@@ -62,17 +62,24 @@ fn native_escape(source : String) -> String? {
 /// `partial_match` keep failing compilation with warnings off (see
 /// `WarnOffList`).
 ///
-/// Note: on macOS the run is wrapped in `sandbox-exec` with the
-/// source-write-readonly profile, so a snippet — and every process it spawns —
-/// is blocked from directly writing protected source files (`*.mbt`, `*.mbti`,
-/// `*.mbt.md`, `moon.mod/pkg/work`) while non-source output stays permitted.
-/// That covers the source-writing moon commands too (`moon fmt`, `moon info`,
-/// `moon add`, `moon test --update`): they are denied, and source changes
-/// belong to the file tools. This is best-effort, not a hard boundary — an
-/// arbitrary program can still smuggle sources via directory renames, which no
-/// static check on the program text could catch. Full capability containment is
-/// deferred to the planned wasm backend, where the runtime is safe by
-/// construction.
+/// Confinement comes from two layers that cover different things, because
+/// neither covers both:
+///
+/// * moonrun's wasm policy (cross-platform) decides WHICH programs may start —
+///   an allowlist holding the moon/git/gh toolchain and inert utilities, with
+///   no shell, interpreter, or ad-hoc rewriter in it — and bounds the file
+///   access of the snippet itself.
+/// * `sandbox-exec` (macOS only) bounds what the process TREE may write: the
+///   workspace, this run's build directory, the toolchain's caches, nothing
+///   else. This is the only layer that reaches spawned children — the policy's
+///   `fs` rules stop at the process boundary — so off macOS a spawned command
+///   is bounded by the allowlist alone.
+///
+/// Note what is deliberately NOT denied: source writes as such. The commands
+/// whose job is to rewrite source (`moon fmt`, `moon info`, `git checkout`) run
+/// normally, and the reason the old rule existed — an arbitrary program editing
+/// files behind the model's back — is covered by the allowlist admitting no
+/// such program.
 pub fn definition(
   workspace_root~ : String,
   bg_runtime? : @bgjobs.BgJobRuntime,
@@ -246,6 +253,29 @@ async fn execute(
   // moon's diagnostics point at the copied source under the build dir; the
   // canonical path anchors the diagnostic path rewrite below.
   let real = @fs.realpath(dir) catch { _ => dir }
+  // The wasm backend is where moonrun's policy applies, so the policy file is
+  // written for every run and passed alongside. `--wasm-policy` is silently
+  // IGNORED on other backends, which is why `target` is not the model's choice
+  // to make freely — see `decode`.
+  let policy_path = "\{dir}/policy.json"
+  // Scratch space for the snippet's own `@fs.tmpdir()`, kept beside the build
+  // output rather than inside it so temp directories do not appear among moon's
+  // artifacts. It goes away with `dir` when the run is cleaned up.
+  let snippet_tmp = "\{dir}/tmp"
+  @fs.mkdir(snippet_tmp) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => ()
+  }
+  let policy = wasm_policy_document(
+    workspace_root~,
+    dir~,
+    tmp_dir=snippet_tmp,
+    extra_roots=[
+      ..run_cwd.map(c => [c]).unwrap_or([]),
+      ..scratch_dir.map(l => [l]).unwrap_or([]),
+    ],
+  )
+  @fs.write_file(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
   let moon_argv = [
     "run",
     "\{dir}/snippet.mbtx",
@@ -253,26 +283,22 @@ async fn execute(
     input.target,
     "--target-dir",
     dir,
+    ..if input.target == "wasm" {
+      ["--wasm-policy", policy_path]
+    },
     ..if !input.warning {
       ["--warn-list", WarnOffList]
     },
   ]
-  // Wrap `moon run` in sandbox-exec where it can actually enforce (macOS) so a
-  // snippet cannot directly overwrite protected source files — reusing the
-  // source-write-readonly profile keyed on the workspace root. The profile
-  // covers the whole process tree, so a command spawned from the snippet is
-  // bound by it too: source-writing moon commands (`moon fmt`, `moon info`,
-  // `moon add`, `moon test --update`) are DENIED, and source changes belong
-  // to the file tools. There is deliberately no trusted-command exemption:
-  // exempting `moon fmt` and friends would require deciding, before running
-  // it, that a program only issues trusted commands — which is undecidable
-  // for an arbitrary program, unlike for a fixed command string.
-  // This is best-effort, not a hard boundary: a program can still smuggle
-  // sources via directory renames; full containment is the wasm backend's
-  // job. Elsewhere (or in a nested sandbox where it cannot enforce) run moon
-  // directly.
-  // The prepared command carries its denial subjects, so a denial showing up
-  // in the program's output can be recognized and explained below. The
+  // Wrap `moon run` in sandbox-exec where it can actually enforce (macOS).
+  // This is the layer the wasm policy cannot supply: the policy's `fs` rules
+  // bind the snippet but stop at the process boundary, so without this a
+  // spawned `git` or `moon` writes wherever it likes. Which profile depends on
+  // the role below. Elsewhere (or in a nested sandbox where it cannot enforce)
+  // run moon directly and let the policy's allowlist be the only bound.
+  // The prepared command carries what it needs to classify its own denials, so
+  // one showing up in the program's output can be recognized and explained
+  // with the guidance for the rule that actually refused it. The
   // throwaway build dir is the writable subtree: if it falls INSIDE the
   // workspace root (e.g. `workspace_root=/tmp`, where `@fs.tmpdir` lands
   // under it) the shared deny would otherwise block moon's own generated
@@ -297,11 +323,29 @@ async fn execute(
         worker_root=scope.worker_root,
         worker_admin_dir=scope.worker_admin_dir,
       )
-    None =>
+    // A lab means a read-only subrun (explore/review/audit): those hold no
+    // editing tool, so "may not write source" is the guarantee that defines
+    // them and it stays kernel-enforced. The profile suits them for a second
+    // reason — it is `(allow default)` minus source, so `moon check` can still
+    // write its target dir inside the workspace, which a boundary profile
+    // denying the workspace would take away.
+    None if scratch_dir is Some(_) =>
       @sandbox.SandboxedCommand::create_if_available(
         workspace_root,
         Exec("moon", moon_argv),
         writable_subtree~,
+      )
+    None =>
+      // The main agent draws the line at the workspace instead. Forbidding
+      // source writes here would break the very commands it needs — `moon fmt`,
+      // `moon info`, `git checkout` all rewrite source by definition — and the
+      // reason that rule existed is already covered: a snippet's programs come
+      // from an allowlist with no shell, no interpreter, and no ad-hoc
+      // rewriter in it. What is left worth denying is everything OUTSIDE.
+      @sandbox.SandboxedCommand::create_workspace_boundary_if_available(
+        workspace_root,
+        Exec("moon", moon_argv),
+        writable_roots=[writable_subtree, ..child_process_write_roots()],
       )
   }
   let (prog, argv) = match sandboxed_command {
@@ -422,14 +466,20 @@ async fn execute(
     // chunked walk the redirected path uses. A memory-only execution (no
     // session temp dir) has no such file, and there the head is all there is.
     let denial_scan_source = exec.spill_path()
-    let sandbox_denied = sandboxed_command is Some(command) &&
-      (match denial_scan_source {
-        Some(path) =>
-          log_shows_source_write_denial(path, output => {
-            command.output_reports_denial(output)
-          })
-        None => command.output_reports_denial(raw)
-      })
+    // `Some(guidance)` when denied: the flag and the explanation come from the
+    // same command, so the text always matches the rule that refused.
+    let sandbox_denied = if sandboxed_command is Some(command) &&
+      (if denial_scan_source is Some(path) {
+        log_shows_source_write_denial(path, output => {
+          command.output_reports_denial(output)
+        })
+      } else {
+        command.output_reports_denial(raw)
+      }) {
+      Some(command.denial_feedback())
+    } else {
+      None
+    }
     exec.discard()
     let text = rewrite_temp_paths(raw, [real, dir])
     let body = if text.is_blank() {
@@ -449,14 +499,16 @@ async fn execute(
     } else {
       body
     }
-    let body = if sandbox_denied {
-      "\{body}\n\n\{@sandbox.source_write_denial_feedback}"
+    let body = if sandbox_denied is Some(guidance) {
+      "\{body}\n\n\{guidance}"
     } else {
       body
     }
     return @agent_tool.ToolAction::respond(
       body,
-      is_error=exit_code != 0 || sandbox_denied || output_limit_reached,
+      is_error=exit_code != 0 ||
+        sandbox_denied is Some(_) ||
+        output_limit_reached,
       brief="run_moonbit (exit=\{exit_code})",
     )
   }
@@ -482,10 +534,14 @@ async fn execute(
   // head+tail byte budget), and runs for the timeout arm too: a snippet can
   // flood past the cap before hitting the denial, or print a caught denial
   // and then hang.
-  let sandbox_denied = sandboxed_command is Some(command) &&
+  let sandbox_denied = if sandboxed_command is Some(command) &&
     log_shows_source_write_denial(log, output => {
       command.output_reports_denial(output)
-    })
+    }) {
+    Some(command.denial_feedback())
+  } else {
+    None
+  }
   let action = match result {
     Some((exit_code, raw)) => {
       // Rewrite the throwaway temp path to `source` so the model reads
@@ -501,14 +557,14 @@ async fn execute(
       } else {
         text
       }
-      let body = if sandbox_denied {
-        "\{body}\n\n\{@sandbox.source_write_denial_feedback}"
+      let body = if sandbox_denied is Some(guidance) {
+        "\{body}\n\n\{guidance}"
       } else {
         body
       }
       @agent_tool.ToolAction::respond(
         body,
-        is_error=exit_code != 0 || sandbox_denied,
+        is_error=exit_code != 0 || sandbox_denied is Some(_),
         brief="run_moonbit (exit=\{exit_code})",
       )
     }
@@ -524,8 +580,8 @@ async fn execute(
       } else {
         "\{head}\n[partial output before the timeout]\n\{partial}"
       }
-      let body = if sandbox_denied {
-        "\{body}\n\n\{@sandbox.source_write_denial_feedback}"
+      let body = if sandbox_denied is Some(guidance) {
+        "\{body}\n\n\{guidance}"
       } else {
         body
       }
@@ -698,7 +754,7 @@ fn schema(background~ : Bool) -> Json {
     "target": {
       "type": "string",
       "enum": ["native", "wasm", "wasm-gc", "js", "llvm"],
-      "description": "Backend to run on; defaults to native. Commands and IO (@fs, @stdio, myshell) work on native and wasm; the other backends run pure computation only.",
+      "description": "Backend to run on; defaults to wasm, which is the sandboxed one. The alternatives run pure computation only — they cannot spawn commands or touch files.",
     },
     "cwd": {
       "type": "string",

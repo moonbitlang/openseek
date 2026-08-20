@@ -19,26 +19,34 @@ pub struct RunMoonbitInput {
 /// The moon backends `--target` accepts. `native` is the default because the
 /// async IO batteries (`@fs`, `@stdio`, `@process`) require it.
 fn valid_target(target : String) -> Bool {
-  target is ("native" | "wasm" | "wasm-gc" | "js" | "llvm")
+  // `native` is deliberately absent: moonrun's policy — the only confinement
+  // that holds off macOS — applies to the wasm backend alone, and
+  // `--wasm-policy` is silently ignored elsewhere. Letting a snippet name
+  // `native` would hand it a one-argument way out of the sandbox. The
+  // remaining alternatives cannot spawn or touch the filesystem at all.
+  target is ("wasm" | "wasm-gc" | "js" | "llvm")
 }
 
 ///|
 /// Decode `run_moonbit` tool-call arguments. `source` is a required string
 /// holding a full `.mbtx` program (an optional leading `import { … }` block,
 /// then the program including its own `main`). `target` is an optional backend
-/// name defaulting to `native`. `cwd` is an optional working directory for the
-/// program (defaults to the workspace root). Failures name the offending field.
+/// name defaulting to `wasm`, which is the backend moonrun's policy sandbox
+/// applies to — a snippet may not simply ask for an unsandboxed one, so the
+/// compute-only backends are the only alternatives offered. `cwd` is an
+/// optional working directory for the program (defaults to the workspace
+/// root). Failures name the offending field.
 pub fn decode(arguments : Json) -> RunMoonbitInput raise {
   match arguments {
     { "source": String(source), .. } => {
       let target = match arguments {
         { "target": String(t), .. } => t
-        { "target": Null, .. } => "native"
+        { "target": Null, .. } => "wasm"
         { "target": _, .. } => fail("arguments.target to be a string")
-        _ => "native"
+        _ => "wasm"
       }
       guard valid_target(target) else {
-        fail("arguments.target to be one of native, wasm, wasm-gc, js, llvm")
+        fail("arguments.target to be one of wasm, wasm-gc, js, llvm")
       }
       let cwd = match arguments {
         { "cwd": String(c), .. } => Some(c)
@@ -70,10 +78,26 @@ pub fn decode(arguments : Json) -> RunMoonbitInput raise {
 }
 
 ///|
-test "decode reads source with the default native target" {
+test "decode reads source with the default wasm target" {
   let input = decode({ "source": "fn main { println(1) }" })
   assert_eq(input.source, "fn main { println(1) }")
-  assert_eq(input.target, "native")
+  assert_eq(input.target, "wasm")
+}
+
+///|
+/// `native` is the one backend a snippet may not ask for: moonrun's policy —
+/// the confinement that holds on every platform — applies to wasm alone, and
+/// `--wasm-policy` is silently ignored elsewhere, so naming `native` would be
+/// a one-argument way out of the sandbox.
+test "decode refuses the unsandboxed native target" {
+  let refused = try {
+    decode({ "source": "fn main {  }", "target": "native" }) |> ignore
+    "accepted"
+  } catch {
+    error => "\{error}"
+  }
+  assert_false(refused == "accepted")
+  assert_true(refused.contains("wasm"))
 }
 
 ///|

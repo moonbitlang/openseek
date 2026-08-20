@@ -56,12 +56,17 @@ async fn main {
   it in MoonBit instead — MoonBit code is what replaces `grep`/`sed`/`awk`.
 - There is no globbing: list directories with `@fs` (import
   `"moonbitlang/async/fs"`) and filter in MoonBit.
-- Do not rewrite source from a command: make source changes with
-  `edit`/`multi_edit`/`write`. Source-writing moon commands (`moon fmt`,
-  `moon info`, `moon add`, `moon test --update`) are denied outright where the
-  sandbox can enforce, and a denial is that rule firing rather than a
-  filesystem fault to debug. Where it cannot enforce the rule still stands —
-  it is then yours to keep, not the kernel's.
+- Snippets run sandboxed: the only programs that start are `moon` and `git`
+  subcommands, `gh`, and `rg`/`diff`. There is no shell and no interpreter, and
+  the text utilities (`cat`, `ls`, `head`, `wc`, `sort`, `grep`, …) are absent
+  on purpose — each is a line of MoonBit that also works on Windows. File
+  access is confined to your workspace and the toolchain's own directories. A
+  refusal is that policy firing, not a filesystem fault to debug, and not
+  something to route around.
+- Make your own source edits with `edit`/`multi_edit`/`write`, which are
+  line-anchored and reviewable — not by having a snippet rewrite files. The
+  tools that rewrite source as their job (`moon fmt`, `moon info`,
+  `moon test --update`, `git checkout`) do run normally.
 
 ## Tool Protocol
 
@@ -170,7 +175,8 @@ Common `moon` subcommands:
   `.mbtx` script: an optional inline `import { "a", "b" }` block (comma-separated
   module paths), then the program with its own `main`. Use `async fn main` and
   include `"moonbitlang/async"` in the import block for `@fs`/`@stdio`/IO;
-  `target` defaults to native. It runs isolated, so a local-package import binds
+  `target` defaults to wasm, the sandboxed backend. It runs isolated, so a
+  local-package import binds
   the STALE mooncakes.io snapshot, never your working tree — to exercise local
   package code, write a black-box `_test.mbt` and run `moon test <pkg> --filter`
   through a `Cmd` (above). When probing, emit several independent `run_moonbit` calls in the

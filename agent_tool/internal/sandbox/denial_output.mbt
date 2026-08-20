@@ -5,7 +5,7 @@
 /// the sandbox — instead of using `edit`. It lives beside the denial detector
 /// because both the foreground runner and the background-job reader need the
 /// same explanation for the same recognized condition.
-pub let source_write_denial_feedback : String =
+let source_write_denial_feedback : String =
   #|run_moonbit sandbox: the "Operation not permitted" failure above is this tool's
   #|sandbox denying a write to a protected MoonBit source file (`*.mbt`, `*.mbti`,
   #|`*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`) — not a filesystem or permissions
@@ -16,6 +16,46 @@ pub let source_write_denial_feedback : String =
   #|copies, temp-then-move, or other sandbox escapes) — make source changes with the
   #|line-anchored `edit` tool instead, and keep run_moonbit for commands, compute,
   #|probing, and non-source IO.
+
+///|
+/// Guidance for a run under the workspace-boundary profile. Two rules can
+/// produce the same refusal here — a write outside the tree, and a program the
+/// allowlist will not start — and both surface as the same OS wording, so this
+/// names both rather than guessing. Asserting one of them was how a refused
+/// `@process.spawn` came to be explained as a blocked file write, sending the
+/// model to debug paths for a failure that had no path in it.
+let workspace_boundary_denial_feedback : String =
+  #|run_moonbit sandbox: the failure above is this tool's sandbox refusing something —
+  #|not a filesystem or permissions problem to debug. Either a write landed OUTSIDE the
+  #|workspace (inside it everything is allowed, so `moon fmt`, `moon info` and
+  #|`git checkout` all work), or a program that is not on the spawn allowlist tried to
+  #|start — note that an executable this run just built is never spawnable by name, so
+  #|reach it with `moon run`, or exercise the code through `moon test`.
+  #|Do NOT try to work around the block from inside a program (renames, copies,
+  #|temp-then-move, or other sandbox escapes); stay under the workspace, and if what you
+  #|need is genuinely outside it, say so rather than routing around the boundary.
+
+///|
+/// Return whether child output shows a write denied by the workspace-boundary
+/// profile. That profile denies writes globally and re-allows `writable_roots`,
+/// so the test is inverted from `source_write_denied_in_text`: any write denial
+/// is this profile's, EXCEPT one naming a path inside a re-allowed root, where
+/// the refusal came from ordinary filesystem permissions instead.
+fn write_outside_roots_denied_in_text(
+  output_text : String,
+  writable_roots : Array[String],
+) -> Bool {
+  output_text
+  .split("\n")
+  .any(line => {
+    let mentions_denial = line.contains("Operation not permitted") ||
+      line.contains("operation not permitted") ||
+      line.contains(": Permission denied") ||
+      line.contains("Permission denied:")
+    mentions_denial &&
+    !writable_roots.any(root => root != "" && line.contains(root))
+  })
+}
 
 ///|
 /// Protected MoonBit source and manifest names, as they appear at the end of a

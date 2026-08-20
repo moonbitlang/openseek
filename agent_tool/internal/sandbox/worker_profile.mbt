@@ -126,7 +126,7 @@ pub async fn SandboxedCommand::create_worker_if_available(
   Some({
     program: SandboxExecPath,
     args,
-    denial_subjects: data.denial_subjects,
     plain_source_readonly: false,
+    denial_shape: NamedSubjects(data.denial_subjects),
   })
 }

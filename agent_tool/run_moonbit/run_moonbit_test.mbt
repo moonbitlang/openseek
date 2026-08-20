@@ -114,39 +114,184 @@ async fn sandbox_enforcement_available() -> Bool {
 }
 
 ///|
-async test "sandbox blocks overwriting a protected source file in the workspace" {
-  // Only meaningful where the sandbox can actually enforce (macOS, not nested);
-  // gate on the SAME probe `execute` uses so a host where sandbox-exec exists but
-  // cannot apply a nested profile (production runs unsandboxed there) skips
-  // rather than fails. The wasm backend carries this policy cross-platform.
+/// A global write deny takes down ordinary programs, not just escapes: `git`
+/// opens `/dev/null` for writing and dies with `fatal: could not open
+/// '/dev/null'` unless the profile re-allows device nodes. Pinned with `git`
+/// itself because that is how the gap was found.
+async test "a spawned git command still gets its device nodes" {
   guard sandbox_enforcement_available() else { return }
   @vfs.with_tmpdir(ws => {
-    @fs.write_file(
-      "\{ws}/keep.mbt",
-      "fn main {  }\n",
-      create_mode=CreateOrTruncate,
-    )
     let out = run_in(ws, {
       "source": (
-        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+        #|import { "moonbitlang/async", "moonbitlang/async/stdio", "bobzhang/myshell" }
         #|
         #|async fn main {
-        #|  let blocked = try {
-        #|    @fs.write_file("keep.mbt", "// CORRUPTED\n", create_mode=CreateOrTruncate)
-        #|    false
-        #|  } catch { _ => true }
-        #|  // a non-source output is still allowed
-        #|  @fs.write_file("out.txt", "ok\n", create_mode=CreateOrTruncate)
-        #|  @stdio.stdout.write("blocked=\{blocked}\n")
+        #|  let r = @myshell.Cmd("git", ["init", "-q", "."]).output()
+        #|  @stdio.stdout.write("init=\{r.exit_code}\n")
+        #|  @stdio.stdout.write(r.stderr)
         #|}
       ),
     })
-    assert_false(out.is_error)
-    assert_true(out.content.contains("blocked=true"))
-    // the protected source file is untouched; the non-source output landed
-    assert_true(@fs.read_file("\{ws}/keep.mbt").text().contains("fn main {  }"))
-    assert_true(@fs.exists("\{ws}/out.txt"))
+    assert_true(out.content.contains("init=0"))
+    assert_false(out.content.contains("/dev/null"))
+    assert_true(@fs.exists("\{ws}/.git"))
   })
+}
+
+///|
+/// A snippet needs somewhere to put scratch files, and `@fs.tmpdir()` is where
+/// it will look. Under a policy moonrun takes that base path from the POLICY's
+/// `TMPDIR`, so the run points it at its own build directory: the call has to
+/// succeed without the host's temp directory ever being granted.
+async test "a snippet's temp directory lands somewhere it may write" {
+  let out = run(
+    (
+      #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+      #|
+      #|async fn main {
+      #|  let dir = @fs.tmpdir(prefix="probe-")
+      #|  @fs.write_file("\{dir}/x.txt", "hi", create_mode=CreateOrTruncate)
+      #|  @stdio.stdout.write("ok=\{@fs.exists("\{dir}/x.txt")}\n")
+      #|  @fs.rmdir(dir, recursive=true)
+      #|}
+    ),
+  )
+  assert_false(out.is_error)
+  assert_true(out.content.contains("ok=true"))
+}
+
+///|
+/// A refused spawn carries the same OS wording as a blocked write, and the
+/// guidance used to assert it WAS a blocked write — so a run that never touched
+/// a file was told to reason about paths. The message must cover the rule that
+/// actually fired, which for a spawn means naming how to reach a built binary.
+#cfg(not(platform="windows"))
+async test "a refused spawn gets guidance that fits a refused spawn" {
+  let out = run(
+    (
+      #|import { "bobzhang/myshell", "moonbitlang/async" }
+      #|
+      #|async fn main {
+      #|  @myshell.Cmd("curl", ["--version"]).output() |> ignore
+      #|}
+    ),
+  )
+  assert_true(out.is_error)
+  assert_true(out.content.contains("spawn allowlist"))
+  assert_true(out.content.contains("moon run"))
+  // And it must not claim, as it once did, that a write was what failed.
+  assert_false(out.content.contains("denying a write OUTSIDE"))
+}
+
+///|
+/// The boundary is the workspace, not the file's kind: a snippet may rewrite
+/// source inside the tree it was pointed at — `moon fmt` and `git checkout`
+/// would be useless otherwise — and may not write anywhere else.
+async test "the sandbox draws the line at the workspace, not at source files" {
+  // Only meaningful where the sandbox can actually enforce (macOS, not nested);
+  // gate on the SAME probe `execute` uses so a host where sandbox-exec exists but
+  // cannot apply a nested profile (production runs unsandboxed there) skips
+  // rather than fails. The moonrun policy carries the guest half cross-platform.
+  guard sandbox_enforcement_available() else { return }
+  @vfs.with_tmpdir(ws => {
+    @vfs.with_tmpdir(outside => {
+      @fs.write_file(
+        "\{ws}/keep.mbt",
+        "fn main {  }\n",
+        create_mode=CreateOrTruncate,
+      )
+      let source = (
+        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+        #|
+        #|async fn main {
+        #|  let inside = try {
+        #|    @fs.write_file("keep.mbt", "// REWRITTEN\n", create_mode=CreateOrTruncate)
+        #|    true
+        #|  } catch { _ => false }
+        #|  let outside = try {
+        #|    @fs.write_file("OUTSIDE/escape.txt", "x", create_mode=CreateOrTruncate)
+        #|    true
+        #|  } catch { _ => false }
+        #|  @stdio.stdout.write("inside=\{inside} outside=\{outside}\n")
+        #|}
+      ).replace_all(old="OUTSIDE", new=outside)
+      let out = run_in(ws, { "source": source })
+      assert_true(out.content.contains("inside=true"))
+      assert_true(out.content.contains("outside=false"))
+      // The in-tree rewrite really landed; the escape really did not.
+      assert_true(@fs.read_file("\{ws}/keep.mbt").text().contains("REWRITTEN"))
+      assert_false(@fs.exists("\{outside}/escape.txt"))
+    })
+  })
+}
+
+///|
+/// The generated moonrun policy is deny-by-default, so a program NOT on the
+/// spawn allowlist must be refused at the host boundary — on every platform,
+/// unlike the `sandbox-exec` profile. Uses a program that certainly exists and
+/// is certainly not listed, so a pass cannot come from the command being
+/// missing.
+#cfg(not(platform="windows"))
+async test "a command outside the spawn allowlist is denied by the policy" {
+  let out = run(
+    (
+      #|import { "bobzhang/myshell", "moonbitlang/async" }
+      #|
+      #|async fn main {
+      #|  let refused = try {
+      #|    let result = @myshell.Cmd("chmod", ["644", "/tmp"]).output()
+      #|    "ran exit=\{result.exit_code}"
+      #|  } catch { _ => "refused" }
+      #|  println("chmod: \{refused}")
+      #|}
+    ),
+  )
+  assert_true(out.content.contains("chmod: refused"))
+}
+
+///|
+/// The allowlist keys on the argument prefix, not just the program, so one
+/// subcommand of a program can be admitted while another is not. This is what
+/// keeps `moon` — a general-purpose runner — from making the list decorative.
+#cfg(not(platform="windows"))
+async test "the spawn allowlist discriminates between subcommands" {
+  let out = run(
+    (
+      #|import { "bobzhang/myshell", "moonbitlang/async" }
+      #|
+      #|async fn main {
+      #|  // A refusal must be the POLICY refusing, not the command failing, so
+      #|  // make the repo first: every probe below then exits 0 if it is allowed
+      #|  // to start at all.
+      #|  @myshell.Cmd("git", ["init", "-q", "."]).output() |> ignore
+      #|  async fn probe(program : String, args : Array[String]) -> String {
+      #|    try {
+      #|      @myshell.Cmd(program, args).output() |> ignore
+      #|      "ran"
+      #|    } catch { _ => "refused" }
+      #|  }
+      #|  println("status: \{probe("git", ["status", "--short"])}")
+      #|  println("clean: \{probe("git", ["clean", "-n"])}")
+      #|  println("stash-list: \{probe("git", ["stash", "list"])}")
+      #|  println("stash-pop: \{probe("git", ["stash", "pop"])}")
+      #|  println("reconfigured: \{probe("git", ["-c", "core.pager=cat", "status"])}")
+      #|  println("curl: \{probe("curl", ["--version"])}")
+      #|}
+    ),
+  )
+  // A listed git subcommand runs; one left off the list does not — the rules
+  // are per subcommand, so `git` as such is not a capability.
+  assert_true(out.content.contains("status: ran"))
+  assert_true(out.content.contains("clean: refused"))
+  // A two-token prefix reaches one verb deep, so a subcommand can be split:
+  // reading the stash is allowed while mutating the shared stack is not.
+  assert_true(out.content.contains("stash-list: ran"))
+  assert_true(out.content.contains("stash-pop: refused"))
+  // A reconfiguring global option precedes the subcommand, so the argument
+  // vector starts with `-c` and matches no prefix. This is what makes the
+  // shell tool's `global_option_reconfigures` guard unnecessary here.
+  assert_true(out.content.contains("reconfigured: refused"))
+  assert_true(out.content.contains("curl: refused"))
 }
 
 ///|
@@ -327,32 +472,36 @@ test "the description teaches the process EDSL, since there is no shell tool" {
 async test "an uncaught sandbox denial is explained, not left as a bare EPERM" {
   guard sandbox_enforcement_available() else { return }
   @vfs.with_tmpdir(ws => {
-    @fs.write_file(
-      "\{ws}/keep.mbt",
-      "fn main {  }\n",
-      create_mode=CreateOrTruncate,
-    )
-    // Unlike the test above, the snippet does NOT catch the write failure, so
-    // the run dies with the raw OS error — the case where the model previously
-    // saw only `Operation not permitted` with no idea the sandbox caused it.
-    let out = run_in(ws, {
-      "source": (
+    @vfs.with_tmpdir(outside => {
+      // Unlike the test above, the snippet does NOT catch the write failure, so
+      // the run dies with the raw OS error — the case where the model previously
+      // saw only `Operation not permitted` with no idea the sandbox caused it.
+      let source = (
         #|import { "moonbitlang/async", "moonbitlang/async/fs" }
         #|
         #|async fn main {
-        #|  @fs.write_file("keep.mbt", "// CORRUPTED\n", create_mode=CreateOrTruncate)
+        #|  @fs.write_file("OUTSIDE/escape.txt", "x", create_mode=CreateOrTruncate)
         #|}
-      ),
+      ).replace_all(old="OUTSIDE", new=outside)
+      let out = run_in(ws, { "source": source })
+      assert_true(out.is_error)
+      // The raw failure stays visible. It is the moonrun policy that refuses
+      // here, not `sandbox-exec`: the guest's own `fs.write` roots are checked
+      // first, so the snippet never reaches the kernel layer. Assert what is
+      // actually printed — an earlier version of this test looked for
+      // "Operation not permitted", which only ever matched because the guidance
+      // text quoted that phrase, so it verified nothing about the real error.
+      assert_true(out.content.contains("Sandbox policy blocked file write"))
+      assert_true(out.content.contains("Permission denied"))
+      // ...now followed by the sandbox explanation and anti-workaround guidance
+      assert_true(out.content.contains("run_moonbit sandbox"))
+      assert_true(out.content.contains("Do NOT try to work around"))
+      // The guidance describes this profile's rules — the workspace boundary
+      // and the spawn allowlist — not the source-write rule it does not carry.
+      assert_true(out.content.contains("OUTSIDE the"))
+      assert_false(out.content.contains("`edit`"))
+      assert_false(@fs.exists("\{outside}/escape.txt"))
     })
-    assert_true(out.is_error)
-    // the raw OS error stays visible...
-    assert_true(out.content.contains("Operation not permitted"))
-    // ...now followed by the sandbox explanation and anti-workaround guidance
-    assert_true(out.content.contains("run_moonbit sandbox"))
-    assert_true(out.content.contains("Do NOT try to work around"))
-    assert_true(out.content.contains("`edit`"))
-    // the protected source file is untouched
-    assert_true(@fs.read_file("\{ws}/keep.mbt").text().contains("fn main {  }"))
   })
 }
 
@@ -380,16 +529,11 @@ async test "warnings are suppressed by default and shown with warning=on" {
 async test "a denial past the display cap is still detected and explained" {
   guard sandbox_enforcement_available() else { return }
   @vfs.with_tmpdir(ws => {
-    @fs.write_file(
-      "\{ws}/keep.mbt",
-      "fn main {  }\n",
-      create_mode=CreateOrTruncate,
-    )
-    // ~200KB of flood BEFORE the uncaught denied write: the OSError line lands
-    // beyond the 48KB display cap (and beyond one 64KB scan chunk), so only
-    // the full-log scan can see it.
-    let out = run_in(ws, {
-      "source": (
+    @vfs.with_tmpdir(outside => {
+      // ~200KB of flood BEFORE the uncaught denied write: the OSError line lands
+      // beyond the 48KB display cap (and beyond one 64KB scan chunk), so only
+      // the full-log scan can see it.
+      let source = (
         #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
         #|
         #|async fn main {
@@ -397,18 +541,20 @@ async test "a denial past the display cap is still detected and explained" {
         #|  for _i in 0..<200 {
         #|    @stdio.stdout.write("\{filler}\n")
         #|  }
-        #|  @fs.write_file("keep.mbt", "// CORRUPTED\n", create_mode=CreateOrTruncate)
+        #|  @fs.write_file("OUTSIDE/escape.txt", "x", create_mode=CreateOrTruncate)
         #|}
-      ),
+      ).replace_all(old="OUTSIDE", new=outside)
+      let out = run_in(ws, { "source": source })
+      assert_true(out.is_error)
+      // the displayed prefix is the truncated flood, not the denial line —
+      // pinned on `OSError`, a token the guidance text does not contain, so
+      // the assertion cannot be satisfied by the guidance instead...
+      assert_true(out.content.contains("output truncated"))
+      assert_false(out.content.contains("OSError"))
+      // ...yet the guidance still lands, from the full-log scan
+      assert_true(out.content.contains("run_moonbit sandbox"))
+      assert_false(@fs.exists("\{outside}/escape.txt"))
     })
-    assert_true(out.is_error)
-    // the displayed prefix is the truncated flood, not the denial line (the
-    // feedback itself quotes "Operation not permitted", so pin on OSError)...
-    assert_true(out.content.contains("output truncated"))
-    assert_false(out.content.contains("OSError"))
-    // ...yet the guidance still lands, from the full-log scan
-    assert_true(out.content.contains("run_moonbit sandbox"))
-    assert_true(@fs.read_file("\{ws}/keep.mbt").text().contains("fn main {  }"))
   })
 }
 
@@ -472,13 +618,15 @@ async test "runs a command through the myshell EDSL" {
       #|import { "bobzhang/myshell", "moonbitlang/async" }
       #|
       #|async fn main {
-      #|  let result = @myshell.Cmd("printf", ["alpha"]).output()
-      #|  println("out=\{result.stdout} exit=\{result.exit_code}")
+      #|  let result = @myshell.Cmd("git", ["--version"]).output()
+      #|  println("out=\{result.stdout}")
+      #|  println("exit=\{result.exit_code}")
       #|}
     ),
   )
   assert_false(out.is_error)
-  assert_true(out.content.contains("out=alpha exit=0"))
+  assert_true(out.content.contains("out=git version"))
+  assert_true(out.content.contains("exit=0"))
 }
 
 ///|

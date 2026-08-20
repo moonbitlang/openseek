@@ -2,7 +2,6 @@
 package "bobzhang/openseek/agent_tool/internal/sandbox"
 
 // Values
-pub let source_write_denial_feedback : String
 
 // Errors
 
@@ -17,6 +16,8 @@ pub fn SandboxedCommand::allows_standalone_trusted_writer(Self) -> Bool
 pub fn SandboxedCommand::args(Self) -> Array[String]
 pub async fn SandboxedCommand::create_if_available(String, Command, writable_subtree? : String) -> Self?
 pub async fn SandboxedCommand::create_worker_if_available(Command, deny_roots~ : Array[String], worker_root~ : String, worker_admin_dir~ : String) -> Self?
+pub async fn SandboxedCommand::create_workspace_boundary_if_available(String, Command, writable_roots? : Array[String]) -> Self?
+pub fn SandboxedCommand::denial_feedback(Self) -> String
 pub fn SandboxedCommand::output_reports_denial(Self, String) -> Bool
 pub fn SandboxedCommand::program(Self) -> String
 

@@ -96,13 +96,19 @@ async fn execute(
   // when the command exited 0. Scan the *full* retained output for a denial (the
   // denial line can be earlier than the displayed tail), but only for a sandboxed
   // job — so a full read is done only in that rare case.
-  let sandbox_denied = if snapshot.sandboxed_command is Some(command) {
-    let full = bg_runtime.read_output(job_id).unwrap_or(output)
-    command.output_reports_denial(full)
+  // `Some(guidance)` when denied: the explanation comes from the command that
+  // classified the output, so it describes the rule that actually refused.
+  let sandbox_denied = if snapshot.sandboxed_command is Some(command) &&
+    command.output_reports_denial(
+      bg_runtime.read_output(job_id).unwrap_or(output),
+    ) {
+    Some(command.denial_feedback())
   } else {
-    false
+    None
   }
-  let is_error = exit_error || snapshot.had_invalid_utf8 || sandbox_denied
+  let is_error = exit_error ||
+    snapshot.had_invalid_utf8 ||
+    sandbox_denied is Some(_)
   // Truncated whenever what we show is less than what the job produced — this
   // covers the window (large output), a memory-only runtime that dropped output
   // past the budget, and a hard-cap drop — so a prefix is never presented as the
@@ -133,8 +139,8 @@ async fn execute(
       content.write_string("\n")
     }
   }
-  if sandbox_denied {
-    content.write_string(@sandbox.source_write_denial_feedback)
+  if sandbox_denied is Some(guidance) {
+    content.write_string(guidance)
     content.write_string("\n")
   }
   content.write_string(footer)

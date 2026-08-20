@@ -23,13 +23,32 @@ struct SandboxedCommand {
   /// `program = "/usr/bin/sandbox-exec"` with
   /// `args = ["-p", "<profile>", "sh", "-c", "moon check"]` on macOS.
   args : Array[String]
-  /// Protected paths and basenames derived from the same profile encoded in
-  /// `args`, retained so denial reporting cannot use metadata from another run.
-  denial_subjects : Array[String]
   /// True only for the ordinary source-readonly profile with no writable
   /// subtree. A trusted source writer can escape this profile by running as a
   /// standalone shell command; worker and scratch-lab profiles cannot.
   plain_source_readonly : Bool
+  /// How a denial from this profile is recognized in child output, together
+  /// with the paths that recognition needs. Derived from the same profile
+  /// encoded in `args`, so denial reporting cannot use metadata from another
+  /// run. The profiles deny along different axes, so they cannot share one
+  /// rule — nor one set of paths, which is why each carries its own.
+  denial_shape : DenialShape
+}
+
+///|
+/// The shape a profile's denials take in child output, which decides how they
+/// are told apart from permission errors this sandbox did not cause.
+priv enum DenialShape {
+  /// The profile denies an enumerated set, so a denial names a protected
+  /// source file or one of these subjects — protected paths and basenames.
+  /// Anything else is someone else's error.
+  NamedSubjects(Array[String])
+  /// The profile denies writes globally and re-allows these roots, so the
+  /// denied path is whatever the run reached for and cannot be enumerated in
+  /// advance. Inverted accordingly: a write denial is this profile's unless
+  /// the line names a path inside a re-allowed root, where the sandbox is not
+  /// what refused it (an ordinary read-only file, say).
+  OutsideRoots(Array[String])
 }
 
 ///|
@@ -93,8 +112,8 @@ pub async fn SandboxedCommand::create_if_available(
     args,
     // Copied: the profile cache hands out its own array, and this command must
     // keep classifying with the subjects of the profile it actually runs under.
-    denial_subjects: data.denial_subjects.copy(),
     plain_source_readonly: subtree is None,
+    denial_shape: NamedSubjects(data.denial_subjects.copy()),
   })
 }
 
@@ -118,7 +137,22 @@ pub fn SandboxedCommand::output_reports_denial(
   self : SandboxedCommand,
   output : String,
 ) -> Bool {
-  source_write_denied_in_text(output, self.denial_subjects)
+  match self.denial_shape {
+    NamedSubjects(subjects) => source_write_denied_in_text(output, subjects)
+    OutsideRoots(roots) => write_outside_roots_denied_in_text(output, roots)
+  }
+}
+
+///|
+/// The guidance to append when this command's output reports a denial. Which
+/// text is right depends on which rule refused the write, so it comes from the
+/// same prepared command that classified the output rather than from a global
+/// a caller picks by hand.
+pub fn SandboxedCommand::denial_feedback(self : SandboxedCommand) -> String {
+  match self.denial_shape {
+    NamedSubjects(_) => source_write_denial_feedback
+    OutsideRoots(_) => workspace_boundary_denial_feedback
+  }
 }
 
 ///|
