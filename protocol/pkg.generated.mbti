@@ -21,9 +21,12 @@ pub(all) enum Command {
   GoalSet(text~ : String, auto~ : Bool)
   GoalClear
 } derive(Eq, @debug.Debug)
+pub fn Command::equal(Self, Self) -> Bool
+pub fn Command::not_equal(Self, Self) -> Bool
 pub fn Command::parse(Json) -> Result[Self, String]
 pub fn Command::to_json(Self) -> Json
 pub fn Command::to_jsonl(Self) -> String
+pub fn Command::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Event {
   AgentSetupFailed(error~ : String)
@@ -76,12 +79,18 @@ pub(all) enum Event {
   McpListToolsTimeout(server~ : String)
   McpNoTools(server~ : String)
 } derive(Eq, @debug.Debug)
+pub fn Event::equal(Self, Self) -> Bool
+pub fn Event::not_equal(Self, Self) -> Bool
 pub fn Event::to_json(Self) -> Json
+pub fn Event::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SteerKind {
   Prompt
   Command
 } derive(Eq, @debug.Debug)
+pub fn SteerKind::equal(Self, Self) -> Bool
+pub fn SteerKind::not_equal(Self, Self) -> Bool
+pub fn SteerKind::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Usage {
   prompt_tokens : Int
@@ -90,6 +99,10 @@ pub(all) struct Usage {
   prompt_cache_hit_tokens : Int
   prompt_cache_miss_tokens : Int
 } derive(Eq, ToJson, @debug.Debug)
+pub fn Usage::equal(Self, Self) -> Bool
+pub fn Usage::not_equal(Self, Self) -> Bool
+pub fn Usage::to_json(Self) -> Json
+pub fn Usage::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

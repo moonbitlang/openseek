@@ -32,12 +32,15 @@ pub(all) enum ClientPacket {
   ListHostDirectory(HostPathRequest)
   SwitchWorkspace(HostPathRequest)
 } derive(@debug.Debug)
+pub fn ClientPacket::to_json(Self) -> Json
+pub fn ClientPacket::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ClientPacket
 
 pub enum ClientPacketDecodeResult {
   DecodedClientPacket(ClientPacket)
   ClientPacketDecodeError(ProtocolError)
 } derive(@debug.Debug)
+pub fn ClientPacketDecodeResult::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DefinitionResultPayload {
   id : String
@@ -45,22 +48,26 @@ pub(all) struct DefinitionResultPayload {
   revision : String
   locations : Array[@language.Location]
 } derive(@debug.Debug)
+pub fn DefinitionResultPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DiagnosticsPayload {
   uri : @common.Uri
   revision : String
   diagnostics : Array[@language.Diagnostic]
 } derive(@debug.Debug)
+pub fn DiagnosticsPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DirectoryResolvedPayload {
   id : String
   stat : @workspace.WorkspaceStat
 } derive(@debug.Debug)
+pub fn DirectoryResolvedPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DocumentPayload {
   id : String
   document : @workspace.DocumentSnapshot
 } derive(@debug.Debug)
+pub fn DocumentPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DocumentPositionRequest {
   id : String
@@ -68,17 +75,20 @@ pub(all) struct DocumentPositionRequest {
   document_revision : String
   offset : Int
 } derive(@debug.Debug)
+pub fn DocumentPositionRequest::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DocumentRequest {
   id : String
   uri : @common.Uri
 } derive(@debug.Debug)
+pub fn DocumentRequest::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DocumentRevisionRequest {
   id : String
   uri : @common.Uri
   document_revision : String
 } derive(@debug.Debug)
+pub fn DocumentRevisionRequest::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DocumentSymbolsResultPayload {
   id : String
@@ -86,28 +96,37 @@ pub(all) struct DocumentSymbolsResultPayload {
   revision : String
   symbols : Array[@language.DocumentSymbol]
 } derive(@debug.Debug)
+pub fn DocumentSymbolsResultPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct HostDirectoryEntry {
   name : String
   path : String
   is_workspace : Bool
 } derive(Eq, @debug.Debug)
+pub fn HostDirectoryEntry::equal(Self, Self) -> Bool
+pub fn HostDirectoryEntry::not_equal(Self, Self) -> Bool
+pub fn HostDirectoryEntry::to_repr(Self) -> @debug.Repr
 
 pub(all) struct HostDirectoryListedPayload {
   id : String
   listing : HostDirectoryListing
 } derive(@debug.Debug)
+pub fn HostDirectoryListedPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct HostDirectoryListing {
   path : String
   parent : String?
   entries : Array[HostDirectoryEntry]
 } derive(Eq, @debug.Debug)
+pub fn HostDirectoryListing::equal(Self, Self) -> Bool
+pub fn HostDirectoryListing::not_equal(Self, Self) -> Bool
+pub fn HostDirectoryListing::to_repr(Self) -> @debug.Repr
 
 pub(all) struct HostPathRequest {
   id : String
   path : String
 } derive(@debug.Debug)
+pub fn HostPathRequest::to_repr(Self) -> @debug.Repr
 
 pub(all) struct HoverResultPayload {
   id : String
@@ -115,6 +134,7 @@ pub(all) struct HoverResultPayload {
   revision : String
   hover : @language.Hover?
 } derive(@debug.Debug)
+pub fn HoverResultPayload::to_repr(Self) -> @debug.Repr
 
 pub struct ProtocolError {
   code : ProtocolErrorCode
@@ -124,6 +144,8 @@ pub struct ProtocolError {
 } derive(@debug.Debug)
 pub fn ProtocolError::ProtocolError(ProtocolErrorCode, String, request_id? : String, provider_code? : String) -> Self
 pub fn ProtocolError::from_file_system_error(@workspace.FileSystemProviderError, request_id? : String) -> Self
+pub fn ProtocolError::to_json(Self) -> Json
+pub fn ProtocolError::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ProtocolError
 
 pub(all) enum ProtocolErrorCode {
@@ -134,14 +156,18 @@ pub(all) enum ProtocolErrorCode {
   ProtocolInvalidUri
   ProtocolProviderError
 } derive(Eq, @debug.Debug)
+pub fn ProtocolErrorCode::equal(Self, Self) -> Bool
 pub fn ProtocolErrorCode::from_string(String) -> Self
 pub fn ProtocolErrorCode::label(Self) -> String
+pub fn ProtocolErrorCode::not_equal(Self, Self) -> Bool
+pub fn ProtocolErrorCode::to_repr(Self) -> @debug.Repr
 pub fn ProtocolErrorCode::to_string(Self) -> String
 
 pub enum ProtocolNegotiation {
   ProtocolAccepted(Int)
   ProtocolRejected(ProtocolError)
 } derive(@debug.Debug)
+pub fn ProtocolNegotiation::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ReferenceItem {
   uri : @common.Uri
@@ -150,6 +176,7 @@ pub(all) struct ReferenceItem {
   column : Int
   line_text : String
 } derive(@debug.Debug)
+pub fn ReferenceItem::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ReferencesResultPayload {
   id : String
@@ -157,6 +184,7 @@ pub(all) struct ReferencesResultPayload {
   revision : String
   references : Array[ReferenceItem]
 } derive(@debug.Debug)
+pub fn ReferencesResultPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ServerPacket {
   DirectoryResolved(DirectoryResolvedPayload)
@@ -171,18 +199,22 @@ pub(all) enum ServerPacket {
   WorkspaceSwitched(WorkspaceSwitchedPayload)
   RemoteError(ProtocolError)
 } derive(@debug.Debug)
+pub fn ServerPacket::to_json(Self) -> Json
+pub fn ServerPacket::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ServerPacket
 
 pub enum ServerPacketDecodeResult {
   DecodedServerPacket(ServerPacket)
   ServerPacketDecodeError(ProtocolError)
 } derive(@debug.Debug)
+pub fn ServerPacketDecodeResult::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorkspaceSwitchedPayload {
   id : String
   root : String
   name : String
 } derive(@debug.Debug)
+pub fn WorkspaceSwitchedPayload::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

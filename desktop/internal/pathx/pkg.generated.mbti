@@ -12,33 +12,52 @@ import {
 // Types and methods
 pub struct Absolute(String) derive(Eq, Hash, @debug.Debug)
 pub fn Absolute::contains(Self, Self) -> Bool
+pub fn Absolute::equal(Self, Self) -> Bool
 pub fn Absolute::from_uri_path(String) -> Self?
+pub fn Absolute::hash(Self) -> Int
+pub fn Absolute::hash_combine(Self, Hasher) -> Unit
 pub fn Absolute::join(Self, Relative) -> Self
 pub fn Absolute::normalize(Self) -> Self
+pub fn Absolute::not_equal(Self, Self) -> Bool
+pub fn Absolute::output(Self, &Logger) -> Unit
 pub fn Absolute::relative_to(Self, root~ : Self) -> Relative?
 pub fn Absolute::to_path(Self) -> Path
+pub fn Absolute::to_repr(Self) -> @debug.Repr
+pub fn Absolute::to_string(Self) -> String
 pub fn Absolute::to_uri_path(Self) -> String?
 pub impl Show for Absolute
 
 pub(all) struct Path(String) derive(Eq, @debug.Debug)
 pub fn Path::basename(Self) -> StringView
 pub fn Path::dirname(Self) -> Self
+pub fn Path::equal(Self, Self) -> Bool
 pub fn Path::extname(Self) -> StringView
 pub fn Path::is_host_absolute(Self) -> Bool
 pub fn Path::join(Self, Relative) -> Self
 pub fn Path::normalize(Self) -> Self
+pub fn Path::not_equal(Self, Self) -> Bool
+pub fn Path::output(Self, &Logger) -> Unit
 pub fn Path::relative(Self, base~ : Self) -> Self
 pub fn Path::resolve(Self) -> Absolute
 pub fn Path::to_absolute(Self) -> Absolute?
 pub fn Path::to_relative(Self) -> Relative?
+pub fn Path::to_repr(Self) -> @debug.Repr
+pub fn Path::to_string(Self) -> String
 pub impl Show for Path
 
 pub(all) struct Relative(String) derive(Eq, Hash, @debug.Debug)
 pub fn Relative::contains(Self, Self) -> Bool
+pub fn Relative::equal(Self, Self) -> Bool
+pub fn Relative::hash(Self) -> Int
+pub fn Relative::hash_combine(Self, Hasher) -> Unit
 pub fn Relative::is_root(Self) -> Bool
 pub fn Relative::normalize(Self) -> Self
+pub fn Relative::not_equal(Self, Self) -> Bool
+pub fn Relative::output(Self, &Logger) -> Unit
 pub fn Relative::root() -> Self
 pub fn Relative::to_path(Self) -> Path
+pub fn Relative::to_repr(Self) -> @debug.Repr
+pub fn Relative::to_string(Self) -> String
 pub impl Show for Relative
 
 // Type aliases

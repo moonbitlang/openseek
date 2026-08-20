@@ -12,6 +12,8 @@ import {
 // Types and methods
 type PlainTokenizer
 pub fn PlainTokenizer::PlainTokenizer() -> Self
+pub fn PlainTokenizer::initial_state(Self) -> @syntax.TokenizerState
+pub fn PlainTokenizer::tokenize_line(Self, StringView, @syntax.TokenizerState) -> (Array[@syntax.LineToken], @syntax.TokenizerState)
 pub impl @syntax.LineTokenizer for PlainTokenizer
 
 // Type aliases

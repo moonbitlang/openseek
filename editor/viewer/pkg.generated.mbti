@@ -40,6 +40,9 @@ pub(all) enum DiffEditorRenderMode {
   SideBySide
   Unified
 } derive(Eq, @debug.Debug)
+pub fn DiffEditorRenderMode::equal(Self, Self) -> Bool
+pub fn DiffEditorRenderMode::not_equal(Self, Self) -> Bool
+pub fn DiffEditorRenderMode::to_repr(Self) -> @debug.Repr
 
 type DiffViewer
 pub fn DiffViewer::clear(Self) -> Unit
@@ -58,6 +61,8 @@ pub(all) enum DiffViewerMode {
   TokenDiff
   TreeDiff
 } derive(Eq)
+pub fn DiffViewerMode::equal(Self, Self) -> Bool
+pub fn DiffViewerMode::not_equal(Self, Self) -> Bool
 
 type EditorDecorationsCollection
 pub fn EditorDecorationsCollection::append(Self, Array[@model.ModelDeltaDecoration]) -> Array[String]
@@ -165,7 +170,9 @@ pub fn Viewer::update_options(Self, ViewerOptions) -> Unit
 type ViewerOptions derive(Eq, @debug.Debug)
 pub fn ViewerOptions::ViewerOptions(soft_wrap? : Bool, tab_size? : Int, wrapping_indent? : @editor_api.WrappingIndent, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, render_line_highlight? : @editor_api.RenderLineHighlight, render_line_highlight_only_when_focus? : Bool, render_validation_decorations? : @editor_api.RenderValidationDecorations, theme? : String, placeholder? : String, line_decorations_width? : Int, line_numbers_min_chars? : Int, folding? : Bool, show_folding_controls? : @editor_api.ShowFoldingControls, folding_highlight? : Bool, folding_maximum_regions? : Int, unfold_on_click_after_end_of_line? : Bool, smooth_scrolling? : Bool, show_unused? : Bool, show_deprecated? : Bool, font_family? : String, font_weight? : String, font_size? : Double, line_height? : Double, letter_spacing? : Double) -> Self
 pub fn ViewerOptions::default() -> Self
+pub fn ViewerOptions::equal(Self, Self) -> Bool
 pub fn ViewerOptions::line_height(Self) -> Double
+pub fn ViewerOptions::not_equal(Self, Self) -> Bool
 pub fn ViewerOptions::soft_wrap(Self) -> Bool
 pub fn ViewerOptions::with_font_family(Self, String) -> Self
 pub fn ViewerOptions::with_font_size(Self, Double) -> Self

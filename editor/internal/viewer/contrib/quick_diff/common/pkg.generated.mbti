@@ -18,6 +18,9 @@ pub(all) enum ChangeType {
   Add
   Delete
 } derive(Eq, @debug.Debug)
+pub fn ChangeType::equal(Self, Self) -> Bool
+pub fn ChangeType::not_equal(Self, Self) -> Bool
+pub fn ChangeType::to_repr(Self) -> @debug.Repr
 
 type QuickDiffService
 pub fn QuickDiffService::QuickDiffService() -> Self

@@ -14,24 +14,36 @@ pub fn get_default() -> DefaultLinesDiffComputer
 // Types and methods
 type DefaultLinesDiffComputer derive(Eq, @debug.Debug)
 pub fn DefaultLinesDiffComputer::compute_diff(Self, Array[String], Array[String], LinesDiffComputerOptions) -> LinesDiff
+pub fn DefaultLinesDiffComputer::equal(Self, Self) -> Bool
+pub fn DefaultLinesDiffComputer::not_equal(Self, Self) -> Bool
+pub fn DefaultLinesDiffComputer::to_repr(Self) -> @debug.Repr
 
 pub struct DetailedLineRangeMapping {
   original : @common.LineRange
   modified : @common.LineRange
   // private fields
 } derive(Eq, @debug.Debug)
+pub fn DetailedLineRangeMapping::equal(Self, Self) -> Bool
 pub fn DetailedLineRangeMapping::get_inner_changes(Self) -> Array[(@common.Range, @common.Range)]?
+pub fn DetailedLineRangeMapping::not_equal(Self, Self) -> Bool
+pub fn DetailedLineRangeMapping::to_repr(Self) -> @debug.Repr
 
 pub struct LinesDiff {
   changes : Array[DetailedLineRangeMapping]
   // private fields
 } derive(Eq, @debug.Debug)
+pub fn LinesDiff::equal(Self, Self) -> Bool
+pub fn LinesDiff::not_equal(Self, Self) -> Bool
+pub fn LinesDiff::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LinesDiffComputerOptions {
   ignore_trim_whitespace : Bool
   max_computation_time_ms : Int
   compute_moves : Bool
 } derive(Eq, @debug.Debug)
+pub fn LinesDiffComputerOptions::equal(Self, Self) -> Bool
+pub fn LinesDiffComputerOptions::not_equal(Self, Self) -> Bool
+pub fn LinesDiffComputerOptions::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

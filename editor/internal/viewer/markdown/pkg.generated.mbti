@@ -32,6 +32,9 @@ pub struct MarkdownBlockAnchor {
   rendered_element_index : Int?
   // private fields
 } derive(Eq, @debug.Debug)
+pub fn MarkdownBlockAnchor::equal(Self, Self) -> Bool
+pub fn MarkdownBlockAnchor::not_equal(Self, Self) -> Bool
+pub fn MarkdownBlockAnchor::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownCodeBlock {
   block_index : Int
@@ -41,8 +44,11 @@ pub struct MarkdownCodeBlock {
   // private fields
 } derive(Eq, @debug.Debug)
 pub fn MarkdownCodeBlock::MarkdownCodeBlock(Int, String, String?, String?, String?, @common.OffsetRange, Array[MarkdownCodeLine]) -> Self
+pub fn MarkdownCodeBlock::equal(Self, Self) -> Bool
 pub fn MarkdownCodeBlock::is_moonbit_check_fence(Self, MarkdownResourceKind) -> Bool
+pub fn MarkdownCodeBlock::not_equal(Self, Self) -> Bool
 pub fn MarkdownCodeBlock::project_source_range(Self, @common.OffsetRange) -> Array[MarkdownProjectedCodeRange]
+pub fn MarkdownCodeBlock::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownCodeLine {
   displayed_text : String
@@ -50,28 +56,43 @@ pub struct MarkdownCodeLine {
   source_range : @common.OffsetRange
   // private fields
 } derive(Eq, @debug.Debug)
+pub fn MarkdownCodeLine::equal(Self, Self) -> Bool
+pub fn MarkdownCodeLine::not_equal(Self, Self) -> Bool
 pub fn MarkdownCodeLine::source_offset_at_displayed_boundary(Self, Int) -> Int?
+pub fn MarkdownCodeLine::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownDocumentProjection {
   block_anchors : Array[MarkdownBlockAnchor]
   code_blocks : Array[MarkdownCodeBlock]
 } derive(Eq, @debug.Debug)
+pub fn MarkdownDocumentProjection::equal(Self, Self) -> Bool
+pub fn MarkdownDocumentProjection::not_equal(Self, Self) -> Bool
+pub fn MarkdownDocumentProjection::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownProjectedCodeRange {
   line_index : Int
   displayed_range : @common.OffsetRange
 } derive(Eq, @debug.Debug)
+pub fn MarkdownProjectedCodeRange::equal(Self, Self) -> Bool
+pub fn MarkdownProjectedCodeRange::not_equal(Self, Self) -> Bool
+pub fn MarkdownProjectedCodeRange::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownRenderFact {
   html : String
   has_code_block : Bool
   projection : MarkdownDocumentProjection
 } derive(Eq, @debug.Debug)
+pub fn MarkdownRenderFact::equal(Self, Self) -> Bool
+pub fn MarkdownRenderFact::not_equal(Self, Self) -> Bool
+pub fn MarkdownRenderFact::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MarkdownResourceKind {
   OrdinaryMarkdown
   MoonBitMarkdown
 } derive(Eq, @debug.Debug)
+pub fn MarkdownResourceKind::equal(Self, Self) -> Bool
+pub fn MarkdownResourceKind::not_equal(Self, Self) -> Bool
+pub fn MarkdownResourceKind::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownSection {
   heading_anchor_index : Int
@@ -80,7 +101,10 @@ pub struct MarkdownSection {
   // private fields
 } derive(Eq, @debug.Debug)
 pub fn MarkdownSection::body_rendered_element_indexes(Self, MarkdownDocumentProjection) -> Array[Int]
+pub fn MarkdownSection::equal(Self, Self) -> Bool
 pub fn MarkdownSection::is_foldable(Self, MarkdownDocumentProjection) -> Bool
+pub fn MarkdownSection::not_equal(Self, Self) -> Bool
+pub fn MarkdownSection::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownTocEntry {
   depth : Int
@@ -88,6 +112,9 @@ pub struct MarkdownTocEntry {
   source_offset : Int
   // private fields
 } derive(Eq, @debug.Debug)
+pub fn MarkdownTocEntry::equal(Self, Self) -> Bool
+pub fn MarkdownTocEntry::not_equal(Self, Self) -> Bool
+pub fn MarkdownTocEntry::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

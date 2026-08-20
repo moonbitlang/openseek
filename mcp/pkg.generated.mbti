@@ -19,7 +19,10 @@ pub struct CallToolResult {
   structured_content : Json?
   is_error : Bool
 } derive(Eq, @debug.Debug)
+pub fn CallToolResult::equal(Self, Self) -> Bool
+pub fn CallToolResult::not_equal(Self, Self) -> Bool
 pub fn CallToolResult::render_text(Self) -> String
+pub fn CallToolResult::to_repr(Self) -> @debug.Repr
 
 pub enum ContentBlock {
   Text(String)
@@ -27,6 +30,9 @@ pub enum ContentBlock {
   Resource(uri~ : String, text~ : String?)
   Other(kind~ : String)
 } derive(Eq, @debug.Debug)
+pub fn ContentBlock::equal(Self, Self) -> Bool
+pub fn ContentBlock::not_equal(Self, Self) -> Bool
+pub fn ContentBlock::to_repr(Self) -> @debug.Repr
 
 pub struct InitializeResult {
   protocol_version : String
@@ -34,6 +40,9 @@ pub struct InitializeResult {
   server_version : String
   instructions : String?
 } derive(Eq, @debug.Debug)
+pub fn InitializeResult::equal(Self, Self) -> Bool
+pub fn InitializeResult::not_equal(Self, Self) -> Bool
+pub fn InitializeResult::to_repr(Self) -> @debug.Repr
 
 type McpClient
 pub async fn McpClient::call_tool(Self, name~ : String, arguments~ : Json) -> CallToolResult
@@ -46,6 +55,9 @@ pub struct McpTool {
   description : String
   input_schema : Json
 } derive(Eq, @debug.Debug)
+pub fn McpTool::equal(Self, Self) -> Bool
+pub fn McpTool::not_equal(Self, Self) -> Bool
+pub fn McpTool::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -12,6 +12,8 @@ import {
 // Types and methods
 type MoonBitTokenizer
 pub fn MoonBitTokenizer::MoonBitTokenizer() -> Self
+pub fn MoonBitTokenizer::initial_state(Self) -> @syntax.TokenizerState
+pub fn MoonBitTokenizer::tokenize_line(Self, StringView, @syntax.TokenizerState) -> (Array[@syntax.LineToken], @syntax.TokenizerState)
 pub impl @syntax.LineTokenizer for MoonBitTokenizer
 
 // Type aliases

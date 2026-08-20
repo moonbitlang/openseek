@@ -31,6 +31,7 @@ pub async fn tree_dir(@pathx.Absolute, String) -> @pathx.Absolute?
 pub suberror WorktreeError {
   WorktreeError(String)
 } derive(@debug.Debug)
+pub fn WorktreeError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub struct CodexWorktreeBinding {
@@ -38,6 +39,9 @@ pub struct CodexWorktreeBinding {
   workspace : String
   worktree : @protocol.WorktreeInfo
 } derive(Eq, @debug.Debug)
+pub fn CodexWorktreeBinding::equal(Self, Self) -> Bool
+pub fn CodexWorktreeBinding::not_equal(Self, Self) -> Bool
+pub fn CodexWorktreeBinding::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorktreeHost {
   lifecycle_lock : @async.Mutex
@@ -49,7 +53,10 @@ type WorktreeOwner derive(Eq, @debug.Debug)
 pub async fn WorktreeOwner::archive_check(Self) -> @protocol.ArchiveNeedsForceReply?
 pub async fn WorktreeOwner::archive_checkout(Self, Bool, on_committed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveNeedsForceReply?
 pub fn WorktreeOwner::codex(String) -> Self
+pub fn WorktreeOwner::equal(Self, Self) -> Bool
+pub fn WorktreeOwner::not_equal(Self, Self) -> Bool
 pub fn WorktreeOwner::openseek(String) -> Self
+pub fn WorktreeOwner::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

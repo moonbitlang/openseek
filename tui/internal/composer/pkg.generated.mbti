@@ -12,8 +12,10 @@ pub const DefaultMaxTextRows : Int = 4
 
 // Types and methods
 type Mode derive(Eq)
+pub fn Mode::equal(Self, Self) -> Bool
 pub fn Mode::is_input(Self) -> Bool
 pub fn Mode::is_shell(Self) -> Bool
+pub fn Mode::not_equal(Self, Self) -> Bool
 
 type Model
 pub fn Model::cursor_at_first_visual_row(Self) -> Bool

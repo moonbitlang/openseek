@@ -13,16 +13,22 @@ pub fn completion_item_matches(Array[CompletionItem], String) -> Array[Completio
 // Types and methods
 type CompletionItem derive(Eq, @debug.Debug)
 pub fn CompletionItem::description(Self) -> String
+pub fn CompletionItem::equal(Self, Self) -> Bool
 pub fn CompletionItem::insert_text(Self) -> String
 pub fn CompletionItem::label(Self) -> String
 pub fn CompletionItem::new(label~ : String, insert_text? : String, description? : String) -> Self
+pub fn CompletionItem::not_equal(Self, Self) -> Bool
+pub fn CompletionItem::to_repr(Self) -> @debug.Repr
 
 type Model derive(Eq, @debug.Debug)
 pub fn Model::closed() -> Self
+pub fn Model::equal(Self, Self) -> Bool
 pub fn Model::is_open(Self) -> Bool
 pub fn Model::items(Self) -> Array[CompletionItem]
+pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::open(items~ : Array[CompletionItem], selected? : Int) -> Self
 pub fn Model::selected(Self) -> Int
+pub fn Model::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

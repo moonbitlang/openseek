@@ -12,6 +12,8 @@ import {
 // Types and methods
 type MoonConfigTokenizer
 pub fn MoonConfigTokenizer::MoonConfigTokenizer() -> Self
+pub fn MoonConfigTokenizer::initial_state(Self) -> @syntax.TokenizerState
+pub fn MoonConfigTokenizer::tokenize_line(Self, StringView, @syntax.TokenizerState) -> (Array[@syntax.LineToken], @syntax.TokenizerState)
 pub impl @syntax.LineTokenizer for MoonConfigTokenizer
 
 // Type aliases

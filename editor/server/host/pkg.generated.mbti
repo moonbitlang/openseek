@@ -32,6 +32,10 @@ pub fn MoonCheckDiagnostics::schedule(Self, (async () -> Unit) -> Unit) -> Unit
 
 type MoonWorkspaceLanguageProvider
 pub fn MoonWorkspaceLanguageProvider::MoonWorkspaceLanguageProvider(@ref.Ref[String], moon_command? : String) -> Self
+pub async fn MoonWorkspaceLanguageProvider::provide_definition(Self, @model.TextModel, @common.Position, @language.CancellationToken) -> Array[@language.Location]
+pub async fn MoonWorkspaceLanguageProvider::provide_document_symbols(Self, @model.TextModel, @language.CancellationToken) -> Array[@language.DocumentSymbol]
+pub async fn MoonWorkspaceLanguageProvider::provide_hover(Self, @model.TextModel, @common.Position, @language.CancellationToken) -> @language.Hover?
+pub async fn MoonWorkspaceLanguageProvider::provide_references(Self, @model.TextModel, @common.Position, @language.CancellationToken) -> Array[@language.Location]
 pub impl @language.DefinitionProvider for MoonWorkspaceLanguageProvider
 pub impl @language.DocumentSymbolProvider for MoonWorkspaceLanguageProvider
 pub impl @language.HoverProvider for MoonWorkspaceLanguageProvider
@@ -39,6 +43,9 @@ pub impl @language.ReferencesProvider for MoonWorkspaceLanguageProvider
 
 type NativeServerHost
 pub fn NativeServerHost::NativeServerHost() -> Self
+pub async fn NativeServerHost::read_directory(Self, String, String) -> @server.ServerHostResolveResult
+pub async fn NativeServerHost::read_text_file(Self, String, @workspace.SourcePath) -> @server.ServerHostReadResult
+pub fn NativeServerHost::watch_text_file(Self, String, @workspace.SourcePath, async (@workspace.FileChangeType) -> Unit, (async () -> Unit) -> Unit) -> @server.ServerWatch
 pub fn NativeServerHost::with_poll_interval(Int) -> Self
 pub impl @server.ServerHost for NativeServerHost
 

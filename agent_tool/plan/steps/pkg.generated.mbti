@@ -18,18 +18,23 @@ pub fn decode(Json) -> PlanInput raise
 pub struct PlanInput {
   steps : Array[PlanStep]
 } derive(@debug.Debug)
+pub fn PlanInput::to_repr(Self) -> @debug.Repr
 
 pub enum PlanStatus {
   Pending
   InProgress
   Completed
 } derive(Eq, @debug.Debug)
+pub fn PlanStatus::equal(Self, Self) -> Bool
 pub fn PlanStatus::label(Self) -> String
+pub fn PlanStatus::not_equal(Self, Self) -> Bool
+pub fn PlanStatus::to_repr(Self) -> @debug.Repr
 
 pub struct PlanStep {
   title : String
   status : PlanStatus
 } derive(@debug.Debug)
+pub fn PlanStep::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

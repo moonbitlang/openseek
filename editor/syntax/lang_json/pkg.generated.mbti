@@ -12,6 +12,8 @@ import {
 // Types and methods
 type JsonTokenizer
 pub fn JsonTokenizer::JsonTokenizer() -> Self
+pub fn JsonTokenizer::initial_state(Self) -> @syntax.TokenizerState
+pub fn JsonTokenizer::tokenize_line(Self, StringView, @syntax.TokenizerState) -> (Array[@syntax.LineToken], @syntax.TokenizerState)
 pub impl @syntax.LineTokenizer for JsonTokenizer
 
 // Type aliases

@@ -24,6 +24,9 @@ pub struct Style {
   underline : Bool
 } derive(Eq, @debug.Debug)
 pub fn Style::Style(foreground? : @color.Color, background? : @color.Color, underline? : Bool) -> Self
+pub fn Style::equal(Self, Self) -> Bool
+pub fn Style::not_equal(Self, Self) -> Bool
+pub fn Style::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

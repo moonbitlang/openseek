@@ -17,17 +17,26 @@ pub(all) struct EnvAssignment {
   name : String
   value : String
 } derive(Eq, @debug.Debug)
+pub fn EnvAssignment::equal(Self, Self) -> Bool
+pub fn EnvAssignment::not_equal(Self, Self) -> Bool
+pub fn EnvAssignment::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ParseResult {
   Simple(Array[SimpleCommand])
   TooComplex(String)
   SyntaxError(String)
 } derive(Eq, @debug.Debug)
+pub fn ParseResult::equal(Self, Self) -> Bool
+pub fn ParseResult::not_equal(Self, Self) -> Bool
+pub fn ParseResult::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Redirect {
   op : String
   target : String
 } derive(Eq, @debug.Debug)
+pub fn Redirect::equal(Self, Self) -> Bool
+pub fn Redirect::not_equal(Self, Self) -> Bool
+pub fn Redirect::to_repr(Self) -> @debug.Repr
 
 pub struct SimpleCommand {
   argv : Array[String]
@@ -38,6 +47,9 @@ pub struct SimpleCommand {
 } derive(Eq, @debug.Debug)
 pub fn SimpleCommand::command_index(Self) -> Int?
 pub fn SimpleCommand::command_name(Self) -> String?
+pub fn SimpleCommand::equal(Self, Self) -> Bool
+pub fn SimpleCommand::not_equal(Self, Self) -> Bool
+pub fn SimpleCommand::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

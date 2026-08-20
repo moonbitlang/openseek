@@ -40,6 +40,8 @@ pub(all) enum ContentWidgetPositionPreference {
   Below
   Exact
 } derive(Eq)
+pub fn ContentWidgetPositionPreference::equal(Self, Self) -> Bool
+pub fn ContentWidgetPositionPreference::not_equal(Self, Self) -> Bool
 
 type ContentWidgets
 pub fn ContentWidgets::add_widget(Self, ContentWidgetHandle) -> Unit
@@ -53,6 +55,9 @@ pub fn EditorScrollbar::scrollable(Self) -> @scrollbar.ScrollableElementDom
 pub struct HorizontalPosition {
   left : Int
 } derive(Eq, @debug.Debug)
+pub fn HorizontalPosition::equal(Self, Self) -> Bool
+pub fn HorizontalPosition::not_equal(Self, Self) -> Bool
+pub fn HorizontalPosition::to_repr(Self) -> @debug.Repr
 
 type OverlayWidgets
 pub fn OverlayWidgets::add_widget(Self, @browser.OverlayWidget) -> Unit
@@ -72,7 +77,10 @@ pub(all) enum PartFingerprint {
   ViewLinesGpu
 } derive(Eq, @debug.Debug)
 pub fn PartFingerprint::collect(@dom.Element?, @dom.Element) -> Bytes
+pub fn PartFingerprint::equal(Self, Self) -> Bool
+pub fn PartFingerprint::not_equal(Self, Self) -> Bool
 pub fn PartFingerprint::to_int(Self) -> Int
+pub fn PartFingerprint::to_repr(Self) -> @debug.Repr
 
 pub struct View {
   root : @dom.Element
@@ -128,6 +136,9 @@ pub(all) enum ViewConfigurationOption {
   CursorSmoothCaretAnimation
   EffectiveEditContext
 } derive(Eq, @debug.Debug)
+pub fn ViewConfigurationOption::equal(Self, Self) -> Bool
+pub fn ViewConfigurationOption::not_equal(Self, Self) -> Bool
+pub fn ViewConfigurationOption::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ViewContext {
   measure_line_selection : (Int, Int, Int) -> Array[(Double, Double)]
@@ -175,6 +186,9 @@ pub fn ViewLines::install_live_configuration_reader(Self, () -> ViewLinesConfigu
 
 type ViewLinesConfiguration derive(Eq, @debug.Debug)
 pub fn ViewLinesConfiguration::ViewLinesConfiguration(line_height? : Int, typical_halfwidth_character_width? : Double, is_viewport_wrapping? : Bool, can_use_layer_hinting? : Bool, space_width? : Double, middot_width? : Double, wsmiddot_width? : Double, use_monospace_optimizations? : Bool, can_use_halfwidth_rightwards_arrow? : Bool, stop_rendering_line_after? : Int, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, font_ligatures? : Bool, vertical_scrollbar_size? : Double) -> Self
+pub fn ViewLinesConfiguration::equal(Self, Self) -> Bool
+pub fn ViewLinesConfiguration::not_equal(Self, Self) -> Bool
+pub fn ViewLinesConfiguration::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ViewRenderInput {
   window : @view_layout.LineWindow

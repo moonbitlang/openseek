@@ -49,6 +49,8 @@ pub enum BgJobStatus {
   Exited(Int)
   Stopped
 } derive(Eq)
+pub fn BgJobStatus::equal(Self, Self) -> Bool
+pub fn BgJobStatus::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

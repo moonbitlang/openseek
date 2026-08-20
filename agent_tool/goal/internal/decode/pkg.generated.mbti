@@ -16,6 +16,7 @@ pub enum GoalStatus {
   Continuing(String)
   Blocked(String)
 } derive(@debug.Debug)
+pub fn GoalStatus::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

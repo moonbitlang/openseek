@@ -27,7 +27,10 @@ pub struct WorkerInput {
   allowed_paths : Array[String]
   base_oid : String
 } derive(Eq, @debug.Debug)
+pub fn WorkerInput::equal(Self, Self) -> Bool
+pub fn WorkerInput::not_equal(Self, Self) -> Bool
 pub fn WorkerInput::parse(Json) -> Result[Self, String]
+pub fn WorkerInput::to_repr(Self) -> @debug.Repr
 
 pub struct WorkerReport {
   schema_version : Int
@@ -35,7 +38,12 @@ pub struct WorkerReport {
   summary : String
   verification : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn WorkerReport::equal(Self, Self) -> Bool
+pub fn WorkerReport::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn WorkerReport::not_equal(Self, Self) -> Bool
 pub fn WorkerReport::parse_validated(Json) -> Result[Self, String]
+pub fn WorkerReport::to_json(Self) -> Json
+pub fn WorkerReport::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

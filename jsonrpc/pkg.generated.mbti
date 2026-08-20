@@ -8,6 +8,8 @@ pub suberror ResponseError {
   Failed(code~ : Int, message~ : String, data~ : Json?)
   Closed
 }
+pub fn ResponseError::output(Self, &Logger) -> Unit
+pub fn ResponseError::to_string(Self) -> String
 pub impl Show for ResponseError
 
 // Types and methods

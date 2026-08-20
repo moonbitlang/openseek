@@ -31,7 +31,10 @@ pub fn to_selected_lines(Array[@core.Selection]) -> SelectedLines
 type FoldRange derive(Eq, @debug.Debug)
 pub fn FoldRange::FoldRange(Int, Int, type_? : String) -> Self
 pub fn FoldRange::end_line_number(Self) -> Int
+pub fn FoldRange::equal(Self, Self) -> Bool
+pub fn FoldRange::not_equal(Self, Self) -> Bool
 pub fn FoldRange::start_line_number(Self) -> Int
+pub fn FoldRange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FoldingController {
   mut folding_model : FoldingModel?
@@ -99,6 +102,9 @@ pub(all) struct LineRange {
   start_line_number : Int
   end_line_number : Int
 } derive(Eq, @debug.Debug)
+pub fn LineRange::equal(Self, Self) -> Bool
+pub fn LineRange::not_equal(Self, Self) -> Bool
+pub fn LineRange::to_repr(Self) -> @debug.Repr
 
 type RegionFilter
 pub fn RegionFilter::RegionFilter((FoldingRegion) -> Bool) -> Self

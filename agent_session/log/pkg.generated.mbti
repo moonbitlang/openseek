@@ -21,12 +21,16 @@ pub enum HeaderParse {
   UnsupportedVersion(Int)
   NotHeader
 } derive(@debug.Debug)
+pub fn HeaderParse::to_repr(Self) -> @debug.Repr
 
 pub struct LineError {
   line_number : Int
   content : String
   message : String
 } derive(Eq, @debug.Debug)
+pub fn LineError::equal(Self, Self) -> Bool
+pub fn LineError::not_equal(Self, Self) -> Bool
+pub fn LineError::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ParsedLog {
   header : SessionFileHeader?
@@ -34,11 +38,18 @@ pub(all) struct ParsedLog {
   errors : Array[LineError]
   partial_tail : Bool
 } derive(Eq, @debug.Debug)
+pub fn ParsedLog::equal(Self, Self) -> Bool
+pub fn ParsedLog::not_equal(Self, Self) -> Bool
+pub fn ParsedLog::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionFileHeader {
   id : String
   system_prompt : String
 } derive(Eq, @debug.Debug)
+pub fn SessionFileHeader::equal(Self, Self) -> Bool
+pub fn SessionFileHeader::not_equal(Self, Self) -> Bool
+pub fn SessionFileHeader::to_json(Self) -> Json
+pub fn SessionFileHeader::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionFileHeader
 
 // Type aliases

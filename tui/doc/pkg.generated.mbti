@@ -21,6 +21,7 @@ pub fn Doc::layout(Self, width~ : Int) -> Array[@surface.Line]
 type Span derive(@debug.Debug)
 pub fn Span::Span(@displaytext.DisplayText, style? : @style.Style) -> Self
 pub fn Span::plain(String) -> Self
+pub fn Span::to_repr(Self) -> @debug.Repr
 
 type Text derive(@debug.Debug)
 pub fn Text::Text(Array[Span]) -> Self
@@ -28,6 +29,7 @@ pub fn Text::first_line(Self, width~ : Int) -> @surface.Line
 pub fn Text::plain(String) -> Self
 pub fn Text::prepend_span(Self, Span) -> Self
 pub fn Text::split_lines(Self) -> Array[Self]
+pub fn Text::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

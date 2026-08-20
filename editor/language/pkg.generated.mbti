@@ -32,6 +32,9 @@ pub(all) struct Diagnostic {
   message : String
   tags : Array[DiagnosticTag]?
 } derive(Eq, @debug.Debug)
+pub fn Diagnostic::equal(Self, Self) -> Bool
+pub fn Diagnostic::not_equal(Self, Self) -> Bool
+pub fn Diagnostic::to_repr(Self) -> @debug.Repr
 
 pub(all) enum DiagnosticSeverity {
   Error
@@ -39,34 +42,46 @@ pub(all) enum DiagnosticSeverity {
   Info
   Hint
 } derive(Eq, @debug.Debug)
+pub fn DiagnosticSeverity::equal(Self, Self) -> Bool
 pub fn DiagnosticSeverity::label(Self) -> String
+pub fn DiagnosticSeverity::not_equal(Self, Self) -> Bool
+pub fn DiagnosticSeverity::to_repr(Self) -> @debug.Repr
 
 pub(all) enum DiagnosticTag {
   Unnecessary
   Deprecated
 } derive(Eq, @debug.Debug)
+pub fn DiagnosticTag::equal(Self, Self) -> Bool
 pub fn DiagnosticTag::label(Self) -> String
+pub fn DiagnosticTag::not_equal(Self, Self) -> Bool
+pub fn DiagnosticTag::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DocumentSymbol {
   name : String
   kind : String
   range : @common.Range
 } derive(@debug.Debug)
+pub fn DocumentSymbol::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Hover {
   range : @common.Range
   contents : Array[HoverContent]
 } derive(@debug.Debug)
+pub fn Hover::to_repr(Self) -> @debug.Repr
 
 pub(all) enum HoverContent {
   PlainText(String)
   Markdown(String)
 } derive(Eq, @debug.Debug)
+pub fn HoverContent::equal(Self, Self) -> Bool
+pub fn HoverContent::not_equal(Self, Self) -> Bool
+pub fn HoverContent::to_repr(Self) -> @debug.Repr
 
 type LanguageFilter derive(@debug.Debug)
 pub fn LanguageFilter::LanguageFilter(language? : String, scheme? : String, pattern? : String) -> Self
 pub fn LanguageFilter::matches(Self, @model.TextModel) -> Bool
 pub fn LanguageFilter::score(Self, @model.TextModel) -> Int
+pub fn LanguageFilter::to_repr(Self) -> @debug.Repr
 
 pub(all) enum LanguageSelector {
   LanguageId(String)
@@ -75,16 +90,21 @@ pub(all) enum LanguageSelector {
 } derive(@debug.Debug)
 pub fn LanguageSelector::matches(Self, @model.TextModel) -> Bool
 pub fn LanguageSelector::score(Self, @model.TextModel) -> Int
+pub fn LanguageSelector::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Location {
   uri : @common.Uri
   range : @common.Range
 } derive(@debug.Debug)
+pub fn Location::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MarkdownCommentBlock {
   line_range : @common.LineRange
   markdown : String
 } derive(Eq, @debug.Debug)
+pub fn MarkdownCommentBlock::equal(Self, Self) -> Bool
+pub fn MarkdownCommentBlock::not_equal(Self, Self) -> Bool
+pub fn MarkdownCommentBlock::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

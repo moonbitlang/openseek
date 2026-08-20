@@ -62,6 +62,9 @@ pub(all) enum CursorMoveDirection {
   ViewPortIfOutside
 } derive(Eq, @debug.Debug)
 pub fn CursorMoveDirection::as_simple(Self) -> SimpleMoveDirection?
+pub fn CursorMoveDirection::equal(Self, Self) -> Bool
+pub fn CursorMoveDirection::not_equal(Self, Self) -> Bool
+pub fn CursorMoveDirection::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CursorMoveUnit {
   None
@@ -71,6 +74,9 @@ pub(all) enum CursorMoveUnit {
   HalfLine
   FoldedLine
 } derive(Eq, @debug.Debug)
+pub fn CursorMoveUnit::equal(Self, Self) -> Bool
+pub fn CursorMoveUnit::not_equal(Self, Self) -> Bool
+pub fn CursorMoveUnit::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CursorStateChangedEvent {
   kind : OutgoingViewModelEventKind
@@ -83,6 +89,7 @@ pub(all) struct CursorStateChangedEvent {
   reached_max_cursor_count : Bool
 } derive(@debug.Debug)
 pub fn CursorStateChangedEvent::is_no_op(Self) -> Bool
+pub fn CursorStateChangedEvent::to_repr(Self) -> @debug.Repr
 
 pub struct DecorationToRender {
   start_line_number : Int
@@ -90,12 +97,16 @@ pub struct DecorationToRender {
   class_name : String
   z_index : Int
 } derive(Eq, @debug.Debug)
+pub fn DecorationToRender::equal(Self, Self) -> Bool
+pub fn DecorationToRender::not_equal(Self, Self) -> Bool
+pub fn DecorationToRender::to_repr(Self) -> @debug.Repr
 
 pub struct HiddenAreasChangedOutgoingEvent {
   kind : OutgoingViewModelEventKind
 } derive(@debug.Debug)
 pub fn HiddenAreasChangedOutgoingEvent::HiddenAreasChangedOutgoingEvent() -> Self
 pub fn HiddenAreasChangedOutgoingEvent::is_no_op(Self) -> Bool
+pub fn HiddenAreasChangedOutgoingEvent::to_repr(Self) -> @debug.Repr
 
 pub struct InjectedText {
   position : @common.Position
@@ -104,6 +115,9 @@ pub struct InjectedText {
   source_index : Int
 } derive(Eq, @debug.Debug)
 pub fn InjectedText::InjectedText(@common.Position, String, String, source_index? : Int) -> Self
+pub fn InjectedText::equal(Self, Self) -> Bool
+pub fn InjectedText::not_equal(Self, Self) -> Bool
+pub fn InjectedText::to_repr(Self) -> @debug.Repr
 
 type LineBreaksComputer
 pub fn LineBreaksComputer::add_request(Self, Int, String, Array[InjectedText]) -> Unit
@@ -133,7 +147,10 @@ pub struct ModelLineProjectionData {
   segments : Array[ModelLineProjectionSegment]
 } derive(Eq, @debug.Debug)
 pub fn ModelLineProjectionData::ModelLineProjectionData(Int, Int, ProjectedTextLine, Array[ModelLineProjectionSegment]) -> Self
+pub fn ModelLineProjectionData::equal(Self, Self) -> Bool
+pub fn ModelLineProjectionData::not_equal(Self, Self) -> Bool
 pub fn ModelLineProjectionData::segment_at_view_line_index(Self, Int) -> ModelLineProjectionSegment
+pub fn ModelLineProjectionData::to_repr(Self) -> @debug.Repr
 pub fn ModelLineProjectionData::view_line_count(Self) -> Int
 pub fn ModelLineProjectionData::view_line_index_for_model_column(Self, Int) -> Int
 pub fn ModelLineProjectionData::view_line_index_for_projected_column(Self, Int, affinity? : @model.PositionAffinity) -> Int
@@ -148,6 +165,9 @@ pub struct ModelLineProjectionSegment {
   continues_with_wrapped_line : Bool
   wrapped_text_indent_length : Int
 } derive(Eq, @debug.Debug)
+pub fn ModelLineProjectionSegment::equal(Self, Self) -> Bool
+pub fn ModelLineProjectionSegment::not_equal(Self, Self) -> Bool
+pub fn ModelLineProjectionSegment::to_repr(Self) -> @debug.Repr
 
 pub struct ModelTokensChangedOutgoingEvent {
   kind : OutgoingViewModelEventKind
@@ -167,17 +187,26 @@ pub(all) enum OutgoingViewModelEventKind {
   CursorStateChanged
   ModelTokensChanged
 } derive(Eq, @debug.Debug)
+pub fn OutgoingViewModelEventKind::equal(Self, Self) -> Bool
+pub fn OutgoingViewModelEventKind::not_equal(Self, Self) -> Bool
+pub fn OutgoingViewModelEventKind::to_repr(Self) -> @debug.Repr
 
 pub struct ProjectedLinePart {
   start : Int
   end : Int
   kind : ProjectedLinePartKind
 } derive(Eq, @debug.Debug)
+pub fn ProjectedLinePart::equal(Self, Self) -> Bool
+pub fn ProjectedLinePart::not_equal(Self, Self) -> Bool
+pub fn ProjectedLinePart::to_repr(Self) -> @debug.Repr
 
 pub enum ProjectedLinePartKind {
   SourceSegment(model_start~ : Int, model_end~ : Int)
   InjectedSegment(model_column~ : Int, injected_text_index~ : Int, class_name~ : String)
 } derive(Eq, @debug.Debug)
+pub fn ProjectedLinePartKind::equal(Self, Self) -> Bool
+pub fn ProjectedLinePartKind::not_equal(Self, Self) -> Bool
+pub fn ProjectedLinePartKind::to_repr(Self) -> @debug.Repr
 
 pub struct ProjectedTextLine {
   text : String
@@ -187,12 +216,15 @@ pub struct ProjectedTextLine {
   model_to_projected_columns : Array[Int]
   parts : Array[ProjectedLinePart]
 } derive(Eq, @debug.Debug)
+pub fn ProjectedTextLine::equal(Self, Self) -> Bool
 pub fn ProjectedTextLine::from_injected_text(String, Array[InjectedText]) -> Self
 pub fn ProjectedTextLine::identity(String) -> Self
 pub fn ProjectedTextLine::injected_text_index_at_projected_column(Self, Int) -> Int
 pub fn ProjectedTextLine::model_column_to_projected_column(Self, Int, affinity? : @model.PositionAffinity) -> Int
 pub fn ProjectedTextLine::normalize_projected_column_around_injections(Self, Int, @model.PositionAffinity) -> Int
+pub fn ProjectedTextLine::not_equal(Self, Self) -> Bool
 pub fn ProjectedTextLine::projected_column_to_model_column(Self, Int) -> Int
+pub fn ProjectedTextLine::to_repr(Self) -> @debug.Repr
 
 pub struct SimpleMoveArguments {
   direction : SimpleMoveDirection
@@ -201,6 +233,9 @@ pub struct SimpleMoveArguments {
   value : Int
 } derive(Eq, @debug.Debug)
 pub fn SimpleMoveArguments::SimpleMoveArguments(SimpleMoveDirection, CursorMoveUnit, Bool, Int) -> Self
+pub fn SimpleMoveArguments::equal(Self, Self) -> Bool
+pub fn SimpleMoveArguments::not_equal(Self, Self) -> Bool
+pub fn SimpleMoveArguments::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SimpleMoveDirection {
   Left
@@ -215,6 +250,9 @@ pub(all) enum SimpleMoveDirection {
   WrappedLineEnd
   WrappedLineLastNonWhitespaceCharacter
 } derive(Eq, @debug.Debug)
+pub fn SimpleMoveDirection::equal(Self, Self) -> Bool
+pub fn SimpleMoveDirection::not_equal(Self, Self) -> Bool
+pub fn SimpleMoveDirection::to_repr(Self) -> @debug.Repr
 
 pub struct ViewDecorationsCollection {
   decorations : Array[ViewModelDecoration]
@@ -348,25 +386,35 @@ pub struct ViewModelOptions {
   render_validation_decorations : @editor_api.RenderValidationDecorations
 } derive(Eq, @debug.Debug)
 pub fn ViewModelOptions::ViewModelOptions(font_info? : @config.FontInfo, soft_wrap_column? : Int, tab_size? : Int, wrapping_indent? : @editor_api.WrappingIndent, editor_id? : Int, render_validation_decorations? : @editor_api.RenderValidationDecorations) -> Self
+pub fn ViewModelOptions::equal(Self, Self) -> Bool
 pub fn ViewModelOptions::is_soft_wrap_enabled(Self) -> Bool
 pub fn ViewModelOptions::no_wrap() -> Self
+pub fn ViewModelOptions::not_equal(Self, Self) -> Bool
 pub fn ViewModelOptions::soft_wrap(Int, tab_size? : Int, wrapping_indent? : @editor_api.WrappingIndent) -> Self
+pub fn ViewModelOptions::to_repr(Self) -> @debug.Repr
 
 pub struct ViewTokensChangedRange {
   from_line_number : Int
   to_line_number : Int
 } derive(Eq, @debug.Debug)
+pub fn ViewTokensChangedRange::equal(Self, Self) -> Bool
+pub fn ViewTokensChangedRange::not_equal(Self, Self) -> Bool
+pub fn ViewTokensChangedRange::to_repr(Self) -> @debug.Repr
 
 pub struct ViewZonesChangedEvent {
   kind : OutgoingViewModelEventKind
 } derive(@debug.Debug)
 pub fn ViewZonesChangedEvent::ViewZonesChangedEvent() -> Self
 pub fn ViewZonesChangedEvent::is_no_op(Self) -> Bool
+pub fn ViewZonesChangedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) enum WordBreak {
   Normal
   KeepAll
 } derive(Eq, @debug.Debug)
+pub fn WordBreak::equal(Self, Self) -> Bool
+pub fn WordBreak::not_equal(Self, Self) -> Bool
+pub fn WordBreak::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

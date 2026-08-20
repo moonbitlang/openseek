@@ -21,12 +21,16 @@ pub(all) enum OpenLocationMode {
   Current
   Side
 } derive(Eq, @debug.Debug)
+pub fn OpenLocationMode::equal(Self, Self) -> Bool
+pub fn OpenLocationMode::not_equal(Self, Self) -> Bool
+pub fn OpenLocationMode::to_repr(Self) -> @debug.Repr
 
 pub(all) struct OpenLocationRequest {
   source_viewer_id : String
   location : @language.Location
   mode : OpenLocationMode
 } derive(@debug.Debug)
+pub fn OpenLocationRequest::to_repr(Self) -> @debug.Repr
 
 type TextModelReference
 pub fn TextModelReference::TextModelReference(@model.TextModel, release~ : () -> Unit) -> Self

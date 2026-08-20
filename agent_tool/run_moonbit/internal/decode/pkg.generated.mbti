@@ -17,6 +17,7 @@ pub struct RunMoonbitInput {
   cwd : String?
   warning : Bool
 } derive(@debug.Debug)
+pub fn RunMoonbitInput::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

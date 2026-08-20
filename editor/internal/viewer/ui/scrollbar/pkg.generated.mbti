@@ -33,6 +33,9 @@ pub(all) enum CssLength {
   Pixels(Double)
   Raw(String)
 } derive(Eq, @debug.Debug)
+pub fn CssLength::equal(Self, Self) -> Bool
+pub fn CssLength::not_equal(Self, Self) -> Bool
+pub fn CssLength::to_repr(Self) -> @debug.Repr
 
 type MouseWheelClassifier
 pub fn MouseWheelClassifier::accept_standard_wheel_event(Self, StandardWheelEvent) -> Unit

@@ -32,8 +32,11 @@ pub struct BareFontInfo {
   letter_spacing : Double
 } derive(Eq, @debug.Debug)
 pub fn BareFontInfo::create(font_family~ : String, font_weight~ : String, font_size~ : Double, font_feature_settings~ : String, font_variation_settings~ : String, line_height~ : Double, letter_spacing~ : Double, pixel_ratio~ : Double) -> Self
+pub fn BareFontInfo::equal(Self, Self) -> Bool
 pub fn BareFontInfo::get_id(Self) -> String
 pub fn BareFontInfo::get_massaged_font_family(Self) -> String
+pub fn BareFontInfo::not_equal(Self, Self) -> Bool
+pub fn BareFontInfo::to_repr(Self) -> @debug.Repr
 
 pub struct EditorFontDefaults {
   font_family : String
@@ -42,6 +45,9 @@ pub struct EditorFontDefaults {
   line_height : Double
   letter_spacing : Double
 } derive(Eq, @debug.Debug)
+pub fn EditorFontDefaults::equal(Self, Self) -> Bool
+pub fn EditorFontDefaults::not_equal(Self, Self) -> Bool
+pub fn EditorFontDefaults::to_repr(Self) -> @debug.Repr
 
 pub(all) struct EditorLayoutInfo {
   width : Double
@@ -57,6 +63,9 @@ pub(all) struct EditorLayoutInfo {
   horizontal_scrollbar_height : Double
   vertical_scrollbar_width : Double
 } derive(Eq, @debug.Debug)
+pub fn EditorLayoutInfo::equal(Self, Self) -> Bool
+pub fn EditorLayoutInfo::not_equal(Self, Self) -> Bool
+pub fn EditorLayoutInfo::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FontInfo {
   pixel_ratio : Double
@@ -79,9 +88,12 @@ pub(all) struct FontInfo {
 } derive(Eq, @debug.Debug)
 pub fn FontInfo::bare(Self) -> BareFontInfo
 pub fn FontInfo::default() -> Self
+pub fn FontInfo::equal(Self, Self) -> Bool
 pub fn FontInfo::equals(Self, Self) -> Bool
 pub fn FontInfo::estimated(BareFontInfo) -> Self
 pub fn FontInfo::get_id(Self) -> String
+pub fn FontInfo::not_equal(Self, Self) -> Bool
+pub fn FontInfo::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

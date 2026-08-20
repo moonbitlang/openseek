@@ -72,7 +72,9 @@ pub fn LineTokens::slice_and_inflate(Self, Int, Int, Int) -> ViewLineTokens
 pub fn LineTokens::with_inserted(Self, Array[InsertedToken]) -> Self
 
 pub(all) struct TokenMetadata(UInt) derive(Eq)
+pub fn TokenMetadata::equal(Self, Self) -> Bool
 pub fn TokenMetadata::get_class_name(Self) -> String
+pub fn TokenMetadata::not_equal(Self, Self) -> Bool
 pub fn TokenMetadata::to_uint(Self) -> UInt
 
 type ViewLineTokens

@@ -19,6 +19,9 @@ pub(all) struct ReferenceGroup {
   uri_string : String
   references : Array[ReferenceItem]
 } derive(Eq, @debug.Debug)
+pub fn ReferenceGroup::equal(Self, Self) -> Bool
+pub fn ReferenceGroup::not_equal(Self, Self) -> Bool
+pub fn ReferenceGroup::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ReferenceItem {
   flat_index : Int
@@ -28,14 +31,20 @@ pub(all) struct ReferenceItem {
   uri_string : String
   range : @common.Range
 } derive(Eq, @debug.Debug)
+pub fn ReferenceItem::equal(Self, Self) -> Bool
 pub fn ReferenceItem::fallback_label(Self) -> String
 pub fn ReferenceItem::location(Self) -> @language.Location
+pub fn ReferenceItem::not_equal(Self, Self) -> Bool
 pub fn ReferenceItem::row_preview(Self, @model.TextModel?) -> ReferenceRowPreview
+pub fn ReferenceItem::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ReferenceRowPreview {
   Snippet(ReferenceSnippet)
   LocationFallback(String)
 } derive(Eq, @debug.Debug)
+pub fn ReferenceRowPreview::equal(Self, Self) -> Bool
+pub fn ReferenceRowPreview::not_equal(Self, Self) -> Bool
+pub fn ReferenceRowPreview::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ReferenceSnippet {
   before : String
@@ -43,21 +52,30 @@ pub(all) struct ReferenceSnippet {
   after : String
 } derive(Eq, @debug.Debug)
 pub fn ReferenceSnippet::display_text(Self) -> String
+pub fn ReferenceSnippet::equal(Self, Self) -> Bool
+pub fn ReferenceSnippet::not_equal(Self, Self) -> Bool
+pub fn ReferenceSnippet::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ReferencesModel {
   groups : Array[ReferenceGroup]
   references : Array[ReferenceItem]
 } derive(Eq, @debug.Debug)
 pub fn ReferencesModel::ReferencesModel(Array[@language.Location]) -> Self
+pub fn ReferencesModel::equal(Self, Self) -> Bool
 pub fn ReferencesModel::is_empty(Self) -> Bool
 pub fn ReferencesModel::nearest_reference(Self, @common.Uri, @common.Position) -> ReferenceItem?
 pub fn ReferencesModel::next_reference(Self, ReferenceItem) -> ReferenceItem?
+pub fn ReferencesModel::not_equal(Self, Self) -> Bool
 pub fn ReferencesModel::previous_reference(Self, ReferenceItem) -> ReferenceItem?
+pub fn ReferencesModel::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ReferencesPeekMode {
   Definitions
   References
 } derive(Eq, @debug.Debug)
+pub fn ReferencesPeekMode::equal(Self, Self) -> Bool
+pub fn ReferencesPeekMode::not_equal(Self, Self) -> Bool
+pub fn ReferencesPeekMode::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ReferencesPeekPhase {
   PeekClosed
@@ -67,6 +85,9 @@ pub(all) enum ReferencesPeekPhase {
   PeekShown(Int, Int)
   PeekUnavailable(Int, Int)
 } derive(Eq, @debug.Debug)
+pub fn ReferencesPeekPhase::equal(Self, Self) -> Bool
+pub fn ReferencesPeekPhase::not_equal(Self, Self) -> Bool
+pub fn ReferencesPeekPhase::to_repr(Self) -> @debug.Repr
 
 pub struct ReferencesSessionKey {
   model_identity : Int
@@ -74,8 +95,11 @@ pub struct ReferencesSessionKey {
   model_version_id : Int
   anchor : @common.Position
 } derive(Eq, @debug.Debug)
+pub fn ReferencesSessionKey::equal(Self, Self) -> Bool
 pub fn ReferencesSessionKey::from_model(@model.TextModel, Int, @common.Position) -> Self
 pub fn ReferencesSessionKey::is_current(Self, @model.TextModel, Int) -> Bool
+pub fn ReferencesSessionKey::not_equal(Self, Self) -> Bool
+pub fn ReferencesSessionKey::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

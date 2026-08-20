@@ -48,6 +48,8 @@ pub async fn write_text(String, String) -> Unit
 pub(all) suberror PackageError {
   PackageError(String)
 }
+pub fn PackageError::output(Self, &Logger) -> Unit
+pub fn PackageError::to_string(Self) -> String
 pub impl Show for PackageError
 
 // Types and methods

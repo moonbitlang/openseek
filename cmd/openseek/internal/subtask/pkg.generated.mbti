@@ -58,6 +58,9 @@ pub struct Change {
   path : String
   kind : String
 } derive(Eq, @debug.Debug)
+pub fn Change::equal(Self, Self) -> Bool
+pub fn Change::not_equal(Self, Self) -> Bool
+pub fn Change::to_repr(Self) -> @debug.Repr
 
 pub struct Geometry {
   origin_root : String
@@ -97,6 +100,11 @@ pub struct SubtaskEntry {
   origin_head_before : String?
   conflict_paths : Array[String]
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn SubtaskEntry::equal(Self, Self) -> Bool
+pub fn SubtaskEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubtaskEntry::not_equal(Self, Self) -> Bool
+pub fn SubtaskEntry::to_json(Self) -> Json
+pub fn SubtaskEntry::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SubtaskState {
   Provisioning
@@ -108,7 +116,12 @@ pub(all) enum SubtaskState {
   Discarded
   NoChanges
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn SubtaskState::equal(Self, Self) -> Bool
+pub fn SubtaskState::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SubtaskState::is_terminal(Self) -> Bool
+pub fn SubtaskState::not_equal(Self, Self) -> Bool
+pub fn SubtaskState::to_json(Self) -> Json
+pub fn SubtaskState::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

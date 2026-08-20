@@ -39,13 +39,21 @@ pub struct AssistantMessage {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn AssistantMessage::AssistantMessage(String, tool_calls? : Array[@deepseek.ToolCall], reasoning_content? : String) -> Self
 pub fn AssistantMessage::content(Self) -> String
+pub fn AssistantMessage::equal(Self, Self) -> Bool
+pub fn AssistantMessage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AssistantMessage::not_equal(Self, Self) -> Bool
 pub fn AssistantMessage::reasoning_content(Self) -> String?
+pub fn AssistantMessage::to_json(Self) -> Json
+pub fn AssistantMessage::to_repr(Self) -> @debug.Repr
 pub fn AssistantMessage::tool_calls(Self) -> Array[@deepseek.ToolCall]
 
 pub(all) struct GoalBaseline {
   sha : String
   dirty : Bool
 } derive(Eq, @debug.Debug)
+pub fn GoalBaseline::equal(Self, Self) -> Bool
+pub fn GoalBaseline::not_equal(Self, Self) -> Bool
+pub fn GoalBaseline::to_repr(Self) -> @debug.Repr
 
 pub enum GoalMarker {
   GoalSet(String)
@@ -53,12 +61,18 @@ pub enum GoalMarker {
   GoalBlocked(String)
   GoalUnblocked
 } derive(@debug.Debug)
+pub fn GoalMarker::to_repr(Self) -> @debug.Repr
 
 pub struct RuntimeNotice {
   // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn RuntimeNotice::RuntimeNotice(String) -> Self
 pub fn RuntimeNotice::content(Self) -> String
+pub fn RuntimeNotice::equal(Self, Self) -> Bool
+pub fn RuntimeNotice::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn RuntimeNotice::not_equal(Self, Self) -> Bool
+pub fn RuntimeNotice::to_json(Self) -> Json
+pub fn RuntimeNotice::to_repr(Self) -> @debug.Repr
 
 pub struct Session {
   // private fields
@@ -70,26 +84,40 @@ pub fn Session::chat_messages(Self) -> Array[@deepseek.ChatMessage]
 pub fn Session::compact(Self, content~ : String, from_sequence~ : Int, to_sequence~ : Int, unix_ms? : Int64) -> Self raise
 pub fn Session::current_goal(Self) -> StandingGoal?
 pub fn Session::current_goal_baseline(Self) -> GoalBaseline?
+pub fn Session::equal(Self, Self) -> Bool
 pub fn Session::events(Self) -> @vector.Vector[SessionEvent]
+pub fn Session::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn Session::id(Self) -> SessionId
 pub fn Session::last_sequence(Self) -> Int
+pub fn Session::not_equal(Self, Self) -> Bool
 pub fn Session::summary_item(Self, content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> SessionItem raise
 pub fn Session::system_prompt(Self) -> String
+pub fn Session::to_json(Self) -> Json
+pub fn Session::to_repr(Self) -> @debug.Repr
 pub impl ToJson for Session
 pub impl @json.FromJson for Session
 
 pub struct SessionEvent {
   // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn SessionEvent::equal(Self, Self) -> Bool
+pub fn SessionEvent::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionEvent::item(Self) -> SessionItem
+pub fn SessionEvent::not_equal(Self, Self) -> Bool
 pub fn SessionEvent::sequence(Self) -> Int
+pub fn SessionEvent::to_json(Self) -> Json
+pub fn SessionEvent::to_repr(Self) -> @debug.Repr
 pub fn SessionEvent::unix_ms(Self) -> Int64
 
 pub struct SessionId {
   // private fields
 } derive(Eq, @debug.Debug)
 pub fn SessionId::SessionId(String) -> Self
+pub fn SessionId::equal(Self, Self) -> Bool
+pub fn SessionId::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionId::generated(prefix~ : String, now_ms~ : Int64, salt? : String) -> Self
+pub fn SessionId::not_equal(Self, Self) -> Bool
+pub fn SessionId::to_repr(Self) -> @debug.Repr
 pub fn SessionId::value(Self) -> String
 pub impl @json.FromJson for SessionId
 
@@ -101,6 +129,10 @@ pub(all) enum SessionItem {
   Summary(SessionSummary)
   Terminal(TurnTerminal)
 } derive(Eq, @debug.Debug)
+pub fn SessionItem::equal(Self, Self) -> Bool
+pub fn SessionItem::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionItem::not_equal(Self, Self) -> Bool
+pub fn SessionItem::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for SessionItem
 
 pub struct SessionSummary {
@@ -108,7 +140,12 @@ pub struct SessionSummary {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn SessionSummary::SessionSummary(content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> Self
 pub fn SessionSummary::content(Self) -> String
+pub fn SessionSummary::equal(Self, Self) -> Bool
+pub fn SessionSummary::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionSummary::from_sequence(Self) -> Int
+pub fn SessionSummary::not_equal(Self, Self) -> Bool
+pub fn SessionSummary::to_json(Self) -> Json
+pub fn SessionSummary::to_repr(Self) -> @debug.Repr
 pub fn SessionSummary::to_sequence(Self) -> Int
 
 pub struct StandingGoal {
@@ -118,6 +155,7 @@ pub fn StandingGoal::answered_since_set(Self) -> Bool
 pub fn StandingGoal::blocked(Self) -> Bool
 pub fn StandingGoal::set_sequence(Self) -> Int
 pub fn StandingGoal::text(Self) -> String
+pub fn StandingGoal::to_repr(Self) -> @debug.Repr
 
 pub struct ToolResult {
   // private fields
@@ -125,7 +163,12 @@ pub struct ToolResult {
 pub fn ToolResult::ToolResult(tool_call_id~ : String, tool_name~ : String, content~ : String, is_error? : Bool, brief? : String) -> Self
 pub fn ToolResult::brief(Self) -> String?
 pub fn ToolResult::content(Self) -> String
+pub fn ToolResult::equal(Self, Self) -> Bool
+pub fn ToolResult::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ToolResult::is_error(Self) -> Bool
+pub fn ToolResult::not_equal(Self, Self) -> Bool
+pub fn ToolResult::to_json(Self) -> Json
+pub fn ToolResult::to_repr(Self) -> @debug.Repr
 pub fn ToolResult::tool_call_id(Self) -> String
 pub fn ToolResult::tool_name(Self) -> String
 
@@ -135,6 +178,10 @@ pub(all) enum TurnTerminal {
   Interrupted(String)
   Failed(String)
 } derive(Eq, @debug.Debug)
+pub fn TurnTerminal::equal(Self, Self) -> Bool
+pub fn TurnTerminal::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn TurnTerminal::not_equal(Self, Self) -> Bool
+pub fn TurnTerminal::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for TurnTerminal
 
 pub struct UserMessage {
@@ -142,7 +189,12 @@ pub struct UserMessage {
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn UserMessage::UserMessage(String, submission_id? : String) -> Self
 pub fn UserMessage::content(Self) -> String
+pub fn UserMessage::equal(Self, Self) -> Bool
+pub fn UserMessage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn UserMessage::not_equal(Self, Self) -> Bool
 pub fn UserMessage::submission_id(Self) -> String?
+pub fn UserMessage::to_json(Self) -> Json
+pub fn UserMessage::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 
