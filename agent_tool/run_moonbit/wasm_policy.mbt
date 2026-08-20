@@ -233,7 +233,8 @@ async fn wasm_policy_document(
 /// There is no third location — a path like `$HOME/Library/MoonBit` is where an
 /// installer may put the toolchain, but then it exports `MOON_HOME` to match, so
 /// listing it as a fallback would only widen the sandbox for hosts that do not
-/// use it.
+/// use it. What `toolchain_roots` adds on top of this answer is the DEFAULT
+/// location as well, which is a different question — see there.
 fn moon_home() -> String? {
   if @env.get_env_var("MOON_HOME") is Some(home) && home != "" {
     return Some(home)
@@ -297,6 +298,20 @@ async fn toolchain_roots() -> Array[String] {
   let roots = []
   if moon_home() is Some(home) {
     roots.push(home)
+  }
+  // `$HOME/.moon` even when `MOON_HOME` points elsewhere. It is the DEFAULT
+  // registry location and the one a snippet reaches for by name — the API
+  // lookup a turn is taught is `${MOON_HOME:-$HOME/.moon}`, and a machine that
+  // relocated `MOON_HOME` usually still has a registry here. A run spent a step
+  // on this: it read `~/.moon` to find a package's `.mbti`, got a policy
+  // refusal rather than a plain "no such file", and had to work out which of
+  // the two it was looking at. Reads only, and this list is already the
+  // toolchain's.
+  if @env.get_env_var("HOME") is Some(home) && home != "" {
+    let default_home = "\{home}/.moon"
+    if !roots.contains(default_home) {
+      roots.push(default_home)
+    }
   }
   if toolchain_root.wait() is Some(root) {
     roots.push(root)
