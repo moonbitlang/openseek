@@ -32,6 +32,7 @@ pub(all) enum MermaidTheme {
 } derive(Eq, @debug.Debug)
 pub fn MermaidTheme::equal(Self, Self) -> Bool
 pub fn MermaidTheme::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MermaidTheme::to_repr(Self) -> @debug.Repr
 
 pub struct RenderedMarkdown {

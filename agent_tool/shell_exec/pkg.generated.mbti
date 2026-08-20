@@ -20,6 +20,7 @@ pub enum ExecStatus {
 } derive(Eq, @debug.Debug)
 pub fn ExecStatus::equal(Self, Self) -> Bool
 pub fn ExecStatus::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ExecStatus::to_repr(Self) -> @debug.Repr
 
 pub struct ShellExecution {

@@ -32,12 +32,14 @@ pub struct Marker {
 } derive(Eq, @debug.Debug)
 pub fn Marker::equal(Self, Self) -> Bool
 pub fn Marker::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn Marker::to_repr(Self) -> @debug.Repr
 
 type MarkerData derive(Eq, @debug.Debug)
 pub fn MarkerData::MarkerData(severity~ : MarkerSeverity, message~ : String, start_line_number~ : Int, start_column~ : Int, end_line_number~ : Int, end_column~ : Int, code? : String, source? : String, model_version_id? : Int, related_information? : Array[RelatedInformation], tags? : Array[MarkerTag], origin? : String) -> Self
 pub fn MarkerData::equal(Self, Self) -> Bool
 pub fn MarkerData::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MarkerData::to_repr(Self) -> @debug.Repr
 
 type MarkerDecorationsHandle
@@ -81,6 +83,7 @@ pub(all) enum MarkerSeverity {
 } derive(Eq, @debug.Debug)
 pub fn MarkerSeverity::equal(Self, Self) -> Bool
 pub fn MarkerSeverity::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MarkerSeverity::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MarkerTag {
@@ -89,6 +92,7 @@ pub(all) enum MarkerTag {
 } derive(Eq, @debug.Debug)
 pub fn MarkerTag::equal(Self, Self) -> Bool
 pub fn MarkerTag::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MarkerTag::to_repr(Self) -> @debug.Repr
 
 pub(all) struct RelatedInformation {
@@ -101,6 +105,7 @@ pub(all) struct RelatedInformation {
 } derive(Eq, @debug.Debug)
 pub fn RelatedInformation::equal(Self, Self) -> Bool
 pub fn RelatedInformation::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn RelatedInformation::to_repr(Self) -> @debug.Repr
 
 pub struct ResolvedMarkerDecoration {
@@ -115,6 +120,7 @@ pub(all) struct ResourceMarker {
 } derive(Eq, @debug.Debug)
 pub fn ResourceMarker::equal(Self, Self) -> Bool
 pub fn ResourceMarker::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ResourceMarker::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SquigglyThemeColors {
@@ -125,6 +131,7 @@ pub(all) struct SquigglyThemeColors {
 } derive(Eq, @debug.Debug)
 pub fn SquigglyThemeColors::equal(Self, Self) -> Bool
 pub fn SquigglyThemeColors::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SquigglyThemeColors::to_repr(Self) -> @debug.Repr
 
 // Type aliases

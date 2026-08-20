@@ -22,6 +22,7 @@ pub(all) enum Event {
 } derive(Eq, @debug.Debug)
 pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn Event::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Input {
@@ -33,10 +34,12 @@ pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 pub fn Input::prefix(Self) -> @displaytext.DisplayText
 pub fn Input::text(Self) -> String
+#deprecated
 pub fn Input::to_repr(Self) -> @debug.Repr
 
 type ToolCall derive(@debug.Debug)
 pub fn ToolCall::ToolCall(@doc.Text, status? : ToolStatus, details? : Array[@doc.Text]) -> Self
+#deprecated
 pub fn ToolCall::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ToolStatus {
@@ -45,6 +48,7 @@ pub(all) enum ToolStatus {
 } derive(Eq, @debug.Debug)
 pub fn ToolStatus::equal(Self, Self) -> Bool
 pub fn ToolStatus::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ToolStatus::to_repr(Self) -> @debug.Repr
 
 pub(all) enum TranscriptItem {
@@ -56,6 +60,7 @@ pub(all) enum TranscriptItem {
   Error(String)
 } derive(@debug.Debug)
 pub fn TranscriptItem::to_doc(Self) -> @doc.Doc
+#deprecated
 pub fn TranscriptItem::to_repr(Self) -> @debug.Repr
 pub impl @doc.ToDoc for TranscriptItem
 

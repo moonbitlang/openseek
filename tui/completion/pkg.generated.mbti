@@ -18,6 +18,7 @@ pub fn CompletionItem::insert_text(Self) -> String
 pub fn CompletionItem::label(Self) -> String
 pub fn CompletionItem::new(label~ : String, insert_text? : String, description? : String) -> Self
 pub fn CompletionItem::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn CompletionItem::to_repr(Self) -> @debug.Repr
 
 type Model derive(Eq, @debug.Debug)
@@ -28,6 +29,7 @@ pub fn Model::items(Self) -> Array[CompletionItem]
 pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::open(items~ : Array[CompletionItem], selected? : Int) -> Self
 pub fn Model::selected(Self) -> Int
+#deprecated
 pub fn Model::to_repr(Self) -> @debug.Repr
 
 // Type aliases

@@ -22,6 +22,7 @@ pub struct ShellInput {
   max_output_chars : Int
   run_in_background : Bool
 } derive(@debug.Debug)
+#deprecated
 pub fn ShellInput::to_repr(Self) -> @debug.Repr
 
 // Type aliases

@@ -21,6 +21,7 @@ pub enum HeaderParse {
   UnsupportedVersion(Int)
   NotHeader
 } derive(@debug.Debug)
+#deprecated
 pub fn HeaderParse::to_repr(Self) -> @debug.Repr
 
 pub struct LineError {
@@ -30,6 +31,7 @@ pub struct LineError {
 } derive(Eq, @debug.Debug)
 pub fn LineError::equal(Self, Self) -> Bool
 pub fn LineError::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn LineError::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ParsedLog {
@@ -40,6 +42,7 @@ pub(all) struct ParsedLog {
 } derive(Eq, @debug.Debug)
 pub fn ParsedLog::equal(Self, Self) -> Bool
 pub fn ParsedLog::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ParsedLog::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionFileHeader {
@@ -49,6 +52,7 @@ pub(all) struct SessionFileHeader {
 pub fn SessionFileHeader::equal(Self, Self) -> Bool
 pub fn SessionFileHeader::not_equal(Self, Self) -> Bool
 pub fn SessionFileHeader::to_json(Self) -> Json
+#deprecated
 pub fn SessionFileHeader::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionFileHeader
 

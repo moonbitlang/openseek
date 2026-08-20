@@ -21,6 +21,7 @@ pub struct EditInput {
   end_line : Int?
   revert_on_parse_errors : Bool
 } derive(@debug.Debug)
+#deprecated
 pub fn EditInput::to_repr(Self) -> @debug.Repr
 
 // Type aliases

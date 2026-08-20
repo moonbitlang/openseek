@@ -36,6 +36,7 @@ pub async fn update_settings(String, (@protocol.WorkspaceSettingsPayload) -> Uni
 pub suberror WorkspaceError {
   WorkspaceError(String)
 } derive(@debug.Debug)
+#deprecated
 pub fn WorkspaceError::to_repr(Self) -> @debug.Repr
 
 // Types and methods

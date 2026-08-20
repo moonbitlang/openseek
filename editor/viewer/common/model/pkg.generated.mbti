@@ -35,12 +35,14 @@ pub fn InjectedTextOptions::content(Self) -> String
 pub fn InjectedTextOptions::equal(Self, Self) -> Bool
 pub fn InjectedTextOptions::inline_class_name(Self) -> String?
 pub fn InjectedTextOptions::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn InjectedTextOptions::to_repr(Self) -> @debug.Repr
 
 pub struct InternalModelContentChangeEvent {
   raw_content_changed_event : ModelRawContentChangedEvent
   content_changed_event : ModelContentChangedEvent
 } derive(@debug.Debug)
+#deprecated
 pub fn InternalModelContentChangeEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MinimapPosition {
@@ -49,6 +51,7 @@ pub(all) enum MinimapPosition {
 } derive(Eq, @debug.Debug)
 pub fn MinimapPosition::equal(Self, Self) -> Bool
 pub fn MinimapPosition::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MinimapPosition::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelContentChange {
@@ -57,6 +60,7 @@ pub(all) struct ModelContentChange {
   range_length : Int
   text : String
 } derive(@debug.Debug)
+#deprecated
 pub fn ModelContentChange::to_repr(Self) -> @debug.Repr
 
 pub struct ModelContentChangedEvent {
@@ -68,6 +72,7 @@ pub struct ModelContentChangedEvent {
   is_flush : Bool
   is_eol_change : Bool
 } derive(@debug.Debug)
+#deprecated
 pub fn ModelContentChangedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelDecoration {
@@ -76,6 +81,7 @@ pub(all) struct ModelDecoration {
   range : @common.Range
   options : ModelDecorationOptions
 } derive(@debug.Debug)
+#deprecated
 pub fn ModelDecoration::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelDecorationMinimapOptions {
@@ -84,6 +90,7 @@ pub(all) struct ModelDecorationMinimapOptions {
 } derive(Eq, @debug.Debug)
 pub fn ModelDecorationMinimapOptions::equal(Self, Self) -> Bool
 pub fn ModelDecorationMinimapOptions::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ModelDecorationMinimapOptions::to_repr(Self) -> @debug.Repr
 
 pub struct ModelDecorationOptions {
@@ -109,6 +116,7 @@ pub struct ModelDecorationOptions {
   after : InjectedTextOptions?
 } derive(@debug.Debug)
 pub fn ModelDecorationOptions::ModelDecorationOptions(String, message? : String, inline_class_name? : String, inline_class_name_affects_letter_spacing? : Bool, z_index? : Int, is_whole_line? : Bool, show_if_collapsed? : Bool, should_fill_line_on_line_break? : Bool, stickiness? : TrackedRangeStickiness, overview_ruler? : ModelDecorationOverviewRulerOptions, minimap? : ModelDecorationMinimapOptions, glyph_margin_class_name? : String, lines_decorations_class_name? : String, first_line_decoration_class_name? : String, margin_class_name? : String, after_content_class_name? : String, collapse_on_replace_edit? : Bool, description? : String, before? : InjectedTextOptions, after? : InjectedTextOptions) -> Self
+#deprecated
 pub fn ModelDecorationOptions::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelDecorationOverviewRulerOptions {
@@ -117,6 +125,7 @@ pub(all) struct ModelDecorationOverviewRulerOptions {
 } derive(Eq, @debug.Debug)
 pub fn ModelDecorationOverviewRulerOptions::equal(Self, Self) -> Bool
 pub fn ModelDecorationOverviewRulerOptions::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ModelDecorationOverviewRulerOptions::to_repr(Self) -> @debug.Repr
 
 pub struct ModelDecorationsChangeAccessor {
@@ -136,12 +145,14 @@ pub struct ModelDecorationsChangedEvent {
 } derive(Eq, @debug.Debug)
 pub fn ModelDecorationsChangedEvent::equal(Self, Self) -> Bool
 pub fn ModelDecorationsChangedEvent::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ModelDecorationsChangedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelDeltaDecoration {
   range : @common.Range
   options : ModelDecorationOptions
 } derive(@debug.Debug)
+#deprecated
 pub fn ModelDeltaDecoration::to_repr(Self) -> @debug.Repr
 
 pub enum ModelRawChange {
@@ -151,6 +162,7 @@ pub enum ModelRawChange {
   ModelRawLinesInserted(from_line_number~ : Int, from_line_number_post_edit~ : Int, count~ : Int)
   ModelRawEOLChanged
 } derive(@debug.Debug)
+#deprecated
 pub fn ModelRawChange::to_repr(Self) -> @debug.Repr
 
 pub struct ModelRawContentChangedEvent {
@@ -160,6 +172,7 @@ pub struct ModelRawContentChangedEvent {
   is_redoing : Bool
 } derive(@debug.Debug)
 pub fn ModelRawContentChangedEvent::contains_event(Self, RawContentChangedType) -> Bool
+#deprecated
 pub fn ModelRawContentChangedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelTokensChangedEvent {
@@ -180,6 +193,7 @@ pub(all) enum OverviewRulerLane {
 } derive(Eq, @debug.Debug)
 pub fn OverviewRulerLane::equal(Self, Self) -> Bool
 pub fn OverviewRulerLane::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn OverviewRulerLane::to_repr(Self) -> @debug.Repr
 
 pub(all) enum PositionAffinity {
@@ -191,6 +205,7 @@ pub(all) enum PositionAffinity {
 } derive(Eq, @debug.Debug)
 pub fn PositionAffinity::equal(Self, Self) -> Bool
 pub fn PositionAffinity::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn PositionAffinity::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RawContentChangedType {
@@ -202,6 +217,7 @@ pub(all) enum RawContentChangedType {
 } derive(Eq, @debug.Debug)
 pub fn RawContentChangedType::equal(Self, Self) -> Bool
 pub fn RawContentChangedType::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn RawContentChangedType::to_repr(Self) -> @debug.Repr
 
 pub struct TextModel {
@@ -252,6 +268,7 @@ pub fn TextModel::remove_all_decorations_with_owner_id(Self, Int) -> Unit
 pub fn TextModel::same(Self, Self) -> Bool
 pub fn TextModel::set_value(Self, String) -> Unit
 pub fn TextModel::snapshot(Self) -> TextSnapshot
+#deprecated
 pub fn TextModel::to_repr(Self) -> @debug.Repr
 pub fn TextModel::validate_position(Self, @common.Position) -> @common.Position
 pub fn TextModel::validate_range(Self, @common.Range) -> @common.Range
@@ -270,6 +287,7 @@ pub fn TextSnapshot::line_text(Self, Int) -> String
 pub fn TextSnapshot::offset_range_of(Self, @common.Range) -> @common.OffsetRange
 pub fn TextSnapshot::range_of(Self, @common.OffsetRange) -> @common.Range
 pub fn TextSnapshot::slice(Self, @common.OffsetRange) -> String
+#deprecated
 pub fn TextSnapshot::to_repr(Self) -> @debug.Repr
 
 type TokenizationIdleDeadline
@@ -290,6 +308,7 @@ pub(all) enum TrackedRangeStickiness {
 } derive(Eq, @debug.Debug)
 pub fn TrackedRangeStickiness::equal(Self, Self) -> Bool
 pub fn TrackedRangeStickiness::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn TrackedRangeStickiness::to_repr(Self) -> @debug.Repr
 
 pub(all) struct VisibleLineRange {
@@ -298,6 +317,7 @@ pub(all) struct VisibleLineRange {
 } derive(Eq, @debug.Debug)
 pub fn VisibleLineRange::equal(Self, Self) -> Bool
 pub fn VisibleLineRange::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn VisibleLineRange::to_repr(Self) -> @debug.Repr
 
 pub struct WordAtPosition {
@@ -307,6 +327,7 @@ pub struct WordAtPosition {
 } derive(Eq, @debug.Debug)
 pub fn WordAtPosition::equal(Self, Self) -> Bool
 pub fn WordAtPosition::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn WordAtPosition::to_repr(Self) -> @debug.Repr
 
 // Type aliases

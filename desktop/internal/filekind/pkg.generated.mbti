@@ -18,6 +18,7 @@ pub enum Classification {
 } derive(Eq, @debug.Debug)
 pub fn Classification::equal(Self, Self) -> Bool
 pub fn Classification::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn Classification::to_repr(Self) -> @debug.Repr
 
 // Type aliases

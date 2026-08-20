@@ -38,6 +38,7 @@ pub fn CharacterMapping::get_horizontal_offset(Self, Int) -> Int
 pub fn CharacterMapping::inflate(Self) -> Array[CharacterMappingEntry]
 pub fn CharacterMapping::not_equal(Self, Self) -> Bool
 pub fn CharacterMapping::set_column_info(Self, Int, Int, Int, Int) -> Unit
+#deprecated
 pub fn CharacterMapping::to_repr(Self) -> @debug.Repr
 
 pub struct CharacterMappingEntry {
@@ -47,6 +48,7 @@ pub struct CharacterMappingEntry {
 } derive(Eq, @debug.Debug)
 pub fn CharacterMappingEntry::equal(Self, Self) -> Bool
 pub fn CharacterMappingEntry::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn CharacterMappingEntry::to_repr(Self) -> @debug.Repr
 
 pub struct ConstantTimePrefixSumComputer {
@@ -72,6 +74,7 @@ pub(all) struct ContentSizeChange {
 } derive(Eq, @debug.Debug)
 pub fn ContentSizeChange::equal(Self, Self) -> Bool
 pub fn ContentSizeChange::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ContentSizeChange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DecorationSegment {
@@ -82,6 +85,7 @@ pub(all) struct DecorationSegment {
 } derive(Eq, @debug.Debug)
 pub fn DecorationSegment::equal(Self, Self) -> Bool
 pub fn DecorationSegment::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn DecorationSegment::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DomPosition {
@@ -90,6 +94,7 @@ pub(all) struct DomPosition {
 } derive(Eq, @debug.Debug)
 pub fn DomPosition::equal(Self, Self) -> Bool
 pub fn DomPosition::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn DomPosition::to_repr(Self) -> @debug.Repr
 
 pub struct EditorScrollDimensions {
@@ -103,6 +108,7 @@ pub struct EditorScrollDimensions {
 pub fn EditorScrollDimensions::EditorScrollDimensions(Double, Double, Double, Double) -> Self
 pub fn EditorScrollDimensions::equal(Self, Self) -> Bool
 pub fn EditorScrollDimensions::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn EditorScrollDimensions::to_repr(Self) -> @debug.Repr
 
 type EditorScrollable
@@ -134,6 +140,7 @@ pub struct EditorWhitespace {
 pub fn EditorWhitespace::EditorWhitespace(String, Int, Int, Int, Int) -> Self
 pub fn EditorWhitespace::equal(Self, Self) -> Bool
 pub fn EditorWhitespace::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn EditorWhitespace::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ForeignElementType {
@@ -144,6 +151,7 @@ pub(all) enum ForeignElementType {
 } derive(Eq, @debug.Debug)
 pub fn ForeignElementType::equal(Self, Self) -> Bool
 pub fn ForeignElementType::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ForeignElementType::to_repr(Self) -> @debug.Repr
 
 pub struct InlineDecoration {
@@ -154,6 +162,7 @@ pub struct InlineDecoration {
 pub fn InlineDecoration::InlineDecoration(@common.OffsetRange, String, decoration_type? : InlineDecorationType) -> Self
 pub fn InlineDecoration::equal(Self, Self) -> Bool
 pub fn InlineDecoration::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn InlineDecoration::to_repr(Self) -> @debug.Repr
 
 pub(all) enum InlineDecorationType {
@@ -164,6 +173,7 @@ pub(all) enum InlineDecorationType {
 } derive(Eq, @debug.Debug)
 pub fn InlineDecorationType::equal(Self, Self) -> Bool
 pub fn InlineDecorationType::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn InlineDecorationType::to_repr(Self) -> @debug.Repr
 
 pub struct LineDecoration {
@@ -176,6 +186,7 @@ pub fn LineDecoration::LineDecoration(Int, Int, String, decoration_type? : Inlin
 pub fn LineDecoration::compare(Self, Self) -> Int
 pub fn LineDecoration::equal(Self, Self) -> Bool
 pub fn LineDecoration::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn LineDecoration::to_repr(Self) -> @debug.Repr
 
 pub struct LineDecorationsNormalizer {
@@ -194,6 +205,7 @@ pub fn LinePart::is_pseudo_after(Self) -> Bool
 pub fn LinePart::is_pseudo_before(Self) -> Bool
 pub fn LinePart::is_whitespace(Self) -> Bool
 pub fn LinePart::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn LinePart::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LineWindow {
@@ -202,6 +214,7 @@ pub(all) struct LineWindow {
 } derive(Eq, @debug.Debug)
 pub fn LineWindow::equal(Self, Self) -> Bool
 pub fn LineWindow::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn LineWindow::to_repr(Self) -> @debug.Repr
 
 type LinesLayout
@@ -250,6 +263,7 @@ pub struct PartialViewLinesViewportData {
 } derive(Eq, @debug.Debug)
 pub fn PartialViewLinesViewportData::equal(Self, Self) -> Bool
 pub fn PartialViewLinesViewportData::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn PartialViewLinesViewportData::to_repr(Self) -> @debug.Repr
 
 pub struct PrefixSumComputer {
@@ -272,6 +286,7 @@ pub(all) struct PrefixSumIndexOfResult {
 } derive(Eq, @debug.Debug)
 pub fn PrefixSumIndexOfResult::equal(Self, Self) -> Bool
 pub fn PrefixSumIndexOfResult::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn PrefixSumIndexOfResult::to_repr(Self) -> @debug.Repr
 
 pub struct RenderLineInput {
@@ -301,6 +316,7 @@ pub struct RenderLineInput {
 pub fn RenderLineInput::equal(Self, Self) -> Bool
 pub fn RenderLineInput::from_view_line(ViewLineRenderingData, line_decorations? : Array[LineDecoration], use_monospace_optimizations? : Bool, can_use_halfwidth_rightwards_arrow? : Bool, faux_indent_length? : Int, space_width? : Double, middot_width? : Double, wsmiddot_width? : Double, stop_rendering_line_after? : Int, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, font_ligatures? : Bool, selections_on_line? : Array[@common.OffsetRange], vertical_scrollbar_size? : Double, render_new_line_when_empty? : Bool) -> Self
 pub fn RenderLineInput::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn RenderLineInput::to_repr(Self) -> @debug.Repr
 
 pub struct RenderLineOutput {
@@ -309,6 +325,7 @@ pub struct RenderLineOutput {
 } derive(Eq, @debug.Debug)
 pub fn RenderLineOutput::equal(Self, Self) -> Bool
 pub fn RenderLineOutput::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn RenderLineOutput::to_repr(Self) -> @debug.Repr
 
 pub struct RenderLineOutput2 {
@@ -318,6 +335,7 @@ pub struct RenderLineOutput2 {
 } derive(Eq, @debug.Debug)
 pub fn RenderLineOutput2::equal(Self, Self) -> Bool
 pub fn RenderLineOutput2::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn RenderLineOutput2::to_repr(Self) -> @debug.Repr
 
 pub struct SavedScrollState {
@@ -327,6 +345,7 @@ pub struct SavedScrollState {
 } derive(Eq, @debug.Debug)
 pub fn SavedScrollState::equal(Self, Self) -> Bool
 pub fn SavedScrollState::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SavedScrollState::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ScrollChange {
@@ -358,6 +377,7 @@ pub(all) struct ScrollChange {
 } derive(Eq, @debug.Debug)
 pub fn ScrollChange::equal(Self, Self) -> Bool
 pub fn ScrollChange::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ScrollChange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ScrollDimensions {
@@ -368,6 +388,7 @@ pub(all) struct ScrollDimensions {
 } derive(Eq, @debug.Debug)
 pub fn ScrollDimensions::equal(Self, Self) -> Bool
 pub fn ScrollDimensions::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ScrollDimensions::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ScrollDimensionsUpdate {
@@ -378,6 +399,7 @@ pub(all) struct ScrollDimensionsUpdate {
 } derive(Eq, @debug.Debug)
 pub fn ScrollDimensionsUpdate::equal(Self, Self) -> Bool
 pub fn ScrollDimensionsUpdate::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ScrollDimensionsUpdate::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ScrollPosition {
@@ -386,6 +408,7 @@ pub(all) struct ScrollPosition {
 } derive(Eq, @debug.Debug)
 pub fn ScrollPosition::equal(Self, Self) -> Bool
 pub fn ScrollPosition::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ScrollPosition::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ScrollPositionUpdate {
@@ -394,6 +417,7 @@ pub(all) struct ScrollPositionUpdate {
 } derive(Eq, @debug.Debug)
 pub fn ScrollPositionUpdate::equal(Self, Self) -> Bool
 pub fn ScrollPositionUpdate::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ScrollPositionUpdate::to_repr(Self) -> @debug.Repr
 
 pub struct ScrollState {
@@ -412,6 +436,7 @@ pub fn ScrollState::create_scroll_event(Self, Self, Bool) -> ScrollChange
 pub fn ScrollState::equal(Self, Self) -> Bool
 pub fn ScrollState::equals(Self, Self) -> Bool
 pub fn ScrollState::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ScrollState::to_repr(Self) -> @debug.Repr
 pub fn ScrollState::with_scroll_dimensions(Self, ScrollDimensionsUpdate, Bool) -> Self
 pub fn ScrollState::with_scroll_position(Self, ScrollPositionUpdate) -> Self
@@ -458,6 +483,7 @@ pub(all) struct SmoothScrollPosition {
 } derive(Eq, @debug.Debug)
 pub fn SmoothScrollPosition::equal(Self, Self) -> Bool
 pub fn SmoothScrollPosition::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SmoothScrollPosition::to_repr(Self) -> @debug.Repr
 
 pub struct SmoothScrollingOperation {
@@ -484,6 +510,7 @@ pub struct SmoothScrollingUpdate {
 pub fn SmoothScrollingUpdate::SmoothScrollingUpdate(Double, Double, Bool) -> Self
 pub fn SmoothScrollingUpdate::equal(Self, Self) -> Bool
 pub fn SmoothScrollingUpdate::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SmoothScrollingUpdate::to_repr(Self) -> @debug.Repr
 
 pub(all) enum TextDirection {
@@ -492,6 +519,7 @@ pub(all) enum TextDirection {
 } derive(Eq, @debug.Debug)
 pub fn TextDirection::equal(Self, Self) -> Bool
 pub fn TextDirection::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn TextDirection::to_repr(Self) -> @debug.Repr
 
 pub(all) enum VerticalRevealType {
@@ -505,6 +533,7 @@ pub(all) enum VerticalRevealType {
 } derive(Eq, @debug.Debug)
 pub fn VerticalRevealType::equal(Self, Self) -> Bool
 pub fn VerticalRevealType::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn VerticalRevealType::to_repr(Self) -> @debug.Repr
 
 pub struct ViewLayout {
@@ -583,6 +612,7 @@ pub(all) struct ViewLineRenderingData {
 } derive(Eq, @debug.Debug)
 pub fn ViewLineRenderingData::equal(Self, Self) -> Bool
 pub fn ViewLineRenderingData::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ViewLineRenderingData::to_repr(Self) -> @debug.Repr
 
 pub struct ViewWhitespaceViewportData {
@@ -593,6 +623,7 @@ pub struct ViewWhitespaceViewportData {
 } derive(Eq, @debug.Debug)
 pub fn ViewWhitespaceViewportData::equal(Self, Self) -> Bool
 pub fn ViewWhitespaceViewportData::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ViewWhitespaceViewportData::to_repr(Self) -> @debug.Repr
 
 pub struct Viewport {
@@ -603,6 +634,7 @@ pub struct Viewport {
 } derive(Eq, @debug.Debug)
 pub fn Viewport::equal(Self, Self) -> Bool
 pub fn Viewport::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn Viewport::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ViewportData {
@@ -621,6 +653,7 @@ pub fn ViewportData::decorations_in_viewport(Self) -> Array[LineDecoration]
 pub fn ViewportData::equal(Self, Self) -> Bool
 pub fn ViewportData::line_data(Self, Int) -> ViewLineRenderingData?
 pub fn ViewportData::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ViewportData::to_repr(Self) -> @debug.Repr
 
 type WhitespaceChangeAccessor

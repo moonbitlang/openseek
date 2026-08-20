@@ -22,6 +22,7 @@ pub fn Absolute::not_equal(Self, Self) -> Bool
 pub fn Absolute::output(Self, &Logger) -> Unit
 pub fn Absolute::relative_to(Self, root~ : Self) -> Relative?
 pub fn Absolute::to_path(Self) -> Path
+#deprecated
 pub fn Absolute::to_repr(Self) -> @debug.Repr
 pub fn Absolute::to_string(Self) -> String
 pub fn Absolute::to_uri_path(Self) -> String?
@@ -41,6 +42,7 @@ pub fn Path::relative(Self, base~ : Self) -> Self
 pub fn Path::resolve(Self) -> Absolute
 pub fn Path::to_absolute(Self) -> Absolute?
 pub fn Path::to_relative(Self) -> Relative?
+#deprecated
 pub fn Path::to_repr(Self) -> @debug.Repr
 pub fn Path::to_string(Self) -> String
 pub impl Show for Path
@@ -56,6 +58,7 @@ pub fn Relative::not_equal(Self, Self) -> Bool
 pub fn Relative::output(Self, &Logger) -> Unit
 pub fn Relative::root() -> Self
 pub fn Relative::to_path(Self) -> Path
+#deprecated
 pub fn Relative::to_repr(Self) -> @debug.Repr
 pub fn Relative::to_string(Self) -> String
 pub impl Show for Relative

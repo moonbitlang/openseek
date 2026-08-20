@@ -31,6 +31,7 @@ pub fn CursorState::from_model_selections(Array[@core.Selection]) -> Array[Parti
 pub fn CursorState::from_model_state(SingleCursorState) -> PartialCursorState
 pub fn CursorState::from_view_state(SingleCursorState) -> PartialCursorState
 pub fn CursorState::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn CursorState::to_repr(Self) -> @debug.Repr
 
 pub struct CursorStateChange {
@@ -43,6 +44,7 @@ pub struct CursorStateChange {
   reached_max_cursor_count : Bool
   has_outgoing_event : Bool
 } derive(@debug.Debug)
+#deprecated
 pub fn CursorStateChange::to_repr(Self) -> @debug.Repr
 
 type CursorsController
@@ -59,6 +61,7 @@ pub fn CursorsController::view_state(Self) -> SingleCursorState
 type PartialCursorState derive(Eq, @debug.Debug)
 pub fn PartialCursorState::equal(Self, Self) -> Bool
 pub fn PartialCursorState::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn PartialCursorState::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SelectionStartKind {
@@ -68,6 +71,7 @@ pub(all) enum SelectionStartKind {
 } derive(Eq, @debug.Debug)
 pub fn SelectionStartKind::equal(Self, Self) -> Bool
 pub fn SelectionStartKind::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SelectionStartKind::to_repr(Self) -> @debug.Repr
 
 pub struct SingleCursorState {
@@ -84,6 +88,7 @@ pub fn SingleCursorState::has_selection(Self) -> Bool
 pub fn SingleCursorState::moved(Self, Bool, @common.Position, leftover_visible_columns? : Int) -> Self
 pub fn SingleCursorState::not_equal(Self, Self) -> Bool
 pub fn SingleCursorState::selection(Self) -> @core.Selection
+#deprecated
 pub fn SingleCursorState::to_repr(Self) -> @debug.Repr
 
 // Type aliases

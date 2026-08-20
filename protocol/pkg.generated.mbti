@@ -26,6 +26,7 @@ pub fn Command::not_equal(Self, Self) -> Bool
 pub fn Command::parse(Json) -> Result[Self, String]
 pub fn Command::to_json(Self) -> Json
 pub fn Command::to_jsonl(Self) -> String
+#deprecated
 pub fn Command::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Event {
@@ -82,6 +83,7 @@ pub(all) enum Event {
 pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
 pub fn Event::to_json(Self) -> Json
+#deprecated
 pub fn Event::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SteerKind {
@@ -90,6 +92,7 @@ pub(all) enum SteerKind {
 } derive(Eq, @debug.Debug)
 pub fn SteerKind::equal(Self, Self) -> Bool
 pub fn SteerKind::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SteerKind::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Usage {
@@ -102,6 +105,7 @@ pub(all) struct Usage {
 pub fn Usage::equal(Self, Self) -> Bool
 pub fn Usage::not_equal(Self, Self) -> Bool
 pub fn Usage::to_json(Self) -> Json
+#deprecated
 pub fn Usage::to_repr(Self) -> @debug.Repr
 
 // Type aliases

@@ -31,6 +31,7 @@ pub async fn tree_dir(@pathx.Absolute, String) -> @pathx.Absolute?
 pub suberror WorktreeError {
   WorktreeError(String)
 } derive(@debug.Debug)
+#deprecated
 pub fn WorktreeError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
@@ -41,6 +42,7 @@ pub struct CodexWorktreeBinding {
 } derive(Eq, @debug.Debug)
 pub fn CodexWorktreeBinding::equal(Self, Self) -> Bool
 pub fn CodexWorktreeBinding::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn CodexWorktreeBinding::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorktreeHost {
@@ -56,6 +58,7 @@ pub fn WorktreeOwner::codex(String) -> Self
 pub fn WorktreeOwner::equal(Self, Self) -> Bool
 pub fn WorktreeOwner::not_equal(Self, Self) -> Bool
 pub fn WorktreeOwner::openseek(String) -> Self
+#deprecated
 pub fn WorktreeOwner::to_repr(Self) -> @debug.Repr
 
 // Type aliases

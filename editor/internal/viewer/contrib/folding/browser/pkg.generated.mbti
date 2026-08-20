@@ -34,6 +34,7 @@ pub fn FoldRange::end_line_number(Self) -> Int
 pub fn FoldRange::equal(Self, Self) -> Bool
 pub fn FoldRange::not_equal(Self, Self) -> Bool
 pub fn FoldRange::start_line_number(Self) -> Int
+#deprecated
 pub fn FoldRange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FoldingController {
@@ -104,6 +105,7 @@ pub(all) struct LineRange {
 } derive(Eq, @debug.Debug)
 pub fn LineRange::equal(Self, Self) -> Bool
 pub fn LineRange::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn LineRange::to_repr(Self) -> @debug.Repr
 
 type RegionFilter

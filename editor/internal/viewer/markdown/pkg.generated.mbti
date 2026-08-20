@@ -34,6 +34,7 @@ pub struct MarkdownBlockAnchor {
 } derive(Eq, @debug.Debug)
 pub fn MarkdownBlockAnchor::equal(Self, Self) -> Bool
 pub fn MarkdownBlockAnchor::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MarkdownBlockAnchor::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownCodeBlock {
@@ -48,6 +49,7 @@ pub fn MarkdownCodeBlock::equal(Self, Self) -> Bool
 pub fn MarkdownCodeBlock::is_moonbit_check_fence(Self, MarkdownResourceKind) -> Bool
 pub fn MarkdownCodeBlock::not_equal(Self, Self) -> Bool
 pub fn MarkdownCodeBlock::project_source_range(Self, @common.OffsetRange) -> Array[MarkdownProjectedCodeRange]
+#deprecated
 pub fn MarkdownCodeBlock::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownCodeLine {
@@ -59,6 +61,7 @@ pub struct MarkdownCodeLine {
 pub fn MarkdownCodeLine::equal(Self, Self) -> Bool
 pub fn MarkdownCodeLine::not_equal(Self, Self) -> Bool
 pub fn MarkdownCodeLine::source_offset_at_displayed_boundary(Self, Int) -> Int?
+#deprecated
 pub fn MarkdownCodeLine::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownDocumentProjection {
@@ -67,6 +70,7 @@ pub struct MarkdownDocumentProjection {
 } derive(Eq, @debug.Debug)
 pub fn MarkdownDocumentProjection::equal(Self, Self) -> Bool
 pub fn MarkdownDocumentProjection::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MarkdownDocumentProjection::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownProjectedCodeRange {
@@ -75,6 +79,7 @@ pub struct MarkdownProjectedCodeRange {
 } derive(Eq, @debug.Debug)
 pub fn MarkdownProjectedCodeRange::equal(Self, Self) -> Bool
 pub fn MarkdownProjectedCodeRange::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MarkdownProjectedCodeRange::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownRenderFact {
@@ -84,6 +89,7 @@ pub struct MarkdownRenderFact {
 } derive(Eq, @debug.Debug)
 pub fn MarkdownRenderFact::equal(Self, Self) -> Bool
 pub fn MarkdownRenderFact::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MarkdownRenderFact::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MarkdownResourceKind {
@@ -92,6 +98,7 @@ pub(all) enum MarkdownResourceKind {
 } derive(Eq, @debug.Debug)
 pub fn MarkdownResourceKind::equal(Self, Self) -> Bool
 pub fn MarkdownResourceKind::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MarkdownResourceKind::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownSection {
@@ -104,6 +111,7 @@ pub fn MarkdownSection::body_rendered_element_indexes(Self, MarkdownDocumentProj
 pub fn MarkdownSection::equal(Self, Self) -> Bool
 pub fn MarkdownSection::is_foldable(Self, MarkdownDocumentProjection) -> Bool
 pub fn MarkdownSection::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MarkdownSection::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownTocEntry {
@@ -114,6 +122,7 @@ pub struct MarkdownTocEntry {
 } derive(Eq, @debug.Debug)
 pub fn MarkdownTocEntry::equal(Self, Self) -> Bool
 pub fn MarkdownTocEntry::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MarkdownTocEntry::to_repr(Self) -> @debug.Repr
 
 // Type aliases

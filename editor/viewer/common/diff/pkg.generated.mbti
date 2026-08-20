@@ -16,6 +16,7 @@ type DefaultLinesDiffComputer derive(Eq, @debug.Debug)
 pub fn DefaultLinesDiffComputer::compute_diff(Self, Array[String], Array[String], LinesDiffComputerOptions) -> LinesDiff
 pub fn DefaultLinesDiffComputer::equal(Self, Self) -> Bool
 pub fn DefaultLinesDiffComputer::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn DefaultLinesDiffComputer::to_repr(Self) -> @debug.Repr
 
 pub struct DetailedLineRangeMapping {
@@ -26,6 +27,7 @@ pub struct DetailedLineRangeMapping {
 pub fn DetailedLineRangeMapping::equal(Self, Self) -> Bool
 pub fn DetailedLineRangeMapping::get_inner_changes(Self) -> Array[(@common.Range, @common.Range)]?
 pub fn DetailedLineRangeMapping::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn DetailedLineRangeMapping::to_repr(Self) -> @debug.Repr
 
 pub struct LinesDiff {
@@ -34,6 +36,7 @@ pub struct LinesDiff {
 } derive(Eq, @debug.Debug)
 pub fn LinesDiff::equal(Self, Self) -> Bool
 pub fn LinesDiff::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn LinesDiff::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LinesDiffComputerOptions {
@@ -43,6 +46,7 @@ pub(all) struct LinesDiffComputerOptions {
 } derive(Eq, @debug.Debug)
 pub fn LinesDiffComputerOptions::equal(Self, Self) -> Bool
 pub fn LinesDiffComputerOptions::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn LinesDiffComputerOptions::to_repr(Self) -> @debug.Repr
 
 // Type aliases

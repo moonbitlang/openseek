@@ -28,6 +28,7 @@ pub fn CodexError::is_active_writer(Self) -> Bool
 pub fn CodexError::is_unmaterialized_thread_history(Self) -> Bool
 pub fn CodexError::is_unmaterialized_thread_turns(Self) -> Bool
 pub fn CodexError::output(Self, &Logger) -> Unit
+#deprecated
 pub fn CodexError::to_repr(Self) -> @debug.Repr
 pub fn CodexError::to_string(Self) -> String
 pub impl Show for CodexError

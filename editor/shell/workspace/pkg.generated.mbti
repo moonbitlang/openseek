@@ -24,10 +24,12 @@ pub(all) enum DocumentChange {
   DocumentDeleted(@common.Uri)
   DocumentChangeFailed(uri~ : @common.Uri, error~ : DocumentError)
 } derive(@debug.Debug)
+#deprecated
 pub fn DocumentChange::to_repr(Self) -> @debug.Repr
 
 type DocumentContent derive(@debug.Debug)
 pub fn DocumentContent::DocumentContent(String, display_name? : String, language_id? : String, revision? : String) -> Self
+#deprecated
 pub fn DocumentContent::to_repr(Self) -> @debug.Repr
 
 pub struct DocumentError {
@@ -38,6 +40,7 @@ pub struct DocumentError {
 pub fn DocumentError::DocumentError(FileSystemProviderErrorCode, String, uri? : @common.Uri) -> Self
 pub fn DocumentError::to_file_system_error(Self) -> FileSystemProviderError
 pub fn DocumentError::to_json(Self) -> Json
+#deprecated
 pub fn DocumentError::to_repr(Self) -> @debug.Repr
 pub impl ToJson for DocumentError
 
@@ -47,6 +50,7 @@ pub(all) enum DocumentReadResult {
   DocumentReadFailed(DocumentError)
 } derive(@debug.Debug)
 pub fn DocumentReadResult::to_json(Self) -> Json
+#deprecated
 pub fn DocumentReadResult::to_repr(Self) -> @debug.Repr
 pub impl ToJson for DocumentReadResult
 
@@ -70,6 +74,7 @@ pub fn DocumentSnapshot::offset_at_position(Self, @common.Position) -> Int
 pub fn DocumentSnapshot::position_at_offset(Self, Int) -> @common.Position
 pub fn DocumentSnapshot::slice(Self, @common.OffsetRange) -> String
 pub fn DocumentSnapshot::to_json(Self) -> Json
+#deprecated
 pub fn DocumentSnapshot::to_repr(Self) -> @debug.Repr
 pub impl ToJson for DocumentSnapshot
 
@@ -78,6 +83,7 @@ pub(all) struct FileChange {
   change_type : FileChangeType
 } derive(@debug.Debug)
 pub fn FileChange::to_json(Self) -> Json
+#deprecated
 pub fn FileChange::to_repr(Self) -> @debug.Repr
 pub impl ToJson for FileChange
 
@@ -88,12 +94,14 @@ pub(all) enum FileChangeType {
 } derive(Eq, @debug.Debug)
 pub fn FileChangeType::equal(Self, Self) -> Bool
 pub fn FileChangeType::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn FileChangeType::to_repr(Self) -> @debug.Repr
 
 pub(all) enum FileReadResult {
   FileReadOk(DocumentContent)
   FileReadError(FileSystemProviderError)
 } derive(@debug.Debug)
+#deprecated
 pub fn FileReadResult::to_repr(Self) -> @debug.Repr
 
 pub struct FileSystemProviderError {
@@ -103,6 +111,7 @@ pub struct FileSystemProviderError {
 } derive(@debug.Debug)
 pub fn FileSystemProviderError::FileSystemProviderError(FileSystemProviderErrorCode, String, uri? : @common.Uri) -> Self
 pub fn FileSystemProviderError::to_json(Self) -> Json
+#deprecated
 pub fn FileSystemProviderError::to_repr(Self) -> @debug.Repr
 pub impl ToJson for FileSystemProviderError
 
@@ -119,6 +128,7 @@ pub(all) enum FileSystemProviderErrorCode {
 pub fn FileSystemProviderErrorCode::equal(Self, Self) -> Bool
 pub fn FileSystemProviderErrorCode::from_string(String) -> Self
 pub fn FileSystemProviderErrorCode::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn FileSystemProviderErrorCode::to_repr(Self) -> @debug.Repr
 pub fn FileSystemProviderErrorCode::to_string(Self) -> String
 
@@ -133,6 +143,7 @@ pub(all) enum SourceError {
 } derive(Eq, @debug.Debug)
 pub fn SourceError::equal(Self, Self) -> Bool
 pub fn SourceError::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SourceError::to_repr(Self) -> @debug.Repr
 pub fn SourceError::to_string(Self) -> String
 
@@ -141,6 +152,7 @@ pub fn SourcePath::display_name(Self) -> String
 pub fn SourcePath::equal(Self, Self) -> Bool
 pub fn SourcePath::normalize_root_relative_path(String) -> SourcePathResult
 pub fn SourcePath::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SourcePath::to_repr(Self) -> @debug.Repr
 pub fn SourcePath::to_string(Self) -> String
 
@@ -150,6 +162,7 @@ pub enum SourcePathResult {
 } derive(Eq, @debug.Debug)
 pub fn SourcePathResult::equal(Self, Self) -> Bool
 pub fn SourcePathResult::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SourcePathResult::to_repr(Self) -> @debug.Repr
 
 pub struct WatchOptions {
@@ -157,6 +170,7 @@ pub struct WatchOptions {
   excludes : Array[String]
 } derive(@debug.Debug)
 pub fn WatchOptions::default() -> Self
+#deprecated
 pub fn WatchOptions::to_repr(Self) -> @debug.Repr
 
 pub(all) enum WorkspaceEntryKind {
@@ -166,6 +180,7 @@ pub(all) enum WorkspaceEntryKind {
 pub fn WorkspaceEntryKind::equal(Self, Self) -> Bool
 pub fn WorkspaceEntryKind::from_string(String) -> Self?
 pub fn WorkspaceEntryKind::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn WorkspaceEntryKind::to_repr(Self) -> @debug.Repr
 pub fn WorkspaceEntryKind::to_string(Self) -> String
 
@@ -173,6 +188,7 @@ pub(all) enum WorkspaceResolveResult {
   WorkspaceResolved(WorkspaceStat)
   WorkspaceResolveError(FileSystemProviderError)
 } derive(@debug.Debug)
+#deprecated
 pub fn WorkspaceResolveResult::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorkspaceStat {
@@ -181,6 +197,7 @@ pub(all) struct WorkspaceStat {
   kind : WorkspaceEntryKind
   children : Array[WorkspaceStat]?
 } derive(@debug.Debug)
+#deprecated
 pub fn WorkspaceStat::to_repr(Self) -> @debug.Repr
 
 // Type aliases

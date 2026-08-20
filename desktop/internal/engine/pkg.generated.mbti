@@ -55,6 +55,7 @@ pub async fn update_settings(EngineManager, SettingsPatch, legacy_migration? : B
 pub(all) suberror EngineError {
   EngineError(String)
 } derive(@debug.Debug)
+#deprecated
 pub fn EngineError::to_repr(Self) -> @debug.Repr
 
 // Types and methods

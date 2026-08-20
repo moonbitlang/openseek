@@ -50,6 +50,7 @@ pub struct ComputedHover {
 } derive(Eq, @debug.Debug)
 pub fn ComputedHover::equal(Self, Self) -> Bool
 pub fn ComputedHover::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ComputedHover::to_repr(Self) -> @debug.Repr
 
 type ContentHoverComputer
@@ -63,6 +64,7 @@ pub fn ContentHoverComputer::participants(Self) -> Array[HoverParticipantHandle]
 type EventModifiers derive(@debug.Debug)
 pub fn EventModifiers::EventModifiers(Bool, Bool, Bool) -> Self
 pub fn EventModifiers::none() -> Self
+#deprecated
 pub fn EventModifiers::to_repr(Self) -> @debug.Repr
 
 pub(all) enum HoverAnchor {
@@ -72,6 +74,7 @@ pub(all) enum HoverAnchor {
 pub fn HoverAnchor::equal(Self, Self) -> Bool
 pub fn HoverAnchor::not_equal(Self, Self) -> Bool
 pub fn HoverAnchor::priority(Self) -> Int
+#deprecated
 pub fn HoverAnchor::to_repr(Self) -> @debug.Repr
 
 pub struct HoverController {
@@ -120,6 +123,7 @@ pub struct HoverOperation {
 pub fn HoverOperation::equal(Self, Self) -> Bool
 pub fn HoverOperation::not_equal(Self, Self) -> Bool
 pub fn HoverOperation::shows_loading_message(Self) -> Bool
+#deprecated
 pub fn HoverOperation::to_repr(Self) -> @debug.Repr
 
 pub struct HoverOperationOptions {
@@ -128,6 +132,7 @@ pub struct HoverOperationOptions {
 } derive(Eq, @debug.Debug)
 pub fn HoverOperationOptions::equal(Self, Self) -> Bool
 pub fn HoverOperationOptions::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn HoverOperationOptions::to_repr(Self) -> @debug.Repr
 
 pub(all) enum HoverPart {
@@ -137,6 +142,7 @@ pub(all) enum HoverPart {
 } derive(Eq, @debug.Debug)
 pub fn HoverPart::equal(Self, Self) -> Bool
 pub fn HoverPart::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn HoverPart::to_repr(Self) -> @debug.Repr
 
 pub struct HoverParticipantHandle {
@@ -178,6 +184,7 @@ pub(all) enum HoverStartMode {
 } derive(Eq, @debug.Debug)
 pub fn HoverStartMode::equal(Self, Self) -> Bool
 pub fn HoverStartMode::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn HoverStartMode::to_repr(Self) -> @debug.Repr
 
 pub(all) enum HoverStartSource {
@@ -187,6 +194,7 @@ pub(all) enum HoverStartSource {
 } derive(Eq, @debug.Debug)
 pub fn HoverStartSource::equal(Self, Self) -> Bool
 pub fn HoverStartSource::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn HoverStartSource::to_repr(Self) -> @debug.Repr
 
 type HoverView derive(Eq)

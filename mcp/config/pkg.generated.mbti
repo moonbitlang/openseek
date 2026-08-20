@@ -21,6 +21,7 @@ pub(all) enum McpServer {
 pub fn McpServer::equal(Self, Self) -> Bool
 pub fn McpServer::name(Self) -> String
 pub fn McpServer::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn McpServer::to_repr(Self) -> @debug.Repr
 
 // Type aliases

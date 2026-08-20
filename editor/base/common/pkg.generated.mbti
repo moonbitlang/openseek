@@ -64,6 +64,7 @@ pub fn uri_to_fs_path(Uri, Bool) -> String
 pub suberror UriError {
   UriError(String)
 } derive(@debug.Debug)
+#deprecated
 pub fn UriError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
@@ -120,6 +121,7 @@ pub fn LineRange::join(Self, Self) -> Self
 pub fn LineRange::join_many(Array[Array[Self]]) -> Array[Self]
 pub fn LineRange::length(Self) -> Int
 pub fn LineRange::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn LineRange::to_repr(Self) -> @debug.Repr
 pub fn LineRange::to_string(Self) -> String
 
@@ -149,6 +151,7 @@ pub fn OffsetRange::is_empty(Self) -> Bool
 pub fn OffsetRange::length(Self) -> Int
 pub fn OffsetRange::not_equal(Self, Self) -> Bool
 pub fn OffsetRange::of_length(Int) -> Self
+#deprecated
 pub fn OffsetRange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Position {
@@ -163,6 +166,7 @@ pub fn Position::equals(Self, Self) -> Bool
 pub fn Position::is_before(Self, Self) -> Bool
 pub fn Position::is_before_or_equal(Self, Self) -> Bool
 pub fn Position::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn Position::to_repr(Self) -> @debug.Repr
 pub fn Position::with_(Self, line_number? : Int, column? : Int) -> Self
 
@@ -200,6 +204,7 @@ pub fn Range::not_equal(Self, Self) -> Bool
 pub fn Range::plus_range(Self, Self) -> Self
 pub fn Range::set_end_position(Self, Int, Int) -> Self
 pub fn Range::strict_contains_range(Self, Self) -> Bool
+#deprecated
 pub fn Range::to_repr(Self) -> @debug.Repr
 pub fn Range::to_string(Self) -> String
 
@@ -220,6 +225,7 @@ pub fn Uri::hash_combine(Self, Hasher) -> Unit
 pub fn Uri::join_path(Self, Array[String]) -> Self
 pub fn Uri::not_equal(Self, Self) -> Bool
 pub fn Uri::parse(String, strict? : Bool) -> Self raise UriError
+#deprecated
 pub fn Uri::to_repr(Self) -> @debug.Repr
 pub fn Uri::to_string(Self, skip_encoding? : Bool) -> String
 pub fn Uri::with_(Self, scheme? : String, authority? : String, path? : String, query? : String, fragment? : String) -> Self raise UriError

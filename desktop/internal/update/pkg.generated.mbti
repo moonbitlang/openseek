@@ -44,6 +44,7 @@ pub struct PackageInfo {
 } derive(Eq, @debug.Debug)
 pub fn PackageInfo::equal(Self, Self) -> Bool
 pub fn PackageInfo::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn PackageInfo::to_repr(Self) -> @debug.Repr
 
 pub struct StagedUpdate {
@@ -57,6 +58,7 @@ pub struct UpdateInfo {
 } derive(Eq, @debug.Debug)
 pub fn UpdateInfo::equal(Self, Self) -> Bool
 pub fn UpdateInfo::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn UpdateInfo::to_repr(Self) -> @debug.Repr
 
 // Type aliases

@@ -53,6 +53,7 @@ pub(all) struct MarkdownSectionFoldControl {
 } derive(Eq, @debug.Debug)
 pub fn MarkdownSectionFoldControl::equal(Self, Self) -> Bool
 pub fn MarkdownSectionFoldControl::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MarkdownSectionFoldControl::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownSemanticCodeLineDom {
@@ -76,6 +77,7 @@ pub(all) struct MarkdownTocBarEntry {
 } derive(Eq, @debug.Debug)
 pub fn MarkdownTocBarEntry::equal(Self, Self) -> Bool
 pub fn MarkdownTocBarEntry::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MarkdownTocBarEntry::to_repr(Self) -> @debug.Repr
 
 // Type aliases

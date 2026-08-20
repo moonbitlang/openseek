@@ -17,6 +17,7 @@ pub struct SessionListing {
 pub fn SessionListing::first_prompt(Self) -> String
 pub fn SessionListing::id(Self) -> @agent_session.SessionId
 pub fn SessionListing::last_active_unix_seconds(Self) -> Int64?
+#deprecated
 pub fn SessionListing::to_repr(Self) -> @debug.Repr
 
 pub struct SessionStore {
@@ -33,6 +34,7 @@ pub async fn SessionStore::listings(Self) -> Array[SessionListing]
 pub async fn SessionStore::load(Self, @agent_session.SessionId) -> @agent_session.Session
 pub fn SessionStore::root(Self) -> String
 pub fn SessionStore::session_file(Self, @agent_session.SessionId) -> String raise
+#deprecated
 pub fn SessionStore::to_repr(Self) -> @debug.Repr
 
 // Type aliases

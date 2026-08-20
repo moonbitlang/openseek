@@ -22,6 +22,7 @@ pub(all) struct UnifiedDiffAlgorithmOptions {
 } derive(Eq, @debug.Debug)
 pub fn UnifiedDiffAlgorithmOptions::equal(Self, Self) -> Bool
 pub fn UnifiedDiffAlgorithmOptions::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn UnifiedDiffAlgorithmOptions::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UnifiedDiffChange {
@@ -32,6 +33,7 @@ pub(all) struct UnifiedDiffChange {
 } derive(Eq, @debug.Debug)
 pub fn UnifiedDiffChange::equal(Self, Self) -> Bool
 pub fn UnifiedDiffChange::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn UnifiedDiffChange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UnifiedDiffHunk {
@@ -43,6 +45,7 @@ pub(all) struct UnifiedDiffHunk {
 } derive(Eq, @debug.Debug)
 pub fn UnifiedDiffHunk::equal(Self, Self) -> Bool
 pub fn UnifiedDiffHunk::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn UnifiedDiffHunk::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UnifiedDiffLine {
@@ -53,6 +56,7 @@ pub(all) struct UnifiedDiffLine {
 } derive(Eq, @debug.Debug)
 pub fn UnifiedDiffLine::equal(Self, Self) -> Bool
 pub fn UnifiedDiffLine::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn UnifiedDiffLine::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UnifiedDiffLineComment {
@@ -61,6 +65,7 @@ pub(all) struct UnifiedDiffLineComment {
 } derive(Eq, @debug.Debug)
 pub fn UnifiedDiffLineComment::equal(Self, Self) -> Bool
 pub fn UnifiedDiffLineComment::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn UnifiedDiffLineComment::to_repr(Self) -> @debug.Repr
 
 pub(all) enum UnifiedDiffLineKind {
@@ -70,6 +75,7 @@ pub(all) enum UnifiedDiffLineKind {
 } derive(Eq, @debug.Debug)
 pub fn UnifiedDiffLineKind::equal(Self, Self) -> Bool
 pub fn UnifiedDiffLineKind::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn UnifiedDiffLineKind::to_repr(Self) -> @debug.Repr
 
 // Type aliases

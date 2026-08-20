@@ -20,6 +20,7 @@ pub(all) enum ChangeType {
 } derive(Eq, @debug.Debug)
 pub fn ChangeType::equal(Self, Self) -> Bool
 pub fn ChangeType::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ChangeType::to_repr(Self) -> @debug.Repr
 
 type QuickDiffService

@@ -21,6 +21,7 @@ pub(all) struct ReferenceGroup {
 } derive(Eq, @debug.Debug)
 pub fn ReferenceGroup::equal(Self, Self) -> Bool
 pub fn ReferenceGroup::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ReferenceGroup::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ReferenceItem {
@@ -36,6 +37,7 @@ pub fn ReferenceItem::fallback_label(Self) -> String
 pub fn ReferenceItem::location(Self) -> @language.Location
 pub fn ReferenceItem::not_equal(Self, Self) -> Bool
 pub fn ReferenceItem::row_preview(Self, @model.TextModel?) -> ReferenceRowPreview
+#deprecated
 pub fn ReferenceItem::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ReferenceRowPreview {
@@ -44,6 +46,7 @@ pub(all) enum ReferenceRowPreview {
 } derive(Eq, @debug.Debug)
 pub fn ReferenceRowPreview::equal(Self, Self) -> Bool
 pub fn ReferenceRowPreview::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ReferenceRowPreview::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ReferenceSnippet {
@@ -54,6 +57,7 @@ pub(all) struct ReferenceSnippet {
 pub fn ReferenceSnippet::display_text(Self) -> String
 pub fn ReferenceSnippet::equal(Self, Self) -> Bool
 pub fn ReferenceSnippet::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ReferenceSnippet::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ReferencesModel {
@@ -67,6 +71,7 @@ pub fn ReferencesModel::nearest_reference(Self, @common.Uri, @common.Position) -
 pub fn ReferencesModel::next_reference(Self, ReferenceItem) -> ReferenceItem?
 pub fn ReferencesModel::not_equal(Self, Self) -> Bool
 pub fn ReferencesModel::previous_reference(Self, ReferenceItem) -> ReferenceItem?
+#deprecated
 pub fn ReferencesModel::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ReferencesPeekMode {
@@ -75,6 +80,7 @@ pub(all) enum ReferencesPeekMode {
 } derive(Eq, @debug.Debug)
 pub fn ReferencesPeekMode::equal(Self, Self) -> Bool
 pub fn ReferencesPeekMode::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ReferencesPeekMode::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ReferencesPeekPhase {
@@ -87,6 +93,7 @@ pub(all) enum ReferencesPeekPhase {
 } derive(Eq, @debug.Debug)
 pub fn ReferencesPeekPhase::equal(Self, Self) -> Bool
 pub fn ReferencesPeekPhase::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ReferencesPeekPhase::to_repr(Self) -> @debug.Repr
 
 pub struct ReferencesSessionKey {
@@ -99,6 +106,7 @@ pub fn ReferencesSessionKey::equal(Self, Self) -> Bool
 pub fn ReferencesSessionKey::from_model(@model.TextModel, Int, @common.Position) -> Self
 pub fn ReferencesSessionKey::is_current(Self, @model.TextModel, Int) -> Bool
 pub fn ReferencesSessionKey::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ReferencesSessionKey::to_repr(Self) -> @debug.Repr
 
 // Type aliases

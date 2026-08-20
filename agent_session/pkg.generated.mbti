@@ -44,6 +44,7 @@ pub fn AssistantMessage::from_json(Json, @json.JsonPath) -> Self raise @json.Jso
 pub fn AssistantMessage::not_equal(Self, Self) -> Bool
 pub fn AssistantMessage::reasoning_content(Self) -> String?
 pub fn AssistantMessage::to_json(Self) -> Json
+#deprecated
 pub fn AssistantMessage::to_repr(Self) -> @debug.Repr
 pub fn AssistantMessage::tool_calls(Self) -> Array[@deepseek.ToolCall]
 
@@ -53,6 +54,7 @@ pub(all) struct GoalBaseline {
 } derive(Eq, @debug.Debug)
 pub fn GoalBaseline::equal(Self, Self) -> Bool
 pub fn GoalBaseline::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn GoalBaseline::to_repr(Self) -> @debug.Repr
 
 pub enum GoalMarker {
@@ -61,6 +63,7 @@ pub enum GoalMarker {
   GoalBlocked(String)
   GoalUnblocked
 } derive(@debug.Debug)
+#deprecated
 pub fn GoalMarker::to_repr(Self) -> @debug.Repr
 
 pub struct RuntimeNotice {
@@ -72,6 +75,7 @@ pub fn RuntimeNotice::equal(Self, Self) -> Bool
 pub fn RuntimeNotice::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn RuntimeNotice::not_equal(Self, Self) -> Bool
 pub fn RuntimeNotice::to_json(Self) -> Json
+#deprecated
 pub fn RuntimeNotice::to_repr(Self) -> @debug.Repr
 
 pub struct Session {
@@ -93,6 +97,7 @@ pub fn Session::not_equal(Self, Self) -> Bool
 pub fn Session::summary_item(Self, content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> SessionItem raise
 pub fn Session::system_prompt(Self) -> String
 pub fn Session::to_json(Self) -> Json
+#deprecated
 pub fn Session::to_repr(Self) -> @debug.Repr
 pub impl ToJson for Session
 pub impl @json.FromJson for Session
@@ -106,6 +111,7 @@ pub fn SessionEvent::item(Self) -> SessionItem
 pub fn SessionEvent::not_equal(Self, Self) -> Bool
 pub fn SessionEvent::sequence(Self) -> Int
 pub fn SessionEvent::to_json(Self) -> Json
+#deprecated
 pub fn SessionEvent::to_repr(Self) -> @debug.Repr
 pub fn SessionEvent::unix_ms(Self) -> Int64
 
@@ -117,6 +123,7 @@ pub fn SessionId::equal(Self, Self) -> Bool
 pub fn SessionId::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionId::generated(prefix~ : String, now_ms~ : Int64, salt? : String) -> Self
 pub fn SessionId::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SessionId::to_repr(Self) -> @debug.Repr
 pub fn SessionId::value(Self) -> String
 pub impl @json.FromJson for SessionId
@@ -132,6 +139,7 @@ pub(all) enum SessionItem {
 pub fn SessionItem::equal(Self, Self) -> Bool
 pub fn SessionItem::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionItem::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SessionItem::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for SessionItem
 
@@ -145,6 +153,7 @@ pub fn SessionSummary::from_json(Json, @json.JsonPath) -> Self raise @json.JsonD
 pub fn SessionSummary::from_sequence(Self) -> Int
 pub fn SessionSummary::not_equal(Self, Self) -> Bool
 pub fn SessionSummary::to_json(Self) -> Json
+#deprecated
 pub fn SessionSummary::to_repr(Self) -> @debug.Repr
 pub fn SessionSummary::to_sequence(Self) -> Int
 
@@ -155,6 +164,7 @@ pub fn StandingGoal::answered_since_set(Self) -> Bool
 pub fn StandingGoal::blocked(Self) -> Bool
 pub fn StandingGoal::set_sequence(Self) -> Int
 pub fn StandingGoal::text(Self) -> String
+#deprecated
 pub fn StandingGoal::to_repr(Self) -> @debug.Repr
 
 pub struct ToolResult {
@@ -168,6 +178,7 @@ pub fn ToolResult::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecod
 pub fn ToolResult::is_error(Self) -> Bool
 pub fn ToolResult::not_equal(Self, Self) -> Bool
 pub fn ToolResult::to_json(Self) -> Json
+#deprecated
 pub fn ToolResult::to_repr(Self) -> @debug.Repr
 pub fn ToolResult::tool_call_id(Self) -> String
 pub fn ToolResult::tool_name(Self) -> String
@@ -181,6 +192,7 @@ pub(all) enum TurnTerminal {
 pub fn TurnTerminal::equal(Self, Self) -> Bool
 pub fn TurnTerminal::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TurnTerminal::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn TurnTerminal::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for TurnTerminal
 
@@ -194,6 +206,7 @@ pub fn UserMessage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDeco
 pub fn UserMessage::not_equal(Self, Self) -> Bool
 pub fn UserMessage::submission_id(Self) -> String?
 pub fn UserMessage::to_json(Self) -> Json
+#deprecated
 pub fn UserMessage::to_repr(Self) -> @debug.Repr
 
 // Type aliases

@@ -33,6 +33,7 @@ pub fn Selection::not_equal(Self, Self) -> Bool
 pub fn Selection::set_end_position(Self, Int, Int) -> Self
 pub fn Selection::set_start_position(Self, Int, Int) -> Self
 pub fn Selection::start(Self) -> @common.Position
+#deprecated
 pub fn Selection::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SelectionDirection {
@@ -41,6 +42,7 @@ pub(all) enum SelectionDirection {
 } derive(Eq, @debug.Debug)
 pub fn SelectionDirection::equal(Self, Self) -> Bool
 pub fn SelectionDirection::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SelectionDirection::to_repr(Self) -> @debug.Repr
 
 // Type aliases

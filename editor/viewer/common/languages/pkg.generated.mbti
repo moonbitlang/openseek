@@ -30,6 +30,7 @@ pub(all) struct CharacterPair {
 } derive(Eq, @debug.Debug)
 pub fn CharacterPair::equal(Self, Self) -> Bool
 pub fn CharacterPair::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn CharacterPair::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CommentRule {
@@ -38,6 +39,7 @@ pub(all) struct CommentRule {
 } derive(Eq, @debug.Debug)
 pub fn CommentRule::equal(Self, Self) -> Bool
 pub fn CommentRule::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn CommentRule::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FoldingMarkers {
@@ -82,6 +84,7 @@ pub struct LineCommentRule {
 pub fn LineCommentRule::LineCommentRule(String, no_indent? : Bool) -> Self
 pub fn LineCommentRule::equal(Self, Self) -> Bool
 pub fn LineCommentRule::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn LineCommentRule::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownCommentProviderResult {

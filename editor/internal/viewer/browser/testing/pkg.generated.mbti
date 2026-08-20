@@ -33,6 +33,7 @@ pub(all) struct HoverResolvedObservation {
 } derive(Eq, @debug.Debug)
 pub fn HoverResolvedObservation::equal(Self, Self) -> Bool
 pub fn HoverResolvedObservation::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn HoverResolvedObservation::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelRenderedObservation {
@@ -42,6 +43,7 @@ pub(all) struct ModelRenderedObservation {
   patch_ms : Double
   fresh : Bool
 } derive(@debug.Debug)
+#deprecated
 pub fn ModelRenderedObservation::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ScrollFramePhase {
@@ -51,6 +53,7 @@ pub(all) enum ScrollFramePhase {
 } derive(Eq, @debug.Debug)
 pub fn ScrollFramePhase::equal(Self, Self) -> Bool
 pub fn ScrollFramePhase::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ScrollFramePhase::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ViewModelBuiltObservation {
@@ -60,6 +63,7 @@ pub(all) struct ViewModelBuiltObservation {
   tokenize_ms : Double
   build_ms : Double
 } derive(@debug.Debug)
+#deprecated
 pub fn ViewModelBuiltObservation::to_repr(Self) -> @debug.Repr
 
 // Type aliases

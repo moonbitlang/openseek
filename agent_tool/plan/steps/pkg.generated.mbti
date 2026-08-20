@@ -18,6 +18,7 @@ pub fn decode(Json) -> PlanInput raise
 pub struct PlanInput {
   steps : Array[PlanStep]
 } derive(@debug.Debug)
+#deprecated
 pub fn PlanInput::to_repr(Self) -> @debug.Repr
 
 pub enum PlanStatus {
@@ -28,12 +29,14 @@ pub enum PlanStatus {
 pub fn PlanStatus::equal(Self, Self) -> Bool
 pub fn PlanStatus::label(Self) -> String
 pub fn PlanStatus::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn PlanStatus::to_repr(Self) -> @debug.Repr
 
 pub struct PlanStep {
   title : String
   status : PlanStatus
 } derive(@debug.Debug)
+#deprecated
 pub fn PlanStep::to_repr(Self) -> @debug.Repr
 
 // Type aliases

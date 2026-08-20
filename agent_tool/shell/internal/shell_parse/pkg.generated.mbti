@@ -19,6 +19,7 @@ pub(all) struct EnvAssignment {
 } derive(Eq, @debug.Debug)
 pub fn EnvAssignment::equal(Self, Self) -> Bool
 pub fn EnvAssignment::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn EnvAssignment::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ParseResult {
@@ -28,6 +29,7 @@ pub(all) enum ParseResult {
 } derive(Eq, @debug.Debug)
 pub fn ParseResult::equal(Self, Self) -> Bool
 pub fn ParseResult::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ParseResult::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Redirect {
@@ -36,6 +38,7 @@ pub(all) struct Redirect {
 } derive(Eq, @debug.Debug)
 pub fn Redirect::equal(Self, Self) -> Bool
 pub fn Redirect::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn Redirect::to_repr(Self) -> @debug.Repr
 
 pub struct SimpleCommand {
@@ -49,6 +52,7 @@ pub fn SimpleCommand::command_index(Self) -> Int?
 pub fn SimpleCommand::command_name(Self) -> String?
 pub fn SimpleCommand::equal(Self, Self) -> Bool
 pub fn SimpleCommand::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn SimpleCommand::to_repr(Self) -> @debug.Repr
 
 // Type aliases

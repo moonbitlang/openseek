@@ -24,6 +24,7 @@ pub(all) struct ClientCoordinates {
 pub fn ClientCoordinates::equal(Self, Self) -> Bool
 pub fn ClientCoordinates::not_equal(Self, Self) -> Bool
 pub fn ClientCoordinates::to_page_coordinates(Self) -> PageCoordinates
+#deprecated
 pub fn ClientCoordinates::to_repr(Self) -> @debug.Repr
 
 pub struct CoordinatesRelativeToEditor {
@@ -32,6 +33,7 @@ pub struct CoordinatesRelativeToEditor {
 } derive(Eq, @debug.Debug)
 pub fn CoordinatesRelativeToEditor::equal(Self, Self) -> Bool
 pub fn CoordinatesRelativeToEditor::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn CoordinatesRelativeToEditor::to_repr(Self) -> @debug.Repr
 
 pub struct EditorDomMouseEvent {
@@ -83,6 +85,7 @@ pub struct EditorPagePosition {
 } derive(Eq, @debug.Debug)
 pub fn EditorPagePosition::equal(Self, Self) -> Bool
 pub fn EditorPagePosition::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn EditorPagePosition::to_repr(Self) -> @debug.Repr
 
 type GlobalEditorPointerMoveMonitor
@@ -114,6 +117,7 @@ pub(all) struct MouseTargetContentEmptyData {
 } derive(Eq, @debug.Debug)
 pub fn MouseTargetContentEmptyData::equal(Self, Self) -> Bool
 pub fn MouseTargetContentEmptyData::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MouseTargetContentEmptyData::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MouseTargetContentTextData {
@@ -130,6 +134,7 @@ pub(all) struct MouseTargetMarginData {
 } derive(Eq, @debug.Debug)
 pub fn MouseTargetMarginData::equal(Self, Self) -> Bool
 pub fn MouseTargetMarginData::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MouseTargetMarginData::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MouseTargetType {
@@ -150,6 +155,7 @@ pub(all) enum MouseTargetType {
 } derive(Eq, @debug.Debug)
 pub fn MouseTargetType::equal(Self, Self) -> Bool
 pub fn MouseTargetType::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MouseTargetType::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MouseTargetViewZoneData {
@@ -161,6 +167,7 @@ pub(all) struct MouseTargetViewZoneData {
 } derive(Eq, @debug.Debug)
 pub fn MouseTargetViewZoneData::equal(Self, Self) -> Bool
 pub fn MouseTargetViewZoneData::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn MouseTargetViewZoneData::to_repr(Self) -> @debug.Repr
 
 pub(all) enum OutsidePosition {
@@ -171,6 +178,7 @@ pub(all) enum OutsidePosition {
 } derive(Eq, @debug.Debug)
 pub fn OutsidePosition::equal(Self, Self) -> Bool
 pub fn OutsidePosition::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn OutsidePosition::to_repr(Self) -> @debug.Repr
 
 type OverlayWidget
@@ -185,6 +193,7 @@ pub(all) struct PageCoordinates {
 pub fn PageCoordinates::equal(Self, Self) -> Bool
 pub fn PageCoordinates::not_equal(Self, Self) -> Bool
 pub fn PageCoordinates::to_client_coordinates(Self) -> ClientCoordinates
+#deprecated
 pub fn PageCoordinates::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PartialEditorMouseEvent {

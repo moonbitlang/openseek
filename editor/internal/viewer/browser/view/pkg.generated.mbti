@@ -57,6 +57,7 @@ pub struct HorizontalPosition {
 } derive(Eq, @debug.Debug)
 pub fn HorizontalPosition::equal(Self, Self) -> Bool
 pub fn HorizontalPosition::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn HorizontalPosition::to_repr(Self) -> @debug.Repr
 
 type OverlayWidgets
@@ -80,6 +81,7 @@ pub fn PartFingerprint::collect(@dom.Element?, @dom.Element) -> Bytes
 pub fn PartFingerprint::equal(Self, Self) -> Bool
 pub fn PartFingerprint::not_equal(Self, Self) -> Bool
 pub fn PartFingerprint::to_int(Self) -> Int
+#deprecated
 pub fn PartFingerprint::to_repr(Self) -> @debug.Repr
 
 pub struct View {
@@ -138,6 +140,7 @@ pub(all) enum ViewConfigurationOption {
 } derive(Eq, @debug.Debug)
 pub fn ViewConfigurationOption::equal(Self, Self) -> Bool
 pub fn ViewConfigurationOption::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ViewConfigurationOption::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ViewContext {
@@ -188,6 +191,7 @@ type ViewLinesConfiguration derive(Eq, @debug.Debug)
 pub fn ViewLinesConfiguration::ViewLinesConfiguration(line_height? : Int, typical_halfwidth_character_width? : Double, is_viewport_wrapping? : Bool, can_use_layer_hinting? : Bool, space_width? : Double, middot_width? : Double, wsmiddot_width? : Double, use_monospace_optimizations? : Bool, can_use_halfwidth_rightwards_arrow? : Bool, stop_rendering_line_after? : Int, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, font_ligatures? : Bool, vertical_scrollbar_size? : Double) -> Self
 pub fn ViewLinesConfiguration::equal(Self, Self) -> Bool
 pub fn ViewLinesConfiguration::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn ViewLinesConfiguration::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ViewRenderInput {

@@ -40,6 +40,7 @@ pub(all) enum HighlightTag {
 pub fn HighlightTag::equal(Self, Self) -> Bool
 pub fn HighlightTag::not_equal(Self, Self) -> Bool
 pub fn HighlightTag::output(Self, &Logger) -> Unit
+#deprecated
 pub fn HighlightTag::to_repr(Self) -> @debug.Repr
 pub fn HighlightTag::to_string(Self) -> String
 pub impl Show for HighlightTag
@@ -51,6 +52,7 @@ pub(all) struct LineToken {
 } derive(Eq, @debug.Debug)
 pub fn LineToken::equal(Self, Self) -> Bool
 pub fn LineToken::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn LineToken::to_repr(Self) -> @debug.Repr
 
 pub struct TokenizationChangedEvent {
@@ -78,6 +80,7 @@ pub fn TokenizerState::last_mode(Self) -> Byte?
 pub fn TokenizerState::not_equal(Self, Self) -> Bool
 pub fn TokenizerState::pop_mode(Self) -> Self
 pub fn TokenizerState::push_mode(Self, Byte) -> Self
+#deprecated
 pub fn TokenizerState::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for TokenizerState
 

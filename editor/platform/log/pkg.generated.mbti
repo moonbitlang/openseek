@@ -18,6 +18,7 @@ pub(all) struct LogEntry {
 } derive(Eq, @debug.Debug)
 pub fn LogEntry::equal(Self, Self) -> Bool
 pub fn LogEntry::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn LogEntry::to_repr(Self) -> @debug.Repr
 
 type LogHandle
@@ -36,6 +37,7 @@ pub fn LogLevel::equal(Self, Self) -> Bool
 pub fn LogLevel::is_warning_or_error(Self) -> Bool
 pub fn LogLevel::label(Self) -> String
 pub fn LogLevel::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn LogLevel::to_repr(Self) -> @debug.Repr
 
 type LogService

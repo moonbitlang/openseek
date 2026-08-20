@@ -19,6 +19,7 @@ pub struct MultiEditArgs {
   revert_when_errors_above : Int?
   revert_on_parse_errors : Bool
 } derive(@debug.Debug)
+#deprecated
 pub fn MultiEditArgs::to_repr(Self) -> @debug.Repr
 
 pub struct MultiEditItem {
@@ -28,6 +29,7 @@ pub struct MultiEditItem {
   start_line : Int
   end_line : Int?
 } derive(@debug.Debug)
+#deprecated
 pub fn MultiEditItem::to_repr(Self) -> @debug.Repr
 
 // Type aliases

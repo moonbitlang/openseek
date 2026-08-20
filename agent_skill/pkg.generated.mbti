@@ -19,6 +19,7 @@ type Skill derive(@debug.Debug)
 pub fn Skill::description(Self) -> String
 pub fn Skill::name(Self) -> String
 pub fn Skill::path(Self) -> String
+#deprecated
 pub fn Skill::to_repr(Self) -> @debug.Repr
 
 // Type aliases

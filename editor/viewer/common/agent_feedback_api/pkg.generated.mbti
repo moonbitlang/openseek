@@ -20,18 +20,21 @@ pub(all) struct AgentFeedback {
   replies : Array[String]
   state : AgentFeedbackState
 } derive(@debug.Debug)
+#deprecated
 pub fn AgentFeedback::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AgentFeedbackAddedEvent {
   feedback : AgentFeedback
   has_existing_feedback_for_file : Bool
 } derive(@debug.Debug)
+#deprecated
 pub fn AgentFeedbackAddedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AgentFeedbackChangeEvent {
   resource : @common.Uri
   feedback_items : Array[AgentFeedback]
 } derive(@debug.Debug)
+#deprecated
 pub fn AgentFeedbackChangeEvent::to_repr(Self) -> @debug.Repr
 
 type AgentFeedbackHandle
@@ -55,6 +58,7 @@ pub(all) enum AgentFeedbackKind {
 } derive(Eq, @debug.Debug)
 pub fn AgentFeedbackKind::equal(Self, Self) -> Bool
 pub fn AgentFeedbackKind::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn AgentFeedbackKind::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AgentFeedbackNavigationBearing {
@@ -63,6 +67,7 @@ pub(all) struct AgentFeedbackNavigationBearing {
 } derive(Eq, @debug.Debug)
 pub fn AgentFeedbackNavigationBearing::equal(Self, Self) -> Bool
 pub fn AgentFeedbackNavigationBearing::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn AgentFeedbackNavigationBearing::to_repr(Self) -> @debug.Repr
 
 pub(all) enum AgentFeedbackState {
@@ -73,6 +78,7 @@ pub(all) enum AgentFeedbackState {
 } derive(Eq, @debug.Debug)
 pub fn AgentFeedbackState::equal(Self, Self) -> Bool
 pub fn AgentFeedbackState::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn AgentFeedbackState::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AgentFeedbackSubmittedEvent {
@@ -82,6 +88,7 @@ pub(all) struct AgentFeedbackSubmittedEvent {
   agent_review_count : Int
   reply_count : Int
 } derive(@debug.Debug)
+#deprecated
 pub fn AgentFeedbackSubmittedEvent::to_repr(Self) -> @debug.Repr
 
 // Type aliases

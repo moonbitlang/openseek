@@ -33,6 +33,7 @@ pub fn AgentErrorPayload::equal(Self, Self) -> Bool
 pub fn AgentErrorPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AgentErrorPayload::not_equal(Self, Self) -> Bool
 pub fn AgentErrorPayload::to_json(Self) -> Json
+#deprecated
 pub fn AgentErrorPayload::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for AgentErrorPayload
 
@@ -45,6 +46,7 @@ pub fn AgentEventPayload::equal(Self, Self) -> Bool
 pub fn AgentEventPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AgentEventPayload::not_equal(Self, Self) -> Bool
 pub fn AgentEventPayload::to_json(Self) -> Json
+#deprecated
 pub fn AgentEventPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AgentStreamEvent {
@@ -56,6 +58,7 @@ pub fn AgentStreamEvent::from_json(Json, @json.JsonPath) -> Self raise @json.Jso
 pub fn AgentStreamEvent::not_equal(Self, Self) -> Bool
 pub fn AgentStreamEvent::remote_lifecycle(Self) -> Self?
 pub fn AgentStreamEvent::to_json(Self) -> Json
+#deprecated
 pub fn AgentStreamEvent::to_repr(Self) -> @debug.Repr
 pub impl ToJson for AgentStreamEvent
 pub impl @json.FromJson for AgentStreamEvent
@@ -69,6 +72,7 @@ pub fn AppEntry::equal(Self, Self) -> Bool
 pub fn AppEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AppEntry::not_equal(Self, Self) -> Bool
 pub fn AppEntry::to_json(Self) -> Json
+#deprecated
 pub fn AppEntry::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AppInfoReply {
@@ -78,6 +82,7 @@ pub fn AppInfoReply::equal(Self, Self) -> Bool
 pub fn AppInfoReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AppInfoReply::not_equal(Self, Self) -> Bool
 pub fn AppInfoReply::to_json(Self) -> Json
+#deprecated
 pub fn AppInfoReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ApplyUpdateReply {
@@ -87,6 +92,7 @@ pub fn ApplyUpdateReply::equal(Self, Self) -> Bool
 pub fn ApplyUpdateReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ApplyUpdateReply::not_equal(Self, Self) -> Bool
 pub fn ApplyUpdateReply::to_json(Self) -> Json
+#deprecated
 pub fn ApplyUpdateReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ArchiveNeedsForceReply {
@@ -98,6 +104,7 @@ pub fn ArchiveNeedsForceReply::equal(Self, Self) -> Bool
 pub fn ArchiveNeedsForceReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ArchiveNeedsForceReply::not_equal(Self, Self) -> Bool
 pub fn ArchiveNeedsForceReply::to_json(Self) -> Json
+#deprecated
 pub fn ArchiveNeedsForceReply::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ArchiveReply {
@@ -108,6 +115,7 @@ pub fn ArchiveReply::equal(Self, Self) -> Bool
 pub fn ArchiveReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ArchiveReply::not_equal(Self, Self) -> Bool
 pub fn ArchiveReply::to_json(Self) -> Json
+#deprecated
 pub fn ArchiveReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ArchiveReply
 pub impl @json.FromJson for ArchiveReply
@@ -120,6 +128,7 @@ pub fn ArchivedSessionPayload::equal(Self, Self) -> Bool
 pub fn ArchivedSessionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ArchivedSessionPayload::not_equal(Self, Self) -> Bool
 pub fn ArchivedSessionPayload::to_json(Self) -> Json
+#deprecated
 pub fn ArchivedSessionPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AuthDevicePayload {
@@ -131,6 +140,7 @@ pub fn AuthDevicePayload::equal(Self, Self) -> Bool
 pub fn AuthDevicePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AuthDevicePayload::not_equal(Self, Self) -> Bool
 pub fn AuthDevicePayload::to_json(Self) -> Json
+#deprecated
 pub fn AuthDevicePayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AuthStatusPayload {
@@ -144,6 +154,7 @@ pub fn AuthStatusPayload::equal(Self, Self) -> Bool
 pub fn AuthStatusPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AuthStatusPayload::not_equal(Self, Self) -> Bool
 pub fn AuthStatusPayload::to_json(Self) -> Json
+#deprecated
 pub fn AuthStatusPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AuthUserPayload {
@@ -154,6 +165,7 @@ pub fn AuthUserPayload::equal(Self, Self) -> Bool
 pub fn AuthUserPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AuthUserPayload::not_equal(Self, Self) -> Bool
 pub fn AuthUserPayload::to_json(Self) -> Json
+#deprecated
 pub fn AuthUserPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct BrowseDirectoryPayload {
@@ -163,6 +175,7 @@ pub fn BrowseDirectoryPayload::equal(Self, Self) -> Bool
 pub fn BrowseDirectoryPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowseDirectoryPayload::not_equal(Self, Self) -> Bool
 pub fn BrowseDirectoryPayload::to_json(Self) -> Json
+#deprecated
 pub fn BrowseDirectoryPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) enum BrowseDirectoryReply {
@@ -174,6 +187,7 @@ pub fn BrowseDirectoryReply::equal(Self, Self) -> Bool
 pub fn BrowseDirectoryReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowseDirectoryReply::not_equal(Self, Self) -> Bool
 pub fn BrowseDirectoryReply::to_json(Self) -> Json
+#deprecated
 pub fn BrowseDirectoryReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for BrowseDirectoryReply
 pub impl @json.FromJson for BrowseDirectoryReply
@@ -189,6 +203,7 @@ pub fn BrowserBoundsPayload::equal(Self, Self) -> Bool
 pub fn BrowserBoundsPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserBoundsPayload::not_equal(Self, Self) -> Bool
 pub fn BrowserBoundsPayload::to_json(Self) -> Json
+#deprecated
 pub fn BrowserBoundsPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct BrowserIdPayload {
@@ -198,6 +213,7 @@ pub fn BrowserIdPayload::equal(Self, Self) -> Bool
 pub fn BrowserIdPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserIdPayload::not_equal(Self, Self) -> Bool
 pub fn BrowserIdPayload::to_json(Self) -> Json
+#deprecated
 pub fn BrowserIdPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct BrowserOpenPayload {
@@ -208,6 +224,7 @@ pub fn BrowserOpenPayload::equal(Self, Self) -> Bool
 pub fn BrowserOpenPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserOpenPayload::not_equal(Self, Self) -> Bool
 pub fn BrowserOpenPayload::to_json(Self) -> Json
+#deprecated
 pub fn BrowserOpenPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct BrowserVisiblePayload {
@@ -218,6 +235,7 @@ pub fn BrowserVisiblePayload::equal(Self, Self) -> Bool
 pub fn BrowserVisiblePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserVisiblePayload::not_equal(Self, Self) -> Bool
 pub fn BrowserVisiblePayload::to_json(Self) -> Json
+#deprecated
 pub fn BrowserVisiblePayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CancelPayload {
@@ -227,6 +245,7 @@ pub fn CancelPayload::equal(Self, Self) -> Bool
 pub fn CancelPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CancelPayload::not_equal(Self, Self) -> Bool
 pub fn CancelPayload::to_json(Self) -> Json
+#deprecated
 pub fn CancelPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CancelReply {
@@ -237,6 +256,7 @@ pub fn CancelReply::equal(Self, Self) -> Bool
 pub fn CancelReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CancelReply::not_equal(Self, Self) -> Bool
 pub fn CancelReply::to_json(Self) -> Json
+#deprecated
 pub fn CancelReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CancelSearchFilesPayload {
@@ -247,6 +267,7 @@ pub fn CancelSearchFilesPayload::equal(Self, Self) -> Bool
 pub fn CancelSearchFilesPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CancelSearchFilesPayload::not_equal(Self, Self) -> Bool
 pub fn CancelSearchFilesPayload::to_json(Self) -> Json
+#deprecated
 pub fn CancelSearchFilesPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) enum CheckUpdateReply {
@@ -260,6 +281,7 @@ pub fn CheckUpdateReply::equal(Self, Self) -> Bool
 pub fn CheckUpdateReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CheckUpdateReply::not_equal(Self, Self) -> Bool
 pub fn CheckUpdateReply::to_json(Self) -> Json
+#deprecated
 pub fn CheckUpdateReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CheckUpdateReply
 pub impl @json.FromJson for CheckUpdateReply
@@ -271,6 +293,7 @@ pub fn ClearFileSearchCachePayload::equal(Self, Self) -> Bool
 pub fn ClearFileSearchCachePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ClearFileSearchCachePayload::not_equal(Self, Self) -> Bool
 pub fn ClearFileSearchCachePayload::to_json(Self) -> Json
+#deprecated
 pub fn ClearFileSearchCachePayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CodexAccountLoginCancelPayload {
@@ -280,6 +303,7 @@ pub fn CodexAccountLoginCancelPayload::equal(Self, Self) -> Bool
 pub fn CodexAccountLoginCancelPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexAccountLoginCancelPayload::not_equal(Self, Self) -> Bool
 pub fn CodexAccountLoginCancelPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexAccountLoginCancelPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexAccountLoginCancelPayload
 pub impl @json.FromJson for CodexAccountLoginCancelPayload
@@ -293,6 +317,7 @@ pub fn CodexAccountLoginStartPayload::equal(Self, Self) -> Bool
 pub fn CodexAccountLoginStartPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexAccountLoginStartPayload::not_equal(Self, Self) -> Bool
 pub fn CodexAccountLoginStartPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexAccountLoginStartPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexAccountLoginStartPayload
 pub impl @json.FromJson for CodexAccountLoginStartPayload
@@ -304,6 +329,7 @@ pub fn CodexAccountReadPayload::equal(Self, Self) -> Bool
 pub fn CodexAccountReadPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexAccountReadPayload::not_equal(Self, Self) -> Bool
 pub fn CodexAccountReadPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexAccountReadPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexAccountReadPayload
 pub impl @json.FromJson for CodexAccountReadPayload
@@ -316,6 +342,7 @@ pub fn CodexAccountReply::equal(Self, Self) -> Bool
 pub fn CodexAccountReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexAccountReply::not_equal(Self, Self) -> Bool
 pub fn CodexAccountReply::to_json(Self) -> Json
+#deprecated
 pub fn CodexAccountReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexAccountReply
 pub impl @json.FromJson for CodexAccountReply
@@ -336,6 +363,7 @@ pub fn CodexDataReply::equal(Self, Self) -> Bool
 pub fn CodexDataReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexDataReply::not_equal(Self, Self) -> Bool
 pub fn CodexDataReply::to_json(Self) -> Json
+#deprecated
 pub fn CodexDataReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexDataReply
 pub impl @json.FromJson for CodexDataReply
@@ -347,6 +375,7 @@ pub fn CodexDraftClosePayload::equal(Self, Self) -> Bool
 pub fn CodexDraftClosePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexDraftClosePayload::not_equal(Self, Self) -> Bool
 pub fn CodexDraftClosePayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexDraftClosePayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexDraftClosePayload
 pub impl @json.FromJson for CodexDraftClosePayload
@@ -359,6 +388,7 @@ pub fn CodexDraftOpenPayload::equal(Self, Self) -> Bool
 pub fn CodexDraftOpenPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexDraftOpenPayload::not_equal(Self, Self) -> Bool
 pub fn CodexDraftOpenPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexDraftOpenPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexDraftOpenPayload
 pub impl @json.FromJson for CodexDraftOpenPayload
@@ -372,6 +402,7 @@ pub fn CodexDraftOpenReply::equal(Self, Self) -> Bool
 pub fn CodexDraftOpenReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexDraftOpenReply::not_equal(Self, Self) -> Bool
 pub fn CodexDraftOpenReply::to_json(Self) -> Json
+#deprecated
 pub fn CodexDraftOpenReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexDraftOpenReply
 pub impl @json.FromJson for CodexDraftOpenReply
@@ -385,6 +416,7 @@ pub fn CodexFileSearchPayload::equal(Self, Self) -> Bool
 pub fn CodexFileSearchPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexFileSearchPayload::not_equal(Self, Self) -> Bool
 pub fn CodexFileSearchPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexFileSearchPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexFileSearchPayload
 pub impl @json.FromJson for CodexFileSearchPayload
@@ -405,6 +437,7 @@ pub fn CodexLoginStartReply::equal(Self, Self) -> Bool
 pub fn CodexLoginStartReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexLoginStartReply::not_equal(Self, Self) -> Bool
 pub fn CodexLoginStartReply::to_json(Self) -> Json
+#deprecated
 pub fn CodexLoginStartReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexLoginStartReply
 pub impl @json.FromJson for CodexLoginStartReply
@@ -417,6 +450,7 @@ pub fn CodexModelListPayload::equal(Self, Self) -> Bool
 pub fn CodexModelListPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexModelListPayload::not_equal(Self, Self) -> Bool
 pub fn CodexModelListPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexModelListPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexModelListPayload
 pub impl @json.FromJson for CodexModelListPayload
@@ -429,6 +463,7 @@ pub fn CodexReviewStartPayload::equal(Self, Self) -> Bool
 pub fn CodexReviewStartPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexReviewStartPayload::not_equal(Self, Self) -> Bool
 pub fn CodexReviewStartPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexReviewStartPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexReviewStartPayload
 pub impl @json.FromJson for CodexReviewStartPayload
@@ -440,6 +475,7 @@ pub fn CodexReviewTarget::equal(Self, Self) -> Bool
 pub fn CodexReviewTarget::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexReviewTarget::not_equal(Self, Self) -> Bool
 pub fn CodexReviewTarget::to_json(Self) -> Json
+#deprecated
 pub fn CodexReviewTarget::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexReviewTarget
 pub impl @json.FromJson for CodexReviewTarget
@@ -452,6 +488,7 @@ pub fn CodexServerRequestRespondPayload::equal(Self, Self) -> Bool
 pub fn CodexServerRequestRespondPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexServerRequestRespondPayload::not_equal(Self, Self) -> Bool
 pub fn CodexServerRequestRespondPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexServerRequestRespondPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexServerRequestRespondPayload
 pub impl @json.FromJson for CodexServerRequestRespondPayload
@@ -464,6 +501,7 @@ pub fn CodexServerRequestsReply::equal(Self, Self) -> Bool
 pub fn CodexServerRequestsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexServerRequestsReply::not_equal(Self, Self) -> Bool
 pub fn CodexServerRequestsReply::to_json(Self) -> Json
+#deprecated
 pub fn CodexServerRequestsReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexServerRequestsReply
 pub impl @json.FromJson for CodexServerRequestsReply
@@ -477,6 +515,7 @@ pub fn CodexSkillsListPayload::equal(Self, Self) -> Bool
 pub fn CodexSkillsListPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexSkillsListPayload::not_equal(Self, Self) -> Bool
 pub fn CodexSkillsListPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexSkillsListPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexSkillsListPayload
 pub impl @json.FromJson for CodexSkillsListPayload
@@ -489,6 +528,7 @@ pub fn CodexStatusReply::equal(Self, Self) -> Bool
 pub fn CodexStatusReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexStatusReply::not_equal(Self, Self) -> Bool
 pub fn CodexStatusReply::to_json(Self) -> Json
+#deprecated
 pub fn CodexStatusReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexStatusReply
 pub impl @json.FromJson for CodexStatusReply
@@ -501,6 +541,7 @@ pub fn CodexThreadArchivePayload::equal(Self, Self) -> Bool
 pub fn CodexThreadArchivePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexThreadArchivePayload::not_equal(Self, Self) -> Bool
 pub fn CodexThreadArchivePayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexThreadArchivePayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexThreadArchivePayload
 pub impl @json.FromJson for CodexThreadArchivePayload
@@ -514,6 +555,7 @@ pub fn CodexThreadListPayload::equal(Self, Self) -> Bool
 pub fn CodexThreadListPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexThreadListPayload::not_equal(Self, Self) -> Bool
 pub fn CodexThreadListPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexThreadListPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexThreadListPayload
 pub impl @json.FromJson for CodexThreadListPayload
@@ -525,6 +567,7 @@ pub fn CodexThreadPayload::equal(Self, Self) -> Bool
 pub fn CodexThreadPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexThreadPayload::not_equal(Self, Self) -> Bool
 pub fn CodexThreadPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexThreadPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexThreadPayload
 pub impl @json.FromJson for CodexThreadPayload
@@ -537,6 +580,7 @@ pub fn CodexThreadReadPayload::equal(Self, Self) -> Bool
 pub fn CodexThreadReadPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexThreadReadPayload::not_equal(Self, Self) -> Bool
 pub fn CodexThreadReadPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexThreadReadPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexThreadReadPayload
 pub impl @json.FromJson for CodexThreadReadPayload
@@ -548,6 +592,7 @@ pub fn CodexThreadReply::equal(Self, Self) -> Bool
 pub fn CodexThreadReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexThreadReply::not_equal(Self, Self) -> Bool
 pub fn CodexThreadReply::to_json(Self) -> Json
+#deprecated
 pub fn CodexThreadReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexThreadReply
 pub impl @json.FromJson for CodexThreadReply
@@ -560,6 +605,7 @@ pub fn CodexThreadResumeReply::equal(Self, Self) -> Bool
 pub fn CodexThreadResumeReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexThreadResumeReply::not_equal(Self, Self) -> Bool
 pub fn CodexThreadResumeReply::to_json(Self) -> Json
+#deprecated
 pub fn CodexThreadResumeReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexThreadResumeReply
 pub impl @json.FromJson for CodexThreadResumeReply
@@ -573,6 +619,7 @@ pub fn CodexThreadStartPayload::equal(Self, Self) -> Bool
 pub fn CodexThreadStartPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexThreadStartPayload::not_equal(Self, Self) -> Bool
 pub fn CodexThreadStartPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexThreadStartPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexThreadStartPayload
 pub impl @json.FromJson for CodexThreadStartPayload
@@ -585,6 +632,7 @@ pub fn CodexTurnInterruptPayload::equal(Self, Self) -> Bool
 pub fn CodexTurnInterruptPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexTurnInterruptPayload::not_equal(Self, Self) -> Bool
 pub fn CodexTurnInterruptPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexTurnInterruptPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexTurnInterruptPayload
 pub impl @json.FromJson for CodexTurnInterruptPayload
@@ -597,6 +645,7 @@ pub fn CodexTurnReply::equal(Self, Self) -> Bool
 pub fn CodexTurnReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexTurnReply::not_equal(Self, Self) -> Bool
 pub fn CodexTurnReply::to_json(Self) -> Json
+#deprecated
 pub fn CodexTurnReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexTurnReply
 pub impl @json.FromJson for CodexTurnReply
@@ -611,6 +660,7 @@ pub fn CodexTurnStartPayload::equal(Self, Self) -> Bool
 pub fn CodexTurnStartPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexTurnStartPayload::not_equal(Self, Self) -> Bool
 pub fn CodexTurnStartPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexTurnStartPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexTurnStartPayload
 pub impl @json.FromJson for CodexTurnStartPayload
@@ -624,6 +674,7 @@ pub fn CodexTurnSteerPayload::equal(Self, Self) -> Bool
 pub fn CodexTurnSteerPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CodexTurnSteerPayload::not_equal(Self, Self) -> Bool
 pub fn CodexTurnSteerPayload::to_json(Self) -> Json
+#deprecated
 pub fn CodexTurnSteerPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexTurnSteerPayload
 pub impl @json.FromJson for CodexTurnSteerPayload
@@ -638,6 +689,7 @@ pub fn CompactPayload::equal(Self, Self) -> Bool
 pub fn CompactPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CompactPayload::not_equal(Self, Self) -> Bool
 pub fn CompactPayload::to_json(Self) -> Json
+#deprecated
 pub fn CompactPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CompactReply {
@@ -647,6 +699,7 @@ pub fn CompactReply::equal(Self, Self) -> Bool
 pub fn CompactReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CompactReply::not_equal(Self, Self) -> Bool
 pub fn CompactReply::to_json(Self) -> Json
+#deprecated
 pub fn CompactReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ConnectedPayload {
@@ -656,6 +709,7 @@ pub fn ConnectedPayload::equal(Self, Self) -> Bool
 pub fn ConnectedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ConnectedPayload::not_equal(Self, Self) -> Bool
 pub fn ConnectedPayload::to_json(Self) -> Json
+#deprecated
 pub fn ConnectedPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ConnectedPayload
 pub impl @json.FromJson for ConnectedPayload
@@ -668,6 +722,7 @@ pub fn ConnectedStage::equal(Self, Self) -> Bool
 pub fn ConnectedStage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ConnectedStage::not_equal(Self, Self) -> Bool
 pub fn ConnectedStage::to_json(Self) -> Json
+#deprecated
 pub fn ConnectedStage::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ConnectedStage
 pub impl @json.FromJson for ConnectedStage
@@ -681,6 +736,7 @@ pub fn DiagnosticsPayload::equal(Self, Self) -> Bool
 pub fn DiagnosticsPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn DiagnosticsPayload::not_equal(Self, Self) -> Bool
 pub fn DiagnosticsPayload::to_json(Self) -> Json
+#deprecated
 pub fn DiagnosticsPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DirEntry {
@@ -691,6 +747,7 @@ pub fn DirEntry::equal(Self, Self) -> Bool
 pub fn DirEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn DirEntry::not_equal(Self, Self) -> Bool
 pub fn DirEntry::to_json(Self) -> Json
+#deprecated
 pub fn DirEntry::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DownloadUpdateAcceptedReply {
@@ -700,6 +757,7 @@ pub fn DownloadUpdateAcceptedReply::equal(Self, Self) -> Bool
 pub fn DownloadUpdateAcceptedReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn DownloadUpdateAcceptedReply::not_equal(Self, Self) -> Bool
 pub fn DownloadUpdateAcceptedReply::to_json(Self) -> Json
+#deprecated
 pub fn DownloadUpdateAcceptedReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DurableBoundaryPayload {
@@ -711,6 +769,7 @@ pub fn DurableBoundaryPayload::equal(Self, Self) -> Bool
 pub fn DurableBoundaryPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn DurableBoundaryPayload::not_equal(Self, Self) -> Bool
 pub fn DurableBoundaryPayload::to_json(Self) -> Json
+#deprecated
 pub fn DurableBoundaryPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) enum EmptyPayload {
@@ -720,6 +779,7 @@ pub fn EmptyPayload::equal(Self, Self) -> Bool
 pub fn EmptyPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn EmptyPayload::not_equal(Self, Self) -> Bool
 pub fn EmptyPayload::to_json(Self) -> Json
+#deprecated
 pub fn EmptyPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for EmptyPayload
 pub impl @json.FromJson for EmptyPayload
@@ -731,6 +791,7 @@ pub fn EmptyReply::equal(Self, Self) -> Bool
 pub fn EmptyReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn EmptyReply::not_equal(Self, Self) -> Bool
 pub fn EmptyReply::to_json(Self) -> Json
+#deprecated
 pub fn EmptyReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for EmptyReply
 pub impl @json.FromJson for EmptyReply
@@ -742,6 +803,7 @@ pub fn ExternalLinkPayload::equal(Self, Self) -> Bool
 pub fn ExternalLinkPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ExternalLinkPayload::not_equal(Self, Self) -> Bool
 pub fn ExternalLinkPayload::to_json(Self) -> Json
+#deprecated
 pub fn ExternalLinkPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FileStat {
@@ -752,6 +814,7 @@ pub fn FileStat::equal(Self, Self) -> Bool
 pub fn FileStat::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn FileStat::not_equal(Self, Self) -> Bool
 pub fn FileStat::to_json(Self) -> Json
+#deprecated
 pub fn FileStat::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FinishedPayload {
@@ -765,6 +828,7 @@ pub fn FinishedPayload::equal(Self, Self) -> Bool
 pub fn FinishedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn FinishedPayload::not_equal(Self, Self) -> Bool
 pub fn FinishedPayload::to_json(Self) -> Json
+#deprecated
 pub fn FinishedPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FsChangedPayload {
@@ -777,6 +841,7 @@ pub fn FsChangedPayload::equal(Self, Self) -> Bool
 pub fn FsChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn FsChangedPayload::not_equal(Self, Self) -> Bool
 pub fn FsChangedPayload::to_json(Self) -> Json
+#deprecated
 pub fn FsChangedPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FsEventPayload {
@@ -788,6 +853,7 @@ pub fn FsEventPayload::equal(Self, Self) -> Bool
 pub fn FsEventPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn FsEventPayload::not_equal(Self, Self) -> Bool
 pub fn FsEventPayload::to_json(Self) -> Json
+#deprecated
 pub fn FsEventPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FsWatchFailedPayload {
@@ -799,6 +865,7 @@ pub fn FsWatchFailedPayload::equal(Self, Self) -> Bool
 pub fn FsWatchFailedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn FsWatchFailedPayload::not_equal(Self, Self) -> Bool
 pub fn FsWatchFailedPayload::to_json(Self) -> Json
+#deprecated
 pub fn FsWatchFailedPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GitBranchPayload {
@@ -810,6 +877,7 @@ pub fn GitBranchPayload::equal(Self, Self) -> Bool
 pub fn GitBranchPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitBranchPayload::not_equal(Self, Self) -> Bool
 pub fn GitBranchPayload::to_json(Self) -> Json
+#deprecated
 pub fn GitBranchPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GitBranchReply {
@@ -820,6 +888,7 @@ pub fn GitBranchReply::equal(Self, Self) -> Bool
 pub fn GitBranchReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitBranchReply::not_equal(Self, Self) -> Bool
 pub fn GitBranchReply::to_json(Self) -> Json
+#deprecated
 pub fn GitBranchReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GitChange {
@@ -833,6 +902,7 @@ pub fn GitChange::equal(Self, Self) -> Bool
 pub fn GitChange::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitChange::not_equal(Self, Self) -> Bool
 pub fn GitChange::to_json(Self) -> Json
+#deprecated
 pub fn GitChange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GitChangesPayload {
@@ -843,6 +913,7 @@ pub fn GitChangesPayload::equal(Self, Self) -> Bool
 pub fn GitChangesPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitChangesPayload::not_equal(Self, Self) -> Bool
 pub fn GitChangesPayload::to_json(Self) -> Json
+#deprecated
 pub fn GitChangesPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GitChangesReply {
@@ -855,6 +926,7 @@ pub fn GitChangesReply::equal(Self, Self) -> Bool
 pub fn GitChangesReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitChangesReply::not_equal(Self, Self) -> Bool
 pub fn GitChangesReply::to_json(Self) -> Json
+#deprecated
 pub fn GitChangesReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GitChecks {
@@ -866,6 +938,7 @@ pub fn GitChecks::equal(Self, Self) -> Bool
 pub fn GitChecks::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitChecks::not_equal(Self, Self) -> Bool
 pub fn GitChecks::to_json(Self) -> Json
+#deprecated
 pub fn GitChecks::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GitDiffStat {
@@ -879,6 +952,7 @@ pub fn GitDiffStat::equal(Self, Self) -> Bool
 pub fn GitDiffStat::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitDiffStat::not_equal(Self, Self) -> Bool
 pub fn GitDiffStat::to_json(Self) -> Json
+#deprecated
 pub fn GitDiffStat::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GitOriginalFilePayload {
@@ -891,6 +965,7 @@ pub fn GitOriginalFilePayload::equal(Self, Self) -> Bool
 pub fn GitOriginalFilePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitOriginalFilePayload::not_equal(Self, Self) -> Bool
 pub fn GitOriginalFilePayload::to_json(Self) -> Json
+#deprecated
 pub fn GitOriginalFilePayload::to_repr(Self) -> @debug.Repr
 
 pub(all) enum GitOriginalFileReply {
@@ -903,6 +978,7 @@ pub fn GitOriginalFileReply::equal(Self, Self) -> Bool
 pub fn GitOriginalFileReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitOriginalFileReply::not_equal(Self, Self) -> Bool
 pub fn GitOriginalFileReply::to_json(Self) -> Json
+#deprecated
 pub fn GitOriginalFileReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for GitOriginalFileReply
 pub impl @json.FromJson for GitOriginalFileReply
@@ -923,6 +999,7 @@ pub fn GitPullRequest::equal(Self, Self) -> Bool
 pub fn GitPullRequest::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitPullRequest::not_equal(Self, Self) -> Bool
 pub fn GitPullRequest::to_json(Self) -> Json
+#deprecated
 pub fn GitPullRequest::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GitPullRequestPayload {
@@ -934,6 +1011,7 @@ pub fn GitPullRequestPayload::equal(Self, Self) -> Bool
 pub fn GitPullRequestPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitPullRequestPayload::not_equal(Self, Self) -> Bool
 pub fn GitPullRequestPayload::to_json(Self) -> Json
+#deprecated
 pub fn GitPullRequestPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for GitPullRequestPayload
 pub impl @json.FromJson for GitPullRequestPayload
@@ -947,6 +1025,7 @@ pub fn GitPullRequestReply::equal(Self, Self) -> Bool
 pub fn GitPullRequestReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitPullRequestReply::not_equal(Self, Self) -> Bool
 pub fn GitPullRequestReply::to_json(Self) -> Json
+#deprecated
 pub fn GitPullRequestReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GoalPayload {
@@ -961,6 +1040,7 @@ pub fn GoalPayload::equal(Self, Self) -> Bool
 pub fn GoalPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GoalPayload::not_equal(Self, Self) -> Bool
 pub fn GoalPayload::to_json(Self) -> Json
+#deprecated
 pub fn GoalPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GoalReply {
@@ -970,6 +1050,7 @@ pub fn GoalReply::equal(Self, Self) -> Bool
 pub fn GoalReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GoalReply::not_equal(Self, Self) -> Bool
 pub fn GoalReply::to_json(Self) -> Json
+#deprecated
 pub fn GoalReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct InstallSkillPayload {
@@ -981,6 +1062,7 @@ pub fn InstallSkillPayload::equal(Self, Self) -> Bool
 pub fn InstallSkillPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn InstallSkillPayload::not_equal(Self, Self) -> Bool
 pub fn InstallSkillPayload::to_json(Self) -> Json
+#deprecated
 pub fn InstallSkillPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct InstallSkillReply {
@@ -990,6 +1072,7 @@ pub fn InstallSkillReply::equal(Self, Self) -> Bool
 pub fn InstallSkillReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn InstallSkillReply::not_equal(Self, Self) -> Bool
 pub fn InstallSkillReply::to_json(Self) -> Json
+#deprecated
 pub fn InstallSkillReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct InstalledSkill {
@@ -1002,6 +1085,7 @@ pub fn InstalledSkill::equal(Self, Self) -> Bool
 pub fn InstalledSkill::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn InstalledSkill::not_equal(Self, Self) -> Bool
 pub fn InstalledSkill::to_json(Self) -> Json
+#deprecated
 pub fn InstalledSkill::to_repr(Self) -> @debug.Repr
 
 pub(all) struct InstalledSkillsReply {
@@ -1011,6 +1095,7 @@ pub fn InstalledSkillsReply::equal(Self, Self) -> Bool
 pub fn InstalledSkillsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn InstalledSkillsReply::not_equal(Self, Self) -> Bool
 pub fn InstalledSkillsReply::to_json(Self) -> Json
+#deprecated
 pub fn InstalledSkillsReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct KnownRunPayload {
@@ -1022,6 +1107,7 @@ pub fn KnownRunPayload::equal(Self, Self) -> Bool
 pub fn KnownRunPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn KnownRunPayload::not_equal(Self, Self) -> Bool
 pub fn KnownRunPayload::to_json(Self) -> Json
+#deprecated
 pub fn KnownRunPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LaunchAppPayload {
@@ -1033,6 +1119,7 @@ pub fn LaunchAppPayload::equal(Self, Self) -> Bool
 pub fn LaunchAppPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LaunchAppPayload::not_equal(Self, Self) -> Bool
 pub fn LaunchAppPayload::to_json(Self) -> Json
+#deprecated
 pub fn LaunchAppPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LaunchAppReply {
@@ -1042,6 +1129,7 @@ pub fn LaunchAppReply::equal(Self, Self) -> Bool
 pub fn LaunchAppReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LaunchAppReply::not_equal(Self, Self) -> Bool
 pub fn LaunchAppReply::to_json(Self) -> Json
+#deprecated
 pub fn LaunchAppReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ListAppsReply {
@@ -1051,6 +1139,7 @@ pub fn ListAppsReply::equal(Self, Self) -> Bool
 pub fn ListAppsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ListAppsReply::not_equal(Self, Self) -> Bool
 pub fn ListAppsReply::to_json(Self) -> Json
+#deprecated
 pub fn ListAppsReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LoadSessionPayload {
@@ -1061,6 +1150,7 @@ pub fn LoadSessionPayload::equal(Self, Self) -> Bool
 pub fn LoadSessionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LoadSessionPayload::not_equal(Self, Self) -> Bool
 pub fn LoadSessionPayload::to_json(Self) -> Json
+#deprecated
 pub fn LoadSessionPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LoadSessionReply {
@@ -1071,6 +1161,7 @@ pub fn LoadSessionReply::equal(Self, Self) -> Bool
 pub fn LoadSessionReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LoadSessionReply::not_equal(Self, Self) -> Bool
 pub fn LoadSessionReply::to_json(Self) -> Json
+#deprecated
 pub fn LoadSessionReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LspDiagnostic {
@@ -1084,6 +1175,7 @@ pub fn LspDiagnostic::equal(Self, Self) -> Bool
 pub fn LspDiagnostic::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LspDiagnostic::not_equal(Self, Self) -> Bool
 pub fn LspDiagnostic::to_json(Self) -> Json
+#deprecated
 pub fn LspDiagnostic::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LspDiagnosticsReply {
@@ -1093,6 +1185,7 @@ pub fn LspDiagnosticsReply::equal(Self, Self) -> Bool
 pub fn LspDiagnosticsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LspDiagnosticsReply::not_equal(Self, Self) -> Bool
 pub fn LspDiagnosticsReply::to_json(Self) -> Json
+#deprecated
 pub fn LspDiagnosticsReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LspHoverPayload {
@@ -1106,6 +1199,7 @@ pub fn LspHoverPayload::equal(Self, Self) -> Bool
 pub fn LspHoverPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LspHoverPayload::not_equal(Self, Self) -> Bool
 pub fn LspHoverPayload::to_json(Self) -> Json
+#deprecated
 pub fn LspHoverPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for LspHoverPayload
 pub impl @json.FromJson for LspHoverPayload
@@ -1123,6 +1217,7 @@ pub fn LspHoverReply::equal(Self, Self) -> Bool
 pub fn LspHoverReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LspHoverReply::not_equal(Self, Self) -> Bool
 pub fn LspHoverReply::to_json(Self) -> Json
+#deprecated
 pub fn LspHoverReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LspOpenPayload {
@@ -1134,6 +1229,7 @@ pub fn LspOpenPayload::equal(Self, Self) -> Bool
 pub fn LspOpenPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LspOpenPayload::not_equal(Self, Self) -> Bool
 pub fn LspOpenPayload::to_json(Self) -> Json
+#deprecated
 pub fn LspOpenPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for LspOpenPayload
 pub impl @json.FromJson for LspOpenPayload
@@ -1146,6 +1242,7 @@ pub fn LspPosition::equal(Self, Self) -> Bool
 pub fn LspPosition::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LspPosition::not_equal(Self, Self) -> Bool
 pub fn LspPosition::to_json(Self) -> Json
+#deprecated
 pub fn LspPosition::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LspRange {
@@ -1156,6 +1253,7 @@ pub fn LspRange::equal(Self, Self) -> Bool
 pub fn LspRange::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LspRange::not_equal(Self, Self) -> Bool
 pub fn LspRange::to_json(Self) -> Json
+#deprecated
 pub fn LspRange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MarketSkill {
@@ -1171,6 +1269,7 @@ pub fn MarketSkill::equal(Self, Self) -> Bool
 pub fn MarketSkill::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn MarketSkill::not_equal(Self, Self) -> Bool
 pub fn MarketSkill::to_json(Self) -> Json
+#deprecated
 pub fn MarketSkill::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MoonIdeLocation {
@@ -1184,6 +1283,7 @@ pub fn MoonIdeLocation::equal(Self, Self) -> Bool
 pub fn MoonIdeLocation::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn MoonIdeLocation::not_equal(Self, Self) -> Bool
 pub fn MoonIdeLocation::to_json(Self) -> Json
+#deprecated
 pub fn MoonIdeLocation::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MoonIdeLocationsReply {
@@ -1193,6 +1293,7 @@ pub fn MoonIdeLocationsReply::equal(Self, Self) -> Bool
 pub fn MoonIdeLocationsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn MoonIdeLocationsReply::not_equal(Self, Self) -> Bool
 pub fn MoonIdeLocationsReply::to_json(Self) -> Json
+#deprecated
 pub fn MoonIdeLocationsReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct MoonIdeNavigationPayload {
@@ -1206,6 +1307,7 @@ pub fn MoonIdeNavigationPayload::equal(Self, Self) -> Bool
 pub fn MoonIdeNavigationPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn MoonIdeNavigationPayload::not_equal(Self, Self) -> Bool
 pub fn MoonIdeNavigationPayload::to_json(Self) -> Json
+#deprecated
 pub fn MoonIdeNavigationPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for MoonIdeNavigationPayload
 pub impl @json.FromJson for MoonIdeNavigationPayload
@@ -1243,6 +1345,7 @@ pub fn Notification::from_wire(String, Json) -> Self?
 pub fn Notification::kind(Self) -> NotificationKind
 pub fn Notification::not_equal(Self, Self) -> Bool
 pub fn Notification::params(Self) -> Json
+#deprecated
 pub fn Notification::to_repr(Self) -> @debug.Repr
 pub fn Notification::wire_name(Self) -> String
 
@@ -1279,6 +1382,7 @@ pub fn NotificationKind::equal(Self, Self) -> Bool
 pub fn NotificationKind::hash(Self) -> Int
 pub fn NotificationKind::hash_combine(Self, Hasher) -> Unit
 pub fn NotificationKind::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn NotificationKind::to_repr(Self) -> @debug.Repr
 pub fn NotificationKind::wire_name(Self) -> String
 
@@ -1289,6 +1393,7 @@ pub fn OpenExternalReply::equal(Self, Self) -> Bool
 pub fn OpenExternalReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn OpenExternalReply::not_equal(Self, Self) -> Bool
 pub fn OpenExternalReply::to_json(Self) -> Json
+#deprecated
 pub fn OpenExternalReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct OpenPathDirectoryTarget {
@@ -1298,6 +1403,7 @@ pub fn OpenPathDirectoryTarget::equal(Self, Self) -> Bool
 pub fn OpenPathDirectoryTarget::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn OpenPathDirectoryTarget::not_equal(Self, Self) -> Bool
 pub fn OpenPathDirectoryTarget::to_json(Self) -> Json
+#deprecated
 pub fn OpenPathDirectoryTarget::to_repr(Self) -> @debug.Repr
 
 pub(all) struct OpenPathEditorTarget {
@@ -1309,6 +1415,7 @@ pub fn OpenPathEditorTarget::equal(Self, Self) -> Bool
 pub fn OpenPathEditorTarget::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn OpenPathEditorTarget::not_equal(Self, Self) -> Bool
 pub fn OpenPathEditorTarget::to_json(Self) -> Json
+#deprecated
 pub fn OpenPathEditorTarget::to_repr(Self) -> @debug.Repr
 
 pub(all) struct OpenPathPayload {
@@ -1320,6 +1427,7 @@ pub fn OpenPathPayload::equal(Self, Self) -> Bool
 pub fn OpenPathPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn OpenPathPayload::not_equal(Self, Self) -> Bool
 pub fn OpenPathPayload::to_json(Self) -> Json
+#deprecated
 pub fn OpenPathPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) enum OpenPathReply {
@@ -1332,6 +1440,7 @@ pub fn OpenPathReply::equal(Self, Self) -> Bool
 pub fn OpenPathReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn OpenPathReply::not_equal(Self, Self) -> Bool
 pub fn OpenPathReply::to_json(Self) -> Json
+#deprecated
 pub fn OpenPathReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for OpenPathReply
 pub impl @json.FromJson for OpenPathReply
@@ -1343,6 +1452,7 @@ pub fn ReadDirPayload::equal(Self, Self) -> Bool
 pub fn ReadDirPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ReadDirPayload::not_equal(Self, Self) -> Bool
 pub fn ReadDirPayload::to_json(Self) -> Json
+#deprecated
 pub fn ReadDirPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ReadDirReply {
@@ -1352,6 +1462,7 @@ pub fn ReadDirReply::equal(Self, Self) -> Bool
 pub fn ReadDirReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ReadDirReply::not_equal(Self, Self) -> Bool
 pub fn ReadDirReply::to_json(Self) -> Json
+#deprecated
 pub fn ReadDirReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ReadFilePayload {
@@ -1362,6 +1473,7 @@ pub fn ReadFilePayload::equal(Self, Self) -> Bool
 pub fn ReadFilePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ReadFilePayload::not_equal(Self, Self) -> Bool
 pub fn ReadFilePayload::to_json(Self) -> Json
+#deprecated
 pub fn ReadFilePayload::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ReadFileReply {
@@ -1374,6 +1486,7 @@ pub fn ReadFileReply::equal(Self, Self) -> Bool
 pub fn ReadFileReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ReadFileReply::not_equal(Self, Self) -> Bool
 pub fn ReadFileReply::to_json(Self) -> Json
+#deprecated
 pub fn ReadFileReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ReadFileReply
 pub impl @json.FromJson for ReadFileReply
@@ -1390,6 +1503,7 @@ pub fn RunSettlementPayload::equal(Self, Self) -> Bool
 pub fn RunSettlementPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn RunSettlementPayload::not_equal(Self, Self) -> Bool
 pub fn RunSettlementPayload::to_json(Self) -> Json
+#deprecated
 pub fn RunSettlementPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct RunsPayload {
@@ -1399,6 +1513,7 @@ pub fn RunsPayload::equal(Self, Self) -> Bool
 pub fn RunsPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn RunsPayload::not_equal(Self, Self) -> Bool
 pub fn RunsPayload::to_json(Self) -> Json
+#deprecated
 pub fn RunsPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct RunsReply {
@@ -1409,6 +1524,7 @@ pub fn RunsReply::equal(Self, Self) -> Bool
 pub fn RunsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn RunsReply::not_equal(Self, Self) -> Bool
 pub fn RunsReply::to_json(Self) -> Json
+#deprecated
 pub fn RunsReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SearchFilesPayload {
@@ -1422,6 +1538,7 @@ pub fn SearchFilesPayload::equal(Self, Self) -> Bool
 pub fn SearchFilesPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SearchFilesPayload::not_equal(Self, Self) -> Bool
 pub fn SearchFilesPayload::to_json(Self) -> Json
+#deprecated
 pub fn SearchFilesPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SearchFilesReply {
@@ -1434,6 +1551,7 @@ pub fn SearchFilesReply::equal(Self, Self) -> Bool
 pub fn SearchFilesReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SearchFilesReply::not_equal(Self, Self) -> Bool
 pub fn SearchFilesReply::to_json(Self) -> Json
+#deprecated
 pub fn SearchFilesReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionAssistantMessage {
@@ -1445,6 +1563,7 @@ pub fn SessionAssistantMessage::equal(Self, Self) -> Bool
 pub fn SessionAssistantMessage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionAssistantMessage::not_equal(Self, Self) -> Bool
 pub fn SessionAssistantMessage::to_json(Self) -> Json
+#deprecated
 pub fn SessionAssistantMessage::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionChangedPayload {
@@ -1456,6 +1575,7 @@ pub fn SessionChangedPayload::equal(Self, Self) -> Bool
 pub fn SessionChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionChangedPayload::not_equal(Self, Self) -> Bool
 pub fn SessionChangedPayload::to_json(Self) -> Json
+#deprecated
 pub fn SessionChangedPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionCommitPayload {
@@ -1468,6 +1588,7 @@ pub fn SessionCommitPayload::equal(Self, Self) -> Bool
 pub fn SessionCommitPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionCommitPayload::not_equal(Self, Self) -> Bool
 pub fn SessionCommitPayload::to_json(Self) -> Json
+#deprecated
 pub fn SessionCommitPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionDocument {
@@ -1480,6 +1601,7 @@ pub fn SessionDocument::equal(Self, Self) -> Bool
 pub fn SessionDocument::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionDocument::not_equal(Self, Self) -> Bool
 pub fn SessionDocument::to_json(Self) -> Json
+#deprecated
 pub fn SessionDocument::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionEvent {
@@ -1491,6 +1613,7 @@ pub fn SessionEvent::equal(Self, Self) -> Bool
 pub fn SessionEvent::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionEvent::not_equal(Self, Self) -> Bool
 pub fn SessionEvent::to_json(Self) -> Json
+#deprecated
 pub fn SessionEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionGroup {
@@ -1504,6 +1627,7 @@ pub fn SessionGroup::equal(Self, Self) -> Bool
 pub fn SessionGroup::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionGroup::not_equal(Self, Self) -> Bool
 pub fn SessionGroup::to_json(Self) -> Json
+#deprecated
 pub fn SessionGroup::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SessionItem {
@@ -1521,6 +1645,7 @@ pub fn SessionItem::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDeco
 pub fn SessionItem::is_terminal(Self) -> Bool
 pub fn SessionItem::not_equal(Self, Self) -> Bool
 pub fn SessionItem::to_json(Self) -> Json
+#deprecated
 pub fn SessionItem::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionItem
 pub impl @json.FromJson for SessionItem
@@ -1535,6 +1660,7 @@ pub fn SessionListEntry::equal(Self, Self) -> Bool
 pub fn SessionListEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionListEntry::not_equal(Self, Self) -> Bool
 pub fn SessionListEntry::to_json(Self) -> Json
+#deprecated
 pub fn SessionListEntry::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for SessionListEntry
 
@@ -1546,6 +1672,7 @@ pub fn SessionPayload::equal(Self, Self) -> Bool
 pub fn SessionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionPayload::not_equal(Self, Self) -> Bool
 pub fn SessionPayload::to_json(Self) -> Json
+#deprecated
 pub fn SessionPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionRuntimeNotice {
@@ -1555,6 +1682,7 @@ pub fn SessionRuntimeNotice::equal(Self, Self) -> Bool
 pub fn SessionRuntimeNotice::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionRuntimeNotice::not_equal(Self, Self) -> Bool
 pub fn SessionRuntimeNotice::to_json(Self) -> Json
+#deprecated
 pub fn SessionRuntimeNotice::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionSummary {
@@ -1566,6 +1694,7 @@ pub fn SessionSummary::equal(Self, Self) -> Bool
 pub fn SessionSummary::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionSummary::not_equal(Self, Self) -> Bool
 pub fn SessionSummary::to_json(Self) -> Json
+#deprecated
 pub fn SessionSummary::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SessionTerminal {
@@ -1578,6 +1707,7 @@ pub fn SessionTerminal::equal(Self, Self) -> Bool
 pub fn SessionTerminal::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionTerminal::not_equal(Self, Self) -> Bool
 pub fn SessionTerminal::to_json(Self) -> Json
+#deprecated
 pub fn SessionTerminal::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionTerminal
 pub impl @json.FromJson for SessionTerminal
@@ -1591,6 +1721,7 @@ pub fn SessionToolCall::equal(Self, Self) -> Bool
 pub fn SessionToolCall::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionToolCall::not_equal(Self, Self) -> Bool
 pub fn SessionToolCall::to_json(Self) -> Json
+#deprecated
 pub fn SessionToolCall::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionToolResult {
@@ -1604,6 +1735,7 @@ pub fn SessionToolResult::equal(Self, Self) -> Bool
 pub fn SessionToolResult::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionToolResult::not_equal(Self, Self) -> Bool
 pub fn SessionToolResult::to_json(Self) -> Json
+#deprecated
 pub fn SessionToolResult::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionUserMessage {
@@ -1613,6 +1745,7 @@ pub fn SessionUserMessage::equal(Self, Self) -> Bool
 pub fn SessionUserMessage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionUserMessage::not_equal(Self, Self) -> Bool
 pub fn SessionUserMessage::to_json(Self) -> Json
+#deprecated
 pub fn SessionUserMessage::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionsReply {
@@ -1622,6 +1755,7 @@ pub fn SessionsReply::equal(Self, Self) -> Bool
 pub fn SessionsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionsReply::not_equal(Self, Self) -> Bool
 pub fn SessionsReply::to_json(Self) -> Json
+#deprecated
 pub fn SessionsReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SettingsSetPayload {
@@ -1635,6 +1769,7 @@ pub fn SettingsSetPayload::equal(Self, Self) -> Bool
 pub fn SettingsSetPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SettingsSetPayload::not_equal(Self, Self) -> Bool
 pub fn SettingsSetPayload::to_json(Self) -> Json
+#deprecated
 pub fn SettingsSetPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SettingsStatusPayload {
@@ -1648,6 +1783,7 @@ pub fn SettingsStatusPayload::equal(Self, Self) -> Bool
 pub fn SettingsStatusPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SettingsStatusPayload::not_equal(Self, Self) -> Bool
 pub fn SettingsStatusPayload::to_json(Self) -> Json
+#deprecated
 pub fn SettingsStatusPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SkillsCatalogReply {
@@ -1657,6 +1793,7 @@ pub fn SkillsCatalogReply::equal(Self, Self) -> Bool
 pub fn SkillsCatalogReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SkillsCatalogReply::not_equal(Self, Self) -> Bool
 pub fn SkillsCatalogReply::to_json(Self) -> Json
+#deprecated
 pub fn SkillsCatalogReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct StartPayload {
@@ -1671,6 +1808,7 @@ pub fn StartPayload::equal(Self, Self) -> Bool
 pub fn StartPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn StartPayload::not_equal(Self, Self) -> Bool
 pub fn StartPayload::to_json(Self) -> Json
+#deprecated
 pub fn StartPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct StartReply {
@@ -1682,6 +1820,7 @@ pub fn StartReply::equal(Self, Self) -> Bool
 pub fn StartReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn StartReply::not_equal(Self, Self) -> Bool
 pub fn StartReply::to_json(Self) -> Json
+#deprecated
 pub fn StartReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct StartedPayload {
@@ -1697,6 +1836,7 @@ pub fn StartedPayload::equal(Self, Self) -> Bool
 pub fn StartedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn StartedPayload::not_equal(Self, Self) -> Bool
 pub fn StartedPayload::to_json(Self) -> Json
+#deprecated
 pub fn StartedPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct StatFilesPayload {
@@ -1706,6 +1846,7 @@ pub fn StatFilesPayload::equal(Self, Self) -> Bool
 pub fn StatFilesPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn StatFilesPayload::not_equal(Self, Self) -> Bool
 pub fn StatFilesPayload::to_json(Self) -> Json
+#deprecated
 pub fn StatFilesPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct StatFilesReply {
@@ -1715,6 +1856,7 @@ pub fn StatFilesReply::equal(Self, Self) -> Bool
 pub fn StatFilesReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn StatFilesReply::not_equal(Self, Self) -> Bool
 pub fn StatFilesReply::to_json(Self) -> Json
+#deprecated
 pub fn StatFilesReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SteerPayload {
@@ -1726,6 +1868,7 @@ pub fn SteerPayload::equal(Self, Self) -> Bool
 pub fn SteerPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SteerPayload::not_equal(Self, Self) -> Bool
 pub fn SteerPayload::to_json(Self) -> Json
+#deprecated
 pub fn SteerPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SteerReply {
@@ -1736,6 +1879,7 @@ pub fn SteerReply::equal(Self, Self) -> Bool
 pub fn SteerReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SteerReply::not_equal(Self, Self) -> Bool
 pub fn SteerReply::to_json(Self) -> Json
+#deprecated
 pub fn SteerReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SubrunProgressPayload {
@@ -1748,6 +1892,7 @@ pub fn SubrunProgressPayload::equal(Self, Self) -> Bool
 pub fn SubrunProgressPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SubrunProgressPayload::not_equal(Self, Self) -> Bool
 pub fn SubrunProgressPayload::to_json(Self) -> Json
+#deprecated
 pub fn SubrunProgressPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SymbolItem {
@@ -1761,6 +1906,7 @@ pub fn SymbolItem::equal(Self, Self) -> Bool
 pub fn SymbolItem::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SymbolItem::not_equal(Self, Self) -> Bool
 pub fn SymbolItem::to_json(Self) -> Json
+#deprecated
 pub fn SymbolItem::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SymbolPosition {
@@ -1771,6 +1917,7 @@ pub fn SymbolPosition::equal(Self, Self) -> Bool
 pub fn SymbolPosition::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SymbolPosition::not_equal(Self, Self) -> Bool
 pub fn SymbolPosition::to_json(Self) -> Json
+#deprecated
 pub fn SymbolPosition::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SymbolRange {
@@ -1781,6 +1928,7 @@ pub fn SymbolRange::equal(Self, Self) -> Bool
 pub fn SymbolRange::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SymbolRange::not_equal(Self, Self) -> Bool
 pub fn SymbolRange::to_json(Self) -> Json
+#deprecated
 pub fn SymbolRange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TerminalAckPayload {
@@ -1791,6 +1939,7 @@ pub fn TerminalAckPayload::equal(Self, Self) -> Bool
 pub fn TerminalAckPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalAckPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalAckPayload::to_json(Self) -> Json
+#deprecated
 pub fn TerminalAckPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TerminalClosePayload {
@@ -1800,6 +1949,7 @@ pub fn TerminalClosePayload::equal(Self, Self) -> Bool
 pub fn TerminalClosePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalClosePayload::not_equal(Self, Self) -> Bool
 pub fn TerminalClosePayload::to_json(Self) -> Json
+#deprecated
 pub fn TerminalClosePayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TerminalExitPayload {
@@ -1810,6 +1960,7 @@ pub fn TerminalExitPayload::equal(Self, Self) -> Bool
 pub fn TerminalExitPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalExitPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalExitPayload::to_json(Self) -> Json
+#deprecated
 pub fn TerminalExitPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TerminalInputPayload {
@@ -1821,6 +1972,7 @@ pub fn TerminalInputPayload::equal(Self, Self) -> Bool
 pub fn TerminalInputPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalInputPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalInputPayload::to_json(Self) -> Json
+#deprecated
 pub fn TerminalInputPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TerminalOpenPayload {
@@ -1833,6 +1985,7 @@ pub fn TerminalOpenPayload::equal(Self, Self) -> Bool
 pub fn TerminalOpenPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalOpenPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalOpenPayload::to_json(Self) -> Json
+#deprecated
 pub fn TerminalOpenPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TerminalOpenReply {
@@ -1842,6 +1995,7 @@ pub fn TerminalOpenReply::equal(Self, Self) -> Bool
 pub fn TerminalOpenReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalOpenReply::not_equal(Self, Self) -> Bool
 pub fn TerminalOpenReply::to_json(Self) -> Json
+#deprecated
 pub fn TerminalOpenReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TerminalOutputPayload {
@@ -1853,6 +2007,7 @@ pub fn TerminalOutputPayload::equal(Self, Self) -> Bool
 pub fn TerminalOutputPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalOutputPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalOutputPayload::to_json(Self) -> Json
+#deprecated
 pub fn TerminalOutputPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TerminalResizePayload {
@@ -1864,6 +2019,7 @@ pub fn TerminalResizePayload::equal(Self, Self) -> Bool
 pub fn TerminalResizePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalResizePayload::not_equal(Self, Self) -> Bool
 pub fn TerminalResizePayload::to_json(Self) -> Json
+#deprecated
 pub fn TerminalResizePayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UninstallSkillPayload {
@@ -1873,6 +2029,7 @@ pub fn UninstallSkillPayload::equal(Self, Self) -> Bool
 pub fn UninstallSkillPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn UninstallSkillPayload::not_equal(Self, Self) -> Bool
 pub fn UninstallSkillPayload::to_json(Self) -> Json
+#deprecated
 pub fn UninstallSkillPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UninstallSkillReply {
@@ -1882,6 +2039,7 @@ pub fn UninstallSkillReply::equal(Self, Self) -> Bool
 pub fn UninstallSkillReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn UninstallSkillReply::not_equal(Self, Self) -> Bool
 pub fn UninstallSkillReply::to_json(Self) -> Json
+#deprecated
 pub fn UninstallSkillReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UpdateDownloadFailedPayload {
@@ -1891,6 +2049,7 @@ pub fn UpdateDownloadFailedPayload::equal(Self, Self) -> Bool
 pub fn UpdateDownloadFailedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn UpdateDownloadFailedPayload::not_equal(Self, Self) -> Bool
 pub fn UpdateDownloadFailedPayload::to_json(Self) -> Json
+#deprecated
 pub fn UpdateDownloadFailedPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UpdateDownloadProgressPayload {
@@ -1901,6 +2060,7 @@ pub fn UpdateDownloadProgressPayload::equal(Self, Self) -> Bool
 pub fn UpdateDownloadProgressPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn UpdateDownloadProgressPayload::not_equal(Self, Self) -> Bool
 pub fn UpdateDownloadProgressPayload::to_json(Self) -> Json
+#deprecated
 pub fn UpdateDownloadProgressPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UpdateDownloadedPayload {
@@ -1910,6 +2070,7 @@ pub fn UpdateDownloadedPayload::equal(Self, Self) -> Bool
 pub fn UpdateDownloadedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn UpdateDownloadedPayload::not_equal(Self, Self) -> Bool
 pub fn UpdateDownloadedPayload::to_json(Self) -> Json
+#deprecated
 pub fn UpdateDownloadedPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WatchWorkspacePayload {
@@ -1923,6 +2084,7 @@ pub fn WatchWorkspacePayload::equal(Self, Self) -> Bool
 pub fn WatchWorkspacePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WatchWorkspacePayload::not_equal(Self, Self) -> Bool
 pub fn WatchWorkspacePayload::to_json(Self) -> Json
+#deprecated
 pub fn WatchWorkspacePayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorkspacePayload {
@@ -1932,6 +2094,7 @@ pub fn WorkspacePayload::equal(Self, Self) -> Bool
 pub fn WorkspacePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspacePayload::not_equal(Self, Self) -> Bool
 pub fn WorkspacePayload::to_json(Self) -> Json
+#deprecated
 pub fn WorkspacePayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorkspaceSettingsGetPayload {
@@ -1941,6 +2104,7 @@ pub fn WorkspaceSettingsGetPayload::equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsGetPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspaceSettingsGetPayload::not_equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsGetPayload::to_json(Self) -> Json
+#deprecated
 pub fn WorkspaceSettingsGetPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorkspaceSettingsPayload {
@@ -1953,6 +2117,7 @@ pub fn WorkspaceSettingsPayload::equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspaceSettingsPayload::not_equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsPayload::to_json(Self) -> Json
+#deprecated
 pub fn WorkspaceSettingsPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorkspaceSettingsSetPayload {
@@ -1965,6 +2130,7 @@ pub fn WorkspaceSettingsSetPayload::equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsSetPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspaceSettingsSetPayload::not_equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsSetPayload::to_json(Self) -> Json
+#deprecated
 pub fn WorkspaceSettingsSetPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorkspaceSymbolsPayload {
@@ -1976,6 +2142,7 @@ pub fn WorkspaceSymbolsPayload::equal(Self, Self) -> Bool
 pub fn WorkspaceSymbolsPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspaceSymbolsPayload::not_equal(Self, Self) -> Bool
 pub fn WorkspaceSymbolsPayload::to_json(Self) -> Json
+#deprecated
 pub fn WorkspaceSymbolsPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for WorkspaceSymbolsPayload
 pub impl @json.FromJson for WorkspaceSymbolsPayload
@@ -1987,6 +2154,7 @@ pub fn WorkspaceSymbolsReply::equal(Self, Self) -> Bool
 pub fn WorkspaceSymbolsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspaceSymbolsReply::not_equal(Self, Self) -> Bool
 pub fn WorkspaceSymbolsReply::to_json(Self) -> Json
+#deprecated
 pub fn WorkspaceSymbolsReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorkspacesChangedPayload {
@@ -1996,6 +2164,7 @@ pub fn WorkspacesChangedPayload::equal(Self, Self) -> Bool
 pub fn WorkspacesChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspacesChangedPayload::not_equal(Self, Self) -> Bool
 pub fn WorkspacesChangedPayload::to_json(Self) -> Json
+#deprecated
 pub fn WorkspacesChangedPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) enum WorkspacesReply {
@@ -2006,6 +2175,7 @@ pub fn WorkspacesReply::equal(Self, Self) -> Bool
 pub fn WorkspacesReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspacesReply::not_equal(Self, Self) -> Bool
 pub fn WorkspacesReply::to_json(Self) -> Json
+#deprecated
 pub fn WorkspacesReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for WorkspacesReply
 pub impl @json.FromJson for WorkspacesReply
@@ -2018,6 +2188,7 @@ pub fn WorktreeChangedPayload::equal(Self, Self) -> Bool
 pub fn WorktreeChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorktreeChangedPayload::not_equal(Self, Self) -> Bool
 pub fn WorktreeChangedPayload::to_json(Self) -> Json
+#deprecated
 pub fn WorktreeChangedPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorktreeCreatePayload {
@@ -2029,6 +2200,7 @@ pub fn WorktreeCreatePayload::equal(Self, Self) -> Bool
 pub fn WorktreeCreatePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorktreeCreatePayload::not_equal(Self, Self) -> Bool
 pub fn WorktreeCreatePayload::to_json(Self) -> Json
+#deprecated
 pub fn WorktreeCreatePayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for WorktreeCreatePayload
 pub impl @json.FromJson for WorktreeCreatePayload
@@ -2041,6 +2213,7 @@ pub fn WorktreeCreateReply::equal(Self, Self) -> Bool
 pub fn WorktreeCreateReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorktreeCreateReply::not_equal(Self, Self) -> Bool
 pub fn WorktreeCreateReply::to_json(Self) -> Json
+#deprecated
 pub fn WorktreeCreateReply::to_repr(Self) -> @debug.Repr
 
 pub(all) enum WorktreeCreateResult {
@@ -2051,6 +2224,7 @@ pub fn WorktreeCreateResult::equal(Self, Self) -> Bool
 pub fn WorktreeCreateResult::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorktreeCreateResult::not_equal(Self, Self) -> Bool
 pub fn WorktreeCreateResult::to_json(Self) -> Json
+#deprecated
 pub fn WorktreeCreateResult::to_repr(Self) -> @debug.Repr
 pub impl ToJson for WorktreeCreateResult
 pub impl @json.FromJson for WorktreeCreateResult
@@ -2068,6 +2242,7 @@ pub fn WorktreeInfo::equal(Self, Self) -> Bool
 pub fn WorktreeInfo::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorktreeInfo::not_equal(Self, Self) -> Bool
 pub fn WorktreeInfo::to_json(Self) -> Json
+#deprecated
 pub fn WorktreeInfo::to_repr(Self) -> @debug.Repr
 pub impl ToJson for WorktreeInfo
 pub impl @json.FromJson for WorktreeInfo
@@ -2079,6 +2254,7 @@ pub fn WorktreeListPayload::equal(Self, Self) -> Bool
 pub fn WorktreeListPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorktreeListPayload::not_equal(Self, Self) -> Bool
 pub fn WorktreeListPayload::to_json(Self) -> Json
+#deprecated
 pub fn WorktreeListPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorktreeRemovePayload {
@@ -2090,6 +2266,7 @@ pub fn WorktreeRemovePayload::equal(Self, Self) -> Bool
 pub fn WorktreeRemovePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorktreeRemovePayload::not_equal(Self, Self) -> Bool
 pub fn WorktreeRemovePayload::to_json(Self) -> Json
+#deprecated
 pub fn WorktreeRemovePayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorktreesReply {
@@ -2099,6 +2276,7 @@ pub fn WorktreesReply::equal(Self, Self) -> Bool
 pub fn WorktreesReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorktreesReply::not_equal(Self, Self) -> Bool
 pub fn WorktreesReply::to_json(Self) -> Json
+#deprecated
 pub fn WorktreesReply::to_repr(Self) -> @debug.Repr
 
 // Type aliases

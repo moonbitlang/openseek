@@ -22,6 +22,7 @@ pub enum AgentControl {
   Finish(String)
   Abort(String)
 } derive(@debug.Debug)
+#deprecated
 pub fn AgentControl::to_repr(Self) -> @debug.Repr
 
 pub struct AgentToolCall {
@@ -41,6 +42,7 @@ pub struct AgentToolDefinition {
 pub fn AgentToolDefinition::AgentToolDefinition(name~ : String, description~ : String, schema~ : JsonSchema, execute~ : ToolExecutor, control? : Bool, concurrent_safe? : Bool) -> Self
 pub fn AgentToolDefinition::is_concurrent_safe(Self) -> Bool
 pub fn AgentToolDefinition::is_control(Self) -> Bool
+#deprecated
 pub fn AgentToolDefinition::to_repr(Self) -> @debug.Repr
 
 pub enum FileState {
@@ -49,6 +51,7 @@ pub enum FileState {
 } derive(Eq, @debug.Debug)
 pub fn FileState::equal(Self, Self) -> Bool
 pub fn FileState::not_equal(Self, Self) -> Bool
+#deprecated
 pub fn FileState::to_repr(Self) -> @debug.Repr
 
 pub struct FileStateMap {
@@ -63,6 +66,7 @@ pub fn FileStateMap::record_edited(Self, String, String, String) -> Unit
 pub fn FileStateMap::record_modified(Self, String, String) -> Unit
 
 pub(all) struct JsonSchema(Json) derive(@debug.Debug)
+#deprecated
 pub fn JsonSchema::to_repr(Self) -> @debug.Repr
 
 pub enum ToolAction {
@@ -71,6 +75,7 @@ pub enum ToolAction {
 } derive(@debug.Debug)
 pub fn ToolAction::finish(String) -> Self
 pub fn ToolAction::respond(String, is_error? : Bool, brief? : String) -> Self
+#deprecated
 pub fn ToolAction::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ToolExecutor {
@@ -83,6 +88,7 @@ pub struct ToolOutput {
   is_error : Bool
   brief : String?
 } derive(@debug.Debug)
+#deprecated
 pub fn ToolOutput::to_repr(Self) -> @debug.Repr
 
 pub struct Tools {

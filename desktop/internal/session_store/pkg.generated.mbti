@@ -31,6 +31,7 @@ pub async fn workspace_of(String) -> @pathx.Absolute?
 pub suberror StoreError {
   StoreError(String)
 } derive(@debug.Debug)
+#deprecated
 pub fn StoreError::to_repr(Self) -> @debug.Repr
 
 // Types and methods

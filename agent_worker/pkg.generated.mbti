@@ -30,6 +30,7 @@ pub struct WorkerInput {
 pub fn WorkerInput::equal(Self, Self) -> Bool
 pub fn WorkerInput::not_equal(Self, Self) -> Bool
 pub fn WorkerInput::parse(Json) -> Result[Self, String]
+#deprecated
 pub fn WorkerInput::to_repr(Self) -> @debug.Repr
 
 pub struct WorkerReport {
@@ -43,6 +44,7 @@ pub fn WorkerReport::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDec
 pub fn WorkerReport::not_equal(Self, Self) -> Bool
 pub fn WorkerReport::parse_validated(Json) -> Result[Self, String]
 pub fn WorkerReport::to_json(Self) -> Json
+#deprecated
 pub fn WorkerReport::to_repr(Self) -> @debug.Repr
 
 // Type aliases
