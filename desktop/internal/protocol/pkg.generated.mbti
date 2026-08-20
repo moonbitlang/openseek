@@ -336,6 +336,15 @@ pub fn CodexArchiveReply::to_json(Self) -> Json
 pub impl ToJson for CodexArchiveReply
 pub impl @json.FromJson for CodexArchiveReply
 
+pub(all) enum CodexCommandReply[Reply] {
+  CodexCommandSuccess(Reply)
+  CodexCommandError(String)
+}
+pub fn[Reply : @json.FromJson] CodexCommandReply::from_json(Json, @json.JsonPath) -> Self[Reply] raise @json.JsonDecodeError
+pub fn[Reply : ToJson] CodexCommandReply::to_json(Self[Reply]) -> Json
+pub impl[Reply : ToJson] ToJson for CodexCommandReply[Reply]
+pub impl[Reply : @json.FromJson] @json.FromJson for CodexCommandReply[Reply]
+
 pub(all) struct CodexDataReply {
   data : Array[Json]
   next_cursor : String?

@@ -358,20 +358,20 @@ pub fn endpoints(
   connection : @host.HostConnection,
 ) -> Array[@endpoint.Endpoint] {
   let endpoints = [
-    @endpoint.Endpoint::remote_sync(@commands.codex_status, _ => {
+    @endpoint.Endpoint::codex_sync(@commands.codex_status, _ => {
       let reply : @protocol.CodexStatusReply = @json.from_json(
         state.codex.status(),
       )
       reply
     }),
-    @endpoint.Endpoint::remote(@commands.codex_config_open, async fn(_) {
+    @endpoint.Endpoint::codex(@commands.codex_config_open, async fn(_) {
       @host.open_codex_config(state.codex.config_home())
       Acknowledged
     }),
-    @endpoint.Endpoint::remote(@commands.codex_draft_open, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_draft_open, async fn(payload) {
       state.open_codex_draft(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.codex_draft_close, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_draft_close, async fn(payload) {
       guard payload.validated_id() is Some(draft_id) else {
         raise @host.PayloadError("invalid Codex draft id")
       }
@@ -379,15 +379,13 @@ pub fn endpoints(
       state.codex_draft_threads.forget(draft_id)
       Acknowledged
     }),
-    @endpoint.Endpoint::remote(@commands.codex_server_request_list, async fn(
-      _,
-    ) {
+    @endpoint.Endpoint::codex(@commands.codex_server_request_list, async fn(_) {
       let reply : @protocol.CodexServerRequestsReply = @json.from_json(
         state.codex.requests(),
       )
       reply
     }),
-    @endpoint.Endpoint::remote(@commands.codex_server_request_respond, async fn(
+    @endpoint.Endpoint::codex(@commands.codex_server_request_respond, async fn(
       payload,
     ) {
       ignore(
@@ -398,10 +396,10 @@ pub fn endpoints(
       )
       Acknowledged
     }),
-    @endpoint.Endpoint::remote(@commands.codex_file_search, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_file_search, async fn(payload) {
       state.codex_file_search(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.codex_skills_list, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_skills_list, async fn(payload) {
       state.codex_skills_list(payload)
     }),
     state.codex_endpoint(@commands.codex_account_read),
@@ -409,12 +407,12 @@ pub fn endpoints(
     state.codex_endpoint(@commands.codex_account_login_cancel),
     state.codex_endpoint(@commands.codex_account_logout),
     state.codex_endpoint(@commands.codex_model_list),
-    @endpoint.Endpoint::remote(@commands.codex_thread_start, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_thread_start, async fn(payload) {
       state.codex_thread_start(payload)
     }),
     state.codex_endpoint(@commands.codex_thread_resume),
     state.codex_endpoint(@commands.codex_thread_read),
-    @endpoint.Endpoint::remote(@commands.codex_thread_history_read, async fn(
+    @endpoint.Endpoint::codex(@commands.codex_thread_history_read, async fn(
       payload,
     ) {
       state.codex_thread_history(payload)
@@ -424,7 +422,7 @@ pub fn endpoints(
     state.codex_endpoint(@commands.codex_thread_unarchive),
     state.codex_endpoint(@commands.codex_thread_compact),
     state.codex_endpoint(@commands.codex_review_start),
-    @endpoint.Endpoint::remote(@commands.codex_turn_start, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_turn_start, async fn(payload) {
       state.codex_turn_start(payload)
     }),
     state.codex_endpoint(@commands.codex_turn_steer),
@@ -669,10 +667,10 @@ pub fn endpoints(
 /// `codex_request`; no second catalog can drift from the registered endpoint.
 fn[Payload : FromJson + ToJson, Reply : FromJson + ToJson] ApiState::codex_endpoint(
   self : ApiState,
-  command : @commands.Command[Payload, Reply],
+  command : @commands.Command[Payload, @protocol.CodexCommandReply[Reply]],
 ) -> @endpoint.Endpoint {
   let desktop_method = command.name()
-  @endpoint.Endpoint::remote(command, async fn(payload) {
+  @endpoint.Endpoint::codex(command, async fn(payload) {
     let value = self.codex_request(desktop_method, ToJson::to_json(payload))
     @json.from_json(value)
   })

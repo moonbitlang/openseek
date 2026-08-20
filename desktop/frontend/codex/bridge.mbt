@@ -7,23 +7,15 @@ fn[Payload : ToJson, Response : FromJson + ToJson] CodexReplyKind::request(
   self : CodexReplyKind,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  command : @commands.Command[Payload, Response],
+  command : @commands.Command[Payload, @protocol.CodexCommandReply[Response]],
   payload : Payload,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply : Response = @interop.bridge_request(channel, command, payload) catch {
+      let reply : Response = @interop.codex_request(channel, command, payload) catch {
         error => {
           let message = @interop.bridge_error_text(error)
-          scheduler.add(
-            dispatch(
-              match (self, @interop.bridge_failure(error)) {
-                (CodexTurnReply(thread_id), Unknown) =>
-                  TurnDeliveryUnknown(thread_id~, message~, worktree=None)
-                _ => Failed(kind=self, message~)
-              },
-            ),
-          )
+          scheduler.add(dispatch(Failed(kind=self, message~)))
           return
         }
       }
@@ -54,7 +46,7 @@ fn CodexThreadCatalogRequest::run(
       let seen_cursors : Array[String] = []
       let mut cursor : String? = None
       for ;; {
-        let page : @protocol.CodexDataReply = @interop.bridge_request(
+        let page : @protocol.CodexDataReply = @interop.codex_request(
           channel,
           @commands.codex_thread_list,
           { limit: 100, archived: self.archived, cursor },
@@ -209,7 +201,7 @@ fn State::close_draft(
     @js.async_run(() => {
       ignore(
         try
-          @interop.bridge_request(channel, @commands.codex_draft_close, @protocol.CodexDraftClosePayload::{
+          @interop.codex_request(channel, @commands.codex_draft_close, @protocol.CodexDraftClosePayload::{
             draft_id,
           })
         catch {
@@ -246,7 +238,7 @@ fn CodexDraftThreadRequest::run(
         () => {
           // The native host ties cwd authority to this already-open draft and
           // strips this Desktop-only field before forwarding thread/start.
-          let thread_reply : @protocol.CodexThreadReply = @interop.bridge_request(
+          let thread_reply : @protocol.CodexThreadReply = @interop.codex_request(
             channel,
             @commands.codex_thread_start,
             {
@@ -285,7 +277,7 @@ fn CodexDraftThreadRequest::run(
           }
           ignore(
             try
-              @interop.bridge_request(channel, @commands.codex_draft_close, {
+              @interop.codex_request(channel, @commands.codex_draft_close, {
                 draft_id: self.draft_id,
               })
             catch {
@@ -373,28 +365,6 @@ fn State::refresh_thread_meta(
 }
 
 ///|
-/// Re-read one task after a start/steer reply was lost. This uses a distinct
-/// reply kind so ordinary selection loading cannot clear the preserved input
-/// or enable Send before the request-time frontier has been compared.
-fn State::reconcile_turn_delivery(
-  self : State,
-  dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  thread_id : String,
-) -> @cmd.Cmd {
-  guard self.pending_turn_delivery is Some(pending) &&
-    pending.thread_id == thread_id else {
-    return @cmd.none
-  }
-  CodexTurnReconcileReply(thread_id).request(
-    dispatch,
-    channel,
-    @commands.codex_thread_history_read,
-    { thread_id, },
-  )
-}
-
-///|
 /// Re-read the selected checkout's current branch and pull request. App-server
 /// `gitInfo` is creation-time metadata; this host operation is the same GitHub
 /// lookup used by OpenSeek's composer and therefore follows branch changes
@@ -436,7 +406,7 @@ fn State::resume_for_send(
   let thread_id = active.id
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply : @protocol.CodexThreadResumeReply = @interop.bridge_request(
+      let reply : @protocol.CodexThreadResumeReply = @interop.codex_request(
         channel,
         @commands.codex_thread_resume,
         { thread_id, },
@@ -507,9 +477,7 @@ fn State::send(
 }
 
 ///|
-/// Build the exact app-server input array once for both delivery tracking and
-/// the start/steer request. Reconciliation compares this canonical JSON with
-/// a newly stored user item instead of guessing from rendered transcript text.
+/// Build the exact app-server input array once for the start/steer request.
 fn State::turn_inputs(self : State) -> Array[Json] {
   let text = self.prompt_text()
   let inputs : Array[Json] = []
@@ -522,22 +490,6 @@ fn State::turn_inputs(self : State) -> Array[Json] {
     }
   }
   inputs
-}
-
-///|
-/// Capture every user item visible before a turn request leaves. A lost reply
-/// keeps this frontier in State until thread/read proves whether a new exact
-/// input appeared, so the same composer cannot issue an automatic duplicate.
-fn State::with_pending_turn_delivery(self : State) -> State {
-  guard self.active_thread() is Some(active) else { return self }
-  {
-    ..self,
-    pending_turn_delivery: Some({
-      thread_id: active.id,
-      input_signature: Json::array(self.turn_inputs()).stringify(),
-      known_user_items: active.user_item_ids(),
-    }),
-  }
 }
 
 ///|
@@ -567,14 +519,7 @@ fn State::start_turn_in_new_worktree(
             { workspace, session: None, codex_thread: Some(thread_id) },
           ) catch {
             error => {
-              let detail = @interop.bridge_error_text(error)
-              let message = match @interop.bridge_failure(error) {
-                Refused | Unsent => "worktree setup failed: " + detail
-                Unknown =>
-                  "worktree setup could not be confirmed (" +
-                  detail +
-                  ") — this task may already own a new worktree; the prompt was not resent"
-              }
+              let message = @interop.bridge_error_text(error)
               scheduler.add(
                 dispatch(Failed(kind=CodexTurnReply(thread_id), message~)),
               )
@@ -607,7 +552,7 @@ fn State::start_turn_in_new_worktree(
             )
             return
           }
-          let reply : @protocol.CodexTurnReply = @interop.bridge_request(
+          let reply : @protocol.CodexTurnReply = @interop.codex_request(
             channel,
             @commands.codex_turn_start,
             {
@@ -625,16 +570,10 @@ fn State::start_turn_in_new_worktree(
               let message = @interop.bridge_error_text(error)
               scheduler.add(
                 dispatch(
-                  match @interop.bridge_failure(error) {
-                    Unknown =>
-                      TurnDeliveryUnknown(
-                        thread_id~,
-                        message~,
-                        worktree=Some(worktree),
-                      )
-                    Refused | Unsent =>
-                      Failed(kind=CodexTurnReply(thread_id), message~)
-                  },
+                  Failed(
+                    kind=CodexWorktreeTurnReply(thread_id, worktree),
+                    message~,
+                  ),
                 ),
               )
               return
@@ -741,7 +680,7 @@ fn State::load_skills(
   let cwd = owner.cwd
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply : @protocol.CodexDataReply = @interop.bridge_request(
+      let reply : @protocol.CodexDataReply = @interop.codex_request(
         channel,
         @commands.codex_skills_list,
         { thread_id, cwd, force_reload },

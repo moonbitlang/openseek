@@ -63,6 +63,7 @@ pub fn update(
           selection: CodexNoTask,
           draft: "",
           mentions: [],
+          submitted_first_prompt: None,
           placement: @composer.LocalCheckout,
           foreground: None,
           loading: false,
@@ -100,7 +101,7 @@ pub fn update(
             // its own identity, exactly as it does for OpenSeek conversations.
             draft: "",
             mentions: [],
-            pending_turn_delivery: None,
+            submitted_first_prompt: None,
             notice: "",
           }.begin_foreground(CodexThreadReply(thread_id)),
         )
@@ -162,29 +163,9 @@ pub fn update(
           {
             ..state.settle_foreground(CodexWriterReply(thread_id)),
             write_access: CodexActiveElsewhere,
-            pending_turn_delivery: None,
             notice: "This Codex task is active in another client. Its history is available here, but sending is read-only until that client releases it.",
           },
         )
-      } else {
-        (@cmd.none, state)
-      }
-    TurnDeliveryUnknown(thread_id~, message~, worktree~) =>
-      if state.active_thread() is Some(active) &&
-        active.id == thread_id &&
-        state.pending_turn_delivery is Some(pending) &&
-        pending.thread_id == thread_id {
-        let next = match worktree {
-          Some(worktree) => state.with_created_worktree(worktree)
-          None => state
-        }
-        let next = {
-          ..next,
-          notice: "Codex turn delivery could not be confirmed (" +
-          message +
-          "); refreshing this task before Send is enabled.",
-        }.begin_foreground(CodexTurnReconcileReply(thread_id))
-        (next.reconcile_turn_delivery(dispatch, channel, thread_id), next)
       } else {
         (@cmd.none, state)
       }
@@ -252,10 +233,7 @@ pub fn update(
           // Install the real id before starting the turn so every app-server
           // notification observes the stored selection. The preserved draft
           // and placement now flow through the ordinary Local/Worktree send.
-          next = {
-            ..next.with_pending_turn_delivery(),
-            write_access: CodexWritable,
-          }
+          next = { ..next, write_access: CodexWritable }
           next = next.loading_context(false)
           cmd = @cmd.batch([
             next.send(dispatch, channel),
@@ -267,8 +245,6 @@ pub fn update(
           }
         }
         CodexTurnReply(_) => next = next.with_turn_reply(value)
-        CodexTurnReconcileReply(thread_id) =>
-          next = next.with_reconciled_turn_reply(value, thread_id)
         CodexWorktreeTurnReply(_, worktree) => {
           next = next.with_created_worktree(worktree).with_turn_reply(value)
           cmd = @cmd.batch([
@@ -358,7 +334,6 @@ pub fn update(
         | CodexThreadMetaReply(_)
         | CodexDraftThreadReply(_) => "Codex thread"
         CodexTurnReply(_) | CodexWorktreeTurnReply(_, _) => "Codex turn"
-        CodexTurnReconcileReply(_) => "Codex turn reconciliation"
         CodexWorktreeRepairReply(_, _) => "Codex worktree rebuild"
         CodexLoginReply => "Codex sign-in"
         CodexArchiveReply(_) => "Codex archive"
@@ -385,21 +360,30 @@ pub fn update(
         message
       }
       let owns_foreground = state.owns_foreground(kind)
-      let settled = state.settle_foreground(kind)
-      let next = if kind is CodexTurnReconcileReply(_) && owns_foreground {
-        {
-          ..settled,
-          notice: subject +
-          ": " +
-          message +
-          ". Reopen the task to refresh it before retrying.",
+      let settled = if owns_foreground {
+        match kind {
+          CodexWorktreeTurnReply(_, worktree) =>
+            state.with_created_worktree(worktree).settle_foreground(kind)
+          _ => state.settle_foreground(kind)
         }
-      } else if owns_foreground {
-        {
-          ..settled,
-          pending_turn_delivery: None,
-          notice: subject + ": " + message,
-        }
+      } else {
+        state
+      }
+      // A definite request error leaves the editable draft intact and removes
+      // only the transient transcript preview. The error itself is rendered
+      // directly; no read, retry, or delivery inference follows it.
+      let settled = if owns_foreground &&
+        (
+          kind is CodexDraftThreadReply(_) ||
+          kind is CodexTurnReply(_) ||
+          kind is CodexWorktreeTurnReply(_, _)
+        ) {
+        { ..settled, submitted_first_prompt: None }
+      } else {
+        settled
+      }
+      let next = if owns_foreground {
+        { ..settled, notice: subject + ": " + message }
       } else {
         { ..state, notice: subject + ": " + message }
       }
@@ -417,13 +401,7 @@ pub fn update(
         let (refresh, refreshed) = next.refresh(dispatch, channel)
         current = refreshed
         if next.active_thread() is Some(active) {
-          let thread = if next.pending_turn_delivery is Some(pending) &&
-            pending.thread_id == active.id {
-            next.reconcile_turn_delivery(dispatch, channel, active.id)
-          } else {
-            next.open_thread(dispatch, channel, active.id)
-          }
-          @cmd.batch([refresh, thread])
+          @cmd.batch([refresh, next.open_thread(dispatch, channel, active.id)])
         } else if next.active_draft() is Some(draft) && !draft.cwd.is_empty() {
           @cmd.batch([
             refresh,
@@ -465,18 +443,11 @@ pub fn update(
         next.active_thread() is Some(active) {
         // Re-read through the host so a cwd change cannot retarget Files,
         // Terminal, or language services from an unvalidated notification.
-        // If a turn reply is also missing, the same read must first settle
-        // that delivery frontier before Send can become available. The
-        // ordinary case applies the read metadata-only: the first turn of a
-        // fresh thread fires this notification while it is still streaming,
-        // and a full `open_thread` replacement would blank the transcript
-        // with a snapshot that predates the turn.
-        if next.pending_turn_delivery is Some(pending) &&
-          pending.thread_id == active.id {
-          next.reconcile_turn_delivery(dispatch, channel, active.id)
-        } else {
-          next.refresh_thread_meta(dispatch, channel, active.id)
-        }
+        // Apply this read metadata-only: the first turn of a fresh thread
+        // fires this notification while it is still streaming, and a full
+        // `open_thread` replacement would blank the transcript with a snapshot
+        // that predates the turn.
+        next.refresh_thread_meta(dispatch, channel, active.id)
       } else if method_ == "turn/completed" {
         // A turn may check out another branch or create a PR. Refresh the same
         // compact status chip OpenSeek updates at its run boundary.
@@ -507,12 +478,7 @@ fn State::with_turn_reply(self : State, value : Json) -> State {
   } else {
     { ..self, draft: "" }
   }
-  {
-    ..next,
-    mentions: [],
-    submission_sequence: next.submission_sequence + 1,
-    pending_turn_delivery: None,
-  }
+  { ..next, mentions: [], submission_sequence: next.submission_sequence + 1 }.with_observed_first_prompt()
 }
 
 ///|
@@ -557,6 +523,34 @@ test "Codex project add stays local until the first prompt" {
     open_external,
   )
   assert_true(wants_worktree.placement is @composer.FreshWorktree)
+  let submit = ComposerAction(
+    @composer.DraftSubmitted(
+      identity=wants_worktree.composer_identity(@interop.ChannelId::Local),
+      draft={ task: "inspect this", mentions: [] },
+    ),
+  )
+  let (_, submitting) = update(
+    dispatch,
+    submit,
+    wants_worktree,
+    @interop.ChannelId::Local,
+    open_external,
+  )
+  let (_, submitting_again) = update(
+    dispatch,
+    submit,
+    wants_worktree,
+    @interop.ChannelId::Local,
+    open_external,
+  )
+  // Submit changes pure state immediately: the local User row and Starting
+  // status do not wait for thread creation or worktree setup.
+  assert_true(submitting == submitting_again)
+  assert_true(submitting.waiting_for_first_user_item())
+  let starting_items = submitting.transcript_items()
+  assert_eq(starting_items.length(), 1)
+  assert_true(starting_items[0].kind is @transcript.User)
+  assert_eq(starting_items[0].content, "inspect this")
   let (_, adopted) = update(
     dispatch,
     Reply(kind=CodexDraftThreadReply("desktop-draft-1"), value={
@@ -567,7 +561,7 @@ test "Codex project add stays local until the first prompt" {
         "turns": [],
       },
     }),
-    wants_worktree,
+    submitting,
     @interop.ChannelId::Local,
     open_external,
   )
@@ -577,6 +571,57 @@ test "Codex project add stays local until the first prompt" {
   assert_true(adopted.active_thread() is Some(_))
   assert_true(adopted.placement is @composer.FreshWorktree)
   assert_true(adopted.loading)
+  assert_true(adopted.waiting_for_first_user_item())
+  assert_eq(adopted.transcript_items().length(), 1)
+
+  let worktree : CodexWorktree = {
+    name: "wt-1",
+    path: "/work/project/.worktrees/wt-1",
+    present: true,
+  }
+  let (_, acknowledged) = update(
+    dispatch,
+    Reply(kind=CodexWorktreeTurnReply("thread-real-1", worktree), value={
+      "turn": {
+        "id": "turn-1",
+        "status": "inProgress",
+        "itemsView": "notLoaded",
+      },
+    }),
+    adopted,
+    @interop.ChannelId::Local,
+    open_external,
+  )
+  // An ACK may omit its items. The accepted draft leaves the textarea but its
+  // local transcript row stays until the real User item arrives.
+  assert_eq(acknowledged.draft_text(), "")
+  assert_true(acknowledged.waiting_for_first_user_item())
+  assert_eq(acknowledged.transcript_items().length(), 1)
+
+  let (_, observed) = update(
+    dispatch,
+    Notification(
+      method_="item/started",
+      params={
+        "threadId": "thread-real-1",
+        "turnId": "turn-1",
+        "item": {
+          "id": "user-1",
+          "type": "userMessage",
+          "content": [{ "type": "text", "text": "inspect this" }],
+        },
+      },
+      generation=1,
+    ),
+    acknowledged,
+    @interop.ChannelId::Local,
+    open_external,
+  )
+  assert_false(observed.waiting_for_first_user_item())
+  let observed_items = observed.transcript_items()
+  assert_eq(observed_items.length(), 1)
+  assert_true(observed_items[0].kind is @transcript.User)
+  assert_eq(observed_items[0].content, "inspect this")
 }
 
 ///|
@@ -720,114 +765,48 @@ test "cwd-less stored Codex tasks expose Terminal scratch without Files" {
 }
 
 ///|
-test "unknown Codex turn delivery refreshes before permitting retry" {
+test "Codex turn connection errors settle immediately without a history read" {
   let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let original = {
     ..State::from_thread_snapshot({
-      "thread": {
-        "id": "thread-1",
-        "turns": [
-          {
-            "id": "turn-old",
-            "status": "completed",
-            "items": [
-              {
-                "id": "user-old",
-                "type": "userMessage",
-                "content": [{ "type": "text", "text": "older" }],
-              },
-            ],
-          },
-        ],
-      },
+      "thread": { "id": "thread-1", "turns": [] },
     }),
     draft: "new prompt",
-  }.with_pending_turn_delivery()
-  let (_, refreshing) = update(
+    submitted_first_prompt: Some({ task: "new prompt", mentions: [] }),
+  }.begin_foreground(CodexTurnReply("thread-1"))
+  let (_, failed) = update(
     dispatch,
-    TurnDeliveryUnknown(
-      thread_id="thread-1",
-      message="connection closed",
-      worktree=None,
+    Failed(kind=CodexTurnReply("thread-1"), message="SeekMoon connection lost"),
+    original,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(failed.draft_text(), "new prompt")
+  assert_false(failed.loading)
+  assert_true(failed.foreground is None)
+  assert_true(failed.can_prompt())
+  assert_eq(failed.notice, "Codex turn: SeekMoon connection lost")
+  assert_false(failed.waiting_for_first_user_item())
+  assert_eq(failed.transcript_items().length(), 1)
+
+  let worktree : CodexWorktree = {
+    name: "wt-1",
+    path: "/work/project/.worktrees/wt-1",
+    present: true,
+  }
+  let (_, worktree_failed) = update(
+    dispatch,
+    Failed(
+      kind=CodexWorktreeTurnReply("thread-1", worktree),
+      message="SeekMoon connection lost",
     ),
     original,
     @interop.ChannelId::Local,
     _ => @cmd.none,
   )
-  assert_true(refreshing.pending_turn_delivery is Some(_))
-  assert_true(refreshing.loading)
-  assert_false(refreshing.can_prompt())
-
-  let accepted_snapshot : Json = {
-    "thread": {
-      "id": "thread-1",
-      "turns": [
-        {
-          "id": "turn-old",
-          "status": "completed",
-          "items": [
-            {
-              "id": "user-old",
-              "type": "userMessage",
-              "content": [{ "type": "text", "text": "older" }],
-            },
-          ],
-        },
-        {
-          "id": "turn-new",
-          "status": "inProgress",
-          "items": [
-            {
-              "id": "user-new",
-              "type": "userMessage",
-              "content": [{ "type": "text", "text": "new prompt" }],
-            },
-          ],
-        },
-      ],
-    },
-  }
-  let (_, recovered) = update(
-    dispatch,
-    Reply(kind=CodexTurnReconcileReply("thread-1"), value=accepted_snapshot),
-    refreshing,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
-  assert_eq(recovered.draft_text(), "")
-  assert_true(recovered.pending_turn_delivery is None)
-  assert_false(recovered.loading)
-
-  let undelivered = original.begin_foreground(
-    CodexTurnReconcileReply("thread-1"),
-  )
-  let (_, retryable) = update(
-    dispatch,
-    Reply(kind=CodexTurnReconcileReply("thread-1"), value={
-      "thread": {
-        "id": "thread-1",
-        "turns": [
-          {
-            "id": "turn-old",
-            "status": "completed",
-            "items": [
-              {
-                "id": "user-old",
-                "type": "userMessage",
-                "content": [{ "type": "text", "text": "older" }],
-              },
-            ],
-          },
-        ],
-      },
-    }),
-    undelivered,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
-  assert_eq(retryable.draft_text(), "new prompt")
-  assert_true(retryable.pending_turn_delivery is None)
-  assert_true(retryable.can_prompt())
+  assert_true(worktree_failed.placement is @composer.BoundWorktree("wt-1"))
+  assert_eq(worktree_failed.draft_text(), "new prompt")
+  assert_eq(worktree_failed.notice, "Codex turn: SeekMoon connection lost")
 }
 
 ///|
@@ -1290,22 +1269,20 @@ test "reopening the selected Codex task preserves its foreground state" {
 test "archiving the selected Codex task settles its owned foreground work" {
   let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let state = {
-      ..State::from_thread_snapshot({
-        "thread": { "id": "thread-a", "cwd": "/work/a", "turns": [] },
-      }),
-      draft: "pending prompt",
-      pending_requests: [
-        {
-          request_id: Json::string("approval-a"),
-          thread_id: "thread-a",
-          method_: "item/commandExecution/requestApproval",
-          params: { "threadId": "thread-a" },
-          answers: Map([]),
-        },
-      ],
-    }
-    .with_pending_turn_delivery()
-    .begin_foreground(CodexTurnReply("thread-a"))
+    ..State::from_thread_snapshot({
+      "thread": { "id": "thread-a", "cwd": "/work/a", "turns": [] },
+    }),
+    draft: "pending prompt",
+    pending_requests: [
+      {
+        request_id: Json::string("approval-a"),
+        thread_id: "thread-a",
+        method_: "item/commandExecution/requestApproval",
+        params: { "threadId": "thread-a" },
+        answers: Map([]),
+      },
+    ],
+  }.begin_foreground(CodexTurnReply("thread-a"))
   let message = Notification(
     method_="thread/archived",
     params={ "threadId": "thread-a" },
@@ -1320,7 +1297,6 @@ test "archiving the selected Codex task settles its owned foreground work" {
   assert_true(once.active_thread() is None)
   assert_false(once.loading)
   assert_true(once.foreground is None)
-  assert_true(once.pending_turn_delivery is None)
   assert_true(once.pending_requests.is_empty())
   assert_true(once == twice)
 }

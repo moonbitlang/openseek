@@ -57,6 +57,39 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::remote(
 }
 
 ///|
+/// Construct a Codex endpoint whose raised handler errors travel as ordinary
+/// typed replies. Proton may redact a raised error, so the catch must happen
+/// before the shared local/remote endpoint hands the result to either channel.
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex(
+  command : @commands.Command[Payload, @protocol.CodexCommandReply[Reply]],
+  handler : async (Payload) -> Reply,
+) -> Endpoint {
+  Endpoint::remote(command, async fn(payload) {
+    let reply = handler(payload) catch {
+      error if @async.is_being_cancelled() => raise error
+      error => return CodexCommandError("\{error}")
+    }
+    CodexCommandSuccess(reply)
+  })
+}
+
+///|
+/// Construct a Codex endpoint whose handler completes synchronously. Keeping
+/// this separate avoids pretending a synchronous command can suspend merely
+/// to share the Codex error-reply contract.
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex_sync(
+  command : @commands.Command[Payload, @protocol.CodexCommandReply[Reply]],
+  handler : (Payload) -> Reply raise,
+) -> Endpoint {
+  Endpoint::remote_sync(command, fn(payload) {
+    let reply = handler(payload) catch {
+      error => return CodexCommandError("\{error}")
+    }
+    CodexCommandSuccess(reply)
+  })
+}
+
+///|
 /// Construct a shared endpoint whose native operation does not suspend.
 pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::remote_sync(
   command : @commands.Command[Payload, Reply],

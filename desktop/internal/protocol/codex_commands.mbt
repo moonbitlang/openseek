@@ -281,6 +281,16 @@ pub(all) struct CodexThreadReply {
 } derive(Debug, Eq)
 
 ///|
+/// The reply shared by every `codex.*` Desktop command. Successful replies keep
+/// their existing JSON shape; a raised handler error becomes `{error: ...}` so
+/// the trusted frontend receives the original detail even though Proton
+/// redacts raised command errors.
+pub(all) enum CodexCommandReply[Reply] {
+  CodexCommandSuccess(Reply)
+  CodexCommandError(String)
+}
+
+///|
 /// `thread/resume` returns a thread on success and Desktop's explicit
 /// `{status:"activeWriter"}` state when another client owns the writer.
 pub(all) struct CodexThreadResumeReply {
@@ -760,6 +770,30 @@ pub impl ToJson for CodexThreadReply with fn to_json(self) {
 }
 
 ///|
+pub impl[Reply : FromJson] FromJson for CodexCommandReply[Reply] with fn from_json(
+  json,
+  path,
+) {
+  if json is Object(fields) &&
+    fields.length() == 1 &&
+    fields.get("error") is Some(String(message)) {
+    CodexCommandError(message)
+  } else {
+    CodexCommandSuccess(FromJson::from_json(json, path))
+  }
+}
+
+///|
+pub impl[Reply : ToJson] ToJson for CodexCommandReply[Reply] with fn to_json(
+  self,
+) {
+  match self {
+    CodexCommandSuccess(reply) => ToJson::to_json(reply)
+    CodexCommandError(message) => { "error": Json::string(message) }
+  }
+}
+
+///|
 pub impl FromJson for CodexThreadResumeReply with fn from_json(json, path) {
   let object = CodexJsonObject::decode(json, path, "Codex thread resume reply")
   {
@@ -1104,6 +1138,12 @@ pub extend CodexThreadReadPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend CodexThreadReadPayload with ToJson::{to_json}
+
+///|
+pub extend CodexCommandReply with FromJson::{from_json}
+
+///|
+pub extend CodexCommandReply with ToJson::{to_json}
 
 ///|
 pub extend CodexThreadReply with Debug::{to_repr}

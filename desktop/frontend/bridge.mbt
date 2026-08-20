@@ -1593,7 +1593,7 @@ fn open_codex_config(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let _ : @protocol.EmptyReply = @interop.bridge_request(
+      let _ : @protocol.EmptyReply = @interop.codex_request(
         channel,
         @commands.codex_config_open,
         @protocol.EmptyPayload::NoPayload,

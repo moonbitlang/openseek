@@ -1,9 +1,15 @@
 import {
   "moonbit-community/proton",
   "moonbit-community/proton_contract",
+  "moonbitlang/async",
   "openseek_desktop/internal/commands",
+  "openseek_desktop/internal/protocol",
   "moonbitlang/core/json",
 }
+
+import {
+  "moonbitlang/core/debug",
+} for "wbtest"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 

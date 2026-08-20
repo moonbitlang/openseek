@@ -7,6 +7,7 @@ import {
   "moonbit-community/proton_contract",
   "moonbitlang/core/json",
   "openseek_desktop/internal/commands",
+  "openseek_desktop/internal/protocol",
 }
 
 // Values
@@ -19,6 +20,8 @@ pub(all) suberror InvalidEndpointPayload {
 // Types and methods
 type Endpoint
 pub fn Endpoint::bind(Self, @command.CommandRegistrar) -> Unit raise
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex(@commands.Command[Payload, @protocol.CodexCommandReply[Reply]], async (Payload) -> Reply) -> Self
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex_sync(@commands.Command[Payload, @protocol.CodexCommandReply[Reply]], (Payload) -> Reply raise) -> Self
 pub async fn Endpoint::invoke_remote(Self, Json) -> Json
 pub fn Endpoint::name(Self) -> String
 pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::remote(@commands.Command[Payload, Reply], async (Payload) -> Reply) -> Self

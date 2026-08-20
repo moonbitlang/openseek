@@ -7,6 +7,9 @@
 
 ///|
 priv suberror BridgeError {
+  // The host returned a command-level failure. The detail is safe to show and
+  // the caller knows the requested action did not succeed.
+  BridgeRefused(String)
   // The call left this client and something went wrong after that: a reply
   // arrived that could not be read.
   BridgeError(String)
@@ -19,7 +22,8 @@ priv suberror BridgeError {
 ///|
 impl Show for BridgeError with fn output(self, logger) {
   match self {
-    BridgeError(message) | BridgeUnsent(message) => logger.write_string(message)
+    BridgeRefused(message) | BridgeError(message) | BridgeUnsent(message) =>
+      logger.write_string(message)
   }
 }
 
@@ -59,6 +63,21 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request(
   }
   @json.from_json(json) catch {
     _ => raise BridgeError("Malformed reply from \{op}")
+  }
+}
+
+///|
+/// Call one `codex.*` command and unwrap its command-level result. Native
+/// handlers return original error text inside the reply so Proton cannot
+/// replace it with a generic rejected-promise message.
+pub async fn[Payload : ToJson, Reply : @json.FromJson] codex_request(
+  channel : ChannelId,
+  command : @commands.Command[Payload, @protocol.CodexCommandReply[Reply]],
+  payload : Payload,
+) -> Reply {
+  match bridge_request(channel, command, payload) {
+    CodexCommandSuccess(reply) => reply
+    CodexCommandError(message) => raise BridgeRefused(message)
   }
 }
 
@@ -236,11 +255,24 @@ test "an ordered request failure releases its channel lane" {
 }
 
 ///|
+test "a Codex command error keeps its detail and is a definite refusal" {
+  let error : Error = BridgeRefused(
+    "Codex app-server request turn/start failed: invalid model",
+  )
+  assert_eq(
+    bridge_error_text(error),
+    "Codex app-server request turn/start failed: invalid model",
+  )
+  assert_true(bridge_failure(error) is Refused)
+}
+
+///|
 /// A user-facing message for a failed bridge call, preferring the JS
 /// error's `message` over its stringified form.
 pub fn bridge_error_text(error : Error) -> String {
   match error {
-    BridgeError(message) | BridgeUnsent(message) => message
+    BridgeRefused(message) | BridgeError(message) | BridgeUnsent(message) =>
+      message
     @js.Error_(value) =>
       if js_prop(value, "message") is Some(message) &&
         (@js.Cast::into(message) : String?) is Some(text) &&
@@ -284,6 +316,7 @@ pub(all) enum BridgeFailure {
 /// `@js.Error_` reaching this point came from the local path.
 pub fn bridge_failure(error : Error) -> BridgeFailure {
   match error {
+    BridgeRefused(_) => Refused
     BridgeUnsent(_) => Unsent
     // A reply that arrived and could not be decoded, or a socket that died
     // under a request already sent: it went out, and the answer is what is

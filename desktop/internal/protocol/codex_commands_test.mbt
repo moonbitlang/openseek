@@ -58,6 +58,28 @@ test "Codex list and turn replies keep their typed envelopes" {
 }
 
 ///|
+test "Codex commands preserve successes and return original host errors" {
+  let success : @protocol.CodexCommandReply[@protocol.CodexThreadReply] = @json.from_json({
+      "thread": { "id": "thread-1", "turns": [] },
+    },
+  )
+  assert_true(success is CodexCommandSuccess(_))
+  @debug.assert_eq(success.to_json(), {
+    "thread": { "id": "thread-1", "turns": [] },
+  })
+  let failure : @protocol.CodexCommandReply[@protocol.CodexThreadReply] = @json.from_json({
+      "error": "Codex app-server request thread/read failed",
+    },
+  )
+  assert_true(
+    failure is CodexCommandError("Codex app-server request thread/read failed"),
+  )
+  @debug.assert_eq(failure.to_json(), {
+    "error": "Codex app-server request thread/read failed",
+  })
+}
+
+///|
 test "Codex server-request snapshots preserve actor generation" {
   let requests : @protocol.CodexServerRequestsReply = @json.from_json({
     "data": [

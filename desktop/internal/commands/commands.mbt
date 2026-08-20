@@ -177,14 +177,14 @@ pub let worktree_remove : Command[
 /// app-server records remain JSON fields inside those envelopes.
 pub let codex_status : Command[
   @protocol.EmptyPayload,
-  @protocol.CodexStatusReply,
+  @protocol.CodexCommandReply[@protocol.CodexStatusReply],
 ] = Command("codex.status")
 
 ///|
 /// Ensure and open the Codex home's `config.toml` with the platform opener.
 pub let codex_config_open : Command[
   @protocol.EmptyPayload,
-  @protocol.EmptyReply,
+  @protocol.CodexCommandReply[@protocol.EmptyReply],
 ] = Command("codex.config.open")
 
 ///|
@@ -192,87 +192,87 @@ pub let codex_config_open : Command[
 /// This process-local operation does not create an app-server thread.
 pub let codex_draft_open : Command[
   @protocol.CodexDraftOpenPayload,
-  @protocol.CodexDraftOpenReply,
+  @protocol.CodexCommandReply[@protocol.CodexDraftOpenReply],
 ] = Command("codex.draft.open")
 
 ///|
 /// Revoke a browser-local draft's process-local filesystem authority.
 pub let codex_draft_close : Command[
   @protocol.CodexDraftClosePayload,
-  @protocol.EmptyReply,
+  @protocol.CodexCommandReply[@protocol.EmptyReply],
 ] = Command("codex.draft.close")
 
 ///|
 pub let codex_server_request_list : Command[
   @protocol.EmptyPayload,
-  @protocol.CodexServerRequestsReply,
+  @protocol.CodexCommandReply[@protocol.CodexServerRequestsReply],
 ] = Command("codex.server_request.list")
 
 ///|
 pub let codex_server_request_respond : Command[
   @protocol.CodexServerRequestRespondPayload,
-  @protocol.EmptyReply,
+  @protocol.CodexCommandReply[@protocol.EmptyReply],
 ] = Command("codex.server_request.respond")
 
 ///|
 pub let codex_file_search : Command[
   @protocol.CodexFileSearchPayload,
-  @protocol.CodexFileSearchReply,
+  @protocol.CodexCommandReply[@protocol.CodexFileSearchReply],
 ] = Command("codex.file.search")
 
 ///|
 /// List the Codex app-server skills available to one authorized thread cwd.
 pub let codex_skills_list : Command[
   @protocol.CodexSkillsListPayload,
-  @protocol.CodexDataReply,
+  @protocol.CodexCommandReply[@protocol.CodexDataReply],
 ] = Command("codex.skills.list")
 
 ///|
 pub let codex_account_read : Command[
   @protocol.CodexAccountReadPayload,
-  @protocol.CodexAccountReply,
+  @protocol.CodexCommandReply[@protocol.CodexAccountReply],
 ] = Command("codex.account.read")
 
 ///|
 pub let codex_account_login_start : Command[
   @protocol.CodexAccountLoginStartPayload,
-  @protocol.CodexLoginStartReply,
+  @protocol.CodexCommandReply[@protocol.CodexLoginStartReply],
 ] = Command("codex.account.login.start")
 
 ///|
 pub let codex_account_login_cancel : Command[
   @protocol.CodexAccountLoginCancelPayload,
-  @protocol.EmptyReply,
+  @protocol.CodexCommandReply[@protocol.EmptyReply],
 ] = Command("codex.account.login.cancel")
 
 ///|
 pub let codex_account_logout : Command[
   @protocol.EmptyPayload,
-  @protocol.EmptyReply,
+  @protocol.CodexCommandReply[@protocol.EmptyReply],
 ] = Command("codex.account.logout")
 
 ///|
 pub let codex_model_list : Command[
   @protocol.CodexModelListPayload,
-  @protocol.CodexDataReply,
+  @protocol.CodexCommandReply[@protocol.CodexDataReply],
 ] = Command("codex.model.list")
 
 ///|
 pub let codex_thread_start : Command[
   @protocol.CodexThreadStartPayload,
-  @protocol.CodexThreadReply,
+  @protocol.CodexCommandReply[@protocol.CodexThreadReply],
 ] = Command("codex.thread.start")
 
 ///|
 pub let codex_thread_resume : Command[
   @protocol.CodexThreadPayload,
-  @protocol.CodexThreadResumeReply,
+  @protocol.CodexCommandReply[@protocol.CodexThreadResumeReply],
 ] = Command("codex.thread.resume")
 
 ///|
 pub let codex_thread_read : Command[
   @protocol.CodexThreadReadPayload,
-  @protocol.CodexThreadReply,
+  @protocol.CodexCommandReply[@protocol.CodexThreadReply],
 ] = Command("codex.thread.read")
 
 ///|
@@ -280,55 +280,55 @@ pub let codex_thread_read : Command[
 /// without resuming the task or acquiring its writer.
 pub let codex_thread_history_read : Command[
   @protocol.CodexThreadPayload,
-  @protocol.CodexThreadReply,
+  @protocol.CodexCommandReply[@protocol.CodexThreadReply],
 ] = Command("codex.thread.history.read")
 
 ///|
 pub let codex_thread_list : Command[
   @protocol.CodexThreadListPayload,
-  @protocol.CodexDataReply,
+  @protocol.CodexCommandReply[@protocol.CodexDataReply],
 ] = Command("codex.thread.list")
 
 ///|
 pub let codex_thread_archive : Command[
   @protocol.CodexThreadArchivePayload,
-  @protocol.CodexArchiveReply,
+  @protocol.CodexCommandReply[@protocol.CodexArchiveReply],
 ] = Command("codex.thread.archive")
 
 ///|
 pub let codex_thread_unarchive : Command[
   @protocol.CodexThreadPayload,
-  @protocol.EmptyReply,
+  @protocol.CodexCommandReply[@protocol.EmptyReply],
 ] = Command("codex.thread.unarchive")
 
 ///|
 pub let codex_thread_compact : Command[
   @protocol.CodexThreadPayload,
-  @protocol.EmptyReply,
+  @protocol.CodexCommandReply[@protocol.EmptyReply],
 ] = Command("codex.thread.compact")
 
 ///|
 pub let codex_review_start : Command[
   @protocol.CodexReviewStartPayload,
-  @protocol.EmptyReply,
+  @protocol.CodexCommandReply[@protocol.EmptyReply],
 ] = Command("codex.review.start")
 
 ///|
 pub let codex_turn_start : Command[
   @protocol.CodexTurnStartPayload,
-  @protocol.CodexTurnReply,
+  @protocol.CodexCommandReply[@protocol.CodexTurnReply],
 ] = Command("codex.turn.start")
 
 ///|
 pub let codex_turn_steer : Command[
   @protocol.CodexTurnSteerPayload,
-  @protocol.CodexTurnReply,
+  @protocol.CodexCommandReply[@protocol.CodexTurnReply],
 ] = Command("codex.turn.steer")
 
 ///|
 pub let codex_turn_interrupt : Command[
   @protocol.CodexTurnInterruptPayload,
-  @protocol.EmptyReply,
+  @protocol.CodexCommandReply[@protocol.EmptyReply],
 ] = Command("codex.turn.interrupt")
 
 ///|

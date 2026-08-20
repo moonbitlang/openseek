@@ -123,21 +123,30 @@ fn State::submit_composer(
     return (@cmd.none, self)
   }
   if self.active_draft() is Some(draft) {
+    let next = {
+      ..self
+      // This copy is a UI receipt for the first Send. It follows the draft
+      // into the real thread until app-server emits its User item, but is
+      // never consulted when constructing or retrying a request.
+      ,
+      submitted_first_prompt: Some({
+        task: self.draft,
+        mentions: self.mentions.copy(),
+      }),
+    }
     (
-      self.start_draft_thread(dispatch, channel),
-      self.begin_foreground(CodexDraftThreadReply(draft.id)),
+      next.start_draft_thread(dispatch, channel),
+      next.begin_foreground(CodexDraftThreadReply(draft.id)),
     )
   } else if self.write_access is CodexWritable {
-    let next = self.with_pending_turn_delivery()
-    guard next.active_thread() is Some(active) else { return (@cmd.none, self) }
-    let next = next.begin_foreground(CodexTurnReply(active.id))
-    (next.send(dispatch, channel), next)
+    guard self.active_thread() is Some(active) else { return (@cmd.none, self) }
+    let next = self.begin_foreground(CodexTurnReply(active.id))
+    (self.send(dispatch, channel), next)
   } else {
-    let next = self.with_pending_turn_delivery()
-    guard next.active_thread() is Some(active) else { return (@cmd.none, self) }
+    guard self.active_thread() is Some(active) else { return (@cmd.none, self) }
     (
-      next.resume_for_send(dispatch, channel),
-      next.begin_foreground(CodexWriterReply(active.id)),
+      self.resume_for_send(dispatch, channel),
+      self.begin_foreground(CodexWriterReply(active.id)),
     )
   }
 }
@@ -276,10 +285,14 @@ pub fn State::composer_input(
   {
     identity: self.composer_identity(context.channel),
     draft: { task: self.draft, mentions: self.mentions },
-    // Not wired for Codex: a thread runs several turns at once and numbers no
-    // steps, so what a single heartbeat line should say here is a product
-    // question rather than a projection of this state.
-    run: None,
+    // Before the first real User item arrives, the only honest progress fact
+    // is that this accepted local submission is starting. Later Codex turns
+    // can overlap, so no broader single-turn heartbeat is inferred here.
+    run: if self.waiting_for_first_user_item() {
+      Some({ stage: @composer.Starting, started_ms: None, tokens: 0 })
+    } else {
+      None
+    },
     goal: { draft: None, standing: None, pending: None },
     slash_commands: [
       {

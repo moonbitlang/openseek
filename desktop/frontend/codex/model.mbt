@@ -173,17 +173,7 @@ priv struct CodexPendingRequest {
 } derive(Eq)
 
 ///|
-/// The exact task/input frontier captured before a start or steer request.
-/// If the transport loses the reply after sending, a fresh thread snapshot
-/// can distinguish a newly stored user item from everything already visible
-/// before the request. Until that read completes, Send remains disabled.
-priv struct CodexPendingTurnDelivery {
-  thread_id : String
-  input_signature : String
-  known_user_items : Array[String]
-} derive(Eq)
-
-///|
+/// The typed operation associated with one app-server reply.
 priv enum CodexReplyKind {
   CodexStatusReply
   CodexRequestsReply
@@ -199,7 +189,6 @@ priv enum CodexReplyKind {
   CodexDraftOpenReply(String)
   CodexDraftThreadReply(String)
   CodexTurnReply(String)
-  CodexTurnReconcileReply(String)
   CodexWorktreeTurnReply(String, CodexWorktree)
   CodexWorktreeRepairReply(String, CodexWorktree)
   CodexLoginReply
@@ -216,8 +205,8 @@ priv enum CodexReplyKind {
 ///|
 /// The foreground operation that currently owns the shared composer lock.
 /// Reply kinds with different payload shapes normalize to the same owner, so
-/// worktree creation and turn reconciliation still settle the turn that
-/// launched them without allowing unrelated replies to release the lock.
+/// worktree creation still settles the turn that launched it without allowing
+/// unrelated replies to release the lock.
 priv enum CodexForeground {
   CodexDraftOpenForeground(String)
   CodexThreadForeground(String)
@@ -261,11 +250,6 @@ enum Msg {
   CancelArchiveDiscard
   WriterAcquired(String)
   WriterConflict(String)
-  TurnDeliveryUnknown(
-    thread_id~ : String,
-    message~ : String,
-    worktree~ : CodexWorktree?
-  )
   Stop
   Login
   CancelLogin
@@ -430,8 +414,13 @@ struct State {
   write_access : CodexWriteAccess
   draft : String
   mentions : Array[@composer.Mention]
-  // The shared component advances only after app-server accepts or recovered
-  // history proves a submission. Failed sends therefore keep the local draft.
+  // The first submitted input remains visible while thread/worktree startup
+  // has not produced its real app-server User item yet. This is display-only:
+  // request construction continues to read `draft` and `mentions`, and no
+  // retry or history read is derived from this field.
+  submitted_first_prompt : @composer.Draft?
+  // The shared component advances only after app-server accepts a submission.
+  // Failed sends therefore keep the local draft.
   submission_sequence : Int
   // `$` remains the cwd-scoped app-server catalog. `@` and `#` are owned by
   // the shared component and use the same file/symbol subscriptions as Chat.
@@ -443,10 +432,6 @@ struct State {
   // reverse-request events. Older snapshots/events are ignored instead of
   // erasing a request that arrived while the snapshot was in flight.
   request_generation : Int
-  // Present only after a turn request went out but its reply was lost. The
-  // preserved composer input is not retryable until thread/read compares it
-  // with the request-time user-item frontier.
-  pending_turn_delivery : CodexPendingTurnDelivery?
   loading : Bool
   foreground : CodexForeground?
   notice : String
@@ -472,13 +457,13 @@ pub fn State::State(loading? : Bool = false) -> State {
     write_access: CodexNeedsResume,
     draft: "",
     mentions: [],
+    submitted_first_prompt: None,
     submission_sequence: 0,
     skills: CodexSkillsEmpty,
     placement: @composer.LocalCheckout,
     archive_confirm: None,
     pending_requests: [],
     request_generation: 0,
-    pending_turn_delivery: None,
     loading,
     foreground: None,
     notice: "",
@@ -624,9 +609,7 @@ fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
       .unwrap_or(false)
     CodexDraftThreadReply(draft_id) =>
       self.active_draft().map(draft => draft.id == draft_id).unwrap_or(false)
-    CodexTurnReply(thread_id)
-    | CodexTurnReconcileReply(thread_id)
-    | CodexWorktreeTurnReply(thread_id, _) =>
+    CodexTurnReply(thread_id) | CodexWorktreeTurnReply(thread_id, _) =>
       self
       .active_thread()
       .map(thread => thread.id == thread_id)
@@ -650,9 +633,8 @@ fn CodexReplyKind::foreground(self : CodexReplyKind) -> CodexForeground? {
     CodexThreadReply(id) => Some(CodexThreadForeground(id))
     CodexWriterReply(id) => Some(CodexWriterForeground(id))
     CodexDraftThreadReply(id) => Some(CodexDraftStartForeground(id))
-    CodexTurnReply(id)
-    | CodexTurnReconcileReply(id)
-    | CodexWorktreeTurnReply(id, _) => Some(CodexTurnForeground(id))
+    CodexTurnReply(id) | CodexWorktreeTurnReply(id, _) =>
+      Some(CodexTurnForeground(id))
     CodexWorktreeRepairReply(id, _) => Some(CodexWorktreeRepairForeground(id))
     CodexLoginReply => Some(CodexLoginForeground)
     CodexCancelLoginReply(id) => Some(CodexCancelLoginForeground(id))
@@ -832,9 +814,6 @@ fn State::can_choose_worktree(self : State) -> Bool {
 /// created without any selected project can still start an ordinary cwd-less
 /// Codex thread, matching app-server's native Local behavior.
 fn State::can_prompt(self : State) -> Bool {
-  if self.pending_turn_delivery is Some(_) {
-    return false
-  }
   match self.selection {
     CodexNoTask => false
     CodexDraftTask(draft) =>
@@ -878,10 +857,10 @@ fn State::select_draft(self : State, id : String, cwd : String) -> State {
     write_access: CodexWritable,
     draft: "",
     mentions: [],
+    submitted_first_prompt: None,
     skills: CodexSkillsEmpty,
     placement: @composer.LocalCheckout,
     archive_confirm: None,
-    pending_turn_delivery: None,
     loading: false,
     foreground: None,
     notice: "",
@@ -931,52 +910,6 @@ fn CodexItem::decode(value : Json) -> CodexItem? {
     return None
   }
   Some({ id, kind, value, streamed: "" })
-}
-
-///|
-/// Canonical app-server input carried by one stored user item. The frontend
-/// compares this only within one thread and only after excluding every item
-/// id visible before the request, so an older identical prompt is not mistaken
-/// for proof that an unanswered start/steer request landed.
-fn CodexItem::user_input_signature(self : CodexItem) -> String? {
-  guard self.kind == "userMessage" &&
-    self.value is Object(fields) &&
-    fields.get("content") is Some(Array(content)) else {
-    return None
-  }
-  Some(Json::array(content).stringify())
-}
-
-///|
-fn CodexThread::user_item_ids(self : CodexThread) -> Array[String] {
-  let ids : Array[String] = []
-  for turn in self.turns {
-    for item in turn.items {
-      if item.kind == "userMessage" {
-        ids.push(item.id)
-      }
-    }
-  }
-  ids
-}
-
-///|
-/// A user item beyond the request-time frontier with the exact submitted
-/// input proves that the unanswered request was accepted. Absence after a
-/// fresh thread/read means the preserved composer may be retried deliberately.
-fn CodexThread::received(
-  self : CodexThread,
-  pending : CodexPendingTurnDelivery,
-) -> Bool {
-  for turn in self.turns {
-    for item in turn.items {
-      if !pending.known_user_items.contains(item.id) &&
-        item.user_input_signature() == Some(pending.input_signature) {
-        return true
-      }
-    }
-  }
-  false
 }
 
 ///|
@@ -1429,6 +1362,14 @@ fn State::with_thread_reply(
     threads: visible,
     selection: CodexStoredTask(active),
     requested_thread: None,
+    // A sidebar read selects an existing task and owns no local first-input
+    // preview. A thread/start reply promotes the composing draft in place and
+    // must carry that preview into the real task identity.
+    submitted_first_prompt: if requested_thread is Some(_) {
+      None
+    } else {
+      self.submitted_first_prompt
+    },
     git_status: Some({
       thread_id: active.id,
       branch: active.branch,
@@ -1446,47 +1387,6 @@ fn State::with_thread_reply(
       None => @composer.LocalCheckout
     },
     notice: "",
-  }
-}
-
-///|
-/// Reconcile a turn request whose transport reply was lost. This read is the
-/// boundary that permits another Send: accepted input is cleared, while input
-/// absent from the authoritative snapshot stays in the composer for an
-/// explicit retry.
-fn State::with_reconciled_turn_reply(
-  self : State,
-  value : Json,
-  thread_id : String,
-) -> State {
-  guard self.pending_turn_delivery is Some(pending) &&
-    pending.thread_id == thread_id &&
-    value is Object(fields) &&
-    fields.get("thread") is Some(thread) &&
-    CodexThread::decode(thread) is Some(authoritative) &&
-    authoritative.id == thread_id else {
-    return {
-      ..self,
-      notice: "Codex turn delivery is still unconfirmed; reopen the task to refresh it before retrying.",
-    }
-  }
-  let received = authoritative.received(pending)
-  let next = self.with_thread_reply(value, requested_thread=thread_id)
-  if received {
-    {
-      ..next,
-      draft: "",
-      mentions: [],
-      submission_sequence: next.submission_sequence + 1,
-      pending_turn_delivery: None,
-      notice: "Codex accepted the prompt; its reply was recovered from refreshed history.",
-    }
-  } else {
-    {
-      ..next,
-      pending_turn_delivery: None,
-      notice: "The prompt is not present in refreshed Codex history; it is available to send again.",
-    }
   }
 }
 
@@ -1600,9 +1500,10 @@ fn State::without_thread(self : State, thread_id : String) -> State {
     pending_requests: self.pending_requests.filter(request => {
       request.thread_id != thread_id
     }),
-    pending_turn_delivery: match self.pending_turn_delivery {
-      Some(pending) if pending.thread_id == thread_id => None
-      other => other
+    submitted_first_prompt: if removing_active {
+      None
+    } else {
+      self.submitted_first_prompt
     },
     loading: if removing_foreground {
       false
@@ -1748,6 +1649,40 @@ fn CodexThread::with_turn(self : CodexThread, turn : CodexTurn) -> CodexThread {
 }
 
 ///|
+/// Whether the app-server transcript has supplied the real presentation of
+/// the first submitted input. Item ids stay app-server-owned; the local
+/// preview needs only this semantic boundary and never tries to match text.
+fn CodexThread::has_user_item(self : CodexThread) -> Bool {
+  for turn in self.turns {
+    if turn.items.iter().any(item => item.kind == "userMessage") {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Keep the local first-input preview only until the selected thread exposes
+/// a real User item. This method changes presentation state only; it never
+/// starts, retries, or reads a Codex operation.
+fn State::with_observed_first_prompt(self : State) -> State {
+  guard self.submitted_first_prompt is Some(_) &&
+    self.active_thread() is Some(active) &&
+    active.has_user_item() else {
+    return self
+  }
+  { ..self, submitted_first_prompt: None }
+}
+
+///|
+/// The exact interval in which the transcript should show the submitted
+/// first input locally and the composer should say `Starting…`.
+fn State::waiting_for_first_user_item(self : State) -> Bool {
+  self.submitted_first_prompt is Some(_) &&
+  self.active_thread().map(thread => !thread.has_user_item()).unwrap_or(true)
+}
+
+///|
 /// Adopt a partial-view turn envelope over what this client accumulated.
 /// The envelope is authoritative for the turn's status, timestamps, and
 /// error; its `items` are declaredly incomplete (`itemsView` "summary" or
@@ -1862,7 +1797,7 @@ fn State::with_notification(
     @jsonx.json_text(fields, "threadId").unwrap_or(active.id) == active.id else {
     return self
   }
-  match method_ {
+  let next = match method_ {
     "thread/name/updated" =>
       if @jsonx.json_text(fields, "name") is Some(title) {
         { ..self, selection: CodexStoredTask({ ..active, title, }) }
@@ -1926,6 +1861,7 @@ fn State::with_notification(
       }
     _ => self
   }
+  next.with_observed_first_prompt()
 }
 
 ///|
@@ -2336,6 +2272,15 @@ pub fn State::transcript_items(
     items.push({
       kind: @transcript.Assistant(is_danger=true),
       content: self.notice,
+      ts: None,
+      sequence: None,
+    })
+  }
+  if self.waiting_for_first_user_item() &&
+    self.submitted_first_prompt is Some(submitted) {
+    items.push({
+      kind: @transcript.User,
+      content: submitted.prompt(),
       ts: None,
       sequence: None,
     })
