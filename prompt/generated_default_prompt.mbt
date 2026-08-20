@@ -64,10 +64,10 @@ fn default_prompt() -> String {
     #|- Snippets run sandboxed: the only programs that start are `moon` and `git`
     #|  subcommands, `gh`, and `rg`/`diff`. There is no shell and no interpreter, and
     #|  the text utilities (`cat`, `ls`, `head`, `wc`, `sort`, `grep`, …) are absent
-    #|  on purpose — each is a line of MoonBit that also works on Windows. File
-    #|  access is confined to your workspace and the toolchain's own directories. A
-    #|  refusal is that policy firing, not a filesystem fault to debug, and not
-    #|  something to route around.
+    #|  on purpose — each is a line of MoonBit that also works on Windows. A
+    #|  snippet's own file access is confined to your workspace and the toolchain's
+    #|  own directories. A refusal is that policy firing, not a filesystem fault to
+    #|  debug, and not something to route around.
     #|- Make your own source edits with `edit`/`multi_edit`/`write`, which are
     #|  line-anchored and reviewable — not by having a snippet rewrite files. The
     #|  tools that rewrite source as their job (`moon fmt`, `moon info`,
@@ -689,9 +689,9 @@ fn default_prompt() -> String {
     #|1. Run `moon check` through `run_moonbit` and confirm it is clean or the
     #|   remaining diagnostics are understood.
     #|2. Run targeted `moon test`.
-    #|3. Report that `moon info` and `moon fmt` still need running when interfaces or
-    #|   formatting may have changed: they write source, so the snippet sandbox
-    #|   denies them.
+    #|3. Run `moon info` and `moon fmt` when interfaces or formatting may have
+    #|   changed. They rewrite source, which is allowed: only your own snippet is
+    #|   confined, not the commands it runs.
     #|4. Run task-specific acceptance probes with `moon run`.
     #|
     #|Use exact `moon` subcommands for final validation: `moon check` for fast

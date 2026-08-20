@@ -66,24 +66,24 @@ fn native_escape(source : String) -> String? {
 /// `partial_match` keep failing compilation with warnings off (see
 /// `WarnOffList`).
 ///
-/// Confinement comes from two layers that cover different things, because
-/// neither covers both:
+/// Confinement is moonrun's wasm policy, which applies on every platform. It
+/// decides WHICH programs may start — an allowlist holding the moon/git/gh
+/// toolchain and inert utilities, with no shell, interpreter, or ad-hoc
+/// rewriter in it — and bounds the file access of the snippet itself.
 ///
-/// * moonrun's wasm policy (cross-platform) decides WHICH programs may start —
-///   an allowlist holding the moon/git/gh toolchain and inert utilities, with
-///   no shell, interpreter, or ad-hoc rewriter in it — and bounds the file
-///   access of the snippet itself.
-/// * `sandbox-exec` (macOS only) bounds what the process TREE may write: the
-///   workspace, this run's build directory, the toolchain's caches, nothing
-///   else. This is the only layer that reaches spawned children — the policy's
-///   `fs` rules stop at the process boundary — so off macOS a spawned command
-///   is bounded by the allowlist alone.
+/// Its `fs` rules stop at the process boundary, so an admitted command writes
+/// with the agent's own access. What is bounded is which commands exist at all,
+/// and one of those bounds is per subcommand: the options that would point git
+/// at another repository (`git -C`, `--git-dir`) precede the subcommand and so
+/// match no allowlist prefix.
 ///
 /// Note what is deliberately NOT denied: source writes as such. The commands
 /// whose job is to rewrite source (`moon fmt`, `moon info`, `git checkout`) run
 /// normally, and the reason the old rule existed — an arbitrary program editing
 /// files behind the model's back — is covered by the allowlist admitting no
-/// such program.
+/// such program. A read-only subrun is the exception, and the one role that
+/// still takes a `sandbox-exec` profile: holding no editing tool is what defines
+/// it, so "may not write source" is enforced in the kernel where it can be.
 pub fn definition(
   workspace_root~ : String,
   bg_runtime? : @bgjobs.BgJobRuntime,
@@ -294,16 +294,16 @@ async fn execute(
       ["--warn-list", WarnOffList]
     },
   ]
-  // Wrap `moon run` in sandbox-exec where it can actually enforce (macOS).
-  // This is the layer the wasm policy cannot supply: the policy's `fs` rules
-  // bind the snippet but stop at the process boundary, so without this a
-  // spawned `git` or `moon` writes wherever it likes. Which profile depends on
-  // the role below. Elsewhere (or in a nested sandbox where it cannot enforce)
-  // run moon directly and let the policy's allowlist be the only bound.
+  // Wrap `moon run` in sandbox-exec for the roles that need a rule the wasm
+  // policy cannot state: "may not write source". The policy's `fs` rules bind
+  // the snippet and stop at the process boundary, so a spawned `moon fmt` is
+  // beyond them, and a role defined by holding no editing tool needs that
+  // covered in the kernel. The main agent is not such a role and takes no
+  // profile — see below. Off macOS, or in a nested sandbox where a profile
+  // cannot be applied, every role runs with the policy as its only bound.
   // The prepared command carries what it needs to classify its own denials, so
-  // one showing up in the program's output can be recognized and explained
-  // with the guidance for the rule that actually refused it. The
-  // throwaway build dir is the writable subtree: if it falls INSIDE the
+  // one showing up in the program's output can be recognized and explained.
+  // The throwaway build dir is the writable subtree: if it falls INSIDE the
   // workspace root (e.g. `workspace_root=/tmp`, where `@fs.tmpdir` lands
   // under it) the shared deny would otherwise block moon's own generated
   // `snippet.mbt`.
@@ -339,18 +339,22 @@ async fn execute(
         Exec("moon", moon_argv),
         writable_subtree~,
       )
-    None =>
-      // The main agent draws the line at the workspace instead. Forbidding
-      // source writes here would break the very commands it needs — `moon fmt`,
-      // `moon info`, `git checkout` all rewrite source by definition — and the
-      // reason that rule existed is already covered: a snippet's programs come
-      // from an allowlist with no shell, no interpreter, and no ad-hoc
-      // rewriter in it. What is left worth denying is everything OUTSIDE.
-      @sandbox.SandboxedCommand::create_workspace_boundary_if_available(
-        workspace_root,
-        Exec("moon", moon_argv),
-        writable_roots=[writable_subtree, ..child_process_write_roots()],
-      )
+    // The main agent runs with no kernel profile at all. Forbidding source
+    // writes here would break the very commands it needs — `moon fmt`,
+    // `moon info`, `git checkout` all rewrite source by definition — and the
+    // other shape, denying writes globally and re-allowing an enumerated set,
+    // was tried and withdrawn: every root it missed (`/dev` for git's
+    // `/dev/null`, `/tmp` for `@fs.tmpdir`, the toolchain root, gh's cache)
+    // surfaced as a bare EPERM in a live turn rather than in a test, and the
+    // list only ever protected macOS.
+    //
+    // What is left bounding a child is the allowlist, which works everywhere:
+    // it admits no shell, no interpreter and no ad-hoc rewriter, and it refuses
+    // the git options that would point a command at another repository. That is
+    // a bound on which commands exist, not on where they may write — the file
+    // tools are not path-confined for this role either, so a profile here would
+    // have been the only such rule in the tool set.
+    None => None
   }
   let (prog, argv) = match sandboxed_command {
     Some(command) => (command.program(), command.args())
@@ -470,20 +474,9 @@ async fn execute(
     // chunked walk the redirected path uses. A memory-only execution (no
     // session temp dir) has no such file, and there the head is all there is.
     let denial_scan_source = exec.spill_path()
-    // `Some(guidance)` when denied: the flag and the explanation come from the
-    // same command, so the text always matches the rule that refused.
-    let sandbox_denied = if sandboxed_command is Some(command) &&
-      (if denial_scan_source is Some(path) {
-        log_shows_source_write_denial(path, output => {
-          command.output_reports_denial(output)
-        })
-      } else {
-        command.output_reports_denial(raw)
-      }) {
-      Some(command.denial_feedback())
-    } else {
-      None
-    }
+    let sandbox_denied = refusal_guidance(
+      sandboxed_command, denial_scan_source, raw,
+    )
     exec.discard()
     let text = rewrite_temp_paths(raw, [real, dir])
     let body = if text.is_blank() {
@@ -529,23 +522,12 @@ async fn execute(
     )
     (exit_code, read_capped(log))
   })
-  // A "not permitted" line naming a protected source path in a sandboxed run
-  // is the source-write policy firing, not an environment fault: explain it
-  // (the raw OS error is otherwise a dead end) and treat the run as failed
-  // even if the snippet swallowed the error and exited 0 — a swallowed denial
-  // still means the write it needed did not happen. Detection scans
-  // the on-disk log far past the capped display prefix (bounded to a fixed
-  // head+tail byte budget), and runs for the timeout arm too: a snippet can
-  // flood past the cap before hitting the denial, or print a caught denial
-  // and then hang.
-  let sandbox_denied = if sandboxed_command is Some(command) &&
-    log_shows_source_write_denial(log, output => {
-      command.output_reports_denial(output)
-    }) {
-    Some(command.denial_feedback())
-  } else {
-    None
-  }
+  // A refusal is this tool's confinement firing, not an environment fault:
+  // explain it (the raw OS error is otherwise a dead end) and treat the run as
+  // failed even if the snippet swallowed the error and exited 0 — a swallowed
+  // denial still means the access it needed did not happen. It runs for the
+  // timeout arm too: a snippet can print a caught denial and then hang.
+  let sandbox_denied = refusal_guidance(sandboxed_command, Some(log), "")
   let action = match result {
     Some((exit_code, raw)) => {
       // Rewrite the throwaway temp path to `source` so the model reads
@@ -600,6 +582,42 @@ async fn execute(
 }
 
 ///|
+/// The guidance for a refusal this run's confinement produced, or `None` when
+/// the output shows none.
+///
+/// Both layers are read, in the order they can fire. The moonrun policy binds
+/// the snippet itself and refuses first — a write outside its roots never
+/// reaches the kernel — and it applies on every platform, so it is checked
+/// whether or not a profile was prepared. A `sandbox-exec` profile refuses only
+/// what got past that, and only for the roles that carry one; its text comes
+/// from the prepared command, so it always describes the profile that actually
+/// ran.
+///
+/// `log_path` is the retained output on disk, scanned past the display cap; a
+/// memory-only execution has none and `head` is then all there is.
+async fn refusal_guidance(
+  sandboxed_command : @sandbox.SandboxedCommand?,
+  log_path : String?,
+  head : String,
+) -> String? {
+  async fn shows(reports : (String) -> Bool) -> Bool {
+    match log_path {
+      Some(path) => log_shows_denial(path, reports)
+      None => reports(head)
+    }
+  }
+
+  if shows(@sandbox.output_reports_policy_refusal) {
+    return Some(@sandbox.policy_refusal_feedback)
+  }
+  guard sandboxed_command is Some(command) else { return None }
+  if shows(output => command.output_reports_denial(output)) {
+    return Some(command.denial_feedback())
+  }
+  None
+}
+
+///|
 /// Rewrite moon's throwaway temp paths back to `source` in its diagnostics, for
 /// both `/` and `\` separators — moon reports the canonical native path (with
 /// backslashes on Windows), so `source:LINE:COL` shows on every host rather than
@@ -637,16 +655,17 @@ const DenialScanCarryTailChars : Int = 4_096
 const DenialScanBudgetBytes : Int = 16_777_216
 
 ///|
-/// Whether the on-disk output log shows a source-write denial. Detection must
-/// not be bounded by the 48KB display cap (a snippet can flood past it before
-/// the denied write), but it must stay bounded in bytes and time: a log larger
+/// Whether the on-disk output log shows a denial, as `reports_denial` reads
+/// one. Detection must not be bounded by the 48KB display cap (a snippet can
+/// flood past it before the denied access), but it must stay bounded in bytes
+/// and time: a log larger
 /// than twice `DenialScanBudgetBytes` is scanned at its head and tail only. An
 /// uncaught denial crashes the snippet, so its OSError line is the log's tail;
 /// a caught-and-printed denial lands where it happened, inside the head for
 /// realistic probes. Only a denial buried in the MIDDLE of a >32MB flood is
 /// missed — the price of a bounded scan. `budget_bytes` is parameterized for
 /// tests only.
-async fn log_shows_source_write_denial(
+async fn log_shows_denial(
   path : String,
   reports_denial : (String) -> Bool,
   budget_bytes? : Int = DenialScanBudgetBytes,

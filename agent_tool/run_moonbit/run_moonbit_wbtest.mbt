@@ -19,7 +19,7 @@ async test "denial scan is bounded to the log's head and tail" {
     async fn scan(name : String, content : String) -> Bool {
       let path = "\{dir}/\{name}.log"
       @fs.write_file(path, content, create_mode=CreateOrTruncate)
-      log_shows_source_write_denial(
+      log_shows_denial(
         path,
         text => text.contains("main.mbt: Operation not permitted"),
         budget_bytes=1024,

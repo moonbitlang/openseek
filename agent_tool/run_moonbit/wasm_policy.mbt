@@ -5,9 +5,13 @@
 /// programs on it can themselves run code (`moon run` compiles and runs a
 /// program, `git` honours hooks), so what it buys is the LONG TAIL — an
 /// arbitrary downloaded binary, `rm -rf /`, `curl | sh` — none of which a
-/// legitimate turn needs. Path confinement for the children these programs
-/// start is the sandbox profile's job, not this list's; moonrun's `fs` section
-/// does not reach child processes.
+/// legitimate turn needs.
+///
+/// Nothing confines where the admitted programs then write: moonrun's `fs`
+/// section binds the snippet and stops at the process boundary. What this list
+/// can still say is which FORM of a command exists, and the git rules use it:
+/// the options that would point git at another repository (`-C`, `--git-dir`,
+/// `--work-tree`) precede the subcommand, so they match no prefix rule below.
 ///
 /// Entries are `(program, args_prefix)`. An empty prefix allows any arguments.
 /// A prefix matches whole argument tokens from the front, so `moon` with
@@ -153,9 +157,12 @@ let spawnable_commands : Array[(String, Array[String])] = [
 /// snippet reads and writes the user's files, `dir` is its throwaway build
 /// tree, and the toolchain roots are what `moon` itself reads.
 ///
-/// This is the CROSS-PLATFORM half of the confinement. The `sandbox-exec`
-/// profile still wraps the run where it exists, and covers what this cannot:
-/// the file access of the child processes these rules let the snippet start.
+/// What this binds is the SNIPPET, on every platform. It does not reach the
+/// child processes its `process` rules let the snippet start: those run with the
+/// agent's own ambient access, and what bounds them is the allowlist itself —
+/// which admits no shell, no interpreter, and no ad-hoc rewriter, and which
+/// refuses git's reconfiguring global options because they precede the
+/// subcommand.
 async fn wasm_policy_document(
   workspace_root~ : String,
   dir~ : String,
@@ -194,10 +201,10 @@ async fn wasm_policy_document(
     // `@fs.tmpdir()` from the POLICY's environment (`async_api/fs.rs::tmp_path`)
     // rather than the host's. Pointing it at a directory this run already owns
     // gives the snippet working scratch space without granting the host temp
-    // directory, which would widen the boundary to hold every other run's
-    // files. (The native `moon test` child ignores it — its stub hardcodes
-    // `/tmp`, which is why that path is granted separately in
-    // `child_process_write_roots`.)
+    // directory, which would widen the read and write roots to hold every other
+    // run's files. A native child ignores it either way — moonbitlang/async's
+    // `stub.c` hardcodes `/tmp` off Windows — but a child is outside this
+    // policy, so its temp directory is not this policy's business.
     "env": { "from_host": ["*"], "set": { "TMPDIR": tmp_dir } },
     "fs": {
       "read": json_strings(read_roots),
@@ -236,9 +243,9 @@ fn moon_home() -> String? {
 ///
 /// The two diverge exactly where it matters. The desktop app never sets
 /// `MOON_HOME` and finds moon purely by prepending a bin directory to `PATH`,
-/// so there the registry is `~/.moon` while the toolchain is wherever moon was
-/// installed — and `moon` writes to BOTH (`lib/core/_build` when it builds core
-/// for a target it has not built yet).
+/// so there the registry is `~/.moon` while `lib/core` is wherever moon was
+/// installed — and a snippet reading an `.mbti` to look up an API needs the
+/// second one, which `MOON_HOME` alone does not name.
 /// The answer cannot change while the agent runs — `PATH` and
 /// `MOON_TOOLCHAIN_ROOT` are fixed at startup — while finding it stats every
 /// `PATH` entry in turn. `Lazy` resolves it on first use and caches it,
@@ -248,9 +255,9 @@ let toolchain_root : @async.Lazy[String?] = Lazy(() => resolve_toolchain_root())
 
 ///|
 /// The `PATH` walk is written for the POSIX spelling (`:`-separated, no `.exe`).
-/// On Windows it simply finds nothing and the toolchain root goes ungranted,
-/// which costs nothing there: the roots exist for the `sandbox-exec` profile,
-/// and that does not exist on Windows either.
+/// On Windows it finds nothing and the toolchain root goes ungranted, which
+/// costs a snippet the ability to READ `lib/core` there — an API lookup, not a
+/// build, since `moon` is a child process and reads it on its own account.
 async fn resolve_toolchain_root() -> String? {
   if @env.get_env_var("MOON_TOOLCHAIN_ROOT") is Some(root) && root != "" {
     return Some(root)
@@ -283,47 +290,6 @@ async fn toolchain_roots() -> Array[String] {
   }
   if toolchain_root.wait() is Some(root) {
     roots.push(root)
-  }
-  roots
-}
-
-///|
-/// Where the toolchain writes outside the tree being worked on: its own caches
-/// (the registry, the installed compiler assets) and nothing else.
-///
-/// `/tmp` is here because `@fs.tmpdir()` uses it and nothing else will do:
-/// moonbitlang/async's `stub.c` returns a literal `"/tmp/"` on every platform
-/// but Windows and Android, ignoring `TMPDIR` entirely. A test suite that makes
-/// scratch directories therefore cannot run without it — which is most of what
-/// `moon test` does in this repository — and withholding it produced a bare
-/// `Operation not permitted` from every run, with no path to explain it.
-///
-/// This widens the boundary only for CHILD processes: these roots go to the
-/// `sandbox-exec` profile, never to the policy's `fs.write`, so the snippet's
-/// own writes stay inside the workspace while the toolchain it starts can use
-/// its scratch space.
-///
-/// The whole of `MOON_HOME` is granted, which is more than the registry cache
-/// `moon add`/`update` need — credentials live there too. Narrowing it to the
-/// cache subdirectories would be tighter, but the layout is moon's to change,
-/// and a wrong guess breaks dependency management rather than failing visibly.
-///
-/// `gh` gets the same treatment for the same reason: `gh run view --log-failed`
-/// spools the log through its cache directory, so without it a plainly
-/// read-only command fails on a write nobody asked for. Only the cache is
-/// granted, not `~/.config/gh`, which holds the auth token.
-async fn child_process_write_roots() -> Array[String] {
-  let roots = ["/tmp", "/private/tmp"]
-  if moon_home() is Some(home) {
-    roots.push(home)
-  }
-  if toolchain_root.wait() is Some(root) {
-    roots.push(root)
-  }
-  if @env.get_env_var("XDG_CACHE_HOME") is Some(cache) && cache != "" {
-    roots.push("\{cache}/gh")
-  } else if @env.get_env_var("HOME") is Some(home) && home != "" {
-    roots.push("\{home}/.cache/gh")
   }
   roots
 }

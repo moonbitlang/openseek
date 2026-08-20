@@ -92,13 +92,22 @@ async fn execute(
     Stopped => ("stopped", true)
   }
   // Preserve the foreground path's error semantics for a job read later: binary
-  // (non-UTF-8) output and a sandboxed source-write denial are tool errors even
-  // when the command exited 0. Scan the *full* retained output for a denial (the
-  // denial line can be earlier than the displayed tail), but only for a sandboxed
-  // job — so a full read is done only in that rare case.
-  // `Some(guidance)` when denied: the explanation comes from the command that
-  // classified the output, so it describes the rule that actually refused.
-  let sandbox_denied = if snapshot.sandboxed_command is Some(command) &&
+  // (non-UTF-8) output and a refused access are tool errors even when the
+  // command exited 0.
+  //
+  // The moonrun policy refuses on every platform and for every job, so its
+  // wording is looked for first — in the displayed tail, which is where an
+  // uncaught refusal lands because it is what killed the job. A refusal the job
+  // caught and then outran can scroll out of that window; the foreground path's
+  // full-log scan is what covers that case, and it is not worth a full read of
+  // every job's output here.
+  //
+  // A profile denial is then scanned for across the *full* retained output (the
+  // denial line can be earlier than the tail), but only for a sandboxed job — so
+  // a full read happens only in that rarer case.
+  let sandbox_denied = if @sandbox.output_reports_policy_refusal(output) {
+    Some(@sandbox.policy_refusal_feedback)
+  } else if snapshot.sandboxed_command is Some(command) &&
     command.output_reports_denial(
       bg_runtime.read_output(job_id).unwrap_or(output),
     ) {

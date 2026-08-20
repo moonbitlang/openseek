@@ -114,31 +114,6 @@ async fn sandbox_enforcement_available() -> Bool {
 }
 
 ///|
-/// A global write deny takes down ordinary programs, not just escapes: `git`
-/// opens `/dev/null` for writing and dies with `fatal: could not open
-/// '/dev/null'` unless the profile re-allows device nodes. Pinned with `git`
-/// itself because that is how the gap was found.
-async test "a spawned git command still gets its device nodes" {
-  guard sandbox_enforcement_available() else { return }
-  @vfs.with_tmpdir(ws => {
-    let out = run_in(ws, {
-      "source": (
-        #|import { "moonbitlang/async", "moonbitlang/async/stdio", "bobzhang/myshell" }
-        #|
-        #|async fn main {
-        #|  let r = @myshell.Cmd("git", ["init", "-q", "."]).output()
-        #|  @stdio.stdout.write("init=\{r.exit_code}\n")
-        #|  @stdio.stdout.write(r.stderr)
-        #|}
-      ),
-    })
-    assert_true(out.content.contains("init=0"))
-    assert_false(out.content.contains("/dev/null"))
-    assert_true(@fs.exists("\{ws}/.git"))
-  })
-}
-
-///|
 /// A snippet needs somewhere to put scratch files, and `@fs.tmpdir()` is where
 /// it will look. Under a policy moonrun takes that base path from the POLICY's
 /// `TMPDIR`, so the run points it at its own build directory: the call has to
@@ -204,12 +179,10 @@ async test "a refused spawn gets guidance that fits a refused spawn" {
 /// The boundary is the workspace, not the file's kind: a snippet may rewrite
 /// source inside the tree it was pointed at — `moon fmt` and `git checkout`
 /// would be useless otherwise — and may not write anywhere else.
+///
+/// Ungated: this is the policy's own `fs.write` rule, which moonrun applies on
+/// every platform, so there is no host where it may be skipped.
 async test "the sandbox draws the line at the workspace, not at source files" {
-  // Only meaningful where the sandbox can actually enforce (macOS, not nested);
-  // gate on the SAME probe `execute` uses so a host where sandbox-exec exists but
-  // cannot apply a nested profile (production runs unsandboxed there) skips
-  // rather than fails. The moonrun policy carries the guest half cross-platform.
-  guard sandbox_enforcement_available() else { return }
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
       @fs.write_file(
@@ -487,7 +460,6 @@ test "the description teaches the process EDSL, since there is no shell tool" {
 
 ///|
 async test "an uncaught sandbox denial is explained, not left as a bare EPERM" {
-  guard sandbox_enforcement_available() else { return }
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
       // Unlike the test above, the snippet does NOT catch the write failure, so
@@ -502,10 +474,9 @@ async test "an uncaught sandbox denial is explained, not left as a bare EPERM" {
       ).replace_all(old="OUTSIDE", new=outside)
       let out = run_in(ws, { "source": source })
       assert_true(out.is_error)
-      // The raw failure stays visible. It is the moonrun policy that refuses
-      // here, not `sandbox-exec`: the guest's own `fs.write` roots are checked
-      // first, so the snippet never reaches the kernel layer. Assert what is
-      // actually printed — an earlier version of this test looked for
+      // The raw failure stays visible, and it is the moonrun policy's own
+      // wording — the phrase the guidance is recognized by. Assert what is
+      // actually printed: an earlier version of this test looked for
       // "Operation not permitted", which only ever matched because the guidance
       // text quoted that phrase, so it verified nothing about the real error.
       assert_true(out.content.contains("Sandbox policy blocked file write"))
@@ -513,8 +484,8 @@ async test "an uncaught sandbox denial is explained, not left as a bare EPERM" {
       // ...now followed by the sandbox explanation and anti-workaround guidance
       assert_true(out.content.contains("run_moonbit sandbox"))
       assert_true(out.content.contains("Do NOT try to work around"))
-      // The guidance describes this profile's rules — the workspace boundary
-      // and the spawn allowlist — not the source-write rule it does not carry.
+      // The guidance describes the policy's rules — the snippet's own roots and
+      // the spawn allowlist — not the source-write rule this run does not carry.
       assert_true(out.content.contains("OUTSIDE the"))
       assert_false(out.content.contains("`edit`"))
       assert_false(@fs.exists("\{outside}/escape.txt"))
@@ -544,7 +515,6 @@ async test "warnings are suppressed by default and shown with warning=on" {
 
 ///|
 async test "a denial past the display cap is still detected and explained" {
-  guard sandbox_enforcement_available() else { return }
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
       // ~200KB of flood BEFORE the uncaught denied write: the OSError line lands
