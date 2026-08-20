@@ -150,15 +150,8 @@ async test "the registry has no shell tool family" {
     // The command surface teaches the process EDSL rather than deferring to a
     // shell tool that is no longer there.
     assert_true(run_moonbit.description.contains("bobzhang/myshell"))
-    // With a job runtime wired it also offers the background escape hatch, so
-    // long work is not forced into the foreground bound.
-    assert_true(run_moonbit.description.contains("run_in_background"))
-    // The description is two paragraphs joined; the join must separate them
-    // rather than run the background text onto the base text's last sentence.
-    assert_false(run_moonbit.description.contains("each.For long-running"))
-    assert_true(run_moonbit.description.contains("\n\nFor long-running"))
-    // The schema must offer the argument the description promises, alongside
-    // the ones a background-less definition already carries.
+    // A job runtime is wired here, so the background argument must be OFFERED:
+    // the schema is what decides whether the model can make the call at all.
     let JsonSchema(schema) = run_moonbit.schema
     guard schema is { "properties": Object(properties), .. } else {
       fail("expected an object schema")
