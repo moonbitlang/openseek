@@ -465,6 +465,29 @@ test "the description teaches the process EDSL, since there is no shell tool" {
 }
 
 ///|
+/// The allowlist belongs to the TOOL, so it is described by the tool — not by a
+/// system prompt. Every role that registers `run_moonbit` runs snippets under
+/// the same policy, but each has its own prompt, and a subagent whose prompt
+/// omitted the list learned it by being refused twice before working out that
+/// `ls`/`find`/`pwd` were never going to start. A description travels with the
+/// tool into every registry, so it is the one copy that cannot drift.
+test "the description names the spawn allowlist and its replacements" {
+  let description = @run_moonbit.definition(workspace_root=".").description
+  for program in ["moon", "git", "gh", "rg"] {
+    assert_true(description.contains(program))
+  }
+  // The utilities a turn reaches for, each with somewhere to go instead — the
+  // refusals a live run actually spent steps on.
+  for
+    replacement in [
+      "`ls`→`@fs.readdir(dir)`", "`pwd`→`@env.current_dir()`", "`which`→`@env.get_env_var(\"PATH\")`",
+    ] {
+    assert_true(description.contains(replacement))
+  }
+  assert_true(description.contains("REFUSED"))
+}
+
+///|
 async test "an uncaught sandbox denial is explained, not left as a bare EPERM" {
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {

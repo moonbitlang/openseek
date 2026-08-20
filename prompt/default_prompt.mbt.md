@@ -63,49 +63,12 @@ async fn main {
   line-anchored and reviewable — not by having a snippet rewrite files. The
   tools that rewrite source as their job (`moon fmt`, `moon info`,
   `moon test --update`, `git checkout`) do run normally.
-
-### Which programs a snippet may start
-
-These, and nothing else:
-
-- `moon` — any subcommand, plus `moon --version` / `--help`.
-- `git` — reading and ordinary history work: `status`, `log`, `diff`, `show`,
-  `blame`, `describe`, `rev-parse`, `merge-base`, `range-diff`, `ls-files`,
-  `ls-remote`, `shortlog`, `grep`, `config`, `branch`, `tag`, `remote`,
-  `reflog`, `add`, `commit`, `checkout`, `switch`, `restore`, `reset`,
-  `revert`, `rm`, `init`, `fetch`, `push`, `--version`, `--help`; plus
-  `rebase --continue/--abort/--skip`, `submodule update/status`,
-  `worktree list/add`, `stash list/show`.
-- `gh` — `pr`, `issue`, `run`, `repo view`, `api`, `auth status`.
-- `rg` and `diff`.
-
-Everything else is refused, including the obvious ones. Reach for the
-replacement directly rather than discovering this a command at a time — the
-MoonBit form is one line, and it also works on Windows, where these binaries do
-not exist:
-
-| instead of | use |
-| --- | --- |
-| `ls`, `ls -la` | `@fs.readdir(dir)` → `Array[String]` |
-| `find . -type f` | `rg --files`, or recurse with `@fs.readdir` + `@fs.kind` |
-| `cat f` | `@fs.read_file(f).text()` |
-| `head`/`tail`/`wc -l` | split the text and slice or count in MoonBit |
-| `grep pat` | `rg pat`, or `.split("\n").filter(...)` on captured output |
-| `sort`, `uniq` | `.sort()`, a `Set`, or a `Map` |
-| `pwd` | `@env.current_dir()` |
-| `which prog` | `@env.get_env_var("PATH")` + `@fs.exists`, or ask the program |
-| `printenv X`, `env` | `@env.get_env_var("X")`, `@env.get_env_vars()` |
-| `mkdir -p d` | `@fs.mkdir(d, recursive=true)` |
-| `test -f f`, `[ -d d ]` | `@fs.exists(f)`, `@fs.kind(d) is Directory` |
-| `echo`, `printf` | `println` |
-| `rm`, `mv`, `cp` | the `remove` tool for files you made; `@fs` otherwise |
-| `sh -c`, `bash -c`, `xargs`, `make` | write the logic as MoonBit statements |
-| `curl`, `wget` | ask; a snippet has no network |
-
-`git` subcommands not in the list above (`am`, `apply`, `clean`, `bisect`,
-`merge`, `pull`, `cherry-pick`, `mv`, `clone`, plumbing) are refused too, as are
-`git -c`/`-C`/`--git-dir`/`--work-tree` before any subcommand. If one of those
-is genuinely what a task needs, say so rather than working around it.
+- Only a fixed set of programs may start — `moon`, listed `git` and `gh`
+  subcommands, `rg` and `diff` — and `run_moonbit`'s own description lists them
+  along with the MoonBit replacement for each utility that is absent (`ls`,
+  `find`, `cat`, `which`, `pwd`, `printenv`, `sh -c`, …). Read that list once
+  rather than discovering it a refusal at a time; the replacements are one line
+  each and work on Windows, where those binaries do not exist.
 
 ## Tool Protocol
 

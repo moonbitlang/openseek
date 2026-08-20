@@ -848,6 +848,27 @@ fn description(background~ : Bool) -> String {
     #|warnings are what you want to see. Bounded to 300s. For independent commands or
     #|probes, emit SEVERAL run_moonbit calls in the SAME assistant turn — they run and
     #|come back together, saving a model round-trip each.
+    #|
+    #|WHICH PROGRAMS A SNIPPET MAY START, and nothing else: `moon` (any subcommand, plus
+    #|`--version`/`--help`); `git` status/log/diff/show/blame/describe/rev-parse/
+    #|merge-base/range-diff/ls-files/ls-remote/shortlog/grep/config/branch/tag/remote/
+    #|reflog/add/commit/checkout/switch/restore/reset/revert/rm/init/fetch/push/
+    #|--version/--help, plus `rebase --continue|--abort|--skip`, `submodule
+    #|update|status`, `worktree list|add`, `stash list|show`; `gh` pr/issue/run/
+    #|`repo view`/api/`auth status`; and `rg`/`diff`. Anything else is REFUSED — reach
+    #|for the replacement directly instead of discovering this one command at a time,
+    #|since each is a line of MoonBit that also works on Windows: `ls`→`@fs.readdir(dir)`,
+    #|`find`→`rg --files` or recurse `@fs.readdir`+`@fs.kind`, `cat`→`@fs.read_file(p)
+    #|.text()`, `head`/`tail`/`wc -l`→slice or count the split text, `grep`→`rg` or
+    #|`.split("\n").filter(...)`, `sort`/`uniq`→`.sort()`/a Set, `pwd`→`@env.current_dir()`,
+    #|`which`→`@env.get_env_var("PATH")`+`@fs.exists`, `printenv`/`env`→`@env.get_env_var`
+    #|/`@env.get_env_vars()`, `mkdir -p`→`@fs.mkdir(d, recursive=true)`, `test -f`→
+    #|`@fs.exists`, `echo`→`println`, `rm`/`mv`/`cp`→the `remove` tool or `@fs`,
+    #|`sh -c`/`xargs`/`make`→write it as MoonBit statements. A git subcommand not listed
+    #|above (`am`, `apply`, `clean`, `bisect`, `merge`, `pull`, `cherry-pick`, `mv`,
+    #|`clone`, plumbing) is refused too, as is `git -c`/`-C`/`--git-dir`/`--work-tree`
+    #|before any subcommand. If one of those is genuinely what the task needs, say so
+    #|rather than working around it.
   if !background {
     return base
   }
