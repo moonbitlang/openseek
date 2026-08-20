@@ -206,3 +206,6 @@ pub fn should_keep_current_hover(
 ) -> Bool {
   keep_open || (sticky && mouse_on_widget)
 }
+
+///|
+pub extend EventModifiers with Debug::{to_repr}

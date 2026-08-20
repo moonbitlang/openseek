@@ -23,20 +23,28 @@ fn panel_view(input : Input, actions : Actions) -> @html.Html {
         { tab, label, title, missing: false }
       }
       FilePicker =>
-        if input.file_panel.explorer_mode is ExplorerChanges {
-          {
-            tab,
-            label: "Review Changes",
-            title: "Review changed files and diffs",
-            missing: false,
-          }
-        } else {
-          {
-            tab,
-            label: "Open File",
-            title: "Open a workspace file",
-            missing: false,
-          }
+        match input.file_panel.explorer_mode {
+          ExplorerChanges =>
+            {
+              tab,
+              label: "Review Changes",
+              title: "Review changed files and diffs",
+              missing: false,
+            }
+          ExplorerSearch =>
+            {
+              tab,
+              label: "Search",
+              title: "Search across files",
+              missing: false,
+            }
+          ExplorerFiles =>
+            {
+              tab,
+              label: "Open File",
+              title: "Open a workspace file",
+              missing: false,
+            }
         }
     }
   })
@@ -47,6 +55,7 @@ fn panel_view(input : Input, actions : Actions) -> @html.Html {
     } else {
       None
     },
+    search: @cmd.batch([actions.search, actions.close_menu]),
     files: @cmd.batch([actions.files, actions.close_menu]),
     review: @cmd.batch([actions.review, actions.close_menu]),
   }
@@ -57,6 +66,8 @@ fn panel_view(input : Input, actions : Actions) -> @html.Html {
     Some(Browser(_)) => "mode-browser"
     Some(FilePicker) if input.file_panel.explorer_mode is ExplorerChanges =>
       "mode-picker mode-review"
+    Some(FilePicker) if input.file_panel.explorer_mode is ExplorerSearch =>
+      "mode-picker mode-search-picker"
     Some(FilePicker) => "mode-picker"
     Some(File(_)) => "mode-file"
   }

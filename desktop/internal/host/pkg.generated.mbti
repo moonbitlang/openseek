@@ -32,10 +32,12 @@ pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (@protocol.Noti
 pub(all) suberror HostError {
   HostError(String)
 } derive(@debug.Debug)
+pub fn HostError::to_repr(Self) -> @debug.Repr
 
 pub(all) suberror PayloadError {
   PayloadError(String)
 } derive(@debug.Debug)
+pub fn PayloadError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 type HostConnection

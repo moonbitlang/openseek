@@ -18,15 +18,20 @@ type CursorContext
 pub fn CursorContext::CursorContext(view_to_model~ : (@common.Position) -> @common.Position, view_range_to_model~ : (@common.Range) -> @common.Range, model_to_view~ : (@common.Position) -> @common.Position) -> Self
 
 type CursorModelState derive(Eq)
+pub fn CursorModelState::equal(Self, Self) -> Bool
+pub fn CursorModelState::not_equal(Self, Self) -> Bool
 
 pub struct CursorState {
   model_state : SingleCursorState
   view_state : SingleCursorState
 } derive(Eq, @debug.Debug)
+pub fn CursorState::equal(Self, Self) -> Bool
 pub fn CursorState::from_model_selection(@core.Selection) -> PartialCursorState
 pub fn CursorState::from_model_selections(Array[@core.Selection]) -> Array[PartialCursorState]
 pub fn CursorState::from_model_state(SingleCursorState) -> PartialCursorState
 pub fn CursorState::from_view_state(SingleCursorState) -> PartialCursorState
+pub fn CursorState::not_equal(Self, Self) -> Bool
+pub fn CursorState::to_repr(Self) -> @debug.Repr
 
 pub struct CursorStateChange {
   old_selections : Array[@core.Selection]?
@@ -38,6 +43,7 @@ pub struct CursorStateChange {
   reached_max_cursor_count : Bool
   has_outgoing_event : Bool
 } derive(@debug.Debug)
+pub fn CursorStateChange::to_repr(Self) -> @debug.Repr
 
 type CursorsController
 pub fn CursorsController::CursorsController(@model.TextModel, CursorContext) -> Self
@@ -51,12 +57,18 @@ pub fn CursorsController::set_cursor_state(Self, PartialCursorState?, source? : 
 pub fn CursorsController::view_state(Self) -> SingleCursorState
 
 type PartialCursorState derive(Eq, @debug.Debug)
+pub fn PartialCursorState::equal(Self, Self) -> Bool
+pub fn PartialCursorState::not_equal(Self, Self) -> Bool
+pub fn PartialCursorState::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SelectionStartKind {
   Simple
   Word
   Line
 } derive(Eq, @debug.Debug)
+pub fn SelectionStartKind::equal(Self, Self) -> Bool
+pub fn SelectionStartKind::not_equal(Self, Self) -> Bool
+pub fn SelectionStartKind::to_repr(Self) -> @debug.Repr
 
 pub struct SingleCursorState {
   selection_start_start : @common.Position
@@ -67,9 +79,12 @@ pub struct SingleCursorState {
   leftover_visible_columns : Int
 } derive(Eq, @debug.Debug)
 pub fn SingleCursorState::SingleCursorState(@common.Position, @common.Position, SelectionStartKind, @common.Position, selection_start_leftover_visible_columns? : Int, leftover_visible_columns? : Int) -> Self
+pub fn SingleCursorState::equal(Self, Self) -> Bool
 pub fn SingleCursorState::has_selection(Self) -> Bool
 pub fn SingleCursorState::moved(Self, Bool, @common.Position, leftover_visible_columns? : Int) -> Self
+pub fn SingleCursorState::not_equal(Self, Self) -> Bool
 pub fn SingleCursorState::selection(Self) -> @core.Selection
+pub fn SingleCursorState::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

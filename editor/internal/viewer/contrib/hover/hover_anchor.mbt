@@ -77,3 +77,6 @@ fn hover_anchor_can_adopt_at(
       new_owner == last_owner
   }
 }
+
+///|
+pub extend HoverParticipantOwner with Eq::{equal, not_equal}

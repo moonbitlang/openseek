@@ -25,3 +25,9 @@ pub(all) struct AgentFeedbackSubmittedEvent {
   agent_review_count : Int
   reply_count : Int
 } derive(Debug)
+
+///|
+pub extend AgentFeedbackAddedEvent with Debug::{to_repr}
+
+///|
+pub extend AgentFeedbackSubmittedEvent with Debug::{to_repr}

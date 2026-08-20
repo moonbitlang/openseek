@@ -155,3 +155,9 @@ pub fn DefaultLinesDiffComputer::compute_diff(
   }
   { changes, hit_timeout: false }
 }
+
+///|
+pub extend DefaultLinesDiffComputer with Debug::{to_repr}
+
+///|
+pub extend DefaultLinesDiffComputer with Eq::{equal, not_equal}

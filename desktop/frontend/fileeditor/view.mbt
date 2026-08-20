@@ -47,6 +47,9 @@ const ExplorerFilesTabId = "explorer-files-tab"
 const ExplorerChangesTabId = "explorer-changes-tab"
 
 ///|
+const ExplorerSearchTabId = "explorer-search-tab"
+
+///|
 const ExplorerPanelId = "explorer-inventory"
 
 ///|
@@ -87,6 +90,81 @@ fn focus_explorer_tab_after_render(id : String) -> @cmd.Cmd {
       }
     },
     kind=@cmd.after_render,
+  )
+}
+
+///|
+fn explorer_tab_id(mode : ExplorerMode) -> String {
+  match mode {
+    ExplorerFiles => ExplorerFilesTabId
+    ExplorerChanges => ExplorerChangesTabId
+    ExplorerSearch => ExplorerSearchTabId
+  }
+}
+
+///|
+fn ExplorerMode::next(self : ExplorerMode) -> ExplorerMode {
+  match self {
+    ExplorerFiles => ExplorerChanges
+    ExplorerChanges => ExplorerSearch
+    ExplorerSearch => ExplorerFiles
+  }
+}
+
+///|
+fn ExplorerMode::previous(self : ExplorerMode) -> ExplorerMode {
+  match self {
+    ExplorerFiles => ExplorerSearch
+    ExplorerChanges => ExplorerFiles
+    ExplorerSearch => ExplorerChanges
+  }
+}
+
+///|
+fn explorer_tab_key_target(mode : ExplorerMode, key : String) -> ExplorerMode? {
+  match key {
+    "Home" => Some(ExplorerFiles)
+    "End" => Some(ExplorerSearch)
+    "ArrowRight" | "ArrowDown" => Some(mode.next())
+    "ArrowLeft" | "ArrowUp" => Some(mode.previous())
+    _ => None
+  }
+}
+
+///|
+/// One entry in the Files / Changes / Search roving tablist. Arrow keys wrap,
+/// while Home and End select the first and last inventories.
+fn explorer_tab(
+  dispatch : @cmd.Emit[Msg],
+  selected : ExplorerMode,
+  mode : ExplorerMode,
+  title : String,
+  children : Array[@html.Html],
+) -> @html.Html {
+  let active = selected == mode
+  @html.button(
+    class=if active { "explorer-tab active" } else { "explorer-tab" },
+    title~,
+    on_click=dispatch(ExplorerModeSelected(mode)),
+    attrs=@html.Attrs::build()
+      .id(explorer_tab_id(mode))
+      .role("tab")
+      .tabindex(if active { 0 } else { -1 })
+      .aria_controls(ExplorerPanelId)
+      .aria_selected(active.to_string())
+      .on_keydown(event => {
+        match explorer_tab_key_target(mode, event.key()) {
+          Some(target) => {
+            event.prevent_default()
+            @cmd.batch([
+              dispatch(ExplorerModeSelected(target)),
+              focus_explorer_tab_after_render(explorer_tab_id(target)),
+            ])
+          }
+          None => @cmd.none
+        }
+      }),
+    children,
   )
 }
 
@@ -297,9 +375,13 @@ fn viewer_notice(state : State, ctx : Ctx) -> @html.Html {
 fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html {
   // Losing the watcher is more important than a request-local failure: live
   // updates remain disabled even if a later directory request succeeds.
-  let visible_error = match state.watch_error {
-    Some(message) => Some(message)
-    None => state.error
+  let visible_error = if state.explorer_mode is ExplorerSearch {
+    None
+  } else {
+    match state.watch_error {
+      Some(message) => Some(message)
+      None => state.error
+    }
   }
   let inventory = if ctx.placement is None {
     [@html.div(class="file-panel-empty", "Waiting for workspace placement…")]
@@ -311,6 +393,14 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
     match state.explorer_mode {
       ExplorerFiles => file_inventory(dispatch, state, ctx)
       ExplorerChanges => change_inventory(dispatch, state, ctx)
+      ExplorerSearch =>
+        [
+          state.search.explorer_view(
+            ctx.search_input(),
+            dispatch.map(msg => Search(msg)),
+            (path, range) => dispatch(SearchMatchSelected(path~, range~)),
+          ),
+        ]
     }
   }
   @html.div(class="file-tree-pane", [
@@ -326,89 +416,39 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
       class="explorer-tabs",
       attrs=@html.Attrs::build().role("tablist").aria_label("Explorer views"),
       [
-        @html.button(
-          class=if state.explorer_mode is ExplorerFiles {
-            "explorer-tab active"
-          } else {
-            "explorer-tab"
-          },
-          on_click=dispatch(ExplorerModeSelected(ExplorerFiles)),
-          attrs=@html.Attrs::build()
-            .id(ExplorerFilesTabId)
-            .role("tab")
-            .tabindex(if state.explorer_mode is ExplorerFiles { 0 } else { -1 })
-            .aria_controls(ExplorerPanelId)
-            .aria_selected((state.explorer_mode is ExplorerFiles).to_string())
-            .on_keydown(event => {
-              match event.key() {
-                "Home" => {
-                  event.prevent_default()
-                  focus_explorer_tab_after_render(ExplorerFilesTabId)
-                }
-                "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" | "End" => {
-                  event.prevent_default()
-                  @cmd.batch([
-                    dispatch(ExplorerModeSelected(ExplorerChanges)),
-                    focus_explorer_tab_after_render(ExplorerChangesTabId),
-                  ])
-                }
-                _ => @cmd.none
-              }
-            }),
-          "Files",
+        explorer_tab(
+          dispatch,
+          state.explorer_mode,
+          ExplorerFiles,
+          "Workspace files",
+          [@html.span("Files")],
         ),
-        @html.button(
-          class=if state.explorer_mode is ExplorerChanges {
-            "explorer-tab active"
-          } else {
-            "explorer-tab"
-          },
-          title="Changed files (click again to refresh)",
-          on_click=dispatch(ExplorerModeSelected(ExplorerChanges)),
-          attrs=@html.Attrs::build()
-            .id(ExplorerChangesTabId)
-            .role("tab")
-            .tabindex(
-              if state.explorer_mode is ExplorerChanges {
-                0
-              } else {
-                -1
-              },
-            )
-            .aria_controls(ExplorerPanelId)
-            .aria_selected((state.explorer_mode is ExplorerChanges).to_string())
-            .on_keydown(event => {
-              match event.key() {
-                "End" => {
-                  event.prevent_default()
-                  focus_explorer_tab_after_render(ExplorerChangesTabId)
-                }
-                "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" | "Home" => {
-                  event.prevent_default()
-                  @cmd.batch([
-                    dispatch(ExplorerModeSelected(ExplorerFiles)),
-                    focus_explorer_tab_after_render(ExplorerFilesTabId),
-                  ])
-                }
-                _ => @cmd.none
-              }
-            }),
+        explorer_tab(
+          dispatch,
+          state.explorer_mode,
+          ExplorerChanges,
+          "Changed files (click again to refresh)",
           [@html.span("Changes"), change_count(state.changes)],
+        ),
+        explorer_tab(
+          dispatch,
+          state.explorer_mode,
+          ExplorerSearch,
+          "Search across the workspace",
+          [@html.span("Search")],
         ),
       ],
     ),
     @html.div(
-      class="file-tree",
+      class=if state.explorer_mode is ExplorerSearch {
+        "file-tree search-inventory"
+      } else {
+        "file-tree"
+      },
       attrs=@html.Attrs::build()
         .id(ExplorerPanelId)
         .role("tabpanel")
-        .aria_labelledby(
-          if state.explorer_mode is ExplorerFiles {
-            ExplorerFilesTabId
-          } else {
-            ExplorerChangesTabId
-          },
-        ),
+        .aria_labelledby(explorer_tab_id(state.explorer_mode)),
       inventory,
     ),
     // Rendered even while empty so the row's slot in the pane is stable.

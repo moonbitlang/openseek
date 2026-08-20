@@ -261,3 +261,6 @@ test "tally renders a diagnostic without a location using just the path" {
   assert_eq(tally.first_errors.length(), 1)
   assert_eq(tally.first_errors[0], "a.mbt: module-level boom")
 }
+
+///|
+pub extend CheckErrors with Debug::{to_repr}

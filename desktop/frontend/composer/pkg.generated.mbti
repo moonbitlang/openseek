@@ -10,6 +10,7 @@ import {
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/pathx",
+  "openseek_desktop/frontend/skills",
   "openseek_desktop/frontend/transcript",
   "openseek_desktop/internal/protocol",
 }
@@ -109,10 +110,11 @@ pub(all) struct Identity {
 pub(all) struct Input {
   identity : Identity
   draft : Draft
+  run : RunHeartbeat?
   goal : GoalInput
   slash_commands : Array[SlashCommand]
   root : @common.Uri?
-  installed_skills : Array[@transcript.InstalledSkillItem]
+  installed_skills : Array[@skills.InstalledItem]
   context_generation : Int
   submission_sequence : Int
   replacements : Array[Replacement]
@@ -197,6 +199,20 @@ pub(all) struct Replacement {
   archived : @interop.ConversationKey
   fresh : @interop.ConversationKey
   archive_generation : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RunHeartbeat {
+  stage : RunStage
+  started_ms : Double?
+  tokens : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum RunStage {
+  Starting
+  Thinking
+  AtStep(Int)
+  Working
+  Stopping
 } derive(Eq, @debug.Debug)
 
 pub(all) struct SlashCommand {

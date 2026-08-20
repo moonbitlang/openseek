@@ -17,6 +17,15 @@
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.6;
 
+  /* Icon sizes. A control declares `--icon-size` from this scale and `.icon`
+     reads it, so no rule reaches into another element to size its glyph.
+     Codicons are drawn on a 16px grid, so the steps are even: at odd sizes
+     the glyph edges land on half pixels. */
+  --icon-xs: 10px;
+  --icon-sm: 12px;
+  --icon-md: 14px;
+  --icon-lg: 16px;
+
   /* Surfaces and text */
   --color-bg-canvas: #fbfbf9;
   --color-bg-surface: #ffffff;

@@ -204,24 +204,17 @@ async fn prepared_bundled_moonbit_payload(
 ///|
 async test "prepared payload dir accepts existing toolchain root" {
   let runtime = @pathx.Path(@fs.tmpdir(prefix="openseek-moonbit-runtime-"))
+  defer (@fs.rmdir(runtime.to_string(), recursive=true) catch { _ => () })
   let root = runtime.join("toolchains/moonbit")
   @fs.mkdir(root.to_string(), recursive=true)
   let expected = root.join("macos-arm64").to_string()
   let result = prepared_moonbit_payload_dir(
     seed_dir=runtime.join("seed").join("macos-arm64").resolve(),
     runtime_dir=runtime,
-  ) catch {
-    error => {
-      @fs.rmdir(runtime.to_string(), recursive=true) catch {
-        _ => ()
-      }
-      raise error
-    }
-  }
+  )
   let actual = match result {
     Some(path) => path.to_string()
     None => "<none>"
   }
-  @fs.rmdir(runtime.to_string(), recursive=true)
   assert_eq(actual, expected)
 }

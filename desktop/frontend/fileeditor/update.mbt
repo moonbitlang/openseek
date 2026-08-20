@@ -1451,13 +1451,31 @@ fn changes_poll_wanted(state : State, ctx : Ctx) -> Bool {
 /// restarts from each settle exactly as the old per-settle timer did, and a
 /// conversation switch, a hidden explorer, or a superseded request cannot leave
 /// a timer running behind the state that armed it.
-pub fn changes_poll_subscription(
+fn changes_poll_subscription(
   state : State,
   ctx : Ctx,
   dispatch : @cmd.Emit[Msg],
 ) -> @sub.Sub {
   guard changes_poll_wanted(state, ctx) else { return @sub.none }
   @sub.every(ChangesPollIntervalMilliseconds, dispatch(ChangesPollDue))
+}
+
+///|
+/// Declare every subscription owned by the file editor's Explorer. The root
+/// supplies one state/context projection; individual inventories decide their
+/// own request cadence without re-deriving visibility or checkout identity.
+pub fn subscriptions(
+  state : State,
+  ctx : Ctx,
+  dispatch : @cmd.Emit[Msg],
+) -> @sub.Sub {
+  @sub.batch([
+    changes_poll_subscription(state, ctx, dispatch),
+    state.search.subscription(
+      ctx.search_input(),
+      dispatch.map(msg => Search(msg)),
+    ),
+  ])
 }
 
 ///|
@@ -1793,6 +1811,7 @@ pub fn sync(
         placement: PlacementUnknown.reconcile(ctx.placement),
         tree_open: state.tree_open,
         explorer_mode: state.explorer_mode,
+        search: state.search.reset_checkout(),
         review_view_mode: state.review_view_mode,
         review_diff_layout: state.review_diff_layout,
         // Request tokens must outlive the per-conversation cache. Resetting
@@ -1865,6 +1884,7 @@ pub fn sync(
       loading: [],
       index: IndexEmpty,
       error: None,
+      search: state.search.park(),
       changes_generation: state.changes_generation + 1,
       review_generation,
       review_recovery_pending,
@@ -2114,11 +2134,17 @@ pub fn update(
       }
       (@cmd.none, { ..state, reviewed_changes, })
     }
+    Search(msg) =>
+      (
+        @cmd.none,
+        { ..state, search: state.search.handle(msg, ctx.search_input()) },
+      )
     ExplorerModeSelected(mode) => {
       let already_selected = state.explorer_mode == mode
       let selected = { ..state, explorer_mode: mode }
       match mode {
         ExplorerFiles => (@cmd.none, selected)
+        ExplorerSearch => (@grep_search.focus_query_after_render(), selected)
         ExplorerChanges =>
           if already_selected ||
             selected.changes is ChangeListIdle ||
@@ -2501,7 +2527,7 @@ pub fn update(
     // `EditorCommentAdded` pattern), opens/activates the dock tab, and calls
     // `open_document`. Reaching this arm means the root didn't intercept it;
     // changing nothing is the safe answer.
-    FileSelected(..) => (@cmd.none, state)
+    FileSelected(..) | SearchMatchSelected(..) => (@cmd.none, state)
     // Intercepted by the root so the dock can open/activate the file tab
     // before this package starts the paired working-tree + HEAD reads.
     ChangedFileSelected(_) => (@cmd.none, state)
@@ -5198,6 +5224,20 @@ test "an unresolved placement parks files and refuses editor actions" {
     unresolved,
   )
   assert_true(selected.explorer_mode is ExplorerChanges)
+}
+
+///|
+test "Search Explorer selection survives a conversation owner switch" {
+  let state = { ..owned_state(), explorer_mode: ExplorerSearch }
+  let next_ctx = {
+    ..test_ctx(),
+    owner: { ..test_ctx().owner, session: "another-conversation" },
+    open_files: [],
+    active_file: None,
+  }
+  let (switched, _) = sync(test_emit(), state, next_ctx)
+  assert_true(switched.owner == Some(next_ctx.owner))
+  assert_true(switched.explorer_mode is ExplorerSearch)
 }
 
 ///|

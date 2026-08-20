@@ -88,7 +88,7 @@ fn sample_worker_report() -> WorkerReport {
 ///|
 test "worker report round-trips through json" {
   let report = sample_worker_report()
-  guard WorkerReport::parse(report.to_json()) is Ok(parsed) else {
+  guard WorkerReport::parse(ToJson::to_json(report)) is Ok(parsed) else {
     fail("parse failed")
   }
   assert_eq(parsed, report)
@@ -137,3 +137,15 @@ pub fn WorkerReport::parse_validated(
     }
   }
 }
+
+///|
+pub extend WorkerReport with Debug::{to_repr}
+
+///|
+pub extend WorkerReport with FromJson::{from_json}
+
+///|
+pub extend WorkerReport with Eq::{equal, not_equal}
+
+///|
+pub extend WorkerReport with ToJson::{to_json}

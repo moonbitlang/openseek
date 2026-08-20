@@ -181,8 +181,6 @@ h2 {
 }
 
 .settings-group-head .icon {
-  width: 15px;
-  height: 15px;
   color: var(--color-accent);
 }
 
@@ -395,11 +393,6 @@ h2 {
   color: var(--color-text-muted);
 }
 
-.skills-search .icon {
-  width: 15px;
-  height: 15px;
-}
-
 .skills-search input {
   flex: 1;
   border: none;
@@ -424,11 +417,6 @@ h2 {
   border-radius: 8px;
   background: var(--color-bg-subtle);
   color: var(--color-text-secondary);
-}
-
-.skill-avatar .icon {
-  width: 15px;
-  height: 15px;
 }
 
 .skill-row {

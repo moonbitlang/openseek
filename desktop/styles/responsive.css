@@ -165,6 +165,7 @@
 @media (prefers-reduced-motion: reduce) {
   .pending-steer-state,
   .subrun-mark,
+  .composer-running-mark,
   .notification,
   .update-progress-fill.indeterminate,
   .msg,

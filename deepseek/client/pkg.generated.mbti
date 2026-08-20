@@ -22,6 +22,7 @@ pub struct Client {
 } derive(@debug.Debug)
 pub fn Client::Client(api_key~ : String, model? : @deepseek.Model, api_url? : String, thinking? : @deepseek.ThinkingMode, retry_attempts? : Int, retry_backoff_ms? : Int, idle_timeout_ms? : Int) -> Self
 pub async fn Client::chat(Self, Array[@deepseek.ChatMessage], tools? : Array[@deepseek.ToolDefinition], response_format? : @deepseek.ResponseFormat, stream? : StreamHandler) -> @deepseek.ChatResponse
+pub fn Client::to_repr(Self) -> @debug.Repr
 
 pub struct StreamHandler {
   // private fields

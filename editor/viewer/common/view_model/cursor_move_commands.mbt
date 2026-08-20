@@ -655,3 +655,27 @@ pub fn ViewModel::move_cursor_to(
     reason~,
   )
 }
+
+///|
+pub extend CursorMoveDirection with Debug::{to_repr}
+
+///|
+pub extend CursorMoveDirection with Eq::{equal, not_equal}
+
+///|
+pub extend CursorMoveUnit with Debug::{to_repr}
+
+///|
+pub extend CursorMoveUnit with Eq::{equal, not_equal}
+
+///|
+pub extend SimpleMoveArguments with Debug::{to_repr}
+
+///|
+pub extend SimpleMoveArguments with Eq::{equal, not_equal}
+
+///|
+pub extend SimpleMoveDirection with Debug::{to_repr}
+
+///|
+pub extend SimpleMoveDirection with Eq::{equal, not_equal}

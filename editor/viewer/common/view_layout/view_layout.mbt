@@ -776,3 +776,15 @@ pub fn ViewLayout::is_in_bottom_padding(
 ) -> Bool {
   self.lines.is_in_bottom_padding(vertical_offset)
 }
+
+///|
+pub extend SavedScrollState with Debug::{to_repr}
+
+///|
+pub extend SavedScrollState with Eq::{equal, not_equal}
+
+///|
+pub extend Viewport with Debug::{to_repr}
+
+///|
+pub extend Viewport with Eq::{equal, not_equal}

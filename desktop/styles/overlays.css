@@ -372,9 +372,6 @@
 }
 
 .quick-open-input-wrap > .icon {
-  flex: 0 0 auto;
-  width: 17px;
-  height: 17px;
   color: var(--color-text-muted);
 }
 

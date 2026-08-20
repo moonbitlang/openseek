@@ -1,0 +1,13 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/labels"
+
+// Values
+pub fn compact_count(Int) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

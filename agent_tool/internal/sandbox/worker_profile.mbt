@@ -123,5 +123,10 @@ pub async fn SandboxedCommand::create_worker_if_available(
     Shell(cmd) => sandbox_exec_args(data.profile, cmd)
     Exec(program, args) => ["-p", data.profile, program, ..args]
   }
-  Some({ program: SandboxExecPath, args, denial_subjects: data.denial_subjects })
+  Some({
+    program: SandboxExecPath,
+    args,
+    denial_subjects: data.denial_subjects,
+    plain_source_readonly: false,
+  })
 }

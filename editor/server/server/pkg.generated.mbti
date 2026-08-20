@@ -23,11 +23,13 @@ pub(all) enum RemoteDirectoryResult {
   ParsedRemoteDirectory(String, String)
   RemoteDirectoryError(@remote_protocol.ProtocolError)
 } derive(@debug.Debug)
+pub fn RemoteDirectoryResult::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RemotePathResult {
   ParsedRemotePath(@workspace.SourcePath)
   RemotePathError(@remote_protocol.ProtocolError)
 } derive(@debug.Debug)
+pub fn RemotePathResult::to_repr(Self) -> @debug.Repr
 
 type RemoteServer
 pub fn RemoteServer::current_workspace_root(Self) -> String
@@ -49,11 +51,13 @@ pub(all) enum ServerHostReadResult {
   ServerHostReadOk(@workspace.DocumentContent)
   ServerHostReadError(@workspace.FileSystemProviderErrorCode, String)
 } derive(@debug.Debug)
+pub fn ServerHostReadResult::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ServerHostResolveResult {
   ServerHostResolveOk(Array[@workspace.WorkspaceStat])
   ServerHostResolveError(@workspace.FileSystemProviderErrorCode, String)
 } derive(@debug.Debug)
+pub fn ServerHostResolveResult::to_repr(Self) -> @debug.Repr
 
 type ServerWatch
 pub fn ServerWatch::ServerWatch(() -> Unit) -> Self

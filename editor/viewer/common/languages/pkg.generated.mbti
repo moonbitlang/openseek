@@ -28,11 +28,17 @@ pub(all) struct CharacterPair {
   open : String
   close : String
 } derive(Eq, @debug.Debug)
+pub fn CharacterPair::equal(Self, Self) -> Bool
+pub fn CharacterPair::not_equal(Self, Self) -> Bool
+pub fn CharacterPair::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CommentRule {
   line_comment : LineCommentRule?
   block_comment : CharacterPair?
 } derive(Eq, @debug.Debug)
+pub fn CommentRule::equal(Self, Self) -> Bool
+pub fn CommentRule::not_equal(Self, Self) -> Bool
+pub fn CommentRule::to_repr(Self) -> @debug.Repr
 
 pub(all) struct FoldingMarkers {
   start : (String) -> Bool
@@ -74,6 +80,9 @@ pub struct LineCommentRule {
   // private fields
 } derive(Eq, @debug.Debug)
 pub fn LineCommentRule::LineCommentRule(String, no_indent? : Bool) -> Self
+pub fn LineCommentRule::equal(Self, Self) -> Bool
+pub fn LineCommentRule::not_equal(Self, Self) -> Bool
+pub fn LineCommentRule::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownCommentProviderResult {
   blocks : Array[@language.MarkdownCommentBlock]

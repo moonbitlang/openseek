@@ -27,6 +27,7 @@ import {
   "moonbitlang/async/semaphore",
   "moonbitlang/core/encoding/base64",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/buffer",
   "moonbitlang/core/env" @sys,
   "moonbitlang/core/json",
   "moonbitlang/core/string",

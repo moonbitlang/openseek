@@ -266,14 +266,11 @@ async fn respond_json(
 async test "build bridges and dispatches tools from an http server" {
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
-      error => {
-        let message = "\{error}"
-        if message.contains("Operation not permitted") {
-          println("local TCP bind unavailable; skipping http bridge test")
-          return
-        }
-        raise error
+      error if "\{error}".contains("Operation not permitted") => {
+        println("local TCP bind unavailable; skipping http bridge test")
+        return
       }
+      error => raise error
     }
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever(

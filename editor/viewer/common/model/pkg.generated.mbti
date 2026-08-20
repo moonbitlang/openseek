@@ -32,17 +32,24 @@ type InjectedTextOptions derive(Eq, @debug.Debug)
 pub fn InjectedTextOptions::InjectedTextOptions(String, inline_class_name? : String, attached_index? : Int) -> Self
 pub fn InjectedTextOptions::attached_index(Self) -> Int
 pub fn InjectedTextOptions::content(Self) -> String
+pub fn InjectedTextOptions::equal(Self, Self) -> Bool
 pub fn InjectedTextOptions::inline_class_name(Self) -> String?
+pub fn InjectedTextOptions::not_equal(Self, Self) -> Bool
+pub fn InjectedTextOptions::to_repr(Self) -> @debug.Repr
 
 pub struct InternalModelContentChangeEvent {
   raw_content_changed_event : ModelRawContentChangedEvent
   content_changed_event : ModelContentChangedEvent
 } derive(@debug.Debug)
+pub fn InternalModelContentChangeEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MinimapPosition {
   Inline
   Gutter
 } derive(Eq, @debug.Debug)
+pub fn MinimapPosition::equal(Self, Self) -> Bool
+pub fn MinimapPosition::not_equal(Self, Self) -> Bool
+pub fn MinimapPosition::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelContentChange {
   range : @common.Range
@@ -50,6 +57,7 @@ pub(all) struct ModelContentChange {
   range_length : Int
   text : String
 } derive(@debug.Debug)
+pub fn ModelContentChange::to_repr(Self) -> @debug.Repr
 
 pub struct ModelContentChangedEvent {
   changes : Array[ModelContentChange]
@@ -60,6 +68,7 @@ pub struct ModelContentChangedEvent {
   is_flush : Bool
   is_eol_change : Bool
 } derive(@debug.Debug)
+pub fn ModelContentChangedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelDecoration {
   id : String
@@ -67,11 +76,15 @@ pub(all) struct ModelDecoration {
   range : @common.Range
   options : ModelDecorationOptions
 } derive(@debug.Debug)
+pub fn ModelDecoration::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelDecorationMinimapOptions {
   color : String
   position : MinimapPosition
 } derive(Eq, @debug.Debug)
+pub fn ModelDecorationMinimapOptions::equal(Self, Self) -> Bool
+pub fn ModelDecorationMinimapOptions::not_equal(Self, Self) -> Bool
+pub fn ModelDecorationMinimapOptions::to_repr(Self) -> @debug.Repr
 
 pub struct ModelDecorationOptions {
   class_name : String
@@ -96,11 +109,15 @@ pub struct ModelDecorationOptions {
   after : InjectedTextOptions?
 } derive(@debug.Debug)
 pub fn ModelDecorationOptions::ModelDecorationOptions(String, message? : String, inline_class_name? : String, inline_class_name_affects_letter_spacing? : Bool, z_index? : Int, is_whole_line? : Bool, show_if_collapsed? : Bool, should_fill_line_on_line_break? : Bool, stickiness? : TrackedRangeStickiness, overview_ruler? : ModelDecorationOverviewRulerOptions, minimap? : ModelDecorationMinimapOptions, glyph_margin_class_name? : String, lines_decorations_class_name? : String, first_line_decoration_class_name? : String, margin_class_name? : String, after_content_class_name? : String, collapse_on_replace_edit? : Bool, description? : String, before? : InjectedTextOptions, after? : InjectedTextOptions) -> Self
+pub fn ModelDecorationOptions::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelDecorationOverviewRulerOptions {
   color : String?
   position : OverviewRulerLane
 } derive(Eq, @debug.Debug)
+pub fn ModelDecorationOverviewRulerOptions::equal(Self, Self) -> Bool
+pub fn ModelDecorationOverviewRulerOptions::not_equal(Self, Self) -> Bool
+pub fn ModelDecorationOverviewRulerOptions::to_repr(Self) -> @debug.Repr
 
 pub struct ModelDecorationsChangeAccessor {
   mut add_decoration : (@common.Range, ModelDecorationOptions) -> String
@@ -117,11 +134,15 @@ pub struct ModelDecorationsChangedEvent {
   affects_injected_text : Bool
   affects_line_number : Bool
 } derive(Eq, @debug.Debug)
+pub fn ModelDecorationsChangedEvent::equal(Self, Self) -> Bool
+pub fn ModelDecorationsChangedEvent::not_equal(Self, Self) -> Bool
+pub fn ModelDecorationsChangedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelDeltaDecoration {
   range : @common.Range
   options : ModelDecorationOptions
 } derive(@debug.Debug)
+pub fn ModelDeltaDecoration::to_repr(Self) -> @debug.Repr
 
 pub enum ModelRawChange {
   ModelRawFlush
@@ -130,6 +151,7 @@ pub enum ModelRawChange {
   ModelRawLinesInserted(from_line_number~ : Int, from_line_number_post_edit~ : Int, count~ : Int)
   ModelRawEOLChanged
 } derive(@debug.Debug)
+pub fn ModelRawChange::to_repr(Self) -> @debug.Repr
 
 pub struct ModelRawContentChangedEvent {
   changes : Array[ModelRawChange]
@@ -138,6 +160,7 @@ pub struct ModelRawContentChangedEvent {
   is_redoing : Bool
 } derive(@debug.Debug)
 pub fn ModelRawContentChangedEvent::contains_event(Self, RawContentChangedType) -> Bool
+pub fn ModelRawContentChangedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelTokensChangedEvent {
   semantic_tokens_applied : Bool
@@ -155,6 +178,9 @@ pub(all) enum OverviewRulerLane {
   Right
   Full
 } derive(Eq, @debug.Debug)
+pub fn OverviewRulerLane::equal(Self, Self) -> Bool
+pub fn OverviewRulerLane::not_equal(Self, Self) -> Bool
+pub fn OverviewRulerLane::to_repr(Self) -> @debug.Repr
 
 pub(all) enum PositionAffinity {
   Left
@@ -163,6 +189,9 @@ pub(all) enum PositionAffinity {
   LeftOfInjectedText
   RightOfInjectedText
 } derive(Eq, @debug.Debug)
+pub fn PositionAffinity::equal(Self, Self) -> Bool
+pub fn PositionAffinity::not_equal(Self, Self) -> Bool
+pub fn PositionAffinity::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RawContentChangedType {
   Flush
@@ -171,6 +200,9 @@ pub(all) enum RawContentChangedType {
   LinesInserted
   EOLChanged
 } derive(Eq, @debug.Debug)
+pub fn RawContentChangedType::equal(Self, Self) -> Bool
+pub fn RawContentChangedType::not_equal(Self, Self) -> Bool
+pub fn RawContentChangedType::to_repr(Self) -> @debug.Repr
 
 pub struct TextModel {
   uri : @common.Uri
@@ -220,6 +252,7 @@ pub fn TextModel::remove_all_decorations_with_owner_id(Self, Int) -> Unit
 pub fn TextModel::same(Self, Self) -> Bool
 pub fn TextModel::set_value(Self, String) -> Unit
 pub fn TextModel::snapshot(Self) -> TextSnapshot
+pub fn TextModel::to_repr(Self) -> @debug.Repr
 pub fn TextModel::validate_position(Self, @common.Position) -> @common.Position
 pub fn TextModel::validate_range(Self, @common.Range) -> @common.Range
 pub impl @debug.Debug for TextModel
@@ -237,6 +270,7 @@ pub fn TextSnapshot::line_text(Self, Int) -> String
 pub fn TextSnapshot::offset_range_of(Self, @common.Range) -> @common.OffsetRange
 pub fn TextSnapshot::range_of(Self, @common.OffsetRange) -> @common.Range
 pub fn TextSnapshot::slice(Self, @common.OffsetRange) -> String
+pub fn TextSnapshot::to_repr(Self) -> @debug.Repr
 
 type TokenizationIdleDeadline
 pub fn TokenizationIdleDeadline::TokenizationIdleDeadline(() -> Double) -> Self
@@ -254,17 +288,26 @@ pub(all) enum TrackedRangeStickiness {
   GrowsOnlyWhenTypingBefore
   GrowsOnlyWhenTypingAfter
 } derive(Eq, @debug.Debug)
+pub fn TrackedRangeStickiness::equal(Self, Self) -> Bool
+pub fn TrackedRangeStickiness::not_equal(Self, Self) -> Bool
+pub fn TrackedRangeStickiness::to_repr(Self) -> @debug.Repr
 
 pub(all) struct VisibleLineRange {
   start_line_number : Int
   end_line_number : Int
 } derive(Eq, @debug.Debug)
+pub fn VisibleLineRange::equal(Self, Self) -> Bool
+pub fn VisibleLineRange::not_equal(Self, Self) -> Bool
+pub fn VisibleLineRange::to_repr(Self) -> @debug.Repr
 
 pub struct WordAtPosition {
   word : String
   start_column : Int
   end_column : Int
 } derive(Eq, @debug.Debug)
+pub fn WordAtPosition::equal(Self, Self) -> Bool
+pub fn WordAtPosition::not_equal(Self, Self) -> Bool
+pub fn WordAtPosition::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

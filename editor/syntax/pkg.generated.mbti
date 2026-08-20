@@ -37,6 +37,11 @@ pub(all) enum HighlightTag {
   Attribute
   Invalid
 } derive(Eq, @debug.Debug)
+pub fn HighlightTag::equal(Self, Self) -> Bool
+pub fn HighlightTag::not_equal(Self, Self) -> Bool
+pub fn HighlightTag::output(Self, &Logger) -> Unit
+pub fn HighlightTag::to_repr(Self) -> @debug.Repr
+pub fn HighlightTag::to_string(Self) -> String
 pub impl Show for HighlightTag
 
 pub(all) struct LineToken {
@@ -44,6 +49,9 @@ pub(all) struct LineToken {
   end : Int
   tag : HighlightTag
 } derive(Eq, @debug.Debug)
+pub fn LineToken::equal(Self, Self) -> Bool
+pub fn LineToken::not_equal(Self, Self) -> Bool
+pub fn LineToken::to_repr(Self) -> @debug.Repr
 
 pub struct TokenizationChangedEvent {
   changed_languages : Array[String]
@@ -65,9 +73,12 @@ pub struct TokenizerState {
   // private fields
 } derive(Eq)
 pub fn TokenizerState::TokenizerState() -> Self
+pub fn TokenizerState::equal(Self, Self) -> Bool
 pub fn TokenizerState::last_mode(Self) -> Byte?
+pub fn TokenizerState::not_equal(Self, Self) -> Bool
 pub fn TokenizerState::pop_mode(Self) -> Self
 pub fn TokenizerState::push_mode(Self, Byte) -> Self
+pub fn TokenizerState::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for TokenizerState
 
 // Type aliases

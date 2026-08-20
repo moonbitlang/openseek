@@ -19,6 +19,7 @@ pub struct ReadInput {
   max_lines : Int?
   max_output_chars : Int
 } derive(@debug.Debug)
+pub fn ReadInput::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

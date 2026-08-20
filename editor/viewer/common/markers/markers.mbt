@@ -253,3 +253,27 @@ fn Marker::to_diagnostic(self : Marker) -> @language.Diagnostic {
     tags: self.tags.map(tags => tags.map(MarkerTag::to_diagnostic_tag)),
   }
 }
+
+///|
+pub extend Marker with Debug::{to_repr}
+
+///|
+pub extend Marker with Eq::{equal, not_equal}
+
+///|
+pub extend MarkerData with Debug::{to_repr}
+
+///|
+pub extend MarkerData with Eq::{equal, not_equal}
+
+///|
+pub extend MarkerSeverity with Debug::{to_repr}
+
+///|
+pub extend MarkerSeverity with Eq::{equal, not_equal}
+
+///|
+pub extend MarkerTag with Debug::{to_repr}
+
+///|
+pub extend MarkerTag with Eq::{equal, not_equal}

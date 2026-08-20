@@ -172,3 +172,15 @@ fn parse_steer(line : Json) -> Result[Command, String] {
     _ => Ok(Steer(kind=Prompt, text~))
   }
 }
+
+///|
+pub extend Command with Debug::{to_repr}
+
+///|
+pub extend Command with Eq::{equal, not_equal}
+
+///|
+pub extend SteerKind with Debug::{to_repr}
+
+///|
+pub extend SteerKind with Eq::{equal, not_equal}

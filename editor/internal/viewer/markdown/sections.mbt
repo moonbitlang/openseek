@@ -385,3 +385,15 @@ fn markdown_count_source_lines(
     lines
   }
 }
+
+///|
+pub extend MarkdownSection with Debug::{to_repr}
+
+///|
+pub extend MarkdownSection with Eq::{equal, not_equal}
+
+///|
+pub extend MarkdownTocEntry with Debug::{to_repr}
+
+///|
+pub extend MarkdownTocEntry with Eq::{equal, not_equal}

@@ -1012,3 +1012,9 @@ fn view_lines_parent_element(el : @rdom.Element) -> @rdom.Element? {
     None
   }
 }
+
+///|
+pub extend ViewLinesConfiguration with Debug::{to_repr}
+
+///|
+pub extend ViewLinesConfiguration with Eq::{equal, not_equal}

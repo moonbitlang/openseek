@@ -26,6 +26,7 @@ pub struct InstalledSkill {
   description : String
   source : String
 } derive(ToJson)
+pub fn InstalledSkill::to_json(Self) -> Json
 
 pub struct MarketSkill {
   name : String
@@ -36,6 +37,7 @@ pub struct MarketSkill {
   author : String
   repository : String
 } derive(ToJson)
+pub fn MarketSkill::to_json(Self) -> Json
 
 // Type aliases
 

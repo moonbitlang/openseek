@@ -121,3 +121,6 @@ fn required_positive_int(
     _ => fail("\{prefix}.\{name} to be an integer")
   }
 }
+
+///|
+pub extend EditInput with Debug::{to_repr}

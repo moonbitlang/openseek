@@ -224,3 +224,54 @@ pub fn ModelDecorationOptions::ModelDecorationOptions(
     after,
   }
 }
+
+///|
+pub extend InjectedTextOptions with Debug::{to_repr}
+
+///|
+pub extend InjectedTextOptions with Eq::{equal, not_equal}
+
+///|
+pub extend MinimapPosition with Debug::{to_repr}
+
+///|
+pub extend MinimapPosition with Eq::{equal, not_equal}
+
+///|
+pub extend ModelDecoration with Debug::{to_repr}
+
+///|
+pub extend ModelDecorationMinimapOptions with Debug::{to_repr}
+
+///|
+pub extend ModelDecorationMinimapOptions with Eq::{equal, not_equal}
+
+///|
+pub extend ModelDecorationOptions with Debug::{to_repr}
+
+///|
+pub extend ModelDecorationOverviewRulerOptions with Debug::{to_repr}
+
+///|
+pub extend ModelDecorationOverviewRulerOptions with Eq::{equal, not_equal}
+
+///|
+pub extend ModelDecorationsChangedEvent with Debug::{to_repr}
+
+///|
+pub extend ModelDecorationsChangedEvent with Eq::{equal, not_equal}
+
+///|
+pub extend ModelDeltaDecoration with Debug::{to_repr}
+
+///|
+pub extend OverviewRulerLane with Debug::{to_repr}
+
+///|
+pub extend OverviewRulerLane with Eq::{equal, not_equal}
+
+///|
+pub extend TrackedRangeStickiness with Debug::{to_repr}
+
+///|
+pub extend TrackedRangeStickiness with Eq::{equal, not_equal}

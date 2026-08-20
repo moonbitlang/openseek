@@ -16,6 +16,7 @@ pub struct WriteInput {
   content : String
   revert_on_parse_errors : Bool
 } derive(@debug.Debug)
+pub fn WriteInput::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

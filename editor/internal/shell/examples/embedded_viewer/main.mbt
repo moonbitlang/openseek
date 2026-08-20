@@ -65,6 +65,8 @@ fn memory_workspace() -> MemoryWorkspace {
   directories[memory_root] = [
     memory_dir("src", "src"),
     memory_file("broken.mbt", "broken.mbt"),
+    memory_file("comments-only.mbt", "comments-only.mbt"),
+    memory_file("comments.mbt", "comments.mbt"),
     memory_file("large.mbt", "large.mbt"),
     memory_file("tabbed-deletion.mbt", "tabbed-deletion.mbt"),
     memory_file("oversized-line.mbt", "oversized-line.mbt"),
@@ -80,6 +82,13 @@ fn memory_workspace() -> MemoryWorkspace {
   ]
   let documents : Map[String, String] = Map([])
   documents["\{memory_root}/broken.mbt"] = "fn okay() {}\n"
+  documents["\{memory_root}/comments-only.mbt"] = [
+    "fn stable() -> Int {", "", "  // updated note", "  1", "}",
+  ].join("\n")
+  documents["\{memory_root}/comments.mbt"] = [
+    "fn review_value() -> Int {", "", "  // updated explanation", "  new_value()",
+    "}",
+  ].join("\n")
   documents["\{memory_root}/large.mbt"] = large_diff_document("modified")
   documents["\{memory_root}/tabbed-deletion.mbt"] = "let retained = 1\n"
   documents["\{memory_root}/oversized-line.mbt"] = oversized_diff_line("m")
@@ -109,6 +118,12 @@ fn memory_workspace() -> MemoryWorkspace {
   )
   let original_documents : Map[String, String] = Map([])
   original_documents["\{memory_root}/broken.mbt"] = "fn broken( {\n"
+  original_documents["\{memory_root}/comments-only.mbt"] = [
+    "fn stable() -> Int {", "  // obsolete note", "  1", "}",
+  ].join("\n")
+  original_documents["\{memory_root}/comments.mbt"] = [
+    "fn review_value() -> Int {", "  // obsolete explanation", "  old_value()", "}",
+  ].join("\n")
   original_documents["\{memory_root}/large.mbt"] = large_diff_document(
     "original",
   )

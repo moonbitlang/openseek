@@ -98,3 +98,9 @@ fn QuickDiffService::on_did_change_original(
 ) -> @base_common.Disposable {
   self.did_change_original.event(handler)
 }
+
+///|
+pub extend ChangeType with Debug::{to_repr}
+
+///|
+pub extend ChangeType with Eq::{equal, not_equal}

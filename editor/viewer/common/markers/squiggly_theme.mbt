@@ -130,3 +130,9 @@ fn write_dotdotdot_rule(sb : StringBuilder, svg_data : String) -> Unit {
   sb <+
     $|.moonbit-viewer .squiggly-hint { background: url("data:image/svg+xml,\{svg_data}") no-repeat bottom left; }
 }
+
+///|
+pub extend SquigglyThemeColors with Debug::{to_repr}
+
+///|
+pub extend SquigglyThemeColors with Eq::{equal, not_equal}

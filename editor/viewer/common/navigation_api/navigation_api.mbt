@@ -107,3 +107,12 @@ pub async fn TextModelResolverHandle::resolve(
 ) -> TextModelReference? noraise {
   (self.resolve_callback)(resource, token)
 }
+
+///|
+pub extend OpenLocationMode with Debug::{to_repr}
+
+///|
+pub extend OpenLocationMode with Eq::{equal, not_equal}
+
+///|
+pub extend OpenLocationRequest with Debug::{to_repr}

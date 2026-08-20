@@ -11,6 +11,9 @@ const PackageAssetDir : String = PackageInputRoot + "/assets"
 const PackageBinDir : String = PackageInputRoot + "/bin"
 
 ///|
+const RipgrepLicenseDir : String = PackageInputRoot + "/licenses/ripgrep"
+
+///|
 const SigningEntitlementsPath : String = "package/macos/SeekMoon.entitlements"
 
 ///|
@@ -162,12 +165,12 @@ fn PackageOptions::proton_args(
 async fn @packaging.Workspace::build_package_inputs(
   self : @packaging.Workspace,
   release~ : Bool,
-) -> @xterm_assets.Assets {
+) -> (@xterm_assets.Assets, @ripgrep_assets.Assets) {
   let build_env = {
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
     "PROTON_PACKAGE_RPATH": "@executable_path/../Resources/proton/lib",
   }
-  self.prepare_checkout_proton_runtime(@packaging.posix_proton_cli(), extra_env={
+  @packaging.ensure_cef_runtime(self, extra_env={
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
   })
   @packaging.build_frontend_bundle(self, release~)
@@ -175,11 +178,15 @@ async fn @packaging.Workspace::build_package_inputs(
     self,
     @xterm_assets.macos_arm64_target(),
   )
+  let ripgrep_assets = @ripgrep_assets.build(
+    self,
+    @ripgrep_assets.macos_arm64_target(),
+  )
   @packaging.build_native_host(self, release~, extra_env=build_env)
   @packaging.build_engine(self, release~, extra_env={
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
   })
-  terminal_assets
+  (terminal_assets, ripgrep_assets)
 }
 
 ///|
@@ -189,11 +196,13 @@ async fn @packaging.Workspace::build_package_inputs(
 async fn @packaging.Workspace::stage_package_inputs(
   self : @packaging.Workspace,
   terminal_assets : @xterm_assets.Assets,
+  ripgrep_assets : @ripgrep_assets.Assets,
   release~ : Bool,
 ) -> Unit {
   @packaging.remove_path_if_exists(self.at(PackageInputRoot))
   @packaging.ensure_dir(self.at(PackageAssetDir))
   @packaging.ensure_dir(self.at(PackageBinDir))
+  @packaging.ensure_dir(self.at(RipgrepLicenseDir))
   @packaging.copy_file(
     self.app_stylesheet(),
     self.at(PackageAssetDir + "/app.css"),
@@ -225,9 +234,18 @@ async fn @packaging.Workspace::stage_package_inputs(
     self.engine_binary(release~),
     self.at(PackageBinDir + "/openseek"),
   )
+  @packaging.copy_file(ripgrep_assets.binary, self.at(PackageBinDir + "/rg"))
+  @packaging.copy_file(
+    ripgrep_assets.license_mit,
+    self.at(RipgrepLicenseDir + "/LICENSE-MIT"),
+  )
+  @packaging.copy_file(
+    ripgrep_assets.unlicense,
+    self.at(RipgrepLicenseDir + "/UNLICENSE"),
+  )
   @packaging.run_checked(
     "chmod",
-    ["+x", PackageBinDir + "/openseek"],
+    ["+x", PackageBinDir + "/openseek", PackageBinDir + "/rg"],
     dir=self.dir(),
   )
   // Proton applies the static `bundle.sign.binaries` list to both ad-hoc and
@@ -263,12 +281,7 @@ async fn @packaging.Workspace::package_with_proton(
     Some(profile) => package_env["PROTON_NOTARY_PROFILE"] = profile
     None => ()
   }
-  @packaging.run_checked(
-    self.at(@packaging.posix_proton_cli()),
-    args,
-    dir=self.dir(),
-    extra_env=package_env,
-  ) catch {
+  @packaging.run_proton_cli(self, args, extra_env=package_env) catch {
     error if @async.is_being_cancelled() => raise error
     error => {
       // Keep Proton's original failure as the authority. This extra hint is
@@ -287,8 +300,14 @@ async fn @packaging.Workspace::package_with_proton(
 async fn main {
   let options = PackageOptions::parse()
   let ws = @packaging.locate_workspace()
-  let terminal_assets = ws.build_package_inputs(release=options.release)
-  ws.stage_package_inputs(terminal_assets, release=options.release)
+  let (terminal_assets, ripgrep_assets) = ws.build_package_inputs(
+    release=options.release,
+  )
+  ws.stage_package_inputs(
+    terminal_assets,
+    ripgrep_assets,
+    release=options.release,
+  )
   ws.package_with_proton(options)
   if options.open_after_packaging {
     let _ = @process.run("open", [ws.at("dist/SeekMoon.app")])

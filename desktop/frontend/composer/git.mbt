@@ -316,3 +316,15 @@ fn GitPopoverLink::render(self : GitPopoverLink) -> @html.Html {
     children,
   )
 }
+
+///|
+pub extend GitChanges with Eq::{equal, not_equal}
+
+///|
+pub extend GitChecks with Eq::{equal, not_equal}
+
+///|
+pub extend GitPresentation with Eq::{equal, not_equal}
+
+///|
+pub extend GitPullRequest with Eq::{equal, not_equal}

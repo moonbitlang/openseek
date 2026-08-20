@@ -748,3 +748,6 @@ fn TextModel::emit_content_changed_event(
 }
 
 // #endregion
+
+///|
+pub extend TextModel with Debug::{to_repr}

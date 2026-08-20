@@ -73,3 +73,9 @@ pub impl @syntax.LineTokenizer for JsonTokenizer with fn tokenize_line(
   }
   (tokens, json_normal_state)
 }
+
+///|
+pub extend JsonTokenizer with @syntax.LineTokenizer::{
+  initial_state,
+  tokenize_line,
+}

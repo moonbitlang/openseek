@@ -9,10 +9,12 @@ import {
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/files",
   "openseek_desktop/frontend/icons",
+  "openseek_desktop/frontend/labels",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/frontend/transcript",
+  "openseek_desktop/frontend/skills",
   "openseek_desktop/internal/protocol",
 }
 

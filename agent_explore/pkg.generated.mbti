@@ -25,6 +25,11 @@ pub struct Citation {
   line : Int?
   note : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn Citation::equal(Self, Self) -> Bool
+pub fn Citation::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Citation::not_equal(Self, Self) -> Bool
+pub fn Citation::to_json(Self) -> Json
+pub fn Citation::to_repr(Self) -> @debug.Repr
 
 pub struct ExploreReport {
   schema_version : Int
@@ -32,6 +37,11 @@ pub struct ExploreReport {
   citations : Array[Citation]
   unresolved : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn ExploreReport::equal(Self, Self) -> Bool
+pub fn ExploreReport::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ExploreReport::not_equal(Self, Self) -> Bool
+pub fn ExploreReport::to_json(Self) -> Json
+pub fn ExploreReport::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

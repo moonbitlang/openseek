@@ -24,18 +24,24 @@ type Selection derive(Eq, @debug.Debug)
 pub fn Selection::Selection(@common.Position, @common.Position) -> Self
 pub fn Selection::direction(Self) -> SelectionDirection
 pub fn Selection::end(Self) -> @common.Position
+pub fn Selection::equal(Self, Self) -> Bool
 pub fn Selection::from_positions(@common.Position, @common.Position) -> Self
 pub fn Selection::get_position(Self) -> @common.Position
 pub fn Selection::get_selection_start(Self) -> @common.Position
 pub fn Selection::is_empty(Self) -> Bool
+pub fn Selection::not_equal(Self, Self) -> Bool
 pub fn Selection::set_end_position(Self, Int, Int) -> Self
 pub fn Selection::set_start_position(Self, Int, Int) -> Self
 pub fn Selection::start(Self) -> @common.Position
+pub fn Selection::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SelectionDirection {
   LTR
   RTL
 } derive(Eq, @debug.Debug)
+pub fn SelectionDirection::equal(Self, Self) -> Bool
+pub fn SelectionDirection::not_equal(Self, Self) -> Bool
+pub fn SelectionDirection::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

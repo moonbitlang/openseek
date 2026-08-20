@@ -138,6 +138,10 @@ fn Model::composer_input(
   {
     identity,
     draft: { task: conv.task, mentions: conv.mentions },
+    // Sub-run lanes stay in the transcript tail: they are activity *inside*
+    // this turn, and drawing both in one place put the outer run on the same
+    // footing as the children it spawned.
+    run: conv.run_heartbeat(),
     goal: {
       draft: conv.goal_edit.map(edit => edit.draft),
       standing: conv.goal,
@@ -254,6 +258,7 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
       archive_generation: self.composer_entry_retirements.length(),
     },
     draft: { task: "", mentions: [] },
+    run: None,
     goal: { draft: None, standing: None, pending: None },
     slash_commands: [],
     root: None,

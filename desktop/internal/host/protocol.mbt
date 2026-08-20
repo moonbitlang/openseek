@@ -147,6 +147,18 @@ type ClearFileSearchCachePayload = @protocol.ClearFileSearchCachePayload
 type SearchFilesReply = @protocol.SearchFilesReply
 
 ///|
+type SearchTextPayload = @protocol.SearchTextPayload
+
+///|
+type CancelSearchTextPayload = @protocol.CancelSearchTextPayload
+
+///|
+type SearchTextReply = @protocol.SearchTextReply
+
+///|
+type TextSearchMatch = @protocol.TextSearchMatch
+
+///|
 type ReadFilePayload = @protocol.ReadFilePayload
 
 ///|

@@ -56,3 +56,15 @@ pub fn update(msg : Msg, state : State) -> State {
     ActiveChanged(key) => { ..state, active: key }
   }
 }
+
+///|
+pub extend Hover with Debug::{to_repr}
+
+///|
+pub extend Hover with Eq::{equal, not_equal}
+
+///|
+pub extend State with Debug::{to_repr}
+
+///|
+pub extend State with Eq::{equal, not_equal}

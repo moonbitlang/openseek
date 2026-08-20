@@ -1,0 +1,61 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/grep_search"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/sub",
+  "moonbitlang/core/debug",
+  "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/internal/protocol",
+}
+
+// Values
+pub fn focus_query_after_render() -> @cmd.Cmd
+
+// Errors
+
+// Types and methods
+pub(all) struct Input {
+  owner : @interop.ConversationKey
+  root : @common.Uri?
+} derive(Eq)
+pub fn Input::Input(owner~ : @interop.ConversationKey, root~ : @common.Uri?) -> Self
+
+pub(all) enum Msg {
+  QueryChanged(String)
+  ToggleCaseSensitive
+  ToggleWholeWord
+  ToggleRegex
+  ToggleDetails
+  IncludeChanged(String)
+  ExcludeChanged(String)
+  Submit
+  Refresh
+  ClearResults
+  CollapseAll
+  ShowMore
+  ToggleFile(String)
+  RequestStarted(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int)
+  Loaded(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int, reply~ : @protocol.SearchTextReply)
+  RequestFailed(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int, code~ : String, message~ : String)
+}
+
+type Page derive(Eq)
+
+type Phase derive(Eq, @debug.Debug)
+
+pub struct State {
+  // private fields
+} derive(Eq)
+pub fn State::empty() -> Self
+pub fn State::explorer_view(Self, Input, @cmd.Emit[Msg], (String, @common.Range) -> @cmd.Cmd) -> @html.Html
+pub fn State::handle(Self, Msg, Input) -> Self
+pub fn State::park(Self) -> Self
+pub fn State::reset_checkout(Self) -> Self
+pub fn State::subscription(Self, Input, @cmd.Emit[Msg]) -> @sub.Sub
+
+// Type aliases
+
+// Traits

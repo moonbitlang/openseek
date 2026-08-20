@@ -153,6 +153,7 @@ aside {
 /* Hover-revealed archive control on a durable row. Kept in layout
    (visibility, not display) so the label doesn't shift as it appears. */
 .row-archive {
+  --icon-size: var(--icon-md);
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -324,6 +325,7 @@ aside {
   z-index: var(--z-menu);
 }
 .workspace-menu-item {
+  --icon-size: var(--icon-md);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -343,8 +345,6 @@ aside {
   color: var(--color-accent-strong);
 }
 .workspace-menu-item > .icon {
-  width: 14px;
-  height: 14px;
   color: var(--color-text-muted);
 }
 .workspace-menu-item:hover > .icon {
@@ -360,6 +360,7 @@ aside {
    environment lives and dies with its conversation. A fixed slot, so the
    title keeps the rest of the row no matter how long the name is. */
 .worktree-mark {
+  --icon-size: var(--icon-sm);
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -367,13 +368,10 @@ aside {
   height: 14px;
   color: var(--color-accent);
 }
-.worktree-mark .icon {
-  width: 12px;
-  height: 12px;
-}
 /* The composer's launch-mode chip: Local ⇄ Worktree while the conversation
    can still choose; fixed to the worktree's name once bound. */
 .composer-worktree {
+  --icon-size: var(--icon-sm);
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -399,10 +397,6 @@ button.composer-worktree:hover {
   border-color: var(--color-accent-border);
   background: var(--color-accent-soft);
   color: var(--color-accent-strong);
-}
-.composer-worktree .icon {
-  width: 12px;
-  height: 12px;
 }
 
 /* A conversation nested under its workspace row: the twisty cell and the row
@@ -455,12 +449,10 @@ button.composer-worktree:hover {
   height: 6px;
   border-radius: 50%;
   background: var(--color-accent);
-  animation: subrun-pulse 1.6s ease-in-out infinite;
+  animation: lane-pulse 1.6s ease-in-out infinite;
 }
-@keyframes subrun-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
+/* `lane-pulse` is defined in base.css — shared with the composer's running
+   row. */
 .subrun-name {
   flex: 0 0 auto;
   color: var(--color-text-secondary);
@@ -487,6 +479,7 @@ button.composer-worktree:hover {
    so titles line up either way. The chevron points down when open and right
    when closed. */
 .row-twisty {
+  --icon-size: var(--icon-sm);
   flex: 0 0 14px;
   display: grid;
   place-items: center;
@@ -500,8 +493,6 @@ button.composer-worktree:hover {
   cursor: pointer;
 }
 .row-twisty .icon {
-  width: 12px;
-  height: 12px;
   transform: rotate(-90deg);
   transition: transform 0.12s ease;
 }
@@ -611,6 +602,7 @@ button.row-twisty:hover {
 }
 
 .sidebar-icon {
+  --icon-size: var(--icon-md);
   display: grid;
   place-items: center;
   width: 20px;

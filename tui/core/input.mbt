@@ -70,3 +70,9 @@ impl @doc.ToDoc for Input with fn to_doc(self) {
     }
   ]
 }
+
+///|
+pub extend Input with Debug::{to_repr}
+
+///|
+pub extend Input with Eq::{equal, not_equal}

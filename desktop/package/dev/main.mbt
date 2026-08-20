@@ -25,15 +25,6 @@ priv struct Development {
 }
 
 ///|
-fn Development::proton_cli_path() -> String {
-  if @platform.win32 || @platform.win64 {
-    @packaging.windows_proton_cli()
-  } else {
-    @packaging.posix_proton_cli()
-  }
-}
-
-///|
 fn Development::cef_helper_name() -> String {
   if @platform.win32 || @platform.win64 {
     "cef_process.exe"
@@ -58,10 +49,9 @@ async fn Development::prepare_frontend(self : Development) -> Unit {
 }
 
 ///|
-/// Prepare this checkout's CEF runtime and refresh its Linux or Windows Proton
-/// artifacts from the matching Lepus sources.
+/// Prepare the CEF runtime this checkout's Proton dependency calls for.
 async fn Development::prepare_runtime(self : Development) -> String {
-  self.workspace.prepare_checkout_proton_runtime(Development::proton_cli_path())
+  @packaging.ensure_cef_runtime(self.workspace)
   let runtime = @packaging.proton_runtime_dist(self.workspace).0
   let normalized = (runtime : @path.Path).normalize()
   let helper = normalized

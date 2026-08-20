@@ -991,3 +991,9 @@ fn percent_decode(str : String) -> String {
   sb.write_string(js_slice(str, chunk_start))
   sb.to_string()
 }
+
+///|
+pub extend Uri with Debug::{to_repr}
+
+///|
+pub extend Uri with Eq::{equal, not_equal}

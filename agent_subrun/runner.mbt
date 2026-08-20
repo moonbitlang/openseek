@@ -402,3 +402,12 @@ fn status_of(terminal : SubrunTerminal) -> String {
     Failed(_) => "failed"
   }
 }
+
+///|
+pub extend SubrunResult with Debug::{to_repr}
+
+///|
+pub extend SubrunTerminal with Debug::{to_repr}
+
+///|
+pub extend SubrunTerminal with Eq::{equal, not_equal}

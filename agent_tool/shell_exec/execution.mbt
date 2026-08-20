@@ -542,3 +542,7 @@ async test "execution child sees an immediately-closed stdin pipe on Windows" {
     assert_false(exec.head().contains("NOT-REDIRECTED"))
   })
 }
+pub extend ExecStatus with Debug::{to_repr}
+
+///|
+pub extend ExecStatus with Eq::{equal, not_equal}

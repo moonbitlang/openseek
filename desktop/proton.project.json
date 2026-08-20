@@ -24,6 +24,7 @@
     "sign": {
       "binaries": [
         "target/proton-package-input/bin/openseek",
+        "target/proton-package-input/bin/rg",
         "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/internal/tcc",
         "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moon",
         "target/proton-package-input/toolchains/moonbit/macos-arm64/bin/moon-cram",

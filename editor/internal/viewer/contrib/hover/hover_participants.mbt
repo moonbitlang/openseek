@@ -469,3 +469,15 @@ fn union_range(
 ) -> @base_common.Range {
   @base_common.Range::plus_range(left, right)
 }
+
+///|
+pub extend ComputedHover with Debug::{to_repr}
+
+///|
+pub extend ComputedHover with Eq::{equal, not_equal}
+
+///|
+pub extend HoverPart with Debug::{to_repr}
+
+///|
+pub extend HoverPart with Eq::{equal, not_equal}

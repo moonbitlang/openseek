@@ -138,3 +138,6 @@ test "decode rejects non-object arguments" {
   }
   assert_true(failed)
 }
+
+///|
+pub extend RunMoonbitInput with Debug::{to_repr}

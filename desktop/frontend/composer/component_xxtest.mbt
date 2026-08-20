@@ -7,6 +7,7 @@ fn Input::fixture(task : String) -> Input {
   {
     identity: { owner, archive_generation: 0 },
     draft: { task, mentions: [] },
+    run: None,
     goal: { draft: None, standing: None, pending: None },
     slash_commands: [],
     root: Some(@common.Uri::file("/workspace")),
@@ -404,6 +405,125 @@ test "a mention-only draft is a submit-ready prompt" {
 }
 
 ///|
+test "the heartbeat reports only the detail it actually has" {
+  let clock_ms = 1_000_000.0
+  let full : RunHeartbeat = {
+    stage: Thinking,
+    started_ms: Some(clock_ms - 134_000.0),
+    tokens: 12_345,
+  }
+  assert_eq(full.label(clock_ms~), "Thinking… (2m 14s · 12.3k tokens)")
+  // A run adopted from a reconnect has no start this page witnessed. Its age
+  // is omitted, never guessed from the moment we noticed it.
+  assert_eq(
+    { ..full, started_ms: None }.label(clock_ms~),
+    "Thinking… (12.3k tokens)",
+  )
+  // Before the first usage event there is no count to report.
+  assert_eq({ ..full, tokens: 0 }.label(clock_ms~), "Thinking… (2m 14s)")
+  // Neither known: the bare stage is still the one thing worth saying.
+  assert_eq(
+    { ..full, started_ms: None, tokens: 0 }.label(clock_ms~),
+    "Thinking…",
+  )
+  // A clock that has not advanced past the start — the first render after a
+  // submit — reports no span rather than "0s".
+  assert_eq(
+    { ..full, started_ms: Some(clock_ms) }.label(clock_ms~),
+    "Thinking… (12.3k tokens)",
+  )
+  let bare = (stage : RunStage) => {
+    ({ stage, started_ms: None, tokens: 0 } : RunHeartbeat).label(clock_ms~)
+  }
+  assert_eq(bare(Starting), "Starting…")
+  assert_eq(bare(AtStep(3)), "Working · step 3")
+  assert_eq(bare(Working), "Working…")
+  assert_eq(bare(Stopping), "Stopping…")
+}
+
+///|
+test "an idle tick changes nothing, a running one advances the clock" {
+  // The tick is permanent because a component's subscriptions are re-derived
+  // only when it processes a message — never on an input change alone — so
+  // one declared just for open runs would never be installed for a prompt
+  // the user submits and then waits on. That makes this handler the place
+  // where idleness is decided, and an idle tick must leave the model equal to
+  // itself or the composer re-renders once a second forever.
+  let idle = Input::fixture("")
+  let mounted = Model(idle)
+  let (after_idle, _) = mounted.update(
+    idle,
+    ClockTicked,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(after_idle == mounted)
+  let running = {
+    ..idle,
+    run: Some({ stage: Thinking, started_ms: None, tokens: 0 }),
+  }
+  let stale = { ..mounted, clock_ms: 0.0 }
+  let (after_running, _) = stale.update(
+    running,
+    ClockTicked,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(after_running.clock_ms > 0.0)
+}
+
+///|
+test "an elapsed span never shows finer units than its own scale" {
+  assert_eq(elapsed_label(0.0), "0s")
+  assert_eq(elapsed_label(950.0), "0s")
+  assert_eq(elapsed_label(59_999.0), "59s")
+  assert_eq(elapsed_label(60_000.0), "1m 0s")
+  assert_eq(elapsed_label(134_000.0), "2m 14s")
+  assert_eq(elapsed_label(3_599_000.0), "59m 59s")
+  // Past an hour the seconds column is noise to anyone reading it.
+  assert_eq(elapsed_label(3_600_000.0), "1h 0m")
+  assert_eq(elapsed_label(87_240_000.0), "24h 14m")
+}
+
+///|
+#warnings("-alert_unstable")
+test "the running row is a permanent slot that empties when idle" {
+  let render = (input : Input) => {
+    @rabbita.render_to_string(() => {
+      @rabbita.Val::constant(
+        Model(input)
+        .active(input)
+        .view(
+          Msg::test_emit(),
+          Action::test_emit(),
+          input,
+          clock_ms=1_000_000.0,
+        ),
+      )
+    })
+  }
+  let idle = Input::fixture("")
+  let running : Input = {
+    ..idle,
+    run: Some({
+      stage: AtStep(3),
+      started_ms: Some(1_000_000.0 - 45_000.0),
+      tokens: 8_400,
+    }),
+  }
+  let running_markup = render(running)
+  assert_true(running_markup.contains("composer-running-mark"))
+  assert_true(running_markup.contains("Working · step 3 (45s · 8.4k tokens)"))
+  // Idle keeps the element and empties it — `.composer-running:empty` is what
+  // takes it off screen, so the contents must be gone, not merely hidden. The
+  // context column is diffed by position, and a row that came and went would
+  // shift the goal row below it on every run start and end.
+  let idle_markup = render(idle)
+  assert_true(idle_markup.contains("composer-running"))
+  assert_false(idle_markup.contains("composer-running-mark"))
+}
+
+///|
 #warnings("-alert_unstable")
 test "composer declares form focus ownership" {
   let input = Input::fixture("")
@@ -411,7 +531,7 @@ test "composer declares form focus ownership" {
     @rabbita.Val::constant(
       Model(input)
       .active(input)
-      .view(Msg::test_emit(), Action::test_emit(), input),
+      .view(Msg::test_emit(), Action::test_emit(), input, clock_ms=0.0),
     )
   })
   assert_true(markup.contains("class=\"composer-inner\""))

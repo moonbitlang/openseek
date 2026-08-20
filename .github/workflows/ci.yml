@@ -33,10 +33,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Checkout proton submodule
-        run: |
-          git submodule update --init ./desktop/lepus
-
       - name: Set up MoonBit (${{ matrix.moonbit-channel }})
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "${{ matrix.moonbit-version }}"
@@ -49,20 +45,15 @@ jobs:
       - name: Update MoonBit package registry
         run: moon update
 
-      # OpenSeek, editor, editor-server, desktop, and Proton are tested together
-      # by the root moon.work. The desktop and Proton native test binaries link
-      # libproton.so, which on Linux hard-links libcef.so: without an assembled
-      # CEF runtime the executables cannot even load. `cef setup` downloads the
-      # pinned CEF distribution (cached below), builds libproton from the
-      # submodule sources (needs pkg-config, GTK3 and X11 headers), and writes
-      # desktop/lepus/.proton/runtime.json, which Proton's link config prefers
-      # over the incomplete checked-in prebuilt.
-      - name: Install Proton native build dependencies
-        if: matrix.target == 'native'
+      # Proton comes from the registry, so the version it is pinned to lives in
+      # desktop/moon.mod and nowhere else. Read it back here rather than
+      # repeating it, and reuse it for both the CEF cache key and the CLI.
+      - name: Resolve pinned Proton version
+        id: proton
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libgtk-3-dev libx11-dev xvfb
+          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/moon.mod)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       # Pull requests may restore the default branch's cache, but their own
       # merge-ref caches are private to that PR and cannot warm other branches.
@@ -74,51 +65,7 @@ jobs:
           # Proton shares downloaded CEF distributions between projects here,
           # then copies the selected version into the project-local runtime.
           path: ~/.proton/cache/cef
-          key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/lepus/cli/cef/cef_platform.mbt') }}
-
-      - name: Assemble Proton CEF runtime
-        if: matrix.target == 'native'
-        # Proton's link config discovers the assembled runtime by walking up
-        # from the local proton module root. Run setup at that same project
-        # root so it finds the submodule's checked-in prebuilt and writes the
-        # runtime where the link config looks for it.
-        run: |
-          moon -C desktop/lepus install ./cli --bin target/proton-tools
-          ./desktop/lepus/target/proton-tools/proton_cli -C "$PWD/desktop/lepus" cef setup
-          test -f desktop/lepus/.proton/runtime.json
-          # `cef setup` stages the checked-in linux prebuilt libproton.so into
-          # the runtime dist, but that prebuilt predates the menu, notification
-          # and directory-dialog APIs (darwin's was rebuilt, linux's was not),
-          # so the full desktop app fails to link. Rebuild libproton from the
-          # submodule sources against the downloaded CEF — the same build the
-          # AppImage packager runs — and replace the staged library.
-          dist=$(jq -r .dist desktop/lepus/.proton/runtime.json)
-          case "$dist" in
-            /*) ;;
-            *) dist="$PWD/desktop/lepus/$dist" ;;
-          esac
-          # The active manifest owns this absolute path: Proton may use its
-          # shared user cache or a PROTON_CEF_CACHE override.
-          cef_root=$(jq -r .cef desktop/lepus/.proton/runtime.json)
-          cmake -S desktop/lepus/native -B desktop/target/proton-native/build \
-            -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
-            -DPROTON_WITH_ENGINE=ON -DPROTON_ENGINE_ROOT="$cef_root"
-          cmake --build desktop/target/proton-native/build --config Release
-          cp desktop/target/proton-native/build/lib/libproton.so "$dist/lib/libproton.so"
-          nm -D "$dist/lib/libproton.so" | grep -q proton_runtime_set_menu_json
-
-      # The stable/native main job is the sole Linux writer. PR jobs remain
-      # restore-only, and nightly does not race stable to reserve the same key.
-      - name: Save CEF distribution
-        if: >-
-          github.event_name == 'push' &&
-          matrix.moonbit-channel == 'stable' &&
-          matrix.target == 'native' &&
-          steps.cef-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.proton/cache/cef
-          key: ${{ steps.cef-cache.outputs.cache-primary-key }}
+          key: cef-${{ runner.os }}-${{ runner.arch }}-proton-${{ steps.proton.outputs.version }}
 
       - name: Check formatting
         # Stable only, for the same reason as `--deny-warn` below. `moon fmt` is
@@ -157,11 +104,48 @@ jobs:
             exit 1
           fi
 
-      - name: Test native target
-        # xvfb: the desktop/Proton windowed tests create real CEF windows (the
-        # Linux engine is compiled with CEF_X11), and the runner is headless.
+      # Only now: `cef setup` reads the Proton package's platform prebuilt out
+      # of .mooncakes, and nothing before the check steps above materializes
+      # it — `moon update` only refreshes the registry index. The checks
+      # themselves need no runtime because they never link. Setup runs at the
+      # repository root, which is both where Moon resolves .mooncakes and
+      # where Proton's link config looks for the .proton/runtime.json it
+      # writes; `moonx` runs the published CLI straight from the registry
+      # cache, so there is nothing to install.
+      #
+      # The test binaries below do link libproton.so, whose DT_NEEDED names
+      # libcef.so, libgtk-3.so.0 and libX11.so.6 — the loader resolves all
+      # three before main runs, so even a test that never opens a window
+      # cannot start without them. GTK and X11 are already on the runner
+      # image; libcef.so is the one the Proton package does not ship, and is
+      # what this step assembles beside libproton.so.
+      - name: Assemble Proton CEF runtime
         if: matrix.target == 'native'
-        run: xvfb-run -a moon test --target native
+        run: |
+          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}" \
+            -C "$PWD" cef setup
+          test -f .proton/runtime.json
+
+      # The stable/native main job is the sole Linux writer. PR jobs remain
+      # restore-only, and nightly does not race stable to reserve the same key.
+      - name: Save CEF distribution
+        if: >-
+          github.event_name == 'push' &&
+          matrix.moonbit-channel == 'stable' &&
+          matrix.target == 'native' &&
+          steps.cef-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.proton/cache/cef
+          key: ${{ steps.cef-cache.outputs.cache-primary-key }}
+
+      - name: Test native target
+        # No Xvfb: nothing here initializes CEF or opens a window. That was
+        # Proton's own windowed test suite, which left this workspace when
+        # Proton became a registry dependency; loading libproton needs the
+        # libraries above, not a display.
+        if: matrix.target == 'native'
+        run: moon test --target native
 
       - name: Test JS target
         # Run JS-only package tests from the same root workspace. These do not

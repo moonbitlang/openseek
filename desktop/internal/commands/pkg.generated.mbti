@@ -109,6 +109,8 @@ pub let fs_browse : Command[@protocol.BrowseDirectoryPayload, @protocol.BrowseDi
 
 pub let fs_cancel_search_files : Command[@protocol.CancelSearchFilesPayload, @protocol.EmptyReply]
 
+pub let fs_cancel_search_text : Command[@protocol.CancelSearchTextPayload, @protocol.EmptyReply]
+
 pub let fs_clear_file_search_cache : Command[@protocol.ClearFileSearchCachePayload, @protocol.EmptyReply]
 
 pub let fs_read_directory : Command[@protocol.ReadDirPayload, @protocol.ReadDirReply]
@@ -116,6 +118,8 @@ pub let fs_read_directory : Command[@protocol.ReadDirPayload, @protocol.ReadDirR
 pub let fs_read_file : Command[@protocol.ReadFilePayload, @protocol.ReadFileReply]
 
 pub let fs_search_files : Command[@protocol.SearchFilesPayload, @protocol.SearchFilesReply]
+
+pub let fs_search_text : Command[@protocol.SearchTextPayload, @protocol.SearchTextReply]
 
 pub let fs_stat_files : Command[@protocol.StatFilesPayload, @protocol.StatFilesReply]
 

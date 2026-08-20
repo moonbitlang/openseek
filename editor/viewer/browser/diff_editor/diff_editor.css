@@ -7,6 +7,7 @@
   min-height: 0;
   overflow: hidden;
   background: var(--vscode-editor-background);
+  container-type: inline-size;
 }
 
 .moonbit-diff-editor-toolbar {
@@ -78,6 +79,56 @@
   background: var(--vscode-button-background, #0e639c);
 }
 
+.moonbit-diff-editor-ignore-comments {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid
+    var(--vscode-editorWidget-border, rgba(127, 127, 127, 0.35));
+  border-radius: 5px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.moonbit-diff-editor-ignore-comments:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground, rgba(127, 127, 127, 0.12));
+}
+
+.moonbit-diff-editor-ignore-comments:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  outline-offset: -1px;
+}
+
+.moonbit-diff-editor-ignore-comments.active {
+  background: var(
+    --vscode-toolbar-activeBackground,
+    var(--vscode-toolbar-hoverBackground, rgba(127, 127, 127, 0.12))
+  );
+}
+
+.moonbit-diff-editor-ignore-comments:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.moonbit-diff-editor-ignore-comments-icon {
+  color: var(--vscode-symbolIcon-colorForeground, #8064c8);
+  font-family: var(--editor-font-family, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.moonbit-diff-editor-ignore-comments-label {
+  margin-left: 5px;
+  white-space: nowrap;
+}
+
 .moonbit-diff-editor-mode-status {
   flex: 1 1 auto;
   min-width: 0;
@@ -89,6 +140,22 @@
 
 .moonbit-diff-editor-mode-status[hidden] {
   display: none;
+}
+
+@container (max-width: 420px) {
+  .moonbit-diff-editor-toolbar {
+    gap: 5px;
+    padding-inline: 6px;
+  }
+
+  .moonbit-diff-editor-ignore-comments {
+    width: 26px;
+    padding-inline: 0;
+  }
+
+  .moonbit-diff-editor-ignore-comments-label {
+    display: none;
+  }
 }
 
 .moonbit-diff-editor-panes {

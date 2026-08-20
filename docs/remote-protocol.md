@@ -484,6 +484,8 @@ picker-specific starting-point behavior.
 | `fs.search_files` | `{path, cache_key, query, max_results, generation}` (`path` absolute root) | `{files: […], from_cache, limit_hit, cancelled}` — VS Code-style cache-session query returning root-relative paths; `max_results: 0` populates without returning rows, Quick Open requests at most 512 |
 | `fs.cancel_search_files` | `{cache_key, generation}` | `{}` — cancels one query while allowing cache population to finish |
 | `fs.clear_file_search_cache` | `{cache_key}` | `{}` — retires one search cache session and its outstanding work |
+| `fs.search_text` | `{root, query, regex, case_sensitive, whole_word, include_glob, exclude_glob, session_key, generation, max_results}` (`root` absolute; include/exclude are comma-separated VS Code-style globs) | `{root, generation, matches: [{path, line_number, preview, preview_start_column, ranges: [{start_column, end_column}]}], match_count, file_count, limit_hit, cancelled, error_code?, error_message?}` — bounded workspace grep using bundled ripgrep; paths are root-relative, line/preview columns and exclusive range ends are one-based UTF-16. Success omits both error fields; failures include both, and `error_code` distinguishes `invalid_regex`, `invalid_glob`, `permission_denied`, `rg_unavailable`, `invalid_request`, and `search_failed` |
+| `fs.cancel_search_text` | `{session_key, generation}` | `{}` — cancels that generation and records a bounded recent monotonic cancellation frontier; a newer generation in the same session automatically cancels its predecessor |
 | `fs.stat_files` | `{paths}` (absolute) | `{stats: [{path, sig}]}` — each `path` echoes its absolute input; `sig` is the opaque mtime signature `"{seconds}:{nanos}"`; `""` means the file is missing, retained for client compatibility |
 | `fs.watch` | `{path, files, directories, recursive?, generation}` (`path` absolute; `generation` string) | `{}` — replaces the connection's single watcher; success means the native watcher has scanned its initial tree and emitted its baseline, while setup failure rejects this request; `files` and `directories` are relative to `path`, each directory keeps its immediate children observable, `recursive=true` additionally watches every non-pruned descendant, and clients use a page-unique namespace plus a monotonically increasing counter for `generation` |
 | `fs.unwatch` | `{}` | `{}` — stops watching when the panel is closed and it has no open tabs |
@@ -499,6 +501,23 @@ Notification:
 The path arrays are always present, including when empty. A watcher replacement
 emits a baseline after it has scanned the selected paths and before its request
 returns, so the client can reconcile changes that raced the replacement.
+
+Text search mirrors VS Code's default ripgrep contract: it follows local
+`.gitignore`, `.ignore`, and `.rgignore` files without inheriting parent or
+global ignore files, includes hidden source files, follows symlinks, ignores
+`RIPGREP_CONFIG_PATH`, matches globs and ignore files case-insensitively outside
+Linux, and skips binary or files larger than 16 GiB. Directory
+exclusions start with VS Code's default `files.exclude` and `search.exclude`
+globs. Like the Search view, comma-separated patterns are split outside `{...}`
+and `[...]`; an ordinary `src` entry expands to both `**/src` and `**/src/**`,
+`.mbt` expands as `*.mbt`, and `./src` stays relative to the selected root.
+The protocol is intentionally single-root: `../`, `~/`, and absolute search
+locations are rejected instead of escaping `root`. Includes are emitted first
+and every default or request exclusion follows, so an exclusion wins when both
+match. The Host accepts at most 20,000 occurrences and sets `limit_hit` when the
+cap is reached. A connection teardown cancels every process it owns. Installed
+builds resolve only their packaged ripgrep; a `PATH` fallback is permitted
+solely for a detected development layout.
 
 ### terminal.* — connection-scoped PTYs
 

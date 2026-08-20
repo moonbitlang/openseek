@@ -130,3 +130,9 @@ pub(all) enum Event {
   McpListToolsTimeout(server~ : String)
   McpNoTools(server~ : String)
 } derive(Eq, Debug)
+
+///|
+pub extend Event with Debug::{to_repr}
+
+///|
+pub extend Event with Eq::{equal, not_equal}

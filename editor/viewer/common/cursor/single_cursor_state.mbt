@@ -121,3 +121,15 @@ fn not_before_or_equal(
 ) -> Bool {
   !a.is_before_or_equal(b)
 }
+
+///|
+pub extend SelectionStartKind with Debug::{to_repr}
+
+///|
+pub extend SelectionStartKind with Eq::{equal, not_equal}
+
+///|
+pub extend SingleCursorState with Debug::{to_repr}
+
+///|
+pub extend SingleCursorState with Eq::{equal, not_equal}

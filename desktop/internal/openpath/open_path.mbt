@@ -105,3 +105,15 @@ fn Reference::editor_candidate(self : Reference) -> EditorCandidate? {
   }
   Some({ path: before_last.to_owned(), line: last, column: None })
 }
+
+///|
+pub extend Reference with Debug::{to_repr}
+
+///|
+pub extend Reference with Eq::{equal, not_equal}
+
+///|
+pub extend Resolution with Debug::{to_repr}
+
+///|
+pub extend Resolution with Eq::{equal, not_equal}

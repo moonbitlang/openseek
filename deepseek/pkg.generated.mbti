@@ -19,6 +19,7 @@ pub struct ChatMessage {
   reasoning_content : String?
 } derive(@debug.Debug)
 pub fn ChatMessage::ChatMessage(Role, content~ : String, tool_calls? : Array[ToolCall], reasoning_content? : String) -> Self
+pub fn ChatMessage::to_repr(Self) -> @debug.Repr
 
 pub struct ChatResponse {
   content : String
@@ -26,17 +27,25 @@ pub struct ChatResponse {
   tool_calls : Array[ToolCall]
   usage : Usage
 } derive(@debug.Debug)
+pub fn ChatResponse::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ChatResponse::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for ChatResponse
 
 pub(all) enum DsVariant {
   V4Flash
   V4Pro
 } derive(Eq, @debug.Debug)
+pub fn DsVariant::equal(Self, Self) -> Bool
+pub fn DsVariant::not_equal(Self, Self) -> Bool
+pub fn DsVariant::to_repr(Self) -> @debug.Repr
 
 pub(all) enum KimiVariant {
   K27Code
   K27CodeHighSpeed
 } derive(Eq, @debug.Debug)
+pub fn KimiVariant::equal(Self, Self) -> Bool
+pub fn KimiVariant::not_equal(Self, Self) -> Bool
+pub fn KimiVariant::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Model {
   Deepseek(DsVariant)
@@ -44,12 +53,20 @@ pub(all) enum Model {
 } derive(Eq, @debug.Debug)
 pub fn Model::api_key(Self, Map[String, Array[String]]) -> String?
 pub fn Model::context_window(Self) -> Int
+pub fn Model::equal(Self, Self) -> Bool
+pub fn Model::not_equal(Self, Self) -> Bool
+pub fn Model::output(Self, &Logger) -> Unit
 pub fn Model::parse(String) -> Self raise
+pub fn Model::to_repr(Self) -> @debug.Repr
+pub fn Model::to_string(Self) -> String
 pub impl Show for Model
 
 pub(all) enum ResponseFormat {
   JsonObject
 } derive(Eq, @debug.Debug)
+pub fn ResponseFormat::equal(Self, Self) -> Bool
+pub fn ResponseFormat::not_equal(Self, Self) -> Bool
+pub fn ResponseFormat::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Role {
   System
@@ -57,13 +74,21 @@ pub(all) enum Role {
   Assistant
   Tool(String)
 } derive(Eq, @debug.Debug)
+pub fn Role::equal(Self, Self) -> Bool
+pub fn Role::not_equal(Self, Self) -> Bool
+pub fn Role::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ThinkingMode {
   No
   High
   Max
 } derive(Eq, @debug.Debug)
+pub fn ThinkingMode::equal(Self, Self) -> Bool
+pub fn ThinkingMode::not_equal(Self, Self) -> Bool
+pub fn ThinkingMode::output(Self, &Logger) -> Unit
 pub fn ThinkingMode::parse(String) -> Self raise
+pub fn ThinkingMode::to_repr(Self) -> @debug.Repr
+pub fn ThinkingMode::to_string(Self) -> String
 pub impl Show for ThinkingMode
 
 pub struct ToolCall {
@@ -72,6 +97,7 @@ pub struct ToolCall {
   arguments : String
 } derive(@debug.Debug)
 pub fn ToolCall::ToolCall(id~ : String, name~ : String, arguments~ : String) -> Self
+pub fn ToolCall::to_repr(Self) -> @debug.Repr
 
 pub struct ToolDefinition {
   name : String
@@ -80,6 +106,7 @@ pub struct ToolDefinition {
   strict : Bool
 } derive(@debug.Debug)
 pub fn ToolDefinition::ToolDefinition(String, String, Json, strict? : Bool) -> Self
+pub fn ToolDefinition::to_repr(Self) -> @debug.Repr
 
 pub struct Usage {
   prompt_tokens : Int
@@ -88,6 +115,9 @@ pub struct Usage {
   prompt_cache_hit_tokens : Int
   prompt_cache_miss_tokens : Int
 } derive(ToJson, @debug.Debug)
+pub fn Usage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Usage::to_json(Self) -> Json
+pub fn Usage::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for Usage
 
 // Type aliases

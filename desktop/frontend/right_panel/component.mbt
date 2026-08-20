@@ -31,6 +31,7 @@ pub(all) struct Actions {
   dock : @cmd.Emit[@dock.Msg]
   file_editor : @cmd.Emit[@fileeditor.Msg]
   browser_tab : @cmd.Cmd
+  search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
   browser_input : @cmd.Emit[String]
@@ -55,3 +56,6 @@ pub fn component(
 ) -> @rabbita.Val[@html.Html] {
   input.map(input => panel_view(input, actions))
 }
+
+///|
+pub extend Input with Eq::{equal, not_equal}

@@ -190,6 +190,7 @@
   font-family: var(--font-family-ui);
 }
 .mention-remove {
+  --icon-size: var(--icon-sm);
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -297,6 +298,40 @@
   display: none;
 }
 
+/* The open turn's heartbeat, docked directly above the textarea. Aligned to
+   the same 820px column as the notices but deliberately without their card:
+   it is the only row up here that repaints every second, and a bordered box
+   doing that reads as an alarm. The mark's pulse is the signal; the text is
+   detail for whoever looks.
+
+   Like `.plan-panel-slot`, the element is always in the DOM and collapses
+   when idle, so the goal row below it keeps its child index across the run
+   starts and ends that would otherwise shift it twice a turn. */
+.composer-running:empty {
+  display: none;
+}
+.composer-running {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 820px;
+  margin: 0 auto 8px;
+  padding: 0 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+.composer-running-mark {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  animation: lane-pulse 1.6s ease-in-out infinite;
+}
+.composer-running-text {
+  min-width: 0;
+}
+
 .composer-notice {
   display: flex;
   align-items: center;
@@ -311,6 +346,7 @@
   font-size: var(--font-size-md);
 }
 .composer-notice-icon {
+  --icon-size: var(--icon-md);
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -543,13 +579,10 @@
    whose SVG fills it, so shrinking only the SVG leaves it parked at the box's
    top edge instead of on the text's centre line. */
 .composer-git-glyph {
+  --icon-size: var(--icon-sm);
   display: inline-flex;
   align-items: center;
   flex: none;
-}
-.composer-git-glyph .icon {
-  width: 12px;
-  height: 12px;
 }
 /* The chip is tinted by CI, which is the part that changes while nobody is
    looking. Which pull request it is, and whether it is a draft, are in the
@@ -632,14 +665,11 @@
   color: var(--color-text-muted);
 }
 .composer-git-out {
+  --icon-size: var(--icon-sm);
   display: inline-flex;
   align-items: center;
   flex: none;
   color: var(--color-text-muted);
-}
-.composer-git-out .icon {
-  width: 11px;
-  height: 11px;
 }
 .composer-git-rule {
   height: 1px;

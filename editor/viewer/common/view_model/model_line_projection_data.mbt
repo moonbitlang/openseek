@@ -116,3 +116,15 @@ fn model_line_projection_segment(
     wrapped_text_indent_length,
   }
 }
+
+///|
+pub extend ModelLineProjectionData with Debug::{to_repr}
+
+///|
+pub extend ModelLineProjectionData with Eq::{equal, not_equal}
+
+///|
+pub extend ModelLineProjectionSegment with Debug::{to_repr}
+
+///|
+pub extend ModelLineProjectionSegment with Eq::{equal, not_equal}

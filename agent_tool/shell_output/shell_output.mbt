@@ -96,12 +96,24 @@ async fn execute(
   // when the command exited 0. Scan the *full* retained output for a denial (the
   // denial line can be earlier than the displayed tail), but only for a sandboxed
   // job — so a full read is done only in that rare case.
-  let sandbox_denied = if snapshot.sandboxed_command is Some(command) {
-    let full = bg_runtime.read_output(job_id).unwrap_or(output)
-    command.output_reports_denial(full)
-  } else {
-    false
+  let sandbox_feedback = match snapshot.sandboxed_command {
+    Some(command) => {
+      let full = bg_runtime.read_output(job_id).unwrap_or(output)
+      if command.output_reports_denial(full) {
+        Some(
+          @shell.contextual_source_write_denial_feedback(
+            command,
+            full,
+            read_only_review=snapshot.read_only_review,
+          ),
+        )
+      } else {
+        None
+      }
+    }
+    None => None
   }
+  let sandbox_denied = sandbox_feedback is Some(_)
   let is_error = exit_error || snapshot.had_invalid_utf8 || sandbox_denied
   // Truncated whenever what we show is less than what the job produced — this
   // covers the window (large output), a memory-only runtime that dropped output
@@ -133,8 +145,8 @@ async fn execute(
       content.write_string("\n")
     }
   }
-  if sandbox_denied {
-    content.write_string(@shell.source_write_denial_feedback())
+  if sandbox_feedback is Some(feedback) {
+    content.write_string(feedback)
     content.write_string("\n")
   }
   content.write_string(footer)

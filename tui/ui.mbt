@@ -56,17 +56,8 @@ fn Ui::new(tty : @tty.Tty, config : Config) -> Ui {
 /// and leave run on the command queue so they serialize with redraws.
 async fn[T] Ui::with_entered(self : Self, body : async () -> T) -> T {
   self.commands.wait(() => self.enter())
-  try body() catch {
-    error => {
-      self.commands.wait(() => self.leave())
-      raise error
-    }
-  } noraise {
-    value => {
-      self.commands.wait(() => self.leave())
-      value
-    }
-  }
+  defer self.commands.wait(() => self.leave())
+  body()
 }
 
 ///|

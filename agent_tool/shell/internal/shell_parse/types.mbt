@@ -74,3 +74,27 @@ priv enum LexState {
   DoubleQuoted
   Comment
 }
+
+///|
+pub extend EnvAssignment with Debug::{to_repr}
+
+///|
+pub extend EnvAssignment with Eq::{equal, not_equal}
+
+///|
+pub extend ParseResult with Debug::{to_repr}
+
+///|
+pub extend ParseResult with Eq::{equal, not_equal}
+
+///|
+pub extend Redirect with Debug::{to_repr}
+
+///|
+pub extend Redirect with Eq::{equal, not_equal}
+
+///|
+pub extend SimpleCommand with Debug::{to_repr}
+
+///|
+pub extend SimpleCommand with Eq::{equal, not_equal}

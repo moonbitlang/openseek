@@ -6,6 +6,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/sub",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/grep_search",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/internal/protocol",
@@ -23,8 +24,6 @@ pub fn basename(@pathx.Relative) -> String
 pub fn body_view(@cmd.Emit[Msg], State, Ctx) -> @html.Html
 
 pub fn breadcrumb_view(@cmd.Emit[Msg], State, Ctx) -> @html.Html
-
-pub fn changes_poll_subscription(State, Ctx, @cmd.Emit[Msg]) -> @sub.Sub
 
 pub fn close_document(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, next~ : @pathx.Relative?, was_active~ : Bool) -> (@cmd.Cmd, State)
 
@@ -45,6 +44,8 @@ pub fn remove_editor_feedback(ModelUri, String) -> @cmd.Cmd
 pub fn request_viewer_remeasure() -> @cmd.Cmd
 
 pub fn resize_handle_view() -> @html.Html
+
+pub fn subscriptions(State, Ctx, @cmd.Emit[Msg]) -> @sub.Sub
 
 pub fn sync(@cmd.Emit[Msg], State, Ctx) -> (State, @cmd.Cmd)
 
@@ -105,6 +106,7 @@ pub(all) struct Doc {
 pub(all) enum ExplorerMode {
   ExplorerFiles
   ExplorerChanges
+  ExplorerSearch
 } derive(Eq)
 
 pub(all) enum FileChange {
@@ -146,6 +148,8 @@ pub(all) enum Msg {
   HighlightCleared(@pathx.Relative)
   ToggleTree
   ExplorerModeSelected(ExplorerMode)
+  Search(@grep_search.Msg)
+  SearchMatchSelected(path~ : String, range~ : @common.Range)
   DirToggle(@pathx.Relative)
   EnsureFileIndex
   DirLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, entries~ : Array[FileEntry])
@@ -157,7 +161,9 @@ pub(all) enum Msg {
   ChangesPollDue
   FileSelected(path~ : @pathx.Relative, name~ : String)
   ChangedFileSelected(ChangedFile)
+  DiffLoadingDue(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int)
   ToggleReviewDiff
+  ToggleReviewDiffLayout
   ToggleReviewProgress
   GitOriginalLoaded(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, original~ : @protocol.GitOriginalFileReply)
   GitOriginalFailed(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, message~ : String)
@@ -172,7 +178,7 @@ pub(all) enum Msg {
   DiagnosticsPublished(channel~ : @interop.ChannelId, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
   LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : String)
   EditorCommentAdded(resource~ : ModelUri, file~ : @pathx.Relative, range~ : @common.Range, quote~ : String, comment~ : String, feedback_id~ : String)
-  UnifiedDiffCommentAdded(file~ : @pathx.Relative, original_line_number~ : Int?, modified_line_number~ : Int?, quote~ : String, comment~ : String)
+  UnifiedDiffCommentAdded(file~ : @pathx.Relative, original_line_number~ : Int?, modified_line_number~ : Int?, quote~ : String, comment~ : String, resource~ : ModelUri?, feedback_id~ : String?)
 }
 
 pub(all) enum ReconciledPlacement {
@@ -193,6 +199,11 @@ pub(all) enum ReviewBaseline {
   ReviewFailed(String)
 } derive(Eq)
 
+pub(all) enum ReviewDiffLayout {
+  ReviewSideBySide
+  ReviewUnified
+} derive(Eq)
+
 pub(all) struct ReviewState {
   generation : Int
   working_generation : Int
@@ -211,7 +222,9 @@ pub(all) struct State {
   placement : ReconciledPlacement
   tree_open : Bool
   explorer_mode : ExplorerMode
+  search : @grep_search.State
   review_view_mode : ReviewViewMode
+  review_diff_layout : ReviewDiffLayout
   changes : ChangeList
   reviewed_changes : Array[ChangedFile]
   changes_generation : Int
@@ -220,6 +233,7 @@ pub(all) struct State {
   changes_head : String?
   changes_head_known : Bool
   review_generation : Int
+  diff_loading_generation : Int?
   review_recovery_pending : Bool
   background_review_requests : Map[@pathx.Relative, Int]
   explorer_was_visible : Bool
@@ -235,6 +249,7 @@ pub(all) struct State {
   error : String?
 } derive(Eq)
 pub fn State::empty() -> Self
+pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@pathx.Relative]) -> Self
 pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
 
 pub(all) enum TabState {

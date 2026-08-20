@@ -209,3 +209,6 @@ fn emit_durable_boundary(
 ) -> Unit {
   emit(sink, DurableBoundary({ run_id, session, sequence }))
 }
+
+///|
+pub extend EngineError with Debug::{to_repr}

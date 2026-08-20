@@ -542,14 +542,12 @@ async fn[G] ensure_follower(
   group.spawn_bg(no_wait=true, allow_failure=true, () => {
     follower.run(sink, manager, ready)
   })
-  ready.get() catch {
-    error => {
-      // The actor lives in the pump group rather than this caller's task, so
-      // cancelling startup does not cancel it. Retire it synchronously here;
-      // waiting for a Stop would deadlock if the pump group is also exiting.
-      discard_follower_startup(manager, follower)
-      raise error
-    }
+  // The actor lives in the pump group rather than this caller's task, so
+  // cancelling startup does not cancel it. Retire it synchronously on the way
+  // out; waiting for a Stop would deadlock if the pump group is also exiting.
+  {
+    errdefer discard_follower_startup(manager, follower)
+    ready.get()
   }
   Some(follower)
 }

@@ -193,3 +193,6 @@ fn TokenMetadata::get_inline_style(
   }
   result
 }
+
+///|
+pub extend TokenMetadata with Eq::{equal, not_equal}

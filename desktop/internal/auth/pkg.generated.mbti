@@ -18,6 +18,8 @@ pub fn tunnel_url(String) -> String
 pub(all) suberror AuthError {
   AuthError(String)
 }
+pub fn AuthError::output(Self, &Logger) -> Unit
+pub fn AuthError::to_string(Self) -> String
 pub impl Show for AuthError
 
 // Types and methods
@@ -43,6 +45,8 @@ pub(all) struct ConnectorConfig {
   device_token : String
   device_name : String
 } derive(Eq)
+pub fn ConnectorConfig::equal(Self, Self) -> Bool
+pub fn ConnectorConfig::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

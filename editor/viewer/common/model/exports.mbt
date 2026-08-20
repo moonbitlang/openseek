@@ -46,3 +46,6 @@ pub(all) struct ModelContentChange {
   /// The new text for the range.
   text : String
 } derive(Debug)
+
+///|
+pub extend ModelContentChange with Debug::{to_repr}

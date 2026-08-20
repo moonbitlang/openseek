@@ -30,9 +30,15 @@ pub struct Marker {
   tags : Array[MarkerTag]?
   origin : String?
 } derive(Eq, @debug.Debug)
+pub fn Marker::equal(Self, Self) -> Bool
+pub fn Marker::not_equal(Self, Self) -> Bool
+pub fn Marker::to_repr(Self) -> @debug.Repr
 
 type MarkerData derive(Eq, @debug.Debug)
 pub fn MarkerData::MarkerData(severity~ : MarkerSeverity, message~ : String, start_line_number~ : Int, start_column~ : Int, end_line_number~ : Int, end_column~ : Int, code? : String, source? : String, model_version_id? : Int, related_information? : Array[RelatedInformation], tags? : Array[MarkerTag], origin? : String) -> Self
+pub fn MarkerData::equal(Self, Self) -> Bool
+pub fn MarkerData::not_equal(Self, Self) -> Bool
+pub fn MarkerData::to_repr(Self) -> @debug.Repr
 
 type MarkerDecorationsHandle
 pub fn MarkerDecorationsHandle::acquire_model(Self, @model.TextModel) -> @common.Disposable
@@ -73,11 +79,17 @@ pub(all) enum MarkerSeverity {
   Warning
   Error
 } derive(Eq, @debug.Debug)
+pub fn MarkerSeverity::equal(Self, Self) -> Bool
+pub fn MarkerSeverity::not_equal(Self, Self) -> Bool
+pub fn MarkerSeverity::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MarkerTag {
   Unnecessary
   Deprecated
 } derive(Eq, @debug.Debug)
+pub fn MarkerTag::equal(Self, Self) -> Bool
+pub fn MarkerTag::not_equal(Self, Self) -> Bool
+pub fn MarkerTag::to_repr(Self) -> @debug.Repr
 
 pub(all) struct RelatedInformation {
   resource : @common.Uri
@@ -87,6 +99,9 @@ pub(all) struct RelatedInformation {
   end_line_number : Int
   end_column : Int
 } derive(Eq, @debug.Debug)
+pub fn RelatedInformation::equal(Self, Self) -> Bool
+pub fn RelatedInformation::not_equal(Self, Self) -> Bool
+pub fn RelatedInformation::to_repr(Self) -> @debug.Repr
 
 pub struct ResolvedMarkerDecoration {
   range : @common.Range
@@ -98,6 +113,9 @@ pub(all) struct ResourceMarker {
   resource : @common.Uri
   marker : MarkerData
 } derive(Eq, @debug.Debug)
+pub fn ResourceMarker::equal(Self, Self) -> Bool
+pub fn ResourceMarker::not_equal(Self, Self) -> Bool
+pub fn ResourceMarker::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SquigglyThemeColors {
   error : String?
@@ -105,6 +123,9 @@ pub(all) struct SquigglyThemeColors {
   info : String?
   hint : String?
 } derive(Eq, @debug.Debug)
+pub fn SquigglyThemeColors::equal(Self, Self) -> Bool
+pub fn SquigglyThemeColors::not_equal(Self, Self) -> Bool
+pub fn SquigglyThemeColors::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

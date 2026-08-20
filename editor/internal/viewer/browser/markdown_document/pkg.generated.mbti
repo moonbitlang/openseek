@@ -51,6 +51,9 @@ pub(all) struct MarkdownSectionFoldControl {
   section_index : Int
   collapsed : Bool
 } derive(Eq, @debug.Debug)
+pub fn MarkdownSectionFoldControl::equal(Self, Self) -> Bool
+pub fn MarkdownSectionFoldControl::not_equal(Self, Self) -> Bool
+pub fn MarkdownSectionFoldControl::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownSemanticCodeLineDom {
   block_index : Int
@@ -71,6 +74,9 @@ pub(all) struct MarkdownTocBarEntry {
   text : String
   source_offset : Int
 } derive(Eq, @debug.Debug)
+pub fn MarkdownTocBarEntry::equal(Self, Self) -> Bool
+pub fn MarkdownTocBarEntry::not_equal(Self, Self) -> Bool
+pub fn MarkdownTocBarEntry::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

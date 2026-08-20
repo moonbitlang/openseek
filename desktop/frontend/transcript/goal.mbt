@@ -107,3 +107,9 @@ test "the goal reducer follows last-marker-wins with guarded transitions" {
   assert_true(apply_goal_marker(None, GoalBlocked("orphan")) is None)
   assert_true(apply_goal_marker(None, GoalUnblocked) is None)
 }
+
+///|
+pub extend GoalMarker with Eq::{equal, not_equal}
+
+///|
+pub extend GoalStanding with Eq::{equal, not_equal}

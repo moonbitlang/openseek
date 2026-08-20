@@ -47,3 +47,33 @@ pub(all) enum ShowFoldingControls {
   Never
   Mouseover
 } derive(Eq, Debug)
+
+///|
+pub extend RenderLineHighlight with Debug::{to_repr}
+
+///|
+pub extend RenderLineHighlight with Eq::{equal, not_equal}
+
+///|
+pub extend RenderValidationDecorations with Debug::{to_repr}
+
+///|
+pub extend RenderValidationDecorations with Eq::{equal, not_equal}
+
+///|
+pub extend RenderWhitespace with Debug::{to_repr}
+
+///|
+pub extend RenderWhitespace with Eq::{equal, not_equal}
+
+///|
+pub extend ShowFoldingControls with Debug::{to_repr}
+
+///|
+pub extend ShowFoldingControls with Eq::{equal, not_equal}
+
+///|
+pub extend WrappingIndent with Debug::{to_repr}
+
+///|
+pub extend WrappingIndent with Eq::{equal, not_equal}

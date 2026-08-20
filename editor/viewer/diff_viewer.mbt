@@ -67,6 +67,7 @@ struct DiffViewer {
   toolbar : @rdom.Element
   mode_status : @rdom.Element
   mode_buttons : Array[(DiffViewerMode, @rdom.Element)]
+  ignore_comments_button : @rdom.Element
   original_viewer : Viewer
   modified_viewer : Viewer
   owned_services : ViewerServices?
@@ -80,6 +81,7 @@ struct DiffViewer {
   mut original_zone_ids : Array[String]
   mut modified_zone_ids : Array[String]
   mut diff_mode : DiffViewerMode
+  mut ignore_comments : Bool
   mut disposed : Bool
 }
 
@@ -129,6 +131,28 @@ pub fn DiffViewer::create(
     mode_buttons.push((mode, button))
   }
   toolbar.append_child(mode_group.as_node())
+  let ignore_comments_button = document.create_element("button")
+  ignore_comments_button.set_attribute("type", "button")
+  ignore_comments_button.set_attribute(
+    "class", "moonbit-diff-editor-ignore-comments active",
+  )
+  ignore_comments_button.set_attribute("aria-label", "Ignore comments")
+  ignore_comments_button.set_attribute("aria-pressed", "true")
+  ignore_comments_button.set_attribute("disabled", "")
+  let ignore_comments_icon = document.create_element("span")
+  ignore_comments_icon.set_attribute(
+    "class", "moonbit-diff-editor-ignore-comments-icon",
+  )
+  ignore_comments_icon.set_attribute("aria-hidden", "true")
+  ignore_comments_icon.set_inner_html("//")
+  ignore_comments_button.append_child(ignore_comments_icon.as_node())
+  let ignore_comments_label = document.create_element("span")
+  ignore_comments_label.set_attribute(
+    "class", "moonbit-diff-editor-ignore-comments-label",
+  )
+  ignore_comments_label.set_inner_html("Ignore comments")
+  ignore_comments_button.append_child(ignore_comments_label.as_node())
+  toolbar.append_child(ignore_comments_button.as_node())
   let mode_status = document.create_element("span")
   mode_status.set_attribute("class", "moonbit-diff-editor-mode-status")
   mode_status.set_attribute("aria-live", "polite")
@@ -178,6 +202,7 @@ pub fn DiffViewer::create(
     toolbar,
     mode_status,
     mode_buttons,
+    ignore_comments_button,
     original_viewer,
     modified_viewer,
     owned_services,
@@ -191,6 +216,7 @@ pub fn DiffViewer::create(
     original_zone_ids: [],
     modified_zone_ids: [],
     diff_mode: StandardDiff,
+    ignore_comments: true,
     disposed: false,
   }
   diff_viewer.apply_render_mode_dom()
@@ -202,6 +228,15 @@ pub fn DiffViewer::create(
       diff_viewer.set_diff_mode(mode)
     })
   }
+  diff_viewer.ignore_comments_button.add_event_listener("click", event => {
+    event.prevent_default()
+    event.stop_propagation()
+    if diff_viewer.diff_mode is StandardDiff {
+      return
+    }
+    diff_viewer.ignore_comments = !diff_viewer.ignore_comments
+    diff_viewer.refresh_diff()
+  })
   diff_viewer.update_diff_mode_controls(
     specialized_available=false,
     effective_mode=StandardDiff,
@@ -581,6 +616,10 @@ fn DiffViewer::update_diff_mode_controls(
   }
   self.root.set_attribute("data-diff-mode", selected_mode.attribute_name())
   self.root.set_attribute("data-diff-renderer", effective_mode.attribute_name())
+  self.root.set_attribute(
+    "data-ignore-comments",
+    self.ignore_comments.to_string(),
+  )
   for entry in self.mode_buttons {
     let (mode, button) = entry
     let active = mode == selected_mode
@@ -593,6 +632,34 @@ fn DiffViewer::update_diff_mode_controls(
       },
     )
     button.set_attribute("aria-pressed", active.to_string())
+  }
+  self.ignore_comments_button.set_attribute(
+    "class",
+    if self.ignore_comments {
+      "moonbit-diff-editor-ignore-comments active"
+    } else {
+      "moonbit-diff-editor-ignore-comments"
+    },
+  )
+  self.ignore_comments_button.set_attribute(
+    "aria-pressed",
+    self.ignore_comments.to_string(),
+  )
+  if specialized_available && !(self.diff_mode is StandardDiff) {
+    self.ignore_comments_button.remove_attribute("disabled")
+    self.ignore_comments_button.set_attribute(
+      "title",
+      if self.ignore_comments {
+        "Show comment and blank-line changes"
+      } else {
+        "Ignore MoonBit comment and blank-line changes"
+      },
+    )
+  } else {
+    self.ignore_comments_button.set_attribute("disabled", "")
+    self.ignore_comments_button.set_attribute(
+      "title", "Available in Token and Tree diff",
+    )
   }
   if fell_back {
     self.root.set_attribute("data-diff-fallback", "true")
@@ -628,6 +695,7 @@ fn DiffViewer::refresh_diff(self : DiffViewer) -> Unit {
   let calculation = calculate_diff_changes(
     self.diff_mode,
     specialized_available,
+    self.ignore_comments,
     original_lines,
     modified_lines,
     diff_model.original.get_value(),
@@ -724,6 +792,7 @@ priv struct DiffLineChange {
   modified : @base_common.LineRange
   original_inner_changed : Array[@base_common.Range]
   modified_inner_changed : Array[@base_common.Range]
+  render_change : Bool
 }
 
 ///|
@@ -749,20 +818,22 @@ fn diff_presentation(changes : Array[DiffLineChange]) -> DiffPresentation {
   let original_spacers = []
   let modified_spacers = []
   for change in changes {
-    if !change.original.is_empty() {
-      original_changed.push(change.original)
-    }
-    if !change.modified.is_empty() {
-      modified_changed.push(change.modified)
-    }
-    for original in change.original_inner_changed {
-      if !original.is_empty() {
-        original_inner_changed.push(original)
+    if change.render_change {
+      if !change.original.is_empty() {
+        original_changed.push(change.original)
       }
-    }
-    for modified in change.modified_inner_changed {
-      if !modified.is_empty() {
-        modified_inner_changed.push(modified)
+      if !change.modified.is_empty() {
+        modified_changed.push(change.modified)
+      }
+      for original in change.original_inner_changed {
+        if !original.is_empty() {
+          original_inner_changed.push(original)
+        }
+      }
+      for modified in change.modified_inner_changed {
+        if !modified.is_empty() {
+          modified_inner_changed.push(modified)
+        }
       }
     }
     let original_length = change.original.length()
@@ -1027,7 +1098,9 @@ fn install_unified_deleted_zones(
   let options = configuration.options
   viewer.change_view_zones(accessor => {
     for ordinal, change in changes {
-      guard !change.original.is_empty() else { continue }
+      guard change.render_change && !change.original.is_empty() else {
+        continue
+      }
       let document = @rdom.document()
       let content = document.create_element("div")
       content.set_attribute("class", "diff-editor-unified-deleted-block")
@@ -1108,3 +1181,12 @@ fn remove_diff_zones(viewer : Viewer, ids : Array[String]) -> Unit {
     }
   })
 }
+
+///|
+pub extend DiffEditorRenderMode with Debug::{to_repr}
+
+///|
+pub extend DiffEditorRenderMode with Eq::{equal, not_equal}
+
+///|
+pub extend DiffViewerMode with Eq::{equal, not_equal}

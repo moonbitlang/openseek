@@ -569,6 +569,11 @@ priv struct Conversation {
   // (accent for success, warn otherwise) until the conversation is opened.
   unseen_finish : Bool
   usage_tokens : Int
+  // When this page saw the current run begin, for the composer row's elapsed
+  // span. `None` whenever that moment is not this page's to know — a run
+  // adopted from a reconnect started before we were watching, and guessing
+  // from the moment we noticed would report a wrong, always-too-short age.
+  run_started_ms : Double?
   // Sub-runs this conversation's open turn has in flight, in the order they
   // started. Live-only: nothing persists a sub-run's progress, so a reload
   // mid-turn shows the tool call pending with no lane under it.
@@ -867,16 +872,6 @@ priv enum Screen {
 /// `file:line` cannot carry, so a draft chip's jump still selects the exact
 /// span (`None` for a skill or an unplaced symbol).
 type Mention = @composer.Mention
-
-///|
-/// The mooncakes.io skill catalog as the Skills page sees it. One enum, so
-/// "loading", "loaded empty" and "failed" cannot be conflated.
-priv enum SkillsCatalog {
-  CatalogIdle
-  CatalogLoading
-  CatalogReady(Array[@transcript.MarketSkillItem])
-  CatalogFailed(String)
-} derive(Eq)
 
 ///|
 /// Whether the host bridge is up — three states the old `bridge_ready` bool
@@ -1202,22 +1197,18 @@ priv struct Model {
   project_picker : ProjectPicker?
   // A confirmed add waiting for its registry snapshot; None otherwise.
   pending_project_adoption : ProjectAdoption?
-  // The Skills page: the registry catalog, the local library's contents,
-  // the search filter, entries with an install/uninstall in flight (keyed
-  // by the catalog entry's source label or the installed entry's id), and
-  // the last failure to show. The catalog is fetched when the page opens
-  // and kept for the app run; the installed list refreshes on open and
-  // after every successful action.
   screen : Screen
   // Codex app-server has an independent durable thread/turn/item model. Keep
   // its page state beside the screen selector instead of folding it into an
   // OpenSeek Conversation, whose persistence and event protocol are different.
   codex : @codex.State
-  skills_catalog : SkillsCatalog
-  installed_skills : Array[@transcript.InstalledSkillItem]
-  skills_query : String
-  skills_busy : Array[String]
-  skills_notice : String
+  // The Skills page's own state — the registry catalog, the search filter,
+  // in-flight actions, the last failure — which only that page can see.
+  skills : @skills.State
+  // The focused host's skills library. Root-owned rather than page-owned
+  // because the composer's `$` completion reads the same list, which is why
+  // it refreshes on connect instead of when the Skills page opens.
+  installed_skills : Array[@skills.InstalledItem]
   // Advances only when navigation changes which composer is visible. Local
   // component entries use it to dismiss an old completion menu while keeping
   // each conversation's unsent draft; textarea edits never touch this field or
@@ -1577,18 +1568,8 @@ priv enum Msg {
   ViewportResized(width~ : Int)
   SaveApiKey
   OpenSkills
-  SkillsQueryChanged(String)
-  SkillsCatalogLoaded(Array[@transcript.MarketSkillItem])
-  SkillsCatalogFailed(String)
-  // A failure outside install/uninstall (the installed-list refresh).
-  SkillsNotice(String)
-  InstallSkill(@transcript.MarketSkillItem)
-  // Uninstall by library entry id; only registry installs get the button.
-  UninstallSkill(String)
-  // An install/uninstall settled: `key` is the busy entry to release, and a
-  // non-empty `error` becomes the panel's notice (success refreshes the
-  // installed list instead).
-  SkillActionDone(channel~ : @interop.ChannelId, key~ : String, error~ : String)
+  // Everything the Skills page does with itself once it is open.
+  Skills(@skills.Msg)
   Send
   Stop
   NewChat
@@ -1763,12 +1744,11 @@ priv enum Msg {
   // The browser subsystem's pure messages: address drafts and the host's
   // `browser.event` view events, routed to the `preview` package.
   Preview(@preview.Msg)
-  // The dock launcher's rows: open a blank Browser tab (with the address
-  // bar focused), or open the transient FilePicker tab on Files or Review.
-  // Every row closes the `+` menu.
+  // The dock launcher's rows: open a blank Browser tab, or open the shared
+  // Explorer picker on Files, Changes, or Search. Every row closes the `+`
+  // menu; all inventories share this one shell transition.
   BrowserTabRequested
-  FilePickerRequested
-  ReviewRequested
+  ExplorerRequested(@fileeditor.ExplorerMode)
   // The browser toolbar, acting on whatever Browser tab is active — the
   // messages carry no id so a stale click cannot outlive a tab switch.
   BrowserAddressEdited(String)
@@ -1839,7 +1819,7 @@ priv enum DeviceMsg {
   // A `skills.installed` reply is channel-scoped just like the invalidation
   // that prompted it. Only the currently focused host may replace the
   // page's library mirror.
-  InstalledSkillsLoaded(Array[@transcript.InstalledSkillItem])
+  InstalledSkillsLoaded(Array[@skills.InstalledItem])
   InstalledSkillsFailed(String)
   // Another client changed this host's library; the focused client re-reads
   // it so the Skills page and `$` completion share the new contents.
@@ -2196,6 +2176,7 @@ fn empty_conversation(
     compaction: NotCompacting,
     unseen_finish: false,
     usage_tokens: 0,
+    run_started_ms: None,
     subruns: [],
     branch: None,
     diffstat: None,
@@ -2318,11 +2299,8 @@ fn initial_model() -> Model {
     archived_delete_confirm: None,
     screen: Chat,
     codex: @codex.State(),
-    skills_catalog: CatalogIdle,
+    skills: @skills.State::empty(),
     installed_skills: [],
-    skills_query: "",
-    skills_busy: [],
-    skills_notice: "",
     composer_context_generation: 0,
     composer_entry_replacements: [],
     composer_entry_retirements: [],
@@ -2443,16 +2421,10 @@ fn Model::bridge_state(self : Model) -> BridgeState {
 }
 
 ///|
-/// Whether a catalog entry (identified by its source label) is already in
-/// the local library — at that exact version; an older install keeps the
-/// Install button alive as the upgrade path.
-fn Model::skill_installed(self : Model, source : String) -> Bool {
-  for skill in self.installed_skills {
-    if skill.source == source {
-      return true
-    }
-  }
-  false
+/// What the Skills page draws against: the device it acts on, and that
+/// device's library as the root mirrors it.
+fn Model::skills_input(self : Model) -> @skills.Input {
+  { channel: self.focused, installed: self.installed_skills }
 }
 
 ///|
@@ -3253,6 +3225,32 @@ fn Conversation::visible_subruns(
 ) -> Array[@transcript.SubrunLane] {
   guard self.run is Open(run_id~, ..) else { return [] }
   self.subruns.filter(lane => lane.run is Some(owner) && owner == run_id)
+}
+
+///|
+/// What the run is doing right now, as one line docked above the composer.
+/// `None` between runs — an idle conversation reports nothing.
+///
+/// Purely derived from the run phase, like `display_status`, so no handler
+/// has to keep a stored line in sync. The wire protocol carries no live
+/// reasoning stream, so the deepest this can see during a model call is the
+/// step it is on: between `agent_step` and the first answer delta every
+/// engine is silent, and this line plus its pulsing mark is the whole of
+/// what distinguishes thinking from a hang.
+/// The open turn as the composer's heartbeat row needs it: facts only. The
+/// wording, the clock, and the tick that advances it belong to the composer,
+/// so a span that changes every second costs one component's render instead
+/// of reprojecting every component's input once a second.
+fn Conversation::run_heartbeat(self : Conversation) -> @composer.RunHeartbeat? {
+  let stage : @composer.RunStage = match self.run {
+    NoRun(..) => return None
+    Starting(..) => Starting
+    Open(stage=Opened, ..) => Thinking
+    Open(stage=AtStep(Some(step)), ..) => AtStep(step)
+    Open(stage=AtStep(None), ..) => Working
+    Open(stage=Cancelling, ..) => Stopping
+  }
+  Some({ stage, started_ms: self.run_started_ms, tokens: self.usage_tokens })
 }
 
 ///|

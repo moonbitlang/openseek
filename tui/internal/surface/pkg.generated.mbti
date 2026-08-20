@@ -17,12 +17,16 @@ pub fn Cursor::new(row~ : Int, col~ : Int) -> Self
 pub fn Cursor::row(Self) -> Int
 
 type Line derive(Eq)
+pub fn Line::equal(Self, Self) -> Bool
 pub fn Line::new(Array[Span]) -> Self
+pub fn Line::not_equal(Self, Self) -> Bool
 pub fn Line::spans(Self) -> Array[Span]
 pub fn Line::text(Self) -> String
 
 type Span derive(Eq)
 pub fn Span::Span(@displaytext.DisplayText, style? : @style.Style) -> Self
+pub fn Span::equal(Self, Self) -> Bool
+pub fn Span::not_equal(Self, Self) -> Bool
 pub fn Span::style(Self) -> @style.Style
 pub fn Span::text(Self) -> String
 

@@ -1,6 +1,7 @@
 import {
   "openseek_desktop/package/internal/moonbit",
   "openseek_desktop/package/internal/packaging",
+  "openseek_desktop/package/internal/ripgrep_assets",
   "openseek_desktop/package/internal/xterm_assets",
   "moonbitlang/async",
   "moonbitlang/core/argparse",

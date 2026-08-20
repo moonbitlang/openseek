@@ -175,3 +175,9 @@ pub fn search(
     })
   })
 }
+
+///|
+pub extend Symbol with Debug::{to_repr}
+
+///|
+pub extend Symbol with Eq::{equal, not_equal}

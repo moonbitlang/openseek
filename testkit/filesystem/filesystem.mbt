@@ -134,19 +134,8 @@ pub async fn[T] with_tmpdir(
       _ => ()
     }
   }
-  // `defer` cannot run an async call, so clean up on both paths explicitly and
-  // re-raise the body's error after removing the directory.
-  try body(dir) catch {
-    error => {
-      rmdir()
-      raise error
-    }
-  } noraise {
-    result => {
-      rmdir()
-      result
-    }
-  }
+  defer rmdir()
+  body(dir)
 }
 
 ///|

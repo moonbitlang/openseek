@@ -304,3 +304,6 @@ test "sidecar decoding renders the install source" {
   assert_eq(decode_sidecar("not json"), "")
   assert_eq(decode_sidecar("{\"version\":\"0.2.0\"}"), "")
 }
+
+///|
+pub extend MarketSkill with ToJson::{to_json}

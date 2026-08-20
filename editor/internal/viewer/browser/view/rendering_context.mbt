@@ -278,3 +278,9 @@ priv struct HorizontalRange {
   left : Int
   width : Int
 }
+
+///|
+pub extend HorizontalPosition with Debug::{to_repr}
+
+///|
+pub extend HorizontalPosition with Eq::{equal, not_equal}

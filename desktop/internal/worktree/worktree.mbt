@@ -890,7 +890,10 @@ pub async fn create(
   // provably THIS invocation's, which is what makes the rollback's
   // `branch -D` safe.
   ignore(@gitx.run(dir, ["branch", branch, base]))
-  try {
+  {
+    errdefer @async.protect_from_cancel(() => {
+      rollback_worktree(dir, name, branch)
+    })
     ignore(
       @gitx.run(dir, ["worktree", "add", "\{WorktreesDirName}/\{name}", branch]),
     )
@@ -898,11 +901,6 @@ pub async fn create(
       provision_initialized_submodules(
         dir, target, submodule_checkout_timeout_seconds,
       )
-    }
-  } catch {
-    error => {
-      @async.protect_from_cancel(() => rollback_worktree(dir, name, branch))
-      raise error
     }
   }
   entries.push({
@@ -914,11 +912,9 @@ pub async fn create(
   })
   let mut infos : Array[WorktreeInfo] = []
   @async.protect_from_cancel(() => {
-    write_worktrees(dir, entries) catch {
-      error => {
-        rollback_worktree(dir, name, branch)
-        raise error
-      }
+    {
+      errdefer rollback_worktree(dir, name, branch)
+      write_worktrees(dir, entries)
     }
     infos = worktree_infos(dir, entries)
     on_committed(infos)
@@ -954,27 +950,21 @@ async fn restore_worktree_checkout(
   ignore(@gitx.probe(dir, ["worktree", "prune"]))
   @workspaces.exclude_from_git(dir, WorktreesDirName)
   let target = worktree_dir(dir, entry.name)
-  try {
-    ignore(
-      @gitx.run(dir, [
-        "worktree",
-        "add",
-        "\{WorktreesDirName}/\{entry.name}",
-        entry.branch,
-      ]),
+  errdefer @async.protect_from_cancel(() => {
+    rollback_worktree_checkout(dir, entry.name, entry.branch)
+  })
+  ignore(
+    @gitx.run(dir, [
+      "worktree",
+      "add",
+      "\{WorktreesDirName}/\{entry.name}",
+      entry.branch,
+    ]),
+  )
+  if checkout_submodules {
+    provision_initialized_submodules(
+      dir, target, submodule_checkout_timeout_seconds,
     )
-    if checkout_submodules {
-      provision_initialized_submodules(
-        dir, target, submodule_checkout_timeout_seconds,
-      )
-    }
-  } catch {
-    error => {
-      @async.protect_from_cancel(() => {
-        rollback_worktree_checkout(dir, entry.name, entry.branch)
-      })
-      raise error
-    }
   }
 }
 
@@ -1808,3 +1798,18 @@ async test "worktree remove prunes an externally deleted checkout" {
   )
   @fs.rmdir(root.to_string(), recursive=true)
 }
+
+///|
+pub extend CodexWorktreeBinding with Debug::{to_repr}
+
+///|
+pub extend CodexWorktreeBinding with Eq::{equal, not_equal}
+
+///|
+pub extend WorktreeError with Debug::{to_repr}
+
+///|
+pub extend WorktreeOwner with Debug::{to_repr}
+
+///|
+pub extend WorktreeOwner with Eq::{equal, not_equal}

@@ -48,3 +48,15 @@ pub fn Relative::contains(self : Relative, path : Relative) -> Bool {
   let prefix = if root.has_suffix("/") { root } else { "\{root}/" }
   path.strip_prefix(prefix) is Some(_)
 }
+
+///|
+pub extend Relative with Debug::{to_repr}
+
+///|
+pub extend Relative with Eq::{equal, not_equal}
+
+///|
+pub extend Relative with Hash::{hash, hash_combine}
+
+///|
+pub extend Relative with Show::{output, to_string}

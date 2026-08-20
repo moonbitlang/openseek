@@ -264,3 +264,9 @@ pub(all) enum Msg {
   /// One tab's emulator re-fit to a new grid size.
   ViewportResized(key~ : Int, cols~ : Int, rows~ : Int)
 }
+
+///|
+pub extend Ctx with Eq::{equal, not_equal}
+
+///|
+pub extend State with Eq::{equal, not_equal}

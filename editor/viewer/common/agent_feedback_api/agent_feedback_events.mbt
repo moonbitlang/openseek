@@ -12,3 +12,12 @@ pub(all) struct AgentFeedbackNavigationBearing {
   active_idx : Int
   total_count : Int
 } derive(Eq, Debug)
+
+///|
+pub extend AgentFeedbackChangeEvent with Debug::{to_repr}
+
+///|
+pub extend AgentFeedbackNavigationBearing with Debug::{to_repr}
+
+///|
+pub extend AgentFeedbackNavigationBearing with Eq::{equal, not_equal}

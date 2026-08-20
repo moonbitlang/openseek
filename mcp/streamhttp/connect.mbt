@@ -67,7 +67,7 @@ pub async fn[X] connect(
       torn_down.val = true
       pump.cancel()
       writer.cancel()
-      transport.close()
+      @jsonrpc.Transport::close(transport)
     }
   }
   let mcp_client = @mcp.McpClient::new(client)

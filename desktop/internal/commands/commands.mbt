@@ -380,6 +380,18 @@ pub let fs_cancel_search_files : Command[
 ] = Command("fs.cancel_search_files")
 
 ///|
+pub let fs_search_text : Command[
+  @protocol.SearchTextPayload,
+  @protocol.SearchTextReply,
+] = Command("fs.search_text")
+
+///|
+pub let fs_cancel_search_text : Command[
+  @protocol.CancelSearchTextPayload,
+  @protocol.EmptyReply,
+] = Command("fs.cancel_search_text")
+
+///|
 pub let fs_clear_file_search_cache : Command[
   @protocol.ClearFileSearchCachePayload,
   @protocol.EmptyReply,

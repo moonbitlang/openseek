@@ -20,16 +20,19 @@ pub(all) struct AgentFeedback {
   replies : Array[String]
   state : AgentFeedbackState
 } derive(@debug.Debug)
+pub fn AgentFeedback::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AgentFeedbackAddedEvent {
   feedback : AgentFeedback
   has_existing_feedback_for_file : Bool
 } derive(@debug.Debug)
+pub fn AgentFeedbackAddedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AgentFeedbackChangeEvent {
   resource : @common.Uri
   feedback_items : Array[AgentFeedback]
 } derive(@debug.Debug)
+pub fn AgentFeedbackChangeEvent::to_repr(Self) -> @debug.Repr
 
 type AgentFeedbackHandle
 pub fn AgentFeedbackHandle::AgentFeedbackHandle(on_did_change_feedback~ : ((AgentFeedbackChangeEvent) -> Unit) -> @common.Disposable, on_did_change_navigation~ : ((@common.Uri) -> Unit) -> @common.Disposable, is_feedback_enabled~ : (@common.Uri) -> Bool, get_feedback~ : (@common.Uri) -> Array[AgentFeedback], get_navigation_bearing~ : (@common.Uri, Array[String]) -> AgentFeedbackNavigationBearing, add_feedback~ : (@common.Uri, @common.Range, String, AgentFeedbackKind?, AgentFeedbackState?) -> AgentFeedback, mark_feedback_submitted~ : (@common.Uri) -> Unit, remove_feedback~ : (@common.Uri, String) -> Unit, accept_feedback~ : (@common.Uri, String) -> Unit, set_navigation_anchor~ : (@common.Uri, String?) -> Unit, update_feedback~ : (@common.Uri, String, String) -> Unit, add_reply~ : (@common.Uri, String, String) -> Unit) -> Self
@@ -50,11 +53,17 @@ pub(all) enum AgentFeedbackKind {
   UserReview
   AgentReview
 } derive(Eq, @debug.Debug)
+pub fn AgentFeedbackKind::equal(Self, Self) -> Bool
+pub fn AgentFeedbackKind::not_equal(Self, Self) -> Bool
+pub fn AgentFeedbackKind::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AgentFeedbackNavigationBearing {
   active_idx : Int
   total_count : Int
 } derive(Eq, @debug.Debug)
+pub fn AgentFeedbackNavigationBearing::equal(Self, Self) -> Bool
+pub fn AgentFeedbackNavigationBearing::not_equal(Self, Self) -> Bool
+pub fn AgentFeedbackNavigationBearing::to_repr(Self) -> @debug.Repr
 
 pub(all) enum AgentFeedbackState {
   Created
@@ -62,6 +71,9 @@ pub(all) enum AgentFeedbackState {
   Submitted
   Resolved
 } derive(Eq, @debug.Debug)
+pub fn AgentFeedbackState::equal(Self, Self) -> Bool
+pub fn AgentFeedbackState::not_equal(Self, Self) -> Bool
+pub fn AgentFeedbackState::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AgentFeedbackSubmittedEvent {
   resource : @common.Uri
@@ -70,6 +82,7 @@ pub(all) struct AgentFeedbackSubmittedEvent {
   agent_review_count : Int
   reply_count : Int
 } derive(@debug.Debug)
+pub fn AgentFeedbackSubmittedEvent::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

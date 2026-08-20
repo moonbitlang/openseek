@@ -34,6 +34,7 @@ pub struct SessionEditorComment {
   replies : Array[String]
   state : @agent_feedback_api.AgentFeedbackState
 } derive(@debug.Debug)
+pub fn SessionEditorComment::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

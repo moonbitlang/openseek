@@ -992,7 +992,7 @@ fn document_symbols_result_json(payload : DocumentSymbolsResultPayload) -> Json 
 ///|
 fn error_packet_json(error : ProtocolError) -> Json {
   let fields = packet_fields("Error", error.request_id)
-  fields["error"] = error.to_json()
+  fields["error"] = ToJson::to_json(error)
   Json::object(fields)
 }
 
@@ -1324,3 +1324,69 @@ fn json_int_field(value : Json, key : String) -> Int? {
     _ => None
   }
 }
+
+///|
+pub extend ClientPacket with Debug::{to_repr}
+
+///|
+pub extend ClientPacket with ToJson::{to_json}
+
+///|
+pub extend ClientPacketDecodeResult with Debug::{to_repr}
+
+///|
+pub extend DefinitionResultPayload with Debug::{to_repr}
+
+///|
+pub extend DiagnosticsPayload with Debug::{to_repr}
+
+///|
+pub extend DirectoryResolvedPayload with Debug::{to_repr}
+
+///|
+pub extend DocumentPayload with Debug::{to_repr}
+
+///|
+pub extend DocumentPositionRequest with Debug::{to_repr}
+
+///|
+pub extend DocumentRequest with Debug::{to_repr}
+
+///|
+pub extend DocumentRevisionRequest with Debug::{to_repr}
+
+///|
+pub extend DocumentSymbolsResultPayload with Debug::{to_repr}
+
+///|
+pub extend HoverResultPayload with Debug::{to_repr}
+
+///|
+pub extend ProtocolError with Debug::{to_repr}
+
+///|
+pub extend ProtocolError with ToJson::{to_json}
+
+///|
+pub extend ProtocolErrorCode with Debug::{to_repr}
+
+///|
+pub extend ProtocolErrorCode with Eq::{equal, not_equal}
+
+///|
+pub extend ProtocolNegotiation with Debug::{to_repr}
+
+///|
+pub extend ReferenceItem with Debug::{to_repr}
+
+///|
+pub extend ReferencesResultPayload with Debug::{to_repr}
+
+///|
+pub extend ServerPacket with Debug::{to_repr}
+
+///|
+pub extend ServerPacket with ToJson::{to_json}
+
+///|
+pub extend ServerPacketDecodeResult with Debug::{to_repr}

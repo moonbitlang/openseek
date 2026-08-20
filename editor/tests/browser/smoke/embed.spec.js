@@ -276,12 +276,19 @@ test('switches standard token and tree diff only for mbt comparisons', async ({ 
   const standard = toolbar.getByRole('button', { name: 'Standard diff' });
   const token = toolbar.getByRole('button', { name: 'Token diff' });
   const tree = toolbar.getByRole('button', { name: 'Tree diff' });
+  const ignoreComments = toolbar.getByRole('button', {
+    name: 'Ignore comments',
+  });
   await expect(toolbar).toBeVisible();
   await expect(standard).toHaveAttribute('aria-pressed', 'true');
+  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'true');
+  await expect(ignoreComments).toBeDisabled();
+  await expect(diff).toHaveAttribute('data-ignore-comments', 'true');
   await expect(diff).toHaveAttribute('data-diff-renderer', 'standard');
 
   await token.click();
   await expect(token).toHaveAttribute('aria-pressed', 'true');
+  await expect(ignoreComments).toBeEnabled();
   await expect(diff).toHaveAttribute('data-diff-mode', 'token');
   await expect(diff).toHaveAttribute('data-diff-renderer', 'token');
   await expect(diff).not.toHaveAttribute('data-diff-fallback', 'true');
@@ -294,6 +301,7 @@ test('switches standard token and tree diff only for mbt comparisons', async ({ 
 
   await standard.click();
   await expect(standard).toHaveAttribute('aria-pressed', 'true');
+  await expect(ignoreComments).toBeDisabled();
   await expect(diff).toHaveAttribute('data-diff-renderer', 'standard');
 
   // Manifests and other non-.mbt files continue to use the existing diff and
@@ -305,6 +313,115 @@ test('switches standard token and tree diff only for mbt comparisons', async ({ 
   await expect(toolbar).toBeHidden();
   await expect(diff).not.toHaveAttribute('data-moondiff-available', 'true');
   await expect(diff).toHaveAttribute('data-diff-renderer', 'standard');
+});
+
+test('toggles comment filtering for token and tree review diffs', async ({ page }) => {
+  await page.goto('/embed.html');
+  await expect(page.locator('.editor-shell')).toHaveAttribute('data-status', 'ready');
+  await page.locator(workspaceItem('comments.mbt')).click();
+  await expect(page.locator(sourceEditor)).toContainText('new_value');
+  await page.locator('[data-action="toggle-diff"]').click();
+
+  const diff = page.locator('.diff-viewer-host > .moonbit-diff-editor');
+  const toolbar = diff.locator('.moonbit-diff-editor-toolbar');
+  const token = toolbar.getByRole('button', { name: 'Token diff' });
+  const tree = toolbar.getByRole('button', { name: 'Tree diff' });
+  const ignoreComments = toolbar.getByRole('button', {
+    name: 'Ignore comments',
+  });
+  const ignoreLabel = ignoreComments.locator(
+    '.moonbit-diff-editor-ignore-comments-label',
+  );
+  const originalPane = diff.locator('.moonbit-diff-editor-original');
+
+  // The standalone label collapses inside the actual diff container rather
+  // than relying on the whole browser viewport width.
+  const viewerStack = page.locator('.embedded-viewer-stack');
+  await viewerStack.evaluate((element) => {
+    element.style.width = '300px';
+    element.style.flex = '0 0 300px';
+  });
+  await expect(ignoreComments).toBeVisible();
+  await expect(ignoreLabel).toBeHidden();
+  const toolbarWidth = await toolbar.evaluate((element) => ({
+    client: element.clientWidth,
+    scroll: element.scrollWidth,
+  }));
+  expect(toolbarWidth.scroll).toBeLessThanOrEqual(toolbarWidth.client);
+  await viewerStack.evaluate((element) => {
+    element.style.width = '';
+    element.style.flex = '';
+  });
+
+  await token.click();
+  await expect(ignoreComments).toBeEnabled();
+  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'true');
+  await expect(diff).toHaveAttribute('data-diff-renderer', 'token');
+  const ignoredTokenText = (
+    await originalPane.locator('.diff-editor-char-delete').allTextContents()
+  ).join(' ');
+  expect(ignoredTokenText).toContain('old');
+  expect(ignoredTokenText).not.toContain('obsolete');
+
+  await ignoreComments.click();
+  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'false');
+  await expect(diff).toHaveAttribute('data-ignore-comments', 'false');
+  const visibleTokenText = (
+    await originalPane.locator('.diff-editor-char-delete').allTextContents()
+  ).join(' ');
+  expect(visibleTokenText).toContain('obsolete');
+
+  await tree.click();
+  await expect(tree).toHaveAttribute('aria-pressed', 'true');
+  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'false');
+  await expect(diff).toHaveAttribute('data-diff-renderer', 'tree');
+  await ignoreComments.click();
+  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'true');
+  await expect(diff).toHaveAttribute('data-ignore-comments', 'true');
+  const ignoredTreeText = (
+    await originalPane.locator('.diff-editor-char-delete').allTextContents()
+  ).join(' ');
+  expect(ignoredTreeText).not.toContain('obsolete');
+
+  // A fully filtered comparison is still a specialized result. Its inserted
+  // blank line aligns later source without painting either ignored line.
+  await page.locator('[data-action="toggle-diff"]').click();
+  await page.locator(workspaceItem('comments-only.mbt')).click();
+  await page.locator('[data-action="toggle-diff"]').click();
+  await expect(tree).toHaveAttribute('aria-pressed', 'true');
+  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'true');
+  await expect(diff).toHaveAttribute('data-diff-renderer', 'tree');
+  await expect(
+    originalPane.locator('.diff-editor-line-delete, .diff-editor-char-delete'),
+  ).toHaveCount(0);
+  await expect(
+    diff.locator('.moonbit-diff-editor-modified').locator(
+      '.diff-editor-line-insert, .diff-editor-char-insert',
+    ),
+  ).toHaveCount(0);
+  await expect(originalPane.locator('.diff-editor-alignment-zone')).toHaveCount(1);
+
+  await page.locator('[data-action="toggle-diff"]').click();
+  await page.locator(workspaceItem('comments.mbt')).click();
+  await page.locator('[data-action="toggle-diff"]').click();
+  await expect(tree).toHaveAttribute('aria-pressed', 'true');
+  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'true');
+
+  await page.locator('[data-action="toggle-diff-layout"]').click();
+  await expect(diff).toHaveAttribute('data-render-mode', 'unified');
+  await expect(
+    diff.locator('.diff-editor-unified-deleted-line'),
+  ).not.toContainText('obsolete explanation');
+
+  // The component keeps the preference and selected algorithm when its model
+  // pair changes within the mounted review surface.
+  await page.locator('[data-action="toggle-diff"]').click();
+  await page.locator(workspaceItem('src/lib')).click();
+  await page.locator(workspaceItem('src/lib/util.mbt')).click();
+  await page.locator('[data-action="toggle-diff"]').click();
+  await expect(tree).toHaveAttribute('aria-pressed', 'true');
+  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'true');
+  await expect(ignoreComments).toBeEnabled();
 });
 
 test('uses moondiff token fallback when tree diff cannot parse a model', async ({ page }) => {

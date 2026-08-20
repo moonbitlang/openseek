@@ -239,3 +239,15 @@ pub fn Session::current_goal_baseline(self : Session) -> GoalBaseline? {
   }
   None
 }
+
+///|
+pub extend GoalBaseline with Debug::{to_repr}
+
+///|
+pub extend GoalBaseline with Eq::{equal, not_equal}
+
+///|
+pub extend GoalMarker with Debug::{to_repr}
+
+///|
+pub extend StandingGoal with Debug::{to_repr}

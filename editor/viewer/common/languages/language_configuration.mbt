@@ -111,3 +111,21 @@ fn Languages::get_language_configuration(
   .get(language_id)
   .unwrap_or({ comments: None, folding_rules: None })
 }
+
+///|
+pub extend CharacterPair with Debug::{to_repr}
+
+///|
+pub extend CharacterPair with Eq::{equal, not_equal}
+
+///|
+pub extend CommentRule with Debug::{to_repr}
+
+///|
+pub extend CommentRule with Eq::{equal, not_equal}
+
+///|
+pub extend LineCommentRule with Debug::{to_repr}
+
+///|
+pub extend LineCommentRule with Eq::{equal, not_equal}

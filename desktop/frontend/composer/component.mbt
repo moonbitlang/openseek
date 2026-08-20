@@ -77,7 +77,7 @@ priv struct Entry {
   symbol_cache : SymbolCache
   file_completion : FileCompletion
   root : @common.Uri?
-  installed_skills : Array[@transcript.InstalledSkillItem]
+  installed_skills : Array[@skills.InstalledItem]
   context_generation : Int
   pending_submission : PendingSubmission?
 } derive(Eq)
@@ -264,6 +264,12 @@ priv struct Model {
   entries : Array[Entry]
   applied_retirements : Int
   applied_replacements : Int
+  // The clock the running row's elapsed span is measured against, advanced by
+  // `ClockTicked` and only while a turn is open. Component state rather than
+  // the application's: a value that changes every second belongs to the one
+  // subtree that displays it, or every other component's input is reprojected
+  // once a second to redraw a single line.
+  clock_ms : Double
 } derive(Eq)
 
 ///|
@@ -272,6 +278,7 @@ fn Model::Model(input : Input) -> Model {
     entries: [Entry(input)],
     applied_retirements: input.retirements.length(),
     applied_replacements: input.replacements.length(),
+    clock_ms: @interop.now_ms(),
   }
 }
 
@@ -360,6 +367,9 @@ priv enum Msg {
   EntriesTransferred
   EntriesRetired
   CompletionPump
+  // A second passed while a turn was open. Carries nothing: the handler reads
+  // the clock, and the message exists only to advance the span on screen.
+  ClockTicked
   MentionRemoved(Int)
   MentionJumped(Int)
   GoalCancelled
@@ -763,6 +773,18 @@ fn Model::update(
         emit,
         action_emit,
       )
+    // The tick runs whether or not a turn is open (see `subscriptions`), so
+    // this is where an idle one is discarded: the clock only moves while
+    // there is a span to measure, leaving the model equal to itself and
+    // nothing to re-render.
+    ClockTicked => {
+      let clock_ms = if input.run is Some(_) {
+        @interop.now_ms()
+      } else {
+        self.clock_ms
+      }
+      ({ ..self.with_entry(entry), clock_ms, }, @cmd.none)
+    }
     CompletionPump => {
       // Committing the reconciled entry above is this tick's real work: the
       // subscription diff after every update re-derives the declared lookups
@@ -822,6 +844,30 @@ fn Model::update(
 /// package. Every staleness axis lives in the subscription key, in one place,
 /// instead of being re-checked at issue, delay-fire, and ingest time.
 fn Model::subscriptions(
+  self : Model,
+  input : Input,
+  emit : @cmd.Emit[Msg],
+) -> @sub.Sub {
+  // The heartbeat tick is permanent, deliberately: a component's
+  // subscriptions are re-derived only when that component processes a
+  // message, never when its input alone changes (`handle_subs` runs at
+  // construction and inside `on_update`). A tick declared only while
+  // `input.run` is set would therefore never be installed for the case this
+  // row exists for — submit, then wait without touching the composer, where
+  // no further message ever arrives. Worse, the submit cannot install it
+  // either: `on_update` refreshes subscriptions *before* running the command
+  // that tells the root to open the run, so it still reads `run: None`.
+  //
+  // `ClockTicked` is what stays conditional instead: an idle tick leaves the
+  // model equal to itself, so it costs a comparison and no render.
+  @sub.batch([
+    @sub.every(1000, emit(ClockTicked)),
+    self.editing_subscriptions(input, emit),
+  ])
+}
+
+///|
+fn Model::editing_subscriptions(
   self : Model,
   input : Input,
   emit : @cmd.Emit[Msg],
@@ -898,6 +944,6 @@ pub fn component(
     subscriptions=(state, input, emit) => state.subscriptions(input, emit),
   )
   state.view2(input, (state, input) => {
-    state.active(input).view(emit, action_emit, input)
+    state.active(input).view(emit, action_emit, input, clock_ms=state.clock_ms)
   })
 }

@@ -333,17 +333,8 @@ async fn[T] with_tmpdir(f : async (String) -> T) -> T {
       _ => ()
     }
   }
-  try f(dir) catch {
-    error => {
-      rmdir()
-      raise error
-    }
-  } noraise {
-    result => {
-      rmdir()
-      result
-    }
-  }
+  defer rmdir()
+  f(dir)
 }
 
 ///|

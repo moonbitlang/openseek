@@ -252,32 +252,32 @@ pub fn Notification::wire_name(self : Notification) -> String {
 /// Encode the typed payload only when a transport writes the public event.
 pub fn Notification::params(self : Notification) -> Json {
   match self {
-    AgentConnected(payload) => payload.to_json()
-    AgentStarted(payload) => payload.to_json()
-    AgentEvent(payload) => payload.to_json()
-    AgentError(payload) => payload.to_json()
-    AgentFinished(payload) => payload.to_json()
-    AgentDurable(payload) => payload.to_json()
-    SessionEvent(payload) => payload.to_json()
-    SubrunProgress(payload) => payload.to_json()
-    SessionChanged(payload) => payload.to_json()
-    WorkspaceChanged(payload) => payload.to_json()
-    WorkspaceSettingsChanged(payload) => payload.to_json()
-    WorktreeChanged(payload) => payload.to_json()
-    SettingsChanged(payload) => payload.to_json()
+    AgentConnected(payload) => ToJson::to_json(payload)
+    AgentStarted(payload) => ToJson::to_json(payload)
+    AgentEvent(payload) => ToJson::to_json(payload)
+    AgentError(payload) => ToJson::to_json(payload)
+    AgentFinished(payload) => ToJson::to_json(payload)
+    AgentDurable(payload) => ToJson::to_json(payload)
+    SessionEvent(payload) => ToJson::to_json(payload)
+    SubrunProgress(payload) => ToJson::to_json(payload)
+    SessionChanged(payload) => ToJson::to_json(payload)
+    WorkspaceChanged(payload) => ToJson::to_json(payload)
+    WorkspaceSettingsChanged(payload) => ToJson::to_json(payload)
+    WorktreeChanged(payload) => ToJson::to_json(payload)
+    SettingsChanged(payload) => ToJson::to_json(payload)
     SkillsChanged => Json::empty_object()
-    UpdateDownloadProgress(payload) => payload.to_json()
-    UpdateDownloaded(payload) => payload.to_json()
-    UpdateDownloadFailed(payload) => payload.to_json()
-    AuthChanged(payload) => payload.to_json()
+    UpdateDownloadProgress(payload) => ToJson::to_json(payload)
+    UpdateDownloaded(payload) => ToJson::to_json(payload)
+    UpdateDownloadFailed(payload) => ToJson::to_json(payload)
+    AuthChanged(payload) => ToJson::to_json(payload)
     CodexStatusChanged(payload) => payload
     CodexNotification(payload) => payload
     CodexServerRequest(payload) => payload
-    LspDiagnostics(payload) => payload.to_json()
-    FsChanged(payload) => payload.to_json()
-    FsWatchFailed(payload) => payload.to_json()
-    TerminalOutput(payload) => payload.to_json()
-    TerminalExit(payload) => payload.to_json()
+    LspDiagnostics(payload) => ToJson::to_json(payload)
+    FsChanged(payload) => ToJson::to_json(payload)
+    FsWatchFailed(payload) => ToJson::to_json(payload)
+    TerminalOutput(payload) => ToJson::to_json(payload)
+    TerminalExit(payload) => ToJson::to_json(payload)
   }
 }
 
@@ -317,3 +317,18 @@ test "malformed agent errors remain visible notifications" {
     assert_eq(payload.message, None)
   }
 }
+
+///|
+pub extend Notification with Debug::{to_repr}
+
+///|
+pub extend Notification with Eq::{equal, not_equal}
+
+///|
+pub extend NotificationKind with Debug::{to_repr}
+
+///|
+pub extend NotificationKind with Eq::{equal, not_equal}
+
+///|
+pub extend NotificationKind with Hash::{hash, hash_combine}

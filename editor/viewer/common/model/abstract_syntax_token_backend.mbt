@@ -319,3 +319,9 @@ fn line_range_arrays_equal(
   }
   true
 }
+
+///|
+pub extend VisibleLineRange with Debug::{to_repr}
+
+///|
+pub extend VisibleLineRange with Eq::{equal, not_equal}

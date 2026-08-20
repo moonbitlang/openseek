@@ -77,3 +77,6 @@ fn execute(arguments : Json) -> @agent_tool.ToolAction {
     _ => @agent_tool.ToolAction::respond("goal status recorded")
   }
 }
+
+///|
+pub extend GoalStatus with Debug::{to_repr}

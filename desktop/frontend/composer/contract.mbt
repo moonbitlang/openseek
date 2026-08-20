@@ -93,15 +93,48 @@ pub(all) struct Presentation {
 } derive(Eq)
 
 ///|
+/// How far the open turn has gotten. The application owns the run phase; the
+/// composer owns how it reads on screen.
+pub(all) enum RunStage {
+  // Accepted, no run id yet.
+  Starting
+  // Open, no step reported — the engine is in a model call and silent.
+  Thinking
+  // The engine's latest 1-based step counter.
+  AtStep(Int)
+  // Open and stepping, from an engine that does not number its steps.
+  Working
+  // A Stop was sent and the engine has not honored it yet.
+  Stopping
+} derive(Eq, @debug.Debug)
+
+///|
+/// The open turn's heartbeat: facts, never a rendered line. The wording, the
+/// clock it is measured against, and the per-second tick that advances it are
+/// all the composer's, so a turn's elapsed span costs one component's render
+/// rather than the whole application's.
+///
+/// `started_ms` is `None` whenever that moment is not the page's to know — a
+/// run adopted from a reconnect began before anyone here was watching, and
+/// dating it from the moment it was noticed always reports too short a wait.
+pub(all) struct RunHeartbeat {
+  stage : RunStage
+  started_ms : Double?
+  tokens : Int
+} derive(Eq, @debug.Debug)
+
+///|
 /// The complete root-to-composer boundary. It contains canonical external
 /// facts and view-only presentation, never the root application Model or Msg.
 pub(all) struct Input {
   identity : Identity
   draft : Draft
   goal : GoalInput
+  // The turn in flight, `None` between runs.
+  run : RunHeartbeat?
   slash_commands : Array[SlashCommand]
   root : @common.Uri?
-  installed_skills : Array[@transcript.InstalledSkillItem]
+  installed_skills : Array[@skills.InstalledItem]
   context_generation : Int
   submission_sequence : Int
   replacements : Array[Replacement]
@@ -133,3 +166,60 @@ pub(all) enum Action {
   StopRequested(identity~ : Identity)
   FileIndexEnsured(identity~ : Identity)
 }
+
+///|
+pub extend Draft with Debug::{to_repr}
+
+///|
+pub extend Draft with Eq::{equal, not_equal}
+
+///|
+pub extend FileIndex with Debug::{to_repr}
+
+///|
+pub extend FileIndex with Eq::{equal, not_equal}
+
+///|
+pub extend GoalInput with Eq::{equal, not_equal}
+
+///|
+pub extend GoalPending with Debug::{to_repr}
+
+///|
+pub extend GoalPending with Eq::{equal, not_equal}
+
+///|
+pub extend Identity with Debug::{to_repr}
+
+///|
+pub extend Identity with Eq::{equal, not_equal}
+
+///|
+pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend Mention with Debug::{to_repr}
+
+///|
+pub extend Mention with Eq::{equal, not_equal}
+
+///|
+pub extend Presentation with Eq::{equal, not_equal}
+
+///|
+pub extend PrimaryAction with Debug::{to_repr}
+
+///|
+pub extend PrimaryAction with Eq::{equal, not_equal}
+
+///|
+pub extend Replacement with Debug::{to_repr}
+
+///|
+pub extend Replacement with Eq::{equal, not_equal}
+
+///|
+pub extend SlashCommand with Debug::{to_repr}
+
+///|
+pub extend SlashCommand with Eq::{equal, not_equal}

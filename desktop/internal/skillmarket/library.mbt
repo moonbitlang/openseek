@@ -298,3 +298,6 @@ pub async fn uninstall_skill(
   }
   library.move_to_trash(id, on_committed?)
 }
+
+///|
+pub extend InstalledSkill with ToJson::{to_json}

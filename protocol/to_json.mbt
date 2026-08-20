@@ -38,7 +38,7 @@ pub fn Event::to_json(self : Event) -> Json {
       { "event": "assistant_message", "content": content }
     ReasoningMessage(content~) =>
       { "event": "reasoning_message", "content": content }
-    Usage(usage~) => { "event": "usage", "usage": usage.to_json() }
+    Usage(usage~) => { "event": "usage", "usage": ToJson::to_json(usage) }
     ToolResult(tool_call_id~, tool_name~, is_error~, content~, brief~) =>
       {
         "event": "tool_result",

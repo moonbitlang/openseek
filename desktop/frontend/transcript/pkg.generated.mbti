@@ -18,10 +18,6 @@ pub fn decode_engine_event(@protocol.AgentStreamEvent) -> EngineEvent?
 
 pub fn goal_marker(String) -> GoalMarker?
 
-pub fn installed_skills_from_reply(@protocol.InstalledSkillsReply) -> Array[InstalledSkillItem]
-
-pub fn market_source_label(MarketSkillItem) -> String
-
 pub fn parse_runtime_update(String) -> RuntimeUpdateView
 
 pub fn session_from_reply(@protocol.LoadSessionReply) -> SessionLoadView
@@ -29,8 +25,6 @@ pub fn session_from_reply(@protocol.LoadSessionReply) -> SessionLoadView
 pub fn session_tree(Array[SessionListItem]) -> Array[SessionTreeRow]
 
 pub fn sessions_from_reply(@protocol.SessionsReply, @interop.ChannelId) -> Array[SessionListItem]
-
-pub fn skills_catalog_from_reply(@protocol.SkillsCatalogReply) -> Array[MarketSkillItem]
 
 pub fn subrun_label(String) -> String?
 
@@ -76,13 +70,6 @@ pub(all) struct GoalStanding {
   blocked : String?
 } derive(Eq)
 
-pub(all) struct InstalledSkillItem {
-  id : String
-  name : String
-  description : String
-  source : String
-} derive(Eq)
-
 pub(all) enum ItemKind {
   User
   Assistant(is_danger~ : Bool)
@@ -95,16 +82,6 @@ pub(all) struct LauncherAppItem {
   id : String
   name : String
   icon : String
-} derive(Eq)
-
-pub(all) struct MarketSkillItem {
-  name : String
-  module_name : String
-  package_path : String
-  version : String
-  description : String
-  author : String
-  repository : String
 } derive(Eq)
 
 pub struct RuntimeUpdateView {

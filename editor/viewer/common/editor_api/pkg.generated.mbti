@@ -21,6 +21,9 @@ pub(all) enum CursorChangeReason {
   Undo
   Redo
 } derive(Eq, @debug.Debug)
+pub fn CursorChangeReason::equal(Self, Self) -> Bool
+pub fn CursorChangeReason::not_equal(Self, Self) -> Bool
+pub fn CursorChangeReason::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CursorPositionChangedEvent {
   position : @common.Position
@@ -28,6 +31,7 @@ pub(all) struct CursorPositionChangedEvent {
   reason : CursorChangeReason
   source : String
 } derive(@debug.Debug)
+pub fn CursorPositionChangedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CursorSelectionChangedEvent {
   selection : @core.Selection
@@ -38,11 +42,13 @@ pub(all) struct CursorSelectionChangedEvent {
   source : String
   reason : CursorChangeReason
 } derive(@debug.Debug)
+pub fn CursorSelectionChangedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelChangedEvent {
   old_model_url : @common.Uri?
   new_model_url : @common.Uri?
 } derive(@debug.Debug)
+pub fn ModelChangedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RenderLineHighlight {
   None
@@ -50,12 +56,18 @@ pub(all) enum RenderLineHighlight {
   Line
   All
 } derive(Eq, @debug.Debug)
+pub fn RenderLineHighlight::equal(Self, Self) -> Bool
+pub fn RenderLineHighlight::not_equal(Self, Self) -> Bool
+pub fn RenderLineHighlight::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RenderValidationDecorations {
   Editable
   On
   Off
 } derive(Eq, @debug.Debug)
+pub fn RenderValidationDecorations::equal(Self, Self) -> Bool
+pub fn RenderValidationDecorations::not_equal(Self, Self) -> Bool
+pub fn RenderValidationDecorations::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RenderWhitespace {
   None
@@ -64,6 +76,9 @@ pub(all) enum RenderWhitespace {
   Trailing
   All
 } derive(Eq, @debug.Debug)
+pub fn RenderWhitespace::equal(Self, Self) -> Bool
+pub fn RenderWhitespace::not_equal(Self, Self) -> Bool
+pub fn RenderWhitespace::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ScrollEvent {
   scroll_top : Double
@@ -75,18 +90,25 @@ pub(all) struct ScrollEvent {
   scroll_width_changed : Bool
   scroll_height_changed : Bool
 } derive(@debug.Debug)
+pub fn ScrollEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ScrolledVisiblePosition {
   top : Double
   left : Double
   height : Double
 } derive(Eq, @debug.Debug)
+pub fn ScrolledVisiblePosition::equal(Self, Self) -> Bool
+pub fn ScrolledVisiblePosition::not_equal(Self, Self) -> Bool
+pub fn ScrolledVisiblePosition::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ShowFoldingControls {
   Always
   Never
   Mouseover
 } derive(Eq, @debug.Debug)
+pub fn ShowFoldingControls::equal(Self, Self) -> Bool
+pub fn ShowFoldingControls::not_equal(Self, Self) -> Bool
+pub fn ShowFoldingControls::to_repr(Self) -> @debug.Repr
 
 pub(all) enum WrappingIndent {
   None
@@ -94,6 +116,9 @@ pub(all) enum WrappingIndent {
   Indent
   DeepIndent
 } derive(Eq, @debug.Debug)
+pub fn WrappingIndent::equal(Self, Self) -> Bool
+pub fn WrappingIndent::not_equal(Self, Self) -> Bool
+pub fn WrappingIndent::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

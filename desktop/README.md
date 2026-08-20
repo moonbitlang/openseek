@@ -1,6 +1,6 @@
 # SeekMoon
 
-A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://mooncakes.io/docs/moonbit-community/rabbita) desktop client for the OpenSeek agent, written in MoonBit.
+A [Proton](https://github.com/moonbit-community/proton) + [Rabbita](https://mooncakes.io/docs/moonbit-community/rabbita) desktop client for the OpenSeek agent, written in MoonBit.
 
 - `main.mbt` — entry point: wires the window manifest, the IPC extensions, the per-user runtime directory, and the launch log.
 - `internal/engine/` — the native host: keeps one persistent `openseek serve` engine per conversation, streams its JSONL events to the webview, and owns where conversations live on disk (per-session workspace directories, the durable session store root, and archiving).
@@ -15,7 +15,6 @@ A [Lepus](https://github.com/moonbit-community/lepus) + [Rabbita](https://moonca
 - `frontend/transcript/` — pure decoders from the engine's wire data to display items: engine events, session-list and session-replay replies, runtime updates.
 - `frontend/markdown/` — markdown rendering for transcript content (cmark to Rabbita nodes, panic-guarded).
 - `frontend/interop/` — the typed `@js` helpers shared by the frontend; no frontend package embeds raw JavaScript.
-- `lepus/` — the Lepus framework, vendored as a git submodule.
 
 ## Sessions and streaming
 
@@ -158,9 +157,11 @@ MoonBit toolchain through the normal fallback chain.
 
 ```sh
 git clone <this-repo>
-# From the repository root, initialize the desktop's Lepus submodule:
-git submodule update --init desktop/lepus
 ```
+
+Proton is an ordinary registry dependency (`moonbit-community/proton` in
+`moon.mod`), so a plain clone is complete — `moon` resolves it like any other
+package.
 
 The desktop frontend imports the `moonbitlang/editor` workspace member from
 `../editor`. Packaging reads its reusable CSS and codicon font from that same
@@ -171,38 +172,18 @@ assets cannot drift between registry and source versions and end users never
 fetch Mermaid from a CDN. `viewer_theme.css` supplies the desktop-owned theme
 variables; the editor's reference-shell theme remains development-only.
 
-Why the bootstrap is a little involved:
+What still needs preparing, beyond the MoonBit packages:
 
-- `lepus/` is a git submodule, so a plain clone does not contain its sources
-  until the submodule is initialized.
-- The clipboard extension uses Lepus build-time codegen. A fresh checkout must
-  build and stage the Lepus CLI before the native app can compile.
-- Windows native builds include WebView2 COM headers. The headers are not kept
-  in the repository, so they must be installed from the Microsoft WebView2 NuGet
-  package once per checkout.
+- The native host links `libproton`, which in turn needs CEF. The Proton
+  package ships `libproton` for each platform but not CEF, so the first native
+  build assembles a runtime from the two — see "Run during development" below.
 - The desktop host expects `assets/index.html`, `assets/app.css`,
   `assets/frontend.js`, the generated `assets/mermaid/` tree, and an
   `openseek` engine executable beside it when packaged.
 
 ## Build
 
-Several Lepus extensions are generated at build time by a Lepus codegen CLI,
-so a fresh checkout must stage that tool once:
-
-```sh
-( cd lepus && moon install ./cli --bin target/lepus-tools )
-```
-
-Re-run that command after every lepus submodule update (pull, rebase, branch
-switch) — the staged binary is a build product of the checkout it was built
-from, not of the current one. If the codegen itself changed, also run
-`moon clean`: moon caches pre-build outputs by their *input* hash, so a stale
-cache keeps replaying the old binary's output even after restaging. The
-symptom of either staleness is `extensions/*/extension.g.mbt` showing up as
-modified inside the submodule after a build; never commit that drift —
-restage, clean, and rebuild until the submodule tree stays clean.
-
-Then build the frontend bundle and the native binary:
+Build the frontend bundle and the native binary:
 
 ```sh
 moon build frontend/desktop --target js
@@ -224,10 +205,18 @@ moon run ./desktop/package/dev
 ```
 
 The launcher detects the desktop workspace, builds the frontend, engine, and
-native host with Moon's normal incremental build, prepares the checked-out
-Proton/CEF runtime, and launches the bare host. The first CEF setup may download
-a large archive; later development and platform-package runs reuse the
-validated assembled runtime without installing or invoking the Proton CLI.
+native host with Moon's normal incremental build, prepares the Proton/CEF
+runtime, and launches the bare host. Setup runs `proton_cli` through `moonx`,
+which fetches the published CLI into the registry cache rather than installing
+anything, and assembles the runtime from the resolved Proton package's platform
+prebuilt plus a CEF distribution. That first setup may download a large
+archive; later development and platform-package runs reuse the validated
+assembled runtime and skip the CLI entirely.
+
+`cef setup` runs at the *monorepo root*, not in `desktop/`: the root is where
+Moon resolves `.mooncakes`, so it is both where the CLI finds the Proton
+prebuilt and where Proton's link config looks for the `.proton/runtime.json`
+it writes.
 
 The executable implementation lives in `package/dev`; it accepts no path or
 build-mode arguments.
@@ -272,7 +261,7 @@ OpenSeek conversations. See
 [`docs/codex-app-server.md`](../docs/codex-app-server.md) for the process,
 protocol, approval, and packaging contract.
 
-## Bootstrap desktop submodules on Windows
+## Package (Windows)
 
 The scripted Windows path is:
 
@@ -280,10 +269,9 @@ The scripted Windows path is:
 moon -C desktop run --target native package/windows
 ```
 
-It builds the Lepus codegen tool if needed, installs WebView2 SDK headers if
-needed, builds the frontend and native host, builds the `openseek` engine from
-the monorepo root, writes `dist/windows-x64/SeekMoon/`, and creates
-`dist/SeekMoon-windows-x64.zip`.
+It prepares the Proton/CEF runtime if needed, builds the frontend and native
+host, builds the `openseek` engine from the monorepo root, writes
+`dist/windows-x64/SeekMoon/`, and creates `dist/SeekMoon-windows-x64.zip`.
 
 This development command builds debug MoonBit artifacts. Add `-- --release`
 for an optimized bundle and archives.
@@ -321,27 +309,15 @@ there, and passes the writable copy as `MOON_HOME` to the engine.
 
 The manual steps below are useful when debugging the package script.
 
-From the repository root, initialize the lepus submodule. If Git for Windows
-cannot run `git submodule` from PowerShell because Unix helper tools are
-missing from `PATH`, run the command from Git Bash instead.
+From the repository root, assemble the Proton/CEF runtime the native host
+links against:
 
 ```powershell
-git submodule update --init desktop/lepus
+moonx moonbit-community/proton_cli@<version> -C . cef setup
 ```
 
-Install the Lepus codegen CLI:
-
-```powershell
-cd desktop\lepus
-moon install ./cli --bin target/lepus-tools
-```
-
-Install WebView2 SDK headers used by Lepus native Windows sources:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\install_webview2_headers.ps1
-cd ..
-```
+`<version>` is whatever `moon.mod` pins `moonbit-community/proton` to; the
+packagers read it from there rather than repeating it.
 
 Build the frontend bundle, copy it to `frontend.js`, and build the native host:
 
@@ -393,11 +369,9 @@ assets/app.css       <- desktop/app.generated.css (assembled from desktop/app.cs
 assets/frontend.js   <- desktop/frontend.js
 ```
 
-The target machine also needs Microsoft WebView2 Runtime installed.
-
 ## Package (macOS)
 
-`package/macos` runs all of the above (including the codegen bootstrap),
+`package/macos` runs all of the above (including the runtime preparation),
 builds the `openseek` engine from the monorepo's `cmd/openseek` source, and
 prepares the frontend and MoonBit toolchain inputs. It then delegates the App
 layout, CEF runtime, helper bundles, package metadata, signing, ZIP, and DMG to
@@ -464,8 +438,8 @@ ad-hoc signed. Such outputs are not intended for distribution.
 
 ## Package (Linux)
 
-`package/linux` runs the same build steps (including the codegen
-bootstrap), builds the `openseek` engine from the monorepo's `cmd/openseek`
+`package/linux` runs the same build steps (including the runtime
+preparation), builds the `openseek` engine from the monorepo's `cmd/openseek`
 source, and produces `dist/SeekMoon-linux-x86_64.AppImage`. It builds debug
 MoonBit artifacts by default:
 

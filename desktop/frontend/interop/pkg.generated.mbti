@@ -32,6 +32,8 @@ pub fn js_prop(@js.Value, String) -> @js.Value?
 
 pub fn moonbit_bridge_root() -> @js.Value?
 
+pub fn now_ms() -> Double
+
 pub fn openseek_api() -> @js.Value?
 
 pub fn page_channel() -> ChannelId?

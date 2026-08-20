@@ -20,6 +20,9 @@ pub(all) struct UnifiedDiffAlgorithmOptions {
   ignore_trim_whitespace : Bool
   max_computation_time_ms : Int
 } derive(Eq, @debug.Debug)
+pub fn UnifiedDiffAlgorithmOptions::equal(Self, Self) -> Bool
+pub fn UnifiedDiffAlgorithmOptions::not_equal(Self, Self) -> Bool
+pub fn UnifiedDiffAlgorithmOptions::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UnifiedDiffChange {
   original_start_line_number : Int
@@ -27,6 +30,9 @@ pub(all) struct UnifiedDiffChange {
   modified_start_line_number : Int
   modified_end_line_number_exclusive : Int
 } derive(Eq, @debug.Debug)
+pub fn UnifiedDiffChange::equal(Self, Self) -> Bool
+pub fn UnifiedDiffChange::not_equal(Self, Self) -> Bool
+pub fn UnifiedDiffChange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UnifiedDiffHunk {
   original_start_line_number : Int
@@ -35,6 +41,9 @@ pub(all) struct UnifiedDiffHunk {
   modified_line_count : Int
   lines : Array[UnifiedDiffLine]
 } derive(Eq, @debug.Debug)
+pub fn UnifiedDiffHunk::equal(Self, Self) -> Bool
+pub fn UnifiedDiffHunk::not_equal(Self, Self) -> Bool
+pub fn UnifiedDiffHunk::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UnifiedDiffLine {
   kind : UnifiedDiffLineKind
@@ -42,17 +51,26 @@ pub(all) struct UnifiedDiffLine {
   modified_line_number : Int?
   text : String
 } derive(Eq, @debug.Debug)
+pub fn UnifiedDiffLine::equal(Self, Self) -> Bool
+pub fn UnifiedDiffLine::not_equal(Self, Self) -> Bool
+pub fn UnifiedDiffLine::to_repr(Self) -> @debug.Repr
 
 pub(all) struct UnifiedDiffLineComment {
   line : UnifiedDiffLine
   comment : String
 } derive(Eq, @debug.Debug)
+pub fn UnifiedDiffLineComment::equal(Self, Self) -> Bool
+pub fn UnifiedDiffLineComment::not_equal(Self, Self) -> Bool
+pub fn UnifiedDiffLineComment::to_repr(Self) -> @debug.Repr
 
 pub(all) enum UnifiedDiffLineKind {
   Context
   Deletion
   Addition
 } derive(Eq, @debug.Debug)
+pub fn UnifiedDiffLineKind::equal(Self, Self) -> Bool
+pub fn UnifiedDiffLineKind::not_equal(Self, Self) -> Bool
+pub fn UnifiedDiffLineKind::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -160,3 +160,6 @@ pub fn skills_prompt_section(skills : Array[Skill]) -> String? {
     $|\{out => list(out)}
   Some(sb.to_string())
 }
+
+///|
+pub extend Skill with Debug::{to_repr}

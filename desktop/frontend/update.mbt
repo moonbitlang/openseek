@@ -757,6 +757,41 @@ fn Model::begin_editor_navigation(self : Model) -> Model {
 }
 
 ///|
+/// Open the shared Explorer picker on one of its three inventories. Dock and
+/// panel visibility belong to the shell; inventory selection, focus, and any
+/// host-backed refresh belong to fileeditor.
+fn open_explorer(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  mode : @fileeditor.ExplorerMode,
+) -> (@cmd.Cmd, Model) {
+  let model = model.begin_editor_navigation()
+  let screen = if model.screen is Screen::Codex {
+    Screen::Codex
+  } else {
+    Screen::Chat
+  }
+  let next = {
+    ..model,
+    screen,
+    dock: @dock.open_picker(model.dock),
+    right_panel_open: true,
+    right_panel_menu_open: false,
+    // Invoking any Explorer inventory is an explicit request to keep it next
+    // to the selected file on wide layouts. Narrow file opens still perform
+    // the normal drill-down and close this tree.
+    file_panel: { ..model.file_panel, tree_open: true },
+  }
+  let (cmd, file_panel) = @fileeditor.update(
+    dispatch.map(msg => FileEditor(msg)),
+    @fileeditor.ExplorerModeSelected(mode),
+    next.file_panel,
+    file_ctx(next),
+  )
+  (cmd, { ..next, file_panel, })
+}
+
+///|
 /// Reveal a transcript-linked directory in the editor's Files tree. Keep an
 /// active file visible beside the tree; otherwise activate the picker body so
 /// the reveal has a visible home. `RevealDirectory` expands the ancestors;
@@ -858,39 +893,7 @@ fn open_editor_at(
   // table is seeded from the restored strip (identities only), exactly like
   // `@fileeditor.sync`'s own re-root.
   let dock = @dock.sync(model.dock, owner)
-  let previous_panel = model.file_panel
-  let panel = if previous_panel.owner == Some(owner) {
-    previous_panel
-  } else {
-    let docs : Map[@pathx.Relative, @fileeditor.Doc] = Map([])
-    for open_path in @dock.file_paths(dock) {
-      docs[open_path] = {
-        name: @fileeditor.basename(open_path),
-        state: TabLoading,
-        review: None,
-        stale: false,
-      }
-    }
-    {
-      ..@fileeditor.State::empty(),
-      owner: Some(owner),
-      // Mirror fileeditor.sync's re-root invariants. In particular, request
-      // and watcher generations must outlive an A→B→A jump so older A work
-      // cannot collide with the next request or watch after this eager re-root.
-      tree_open: previous_panel.tree_open,
-      explorer_mode: previous_panel.explorer_mode,
-      review_view_mode: previous_panel.review_view_mode,
-      changes_generation: previous_panel.changes_generation,
-      request_epoch: previous_panel.request_epoch + 1,
-      file_link_generation: previous_panel.file_link_generation,
-      review_generation: previous_panel.review_generation,
-      watch_generation: previous_panel.watch_generation,
-      // Preserve the old host configuration until the post-dispatch sync can
-      // explicitly retire or replace it.
-      watching: previous_panel.watching,
-      docs,
-    }
-  }
+  let panel = model.file_panel.prepare_owner(owner, @dock.file_paths(dock))
   guard model.active_relative_path(path) is Some(relative) else {
     return (
       @fileeditor.mount_cmds(femit),
@@ -1117,7 +1120,7 @@ fn apply_engine_event(
           true,
           conv.append_local_notice(
             Assistant(is_danger=true),
-            "\{kind} \{id}: \{status} · \{steps} step(s) · \{compact_count(tokens)} tok",
+            "\{kind} \{id}: \{status} · \{steps} step(s) · \{@labels.compact_count(tokens)} tok",
           ),
         )
       }
@@ -1673,7 +1676,8 @@ fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
   | JumpToMention(_)
   | JumpToLocation(..)
   | QuickOpen(@quick_open.Pick(_))
-  | OpenFileAt(..))
+  | OpenFileAt(..)
+  | FileEditor(@fileeditor.SearchMatchSelected(..)))
 }
 
 ///|
@@ -2215,6 +2219,11 @@ fn update_msg(
         }).mentions
       (clear_feedback, model.replace_conversation({ ..conv, mentions, }))
     }
+    // Search rows use the same ordinary positioned-open path as definition,
+    // mention, and Quick Open navigation. An active picker is fulfilled in
+    // place; an already-open file is activated.
+    FileEditor(@fileeditor.SearchMatchSelected(path~, range~)) =>
+      open_editor_at(dispatch, model, path, Some(range))
     // Intercepted like the comment above: which dock tab a tree click opens
     // is the strip's business. The dock opens (or re-activates) the tab,
     // then the file subsystem loads and shows the document against the
@@ -2906,77 +2915,32 @@ fn update_msg(
       }
     }
     OpenSkills => {
-      // The catalog is fetched once per app run (and again after a
-      // failure); the installed list is cheap and refreshes on every open.
-      let (catalog_cmd, skills_catalog) = match model.skills_catalog {
-        CatalogIdle | CatalogFailed(_) =>
-          (fetch_skills_catalog(dispatch, model.focused), CatalogLoading)
-        current => (@cmd.none, current)
-      }
+      // The page decides whether its catalog still needs fetching; the
+      // installed list is the root's mirror, cheap, and refreshed on every
+      // open.
+      let (page_cmd, skills) = model.skills.opening(
+        dispatch.map(msg => Skills(msg)),
+        model.skills_input(),
+      )
       (
-        @cmd.batch([
-          catalog_cmd,
-          fetch_installed_skills(dispatch, model.focused),
-        ]),
-        { ..model, screen: Skills, skills_catalog, skills_notice: "" },
+        @cmd.batch([page_cmd, fetch_installed_skills(dispatch, model.focused)]),
+        { ..model, screen: Skills, skills },
       )
     }
-    SkillsQueryChanged(value) => (@cmd.none, { ..model, skills_query: value })
-    SkillsCatalogLoaded(items) =>
-      (@cmd.none, { ..model, skills_catalog: CatalogReady(items) })
-    SkillsCatalogFailed(message) =>
-      (@cmd.none, { ..model, skills_catalog: CatalogFailed(message) })
-    SkillsNotice(message) => (@cmd.none, { ..model, skills_notice: message })
-    InstallSkill(item) => {
-      let key = @transcript.market_source_label(item)
-      if model.skills_busy.contains(key) {
-        (@cmd.none, model)
-      } else {
-        let skills_busy = model.skills_busy.copy()
-        skills_busy.push(key)
-        (
-          install_skill(dispatch, model.focused, item),
-          { ..model, skills_busy, skills_notice: "" },
-        )
+    Skills(msg) => {
+      let (page_cmd, skills, outcome) = model.skills.handle(
+        dispatch.map(next => Skills(next)),
+        msg,
+        model.skills_input(),
+      )
+      let model = { ..model, skills, }
+      // A settled install or uninstall changed the library the root owns;
+      // what the page shows must come from disk, not from a client-side
+      // guess.
+      guard outcome is Some(@skills.LibraryChanged(channel~)) else {
+        return (page_cmd, model)
       }
-    }
-    UninstallSkill(id) =>
-      if model.skills_busy.contains(id) {
-        (@cmd.none, model)
-      } else {
-        let skills_busy = model.skills_busy.copy()
-        skills_busy.push(id)
-        (
-          uninstall_skill(dispatch, model.focused, id),
-          { ..model, skills_busy, skills_notice: "" },
-        )
-      }
-    SkillActionDone(channel~, key~, error~) => {
-      let skills_busy = model.skills_busy.filter(entry => entry != key)
-      if error.is_empty() {
-        // The library changed; what the panel shows must come from disk,
-        // not from a client-side guess. A result that outlived a focus
-        // switch belongs to its old host; that host will refetch when it is
-        // focused again.
-        if channel == model.focused {
-          (fetch_installed_skills(dispatch, channel), { ..model, skills_busy, })
-        } else {
-          (@cmd.none, { ..model, skills_busy, })
-        }
-      } else {
-        (
-          @cmd.none,
-          {
-            ..model,
-            skills_busy,
-            skills_notice: if channel == model.focused {
-              error
-            } else {
-              model.skills_notice
-            },
-          },
-        )
-      }
+      (@cmd.batch([page_cmd, fetch_installed_skills(dispatch, channel)]), model)
     }
     Send => {
       guard model.active_conversation() is Some(conv) else {
@@ -3084,6 +3048,10 @@ fn update_msg(
           run_durable_floor: None,
           run_floor_generation: None,
           usage_tokens: 0,
+          // The submit is the moment this run began as far as the user is
+          // concerned: the wait they are watching starts here, not at the
+          // host's `started`.
+          run_started_ms: Some(@interop.now_ms()),
         }
         // The worktree launch mode's first submit creates the environment
         // (the host names it, binds this conversation) and starts inside
@@ -4139,30 +4107,7 @@ fn update_msg(
         { ..model, preview, dock, right_panel_menu_open: false },
       )
     }
-    FilePickerRequested => {
-      let model = model.begin_editor_navigation()
-      let dock = @dock.open_picker(model.dock)
-      let next = { ..model, dock, right_panel_menu_open: false }
-      let (cmd, file_panel) = @fileeditor.update(
-        dispatch.map(msg => FileEditor(msg)),
-        @fileeditor.ExplorerModeSelected(ExplorerFiles),
-        next.file_panel,
-        file_ctx(next),
-      )
-      (cmd, { ..next, file_panel, })
-    }
-    ReviewRequested => {
-      let model = model.begin_editor_navigation()
-      let dock = @dock.open_picker(model.dock)
-      let next = { ..model, dock, right_panel_menu_open: false }
-      let (cmd, file_panel) = @fileeditor.update(
-        dispatch.map(msg => FileEditor(msg)),
-        @fileeditor.ExplorerModeSelected(ExplorerChanges),
-        next.file_panel,
-        file_ctx(next),
-      )
-      (cmd, { ..next, file_panel, })
-    }
+    ExplorerRequested(mode) => open_explorer(dispatch, model, mode)
     BrowserAddressEdited(value) =>
       match @dock.active_browser(model.dock) {
         Some(id) =>
@@ -4451,7 +4396,7 @@ fn update_device_msg(
       }
     InstalledSkillsFailed(message) =>
       if channel == model.focused {
-        (@cmd.none, { ..model, skills_notice: message })
+        (@cmd.none, { ..model, skills: model.skills.with_notice(message) })
       } else {
         (@cmd.none, model)
       }
@@ -6117,11 +6062,18 @@ fn update_device_msg(
       } else {
         conv.sync
       }
+      // `foreign` is exactly the question the elapsed span needs answered: a
+      // run this page did not submit and wait for has an age that started
+      // before we were watching. Keeping the previous run's start would date
+      // the new one from a moment it never had; the span is simply omitted
+      // until a submit of ours establishes one.
+      let run_started_ms = if foreign { None } else { conv.run_started_ms }
       let conv = {
         ..conv,
         run,
         run_durable_floor,
         run_floor_generation,
+        run_started_ms,
         sync,
         // The tier is deliberately NOT re-established from the run. A start
         // is always older than the composer: the user may have flipped the
@@ -6551,11 +6503,24 @@ fn update_device_msg(
                 run: Open(run_id=current, stage~),
                 last_run_id: Some(run_id),
               }
+            // This page submitted and is now being told the run it was
+            // waiting for opened: the submit is still where the user's wait
+            // began, so the span carries over.
+            Starting(..) =>
+              {
+                ..settled,
+                run: Open(run_id~, stage=Opened),
+                last_run_id: Some(run_id),
+              }
+            // Some other run opened — reconnect adopting one already in
+            // flight, or a turn started elsewhere. Its age is not this page's
+            // to know, and the previous run's start would be a lie.
             _ =>
               {
                 ..settled,
                 run: Open(run_id~, stage=Opened),
                 last_run_id: Some(run_id),
+                run_started_ms: None,
               }
           }
         } else {
@@ -7707,6 +7672,89 @@ test "reasoning message waits for its durable commit" {
   )
   inspect(next.active().messages.length(), content="0")
   inspect(next.active().overlay.length(), content="0")
+}
+
+///|
+test "the run heartbeat projects the phase it is derived from" {
+  assert_eq(test_conversation().run_heartbeat(), None)
+  let stage_of = (conv : Conversation) => {
+    conv.run_heartbeat().map(run => run.stage)
+  }
+  // A silent model call is the whole point of the row: nothing else on screen
+  // moves between the step event and the first answer delta.
+  assert_eq(stage_of(running_conversation()), Some(Thinking))
+  assert_eq(
+    stage_of({
+      ..running_conversation(),
+      run: Open(run_id="r7", stage=AtStep(Some(3))),
+    }),
+    Some(AtStep(3)),
+  )
+  assert_eq(
+    stage_of({
+      ..running_conversation(),
+      run: Open(run_id="r7", stage=AtStep(None)),
+    }),
+    Some(Working),
+  )
+  assert_eq(
+    stage_of({
+      ..running_conversation(),
+      run: Open(run_id="r7", stage=Cancelling),
+    }),
+    Some(Stopping),
+  )
+  // The send is accepted but no run id exists yet: still worth a row, or the
+  // gap between submitting and `started` reads as a dropped prompt.
+  assert_eq(
+    stage_of({ ..test_conversation(), run: Starting(submission_id="sub-1") }),
+    Some(Starting),
+  )
+  // A finished run leaves nothing behind — the answer is the status.
+  assert_eq(
+    stage_of({
+      ..running_conversation(),
+      run: NoRun(ended=Some(RunFinished(Completed))),
+    }),
+    None,
+  )
+}
+
+///|
+test "the run heartbeat carries only the facts the page actually has" {
+  let full = {
+    ..running_conversation(),
+    run_started_ms: Some(1_000.0),
+    usage_tokens: 12_345,
+  }
+  assert_eq(
+    full.run_heartbeat(),
+    Some({ stage: Thinking, started_ms: Some(1_000.0), tokens: 12_345 }),
+  )
+  // A run adopted from a reconnect has no start this page witnessed. The
+  // composer omits the span rather than dating it from when we noticed.
+  assert_eq(
+    { ..full, run_started_ms: None }.run_heartbeat().map(run => run.started_ms),
+    Some(None),
+  )
+}
+
+///|
+test "a step event is what moves the heartbeat's stage" {
+  let running = running_model()
+  assert_eq(
+    running.active().run_heartbeat().map(run => run.stage),
+    Some(Thinking),
+  )
+  let (_, stepped) = update_dev(
+    test_dispatch(),
+    Engine(Some("r7"), AgentStep(Some(2)), session=None),
+    running,
+  )
+  assert_eq(
+    stepped.active().run_heartbeat().map(run => run.stage),
+    Some(AtStep(2)),
+  )
 }
 
 ///|
@@ -10095,6 +10143,7 @@ test "a distinct started id replaces a stale open run as foreign" {
       ..running_conversation(),
       run: Open(run_id="r-old", stage=AtStep(Some(3))),
       streaming_response: "old answer fragment",
+      run_started_ms: Some(1_000.0),
     },
     ["old steer"],
     run_id="r-old",
@@ -10122,6 +10171,9 @@ test "a distinct started id replaces a stale open run as foreign" {
   guard next.active().sync is Reloading(generation=1, attempt=1, ..) else {
     fail("a foreign replacement did not refresh the transcript")
   }
+  // The replaced run's start belonged to the run that just lost the seat.
+  // Carrying it over would age the new run from a moment it never had.
+  assert_eq(next.active().run_started_ms, None)
 }
 
 ///|
@@ -10668,6 +10720,9 @@ test "an old empty runs snapshot cannot close a start sent after reconnect" {
   })
   let (_, sent) = update(dispatch, Send, drafted)
   assert_true(sent.active().run is Starting(..))
+  // The submit is where the user's wait begins, so the elapsed span the tail
+  // lane reports has to be established here — before any host round trip.
+  assert_true(sent.active().run_started_ms is Some(_))
   let (_, stale_snapshot) = update_dev(
     dispatch,
     RunsSettled(live=[], frontier=[]),
@@ -16863,40 +16918,6 @@ test "a transcript stream grows without application-owned scroll state" {
 }
 
 ///|
-fn test_market_item() -> @transcript.MarketSkillItem {
-  {
-    name: "acme/widget",
-    module_name: "acme/widget",
-    package_path: "",
-    version: "1.0.0",
-    description: "Build widgets fast.",
-    author: "acme",
-    repository: "",
-  }
-}
-
-///|
-test "opening the skills page fetches the catalog once" {
-  let dispatch = test_dispatch()
-  let (_, opened) = update(dispatch, OpenSkills, test_model())
-  assert_true(opened.screen is Skills)
-  assert_true(opened.skills_catalog is CatalogLoading)
-
-  // Reopening with a loaded catalog keeps it; only a failure refetches.
-  let loaded = { ..test_model(), skills_catalog: CatalogReady([]) }
-  let (_, reopened) = update(dispatch, OpenSkills, loaded)
-  assert_true(reopened.skills_catalog is CatalogReady(_))
-  let failed = {
-    ..test_model(),
-    skills_catalog: CatalogFailed("offline"),
-    skills_notice: "stale",
-  }
-  let (_, retried) = update(dispatch, OpenSkills, failed)
-  assert_true(retried.skills_catalog is CatalogLoading)
-  inspect(retried.skills_notice, content="")
-}
-
-///|
 test "selecting a conversation returns from the skills page to the chat" {
   let dispatch = test_dispatch()
   let (_, opened) = update(dispatch, OpenSkills, test_model())
@@ -16927,8 +16948,7 @@ test "update is pure: opening the skills page twice is idempotent" {
   let (_, twice) = update(dispatch, OpenSkills, model)
   assert_true(once.screen is Skills)
   assert_true(twice.screen is Skills)
-  assert_true(once.skills_catalog is CatalogLoading)
-  assert_true(twice.skills_catalog is CatalogLoading)
+  assert_true(once.skills == twice.skills)
 }
 
 ///|
@@ -17066,104 +17086,32 @@ test "Codex sidebar actions close only the narrow drawer" {
 }
 
 ///|
-test "the skills search query lands on the model" {
+test "an unreadable library becomes the focused page's notice" {
   let dispatch = test_dispatch()
-  let (_, typed) = update(dispatch, SkillsQueryChanged("widget"), test_model())
-  inspect(typed.skills_query, content="widget")
-}
-
-///|
-test "an install marks its entry busy exactly once" {
-  let dispatch = test_dispatch()
-  let (_, busy) = update(
-    dispatch,
-    InstallSkill(test_market_item()),
-    test_model(),
-  )
-  inspect(busy.skills_busy.length(), content="1")
-  inspect(busy.skills_busy[0], content="acme/widget@1.0.0")
-
-  // A second click while in flight is a no-op.
-  let (_, again) = update(dispatch, InstallSkill(test_market_item()), busy)
-  inspect(again.skills_busy.length(), content="1")
-}
-
-///|
-test "a settled action releases its busy entry" {
-  let dispatch = test_dispatch()
-  let busy = { ..test_model(), skills_busy: ["acme/widget@1.0.0", "other"] }
-  let (_, done) = update(
-    dispatch,
-    SkillActionDone(
-      channel=@interop.ChannelId::Local,
-      key="acme/widget@1.0.0",
-      error="",
-    ),
-    busy,
-  )
-  inspect(done.skills_busy.length(), content="1")
-  inspect(done.skills_busy[0], content="other")
-  inspect(done.skills_notice, content="")
-
-  // A failure surfaces as the panel notice instead.
-  let (_, failed) = update(
-    dispatch,
-    SkillActionDone(
-      channel=@interop.ChannelId::Local,
-      key="other",
-      error="digest mismatch",
-    ),
-    done,
-  )
-  inspect(failed.skills_busy.length(), content="0")
-  inspect(failed.skills_notice, content="digest mismatch")
-}
-
-///|
-test "uninstall is keyed by the library id and deduplicated" {
-  let dispatch = test_dispatch()
-  let (_, busy) = update(dispatch, UninstallSkill("acme-widget"), test_model())
-  inspect(busy.skills_busy.length(), content="1")
-  inspect(busy.skills_busy[0], content="acme-widget")
-  let (_, again) = update(dispatch, UninstallSkill("acme-widget"), busy)
-  inspect(again.skills_busy.length(), content="1")
-}
-
-///|
-test "catalog and library replies land on the model" {
-  let dispatch = test_dispatch()
-  let (_, ready) = update(
-    dispatch,
-    SkillsCatalogLoaded([test_market_item()]),
-    test_model(),
-  )
-  guard ready.skills_catalog is CatalogReady(items) else {
-    fail("catalog should be ready")
+  let home = test_model()
+  // Both devices are known, so a background reply reaches the handler proper
+  // instead of being dropped for want of a device state.
+  let paired = {
+    ..home,
+    devices: [
+      home.devices[0],
+      { ..empty_device_state(Remote("d_b")), bridge: Connected },
+    ],
   }
-  inspect(items.length(), content="1")
-  assert_false(ready.skill_installed("acme/widget@1.0.0"))
-  let (_, failed) = update(dispatch, SkillsCatalogFailed("offline"), ready)
-  assert_true(failed.skills_catalog is CatalogFailed(_))
-  let installed : Array[@transcript.InstalledSkillItem] = [
-    {
-      id: "acme-widget",
-      name: "widget",
-      description: "",
-      source: "acme/widget@1.0.0",
-    },
-  ]
-  let (_, listed) = update_dev(
-    dispatch,
-    InstalledSkillsLoaded(installed),
-    ready,
-  )
-  assert_true(listed.skill_installed("acme/widget@1.0.0"))
   let (_, noticed) = update(
     dispatch,
-    SkillsNotice("library unreadable"),
-    listed,
+    FromDevice(Local, InstalledSkillsFailed("library unreadable")),
+    paired,
   )
-  inspect(noticed.skills_notice, content="library unreadable")
+  assert_true(noticed.skills == paired.skills.with_notice("library unreadable"))
+
+  // The page is the focused host's; a background device says nothing on it.
+  let (_, quiet) = update(
+    dispatch,
+    FromDevice(Remote("d_b"), InstalledSkillsFailed("other host")),
+    noticed,
+  )
+  assert_true(quiet.skills == noticed.skills)
 }
 
 ///|
@@ -17179,7 +17127,7 @@ test "installed skills replies are scoped to their source device" {
     focused: Remote("d_b"),
     installed_skills: [],
   }
-  let old_host : Array[@transcript.InstalledSkillItem] = [
+  let old_host : Array[@skills.InstalledItem] = [
     { id: "old", name: "old", description: "", source: "old/source@1.0.0" },
   ]
   let (_, ignored) = update(
@@ -17188,7 +17136,7 @@ test "installed skills replies are scoped to their source device" {
     focused,
   )
   assert_eq(ignored.installed_skills.length(), 0)
-  let new_host : Array[@transcript.InstalledSkillItem] = [
+  let new_host : Array[@skills.InstalledItem] = [
     { id: "new", name: "new", description: "", source: "new/source@1.0.0" },
   ]
   let (_, applied) = update(
@@ -19510,7 +19458,7 @@ test "terminal visibility changes in the root-owned terminal state" {
 }
 
 ///|
-test "launcher rows open Browse, Files, and Review destinations" {
+test "launcher rows open Browser and all Explorer destinations" {
   let dispatch = test_dispatch()
   let model = desktop_model()
   let (_, model) = update(dispatch, ToggleRightPanel, model)
@@ -19522,19 +19470,22 @@ test "launcher rows open Browse, Files, and Review destinations" {
   let page = @preview.page(model.preview, 1).unwrap()
   assert_true(page.url is None)
   assert_false(page.loading)
-  let (_, model) = update(dispatch, FilePickerRequested, model)
+  let (_, model) = update(dispatch, ExplorerRequested(ExplorerFiles), model)
   assert_true(model.dock.active == Some(@dock.DockTab::FilePicker))
   assert_true(model.file_panel.explorer_mode is ExplorerFiles)
   assert_true(
     model.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
   )
-  let (_, model) = update(dispatch, ReviewRequested, model)
+  let (_, model) = update(dispatch, ExplorerRequested(ExplorerChanges), model)
   assert_true(model.dock.active == Some(@dock.DockTab::FilePicker))
   assert_true(model.file_panel.explorer_mode is ExplorerChanges)
   assert_true(model.file_panel.changes is ChangeListLoading(_))
   // Files is an explicit destination even after Review selected Changes.
-  let (_, model) = update(dispatch, FilePickerRequested, model)
+  let (_, model) = update(dispatch, ExplorerRequested(ExplorerFiles), model)
   assert_true(model.file_panel.explorer_mode is ExplorerFiles)
+  let (_, model) = update(dispatch, ExplorerRequested(ExplorerSearch), model)
+  assert_true(model.file_panel.explorer_mode is ExplorerSearch)
+  assert_true(model.file_panel.tree_open)
 }
 
 ///|
@@ -19542,7 +19493,7 @@ test "a tree pick fulfills the active picker in place" {
   let dispatch = test_dispatch()
   let model = desktop_model()
   let (_, model) = update(dispatch, ToggleRightPanel, model)
-  let (_, model) = update(dispatch, FilePickerRequested, model)
+  let (_, model) = update(dispatch, ExplorerRequested(ExplorerFiles), model)
   let (_, model) = update(
     dispatch,
     FileEditor(FileSelected(path=Relative("src/main.mbt"), name="main.mbt")),
@@ -19559,7 +19510,7 @@ test "a changed row opens the file tab in review mode" {
   let dispatch = test_dispatch()
   let model = desktop_model()
   let (_, model) = update(dispatch, ToggleRightPanel, model)
-  let (_, model) = update(dispatch, FilePickerRequested, model)
+  let (_, model) = update(dispatch, ExplorerRequested(ExplorerChanges), model)
   let path = @pathx.Relative("src/main.mbt")
   let (_, model) = update(
     dispatch,
@@ -19905,6 +19856,194 @@ test "navigating an already-placed tab re-places its view" {
   let (_, replaced) = update(dispatch, BrowserPaneMeasured(rect~), navigated)
   assert_true(replaced.browser_pane.shown == Some(1))
   assert_true(replaced.browser_pane.rect == Some(rect))
+}
+
+///|
+#warnings("-alert_unstable")
+fn render_grep_state_for_test(model : Model) -> String {
+  let emit : @cmd.Emit[@grep_search.Msg] = @cmd.Emit(_ => @cmd.none)
+  let active = model
+    .active_checkout()
+    .unwrap_or({
+      owner: { channel: model.focused, session: "" },
+      placement: None,
+    })
+  let input = @grep_search.Input(
+    owner=active.owner,
+    root=active.placement.bind(placement => placement.checkout_root()),
+  )
+  @rabbita.render_to_string(() => {
+    @rabbita.Val::constant(
+      model.file_panel.search.explorer_view(input, emit, (_, _) => @cmd.none),
+    )
+  })
+}
+
+///|
+test "Search reuses the picker and keeps a request when its Explorer tab leaves" {
+  let dispatch = test_dispatch()
+  let (_, opened) = update(
+    dispatch,
+    ExplorerRequested(ExplorerSearch),
+    desktop_model(),
+  )
+  assert_true(opened.right_panel_open)
+  assert_true(opened.dock.active is Some(@dock.DockTab::FilePicker))
+  assert_true(opened.dock.tabs == [@dock.DockTab::FilePicker])
+  assert_true(opened.file_panel.explorer_mode is ExplorerSearch)
+  assert_true(opened.file_panel.tree_open)
+  let (_, reopened_picker) = update(
+    dispatch,
+    ExplorerRequested(ExplorerSearch),
+    opened,
+  )
+  assert_true(reopened_picker.dock.tabs == [@dock.DockTab::FilePicker])
+  let (_, edited) = update(
+    dispatch,
+    FileEditor(Search(@grep_search.QueryChanged("moon"))),
+    reopened_picker,
+  )
+  let (_, running) = update(
+    dispatch,
+    FileEditor(Search(@grep_search.Submit)),
+    edited,
+  )
+  assert_true(render_grep_state_for_test(running).contains("Searching…"))
+  let (_, files) = update(
+    dispatch,
+    FileEditor(@fileeditor.ExplorerModeSelected(ExplorerFiles)),
+    running,
+  )
+  assert_true(render_grep_state_for_test(files).contains("Searching…"))
+  let (_, reopened) = update(dispatch, ExplorerRequested(ExplorerSearch), files)
+  assert_true(reopened.dock.tabs == [@dock.DockTab::FilePicker])
+  assert_true(reopened.file_panel.explorer_mode is ExplorerSearch)
+  let markup = render_grep_state_for_test(reopened)
+  assert_true(markup.contains("Searching…"))
+  assert_true(markup.contains("value=\"moon\""))
+}
+
+///|
+test "a Search result fulfills the picker while preserving Search beside the file" {
+  let dispatch = test_dispatch()
+  let (_, opened) = update(
+    dispatch,
+    ExplorerRequested(ExplorerSearch),
+    desktop_model(),
+  )
+  let (_, edited) = update(
+    dispatch,
+    FileEditor(Search(@grep_search.QueryChanged("moon"))),
+    opened,
+  )
+  let path = @pathx.Relative("src/main.mbt")
+  let range = @common.Range(4, 2, 4, 6)
+  let (_, selected) = update(
+    dispatch,
+    FileEditor(SearchMatchSelected(path=path.0, range~)),
+    edited,
+  )
+  assert_true(selected.dock.tabs == [@dock.DockTab::File(path~)])
+  assert_true(@dock.active_file(selected.dock) == Some(path))
+  assert_true(selected.file_panel.explorer_mode is ExplorerSearch)
+  assert_true(selected.file_panel.tree_open)
+  assert_true(
+    selected.file_panel.docs.get(path)
+    is Some({ review: None, state: TabLoading, .. }),
+  )
+  assert_true(render_grep_state_for_test(selected).contains("value=\"moon\""))
+
+  // Opening Search again appends the one shared picker. Picking the already
+  // open file removes that picker and activates the existing file tab.
+  let (_, picker) = update(
+    dispatch,
+    ExplorerRequested(ExplorerSearch),
+    selected,
+  )
+  assert_true(
+    picker.dock.tabs == [@dock.DockTab::File(path~), @dock.DockTab::FilePicker],
+  )
+  let (_, reused) = update(
+    dispatch,
+    FileEditor(SearchMatchSelected(path=path.0, range~)),
+    picker,
+  )
+  assert_true(reused.dock.tabs == [@dock.DockTab::File(path~)])
+  assert_true(@dock.active_file(reused.dock) == Some(path))
+  assert_true(reused.file_panel.explorer_mode is ExplorerSearch)
+}
+
+///|
+test "narrow Search drill-down hides and restores the retained Explorer" {
+  let dispatch = test_dispatch()
+  let (_, narrow) = update(
+    dispatch,
+    ViewportResized(width=390),
+    desktop_model(),
+  )
+  let (_, opened) = update(dispatch, ExplorerRequested(ExplorerSearch), narrow)
+  let (_, edited) = update(
+    dispatch,
+    FileEditor(Search(@grep_search.QueryChanged("needle"))),
+    opened,
+  )
+  let path = @pathx.Relative("src/narrow.mbt")
+  let range = @common.Range(1, 1, 1, 7)
+  let (_, drilled) = update(
+    dispatch,
+    FileEditor(SearchMatchSelected(path=path.0, range~)),
+    edited,
+  )
+  assert_true(drilled.file_panel.explorer_mode is ExplorerSearch)
+  assert_false(drilled.file_panel.tree_open)
+  assert_true(render_grep_state_for_test(drilled).contains("value=\"needle\""))
+  let (_, restored) = update(
+    dispatch,
+    FileEditor(@fileeditor.ToggleTree),
+    drilled,
+  )
+  assert_true(restored.file_panel.tree_open)
+  assert_true(restored.file_panel.explorer_mode is ExplorerSearch)
+}
+
+///|
+test "Search requests survive hidden Explorer Browser and panel states" {
+  let dispatch = test_dispatch()
+  let (_, opened) = update(
+    dispatch,
+    ExplorerRequested(ExplorerSearch),
+    desktop_model(),
+  )
+  let path = @pathx.Relative("src/main.mbt")
+  let range = @common.Range(2, 1, 2, 5)
+  let (_, file) = update(
+    dispatch,
+    FileEditor(SearchMatchSelected(path=path.0, range~)),
+    opened,
+  )
+  let (_, edited) = update(
+    dispatch,
+    FileEditor(Search(@grep_search.QueryChanged("moon"))),
+    file,
+  )
+  let (_, running) = update(
+    dispatch,
+    FileEditor(Search(@grep_search.Submit)),
+    edited,
+  )
+  assert_true(render_grep_state_for_test(running).contains("Searching…"))
+
+  let (_, tree_hidden) = update(
+    dispatch,
+    FileEditor(@fileeditor.ToggleTree),
+    running,
+  )
+  assert_true(render_grep_state_for_test(tree_hidden).contains("Searching…"))
+  let (_, browser) = update(dispatch, BrowserTabRequested, tree_hidden)
+  assert_true(render_grep_state_for_test(browser).contains("Searching…"))
+  let (_, panel_closed) = update(dispatch, ToggleRightPanel, browser)
+  assert_false(panel_closed.right_panel_open)
+  assert_true(render_grep_state_for_test(panel_closed).contains("Searching…"))
 }
 
 ///|

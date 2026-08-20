@@ -8,3 +8,7 @@ import {
 }
 
 supported_targets = "js"
+
+import {
+  "openseek_desktop/frontend/interop",
+} for "wbtest"

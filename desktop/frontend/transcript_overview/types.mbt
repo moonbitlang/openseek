@@ -99,3 +99,15 @@ pub fn entries(
   }
   result
 }
+
+///|
+pub extend Entry with Debug::{to_repr}
+
+///|
+pub extend Entry with Eq::{equal, not_equal}
+
+///|
+pub extend TurnKey with Debug::{to_repr}
+
+///|
+pub extend TurnKey with Eq::{equal, not_equal}

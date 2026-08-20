@@ -125,3 +125,15 @@ pub fn MarkerService::markers_for_resource(
 ) -> Array[Marker] {
   self.read(MarkerReadOptions(resource~, take=limit))
 }
+
+///|
+pub extend RelatedInformation with Debug::{to_repr}
+
+///|
+pub extend RelatedInformation with Eq::{equal, not_equal}
+
+///|
+pub extend ResourceMarker with Debug::{to_repr}
+
+///|
+pub extend ResourceMarker with Eq::{equal, not_equal}

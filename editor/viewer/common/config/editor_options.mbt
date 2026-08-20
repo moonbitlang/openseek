@@ -41,3 +41,9 @@ pub(all) struct EditorLayoutInfo {
   /// The width of the vertical scrollbar.
   vertical_scrollbar_width : Double
 } derive(Eq, Debug)
+
+///|
+pub extend EditorLayoutInfo with Debug::{to_repr}
+
+///|
+pub extend EditorLayoutInfo with Eq::{equal, not_equal}

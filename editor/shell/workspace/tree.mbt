@@ -54,3 +54,15 @@ pub fn WorkspaceEntryKind::from_string(kind : String) -> WorkspaceEntryKind? {
     _ => None
   }
 }
+
+///|
+pub extend WorkspaceEntryKind with Debug::{to_repr}
+
+///|
+pub extend WorkspaceEntryKind with Eq::{equal, not_equal}
+
+///|
+pub extend WorkspaceResolveResult with Debug::{to_repr}
+
+///|
+pub extend WorkspaceStat with Debug::{to_repr}

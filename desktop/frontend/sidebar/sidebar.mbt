@@ -172,3 +172,15 @@ pub fn component(
     ])
   })
 }
+
+///|
+pub extend Account with Debug::{to_repr}
+
+///|
+pub extend Account with Eq::{equal, not_equal}
+
+///|
+pub extend Input with Debug::{to_repr}
+
+///|
+pub extend Input with Eq::{equal, not_equal}

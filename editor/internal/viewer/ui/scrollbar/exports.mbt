@@ -9,3 +9,9 @@ pub(all) enum CssLength {
   Pixels(Double)
   Raw(String)
 } derive(Eq, Debug)
+
+///|
+pub extend CssLength with Debug::{to_repr}
+
+///|
+pub extend CssLength with Eq::{equal, not_equal}

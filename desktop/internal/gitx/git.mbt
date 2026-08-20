@@ -122,3 +122,6 @@ pub async fn is_linked_worktree(dir : @pathx.Absolute) -> Bool {
   guard dir_pair(dir) is Some((git_dir, common_dir)) else { return false }
   git_dir != common_dir
 }
+
+///|
+pub extend GitError with Debug::{to_repr}

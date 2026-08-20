@@ -330,6 +330,168 @@ test "file search payload and reply round-trip at the JSON boundary" {
 }
 
 ///|
+test "text search payload and UTF-16 reply round-trip at the JSON boundary" {
+  let raw_payload : Json = {
+    "root": "/work/project",
+    "query": "moon",
+    "regex": false,
+    "case_sensitive": true,
+    "whole_word": true,
+    "include_glob": "src/**,tests/**",
+    "exclude_glob": "**/*.snap",
+    "session_key": "search:session-1:/work/project",
+    "generation": 9,
+    "max_results": 20000,
+  }
+  let payload : @protocol.SearchTextPayload = @json.from_json(raw_payload)
+  assert_eq(payload.root, "/work/project")
+  assert_eq(payload.query, "moon")
+  assert_false(payload.regex)
+  assert_true(payload.case_sensitive)
+  assert_true(payload.whole_word)
+  assert_eq(payload.include_glob, "src/**,tests/**")
+  assert_eq(payload.exclude_glob, "**/*.snap")
+  assert_eq(payload.session_key, "search:session-1:/work/project")
+  assert_eq(payload.generation, 9)
+  assert_eq(payload.max_results, 20000)
+  @debug.assert_eq(payload.to_json(), raw_payload)
+  let raw_reply : Json = {
+    "root": "/work/project",
+    "generation": 9,
+    "matches": [
+      {
+        "path": "src/main.mbt",
+        "line_number": 4,
+        "preview": "let moon = \"🌙\"",
+        "preview_start_column": 1,
+        "ranges": [{ "start_column": 5, "end_column": 9 }],
+      },
+    ],
+    "match_count": 1,
+    "file_count": 1,
+    "limit_hit": false,
+    "cancelled": false,
+  }
+  let reply : @protocol.SearchTextReply = @json.from_json(raw_reply)
+  assert_eq(reply.matches[0].ranges[0].start_column, 5)
+  assert_eq(reply.matches[0].ranges[0].end_column, 9)
+  assert_true(reply.error is None)
+  @debug.assert_eq(reply.to_json(), raw_reply)
+  let cancel : @protocol.CancelSearchTextPayload = {
+    session_key: "search:session-1:/work/project",
+    generation: 9,
+  }
+  let decoded : @protocol.CancelSearchTextPayload = @json.from_json(
+    cancel.to_json(),
+  )
+  @debug.assert_eq(decoded, cancel)
+  let raw_error_reply : Json = {
+    "root": "/work/project",
+    "generation": 10,
+    "matches": [],
+    "match_count": 0,
+    "file_count": 0,
+    "limit_hit": false,
+    "cancelled": false,
+    "error_code": "invalid_regex",
+    "error_message": "regex parse error",
+  }
+  let error_reply : @protocol.SearchTextReply = @json.from_json(raw_error_reply)
+  assert_eq(
+    error_reply.error,
+    Some({ code: "invalid_regex", message: "regex parse error" }),
+  )
+  @debug.assert_eq(error_reply.to_json(), raw_error_reply)
+}
+
+///|
+test "text search payload rejects missing and invalid required fields" {
+  let missing_rejected = try {
+    let _ : @protocol.SearchTextPayload = @json.from_json({
+      "root": "/work/project",
+      "query": "moon",
+      "regex": false,
+      "case_sensitive": false,
+      "whole_word": false,
+      "include_glob": "",
+      "exclude_glob": "",
+      "generation": 1,
+      "max_results": 20000,
+    })
+  } catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+  assert_true(missing_rejected)
+  let invalid_rejected = try {
+    let _ : @protocol.CancelSearchTextPayload = @json.from_json({
+      "session_key": 7,
+      "generation": 1,
+    })
+  } catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+  assert_true(invalid_rejected)
+  let null_rejected = try {
+    let _ : @protocol.SearchTextPayload = @json.from_json({
+      "root": Json::null(),
+      "query": "moon",
+      "regex": false,
+      "case_sensitive": false,
+      "whole_word": false,
+      "include_glob": "",
+      "exclude_glob": "",
+      "session_key": "search:null",
+      "generation": 1,
+      "max_results": 20000,
+    })
+  } catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+  assert_true(null_rejected)
+  let half_error_rejected = try {
+    let _ : @protocol.SearchTextReply = @json.from_json({
+      "root": "/work/project",
+      "generation": 1,
+      "matches": [],
+      "match_count": 0,
+      "file_count": 0,
+      "limit_hit": false,
+      "cancelled": false,
+      "error_code": "search_failed",
+    })
+  } catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+  assert_true(half_error_rejected)
+  let empty_error_sentinel_rejected = try {
+    let _ : @protocol.SearchTextReply = @json.from_json({
+      "root": "/work/project",
+      "generation": 1,
+      "matches": [],
+      "match_count": 0,
+      "file_count": 0,
+      "limit_hit": false,
+      "cancelled": false,
+      "error_code": "",
+      "error_message": "",
+    })
+  } catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+  assert_true(empty_error_sentinel_rejected)
+}
+
+///|
 test "workspace replies keep success compatible and carry refusals" {
   let success : @protocol.WorkspacesReply = Workspaces(["/home/u/proj"])
   @debug.assert_eq(success.to_json(), { "workspaces": ["/home/u/proj"] })

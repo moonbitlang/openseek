@@ -195,6 +195,8 @@ pub enum FileIndex {
 pub(all) enum ExplorerMode {
   ExplorerFiles
   ExplorerChanges
+  // Workspace text search is the third inventory owned by this file panel.
+  ExplorerSearch
 } derive(Eq)
 
 ///|
@@ -319,10 +321,13 @@ pub(all) struct State {
   // is shown. A panel preference, not per-conversation state, so it
   // survives conversation switches.
   tree_open : Bool
-  // The explorer's Files/Changes selection and the Git snapshot behind the
-  // latter. The selection survives a conversation switch; the snapshot does
-  // not (see `sync`).
+  // The explorer's Files/Changes/Search selection. The selection survives a
+  // conversation switch; checkout-derived inventories do not (see `sync`).
   explorer_mode : ExplorerMode
+  // Workspace text search is a child inventory of this file subsystem. Its
+  // reducer/request/view remain in grep_search, while this State supplies the
+  // same owner/root lifecycle already used by Files and Changes.
+  search : @grep_search.State
   // Source/full-diff is a reviewer preference, not a per-file decision. New
   // changed-file reviews inherit it so next/previous and tree navigation do
   // not force the reviewer to request the full diff again.
@@ -418,6 +423,7 @@ pub fn State::empty() -> State {
     placement: PlacementUnknown,
     tree_open: true,
     explorer_mode: ExplorerFiles,
+    search: @grep_search.State::empty(),
     review_view_mode: ReviewUnifiedDiff,
     review_diff_layout: ReviewSideBySide,
     changes: ChangeListIdle,
@@ -442,6 +448,45 @@ pub fn State::empty() -> State {
     highlighted: None,
     index: IndexEmpty,
     error: None,
+  }
+}
+
+///|
+/// Prepare the file subsystem for a shell-driven open that must happen before
+/// the ordinary post-dispatch `sync` pass. Checkout-derived inventories and
+/// documents are reset here, inside their owner, while panel preferences and
+/// page-lifetime request fences survive an A -> B -> A conversation switch.
+pub fn State::prepare_owner(
+  self : State,
+  owner : @interop.ConversationKey,
+  open_files : Array[@pathx.Relative],
+) -> State {
+  guard self.owner != Some(owner) else { return self }
+  let docs : Map[@pathx.Relative, Doc] = Map([])
+  for path in open_files {
+    docs[path] = {
+      name: basename(path),
+      state: TabLoading,
+      review: None,
+      stale: false,
+    }
+  }
+  {
+    ..State::empty(),
+    owner: Some(owner),
+    tree_open: self.tree_open,
+    explorer_mode: self.explorer_mode,
+    search: self.search.reset_checkout(),
+    review_view_mode: self.review_view_mode,
+    changes_generation: self.changes_generation,
+    request_epoch: self.request_epoch + 1,
+    file_link_generation: self.file_link_generation,
+    review_generation: self.review_generation,
+    watch_generation: self.watch_generation,
+    // Preserve the old host configuration until `sync` can explicitly retire
+    // or replace it against the newly resolved checkout placement.
+    watching: self.watching,
+    docs,
   }
 }
 
@@ -514,6 +559,11 @@ fn Ctx::root(self : Ctx) -> @common.Uri? {
 }
 
 ///|
+fn Ctx::search_input(self : Ctx) -> @grep_search.Input {
+  @grep_search.Input(owner=self.owner, root=self.root())
+}
+
+///|
 /// The registered project used by Git and worktree requests.
 fn Ctx::workspace(self : Ctx) -> @common.Uri? {
   self.placement.bind(value => value.project_root())
@@ -536,9 +586,14 @@ pub(all) enum Msg {
   HighlightCleared(@pathx.Relative)
   // Show or hide the file-tree pane (the column right of the viewer).
   ToggleTree
-  // Select the ordinary workspace tree or the checkout's changed-file list.
+  // Select the ordinary workspace tree, changed-file list, or workspace Search.
   // Selecting Changes also requests (or explicitly refreshes) its snapshot.
   ExplorerModeSelected(ExplorerMode)
+  // Search reducer events stay nested under the Explorer owner. A selected
+  // result is intercepted by the application root exactly like FileSelected
+  // and ChangedFileSelected because opening a dock tab is shell state.
+  Search(@grep_search.Msg)
+  SearchMatchSelected(path~ : String, range~ : @common.Range)
   // Expand or collapse a directory row in the file tree; the first expansion
   // lazily lists the directory through the host.
   DirToggle(@pathx.Relative)
@@ -764,3 +819,57 @@ pub(all) enum Msg {
     feedback_id~ : String?
   )
 }
+
+///|
+pub extend ChangeKind with Eq::{equal, not_equal}
+
+///|
+pub extend ChangeList with Eq::{equal, not_equal}
+
+///|
+pub extend ChangedFile with Eq::{equal, not_equal}
+
+///|
+pub extend Ctx with Eq::{equal, not_equal}
+
+///|
+pub extend Doc with Eq::{equal, not_equal}
+
+///|
+pub extend ExplorerMode with Eq::{equal, not_equal}
+
+///|
+pub extend FileChange with Eq::{equal, not_equal}
+
+///|
+pub extend FileEntry with Eq::{equal, not_equal}
+
+///|
+pub extend FileIndex with Eq::{equal, not_equal}
+
+///|
+pub extend ReconciledPlacement with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewBaseline with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewDiffLayout with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewState with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewViewMode with Eq::{equal, not_equal}
+
+///|
+pub extend State with Eq::{equal, not_equal}
+
+///|
+pub extend TabState with Eq::{equal, not_equal}
+
+///|
+pub extend TreeLayout with Eq::{equal, not_equal}
+
+///|
+pub extend WatchedPaths with Eq::{equal, not_equal}

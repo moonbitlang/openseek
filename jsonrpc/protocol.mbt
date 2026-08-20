@@ -168,3 +168,6 @@ fn parse_error(error : Json) -> ResponseError {
   }
   Failed(code~, message~, data~)
 }
+
+///|
+pub extend ResponseError with Show::{output, to_string}

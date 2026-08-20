@@ -48,6 +48,9 @@ pub(all) enum NavigationCommandRevealType {
   Minimal
   None
 } derive(Eq, @debug.Debug)
+pub fn NavigationCommandRevealType::equal(Self, Self) -> Bool
+pub fn NavigationCommandRevealType::not_equal(Self, Self) -> Bool
+pub fn NavigationCommandRevealType::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PointerHandlerHelper {
   view_dom_node : @dom.Element

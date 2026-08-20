@@ -346,3 +346,33 @@ pub fn ReferenceItem::row_preview(
     _ => LocationFallback(self.fallback_label())
   }
 }
+
+///|
+pub extend ReferenceGroup with Debug::{to_repr}
+
+///|
+pub extend ReferenceGroup with Eq::{equal, not_equal}
+
+///|
+pub extend ReferenceItem with Debug::{to_repr}
+
+///|
+pub extend ReferenceItem with Eq::{equal, not_equal}
+
+///|
+pub extend ReferenceRowPreview with Debug::{to_repr}
+
+///|
+pub extend ReferenceRowPreview with Eq::{equal, not_equal}
+
+///|
+pub extend ReferenceSnippet with Debug::{to_repr}
+
+///|
+pub extend ReferenceSnippet with Eq::{equal, not_equal}
+
+///|
+pub extend ReferencesModel with Debug::{to_repr}
+
+///|
+pub extend ReferencesModel with Eq::{equal, not_equal}

@@ -10,6 +10,7 @@ fn render_tabs(expanded : Bool) -> String {
   let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let actions : LauncherActions = {
     browser: None,
+    search: @cmd.none,
     files: @cmd.none,
     review: @cmd.none,
   }
@@ -31,27 +32,32 @@ fn render_tabs(expanded : Bool) -> String {
 }
 
 ///|
-test "launcher presents Browse, Files, and Review in order" {
+test "launcher presents Browse, Search, Files, and Review in order" {
   let html = render_launcher({
     browser: Some(@cmd.none),
+    search: @cmd.none,
     files: @cmd.none,
     review: @cmd.none,
   })
   let browse = html.find(">Browse</span>").unwrap()
+  let search = html.find(">Search</span>").unwrap()
   let files = html.find(">Files</span>").unwrap()
   let review = html.find(">Review</span>").unwrap()
-  assert_true(browse < files && files < review)
+  assert_true(browse < search && search < files && files < review)
   assert_true(html.contains("Review changed files and diffs"))
+  assert_true(html.contains("M10.0195 10.7266C9.06578 11.5217"))
 }
 
 ///|
-test "remote launcher hides Browse but retains Files and Review" {
+test "remote launcher hides Browse but retains Search, Files, and Review" {
   let html = render_launcher({
     browser: None,
+    search: @cmd.none,
     files: @cmd.none,
     review: @cmd.none,
   })
   assert_false(html.contains(">Browse</span>"))
+  assert_true(html.contains(">Search</span>"))
   assert_true(html.contains(">Files</span>"))
   assert_true(html.contains(">Review</span>"))
 }

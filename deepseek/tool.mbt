@@ -64,3 +64,9 @@ pub fn ToolCall::ToolCall(
 ) -> ToolCall {
   { id, name, arguments }
 }
+
+///|
+pub extend ToolCall with Debug::{to_repr}
+
+///|
+pub extend ToolDefinition with Debug::{to_repr}

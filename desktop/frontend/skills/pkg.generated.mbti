@@ -1,0 +1,67 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/skills"
+
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/internal/protocol",
+}
+
+// Values
+pub fn catalog_from_reply(@protocol.SkillsCatalogReply) -> Array[MarketItem]
+
+pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @cmd.Emit[Msg]) -> @rabbita.Val[@html.Html]
+
+pub fn installed_from_reply(@protocol.InstalledSkillsReply) -> Array[InstalledItem]
+
+pub fn source_label(MarketItem) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct Input {
+  channel : @interop.ChannelId
+  installed : Array[InstalledItem]
+} derive(Eq)
+
+pub(all) struct InstalledItem {
+  id : String
+  name : String
+  description : String
+  source : String
+} derive(Eq)
+
+pub(all) struct MarketItem {
+  name : String
+  module_name : String
+  package_path : String
+  version : String
+  description : String
+  author : String
+  repository : String
+} derive(Eq)
+
+pub(all) enum Msg {
+  QueryChanged(String)
+  CatalogLoaded(Array[MarketItem])
+  CatalogFailed(String)
+  Install(MarketItem)
+  Uninstall(String)
+  ActionDone(channel~ : @interop.ChannelId, key~ : String, error~ : String)
+}
+
+pub enum Outcome {
+  LibraryChanged(channel~ : @interop.ChannelId)
+} derive(Eq)
+
+type State derive(Eq)
+pub fn State::empty() -> Self
+pub fn State::handle(Self, @cmd.Emit[Msg], Msg, Input) -> (@cmd.Cmd, Self, Outcome?)
+pub fn State::opening(Self, @cmd.Emit[Msg], Input) -> (@cmd.Cmd, Self)
+pub fn State::with_notice(Self, String) -> Self
+
+// Type aliases
+
+// Traits

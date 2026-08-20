@@ -14,6 +14,9 @@ pub async fn[X] connect(@async.TaskGroup[X], command~ : String, args~ : Array[St
 
 // Types and methods
 type NdjsonTransport
+pub fn NdjsonTransport::close(Self) -> Unit
+pub async fn NdjsonTransport::recv(Self) -> Json?
+pub async fn NdjsonTransport::send(Self, Json) -> Unit
 pub impl @jsonrpc.Transport for NdjsonTransport
 
 type StdioConnection

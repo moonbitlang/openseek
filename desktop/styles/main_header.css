@@ -74,6 +74,7 @@ main {
 }
 
 .topbar-workspace {
+  --icon-size: var(--icon-sm);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -84,12 +85,6 @@ main {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
-.topbar-workspace .icon {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 auto;
-}
-
 .run-status {
   display: inline-flex;
   align-items: center;
@@ -140,8 +135,11 @@ main {
   background: transparent;
   color: var(--color-text-muted);
 }
+.launcher-glyph {
+  --icon-size: var(--icon-md);
+}
 .launcher-caret {
-  font-size: 9px;
+  --icon-size: var(--icon-xs);
 }
 .launcher-menu {
   position: absolute;

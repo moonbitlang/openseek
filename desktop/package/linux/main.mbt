@@ -11,6 +11,9 @@ const UsrBinPath : String = AppDirPath + "/usr/bin"
 const AppAssetDir : String = UsrBinPath + "/assets"
 
 ///|
+const RipgrepLicenseDir : String = AppDirPath + "/usr/share/licenses/ripgrep"
+
+///|
 /// Where a downloaded appimagetool is cached between runs. Lives outside the
 /// AppDir so reset_bundle_dirs never deletes it.
 const AppImageToolCache : String = "dist/tools/appimagetool"
@@ -22,17 +25,20 @@ const AppImageToolUrl : String = "https://github.com/AppImage/appimagetool/relea
 async fn build_outputs(
   ws : @packaging.Workspace,
   release~ : Bool,
-) -> @xterm_assets.Assets {
-  // Reuse CEF while rebuilding the native Proton artifacts from this checkout.
-  ws.prepare_checkout_proton_runtime(@packaging.posix_proton_cli())
+) -> (@xterm_assets.Assets, @ripgrep_assets.Assets) {
+  @packaging.ensure_cef_runtime(ws)
   @packaging.build_frontend_bundle(ws, release~)
   let terminal_assets = @xterm_assets.build(
     ws,
     @xterm_assets.linux_x64_target(),
   )
+  let ripgrep_assets = @ripgrep_assets.build(
+    ws,
+    @ripgrep_assets.linux_x64_target(),
+  )
   @packaging.build_native_host(ws, release~)
   @packaging.build_engine(ws, release~)
-  terminal_assets
+  (terminal_assets, ripgrep_assets)
 }
 
 ///|
@@ -41,6 +47,7 @@ async fn reset_bundle_dirs(ws : @packaging.Workspace) -> Unit {
   @packaging.remove_path_if_exists(ws.at(AppImagePath))
   @packaging.ensure_dir(ws.at(UsrBinPath))
   @packaging.ensure_dir(ws.at(AppAssetDir))
+  @packaging.ensure_dir(ws.at(RipgrepLicenseDir))
   @packaging.ensure_dir(ws.at("dist/tools"))
 }
 
@@ -48,6 +55,7 @@ async fn reset_bundle_dirs(ws : @packaging.Workspace) -> Unit {
 async fn copy_bundle_files(
   ws : @packaging.Workspace,
   terminal_assets : @xterm_assets.Assets,
+  ripgrep_assets : @ripgrep_assets.Assets,
   release~ : Bool,
 ) -> Unit {
   let native_binary = ws.native_binary(release~)
@@ -65,6 +73,15 @@ async fn copy_bundle_files(
     ws.at(UsrBinPath + "/openseek-desktop-bin"),
   )
   @packaging.copy_file(engine_binary, ws.at(UsrBinPath + "/openseek"))
+  @packaging.copy_file(ripgrep_assets.binary, ws.at(UsrBinPath + "/rg"))
+  @packaging.copy_file(
+    ripgrep_assets.license_mit,
+    ws.at(RipgrepLicenseDir + "/LICENSE-MIT"),
+  )
+  @packaging.copy_file(
+    ripgrep_assets.unlicense,
+    ws.at(RipgrepLicenseDir + "/UNLICENSE"),
+  )
   @packaging.copy_file(ws.at("index.html"), ws.at(AppAssetDir + "/index.html"))
   @packaging.copy_file(ws.app_stylesheet(), ws.at(AppAssetDir + "/app.css"))
   @packaging.copy_file(
@@ -164,6 +181,7 @@ async fn write_bundle_metadata(ws : @packaging.Workspace) -> Unit {
       AppDirPath + "/AppRun",
       UsrBinPath + "/openseek-desktop-bin",
       UsrBinPath + "/openseek",
+      UsrBinPath + "/rg",
     ],
     dir=ws.dir(),
   )
@@ -226,11 +244,10 @@ async fn main {
   ).parse()
   let release = matches.flags.get("release").unwrap_or(false)
   let ws = @packaging.locate_workspace()
-  @packaging.ensure_cmake(ws)
-  let terminal_assets = build_outputs(ws, release~)
+  let (terminal_assets, ripgrep_assets) = build_outputs(ws, release~)
   println("built openseek engine: \{ws.engine_binary(release~)}")
   reset_bundle_dirs(ws)
-  copy_bundle_files(ws, terminal_assets, release~)
+  copy_bundle_files(ws, terminal_assets, ripgrep_assets, release~)
   write_bundle_metadata(ws)
   let tool = ensure_appimagetool(ws)
   build_appimage(ws, tool)

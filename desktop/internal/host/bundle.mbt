@@ -5,6 +5,9 @@ const FrontendEntryPath = "assets/index.html"
 const ProtonPackageFrontendEntryPath = "target/proton-package-input/assets/index.html"
 
 ///|
+const ProtonPackageRipgrepPath = "target/proton-package-input/bin/rg"
+
+///|
 /// Locate the bundled frontend entry relative to the executable. On macOS
 /// the assets live in `Contents/Resources/` — `Contents/MacOS/` may only
 /// hold code, since non-`--deep` codesigning rejects data files there — so
@@ -36,6 +39,66 @@ pub async fn frontend_entry_path(framework_command : String) -> String {
     return path
   }
   FrontendEntryPath
+}
+
+///|
+/// Locate the packaged ripgrep beside the installed Host. macOS stores data
+/// below Contents/Resources; Linux and Windows keep the executable beside the
+/// Host. Only a recognized Moon `_build` executable (or an embedding without
+/// an executable path, used by development tests) may fall back to `PATH`.
+/// An installed bundle with a missing asset fails closed instead of silently
+/// running a machine-global ripgrep of an unknown version.
+async fn ripgrep_command(executable : String?) -> String? {
+  guard executable is Some(executable) else { return Some("rg") }
+  let command_dir = @pathx.Path(executable).dirname().resolve()
+  let candidates = [
+    command_dir.join("..").join("Resources").join(ProtonPackageRipgrepPath),
+    command_dir.join("rg.exe"),
+    command_dir.join("rg"),
+  ]
+  for candidate in candidates {
+    let path = candidate.normalize().to_string()
+    if @fs.exists(path) {
+      return Some(path)
+    }
+  }
+  if @development.Layout::detect(executable) is Some(_) {
+    Some("rg")
+  } else {
+    None
+  }
+}
+
+///|
+async test "ripgrep resolution uses only packaged or recognized development layouts" {
+  let root : @pathx.Path = @fs.tmpdir(prefix="openseek-ripgrep-resolution-")
+  let installed = root.join("installed")
+  @fs.mkdir(installed.to_string(), recursive=true)
+  let installed_host = installed.join("openseek-desktop").to_string()
+  assert_true(ripgrep_command(Some(installed_host)) is None)
+  let adjacent = installed.join("rg").to_string()
+  @fs.write_file(adjacent, "rg", create_mode=CreateOrTruncate)
+  assert_eq(ripgrep_command(Some(installed_host)), Some(adjacent))
+
+  let macos = root.join("SeekMoon.app/Contents/MacOS")
+  let resources_rg = root
+    .join("SeekMoon.app/Contents/Resources")
+    .join(ProtonPackageRipgrepPath)
+  @fs.mkdir(macos.to_string(), recursive=true)
+  @fs.mkdir(resources_rg.dirname().to_string(), recursive=true)
+  @fs.write_file(resources_rg.to_string(), "rg", create_mode=CreateOrTruncate)
+  assert_eq(
+    ripgrep_command(Some(macos.join("openseek-desktop").to_string())),
+    Some(resources_rg.normalize().to_string()),
+  )
+
+  let development = root.join("_build/native/debug/build/openseek_desktop")
+  @fs.mkdir(development.to_string(), recursive=true)
+  assert_eq(
+    ripgrep_command(Some(development.join("openseek_desktop").to_string())),
+    Some("rg"),
+  )
+  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|

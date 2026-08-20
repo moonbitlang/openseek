@@ -6,18 +6,21 @@ test "diff presentation aligns insertions, deletions, and replacements" {
       modified: LineRange(3, 5),
       original_inner_changed: [],
       modified_inner_changed: [],
+      render_change: true,
     },
     {
       original: LineRange(8, 11),
       modified: LineRange(10, 10),
       original_inner_changed: [],
       modified_inner_changed: [],
+      render_change: true,
     },
     {
       original: LineRange(14, 16),
       modified: LineRange(13, 17),
       original_inner_changed: [],
       modified_inner_changed: [],
+      render_change: true,
     },
   ]
   let presentation = diff_presentation(changes)
@@ -41,6 +44,7 @@ test "diff presentation supports a spacer before the first line" {
       modified: LineRange(1, 3),
       original_inner_changed: [],
       modified_inner_changed: [],
+      render_change: true,
     },
   ]
   let presentation = diff_presentation(changes)
@@ -60,6 +64,7 @@ test "diff presentation separates non-empty character ranges by side" {
       modified: LineRange(3, 5),
       original_inner_changed: [original, Range(4, 1, 4, 1)],
       modified_inner_changed: [modified, inserted],
+      render_change: true,
     },
   ])
   assert_eq(presentation.original_inner_changed, [original])
@@ -91,6 +96,7 @@ test "unified deleted zones precede replacement and deletion anchors" {
       modified: LineRange(4, 5),
       original_inner_changed: [],
       modified_inner_changed: [],
+      render_change: true,
     }),
     3,
   )
@@ -100,6 +106,7 @@ test "unified deleted zones precede replacement and deletion anchors" {
       modified: LineRange(1, 1),
       original_inner_changed: [],
       modified_inner_changed: [],
+      render_change: true,
     }),
     0,
   )
@@ -119,6 +126,7 @@ test "token diff adapts moondiff token segments to Viewer ranges" {
   let calculation = calculate_diff_changes(
     TokenDiff,
     true,
+    false,
     [original],
     [modified],
     original,
@@ -142,6 +150,7 @@ test "token diff ranges remain UTF-16 after a surrogate pair" {
   let calculation = calculate_diff_changes(
     TokenDiff,
     true,
+    false,
     [original],
     [modified],
     original,
@@ -161,6 +170,7 @@ test "tree diff uses structural moondiff output without fallback" {
   let calculation = calculate_diff_changes(
     TreeDiff,
     true,
+    false,
     [original],
     [modified],
     original,
@@ -183,6 +193,7 @@ test "tree parse failure keeps moondiff's token fallback" {
   let calculation = calculate_diff_changes(
     TreeDiff,
     true,
+    false,
     [original],
     [modified],
     original,
@@ -191,6 +202,147 @@ test "tree parse failure keeps moondiff's token fallback" {
   assert_true(calculation.effective_mode is TokenDiff)
   assert_true(calculation.fell_back)
   assert_false(calculation.changes.is_empty())
+}
+
+///|
+test "token and tree diff accept ignored-only source pairs" {
+  let original_lines = ["fn value() -> Int {", "  // obsolete note", "  1", "}"]
+  let modified_lines = [
+    "fn value() -> Int {", "", "  // updated note", "  1", "}",
+  ]
+  let original = original_lines.join("\n")
+  let modified = modified_lines.join("\n")
+  for mode in [TokenDiff, TreeDiff] {
+    let calculation = calculate_diff_changes(
+      mode, true, true, original_lines, modified_lines, original, modified,
+    )
+    assert_true(calculation.effective_mode == mode)
+    assert_false(calculation.fell_back)
+    assert_eq(calculation.changes.length(), 1)
+    assert_false(calculation.changes[0].render_change)
+    let presentation = diff_presentation(calculation.changes)
+    assert_true(presentation.original_changed.is_empty())
+    assert_true(presentation.modified_changed.is_empty())
+    assert_eq(presentation.original_spacers.length(), 1)
+    assert_eq(presentation.original_spacers[0].after_line_number, 1)
+    assert_eq(presentation.original_spacers[0].height_in_lines, 1)
+  }
+  let visible = calculate_diff_changes(
+    TokenDiff,
+    true,
+    false,
+    original_lines,
+    modified_lines,
+    original,
+    modified,
+  )
+  assert_false(visible.changes.is_empty())
+}
+
+///|
+test "equal-length ignored-only pairs remain valid empty results" {
+  let original_lines = ["fn value() -> Int {", "  // obsolete note", "  1", "}"]
+  let modified_lines = ["fn value() -> Int {", "  // updated note", "  1", "}"]
+  let original = original_lines.join("\n")
+  let modified = modified_lines.join("\n")
+  for mode in [TokenDiff, TreeDiff] {
+    let calculation = calculate_diff_changes(
+      mode, true, true, original_lines, modified_lines, original, modified,
+    )
+    assert_true(calculation.effective_mode == mode)
+    assert_false(calculation.fell_back)
+    assert_true(calculation.changes.is_empty())
+  }
+}
+
+///|
+test "ignore comments keeps slashes inside strings diffable" {
+  let original = "let value = \"//old\" // stable"
+  let modified = "let value = \"//new\" // stable"
+  let calculation = calculate_diff_changes(
+    TokenDiff,
+    true,
+    true,
+    [original],
+    [modified],
+    original,
+    modified,
+  )
+  assert_true(calculation.effective_mode is TokenDiff)
+  assert_false(calculation.fell_back)
+  assert_false(calculation.changes.is_empty())
+  assert_false(
+    diff_presentation(calculation.changes).original_inner_changed.is_empty(),
+  )
+}
+
+///|
+test "tree parse fallback keeps ignore-comments token semantics" {
+  let original = "fn broken( { old_value // obsolete note"
+  let modified = "fn broken( { new_value // updated note"
+  let calculation = calculate_diff_changes(
+    TreeDiff,
+    true,
+    true,
+    [original],
+    [modified],
+    original,
+    modified,
+  )
+  assert_true(calculation.effective_mode is TokenDiff)
+  assert_true(calculation.fell_back)
+  assert_false(calculation.changes.is_empty())
+}
+
+///|
+test "ignored one-sided rows align panes without change decoration" {
+  let original_lines = ["old_one()", "old_two()"]
+  let modified_lines = ["new_one()", "// inserted note", "new_two()"]
+  let document : @tokdiff.DiffDocument = {
+    hunks: [
+      {
+        old_start: 0,
+        old_len: 2,
+        new_start: 0,
+        new_len: 3,
+        blocks: [
+          ChangeBlock([
+            Paired(
+              { index: 0, segments: [{ kind: Changed, text: "old_one()" }] },
+              { index: 0, segments: [{ kind: Changed, text: "new_one()" }] },
+            ),
+          ]),
+          IgnoredBlock([
+            NewOnly({
+              index: 1,
+              segments: [{ kind: Ignored, text: "// inserted note" }],
+            }),
+          ]),
+          ChangeBlock([
+            Paired(
+              { index: 1, segments: [{ kind: Changed, text: "old_two()" }] },
+              { index: 2, segments: [{ kind: Changed, text: "new_two()" }] },
+            ),
+          ]),
+        ],
+      },
+    ],
+  }
+  guard moondiff_document_changes(document, original_lines, modified_lines)
+    is Some(changes) else {
+    fail("expected a valid comment-aware document")
+  }
+  assert_eq(changes.length(), 3)
+  assert_true(changes[0].render_change)
+  assert_false(changes[1].render_change)
+  assert_true(changes[2].render_change)
+  let presentation = diff_presentation(changes)
+  assert_eq(presentation.original_changed, [LineRange(1, 2), LineRange(2, 3)])
+  assert_eq(presentation.modified_changed, [LineRange(1, 2), LineRange(3, 4)])
+  assert_eq(presentation.original_spacers.length(), 1)
+  assert_eq(presentation.original_spacers[0].after_line_number, 1)
+  assert_eq(presentation.original_spacers[0].height_in_lines, 1)
+  assert_true(presentation.modified_spacers.is_empty())
 }
 
 ///|

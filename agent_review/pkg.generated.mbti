@@ -34,6 +34,11 @@ pub struct Finding {
   detail : String
   suggestion : String?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn Finding::equal(Self, Self) -> Bool
+pub fn Finding::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Finding::not_equal(Self, Self) -> Bool
+pub fn Finding::to_json(Self) -> Json
+pub fn Finding::to_repr(Self) -> @debug.Repr
 
 pub struct ReviewReport {
   schema_version : Int
@@ -43,8 +48,13 @@ pub struct ReviewReport {
   stats : ReviewStats
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ReviewReport::digest(Self) -> String
+pub fn ReviewReport::equal(Self, Self) -> Bool
+pub fn ReviewReport::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReviewReport::not_equal(Self, Self) -> Bool
 pub fn ReviewReport::parse(Json) -> Result[Self, String]
+pub fn ReviewReport::to_json(Self) -> Json
 pub fn ReviewReport::to_json_string(Self) -> String
+pub fn ReviewReport::to_repr(Self) -> @debug.Repr
 pub fn ReviewReport::validate(Self) -> Array[String]
 
 pub struct ReviewScope {
@@ -52,6 +62,11 @@ pub struct ReviewScope {
   head : String
   files : Array[String]
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn ReviewScope::equal(Self, Self) -> Bool
+pub fn ReviewScope::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReviewScope::not_equal(Self, Self) -> Bool
+pub fn ReviewScope::to_json(Self) -> Json
+pub fn ReviewScope::to_repr(Self) -> @debug.Repr
 
 pub struct ReviewStats {
   files_reviewed : Int
@@ -59,6 +74,11 @@ pub struct ReviewStats {
   build : String
   tests : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn ReviewStats::equal(Self, Self) -> Bool
+pub fn ReviewStats::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReviewStats::not_equal(Self, Self) -> Bool
+pub fn ReviewStats::to_json(Self) -> Json
+pub fn ReviewStats::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -67,3 +67,9 @@ fn Match::of_path(path : @pathx.Relative) -> Match {
   }
   { path, name }
 }
+
+///|
+pub extend Match with Debug::{to_repr}
+
+///|
+pub extend Match with Eq::{equal, not_equal}

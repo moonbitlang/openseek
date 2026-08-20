@@ -86,42 +86,28 @@ select {
   background: transparent;
 }
 
-/* Inline SVG icons (vscode-codicons); they take the surrounding
-   control's color via currentColor and size per context below. */
+/* Inline SVG icons (vscode-codicons). They take the surrounding control's
+   color via currentColor and its size via `--icon-size`, which the control
+   declares from the `--icon-*` scale in tokens.css. Large is the default,
+   so only controls that want a smaller glyph say anything. */
 .icon {
   display: inline-flex;
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: var(--icon-size, var(--icon-lg));
+  height: var(--icon-size, var(--icon-lg));
 }
 .icon svg {
   width: 100%;
   height: 100%;
 }
-.sidebar-icon .icon,
-.composer-notice-icon .icon {
-  width: 14px;
-  height: 14px;
-}
-.topbar-toggle .icon,
-.panel-toggle .icon,
-.icon-button .icon,
-.jump-latest .icon {
-  width: 15px;
-  height: 15px;
-}
-.launcher-glyph .icon,
-.row-archive .icon {
-  width: 13px;
-  height: 13px;
-}
-.mention-remove .icon {
-  width: 12px;
-  height: 12px;
-}
-.launcher-caret .icon {
-  width: 9px;
-  height: 9px;
+
+/* The heartbeat shared by every "still working" mark: the sub-run lanes in
+   the transcript tail and the composer's running row. One definition so two
+   components that can be on screen at once never pulse out of step, and so
+   neither sheet silently owns the other's animation. */
+@keyframes lane-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 @keyframes pulseDot {

@@ -194,3 +194,9 @@ pub async fn run_child(
   )
   Ok(report)
 }
+
+///|
+pub extend WorkerInput with Debug::{to_repr}
+
+///|
+pub extend WorkerInput with Eq::{equal, not_equal}

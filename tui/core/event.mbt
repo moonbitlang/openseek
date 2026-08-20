@@ -7,3 +7,9 @@ pub(all) enum Event {
   Interrupt
   Quit
 } derive(Eq, Debug)
+
+///|
+pub extend Event with Debug::{to_repr}
+
+///|
+pub extend Event with Eq::{equal, not_equal}

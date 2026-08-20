@@ -233,3 +233,30 @@ pub impl @server.ServerHost for NativeServerHost with fn watch_text_file(
   })
   ServerWatch(() => disposed.val = true)
 }
+
+///|
+pub extend MoonWorkspaceLanguageProvider with @language.DefinitionProvider::{
+  provide_definition,
+}
+
+///|
+pub extend MoonWorkspaceLanguageProvider with @language.DocumentSymbolProvider::{
+  provide_document_symbols,
+}
+
+///|
+pub extend MoonWorkspaceLanguageProvider with @language.HoverProvider::{
+  provide_hover,
+}
+
+///|
+pub extend MoonWorkspaceLanguageProvider with @language.ReferencesProvider::{
+  provide_references,
+}
+
+///|
+pub extend NativeServerHost with @server.ServerHost::{
+  read_directory,
+  read_text_file,
+  watch_text_file,
+}

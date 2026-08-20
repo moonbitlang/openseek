@@ -49,3 +49,9 @@ pub struct EditorDomMouseEvent {
   priv mut editor_pos_cache : EditorPagePosition?
   priv mut relative_pos_cache : CoordinatesRelativeToEditor?
 }
+
+///|
+pub extend MouseTargetType with Debug::{to_repr}
+
+///|
+pub extend MouseTargetType with Eq::{equal, not_equal}

@@ -763,3 +763,9 @@ pub async fn SessionStore::compact(
     next
   })
 }
+
+///|
+pub extend SessionListing with Debug::{to_repr}
+
+///|
+pub extend SessionStore with Debug::{to_repr}

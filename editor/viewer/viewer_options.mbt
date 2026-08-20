@@ -363,3 +363,6 @@ fn ViewerOptions::view_model_options(
     )
   }
 }
+
+///|
+pub extend ViewerOptions with Eq::{equal, not_equal}

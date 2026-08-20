@@ -2278,3 +2278,9 @@ pub fn subrun_child_ids(
   }
   ids
 }
+
+///|
+pub extend ViewMode with Debug::{to_repr}
+
+///|
+pub extend ViewMode with Eq::{equal, not_equal}

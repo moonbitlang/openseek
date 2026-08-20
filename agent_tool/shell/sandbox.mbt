@@ -5509,11 +5509,19 @@ fn direct_source_blocked_content(operation : String, target : String) -> String 
 fn append_shell_sandbox_feedback_if_needed(
   content : String,
   agent_output : AgentShellOutput,
+  read_only_review~ : Bool,
 ) -> String {
-  if agent_output_has_shell_sandbox_denial(agent_output) {
-    insert_before_system_footer(content, SandboxSourceWriteFeedback)
-  } else {
-    content
+  match agent_output.sandboxed_command {
+    Some(command) if command.output_reports_denial(agent_output.output.text) =>
+      insert_before_system_footer(
+        content,
+        shell_sandbox_denial_feedback(
+          command.allows_standalone_trusted_writer(),
+          read_only_review,
+          agent_output.output.text,
+        ),
+      )
+    _ => content
   }
 }
 
@@ -5526,8 +5534,22 @@ fn agent_output_has_shell_sandbox_denial(
 }
 
 ///|
-/// The guidance appended when a shell command's output shows a sandboxed
-/// source-write denial. Exposed for `shell_output`.
+/// The generic guidance appended for a sandboxed source-write denial.
 pub fn source_write_denial_feedback() -> String {
   SandboxSourceWriteFeedback
+}
+
+///|
+/// Contextual guidance exposed so `shell_output` gives background jobs the same
+/// recovery advice as foreground commands.
+pub fn contextual_source_write_denial_feedback(
+  command : @sandbox.SandboxedCommand,
+  output : String,
+  read_only_review? : Bool = false,
+) -> String {
+  shell_sandbox_denial_feedback(
+    command.allows_standalone_trusted_writer(),
+    read_only_review,
+    output,
+  )
 }

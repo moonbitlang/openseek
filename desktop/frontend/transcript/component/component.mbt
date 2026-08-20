@@ -771,3 +771,12 @@ test "a conversation switch clears component-owned overview state" {
   @debug.assert_eq(remounted.overview.hover, None)
   @debug.assert_eq(remounted.overview.active, None)
 }
+
+///|
+pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend Source with Eq::{equal, not_equal}
+
+///|
+pub extend VisibleRow with Eq::{equal, not_equal}

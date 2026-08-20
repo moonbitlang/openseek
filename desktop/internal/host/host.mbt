@@ -40,6 +40,7 @@ impl Show for PayloadError with fn output(self, logger) {
 /// because two clients may watch different workspaces at the same time.
 struct HostState {
   engine : String
+  executable : String?
   runtime_dir : @pathx.Path?
   moon : MoonCliState
   updates : SelfUpdate
@@ -52,6 +53,7 @@ struct HostState {
 struct HostConnection {
   fs_watch : FsWatchActor
   file_search : FileSearchService
+  text_search : TextSearchService
   terminal : @terminal.TerminalState
 }
 
@@ -60,15 +62,16 @@ pub fn HostConnection::new() -> HostConnection {
   {
     fs_watch: FsWatchActor::new(),
     file_search: FileSearchService::new(),
+    text_search: TextSearchService::new(),
     terminal: @terminal.new_terminal_state(),
   }
 }
 
 ///|
 /// `engine` is the engine executable (the language services resolve the
-/// bundled `moon` next to it); `executable` is the host's own binary, which
-/// self-update uses to locate the running .app bundle (absent or non-bundle
-/// layouts only lose the in-app install, never the announcement).
+/// bundled `moon` next to it); `executable` is the host's own binary, used to
+/// locate packaged assets and the running .app bundle. Absent paths retain
+/// development fallbacks but disable installed-bundle-only behavior.
 pub fn new_host_state(
   engine : String,
   runtime_dir? : @pathx.Path,
@@ -77,6 +80,7 @@ pub fn new_host_state(
 ) -> HostState {
   {
     engine,
+    executable,
     runtime_dir,
     moon: MoonCliState::new(engine, runtime_dir?),
     updates: SelfUpdate::new(runtime_dir, executable, app_version~),
@@ -147,6 +151,7 @@ pub async fn HostConnection::run(
       })
     })
     group.spawn_bg(() => self.file_search.run())
+    group.spawn_bg(() => self.text_search.run())
     self.fs_watch.run(
       async fn(push) {
         emit(
@@ -207,6 +212,14 @@ pub fn endpoints(
       payload,
     ) {
       cancel_search_files_op(connection.file_search, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_search_text, async fn(payload) {
+      search_text_op(state, connection.text_search, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_cancel_search_text, async fn(
+      payload,
+    ) {
+      cancel_search_text_op(connection.text_search, payload)
     }),
     @endpoint.Endpoint::remote(@commands.fs_clear_file_search_cache, async fn(
       payload,
@@ -307,3 +320,9 @@ pub fn endpoints(
     }),
   ]
 }
+
+///|
+pub extend HostError with Debug::{to_repr}
+
+///|
+pub extend PayloadError with Debug::{to_repr}

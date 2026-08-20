@@ -219,3 +219,27 @@ pub fn MouseTarget::range(self : MouseTarget) -> @base_common.Range? {
     MouseTargetContentWidget(..) | MouseTargetOverlayWidget(..) => None
   }
 }
+
+///|
+pub extend MouseTargetContentEmptyData with Debug::{to_repr}
+
+///|
+pub extend MouseTargetContentEmptyData with Eq::{equal, not_equal}
+
+///|
+pub extend MouseTargetMarginData with Debug::{to_repr}
+
+///|
+pub extend MouseTargetMarginData with Eq::{equal, not_equal}
+
+///|
+pub extend MouseTargetViewZoneData with Debug::{to_repr}
+
+///|
+pub extend MouseTargetViewZoneData with Eq::{equal, not_equal}
+
+///|
+pub extend OutsidePosition with Debug::{to_repr}
+
+///|
+pub extend OutsidePosition with Eq::{equal, not_equal}

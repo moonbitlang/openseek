@@ -25,17 +25,20 @@ pub(all) struct CheckErrors {
   first_errors : Array[String]
   truncated : Bool
 } derive(@debug.Debug)
+pub fn CheckErrors::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ParseGate {
   errors : Array[ParseGateError]
   truncated : Bool
 } derive(@debug.Debug)
+pub fn ParseGate::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ParseGateError {
   loc : String
   message : String
   context : String
 } derive(@debug.Debug)
+pub fn ParseGateError::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -79,13 +79,13 @@ test "submit_answer declares itself a control tool" {
 
 ///|
 test "submission parse rejects contract violations" {
-  guard parse_submission(sample_report().to_json()) is Ok(_) else {
+  guard parse_submission(ToJson::to_json(sample_report())) is Ok(_) else {
     fail("expected a valid submission")
   }
   guard parse_submission({ "answer": "no version" }) is Err(_) else {
     fail("expected a parse rejection")
   }
-  guard parse_submission({ ..sample_report(), answer: "" }.to_json())
+  guard parse_submission(ToJson::to_json({ ..sample_report(), answer: "" }))
     is Err(problems) else {
     fail("expected a validation rejection")
   }

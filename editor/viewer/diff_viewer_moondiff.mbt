@@ -41,6 +41,7 @@ fn standard_diff_changes(
       modified: change.modified,
       original_inner_changed,
       modified_inner_changed,
+      render_change: true,
     }
   })
 }
@@ -49,6 +50,7 @@ fn standard_diff_changes(
 fn calculate_diff_changes(
   requested_mode : DiffViewerMode,
   specialized_available : Bool,
+  ignore_comments : Bool,
   original_lines : Array[String],
   modified_lines : Array[String],
   original_source : String,
@@ -63,7 +65,8 @@ fn calculate_diff_changes(
   }
   match
     moondiff_changes(
-      requested_mode, original_lines, modified_lines, original_source, modified_source,
+      requested_mode, ignore_comments, original_lines, modified_lines, original_source,
+      modified_source,
     ) {
     Some(calculation) => calculation
     None =>
@@ -78,6 +81,7 @@ fn calculate_diff_changes(
 ///|
 fn moondiff_changes(
   mode : DiffViewerMode,
+  ignore_comments : Bool,
   original_lines : Array[String],
   modified_lines : Array[String],
   original_source : String,
@@ -92,6 +96,7 @@ fn moondiff_changes(
           new=modified_lines,
           context=0,
           line_cleanup=true,
+          ignore_comments~,
         ),
         TokenDiff,
         false,
@@ -100,7 +105,7 @@ fn moondiff_changes(
       let result = @mbtdiff.diff(
         original_source,
         modified_source,
-        options=@mbtdiff.DiffOptions::new(context_lines=0),
+        options=@mbtdiff.DiffOptions::new(context_lines=0, ignore_comments~),
       )
       let fell_back = result.has_fallback()
       // A typed Tree fallback already contains moondiff's lexical document.
@@ -120,14 +125,54 @@ fn moondiff_changes(
     is Some(changes) else {
     return None
   }
-  // Token diff has no typed error channel. Treat a non-identical pair with an
-  // empty or malformed renderer-neutral document as a failed calculation.
-  if effective_mode is TokenDiff &&
-    original_source != modified_source &&
-    changes.is_empty() {
-    None
-  } else {
-    Some({ changes, effective_mode, fell_back })
+  // Token diff has no typed error channel, so validate its empty filtered
+  // document against the unfiltered calculation. For either specialized mode,
+  // keep validated one-sided rows as neutral alignment changes: comments and
+  // blank lines remain undecorated, while later source lines still line up.
+  if original_source != modified_source && changes.is_empty() {
+    if ignore_comments {
+      match ignored_only_alignment_changes(original_lines, modified_lines) {
+        Some(alignment) =>
+          return Some({ changes: alignment, effective_mode, fell_back })
+        None if effective_mode is TokenDiff => return None
+        None => ()
+      }
+    } else if effective_mode is TokenDiff {
+      return None
+    }
+  }
+  Some({ changes, effective_mode, fell_back })
+}
+
+///|
+fn ignored_only_alignment_changes(
+  original_lines : Array[String],
+  modified_lines : Array[String],
+) -> Array[DiffLineChange]? {
+  let unfiltered = @tokdiff.diff(
+    old=original_lines,
+    new=modified_lines,
+    context=0,
+    line_cleanup=true,
+    ignore_comments=false,
+  )
+  match moondiff_document_changes(unfiltered, original_lines, modified_lines) {
+    Some(changes) if !changes.is_empty() => {
+      let alignment = []
+      for change in changes {
+        if change.original.length() != change.modified.length() {
+          alignment.push({
+            original: change.original,
+            modified: change.modified,
+            original_inner_changed: [],
+            modified_inner_changed: [],
+            render_change: false,
+          })
+        }
+      }
+      Some(alignment)
+    }
+    _ => None
   }
 }
 
@@ -172,6 +217,7 @@ fn moondiff_paired_change(
     modified: LineRange(modified.index + 1, modified.index + 2),
     original_inner_changed: moondiff_inner_ranges(original),
     modified_inner_changed: moondiff_inner_ranges(modified),
+    render_change: true,
   }
 }
 
@@ -179,12 +225,14 @@ fn moondiff_paired_change(
 fn moondiff_old_only_change(
   original : @tokdiff.DiffLine,
   modified_cursor : Int,
+  render_change : Bool,
 ) -> DiffLineChange {
   {
     original: LineRange(original.index + 1, original.index + 2),
     modified: LineRange(modified_cursor + 1, modified_cursor + 1),
     original_inner_changed: moondiff_inner_ranges(original),
     modified_inner_changed: [],
+    render_change,
   }
 }
 
@@ -192,12 +240,14 @@ fn moondiff_old_only_change(
 fn moondiff_new_only_change(
   modified : @tokdiff.DiffLine,
   original_cursor : Int,
+  render_change : Bool,
 ) -> DiffLineChange {
   {
     original: LineRange(original_cursor + 1, original_cursor + 1),
     modified: LineRange(modified.index + 1, modified.index + 2),
     original_inner_changed: [],
     modified_inner_changed: moondiff_inner_ranges(modified),
+    render_change,
   }
 }
 
@@ -230,18 +280,18 @@ fn append_moondiff_rows(
         if !valid_moondiff_line(original, old_cursor, original_lines) {
           return None
         }
-        if render_changes {
-          changes.push(moondiff_old_only_change(original, new_cursor))
-        }
+        changes.push(
+          moondiff_old_only_change(original, new_cursor, render_changes),
+        )
         old_cursor += 1
       }
       NewOnly(modified) => {
         if !valid_moondiff_line(modified, new_cursor, modified_lines) {
           return None
         }
-        if render_changes {
-          changes.push(moondiff_new_only_change(modified, old_cursor))
-        }
+        changes.push(
+          moondiff_new_only_change(modified, old_cursor, render_changes),
+        )
         new_cursor += 1
       }
     }

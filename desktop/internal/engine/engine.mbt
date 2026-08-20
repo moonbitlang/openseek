@@ -2276,6 +2276,7 @@ async test "timed out command-lock waiter is removed" {
 async test "native engine env has one authoritative bundled moon path" {
   let ambient_path = @sys.get_env_var("PATH")
   let root = @pathx.Path(@fs.tmpdir(prefix="openseek-engine-env-"))
+  defer (@fs.rmdir(root.to_string(), recursive=true) catch { _ => () })
   // The macOS bundle's real shape (`package/macos/main.mbt`): the engine is
   // staged in the Proton package input's `bin/`, with the toolchain seed
   // beside that directory rather than inside it.
@@ -2284,22 +2285,8 @@ async test "native engine env has one authoritative bundled moon path" {
   let seed = input.join("toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")
   let moon_home = runtime.join("toolchains/moonbit/macos-arm64")
-  prepare_fake_moonbit_seed(seed, version="0.10.0-test") catch {
-    error => {
-      @fs.rmdir(root.to_string(), recursive=true) catch {
-        _ => ()
-      }
-      raise error
-    }
-  }
-  prepare_fake_bundled_moonbit_home(moon_home, version="0.10.0-test") catch {
-    error => {
-      @fs.rmdir(root.to_string(), recursive=true) catch {
-        _ => ()
-      }
-      raise error
-    }
-  }
+  prepare_fake_moonbit_seed(seed, version="0.10.0-test")
+  prepare_fake_bundled_moonbit_home(moon_home, version="0.10.0-test")
   let config : RunConfig = {
     task: "t",
     api_key: "k",
@@ -2311,15 +2298,7 @@ async test "native engine env has one authoritative bundled moon path" {
     session: "s-env",
     session_root: None,
   }
-  let env = engine_process_env(config, Some(runtime)) catch {
-    error => {
-      @fs.rmdir(root.to_string(), recursive=true) catch {
-        _ => ()
-      }
-      raise error
-    }
-  }
-  @fs.rmdir(root.to_string(), recursive=true)
+  let env = engine_process_env(config, Some(runtime))
   assert_eq(env["OPENSEEK_SESSION"], "s-env")
   assert_true(env.get("OPENSEEK_SESSION_ROOT") is None)
   let moon_bin = moon_home.join("bin").to_string()

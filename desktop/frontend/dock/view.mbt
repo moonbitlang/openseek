@@ -63,6 +63,14 @@ fn icon_folder() -> @html.Html {
 }
 
 ///|
+/// The search codicon (CC BY 4.0): the launcher's workspace Search row.
+fn icon_search() -> @html.Html {
+  codicon(
+    "M10.0195 10.7266C9.06578 11.5217 7.83875 12 6.5 12C3.46243 12 1 9.53757 1 6.5C1 3.46243 3.46243 1 6.5 1C9.53757 1 12 3.46243 12 6.5C12 7.83875 11.5217 9.06578 10.7266 10.0195L13.8535 13.1464C14.0488 13.3417 14.0488 13.6583 13.8535 13.8536C13.6583 14.0488 13.3417 14.0488 13.1464 13.8536L10.0195 10.7266ZM11 6.5C11 4.01472 8.98528 2 6.5 2C4.01472 2 2 4.01472 2 6.5C2 8.98528 4.01472 11 6.5 11C8.98528 11 11 8.98528 11 6.5Z",
+  )
+}
+
+///|
 /// A 16×16 codicon: one filled path tinted by `currentColor`.
 fn codicon(d : String) -> @html.Html {
   @svg.svg(
@@ -143,6 +151,7 @@ pub(all) struct TabChip {
 /// host pages with).
 pub(all) struct LauncherActions {
   browser : @cmd.Cmd?
+  search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
 }
@@ -161,6 +170,13 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
       ]),
     )
   }
+  rows.push(
+    @html.button(class="dock-launcher-row", on_click=actions.search, [
+      icon(icon_search),
+      @html.span(class="dock-launcher-name", "Search"),
+      @html.span(class="dock-launcher-hint", "Search text across the workspace"),
+    ]),
+  )
   rows.push(
     @html.button(class="dock-launcher-row", on_click=actions.files, [
       icon(icon_folder),

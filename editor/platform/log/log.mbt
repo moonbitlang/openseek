@@ -214,3 +214,15 @@ fn level_rank(level : LogLevel) -> Int {
     Error => 4
   }
 }
+
+///|
+pub extend LogEntry with Debug::{to_repr}
+
+///|
+pub extend LogEntry with Eq::{equal, not_equal}
+
+///|
+pub extend LogLevel with Debug::{to_repr}
+
+///|
+pub extend LogLevel with Eq::{equal, not_equal}

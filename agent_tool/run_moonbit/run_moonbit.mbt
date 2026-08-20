@@ -200,8 +200,9 @@ async fn execute(
       )
   }
   async fn cleanup() -> Unit {
-    // rmdir is async, so it cannot run in a `defer`; shield it from cancellation
-    // so an interrupted run still removes its temp dir.
+    // Shielded from cancellation so an interrupted run still removes its temp
+    // dir — the `defer` below runs on the cancellation path too, where every
+    // async call inside it would otherwise be cancelled on the spot.
     @async.protect_from_cancel(() => {
       @fs.rmdir(dir, recursive=true) catch {
         _ => ()
@@ -209,141 +210,133 @@ async fn execute(
     })
   }
 
-  try {
-    @fs.write_file(
-      "\{dir}/snippet.mbtx",
-      input.source,
-      create_mode=CreateOrTruncate,
+  defer cleanup()
+  @fs.write_file(
+    "\{dir}/snippet.mbtx",
+    input.source,
+    create_mode=CreateOrTruncate,
+  )
+  let log = "\{dir}/output.log"
+  // Pre-create the merged output file so both redirects open it; both append
+  // so stdout and stderr interleave in write order.
+  @fs.write_file(log, "", create_mode=CreateOrTruncate)
+  // Give the snippet an EMPTY stdin (immediate EOF) rather than inheriting fd 0:
+  // under `openseek serve`/TUI that fd is the JSONL control channel, and a
+  // snippet reading `@stdio.stdin` would otherwise consume the engine's
+  // prompt/steer/cancel commands (or block until the timeout). An empty temp
+  // file is portable (no `/dev/null`/`NUL` special-casing).
+  let empty_stdin = "\{dir}/stdin.empty"
+  @fs.write_file(empty_stdin, "", create_mode=CreateOrTruncate)
+  // moon's diagnostics point at the copied source under the build dir; the
+  // canonical path anchors the diagnostic path rewrite below.
+  let real = @fs.realpath(dir) catch { _ => dir }
+  let moon_argv = [
+    "run",
+    "\{dir}/snippet.mbtx",
+    "--target",
+    input.target,
+    "--target-dir",
+    dir,
+    ..if !input.warning {
+      ["--warn-list", WarnOffList]
+    },
+  ]
+  // Wrap `moon run` in sandbox-exec where it can actually enforce (macOS) so a
+  // snippet cannot directly overwrite protected source files — reusing the
+  // shell tool's source-write-readonly profile keyed on the workspace root.
+  // This is best-effort, not a hard boundary: unlike `shell` (which statically
+  // preflights the command) an arbitrary snippet can still smuggle sources via
+  // directory renames; full containment is the wasm backend's job. Elsewhere
+  // (or in a nested sandbox where it cannot enforce) run moon directly.
+  // The prepared command carries its denial subjects, so a denial showing up
+  // in the program's output can be recognized and explained below. The
+  // throwaway build dir is the writable subtree: if it falls INSIDE the
+  // workspace root (e.g. `workspace_root=/tmp`, where `@fs.tmpdir` lands
+  // under it) the shared deny would otherwise block moon's own generated
+  // `snippet.mbt`.
+  let sandboxed_command = @sandbox.SandboxedCommand::create_if_available(
+    workspace_root,
+    Exec("moon", moon_argv),
+    writable_subtree=dir,
+  )
+  let (prog, argv) = match sandboxed_command {
+    Some(command) => (command.program(), command.args())
+    None => ("moon", moon_argv)
+  }
+  let result = @async.with_timeout_opt(RunTimeoutMs, () => {
+    let exit_code = @process.run(
+      prog,
+      argv,
+      cwd=run_cwd.unwrap_or("."),
+      inherit_env=true,
+      stdin=@process.redirect_from_file(empty_stdin),
+      stdout=@process.redirect_to_file(log, append=true),
+      stderr=@process.redirect_to_file(log, append=true),
+      no_console_window=true,
     )
-    let log = "\{dir}/output.log"
-    // Pre-create the merged output file so both redirects open it; both append
-    // so stdout and stderr interleave in write order.
-    @fs.write_file(log, "", create_mode=CreateOrTruncate)
-    // Give the snippet an EMPTY stdin (immediate EOF) rather than inheriting fd 0:
-    // under `openseek serve`/TUI that fd is the JSONL control channel, and a
-    // snippet reading `@stdio.stdin` would otherwise consume the engine's
-    // prompt/steer/cancel commands (or block until the timeout). An empty temp
-    // file is portable (no `/dev/null`/`NUL` special-casing).
-    let empty_stdin = "\{dir}/stdin.empty"
-    @fs.write_file(empty_stdin, "", create_mode=CreateOrTruncate)
-    // moon's diagnostics point at the copied source under the build dir; the
-    // canonical path anchors the diagnostic path rewrite below.
-    let real = @fs.realpath(dir) catch { _ => dir }
-    let moon_argv = [
-      "run",
-      "\{dir}/snippet.mbtx",
-      "--target",
-      input.target,
-      "--target-dir",
-      dir,
-      ..if !input.warning {
-        ["--warn-list", WarnOffList]
-      },
-    ]
-    // Wrap `moon run` in sandbox-exec where it can actually enforce (macOS) so a
-    // snippet cannot directly overwrite protected source files — reusing the
-    // shell tool's source-write-readonly profile keyed on the workspace root.
-    // This is best-effort, not a hard boundary: unlike `shell` (which statically
-    // preflights the command) an arbitrary snippet can still smuggle sources via
-    // directory renames; full containment is the wasm backend's job. Elsewhere
-    // (or in a nested sandbox where it cannot enforce) run moon directly.
-    // The prepared command carries its denial subjects, so a denial showing up
-    // in the program's output can be recognized and explained below. The
-    // throwaway build dir is the writable subtree: if it falls INSIDE the
-    // workspace root (e.g. `workspace_root=/tmp`, where `@fs.tmpdir` lands
-    // under it) the shared deny would otherwise block moon's own generated
-    // `snippet.mbt`.
-    let sandboxed_command = @sandbox.SandboxedCommand::create_if_available(
-      workspace_root,
-      Exec("moon", moon_argv),
-      writable_subtree=dir,
-    )
-    let (prog, argv) = match sandboxed_command {
-      Some(command) => (command.program(), command.args())
-      None => ("moon", moon_argv)
-    }
-    let result = @async.with_timeout_opt(RunTimeoutMs, () => {
-      let exit_code = @process.run(
-        prog,
-        argv,
-        cwd=run_cwd.unwrap_or("."),
-        inherit_env=true,
-        stdin=@process.redirect_from_file(empty_stdin),
-        stdout=@process.redirect_to_file(log, append=true),
-        stderr=@process.redirect_to_file(log, append=true),
-        no_console_window=true,
-      )
-      (exit_code, read_capped(log))
+    (exit_code, read_capped(log))
+  })
+  // A "not permitted" line naming a protected source path in a sandboxed run
+  // is the source-write policy firing, not an environment fault: explain it
+  // (the raw OS error is otherwise a dead end) and treat the run as failed
+  // even if the snippet swallowed the error and exited 0 — the same
+  // semantics the shell tool applies to its command output. Detection scans
+  // the on-disk log far past the capped display prefix (bounded to a fixed
+  // head+tail byte budget), and runs for the timeout arm too: a snippet can
+  // flood past the cap before hitting the denial, or print a caught denial
+  // and then hang.
+  let sandbox_denied = sandboxed_command is Some(command) &&
+    log_shows_source_write_denial(log, output => {
+      command.output_reports_denial(output)
     })
-    // A "not permitted" line naming a protected source path in a sandboxed run
-    // is the source-write policy firing, not an environment fault: explain it
-    // (the raw OS error is otherwise a dead end) and treat the run as failed
-    // even if the snippet swallowed the error and exited 0 — the same
-    // semantics the shell tool applies to its command output. Detection scans
-    // the on-disk log far past the capped display prefix (bounded to a fixed
-    // head+tail byte budget), and runs for the timeout arm too: a snippet can
-    // flood past the cap before hitting the denial, or print a caught denial
-    // and then hang.
-    let sandbox_denied = sandboxed_command is Some(command) &&
-      log_shows_source_write_denial(log, output => {
-        command.output_reports_denial(output)
-      })
-    let action = match result {
-      Some((exit_code, raw)) => {
-        // Rewrite the throwaway temp path to `source` so the model reads
-        // `source:LINE:COL` about its own input, not a random temp path.
-        let text = rewrite_temp_paths(raw, [real, dir])
-        // PREPEND the exit status so it survives the agent loop's outer 60k
-        // result clamp (which cuts the tail); the output cap is below 60k so
-        // both the status line and the body are retained.
-        let body = if text.is_blank() {
-          "run_moonbit: program exited \{exit_code} with no output"
-        } else if exit_code != 0 {
-          "[run_moonbit: exited \{exit_code}]\n\{text}"
-        } else {
-          text
-        }
-        let body = if sandbox_denied {
-          "\{body}\n\n\{SandboxSourceWriteFeedback}"
-        } else {
-          body
-        }
-        @agent_tool.ToolAction::respond(
-          body,
-          is_error=exit_code != 0 || sandbox_denied,
-          brief="run_moonbit (exit=\{exit_code})",
-        )
+  match result {
+    Some((exit_code, raw)) => {
+      // Rewrite the throwaway temp path to `source` so the model reads
+      // `source:LINE:COL` about its own input, not a random temp path.
+      let text = rewrite_temp_paths(raw, [real, dir])
+      // PREPEND the exit status so it survives the agent loop's outer 60k
+      // result clamp (which cuts the tail); the output cap is below 60k so
+      // both the status line and the body are retained.
+      let body = if text.is_blank() {
+        "run_moonbit: program exited \{exit_code} with no output"
+      } else if exit_code != 0 {
+        "[run_moonbit: exited \{exit_code}]\n\{text}"
+      } else {
+        text
       }
-      None => {
-        // The snippet may have printed useful output before it hung; the log is
-        // still on disk (cleanup runs below), so surface the captured prefix
-        // instead of discarding it behind a generic timeout message. The status
-        // line stays first so it survives the outer result clamp.
-        let partial = rewrite_temp_paths(read_capped(log), [real, dir])
-        let head = "run_moonbit: timed out after \{RunTimeoutMs / 1000}s and was cancelled — the program did not finish (an infinite loop, or a build that never completed)."
-        let body = if partial.is_blank() {
-          head
-        } else {
-          "\{head}\n[partial output before the timeout]\n\{partial}"
-        }
-        let body = if sandbox_denied {
-          "\{body}\n\n\{SandboxSourceWriteFeedback}"
-        } else {
-          body
-        }
-        @agent_tool.ToolAction::respond(
-          body,
-          is_error=true,
-          brief="run_moonbit (timeout)",
-        )
+      let body = if sandbox_denied {
+        "\{body}\n\n\{SandboxSourceWriteFeedback}"
+      } else {
+        body
       }
+      @agent_tool.ToolAction::respond(
+        body,
+        is_error=exit_code != 0 || sandbox_denied,
+        brief="run_moonbit (exit=\{exit_code})",
+      )
     }
-    cleanup()
-    action
-  } catch {
-    error => {
-      cleanup()
-      raise error
+    None => {
+      // The snippet may have printed useful output before it hung; the log is
+      // still on disk (cleanup runs on scope exit), so surface the captured prefix
+      // instead of discarding it behind a generic timeout message. The status
+      // line stays first so it survives the outer result clamp.
+      let partial = rewrite_temp_paths(read_capped(log), [real, dir])
+      let head = "run_moonbit: timed out after \{RunTimeoutMs / 1000}s and was cancelled — the program did not finish (an infinite loop, or a build that never completed)."
+      let body = if partial.is_blank() {
+        head
+      } else {
+        "\{head}\n[partial output before the timeout]\n\{partial}"
+      }
+      let body = if sandbox_denied {
+        "\{body}\n\n\{SandboxSourceWriteFeedback}"
+      } else {
+        body
+      }
+      @agent_tool.ToolAction::respond(
+        body,
+        is_error=true,
+        brief="run_moonbit (timeout)",
+      )
     }
   }
 }

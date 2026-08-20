@@ -27,6 +27,9 @@ pub(all) suberror CodexError {
 pub fn CodexError::is_active_writer(Self) -> Bool
 pub fn CodexError::is_unmaterialized_thread_history(Self) -> Bool
 pub fn CodexError::is_unmaterialized_thread_turns(Self) -> Bool
+pub fn CodexError::output(Self, &Logger) -> Unit
+pub fn CodexError::to_repr(Self) -> @debug.Repr
+pub fn CodexError::to_string(Self) -> String
 pub impl Show for CodexError
 
 // Types and methods
@@ -59,6 +62,9 @@ pub async fn ProjectCatalog::annotate(Self, Json) -> Json
 pub fn ProjectCatalog::main_project(Self, String) -> String?
 
 type StdioTransport
+pub fn StdioTransport::close(Self) -> Unit
+pub async fn StdioTransport::recv(Self) -> Json?
+pub async fn StdioTransport::send(Self, Json) -> Unit
 pub impl @jsonrpc.Transport for StdioTransport
 
 // Type aliases

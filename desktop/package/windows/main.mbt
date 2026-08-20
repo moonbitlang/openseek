@@ -23,6 +23,9 @@ const ProgramFilesMakensis : String = "C:/Program Files/NSIS/makensis.exe"
 const AppAssetDir : String = BundleDir + "/assets"
 
 ///|
+const RipgrepLicenseDir : String = BundleDir + "/licenses/ripgrep"
+
+///|
 priv struct ArtifactPlan {
   zip : Bool
   installer : Bool
@@ -101,17 +104,20 @@ async fn run_powershell(ws : @packaging.Workspace, script : String) -> Unit {
 async fn build_outputs(
   ws : @packaging.Workspace,
   release~ : Bool,
-) -> @xterm_assets.Assets {
-  // Reuse CEF while rebuilding the native Proton artifacts from this checkout.
-  ws.prepare_checkout_proton_runtime(@packaging.windows_proton_cli())
+) -> (@xterm_assets.Assets, @ripgrep_assets.Assets) {
+  @packaging.ensure_cef_runtime(ws)
   @packaging.build_frontend_bundle(ws, release~)
   let terminal_assets = @xterm_assets.build(
     ws,
     @xterm_assets.windows_x64_target(),
   )
+  let ripgrep_assets = @ripgrep_assets.build(
+    ws,
+    @ripgrep_assets.windows_x64_target(),
+  )
   @packaging.build_native_host(ws, release~, extra_args=["--warn-list", "-20"])
   @packaging.build_engine(ws, release~)
-  terminal_assets
+  (terminal_assets, ripgrep_assets)
 }
 
 ///|
@@ -120,12 +126,14 @@ async fn reset_bundle_dirs(ws : @packaging.Workspace) -> Unit {
   @packaging.remove_path_if_exists(ws.at(ZipPath))
   @packaging.remove_path_if_exists(ws.at(InstallerPath))
   @packaging.ensure_dir(ws.at(AppAssetDir))
+  @packaging.ensure_dir(ws.at(RipgrepLicenseDir))
 }
 
 ///|
 async fn copy_bundle_files(
   ws : @packaging.Workspace,
   terminal_assets : @xterm_assets.Assets,
+  ripgrep_assets : @ripgrep_assets.Assets,
   release~ : Bool,
 ) -> Unit {
   let native_binary = ws.native_binary(release~)
@@ -149,6 +157,15 @@ async fn copy_bundle_files(
     ws.at(BundleDir + "/openseek-desktop.exe"),
   )
   @packaging.copy_file(engine_binary, ws.at(bundled_engine))
+  @packaging.copy_file(ripgrep_assets.binary, ws.at(BundleDir + "/rg.exe"))
+  @packaging.copy_file(
+    ripgrep_assets.license_mit,
+    ws.at(RipgrepLicenseDir + "/LICENSE-MIT"),
+  )
+  @packaging.copy_file(
+    ripgrep_assets.unlicense,
+    ws.at(RipgrepLicenseDir + "/UNLICENSE"),
+  )
   @pe.set_windows_gui_subsystem(ws.at(bundled_engine))
   @packaging.copy_file(ws.at("index.html"), ws.at(AppAssetDir + "/index.html"))
   @packaging.copy_file(ws.app_stylesheet(), ws.at(AppAssetDir + "/app.css"))
@@ -278,14 +295,13 @@ async fn main {
   let artifacts = ArtifactPlan::from_matches(matches)
   let release = matches.flags.get("release").unwrap_or(false)
   let ws = @packaging.locate_workspace()
-  @packaging.ensure_cmake(ws)
   if artifacts.installer {
     ensure_makensis(ws)
   }
-  let terminal_assets = build_outputs(ws, release~)
+  let (terminal_assets, ripgrep_assets) = build_outputs(ws, release~)
   println("built openseek engine: \{ws.engine_binary(release~)}")
   reset_bundle_dirs(ws)
-  copy_bundle_files(ws, terminal_assets, release~)
+  copy_bundle_files(ws, terminal_assets, ripgrep_assets, release~)
   if artifacts.zip {
     zip_bundle(ws)
     println("generated \{ws.at(ZipPath)}")

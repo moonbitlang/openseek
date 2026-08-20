@@ -1,5 +1,5 @@
 ///|
-fn Usage::from_json(
+fn Usage::parse_json(
   json : Json,
   path : @json.JsonPath,
 ) -> Usage raise @json.JsonDecodeError {
@@ -208,3 +208,6 @@ test "parse chat response extracts native tool calls" {
   assert_eq(response.tool_calls[0].arguments, "{\"location\":\"Hangzhou\"}")
   assert_eq(response.usage.total_tokens, 20)
 }
+
+///|
+pub extend ChatResponse with FromJson::{from_json}

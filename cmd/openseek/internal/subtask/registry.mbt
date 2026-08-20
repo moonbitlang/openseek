@@ -73,7 +73,7 @@ pub async fn save_entry(
   let temp = "\{target}.tmp"
   @fs.write_file(
     temp,
-    entry.to_json().stringify(),
+    ToJson::to_json(entry).stringify(),
     create_mode=CreateOrTruncate,
   ) catch {
     error if @async.is_being_cancelled() => raise error
@@ -185,7 +185,7 @@ fn sample_entry() -> SubtaskEntry {
 ///|
 test "registry entry round-trips and states classify" {
   let entry = sample_entry()
-  let parsed : SubtaskEntry = @json.from_json(entry.to_json()) catch {
+  let parsed : SubtaskEntry = @json.from_json(ToJson::to_json(entry)) catch {
     e => fail("round-trip failed: \{e}")
   }
   assert_eq(parsed, entry)
@@ -219,3 +219,27 @@ fn with_default_conflict_paths(json : Json) -> Json {
     other => other
   }
 }
+
+///|
+pub extend SubtaskEntry with Debug::{to_repr}
+
+///|
+pub extend SubtaskEntry with FromJson::{from_json}
+
+///|
+pub extend SubtaskEntry with Eq::{equal, not_equal}
+
+///|
+pub extend SubtaskEntry with ToJson::{to_json}
+
+///|
+pub extend SubtaskState with Debug::{to_repr}
+
+///|
+pub extend SubtaskState with FromJson::{from_json}
+
+///|
+pub extend SubtaskState with Eq::{equal, not_equal}
+
+///|
+pub extend SubtaskState with ToJson::{to_json}

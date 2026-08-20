@@ -159,6 +159,7 @@ fn Entry::view(
   emit : @cmd.Emit[Msg],
   action_emit : @cmd.Emit[Action],
   input : Input,
+  clock_ms~ : Double,
 ) -> @html.Html {
   let goal_mode = input.goal.draft is Some(_)
   let action = if goal_mode {
@@ -206,6 +207,11 @@ fn Entry::view(
     }
   }
   let context = input.presentation.context.copy()
+  // Closest to the textarea: the turn's own liveness is what the person
+  // waiting is watching for, and the wait is spent looking here rather than
+  // at the top bar. Both rows are permanent slots, so neither can shift the
+  // other's child index as a run starts and ends.
+  context.push(running_row(input.run, clock_ms~))
   context.push(input.goal.view(self.identity(), action_emit))
   View::{
     before_inner: context,

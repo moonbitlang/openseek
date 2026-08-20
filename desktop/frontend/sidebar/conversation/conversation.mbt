@@ -262,3 +262,30 @@ pub fn component(
     rows
   })
 }
+
+///|
+pub extend Id with Debug::{to_repr}
+
+///|
+pub extend Id with Eq::{equal, not_equal}
+
+///|
+pub extend Id with Hash::{hash, hash_combine}
+
+///|
+pub extend Input with Debug::{to_repr}
+
+///|
+pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend RunMark with Debug::{to_repr}
+
+///|
+pub extend RunMark with Eq::{equal, not_equal}
+
+///|
+pub extend TrailingAction with Debug::{to_repr}
+
+///|
+pub extend TrailingAction with Eq::{equal, not_equal}

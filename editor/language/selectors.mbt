@@ -144,3 +144,9 @@ fn path_pattern_matches(pattern : String, path : String) -> Bool {
     None => path == pattern
   }
 }
+
+///|
+pub extend LanguageFilter with Debug::{to_repr}
+
+///|
+pub extend LanguageSelector with Debug::{to_repr}

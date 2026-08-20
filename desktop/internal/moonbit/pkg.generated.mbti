@@ -10,6 +10,8 @@ pub async fn resolve_toolchain(String, runtime_dir? : @pathx.Path) -> ResolvedTo
 
 // Errors
 pub suberror ToolchainUnavailable
+pub fn ToolchainUnavailable::output(Self, &Logger) -> Unit
+pub fn ToolchainUnavailable::to_string(Self) -> String
 pub impl Show for ToolchainUnavailable
 
 // Types and methods

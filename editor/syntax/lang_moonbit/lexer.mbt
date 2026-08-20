@@ -277,3 +277,9 @@ pub impl @syntax.LineTokenizer for MoonBitTokenizer with fn tokenize_line(
   }
   (tokens, moonbit_normal_state)
 }
+
+///|
+pub extend MoonBitTokenizer with @syntax.LineTokenizer::{
+  initial_state,
+  tokenize_line,
+}

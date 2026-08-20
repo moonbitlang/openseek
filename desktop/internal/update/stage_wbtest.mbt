@@ -2,14 +2,11 @@
 async test "package download streams to disk and reports byte progress" {
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
-      error => {
-        let message = "\{error}"
-        if message.contains("Operation not permitted") {
-          println("local TCP bind unavailable; skipping test: \{message}")
-          return
-        }
-        raise error
+      error if "\{error}".contains("Operation not permitted") => {
+        println("local TCP bind unavailable; skipping test: \{error}")
+        return
       }
+      error => raise error
     }
     // Closing the listener lets the background run_forever task leave before
     // the task group waits for it during either success or assertion failure.

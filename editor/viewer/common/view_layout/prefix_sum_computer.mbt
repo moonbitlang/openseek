@@ -345,3 +345,9 @@ fn ConstantTimePrefixSumComputer::ensure_valid(self : Self) -> Unit {
   self.is_valid = true
   self.valid_end_index = len - 1
 }
+
+///|
+pub extend PrefixSumIndexOfResult with Debug::{to_repr}
+
+///|
+pub extend PrefixSumIndexOfResult with Eq::{equal, not_equal}

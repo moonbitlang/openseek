@@ -1194,3 +1194,15 @@ pub fn MarkdownDocumentView::set_toc_entries(
     self.toc_nav.set_attribute("data-toc-visible", "false")
   }
 }
+
+///|
+pub extend MarkdownSectionFoldControl with Debug::{to_repr}
+
+///|
+pub extend MarkdownSectionFoldControl with Eq::{equal, not_equal}
+
+///|
+pub extend MarkdownTocBarEntry with Debug::{to_repr}
+
+///|
+pub extend MarkdownTocBarEntry with Eq::{equal, not_equal}

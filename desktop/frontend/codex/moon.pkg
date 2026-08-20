@@ -6,6 +6,7 @@ import {
   "moonbitlang/editor/base/common",
   "openseek_desktop/internal/commands",
   "openseek_desktop/internal/jsonx",
+  "openseek_desktop/frontend/skills",
   "openseek_desktop/internal/protocol",
   "openseek_desktop/frontend/composer",
   "openseek_desktop/frontend/icons",
