@@ -216,6 +216,37 @@ async test "the sandbox draws the line at the workspace, not at source files" {
 }
 
 ///|
+/// Reads are NOT bounded the way writes are, and that asymmetry is deliberate:
+/// the `read` tool takes any absolute path with no scope, so a read root list
+/// buys no confidentiality — it only turns a wrong guess at where the toolchain
+/// lives into a refusal that reads like a broken environment, which live runs
+/// spent steps on. Pinned against a file the workspace cannot reach so it can
+/// only pass if the policy really is open.
+async test "a snippet may read outside the workspace, though it may not write" {
+  @vfs.with_tmpdir(ws => {
+    @vfs.with_tmpdir(outside => {
+      @fs.write_file(
+        "\{outside}/note.txt",
+        "READABLE\n",
+        create_mode=CreateOrTruncate,
+      )
+      let source = (
+        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+        #|
+        #|async fn main {
+        #|  let text = try {
+        #|    @fs.read_file("OUTSIDE/note.txt").text()
+        #|  } catch { _ => "refused" }
+        #|  @stdio.stdout.write("read=\{text.trim()}\n")
+        #|}
+      ).replace_all(old="OUTSIDE", new=outside)
+      let out = run_in(ws, { "source": source })
+      assert_true(out.content.contains("read=READABLE"))
+    })
+  })
+}
+
+///|
 /// The generated moonrun policy is deny-by-default, so a program NOT on the
 /// spawn allowlist must be refused at the host boundary — on every platform,
 /// unlike the `sandbox-exec` profile. Uses a program that certainly exists and

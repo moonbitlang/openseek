@@ -7,8 +7,6 @@ import {
   "bobzhang/openseek/internal/workspace_path",
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/core/env",
-  "moonbitlang/x/path",
   "moonbitlang/async/process",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",

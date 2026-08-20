@@ -162,10 +162,24 @@ let spawnable_commands : Array[(String, Array[String])] = [
 ///|
 /// Build the `moonrun --policy` document for one snippet run.
 ///
-/// Deny-by-default: moonrun denies every surface a policy does not name, so
-/// each root here is one the run genuinely needs. `workspace_root` is where the
-/// snippet reads and writes the user's files, `dir` is its throwaway build
-/// tree, and the toolchain roots are what `moon` itself reads.
+/// Deny-by-default: moonrun denies every surface a policy does not name. Writes
+/// name the roots a run genuinely needs — `workspace_root` for the user's files
+/// and `dir` for its throwaway build tree — while reads are open.
+///
+/// Reads are open because bounding them stops nothing this agent cannot already
+/// do more easily, and costs steps to enforce. The `read` tool takes any
+/// absolute path with no scope of its own, so any file on the machine is one
+/// tool call away; `env.from_host` below hands the snippet every environment
+/// variable the agent holds, API keys included. Against that, a read root list
+/// buys no confidentiality — it only turns a wrong guess at where the toolchain
+/// lives into a refusal that reads like a broken environment. Live runs spent
+/// steps on exactly that, guessing `~/.moon`, `~/.mooncakes` and an opam-
+/// installed `moon`, none of which the list happened to name.
+///
+/// Writes keep their bound for the reason reads do not: a snippet writing
+/// outside the tree is INVISIBLE in the transcript, where a `write` tool call
+/// naming the same path is right there to read. The asymmetry is legibility,
+/// not access.
 ///
 /// What this binds is the SNIPPET, on every platform. It does not reach the
 /// child processes its `process` rules let the snippet start: those run with the
@@ -173,18 +187,17 @@ let spawnable_commands : Array[(String, Array[String])] = [
 /// which admits no shell, no interpreter, and no ad-hoc rewriter, and which
 /// refuses git's reconfiguring global options because they precede the
 /// subcommand.
-async fn wasm_policy_document(
+fn wasm_policy_document(
   workspace_root~ : String,
   dir~ : String,
   tmp_dir~ : String,
   extra_roots~ : Array[String],
 ) -> Json {
-  let read_roots = [workspace_root, dir, ..extra_roots, ..toolchain_roots()]
-  // The toolchain's own directories are deliberately NOT writable here. This
-  // section binds the SNIPPET, and a snippet never writes the registry or the
-  // compiler assets — `moon` does, as a child process, which no `fs` rule of
-  // this policy reaches. Listing them would confine nothing and only suggest
-  // the snippet has business there.
+  // The toolchain's own directories are deliberately NOT writable. This section
+  // binds the SNIPPET, and a snippet never writes the registry or the compiler
+  // assets — `moon` does, as a child process, which no `fs` rule of this policy
+  // reaches. Listing them would confine nothing and only suggest the snippet
+  // has business there.
   let write_roots = [workspace_root, dir, ..extra_roots]
   let allow : Array[Json] = []
   for entry in spawnable_commands {
@@ -216,107 +229,14 @@ async fn wasm_policy_document(
     // `stub.c` hardcodes `/tmp` off Windows — but a child is outside this
     // policy, so its temp directory is not this policy's business.
     "env": { "from_host": ["*"], "set": { "TMPDIR": tmp_dir } },
-    "fs": {
-      "read": json_strings(read_roots),
-      "write": json_strings(write_roots),
-    },
+    // `"*"` is moonrun's every-host-path wildcard — see the header for why
+    // reads are open where writes are not.
+    "fs": { "read": ["*"], "write": json_strings(write_roots) },
     // Network stays denied: nothing a snippet does needs it except registry
     // fetches, which run inside `moon` — a child, and so outside this policy
     // either way.
     "process": { "allow": Json::array(allow) },
   }
-}
-
-///|
-/// Where the toolchain lives, resolved exactly the way `moon` itself resolves it
-/// (moonutil `resolve_moon_home`): `MOON_HOME` when set, otherwise `$HOME/.moon`.
-/// There is no third location — a path like `$HOME/Library/MoonBit` is where an
-/// installer may put the toolchain, but then it exports `MOON_HOME` to match, so
-/// listing it as a fallback would only widen the sandbox for hosts that do not
-/// use it. What `toolchain_roots` adds on top of this answer is the DEFAULT
-/// location as well, which is a different question — see there.
-fn moon_home() -> String? {
-  if @env.get_env_var("MOON_HOME") is Some(home) && home != "" {
-    return Some(home)
-  }
-  if @env.get_env_var("HOME") is Some(home) && home != "" {
-    return Some("\{home}/.moon")
-  }
-  None
-}
-
-///|
-/// Where the compiler and `lib/core` live, which is NOT the same place as
-/// `moon_home()` and is resolved by a different rule. Following moonutil's
-/// `resolve_toolchain_root`: `MOON_TOOLCHAIN_ROOT` when set, otherwise the
-/// parent of the directory holding the `moon` on `PATH` — moon locates its own
-/// assets relative to its executable.
-///
-/// The two diverge exactly where it matters. The desktop app never sets
-/// `MOON_HOME` and finds moon purely by prepending a bin directory to `PATH`,
-/// so there the registry is `~/.moon` while `lib/core` is wherever moon was
-/// installed — and a snippet reading an `.mbti` to look up an API needs the
-/// second one, which `MOON_HOME` alone does not name.
-/// The answer cannot change while the agent runs — `PATH` and
-/// `MOON_TOOLCHAIN_ROOT` are fixed at startup — while finding it stats every
-/// `PATH` entry in turn. `Lazy` resolves it on first use and caches it,
-/// including for concurrent runs: several snippets may be in flight at once,
-/// and they share the one lookup instead of racing to repeat it.
-let toolchain_root : @async.Lazy[String?] = Lazy(() => resolve_toolchain_root())
-
-///|
-/// The `PATH` walk is written for the POSIX spelling (`:`-separated, no `.exe`).
-/// On Windows it finds nothing and the toolchain root goes ungranted, which
-/// costs a snippet the ability to READ `lib/core` there — an API lookup, not a
-/// build, since `moon` is a child process and reads it on its own account.
-async fn resolve_toolchain_root() -> String? {
-  if @env.get_env_var("MOON_TOOLCHAIN_ROOT") is Some(root) && root != "" {
-    return Some(root)
-  }
-  guard @env.get_env_var("PATH") is Some(path) else { return None }
-  for entry in path.split(":") {
-    guard !entry.is_empty() else { continue }
-    let bin_dir = @path.Path(entry.to_owned())
-    if @fs.exists(bin_dir.join(Path("moon")).to_string()) {
-      return Some(bin_dir.dirname().to_string())
-    }
-  }
-  None
-}
-
-///|
-/// What a SNIPPET reads outside its own workspace: the toolchain, whose
-/// `lib/core/*.mbti` files are how a run looks up an API, and the registry
-/// cache next to it.
-///
-/// System directories are deliberately not listed. A snippet reads its
-/// workspace and the toolchain; the programs that read `/usr` and `/etc` are
-/// `moon` and `git`, and they are child processes this policy's `fs` rules do
-/// not reach. Hardcoding POSIX paths would also have been meaningless on
-/// Windows — every root here comes from the environment instead.
-async fn toolchain_roots() -> Array[String] {
-  let roots = []
-  if moon_home() is Some(home) {
-    roots.push(home)
-  }
-  // `$HOME/.moon` even when `MOON_HOME` points elsewhere. It is the DEFAULT
-  // registry location and the one a snippet reaches for by name — the API
-  // lookup a turn is taught is `${MOON_HOME:-$HOME/.moon}`, and a machine that
-  // relocated `MOON_HOME` usually still has a registry here. A run spent a step
-  // on this: it read `~/.moon` to find a package's `.mbti`, got a policy
-  // refusal rather than a plain "no such file", and had to work out which of
-  // the two it was looking at. Reads only, and this list is already the
-  // toolchain's.
-  if @env.get_env_var("HOME") is Some(home) && home != "" {
-    let default_home = "\{home}/.moon"
-    if !roots.contains(default_home) {
-      roots.push(default_home)
-    }
-  }
-  if toolchain_root.wait() is Some(root) {
-    roots.push(root)
-  }
-  roots
 }
 
 ///|
