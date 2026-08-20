@@ -1016,10 +1016,6 @@ fn first_diff_info(
 
 ///|
 /// Check whether `expected` and `actual` differ only by whitespace characters
-/// (tab, space, CR, LF). Handles length differences (e.g. CRLF vs LF).
-
-///|
-/// Check whether `expected` and `actual` differ only by whitespace characters
 /// (tab, space, CR, LF). Uses `normalize_whitespace` as the single source of
 /// truth, so this is consistent with `find_whitespace_normalized_candidates`.
 fn is_whitespace_equivalent(expected : String, actual : String) -> Bool {
@@ -1072,8 +1068,10 @@ fn find_whitespace_normalized_candidates(
       let nc = norm_needle[ni]
       let bc = body[bi]
       if nc == ' ' {
-        // norm_needle expects a whitespace run; skip all whitespace in body
+        // norm_needle expects a whitespace run; require at least one
+        // whitespace character in body (otherwise "a b" would match "ab").
         ni += 1
+        let mut consumed_ws = false
         while bi < body.length() &&
               (
                 body[bi] == ' ' ||
@@ -1082,6 +1080,10 @@ fn find_whitespace_normalized_candidates(
                 body[bi] == '\r'
               ) {
           bi += 1
+          consumed_ws = true
+        }
+        if !consumed_ws {
+          break
         }
       } else if bc == ' ' || bc == '\t' || bc == '\n' || bc == '\r' {
         // body has whitespace where norm_needle has non-space → mismatch
@@ -1353,6 +1355,8 @@ test "find_whitespace_normalized_candidates returns multiple matches when ambigu
 
 ///|
 test "find_whitespace_normalized_candidates does not match different content" {
-  // "ab" should not match "a b" (different non-whitespace content in the gap)
+  // "a x b" should not match "a b" (different non-whitespace content in the gap)
   assert_eq(find_whitespace_normalized_candidates("a x b", "a b").length(), 0)
+  // "ab" should not match "a b" either (no whitespace at all between a and b)
+  assert_eq(find_whitespace_normalized_candidates("ab", "a b").length(), 0)
 }
