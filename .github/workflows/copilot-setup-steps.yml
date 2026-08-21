@@ -29,12 +29,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # Nightly, to match CI: `run_moonbit`'s policy states its spawn allowlist
-      # with `process.allow`, which stable's moonrun rejects outright, so an
-      # agent working here on stable would find every snippet refused.
+      # Pre-release, to match CI: `run_moonbit`'s policy states its spawn
+      # allowlist with `process.allow`, which stable's moonrun rejects outright,
+      # so an agent working here on stable would find every snippet refused.
       - name: Set up MoonBit
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s nightly
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s pre-release
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
 
       - name: Update MoonBit dependencies
