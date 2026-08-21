@@ -8,11 +8,14 @@ async fn merged_output_text(
   @async.with_task_group() <| group => {
     let (reader, writer) = @process.read_from_process()
     defer reader.close()
+    let (stdin_reader, stdin_writer) = @process.write_to_process()
+    stdin_writer.close()
     let args = command.args()
     let child = @process.spawn(
       group,
       command.program(),
       args,
+      stdin=stdin_reader,
       stdout=writer,
       stderr=writer,
       no_wait=true,
