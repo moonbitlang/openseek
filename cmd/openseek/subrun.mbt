@@ -207,6 +207,7 @@ async fn dispatch_kind(
         fail("an API key is required for \{model}: pass --api-key")
       }
       let scratch_dir = new_scratch_lab("openseek-explore-lab-")
+      defer remove_scratch_lab(scratch_dir)
       let report = @agent_explore.run_child(
         input,
         api_key~,
@@ -221,9 +222,6 @@ async fn dispatch_kind(
         append_item?,
         scratch_dir~,
       )
-      // `defer` cannot host an async cleanup; a child cancelled mid-run
-      // re-raises before here and its lab is left to OS temp-cleaning.
-      remove_scratch_lab(scratch_dir)
       report.map(report => report.to_json())
     }
     "review" => {
@@ -242,6 +240,7 @@ async fn dispatch_kind(
         fail("an API key is required for \{model}: pass --api-key")
       }
       let scratch_dir = new_scratch_lab("openseek-review-lab-")
+      defer remove_scratch_lab(scratch_dir)
       let report = @agent_review.run_goal_audit(
         goal~,
         baseline~,
@@ -257,7 +256,6 @@ async fn dispatch_kind(
         append_item?,
         scratch_dir~,
       )
-      remove_scratch_lab(scratch_dir)
       report.map(report => report.to_json())
     }
     "worker" => {

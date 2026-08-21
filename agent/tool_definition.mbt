@@ -65,22 +65,23 @@ pub async fn[X] build_tools(
     _ => None
   }
   // Remove the session temp dir when the owning scope ends, so `/tmp` cannot
-  // accumulate spill files and snippet directories across turns or sessions. A
-  // task parks on a never-fed queue until group teardown cancels it, then
-  // removes the dir shielded from that cancellation (rmdir is async, so it
-  // cannot run in a `defer`).
+  // accumulate spill files and snippet directories across turns or sessions.
+  // A GROUP defer, not a plain one: `build_tools` returns immediately while
+  // the dir must live as long as the session, and the group runs its defers
+  // only after every child task has terminated — so a background job still
+  // spilling output cannot have the directory pulled out from under it.
+  // `protect_from_cancel` because a group cancelled from outside cancels the
+  // async operations in its defers too.
   if spill_dir is Some(dir) {
-    scope.group().spawn_bg(no_wait=true, allow_failure=true) <| () => {
-      let parked : @async.Queue[Unit] = Queue(kind=Unbounded)
-      try parked.get() |> ignore catch {
-        _ =>
-          @async.protect_from_cancel(() => {
-            @fs.rmdir(dir, recursive=true) catch {
-              _ => ()
-            }
-          })
-      }
-    }
+    scope
+    .group()
+    .add_defer(() => {
+      @async.protect_from_cancel(() => {
+        @fs.rmdir(dir, recursive=true) catch {
+          _ => ()
+        }
+      })
+    })
   }
   // When a background job exits on its own, push a completion notice into the
   // loop's lossless steer queue (surfaced to the model at the next step, or
