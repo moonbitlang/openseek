@@ -77,6 +77,13 @@ async test "the worker profile confines writes to the worker tree" {
     assert_true(origin_exit != 0)
     assert_eq(@fs.read_file("\{origin}/seed.txt").text(), "seed\n")
     assert_true(against_origin.output_reports_denial(origin_text))
+    // The guidance follows the profile. A worker that hit its boundary must not
+    // get the source-write text: it would be told to make source changes with
+    // `edit`, which is neither what failed nor something it needs — its own tree
+    // is writable.
+    let guidance = against_origin.denial_feedback()
+    assert_true(guidance.contains("OUTSIDE your worktree"))
+    assert_false(guidance.contains("line-anchored `edit`"))
     // 4. A sibling worktree is not writable.
     guard probe("printf x > \{sibling}/intrude.txt") is Some(against_sibling) else {
       fail("probe build failed")
