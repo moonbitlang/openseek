@@ -454,22 +454,14 @@ async fn execute(
     )
     // A cancelled turn must not leak the child: stop it before unwinding.
     errdefer exec.request_stop()
-    // Binary output ends `wait_or_invalid` early with the child STILL RUNNING,
-    // so reporting there would leave the process going while `defer cleanup()`
-    // removes its build directory underneath it — and the exit code below would
-    // be invented. Wait out the real exit.
-    //
-    // Both waits share ONE deadline. Giving the second its own budget would put
-    // it outside the bound the model was told about and double the worst case:
-    // a program that emits one invalid byte and then keeps running (a watcher, a
-    // test printing raw bytes) would hold the turn for its whole lifetime.
-    // Expiry is not special here either — it detaches like any other long run.
-    let finished = @async.with_timeout_opt(run_timeout_ms, () => {
-      exec.wait_or_invalid()
-      if exec.had_invalid_utf8() {
-        exec.wait()
-      }
-    })
+    // `wait`, not `wait_or_invalid`. That one returns early on the first non-UTF-8
+    // byte, for a caller that fails fast on binary output — and this is not one:
+    // reporting with the child still running would leave it going while
+    // `defer cleanup()` removes its build directory underneath it, and the exit
+    // code below would be invented. The exit is what this waits for either way,
+    // so asking for the early wake only put the rest of the wait outside the
+    // deadline. Expiry needs nothing special: it detaches like any other long run.
+    let finished = @async.with_timeout_opt(run_timeout_ms, () => exec.wait())
     let saw_binary = exec.had_invalid_utf8()
     if finished is None {
       let _ = exec.background()
