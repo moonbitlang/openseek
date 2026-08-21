@@ -418,6 +418,18 @@ fn project_semantic_match(
 }
 
 ///|
+/// A nonzero exit is fatal only when moongrep produced no results at all:
+/// pattern/rules validation and immediate crashes happen before any hit row.
+/// Once hits were streamed, the exit is treated as a recoverable tail crash
+/// and the accumulated rows are kept, mirroring ripgrep's partial results.
+fn semantic_search_exit_is_fatal(
+  exit_code : Int,
+  got_results : Bool,
+) -> Bool {
+  exit_code != 0 && !got_results
+}
+
+///|
 fn semantic_search_error(stderr : String) -> (String, String) {
   let detail = stderr.trim().to_owned()
   let lower = detail.to_lower()
@@ -567,7 +579,11 @@ async fn run_semantic_search(
       _ => 2
     }
     let stderr = stderr_task.wait() catch { _ => "" }
-    if exit_code != 0 {
+    // moongrep streams hits before it aborts, and its current wasm build can
+    // crash on MoonBit syntax it does not parse yet. A nonzero exit alone is
+    // therefore not fatal once some hits were already emitted: keep them, like
+    // ripgrep's partial-results behavior, so the panel can use what it got.
+    if semantic_search_exit_is_fatal(exit_code, !hits.is_empty()) {
       let (code, message) = semantic_search_error(stderr)
       return empty_semantic_search_reply(reply_root, payload.generation, error={
         code,
@@ -675,6 +691,16 @@ test "moongrep failures classify pattern and permission diagnostics" {
     "permission_denied",
   )
   assert_eq(semantic_search_error("unexpected failure").0, "search_failed")
+}
+
+///|
+test "tail crashes keep previously streamed semantic results" {
+  assert_true(semantic_search_exit_is_fatal(1, false))
+  assert_true(semantic_search_exit_is_fatal(2, false))
+  assert_false(semantic_search_exit_is_fatal(0, false))
+  assert_false(semantic_search_exit_is_fatal(0, true))
+  assert_false(semantic_search_exit_is_fatal(1, true))
+  assert_false(semantic_search_exit_is_fatal(134, true))
 }
 
 ///|
