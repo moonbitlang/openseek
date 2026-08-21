@@ -190,8 +190,8 @@ let spawnable_commands : Array[(String, Array[String])] = [
 /// Build the `moonrun --policy` document for one snippet run.
 ///
 /// Deny-by-default: moonrun denies every surface a policy does not name. Writes
-/// name the roots a run genuinely needs — `workspace_root` for the user's files
-/// and `dir` for its throwaway build tree — while reads are open.
+/// name only the two roots a snippet has business in — its own temp directory
+/// and a read-only role's lab — while reads are open.
 ///
 /// Reads are open because bounding them stops nothing this agent cannot already
 /// do more easily, and costs steps to enforce. The `read` tool takes any
@@ -215,17 +215,26 @@ let spawnable_commands : Array[(String, Array[String])] = [
 /// refuses git's reconfiguring global options because they precede the
 /// subcommand.
 fn wasm_policy_document(
-  workspace_root~ : String,
-  dir~ : String,
   tmp_dir~ : String,
   extra_roots~ : Array[String],
 ) -> Json {
-  // The toolchain's own directories are deliberately NOT writable. This section
-  // binds the SNIPPET, and a snippet never writes the registry or the compiler
-  // assets — `moon` does, as a child process, which no `fs` rule of this policy
-  // reaches. Listing them would confine nothing and only suggest the snippet
-  // has business there.
-  let write_roots = [workspace_root, dir, ..extra_roots]
+  // A snippet writes NOTHING in the workspace. It does not need to: the file
+  // tools make the edits, and the commands whose job is to rewrite source
+  // (`moon fmt`, `moon info`, `git checkout`) are child processes, which no `fs`
+  // rule here reaches. What granting the workspace did buy was a documented way
+  // around `remove`'s provenance check — `remove_path`, `rename_path` and
+  // `rmdir_path` are all gated on `fs.write`, so a snippet could delete a file
+  // the guarded tool exists to refuse.
+  //
+  // That leaves the two places a snippet has real business writing: its own temp
+  // directory (where `@fs.tmpdir()` lands, since `TMPDIR` points here) and a
+  // read-only role's scratch lab, which is the one place those roles may build
+  // an experiment — they hold no editing tool at all.
+  //
+  // Every entry must be an EXISTING path: moonrun canonicalizes each root when
+  // it loads the policy and fails the whole file otherwise. Both of these are
+  // created before this runs.
+  let write_roots = [tmp_dir, ..extra_roots]
   let allow : Array[Json] = []
   for entry in spawnable_commands {
     let (program, args_prefix) = entry

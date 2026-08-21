@@ -41,6 +41,7 @@ pub fn output_reports_policy_refusal(output : String) -> Bool {
 /// anyone.
 pub let policy_refusal_feedback : String =
   #|run_moonbit sandbox: that failure is this tool's policy refusing something, not a
-  #|filesystem problem to debug — either a read or write left the workspace, or the
-  #|program is not on the spawn allowlist. Use the MoonBit replacement for the
-  #|utility you reached for, rather than another program.
+  #|filesystem problem to debug — either the program is not on the spawn allowlist, or
+  #|the snippet tried to write outside its own `@fs.tmpdir()`. Reach for the
+  #|MoonBit replacement of the utility you wanted rather than another program, and
+  #|for the file tools to change a file.

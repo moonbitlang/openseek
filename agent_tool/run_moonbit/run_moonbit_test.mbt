@@ -175,13 +175,18 @@ async test "a refused spawn gets guidance that fits a refused spawn" {
 }
 
 ///|
-/// The boundary is the workspace, not the file's kind: a snippet may rewrite
-/// source inside the tree it was pointed at — `moon fmt` and `git checkout`
-/// would be useless otherwise — and may not write anywhere else.
+/// A snippet writes NOTHING in the workspace — the file's kind does not enter
+/// into it. Its own temp directory is where it may write, and everything that
+/// changes a workspace file goes through the file tools or through a child
+/// process, which no `fs` rule of this policy reaches.
+///
+/// Deletion is the case that matters: moonrun gates `remove`, `rename` and
+/// `rmdir` on `fs.write` too, so granting the workspace was a documented way
+/// around `remove`'s refusal to delete a file it did not create.
 ///
 /// Ungated: this is the policy's own `fs.write` rule, which moonrun applies on
 /// every platform, so there is no host where it may be skipped.
-async test "the sandbox draws the line at the workspace, not at source files" {
+async test "a snippet writes only its own temp dir, never the workspace" {
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
       @fs.write_file(
@@ -189,26 +194,50 @@ async test "the sandbox draws the line at the workspace, not at source files" {
         "fn main {  }\n",
         create_mode=CreateOrTruncate,
       )
+      @fs.write_file(
+        "\{ws}/notes.txt",
+        "keep me\n",
+        create_mode=CreateOrTruncate,
+      )
       let source = (
         #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
         #|
         #|async fn main {
-        #|  let inside = try {
+        #|  let source_write = try {
         #|    @fs.write_file("keep.mbt", "// REWRITTEN\n", create_mode=CreateOrTruncate)
+        #|    true
+        #|  } catch { _ => false }
+        #|  let data_write = try {
+        #|    @fs.write_file("fresh.txt", "x", create_mode=CreateOrTruncate)
+        #|    true
+        #|  } catch { _ => false }
+        #|  let delete = try {
+        #|    @fs.remove("notes.txt")
         #|    true
         #|  } catch { _ => false }
         #|  let outside = try {
         #|    @fs.write_file("OUTSIDE/escape.txt", "x", create_mode=CreateOrTruncate)
         #|    true
         #|  } catch { _ => false }
-        #|  @stdio.stdout.write("inside=\{inside} outside=\{outside}\n")
+        #|  let scratch = try {
+        #|    let dir = @fs.tmpdir(prefix="probe-")
+        #|    @fs.write_file("\{dir}/ok.txt", "x", create_mode=CreateOrTruncate)
+        #|    true
+        #|  } catch { _ => false }
+        #|  @stdio.stdout.write("source=\{source_write} data=\{data_write} delete=\{delete} outside=\{outside} scratch=\{scratch}\n")
         #|}
       ).replace_all(old="OUTSIDE", new=outside)
       let out = run_in(ws, { "source": source })
-      assert_true(out.content.contains("inside=true"))
+      assert_true(out.content.contains("source=false"))
+      assert_true(out.content.contains("data=false"))
+      assert_true(out.content.contains("delete=false"))
       assert_true(out.content.contains("outside=false"))
-      // The in-tree rewrite really landed; the escape really did not.
-      assert_true(@fs.read_file("\{ws}/keep.mbt").text().contains("REWRITTEN"))
+      // Its own scratch space still works, or a snippet could not stage anything.
+      assert_true(out.content.contains("scratch=true"))
+      // Reported as denied AND untouched on disk — including the deletion.
+      assert_true(@fs.read_file("\{ws}/keep.mbt").text().contains("fn main"))
+      assert_true(@fs.exists("\{ws}/notes.txt"))
+      assert_false(@fs.exists("\{ws}/fresh.txt"))
       assert_false(@fs.exists("\{outside}/escape.txt"))
     })
   })
@@ -408,12 +437,16 @@ async test "a scratch lab is writable while workspace source stays denied" {
 }
 
 ///|
-/// Worker mode replaces the workspace profile instead of adding to it: a worker
-/// is supposed to write source, just only its own. Pin both halves — its own
-/// tree is writable (a worker that cannot run `moon fmt` on its own files is
-/// useless), and a sibling worktree is not.
-async test "worker mode allows the worker's own source and denies a sibling's" {
-  guard sandbox_enforcement_available() else { return }
+/// A worker's SNIPPET is bound like every other: it writes nothing in the tree,
+/// its own worktree included. A worker does write source — through `edit` and
+/// `write`, and through the moon commands it spawns, which are children and so
+/// outside this policy. `moon fmt` on its own files keeps working.
+///
+/// The sibling denial is the half that is load-bearing here, and it now holds
+/// on every platform rather than only where `sandbox-exec` does. The kernel
+/// profile still governs what those CHILD processes may touch; that is pinned
+/// in `internal/sandbox/worker_profile_test.mbt`.
+async test "a worker's snippet writes neither its own tree nor a sibling's" {
   @vfs.with_tmpdir(prefix="run-moonbit-worker-repo-", repo => {
     let common_git = "\{repo}/.git"
     let worker = "\{repo}/wt-1"
@@ -462,11 +495,14 @@ async test "worker mode allows the worker's own source and denies a sibling's" {
       Sync(_) => fail("run_moonbit should be async")
     }
     guard action is Respond(output) else { fail("expected Respond") }
-    assert_true(output.content.contains("mine=true"))
+    assert_true(output.content.contains("mine=false"))
     assert_true(output.content.contains("theirs=false"))
-    // The sibling's file is untouched on disk, not merely reported as denied.
+    // Untouched on disk, not merely reported as denied — both trees.
     assert_true(
       @fs.read_file("\{sibling}/theirs.mbt").text().contains("fn theirs"),
+    )
+    assert_true(
+      @fs.read_file("\{worker}/mine.mbt").text().contains("-> Int { 1 }"),
     )
   })
 }
@@ -535,7 +571,7 @@ async test "an uncaught sandbox denial is explained, not left as a bare EPERM" {
       assert_true(out.content.contains("run_moonbit sandbox"))
       // The guidance describes the policy's rules — the snippet's own roots and
       // the spawn allowlist — not the source-write rule this run does not carry.
-      assert_true(out.content.contains("left the workspace"))
+      assert_true(out.content.contains("write outside its own"))
       assert_false(out.content.contains("`edit`"))
       assert_false(@fs.exists("\{outside}/escape.txt"))
     })

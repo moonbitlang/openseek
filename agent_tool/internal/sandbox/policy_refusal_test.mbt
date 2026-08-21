@@ -40,7 +40,7 @@ test "a policy refusal is recognized by the runtime's own wording" {
 /// and reading it as a blocked write once sent the model to debug one.
 test "policy guidance names both rules that produce a refusal" {
   let feedback = @sandbox.policy_refusal_feedback
-  assert_true(feedback.contains("left the workspace"))
+  assert_true(feedback.contains("write outside its own"))
   assert_true(feedback.contains("spawn allowlist"))
   // And it ends on the move that answers the refusals that actually happen —
   // POSIX utilities with a one-line MoonBit form.

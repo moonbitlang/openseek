@@ -282,14 +282,12 @@ async fn execute(
     error if @async.is_being_cancelled() => raise error
     _ => ()
   }
+  // `cwd` is deliberately NOT a write root: naming where a program runs should
+  // not also grant writing there, and reads are open, so a snippet can still
+  // work in a directory it may not modify.
   let policy = wasm_policy_document(
-    workspace_root~,
-    dir~,
     tmp_dir=snippet_tmp,
-    extra_roots=[
-      ..run_cwd.map(c => [c]).unwrap_or([]),
-      ..scratch_dir.map(l => [l]).unwrap_or([]),
-    ],
+    extra_roots=[..scratch_dir.map(l => [l]).unwrap_or([])],
   )
   @fs.write_file(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
   let moon_argv = [
@@ -870,8 +868,10 @@ fn description(background~ : Bool) -> String {
     #|  which nearly every `@fs`/`@myshell` call does.
     #|- ALWAYS `println` each command's stdout, stderr and exit code — what you do not
     #|  print is invisible to you. But a run that prints more than ~48KB is STOPPED
-    #|  mid-print, so for output that large pass `stdout=ToFile(path)` and read the
-    #|  file back, or filter before printing.
+    #|  mid-print, so filter before printing, or park the bulk with
+    #|  `stdout=ToFile("\{@fs.tmpdir()}/out.log")` and read back the part you need.
+    #|  A snippet may write ONLY inside its own `@fs.tmpdir()`, so that redirect
+    #|  cannot target the workspace.
     #|- `Cmd(program, args)` passes the argument VECTOR literally: no shell parsing, no
     #|  quoting, and `|`, `>`, `&&`, `$()`, `*` mean nothing. Other labels: `cwd`,
     #|  `env`, `stdin=Text(...)`. Run several commands as sequential statements in ONE
@@ -911,7 +911,9 @@ fn description(background~ : Bool) -> String {
     #|    mkdir -p    → @fs.mkdir(d, recursive=true)
     #|    test -f     → @fs.exists(p); test -d → @fs.kind(p) is Directory
     #|    echo/printf → println
-    #|    rm/mv/cp    → the `remove` tool for files you made; @fs otherwise
+    #|    rm/mv/cp    → the `remove` and `write` tools; a snippet cannot write the
+    #|                  workspace, and `remove` refuses files it did not create —
+    #|                  a refusal there is an answer, not an obstacle to route past
     #|    sh -c, xargs, make → write the logic as MoonBit statements
     #|
     #|## Isolation and limits
@@ -922,9 +924,12 @@ fn description(background~ : Bool) -> String {
     #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits.
     #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
     #|  `moon test` through a `@myshell.Cmd`.
-    #|- Its file access is bounded by policy, and its compiler warnings are suppressed
-    #|  (pass `warning: "on"` to see them). A refusal is that policy firing, not a
-    #|  filesystem fault to debug or route around.
+    #|- A snippet READS anywhere and WRITES only its own `@fs.tmpdir()`. Changing a
+    #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
+    #|  checkout` and friends are child processes and run normally. A write refusal
+    #|  is that rule firing, not a filesystem fault to debug or route around.
+    #|- Compiler warnings for the snippet are suppressed; pass `warning: "on"` to
+    #|  see them.
     #|- Bounded to 300s. For independent commands or probes, emit SEVERAL
     #|  `run_moonbit` calls in the SAME assistant turn — they run and come back
     #|  together, saving a model round-trip each.
