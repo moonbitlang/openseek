@@ -548,11 +548,10 @@ fn semantic_hit_view(
           @html.nothing
         },
       ]),
-      @html.div(class="search-semantic-context", [
-        for line in hit.source_context {
-          semantic_context_line_view(line)
-        },
-      ]),
+      @html.div(
+        class="search-semantic-context",
+        hit.source_context.map(line => semantic_context_line_view(line)),
+      ),
     ],
   )
 }
@@ -561,6 +560,7 @@ fn semantic_hit_view(
 fn semantic_file_group_view(
   page : Page,
   group : SemanticFileGroup,
+  emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
   let collapsed = page.collapsed.get(group.path).unwrap_or(false)
@@ -631,7 +631,7 @@ fn semantic_search_body(
     children.push(message)
   } else {
     for group in visible_semantic_file_groups(page) {
-      children.push(semantic_file_group_view(page, group, open_match))
+      children.push(semantic_file_group_view(page, group, emit, open_match))
     }
     let shown = page.visible_lines.min(page.semantic_hits.length())
     if shown < page.semantic_hits.length() {

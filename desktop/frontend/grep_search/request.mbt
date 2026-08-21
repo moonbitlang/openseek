@@ -54,18 +54,30 @@ fn cancel_search(
   owner : @interop.ConversationKey,
   request : SearchRequest,
 ) -> Unit {
-  let command = match request {
-    Text(_) => @commands.fs_cancel_search_text
-    Semantic(_) => @commands.fs_cancel_search_semantic
-  }
   @js.async_run(() => {
-    ignore(
-      @interop.bridge_request(owner.channel, command, {
-        session_key: request.session_key(),
-        generation: request.generation(),
-      }),
-    ) catch {
-      _ => ()
+    match request {
+      Text(payload) =>
+        ignore(
+          @interop.bridge_request(owner.channel, @commands.fs_cancel_search_text, {
+            session_key: payload.session_key,
+            generation: payload.generation,
+          }),
+        ) catch {
+          _ => ()
+        }
+      Semantic(payload) =>
+        ignore(
+          @interop.bridge_request(
+            owner.channel,
+            @commands.fs_cancel_search_semantic,
+            {
+              session_key: payload.session_key,
+              generation: payload.generation,
+            },
+          ),
+        ) catch {
+          _ => ()
+        }
     }
   })
 }
