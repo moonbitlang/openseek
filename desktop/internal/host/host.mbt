@@ -54,6 +54,7 @@ struct HostConnection {
   fs_watch : FsWatchActor
   file_search : FileSearchService
   text_search : TextSearchService
+  semantic_search : SemanticSearchService
   terminal : @terminal.TerminalState
 }
 
@@ -63,6 +64,7 @@ pub fn HostConnection::new() -> HostConnection {
     fs_watch: FsWatchActor::new(),
     file_search: FileSearchService::new(),
     text_search: TextSearchService::new(),
+    semantic_search: SemanticSearchService::new(),
     terminal: @terminal.new_terminal_state(),
   }
 }
@@ -152,6 +154,7 @@ pub async fn HostConnection::run(
     })
     group.spawn_bg(() => self.file_search.run())
     group.spawn_bg(() => self.text_search.run())
+    group.spawn_bg(() => self.semantic_search.run())
     self.fs_watch.run(
       async fn(push) {
         emit(
@@ -220,6 +223,14 @@ pub fn endpoints(
       payload,
     ) {
       cancel_search_text_op(connection.text_search, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_search_semantic, async fn(payload) {
+      search_semantic_op(state, connection.semantic_search, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.fs_cancel_search_semantic, async fn(
+      payload,
+    ) {
+      cancel_search_semantic_op(connection.semantic_search, payload)
     }),
     @endpoint.Endpoint::remote(@commands.fs_clear_file_search_cache, async fn(
       payload,

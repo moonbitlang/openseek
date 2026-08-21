@@ -545,6 +545,106 @@ html.is-resizing * {
   width: 16px;
   height: 16px;
 }
+/* Mode selector: text vs semantic, mirroring semgrep's search-mode split. */
+.search-mode {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+.search-mode-button {
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.search-mode-button + .search-mode-button {
+  border-left: 1px solid var(--color-border);
+}
+.search-mode-button:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+}
+.search-mode-button.pressed {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+}
+.search-mode-options {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+/* Semantic hits: one structural match per block, semgrep-style. */
+.search-semantic-hit {
+  padding: 6px 10px 6px 34px;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+}
+.search-semantic-hit:hover {
+  background: var(--color-bg-hover);
+}
+.search-semantic-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.search-semantic-rule {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+.search-semantic-desc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+.search-semantic-context {
+  display: grid;
+  overflow: hidden;
+}
+.search-context-line {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+.search-context-line.matched {
+  color: var(--color-text-primary);
+}
+.search-context-line.matched .search-context-text {
+  background: var(--color-accent-soft);
+  border-radius: 2px;
+}
+.search-context-gutter {
+  text-align: right;
+  padding-right: 8px;
+  user-select: none;
+  color: var(--color-text-quiet);
+}
+.search-context-text {
+  min-width: 0;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .search-details-toggle {
   font-weight: 700;
   letter-spacing: 1px;

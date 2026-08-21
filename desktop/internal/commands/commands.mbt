@@ -392,6 +392,18 @@ pub let fs_cancel_search_text : Command[
 ] = Command("fs.cancel_search_text")
 
 ///|
+pub let fs_search_semantic : Command[
+  @protocol.SearchSemanticPayload,
+  @protocol.SearchSemanticReply,
+] = Command("fs.search_semantic")
+
+///|
+pub let fs_cancel_search_semantic : Command[
+  @protocol.CancelSearchSemanticPayload,
+  @protocol.EmptyReply,
+] = Command("fs.cancel_search_semantic")
+
+///|
 pub let fs_clear_file_search_cache : Command[
   @protocol.ClearFileSearchCachePayload,
   @protocol.EmptyReply,

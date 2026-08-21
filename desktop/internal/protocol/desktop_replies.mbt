@@ -1201,6 +1201,58 @@ pub(all) struct SearchTextReply {
 } derive(Debug, Eq)
 
 ///|
+/// One source line from a semantic-search hit's surrounding context.
+/// `line`/`is_match` mirror moongrep's `source_context` entries; `text` has a
+/// single trailing `\r` stripped so Windows CRLF files render cleanly.
+pub(all) struct SemanticContextLine {
+  line : Int
+  text : String
+  is_match : Bool
+} derive(Debug, Eq)
+
+///|
+/// One structural match reported by moongrep. `path` is workspace-relative and
+/// slash-separated like a text-search row. `rule_id` is the anonymous CLI
+/// pattern or the loaded YAML rule id; `description` is absent for the
+/// anonymous pattern, which has no rule description. The range is the matched
+/// node's one-based line/column extent; `matched_source` is the matched source
+/// with `\n` line endings; `source_context` is moongrep's +/-2-line window.
+pub(all) struct SemanticSearchHit {
+  path : String
+  rule_id : String
+  description : String?
+  start_line : Int
+  start_column : Int
+  end_line : Int
+  end_column : Int
+  matched_source : String
+  source_context : Array[SemanticContextLine]
+} derive(Debug, Eq)
+
+///|
+/// A semantic-search failure carried inside the successful bridge response,
+/// mirroring `TextSearchError`.
+pub(all) struct SemanticSearchError {
+  code : String
+  message : String
+} derive(Debug, Eq)
+
+///|
+/// A complete bounded semantic-search response, shaped like `SearchTextReply`
+/// so the Search panel treats both modes uniformly. Success omits both
+/// optional error fields on the wire.
+pub(all) struct SearchSemanticReply {
+  root : String
+  generation : Int
+  matches : Array[SemanticSearchHit]
+  match_count : Int
+  file_count : Int
+  limit_hit : Bool
+  cancelled : Bool
+  error : SemanticSearchError?
+} derive(Debug, Eq)
+
+///|
 pub(all) enum ReadFileReply {
   Binary
   Oversized

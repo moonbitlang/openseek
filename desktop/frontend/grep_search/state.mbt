@@ -7,6 +7,7 @@ const MaxSearchResults : Int = 20000
 ///|
 fn fresh_page() -> Page {
   {
+    mode: Text,
     query: "",
     regex: false,
     case_sensitive: false,
@@ -14,7 +15,10 @@ fn fresh_page() -> Page {
     details_open: false,
     include_glob: "",
     exclude_glob: "",
+    rules_dir: "",
+    use_builtin_rules: false,
     matches: [],
+    semantic_hits: [],
     match_count: 0,
     file_count: 0,
     limit_hit: false,
@@ -29,10 +33,20 @@ fn fresh_page() -> Page {
 ///|
 /// Retire every query/result derived from the outgoing checkout. The monotonic
 /// generation deliberately survives the reset so an A -> B -> A transition
-/// cannot make an old reply current again.
+/// cannot make an old reply current again, while the armed Search mode and its
+/// semantic settings survive the checkout switch.
 pub fn State::reset_checkout(self : State) -> State {
   let generation = self.generation + 1
-  { page: { ..fresh_page(), generation, }, generation }
+  {
+    page: {
+      ..fresh_page(),
+      generation,
+      mode: self.page.mode,
+      rules_dir: self.page.rules_dir,
+      use_builtin_rules: self.page.use_builtin_rules,
+    },
+    generation,
+  }
 }
 
 ///|
@@ -52,6 +66,7 @@ fn State::schedule(
     {
       ..page,
       matches: [],
+      semantic_hits: [],
       match_count: 0,
       file_count: 0,
       limit_hit: false,
@@ -96,6 +111,18 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
   match msg {
     QueryChanged(query) =>
       self.schedule({ ..page, query, }, input, immediate=false)
+    ModeChanged(mode) =>
+      self.schedule(
+        {
+          ..page,
+          mode,
+          matches: [],
+          semantic_hits: [],
+          collapsed: Map([]),
+        },
+        input,
+        immediate=false,
+      )
     ToggleCaseSensitive =>
       self.schedule(
         { ..page, case_sensitive: !page.case_sensitive },
@@ -116,6 +143,14 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       self.schedule({ ..page, include_glob, }, input, immediate=false)
     ExcludeChanged(exclude_glob) =>
       self.schedule({ ..page, exclude_glob, }, input, immediate=false)
+    RulesDirChanged(rules_dir) =>
+      self.schedule({ ..page, rules_dir, }, input, immediate=false)
+    ToggleBuiltinRules =>
+      self.schedule(
+        { ..page, use_builtin_rules: !page.use_builtin_rules },
+        input,
+        immediate=false,
+      )
     Submit | Refresh => self.schedule(page, input, immediate=true)
     ClearResults => {
       let generation = self.generation + 1
@@ -124,6 +159,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         page: {
           ..page,
           matches: [],
+          semantic_hits: [],
           match_count: 0,
           file_count: 0,
           limit_hit: false,
@@ -135,8 +171,12 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
     }
     CollapseAll => {
       let collapsed : Map[String, Bool] = Map([])
-      for result in page.matches {
-        collapsed[result.path] = true
+      let active = match page.mode {
+        Text => page.matches.map(result => result.path)
+        Semantic => page.semantic_hits.map(hit => hit.path)
+      }
+      for path in active {
+        collapsed[path] = true
       }
       { ..self, page: { ..page, collapsed, } }
     }
@@ -146,7 +186,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         page: {
           ..page,
           visible_lines: (page.visible_lines + VisibleSearchLineStep).min(
-            page.matches.length(),
+            page.active_result_count(),
           ),
         },
       }
@@ -172,6 +212,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       guard input.owner == owner &&
         input.root_text() == root &&
         page.generation == generation &&
+        page.mode is Text &&
         reply.root == root &&
         reply.generation == generation else {
         return self
@@ -188,6 +229,37 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         page: {
           ..page,
           matches: reply.matches,
+          semantic_hits: [],
+          match_count: reply.match_count,
+          file_count: reply.file_count,
+          limit_hit: reply.limit_hit,
+          visible_lines: InitialVisibleSearchLines.min(reply.matches.length()),
+          phase,
+        },
+      }
+    }
+    SemanticLoaded(owner~, root~, generation~, reply~) => {
+      guard input.owner == owner &&
+        input.root_text() == root &&
+        page.generation == generation &&
+        page.mode is Semantic &&
+        reply.root == root &&
+        reply.generation == generation else {
+        return self
+      }
+      if reply.cancelled {
+        return { ..self, page: { ..page, phase: Idle } }
+      }
+      let phase = match reply.error {
+        None => Ready
+        Some(error) => Failed(code=error.code, message=error.message)
+      }
+      {
+        ..self,
+        page: {
+          ..page,
+          matches: [],
+          semantic_hits: reply.matches,
           match_count: reply.match_count,
           file_count: reply.file_count,
           limit_hit: reply.limit_hit,
@@ -205,6 +277,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           page: {
             ..page,
             matches: [],
+            semantic_hits: [],
             match_count: 0,
             file_count: 0,
             limit_hit: false,
@@ -229,29 +302,54 @@ pub fn State::editor_highlights(
 ) -> EditorHighlights? {
   guard self.page.phase is Ready else { return None }
   let ranges : Array[@common.Range] = []
-  for result in self.page.matches {
-    if result.path == path {
-      for range in result.ranges {
-        ranges.push(
-          @common.Range(
-            result.line_number,
-            range.start_column,
-            result.line_number,
-            range.end_column,
-          ),
-        )
+  match self.page.mode {
+    Text =>
+      for result in self.page.matches {
+        if result.path == path {
+          for range in result.ranges {
+            ranges.push(
+              @common.Range(
+                result.line_number,
+                range.start_column,
+                result.line_number,
+                range.end_column,
+              ),
+            )
+          }
+        }
       }
-    }
+    Semantic =>
+      for hit in self.page.semantic_hits {
+        if hit.path == path {
+          ranges.push(
+            @common.Range(
+              hit.start_line,
+              hit.start_column,
+              hit.end_line,
+              hit.end_column,
+            ),
+          )
+        }
+      }
   }
   guard !ranges.is_empty() else { return None }
   Some({ ranges, })
 }
 
 ///|
-fn Page::request_payload(
+fn Page::active_result_count(self : Page) -> Int {
+  match self.mode {
+    Text => self.matches.length()
+    Semantic => self.semantic_hits.length()
+  }
+}
+
+///|
+fn Page::text_request_payload(
   self : Page,
   input : Input,
 ) -> @protocol.SearchTextPayload? {
+  guard self.mode is Text else { return None }
   guard input.root is Some(root) && !self.query.is_empty() else { return None }
   Some({
     root: root.path,
@@ -262,6 +360,24 @@ fn Page::request_payload(
     include_glob: self.include_glob,
     exclude_glob: self.exclude_glob,
     session_key: "grep-search:\{input.owner.channel.uri_authority()}:\{input.owner.session}:\{root.path}",
+    generation: self.generation,
+    max_results: MaxSearchResults,
+  })
+}
+
+///|
+fn Page::semantic_request_payload(
+  self : Page,
+  input : Input,
+) -> @protocol.SearchSemanticPayload? {
+  guard self.mode is Semantic else { return None }
+  guard input.root is Some(root) && !self.query.is_empty() else { return None }
+  Some({
+    root: root.path,
+    query: self.query,
+    rules_dir: self.rules_dir,
+    enable_builtin_rules: self.use_builtin_rules,
+    session_key: "semantic-search:\{input.owner.channel.uri_authority()}:\{input.owner.session}:\{root.path}",
     generation: self.generation,
     max_results: MaxSearchResults,
   })

@@ -8,6 +8,9 @@ const ProtonPackageFrontendEntryPath = "target/proton-package-input/assets/index
 const ProtonPackageRipgrepPath = "target/proton-package-input/bin/rg"
 
 ///|
+const ProtonPackageMoongrepPath = "target/proton-package-input/bin/moongrep"
+
+///|
 /// The installed directory containing the Desktop's packaged command-line
 /// tools. The value exists only when the pinned ripgrep asset is present, so
 /// an incomplete installed bundle cannot shadow the user's PATH with an empty
@@ -109,6 +112,33 @@ async fn ripgrep_command(executable : String?) -> String? {
   }
   if @development.Layout::detect(executable) is Some(_) {
     Some("rg")
+  } else {
+    None
+  }
+}
+
+///|
+/// Locate the semantic-search provider beside the installed Host. A packaged
+/// `moongrep` binary serves installed bundles, mirroring the ripgrep layout;
+/// development runs launch `moonx moonbit-community/moongrep -- …` from PATH.
+/// An installed bundle with neither asset fails closed instead of silently
+/// running a machine-global `moonx` of an unknown version.
+async fn moongrep_command(executable : String?) -> String? {
+  guard executable is Some(executable) else { return Some("moonx") }
+  let command_dir = @pathx.Path(executable).dirname().resolve()
+  let candidates = [
+    command_dir.join("..").join("Resources").join(ProtonPackageMoongrepPath),
+    command_dir.join("moongrep.exe"),
+    command_dir.join("moongrep"),
+  ]
+  for candidate in candidates {
+    let path = candidate.normalize().to_string()
+    if @fs.exists(path) {
+      return Some(path)
+    }
+  }
+  if @development.Layout::detect(executable) is Some(_) {
+    Some("moonx")
   } else {
     None
   }

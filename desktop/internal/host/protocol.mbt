@@ -183,6 +183,24 @@ type SearchTextReply = @protocol.SearchTextReply
 type TextSearchMatch = @protocol.TextSearchMatch
 
 ///|
+type SearchSemanticPayload = @protocol.SearchSemanticPayload
+
+///|
+type CancelSearchSemanticPayload = @protocol.CancelSearchSemanticPayload
+
+///|
+type SearchSemanticReply = @protocol.SearchSemanticReply
+
+///|
+type SemanticSearchHit = @protocol.SemanticSearchHit
+
+///|
+type SemanticContextLine = @protocol.SemanticContextLine
+
+///|
+type SemanticSearchError = @protocol.SemanticSearchError
+
+///|
 type ReadFilePayload = @protocol.ReadFilePayload
 
 ///|

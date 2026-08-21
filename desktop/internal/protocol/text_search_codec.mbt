@@ -176,7 +176,8 @@ pub impl FromJson for SearchTextReply with fn from_json(json, path) {
           (path.add_key("error_message"), "expected non-empty error message"),
         )
       }
-      Some({ code, message })
+      let pair : TextSearchError = { code, message }
+      Some(pair)
     }
     _ =>
       raise JsonDecodeError(

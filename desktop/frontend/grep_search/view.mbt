@@ -163,6 +163,76 @@ fn query_key_attrs(emit : @cmd.Emit[Msg]) -> @html.Attrs {
 }
 
 ///|
+/// The mode selector, modeled on semgrep's two search engines: plain text/grep
+/// matching versus structural MoonBit code patterns. Switching modes retires
+/// the armed query and its results via the generation fence.
+fn mode_control(mode : Mode, emit : @cmd.Emit[Msg]) -> @html.Html {
+  @html.div(class="search-mode", [
+    @html.button(
+      class=if mode is Text {
+        "search-mode-button pressed"
+      } else {
+        "search-mode-button"
+      },
+      attrs=@html.Attrs::build()
+        .aria_label("Text search")
+        .aria_pressed((mode is Text).to_string())
+        .on_click(_ => emit(ModeChanged(Text))),
+      "Text",
+    ),
+    @html.button(
+      class=if mode is Semantic {
+        "search-mode-button pressed"
+      } else {
+        "search-mode-button"
+      },
+      attrs=@html.Attrs::build()
+        .aria_label("Code search")
+        .aria_pressed((mode is Semantic).to_string())
+        .on_click(_ => emit(ModeChanged(Semantic))),
+      "Code",
+    ),
+  ])
+}
+
+///|
+/// The mode-specific query options. Text mode offers ripgrep's case /
+/// whole-word / regex toggles; semantic mode offers moongrep's embedded-rule
+/// toggle, mirroring semgrep's per-mode pattern options.
+fn mode_options(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
+  if page.mode is Text {
+    @html.div(class="search-mode-options", [
+      toggle_button(
+        "Aa",
+        "Match Case",
+        page.case_sensitive,
+        emit(ToggleCaseSensitive),
+      ),
+      whole_word_toggle_button(
+        "Match Whole Word",
+        page.whole_word,
+        emit(ToggleWholeWord),
+      ),
+      toggle_button(
+        ".*",
+        "Use Regular Expression",
+        page.regex,
+        emit(ToggleRegex),
+      ),
+    ])
+  } else {
+    @html.div(class="search-mode-options", [
+      toggle_button(
+        "♯",
+        "Use Built-in Rules",
+        page.use_builtin_rules,
+        emit(ToggleBuiltinRules),
+      ),
+    ])
+  }
+}
+
+///|
 fn highlighted_preview(result : @protocol.TextSearchMatch) -> Array[@html.Html] {
   let children : Array[@html.Html] = []
   let preview_start = result.preview_start_column - 1
@@ -272,6 +342,9 @@ fn search_message(page : Page) -> @html.Html? {
         "invalid_glob" => "Invalid file pattern"
         "permission_denied" => "Workspace is not readable"
         "rg_unavailable" => "Bundled ripgrep is unavailable"
+        "invalid_pattern" => "Invalid code pattern"
+        "moongrep_unavailable" => "Semantic search is unavailable"
+        "invalid_request" => "Nothing to search"
         _ => "Search failed"
       }
       Some(
@@ -285,22 +358,28 @@ fn search_message(page : Page) -> @html.Html? {
         ),
       )
     }
-    Ready if page.matches.is_empty() =>
+    Ready if page.active_result_count() == 0 =>
       Some(
         @html.div(
           class="search-empty",
           attrs=@html.Attrs::build().role("status").aria_live("polite"),
-          "No results found.",
+          match page.mode {
+            Text => "No results found."
+            Semantic => "No matching code found."
+          },
         ),
       )
     Idle if page.query.is_empty() =>
       Some(
         @html.div(
           class="search-empty",
-          "Search across files in the current checkout.",
+          match page.mode {
+            Text => "Search across files in the current checkout."
+            Semantic => "Search MoonBit code patterns in the current checkout."
+          },
         ),
       )
-    Idle if page.matches.is_empty() =>
+    Idle if page.active_result_count() == 0 =>
       Some(
         @html.div(
           class="search-empty",
@@ -312,7 +391,21 @@ fn search_message(page : Page) -> @html.Html? {
 }
 
 ///|
+/// Dispatch the results body to the armed Search engine: ripgrep text rows or
+/// moongrep structural hits, mirroring semgrep's mode split.
 fn search_body(
+  page : Page,
+  emit : @cmd.Emit[Msg],
+  open_match : (String, @common.Range) -> @cmd.Cmd,
+) -> @html.Html {
+  match page.mode {
+    Text => text_search_body(page, emit, open_match)
+    Semantic => semantic_search_body(page, emit, open_match)
+  }
+}
+
+///|
+fn text_search_body(
   page : Page,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
@@ -369,38 +462,250 @@ fn search_body(
 }
 
 ///|
+priv struct SemanticFileGroup {
+  path : String
+  hits : Array[@protocol.SemanticSearchHit]
+  count : Int
+}
+
+///|
+fn semantic_grouped_hits(
+  hits : Array[@protocol.SemanticSearchHit],
+) -> Array[SemanticFileGroup] {
+  let groups : Array[SemanticFileGroup] = []
+  let indexes : Map[String, Int] = Map([])
+  for hit in hits {
+    match indexes.get(hit.path) {
+      Some(index) => {
+        let group = groups[index]
+        let rows = group.hits
+        rows.push(hit)
+        groups[index] = { ..group, hits: rows, count: group.count + 1 }
+      }
+      None => {
+        indexes[hit.path] = groups.length()
+        groups.push({ path: hit.path, hits: [hit], count: 1 })
+      }
+    }
+  }
+  groups
+}
+
+///|
+fn visible_semantic_file_groups(page : Page) -> Array[SemanticFileGroup] {
+  let visible : Array[SemanticFileGroup] = []
+  let mut remaining = page.visible_lines.max(0)
+  for group in semantic_grouped_hits(page.semantic_hits) {
+    guard remaining > 0 else { break }
+    let rows : Array[@protocol.SemanticSearchHit] = []
+    for hit in group.hits {
+      guard rows.length() < remaining else { break }
+      rows.push(hit)
+    }
+    visible.push({ ..group, hits: rows })
+    remaining -= rows.length()
+  }
+  visible
+}
+
+///|
+/// One moongrep context line: gutter line number plus the source text, with the
+/// matched lines highlighted, in the style of semgrep's pattern-match output.
+fn semantic_context_line_view(line : @protocol.SemanticContextLine) -> @html.Html {
+  @html.div(
+    class=if line.is_match {
+      "search-context-line matched"
+    } else {
+      "search-context-line"
+    },
+    [
+      @html.span(class="search-context-gutter", "\{line.line}"),
+      @html.span(class="search-context-text", line.text),
+    ],
+  )
+}
+
+///|
+fn semantic_hit_view(
+  hit : @protocol.SemanticSearchHit,
+  open_match : (String, @common.Range) -> @cmd.Cmd,
+) -> @html.Html {
+  let target = @common.Range(
+    hit.start_line,
+    hit.start_column,
+    hit.end_line,
+    hit.end_column,
+  )
+  @html.div(
+    class="search-semantic-hit",
+    attrs=@html.Attrs::build().on_click(_ => open_match(hit.path, target)),
+    [
+      @html.div(class="search-semantic-meta", [
+        @html.span(class="search-semantic-rule", hit.rule_id),
+        if hit.description is Some(description) && !description.is_empty() {
+          @html.span(class="search-semantic-desc", description)
+        } else {
+          @html.nothing
+        },
+      ]),
+      @html.div(class="search-semantic-context", [
+        for line in hit.source_context {
+          semantic_context_line_view(line)
+        },
+      ]),
+    ],
+  )
+}
+
+///|
+fn semantic_file_group_view(
+  page : Page,
+  group : SemanticFileGroup,
+  open_match : (String, @common.Range) -> @cmd.Cmd,
+) -> @html.Html {
+  let collapsed = page.collapsed.get(group.path).unwrap_or(false)
+  let (name, parent) = file_label(group.path)
+  let rows = if collapsed {
+    ([] : Array[@html.Html])
+  } else {
+    group.hits.map(hit => semantic_hit_view(hit, open_match))
+  }
+  @html.div(class="search-file-group", [
+    @html.button(
+      class="search-file-header",
+      title=group.path,
+      attrs=@html.Attrs::build()
+        .aria_expanded((!collapsed).to_string())
+        .on_click(_ => emit(ToggleFile(group.path))),
+      [
+        @html.span(
+          class="search-file-chevron",
+          attrs=@html.Attrs::build().aria_hidden("true"),
+          if collapsed {
+            "›"
+          } else {
+            "⌄"
+          },
+        ),
+        @html.span(class="search-file-name", name),
+        @html.span(class="search-file-parent", parent),
+        @html.span(class="search-file-count", "\{group.count}"),
+      ],
+    ),
+    @html.div(class="search-file-results", rows),
+  ])
+}
+
+///|
+fn semantic_search_body(
+  page : Page,
+  emit : @cmd.Emit[Msg],
+  open_match : (String, @common.Range) -> @cmd.Cmd,
+) -> @html.Html {
+  let children : Array[@html.Html] = []
+  let busy = page.phase is Debouncing || page.phase is Loading
+  let summary = if busy {
+    "Searching…"
+  } else if page.match_count == 1 {
+    "1 match in \{page.file_count} file"
+  } else {
+    "\{page.match_count} matches in \{page.file_count} files"
+  }
+  children.push(
+    @html.div(
+      class="search-summary",
+      attrs=@html.Attrs::build().aria_live("polite").aria_busy(busy.to_string()),
+      summary,
+    ),
+  )
+  if page.limit_hit {
+    children.push(
+      @html.div(
+        class="search-truncated",
+        attrs=@html.Attrs::build().role("status"),
+        "Only the first 20,000 matches are shown. Narrow the search to see more.",
+      ),
+    )
+  }
+  if search_message(page) is Some(message) {
+    children.push(message)
+  } else {
+    for group in visible_semantic_file_groups(page) {
+      children.push(semantic_file_group_view(page, group, open_match))
+    }
+    let shown = page.visible_lines.min(page.semantic_hits.length())
+    if shown < page.semantic_hits.length() {
+      let next = VisibleSearchLineStep.min(page.semantic_hits.length() - shown)
+      children.push(
+        @html.div(class="search-show-more", [
+          @html.button(
+            on_click=emit(ShowMore),
+            "Show \{next} more matches",
+          ),
+          @html.div(
+            class="search-show-more-detail",
+            "\{shown} of \{page.semantic_hits.length()} matches rendered",
+          ),
+        ]),
+      )
+    }
+  }
+  @html.div(class="search-results", children)
+}
+
+///|
 fn page_view(
   page : Page,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
   let details = if page.details_open {
-    @html.div(class="search-details", [
-      @html.label([
-        @html.span("files to include"),
-        @html.input(
-          input_type=@html.InputType::Text,
-          value=page.include_glob,
-          placeholder="e.g. src/**, tests/**",
-          on_input=emit.map(value => IncludeChanged(value)),
-          attrs=@html.Attrs::build()
-            .aria_label("files to include")
-            .data_set("focus-owner", ""),
-        ),
-      ]),
-      @html.label([
-        @html.span("files to exclude"),
-        @html.input(
-          input_type=@html.InputType::Text,
-          value=page.exclude_glob,
-          placeholder="e.g. **/*.snap, generated/**",
-          on_input=emit.map(value => ExcludeChanged(value)),
-          attrs=@html.Attrs::build()
-            .aria_label("files to exclude")
-            .data_set("focus-owner", ""),
-        ),
-      ]),
-    ])
+    match page.mode {
+      Text => {
+        let text_details : Array[@html.Html] = [
+          @html.label([
+            @html.span("files to include"),
+            @html.input(
+              input_type=@html.InputType::Text,
+              value=page.include_glob,
+              placeholder="e.g. src/**, tests/**",
+              on_input=emit.map(value => IncludeChanged(value)),
+              attrs=@html.Attrs::build()
+                .aria_label("files to include")
+                .data_set("focus-owner", ""),
+            ),
+          ]),
+          @html.label([
+            @html.span("files to exclude"),
+            @html.input(
+              input_type=@html.InputType::Text,
+              value=page.exclude_glob,
+              placeholder="e.g. **/*.snap, generated/**",
+              on_input=emit.map(value => ExcludeChanged(value)),
+              attrs=@html.Attrs::build()
+                .aria_label("files to exclude")
+                .data_set("focus-owner", ""),
+            ),
+          ]),
+        ]
+        @html.div(class="search-details", text_details)
+      }
+      Semantic =>
+        @html.div(class="search-details", [
+          @html.label([
+            @html.span("moongrep rules directory"),
+            @html.input(
+              input_type=@html.InputType::Text,
+              value=page.rules_dir,
+              placeholder="e.g. .moongrep/rules, rules/**",
+              on_input=emit.map(value => RulesDirChanged(value)),
+              attrs=@html.Attrs::build()
+                .aria_label("moongrep rules directory")
+                .data_set("focus-owner", ""),
+            ),
+          ]),
+        ])
+    }
   } else {
     @html.nothing
   }
@@ -409,27 +714,16 @@ fn page_view(
       @html.input(
         input_type=@html.InputType::Text,
         value=page.query,
-        placeholder="Search",
+        placeholder=if page.mode is Text {
+          "Search"
+        } else {
+          "Code pattern (e.g. inspect($(x:arg)))"
+        },
         on_input=emit.map(value => QueryChanged(value)),
         attrs=query_key_attrs(emit),
       ),
-      toggle_button(
-        "Aa",
-        "Match Case",
-        page.case_sensitive,
-        emit(ToggleCaseSensitive),
-      ),
-      whole_word_toggle_button(
-        "Match Whole Word",
-        page.whole_word,
-        emit(ToggleWholeWord),
-      ),
-      toggle_button(
-        ".*",
-        "Use Regular Expression",
-        page.regex,
-        emit(ToggleRegex),
-      ),
+      mode_control(page.mode, emit),
+      mode_options(page, emit),
       @html.button(
         class=if page.details_open {
           "search-option pressed search-details-toggle"

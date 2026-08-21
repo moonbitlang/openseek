@@ -22,7 +22,17 @@ enum Phase {
 } derive(Eq, Debug)
 
 ///|
+/// One of the two Search engines, modeled on semgrep's search modes: plain
+/// text search runs the Host's bundled ripgrep; semantic search runs
+/// moongrep's structural MoonBit code patterns.
+enum Mode {
+  Text
+  Semantic
+} derive(Eq, Debug)
+
+///|
 struct Page {
+  mode : Mode
   query : String
   regex : Bool
   case_sensitive : Bool
@@ -30,7 +40,12 @@ struct Page {
   details_open : Bool
   include_glob : String
   exclude_glob : String
+  // Semantic-mode settings. `rules_dir` points at a moongrep YAML rules
+  // directory; `use_builtin_rules` enables moongrep's embedded rules.
+  rules_dir : String
+  use_builtin_rules : Bool
   matches : Array[@protocol.TextSearchMatch]
+  semantic_hits : Array[@protocol.SemanticSearchHit]
   match_count : Int
   file_count : Int
   limit_hit : Bool
@@ -83,12 +98,16 @@ pub fn Input::Input(
 ///|
 pub(all) enum Msg {
   QueryChanged(String)
+  ModeChanged(Mode)
   ToggleCaseSensitive
   ToggleWholeWord
   ToggleRegex
   ToggleDetails
   IncludeChanged(String)
   ExcludeChanged(String)
+  // Semantic-mode settings, mirroring the text-mode toggles.
+  RulesDirChanged(String)
+  ToggleBuiltinRules
   Submit
   Refresh
   ClearResults
@@ -105,6 +124,12 @@ pub(all) enum Msg {
     root~ : String,
     generation~ : Int,
     reply~ : @protocol.SearchTextReply
+  )
+  SemanticLoaded(
+    owner~ : @interop.ConversationKey,
+    root~ : String,
+    generation~ : Int,
+    reply~ : @protocol.SearchSemanticReply
   )
   RequestFailed(
     owner~ : @interop.ConversationKey,
