@@ -5,10 +5,22 @@
 
 ///|
 /// The review task: inspect the change set between `base` and HEAD.
-fn review_task(base : String) -> String {
+fn review_task(base : String, scratch_dir : String?) -> String {
+  let lab = match scratch_dir {
+    Some(lab) =>
+      (
+        $|
+        $|Your scratch lab (writable): \{lab}
+        $|Create files and projects THERE and run any moon command there to
+        $|verify a claim empirically before reporting it. The checkout under
+        $|review stays read-only.
+        $|
+      )
+    None => ""
+  }
   (
     $|Review the code changes between \{base} and HEAD in the current repository.
-    $|
+    $|\{lab}
     $|Steps:
     $|1. Run `git diff \{base}...HEAD` and `git diff --name-only \{base}...HEAD` to see the change set.
     $|2. Read the changed files and enough surrounding context to judge correctness.

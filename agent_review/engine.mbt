@@ -12,15 +12,15 @@ let default_review_max_steps : Int = 120
 
 ///|
 /// Run a code review of the changes between `base` and HEAD and return the
-/// structured report. The toolset is `read`, `shell` (in read-only mode),
-/// `run_moonbit`, and `submit_review` — no edit/multi_edit/write — so the
-/// review reports rather than edits. Read-only is best-effort: the shell
-/// refuses obvious source-mutating moon commands and `run_moonbit` is
-/// sandboxed against source writes on macOS, but `moon check`/`moon test`
-/// may still trigger pre-build source generation and `run_moonbit` can write
-/// non-source files, so the checkout is not guaranteed byte-for-byte
-/// unchanged. Raises `ReviewError` if the model finishes without submitting a
-/// report.
+/// structured report. The toolset is `read`, `run_moonbit`, and
+/// `submit_review` — no edit/multi_edit/write — so the review reports rather
+/// than edits. Read-only is best-effort: passing `scratch_dir` puts
+/// `run_moonbit` under the "may not write source" profile on macOS, but
+/// `moon check`/`moon test` may still trigger pre-build source generation and
+/// a snippet can write non-source files, so the checkout is not guaranteed
+/// byte-for-byte unchanged. WITHOUT `scratch_dir` there is no kernel profile
+/// at all — the caller owes the lab. Raises `ReviewError` if the model
+/// finishes without submitting a report.
 ///
 /// Runs the review kind IN THIS PROCESS via `@agent_subrun.execute_kind`: the
 /// standalone CLI is already a dedicated process, and a future in-session
@@ -34,15 +34,16 @@ pub async fn run_review(
   max_steps? : Int = default_review_max_steps,
   thinking? : @deepseek.ThinkingMode = Max,
   api_url? : String,
+  scratch_dir? : String,
 ) -> ReviewReport {
   let report = @agent_subrun.execute_kind(
     session_id="review",
     system_prompt=review_system_prompt(),
-    task=review_task(base),
+    task=review_task(base, scratch_dir),
     tools=captured => {
       @agent_tool.Tools([
         @read.definition(workspace_root~),
-        @run_moonbit.definition(workspace_root~),
+        @run_moonbit.definition(workspace_root~, scratch_dir?),
         submit_review_tool(captured),
       ])
     },

@@ -52,11 +52,20 @@ async fn run_review_cli(
     @sys.exit(1)
     return
   }
+  // The same lab every subrun kind gets: without it `run_review` wires
+  // `run_moonbit` with no kernel profile at all, and the reviewer has nowhere
+  // it may legitimately write.
+  let scratch_dir = new_scratch_lab("openseek-review-lab-")
+  // `defer` covers the paths that unwind — a normal finish and a cancelled
+  // run. The `@sys.exit` arms below never unwind, so each removes the lab
+  // itself before exiting.
+  defer remove_scratch_lab(scratch_dir)
   let report = @agent_review.run_review(
     api_key,
     model,
     base,
     workspace_root~,
+    scratch_dir~,
     // Omission means context-bounded here too — uniform with run/serve/TUI.
     // (run_review's own 120 default remains the contract for direct API
     // callers only; before the flip the root flag default 1000 always won.)
@@ -66,6 +75,7 @@ async fn run_review_cli(
   ) catch {
     error => {
       @stdio.stderr.write("review failed: \{error}\n")
+      remove_scratch_lab(scratch_dir)
       // `@sys.exit` never returns at runtime but is typed `Unit`, so this arm
       // still needs a diverging expression to satisfy the report-branch type.
       @sys.exit(1)
@@ -74,6 +84,7 @@ async fn run_review_cli(
   }
   @stdio.stdout.write(report.to_json_string() + "\n")
   if report.findings.any(f => f.severity == "blocker") {
+    remove_scratch_lab(scratch_dir)
     @sys.exit(2)
   }
 }
