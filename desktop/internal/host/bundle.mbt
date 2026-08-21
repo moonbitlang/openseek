@@ -120,9 +120,16 @@ async fn ripgrep_command(executable : String?) -> String? {
 ///|
 /// Locate the semantic-search provider beside the installed Host. A packaged
 /// `moongrep` binary serves installed bundles, mirroring the ripgrep layout;
-/// development runs launch `moonx moonbit-community/moongrep -- …` from PATH.
-/// An installed bundle with neither asset fails closed instead of silently
-/// running a machine-global `moonx` of an unknown version.
+/// otherwise the provider resolves through `moonx` from PATH with a pinned
+/// mooncakes registry coordinate.
+///
+/// This is deliberately not fail-closed like ripgrep: moongrep ships no
+/// upstream release binaries, so a trial build has no asset to fail back on. A
+/// real bundle with a staged `moongrep` binary always wins; the `moonx` PATH
+/// fallback stays a documented interim provider until the package vendors a
+/// moongrep binary (or a bundled `moongrep.wasm` run through the packaged
+/// moonrun). The pinned coordinate keeps the version deterministic instead of
+/// silently running an arbitrary machine binary.
 async fn moongrep_command(executable : String?) -> String? {
   guard executable is Some(executable) else { return Some("moonx") }
   let command_dir = @pathx.Path(executable).dirname().resolve()
@@ -137,11 +144,7 @@ async fn moongrep_command(executable : String?) -> String? {
       return Some(path)
     }
   }
-  if @development.Layout::detect(executable) is Some(_) {
-    Some("moonx")
-  } else {
-    None
-  }
+  Some("moonx")
 }
 
 ///|

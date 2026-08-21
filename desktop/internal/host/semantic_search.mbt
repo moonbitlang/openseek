@@ -17,6 +17,14 @@ const MaxSemanticSearchStderrBytes : Int = 1000000
 const MaxSemanticSearchErrorMessageUnits : Int = 1000
 
 ///|
+/// The mooncakes coordinate pinned for the interim `moonx` provider. moongrep
+/// publishes no upstream release binaries, so a trial bundle resolves the
+/// provider through `moonx <coordinate> --`; pinning the version keeps the
+/// search deterministic instead of silently running whatever the local
+/// registry index knows as "latest".
+const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.1.18"
+
+///|
 priv struct ParsedSemanticContextLine {
   line : Int
   text : String
@@ -288,7 +296,7 @@ fn semantic_search_args(
   let args : Array[String] = if command == "moonx" ||
     command.has_suffix("/moonx") ||
     command.has_suffix("\\moonx") {
-    ["moonbit-community/moongrep", "--"]
+    [MoongrepPackageCoordinate, "--"]
   } else {
     []
   }
@@ -611,8 +619,8 @@ test "semantic search builds moonx and bundled moongrep invocations" {
     max_results: 20000,
   }
   assert_eq(semantic_search_args("moonx", pattern), [
-    "moonbit-community/moongrep", "--", "scan", "--pattern", "inspect($(x:arg))",
-    "--output-json",
+    "moonbit-community/moongrep@0.1.18", "--", "scan", "--pattern",
+    "inspect($(x:arg))", "--output-json",
   ])
   let rules : SearchSemanticPayload = {
     ..pattern,
