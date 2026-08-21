@@ -199,6 +199,11 @@ async fn run_agent_task(
   @async.with_task_group(group => {
     let (reader, child_stdout) = @process.read_from_process()
     let (stderr_reader, child_stderr) = @process.read_from_process()
+    // Provide a closed stdin pipe so the Windows spawn does not fall back to
+    // GetStdHandle, which returns NULL (not INVALID_HANDLE_VALUE) when the
+    // process has no console.
+    let (child_stdin, stdin_writer) = @process.write_to_process()
+    stdin_writer.close()
     let child_env = engine_env(config, @env.get_env_vars())
     let proc = @process.spawn(
       group,
@@ -214,6 +219,7 @@ async fn run_agent_task(
       config.engine_args(["run", "--", task]),
       inherit_env=false,
       extra_env=child_env,
+      stdin=child_stdin,
       stdout=child_stdout,
       stderr=child_stderr,
     )

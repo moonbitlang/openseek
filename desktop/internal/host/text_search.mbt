@@ -1025,12 +1025,19 @@ async fn run_text_search(
   let max_results = payload.max_results.max(0).min(MaxTextSearchResults)
   let (stdout_reader, child_stdout) = @process.read_from_process()
   let (stderr_reader, child_stderr) = @process.read_from_process()
+  // Provide a closed stdin pipe so the Windows spawn does not fall back to
+  // GetStdHandle, which returns NULL (not INVALID_HANDLE_VALUE) when the
+  // process has no console — causing SetHandleInformation(NULL, …) to fail
+  // with "The handle is invalid".
+  let (stdin_reader, stdin_writer) = @process.write_to_process()
+  stdin_writer.close()
   @async.with_task_group(group => {
     let process = @process.spawn(
       group,
       command,
       text_search_args(payload),
       inherit_env=true,
+      stdin=stdin_reader,
       stdout=child_stdout,
       stderr=child_stderr,
       cwd=native_root,
