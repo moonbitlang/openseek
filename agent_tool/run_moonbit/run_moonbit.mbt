@@ -9,8 +9,11 @@ const RunTimeoutMs : Int = 300_000
 ///|
 /// Output is streamed to a file on disk, not buffered in memory, so a snippet
 /// that floods stdout (e.g. `while true { println(…) }`) cannot exhaust the
-/// agent's memory before the timeout fires. Only this many bytes are read back
-/// — the rest is dropped with a truncation marker.
+/// agent's memory before the timeout fires. A FOREGROUND run is STOPPED once it
+/// passes this, rather than truncated — the runtime spawns it with
+/// `kill_when_full`, so a clipped head means a killed program and the exit code
+/// is not the program's own. Detaching clears that, so a background job is
+/// bounded by the hard cap instead and runs to its own end.
 const OutputCapBytes : Int = 48_000
 
 ///|
@@ -228,6 +231,12 @@ async fn execute(
   // output log): either an explicit `run_in_background`, or a foreground run
   // detached at its deadline. `cleanup` runs on every exit path, so the flag —
   // not the request — decides whether reclaiming the directory is still ours.
+  //
+  // Handing it over is sound because a job only ever runs with a `job_dir`
+  // wired, and that directory is reclaimed with the session's scope. The
+  // `@fs.tmpdir` branch above has no such owner, but it is only taken when the
+  // caller wired no job dir — which happens only if the session's own tmpdir
+  // call failed, in which case the one above fails too and returns first.
   let job_owns_dir = Ref(false)
   async fn cleanup() -> Unit {
     if job_owns_dir.val {
@@ -445,18 +454,24 @@ async fn execute(
     )
     // A cancelled turn must not leak the child: stop it before unwinding.
     errdefer exec.request_stop()
+    // Binary output ends `wait_or_invalid` early with the child STILL RUNNING,
+    // so reporting there would leave the process going while `defer cleanup()`
+    // removes its build directory underneath it — and the exit code below would
+    // be invented. Wait out the real exit.
+    //
+    // Both waits share ONE deadline. Giving the second its own budget would put
+    // it outside the bound the model was told about and double the worst case:
+    // a program that emits one invalid byte and then keeps running (a watcher, a
+    // test printing raw bytes) would hold the turn for its whole lifetime.
+    // Expiry is not special here either — it detaches like any other long run.
     let finished = @async.with_timeout_opt(run_timeout_ms, () => {
       exec.wait_or_invalid()
+      if exec.had_invalid_utf8() {
+        exec.wait()
+      }
     })
-    // Binary output ends the await early with the child STILL RUNNING, so
-    // reporting now would leave the process going while `defer cleanup()`
-    // removes its build directory underneath it — and the exit code below
-    // would be invented. Wait out the real exit first.
     let saw_binary = exec.had_invalid_utf8()
-    if saw_binary {
-      exec.wait()
-    }
-    if finished is None && !saw_binary {
+    if finished is None {
       let _ = exec.background()
       let id = runtime.adopt(
         exec,
@@ -862,7 +877,9 @@ fn description(background~ : Bool) -> String {
     #|- Keep `async fn main`: a plain `fn main` may not call anything that raises,
     #|  which nearly every `@fs`/`@myshell` call does.
     #|- ALWAYS `println` each command's stdout, stderr and exit code — what you do not
-    #|  print is invisible to you. Past a few hundred KB use `stdout=ToFile(path)`.
+    #|  print is invisible to you. But a run that prints more than ~48KB is STOPPED
+    #|  mid-print, so for output that large pass `stdout=ToFile(path)` and read the
+    #|  file back, or filter before printing.
     #|- `Cmd(program, args)` passes the argument VECTOR literally: no shell parsing, no
     #|  quoting, and `|`, `>`, `&&`, `$()`, `*` mean nothing. Other labels: `cwd`,
     #|  `env`, `stdin=Text(...)`. Run several commands as sequential statements in ONE

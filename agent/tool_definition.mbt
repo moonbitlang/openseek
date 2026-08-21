@@ -321,6 +321,44 @@ async test "binary output waits for the real exit instead of abandoning it" {
 }
 
 ///|
+/// ...and that wait is bounded. It used to run with no deadline of its own, so a
+/// program that emitted one invalid byte and then kept going — a watcher, a test
+/// printing raw bytes — held the turn for its whole lifetime, with the detach
+/// below skipped for exactly this case. Both waits share the bound now, and
+/// expiry detaches like any other long run.
+async test "binary output does not escape the deadline" {
+  @async.with_task_group(group => {
+    let scope = @agent_runtime.AgentTaskScope(group)
+    let spill_dir = @fs.tmpdir(prefix="openseek-jobs-binary-")
+    let bg_runtime = @bgjobs.BgJobRuntime::new(scope, spill_dir~)
+    let run_moonbit = @run_moonbit.definition(
+      workspace_root=".",
+      bg_runtime~,
+      job_dir=spill_dir,
+      run_timeout_ms=1500,
+    )
+    let source =
+      #|import { "moonbitlang/async", "moonbitlang/async/stdio" }
+      #|
+      #|async fn main {
+      #|  @stdio.stdout.write(b"\xff\xfe")
+      #|  @async.sleep(60_000)
+      #|}
+    let action = match run_moonbit.execute {
+      Async(execute) => execute({ "source": source })
+      Sync(_) => fail("run_moonbit should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_true(output.content.contains("moved to the background as job"))
+    guard bg_runtime.list() is [job, ..] else { fail("no job was registered") }
+    let _ = bg_runtime.stop(job.id)
+    @fs.rmdir(spill_dir, recursive=true) catch {
+      _ => ()
+    }
+  })
+}
+
+///|
 /// Background jobs survived the move off the shell tool: a detached
 /// `run_moonbit` snippet still queues a completion notice and wakes an idle
 /// controller when it exits.
