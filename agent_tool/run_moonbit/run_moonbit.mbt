@@ -83,9 +83,10 @@ fn native_escape(source : String) -> String? {
 /// files behind the model's back — is covered by the allowlist admitting no
 /// such program. A read-only subrun is the exception, and the one role that
 /// still takes a `sandbox-exec` profile: holding no editing tool is what defines
-/// it, so "may not write source" is enforced in the kernel where it can be.
+/// it, so `read_only=true` puts "may not write source" in the kernel.
 pub fn definition(
   workspace_root~ : String,
+  read_only? : Bool = false,
   bg_runtime? : @bgjobs.BgJobRuntime,
   job_dir? : String,
   scratch_dir? : String,
@@ -105,6 +106,7 @@ pub fn definition(
       execute(
         workspace_root,
         arguments,
+        read_only~,
         bg_runtime?,
         job_dir?,
         scratch_dir?,
@@ -120,6 +122,7 @@ pub fn definition(
 async fn execute(
   workspace_root : String,
   arguments : Json,
+  read_only~ : Bool,
   bg_runtime? : @bgjobs.BgJobRuntime,
   job_dir? : String,
   scratch_dir? : String,
@@ -327,13 +330,16 @@ async fn execute(
         worker_root=scope.worker_root,
         worker_admin_dir=scope.worker_admin_dir,
       )
-    // A lab means a read-only subrun (explore/review/audit): those hold no
-    // editing tool, so "may not write source" is the guarantee that defines
-    // them and it stays kernel-enforced. The profile suits them for a second
-    // reason — it is `(allow default)` minus source, so `moon check` can still
-    // write its target dir inside the workspace, which a boundary profile
-    // denying the workspace would take away.
-    None if scratch_dir is Some(_) =>
+    // The read-only roles (explore/review/audit) hold no editing tool, so "may
+    // not write source" is the guarantee that defines them and it stays
+    // kernel-enforced. The profile suits them for a second reason — it is
+    // `(allow default)` minus source, so `moon check` can still write its
+    // target dir inside the workspace, which a boundary profile denying the
+    // workspace would take away.
+    //
+    // Read-only is its own parameter rather than being read off `scratch_dir`:
+    // a caller that forgets the lab should lose the lab, not the sandbox.
+    None if read_only =>
       @sandbox.SandboxedCommand::create_if_available(
         workspace_root,
         Exec("moon", moon_argv),
@@ -814,28 +820,104 @@ fn schema(background~ : Bool) -> Json {
 ///|
 /// The `run_moonbit` tool description.
 ///
-/// Deliberately a stub: the envelope, `Cmd` semantics, spawn allowlist and
-/// isolation rules live in each role's system prompt now, because a correction
-/// made here did not move behavior while the prompt said otherwise. Anything
-/// added back competes with the prompt rather than completing it.
+/// Holds the whole command surface: every role that registers this tool gets it
+/// and nothing else does. The five system prompts carried this text for one
+/// revision and had already drifted apart within a single commit, while the
+/// prompt-versus-tool A/B that motivated the move showed no effect either way.
+/// What stays in a prompt is what varies by role — which file tools exist, and
+/// whether the role may commit.
 ///
-/// `background` is the exception that cannot move: without a job runtime the
-/// tool must not advertise `run_in_background`, and a static prompt cannot know
-/// whether one is wired.
+/// The spawn list is prose about `spawnable_commands`, kept by hand so the
+/// groupings survive; adding an entry there means editing this text too.
+///
+/// `background` is conditional because without a job runtime the tool must not
+/// advertise `run_in_background`: the model would only get an error.
 fn description(background~ : Bool) -> String {
   let base =
-    #|Compile and run a self-contained MoonBit program (a `.mbtx` single-file script) and
-    #|return its merged stdout/stderr and exit status. This is BOTH your command runner
-    #|and your scripting surface: there is no shell tool, so commands are spawned from
-    #|MoonBit with the `bobzhang/myshell` EDSL.
+    #|Compile and run a self-contained MoonBit program and return its merged
+    #|stdout/stderr and exit status. This is BOTH your command runner and your
+    #|scripting surface: there is no shell tool, so commands are spawned from MoonBit
+    #|with the `bobzhang/myshell` EDSL.
     #|
-    #|`source` is the whole program: an optional inline `import { "pkg", ... }` block,
-    #|then `async fn main`. Diagnostics are rewritten to `source:LINE:COL` about your
-    #|input, and `target` defaults to wasm, the sandboxed backend.
+    #|`source` is the whole program. Diagnostics are rewritten to `source:LINE:COL`
+    #|about your input; `target` defaults to wasm, the sandboxed backend.
     #|
-    #|Your system prompt's "Running Commands" section is the full contract — the
-    #|envelope, the `Cmd` labels, which programs may start and the MoonBit replacement
-    #|for each utility that is absent, and the isolation rules. Follow it.
+    #|```
+    #|import { "bobzhang/myshell", "moonbitlang/async", "moonbitlang/async/fs" }
+    #|
+    #|async fn main {
+    #|  let out = @myshell.Cmd("moon", ["check", "--diagnostic-limit", "5"]).output()
+    #|  println(out.stdout)
+    #|  println(out.stderr)
+    #|  println("exit=\{out.exit_code}")
+    #|  for name in @fs.readdir(".") {
+    #|    println(name)
+    #|  }
+    #|}
+    #|```
+    #|
+    #|- Every `@pkg` is imported SEPARATELY, as `@fs` is above: `"moonbitlang/async"`
+    #|  alone does not bring in `fs` or `stdio`, and the failure reads
+    #|  `Package "fs" not found`.
+    #|- Keep `async fn main`: a plain `fn main` may not call anything that raises,
+    #|  which nearly every `@fs`/`@myshell` call does.
+    #|- ALWAYS `println` each command's stdout, stderr and exit code — what you do not
+    #|  print is invisible to you. Past a few hundred KB use `stdout=ToFile(path)`.
+    #|- `Cmd(program, args)` passes the argument VECTOR literally: no shell parsing, no
+    #|  quoting, and `|`, `>`, `&&`, `$()`, `*` mean nothing. Other labels: `cwd`,
+    #|  `env`, `stdin=Text(...)`. Run several commands as sequential statements in ONE
+    #|  snippet and branch on `out.exit_code`; there is no `Pipeline`, so filter
+    #|  captured output in MoonBit.
+    #|
+    #|## Which programs a snippet may start
+    #|
+    #|These, and nothing else:
+    #|
+    #|- `moon` — check, test, build, run, fmt, info, add, remove, update, install,
+    #|  tree, clean, new, ide, doc, explain, coverage, cram, version. (Not `publish`,
+    #|  `login` or `register`.)
+    #|- `git` — status, log, diff, show, blame, describe, rev-parse, rev-list,
+    #|  show-ref, for-each-ref, cat-file, check-ignore, merge-base, range-diff,
+    #|  ls-files, ls-tree, ls-remote, shortlog, grep, config, branch, tag, remote,
+    #|  reflog, add, commit, checkout, switch, restore, reset, revert, rm, init,
+    #|  fetch, push, rebase; plus `submodule update|status`, `worktree list|add`,
+    #|  `stash list|show`. A global option BEFORE the subcommand (`-c`, `-C`,
+    #|  `--git-dir`, `--work-tree`) is refused.
+    #|- `gh` — pr, issue, run, `repo view`, api, `auth status`.
+    #|- `rg` and `diff`.
+    #|
+    #|Anything else is REFUSED, including the obvious ones; if a refused command is
+    #|genuinely what the task needs, say so rather than working around it. Reach for
+    #|the replacement rather than finding this out one command at a time — each is a
+    #|line of MoonBit that also works on Windows, where these binaries do not exist:
+    #|
+    #|    ls          → @fs.readdir(dir)
+    #|    find        → rg --files, or recurse @fs.readdir + @fs.kind
+    #|    cat         → @fs.read_file(p).text()
+    #|    head/tail   → slice the split text; wc -l → count it
+    #|    grep        → rg, or .split("\n").filter(...) on captured output
+    #|    sort/uniq   → .sort(), a Set, or a Map
+    #|    pwd         → @env.current_dir(); printenv → @env.get_env_var(name)
+    #|    mkdir -p    → @fs.mkdir(d, recursive=true)
+    #|    test -f     → @fs.exists(p); test -d → @fs.kind(p) is Directory
+    #|    echo/printf → println
+    #|    rm/mv/cp    → the `remove` tool for files you made; @fs otherwise
+    #|    sh -c, xargs, make → write the logic as MoonBit statements
+    #|
+    #|## Isolation and limits
+    #|
+    #|- A snippet runs with the workspace as its working directory, so RELATIVE paths
+    #|  reach workspace files; pass `cwd` to run elsewhere. Its own build artifacts
+    #|  stay in a temp dir — your `_build` is untouched.
+    #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits.
+    #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
+    #|  `moon test` through a `@myshell.Cmd`.
+    #|- Its file access is bounded by policy, and its compiler warnings are suppressed
+    #|  (pass `warning: "on"` to see them). A refusal is that policy firing, not a
+    #|  filesystem fault to debug or route around.
+    #|- Bounded to 300s. For independent commands or probes, emit SEVERAL
+    #|  `run_moonbit` calls in the SAME assistant turn — they run and come back
+    #|  together, saving a model round-trip each.
   if !background {
     return base
   }

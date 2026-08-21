@@ -321,6 +321,43 @@ async test "the spawn allowlist discriminates between subcommands" {
 }
 
 ///|
+/// The profile follows `read_only`, not the presence of a lab. A caller that
+/// forgets `scratch_dir` should lose the lab and keep the sandbox — the review
+/// CLI shipped one revision without the lab and silently ran unconfined, which
+/// is the shape this pins against.
+async test "read_only denies source writes with no scratch lab wired" {
+  guard sandbox_enforcement_available() else { return }
+  @vfs.with_tmpdir(prefix="run-moonbit-ro-", ws => {
+    @fs.write_file(
+      "\{ws}/keep.mbt",
+      "fn main {  }\n",
+      create_mode=CreateOrTruncate,
+    )
+    let definition = @run_moonbit.definition(workspace_root=ws, read_only=true)
+    let action = match definition.execute {
+      Async(execute) =>
+        execute({
+          "source": (
+            #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+            #|
+            #|async fn main {
+            #|  let wrote = try {
+            #|    @fs.write_file("keep.mbt", "// CORRUPTED\n", create_mode=CreateOrTruncate)
+            #|    true
+            #|  } catch { _ => false }
+            #|  @stdio.stdout.write("workspace=\{wrote}\n")
+            #|}
+          ),
+        })
+      Sync(_) => fail("run_moonbit should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_true(output.content.contains("workspace=false"))
+    assert_true(@fs.read_file("\{ws}/keep.mbt").text().contains("fn main {  }"))
+  })
+}
+
+///|
 /// A read-only subagent gets a scratch lab: the one place it MAY fabricate and
 /// rewrite source to verify a claim empirically. The lab must be writable while
 /// the workspace's own sources stay denied — otherwise the lab either does not
@@ -336,6 +373,7 @@ async test "a scratch lab is writable while workspace source stays denied" {
       )
       let definition = @run_moonbit.definition(
         workspace_root=ws,
+        read_only=true,
         scratch_dir=lab,
       )
       // The lab path is substituted rather than interpolated: the snippet has
@@ -465,13 +503,10 @@ test "the schema advertises every decoded argument" {
   assert_eq(required, (["source"] : Json))
 }
 
-// The EDSL guidance the description used to carry — the `Cmd` envelope, the
-// warning off `@myshell.Pipeline`, batching probes into one turn — now lives in
-// each role's system prompt. It is not re-pinned by phrase here or in five
-// prompt packages: an assertion that a text contains its own words breaks on
-// every rewrite and catches no real gap. What IS derived from data, and so can
-// fail for a reason, is `unnamed_spawnable_commands`, checked against each
-// prompt in that prompt's own package.
+// The EDSL guidance the description carries — how a snippet is shaped, the
+// warning off `@myshell.Pipeline`, batching probes into one turn — is not
+// re-pinned by phrase here: an assertion that a text contains its own words
+// breaks on every rewrite and catches no real gap.
 
 ///|
 async test "an uncaught sandbox denial is explained, not left as a bare EPERM" {
