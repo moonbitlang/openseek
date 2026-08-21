@@ -17,9 +17,9 @@
 /// A prefix matches whole argument tokens from the front, so `moon` with
 /// `["test"]` allows `moon test --filter x` but not `moon build`.
 ///
-/// Which prose teaches this list is a separate decision — today it is each
-/// role's system prompt. Admitting a command here without adding it there costs
-/// a turn steps, since the model never learns it may use it.
+/// Each role's system prompt carries this list in prose. Admitting a command
+/// here without adding it there costs a turn steps: the model never learns it
+/// may use it.
 let spawnable_commands : Array[(String, Array[String])] = [
   // The MoonBit toolchain, which is most of what a turn runs. Listed per
   // subcommand rather than as a bare `moon` so the set is reviewable, and so
@@ -69,11 +69,11 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // and matches no rule here — which recovers, for free, the guard the shell
   // tool spent a parser on (`global_option_reconfigures`).
   //
-  // What a prefix CANNOT do is gate flags: allowing `rebase` would allow
-  // `rebase --exec CMD`, since the flag follows the subcommand. So a subcommand
-  // carrying an "execute an arbitrary command" flag is all-or-nothing, and the
-  // ones below are resolved by leaving the subcommand out and admitting only
-  // the fixed control forms that have no such flag.
+  // What a prefix CANNOT do is gate flags: admitting `rebase` admits
+  // `rebase --exec CMD`, since the flag follows the subcommand. Such a
+  // subcommand is all-or-nothing, and the ones below are decided on whether the
+  // long tail is worth losing the verb — not on whether the flag exists, since
+  // `moon run` already runs arbitrary programs from this same list.
   ("git", ["--version"]),
   ("git", ["--help"]),
   ("git", ["status"]),
@@ -105,12 +105,10 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("git", ["init"]),
   ("git", ["fetch"]),
   ("git", ["push"]),
-  // `rebase` itself is withheld because `--exec` rides along with it; the
-  // control forms that finish or abandon an in-progress rebase carry no such
-  // flag and are what a turn actually needs.
-  ("git", ["rebase", "--continue"]),
-  ("git", ["rebase", "--abort"]),
-  ("git", ["rebase", "--skip"]),
+  // Once limited to --continue/--abort/--skip, to keep `--exec` out. That
+  // guards nothing next to `moon run`, already here and running arbitrary
+  // programs, and it refused a plain `git rebase origin/main` in a live turn.
+  ("git", ["rebase"]),
   // Same shape: `submodule foreach` runs an arbitrary command, `worktree
   // move`/`remove --force` relocate or destroy files, and the stash stack is
   // SHARED by every worktree of a repository — a `pop` here can take an entry

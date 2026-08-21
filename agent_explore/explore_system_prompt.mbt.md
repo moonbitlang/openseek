@@ -95,7 +95,7 @@ These, and nothing else:
 - `git` — status, log, diff, show, blame, describe, rev-parse, merge-base,
   range-diff, ls-files, ls-remote, shortlog, grep, config, branch, tag, remote,
   reflog, add, commit, checkout, switch, restore, reset, revert, rm, init,
-  fetch, push, `--version`, `--help`; plus `rebase --continue|--abort|--skip`,
+  fetch, push, rebase, `--version`, `--help`; plus
   `submodule update|status`, `worktree list|add`, `stash list|show`.
 - `gh` — pr, issue, run, `repo view`, api, `auth status`.
 - `rg` and `diff`.
