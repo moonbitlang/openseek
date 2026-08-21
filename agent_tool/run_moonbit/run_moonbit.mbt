@@ -812,9 +812,21 @@ fn schema(background~ : Bool) -> Json {
 }
 
 ///|
-/// The `run_moonbit` tool description. `background` adds the background-jobs
-/// paragraph, which a definition without a job runtime must not advertise —
-/// the model would only get an error from a call it cannot execute.
+/// The `run_moonbit` tool description.
+///
+/// Deliberately a stub. The envelope, the `Cmd` semantics, the spawn allowlist
+/// with its MoonBit replacements, and the isolation rules all live in the
+/// system prompts instead — every role that registers this tool carries them in
+/// its own prompt. The tool text used to hold them and the prompt kept a
+/// pointer; that arrangement was measured and reversed, because a correction
+/// made in the description did not move the behavior while the prompt said
+/// otherwise. Keep this short: whatever is written here now competes with the
+/// prompt rather than completing it.
+///
+/// `background` adds the background-jobs paragraph, which is the one thing that
+/// CANNOT move to a prompt: a definition without a job runtime must not
+/// advertise `run_in_background`, and a static prompt cannot know whether one is
+/// wired.
 fn description(background~ : Bool) -> String {
   let base =
     #|Compile and run a self-contained MoonBit program (a `.mbtx` single-file script) and
@@ -822,94 +834,13 @@ fn description(background~ : Bool) -> String {
     #|and your scripting surface: there is no shell tool, so commands are spawned from
     #|MoonBit with the `bobzhang/myshell` EDSL.
     #|
-    #|## The shape of `source`
+    #|`source` is the whole program: an optional inline `import { "pkg", ... }` block,
+    #|then `async fn main`. Diagnostics are rewritten to `source:LINE:COL` about your
+    #|input, and `target` defaults to wasm, the sandboxed backend.
     #|
-    #|    import { "bobzhang/myshell", "moonbitlang/async" }
-    #|
-    #|    async fn main {
-    #|      let out = @myshell.Cmd("moon", ["check", "--diagnostic-limit", "5"]).output()
-    #|      println(out.stdout)
-    #|      println(out.stderr)
-    #|      println("exit=\{out.exit_code}")
-    #|    }
-    #|
-    #|- DEFAULT to exactly that envelope: an inline `import { "pkg", ... }` block, then
-    #|  `async fn main`. A plain `fn main` may not call anything that raises, which nearly
-    #|  every `@fs`/`@myshell`/`@stdio` call does — the failure reads `Function with error
-    #|  is not allowed in `fn main``. Use `fn main raise` for errors without async, and a
-    #|  plain `fn main` only for pure computation.
-    #|- Every `@pkg` needs its OWN entry in the import block: `@fs` is
-    #|  `"moonbitlang/async/fs"`, `@stdio` is `"moonbitlang/async/stdio"`. Importing the
-    #|  parent `"moonbitlang/async"` does not bring them in; the failure reads
-    #|  `Package "fs" not found`.
-    #|
-    #|## Running commands
-    #|
-    #|- `Cmd(program, args)` takes the argument VECTOR literally — no shell parsing, no
-    #|  quoting, and `|`, `>`, `&&`, `$()`, `*` have no meaning.
-    #|- Optional labels: `cwd="dir"`, `env={..}`, `stdin=Text("...")` (also
-    #|  `Binary(bytes)`/`FromFile(path)`), `stdout=ToFile(path)`.
-    #|- Several commands are ordinary sequential statements; branch on `out.exit_code` /
-    #|  `out.success()`.
-    #|- Do NOT use `@myshell.Pipeline` — capture `out.stdout` and filter/transform it in
-    #|  MoonBit, which is what replaces grep/sed/awk.
-    #|- ALWAYS println each command's exit code, stdout and stderr, or its result is
-    #|  invisible to you. Past a few hundred KB, redirect with `stdout=ToFile(...)` and
-    #|  read the file back.
-    #|
-    #|## Which programs may start
-    #|
-    #|These, and nothing else:
-    #|
-    #|- `moon` — check, test, build, run, fmt, info, add, remove, update, install, tree,
-    #|  clean, new, ide, doc, explain, coverage, cram, version, --version, --help.
-    #|  (Not `publish`, `login` or `register`: releasing a package is not something a
-    #|  turn does on its way past.)
-    #|- `git` — status, log, diff, show, blame, describe, rev-parse, merge-base,
-    #|  range-diff, ls-files, ls-remote, shortlog, grep, config, branch, tag, remote,
-    #|  reflog, add, commit, checkout, switch, restore, reset, revert, rm, init, fetch,
-    #|  push, --version, --help; plus `rebase --continue|--abort|--skip`,
-    #|  `submodule update|status`, `worktree list|add`, `stash list|show`.
-    #|- `gh` — pr, issue, run, `repo view`, api, `auth status`.
-    #|- `rg` and `diff`.
-    #|
-    #|Anything else is REFUSED, including the obvious ones. Reach for the replacement
-    #|directly rather than discovering this one command at a time — each is a line of
-    #|MoonBit that also works on Windows, where these binaries do not exist:
-    #|
-    #|    ls          → @fs.readdir(dir)
-    #|    find        → rg --files, or recurse @fs.readdir + @fs.kind
-    #|    cat         → @fs.read_file(p).text()
-    #|    head/tail   → slice the split text; wc -l → count it
-    #|    grep        → rg, or .split("\n").filter(...) on captured output
-    #|    sort/uniq   → .sort(), a Set, or a Map
-    #|    pwd         → @env.current_dir()
-    #|    which       → @env.get_env_var("PATH") + @fs.exists
-    #|    printenv    → @env.get_env_var(name); env → @env.get_env_vars()
-    #|    mkdir -p    → @fs.mkdir(d, recursive=true)
-    #|    test -f     → @fs.exists(p); test -d → @fs.kind(p) is Directory
-    #|    echo/printf → println
-    #|    rm/mv/cp    → the `remove` tool for files you made; @fs otherwise
-    #|    sh -c, xargs, make → write the logic as MoonBit statements
-    #|
-    #|A git subcommand not listed above (`am`, `apply`, `clean`, `bisect`, `merge`,
-    #|`pull`, `cherry-pick`, `mv`, `clone`, plumbing) is refused too, as is
-    #|`git -c`/`-C`/`--git-dir`/`--work-tree` before any subcommand. If one of those is
-    #|genuinely what the task needs, say so rather than working around it.
-    #|
-    #|## Isolation and limits
-    #|
-    #|- It runs with your workspace as the working directory, so RELATIVE paths reach
-    #|  workspace files; pass `cwd` to run elsewhere.
-    #|- The SNIPPET's own build artifacts stay in a temp dir — your `_build` is untouched.
-    #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits. To
-    #|  exercise working-tree code, add a `*_test.mbt` to that package and run
-    #|  `moon test` through a `@myshell.Cmd`.
-    #|- Compiler warnings for the snippet are suppressed; pass `warning: "on"` when the
-    #|  warnings are what you want to see.
-    #|- Bounded to 300s. For independent commands or probes, emit SEVERAL run_moonbit
-    #|  calls in the SAME assistant turn — they run and come back together, saving a
-    #|  model round-trip each.
+    #|Your system prompt's "Running Commands" section is the full contract — the
+    #|envelope, the `Cmd` labels, which programs may start and the MoonBit replacement
+    #|for each utility that is absent, and the isolation rules. Follow it.
   if !background {
     return base
   }

@@ -47,33 +47,90 @@ fn default_prompt() -> String {
     #|}
     #|```
     #|
+    #|- DEFAULT to exactly that envelope: an inline `import { "pkg", ... }` block, then
+    #|  `async fn main`. A plain `fn main` may not call anything that raises, which
+    #|  nearly every `@fs`/`@myshell`/`@stdio` call does — the failure reads "Function
+    #|  with error is not allowed in fn main". Use `fn main raise` for errors without
+    #|  async, and a plain `fn main` only for pure computation.
+    #|- Every `@pkg` needs its OWN entry in the import block: `@fs` is
+    #|  `"moonbitlang/async/fs"`, `@stdio` is `"moonbitlang/async/stdio"`. Importing
+    #|  the parent `"moonbitlang/async"` does NOT bring them in; the failure reads
+    #|  `Package "fs" not found`.
     #|- `Cmd(program, args)` passes the argument VECTOR literally: no shell parsing,
     #|  no quoting, and `|`, `>`, `&&`, `$()`, `*` have no special meaning.
     #|- ALWAYS `println` each command's stdout, stderr, and exit code — output you do
-    #|  not print is invisible to you.
+    #|  not print is invisible to you. Past a few hundred KB, redirect with
+    #|  `stdout=ToFile(path)` and read the file back with a bounded `read`.
     #|- Optional labels on `Cmd`: `cwd="dir"`, `env={"K": "V"}`, `stdin=Text("...")`
     #|  (also `Binary(bytes)` / `FromFile(path)`), and `stdout=ToFile(path)` /
-    #|  `AppendToFile(path)` for large output (read the file back with bounded
-    #|  `read`).
+    #|  `AppendToFile(path)`.
     #|- Run several commands as ordinary sequential MoonBit statements in ONE
     #|  snippet, and branch on `out.exit_code` / `out.success()`.
     #|- Do NOT use `@myshell.Pipeline`. Capture `out.stdout` and filter or transform
     #|  it in MoonBit instead — MoonBit code is what replaces `grep`/`sed`/`awk`.
-    #|- There is no globbing: list directories with `@fs` (import
+    #|- There is no globbing: list directories with `@fs.readdir` (import
     #|  `"moonbitlang/async/fs"`) and filter in MoonBit.
-    #|- A snippet's own file access is confined to your workspace and the toolchain's
-    #|  own directories. A refusal is that policy firing, not a filesystem fault to
-    #|  debug, and not something to route around.
     #|- Make your own source edits with `edit`/`multi_edit`/`write`, which are
     #|  line-anchored and reviewable — not by having a snippet rewrite files. The
     #|  tools that rewrite source as their job (`moon fmt`, `moon info`,
     #|  `moon test --update`, `git checkout`) do run normally.
-    #|- Only a fixed set of programs may start — `moon`, listed `git` and `gh`
-    #|  subcommands, `rg` and `diff` — and `run_moonbit`'s own description lists them
-    #|  along with the MoonBit replacement for each utility that is absent (`ls`,
-    #|  `find`, `cat`, `which`, `pwd`, `printenv`, `sh -c`, …). Read that list once
-    #|  rather than discovering it a refusal at a time; the replacements are one line
-    #|  each and work on Windows, where those binaries do not exist.
+    #|
+    #|### Which programs a snippet may start
+    #|
+    #|These, and nothing else:
+    #|
+    #|- `moon` — check, test, build, run, fmt, info, add, remove, update, install,
+    #|  tree, clean, new, ide, doc, explain, coverage, cram, version, `--version`,
+    #|  `--help`. (Not `publish`, `login` or `register`: releasing a package is not
+    #|  something a turn does on its way past.)
+    #|- `git` — status, log, diff, show, blame, describe, rev-parse, merge-base,
+    #|  range-diff, ls-files, ls-remote, shortlog, grep, config, branch, tag, remote,
+    #|  reflog, add, commit, checkout, switch, restore, reset, revert, rm, init,
+    #|  fetch, push, `--version`, `--help`; plus `rebase --continue|--abort|--skip`,
+    #|  `submodule update|status`, `worktree list|add`, `stash list|show`.
+    #|- `gh` — pr, issue, run, `repo view`, api, `auth status`.
+    #|- `rg` and `diff`.
+    #|
+    #|Anything else is REFUSED, including the obvious ones. Reach for the replacement
+    #|directly rather than discovering this one command at a time — each is a line of
+    #|MoonBit that also works on Windows, where these binaries do not exist:
+    #|
+    #|    ls          → @fs.readdir(dir)
+    #|    find        → rg --files, or recurse @fs.readdir + @fs.kind
+    #|    cat         → @fs.read_file(p).text()
+    #|    head/tail   → slice the split text; wc -l → count it
+    #|    grep        → rg, or .split("\n").filter(...) on captured output
+    #|    sort/uniq   → .sort(), a Set, or a Map
+    #|    pwd         → @env.current_dir()
+    #|    which       → @env.get_env_var("PATH") + @fs.exists
+    #|    printenv    → @env.get_env_var(name); env → @env.get_env_vars()
+    #|    mkdir -p    → @fs.mkdir(d, recursive=true)
+    #|    test -f     → @fs.exists(p); test -d → @fs.kind(p) is Directory
+    #|    echo/printf → println
+    #|    rm/mv/cp    → the `remove` tool for files you made; @fs otherwise
+    #|    sh -c, xargs, make → write the logic as MoonBit statements
+    #|
+    #|A git subcommand not listed above (`am`, `apply`, `clean`, `bisect`, `merge`,
+    #|`pull`, `cherry-pick`, `mv`, `clone`, plumbing) is refused too, as is
+    #|`git -c`/`-C`/`--git-dir`/`--work-tree` before any subcommand. If one of those
+    #|is genuinely what the task needs, say so rather than working around it.
+    #|
+    #|### Isolation and limits
+    #|
+    #|- A snippet runs with your workspace as the working directory, so RELATIVE paths
+    #|  reach workspace files; pass `cwd` to run elsewhere.
+    #|- The SNIPPET's own build artifacts stay in a temp dir — your `_build` is
+    #|  untouched.
+    #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits.
+    #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
+    #|  `moon test` through a `@myshell.Cmd`.
+    #|- Compiler warnings for the snippet are suppressed; pass `warning: "on"` when
+    #|  the warnings are what you want to see.
+    #|- A snippet's own file access is bounded by policy. A refusal is that policy
+    #|  firing, not a filesystem fault to debug, and not something to route around.
+    #|- Bounded to 300s. For independent commands or probes, emit SEVERAL
+    #|  `run_moonbit` calls in the SAME assistant turn — they run and come back
+    #|  together, saving a model round-trip each.
     #|
     #|## Tool Protocol
     #|
@@ -174,22 +231,17 @@ fn default_prompt() -> String {
     #|- `moon run`: executable package and CLI probes; package path goes before
     #|  `--`, program arguments go after `--`. Example:
     #|  `moon run --target native cmd/tomljson -- /tmp/input.toml`.
-    #|- `run_moonbit` tool: BOTH your command runner (via `@myshell.Cmd`, see
-    #|  Running Commands) and your scripting surface (read and transform files, parse
-    #|  JSON, compute, quick language/API probes) — it keeps automation in MoonBit,
-    #|  takes the program as a structured `source`, is bounded to 300s, and rewrites
-    #|  diagnostics to `source:LINE:COL` about your input. `source` is a
-    #|  `.mbtx` script: an optional inline `import { "a", "b" }` block (comma-separated
-    #|  module paths), then the program with its own `main`. Use `async fn main` and
-    #|  include `"moonbitlang/async"` in the import block for `@fs`/`@stdio`/IO;
-    #|  `target` defaults to wasm, the sandboxed backend. It runs isolated, so a
-    #|  local-package import binds
-    #|  the STALE mooncakes.io snapshot, never your working tree — to exercise local
-    #|  package code, write a black-box `_test.mbt` and run `moon test <pkg> --filter`
-    #|  through a `Cmd` (above). When probing, emit several independent `run_moonbit` calls in the
-    #|  SAME turn — one small program per hypothesis — rather than one probe per turn
-    #|  or one mega-program: batched probes come back together, cost one round-trip,
-    #|  and a failing hypothesis never blocks the others from answering.
+    #|- `run_moonbit` tool: BOTH your command runner (via `@myshell.Cmd`) and your
+    #|  scripting surface (read and transform files, parse JSON, compute, quick
+    #|  language/API probes) — it keeps automation in MoonBit, takes the program as a
+    #|  structured `source`, and rewrites diagnostics to `source:LINE:COL` about your
+    #|  input. `target` defaults to wasm, the sandboxed backend. Running Commands
+    #|  above is the full contract: the envelope, the labels, which programs may
+    #|  start, and the isolation rules. When probing, emit several independent
+    #|  `run_moonbit` calls in the SAME turn — one small program per hypothesis —
+    #|  rather than one probe per turn or one mega-program: batched probes come back
+    #|  together, cost one round-trip, and a failing hypothesis never blocks the
+    #|  others from answering.
     #|- `review` tool: before declaring substantial work or a standing goal
     #|  complete, request an independent worktree audit — a review subagent reads
     #|  the files, runs the project's own checks, hunts for vacuous success, and
@@ -405,8 +457,9 @@ fn default_prompt() -> String {
     #|- Parameter and receiver bindings cannot be `mut`: write `fn f(x : Int)` and
     #|  `fn T::m(self : T)`, not `fn f(mut x : Int)` or
     #|  `fn T::m(mut self : T)`.
-    #|- Use `let mut x = ...` only for local rebinding. Mutable maps/arrays can be
-    #|  updated without rebinding. Use `mut field : T` only on struct fields that you
+    #|- There is no `var`. A mutable local is `let mut x = 0`; `var x = 0` does not
+    #|  parse. Use it only for local rebinding — mutable maps/arrays are updated
+    #|  without rebinding — and use `mut field : T` only on struct fields that you
     #|  assign, e.g. `self.field = value`.
     #|- Empty no-op expression is `()`. Do not write `{ }`; that is an empty map.
     #|- Match arms are separated by newlines or semicolons, not `|`:
@@ -551,6 +604,13 @@ fn default_prompt() -> String {
     #|  variable `ch : Char`, compare without allocating `Some(ch)`:
     #|  `s.get_char(i) is Some(c) && c == ch`. Do not write `is Some(ch)` to compare
     #|  an existing variable; lowercase names in patterns bind a new variable.
+    #|- `String` compares in SHORTLEX order — length first, then code units — so
+    #|  `compare`, `<`, and `.sort()` are not dictionary order:
+    #|  `["port", "debug"].sort()` leaves that array exactly as it was, because
+    #|  `"port"` is the shorter one. This is core's documented ordering, not a bug.
+    #|  It is deterministic, so it is fine when you only need stable output; when you
+    #|  need dictionary order (sorted JSON keys, for instance), sort with an explicit
+    #|  comparator instead of the default.
     #|- `s[start:end]`, `s[:end]`, and `s[start:]` create zero-copy `StringView`s.
     #|  Pass views directly to string APIs and parsers; use `.to_owned()` only when a
     #|  callee stores or requires an owned `String`.

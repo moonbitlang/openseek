@@ -155,8 +155,8 @@ async test "the FFI refusal reads syntax, not the word extern" {
 ///|
 /// A refused spawn carries the same OS wording as a blocked write, and the
 /// guidance used to assert it WAS a blocked write — so a run that never touched
-/// a file was told to reason about paths. The message must cover the rule that
-/// actually fired, which for a spawn means naming how to reach a built binary.
+/// a file was told to reason about paths. The message must name the rule that
+/// actually fired.
 #cfg(not(platform="windows"))
 async test "a refused spawn gets guidance that fits a refused spawn" {
   let out = run(
@@ -170,7 +170,6 @@ async test "a refused spawn gets guidance that fits a refused spawn" {
   )
   assert_true(out.is_error)
   assert_true(out.content.contains("spawn allowlist"))
-  assert_true(out.content.contains("moon run"))
   // And it must not claim, as it once did, that a write was what failed.
   assert_false(out.content.contains("denying a write OUTSIDE"))
 }
@@ -435,21 +434,6 @@ async test "worker mode allows the worker's own source and denies a sibling's" {
 }
 
 ///|
-test "the description encourages batched same-turn probing" {
-  // The batching guidance lives in the tool description (and the default
-  // prompt): several independent probes in ONE assistant turn, not serial
-  // single-probe turns.
-  // The description is a wrapped `#|` block, so newlines fall mid-phrase;
-  // normalize them to spaces before matching the guidance phrases.
-  let description = @run_moonbit.definition(workspace_root=".").description.replace_all(
-    old="\n",
-    new=" ",
-  )
-  assert_true(description.contains("SAME assistant turn"))
-  assert_true(description.contains("come back together"))
-}
-
-///|
 /// Without a job runtime the tool cannot execute a background run, so neither
 /// the description nor the schema may advertise one — the model would only get
 /// an error. (The wired half of this contract is asserted in the `agent`
@@ -481,19 +465,13 @@ test "the schema advertises every decoded argument" {
   assert_eq(required, (["source"] : Json))
 }
 
-///|
-test "the description teaches the process EDSL, since there is no shell tool" {
-  let description = @run_moonbit.definition(workspace_root=".").description.replace_all(
-    old="\n",
-    new=" ",
-  )
-  assert_true(description.contains("bobzhang/myshell"))
-  assert_true(description.contains("@myshell.Cmd"))
-  // The pipeline stage is unreliable with slow producers upstream, so the
-  // description must steer to capture-and-filter-in-MoonBit instead.
-  assert_true(description.contains("Do NOT use"))
-  assert_true(description.contains("Pipeline"))
-}
+// The EDSL guidance the description used to carry — the `Cmd` envelope, the
+// warning off `@myshell.Pipeline`, batching probes into one turn — now lives in
+// each role's system prompt. It is not re-pinned by phrase here or in five
+// prompt packages: an assertion that a text contains its own words breaks on
+// every rewrite and catches no real gap. What IS derived from data, and so can
+// fail for a reason, is `unnamed_spawnable_commands`, checked against each
+// prompt in that prompt's own package.
 
 ///|
 async test "an uncaught sandbox denial is explained, not left as a bare EPERM" {
@@ -518,12 +496,11 @@ async test "an uncaught sandbox denial is explained, not left as a bare EPERM" {
       // text quoted that phrase, so it verified nothing about the real error.
       assert_true(out.content.contains("Sandbox policy blocked file write"))
       assert_true(out.content.contains("Permission denied"))
-      // ...now followed by the sandbox explanation and anti-workaround guidance
+      // ...now followed by the sandbox explanation
       assert_true(out.content.contains("run_moonbit sandbox"))
-      assert_true(out.content.contains("Do NOT try to work around"))
       // The guidance describes the policy's rules — the snippet's own roots and
       // the spawn allowlist — not the source-write rule this run does not carry.
-      assert_true(out.content.contains("OUTSIDE the"))
+      assert_true(out.content.contains("left the workspace"))
       assert_false(out.content.contains("`edit`"))
       assert_false(@fs.exists("\{outside}/escape.txt"))
     })

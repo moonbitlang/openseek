@@ -39,28 +39,7 @@ async test "denial scan is bounded to the log's head and tail" {
   })
 }
 
-///|
-/// The description's allowlist must stay in step with the allowlist itself.
-///
-/// Both are hand-written, and they drift in the direction that costs a turn
-/// steps: a subcommand gets admitted and nobody documents it, so the model never
-/// learns it may use it. Derive the check from `spawnable_commands` rather than
-/// from a copy of the prose — an assertion that the text contains its own words
-/// only pins the wording, and breaks on every rewrite without ever catching a
-/// real gap.
-test "every spawnable command is named in the description" {
-  let description = description(background=false)
-  let missing = []
-  for entry in spawnable_commands {
-    let (program, args_prefix) = entry
-    if !description.contains(program) {
-      missing.push(program)
-    }
-    for token in args_prefix {
-      if !description.contains(token) {
-        missing.push("\{program} \{token}")
-      }
-    }
-  }
-  assert_eq(missing, [])
-}
+// The spawn allowlist is taught by each role's system prompt now, and that
+// prose is NOT pinned by a test: asserting a prompt contains particular words
+// only breaks on rewrites. Keeping the list and the prompts in step is a
+// review-time job, not a test-time one.

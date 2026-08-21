@@ -16,6 +16,10 @@
 /// Entries are `(program, args_prefix)`. An empty prefix allows any arguments.
 /// A prefix matches whole argument tokens from the front, so `moon` with
 /// `["test"]` allows `moon test --filter x` but not `moon build`.
+///
+/// Which prose teaches this list is a separate decision — today it is each
+/// role's system prompt. Admitting a command here without adding it there costs
+/// a turn steps, since the model never learns it may use it.
 let spawnable_commands : Array[(String, Array[String])] = [
   // The MoonBit toolchain, which is most of what a turn runs. Listed per
   // subcommand rather than as a bare `moon` so the set is reviewable, and so
