@@ -99,7 +99,6 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("git", ["ls-remote"]),
   ("git", ["shortlog"]),
   ("git", ["grep"]),
-  ("git", ["config"]),
   ("git", ["branch"]),
   ("git", ["tag"]),
   ("git", ["remote"]),
@@ -143,6 +142,10 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // `difftool`/`mergetool` are out for a different reason: both drive an
   // interactive external program, which a headless turn cannot answer.
   //
+  // `config` writes what LATER git commands do — `core.pager`, `alias.*`,
+  // `protocol.ext.allow` (which makes `ls-remote 'ext::sh -c ...'` a process
+  // launcher) — so it undoes the `git -c` refusal one command later.
+  //
   // The forge CLI, likewise per subcommand: `gh extension` installs and then
   // runs third-party code, and `gh alias` turns any later invocation into
   // something else — both would make this list decorative.
@@ -167,11 +170,15 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // `out.stdout` and filter it in MoonBit instead of reaching for grep and awk.
   ("diff", []),
   ("rg", []),
-  // NOT listed, on purpose: any program that runs another program on request
-  // (`sh`, `bash`, `zsh`, `env`, `xargs`, `python`, `node`, `perl`, `make`).
-  // Admitting one of those would make every other entry decorative, since a
-  // snippet could reach anything through it — and myshell exists precisely so
-  // that no shell sits between the agent and a process.
+  // A repository's gates live in its `justfile`; reimplementing recipes by hand
+  // runs something else and goes stale. Recipes are not listed one by one for
+  // the same reason. A recipe is shell, so this does admit arbitrary code — but
+  // so does `rebase --exec`, which a prefix cannot exclude.
+  ("just", []),
+  // NOT listed: the general-purpose runners (`sh`, `bash`, `zsh`, `env`,
+  // `xargs`, `python`, `node`, `perl`, `make`). Not as a boundary — see `just`
+  // — but because myshell exists so no shell sits between the agent and a
+  // process. What the list buys is that going around it takes intent.
 ]
 
 ///|

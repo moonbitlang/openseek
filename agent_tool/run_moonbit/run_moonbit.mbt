@@ -782,7 +782,7 @@ fn schema(background~ : Bool) -> Json {
     "source": { "type": "string" },
     "target": {
       "type": "string",
-      "enum": ["native", "wasm", "wasm-gc", "js", "llvm"],
+      "enum": ["wasm", "wasm-gc", "js", "llvm"],
       "description": "Backend to run on; defaults to wasm, which is the sandboxed one. The alternatives run pure computation only — they cannot spawn commands or touch files.",
     },
     "cwd": {
@@ -866,8 +866,8 @@ fn description(background~ : Bool) -> String {
     #|- `Cmd(program, args)` passes the argument VECTOR literally: no shell parsing, no
     #|  quoting, and `|`, `>`, `&&`, `$()`, `*` mean nothing. Other labels: `cwd`,
     #|  `env`, `stdin=Text(...)`. Run several commands as sequential statements in ONE
-    #|  snippet and branch on `out.exit_code`; there is no `Pipeline`, so filter
-    #|  captured output in MoonBit.
+    #|  snippet and branch on `out.exit_code`; do NOT reach for `@myshell.Pipeline` —
+    #|  filter captured output in MoonBit instead.
     #|
     #|## Which programs a snippet may start
     #|
@@ -878,12 +878,13 @@ fn description(background~ : Bool) -> String {
     #|  `login` or `register`.)
     #|- `git` — status, log, diff, show, blame, describe, rev-parse, rev-list,
     #|  show-ref, for-each-ref, cat-file, check-ignore, merge-base, range-diff,
-    #|  ls-files, ls-tree, ls-remote, shortlog, grep, config, branch, tag, remote,
-    #|  reflog, add, commit, checkout, switch, restore, reset, revert, rm, init,
-    #|  fetch, push, rebase; plus `submodule update|status`, `worktree list|add`,
-    #|  `stash list|show`. A global option BEFORE the subcommand (`-c`, `-C`,
-    #|  `--git-dir`, `--work-tree`) is refused.
+    #|  ls-files, ls-tree, ls-remote, shortlog, grep, branch, tag, remote, reflog,
+    #|  add, commit, checkout, switch, restore, reset, revert, rm, init, fetch,
+    #|  push, rebase; plus `submodule update|status`, `worktree list|add`,
+    #|  `stash list|show`. Not `config`. A global option BEFORE the subcommand
+    #|  (`-c`, `-C`, `--git-dir`, `--work-tree`) is refused.
     #|- `gh` — pr, issue, run, `repo view`, api, `auth status`.
+    #|- `just`, for a repository whose gates live in a `justfile`.
     #|- `rg` and `diff`.
     #|
     #|Anything else is REFUSED, including the obvious ones; if a refused command is

@@ -16,8 +16,7 @@ pub struct RunMoonbitInput {
 } derive(Debug)
 
 ///|
-/// The moon backends `--target` accepts. `native` is the default because the
-/// async IO batteries (`@fs`, `@stdio`, `@process`) require it.
+/// The moon backends `--target` accepts.
 fn valid_target(target : String) -> Bool {
   // `native` is deliberately absent: moonrun's policy — the only confinement
   // that holds off macOS — applies to the wasm backend alone, and
