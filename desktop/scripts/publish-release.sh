@@ -14,6 +14,9 @@
 # set OPENSEEK_OSS_PREFIX explicitly.
 set -euo pipefail
 
+# ossutil appends an elapsed-time line to structured output unless quiet mode
+# is enabled. Every HeadObject JSON response below must remain valid for jq.
+
 desktop_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 version="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$desktop_dir/moon.mod")"
 if [[ -z "$version" ]]; then
@@ -79,7 +82,8 @@ case "${1:-}" in
             --region "$oss_region" \
             --bucket "$oss_bucket" \
             --key "$oss_key" \
-            --output-format json
+            --output-format json \
+            --quiet
         )"
         served_size="$(jq -er '.Header["Content-Length"][0]' <<< "$head_json")"
         served_sha="$(jq -er '.Header["X-Oss-Meta-Sha256"][0]' <<< "$head_json")"
@@ -141,7 +145,8 @@ case "${1:-}" in
           --region "$oss_region" \
           --bucket "$oss_bucket" \
           --key "$oss_key" \
-          --output-format json
+          --output-format json \
+          --quiet
       )"
       served_size="$(jq -er '.Header["Content-Length"][0]' <<< "$head_json")"
       served_sha="$(jq -er '.Header["X-Oss-Meta-Sha256"][0]' <<< "$head_json")"
@@ -251,7 +256,8 @@ for index in 0 1 2; do
       --region "$oss_region" \
       --bucket "$oss_bucket" \
       --key "$oss_key" \
-      --output-format json
+      --output-format json \
+      --quiet
   )"
   served_size="$(jq -er '.Header["Content-Length"][0]' <<< "$head_json")"
   served_sha="$(jq -er '.Header["X-Oss-Meta-Sha256"][0]' <<< "$head_json")"
