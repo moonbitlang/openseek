@@ -94,10 +94,10 @@ pub async fn start_run(
   // between the prompt and the phase it opens, a remote peer that steers on
   // seeing Started necessarily lands behind the complete prompt, and this
   // task cannot be cancelled after Started is public.
-  guard live.submit(command.to_jsonl(), failure_reason="engine write failed") else {
+  guard live.submit(command, failure_reason="engine write failed") else {
     raise EngineError("engine changed before the prompt was submitted")
   }
-  live.phase = Running(run_id~, cancel_requested=false, compact_queued=false)
+  live.phase = Running(run_id~, compact_queued=false)
   live.steer_runs.begin_run()
   emit(
     sink,
@@ -129,35 +129,37 @@ fn mint_run_id() -> String raise EngineError {
 ///|
 /// Cancel an open turn by asking its serve engine to interrupt it — the
 /// process itself stays alive for the next prompt. The run is addressed by
-/// id across all conversations; with no matching open run there is nothing
-/// to cancel.
+/// id across all conversations; the reply names the run the cancel reached,
+/// which is the only way a caller that omitted the id learns which one that
+/// was.
+///
+/// Nothing open to cancel is an answer, not a failure: a Stop racing a turn
+/// that just ended is ordinary, and the caller wanted the run over either
+/// way. A cancel that could not be written is the real failure — the turn is
+/// still running and nobody asked it to stop.
 pub fn cancel_run(
   manager : EngineManager,
   payload : @protocol.CancelPayload,
-) -> CancelReply {
-  guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) else {
-    return { cancelled: false, run_id: None }
-  }
-  guard live.is_current(manager) else {
-    return { cancelled: false, run_id: None }
-  }
-  guard live.phase is Running(run_id~, compact_queued~, ..) else {
-    return { cancelled: false, run_id: None }
+) -> CancelReply raise EngineError {
+  guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
+    live.phase is Running(run_id~, ..) else {
+    return { run_id: None }
   }
   if payload.run_id is Some(expected) && run_id != expected {
-    return { cancelled: false, run_id: None }
+    return { run_id: None }
   }
   guard live.submit(
-    @protocol.cancel().to_jsonl(),
+    @protocol.cancel(),
     failure_reason="failed to write cancellation to the engine",
   ) else {
-    return { cancelled: false, run_id: None }
+    raise EngineError("the cancellation could not be written to the engine")
   }
-  // A compaction queued behind the dying turn survives the cancel: the
-  // engine's pending queue keeps it (cancel only aborts the active turn), so
-  // the flag must ride along or the terminal event would idle past it.
-  live.phase = Running(run_id~, cancel_requested=true, compact_queued~)
-  { cancelled: true, run_id: Some(run_id) }
+  // The phase stays Running: the turn is not over until the engine says so,
+  // and its terminal event is what closes the run. A compaction queued behind
+  // the dying turn survives too — cancel only aborts the active turn, so the
+  // queued command still runs and the phase must still route the terminal
+  // event into Compacting.
+  { run_id: Some(run_id) }
 }
 
 ///|
@@ -253,15 +255,15 @@ pub async fn compact_run(
     // Sent mid-turn, the command queues behind the open run; the flag makes
     // the turn's terminal event land in Compacting so nothing slips into the
     // gap before the engine's own compaction_started.
-    Running(run_id~, cancel_requested~, compact_queued=false) =>
-      Running(run_id~, cancel_requested~, compact_queued=true)
+    Running(run_id~, compact_queued=false) =>
+      Running(run_id~, compact_queued=true)
     Idle(last_run~) => Compacting(last_run~)
   }
   // Submitting and entering the phase are one synchronous step, so the
   // classification above still holds and the consumer sees the new phase
   // before any event the command can produce.
   guard live.submit(
-    @protocol.compact().to_jsonl(),
+    @protocol.compact(),
     failure_reason="failed to write the compaction command",
   ) else {
     raise EngineError("engine changed before compaction was submitted")
@@ -349,7 +351,7 @@ pub async fn goal_run(
   // leave the client believing a set or clear succeeded that never happened.
   let ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
   guard live.submit(
-    command.to_jsonl(),
+    command,
     failure_reason="failed to write the goal command",
     ack~,
   ) else {
@@ -369,10 +371,8 @@ pub async fn goal_run(
 /// rides that serve engine's lossless steering queue and is folded into the
 /// conversation at the turn's next step boundary, where the engine echoes it
 /// back as a `steer_applied` event (or `steer_dropped` if it raced the turn's
-/// end). Steering a turn that is being cancelled is refused — the steer could
-/// outlive the dying turn in the engine's queue and contaminate a later
-/// prompt. Blank text is refused too: the engine filters blanks without
-/// emitting any settling event, which would leave a phantom acknowledgment.
+/// end). Blank text is refused: the engine filters blanks without emitting
+/// any settling event, which would leave a phantom acknowledgment.
 pub fn steer_run(
   manager : EngineManager,
   payload : @protocol.SteerPayload,
@@ -381,10 +381,7 @@ pub fn steer_run(
     return { steered: false, run_id: None }
   }
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
-    live.phase is Running(run_id~, cancel_requested=false, ..) else {
-    return { steered: false, run_id: None }
-  }
-  guard live.is_current(manager) else {
+    live.phase is Running(run_id~, ..) else {
     return { steered: false, run_id: None }
   }
   if payload.run_id is Some(expected) && run_id != expected {
@@ -392,7 +389,7 @@ pub fn steer_run(
   }
   let submission_id = normalize_submission_id(payload.submission_id)
   guard live.submit(
-    @protocol.steer(payload.text).to_jsonl(),
+    @protocol.steer(payload.text),
     failure_reason="failed to write steering to the engine",
   ) else {
     return { steered: false, run_id: Some(run_id) }
@@ -530,23 +527,38 @@ pub async fn load_session(
       watermark: Some(session_max_sequence(document)),
     }
   }
-  // Name the missing-record states before spending an engine read that can
-  // only fail with a raw file error: a stale client asks for conversations
-  // whose store just detached (or whose record moved to an archived twin),
-  // and the answer should say that, not ENOENT.
-  if !@fsx.is_dir(root.join("sessions").join(session).to_path()) {
-    if @session_store.archived_root_of(session) is Some(_) {
-      raise EngineError("this conversation is archived; unarchive it first")
-    }
-    raise EngineError(
-      "no durable record for this conversation in any attached workspace",
-    )
+  // A record that moved to an archived twin is a different answer than one
+  // that was never written: say so, rather than reporting this store's
+  // emptiness for a conversation that does have durable content elsewhere.
+  if !@fsx.is_dir(root.join("sessions").join(session).to_path()) &&
+    @session_store.archived_root_of(session) is Some(_) {
+    raise EngineError("this conversation is archived; unarchive it first")
   }
   let document = @session_record.read_document(root, session) catch {
     error if @async.is_being_cancelled() => raise error
+    // No record here yet. That is this conversation's answer, not a failed
+    // read: a turn that died before the engine created the record leaves
+    // exactly this state, and a client told "load failed" can only retry a
+    // read that will keep failing.
+    @session_record.Absent(_) => return empty_session_reply(session)
     error => raise EngineError("session load failed: \{error}")
   }
   { session: document, watermark: Some(session_max_sequence(document)) }
+}
+
+///|
+/// The transcript of a conversation with no durable content: what a store
+/// holds for a session whose first turn has not committed anything.
+fn empty_session_reply(session : String) -> LoadSessionReply {
+  {
+    session: {
+      version: None,
+      id: Some(session),
+      system_prompt: None,
+      events: Some([]),
+    },
+    watermark: Some(0),
+  }
 }
 
 ///|
@@ -720,6 +732,33 @@ fn has_finished_run(events : Array[EngineEvent], run_id : String) -> Bool {
     }
   }
   false
+}
+
+///|
+/// The shell a fake engine runs to commit one durable Terminal before it
+/// echoes the matching `agent_finished` — the real engine's append-then-emit
+/// order. The run settles on the stream event alone; this is what gives the
+/// follower a real record to tail, so a fixture exercises both halves the way
+/// a live engine does.
+///
+/// The child reads its own store location and identity from the environment
+/// the host gave it, so this needs no paths baked in. The next sequence is
+/// the record's line count: the header occupies line one, so the first turn
+/// commits sequence 1 and each later one advances.
+#cfg(not(platform="windows"))
+fn commit_terminal_sh() -> String {
+  // `\{newline}` is the two characters a shell `printf` format needs, not an
+  // actual line break.
+  let newline = "\\n"
+  let script =
+    $|record="$OPENSEEK_SESSION_ROOT/sessions/$OPENSEEK_SESSION/openseek_session-$OPENSEEK_SESSION.jsonl"
+    $|mkdir -p "$OPENSEEK_SESSION_ROOT/sessions/$OPENSEEK_SESSION"
+    $|if [ ! -f "$record" ]; then
+    $|  printf '{"version":1,"id":"%s","system_prompt":""}\{newline}' "$OPENSEEK_SESSION" > "$record"
+    $|fi
+    $|printf '{"sequence":%s,"item":{"kind":"terminal","payload":{"kind":"finished","message":"ok"}}}\{newline}' "$(grep -c '' "$record")" >> "$record"
+    $|
+  script
 }
 
 ///|
@@ -917,23 +956,20 @@ async test "a discarded command answers its sender" {
       cancel_handler=@process.graceful_cancel(timeout=10),
       no_wait=true,
     )
-    let engine : ServeEngine = {
-      session_key: "s-discard",
-      session_root: None,
-      spec_key: "test",
+    let engine = test_serve_engine(
+      "s-discard",
       writer,
-      commands: Queue(kind=Unbounded),
       process,
-      sink: EventSink(fn(_) { () }),
-      follower: None,
-      consumer: None,
-      phase: Idle(last_run=None),
-      condemned: false,
-      steer_runs: SteerRunTracker::new(),
-    }
+      EventSink(fn(_) { () }),
+      phase=Idle(last_run=None),
+    )
     let ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
     assert_true(
-      engine.submit("{}\n", failure_reason="failed to write the goal", ack~),
+      engine.submit(
+        @protocol.goal_clear(),
+        failure_reason="failed to write the goal",
+        ack~,
+      ),
     )
     engine.discard_commands("the engine exited")
     guard ack.try_get() is Some(Some(EngineError(reason))) else {
@@ -942,7 +978,9 @@ async test "a discarded command answers its sender" {
     assert_eq(reason, "the engine exited")
     // Discarding also condemns the engine, in the same synchronous step.
     assert_true(engine.condemned)
-    assert_false(engine.submit("{}\n", failure_reason="unreachable"))
+    assert_false(
+      engine.submit(@protocol.goal_clear(), failure_reason="unreachable"),
+    )
     group.return_immediately(())
   })
 }
@@ -976,7 +1014,7 @@ async test "setup failure retires the writer before an immediate next start" {
   )
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  IFS= read -r line || exit 0\n  printf '%s\\n' '{\"event\":\"agent_setup_failed\",\"error\":\"boom\"}'\n  sleep 1\n  printf '%s\\n' '{\"event\":\"turn_failed\",\"error\":\"append failed\"}'\n  printf '' > '\{old_done}'\n  exit 0\nfi\nif [ ! -f '\{old_done}' ]; then printf '' > '\{overlapped}'; fi\nwhile IFS= read -r line; do\n  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  IFS= read -r line || exit 0\n  printf '%s\\n' '{\"event\":\"agent_setup_failed\",\"error\":\"boom\"}'\n  sleep 1\n  printf '%s\\n' '{\"event\":\"turn_failed\",\"error\":\"append failed\"}'\n  printf '' > '\{old_done}'\n  exit 0\nfi\nif [ ! -f '\{old_done}' ]; then printf '' > '\{overlapped}'; fi\nwhile IFS= read -r line; do\n\{commit_terminal_sh()}  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
@@ -1016,16 +1054,13 @@ async test "setup failure retires the writer before an immediate next start" {
       })
       is Some(_),
     )
-    guard manager.serving().get(session) is Some(slot) &&
-      slot.engine is Some(old) else {
-      fail("missing first engine after setup failure")
+    // The run settled on the event that ended its turn, not on the child's
+    // exit: the engine is still draining here, but no longer live, so nothing
+    // can address it — including a Stop aimed at the run that just closed.
+    if manager.serving().get(session) is Some(slot) {
+      assert_true(slot.live() is None)
     }
-    // Still in its slot, so the next start must join its close barrier — but
-    // condemned, so nothing can be routed to it in the meantime.
-    assert_true(old.condemned)
-    assert_true(slot.live() is None)
-    let cancelled = cancel_run(manager, { run_id: Some(first) })
-    assert_false(cancelled.cancelled)
+    assert_true(cancel_run(manager, { run_id: Some(first) }).run_id is None)
     let second = start_run(sink, manager, {
       task: "second",
       submission_id: None,
@@ -1190,7 +1225,7 @@ async test "named session retries after its first prompt creates no record" {
   // finishes it.
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then\n  printf '%s\\n' 'session record does not exist' >&2\n  exit 7\nfi\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  mkdir -p '\{store}/sessions/\{session}'\n  printf '' > '\{first_ready}'\n  exec sleep 1\nfi\nwhile IFS= read -r line; do\n  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then\n  printf '%s\\n' 'session record does not exist' >&2\n  exit 7\nfi\nn=0\nif [ -f '\{count}' ]; then n=$(cat '\{count}'); fi\nn=$((n + 1))\nprintf '%s' \"$n\" > '\{count}'\nif [ \"$n\" -eq 1 ]; then\n  mkdir -p '\{store}/sessions/\{session}'\n  printf '' > '\{first_ready}'\n  exec sleep 1\nfi\nwhile IFS= read -r line; do\n\{commit_terminal_sh()}  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
@@ -1506,7 +1541,7 @@ async test "workspace detach drains an idle writer and its follower first" {
   )
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}' ; exit 0; fi\nwhile IFS= read -r line; do printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'; done\nprintf '' > '\{exited}'\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}' ; exit 0; fi\nwhile IFS= read -r line; do\n\{commit_terminal_sh()}  printf '%s\\n' '{\"event\":\"agent_finished\",\"answer\":\"ok\"}'\ndone\nprintf '' > '\{exited}'\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)

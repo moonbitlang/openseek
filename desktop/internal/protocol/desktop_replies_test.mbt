@@ -1055,3 +1055,159 @@ test "Git history codecs reject missing, null, and malformed required data" {
   }
   assert_true(malformed_change)
 }
+
+///|
+test "a run's close keeps its outcome and reports only the evidence it has" {
+  // Absent, not null, for evidence a close does not have: that is what a host
+  // writes for a turn with no answer and no process exit, and what an older
+  // one writes for a field it never had.
+  let bare : @protocol.FinishedPayload = {
+    run_id: "r1",
+    status: "failed",
+    answer: None,
+    exit_code: None,
+  }
+  @debug.assert_eq(bare.to_json(), { "run_id": "r1", "status": "failed" })
+  let full : @protocol.FinishedPayload = {
+    run_id: "r1",
+    status: "finished",
+    answer: Some("done"),
+    exit_code: Some(0),
+  }
+  @debug.assert_eq(full.to_json(), {
+    "run_id": "r1",
+    "status": "finished",
+    "answer": "done",
+    "exit_code": 0,
+  })
+
+  // Every way of not reporting the optionals decodes the same, and a field a
+  // newer host added is read past rather than refused.
+  for
+    thin in (
+      [
+        { "run_id": "r1", "status": "failed" },
+        { "run_id": "r1", "status": "failed", "answer": Json::null() },
+        { "run_id": "r1", "status": "failed", "exit_code": "9" },
+        { "run_id": "r1", "status": "failed", "settled_by_a_newer_host": true },
+      ] : Array[Json]) {
+    let decoded : @protocol.FinishedPayload = @json.from_json(thin)
+    assert_eq(decoded.run_id, "r1")
+    assert_eq(decoded.status, "failed")
+    assert_eq(decoded.answer, None)
+    assert_eq(decoded.exit_code, None)
+  }
+
+  // The run and its outcome are the message. A report naming neither settles
+  // anything, so it is refused rather than closing a run as "".
+  for incomplete in ([{ "status": "failed" }, { "run_id": "r1" }] : Array[Json]) {
+    let refused = try {
+      let _ : @protocol.FinishedPayload = @json.from_json(incomplete)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(refused)
+  }
+}
+
+///|
+test "a cancel reply spells \"nothing was open\" by omission" {
+  let matched : @protocol.CancelReply = { run_id: Some("r1") }
+  @debug.assert_eq(matched.to_json(), { "run_id": "r1" })
+
+  // Not `{"run_id": null}`: the key's absence IS the answer, so a reader that
+  // only checks for the key agrees with one that inspects its value.
+  let unmatched : @protocol.CancelReply = { run_id: None }
+  @debug.assert_eq(unmatched.to_json(), Json::empty_object())
+
+  // Nothing here is worth failing a Stop over: every shape that is not a run
+  // id decodes as "no run was cancelled", and a newer host's extra keys are
+  // ignored rather than refused.
+  for
+    absent in (
+      [
+        Json::empty_object(),
+        { "run_id": Json::null() },
+        { "run_id": 7 },
+        { "run_id": ["r1"] },
+        { "cancelled": true, "withdrew_pending_prompt": false },
+      ] : Array[Json]) {
+    let decoded : @protocol.CancelReply = @json.from_json(absent)
+    assert_eq(decoded.run_id, None)
+  }
+  let decoded : @protocol.CancelReply = @json.from_json({
+    "run_id": "r1",
+    "cancelled": true,
+  })
+  assert_eq(decoded.run_id, Some("r1"))
+
+  // A reply that is not an object at all is a different host speaking a
+  // different protocol, and that is worth refusing.
+  let refused = try {
+    let _ : @protocol.CancelReply = @json.from_json(Json::string("r1"))
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(refused)
+}
+
+///|
+test "a reconnect settlement is refused unless it names run, session and outcome" {
+  let bare : @protocol.RunSettlementPayload = {
+    run_id: "r1",
+    session: "s1",
+    submission_id: None,
+    status: "cancelled",
+    exit_code: None,
+  }
+  @debug.assert_eq(bare.to_json(), {
+    "run_id": "r1",
+    "session": "s1",
+    "status": "cancelled",
+  })
+  let full : @protocol.RunSettlementPayload = {
+    run_id: "r1",
+    session: "s1",
+    submission_id: Some("sub-1"),
+    status: "failed",
+    exit_code: Some(9),
+  }
+  @debug.assert_eq(full.to_json(), {
+    "run_id": "r1",
+    "session": "s1",
+    "status": "failed",
+    "submission_id": "sub-1",
+    "exit_code": 9,
+  })
+  let decoded : @protocol.RunSettlementPayload = @json.from_json({
+    "run_id": "r1",
+    "session": "s1",
+    "status": "failed",
+    "submission_id": Json::null(),
+    "exit_code": true,
+    "queued_by_a_newer_host": 1,
+  })
+  assert_eq(decoded.submission_id, None)
+  assert_eq(decoded.exit_code, None)
+  assert_eq(decoded.status, "failed")
+
+  // A row that cannot be matched against a caller's selectors, or that names
+  // no outcome, would settle the wrong run or none: refuse it.
+  for
+    incomplete in (
+      [
+        { "session": "s1", "status": "failed" },
+        { "run_id": "r1", "status": "failed" },
+        { "run_id": "r1", "session": "s1" },
+      ] : Array[Json]) {
+    let refused = try {
+      let _ : @protocol.RunSettlementPayload = @json.from_json(incomplete)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(refused)
+  }
+}

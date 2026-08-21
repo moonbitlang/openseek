@@ -6215,7 +6215,6 @@ fn update_device_msg(
             run_id=settlement.run_id,
             status=settlement.status,
             answer=None,
-            durable_sequence=settlement.durable_sequence,
           ),
           next,
         )
@@ -6645,7 +6644,7 @@ fn update_device_msg(
       } else {
         (@cmd.none, model)
       }
-    Finished(run_id~, status~, answer~, durable_sequence~) =>
+    Finished(run_id~, status~, answer~) =>
       if (if model.conversation_by_run(channel, run_id) is Some(conv) {
           Some(conv)
         } else {
@@ -6660,18 +6659,7 @@ fn update_device_msg(
         // Missing receipts are not guessed dropped. Keep exact-id ownership
         // briefly and show a truthful unconfirmed notice behind the durable
         // terminal boundary; a trailing receipt may still settle it.
-        // On abnormal EOF the host includes a sequence only after its final
-        // follower scan succeeded. That is the exact durable EOF boundary;
-        // unlike a normal finish, it need not be followed by a Terminal.
-        let durable_frontier = durable_sequence
-        // Only events logged strictly after a successful Terminal append are
-        // terminal-backed. Failed/aborted/cancelled paths attempt the append
-        // in a catch block that may itself fail; the host closes that engine
-        // and later supplies an exact EOF boundary instead.
-        let terminal_expected = match status {
-          "finished" | "context_yield" | "max_steps_exhausted" => true
-          _ => false
-        }
+        //
         // The run is over, so nothing it carried can still acquire a receipt.
         // Whether each submission reached the store is the record's question;
         // the transcript answers it without a local placeholder.
@@ -6685,16 +6673,6 @@ fn update_device_msg(
           unseen_finish: conv.device != model.focused ||
           conv.session_id != model.active_session,
         }
-        // An exact zero EOF cut proves that a fresh failed run created no
-        // durable record. Cancel its now-obsolete speculative snapshot read:
-        // otherwise `session.load` can only fail (the file does not exist)
-        // and eventually leave Send permanently gated behind ReloadFailed.
-        // Be deliberately narrow: any applied or buffered durable content
-        // still takes the normal reconciliation path.
-        let exact_empty_eof = !terminal_expected &&
-          durable_frontier is Some(frontier) &&
-          base.is_empty_at_durable_frontier(frontier)
-        let base = if exact_empty_eof { { ..base, sync: Synced } } else { base }
         // The finished run just appended to the durable store, so the
         // sidebar list (and this conversation's title) may have changed —
         // and the turn may have created the repository or switched branches.
@@ -6733,7 +6711,10 @@ fn update_device_msg(
           commands.push(panel_cmd)
           next = panel_next
         }
-        if first_finish && !exact_empty_eof && !base.session_id.is_empty() {
+        // A run that recorded nothing needs this pass as much as any other:
+        // the read answers "this conversation is empty" rather than failing,
+        // so the reconciliation ends in Synced either way.
+        if first_finish && !base.session_id.is_empty() {
           match base.sync {
             Reloading(generation~, attempt~, buffered~, reload_after_current~) =>
               // The current snapshot may have been captured before this
@@ -6773,22 +6754,6 @@ fn update_device_msg(
         // Even when this page missed both Started and every commit, the list
         // can reveal the finished durable session for a later open.
         request_sessions_refresh(dispatch, channel, model)
-      }
-    DurableBoundary(run_id~, session~, sequence~) =>
-      if model.find_conversation(channel, session) is Some(conv) &&
-        conv.last_run_id is Some(owner) &&
-        owner == run_id {
-        // An exact zero frontier proves the run created no record at all, so
-        // the speculative reload it would otherwise wait on has nothing to
-        // read. Nothing else is inferred from it: the run's submissions ended
-        // with the run.
-        if conv.is_empty_at_durable_frontier(sequence) {
-          (@cmd.none, model.replace_conversation({ ..conv, sync: Synced }))
-        } else {
-          (@cmd.none, model)
-        }
-      } else {
-        (@cmd.none, model)
       }
   }
 }
@@ -7213,12 +7178,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
   )
   let (_, first_finished) = update_dev(
     dispatch,
-    Finished(
-      run_id="r-first",
-      status="finished",
-      answer=None,
-      durable_sequence=None,
-    ),
+    Finished(run_id="r-first", status="finished", answer=None),
     first_started,
   )
   let (_, reconciled) = update_dev(
@@ -7277,7 +7237,7 @@ fn second_run_started_before_first_steer_receipt() -> Model? {
   let first = with_pending_steers(running_conversation(), ["late steer"])
   let (_, first_finished) = update_dev(
     dispatch,
-    Finished(run_id="r7", status="finished", answer=None, durable_sequence=None),
+    Finished(run_id="r7", status="finished", answer=None),
     running_model().replace_conversation(first),
   )
   // A second local run is admitted only after the prior durable terminal has
@@ -7525,12 +7485,7 @@ test "finished run clears any leftover stream" {
   })
   let (_, next) = update_dev(
     dispatch,
-    Finished(
-      run_id="r7",
-      status="finished",
-      answer=Some("done"),
-      durable_sequence=None,
-    ),
+    Finished(run_id="r7", status="finished", answer=Some("done")),
     model,
   )
   assert_eq(next.active().turn.streaming_response, None)
@@ -7542,12 +7497,7 @@ test "finished run reloads the named durable session for an old host" {
   let dispatch = test_dispatch()
   let (_, finished) = update_dev(
     dispatch,
-    Finished(
-      run_id="r7",
-      status="finished",
-      answer=Some("done"),
-      durable_sequence=None,
-    ),
+    Finished(run_id="r7", status="finished", answer=Some("done")),
     running_model(),
   )
   guard finished.active().sync
@@ -7592,12 +7542,7 @@ test "Finished queues one follow-up behind an older in-flight snapshot" {
     }),
     transcript_request_generation: 1,
   }
-  let finish : DeviceMsg = Finished(
-    run_id="r7",
-    status="finished",
-    answer=None,
-    durable_sequence=None,
-  )
+  let finish : DeviceMsg = Finished(run_id="r7", status="finished", answer=None)
   let (_, finished) = update_dev(dispatch, finish, model)
   guard finished.active().sync
     is Reloading(generation=1, reload_after_current=true, ..) else {
@@ -7633,12 +7578,7 @@ test "a finish the user watched leaves no unseen dot" {
   let dispatch = test_dispatch()
   let (_, next) = update_dev(
     dispatch,
-    Finished(
-      run_id="r7",
-      status="finished",
-      answer=Some("done"),
-      durable_sequence=None,
-    ),
+    Finished(run_id="r7", status="finished", answer=Some("done")),
     running_model(),
   )
   inspect(next.active().unseen_finish, content="false")
@@ -7651,12 +7591,7 @@ test "a background finish marks its conversation until it is opened" {
   let model = { ..running_model(), active_session: "desktop-elsewhere" }
   let (_, next) = update_dev(
     dispatch,
-    Finished(
-      run_id="r7",
-      status="finished",
-      answer=Some("done"),
-      durable_sequence=None,
-    ),
+    Finished(run_id="r7", status="finished", answer=Some("done")),
     model,
   )
   guard next.find_conversation(@interop.ChannelId::Local, "desktop-test")
@@ -9329,28 +9264,6 @@ test "agent error decoder preserves exit codes and normalizes missing messages" 
 }
 
 ///|
-test "finished and durable-boundary decoders preserve exact EOF frontiers" {
-  guard finished_msg({
-      run_id: "r7",
-      status: "failed",
-      answer: None,
-      exit_code: Some(9),
-      durable_sequence: Some(12),
-    })
-    is Some(Finished(durable_sequence=Some(12), ..)) else {
-    fail("expected the final-scan sequence")
-  }
-  guard durable_boundary_msg({
-      run_id: "r7",
-      session: "desktop-test",
-      sequence: 12,
-    })
-    is Some(DurableBoundary(sequence=12, ..)) else {
-    fail("expected the delayed durable boundary")
-  }
-}
-
-///|
 test "session loaded swaps the active conversation onto the stored session" {
   let dispatch = test_dispatch()
   let model = test_model()
@@ -10338,7 +10251,6 @@ test "a settlement captured for an older Starting owner cannot close its success
           session: "desktop-test",
           submission_id: Some("old-owner"),
           status: "failed",
-          durable_sequence: Some(0),
         },
       ],
       live=[],
@@ -10358,7 +10270,7 @@ test "an older positive runs row cannot replace a newer Started" {
   let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
   let (_, finished) = update_dev(
     dispatch,
-    Finished(run_id="r7", status="finished", answer=None, durable_sequence=None),
+    Finished(run_id="r7", status="finished", answer=None),
     model,
   )
   let (_, newer) = update_dev(
@@ -10404,7 +10316,7 @@ test "an older positive runs row cannot resurrect a finished run" {
   let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
   let (_, finished) = update_dev(
     dispatch,
-    Finished(run_id="r7", status="finished", answer=None, durable_sequence=None),
+    Finished(run_id="r7", status="finished", answer=None),
     model,
   )
   let (_, stale) = update_dev(
@@ -10447,12 +10359,7 @@ test "Finished after RunsSettled fills the last run outcome idempotently" {
     model,
   )
   assert_true(settled.active().run is NoRun(ended=None))
-  let finish : DeviceMsg = Finished(
-    run_id="r7",
-    status="finished",
-    answer=None,
-    durable_sequence=None,
-  )
+  let finish : DeviceMsg = Finished(run_id="r7", status="finished", answer=None)
   let (_, once) = update_dev(dispatch, finish, settled)
   let (_, twice) = update_dev(dispatch, finish, once)
   assert_true(once.active().run is NoRun(ended=Some(RunFinished(Completed))))
@@ -10482,12 +10389,7 @@ test "a failed response after durable Finished cannot resurrect its prompt" {
   assert_true(started.active().pending_prompt is Some(_))
   let (_, finished) = update_dev(
     dispatch,
-    Finished(
-      run_id="r-fast",
-      status="finished",
-      answer=None,
-      durable_sequence=None,
-    ),
+    Finished(run_id="r-fast", status="finished", answer=None),
     started,
   )
   assert_true(
@@ -10594,12 +10496,7 @@ test "a background run finishes without disturbing the conversation on screen" {
   let model = running_model().replace_conversation(second)
   let (_, next) = update_dev(
     dispatch,
-    Finished(
-      run_id="r8",
-      status="finished",
-      answer=Some("done"),
-      durable_sequence=None,
-    ),
+    Finished(run_id="r8", status="finished", answer=Some("done")),
     model,
   )
   guard next.find_conversation(@interop.ChannelId::Local, "desktop-second")
@@ -10825,12 +10722,7 @@ test "a late exact applied receipt retracts a run-end unconfirmed notice" {
   )
   let (_, finished) = update_dev(
     dispatch,
-    Finished(
-      run_id="r7",
-      status="finished",
-      answer=Some(""),
-      durable_sequence=None,
-    ),
+    Finished(run_id="r7", status="finished", answer=Some("")),
     model,
   )
   let (_, next) = update_dev(
@@ -15320,12 +15212,7 @@ test "a mid-turn /compact stays visibly queued until compaction starts" {
   // that gap would queue behind the compaction, out of Stop's reach.
   let (_, ended) = update_dev(
     dispatch,
-    Finished(
-      run_id="r7",
-      status="completed",
-      answer=None,
-      durable_sequence=None,
-    ),
+    Finished(run_id="r7", status="completed", answer=None),
     again,
   )
   assert_true(ended.active().compaction is Queued)
@@ -15446,12 +15333,7 @@ test "context yield settles after its automatic checkpoint" {
   assert_true(yielded.active().is_running())
   let (_, settled) = update_dev(
     dispatch,
-    Finished(
-      run_id="r7",
-      status="context_yield",
-      answer=Some(answer),
-      durable_sequence=None,
-    ),
+    Finished(run_id="r7", status="context_yield", answer=Some(answer)),
     yielded,
   )
   assert_true(settled.active().compaction is NotCompacting)

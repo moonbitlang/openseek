@@ -230,14 +230,15 @@ pub fn CancelPayload::to_json(Self) -> Json
 pub fn CancelPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct CancelReply {
-  cancelled : Bool
   run_id : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn CancelReply::equal(Self, Self) -> Bool
 pub fn CancelReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CancelReply::not_equal(Self, Self) -> Bool
 pub fn CancelReply::to_json(Self) -> Json
 pub fn CancelReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for CancelReply
+pub impl @json.FromJson for CancelReply
 
 pub(all) struct CancelSearchFilesPayload {
   cache_key : String
@@ -709,17 +710,6 @@ pub fn DownloadUpdateAcceptedReply::not_equal(Self, Self) -> Bool
 pub fn DownloadUpdateAcceptedReply::to_json(Self) -> Json
 pub fn DownloadUpdateAcceptedReply::to_repr(Self) -> @debug.Repr
 
-pub(all) struct DurableBoundaryPayload {
-  run_id : String
-  session : String
-  sequence : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn DurableBoundaryPayload::equal(Self, Self) -> Bool
-pub fn DurableBoundaryPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn DurableBoundaryPayload::not_equal(Self, Self) -> Bool
-pub fn DurableBoundaryPayload::to_json(Self) -> Json
-pub fn DurableBoundaryPayload::to_repr(Self) -> @debug.Repr
-
 pub(all) enum EmptyPayload {
   NoPayload
 } derive(Eq, @debug.Debug)
@@ -766,13 +756,14 @@ pub(all) struct FinishedPayload {
   status : String
   answer : String?
   exit_code : Int?
-  durable_sequence : Int?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn FinishedPayload::equal(Self, Self) -> Bool
 pub fn FinishedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn FinishedPayload::not_equal(Self, Self) -> Bool
 pub fn FinishedPayload::to_json(Self) -> Json
 pub fn FinishedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for FinishedPayload
+pub impl @json.FromJson for FinishedPayload
 
 pub(all) struct FsChangedPayload {
   root : String
@@ -1294,7 +1285,6 @@ pub(all) enum Notification {
   AgentEvent(AgentEventPayload)
   AgentError(AgentErrorPayload)
   AgentFinished(FinishedPayload)
-  AgentDurable(DurableBoundaryPayload)
   SessionEvent(SessionCommitPayload)
   SubrunProgress(SubrunProgressPayload)
   SessionChanged(SessionChangedPayload)
@@ -1330,7 +1320,6 @@ pub(all) enum NotificationKind {
   AgentEvent
   AgentError
   AgentFinished
-  AgentDurable
   SessionEvent
   SubrunProgress
   SessionChanged
@@ -1462,13 +1451,14 @@ pub(all) struct RunSettlementPayload {
   submission_id : String?
   status : String
   exit_code : Int?
-  durable_sequence : Int?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn RunSettlementPayload::equal(Self, Self) -> Bool
 pub fn RunSettlementPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn RunSettlementPayload::not_equal(Self, Self) -> Bool
 pub fn RunSettlementPayload::to_json(Self) -> Json
 pub fn RunSettlementPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for RunSettlementPayload
+pub impl @json.FromJson for RunSettlementPayload
 
 pub(all) struct RunsPayload {
   known : Array[KnownRunPayload]?

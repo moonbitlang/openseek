@@ -99,7 +99,7 @@ extern "js" fn parse_markdown_content(
 extern "js" fn markdown_content_query_all(
   content : MarkdownParsedContent,
   selector : String,
-) -> Array[@rdom.Element] = "(content, selector) => Array.from(content.querySelectorAll(selector))"
+) -> FixedArray[@rdom.Element] = "(content, selector) => Array.from(content.querySelectorAll(selector))"
 
 ///|
 extern "js" fn replace_target_with_markdown_content(

@@ -35,11 +35,6 @@ let finished_event : @proton_contract.Event[@protocol.FinishedPayload] = @comman
 )
 
 ///|
-let durable_event : @proton_contract.Event[@protocol.DurableBoundaryPayload] = @commands.extension_contract.event(
-  @protocol.NotificationKind::AgentDurable.wire_name(),
-)
-
-///|
 let session_event : @proton_contract.Event[@protocol.SessionCommitPayload] = @commands.extension_contract.event(
   @protocol.NotificationKind::SessionEvent.wire_name(),
 )
@@ -209,7 +204,6 @@ async fn PageEventTarget::emit(
     Hub(AgentEvent(payload)) => self.events.emit(agent_event, payload)
     Hub(AgentError(payload)) => self.events.emit(agent_error_event, payload)
     Hub(AgentFinished(payload)) => self.events.emit(finished_event, payload)
-    Hub(AgentDurable(payload)) => self.events.emit(durable_event, payload)
     Hub(SessionEvent(payload)) => self.events.emit(session_event, payload)
     Hub(SubrunProgress(payload)) => self.events.emit(subrun_progress, payload)
     Hub(SessionChanged(payload)) =>

@@ -856,7 +856,7 @@ extern "js" fn markdown_native_range_bounding_rect(
 ///|
 extern "js" fn markdown_native_range_client_rects(
   range : MarkdownNativeRange,
-) -> Array[@rdom.DOMRect] = "(range) => Array.from(range.getClientRects())"
+) -> FixedArray[@rdom.DOMRect] = "(range) => Array.from(range.getClientRects())"
 
 ///|
 extern "js" fn markdown_native_computed_line_height(

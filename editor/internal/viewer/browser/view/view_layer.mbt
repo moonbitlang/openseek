@@ -347,5 +347,5 @@ extern "js" fn record_view_layer_mutation(kind : String) -> Unit =
 /// ordinary `HTMLElement[]` supplies in Monaco's loops.
 extern "js" fn snapshot_element_children(
   element : @rdom.Element,
-) -> Array[@rdom.Element] =
+) -> FixedArray[@rdom.Element] =
   #| (element) => Array.from(element.children)

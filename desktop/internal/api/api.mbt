@@ -432,7 +432,7 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.agent_start, async fn(payload) {
       @engine.start_run(state.sink(), state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.agent_cancel, fn(payload) {
+    @endpoint.Endpoint::remote_sync(@commands.agent_cancel, payload => {
       @engine.cancel_run(state.manager, payload)
     }),
     @endpoint.Endpoint::remote(@commands.agent_steer, fn(payload) {

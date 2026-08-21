@@ -207,7 +207,6 @@ fn device_msg(
     AgentEvent(payload) => engine_msg(payload)
     AgentError(payload) => error_msg(payload)
     AgentFinished(payload) => finished_msg(payload)
-    AgentDurable(payload) => durable_boundary_msg(payload)
     SessionEvent(payload) => session_event_msg(channel, payload)
     SubrunProgress(payload) =>
       Some(
@@ -883,26 +882,18 @@ fn RecoveredRun::from_started(
 }
 
 ///|
-/// Decode one selector-matched completion from `agent.runs`. A normal
-/// terminal-backed status is durable by construction; every abnormal or
-/// future status requires the host's exact EOF sequence before it is safe to
-/// replay. This keeps a malformed/older host from turning an absence into a
-/// false zero-durable conclusion.
+/// Decode one selector-matched completion from `agent.runs`. Every settlement
+/// the host kept is the outcome it published for a run this caller owns, so
+/// there is nothing to withhold: how much the run committed is a question the
+/// transcript read answers, not one this reply has to prove.
 fn RecoveredSettlement::from_reply(
   payload : @protocol.RunSettlementPayload,
 ) -> RecoveredSettlement? {
-  let terminal_backed = payload.status == "finished" ||
-    payload.status == "context_yield" ||
-    payload.status == "max_steps_exhausted"
-  guard terminal_backed || payload.durable_sequence is Some(_) else {
-    return None
-  }
   Some({
     run_id: payload.run_id,
     session: payload.session,
     submission_id: payload.submission_id,
     status: payload.status,
-    durable_sequence: payload.durable_sequence,
   })
 }
 
@@ -973,20 +964,6 @@ fn finished_msg(payload : @protocol.FinishedPayload) -> DeviceMsg? {
       run_id=payload.run_id,
       status=payload.status,
       answer=payload.answer,
-      durable_sequence=payload.durable_sequence,
-    ),
-  )
-}
-
-///|
-fn durable_boundary_msg(
-  payload : @protocol.DurableBoundaryPayload,
-) -> DeviceMsg? {
-  Some(
-    DurableBoundary(
-      run_id=payload.run_id,
-      session=payload.session,
-      sequence=payload.sequence,
     ),
   )
 }
@@ -1532,6 +1509,11 @@ async fn request_agent_goal(
 }
 
 ///|
+/// Ask the host to cancel `run_id`. Only a failure is worth reporting: the
+/// host raises when the cancellation could not be delivered, and answers
+/// normally otherwise — including for a turn that ended on its own just
+/// before the request landed, which is a race the user cannot see and does
+/// not need to. The run itself ends through its `agent.finished`.
 fn cancel_openseek(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -1539,23 +1521,22 @@ fn cancel_openseek(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      ignore(
-        @interop.bridge_request(channel, @commands.agent_cancel, {
-          run_id: Some(run_id),
-        }) catch {
-          error => {
-            scheduler.add(
-              dispatch(
-                HostActionFailed(
-                  "Failed to cancel the run: " +
-                  @interop.bridge_error_text(error),
-                ),
+      let _ : @protocol.CancelReply = @interop.bridge_request(
+        channel,
+        @commands.agent_cancel,
+        { run_id: Some(run_id) },
+      ) catch {
+        error => {
+          scheduler.add(
+            dispatch(
+              HostActionFailed(
+                "Failed to cancel the run: " + @interop.bridge_error_text(error),
               ),
-            )
-            return
-          }
-        },
-      )
+            ),
+          )
+          return
+        }
+      }
     })
   })
 }

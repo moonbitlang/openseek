@@ -177,7 +177,7 @@ extern "js" fn content_widgets_test_log_event(event : String) -> Unit =
   #| (event) => { globalThis.__contentWidgetEvents.push(String(event)); }
 
 ///|
-extern "js" fn content_widgets_test_events() -> Array[String] =
+extern "js" fn content_widgets_test_events() -> FixedArray[String] =
   #| () => globalThis.__contentWidgetEvents.slice()
 
 ///|

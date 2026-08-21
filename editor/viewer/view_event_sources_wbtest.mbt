@@ -75,7 +75,7 @@ extern "js" fn test_view_scroll_width(
 ///|
 extern "js" fn test_view_scroll_flags(
   event : @view.ViewScrollChangedEvent,
-) -> Array[Bool] =
+) -> FixedArray[Bool] =
   #| (event) => [
   #|   event.scroll_width_changed,
   #|   event.scroll_left_changed,
@@ -86,7 +86,7 @@ extern "js" fn test_view_scroll_flags(
 ///|
 extern "js" fn test_view_cursor_selections(
   event : @view.ViewCursorStateChangedEvent,
-) -> Array[@core.Selection] = "(event) => event.selections"
+) -> FixedArray[@core.Selection] = "(event) => event.selections"
 
 ///|
 test "view configuration source preserves independent paint axes and no-op" {

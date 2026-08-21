@@ -424,7 +424,6 @@ priv struct RecoveredSettlement {
   session : String
   submission_id : String?
   status : String
-  durable_sequence : Int?
 }
 
 ///|
@@ -2108,15 +2107,9 @@ priv enum DeviceMsg {
   )
   // `answer` accompanies normal success and context yield (where it is
   // continuation guidance); other terminal statuses carry none.
-  Finished(
-    run_id~ : String,
-    status~ : String,
-    answer~ : String?,
-    durable_sequence~ : Int?
-  )
+  Finished(run_id~ : String, status~ : String, answer~ : String?)
   // A failed command's process reached EOF after lifecycle was already
   // settled. This is only the exact durable boundary, never a second finish.
-  DurableBoundary(run_id~ : String, session~ : String, sequence~ : Int)
 }
 
 ///|
@@ -3299,25 +3292,6 @@ fn Conversation::acknowledge_steer(
 ///|
 
 ///|
-/// An EOF frontier of zero, with no applied or buffered commit, proves this
-/// session record was never created. This is stronger than an unsuccessful
-/// snapshot read: the host observed the writer after process exit.
-fn Conversation::is_empty_at_durable_frontier(
-  self : Conversation,
-  frontier : Int,
-) -> Bool {
-  let reconciliation_buffer_empty = match self.sync {
-    Synced => true
-    Reloading(buffered~, ..) => buffered.is_empty()
-    ReloadFailed(buffered~, ..) => buffered.is_empty()
-  }
-  frontier == 0 &&
-  self.watermark == 0 &&
-  self.messages.is_empty() &&
-  reconciliation_buffer_empty
-}
-
-///|
 /// Restore a definitively refused submission without overwriting a draft the
 /// user typed while the request was in flight. Recovered text is placed first,
 /// followed by the newer draft; mention chips retain both submissions' order.
@@ -3751,7 +3725,6 @@ priv enum RunOutcome {
   ContextYield
   Aborted
   RunFailed
-  Cancelled
   MaxStepsExhausted
   Unknown(String)
 } derive(Eq)
@@ -3763,7 +3736,6 @@ fn RunOutcome::parse(wire : String) -> RunOutcome {
     "context_yield" => ContextYield
     "aborted" => Aborted
     "failed" => RunFailed
-    "cancelled" => Cancelled
     "max_steps_exhausted" => MaxStepsExhausted
     other => Unknown(other)
   }
@@ -3776,7 +3748,6 @@ fn RunOutcome::label(self : RunOutcome) -> String {
     ContextYield => "Context limit reached"
     Aborted => "Aborted"
     RunFailed => "Failed"
-    Cancelled => "Cancelled"
     MaxStepsExhausted => "Max steps exhausted"
     // An empty wire status reads as a plain finish, like `parse`'s inverse.
     Unknown(wire) => if wire.is_blank() { "Finished" } else { wire }

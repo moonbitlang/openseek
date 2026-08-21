@@ -61,10 +61,42 @@ pub(all) struct StartReply {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// The run the cancellation reached, absent when no turn was open. Absence is
+/// an answer rather than a failure — a Stop racing a turn that just ended
+/// wanted the run over, and it is. A cancel that could not be delivered
+/// raises instead.
 pub(all) struct CancelReply {
-  cancelled : Bool
   run_id : String?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+/// Omitted rather than `null` when there was nothing to cancel: the key's
+/// absence is the answer, and a reader that only checks for the key sees the
+/// same thing as one that inspects its value.
+pub impl ToJson for CancelReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  if self.run_id is Some(run_id) {
+    fields["run_id"] = Json::string(run_id)
+  }
+  Json::object(fields)
+}
+
+///|
+/// Every shape that is not a run id reads as "no run was cancelled" —
+/// missing, `null`, and a non-string alike. There is nothing to be strict
+/// about: the field is optional by design, and a reply this host cannot spell
+/// is not worth failing a Stop over.
+pub impl FromJson for CancelReply with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected a cancel reply"))
+  }
+  {
+    run_id: match fields.get("run_id") {
+      Some(String(run_id)) => Some(run_id)
+      _ => None
+    },
+  }
+}
 
 ///|
 pub(all) struct SteerReply {
@@ -85,15 +117,66 @@ pub(all) struct GoalReply {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-/// One reconnect-safe completion returned by `agent.runs`.
+/// One reconnect-safe completion returned by `agent.runs`. It answers "how
+/// did this run I own end", so the three fields that establish that — the
+/// run, the conversation it belonged to, and its outcome — are required; a
+/// row missing any of them cannot be matched against a caller's selectors
+/// and is refused instead of half-applied. `submission_id` is present only
+/// for a run whose Started carried one, and `exit_code` only for a run whose
+/// process exited, so both read absent, `null` and a wrong-typed value alike
+/// as "not reported".
 pub(all) struct RunSettlementPayload {
   run_id : String
   session : String
   submission_id : String?
   status : String
   exit_code : Int?
-  durable_sequence : Int?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for RunSettlementPayload with fn to_json(self) {
+  let fields = {
+    "run_id": Json::string(self.run_id),
+    "session": Json::string(self.session),
+    "status": Json::string(self.status),
+  }
+  if self.submission_id is Some(submission_id) {
+    fields["submission_id"] = Json::string(submission_id)
+  }
+  if self.exit_code is Some(exit_code) {
+    fields["exit_code"] = Json::number(exit_code.to_double())
+  }
+  Json::object(fields)
+}
+
+///|
+pub impl FromJson for RunSettlementPayload with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected run settlement payload"))
+  }
+  guard fields.get("run_id") is Some(String(run_id)) else {
+    raise JsonDecodeError((path.add_key("run_id"), "expected a run id"))
+  }
+  guard fields.get("session") is Some(String(session)) else {
+    raise JsonDecodeError((path.add_key("session"), "expected a session id"))
+  }
+  guard fields.get("status") is Some(String(status)) else {
+    raise JsonDecodeError((path.add_key("status"), "expected a run status"))
+  }
+  {
+    run_id,
+    session,
+    status,
+    submission_id: match fields.get("submission_id") {
+      Some(String(value)) => Some(value)
+      _ => None
+    },
+    exit_code: match fields.get("exit_code") {
+      Some(Number(value, ..)) => Some(value.to_int())
+      _ => None
+    },
+  }
+}
 
 ///|
 pub(all) struct RunsReply {
