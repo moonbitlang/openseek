@@ -32,26 +32,13 @@ pub fn output_reports_policy_refusal(output : String) -> Bool {
 ///|
 /// Guidance to append when a run's output shows a policy refusal.
 ///
-/// Two rules produce it — a file access outside the snippet's roots, and a
-/// program the spawn allowlist will not start — and a refused spawn carries no
-/// path at all, so this names both instead of asserting one. Asserting one is
-/// how a refused `@process.spawn` came to be explained as a blocked file write,
-/// sending the model to debug paths for a failure that had no path in it.
+/// Names both rules rather than asserting one: a refused spawn carries no path,
+/// and reading it as a blocked write once sent the model to debug paths.
 ///
-/// It does not list ways to evade the boundary. An earlier wording spelled out
-/// renames, copies and temp-then-move as things not to try, which is a worse
-/// instruction than the plain one: the reader who had not thought of them now
-/// has, and a model that decides to evade is not stopped by having been told the
-/// names of the techniques.
-///
-/// It ends by pointing at the replacement rather than at the boundary, because
-/// that is what the refusals in 60 measured trials actually were: `ls`, `cat`,
-/// `pwd`, `which`, `sh` — POSIX utilities with a one-line MoonBit form. Two
-/// earlier sentences were dropped for saying nothing to that case. One coached
-/// reaching a just-built executable through `moon run`, which no trial ever
-/// tried; the other said to stay inside the workspace, which is not what a
-/// refused `ls` is about. Every access refusal on record was a READ, and reads
-/// are now allowed outright, so that half of the message has no live case left.
+/// Ends on the replacement because that is what every refusal in 60 measured
+/// trials was — `ls`, `cat`, `pwd`, `which`, `sh`. It deliberately lists no ways
+/// around the boundary; naming evasion techniques teaches them without stopping
+/// anyone.
 pub let policy_refusal_feedback : String =
   #|run_moonbit sandbox: that failure is this tool's policy refusing something, not a
   #|filesystem problem to debug — either a read or write left the workspace, or the

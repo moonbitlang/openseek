@@ -5,6 +5,9 @@
 /// the sandbox — instead of using `edit`. It lives beside the denial detector
 /// because both the foreground runner and the background-job reader need the
 /// same explanation for the same recognized condition.
+///
+/// Names the way forward without naming ways around it, for the same reason as
+/// `policy_refusal_feedback`.
 let source_write_denial_feedback : String =
   #|run_moonbit sandbox: the "Operation not permitted" failure above is this tool's
   #|sandbox denying a write to a protected MoonBit source file (`*.mbt`, `*.mbti`,
@@ -12,10 +15,8 @@ let source_write_denial_feedback : String =
   #|problem to debug. Snippets run source-write-readonly by design; writing non-source
   #|files (data, logs, reports) stays allowed, and source-writing moon commands
   #|(`moon fmt`, `moon info`, `moon add`, `moon test --update`) are denied here by the
-  #|same rule. Do NOT try to work around the block from inside a program (renames,
-  #|copies, temp-then-move, or other sandbox escapes) — make source changes with the
-  #|line-anchored `edit` tool instead, and keep run_moonbit for commands, compute,
-  #|probing, and non-source IO.
+  #|same rule. Make source changes with the line-anchored `edit` tool, and keep
+  #|run_moonbit for commands, compute, probing, and non-source IO.
 
 ///|
 /// Protected MoonBit source and manifest names, as they appear at the end of a

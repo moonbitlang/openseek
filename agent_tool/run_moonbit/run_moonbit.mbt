@@ -814,19 +814,14 @@ fn schema(background~ : Bool) -> Json {
 ///|
 /// The `run_moonbit` tool description.
 ///
-/// Deliberately a stub. The envelope, the `Cmd` semantics, the spawn allowlist
-/// with its MoonBit replacements, and the isolation rules all live in the
-/// system prompts instead — every role that registers this tool carries them in
-/// its own prompt. The tool text used to hold them and the prompt kept a
-/// pointer; that arrangement was measured and reversed, because a correction
-/// made in the description did not move the behavior while the prompt said
-/// otherwise. Keep this short: whatever is written here now competes with the
-/// prompt rather than completing it.
+/// Deliberately a stub: the envelope, `Cmd` semantics, spawn allowlist and
+/// isolation rules live in each role's system prompt now, because a correction
+/// made here did not move behavior while the prompt said otherwise. Anything
+/// added back competes with the prompt rather than completing it.
 ///
-/// `background` adds the background-jobs paragraph, which is the one thing that
-/// CANNOT move to a prompt: a definition without a job runtime must not
-/// advertise `run_in_background`, and a static prompt cannot know whether one is
-/// wired.
+/// `background` is the exception that cannot move: without a job runtime the
+/// tool must not advertise `run_in_background`, and a static prompt cannot know
+/// whether one is wired.
 fn description(background~ : Bool) -> String {
   let base =
     #|Compile and run a self-contained MoonBit program (a `.mbtx` single-file script) and
