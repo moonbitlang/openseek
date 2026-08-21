@@ -93,6 +93,9 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("git", ["merge-base"]),
   ("git", ["range-diff"]),
   ("git", ["ls-files"]),
+  // `ls-files` reads the index, so listing a tree at another commit had no
+  // spelling short of `cat-file -p` on a hash the turn must first resolve.
+  ("git", ["ls-tree"]),
   ("git", ["ls-remote"]),
   ("git", ["shortlog"]),
   ("git", ["grep"]),
@@ -136,6 +139,9 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // `filter-branch`). In each of those the dangerous form is selected by a
   // FLAG, which follows the subcommand and so cannot be excluded by a prefix —
   // leaving the whole subcommand out is the only setting available.
+  //
+  // `difftool`/`mergetool` are out for a different reason: both drive an
+  // interactive external program, which a headless turn cannot answer.
   //
   // The forge CLI, likewise per subcommand: `gh extension` installs and then
   // runs third-party code, and `gh alias` turns any later invocation into
