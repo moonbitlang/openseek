@@ -2,7 +2,7 @@
 /// Capability eval: does the agent *choose* background jobs when they are
 /// merely the smart strategy? Unlike `eval/bgjobs_e2e` (which instructs the
 /// model to use `run_in_background` and validates the plumbing), these prompts
-/// never mention background jobs, `shell_output`, or notices — the scorecard
+/// never mention background jobs, `job_output`, or notices — the scorecard
 /// measures the model's own judgment:
 ///
 /// - S1 "overlap": a ~20s command plus quick questions, with an efficiency
@@ -38,8 +38,9 @@ async fn scenario_overlap(engine : Engine) -> Unit {
   engine.prompt(
     (
       #|Please do all of the following, and be efficient with wall-clock time:
-      #|1. Run the integration check: sh -c 'sleep 20; echo INTEG-OK-31337'
-      #|   (it takes about 20 seconds) and report the line it prints.
+      #|1. Run the integration check. It takes about 20 seconds and then prints
+      #|   INTEG-OK-31337; stand it in for now with a program that waits that
+      #|   long and prints exactly that line. Report the line it prints.
       #|2. Report how many files are in agent_tool/bgjobs.
       #|3. Report the first line of docs/plans/shell-execution-model.md.
     ),
@@ -53,15 +54,15 @@ async fn scenario_overlap(engine : Engine) -> Unit {
     event is { "event": String("tool_result"), "content": String(content), .. } &&
     content.contains("started background job")
   })
-  // The marker inside a plain `shell` result means the slow command ran (and
-  // blocked) in the foreground.
+  // The marker inside a plain `run_moonbit` result means the slow program ran
+  // (and blocked) in the foreground.
   let blocked_foreground = seen
     .iter()
     .any(event => {
       event
       is {
         "event": String("tool_result"),
-        "tool_name": String("shell"),
+        "tool_name": String("run_moonbit"),
         "content": String(content),
         ..
       } &&
@@ -74,7 +75,7 @@ async fn scenario_overlap(engine : Engine) -> Unit {
     event
     is {
       "event": String("tool_result"),
-      "tool_name": String("shell_output"),
+      "tool_name": String("job_output"),
       "content": String(content),
       ..
     } &&
@@ -87,7 +88,7 @@ async fn scenario_overlap(engine : Engine) -> Unit {
       .any(event => {
         event
         is { "event": String("tool_result"), "tool_name": String(name), .. } &&
-        name != "shell_output"
+        name != "job_output"
       })
     _ => false
   }
@@ -116,7 +117,9 @@ async fn scenario_fire_and_forget(engine : Engine) -> Unit {
   let started_ms = @env.now().reinterpret_as_int64()
   engine.prompt(
     (
-      #|Kick off the long soak check: sh -c 'sleep 45; echo SOAK-DONE-555'.
+      #|Kick off the long soak check. It runs about 45 seconds and then prints
+      #|SOAK-DONE-555; stand it in for now with a program that waits that long
+      #|and prints exactly that line.
       #|I do not need the result now and I don't want you to wait for it —
       #|just get it running, tell me how you started it and how I can check on
       #|it later, and you're done.

@@ -87,14 +87,13 @@ of a snippet and the list of programs one may start.
     file with `@fs` and append a `.worktrees/` line if it is missing (never
     stage `.worktrees/` — without the exclude, `git add .` would stage the
     nested checkout as a gitlink). Then
-    `git worktree add .worktrees/feature-x -b feature-x`, work on the branch
-    there, and `git worktree remove .worktrees/feature-x` when done
-    (`git worktree prune` cleans stale bookkeeping). Run each worktree command
-    as its own `Cmd`. `add`, non-force `remove`, and `prune` are allowed;
-    `remove --force` is not — commit or discard the worktree's changes with
-    git first, then remove it. Keep worktree paths under `.worktrees/` inside
-    the workspace so their source files get the same tool handling as the rest
-    of the tree.
+    `git worktree add .worktrees/feature-x -b feature-x`, and work on the
+    branch there. Run each worktree command as its own `Cmd`. Only `add` and
+    `list` are allowed: `remove` and `prune` are refused, because their target
+    is any worktree of the repository and not only the one you made — so when
+    you are done, name the worktree you left behind rather than trying to
+    clean it up. Keep worktree paths under `.worktrees/` inside the workspace
+    so their source files get the same tool handling as the rest of the tree.
   - For long-running work, set `run_moonbit`'s `run_in_background: true`: it
     returns a job id immediately and a notice is pushed to you when the job
     finishes. Never wait with a sleep loop or by polling; keep working and act
