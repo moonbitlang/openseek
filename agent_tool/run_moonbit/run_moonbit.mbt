@@ -889,7 +889,7 @@ fn description(background~ : Bool) -> String {
     #|  show-ref, for-each-ref, cat-file, check-ignore, merge-base, range-diff,
     #|  ls-files, ls-tree, ls-remote, shortlog, grep, branch, tag, remote, reflog,
     #|  add, commit, checkout, switch, restore, reset, revert, rm, init, fetch,
-    #|  push, rebase; plus `submodule update|status`, `worktree list|add`,
+    #|  push, rebase; plus `submodule update|status`, `worktree list|add|prune`,
     #|  `stash list|show`. Not `config`. A global option BEFORE the subcommand
     #|  (`-c`, `-C`, `--git-dir`, `--work-tree`) is refused.
     #|- `gh` — pr, issue, run, `repo view`, api, `auth status`.

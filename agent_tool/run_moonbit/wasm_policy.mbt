@@ -128,6 +128,11 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("git", ["submodule", "status"]),
   ("git", ["worktree", "list"]),
   ("git", ["worktree", "add"]),
+  // `prune` only garbage-collects the admin records of worktrees whose
+  // DIRECTORY is already gone — it has no argument naming one to delete, so it
+  // cannot reach a live tree the way `remove` can. That is what makes it the
+  // safe half: delete your own worktree's directory, then prune the record.
+  ("git", ["worktree", "prune"]),
   ("git", ["stash", "list"]),
   ("git", ["stash", "show"]),
   // Deliberately absent, matching the forms the shell tool pre-blocked:

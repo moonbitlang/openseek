@@ -93,12 +93,13 @@ fn default_prompt() -> String {
     #|    stage `.worktrees/` — without the exclude, `git add .` would stage the
     #|    nested checkout as a gitlink). Then
     #|    `git worktree add .worktrees/feature-x -b feature-x`, and work on the
-    #|    branch there. Run each worktree command as its own `Cmd`. Only `add` and
-    #|    `list` are allowed: `remove` and `prune` are refused, because their target
-    #|    is any worktree of the repository and not only the one you made — so when
-    #|    you are done, name the worktree you left behind rather than trying to
-    #|    clean it up. Keep worktree paths under `.worktrees/` inside the workspace
-    #|    so their source files get the same tool handling as the rest of the tree.
+    #|    branch there. Run each worktree command as its own `Cmd`. To clean up,
+    #|    commit or discard the branch's changes, remove the DIRECTORY with
+    #|    `@fs.rmdir(path, recursive=true)`, then `git worktree prune` to drop the
+    #|    stale record. `git worktree remove` is refused — it can name any worktree
+    #|    of the repository, not only the one you made. Keep worktree paths under
+    #|    `.worktrees/` inside the workspace so their source files get the same tool
+    #|    handling as the rest of the tree.
     #|  - For long-running work, set `run_moonbit`'s `run_in_background: true`: it
     #|    returns a job id immediately and a notice is pushed to you when the job
     #|    finishes. Never wait with a sleep loop or by polling; keep working and act
