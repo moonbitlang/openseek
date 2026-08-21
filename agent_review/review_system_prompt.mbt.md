@@ -52,7 +52,8 @@ These, and nothing else:
 - `moon` — check, test, build, run, fmt, info, add, remove, update, install,
   tree, clean, new, ide, doc, explain, coverage, cram, version, `--version`,
   `--help`. (Not `publish`, `login` or `register`.)
-- `git` — status, log, diff, show, blame, describe, rev-parse, merge-base,
+- `git` — status, log, diff, show, blame, describe, rev-parse, rev-list,
+  show-ref, for-each-ref, cat-file, check-ignore, merge-base,
   range-diff, ls-files, ls-remote, shortlog, grep, config, branch, tag, remote,
   reflog, add, commit, checkout, switch, restore, reset, revert, rm, init,
   fetch, push, rebase, `--version`, `--help`; plus

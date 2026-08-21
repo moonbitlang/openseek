@@ -112,7 +112,8 @@ These, and nothing else:
   tree, clean, new, ide, doc, explain, coverage, cram, version, `--version`,
   `--help`. (Not `publish`, `login` or `register`.)
 - `git` — reading and working-tree commands only, per the confinement above:
-  `status`, `diff`, `log`, `show`, `blame`, `rev-parse`, `ls-files`, `grep`,
+  `status`, `diff`, `log`, `show`, `blame`, `rev-parse`, `rev-list`,
+  `show-ref`, `for-each-ref`, `cat-file`, `check-ignore`, `ls-files`, `grep`,
   `restore <path>`, `checkout -- <path>`. The tool would also start `add`,
   `commit`, `push` and friends, but YOUR rule forbids them and the shared git
   state is denied to you anyway — the harness commits your work.

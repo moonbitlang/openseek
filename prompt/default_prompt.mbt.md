@@ -78,7 +78,8 @@ These, and nothing else:
   tree, clean, new, ide, doc, explain, coverage, cram, version, `--version`,
   `--help`. (Not `publish`, `login` or `register`: releasing a package is not
   something a turn does on its way past.)
-- `git` — status, log, diff, show, blame, describe, rev-parse, merge-base,
+- `git` — status, log, diff, show, blame, describe, rev-parse, rev-list,
+  show-ref, for-each-ref, cat-file, check-ignore, merge-base,
   range-diff, ls-files, ls-remote, shortlog, grep, config, branch, tag, remote,
   reflog, add, commit, checkout, switch, restore, reset, revert, rm, init,
   fetch, push, rebase, `--version`, `--help`; plus

@@ -83,6 +83,13 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("git", ["blame"]),
   ("git", ["describe"]),
   ("git", ["rev-parse"]),
+  // Read-only queries, each a subset of something already here. They were
+  // missing only because this list is written a subcommand at a time.
+  ("git", ["rev-list"]),
+  ("git", ["show-ref"]),
+  ("git", ["for-each-ref"]),
+  ("git", ["cat-file"]),
+  ("git", ["check-ignore"]),
   ("git", ["merge-base"]),
   ("git", ["range-diff"]),
   ("git", ["ls-files"]),
