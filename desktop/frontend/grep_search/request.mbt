@@ -1,11 +1,6 @@
 ///|
 priv suberror SearchRequestSub {
-  SearchRequest(
-    @interop.ConversationKey,
-    SearchRequest,
-    Int,
-    @cmd.Emit[Msg]
-  )
+  SearchRequest(@interop.ConversationKey, SearchRequest, Int, @cmd.Emit[Msg])
 }
 
 ///|
@@ -58,10 +53,11 @@ fn cancel_search(
     match request {
       Text(payload) =>
         ignore(
-          @interop.bridge_request(owner.channel, @commands.fs_cancel_search_text, {
-            session_key: payload.session_key,
-            generation: payload.generation,
-          }),
+          @interop.bridge_request(
+            owner.channel,
+            @commands.fs_cancel_search_text,
+            { session_key: payload.session_key, generation: payload.generation },
+          ),
         ) catch {
           _ => ()
         }
@@ -70,10 +66,7 @@ fn cancel_search(
           @interop.bridge_request(
             owner.channel,
             @commands.fs_cancel_search_semantic,
-            {
-              session_key: payload.session_key,
-              generation: payload.generation,
-            },
+            { session_key: payload.session_key, generation: payload.generation },
           ),
         ) catch {
           _ => ()
@@ -87,7 +80,8 @@ fn search_request_loader(
   payload : Error,
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
-  guard payload is SearchRequestSub::SearchRequest(owner, request, delay_ms, emit) else {
+  guard payload
+    is SearchRequestSub::SearchRequest(owner, request, delay_ms, emit) else {
     return None
   }
   let mut emit = emit
@@ -110,28 +104,26 @@ fn search_request_loader(
       @js.async_run(() => {
         let loaded : LoadedReply = match request {
           Text(payload) =>
-            try {
-              LoadedReply::TextLoaded(
-                @interop.bridge_request(
-                  owner.channel,
-                  @commands.fs_search_text,
-                  payload,
-                ),
-              )
-            } catch {
-              error => LoadedReply::RequestFailed(@interop.bridge_error_text(error))
+            LoadedReply::TextLoaded(
+              @interop.bridge_request(
+                owner.channel,
+                @commands.fs_search_text,
+                payload,
+              ),
+            ) catch {
+              error =>
+                LoadedReply::RequestFailed(@interop.bridge_error_text(error))
             }
           Semantic(payload) =>
-            try {
-              LoadedReply::SemanticLoaded(
-                @interop.bridge_request(
-                  owner.channel,
-                  @commands.fs_search_semantic,
-                  payload,
-                ),
-              )
-            } catch {
-              error => LoadedReply::RequestFailed(@interop.bridge_error_text(error))
+            LoadedReply::SemanticLoaded(
+              @interop.bridge_request(
+                owner.channel,
+                @commands.fs_search_semantic,
+                payload,
+              ),
+            ) catch {
+              error =>
+                LoadedReply::RequestFailed(@interop.bridge_error_text(error))
             }
         }
         settled = true
@@ -212,7 +204,10 @@ pub fn State::subscription(
     return @sub.none
   }
   let request = match page.mode {
-    Text => page.text_request_payload(input).map(payload => SearchRequest::Text(payload))
+    Text =>
+      page
+      .text_request_payload(input)
+      .map(payload => SearchRequest::Text(payload))
     Semantic =>
       page
       .semantic_request_payload(input)

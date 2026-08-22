@@ -511,7 +511,9 @@ fn visible_semantic_file_groups(page : Page) -> Array[SemanticFileGroup] {
 ///|
 /// One moongrep context line: gutter line number plus the source text, with the
 /// matched lines highlighted, in the style of semgrep's pattern-match output.
-fn semantic_context_line_view(line : @protocol.SemanticContextLine) -> @html.Html {
+fn semantic_context_line_view(
+  line : @protocol.SemanticContextLine,
+) -> @html.Html {
   @html.div(
     class=if line.is_match {
       "search-context-line matched"
@@ -638,10 +640,7 @@ fn semantic_search_body(
       let next = VisibleSearchLineStep.min(page.semantic_hits.length() - shown)
       children.push(
         @html.div(class="search-show-more", [
-          @html.button(
-            on_click=emit(ShowMore),
-            "Show \{next} more matches",
-          ),
+          @html.button(on_click=emit(ShowMore), "Show \{next} more matches"),
           @html.div(
             class="search-show-more-detail",
             "\{shown} of \{page.semantic_hits.length()} matches rendered",

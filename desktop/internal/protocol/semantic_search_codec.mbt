@@ -5,6 +5,8 @@
 // transport.
 
 //|
+
+///|
 fn sem_one_based_line(
   value : Int,
   path : @json.JsonPath,
@@ -17,6 +19,8 @@ fn sem_one_based_line(
 }
 
 //|
+
+///|
 fn sem_one_based_column(
   value : Int,
   path : @json.JsonPath,
@@ -29,6 +33,8 @@ fn sem_one_based_column(
 }
 
 //|
+
+///|
 pub impl FromJson for SearchSemanticPayload with fn from_json(json, path) {
   let object = TextSearchJsonObject::decode(
     json, path, "semantic-search payload",
@@ -51,6 +57,8 @@ pub impl FromJson for SearchSemanticPayload with fn from_json(json, path) {
 }
 
 //|
+
+///|
 pub impl ToJson for SearchSemanticPayload with fn to_json(self) {
   {
     "root": self.root,
@@ -64,6 +72,8 @@ pub impl ToJson for SearchSemanticPayload with fn to_json(self) {
 }
 
 //|
+
+///|
 pub impl FromJson for CancelSearchSemanticPayload with fn from_json(json, path) {
   let object = TextSearchJsonObject::decode(
     json, path, "semantic-search cancellation payload",
@@ -78,11 +88,15 @@ pub impl FromJson for CancelSearchSemanticPayload with fn from_json(json, path) 
 }
 
 //|
+
+///|
 pub impl ToJson for CancelSearchSemanticPayload with fn to_json(self) {
   { "session_key": self.session_key, "generation": self.generation }
 }
 
 //|
+
+///|
 pub impl FromJson for SemanticContextLine with fn from_json(json, path) {
   let object = TextSearchJsonObject::decode(
     json, path, "semantic-search context line",
@@ -96,44 +110,45 @@ pub impl FromJson for SemanticContextLine with fn from_json(json, path) {
 }
 
 //|
+
+///|
 pub impl ToJson for SemanticContextLine with fn to_json(self) {
-  {
-    "line": self.line,
-    "text": self.text,
-    "is_match": self.is_match,
-  }
+  { "line": self.line, "text": self.text, "is_match": self.is_match }
 }
 
 //|
+
+///|
 pub impl FromJson for SemanticSearchHit with fn from_json(json, path) {
-  let object = TextSearchJsonObject::decode(
-    json, path, "semantic-search hit",
-  )
+  let object = TextSearchJsonObject::decode(json, path, "semantic-search hit")
   let start_line = sem_one_based_line(
-    object.required_int("start_line"), path, "start_line",
+    object.required_int("start_line"),
+    path,
+    "start_line",
   )
   let start_column = sem_one_based_column(
-    object.required_int("start_column"), path, "start_column",
+    object.required_int("start_column"),
+    path,
+    "start_column",
   )
   let end_line = sem_one_based_line(
-    object.required_int("end_line"), path, "end_line",
+    object.required_int("end_line"),
+    path,
+    "end_line",
   )
   let end_column = sem_one_based_column(
-    object.required_int("end_column"), path, "end_column",
+    object.required_int("end_column"),
+    path,
+    "end_column",
   )
   if end_line < start_line ||
     (end_line == start_line && end_column < start_column) {
-    raise JsonDecodeError(
-      (path, "semantic-search hit range must be forward"),
-    )
+    raise JsonDecodeError((path, "semantic-search hit range must be forward"))
   }
   let context : Array[SemanticContextLine] = []
   for index, raw in object.required_array("source_context") {
     context.push(
-      @json.from_json(
-        raw,
-        path=path.add_key("source_context").add_index(index),
-      ),
+      @json.from_json(raw, path=path.add_key("source_context").add_index(index)),
     )
   }
   let description = match object.fields.get("description") {
@@ -158,6 +173,8 @@ pub impl FromJson for SemanticSearchHit with fn from_json(json, path) {
 }
 
 //|
+
+///|
 pub impl ToJson for SemanticSearchHit with fn to_json(self) {
   let fields : Map[String, Json] = {
     "path": self.path.to_json(),
@@ -176,10 +193,10 @@ pub impl ToJson for SemanticSearchHit with fn to_json(self) {
 }
 
 //|
+
+///|
 pub impl FromJson for SemanticSearchError with fn from_json(json, path) {
-  let object = TextSearchJsonObject::decode(
-    json, path, "semantic-search error",
-  )
+  let object = TextSearchJsonObject::decode(json, path, "semantic-search error")
   let code = object.required_string("code")
   let message = object.required_string("message")
   if code.is_empty() {
@@ -195,15 +212,17 @@ pub impl FromJson for SemanticSearchError with fn from_json(json, path) {
 }
 
 //|
+
+///|
 pub impl ToJson for SemanticSearchError with fn to_json(self) {
   { "code": self.code, "message": self.message }
 }
 
 //|
+
+///|
 pub impl FromJson for SearchSemanticReply with fn from_json(json, path) {
-  let object = TextSearchJsonObject::decode(
-    json, path, "semantic-search reply",
-  )
+  let object = TextSearchJsonObject::decode(json, path, "semantic-search reply")
   let generation = require_text_search_non_negative(
     object.required_int("generation"),
     path.add_key("generation"),
@@ -258,6 +277,8 @@ pub impl FromJson for SearchSemanticReply with fn from_json(json, path) {
 }
 
 //|
+
+///|
 pub impl ToJson for SearchSemanticReply with fn to_json(self) {
   let fields : Map[String, Json] = {
     "root": self.root.to_json(),

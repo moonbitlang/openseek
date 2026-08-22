@@ -397,9 +397,7 @@ fn parse_moongrep_match(line : String) -> ParsedSemanticMatch? {
 }
 
 ///|
-fn project_semantic_match(
-  parsed : ParsedSemanticMatch,
-) -> SemanticSearchHit {
+fn project_semantic_match(parsed : ParsedSemanticMatch) -> SemanticSearchHit {
   {
     path: parsed.path,
     rule_id: parsed.rule_id,
@@ -422,10 +420,7 @@ fn project_semantic_match(
 /// pattern/rules validation and immediate crashes happen before any hit row.
 /// Once hits were streamed, the exit is treated as a recoverable tail crash
 /// and the accumulated rows are kept, mirroring ripgrep's partial results.
-fn semantic_search_exit_is_fatal(
-  exit_code : Int,
-  got_results : Bool,
-) -> Bool {
+fn semantic_search_exit_is_fatal(exit_code : Int, got_results : Bool) -> Bool {
   exit_code != 0 && !got_results
 }
 
@@ -635,8 +630,8 @@ test "semantic search builds moonx and bundled moongrep invocations" {
     max_results: 20000,
   }
   assert_eq(semantic_search_args("moonx", pattern), [
-    "moonbit-community/moongrep@0.1.18", "--", "scan", "--pattern",
-    "inspect($(x:arg))", "--output-json",
+    "moonbit-community/moongrep@0.1.18", "--", "scan", "--pattern", "inspect($(x:arg))",
+    "--output-json",
   ])
   let rules : SearchSemanticPayload = {
     ..pattern,
@@ -645,8 +640,7 @@ test "semantic search builds moonx and bundled moongrep invocations" {
     enable_builtin_rules: true,
   }
   assert_eq(semantic_search_args("/opt/bin/moongrep", rules), [
-    "scan", "--rules", "/work/.moongrep/rules", "--enable-builtin-rules",
-    "--output-json",
+    "scan", "--rules", "/work/.moongrep/rules", "--enable-builtin-rules", "--output-json",
   ])
 }
 

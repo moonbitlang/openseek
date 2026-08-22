@@ -113,13 +113,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       self.schedule({ ..page, query, }, input, immediate=false)
     ModeChanged(mode) =>
       self.schedule(
-        {
-          ..page,
-          mode,
-          matches: [],
-          semantic_hits: [],
-          collapsed: Map([]),
-        },
+        { ..page, mode, matches: [], semantic_hits: [], collapsed: Map([]) },
         input,
         immediate=false,
       )
