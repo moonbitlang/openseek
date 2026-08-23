@@ -305,8 +305,13 @@ fn activity_view(
   if items is [first, ..] && first.ts is Some(ts) {
     let label = step_time_label(ts)
     if !label.is_empty() {
+      // The visible label is time-only so the column stays scannable, which
+      // leaves one thing it cannot say: which day. A turn that runs through
+      // midnight shows a later step at an earlier clock time. The dated form
+      // rides along as the title rather than in the column, since the
+      // ambiguity is rare and checking it is deliberate.
       summary.push(
-        @html.span(class="activity-time", [
+        @html.span(class="activity-time", title=clock_label(ts), [
           speaker_label("Committed "),
           @html.text(label),
         ]),

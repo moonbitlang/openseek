@@ -716,13 +716,15 @@ test "a step is stamped to the second, from a real stamp only" {
   }
   let markup = render([stamped])
   assert_true(markup.contains("activity-time"))
-  // Locale and time zone are the viewer's, so the exact text is not asserted —
-  // only that seconds are there, which `clock_label`'s hh:mm would not give.
-  // Nothing after the span's class carries a colon but the time itself, so two
-  // separators means three fields.
-  let parts = markup.split("activity-time").to_array()
-  assert_eq(parts.length(), 2)
-  assert_eq(parts[1].split(":").to_array().length() - 1, 2)
+  // Seconds are there — the property, not its spelling. Counting `:` would
+  // have pinned the viewer's locale: fi-FI and da-DK write the same instant
+  // as `10.19.11`. Two instants a second apart rendering differently is the
+  // same claim in a form every locale satisfies, since minute precision would
+  // collapse them.
+  assert_true(step_time_label(1781144351123) != step_time_label(1781144352123))
+  // ...and the minute is still shared, so the difference really is the
+  // seconds field rather than a rollover.
+  assert_eq(clock_label(1781144351123), clock_label(1781144352123))
   assert_true(markup.contains("Committed "))
   // A step with no stamp, and the zero stamp old stores wrote for "no time
   // recorded", both keep the bare summary.
