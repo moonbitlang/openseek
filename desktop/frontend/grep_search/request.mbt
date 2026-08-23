@@ -30,14 +30,6 @@ fn SearchRequest::generation(self : SearchRequest) -> Int {
 }
 
 ///|
-fn SearchRequest::session_key(self : SearchRequest) -> String {
-  match self {
-    Text(payload) => payload.session_key
-    Semantic(payload) => payload.session_key
-  }
-}
-
-///|
 priv enum LoadedReply {
   TextLoaded(@protocol.SearchTextReply)
   SemanticLoaded(@protocol.SearchSemanticReply)
