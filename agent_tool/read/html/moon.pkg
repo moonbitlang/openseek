@@ -1,4 +1,5 @@
 import {
+  "bobzhang/openseek/agent_tool/read/internal/decode",
   "moonbit-community/rabbita/html" @rhtml,
   "moonbitlang/core/json",
   "moonbitlang/editor/viewer/html" @syntax_html,

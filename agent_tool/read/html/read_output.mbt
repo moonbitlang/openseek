@@ -1,10 +1,10 @@
 // HTML rendering for the `read` tool's stable numbered-output protocol.
 //
 // The tool result is not the file verbatim: every source line has a
-// right-aligned `<number> |` gutter and the result ends with a `<system>` status
-// footer. Tokenizing that whole envelope would color the gutters as MoonBit and
-// let the footer perturb the lexer. This decoder keeps those protocol cells as
-// plain text while passing only the source through the editor's shared,
+// right-aligned `<number> |` prefix and the result ends with a `<system>` status
+// footer. Tokenizing that whole envelope would color the protocol as MoonBit
+// and let the footer perturb the lexer. This decoder keeps only the number as
+// plain gutter text while passing the source through the editor's shared,
 // stateful MoonBit tokenizer.
 
 ///|
@@ -20,14 +20,23 @@ const MAX_READ_ARGUMENT_CHARS = 16_000
 /// unnumbered output, and empty/range-past-EOF reads. Callers should preserve
 /// their existing plain-text rendering in those cases.
 pub fn moonbit_output(arguments : String, content : String) -> @rhtml.Html? {
-  guard read_path(arguments) is Some(path) else { return None }
-  moonbit_output_for_path(path, content)
+  if arguments.length() > MAX_READ_ARGUMENT_CHARS {
+    return None
+  }
+  let json = @json.parse(arguments) catch { _ => return None }
+  let input = @decode.decode(json) catch { _ => return None }
+  moonbit_output_for_path(input.path, content)
 }
 
 ///|
 /// Render a numbered result when `path` has a MoonBit source extension.
-pub fn moonbit_output_for_path(path : String, content : String) -> @rhtml.Html? {
-  guard is_moonbit_source(path) else { return None }
+fn moonbit_output_for_path(path : String, content : String) -> @rhtml.Html? {
+  // The read body is capped by its canonical decoder. Leave room for the
+  // short status footer; older unbounded records use the host's plain fallback.
+  guard is_moonbit_source(path) &&
+    content.length() <= @decode.hard_max_output_chars + 512 else {
+    return None
+  }
   let lines = content.split("\n").map(line => line.to_owned()).collect()
   guard lines.last() is Some(status) &&
     status.has_prefix("<system>") &&
@@ -58,7 +67,7 @@ pub fn moonbit_output_for_path(path : String, content : String) -> @rhtml.Html? 
     )
   }
   children.push(@rhtml.span(class="read-moonbit-status", status))
-  Some(@rhtml.span(class="read-moonbit-output", children))
+  Some(@rhtml.span(class="read-moonbit-output run-moonbit-source", children))
 }
 
 ///|
@@ -77,20 +86,6 @@ pub fn moonbit_output_for_brief(
 }
 
 ///|
-/// The recorded `read` path, or `None` when the arguments are too large, not a
-/// JSON object, or do not carry the tool's required string `path` field.
-fn read_path(arguments : String) -> String? {
-  if arguments.length() > MAX_READ_ARGUMENT_CHARS {
-    return None
-  }
-  guard (@json.parse(arguments) catch { _ => return None }) is Object(fields) &&
-    fields.get("path") is Some(String(path)) else {
-    return None
-  }
-  Some(path)
-}
-
-///|
 /// Source/interface/script extensions tokenized by the MoonBit lexer. Markdown
 /// files such as `.mbt.md` deliberately stay plain: their outer grammar is
 /// Markdown even though fenced snippets may contain MoonBit.
@@ -102,9 +97,10 @@ fn is_moonbit_source(path : String) -> Bool {
 }
 
 ///|
-/// Split one stable read-output line into its gutter (including `|`) and
-/// verbatim source. Validation rejects an arbitrary program line containing a
-/// pipe, so an older unnumbered result safely falls back to plain text.
+/// Split one stable read-output line into its display number and verbatim
+/// source. The protocol's `|` is redundant once HTML supplies real columns.
+/// Validation rejects an arbitrary program line containing a pipe, so an older
+/// unnumbered result safely falls back to plain text.
 fn numbered_line(line : String) -> (String, String)? {
   guard line.split_once("|") is Some((left, source)) else { return None }
   let number = left.trim()
@@ -114,5 +110,5 @@ fn numbered_line(line : String) -> (String, String)? {
   if !left.iter().all(char => char == ' ' || char.is_ascii_digit()) {
     return None
   }
-  Some((left.to_owned() + "|", source.to_owned()))
+  Some((number.to_owned(), source.to_owned()))
 }

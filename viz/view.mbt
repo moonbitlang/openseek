@@ -2019,7 +2019,10 @@ fn tool_result_content(
     result.tool_name() == "read" &&
     result.brief() is Some(brief) &&
     @read_html.moonbit_output_for_brief(brief, content) is Some(rendered) {
-    @html.pre(class="content read-moonbit-content", [rendered])
+    @html.div([
+      @html.pre(class="content tool-call-args-rendered", [rendered]),
+      @html.pre(class="content tool-call-args-original", content),
+    ])
   } else {
     text_block(content)
   }

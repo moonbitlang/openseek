@@ -114,6 +114,17 @@ fn original_json_view(arguments : String) -> @html.Html {
 }
 
 ///|
+/// The read tool's exact numbered protocol behind a closed disclosure. The
+/// friendly view may drop protocol separators, but debugging can still inspect
+/// the unmodified output and status footer.
+fn original_output_view(content : String) -> @html.Html {
+  @html.details(class="tool-card-original", [
+    @html.summary(class="tool-card-original-summary", "Original output"),
+    @html.pre(class="tool-card-original-json", content),
+  ])
+}
+
+///|
 /// Ceiling on a recorded payload worth decoding for a custom card, in UTF-16
 /// code units.
 ///

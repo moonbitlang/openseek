@@ -23,8 +23,7 @@
  */
 
 .editor-shell,
-.run-moonbit-source,
-.read-moonbit-output {
+.run-moonbit-source {
   /* Base text and chrome. */
   --vscode-foreground: var(--color-text-primary);
   --vscode-icon-foreground: var(--color-text-secondary);
@@ -235,8 +234,7 @@
 }
 
 .editor-shell[data-theme="light"],
-:root[data-theme="light"] .run-moonbit-source,
-:root[data-theme="light"] .read-moonbit-output {
+:root[data-theme="light"] .run-moonbit-source {
   /* Light Modern syntax palette plus the highlight and shadow literals whose
      light values differ; the token-bound variables above follow the app
      theme by themselves. */

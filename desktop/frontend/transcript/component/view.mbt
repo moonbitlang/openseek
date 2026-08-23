@@ -406,18 +406,23 @@ fn tool_call_view_mode(
   }
   if !item.content.is_blank() {
     let content = truncate_output(item.content)
-    let rendered = match (name, arguments) {
+    let output = match (name, arguments) {
       ("read", Some(arguments)) =>
-        @read_html.moonbit_output(arguments, content).unwrap_or(
-          @html.text(content),
-        )
-      _ => @html.text(content)
+        match @read_html.moonbit_output(arguments, item.content) {
+          Some(rendered) =>
+            [
+              @html.pre(class="tool-call-output", [rendered]),
+              original_output_view(item.content),
+            ]
+          None => [@html.pre(class="tool-call-output", content)]
+        }
+      _ => [@html.pre(class="tool-call-output", content)]
     }
     body.push(
-      @html.div(class="tool-call-section", [
-        @html.div(class="tool-call-section-label", "Output"),
-        @html.pre(class="tool-call-output", [rendered]),
-      ]),
+      @html.div(
+        class="tool-call-section",
+        [@html.div(class="tool-call-section-label", "Output"), ..output],
+      ),
     )
   }
   if body.is_empty() {

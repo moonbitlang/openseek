@@ -341,10 +341,12 @@ test "MoonBit read results highlight source in raw and model views" {
     )
   for mode in [@viz.RawLog, ModelView] {
     let html = render(@viz.render_session(session, mode))
-    assert_true(html.contains("class=\"read-moonbit-output\""))
-    assert_true(html.contains("class=\"read-moonbit-gutter\">1 |"))
+    assert_true(html.contains("read-moonbit-output"))
+    assert_true(html.contains("class=\"read-moonbit-gutter\">1</span>"))
     assert_true(html.contains("<span class=\"mtk3\">fn</span>"))
     assert_true(html.contains("class=\"read-moonbit-status\""))
+    assert_true(html.contains("class=\"content tool-call-args-original\""))
+    assert_true(html.contains("1 |fn main"))
   }
 }
 

@@ -837,10 +837,12 @@
 .read-moonbit-line {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 1ch;
   align-items: start;
 }
 .read-moonbit-gutter {
   color: var(--color-text-muted);
+  text-align: right;
   white-space: pre;
   user-select: none;
 }

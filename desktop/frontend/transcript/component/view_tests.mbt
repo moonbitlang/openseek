@@ -826,6 +826,13 @@ test "a tool row renders recorded arguments before its result" {
 ///|
 #warnings("-alert_unstable")
 test "a MoonBit read highlights source without coloring its gutter or footer" {
+  // More than the generic 100-line display limit proves the read protocol is
+  // decoded before the plain-text fallback inserts skip markers.
+  let source = [
+    for index in 0..<101 => "\{index + 1} |let value_\{index} = \{index}"
+  ]
+  let content = source.join("\n") +
+    "\n<system>start_line=1 shown_lines=101 total_lines=101 truncated=false</system>"
   let rendered = tool_call_view({
     kind: Tool(
       call_id="c1",
@@ -835,21 +842,19 @@ test "a MoonBit read highlights source without coloring its gutter or footer" {
       is_error=false,
       brief=Some("read main.mbt"),
     ),
-    content: (
-      #|1 |fn main {
-      #|2 |  println("hi")
-      #|3 |}
-      #|<system>start_line=1 shown_lines=3 total_lines=3 truncated=false</system>
-    ),
+    content,
     ts: None,
     sequence: None,
   })
   let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
-  assert_true(markup.contains("class=\"read-moonbit-output\""))
-  assert_true(markup.contains("class=\"read-moonbit-gutter\">1 |"))
-  assert_true(markup.contains("<span class=\"mtk3\">fn</span>"))
+  assert_true(markup.contains("read-moonbit-output"))
+  assert_true(markup.contains("class=\"read-moonbit-gutter\">1</span>"))
+  assert_true(markup.contains("<span class=\"mtk3\">let</span>"))
   assert_true(markup.contains("class=\"read-moonbit-status\""))
   assert_false(markup.contains("class=\"mtk3\">&lt;system&gt;"))
+  assert_false(markup.contains("lines skipped"))
+  assert_true(markup.contains("Original output"))
+  assert_true(markup.contains("1 |let value_0 = 0"))
 }
 
 ///|
