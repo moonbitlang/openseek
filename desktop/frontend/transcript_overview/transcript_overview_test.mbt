@@ -91,6 +91,26 @@ test "a failed turn's tick is marked in class and in words" {
   assert_true(markup.contains("overview-tick failed"))
   // Colour is never the only carrier: the label says so too.
   assert_true(markup.contains("first question (had errors)"))
+  // And so does the popover, where a reader checks what the mark meant.
+  let hovered = render(flagged, {
+    hover: Some({
+      key: @transcript_overview.Durable(1),
+      flip: false,
+      anchor: 24,
+    }),
+    active: None,
+  })
+  assert_true(hovered.contains("overview-preview-failed"))
+  // A clean turn's popover says nothing about errors.
+  let clean_hover = render(two_entries(), {
+    hover: Some({
+      key: @transcript_overview.Durable(1),
+      flip: false,
+      anchor: 24,
+    }),
+    active: None,
+  })
+  assert_false(clean_hover.contains("overview-preview-failed"))
   // The clean turn keeps its plain class and its unadorned label.
   assert_true(markup.contains("second question"))
   assert_false(markup.contains("second question (had errors)"))

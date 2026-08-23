@@ -133,16 +133,6 @@
     background 0.12s ease,
     opacity 0.12s ease;
 }
-/* A turn that hit a tool error. Full opacity at the resting width: the mark
-   has to survive a rail of quiet ticks without being mistaken for the active
-   one, which is why only the color changes. Declared before hover and active
-   deliberately — those carry equal specificity and answer "where am I", which
-   outranks this rule's "where should I look". The tick's aria-label says the
-   same thing in words; the color is never the only carrier. */
-.overview-tick.failed .overview-tick-button::before {
-  background: var(--color-danger);
-  opacity: 1;
-}
 .overview-tick:hover .overview-tick-button::before,
 .overview-tick.hovered .overview-tick-button::before {
   width: 12px;
@@ -152,6 +142,16 @@
 .overview-tick.active .overview-tick-button::before {
   width: 12px;
   background: var(--color-accent);
+  opacity: 1;
+}
+/* A turn that hit a tool error. Declared last so its color wins, and setting
+   no width so hover and active keep theirs: the two states occupy separate
+   channels, and a failed tick stays red while it is the one you are reading —
+   which is usually the one you clicked the mark to reach. The tick's
+   aria-label and its hover preview say the same thing in words; the color is
+   never the only carrier. */
+.overview-tick.failed .overview-tick-button::before {
+  background: var(--color-danger);
   opacity: 1;
 }
 /* The hovered tick's preview: the prompt, its send time, and the answer it
@@ -196,6 +196,12 @@
   margin-top: 3px;
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
+}
+.overview-preview-failed {
+  margin-top: 5px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-danger);
 }
 .overview-preview-reply {
   margin-top: 7px;

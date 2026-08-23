@@ -128,6 +128,11 @@ fn preview(
       children.push(@html.div(class="overview-preview-time", label))
     }
   }
+  if entry.failed {
+    // The popover is where a reader checks what a mark meant, so it carries
+    // the fact in words rather than leaving the tick's color to be decoded.
+    children.push(@html.div(class="overview-preview-failed", "had errors"))
+  }
   if entry.reply is Some(reply) {
     children.push(
       @html.div(class="overview-preview-reply", clamp_preview(reply)),
