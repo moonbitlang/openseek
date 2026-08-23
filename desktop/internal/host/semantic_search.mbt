@@ -676,7 +676,7 @@ test "semantic search builds moonx and bundled moongrep invocations" {
 ///|
 test "moongrep JSON rows project into protocol hits" {
   let json =
-    #|{"file":"./src/main.mbt","rule_id":"inspect($(x:arg))","description":"Anonymous CLI pattern.","range":{"start":{"line":3,"column":3},"end":{"line":3,"column":26}},"matched_source":"inspect(1, content=\"1\")\r\n","source_context":[{"line":2,"text":"fn main() {\r\n","is_match":false},{"line":3,"text":"  inspect(1, content=\"1\")\r\n","is_match":true},{"line":4,"text":"}\r\n","is_match":false}]}}
+    #|{"file":"./src/main.mbt","rule_id":"inspect($(x:arg))","description":"Anonymous CLI pattern.","range":{"start":{"line":3,"column":3},"end":{"line":3,"column":26}},"matched_source":"inspect(1, content=\"1\")\n","source_context":[{"line":2,"text":"fn main() {\n","is_match":false},{"line":3,"text":"  inspect(1, content=\"1\")\n","is_match":true},{"line":4,"text":"}\n","is_match":false}]}}
   guard parse_moongrep_match(json) is Some(parsed) else {
     fail("expected moongrep match")
   }
