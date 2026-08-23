@@ -298,6 +298,21 @@ fn activity_view(
   // filling up without unfolding anything. A run that touched no plan adds
   // nothing.
   summary.push(@plan.fold_progress(items))
+  // When this step committed. Every row of a step shares the one stamp of the
+  // Assistant event that produced it — a matched tool result deliberately
+  // keeps its call's stamp — so a step is an instant, not a span, and the
+  // column of instants down a turn is what shows where its time went.
+  if items is [first, ..] && first.ts is Some(ts) {
+    let label = step_time_label(ts)
+    if !label.is_empty() {
+      summary.push(
+        @html.span(class="activity-time", [
+          speaker_label("Committed "),
+          @html.text(label),
+        ]),
+      )
+    }
+  }
   @html.div(class="activity-row", [
     @html.details(class="activity", open=live_reasoning is Some(_), [
       @html.summary(class="activity-summary", summary),
@@ -661,6 +676,32 @@ fn clock_label(unix_ms : Double) -> String {
     date_options.to_value(),
   ])
   date + " " + clock
+}
+
+///|
+/// A step's commit instant: local time to the second, never a date.
+///
+/// Deliberately not `clock_label`. That one dates a user's prompt, where the
+/// day matters and the minute is precise enough; steps of one turn commit
+/// seconds apart, so at `hh:mm` a whole turn would read as the same label
+/// repeated. The date is the turn rule's job — a step is always inside the
+/// turn already dated above it.
+fn step_time_label(unix_ms : Double) -> String {
+  guard !unix_ms.is_nan() && !unix_ms.is_inf() && unix_ms > 0.0 else {
+    return ""
+  }
+  guard @interop.js_prop(@js.globalThis, "Date") is Some(date_constructor) else {
+    return ""
+  }
+  let at : @js.Value = date_constructor.new([@js.Value::cast_from(unix_ms)])
+  let options = @js.Object::new()
+  options["hour"] = "2-digit"
+  options["minute"] = "2-digit"
+  options["second"] = "2-digit"
+  at.apply_with_string("toLocaleTimeString", [
+    @js.Value::cast_from(([] : Array[String])),
+    options.to_value(),
+  ])
 }
 
 ///|

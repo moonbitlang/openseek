@@ -660,6 +660,18 @@
   font-size: var(--font-size-xs);
 }
 
+/* When the step committed. Last in the row and quiet: it is a reference the
+   reader consults, not part of the summary they scan. Tabular numerals so the
+   seconds column does not shift the digits above and below it — reading the
+   gaps between steps is the whole point of showing them. */
+.activity-time {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
 .activity-body {
   display: grid;
   gap: 14px;
