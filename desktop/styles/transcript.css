@@ -660,16 +660,15 @@
   font-size: var(--font-size-xs);
 }
 
-/* When the step committed, at the row's right edge. No color of its own: it
-   inherits the summary's, so it is exactly as legible as the line it belongs
-   to and brightens with it on hover. Setting one would only have restated the
-   same token, or made the row's least important item its highest contrast.
-   Tabular numerals so the seconds column does not shift the digits above and
-   below it — reading the gaps between steps is the whole point of showing
-   them. */
+/* When the step committed, in the summary's second fixed column, right after
+   the ordinal. No color of its own: it inherits the summary's, so it is
+   exactly as legible as the line it belongs to and brightens with it on hover.
+   Setting one would only have restated the same token, or made the row's least
+   important item its highest contrast. Tabular numerals so the seconds digits
+   do not shift against the rows above and below — reading the gaps between
+   steps is the whole point of showing them. */
 .activity-time {
-  flex: 0 0 auto;
-  margin-left: auto;
+  margin-left: 8px;
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
 }

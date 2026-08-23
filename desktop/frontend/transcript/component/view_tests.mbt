@@ -716,6 +716,12 @@ test "a step is stamped to the second, from a real stamp only" {
   }
   let markup = render([stamped])
   assert_true(markup.contains("activity-time"))
+  // Ordinal, then instant, then the separator introducing the label. The order
+  // is the feature: the instants are read as a column against the rows above
+  // and below, which only works with nothing variable-width before them.
+  let after_step = markup.split("activity-step").to_array()[1]
+  assert_true(after_step.contains("activity-time"))
+  assert_true(after_step.split("activity-time").to_array()[1].contains(" · "))
   // Seconds are there — the property, not its spelling. Counting `:` would
   // have pinned the viewer's locale: fi-FI and da-DK write the same instant
   // as `10.19.11`. Two instants a second apart rendering differently is the

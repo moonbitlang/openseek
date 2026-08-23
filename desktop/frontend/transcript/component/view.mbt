@@ -281,36 +281,29 @@ fn activity_view(
   // The step ordinal is its own span so it can carry the accent and a fixed
   // numeral column: every step's `·` lands on the same x, so a long run reads
   // as a numbered list rather than a ragged stack of sentences.
-  let summary : Array[@html.Html] = [
-    if step_label.is_empty() {
-      @html.span(class="activity-text", activity_label)
-    } else {
-      @html.span(class="activity-text", [
-        @html.span(class="activity-step", step_label),
-        @html.text(" · \{activity_label}"),
-      ])
-    },
-  ]
-  if failed > 0 {
-    summary.push(failed_badge(failed))
+  // Ordinal, then commit instant, then the label — the two fixed-width columns
+  // lead, so a run of steps reads as a table. The instant belongs beside the
+  // ordinal rather than out at the right edge: the reason to show it at all is
+  // the gap to the step above and below, and comparing a column is the eye's
+  // job only when nothing variable-width sits between the entries.
+  //
+  // Every row of a step shares the one stamp of the Assistant event that
+  // produced it — a matched tool result deliberately keeps its call's stamp —
+  // so a step is an instant, not a span, and the column of instants is what
+  // shows where a turn's time went.
+  let text : Array[@html.Html] = []
+  if !step_label.is_empty() {
+    text.push(@html.span(class="activity-step", step_label))
   }
-  // The plan as this run left it, so a folded turn reads as the checklist
-  // filling up without unfolding anything. A run that touched no plan adds
-  // nothing.
-  summary.push(@plan.fold_progress(items))
-  // When this step committed. Every row of a step shares the one stamp of the
-  // Assistant event that produced it — a matched tool result deliberately
-  // keeps its call's stamp — so a step is an instant, not a span, and the
-  // column of instants down a turn is what shows where its time went.
   if items is [first, ..] && first.ts is Some(ts) {
     let label = step_time_label(ts)
     if !label.is_empty() {
-      // The visible label is time-only so the column stays scannable, which
+      // The visible label is time-only so the column stays narrow, which
       // leaves one thing it cannot say: which day. A turn that runs through
       // midnight shows a later step at an earlier clock time. The dated form
       // rides along as the title rather than in the column, since the
       // ambiguity is rare and checking it is deliberate.
-      summary.push(
+      text.push(
         @html.span(class="activity-time", title=clock_label(ts), [
           speaker_label("Committed "),
           @html.text(label),
@@ -318,6 +311,23 @@ fn activity_view(
       )
     }
   }
+  // The separator introduces the label only when something precedes it: a
+  // legacy run with no ordinal and no stamp is the label alone.
+  text.push(
+    if text.is_empty() {
+      @html.text(activity_label)
+    } else {
+      @html.text(" · \{activity_label}")
+    },
+  )
+  let summary : Array[@html.Html] = [@html.span(class="activity-text", text)]
+  if failed > 0 {
+    summary.push(failed_badge(failed))
+  }
+  // The plan as this run left it, so a folded turn reads as the checklist
+  // filling up without unfolding anything. A run that touched no plan adds
+  // nothing.
+  summary.push(@plan.fold_progress(items))
   @html.div(class="activity-row", [
     @html.details(class="activity", open=live_reasoning is Some(_), [
       @html.summary(class="activity-summary", summary),
