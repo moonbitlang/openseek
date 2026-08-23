@@ -36,9 +36,7 @@ fn sem_one_based_column(
 
 ///|
 pub impl FromJson for SearchSemanticPayload with fn from_json(json, path) {
-  let object = TextSearchJsonObject::decode(
-    json, path, "semantic-search payload",
-  )
+  let object = JsonObject::decode(json, path, "semantic-search payload")
   {
     root: object.required_string("root"),
     query: object.required_string("query"),
@@ -77,7 +75,7 @@ pub impl ToJson for SearchSemanticPayload with fn to_json(self) {
 
 ///|
 pub impl FromJson for CancelSearchSemanticPayload with fn from_json(json, path) {
-  let object = TextSearchJsonObject::decode(
+  let object = JsonObject::decode(
     json, path, "semantic-search cancellation payload",
   )
   {
@@ -100,9 +98,7 @@ pub impl ToJson for CancelSearchSemanticPayload with fn to_json(self) {
 
 ///|
 pub impl FromJson for SemanticContextLine with fn from_json(json, path) {
-  let object = TextSearchJsonObject::decode(
-    json, path, "semantic-search context line",
-  )
+  let object = JsonObject::decode(json, path, "semantic-search context line")
   let line = sem_one_based_line(object.required_int("line"), path, "line")
   {
     line,
@@ -122,7 +118,7 @@ pub impl ToJson for SemanticContextLine with fn to_json(self) {
 
 ///|
 pub impl FromJson for SemanticSearchHit with fn from_json(json, path) {
-  let object = TextSearchJsonObject::decode(json, path, "semantic-search hit")
+  let object = JsonObject::decode(json, path, "semantic-search hit")
   let start_line = sem_one_based_line(
     object.required_int("start_line"),
     path,
@@ -198,7 +194,7 @@ pub impl ToJson for SemanticSearchHit with fn to_json(self) {
 
 ///|
 pub impl FromJson for SemanticSearchError with fn from_json(json, path) {
-  let object = TextSearchJsonObject::decode(json, path, "semantic-search error")
+  let object = JsonObject::decode(json, path, "semantic-search error")
   let code = object.required_string("code")
   let message = object.required_string("message")
   if code.is_empty() {
@@ -224,7 +220,7 @@ pub impl ToJson for SemanticSearchError with fn to_json(self) {
 
 ///|
 pub impl FromJson for SearchSemanticReply with fn from_json(json, path) {
-  let object = TextSearchJsonObject::decode(json, path, "semantic-search reply")
+  let object = JsonObject::decode(json, path, "semantic-search reply")
   let generation = require_text_search_non_negative(
     object.required_int("generation"),
     path.add_key("generation"),
