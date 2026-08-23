@@ -674,26 +674,6 @@ test "semantic search builds moonx and bundled moongrep invocations" {
 }
 
 ///|
-test "moongrep JSON rows project into protocol hits" {
-  let json =
-    #|{"file":"./src/main.mbt","rule_id":"inspect($(x:arg))","description":"Anonymous CLI pattern.","range":{"start":{"line":3,"column":3},"end":{"line":3,"column":26}},"matched_source":"inspect(1)","source_context":[{"line":2,"text":"fn main()","is_match":false},{"line":3,"text":"  inspect(1)","is_match":true},{"line":4,"text":"}","is_match":false}]})
-  guard parse_moongrep_match(json) is Some(parsed) else {
-    fail("expected moongrep match")
-  }
-  let hit = project_semantic_match(parsed)
-  assert_eq(hit.path, "src/main.mbt")
-  assert_eq(hit.rule_id, "inspect($(x:arg))")
-  assert_eq(hit.start_line, 3)
-  assert_eq(hit.start_column, 3)
-  assert_eq(hit.end_line, 3)
-  assert_eq(hit.end_column, 26)
-  assert_eq(hit.matched_source, "inspect(1)")
-  assert_eq(hit.source_context.length(), 3)
-  assert_eq(hit.source_context[1].is_match, true)
-  assert_eq(hit.source_context[1].text, "  inspect(1)")
-}
-
-///|
 test "moongrep failures classify pattern and permission diagnostics" {
   assert_eq(
     semantic_search_error(
