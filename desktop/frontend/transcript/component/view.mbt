@@ -278,38 +278,25 @@ fn activity_view(
   } else {
     summary_label
   }
+  let stamp = step_stamp(items)
   // The step ordinal is its own span so it can carry the accent and a fixed
-  // numeral column: every step's `·` lands on the same x, so a long run reads
-  // as a numbered list rather than a ragged stack of sentences.
-  // Ordinal, then commit instant, then the label — the two fixed-width columns
-  // lead, so a run of steps reads as a table. The instant belongs beside the
-  // ordinal rather than out at the right edge: the reason to show it at all is
-  // the gap to the step above and below, and comparing a column is the eye's
-  // job only when nothing variable-width sits between the entries.
-  //
-  // Every row of a step shares the one stamp of the Assistant event that
-  // produced it — a matched tool result deliberately keeps its call's stamp —
-  // so a step is an instant, not a span, and the column of instants is what
-  // shows where a turn's time went.
+  // numeral column, then the instant in a second fixed column, then the label:
+  // the run reads as a table. The instant belongs beside the ordinal rather
+  // than out at the row's right edge — the reason to show it at all is the gap
+  // to the step above and below, and comparing a column is the eye's job only
+  // when nothing variable-width sits between its entries and their anchor.
   let text : Array[@html.Html] = []
   if !step_label.is_empty() {
     text.push(@html.span(class="activity-step", step_label))
-  }
-  if items is [first, ..] && first.ts is Some(ts) {
-    let label = step_time_label(ts)
-    if !label.is_empty() {
-      // The visible label is time-only so the column stays narrow, which
-      // leaves one thing it cannot say: which day. A turn that runs through
-      // midnight shows a later step at an earlier clock time. The dated form
-      // rides along as the title rather than in the column, since the
-      // ambiguity is rare and checking it is deliberate.
-      text.push(
-        @html.span(class="activity-time", title=clock_label(ts), [
-          speaker_label("Committed "),
-          @html.text(label),
-        ]),
-      )
+    // A real space, not a CSS margin, and only when the instant follows it: the
+    // gap has to exist in the text as well, or the accessible name and anything
+    // copied out of the row read "#1Committed 14:32:10".
+    if stamp is Some(_) {
+      text.push(@html.text(" "))
     }
+  }
+  if stamp is Some(stamp) {
+    text.push(stamp)
   }
   // The separator introduces the label only when something precedes it: a
   // legacy run with no ordinal and no stamp is the label alone.
@@ -691,6 +678,33 @@ fn clock_label(unix_ms : Double) -> String {
     date_options.to_value(),
   ])
   date + " " + clock
+}
+
+///|
+/// The element carrying when a step committed, or `None` when it has no usable
+/// stamp — an unstamped row, or the `0` old stores wrote for "no time
+/// recorded".
+///
+/// Every row of a step shares the one stamp of the Assistant event that
+/// produced it — a matched tool result deliberately keeps its call's stamp —
+/// so a step is an instant, not a span, and the column of instants down a turn
+/// is what shows where its time went.
+///
+/// The visible label is time-only so the column stays narrow, which leaves one
+/// thing it cannot say: which day. A turn running through midnight shows a
+/// later step at an earlier clock time. The dated form rides along as the
+/// title rather than in the column, since the ambiguity is rare and checking
+/// it is deliberate.
+fn step_stamp(items : Array[@transcript.TranscriptItem]) -> @html.Html? {
+  guard items is [first, ..] && first.ts is Some(ts) else { return None }
+  let label = step_time_label(ts)
+  guard !label.is_empty() else { return None }
+  Some(
+    @html.span(class="activity-time", title=clock_label(ts), [
+      speaker_label("Committed "),
+      @html.text(label),
+    ]),
+  )
 }
 
 ///|

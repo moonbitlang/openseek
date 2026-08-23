@@ -722,6 +722,12 @@ test "a step is stamped to the second, from a real stamp only" {
   let after_step = markup.split("activity-step").to_array()[1]
   assert_true(after_step.contains("activity-time"))
   assert_true(after_step.split("activity-time").to_array()[1].contains(" · "))
+  // The gap after the ordinal is a real space, so it survives into the
+  // accessible name and anything copied out of the row — a CSS margin would
+  // have left "#1Committed 14:32:10".
+  assert_true(markup.contains("#1</span> <span"))
+  // ...and without a stamp there is no stray space before the separator.
+  assert_true(render([tool_item("read")]).contains("#1</span> · "))
   // Seconds are there — the property, not its spelling. Counting `:` would
   // have pinned the viewer's locale: fi-FI and da-DK write the same instant
   // as `10.19.11`. Two instants a second apart rendering differently is the
