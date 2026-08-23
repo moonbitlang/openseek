@@ -24,6 +24,17 @@ pub fn rail(
     if state.hover is Some(hover) && hover.key == entry.key {
       tick_class += " hovered"
     }
+    if entry.failed {
+      tick_class += " failed"
+    }
+    // The mark is a color, so the label carries the same fact in words: a
+    // reader who cannot see the difference between two 7px dashes still hears
+    // which turns hit errors while arrowing the rail.
+    let label = if entry.failed {
+      "\{entry.text} (had errors)"
+    } else {
+      entry.text
+    }
     ticks.push(
       @html.div(class=tick_class, [
         @html.button(
@@ -31,7 +42,7 @@ pub fn rail(
           type_="button",
           on_click=emit(Clicked(entry.key)),
           attrs=@html.Attrs::build()
-            .aria_label(entry.text)
+            .aria_label(label)
             .on_mouseenter(event => {
               let (flip, anchor) = preview_measure(event)
               emit(Entered(entry.key, flip~, anchor~))

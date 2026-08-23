@@ -133,6 +133,16 @@
     background 0.12s ease,
     opacity 0.12s ease;
 }
+/* A turn that hit a tool error. Full opacity at the resting width: the mark
+   has to survive a rail of quiet ticks without being mistaken for the active
+   one, which is why only the color changes. Declared before hover and active
+   deliberately — those carry equal specificity and answer "where am I", which
+   outranks this rule's "where should I look". The tick's aria-label says the
+   same thing in words; the color is never the only carrier. */
+.overview-tick.failed .overview-tick-button::before {
+  background: var(--color-danger);
+  opacity: 1;
+}
 .overview-tick:hover .overview-tick-button::before,
 .overview-tick.hovered .overview-tick-button::before {
   width: 12px;

@@ -45,6 +45,63 @@ test "entries pick user turns and pair each with its first answer" {
 }
 
 ///|
+test "a turn marks failed for any tool error it contains, answered or not" {
+  let tool = is_error => {
+    @transcript.ItemKind::Tool(
+      call_id="c1",
+      name="shell",
+      arguments=None,
+      has_result=true,
+      is_error~,
+      brief=None,
+    )
+  }
+  let rows = @transcript_overview.entries(
+    [
+      item(User, "first question", sequence=1),
+      item(tool(true), "boom", sequence=2),
+      item(Assistant(is_danger=false), "recovered", sequence=3),
+      // A failure after the answer is still this turn's failure: the reply
+      // search stops at the first answer, the failure scan must not.
+      item(tool(true), "boom again", sequence=4),
+      item(User, "second question", sequence=5),
+      item(tool(false), "fine", sequence=6),
+      item(Assistant(is_danger=false), "done", sequence=7),
+    ],
+    display=text => text,
+  )
+  // A turn that recovered still marks — it is still where a reader wants to
+  // land — and a clean turn stays quiet.
+  inspect(rows[0].failed, content="true")
+  inspect(rows[1].failed, content="false")
+  // The scan stops at the next prompt: turn one's failures are not turn two's.
+  let single = @transcript_overview.entries(
+    [item(User, "question", sequence=1), item(tool(true), "boom", sequence=2)],
+    display=text => text,
+  )
+  inspect(single[0].failed, content="true")
+}
+
+///|
+#warnings("-alert_unstable")
+test "a failed turn's tick is marked in class and in words" {
+  let entries = two_entries()
+  let flagged = [{ ..entries[0], failed: true }, entries[1]]
+  let markup = render(flagged, @transcript_overview.State::empty())
+  assert_true(markup.contains("overview-tick failed"))
+  // Colour is never the only carrier: the label says so too.
+  assert_true(markup.contains("first question (had errors)"))
+  // The clean turn keeps its plain class and its unadorned label.
+  assert_true(markup.contains("second question"))
+  assert_false(markup.contains("second question (had errors)"))
+  assert_false(
+    render(entries, @transcript_overview.State::empty()).contains(
+      "overview-tick failed",
+    ),
+  )
+}
+
+///|
 test "an abort bubble is the answer a turn got" {
   let rows = @transcript_overview.entries(
     [
@@ -154,12 +211,14 @@ fn two_entries() -> Array[@transcript_overview.Entry] {
       text: "first question",
       ts: Some(1781144351123),
       reply: Some("first answer"),
+      failed: false,
     },
     {
       key: @transcript_overview.Durable(4),
       text: "second question",
       ts: None,
       reply: None,
+      failed: false,
     },
   ]
 }

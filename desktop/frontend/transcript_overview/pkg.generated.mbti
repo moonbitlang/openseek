@@ -23,6 +23,7 @@ pub(all) struct Entry {
   text : String
   ts : Double?
   reply : String?
+  failed : Bool
 } derive(Eq, @debug.Debug)
 
 pub(all) struct Hover {

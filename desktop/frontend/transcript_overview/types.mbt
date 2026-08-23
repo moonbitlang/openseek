@@ -65,6 +65,15 @@ pub(all) struct Entry {
   // The turn's answer: the first assistant row before the next user turn,
   // `None` while the turn is still running (or when it never got one).
   reply : String?
+  // Whether any tool in the turn came back an error. A long conversation is
+  // read by scrolling, and the one thing a reader scrolls looking for is where
+  // it went wrong; the rail is the only view of the whole conversation, so it
+  // is the only place that question can be answered without scrolling.
+  //
+  // The turn's own failures, not the run's health: a turn that recovered still
+  // marks, because "the agent hit an error here and worked around it" is the
+  // same place a reader wants to land.
+  failed : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -79,15 +88,22 @@ pub fn entries(
     // The turn's answer is its first assistant row — reasoning and tool
     // cards in between belong to the same turn. An abort/failure bubble
     // counts: it is what the turn got.
+    //
+    // Failures are collected over the whole turn rather than stopping at the
+    // answer: a tool that failed after the first assistant row still failed in
+    // this turn, and the reply search stops early by design.
     let mut reply : String? = None
+    let mut failed = false
     for cursor in (index + 1)..<items.length() {
-      match items[cursor].kind {
-        User => break
-        Assistant(_) | AssistantReplay | TerminalAnswer => {
-          reply = Some(items[cursor].content)
-          break
-        }
-        _ => ()
+      if items[cursor].kind is User {
+        break
+      }
+      if items[cursor].kind is Tool(is_error=true, ..) {
+        failed = true
+      }
+      if reply is None &&
+        items[cursor].kind is (Assistant(_) | AssistantReplay | TerminalAnswer) {
+        reply = Some(items[cursor].content)
       }
     }
     result.push({
@@ -95,6 +111,7 @@ pub fn entries(
       text: display(item.content),
       ts: item.ts,
       reply,
+      failed,
     })
   }
   result
