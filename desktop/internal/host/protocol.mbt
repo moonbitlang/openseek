@@ -195,9 +195,6 @@ type SearchSemanticReply = @protocol.SearchSemanticReply
 type SemanticSearchHit = @protocol.SemanticSearchHit
 
 ///|
-type SemanticContextLine = @protocol.SemanticContextLine
-
-///|
 type SemanticSearchError = @protocol.SemanticSearchError
 
 ///|
