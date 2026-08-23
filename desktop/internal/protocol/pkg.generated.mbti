@@ -250,6 +250,13 @@ pub fn CancelSearchFilesPayload::not_equal(Self, Self) -> Bool
 pub fn CancelSearchFilesPayload::to_json(Self) -> Json
 pub fn CancelSearchFilesPayload::to_repr(Self) -> @debug.Repr
 
+pub(all) struct CancelSearchSemanticPayload {
+  session_key : String
+  generation : Int
+} derive(Eq, @debug.Debug)
+pub impl ToJson for CancelSearchSemanticPayload
+pub impl @json.FromJson for CancelSearchSemanticPayload
+
 pub(all) struct CancelSearchTextPayload {
   session_key : String
   generation : Int
@@ -1602,6 +1609,33 @@ pub fn SearchFilesReply::not_equal(Self, Self) -> Bool
 pub fn SearchFilesReply::to_json(Self) -> Json
 pub fn SearchFilesReply::to_repr(Self) -> @debug.Repr
 
+pub(all) struct SearchSemanticPayload {
+  root : String
+  query : String
+  rules_dir : String
+  enable_builtin_rules : Bool
+  exclude_glob : String
+  session_key : String
+  generation : Int
+  max_results : Int
+} derive(Eq, @debug.Debug)
+pub impl ToJson for SearchSemanticPayload
+pub impl @json.FromJson for SearchSemanticPayload
+
+pub(all) struct SearchSemanticReply {
+  root : String
+  generation : Int
+  matches : Array[SemanticSearchHit]
+  match_count : Int
+  file_count : Int
+  limit_hit : Bool
+  cancelled : Bool
+  partial : Bool
+  error : SemanticSearchError?
+} derive(Eq, @debug.Debug)
+pub impl ToJson for SearchSemanticReply
+pub impl @json.FromJson for SearchSemanticReply
+
 pub(all) struct SearchTextPayload {
   root : String
   query : String
@@ -1639,6 +1673,35 @@ pub fn SearchTextReply::to_json(Self) -> Json
 pub fn SearchTextReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SearchTextReply
 pub impl @json.FromJson for SearchTextReply
+
+pub(all) struct SemanticContextLine {
+  line : Int
+  text : String
+  is_match : Bool
+} derive(Eq, @debug.Debug)
+pub impl ToJson for SemanticContextLine
+pub impl @json.FromJson for SemanticContextLine
+
+pub(all) struct SemanticSearchError {
+  code : String
+  message : String
+} derive(Eq, @debug.Debug)
+pub impl ToJson for SemanticSearchError
+pub impl @json.FromJson for SemanticSearchError
+
+pub(all) struct SemanticSearchHit {
+  path : String
+  rule_id : String
+  description : String?
+  start_line : Int
+  start_column : Int
+  end_line : Int
+  end_column : Int
+  matched_source : String
+  source_context : Array[SemanticContextLine]
+} derive(Eq, @debug.Debug)
+pub impl ToJson for SemanticSearchHit
+pub impl @json.FromJson for SemanticSearchHit
 
 pub(all) struct SessionAssistantMessage {
   content : String

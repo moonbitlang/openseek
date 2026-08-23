@@ -598,7 +598,8 @@ async fn run_semantic_search(
     }
     let stderr = stderr_task.wait() catch { _ => "" }
     let lower = stderr.to_lower()
-    let partial = lower.contains("warning:") || lower.contains("skipping") ||
+    let partial = lower.contains("warning:") ||
+      lower.contains("skipping") ||
       lower.contains("parse failed")
     // moongrep streams hits before it aborts, and its current wasm build can
     // crash on MoonBit syntax it does not parse yet. A nonzero exit alone is

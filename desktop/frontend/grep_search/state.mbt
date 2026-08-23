@@ -30,6 +30,8 @@ fn fresh_page() -> Page {
     delay_ms: SearchDebounceMs,
   }
 }
+
+///|
 /// Retire every query/result derived from the outgoing checkout. The monotonic
 /// generation deliberately survives the reset so an A -> B -> A transition
 /// cannot make an old reply current again, while the armed Search mode and its
@@ -113,7 +115,14 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       self.schedule({ ..page, query, }, input, immediate=false)
     ModeChanged(mode) =>
       self.schedule(
-        { ..page, mode, matches: [], semantic_hits: [], partial: false, collapsed: Map([]) },
+        {
+          ..page,
+          mode,
+          matches: [],
+          semantic_hits: [],
+          partial: false,
+          collapsed: Map([]),
+        },
         input,
         immediate=false,
       )
