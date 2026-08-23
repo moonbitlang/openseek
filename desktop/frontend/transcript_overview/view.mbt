@@ -78,10 +78,18 @@ pub fn rail(
 }
 
 ///|
-/// Vertical room a full downward preview needs below its tick: three
-/// clamped prompt lines, the time row, four clamped reply lines, padding,
-/// and a breathing margin.
-const PREVIEW_RESERVE : Double = 170
+/// Vertical room a full downward preview needs below its tick: three clamped
+/// prompt lines, the time row, the failure row, four clamped reply lines,
+/// padding, and a breathing margin.
+///
+/// Budgeted at the large-font setting throughout, not at the default. This
+/// number decides whether a preview is clipped or flips above its tick, and
+/// the cost of the two errors is not symmetric: reserving too much only flips
+/// a preview that would have fitted, while reserving too little cuts content
+/// off at the scroller's edge. The previous 170 was the default setting's
+/// budget, which the largest text already overran before the failure row
+/// existed.
+const PREVIEW_RESERVE : Double = 207
 
 ///|
 /// Whether this tick's preview must open upward, and the tick edge it hangs
