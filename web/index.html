@@ -516,18 +516,34 @@
       font-family: ui-monospace, monospace; font-size: 12px;
     }
     /* MoonBit source uses the editor lexer and its Monaco token color ids. */
-    .run-moonbit-source .mtk1 { color: var(--text); }
-    .run-moonbit-source .mtk3 { color: var(--token-keyword); }
-    .run-moonbit-source .mtk4 { color: var(--token-variable); }
-    .run-moonbit-source .mtk5 { color: var(--token-string); }
-    .run-moonbit-source .mtk6 { color: var(--token-number); }
-    .run-moonbit-source .mtk7 { color: var(--token-comment); }
-    .run-moonbit-source .mtk8 { color: var(--token-punctuation); }
-    .run-moonbit-source .mtk9 { color: var(--token-type); }
-    .run-moonbit-source .mtk10 { color: var(--token-function); }
-    .run-moonbit-source .mtk11 { color: var(--token-string-escape); }
-    .run-moonbit-source .mtk12 { color: var(--token-regexp); }
-    .run-moonbit-source .mtk13 { color: var(--token-invalid); }
+    :is(.run-moonbit-source, .read-moonbit-output) .mtk1 { color: var(--text); }
+    :is(.run-moonbit-source, .read-moonbit-output) .mtk3 { color: var(--token-keyword); }
+    :is(.run-moonbit-source, .read-moonbit-output) .mtk4 { color: var(--token-variable); }
+    :is(.run-moonbit-source, .read-moonbit-output) .mtk5 { color: var(--token-string); }
+    :is(.run-moonbit-source, .read-moonbit-output) .mtk6 { color: var(--token-number); }
+    :is(.run-moonbit-source, .read-moonbit-output) .mtk7 { color: var(--token-comment); }
+    :is(.run-moonbit-source, .read-moonbit-output) .mtk8 { color: var(--token-punctuation); }
+    :is(.run-moonbit-source, .read-moonbit-output) .mtk9 { color: var(--token-type); }
+    :is(.run-moonbit-source, .read-moonbit-output) .mtk10 { color: var(--token-function); }
+    :is(.run-moonbit-source, .read-moonbit-output) .mtk11 { color: var(--token-string-escape); }
+    :is(.run-moonbit-source, .read-moonbit-output) .mtk12 { color: var(--token-regexp); }
+    :is(.run-moonbit-source, .read-moonbit-output) .mtk13 { color: var(--token-invalid); }
+    .read-moonbit-output { display: block; }
+    .read-moonbit-line {
+      display: grid; grid-template-columns: max-content minmax(0, 1fr);
+      align-items: start;
+    }
+    .read-moonbit-gutter {
+      color: var(--muted); white-space: pre; user-select: none;
+    }
+    .read-moonbit-code {
+      min-width: 0; color: var(--text); font: inherit;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .read-moonbit-status {
+      display: block; color: var(--muted);
+      white-space: pre-wrap; word-break: break-word;
+    }
     /* nested args: objects/arrays recurse into indented rows, not a JSON blob */
     .arg-object { margin: 2px 0 2px 2px; padding-left: 8px; border-left: 1px solid var(--border); }
     .arg-array { margin: 2px 0 2px 2px; }

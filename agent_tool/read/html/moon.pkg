@@ -1,0 +1,13 @@
+import {
+  "moonbit-community/rabbita/html" @rhtml,
+  "moonbitlang/core/json",
+  "moonbitlang/editor/viewer/html" @syntax_html,
+}
+
+import {
+  "moonbit-community/rabbita",
+} for "test"
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "js"

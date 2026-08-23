@@ -827,6 +827,37 @@
    `pre-wrap` keeps the listing's indentation while wrapping the overflow — so
    a long line grows the page rather than adding a nested scrollbar. */
 
+/* A MoonBit `read` keeps the tool's numbered gutter and status footer muted,
+   while the file body uses the same shared editor tokens as `run_moonbit`.
+   Each logical line owns its two columns so wrapping never shifts the next
+   line away from its number. */
+.read-moonbit-output {
+  display: block;
+}
+.read-moonbit-line {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+}
+.read-moonbit-gutter {
+  color: var(--color-text-muted);
+  white-space: pre;
+  user-select: none;
+}
+.read-moonbit-code {
+  min-width: 0;
+  color: var(--color-code);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.read-moonbit-status {
+  display: block;
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* A synthesized `edit` / `multi_edit` diff. Same block treatment as the
    argument and output dumps beside it, since it stands in for one; the marker
    column is part of the text, so removed and added lines stay distinguishable

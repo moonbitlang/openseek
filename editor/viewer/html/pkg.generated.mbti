@@ -4,6 +4,8 @@ package "moonbitlang/editor/viewer/html"
 // Values
 pub fn moonbit_source_code(String) -> @moonbit-community/rabbita/html.Html
 
+pub fn moonbit_source_lines(String) -> Array[@moonbit-community/rabbita/html.Html]
+
 // Errors
 
 // Types and methods

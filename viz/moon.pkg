@@ -3,6 +3,7 @@ import {
   "bobzhang/openseek/agent_session/log" @session_log,
   "bobzhang/openseek/agent_tool/edit_diff",
   "bobzhang/openseek/agent_tool/plan/steps",
+  "bobzhang/openseek/agent_tool/read/html" @read_html,
   "bobzhang/openseek/deepseek",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/immut/vector",

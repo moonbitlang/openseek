@@ -311,6 +311,44 @@ test "run_moonbit source uses editor token classes and keeps original JSON" {
 }
 
 ///|
+test "MoonBit read results highlight source in raw and model views" {
+  let session = @agent_session.Session(SessionId("read-mbt"), system_prompt="")
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(
+            id="r1",
+            name="read",
+            arguments="{\"path\":\"src/main.mbt\"}",
+          ),
+        ]),
+      ),
+    )
+    .append(
+      Tool(
+        ToolResult(
+          tool_call_id="r1",
+          tool_name="read",
+          content=(
+            #|1 |fn main {
+            #|2 |  println("hi")
+            #|3 |}
+            #|<system>start_line=1 shown_lines=3 total_lines=3 truncated=false</system>
+          ),
+          brief="read main.mbt",
+        ),
+      ),
+    )
+  for mode in [@viz.RawLog, ModelView] {
+    let html = render(@viz.render_session(session, mode))
+    assert_true(html.contains("class=\"read-moonbit-output\""))
+    assert_true(html.contains("class=\"read-moonbit-gutter\">1 |"))
+    assert_true(html.contains("<span class=\"mtk3\">fn</span>"))
+    assert_true(html.contains("class=\"read-moonbit-status\""))
+  }
+}
+
+///|
 test "non-object tool args fall back to JSON in both forms" {
   // Arguments that are not a JSON object (here a bare array) have no key/value
   // fields, so the friendly view falls back to pretty JSON rather than inventing

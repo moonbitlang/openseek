@@ -1148,7 +1148,9 @@ fn tool_card(
     None => seq_anchor(seq)
   }
   let summary = card_head(label, seq, time~, flag~, link~)
-  let body : Array[@html.Html] = [text_block(result.content())]
+  let body : Array[@html.Html] = [
+    tool_result_content(Some(result), result.content()),
+  ]
   // A subrun result gets a chip to its child session and — when the caller
   // loaded that child — the transcript itself, nested inside this card.
   if subrun_child_id(result, subrun.parent) is Some(child_id) {
@@ -1887,7 +1889,7 @@ fn model_tool_card(
   @html.details(id?=anchor, class="card \{kind}") <| [
     @html.summary(class="card-label") <| summary,
     @html.div(class="card-body") <| [
-      text_block(message.content),
+      tool_result_content(shown, message.content),
     ],
   ]
 }
@@ -2003,6 +2005,23 @@ fn text_block(content : String) -> @html.Html {
     @html.span(class="empty") <| "(empty)"
   } else {
     @html.pre(class="content") <| content
+  }
+}
+
+///|
+/// A read result whose tool-owned brief names a MoonBit file keeps its gutter
+/// and footer plain while the source uses the shared editor tokenizer.
+fn tool_result_content(
+  result : @agent_session.ToolResult?,
+  content : String,
+) -> @html.Html {
+  if result is Some(result) &&
+    result.tool_name() == "read" &&
+    result.brief() is Some(brief) &&
+    @read_html.moonbit_output_for_brief(brief, content) is Some(rendered) {
+    @html.pre(class="content read-moonbit-content", [rendered])
+  } else {
+    text_block(content)
   }
 }
 

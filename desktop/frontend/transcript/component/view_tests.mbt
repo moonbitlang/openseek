@@ -825,6 +825,35 @@ test "a tool row renders recorded arguments before its result" {
 
 ///|
 #warnings("-alert_unstable")
+test "a MoonBit read highlights source without coloring its gutter or footer" {
+  let rendered = tool_call_view({
+    kind: Tool(
+      call_id="c1",
+      name="read",
+      arguments=Some("{\"path\":\"src/main.mbt\"}"),
+      has_result=true,
+      is_error=false,
+      brief=Some("read main.mbt"),
+    ),
+    content: (
+      #|1 |fn main {
+      #|2 |  println("hi")
+      #|3 |}
+      #|<system>start_line=1 shown_lines=3 total_lines=3 truncated=false</system>
+    ),
+    ts: None,
+    sequence: None,
+  })
+  let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
+  assert_true(markup.contains("class=\"read-moonbit-output\""))
+  assert_true(markup.contains("class=\"read-moonbit-gutter\">1 |"))
+  assert_true(markup.contains("<span class=\"mtk3\">fn</span>"))
+  assert_true(markup.contains("class=\"read-moonbit-status\""))
+  assert_false(markup.contains("class=\"mtk3\">&lt;system&gt;"))
+}
+
+///|
+#warnings("-alert_unstable")
 test "a plan row renders its checklist instead of the arguments JSON" {
   let arguments = "{\"steps\":[{\"title\":\"fix the parser\",\"status\":\"in_progress\"},{\"title\":\"run moon test\",\"status\":\"pending\"}]}"
   let rendered = tool_call_view({

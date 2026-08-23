@@ -20,3 +20,15 @@ test "MoonBit source uses editor token classes and escaped text nodes" {
   )
   assert_false(rendered.contains("<hello>"))
 }
+
+///|
+#warnings("-alert_unstable")
+test "per-line MoonBit fragments keep line boundaries and token classes" {
+  let lines = moonbit_source_lines("fn main {\n  let answer = 42\n}")
+  assert_eq(lines.length(), 3)
+  let first = @rabbita.render_to_string(() => @rabbita.Val::constant(lines[0]))
+  assert_true(first.contains("<span class=\"mtk3\">fn</span>"))
+  let second = @rabbita.render_to_string(() => @rabbita.Val::constant(lines[1]))
+  assert_true(second.contains("<span class=\"mtk3\">let</span>"))
+  assert_false(second.contains("\n"))
+}
