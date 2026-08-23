@@ -28,6 +28,12 @@ async fn main {
   // the user's login-shell environment (PATH, custom variables) onto this
   // process before anything downstream — engine, LSP, shell tool — spawns.
   @shellenv.apply_login_shell_env(executable)
+  // The user's login shell supplies the base environment, then installed
+  // tools take precedence. Both the OpenSeek engine and Codex app-server are
+  // created below and therefore pass this packaged `rg` to agent tool calls.
+  if @host.PackagedTools::resolve(executable) is Some(tools) {
+    tools.apply_to_process_env()
+  }
   let frontend_entry = @host.frontend_entry_path(executable)
   let engine = @engine.engine_command(executable)
   let app_version = @host.package_version(executable)

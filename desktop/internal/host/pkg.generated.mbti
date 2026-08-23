@@ -47,6 +47,10 @@ pub async fn HostConnection::run(Self, async (@protocol.Notification) -> Unit) -
 
 type HostState
 
+type PackagedTools
+pub fn PackagedTools::apply_to_process_env(Self) -> Unit
+pub async fn PackagedTools::resolve(String) -> Self?
+
 // Type aliases
 
 // Traits

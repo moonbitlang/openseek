@@ -8,6 +8,71 @@ const ProtonPackageFrontendEntryPath = "target/proton-package-input/assets/index
 const ProtonPackageRipgrepPath = "target/proton-package-input/bin/rg"
 
 ///|
+/// The installed directory containing the Desktop's packaged command-line
+/// tools. The value exists only when the pinned ripgrep asset is present, so
+/// an incomplete installed bundle cannot shadow the user's PATH with an empty
+/// or unrelated directory.
+struct PackagedTools {
+  bin_dir : String
+  ripgrep : String
+}
+
+///|
+/// Resolve the packaged tools installed with `executable`. macOS keeps them
+/// below Contents/Resources; Linux and Windows keep them beside the Host.
+pub async fn PackagedTools::resolve(executable : String) -> PackagedTools? {
+  let command_dir = @pathx.Path(executable).dirname().resolve()
+  let candidates = [
+    command_dir.join("..").join("Resources").join(ProtonPackageRipgrepPath),
+    command_dir.join("rg.exe"),
+    command_dir.join("rg"),
+  ]
+  for candidate in candidates {
+    let path = candidate.normalize()
+    if @fs.exists(path.to_string()) {
+      return Some({
+        bin_dir: path.to_path().dirname().to_string(),
+        ripgrep: path.to_string(),
+      })
+    }
+  }
+  None
+}
+
+///|
+/// Put the packaged tools first in this process's PATH. Desktop child
+/// processes inherit this environment: OpenSeek's engine passes it to agent
+/// shell tools, while Codex app-server passes it to its own tool processes.
+/// Keep an already-leading entry unchanged so Linux's AppRun prefix is not
+/// duplicated.
+pub fn PackagedTools::apply_to_process_env(self : PackagedTools) -> Unit {
+  @sys.set_env_var("PATH", self.path_with_precedence(@sys.get_env_var("PATH")))
+}
+
+///|
+/// Build the command that restores packaged tools after an integrated
+/// terminal's login shell has run its rc/profile files.
+fn PackagedTools::terminal_path_command(
+  self : PackagedTools,
+  shell_command : String,
+  windows~ : Bool,
+) -> String? {
+  @shellenv.path_prepend_command(shell_command, self.bin_dir, windows~)
+}
+
+///|
+fn PackagedTools::path_with_precedence(
+  self : PackagedTools,
+  current : String?,
+) -> String {
+  if current is Some(path) &&
+    (path == self.bin_dir || path.has_prefix(self.bin_dir + @env.path_sep)) {
+    return path
+  }
+  @env.prepend_to_path_env(self.bin_dir, current)
+}
+
+///|
 /// Locate the bundled frontend entry relative to the executable. On macOS
 /// the assets live in `Contents/Resources/` — `Contents/MacOS/` may only
 /// hold code, since non-`--deep` codesigning rejects data files there — so
@@ -50,17 +115,8 @@ pub async fn frontend_entry_path(framework_command : String) -> String {
 /// running a machine-global ripgrep of an unknown version.
 async fn ripgrep_command(executable : String?) -> String? {
   guard executable is Some(executable) else { return Some("rg") }
-  let command_dir = @pathx.Path(executable).dirname().resolve()
-  let candidates = [
-    command_dir.join("..").join("Resources").join(ProtonPackageRipgrepPath),
-    command_dir.join("rg.exe"),
-    command_dir.join("rg"),
-  ]
-  for candidate in candidates {
-    let path = candidate.normalize().to_string()
-    if @fs.exists(path) {
-      return Some(path)
-    }
+  if PackagedTools::resolve(executable) is Some(tools) {
+    return Some(tools.ripgrep)
   }
   if @development.Layout::detect(executable) is Some(_) {
     Some("rg")
@@ -72,6 +128,7 @@ async fn ripgrep_command(executable : String?) -> String? {
 ///|
 async test "ripgrep resolution uses only packaged or recognized development layouts" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-ripgrep-resolution-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   let installed = root.join("installed")
   @fs.mkdir(installed.to_string(), recursive=true)
   let installed_host = installed.join("openseek-desktop").to_string()
@@ -79,6 +136,37 @@ async test "ripgrep resolution uses only packaged or recognized development layo
   let adjacent = installed.join("rg").to_string()
   @fs.write_file(adjacent, "rg", create_mode=CreateOrTruncate)
   assert_eq(ripgrep_command(Some(installed_host)), Some(adjacent))
+  guard PackagedTools::resolve(installed_host) is Some(installed_tools) else {
+    fail("expected adjacent packaged tools")
+  }
+  let installed_bin = installed.to_string()
+  assert_eq(
+    installed_tools.path_with_precedence(Some("/usr/bin")),
+    "\{installed_bin}\{@env.path_sep}/usr/bin",
+  )
+  let already_first = "\{installed_bin}\{@env.path_sep}/usr/bin"
+  assert_eq(
+    installed_tools.path_with_precedence(Some(already_first)),
+    already_first,
+  )
+  assert_eq(
+    installed_tools.terminal_path_command("/bin/zsh", windows=false),
+    Some("export PATH='\{installed_bin}':\"$PATH\"\r"),
+  )
+
+  let windows = root.join("windows")
+  @fs.mkdir(windows.to_string(), recursive=true)
+  let windows_host = windows.join("openseek-desktop.exe").to_string()
+  let windows_rg = windows.join("rg.exe").to_string()
+  @fs.write_file(windows_rg, "rg", create_mode=CreateOrTruncate)
+  assert_eq(ripgrep_command(Some(windows_host)), Some(windows_rg))
+  guard PackagedTools::resolve(windows_host) is Some(windows_tools) else {
+    fail("expected Windows packaged tools")
+  }
+  assert_eq(
+    windows_tools.terminal_path_command("cmd.exe", windows=true),
+    Some("set \"Path=\{windows.to_string()};%Path%\"\r"),
+  )
 
   let macos = root.join("SeekMoon.app/Contents/MacOS")
   let resources_rg = root
@@ -98,7 +186,6 @@ async test "ripgrep resolution uses only packaged or recognized development layo
     ripgrep_command(Some(development.join("openseek_desktop").to_string())),
     Some("rg"),
   )
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|

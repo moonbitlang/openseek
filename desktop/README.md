@@ -256,6 +256,12 @@ Platform package commands remain the release-layout test. They build debug
 MoonBit artifacts by default; pass `--release` after `--` when you need
 optimized artifacts.
 
+When adding another command-line binary to the Desktop bundle, follow
+[`package/README.md`](package/README.md). Copying a file into the package is
+only one part of the contract: runtime lookup, child-process and integrated
+terminal `PATH`, licensing, signing, platform dependencies, and installed
+package smoke tests must move together.
+
 Codex conversations appear beside OpenSeek conversations in the Desktop's
 global left sidebar; selecting one uses the same main transcript/composer area,
 backed by Codex's `app-server` mode and an isolated `CODEX_HOME` under the
