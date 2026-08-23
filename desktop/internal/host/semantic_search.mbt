@@ -123,6 +123,7 @@ fn empty_semantic_search_reply(
   root : String,
   generation : Int,
   cancelled? : Bool = false,
+  partial? : Bool = false,
   error? : SemanticSearchError,
 ) -> SearchSemanticReply {
   {
@@ -133,6 +134,7 @@ fn empty_semantic_search_reply(
     file_count: 0,
     limit_hit: false,
     cancelled,
+    partial,
     error,
   }
 }
@@ -310,6 +312,12 @@ fn semantic_search_args(
   if payload.enable_builtin_rules {
     args.push("--enable-builtin-rules")
   }
+  for entry in payload.exclude_glob.split(",") {
+    let dir = entry.trim().to_owned()
+    if !dir.is_empty() {
+      args.append(["--exclude-dir", dir])
+    }
+  }
   args.append(["--output-json"])
   args
 }
@@ -447,11 +455,26 @@ fn semantic_search_error(stderr : String) -> (String, String) {
 
 ///|
 fn first_semantic_diagnostic(detail : String) -> String {
-  for raw_line in detail.split("\n") {
-    let line = raw_line.trim().to_owned()
+  // moongrep emits skip warnings before the real error line. Scan from the
+  // end: skip indented continuation lines (stack frames) and return the
+  // first non-indented, non-empty line as the actual error.
+  let lines = detail.split("\n").to_array()
+  let mut i = lines.length() - 1
+  while i >= 0 {
+    let line = lines[i].trim().to_owned()
+    if !line.is_empty() && !line.has_prefix("  ") && !line.has_prefix("\t") {
+      return line
+    }
+    i = i - 1
+  }
+  // Fallback: last non-empty line.
+  i = lines.length() - 1
+  while i >= 0 {
+    let line = lines[i].trim().to_owned()
     if !line.is_empty() {
       return line
     }
+    i = i - 1
   }
   "moongrep could not complete the search."
 }
@@ -574,6 +597,9 @@ async fn run_semantic_search(
       _ => 2
     }
     let stderr = stderr_task.wait() catch { _ => "" }
+    let lower = stderr.to_lower()
+    let partial = lower.contains("warning:") || lower.contains("skipping") ||
+      lower.contains("parse failed")
     // moongrep streams hits before it aborts, and its current wasm build can
     // crash on MoonBit syntax it does not parse yet. A nonzero exit alone is
     // therefore not fatal once some hits were already emitted: keep them, like
@@ -593,6 +619,7 @@ async fn run_semantic_search(
       file_count: files.length(),
       limit_hit,
       cancelled: false,
+      partial,
       error: None,
     }
   })
@@ -625,6 +652,7 @@ test "semantic search builds moonx and bundled moongrep invocations" {
     query: "inspect($(x:arg))",
     rules_dir: "",
     enable_builtin_rules: false,
+    exclude_glob: "",
     session_key: "sem:one",
     generation: 1,
     max_results: 20000,
@@ -706,6 +734,7 @@ async test "semantic search argument validation requires a rule source" {
     query: "",
     rules_dir: "",
     enable_builtin_rules: false,
+    exclude_glob: "",
     session_key: "sem:none",
     generation: 1,
     max_results: 20000,
@@ -730,6 +759,7 @@ async test "cancel-before-semantic-search frontier rejects the stale generation"
       query: "foo()",
       rules_dir: "",
       enable_builtin_rules: false,
+      exclude_glob: "",
       session_key: "sem:stale",
       generation: 7,
       max_results: 20000,

@@ -49,6 +49,7 @@ struct Page {
   match_count : Int
   file_count : Int
   limit_hit : Bool
+  partial : Bool
   collapsed : Map[String, Bool]
   visible_lines : Int
   phase : Phase

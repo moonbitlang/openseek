@@ -44,6 +44,7 @@ pub impl FromJson for SearchSemanticPayload with fn from_json(json, path) {
     query: object.required_string("query"),
     rules_dir: object.required_string("rules_dir"),
     enable_builtin_rules: object.required_bool("enable_builtin_rules"),
+    exclude_glob: object.required_string("exclude_glob"),
     session_key: object.required_string("session_key"),
     generation: require_text_search_non_negative(
       object.required_int("generation"),
@@ -65,6 +66,7 @@ pub impl ToJson for SearchSemanticPayload with fn to_json(self) {
     "query": self.query,
     "rules_dir": self.rules_dir,
     "enable_builtin_rules": self.enable_builtin_rules,
+    "exclude_glob": self.exclude_glob,
     "session_key": self.session_key,
     "generation": self.generation,
     "max_results": self.max_results,
@@ -272,6 +274,7 @@ pub impl FromJson for SearchSemanticReply with fn from_json(json, path) {
     file_count,
     limit_hit: object.required_bool("limit_hit"),
     cancelled: object.required_bool("cancelled"),
+    partial: object.required_bool("partial"),
     error,
   }
 }
@@ -288,6 +291,7 @@ pub impl ToJson for SearchSemanticReply with fn to_json(self) {
     "file_count": self.file_count.to_json(),
     "limit_hit": self.limit_hit.to_json(),
     "cancelled": self.cancelled.to_json(),
+    "partial": self.partial.to_json(),
   }
   if self.error is Some(error) {
     fields["error_code"] = error.code.to_json()

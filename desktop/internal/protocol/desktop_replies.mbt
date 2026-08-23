@@ -1249,6 +1249,7 @@ pub(all) struct SearchSemanticReply {
   file_count : Int
   limit_hit : Bool
   cancelled : Bool
+  partial : Bool
   error : SemanticSearchError?
 } derive(Debug, Eq)
 

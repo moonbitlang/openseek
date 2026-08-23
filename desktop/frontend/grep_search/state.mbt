@@ -22,6 +22,7 @@ fn fresh_page() -> Page {
     match_count: 0,
     file_count: 0,
     limit_hit: false,
+    partial: false,
     collapsed: Map([]),
     visible_lines: InitialVisibleSearchLines,
     phase: Idle,
@@ -29,8 +30,6 @@ fn fresh_page() -> Page {
     delay_ms: SearchDebounceMs,
   }
 }
-
-///|
 /// Retire every query/result derived from the outgoing checkout. The monotonic
 /// generation deliberately survives the reset so an A -> B -> A transition
 /// cannot make an old reply current again, while the armed Search mode and its
@@ -70,6 +69,7 @@ fn State::schedule(
       match_count: 0,
       file_count: 0,
       limit_hit: false,
+      partial: false,
       visible_lines: InitialVisibleSearchLines,
       phase: Idle,
       generation,
@@ -113,7 +113,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       self.schedule({ ..page, query, }, input, immediate=false)
     ModeChanged(mode) =>
       self.schedule(
-        { ..page, mode, matches: [], semantic_hits: [], collapsed: Map([]) },
+        { ..page, mode, matches: [], semantic_hits: [], partial: false, collapsed: Map([]) },
         input,
         immediate=false,
       )
@@ -157,6 +157,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           match_count: 0,
           file_count: 0,
           limit_hit: false,
+          partial: false,
           visible_lines: InitialVisibleSearchLines,
           phase: Idle,
           generation,
@@ -227,6 +228,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           match_count: reply.match_count,
           file_count: reply.file_count,
           limit_hit: reply.limit_hit,
+          partial: false,
           visible_lines: InitialVisibleSearchLines.min(reply.matches.length()),
           phase,
         },
@@ -257,6 +259,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           match_count: reply.match_count,
           file_count: reply.file_count,
           limit_hit: reply.limit_hit,
+          partial: reply.partial,
           visible_lines: InitialVisibleSearchLines.min(reply.matches.length()),
           phase,
         },
@@ -275,6 +278,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
             match_count: 0,
             file_count: 0,
             limit_hit: false,
+            partial: false,
             visible_lines: InitialVisibleSearchLines,
             phase: Failed(code~, message~),
           },
@@ -371,6 +375,7 @@ fn Page::semantic_request_payload(
     query: self.query,
     rules_dir: self.rules_dir,
     enable_builtin_rules: self.use_builtin_rules,
+    exclude_glob: self.exclude_glob,
     session_key: "semantic-search:\{input.owner.channel.uri_authority()}:\{input.owner.session}:\{root.path}",
     generation: self.generation,
     max_results: MaxSearchResults,

@@ -629,6 +629,15 @@ fn semantic_search_body(
       ),
     )
   }
+  if page.partial {
+    children.push(
+      @html.div(
+        class="search-truncated",
+        attrs=@html.Attrs::build().role("status"),
+        "Results may be incomplete — moongrep could not parse some files.",
+      ),
+    )
+  }
   if search_message(page) is Some(message) {
     children.push(message)
   } else {

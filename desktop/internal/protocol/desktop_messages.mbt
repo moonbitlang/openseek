@@ -396,6 +396,7 @@ pub(all) struct SearchSemanticPayload {
   query : String
   rules_dir : String
   enable_builtin_rules : Bool
+  exclude_glob : String
   session_key : String
   generation : Int
   max_results : Int
