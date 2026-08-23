@@ -103,51 +103,63 @@ pub async fn apply_login_shell_env(executable : String) -> Unit {
 
 ///|
 /// Build the command an interactive terminal runs after its shell startup
-/// files have loaded, putting bin_dir first on that session's path. The
-/// command is shell-specific because activation must happen inside the shell:
-/// changing the already-running desktop process cannot update a live prompt.
-/// Unknown shells return None instead of receiving syntax they may reject.
-/// A carriage return matches xterm's Enter key and works for both PTYs and
-/// Windows ConPTY.
+/// files have loaded, putting bin_dirs first on that session's path in the
+/// supplied order. One command carries the whole prefix so the terminal does
+/// not echo a separate environment update for every packaged tool directory.
+/// The command is shell-specific because changing the already-running desktop
+/// process cannot update a live prompt. Unknown shells return None instead of
+/// receiving syntax they may reject. A carriage return matches xterm's Enter
+/// key and works for both PTYs and Windows ConPTY.
 pub fn path_prepend_command(
   shell_command : String,
-  bin_dir : String,
+  bin_dirs : Array[String],
   windows~ : Bool,
 ) -> String? {
+  if bin_dirs.is_empty() {
+    return None
+  }
   let shell = shell_command.to_lower()
   let shell_name = match shell.rev_after("/") {
     Some(name) => name.to_owned()
     None => shell.rev_after("\\").map(name => name.to_owned()).unwrap_or(shell)
   }
   if shell_name is ("pwsh" | "pwsh.exe" | "powershell" | "powershell.exe") {
-    let quoted = bin_dir.replace_all(old="'", new="''")
     let separator = if windows { ";" } else { ":" }
+    let quoted = (bin_dirs.join(separator) + separator).replace_all(
+      old="'",
+      new="''",
+    )
     // Environment names are case-sensitive outside Windows, where executable
     // lookup reads PATH rather than the separate Path variable.
     let path_name = if windows { "Path" } else { "PATH" }
-    return Some(
-      "$env:\{path_name} = '\{quoted}\{separator}' + $env:\{path_name}\r",
-    )
+    return Some("$env:\{path_name} = '\{quoted}' + $env:\{path_name}\r")
   }
   if windows {
     if shell_name is ("cmd" | "cmd.exe") {
-      return Some("set \"Path=\{bin_dir};%Path%\"\r")
+      return Some("set \"Path=\{bin_dirs.join(";")};%Path%\"\r")
     }
     return None
   }
   if shell_name == "fish" {
-    let quoted = bin_dir
-      .replace_all(old="\\", new="\\\\")
-      .replace_all(old="'", new="\\'")
-    return Some("set -gx PATH '\{quoted}' $PATH\r")
+    let quoted_dirs : Array[String] = []
+    for bin_dir in bin_dirs {
+      let quoted = bin_dir
+        .replace_all(old="\\", new="\\\\")
+        .replace_all(old="'", new="\\'")
+      quoted_dirs.push("'\{quoted}'")
+    }
+    return Some("set -gx PATH \{quoted_dirs.join(" ")} $PATH\r")
   }
-  let quoted = bin_dir.replace_all(old="'", new="'\\''")
+  let quoted_dirs : Array[String] = []
+  for bin_dir in bin_dirs {
+    quoted_dirs.push("'\{bin_dir.replace_all(old="'", new="'\\''")}'")
+  }
   if shell_name is ("csh" | "tcsh") {
-    return Some("setenv PATH '\{quoted}':\"$PATH\"\r")
+    return Some("setenv PATH \{quoted_dirs.join(":")}:\"$PATH\"\r")
   }
   if shell_name
     is ("sh" | "bash" | "zsh" | "dash" | "ash" | "ksh" | "mksh" | "yash") {
-    return Some("export PATH='\{quoted}':\"$PATH\"\r")
+    return Some("export PATH=\{quoted_dirs.join(":")}:\"$PATH\"\r")
   }
   None
 }

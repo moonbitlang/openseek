@@ -143,8 +143,9 @@ Check every surface:
 - Codex app-server: it inherits the Desktop environment; its isolated
   `CODEX_HOME` must not replace `PATH`.
 - Integrated terminal: a login shell can reset `PATH` in rc/profile files.
-  `desktop/internal/host/terminal_ops.mbt` therefore sends shell-specific PATH
-  activation after startup, first for packaged commands and then for MoonBit.
+  `desktop/internal/host/terminal_ops.mbt` therefore sends one shell-specific
+  PATH activation after startup, listing MoonBit first and packaged commands
+  second.
 - Any child spawned with `inherit_env=false`: copy the already-adjusted PATH
   into its explicit environment. Do not assume a parent mutation reaches it.
 

@@ -62,12 +62,11 @@ async fn terminal_open_op(
     raise HostError("terminal requires a conversation workspace")
   }
   // Match the engine and language services: packaged command-line tools and a
-  // packaged MoonBit seed win when present. Queue both path updates after shell
-  // startup so rc/profile files cannot overwrite the selection. The toolchain
-  // command runs second, leaving the final order as moon-bin, packaged-bin,
-  // then the shell's PATH. Unknown shells stay usable without receiving a
-  // command in another shell's syntax. MOON_HOME remains the user's registry
-  // and caches.
+  // packaged MoonBit seed win when present. Queue one combined path update
+  // after shell startup so rc/profile files cannot overwrite the selection.
+  // Its entries leave the final order as moon-bin, packaged-bin, then the
+  // shell's PATH. Unknown shells stay usable without receiving a command in
+  // another shell's syntax. MOON_HOME remains the user's registry and caches.
   let toolchain = @moonbit.resolve_toolchain(
     state.engine,
     runtime_dir?=state.runtime_dir,
@@ -83,20 +82,16 @@ async fn terminal_open_op(
   } else {
     @sys.get_env_var("SHELL").unwrap_or("/bin/sh")
   }
-  let activation_commands : Array[String] = []
+  let path_entries = [toolchain.bin_dir.to_string()]
   if state.executable is Some(executable) &&
-    PackagedTools::resolve(executable) is Some(tools) &&
-    tools.terminal_path_command(shell_command, windows~) is Some(command) {
-    activation_commands.push(command)
+    PackagedTools::resolve(executable) is Some(tools) {
+    path_entries.push(tools.bin_dir)
   }
-  if @shellenv.path_prepend_command(
-      shell_command,
-      toolchain.bin_dir.to_string(),
-      windows~,
-    )
-    is Some(command) {
-    activation_commands.push(command)
-  }
+  let activation_command = @shellenv.path_prepend_command(
+    shell_command,
+    path_entries,
+    windows~,
+  )
   let id = @terminal.open_terminal(
     terminals,
     cwd=root.to_string(),
@@ -106,12 +101,8 @@ async fn terminal_open_op(
     @terminal.TerminalError(message) => raise HostError(message)
     error => raise error
   }
-  if !activation_commands.is_empty() {
-    @terminal.write_terminal(
-      terminals,
-      id~,
-      @utf8.encode(activation_commands.join("")),
-    ) catch {
+  if activation_command is Some(command) {
+    @terminal.write_terminal(terminals, id~, @utf8.encode(command)) catch {
       @terminal.TerminalError(message) => {
         @terminal.close_terminal(terminals, id~)
         raise HostError(

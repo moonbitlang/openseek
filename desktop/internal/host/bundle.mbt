@@ -50,17 +50,6 @@ pub fn PackagedTools::apply_to_process_env(self : PackagedTools) -> Unit {
 }
 
 ///|
-/// Build the command that restores packaged tools after an integrated
-/// terminal's login shell has run its rc/profile files.
-fn PackagedTools::terminal_path_command(
-  self : PackagedTools,
-  shell_command : String,
-  windows~ : Bool,
-) -> String? {
-  @shellenv.path_prepend_command(shell_command, self.bin_dir, windows~)
-}
-
-///|
 fn PackagedTools::path_with_precedence(
   self : PackagedTools,
   current : String?,
@@ -149,10 +138,6 @@ async test "ripgrep resolution uses only packaged or recognized development layo
     installed_tools.path_with_precedence(Some(already_first)),
     already_first,
   )
-  assert_eq(
-    installed_tools.terminal_path_command("/bin/zsh", windows=false),
-    Some("export PATH='\{installed_bin}':\"$PATH\"\r"),
-  )
 
   let windows = root.join("windows")
   @fs.mkdir(windows.to_string(), recursive=true)
@@ -160,13 +145,6 @@ async test "ripgrep resolution uses only packaged or recognized development layo
   let windows_rg = windows.join("rg.exe").to_string()
   @fs.write_file(windows_rg, "rg", create_mode=CreateOrTruncate)
   assert_eq(ripgrep_command(Some(windows_host)), Some(windows_rg))
-  guard PackagedTools::resolve(windows_host) is Some(windows_tools) else {
-    fail("expected Windows packaged tools")
-  }
-  assert_eq(
-    windows_tools.terminal_path_command("cmd.exe", windows=true),
-    Some("set \"Path=\{windows.to_string()};%Path%\"\r"),
-  )
 
   let macos = root.join("SeekMoon.app/Contents/MacOS")
   let resources_rg = root
