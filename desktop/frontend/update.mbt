@@ -14486,6 +14486,9 @@ test "font settings switch every text surface and are idempotent" {
 
 ///|
 test "font-size settings switch every text surface and are idempotent" {
+  assert_eq(Small.pixels(), 13.0)
+  assert_eq(Medium.pixels(), 14.0)
+  assert_eq(Large.pixels(), 15.0)
   let dispatch = test_dispatch()
   let model = test_model()
   let (_, first) = update(dispatch, FontSizeChanged("small"), model)

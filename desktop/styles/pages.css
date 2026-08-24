@@ -473,8 +473,8 @@ h2 {
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   padding: 3px 9px;
-  background: var(--color-bg-subtle);
-  color: var(--color-text-secondary);
+  background: transparent;
+  color: var(--color-text-faint);
   font-size: var(--font-size-xs);
   white-space: nowrap;
 }

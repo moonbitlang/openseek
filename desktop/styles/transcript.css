@@ -290,8 +290,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  color: var(--color-text-faint);
+  font-size: var(--font-size-xs);
 }
 .turn-rule::before {
   content: "";
@@ -670,6 +670,7 @@
    rows above and below — reading the gaps between steps is the whole point of
    showing them. */
 .activity-time {
+  color: var(--color-text-faint);
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
 }

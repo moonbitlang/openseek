@@ -11,7 +11,7 @@
     Consolas, monospace;
   --font-size-xs: 11px;
   --font-size-sm: 12px;
-  --font-size-md: 13px;
+  --font-size-md: 14px;
   --font-size-lg: 16px;
   --line-height-tight: 1;
   --line-height-normal: 1.5;
@@ -30,9 +30,10 @@
   --color-bg-canvas: #fbfbf9;
   --color-bg-surface: #ffffff;
   --color-bg-subtle: #f6f6f3;
-  --color-text-primary: #16171a;
+  --color-text-primary: #121418;
   --color-text-secondary: #5c5f66;
   --color-text-muted: #9a9da4;
+  --color-text-faint: #a8aab0;
   --color-border: #e9e8e3;
   --color-border-subtle: #f0efea;
 
@@ -64,7 +65,7 @@
   --color-danger-border: #f2d4cf;
   --color-warning: #b7791f;
 
-  --color-code: #2b2f36;
+  --color-code: #20242b;
 
   /* Interaction colors derive from the active palette automatically. */
   --color-focus-ring: var(--color-accent);
@@ -114,18 +115,18 @@
 
 /* Medium is the token scale declared on :root. Small and Large shift the four
    shared steps together, preserving the hierarchy between labels and body
-   text while the selected base size remains exactly 12px or 14px. */
+   text while the selected primary-content size remains exactly 13px or 15px. */
 :root[data-font-size="small"] {
   --font-size-xs: 10px;
   --font-size-sm: 11px;
-  --font-size-md: 12px;
+  --font-size-md: 13px;
   --font-size-lg: 15px;
 }
 
 :root[data-font-size="large"] {
   --font-size-xs: 12px;
   --font-size-sm: 13px;
-  --font-size-md: 14px;
+  --font-size-md: 15px;
   --font-size-lg: 17px;
 }
 
@@ -138,7 +139,7 @@
   --editor-line-height: var(--line-height-relaxed);
   --monaco-monospace-font: var(--font-family-ui);
   --ui-font-family: var(--font-family-ui);
-  --ui-font-size: var(--font-size-md);
+  --ui-font-size: var(--font-size-sm);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -146,9 +147,10 @@
     --color-bg-canvas: #16181d;
     --color-bg-surface: #1c1f26;
     --color-bg-subtle: #23272f;
-    --color-text-primary: #e9ebf0;
+    --color-text-primary: #f1f3f7;
     --color-text-secondary: #a3a8b4;
     --color-text-muted: #6f7480;
+    --color-text-faint: #656b76;
     --color-border: #2c313b;
     --color-border-subtle: #262b33;
 
@@ -164,7 +166,7 @@
     --color-danger-border: #4a2f2f;
     --color-warning: #e3b341;
 
-    --color-code: #d7dbe2;
+    --color-code: #edf0f5;
 
     --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.3),
       0 6px 22px -10px rgba(0, 0, 0, 0.5);
@@ -181,9 +183,10 @@
   --color-bg-canvas: #fbfbf9;
   --color-bg-surface: #ffffff;
   --color-bg-subtle: #f6f6f3;
-  --color-text-primary: #16171a;
+  --color-text-primary: #121418;
   --color-text-secondary: #5c5f66;
   --color-text-muted: #9a9da4;
+  --color-text-faint: #a8aab0;
   --color-border: #e9e8e3;
   --color-border-subtle: #f0efea;
 
@@ -199,7 +202,7 @@
   --color-danger-border: #f2d4cf;
   --color-warning: #b7791f;
 
-  --color-code: #2b2f36;
+  --color-code: #20242b;
   --shadow-surface: 0 1px 2px rgba(20, 23, 26, 0.04),
     0 6px 22px -10px rgba(20, 23, 26, 0.1);
   --shadow-overlay: 0 8px 30px -8px rgba(20, 23, 26, 0.22);
@@ -211,9 +214,10 @@
   --color-bg-canvas: #16181d;
   --color-bg-surface: #1c1f26;
   --color-bg-subtle: #23272f;
-  --color-text-primary: #e9ebf0;
+  --color-text-primary: #f1f3f7;
   --color-text-secondary: #a3a8b4;
   --color-text-muted: #6f7480;
+  --color-text-faint: #656b76;
   --color-border: #2c313b;
   --color-border-subtle: #262b33;
 
@@ -229,7 +233,7 @@
   --color-danger-border: #4a2f2f;
   --color-warning: #e3b341;
 
-  --color-code: #d7dbe2;
+  --color-code: #edf0f5;
   --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.3),
     0 6px 22px -10px rgba(0, 0, 0, 0.5);
   --shadow-overlay: 0 8px 30px -8px rgba(0, 0, 0, 0.6);

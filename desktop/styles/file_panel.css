@@ -88,7 +88,7 @@ button.panel-toggle:not(:disabled):hover {
   max-width: 200px;
   padding: 4px 4px 4px 10px;
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  color: var(--color-text-faint);
   border-radius: var(--radius-sm);
   cursor: pointer;
   white-space: nowrap;
@@ -99,7 +99,7 @@ button.panel-toggle:not(:disabled):hover {
 }
 .editor-tab.active {
   background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-text-secondary);
 }
 /* A tab whose file vanished from disk keeps its place, struck through
    until the file reappears or the tab is closed. */
@@ -132,7 +132,7 @@ button.panel-toggle:not(:disabled):hover {
   color: var(--color-text-primary);
 }
 .editor-tab.active .tab-close {
-  color: var(--color-accent-strong);
+  color: var(--color-text-muted);
 }
 
 /* The viewer and the toggleable file-tree panel split the column below
@@ -630,7 +630,7 @@ html.is-resizing * {
   padding: 5px 10px 5px 8px;
   border: 0;
   background: transparent;
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
   font: inherit;
   font-size: var(--font-size-sm);
   text-align: left;
@@ -667,7 +667,7 @@ html.is-resizing * {
   padding: 0 5px;
   border-radius: 9px;
   background: var(--color-bg-subtle);
-  color: var(--color-text-secondary);
+  color: var(--color-text-faint);
   font-size: var(--font-size-xs);
   line-height: 18px;
   text-align: center;
@@ -1319,9 +1319,9 @@ html.is-resizing-review * {
   overflow: hidden;
   border: 0;
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   font: inherit;
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-sm);
   line-height: 22px;
   text-align: left;
   white-space: nowrap;
@@ -1330,7 +1330,7 @@ html.is-resizing-review * {
 
 button.git-history-file:hover,
 button.git-history-file:focus-visible {
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
   background: var(--color-bg-subtle);
 }
 
@@ -1469,7 +1469,7 @@ button.git-history-file:focus-visible {
 }
 
 .history-commit-crumb {
-  color: var(--color-accent-strong);
+  color: var(--color-text-secondary);
   font-family: var(--font-mono);
 }
 
@@ -1487,8 +1487,8 @@ button.git-history-file:focus-visible {
   padding-top: 3px;
   padding-bottom: 3px;
   padding-right: 10px;
-  font-size: var(--font-size-md);
-  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -1513,7 +1513,7 @@ button.git-history-file:focus-visible {
   padding: 4px 10px 4px 12px;
   border: 0;
   border-radius: 0;
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
   background: transparent;
   font: inherit;
   font-size: var(--font-size-sm);
@@ -1644,8 +1644,8 @@ button.git-history-file:focus-visible {
   height: 34px;
   padding: 0 18px 0 12px;
   border-bottom: 1px solid var(--color-separator);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-faint);
   white-space: nowrap;
   overflow: visible;
   background: var(--color-bg-surface);
@@ -1671,7 +1671,7 @@ button.git-history-file:focus-visible {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   cursor: pointer;
 }
 .crumb:hover {
@@ -1679,7 +1679,7 @@ button.git-history-file:focus-visible {
   text-decoration: underline;
 }
 .crumb-file {
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
   font-weight: 500;
   cursor: default;
 }
@@ -1688,7 +1688,7 @@ button.git-history-file:focus-visible {
 }
 .crumb-sep {
   flex: 0 0 auto;
-  color: var(--color-text-muted);
+  color: var(--color-text-faint);
 }
 
 /* VS Code-style breadcrumb picker: clicking a directory opens its immediate
@@ -1779,7 +1779,7 @@ button.git-history-file:focus-visible {
   padding: 0 8px;
   border: 0;
   border-radius: 0;
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
   background: transparent;
   font: inherit;
   font-size: var(--font-size-sm);
@@ -1845,7 +1845,7 @@ button.git-history-file:focus-visible {
   padding: 2px 7px;
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   background: var(--color-control-surface);
   font-size: var(--font-size-xs);
   line-height: 16px;
@@ -1870,7 +1870,7 @@ button.git-history-file:focus-visible {
   padding: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-xs);
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   background: transparent;
   font: inherit;
   font-size: var(--font-size-lg);
@@ -1889,7 +1889,7 @@ button.git-history-file:focus-visible {
 }
 .review-nav-position {
   min-width: 38px;
-  color: var(--color-text-muted);
+  color: var(--color-text-faint);
   font-size: var(--font-size-xs);
   text-align: center;
 }

@@ -41,7 +41,7 @@ const DiagnosticsOwner = "moon-lsp"
 const DefaultEditorFontFamily = "\"Geist Mono\", \"SF Mono\", ui-monospace, \"Cascadia Mono\", Menlo, Consolas, monospace"
 
 ///|
-const DefaultEditorFontSize : Double = 13.0
+const DefaultEditorFontSize : Double = 14.0
 
 ///|
 /// The viewer's imperative state — the attached widget, its services, and the

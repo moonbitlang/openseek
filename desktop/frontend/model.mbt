@@ -380,9 +380,9 @@ fn AppFontSize::wire(self : AppFontSize) -> String {
 ///|
 fn AppFontSize::pixels(self : AppFontSize) -> Double {
   match self {
-    Small => 12.0
-    Medium => 13.0
-    Large => 14.0
+    Small => 13.0
+    Medium => 14.0
+    Large => 15.0
   }
 }
 

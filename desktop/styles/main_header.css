@@ -83,7 +83,7 @@ main {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  color: var(--color-text-faint);
 }
 .run-status {
   display: inline-flex;
@@ -91,7 +91,7 @@ main {
   gap: 7px;
   margin-left: auto;
   font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  color: var(--color-text-faint);
   white-space: nowrap;
 }
 .run-status.accent .run-text {
