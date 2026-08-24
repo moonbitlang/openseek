@@ -6586,18 +6586,11 @@ fn update_device_msg(
       // transients are not replayed), so nothing else will ever take that card
       // down, and pressing it sends a decision the engine's desk discards.
       //
-      // Matched on session AND id: ids are minted per engine and every one
-      // starts at `ap-1`, so another session still holding that number is not
-      // evidence that this one survives.
       for captured in frontier {
         guard captured.pending_approval_id is Some(captured_id) else {
           continue
         }
-        if approvals
-          .iter()
-          .any(item => {
-            item.session == captured.session && item.approval.id == captured_id
-          }) {
+        if approvals.iter().any(item => item.approval.id == captured_id) {
           continue
         }
         guard seeded.find_conversation(channel, captured.session) is Some(conv) else {

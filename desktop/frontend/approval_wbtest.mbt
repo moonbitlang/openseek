@@ -552,66 +552,6 @@ test "a stale snapshot does not overwrite a newer question" {
 }
 
 ///|
-/// Absence is matched on session AND id. Ids repeat across engines — every desk
-/// starts at `ap-1` — so another conversation still holding that number is not
-/// evidence that this one's question survives; matching by id alone would keep
-/// a dead card up for as long as any other session happened to share it.
-test "another session's identical id does not keep a dead card alive" {
-  let mine = running_conversation()
-  let theirs = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "other-session",
-      @interop.ChannelId::Local.test_project(),
-    ),
-    run: Open(run_id="r-other", stage=Opened),
-  }
-  let asked = fold_engine(
-    mine,
-    ApprovalRequested(
-      id="ap-1",
-      tool_name="run_moonbit",
-      detail="escalate",
-      body=None,
-    ),
-  )
-  let model = {
-    ..test_model(),
-    active_session: asked.session_id,
-    conversations: [asked, theirs],
-  }
-  // The host lists `ap-1` — but for the OTHER session. Mine is gone.
-  let (_, resynced) = update(
-    test_dispatch(),
-    runs_loaded_with_approvals(model, [
-      {
-        session: theirs.session_id,
-        approval: {
-          id: "ap-1",
-          run_id: Some("r-other"),
-          tool_name: "run_moonbit",
-          detail: "escalate",
-          body: None,
-          answered: false,
-        },
-      },
-    ]),
-    model,
-  )
-  guard resynced.find_conversation(@interop.ChannelId::Local, asked.session_id)
-    is Some(conv) else {
-    fail("expected my conversation")
-  }
-  assert_true(conv.pending_approval is None)
-  // And theirs was seeded, since it is genuinely standing.
-  guard resynced.find_conversation(@interop.ChannelId::Local, theirs.session_id)
-    is Some(other) else {
-    fail("expected the other conversation")
-  }
-  assert_true(other.pending_approval is Some(_))
-}
-
-///|
 /// The frontier guard compares two endpoints, so it cannot see a value that
 /// changed and changed back. With no question captured, one asked and resolved
 /// in flight, and its run replaced, both endpoints read `None` — and the

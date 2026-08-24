@@ -8,8 +8,8 @@ priv enum ServeCommand {
   Cancel
   Goal(GoalAction)
   /// The answer to an `approval_requested` event: which question, and whether
-  /// it is granted. Both labelled — `Approval("ap-1", true)` reads as nothing
-  /// at a call site, and the second field is the decision itself.
+  /// it is granted. Both labelled, because a bare positional pair reads as
+  /// nothing at a call site and the second field is the decision itself.
   ///
   /// Unlike every other command here it does not schedule work. It releases a
   /// tool that is already running and blocked, which is why it is dispatched
@@ -638,7 +638,9 @@ async fn run_serve(
   // The desk outlives every turn: a question is asked by a tool inside one
   // turn's task and answered by the loop below, which is the process's single
   // command consumer. Both close over this one value.
-  let approval_desk = ApprovalDesk::new()
+  let approval_desk = ApprovalDesk::new(
+    now_ms=@env.now().reinterpret_as_int64(),
+  )
   let approval = approval_channel(
     approval_policy(matches, interactive=true),
     approval_desk,

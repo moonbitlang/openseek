@@ -274,7 +274,7 @@ async fn run_task_turn(
     // channel itself, `never` wires none.
     let approval = approval_channel(
       approval_policy(matches, interactive=false),
-      ApprovalDesk::new(),
+      ApprovalDesk::new(now_ms=@env.now().reinterpret_as_int64()),
     )
     let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
     let scope = @agent_runtime.AgentTaskScope(group)

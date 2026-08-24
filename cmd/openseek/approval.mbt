@@ -97,15 +97,30 @@ priv struct ApprovalDesk {
   /// Set when the command stream is gone. No answer can arrive after that, so
   /// a question asked from here on is withdrawn without ever being announced.
   mut closed : Bool
-  /// Source of request ids, unique within this process. Ids are not durable
-  /// and mean nothing to a later engine: a question outlives neither the turn
-  /// that asked it nor the process.
+  /// Distinguishes this desk's ids from every other desk's.
+  ///
+  /// A bare counter is not enough, and the reason is written on this repo's
+  /// other id: `mint_run_id` notes that "a counter reset to 1 would hand their
+  /// ids to new runs and cross-wire two conversations' event streams". The
+  /// same applies here — every engine process starts its own desk, and their
+  /// questions meet in places that are not per-process: the desktop host's
+  /// hub, one client's window, and the single stdout stream a best-of-N fleet
+  /// shares.
+  nonce : String
+  /// Ordinal within this desk. Kept beside the nonce rather than replaced by
+  /// it because it is what makes a log readable in ask order.
   mut next_id : Int
 }
 
 ///|
-fn ApprovalDesk::new() -> ApprovalDesk {
-  { pending: {}, next_id: 0, closed: false }
+/// The nonce is drawn once per desk, not once per question: entropy here costs
+/// a temp directory, and a question is human-paced but a desk is per-process.
+/// An entropy failure falls back to the clock, which two engines would have to
+/// start within the same millisecond to collide on.
+async fn ApprovalDesk::new(now_ms~ : Int64) -> ApprovalDesk {
+  let salt = random_salt()
+  let nonce = if salt == "" { "\{now_ms}" } else { salt }
+  { pending: {}, next_id: 0, closed: false, nonce }
 }
 
 ///|
@@ -133,7 +148,7 @@ async fn ApprovalDesk::ask(
   // either: a request nobody can see is not a question.
   guard !self.closed else { return Cancelled }
   self.next_id += 1
-  let id = "ap-\{self.next_id}"
+  let id = "ap-\{self.nonce}-\{self.next_id}"
   let replies : @aqueue.Queue[@agent_runtime.ApprovalOutcome] = Queue(
     kind=Unbounded,
   )
@@ -214,7 +229,7 @@ fn approval_channel(
       Some(
         ApprovalChannel(ask => {
           desk.next_id += 1
-          let id = "ap-\{desk.next_id}"
+          let id = "ap-\{desk.nonce}-\{desk.next_id}"
           @emit.emit(
             ApprovalRequested(
               id~,
@@ -270,8 +285,18 @@ test "an unknown approval value names the accepted ones" {
 }
 
 ///|
+/// Test helper: the id of the question this desk is standing on. A controller
+/// reads it off `approval_requested`; a test in this file can read the desk.
+fn ApprovalDesk::standing(self : ApprovalDesk) -> String? {
+  for id, _ in self.pending {
+    return Some(id)
+  }
+  None
+}
+
+///|
 async test "an answered question resolves to the controller's decision" {
-  let desk = ApprovalDesk::new()
+  let desk = ApprovalDesk::new(now_ms=0)
   @async.with_task_group(group => {
     let asked = group.spawn(() => {
       desk.ask({
@@ -283,12 +308,13 @@ async test "an answered question resolves to the controller's decision" {
     // The asker registers its pending entry before it blocks; wait for it
     // rather than assuming the spawn already ran.
     for _ in 0..<200 {
-      if desk.pending.length() > 0 {
+      if desk.standing() is Some(_) {
         break
       }
       @async.sleep(5)
     }
-    desk.settle("ap-1", true)
+    guard desk.standing() is Some(id) else { fail("no question was announced") }
+    desk.settle(id, true)
     assert_true(asked.wait() is AllowedOnce)
   })
   assert_eq(desk.pending.length(), 0)
@@ -296,7 +322,7 @@ async test "an answered question resolves to the controller's decision" {
 
 ///|
 async test "a refused question resolves to rejected" {
-  let desk = ApprovalDesk::new()
+  let desk = ApprovalDesk::new(now_ms=0)
   @async.with_task_group(group => {
     let asked = group.spawn(() => {
       desk.ask({
@@ -306,12 +332,13 @@ async test "a refused question resolves to rejected" {
       })
     })
     for _ in 0..<200 {
-      if desk.pending.length() > 0 {
+      if desk.standing() is Some(_) {
         break
       }
       @async.sleep(5)
     }
-    desk.settle("ap-1", false)
+    guard desk.standing() is Some(id) else { fail("no question was announced") }
+    desk.settle(id, false)
     assert_true(asked.wait() is Rejected)
   })
 }
@@ -322,7 +349,7 @@ async test "a refused question resolves to rejected" {
 /// is gone because the turn was cancelled — with no deadline, that is the only
 /// way one leaves unanswered.
 async test "a decision for a settled question is discarded" {
-  let desk = ApprovalDesk::new()
+  let desk = ApprovalDesk::new(now_ms=0)
   @async.with_task_group(group => {
     let asking = group.spawn(() => {
       desk.ask({ tool_name: "run_moonbit", detail: "escalate", body: None })
@@ -336,15 +363,16 @@ async test "a decision for a settled question is discarded" {
     asking.cancel()
   })
   assert_eq(desk.pending.length(), 0)
-  desk.settle("ap-1", true)
+  // A decision for a question that is gone finds nothing and reports nothing.
+  desk.settle("ap-whatever", true)
   assert_eq(desk.pending.length(), 0)
 }
 
 ///|
 /// `Never` is an absent channel rather than a refusing one, because that
 /// absence is what stops the argument from being advertised at all.
-test "never wires no channel; ask and always do" {
-  let desk = ApprovalDesk::new()
+async test "never wires no channel; ask and always do" {
+  let desk = ApprovalDesk::new(now_ms=0)
   assert_true(approval_channel(Never, desk) is None)
   assert_true(approval_channel(Ask, desk) is Some(_))
   assert_true(approval_channel(Always, desk) is Some(_))
@@ -361,7 +389,7 @@ test "never wires no channel; ask and always do" {
 /// back. Moving that emit out of the defer would strand the card on screen,
 /// answerable and connected to nothing, and no other test would notice.
 async test "an interrupted wait still retires its question" {
-  let desk = ApprovalDesk::new()
+  let desk = ApprovalDesk::new(now_ms=0)
   @async.with_task_group(group => {
     let asking = group.spawn(() => {
       desk.ask({
@@ -393,7 +421,7 @@ async test "an interrupted wait still retires its question" {
 /// wait with no clock behind it is a turn that never ends — so `serve` would
 /// never see its `TurnDone` and never exit.
 async test "closing the command stream withdraws a standing question" {
-  let desk = ApprovalDesk::new()
+  let desk = ApprovalDesk::new(now_ms=0)
   @async.with_task_group(group => {
     let asking = group.spawn(() => {
       desk.ask({ tool_name: "run_moonbit", detail: "escalate", body: None })
@@ -416,7 +444,7 @@ async test "closing the command stream withdraws a standing question" {
 /// a model that retries the escalation must not open a second wait nobody can
 /// end.
 async test "a question asked after the stream closed does not wait" {
-  let desk = ApprovalDesk::new()
+  let desk = ApprovalDesk::new(now_ms=0)
   desk.withdraw_all()
   @async.with_task_group(_ => {
     let outcome = desk.ask({
