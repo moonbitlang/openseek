@@ -135,14 +135,6 @@ test "Codex optional fields accept null and encode absence by omission" {
   })
   assert_true(page.next_cursor is None)
   @debug.assert_eq(page.to_json(), { "data": [] })
-  let resumed : @protocol.CodexThreadResumeReply = @json.from_json({
-    "thread": null,
-    "status": "activeWriter",
-    "futureMetadata": true,
-  })
-  assert_true(resumed.thread is None)
-  assert_eq(resumed.status, Some("activeWriter"))
-  @debug.assert_eq(resumed.to_json(), { "status": "activeWriter" })
 }
 
 ///|

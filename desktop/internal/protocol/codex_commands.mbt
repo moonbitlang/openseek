@@ -196,14 +196,6 @@ pub(all) enum CodexCommandReply[Reply] {
 }
 
 ///|
-/// `thread/resume` returns a thread on success and Desktop's explicit
-/// `{status:"activeWriter"}` state when another client owns the writer.
-pub(all) struct CodexThreadResumeReply {
-  thread : Json?
-  status : String?
-} derive(Debug, Eq)
-
-///|
 /// A start reply may contain the complete turn while a steer reply may contain
 /// only `turnId`. Both are successful deliveries of the same composer action.
 pub(all) struct CodexTurnReply {
@@ -751,27 +743,6 @@ pub impl[Reply : ToJson] ToJson for CodexCommandReply[Reply] with fn to_json(
 }
 
 ///|
-pub impl FromJson for CodexThreadResumeReply with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "Codex thread resume reply")
-  {
-    thread: object.optional_json("thread"),
-    status: object.optional_string("status"),
-  }
-}
-
-///|
-pub impl ToJson for CodexThreadResumeReply with fn to_json(self) {
-  let fields : Map[String, Json] = Map([])
-  if self.thread is Some(thread) {
-    fields["thread"] = thread
-  }
-  if self.status is Some(status) {
-    fields["status"] = Json::string(status)
-  }
-  Json::object(fields)
-}
-
-///|
 pub impl FromJson for CodexTurnReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "Codex turn reply")
   {
@@ -1137,18 +1108,6 @@ pub extend CodexThreadReply with Eq::{equal, not_equal}
 
 ///|
 pub extend CodexThreadReply with ToJson::{to_json}
-
-///|
-pub extend CodexThreadResumeReply with Debug::{to_repr}
-
-///|
-pub extend CodexThreadResumeReply with FromJson::{from_json}
-
-///|
-pub extend CodexThreadResumeReply with Eq::{equal, not_equal}
-
-///|
-pub extend CodexThreadResumeReply with ToJson::{to_json}
 
 ///|
 pub extend CodexThreadStartPayload with Debug::{to_repr}

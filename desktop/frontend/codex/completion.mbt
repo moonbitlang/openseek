@@ -108,9 +108,9 @@ fn State::input_empty(self : State) -> Bool {
 }
 
 ///|
-/// Interpret a submitted shared-composer draft through Codex writer ownership
-/// and thread creation. Input mechanics stay component-local; this method
-/// begins only the app-server operation selected by the canonical task state.
+/// Interpret a submitted shared-composer draft through thread creation,
+/// direct steering, or resume. Running tasks steer their reported active turn;
+/// idle stored tasks resume before starting a new turn.
 fn State::submit_composer(
   self : State,
   dispatch : @cmd.Emit[Msg],
@@ -123,7 +123,7 @@ fn State::submit_composer(
     return (@cmd.none, self)
   }
   // Once Send begins, the visible choice is frozen into its request payload;
-  // close the menu before any asynchronous writer/start transition.
+  // close the menu before any asynchronous resume/start transition.
   let ready = { ..self, permission_picker: self.permission_picker.close() }
   if ready.active_draft() is Some(draft) {
     let next = {
@@ -141,7 +141,7 @@ fn State::submit_composer(
       next.start_draft_thread(dispatch, channel),
       next.begin_foreground(CodexDraftThreadReply(draft.id)),
     )
-  } else if ready.write_access is CodexWritable {
+  } else if ready.active_turn_id() is Some(_) {
     guard ready.active_thread() is Some(active) else {
       return (@cmd.none, ready)
     }
@@ -153,7 +153,7 @@ fn State::submit_composer(
     }
     (
       ready.resume_for_send(dispatch, channel),
-      ready.begin_foreground(CodexWriterReply(active.id)),
+      ready.begin_foreground(CodexResumeReply(active.id)),
     )
   }
 }
@@ -458,14 +458,12 @@ pub fn State::composer_input(
       ),
     )
   }
-  let writable_turn = self.writable_turn_id()
-  let read_only_turn = self.active_turn_is_read_only()
+  let active_turn = self.active_turn_id()
   let missing_worktree = self.has_missing_worktree()
   let can_edit = self.can_prompt() &&
     self.connection is CodexReady &&
-    !read_only_turn &&
     !missing_worktree
-  let primary_action = if writable_turn is Some(_) {
+  let primary_action = if active_turn is Some(_) {
     @composer.Running(steer_available=can_edit, can_stop=true)
   } else {
     @composer.Send(available=!self.loading && can_edit && self.has_active())
@@ -509,14 +507,10 @@ pub fn State::composer_input(
     presentation: {
       context: before,
       status,
-      placeholder: if writable_turn is Some(_) {
+      placeholder: if active_turn is Some(_) {
         "Steer the running task — your message joins it at the next step."
       } else if missing_worktree {
         "Rebuild this task's worktree before continuing."
-      } else if read_only_turn {
-        "This task is active in another Codex client."
-      } else if self.is_active_elsewhere() {
-        "Send to retry writer access for this task."
       } else {
         "Ask Codex to inspect, edit, or explain this workspace."
       },

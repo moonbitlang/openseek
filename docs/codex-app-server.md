@@ -41,8 +41,10 @@ page requests.
   ChatGPT token; the token stays inside the isolated home's `auth.json`,
   protected by the OS keychain.
 - A disconnect drops streamed presentation state. After reconnect, the page
-  calls `thread/resume` and then `thread/read` with `includeTurns: true`; the
-  read reply is the authoritative history snapshot.
+  calls `thread/read` with `includeTurns: true`; that reply is the authoritative
+  history snapshot. An idle stored-task Send calls `thread/resume` immediately
+  before `turn/start`; an `inProgress` task sends `turn/steer` directly, so the
+  page does not cache writer state or race rollout materialization.
 - `item/completed` replaces any accumulated delta text. Deltas are display-only
   and are not treated as durable history.
 

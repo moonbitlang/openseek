@@ -907,7 +907,7 @@ async fn ApiState::codex_thread_start(
 async fn ApiState::codex_thread_resume(
   self : ApiState,
   request : @protocol.CodexThreadResumePayload,
-) -> @protocol.CodexThreadResumeReply {
+) -> @protocol.CodexThreadReply {
   @json.from_json(
     self.codex_request("codex.thread.resume", request.app_server_params()),
   )
@@ -1095,24 +1095,7 @@ async fn ApiState::codex_request(
     ("codex.thread.archive", _) => archive.unwrap().app_server_params()
     _ => params
   }
-  let reply = try
-    self.codex.call(method_=app_server_method, params=scoped_params)
-  catch {
-    @codex.JsonRpc(..) as error if desktop_method == "codex.thread.resume" &&
-      error.is_active_writer() =>
-      // A stored task remains readable while another Codex client owns its
-      // writer. Return a safe state instead of leaking arbitrary RPC details
-      // through Proton's browser boundary.
-      Json::object({ "status": Json::string("activeWriter") })
-    error => raise error
-  } noraise {
-    value => value
-  }
-  if desktop_method == "codex.thread.resume" &&
-    reply is Object(fields) &&
-    fields.get("status") is Some(String("activeWriter")) {
-    return reply
-  }
+  let reply = self.codex.call(method_=app_server_method, params=scoped_params)
   let reply = match desktop_method {
     "codex.thread.start"
     | "codex.thread.resume"

@@ -20,24 +20,6 @@ test "Codex JSON-RPC errors retain method, code, message, and data" {
 }
 
 ///|
-test "Codex active-writer conflicts have a safe UI classification" {
-  let conflict : @codex.CodexError = JsonRpc(
-    method_="thread/resume",
-    code=-32600,
-    message="thread abc already has an active writer",
-    data=None,
-  )
-  assert_true(conflict.is_active_writer())
-  let invalid_id : @codex.CodexError = JsonRpc(
-    method_="thread/resume",
-    code=-32602,
-    message="invalid thread id",
-    data=None,
-  )
-  assert_false(invalid_id.is_active_writer())
-}
-
-///|
 test "Codex unmaterialized task history has a narrow empty-history classification" {
   let empty : @codex.CodexError = JsonRpc(
     method_="thread/read",

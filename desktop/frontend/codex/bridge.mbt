@@ -398,8 +398,9 @@ fn State::refresh_git(
 }
 
 ///|
-/// Claim the selected task's writer only when the user intends to append a
-/// turn. A conflicting Codex client leaves the transcript and draft intact.
+/// Resume an idle stored task immediately before starting its next turn.
+/// Running tasks steer directly because their rollout can still be empty when
+/// `turn/start` has reported `inProgress` but has not persisted its first item.
 fn State::resume_for_send(
   self : State,
   dispatch : @cmd.Emit[Msg],
@@ -409,7 +410,7 @@ fn State::resume_for_send(
   let thread_id = active.id
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply : @protocol.CodexThreadResumeReply = @interop.codex_request(
+      let _reply : @protocol.CodexThreadReply = @interop.codex_request(
         channel,
         @commands.codex_thread_resume,
         { thread_id, permission_mode: self.permission_mode() },
@@ -418,7 +419,7 @@ fn State::resume_for_send(
           scheduler.add(
             dispatch(
               Failed(
-                kind=CodexWriterReply(thread_id),
+                kind=CodexResumeReply(thread_id),
                 message=@interop.bridge_error_text(error),
               ),
             ),
@@ -426,11 +427,7 @@ fn State::resume_for_send(
           return
         }
       }
-      if reply.status is Some("activeWriter") {
-        scheduler.add(dispatch(WriterConflict(thread_id)))
-      } else {
-        scheduler.add(dispatch(WriterAcquired(thread_id)))
-      }
+      scheduler.add(dispatch(ResumeSucceeded(thread_id)))
     })
   })
 }
@@ -755,7 +752,7 @@ fn State::interrupt(
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
   guard self.active_thread() is Some(active) &&
-    self.writable_turn_id() is Some(turn_id) else {
+    self.active_turn_id() is Some(turn_id) else {
     return @cmd.none
   }
   CodexInterruptReply.request(

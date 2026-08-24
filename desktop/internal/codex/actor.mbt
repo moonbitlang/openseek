@@ -35,20 +35,6 @@ pub impl Show for CodexError with fn output(self, logger) {
 }
 
 ///|
-/// App-server does not currently attach a machine-readable discriminator to
-/// thread-store writer conflicts. Keep the exact compatibility check at the
-/// native boundary so the browser receives only a stable, safe UI state.
-pub fn CodexError::is_active_writer(self : CodexError) -> Bool {
-  match self {
-    JsonRpc(method_~, code~, message~, data=_) =>
-      method_ == "thread/resume" &&
-      code == -32600 &&
-      message.contains("already has an active writer")
-    _ => false
-  }
-}
-
-///|
 /// A task created by another Codex client can exist in the state database
 /// before its first user message creates a rollout. Summary reads are valid in
 /// that interval, but current app-server builds reject `includeTurns=true`

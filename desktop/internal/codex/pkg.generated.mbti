@@ -24,7 +24,6 @@ pub(all) suberror CodexError {
   RequestFailed(method_~ : String, detail~ : String)
   Unavailable(String)
 } derive(@debug.Debug)
-pub fn CodexError::is_active_writer(Self) -> Bool
 pub fn CodexError::is_unmaterialized_thread_history(Self) -> Bool
 pub fn CodexError::is_unmaterialized_thread_turns(Self) -> Bool
 pub fn CodexError::output(Self, &Logger) -> Unit

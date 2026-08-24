@@ -864,15 +864,6 @@ pub fn State::page(
         @html.span(class="run-text", [
           @html.span(class="codex-connection", self.connection_label()),
           @html.span(class="codex-account-label", " · " + self.account_label()),
-          if self.is_active_elsewhere() {
-            @html.span(
-              class="codex-writer-status",
-              title="Another Codex client owned this task's writer; Send retries acquisition",
-              " · Writer unavailable",
-            )
-          } else {
-            @html.nothing
-          },
         ]),
       ],
     ),

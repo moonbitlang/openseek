@@ -141,8 +141,8 @@ pub fn update(
           state.requested_thread == Some(thread_id)
         ) {
         // Clicking the selected sidebar row is navigation at the root shell,
-        // not a request to reacquire history. Preserve its local composer,
-        // writer ownership, and any foreground Stop authority.
+        // not a request to reacquire history. Preserve its local composer and
+        // any foreground Stop authority.
         (@cmd.none, state)
       } else {
         let commands : Array[@cmd.Cmd] = [
@@ -156,7 +156,6 @@ pub fn update(
           {
             ..state,
             git_details_open: false,
-            write_access: CodexNeedsResume,
             requested_thread: Some(thread_id),
             // These fields are the adapter's last canonical submission snapshot.
             // The shared component keeps each task's unsent local draft under
@@ -203,31 +202,15 @@ pub fn update(
         None => (@cmd.none, state)
       }
     CancelArchiveDiscard => (@cmd.none, { ..state, archive_confirm: None })
-    WriterAcquired(thread_id) =>
+    ResumeSucceeded(thread_id) =>
       if state.active_thread() is Some(active) &&
         active.id == thread_id &&
-        state.owns_foreground(CodexWriterReply(thread_id)) {
+        state.owns_foreground(CodexResumeReply(thread_id)) {
         let next = {
-          ..state.settle_foreground(CodexWriterReply(thread_id)),
-          write_access: CodexWritable,
+          ..state.settle_foreground(CodexResumeReply(thread_id)),
           notice: "",
         }.begin_foreground(CodexTurnReply(thread_id))
         (next.send(dispatch, channel), next)
-      } else {
-        (@cmd.none, state)
-      }
-    WriterConflict(thread_id) =>
-      if state.active_thread() is Some(active) &&
-        active.id == thread_id &&
-        state.owns_foreground(CodexWriterReply(thread_id)) {
-        (
-          @cmd.none,
-          {
-            ..state.settle_foreground(CodexWriterReply(thread_id)),
-            write_access: CodexActiveElsewhere,
-            notice: "This Codex task is active in another client. Its history is available here, but sending is read-only until that client releases it.",
-          },
-        )
       } else {
         (@cmd.none, state)
       }
@@ -281,7 +264,6 @@ pub fn update(
           // A malformed or mismatched snapshot leaves the requested id in
           // place. Only a verified selection may retarget Files/Terminal.
           if next.requested_thread is None {
-            next = { ..next, write_access: CodexNeedsResume }
             next = next.loading_context(false)
             cmd = @cmd.batch([
               next.refresh_git(dispatch, channel),
@@ -289,13 +271,12 @@ pub fn update(
             ])
           }
         }
-        CodexWriterReply(_) => ()
+        CodexResumeReply(_) => ()
         CodexDraftThreadReply(_) => {
           next = next.with_thread_reply(value)
           // Install the real id before starting the turn so every app-server
           // notification observes the stored selection. The preserved draft
           // and placement now flow through the ordinary Local/Worktree send.
-          next = { ..next, write_access: CodexWritable }
           next = next.loading_context(false)
           cmd = @cmd.batch([
             next.send(dispatch, channel),
@@ -402,24 +383,11 @@ pub fn update(
         CodexUnarchiveReply(_) => "Codex restore"
         CodexCompactReply(_, _) => "Codex compact"
         CodexReviewReply(_, _) => "Codex review"
-        CodexWriterReply(_) => "Codex writer"
+        CodexResumeReply(_) => "Codex resume"
         CodexInterruptReply => "Codex interrupt"
         CodexCancelLoginReply(_) => "Codex sign-in cancellation"
         CodexLogoutReply => "Codex sign-out"
         CodexApprovalReply => "Codex response"
-      }
-      // A writer-lock refusal is an environment condition, not a protocol
-      // fault: some process — typically a previous SeekMoon instance that
-      // never fully exited, still owning its codex app-server — holds the
-      // thread's writer lock. Name the condition and the way out instead of
-      // quoting the raw JSON-RPC error.
-      let message = if (
-          kind is CodexArchiveReply(_) || kind is CodexUnarchiveReply(_)
-        ) &&
-        message.contains("already has an active writer") {
-        "another process still holds this task's writer — usually a previous SeekMoon instance that never fully exited. Quit it, then try again."
-      } else {
-        message
       }
       let owns_foreground = state.owns_foreground(kind)
       let settled = if owns_foreground {
@@ -453,11 +421,6 @@ pub fn update(
     }
     StatusChanged(value) => {
       let next = state.with_status(value)
-      let next = if next.connection is CodexReady {
-        next
-      } else {
-        { ..next, write_access: CodexNeedsResume }
-      }
       let mut current = next
       let cmd = if next.connection is CodexReady {
         let (refresh, refreshed) = next.refresh(dispatch, channel)
@@ -775,36 +738,6 @@ test "a settings-updated re-read keeps the streaming turns" {
   }
   assert_eq(kept.id, "thread-1")
   assert_eq(kept.turns.length(), 1)
-}
-
-///|
-test "a writer-locked archive failure reads as a condition, not a dump" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  let open_external = (_ : String) => @cmd.none
-  let raw = "HandlerFailed(name=\"ext:openseek/codex.thread.archive\", detail=\"JsonRpc(method_=\\\"thread/archive\\\", code=-32600, message=\\\"thread 01a0 already has an active writer\\\", data=None)\")"
-  let (_, held) = update(
-    dispatch,
-    Failed(kind=CodexArchiveReply("thread-1"), message=raw),
-    State(),
-    @interop.ChannelId::Local,
-    open_external,
-  )
-  inspect(
-    held.transcript_items()[0].content,
-    content="Codex archive: another process still holds this task's writer — usually a previous SeekMoon instance that never fully exited. Quit it, then try again.",
-  )
-  // Every other archive failure keeps its exact wording.
-  let (_, other) = update(
-    dispatch,
-    Failed(kind=CodexArchiveReply("thread-1"), message="thread not found"),
-    State(),
-    @interop.ChannelId::Local,
-    open_external,
-  )
-  inspect(
-    other.transcript_items()[0].content,
-    content="Codex archive: thread not found",
-  )
 }
 
 ///|
@@ -1333,46 +1266,55 @@ test "Codex draft and turn replies stay with their originating task" {
 }
 
 ///|
-test "Codex writer conflict is the active-elsewhere signal" {
+test "Codex observed running task steers without resume" {
   let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  let state = State::from_thread_snapshot({
-    "thread": { "id": "thread-1", "turns": [] },
-  }).begin_foreground(CodexWriterReply("thread-1"))
-  let (_, first) = update(
+  let observed = {
+    ..State::from_thread_snapshot({
+      "thread": {
+        "id": "thread-1",
+        "turns": [{ "id": "turn-1", "status": "inProgress", "items": [] }],
+      },
+    }),
+    connection: CodexReady,
+    draft: "follow up",
+  }
+  assert_true(observed.is_running())
+  let (_, steering) = observed.submit_composer(
     dispatch,
-    WriterConflict("thread-1"),
-    state,
     @interop.ChannelId::Local,
-    _ => @cmd.none,
   )
-  let (_, repeated) = update(
-    dispatch,
-    WriterConflict("thread-1"),
-    state,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
-  assert_true(first.is_active_elsewhere())
-  assert_false(first.is_running())
-  assert_true(first == repeated)
+  assert_true(steering.owns_foreground(CodexTurnReply("thread-1")))
+}
 
-  // Once the observed turn is idle, Send retries thread/resume instead of
-  // leaving the task permanently disabled after one writer conflict.
-  let retryable = { ..first, connection: CodexReady, draft: "try again" }
-  let (_, retrying) = retryable.submit_composer(
+///|
+test "Codex idle stored task resumes before starting a turn" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let idle = {
+    ..State::from_thread_snapshot({
+      "thread": { "id": "thread-1", "turns": [] },
+    }),
+    connection: CodexReady,
+    draft: "follow up",
+  }
+  let (_, resuming) = idle.submit_composer(dispatch, @interop.ChannelId::Local)
+  assert_true(resuming.owns_foreground(CodexResumeReply("thread-1")))
+  let message = ResumeSucceeded("thread-1")
+  let (_, once) = update(
     dispatch,
-    @interop.ChannelId::Local,
-  )
-  assert_true(retrying.loading)
-
-  let (_, stale) = update(
-    dispatch,
-    WriterConflict("thread-old"),
-    state,
+    message,
+    resuming,
     @interop.ChannelId::Local,
     _ => @cmd.none,
   )
-  assert_true(stale == state)
+  let (_, twice) = update(
+    dispatch,
+    message,
+    resuming,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(once.owns_foreground(CodexTurnReply("thread-1")))
+  assert_true(once == twice)
 }
 
 ///|
@@ -1407,7 +1349,6 @@ test "reopening the selected Codex task preserves its foreground state" {
         "turns": [{ "id": "turn-a", "status": "inProgress", "items": [] }],
       },
     }),
-    write_access: CodexWritable,
     draft: "unsent follow-up",
   }.begin_foreground(CodexTurnReply("thread-a"))
   let message = OpenThread("thread-a")

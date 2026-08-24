@@ -91,7 +91,7 @@ pub let codex_thread_list : Command[@protocol.CodexThreadListPayload, @protocol.
 
 pub let codex_thread_read : Command[@protocol.CodexThreadReadPayload, @protocol.CodexCommandReply[@protocol.CodexThreadReply]]
 
-pub let codex_thread_resume : Command[@protocol.CodexThreadResumePayload, @protocol.CodexCommandReply[@protocol.CodexThreadResumeReply]]
+pub let codex_thread_resume : Command[@protocol.CodexThreadResumePayload, @protocol.CodexCommandReply[@protocol.CodexThreadReply]]
 
 pub let codex_thread_start : Command[@protocol.CodexThreadStartPayload, @protocol.CodexCommandReply[@protocol.CodexThreadReply]]
 

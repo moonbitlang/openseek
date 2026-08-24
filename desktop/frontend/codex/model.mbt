@@ -19,15 +19,6 @@ priv enum CodexAccount {
 } derive(Eq)
 
 ///|
-/// Reading persisted history does not require a writer. A selected task only
-/// asks app-server for its writer when the user first tries to send.
-priv enum CodexWriteAccess {
-  CodexNeedsResume
-  CodexWritable
-  CodexActiveElsewhere
-} derive(Eq)
-
-///|
 /// The permission picker keeps its current choice inside every transient UI
 /// state. Full access cannot become active until the explicit confirmation
 /// transition completes.
@@ -174,8 +165,8 @@ priv struct CodexTurn {
   id : String
   status : String
   // Legacy interrupted turns can retain `startedAt` without ever receiving a
-  // `completedAt`. Only app-server's explicit `inProgress` status proves that
-  // this process has a live turn; writer conflicts are tracked separately.
+  // `completedAt`. Only app-server's explicit `inProgress` status reports a
+  // live turn; it does not identify which process owns the writer.
   started_at : Int?
   completed_at : Int?
   items : Array[CodexItem]
@@ -279,7 +270,7 @@ priv enum CodexReplyKind {
   // the local turns survive, because this read races turns that the item
   // notifications are still building.
   CodexThreadMetaReply(String)
-  CodexWriterReply(String)
+  CodexResumeReply(String)
   CodexDraftOpenReply(String)
   CodexDraftThreadReply(String)
   CodexTurnReply(String)
@@ -304,7 +295,7 @@ priv enum CodexReplyKind {
 priv enum CodexForeground {
   CodexDraftOpenForeground(String)
   CodexThreadForeground(String)
-  CodexWriterForeground(String)
+  CodexResumeForeground(String)
   CodexDraftStartForeground(String)
   CodexTurnForeground(String)
   CodexWorktreeRepairForeground(String)
@@ -348,8 +339,7 @@ enum Msg {
   RepairWorktree
   ConfirmArchiveDiscard
   CancelArchiveDiscard
-  WriterAcquired(String)
-  WriterConflict(String)
+  ResumeSucceeded(String)
   Stop
   Login
   CancelLogin
@@ -524,7 +514,6 @@ struct State {
   requested_thread : String?
   git_status : CodexGitStatus?
   git_details_open : Bool
-  write_access : CodexWriteAccess
   draft : String
   mentions : Array[@composer.Mention]
   // The first submitted input remains visible while thread/worktree startup
@@ -571,7 +560,6 @@ pub fn State::State(loading? : Bool = false) -> State {
     requested_thread: None,
     git_status: None,
     git_details_open: false,
-    write_access: CodexNeedsResume,
     draft: "",
     mentions: [],
     submitted_first_prompt: None,
@@ -833,7 +821,7 @@ fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
       .active_thread()
       .map(thread => thread.id == thread_id)
       .unwrap_or(false)
-    CodexWriterReply(thread_id) =>
+    CodexResumeReply(thread_id) =>
       self
       .active_thread()
       .map(thread => thread.id == thread_id)
@@ -862,7 +850,7 @@ fn CodexReplyKind::foreground(self : CodexReplyKind) -> CodexForeground? {
   match self {
     CodexDraftOpenReply(id) => Some(CodexDraftOpenForeground(id))
     CodexThreadReply(id) => Some(CodexThreadForeground(id))
-    CodexWriterReply(id) => Some(CodexWriterForeground(id))
+    CodexResumeReply(id) => Some(CodexResumeForeground(id))
     CodexDraftThreadReply(id) => Some(CodexDraftStartForeground(id))
     CodexTurnReply(id) | CodexWorktreeTurnReply(id, _) =>
       Some(CodexTurnForeground(id))
@@ -896,7 +884,7 @@ fn CodexForeground::belongs_to_thread(
 ) -> Bool {
   match self {
     CodexThreadForeground(owner)
-    | CodexWriterForeground(owner)
+    | CodexResumeForeground(owner)
     | CodexTurnForeground(owner)
     | CodexWorktreeRepairForeground(owner)
     | CodexArchiveForeground(owner)
@@ -1091,7 +1079,6 @@ fn State::select_draft(self : State, id : String, cwd : String) -> State {
     requested_thread: None,
     git_status: None,
     git_details_open: false,
-    write_access: CodexWritable,
     draft: "",
     mentions: [],
     submitted_first_prompt: None,
@@ -1742,11 +1729,6 @@ fn State::without_thread(self : State, thread_id : String) -> State {
       Some(status) if status.thread_id == thread_id => None
       other => other
     },
-    write_access: if removing_active {
-      CodexNeedsResume
-    } else {
-      self.write_access
-    },
     placement: if removing_active {
       @composer.LocalCheckout
     } else {
@@ -1809,11 +1791,6 @@ fn CodexTurn::is_running(self : CodexTurn) -> Bool {
 }
 
 ///|
-fn State::is_active_elsewhere(self : State) -> Bool {
-  self.write_access is CodexActiveElsewhere
-}
-
-///|
 fn State::active_turn_id(self : State) -> String? {
   guard self.active_thread() is Some(active) else { return None }
   for index = active.turns.length() - 1; index >= 0; index = index - 1 {
@@ -1822,25 +1799,6 @@ fn State::active_turn_id(self : State) -> String? {
     }
   }
   None
-}
-
-///|
-/// A running turn is mutable only after this Desktop actor acquired the
-/// app-server writer. Persisted history may contain a running turn, but that
-/// alone never grants interrupt authority.
-fn State::writable_turn_id(self : State) -> String? {
-  if self.write_access is CodexWritable {
-    self.active_turn_id()
-  } else {
-    None
-  }
-}
-
-///|
-/// A running turn discovered before writer acquisition is display-only. Idle
-/// tasks remain resumable on the next send; only a live turn is locked here.
-fn State::active_turn_is_read_only(self : State) -> Bool {
-  self.active_turn_id() is Some(_) && !(self.write_access is CodexWritable)
 }
 
 ///|
@@ -2639,7 +2597,7 @@ test "Codex reasoning summaries render text instead of JSON syntax" {
 }
 
 ///|
-test "Codex interrupted history is not an active writer signal" {
+test "Codex interrupted history is not a running signal" {
   // Historical review parents can be interrupted after their review child
   // completes. Older records omit `completedAt`, so timestamp absence cannot
   // prove that another app-server still owns the writer.
@@ -2659,7 +2617,6 @@ test "Codex interrupted history is not an active writer signal" {
     },
   })
   assert_false(interrupted.is_running())
-  assert_false(interrupted.is_active_elsewhere())
 
   let running = State::from_thread_snapshot({
     "thread": {
@@ -2676,7 +2633,6 @@ test "Codex interrupted history is not an active writer signal" {
     },
   })
   assert_true(running.is_running())
-  assert_false(running.is_active_elsewhere())
 
   // Old persisted turns can lack both timestamp fields. Do not classify an
   // ordinary historical interruption as live merely because completion time
@@ -2691,7 +2647,7 @@ test "Codex interrupted history is not an active writer signal" {
 }
 
 ///|
-test "Codex interrupt authority requires the local writer" {
+test "Codex running turn supplies the interrupt target" {
   let observed = State::from_thread_snapshot({
     "thread": {
       "id": "thread-1",
@@ -2699,12 +2655,6 @@ test "Codex interrupt authority requires the local writer" {
     },
   })
   assert_eq(observed.active_turn_id(), Some("turn-1"))
-  assert_eq(observed.writable_turn_id(), None)
-  assert_true(observed.active_turn_is_read_only())
-
-  let owned = { ..observed, write_access: CodexWritable }
-  assert_eq(owned.writable_turn_id(), Some("turn-1"))
-  assert_false(owned.active_turn_is_read_only())
 
   let idle = State::from_thread_snapshot({
     "thread": {
@@ -2712,8 +2662,7 @@ test "Codex interrupt authority requires the local writer" {
       "turns": [{ "id": "turn-1", "status": "completed", "items": [] }],
     },
   })
-  assert_eq(idle.writable_turn_id(), None)
-  assert_false(idle.active_turn_is_read_only())
+  assert_eq(idle.active_turn_id(), None)
 }
 
 ///|

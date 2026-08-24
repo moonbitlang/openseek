@@ -599,18 +599,6 @@ pub fn CodexThreadResumePayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexThreadResumePayload
 pub impl @json.FromJson for CodexThreadResumePayload
 
-pub(all) struct CodexThreadResumeReply {
-  thread : Json?
-  status : String?
-} derive(Eq, @debug.Debug)
-pub fn CodexThreadResumeReply::equal(Self, Self) -> Bool
-pub fn CodexThreadResumeReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn CodexThreadResumeReply::not_equal(Self, Self) -> Bool
-pub fn CodexThreadResumeReply::to_json(Self) -> Json
-pub fn CodexThreadResumeReply::to_repr(Self) -> @debug.Repr
-pub impl ToJson for CodexThreadResumeReply
-pub impl @json.FromJson for CodexThreadResumeReply
-
 pub(all) struct CodexThreadStartPayload {
   cwd : String?
   model : String?
