@@ -24,64 +24,36 @@ pub(all) enum ApprovalOutcome {
 } derive(Eq, Debug)
 
 ///|
-/// One permission question, as the asking tool states it.
+/// One permission question: who is asking, what they would be granted, and
+/// what they would do with it. A prompt missing any of the three cannot be
+/// decided on.
 ///
-/// The three fields answer three different questions, and a prompt missing any
-/// of them cannot be decided: WHO is asking, WHAT they would be granted, and
-/// WHAT they would do with it.
-///
-/// `body` exists because the first version left it out. The reasoning was that
-/// a tool call is durably appended before the tool runs, so every controller
-/// already renders the arguments and a second copy could only drift. Both
-/// halves were wrong. It cannot drift — it is the same string the tool was
-/// called with, not a re-rendering — and "already rendered" was not true in
-/// practice: the desktop docks this prompt above the composer, detached from a
-/// transcript row that is collapsed by default and may be scrolled away
-/// entirely. The user was being asked to allow arbitrary code to run with no
-/// sandbox, with the code nowhere on screen. Both references put the subject in
-/// the prompt: Codex renders the command in the card, and dsh's `callId` exists
-/// so a UI can attach the prompt to the call it already streamed.
-///
-/// There is still no field naming the tool CALL. Only one asking call can be
-/// in flight at a time: escalation belongs to `run_moonbit`, which does not
-/// declare itself `concurrent_safe`, so the agent loop never runs it beside
-/// another tool. A tool family that asks and admits adjacent concurrency would
-/// need the call id here to attach its prompt to the right card.
+/// No field names the tool CALL. Only one asking call can be in flight at a
+/// time — escalation belongs to `run_moonbit`, which is not `concurrent_safe`
+/// — so nothing needs pairing. A tool family that asks and admits adjacent
+/// concurrency would need the call id here.
 pub(all) struct ApprovalAsk {
-  /// The tool asking, for the prompt's title. Constant today — `run_moonbit`
-  /// is the only tool that asks — but the seam is on the runtime rather than
-  /// on that tool, and a controller with the name hardcoded would be the thing
-  /// to fix the day a second one appears.
+  /// The tool asking, for the prompt's title.
   tool_name : String
-  /// What would be GRANTED, in the engine's own words: one line, shown to the
-  /// user verbatim. Written by the tool, never by the model — a model-authored
-  /// justification is prose that can misdescribe the code beneath it, which is
-  /// exactly why the code is carried instead of a justification.
+  /// What would be GRANTED, shown to the user verbatim. Written by the tool,
+  /// never by the model: a model-authored justification is prose that can
+  /// misdescribe the code beneath it, which is why the code is carried too.
   detail : String
-  /// What would be RUN, verbatim: the `run_moonbit` program itself. `None` for
-  /// an asker with nothing to show, which no current one is.
+  /// What would be RUN, verbatim.
   body : String?
 } derive(Eq, Debug)
 
 ///|
-/// Where one tool's permission questions go.
-///
-/// A newtype over the function rather than the bare arrow, because the bare
-/// arrow was appearing verbatim in six signatures and reading as noise in all
-/// of them. Wrapping costs nothing here: an asking package already names
-/// `ApprovalAsk` and `ApprovalOutcome`, so the channel's own name adds no
-/// dependency it did not have. What it does add is somewhere for the contract
-/// to live — a caller holding one of these knows it may ask, and knows nothing
-/// else about who answers.
+/// Where one tool's permission questions go. A caller holding one of these
+/// knows it may ask, and nothing else about who answers.
 pub(all) struct ApprovalChannel(async (ApprovalAsk) -> ApprovalOutcome)
 
 ///|
 /// Ask, and wait for the answer.
 ///
-/// The wait is unbounded, and `serve`'s implementation of this has no deadline
-/// either: neither reference puts a clock on a human prompt, and one can only
-/// misfire against a real person who stepped away. A question ends when it is
-/// answered or when its turn is cancelled.
+/// Unbounded, and `serve`'s implementation has no deadline either: a clock on
+/// a human prompt can only misfire against someone who stepped away. A
+/// question ends when it is answered or when its turn is cancelled.
 pub async fn ApprovalChannel::ask(
   self : ApprovalChannel,
   ask : ApprovalAsk,
@@ -94,20 +66,9 @@ pub async fn ApprovalChannel::ask(
 /// can answer one.
 ///
 /// One accessor, because its two readers want the same fact in two forms and
-/// must never disagree about it. A tool REGISTRY reads the presence — that is
-/// what decides whether the arguments that ask are advertised to the model at
-/// all, since offering one with nothing behind it costs a whole turn to
-/// discover. The asking tool reads the payload. Splitting these into a Bool
-/// and a method left every caller rebuilding the option the runtime had just
-/// taken apart.
-///
-/// Handing the closure over rather than wrapping it in a method is what keeps
-/// the asking package free of any dependency on the runtime's own type: it
-/// receives `async (ApprovalAsk) -> ApprovalOutcome` and knows nothing else.
-/// `None` is the fail-closed default, and the tool that holds it answers
-/// `Unavailable` itself — the one place that decision has to be made anyway,
-/// because the same absence already decided what its schema looks like.
-///
+/// must never disagree: a tool REGISTRY reads the presence to decide whether
+/// the arguments that ask are advertised at all, and the asking tool reads the
+/// payload. `None` is the fail-closed default.
 pub fn AgentRuntime::approval_channel(self : AgentRuntime) -> ApprovalChannel? {
   self.approval
 }

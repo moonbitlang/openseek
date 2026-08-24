@@ -929,16 +929,9 @@ priv struct PendingSteer {
 } derive(Eq)
 
 ///|
-/// A permission question the engine announced and is blocked on.
-///
-/// It carries what is being asked ABOUT, not only what would be granted. An
-/// earlier version held neither, on the theory that the tool call was already
-/// rendered above — but this card docks above the composer, detached from a
-/// transcript row that is collapsed by default and may be scrolled away, so
-/// the user was deciding with the code nowhere on screen. `detail` is the
-/// engine's one-line statement of the permission and `body` the program it
-/// would be spent on; both are shown verbatim, since a client that paraphrases
-/// a permission is a client that can get it wrong.
+/// A permission question the engine announced and is blocked on. `detail` is
+/// the permission, `body` the program it would be spent on; both are shown
+/// verbatim, since a client that paraphrases a permission can get it wrong.
 ///
 /// `run_id` is the run this question belongs to. It rides the answer so a
 /// decision the user takes a while over cannot settle a question in a later

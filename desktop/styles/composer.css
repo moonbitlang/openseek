@@ -381,17 +381,10 @@
   background: var(--color-bg-subtle);
 }
 
-/* A permission question the turn is blocked on. It is a composer notice like
-   any other — same surface, same buttons — and nothing about it is louder than
-   its neighbours. What marks it out is the pair of decisions on its right:
-   every other notice here carries advice, and this one carries a question.
-
-   Two earlier attempts overshot. An accent outline on the container spent blue
-   on a box, after `56a798812` had reserved it for selection; filled
-   accent/danger buttons, copied from `.codex-request`, then made the card the
-   loudest thing in the window. The lesson both times was the same — the right
-   reference is not the other approval card, it is the notice sitting directly
-   above this one and the toolbar chips directly below. */
+/* A permission question the turn is blocked on: an ordinary composer notice,
+   no louder than its neighbours. What marks it out is the pair of decisions on
+   its right. Blue is reserved for selection, so the container takes no accent
+   of its own. */
 .composer-approval-tool {
   color: var(--color-text-primary);
   font-weight: 600;

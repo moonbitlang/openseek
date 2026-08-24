@@ -1,34 +1,23 @@
 ///|
 /// What happens to a tool's permission question in this engine.
 ///
-/// The knob is the engine's, never the controller's: an attached UI does not
-/// get to decide that it may be asked. That is what makes `Never` knowable
-/// without a round trip — and what lets the tool registry decide, at build
-/// time, whether the escalation argument is offered to the model at all.
+/// The knob is the engine's, never the controller's, which is what lets the
+/// tool registry decide at BUILD time whether the escalation argument is
+/// offered to the model at all.
 priv enum ApprovalPolicy {
-  /// Ask whoever is on the other end of the wire and wait for the answer.
   Ask
-  /// Never ask. No approval channel is wired, so the tools that would have
-  /// asked do not offer the argument that asks, and a call that asks anyway is
-  /// answered `Unavailable` without dispatching anything.
-  ///
-  /// The stance for unattended runs, and the one whose outcome is knowable
-  /// without asking: a turn nobody is watching must not stop to ask.
+  /// No channel is wired, so the tools that would ask do not offer the
+  /// argument that asks. The stance for unattended runs.
   Never
-  /// Grant every ask without showing it to anyone. Still announced on the wire
-  /// — `approval_requested` and `approval_resolved` are emitted exactly as
-  /// under `Ask` — so the transcript records what was auto-granted rather than
-  /// silently omitting the decision.
+  /// Grant without showing it to anyone, but still announced on the wire, so
+  /// the transcript records what was auto-granted.
   Always
 }
 
 ///|
-/// Read the `--approval` value.
-///
-/// `interactive` is whether this subcommand has a controller that could
-/// answer: `serve` reads commands from stdin, `run` and `review` do not. Asking
-/// where nobody can answer is refused here rather than at the deadline, five
-/// minutes into a turn that was never going to be answered.
+/// Read the `--approval` value. `interactive` is whether this subcommand has a
+/// controller that could answer — `serve` reads commands from stdin, `run`
+/// does not — so asking where nobody can answer is refused up front.
 fn parse_approval_policy(
   value : String,
   interactive~ : Bool,
@@ -50,14 +39,10 @@ fn parse_approval_policy(
 }
 
 ///|
-/// The `--approval` option.
-///
-/// It defaults to `never` on every subcommand, `serve` included. Being asked
-/// is opt-IN, because only the controller knows whether it can answer, and the
+/// The `--approval` option, defaulting to `never` on every subcommand,
+/// `serve` included: only the controller knows whether it can answer, and the
 /// engine cannot tell one attached to a human from a script reading its
-/// stdout. A default of `ask` would have wedged every existing controller —
-/// each would have had to learn a command it has never sent before its next
-/// escalating turn could finish.
+/// stdout. Being asked is opt-in.
 fn approval_option() -> @argparse.OptionArg {
   OptionArg(
     "approval",
@@ -100,13 +85,9 @@ fn approval_outcome_word(outcome : @agent_runtime.ApprovalOutcome) -> String {
 
 ///|
 /// The engine's pending permission questions, and the channel that creates
-/// them.
-///
-/// One desk per engine process. It is the whole of the `Ask` policy: mint an
-/// id, announce the question, block the asking tool on a one-shot reply queue,
-/// and let the serve loop's single consumer settle it when the answer arrives
-/// over the wire. Nothing here is aware of what is being asked about — that is
-/// the asking tool's `detail` string, passed through verbatim.
+/// them: mint an id, announce the question, block the asking tool on a
+/// one-shot reply queue, and let the serve loop's single consumer settle it
+/// when the answer arrives over the wire.
 priv struct ApprovalDesk {
   /// Questions announced and not yet settled, by id. A settled question is
   /// removed by the asker itself, so an entry here means a tool is currently

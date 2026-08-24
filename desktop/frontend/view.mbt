@@ -638,24 +638,15 @@ fn pending_steers_panel(conv : Conversation) -> @html.Html {
 /// The permission question the engine is blocked on, docked above the
 /// composer.
 ///
-/// It does not restate what is being asked about. The tool call carrying the
-/// program is already committed and rendered in the transcript directly above
-/// — a second copy here would be a rendering that can drift from the one being
-/// read, and the one being read is the one the decision is actually about. So
-/// the card states who is asking, what would be granted, and where to look.
+/// The program is shown here rather than left to the transcript: this card is
+/// detached from a tool-call row that is collapsed by default and may be
+/// scrolled away. `detail` is the engine's sentence, shown verbatim.
 ///
-/// `detail` is the engine's sentence, shown verbatim: a client that
-/// paraphrases a permission is a client that can get it wrong.
+/// Once answered the decisions are replaced by a waiting line, but the card
+/// stays until the engine's settlement retires it — that event is the only
+/// proof the answer reached the blocked tool.
 ///
-/// Once answered the decisions are replaced by a waiting line. The card itself
-/// stays until the engine's settlement retires it, because that event is the
-/// only proof the answer reached the blocked tool.
-///
-/// It is an ordinary composer notice, and its two decisions wear the same
-/// borderless chip shape as the model and reasoning controls one row below.
-/// What marks it as the thing the turn is waiting on is that it asks anything
-/// at all, not any colour of its own: the pair is told apart by emphasis, with
-/// the grant carrying the weight and the refusal receding. Refusing is the
+/// The two decisions are told apart by emphasis, not hue. Refusing is the
 /// conservative answer, so it is deliberately not the red one.
 fn approval_card(
   dispatch : @cmd.Emit[Msg],

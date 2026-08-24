@@ -158,12 +158,9 @@ test "the card shows the question and both answers" {
   assert_true(
     markup.contains("<code class=\"composer-approval-tool\">run_moonbit</code>"),
   )
-  // Both decisions wear the borderless chip shape, carrying only an emphasis
-  // modifier on top of it. Three earlier versions gave the card an accent
-  // outline, then filled accent/danger buttons, then outlined ones; each time
-  // it stopped looking like part of this app. Pinning the exact class pair is
-  // what holds that line — nothing else here can tell a chip from a dialog
-  // button.
+  // The borderless chip shape, with only an emphasis modifier on top. Nothing
+  // else here can tell a chip from a dialog button, so the class pair is what
+  // holds it.
   assert_true(
     markup.contains("class=\"composer-approval-action composer-approval-deny\""),
   )
@@ -515,14 +512,16 @@ test "a stale snapshot does not overwrite a newer question" {
       body=None,
     ),
   )
+  guard asked.run is Open(run_id~, ..) else { fail("expected an open run") }
   let model = test_model().replace_conversation(asked)
-  // Captured while ap-1 stood.
+  // Captured while ap-1 stood. The run matches, so the frontier guard is the
+  // only thing that can stop this from being seeded.
   let resync = runs_loaded_with_approvals(model, [
     {
       session: asked.session_id,
       approval: {
         id: "ap-1",
-        run_id: None,
+        run_id: Some(run_id),
         tool_name: "run_moonbit",
         detail: "escalate",
         body: None,
@@ -610,4 +609,42 @@ test "another session's identical id does not keep a dead card alive" {
     fail("expected the other conversation")
   }
   assert_true(other.pending_approval is Some(_))
+}
+
+///|
+/// The frontier guard compares two endpoints, so it cannot see a value that
+/// changed and changed back. With no question captured, one asked and resolved
+/// in flight, and its run replaced, both endpoints read `None` — and the
+/// reply's dead question would be seeded onto the new run, where answering it
+/// is rejected and the failure handler puts the buttons back. The run fence is
+/// what stops it.
+test "a question from a finished run is not seeded onto its successor" {
+  let conv = running_conversation()
+  guard conv.run is Open(run_id~, ..) else { fail("expected an open run") }
+  let model = test_model().replace_conversation(conv)
+  // Captured with no question standing.
+  let resync = runs_loaded_with_approvals(model, [
+    {
+      session: conv.session_id,
+      approval: {
+        id: "ap-1",
+        run_id: Some(run_id),
+        tool_name: "run_moonbit",
+        detail: "escalate",
+        body: None,
+        answered: false,
+      },
+    },
+  ])
+  // In flight: ap-1 was asked and resolved, and r1 gave way to r2.
+  let moved_on = model.replace_conversation({
+    ..conv,
+    run: Open(run_id="r-successor", stage=Opened),
+    pending_approval: None,
+  })
+  let (_, resynced) = update(test_dispatch(), resync, moved_on)
+  guard resynced.active_conversation() is Some(after) else {
+    fail("expected the conversation")
+  }
+  assert_true(after.pending_approval is None)
 }

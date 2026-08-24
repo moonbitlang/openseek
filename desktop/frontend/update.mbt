@@ -6563,8 +6563,21 @@ fn update_device_msg(
           // exactly as it is: this resync runs on every reconnect, not only
           // after a reload, so handing the buttons back to one the user has
           // already answered would be one question with two decisions.
+          //
+          // The question must also belong to the run this conversation has
+          // open. The frontier guard above compares two endpoints, so it
+          // cannot see a value that changed and changed back: with no question
+          // captured, one asked and resolved while the request was in flight,
+          // and its run replaced by a successor, both endpoints read `None`
+          // and the reply's dead question would be seeded onto the new run.
+          // Its decision is then rejected by the run fence, which re-enables
+          // the card — a prompt that can never be dismissed and answers
+          // nothing. A question only exists inside a turn, so a conversation
+          // with no open run has none to restore.
           Some(recovered) =>
-            if !(showing is Some(id) && id == recovered.approval.id) {
+            if conv.run is Open(run_id~, ..) &&
+              recovered.approval.run_id == Some(run_id) &&
+              !(showing is Some(id) && id == recovered.approval.id) {
               seeded = seeded.replace_conversation({
                 ..conv,
                 pending_approval: Some(recovered.approval),
