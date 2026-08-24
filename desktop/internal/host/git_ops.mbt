@@ -406,7 +406,7 @@ async fn git_untracked_numstat(
   dir : @pathx.Absolute,
   path : @pathx.Relative,
 ) -> GitDiffStat? {
-  let (code, stdout, _) = @process.collect_output(
+  let (code, stdout, _) = @processx.collect_output_no_stdin(
     "git",
     ["diff", "--numstat", "--no-index", "--", "/dev/null", path.0],
     cwd=dir.0,
@@ -455,7 +455,7 @@ fn parse_numstat(output : String) -> GitDiffStat {
 /// command that failed reads as None rather than an empty string, so a caller
 /// whose empty output means "nothing changed" can tell the two apart.
 async fn git_output_opt(dir : String, args : Array[String]) -> String? {
-  let (code, stdout, _) = @process.collect_output(
+  let (code, stdout, _) = @processx.collect_output_no_stdin(
     "git",
     args,
     cwd=dir,
@@ -499,7 +499,7 @@ fn git_environment() -> Map[String, String] {
 
 ///|
 async fn git_output(dir : String, args : Array[String]) -> String {
-  let (code, stdout, _) = @process.collect_output(
+  let (code, stdout, _) = @processx.collect_output_no_stdin(
     "git",
     args,
     cwd=dir,
@@ -861,7 +861,7 @@ async fn git_collect(
   dir : String,
   args : Array[String],
 ) -> (Int, &@io.Data, &@io.Data) {
-  @process.collect_output(
+  @processx.collect_output_no_stdin(
     "git",
     args,
     cwd=dir,

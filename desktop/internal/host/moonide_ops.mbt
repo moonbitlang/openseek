@@ -137,7 +137,7 @@ async fn MoonIdeSpawnConfig::ensure_index(
   if @fs.exists(index.to_string()) {
     return false
   }
-  let (code, stdout, stderr) = @process.collect_output(
+  let (code, stdout, stderr) = @processx.collect_output_no_stdin(
     self.executable,
     ["check"],
     extra_env?=self.extra_env,
@@ -305,7 +305,7 @@ async fn moonide_navigation_op(
     request.column,
     indexed,
   )
-  let (code, stdout, stderr) = @process.collect_output(
+  let (code, stdout, stderr) = @processx.collect_output_no_stdin(
     config.executable,
     args,
     extra_env?=config.extra_env,

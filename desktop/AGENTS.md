@@ -9,6 +9,18 @@
   for compatibility with a pre-change host unless the user explicitly asks for
   it.
 
+## Child Processes
+
+- For a one-shot command that collects stdout and stderr but must not read
+  input, use `@processx.collect_output_no_stdin` from
+  `desktop/internal/processx` instead of `@process.collect_output`.
+- `collect_output_no_stdin` gives the child a valid stdin handle that is
+  already at EOF. This is required for Windows GUI builds, where inheriting a
+  missing standard-input handle makes process creation fail before the child
+  starts.
+- Do not use it for interactive commands, long-lived protocol processes, or
+  commands that receive a real stdin pipe, file, or PTY.
+
 ## JSON Protocol Codecs
 
 - Never use `derive(FromJson)`, `derive(ToJson)`, or a combined

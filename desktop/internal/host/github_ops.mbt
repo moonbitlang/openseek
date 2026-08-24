@@ -308,7 +308,7 @@ async fn gh_json(
   dir : @pathx.Absolute,
   args : Array[String],
 ) -> Json? {
-  let (code, stdout, _) = @process.collect_output(
+  let (code, stdout, _) = @processx.collect_output_no_stdin(
     gh.0,
     args,
     cwd=dir.0,

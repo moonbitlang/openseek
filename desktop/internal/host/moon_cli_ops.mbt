@@ -143,23 +143,14 @@ async fn MoonCliState::run_moon(
 ) -> (Int, String, String)? {
   guard self.resolve_command() is Some(config) else { return None }
   @async.with_timeout_opt(MoonCliTimeoutMs, () => {
-    // An empty-file stdin keeps any accidentally interactive tool from
-    // waiting on the host's inherited stdin, mirroring the engine's tool
-    // spawns. Without a runtime dir there is nowhere app-owned to put it;
-    // inherit, as a dev-run `moon` never prompts on check/ide.
-    let stdin : &@process.ProcessInput? = if self.runtime_dir is Some(dir) {
-      let path = dir.join("moon-cli.stdin").to_string()
-      @fs.write_file(path, "", create_mode=CreateOrTruncate)
-      Some(@process.redirect_from_file(path))
-    } else {
-      None
-    }
-    let (code, stdout, stderr) = @process.collect_output(
+    // Moon commands are non-interactive here. Giving them EOF prevents an
+    // accidental prompt and remains valid when a Windows GUI host has no
+    // standard-input handle to inherit.
+    let (code, stdout, stderr) = @processx.collect_output_no_stdin(
       config.command,
       args,
       extra_env?=config.env,
       inherit_env=config.env is None,
-      stdin?,
       cwd=cwd.0,
       no_console_window=true,
     )

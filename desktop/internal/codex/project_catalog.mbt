@@ -56,7 +56,7 @@ async fn ProjectCatalog::resolve(
   if self.roots.get(cwd) is Some(cached) {
     return Some(cached)
   }
-  let (code, stdout, _) = @process.collect_output(
+  let (code, stdout, _) = @processx.collect_output_no_stdin(
     "git",
     ["worktree", "list", "--porcelain"],
     cwd~,

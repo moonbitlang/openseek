@@ -62,7 +62,7 @@ pub async fn apply_login_shell_env(executable : String) -> Unit {
   let probe_env : Map[String, String] = Map([])
   probe_env[ResolvingGuardVar] = "1"
   let result = @async.with_timeout_opt(ProbeTimeoutMs, () => {
-    @process.collect_stdout(shell, args, extra_env=probe_env)
+    @processx.collect_output_no_stdin(shell, args, extra_env=probe_env)
   }) catch {
     error if @async.is_being_cancelled() => raise error
     error => {
@@ -71,7 +71,7 @@ pub async fn apply_login_shell_env(executable : String) -> Unit {
       return
     }
   }
-  guard result is Some((code, stdout)) else {
+  guard result is Some((code, stdout, _)) else {
     @xlog.warn() <? { "message": "shell env probe timed out" }
     return
   }

@@ -244,7 +244,7 @@ async fn locate_app(candidate : AppCandidate) -> String? {
 ///|
 /// Resolve an app bundle's path from its bundle id via Spotlight.
 async fn mdfind_bundle(bundle_id : String) -> String? {
-  let (code, stdout, _) = @process.collect_output("mdfind", [
+  let (code, stdout, _) = @processx.collect_output_no_stdin("mdfind", [
     "kMDItemCFBundleIdentifier == '\{bundle_id}'",
   ]) catch {
     error if @async.is_being_cancelled() => raise error
@@ -326,7 +326,7 @@ async fn find_app_icns(app_path : String) -> String? {
 /// Read `CFBundleIconFile` from an app's Info.plist (handles binary plists,
 /// which `defaults` decodes); empty when the key is absent.
 async fn read_icon_name(info_path : String) -> String {
-  let (code, stdout, _) = @process.collect_output("defaults", [
+  let (code, stdout, _) = @processx.collect_output_no_stdin("defaults", [
     "read", info_path, "CFBundleIconFile",
   ]) catch {
     error if @async.is_being_cancelled() => raise error
@@ -343,7 +343,7 @@ async fn read_icon_name(info_path : String) -> String {
 /// resolved bundle.
 async fn run_app_open(app : LauncherApp, dir : String) -> Unit {
   let args = if app.reveal_only { [dir] } else { ["-a", app.app_path, dir] }
-  let (code, _, stderr) = @process.collect_output("open", args) catch {
+  let (code, _, stderr) = @processx.collect_output_no_stdin("open", args) catch {
     error if @async.is_being_cancelled() => raise error
     error =>
       raise LauncherError("Could not open \{app.name} (\{dir}): \{error}")

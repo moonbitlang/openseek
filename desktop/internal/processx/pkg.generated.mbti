@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/processx"
+
+import {
+  "moonbitlang/async/io",
+}
+
+// Values
+pub async fn collect_output_no_stdin(StringView, ArrayView[String], extra_env? : Map[String, String], inherit_env? : Bool, cwd? : StringView, no_console_window? : Bool) -> (Int, &@io.Data, &@io.Data)
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
