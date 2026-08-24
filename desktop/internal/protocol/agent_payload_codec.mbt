@@ -135,3 +135,48 @@ pub impl FromJson for OpenSeekThinking with fn from_json(json, path) {
 pub impl ToJson for OpenSeekThinking with fn to_json(self) {
   Json::string(self.wire())
 }
+
+///|
+/// `agent.approval` carries a decision, so both of the fields that make it one
+/// are required: an approval with no `id` answers no particular question, and
+/// one with no `allow` did not decide. Neither has a defensible default, and
+/// reading either as absent would settle a permission prompt on a guess — the
+/// same rule the engine's own wire decoder applies to this command.
+///
+/// `run_id` is optional and accepts missing or null. It fences the same race a
+/// steer's does — a decision taken slowly must not settle a question in a
+/// later run — and a caller that does not know the run simply does not fence.
+pub impl FromJson for ApprovalPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "agent.approval payload")
+  {
+    id: object.required_string("id"),
+    allow: object.required_bool("allow"),
+    run_id: object.optional_string("run_id"),
+  }
+}
+
+///|
+pub impl ToJson for ApprovalPayload with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "id": self.id.to_json(),
+    "allow": self.allow.to_json(),
+  }
+  if self.run_id is Some(run_id) {
+    fields["run_id"] = run_id.to_json()
+  }
+  Json::object(fields)
+}
+
+///|
+/// `delivered` is required: it is the whole of the reply, and a client that
+/// read a missing field as `false` would retire a prompt whose question is
+/// still waiting for an answer.
+pub impl FromJson for ApprovalReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "agent.approval reply")
+  { delivered: object.required_bool("delivered") }
+}
+
+///|
+pub impl ToJson for ApprovalReply with fn to_json(self) {
+  { "delivered": self.delivered.to_json() }
+}

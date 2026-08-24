@@ -81,7 +81,7 @@ pub(all) struct ApprovalPayload {
   id : String
   allow : Bool
   run_id : String?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct KnownRunPayload {
@@ -1085,6 +1085,18 @@ pub extend AppInfoReply with Eq::{equal, not_equal}
 
 ///|
 pub extend AppInfoReply with ToJson::{to_json}
+
+///|
+pub extend ApprovalPayload with Debug::{to_repr}
+
+///|
+pub extend ApprovalPayload with FromJson::{from_json}
+
+///|
+pub extend ApprovalPayload with Eq::{equal, not_equal}
+
+///|
+pub extend ApprovalPayload with ToJson::{to_json}
 
 ///|
 pub extend ArchivedSessionPayload with Debug::{to_repr}

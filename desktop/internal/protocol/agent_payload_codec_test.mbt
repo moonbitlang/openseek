@@ -110,3 +110,83 @@ test "agent payload codecs reject unsupported thinking values uniformly" {
   }
   assert_true(padded is None)
 }
+
+///|
+/// Both fields that make an approval a decision are required, and neither has
+/// a defensible default: an id-less approval answers no particular question,
+/// and an `allow`-less one did not decide. Reading either as absent would
+/// settle a permission prompt on a guess.
+test "an approval payload requires the fields that make it a decision" {
+  let missing_id : @protocol.ApprovalPayload? = Some(
+    @json.from_json({ "allow": true }),
+  ) catch {
+    _ => None
+  }
+  assert_true(missing_id is None)
+  let missing_allow : @protocol.ApprovalPayload? = Some(
+    @json.from_json({ "id": "ap-1" }),
+  ) catch {
+    _ => None
+  }
+  assert_true(missing_allow is None)
+  // Explicit null is not a decision either — it is the same absence spelled
+  // out, and the optional-field helpers are the only ones that accept it.
+  let null_allow : @protocol.ApprovalPayload? = Some(
+    @json.from_json({ "id": "ap-1", "allow": null }),
+  ) catch {
+    _ => None
+  }
+  assert_true(null_allow is None)
+  let malformed_allow : @protocol.ApprovalPayload? = Some(
+    @json.from_json({ "id": "ap-1", "allow": "yes" }),
+  ) catch {
+    _ => None
+  }
+  assert_true(malformed_allow is None)
+}
+
+///|
+/// `run_id` fences the same race a steer's does — a decision taken slowly must
+/// not settle a question in a later run — and a caller that does not know the
+/// run simply does not fence. Missing and null are the same thing, and the
+/// encoder omits it rather than writing a null.
+test "an approval payload's run fence is optional and omitted when absent" {
+  let unfenced : @protocol.ApprovalPayload = @json.from_json({
+    "id": "ap-1",
+    "allow": true,
+    "run_id": null,
+  })
+  assert_true(unfenced.run_id is None)
+  @debug.assert_eq(unfenced.to_json(), { "id": "ap-1", "allow": true })
+  let fenced : @protocol.ApprovalPayload = @json.from_json({
+    "id": "ap-1",
+    "allow": false,
+    "run_id": "r-7",
+  })
+  @debug.assert_eq(fenced.to_json(), {
+    "id": "ap-1",
+    "allow": false,
+    "run_id": "r-7",
+  })
+  // Unknown fields are ignored, like every other payload here, so a newer
+  // client can add one without breaking this host.
+  let extra : @protocol.ApprovalPayload = @json.from_json({
+    "id": "ap-1",
+    "allow": true,
+    "why": "because",
+  })
+  assert_eq(extra.id, "ap-1")
+}
+
+///|
+/// `delivered` is the whole of the reply. A client that read a missing field
+/// as `false` would retire a prompt whose question is still waiting.
+test "an approval reply requires its one field" {
+  let missing : @protocol.ApprovalReply? = Some(@json.from_json({})) catch {
+    _ => None
+  }
+  assert_true(missing is None)
+  let reply : @protocol.ApprovalReply = @json.from_json({ "delivered": true })
+  assert_true(reply.delivered)
+  @debug.assert_eq(reply.to_json(), { "delivered": true })
+}

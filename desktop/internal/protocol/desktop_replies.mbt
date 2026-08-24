@@ -111,7 +111,7 @@ pub(all) struct ApprovalReply {
   // engine's own deadline expired — and the client should retire its prompt
   // rather than expect the run to resume.
   delivered : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct CompactReply {
@@ -1681,6 +1681,18 @@ pub extend ApplyUpdateReply with Eq::{equal, not_equal}
 
 ///|
 pub extend ApplyUpdateReply with ToJson::{to_json}
+
+///|
+pub extend ApprovalReply with Debug::{to_repr}
+
+///|
+pub extend ApprovalReply with FromJson::{from_json}
+
+///|
+pub extend ApprovalReply with Eq::{equal, not_equal}
+
+///|
+pub extend ApprovalReply with ToJson::{to_json}
 
 ///|
 pub extend ArchiveNeedsForceReply with Debug::{to_repr}

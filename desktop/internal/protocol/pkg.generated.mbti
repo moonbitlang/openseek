@@ -95,11 +95,25 @@ pub(all) struct ApprovalPayload {
   id : String
   allow : Bool
   run_id : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub fn ApprovalPayload::equal(Self, Self) -> Bool
+pub fn ApprovalPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ApprovalPayload::not_equal(Self, Self) -> Bool
+pub fn ApprovalPayload::to_json(Self) -> Json
+pub fn ApprovalPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ApprovalPayload
+pub impl @json.FromJson for ApprovalPayload
 
 pub(all) struct ApprovalReply {
   delivered : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub fn ApprovalReply::equal(Self, Self) -> Bool
+pub fn ApprovalReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ApprovalReply::not_equal(Self, Self) -> Bool
+pub fn ApprovalReply::to_json(Self) -> Json
+pub fn ApprovalReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ApprovalReply
+pub impl @json.FromJson for ApprovalReply
 
 pub(all) struct ArchiveNeedsForceReply {
   worktree : String

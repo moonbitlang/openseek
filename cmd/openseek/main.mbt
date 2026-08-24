@@ -118,6 +118,12 @@ async fn run_task_command(matches : @argparse.Matches) -> Unit {
   with_jsonl_stdout(() => {
     // --no-session contradicts an explicit --session; reject up front.
     reject_session_contradiction(matches)
+    // So is `--approval ask` on a command that reads no commands. Rejected
+    // HERE, before a session directory exists and before the model is
+    // contacted: resolving it at the first turn instead left a run that
+    // announced `session_started` and only then refused, which is a failure
+    // the caller pays for in artifacts on disk.
+    approval_policy(matches, interactive=false) |> ignore
     // Best-of-N fleet mode owns its own workspace materialization and session
     // creation, so it branches before prepare_workspace_root (which would
     // create a single --dir).
@@ -352,6 +358,10 @@ async fn run_serve_command(matches : @argparse.Matches) -> Unit {
 /// `base…HEAD`; stdout carries exactly one JSON ReviewReport, so progress logging
 /// is discarded rather than drained.
 async fn run_review_command(matches : @argparse.Matches) -> Unit {
+  // Before the log handler is swapped for the discarding one: review reads no
+  // commands either, and a refusal that goes into a discarded log is a silent
+  // exit.
+  approval_policy(matches, interactive=false) |> ignore
   @xlog.global().set_handler(DiscardLog::{  })
   // Review runs a fixed built-in tool set; say so rather than silently ignoring
   // an accepted option. Straight to stderr: review's stdout carries exactly one
