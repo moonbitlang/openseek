@@ -107,6 +107,18 @@ pub fn decode_event(object : Json) -> AgentEvent? {
           "MCP config error (\{mcp_safe(path)}): \{mcp_safe(error)}",
         ),
       )
+    // This UI cannot answer a permission question — it has no prompt for one —
+    // so it says so rather than dropping the line. The engines this UI starts
+    // are launched with `--approval never` and never ask; an engine reached
+    // through `--engine` is somebody else's, and a turn of theirs is about to
+    // sit here until its deadline. Naming that is the difference between a UI
+    // that looks hung and one that tells you to interrupt it.
+    ApprovalRequested(tool_name~, detail~, ..) =>
+      Some(
+        BackgroundNotice(
+          "\{tool_name} is asking permission to \{detail}, which this UI cannot answer — the turn will wait out the engine's deadline unless you interrupt it",
+        ),
+      )
     // Deliberately not shown. Each of these is a decision, and the compiler now
     // holds us to making one: a new protocol event lands here as a build error
     // rather than as a line the UI drops without anyone noticing.
@@ -118,8 +130,11 @@ pub fn decode_event(object : Json) -> AgentEvent? {
     // `goal_updated`. `session_started`, `workspace_created` and `fleet_started`
     // describe a headless run's setup, which the TUI performs itself. The
     // remaining MCP events are per-tool registry bookkeeping, already summarized
-    // by `mcp_tools_registered`.
-    CompactionStarted(..)
+    // by `mcp_tools_registered`. `approval_resolved` retires a prompt this UI
+    // never showed — the request arm above is a one-off notice, not a live
+    // card — so there is nothing here to take back.
+    ApprovalResolved(..)
+    | CompactionStarted(..)
     | AutoCompactionStarted(..)
     | AutoCompactionFinished(..)
     | AutoCompactionFailed(..)

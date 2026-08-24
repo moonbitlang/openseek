@@ -449,6 +449,37 @@ pub fn steer_run(
 }
 
 ///|
+/// Answer a permission question the engine is blocked on, addressed by the id
+/// its `approval_requested` event carried.
+///
+/// Modelled on `steer_run` and different from it in one way that matters: a
+/// steer is optional input, while this releases a tool that is ALREADY running
+/// and waiting. Everything that would defer it — a closed engine, a run that
+/// has since ended, a run id that does not match — reports `delivered: false`
+/// instead, because the caller is showing a prompt and needs to know it is
+/// dead rather than pending.
+pub fn approve_run(
+  manager : EngineManager,
+  payload : @protocol.ApprovalPayload,
+) -> ApprovalReply {
+  guard !payload.id.is_blank() else { return { delivered: false } }
+  guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
+    live.phase is Running(run_id~, ..) else {
+    return { delivered: false }
+  }
+  if payload.run_id is Some(expected) && run_id != expected {
+    return { delivered: false }
+  }
+  guard live.submit(
+    @protocol.approval(payload.id, allow=payload.allow),
+    failure_reason="failed to write the approval decision to the engine",
+  ) else {
+    return { delivered: false }
+  }
+  { delivered: true }
+}
+
+///|
 /// Run the bundled engine with `args` and return its stdout. A non-zero exit
 /// is reported through stderr's content so the frontend sees the engine's own
 /// message rather than a bare exit code when one is available.

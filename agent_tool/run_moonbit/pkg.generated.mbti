@@ -2,12 +2,13 @@
 package "bobzhang/openseek/agent_tool/run_moonbit"
 
 import {
+  "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/agent_tool/bgjobs",
 }
 
 // Values
-pub fn definition(workspace_root~ : String, read_only? : Bool, bg_runtime? : @bgjobs.BgJobRuntime, job_dir? : String, scratch_dir? : String, worker_sandbox? : WorkerSandbox, run_timeout_ms? : Int) -> @agent_tool.AgentToolDefinition
+pub fn definition(workspace_root~ : String, read_only? : Bool, bg_runtime? : @bgjobs.BgJobRuntime, job_dir? : String, scratch_dir? : String, worker_sandbox? : WorkerSandbox, run_timeout_ms? : Int, ask_approval? : async (@agent_runtime.ApprovalAsk) -> @agent_runtime.ApprovalOutcome) -> @agent_tool.AgentToolDefinition
 
 // Errors
 

@@ -262,7 +262,15 @@ async fn run_task_turn(
   child_session? : @agent_subrun.ChildSession,
 ) -> Unit {
   @async.with_task_group() <| group => {
-    let runtime = @agent_runtime.AgentRuntime(workspace_root~)
+    // `run` reads no commands, so there is nobody to ask: `--approval ask` is
+    // refused at parse time (see parse_approval_policy) and the surviving
+    // policies need no pending desk of their own — `always` answers from the
+    // channel itself, `never` wires none.
+    let approval = approval_channel(
+      approval_policy(matches, interactive=false),
+      ApprovalDesk::new(),
+    )
+    let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
     let scope = @agent_runtime.AgentTaskScope(group)
     // One-shot = one turn, so a fresh per-turn subrun budget needs no reset.
     let subrun_budget = @agent_subrun.SubrunBudget()
@@ -618,6 +626,7 @@ fn agent_options() -> Array[@argparse.OptionArg] {
       default_values=[""],
       about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"} | {\"url\", \"headers\"}}}); each server's tools (stdio subprocess or Streamable HTTP) are exposed to the agent, namespaced mcp__<server>__<tool>. Empty disables MCP.",
     ),
+    approval_option(),
   ]
 }
 

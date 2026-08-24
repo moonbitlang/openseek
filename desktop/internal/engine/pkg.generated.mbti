@@ -9,6 +9,8 @@ import {
 }
 
 // Values
+pub fn approve_run(EngineManager, @protocol.ApprovalPayload) -> @protocol.ApprovalReply
+
 pub async fn archive_session(EngineManager, String, (String, String) -> Unit, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveReply
 
 pub async fn archived_sessions(EngineManager) -> @protocol.SessionsReply

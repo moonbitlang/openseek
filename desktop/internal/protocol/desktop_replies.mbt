@@ -105,6 +105,15 @@ pub(all) struct SteerReply {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+pub(all) struct ApprovalReply {
+  // Whether the decision reached a live engine that could still be waiting
+  // for it. False means the question is already gone — the turn ended, or the
+  // engine's own deadline expired — and the client should retire its prompt
+  // rather than expect the run to resume.
+  delivered : Bool
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
 pub(all) struct CompactReply {
   compacting : Bool
 } derive(Debug, Eq, FromJson, ToJson)

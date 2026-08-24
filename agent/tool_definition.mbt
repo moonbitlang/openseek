@@ -102,7 +102,20 @@ pub async fn[X] build_tools(
       @remove.definition(workspace_root~, file_state~),
       @plan.definition(),
       @goal.definition(),
-      @run_moonbit.definition(workspace_root~, bg_runtime~, job_dir?=spill_dir),
+      // The escalation argument exists for this registry only when the runtime
+      // has somewhere to send the question. `ask_approval` is handed over as a
+      // closure rather than the runtime itself, so the tool package keeps
+      // knowing nothing about who answers.
+      @run_moonbit.definition(
+        workspace_root~,
+        bg_runtime~,
+        job_dir?=spill_dir,
+        ask_approval?=if runtime.approval_available() {
+          Some(ask => runtime.ask_approval(ask))
+        } else {
+          None
+        },
+      ),
       @job_output.definition(bg_runtime),
       @job_stop.definition(bg_runtime),
       @finish.definition(),

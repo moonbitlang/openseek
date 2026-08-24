@@ -20,6 +20,7 @@ pub(all) enum Command {
   Cancel
   GoalSet(text~ : String, auto~ : Bool)
   GoalClear
+  ApprovalDecision(id~ : String, allow~ : Bool)
 } derive(Eq, @debug.Debug)
 pub fn Command::equal(Self, Self) -> Bool
 pub fn Command::not_equal(Self, Self) -> Bool
@@ -42,6 +43,8 @@ pub(all) enum Event {
   Usage(usage~ : Usage)
   ToolResult(tool_call_id~ : String, tool_name~ : String, is_error~ : Bool, content~ : String, brief~ : String?)
   ToolCallDecodeError(tool_call_id~ : String, tool_name~ : String, error~ : String)
+  ApprovalRequested(id~ : String, tool_name~ : String, detail~ : String)
+  ApprovalResolved(id~ : String, outcome~ : String)
   SteerApplied(kind~ : String, content~ : String)
   SteerDropped(content~ : String)
   BackgroundNotice(content~ : String)

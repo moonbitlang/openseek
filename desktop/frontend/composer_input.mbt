@@ -83,6 +83,12 @@ fn Model::composer_input(
       ]),
     )
   }
+  // First among the notices, because it is the only one the turn is waiting
+  // on: everything else here is advice, and this is a question with a tool
+  // blocked behind it.
+  if conv.pending_approval is Some(pending) {
+    context.push(approval_card(dispatch, pending))
+  }
   // Advice about the draft this composer is now holding, so it belongs to the
   // composer. It stands until the user acts on it: whether the archived record
   // got the prompt is a question only that record answers, and a toast would

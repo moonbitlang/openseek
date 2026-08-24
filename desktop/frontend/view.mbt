@@ -635,6 +635,62 @@ fn pending_steers_panel(conv : Conversation) -> @html.Html {
 }
 
 ///|
+/// The permission question the engine is blocked on, docked above the
+/// composer.
+///
+/// It does not restate what is being asked about. The tool call carrying the
+/// program is already committed and rendered in the transcript directly above
+/// — a second copy here would be a rendering that can drift from the one being
+/// read, and the one being read is the one the decision is actually about. So
+/// the card states who is asking, what would be granted, and where to look.
+///
+/// `detail` is the engine's sentence, shown verbatim: a client that
+/// paraphrases a permission is a client that can get it wrong.
+///
+/// Once answered both buttons go disabled and the card says it is waiting.
+/// It stays until the engine's settlement retires it, because that event is
+/// the only proof the answer reached the tool.
+fn approval_card(
+  dispatch : @cmd.Emit[Msg],
+  pending : PendingApproval,
+) -> @html.Html {
+  let actions : Array[@html.Html] = if pending.answered {
+    [@html.span(class="composer-approval-state", "Sending…")]
+  } else {
+    [
+      @html.button(
+        class="composer-notice-btn composer-approval-deny",
+        type_="button",
+        title="Refuse this request; the tool reports the refusal and keeps working inside the sandbox",
+        on_click=dispatch(ApprovalAnswered(allow=false)),
+        "Deny",
+      ),
+      @html.button(
+        class="composer-notice-btn composer-approval-allow",
+        type_="button",
+        title="Allow this one run; nothing beyond it is granted",
+        on_click=dispatch(ApprovalAnswered(allow=true)),
+        "Allow once",
+      ),
+    ]
+  }
+  @html.div(
+    class="composer-notice composer-approval",
+    [
+      @html.span(class="composer-notice-icon", icon(icon_key)),
+      @html.span(class="composer-notice-text", [
+        @html.span(class="composer-approval-tool", pending.tool_name),
+        @html.span(
+          class="composer-approval-detail",
+          " wants to \{pending.detail}",
+        ),
+      ]),
+      ..actions,
+    ],
+  )
+}
+
+///|
 /// The one-line display form of a submitted prompt (steer bubbles, sidebar
 /// titles): a submission that carried chips is shown as its typed text plus
 /// `$name`/`#name` markers rather than the raw `<user_mentions>` envelope the

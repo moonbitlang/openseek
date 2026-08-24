@@ -9,6 +9,8 @@ import {
 // Values
 pub const ExtensionId : String = "openseek-desktop"
 
+pub let agent_approval : Command[@protocol.ApprovalPayload, @protocol.ApprovalReply]
+
 pub let agent_cancel : Command[@protocol.CancelPayload, @protocol.CancelReply]
 
 pub let agent_compact : Command[@protocol.CompactPayload, @protocol.CompactReply]

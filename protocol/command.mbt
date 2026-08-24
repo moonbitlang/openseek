@@ -41,6 +41,17 @@ pub(all) enum Command {
   /// protocol, not a private channel, and an external controller drives this.
   GoalSet(text~ : String, auto~ : Bool)
   GoalClear
+  /// The answer to an `approval_requested` event, addressed by the `id` that
+  /// event carried. The only command that replies to the engine rather than
+  /// instructing it, and the only one a controller MUST send: until it
+  /// arrives, the asking tool is blocked.
+  ///
+  /// `allow` is deliberately a Bool and not a decision vocabulary. There is
+  /// exactly one grant to express — permission for the single action that was
+  /// asked about — and a richer answer ("allow for this session", "allow
+  /// commands like this one") would have to say what the grant's equivalence
+  /// class is, which nothing on either end of this wire can currently define.
+  ApprovalDecision(id~ : String, allow~ : Bool)
 } derive(Eq, Debug)
 
 ///|
@@ -77,6 +88,8 @@ pub fn Command::to_json(self : Command) -> Json {
         { "command": "goal", "action": "set", "text": text }
       }
     GoalClear => { "command": "goal", "action": "clear" }
+    ApprovalDecision(id~, allow~) =>
+      { "command": "approval", "id": id, "allow": allow }
   }
 }
 
@@ -150,6 +163,17 @@ pub fn Command::parse(line : Json) -> Result[Command, String] {
       Err(
         "expected {\"action\": \"set\", \"text\": ...} or {\"action\": \"clear\"}",
       )
+    // Both fields are required. Neither has a defensible default: an approval
+    // with no `id` answers no particular question, and one with no `allow` is
+    // a decision that did not decide — silently reading either as absent would
+    // settle a permission prompt on a guess.
+    { "command": "approval", "id": String(id), "allow": True, .. } =>
+      Ok(ApprovalDecision(id~, allow=true))
+    { "command": "approval", "id": String(id), "allow": False, .. } =>
+      Ok(ApprovalDecision(id~, allow=false))
+    { "command": "approval", "id": String(_), .. } =>
+      Err("expected a boolean \"allow\" field")
+    { "command": "approval", .. } => Err("expected a string \"id\" field")
     { "command": String(other), .. } => Err("unknown command: \{other}")
     _ => Err("expected a {\"command\": ...} object")
   }

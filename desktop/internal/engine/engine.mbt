@@ -214,8 +214,12 @@ fn ServeEngine::submit(
 ///
 /// Exhaustive on purpose: a new command kind must decide this at compile time.
 fn ends_with_turn(command : @wire.Command) -> Bool {
+  // An approval answers a question the CURRENT turn is blocked on. Once that
+  // turn is gone the question went with it — the engine's desk discards a
+  // decision nobody is waiting for — so this dies with the turn like a steer,
+  // rather than being delivered into a turn that never asked.
   match command {
-    Cancel | Steer(..) => true
+    Cancel | Steer(..) | ApprovalDecision(..) => true
     Prompt(..) | Compact | GoalSet(..) | GoalClear => false
   }
 }
@@ -1526,7 +1530,12 @@ async fn[G] start_serve_engine(
   let (stderr_reader, child_stderr) = @process.read_from_process()
   let env = engine_process_env(config, manager.runtime_dir)
   let program = config.engine
-  let args = ["serve", "--dir", "."]
+  // `--approval ask` is the host declaring that it CAN answer a permission
+  // question: the engine's own default is never, because an engine cannot tell
+  // a controller with a person behind it from a script reading its stdout.
+  // Saying so here is what makes the escalation argument exist for this
+  // session's model at all.
+  let args = ["serve", "--dir", ".", "--approval", "ask"]
   let graceful_cancel = @process.graceful_cancel(timeout=1000)
   @xlog.debug() <?
     {

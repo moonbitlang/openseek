@@ -27,7 +27,37 @@ fn all_commands() -> Array[@openseek_protocol.Command] {
     // a value `to_json` writes and `parse` rejects.
     GoalSet(text="   ", auto=false),
     GoalClear,
+    ApprovalDecision(id="ap-1", allow=true),
+    ApprovalDecision(id="ap-1", allow=false),
   ]
+}
+
+///|
+/// Both fields carry a decision that cannot be guessed, so neither may go
+/// missing: an approval with no `id` answers no particular question, and one
+/// with no `allow` did not decide. The errors name the field, because a
+/// controller reads them to learn what it got wrong.
+test "an approval command requires both an id and a decision" {
+  debug_inspect(
+    cmd(
+      (
+        #|{"command":"approval","id":"ap-1"}
+      ),
+    ),
+    content=(
+      #|Err("expected a boolean \"allow\" field")
+    ),
+  )
+  debug_inspect(
+    cmd(
+      (
+        #|{"command":"approval","allow":true}
+      ),
+    ),
+    content=(
+      #|Err("expected a string \"id\" field")
+    ),
+  )
 }
 
 ///|

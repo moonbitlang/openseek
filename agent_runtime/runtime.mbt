@@ -49,6 +49,14 @@ pub struct AgentRuntime {
   /// lossy event bus: a noisy watcher may fill `events` and cause later runtime
   /// updates to be ignored, but user-visible input must never be the casualty.
   priv steers : @aqueue.Queue[SteerInput]
+  /// Where a tool's permission question goes, when anything can answer one
+  /// (see `ask_approval`). `None` is the fail-closed default: a runtime with
+  /// no channel refuses every ask without dispatching it anywhere.
+  ///
+  /// A bare function rather than a service type, so a tool package asking for
+  /// approval does not acquire a dependency on the protocol, the engine, or
+  /// whichever controller happens to be attached.
+  priv approval : (async (ApprovalAsk) -> ApprovalOutcome)?
 }
 
 ///|
@@ -61,13 +69,20 @@ pub struct AgentRuntime {
 /// The returned runtime starts with an empty lossy event bus using
 /// `default_agent_event_capacity` and an empty unbounded steering queue. The
 /// constructor does not perform I/O.
+///
+/// `approval` is the channel a tool's permission question is dispatched to.
+/// Omitting it is the fail-closed default: `ask_approval` then answers
+/// `Unavailable` without asking anyone, which is what every caller that has no
+/// human attached — and every test that does not care — wants.
 pub fn AgentRuntime::AgentRuntime(
   workspace_root? : String = ".",
+  approval? : async (ApprovalAsk) -> ApprovalOutcome,
 ) -> AgentRuntime {
   {
     workspace_root,
     events: Queue(kind=DiscardOldest(default_agent_event_capacity)),
     steers: Queue(kind=Unbounded),
+    approval,
   }
 }
 

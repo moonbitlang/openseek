@@ -124,6 +124,14 @@ match @protocol.Command::parse(line) {
 }
 ```
 
+One command runs the other way round. `approval_requested` is the only event
+that is a **question**: a tool has blocked and the turn does not advance until
+an `ApprovalDecision` carrying that request's `id` comes back, at which point
+the engine emits `approval_resolved` to retire the prompt. Every other event
+reports something that already happened, and a controller that only reads is a
+valid controller for all of them — but not for this one, which is why an engine
+asks nobody unless it was started with `--approval ask`.
+
 `Command::parse` returns `Result`, not `Option`, unlike `parse` for events. An
 unreadable event is a line to ignore; an unreadable command is a request that
 will never be answered, and silence is the one reply a controller cannot act on.

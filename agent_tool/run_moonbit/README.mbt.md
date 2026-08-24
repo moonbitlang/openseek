@@ -32,6 +32,11 @@ diagnostics are the error message when something does not build.
 - `cwd` (string, optional, default workspace root): the working directory the
   program runs in. A relative `cwd` resolves against the workspace root, like
   the `shell` tool.
+- `escalated` (boolean, optional, default `false`): ask the user to run this
+  one snippet with **no sandbox policy**. Offered only when the tool was built
+  with an `ask_approval` channel — see *Escalation* below. Absent from the
+  schema otherwise, so a build with nobody to ask does not advertise a field
+  whose every use would be refused.
 - `warning` (string, optional, `"off"`/`"on"`, default `"off"`): whether
   compiler warnings appear in the output. Snippets are throwaway scripts, so
   unused-value style noise is suppressed unless the warnings themselves are
@@ -71,6 +76,62 @@ via directory renames. Treat it as a guard against accidental source clobbering,
 not a security boundary; full containment is the planned wasm backend's job. On
 non-macOS hosts (or inside a nested sandbox that cannot enforce) the run is
 unsandboxed.
+
+## Escalation
+
+`definition` takes an optional `ask_approval` channel. Its presence is the
+whole switch: with one wired, the schema grows an `escalated` boolean and the
+description grows a paragraph about it; without one, neither exists.
+
+A call with `escalated: true` resolves the question **before** anything is
+created or spawned, and after every cheap check — a snippet with a bad `cwd`
+fails on the `cwd` rather than spending someone's attention on a prompt for a
+run that was never going to happen. A grant applies to that one call and
+nothing else: there is no session-scoped permission and no remembered rule, so
+the next escalating call asks again.
+
+What a grant changes is exactly one thing: the generated policy file is still
+written and simply not passed to `moon run`. Widening the document instead was
+not available — its `fs.write` roots are canonicalized existing paths with no
+wildcard, and "any program" has no spelling in `process.allow` short of
+enumerating one — so *no policy* is both the honest description of what was
+approved and the only thing the runtime can express. The `target` list does not
+widen: `native` stays refused whatever the answer.
+
+The three ways of not being granted are three different replies, because what
+the model should do next differs for each — a person's refusal is final for the
+task, an expired request decided nothing, and an absent channel means the
+argument is unusable here and the snippet should be retried without it.
+
+```mbt check
+///|
+async test "run_moonbit escalation is refused without a grant" {
+  let asked = []
+  let definition = @run_moonbit.definition(workspace_root=".", ask_approval=ask => {
+    asked.push(ask.detail)
+    Rejected
+  })
+  // The argument exists here because a channel is wired.
+  let JsonSchema(schema) = definition.schema
+  guard schema is { "properties": Object(properties), .. } else {
+    fail("expected an object schema")
+  }
+  assert_true(properties.contains("escalated"))
+  let action = match definition.execute {
+    Async(execute) =>
+      execute({ "source": "fn main { println(1) }", "escalated": true })
+    Sync(_) => fail("run_moonbit is async")
+  }
+  guard action is Respond(output) else { fail("expected Respond") }
+  assert_true(output.is_error)
+  assert_true(output.content.contains("declined"))
+  // The question stated what would be granted; it carried no copy of the
+  // program, which the transcript already shows.
+  assert_eq(asked, [
+    "run this snippet with no sandbox policy: no spawn allowlist, and writes anywhere",
+  ])
+}
+```
 
 ## Examples
 

@@ -62,6 +62,12 @@ pub let agent_goal : Command[@protocol.GoalPayload, @protocol.GoalReply] = Comma
 )
 
 ///|
+pub let agent_approval : Command[
+  @protocol.ApprovalPayload,
+  @protocol.ApprovalReply,
+] = Command("agent.approval")
+
+///|
 pub let agent_runs : Command[@protocol.RunsPayload, @protocol.RunsReply] = Command(
   "agent.runs",
 )

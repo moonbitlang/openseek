@@ -381,6 +381,39 @@
   background: var(--color-bg-subtle);
 }
 
+/* A permission question the turn is blocked on. It borrows the notice's
+   geometry and takes an accent border, because unlike every other notice
+   above the composer this one is not advice — nothing proceeds until it is
+   answered. */
+.composer-approval {
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+.composer-approval .composer-notice-icon {
+  color: var(--color-accent);
+}
+.composer-approval-tool {
+  font-weight: 600;
+}
+.composer-approval-detail {
+  color: var(--color-text-secondary);
+}
+/* The grant is not the safe default, so it is not the visually dominant one
+   either: both actions read as ordinary buttons and the accent stays on the
+   border, where it marks the question rather than recommending an answer. */
+.composer-approval-allow:not(:disabled):hover {
+  border-color: var(--color-accent);
+}
+.composer-approval-deny:not(:disabled):hover {
+  border-color: var(--color-danger);
+}
+.composer-approval-state {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
 /* steering input not yet folded into the running turn: a panel docked
    above the composer until the engine settles it */
 .pending-steers {

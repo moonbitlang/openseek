@@ -56,6 +56,17 @@ pub fn goal_clear() -> @wire.Command {
 }
 
 ///|
+/// Answer the permission question `id`, which the engine announced with an
+/// `approval_requested` event and is currently blocked on.
+///
+/// `allow` grants the one action that was asked about and nothing else — the
+/// wire has no way to say "allow this kind of thing from now on", because
+/// nothing on either end can define what kind means.
+pub fn approval(id : String, allow~ : Bool) -> @wire.Command {
+  ApprovalDecision(id~, allow~)
+}
+
+///|
 test "the host's commands are the protocol's" {
   assert_true(
     prompt("hello").to_json()

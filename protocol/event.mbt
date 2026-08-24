@@ -43,6 +43,31 @@ pub(all) enum Event {
     error~ : String
   )
 
+  // ── approval ───────────────────────────────────────────────────────────
+  /// A tool is asking the controller for permission and is BLOCKED until an
+  /// `approval` command carrying this `id` comes back. The one event on this
+  /// stream that is a question rather than a report: a controller that reads
+  /// events and never writes one leaves the turn stopped until the engine's
+  /// own deadline expires.
+  ///
+  /// It carries no copy of the call's arguments. The assistant message that
+  /// holds the tool call is durably appended before the tool runs, so every
+  /// controller already renders the call — for `run_moonbit`, the program
+  /// itself — and a second copy here could only drift from the one on screen.
+  ///
+  /// `id` is minted by the engine and is unique within one engine process.
+  ApprovalRequested(id~ : String, tool_name~ : String, detail~ : String)
+  /// How a previously requested approval settled — including when it settled
+  /// without the controller's answer (it outlived its deadline, or a second
+  /// controller answered first). Purely informational: a controller uses it to
+  /// retire the prompt it is showing.
+  ///
+  /// `outcome` is `"allowed_once"`, `"rejected"`, or `"cancelled"`. The
+  /// runtime's fourth outcome, `unavailable`, never appears here: it is what an
+  /// engine with no controller answers, and such an engine emits no request in
+  /// the first place.
+  ApprovalResolved(id~ : String, outcome~ : String)
+
   // ── steering ───────────────────────────────────────────────────────────
   SteerApplied(kind~ : String, content~ : String)
   SteerDropped(content~ : String)

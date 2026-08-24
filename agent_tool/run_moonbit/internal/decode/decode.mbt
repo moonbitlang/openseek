@@ -13,6 +13,12 @@ pub struct RunMoonbitInput {
   /// Whether to detach the run as a background job instead of waiting for it.
   /// Only meaningful when the tool was built with a job runtime.
   run_in_background : Bool
+  /// Whether the snippet asked to run with no sandbox policy — no spawn
+  /// allowlist and no write-root bound. Decoded here whatever the tool was
+  /// built with: a build that offers no approval channel does not advertise
+  /// the field, but a model that sends it anyway must be told what happened,
+  /// not silently run confined while believing otherwise.
+  escalated : Bool
 } derive(Debug)
 
 ///|
@@ -69,7 +75,13 @@ pub fn decode(arguments : Json) -> RunMoonbitInput raise {
           fail("arguments.run_in_background to be a boolean")
         _ => false
       }
-      { source, target, cwd, warning, run_in_background }
+      let escalated = match arguments {
+        { "escalated": True, .. } => true
+        { "escalated": False, .. } | { "escalated": Null, .. } => false
+        { "escalated": _, .. } => fail("arguments.escalated to be a boolean")
+        _ => false
+      }
+      { source, target, cwd, warning, run_in_background, escalated }
     }
     Object(_) => fail("arguments.source")
     _ => fail("object arguments")

@@ -74,6 +74,16 @@ pub(all) struct SteerPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// One answer to an engine's `approval_requested`, addressed by the id that
+/// event carried. `run_id` guards the same race a steer's does: a decision
+/// minted against one run must not settle a question in the next.
+pub(all) struct ApprovalPayload {
+  id : String
+  allow : Bool
+  run_id : String?
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
 pub(all) struct KnownRunPayload {
   session : String
   run_id : String?

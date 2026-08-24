@@ -8,6 +8,8 @@ import {
 }
 
 // Values
+pub fn approval(String, allow~ : Bool) -> @openseek_protocol.Command
+
 pub fn cancel() -> @openseek_protocol.Command
 
 pub fn compact() -> @openseek_protocol.Command
@@ -88,6 +90,16 @@ pub fn ApplyUpdateReply::from_json(Json, @json.JsonPath) -> Self raise @json.Jso
 pub fn ApplyUpdateReply::not_equal(Self, Self) -> Bool
 pub fn ApplyUpdateReply::to_json(Self) -> Json
 pub fn ApplyUpdateReply::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ApprovalPayload {
+  id : String
+  allow : Bool
+  run_id : String?
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) struct ApprovalReply {
+  delivered : Bool
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct ArchiveNeedsForceReply {
   worktree : String

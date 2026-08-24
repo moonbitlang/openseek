@@ -54,6 +54,9 @@ type CancelReply = @protocol.CancelReply
 type SteerReply = @protocol.SteerReply
 
 ///|
+type ApprovalReply = @protocol.ApprovalReply
+
+///|
 type CompactReply = @protocol.CompactReply
 
 ///|

@@ -444,6 +444,13 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.agent_goal, async fn(payload) {
       @engine.goal_run(state.manager, payload)
     }),
+    // Synchronous like cancel: it hands one line to the engine's writer and
+    // reports whether there was still a question to answer. Nothing here waits
+    // on the engine — what the decision releases is reported by the run's own
+    // events.
+    @endpoint.Endpoint::remote_sync(@commands.agent_approval, payload => {
+      @engine.approve_run(state.manager, payload)
+    }),
     @endpoint.Endpoint::remote_sync(@commands.agent_runs, payload => {
       state.hub.runs(known?=payload.known)
     }),

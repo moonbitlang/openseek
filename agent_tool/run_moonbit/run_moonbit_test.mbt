@@ -788,3 +788,148 @@ async test "a non-zero exit shows the exit code in the content, not just the bri
   assert_true(out.content.contains("before"))
   assert_true(out.content.contains("exited"))
 }
+
+///|
+/// Run with an approval channel wired, so the `escalated` argument exists and
+/// `answer` decides what it resolves to.
+async fn run_escalating(
+  source : String,
+  answer : @agent_runtime.ApprovalOutcome,
+  asked~ : Array[@agent_runtime.ApprovalAsk],
+) -> @agent_tool.ToolOutput {
+  @vfs.with_tmpdir(prefix="run-moonbit-escalate-", ws => {
+    let definition = @run_moonbit.definition(workspace_root=ws, ask_approval=ask => {
+      asked.push(ask)
+      answer
+    })
+    let action = match definition.execute {
+      Async(execute) => execute({ "source": source, "escalated": true })
+      Sync(_) => fail("run_moonbit should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    output
+  })
+}
+
+///|
+/// The argument exists only where something can answer it. This is the same
+/// rule `run_in_background` follows, and it is what keeps a headless run from
+/// spending a call on a field whose every use is refused.
+test "the escalated argument is offered only with an approval channel" {
+  let plain = @run_moonbit.definition(workspace_root=".")
+  let JsonSchema(plain_schema) = plain.schema
+  guard plain_schema is { "properties": Object(plain_properties), .. } else {
+    fail("expected an object schema")
+  }
+  assert_false(plain_properties.contains("escalated"))
+  assert_false(plain.description.contains("escalated=true"))
+  let asking = @run_moonbit.definition(workspace_root=".", ask_approval=_ => {
+    Rejected
+  })
+  let JsonSchema(asking_schema) = asking.schema
+  guard asking_schema is { "properties": Object(asking_properties), .. } else {
+    fail("expected an object schema")
+  }
+  assert_true(asking_properties.contains("escalated"))
+  // The description has to carry it too: the refusal advice above it tells the
+  // model to say so rather than work around a refusal, which is wrong wherever
+  // asking is a sanctioned move.
+  assert_true(asking.description.contains("escalated=true"))
+}
+
+///|
+/// A granted escalation is what the policy file not being passed looks like:
+/// a program the allowlist refuses runs normally.
+#cfg(not(platform="windows"))
+async test "an approved escalation runs outside the spawn allowlist" {
+  let asked : Array[@agent_runtime.ApprovalAsk] = []
+  let out = run_escalating(
+    (
+      #|import { "bobzhang/myshell", "moonbitlang/async" }
+      #|
+      #|async fn main {
+      #|  let ran = try {
+      #|    let result = @myshell.Cmd("chmod", ["644", "/tmp"]).output()
+      #|    "ran exit=\{result.exit_code}"
+      #|  } catch { _ => "refused" }
+      #|  println("chmod: \{ran}")
+      #|}
+    ),
+    AllowedOnce,
+    asked~,
+  )
+  assert_false(out.is_error)
+  assert_true(out.content.contains("chmod: ran"))
+  // The question named the tool and stated what would be granted; it carried
+  // no copy of the program, which the transcript already shows.
+  assert_eq(asked.length(), 1)
+  assert_eq(asked[0].tool_name, "run_moonbit")
+  assert_true(asked[0].detail.contains("no sandbox policy"))
+}
+
+///|
+/// The refusal path never reaches the program at all.
+#cfg(not(platform="windows"))
+async test "a refused escalation does not run at all" {
+  let asked : Array[@agent_runtime.ApprovalAsk] = []
+  let out = run_escalating(
+    (
+      #|import { "moonbitlang/async" }
+      #|
+      #|async fn main {
+      #|  println("this must not run")
+      #|}
+    ),
+    Rejected,
+    asked~,
+  )
+  assert_true(out.is_error)
+  assert_false(out.content.contains("this must not run"))
+  assert_eq(asked.length(), 1)
+}
+
+///|
+/// Each refusal says something different, because what the model should do
+/// next differs: a person's no is final for the task, an expired request
+/// decided nothing, and an absent channel means retry without the argument.
+/// A single shared text would make all three read as the same wall.
+async test "each way of not being granted says a different thing" {
+  let refused = run_escalating("fn main {  }", Rejected, asked=[])
+  assert_true(refused.content.contains("declined"))
+  assert_true(refused.content.contains("do not ask again"))
+  let expired = run_escalating("fn main {  }", Cancelled, asked=[])
+  assert_true(expired.content.contains("NOTHING RAN"))
+  assert_true(expired.content.contains("not a refusal"))
+  // Asking where the argument was never advertised: the model sent a field it
+  // was not offered, and is told to drop it rather than to try again.
+  let unavailable = @vfs.with_tmpdir(prefix="run-moonbit-unasked-", ws => {
+    run_in(ws, { "source": "fn main {  }", "escalated": true })
+  })
+  assert_true(unavailable.content.contains("no approval channel"))
+  assert_true(unavailable.content.contains("without `escalated`"))
+  // No two of them are the same sentence.
+  assert_false(refused.content == expired.content)
+  assert_false(expired.content == unavailable.content)
+  assert_false(refused.content == unavailable.content)
+}
+
+///|
+/// A call that does not ask never reaches the channel: approval is not a
+/// per-call toll, and a snippet that stays inside the sandbox must not cost
+/// anyone a prompt.
+async test "an ordinary call never asks for approval" {
+  let asked : Array[@agent_runtime.ApprovalAsk] = []
+  @vfs.with_tmpdir(prefix="run-moonbit-noask-", ws => {
+    let definition = @run_moonbit.definition(workspace_root=ws, ask_approval=ask => {
+      asked.push(ask)
+      AllowedOnce
+    })
+    let action = match definition.execute {
+      Async(execute) => execute({ "source": "fn main { println(6 * 7) }" })
+      Sync(_) => fail("run_moonbit should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_true(output.content.contains("42"))
+  })
+  assert_eq(asked.length(), 0)
+}

@@ -51,6 +51,15 @@ pub(all) enum EngineEvent {
   CompactionStarted
   CompactionFinished(String)
   CompactionFailed(String)
+  // A tool is blocked asking for permission to run outside its sandbox. The
+  // turn does not advance until `agent.approval` carries an answer back, so
+  // this is the one engine event whose presentation has to be answerable
+  // rather than merely readable.
+  ApprovalRequested(id~ : String, tool_name~ : String, detail~ : String)
+  // The question settled: by this client's answer, by another client's, or by
+  // the engine's own deadline. The prompt is retired either way, so the view
+  // never has to decide whose answer it was.
+  ApprovalResolved(id~ : String)
   // The engine could not append an item to the durable session. Idle-time
   // appends have no other failure channel: unlike a turn, nothing terminal
   // follows them, and the host does not normalize this event. Whatever was
@@ -105,6 +114,12 @@ pub fn decode_engine_event(
     // has no use for it and drops it, so unless the view reads it off the raw
     // stream nobody hears about it at all.
     SessionError(error~) => Some(SessionAppendFailed(error))
+    ApprovalRequested(id~, tool_name~, detail~) =>
+      Some(ApprovalRequested(id~, tool_name~, detail~))
+    // The outcome word is dropped: this view shows one prompt at a time and
+    // retires it on settlement, so WHY it settled changes nothing it renders.
+    // What ran, or did not, arrives as the tool's own result.
+    ApprovalResolved(id~, ..) => Some(ApprovalResolved(id~))
     // A sub-run's lifecycle brackets. The id pairs the two, and pairs both
     // with the host's `subrun.progress` pushes in between; the finish is
     // where its cost is reported, since nothing durable records it.

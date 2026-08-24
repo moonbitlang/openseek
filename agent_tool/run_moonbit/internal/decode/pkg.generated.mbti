@@ -17,6 +17,7 @@ pub struct RunMoonbitInput {
   cwd : String?
   warning : Bool
   run_in_background : Bool
+  escalated : Bool
 } derive(@debug.Debug)
 pub fn RunMoonbitInput::to_repr(Self) -> @debug.Repr
 

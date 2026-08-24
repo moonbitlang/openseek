@@ -3,6 +3,7 @@ package "bobzhang/openseek/agent_runtime"
 
 import {
   "moonbitlang/async",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -17,7 +18,9 @@ pub(all) extenum AgentEvent {
 pub struct AgentRuntime {
   // private fields
 }
-pub fn AgentRuntime::AgentRuntime(workspace_root? : String) -> Self
+pub fn AgentRuntime::AgentRuntime(workspace_root? : String, approval? : async (ApprovalAsk) -> ApprovalOutcome) -> Self
+pub fn AgentRuntime::approval_available(Self) -> Bool
+pub async fn AgentRuntime::ask_approval(Self, ApprovalAsk) -> ApprovalOutcome
 pub fn AgentRuntime::drain_events(Self) -> Array[AgentEvent]
 pub fn AgentRuntime::drain_steers(Self) -> Array[SteerInput]
 pub fn AgentRuntime::emit_event(Self, AgentEvent) -> Unit
@@ -29,6 +32,18 @@ pub struct AgentTaskScope[X] {
 }
 pub fn[X] AgentTaskScope::AgentTaskScope(@async.TaskGroup[X]) -> Self[X]
 pub fn[X] AgentTaskScope::group(Self[X]) -> @async.TaskGroup[X]
+
+pub(all) struct ApprovalAsk {
+  tool_name : String
+  detail : String
+} derive(Eq, @debug.Debug)
+
+pub(all) enum ApprovalOutcome {
+  AllowedOnce
+  Rejected
+  Cancelled
+  Unavailable
+} derive(Eq, @debug.Debug)
 
 pub(all) enum SteerInput {
   Prompt(String)

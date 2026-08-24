@@ -1198,11 +1198,43 @@ fn apply_engine_event(
     // The turn loop records this as an error `tool_result`; its commit is the
     // one canonical transcript source, just like a successful tool result.
     ToolCallDecodeError(..) => (None, conv)
+    // A turn cannot end while a tool inside it is still blocked, so a terminal
+    // event means the question died with the turn — the engine settles it as
+    // cancelled on its way out. Clearing here is what stops a card from
+    // outliving the run it belongs to and offering to answer nothing.
     AgentFinished(_)
     | ContextYield(_)
     | AgentAborted(_)
-    | AgentSetupFailed(_) => (None, conv.clear_streams())
-    MaxStepsExhausted => (None, conv.clear_streams())
+    | AgentSetupFailed(_) =>
+      (None, { ..conv.clear_streams(), pending_approval: None })
+    MaxStepsExhausted =>
+      (None, { ..conv.clear_streams(), pending_approval: None })
+    // A tool is blocked until this is answered. It replaces whatever card was
+    // showing: the engine asks one question at a time, so an unretired older
+    // one is a card this client failed to clear, not a second live question.
+    ApprovalRequested(id~, tool_name~, detail~) =>
+      (
+        None,
+        {
+          ..conv,
+          pending_approval: Some({
+            id,
+            run_id: event_run_id,
+            tool_name,
+            detail,
+            answered: false,
+          }),
+        },
+      )
+    // Settled — by this client, by another one, or by the engine's deadline.
+    // Matched by id so a late settlement for an older question cannot retire
+    // the card for a newer one.
+    ApprovalResolved(id~) =>
+      if conv.pending_approval is Some(pending) && pending.id == id {
+        (None, { ..conv, pending_approval: None })
+      } else {
+        (None, conv)
+      }
     // The steer took effect at a step boundary. Its durable user item arrives
     // through `session.event`; the live event only settles pending UI.
     SteerApplied(content~, submission_id~) => {
@@ -3254,6 +3286,30 @@ fn update_msg(
       } else {
         (@cmd.none, model)
       }
+    }
+    // Answering is refused once already answered, so a double click cannot
+    // send two decisions for one question. The card is marked rather than
+    // removed: it comes off screen when the engine says the question settled,
+    // which is the only evidence the answer arrived.
+    ApprovalAnswered(allow~) => {
+      guard model.active_conversation() is Some(conv) &&
+        conv.pending_approval is Some(pending) &&
+        !pending.answered else {
+        return (@cmd.none, model)
+      }
+      (
+        approve_openseek(
+          dispatch,
+          model.focused,
+          pending.id,
+          pending.run_id,
+          allow~,
+        ),
+        model.replace_conversation({
+          ..conv,
+          pending_approval: Some({ ..pending, answered: true }),
+        }),
+      )
     }
     NewChat =>
       // A fresh conversation can start at any time: the current one keeps

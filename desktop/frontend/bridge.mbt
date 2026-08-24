@@ -1553,6 +1553,55 @@ fn cancel_openseek(
 }
 
 ///|
+/// Answer the permission question `id`, which a tool in `run_id` is blocked
+/// on.
+///
+/// The card is not retired here. What retires it is the engine's own
+/// `approval_resolved`, which is the only evidence the decision actually
+/// reached the tool — a reply saying the host wrote the line is not the same
+/// as the engine having read it. A failure, or a host that says the question
+/// is already gone, reports that instead and leaves the card for the
+/// settlement to clear.
+fn approve_openseek(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  id : String,
+  run_id : String?,
+  allow~ : Bool,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let reply : @protocol.ApprovalReply = @interop.bridge_request(
+        channel,
+        @commands.agent_approval,
+        { id, allow, run_id },
+      ) catch {
+        error => {
+          scheduler.add(
+            dispatch(
+              HostActionFailed(
+                "Failed to answer the approval request: " +
+                @interop.bridge_error_text(error),
+              ),
+            ),
+          )
+          return
+        }
+      }
+      if !reply.delivered {
+        scheduler.add(
+          dispatch(
+            HostActionFailed(
+              "That approval request is no longer waiting — the turn ended, or it timed out.",
+            ),
+          ),
+        )
+      }
+    })
+  })
+}
+
+///|
 /// Ask the host to swap the staged update into place. Success means the
 /// bundle on disk is already the new version; the follow-up `UpdateApplied`
 /// closes the window so `main` can relaunch it. A failure pops an error

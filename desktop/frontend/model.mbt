@@ -753,6 +753,14 @@ priv struct Conversation {
   // they belong to. Canonical User text never claims ownership, so identical
   // steers from multiple clients cannot collide.
   pending_steers : Array[PendingSteer]
+  // The permission question this conversation's engine is blocked on, if any.
+  //
+  // A field rather than a queue because the engine can only be blocked on one
+  // at a time: the tool that asks is not `concurrent_safe`, so no second tool
+  // is running beside it to ask a second question. If that ever changes, this
+  // becomes a queue and the composer has to decide what showing two at once
+  // means.
+  pending_approval : PendingApproval?
   // The one prompt in flight: submitted, no answer yet. There is at most one
   // — Send is refused while a run is open — so this is a field, not a queue.
   //
@@ -902,6 +910,30 @@ priv struct PendingSteer {
   content : String
   draft : String
   mentions : Array[Mention]
+} derive(Eq)
+
+///|
+/// A permission question the engine announced and is blocked on.
+///
+/// It holds no copy of what is being asked ABOUT: the tool call carrying the
+/// program is already durably committed and rendered above the composer, so
+/// the card points at it rather than restating it. `detail` is the engine's
+/// one-line statement of what would be granted, shown verbatim — the client
+/// does not paraphrase a permission.
+///
+/// `run_id` is the run this question belongs to. It rides the answer so a
+/// decision the user takes a while over cannot settle a question in a later
+/// run that happens to reuse the id sequence.
+priv struct PendingApproval {
+  id : String
+  run_id : String?
+  tool_name : String
+  detail : String
+  // Set once the answer has been handed to the host, so a second click cannot
+  // send a second decision for the same question. The card stays on screen
+  // until the engine's `approval_resolved` retires it, because until then the
+  // answer has not demonstrably arrived.
+  answered : Bool
 } derive(Eq)
 
 ///|
@@ -1673,6 +1705,10 @@ priv enum Msg {
   Skills(@skills.Msg)
   Send
   Stop
+  // The user answered the active conversation's permission question. `allow`
+  // grants the one action it asked about; the card stays until the engine's
+  // settlement retires it.
+  ApprovalAnswered(allow~ : Bool)
   NewChat
   // The channel is captured when rotation is requested, so a focus move can
   // fence the delayed id instead of activating it on the newly focused host.
@@ -2260,6 +2296,7 @@ fn empty_conversation(
     watcher_status: None,
     turn: RunState::empty(),
     pending_steers: [],
+    pending_approval: None,
     pending_prompt: None,
     messages: [],
     watermark: 0,

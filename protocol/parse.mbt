@@ -111,6 +111,25 @@ pub fn parse(line : Json) -> Event? {
       }
       Some(ToolCallDecodeError(tool_call_id~, tool_name~, error~))
     }
+    "approval_requested" => {
+      guard text(fields, "id") is Some(id) &&
+        text(fields, "tool_name") is Some(tool_name) &&
+        text(fields, "detail") is Some(detail) else {
+        return None
+      }
+      Some(ApprovalRequested(id~, tool_name~, detail~))
+    }
+    // `outcome` is carried as the wire's own string rather than decoded into a
+    // closed type: a controller renders it, and an engine newer than the
+    // controller must be able to settle a prompt with a word this build has
+    // never heard of instead of having the whole event dropped as unreadable.
+    "approval_resolved" => {
+      guard text(fields, "id") is Some(id) &&
+        text(fields, "outcome") is Some(outcome) else {
+        return None
+      }
+      Some(ApprovalResolved(id~, outcome~))
+    }
     // `kind` is defaulted, not required: engines older than 2026-06-25
     // (9b2f6c43, which added it) emit `steer_applied` with only `content`, and
     // the TUI launches whichever `openseek` is on PATH — so a new reader against

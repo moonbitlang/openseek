@@ -66,7 +66,14 @@ pub fn decode_event(object : Json) -> AgentEvent? {
     // which the host performs itself; `command_error` reports a rejected
     // control command, which the host learns from the command's own reply; the
     // MCP registry events are diagnostics the UI surfaces.
-    SubrunStarted(..)
+    // A permission question and its settlement are the webview's: it renders
+    // the prompt off the raw stream and answers with `agent.approval`. The
+    // host's only stake is the run phase, which does not change — a blocked
+    // turn is still a running one, and reporting it as anything else would
+    // make the run look finishable while a tool sits waiting inside it.
+    ApprovalRequested(..)
+    | ApprovalResolved(..)
+    | SubrunStarted(..)
     | SubrunFinished(..)
     | AssistantDelta(..)
     | ReasoningDelta(..)
