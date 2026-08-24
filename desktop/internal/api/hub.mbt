@@ -25,8 +25,18 @@ priv struct Hub {
   // process, so a reconnecting owner learns how its run ended. Run ids carry
   // host-wide random identity, so they are the deduplication key.
   settlements : Map[String, RunSettlement]
-  // Permission questions an engine is currently blocked on, keyed by request
-  // id, in ask order.
+  // The permission question each session's engine is currently blocked on,
+  // keyed by SESSION.
+  //
+  // Not by request id: ids are minted per engine process and every one of them
+  // starts at `ap-1`, so a host with two conversations blocked on their first
+  // question each would have had them collide — one replayed, and resolving
+  // either removing both, leaving the other run stuck forever.
+  //
+  // Session is the right key rather than a workaround for that, because one
+  // engine can only be blocked on one question at a time: the asking tool is
+  // not `concurrent_safe`, so nothing runs beside it. That is the same reason
+  // the frontend holds a field rather than a queue.
   //
   // The same job `active_starts` does, for the one piece of live state a
   // reloading client cannot rebuild any other way. A transcript comes back
@@ -157,7 +167,7 @@ fn Hub::track_approval(
 ) -> Unit {
   match payload.event.event {
     ApprovalRequested(id~, tool_name~, detail~, body~) =>
-      self.pending_approvals[id] = {
+      self.pending_approvals[payload.session] = {
         id,
         session: payload.session,
         run_id: payload.run_id,
@@ -168,7 +178,15 @@ fn Hub::track_approval(
     // Settled by whoever answered it, including this host's own client. The
     // question is gone for every client at once, which is why the resolution
     // is broadcast rather than sent to the answerer alone.
-    ApprovalResolved(id~, ..) => self.pending_approvals.remove(id)
+    //
+    // Checked by id as well as session: ids repeat across engines, so a
+    // resolution must not retire a question that merely shares a slot with the
+    // one it names.
+    ApprovalResolved(id~, ..) =>
+      if self.pending_approvals.get(payload.session) is Some(standing) &&
+        standing.id == id {
+        self.pending_approvals.remove(payload.session)
+      }
     _ => ()
   }
 }
@@ -177,13 +195,13 @@ fn Hub::track_approval(
 /// Drop every question belonging to `run_id`.
 fn Hub::forget_run_approvals(self : Hub, run_id : String) -> Unit {
   let doomed : Array[String] = []
-  for id, approval in self.pending_approvals {
+  for session, approval in self.pending_approvals {
     if approval.run_id is Some(owner) && owner == run_id {
-      doomed.push(id)
+      doomed.push(session)
     }
   }
-  for id in doomed {
-    self.pending_approvals.remove(id)
+  for session in doomed {
+    self.pending_approvals.remove(session)
   }
 }
 
@@ -640,4 +658,75 @@ test "a question does not outlive the engine that asked it" {
   guard hub.runs().approvals is [] else {
     fail("a question outlived the engine that asked it")
   }
+}
+
+///|
+/// Two conversations blocked at once. Every engine mints its ids from its own
+/// counter starting at `ap-1`, so the host sees the same id from both — and
+/// keying only by it would have dropped one question, replayed the survivor to
+/// both, and let either resolution retire the other. The lost run would then
+/// wait forever, since nothing behind the question times out.
+test "questions from two engines with the same id both survive" {
+  let hub = Hub::new()
+  for session in ["s1", "s2"] {
+    hub.publish(
+      approval_event(session, Some("r-" + session), {
+        event: ApprovalRequested(
+          id="ap-1",
+          tool_name="run_moonbit",
+          detail="run with no sandbox policy",
+          body=Some("// " + session),
+        ),
+        submission_id: None,
+      }),
+    )
+  }
+  guard hub.runs().approvals is [first, second] else {
+    fail("one of the two questions was lost to an id collision")
+  }
+  assert_true(
+    (first.session == "s1" && second.session == "s2") ||
+    (first.session == "s2" && second.session == "s1"),
+  )
+  // Answering one retires exactly one.
+  hub.publish(
+    approval_event("s1", Some("r-s1"), {
+      event: ApprovalResolved(id="ap-1", outcome="allowed_once"),
+      submission_id: None,
+    }),
+  )
+  guard hub.runs().approvals is [survivor] else {
+    fail("resolving one question disturbed the other")
+  }
+  assert_eq(survivor.session, "s2")
+  assert_eq(survivor.body, Some("// s2"))
+}
+
+///|
+/// A resolution names both a session and an id. The id half matters because
+/// ids repeat across engines: a late resolution must not retire whatever
+/// happens to occupy that session's slot now.
+test "a resolution for a superseded id leaves the standing question" {
+  let hub = Hub::new()
+  hub.publish(
+    approval_event("s1", Some("r1"), {
+      event: ApprovalRequested(
+        id="ap-7",
+        tool_name="run_moonbit",
+        detail="run with no sandbox policy",
+        body=None,
+      ),
+      submission_id: None,
+    }),
+  )
+  hub.publish(
+    approval_event("s1", Some("r1"), {
+      event: ApprovalResolved(id="ap-1", outcome="allowed_once"),
+      submission_id: None,
+    }),
+  )
+  guard hub.runs().approvals is [standing] else {
+    fail("a resolution for another id retired the standing question")
+  }
+  assert_eq(standing.id, "ap-7")
 }

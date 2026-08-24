@@ -116,6 +116,13 @@ fn PlanCadence::record_plan_success(
 /// one turn. Use `run_turn_in_scope` when the caller needs to preserve runtime
 /// state or tool state across turns. Provider reasoning fragments are emitted
 /// as transient events without appending extra durable session items.
+///
+/// `approval` is the channel a tool's permission question goes to. Omitting it
+/// is the fail-closed default and also the reason the arguments that ask are
+/// not advertised at all — see `build_tools`. It is a parameter because this
+/// function owns the runtime it builds: a caller that accepted `--approval` and
+/// then called this without it would have parsed the flag and silently dropped
+/// it, which is what best-of-N runs did.
 pub async fn run_turn_with_append(
   api_key~ : String,
   model~ : @deepseek.Model,
@@ -126,10 +133,11 @@ pub async fn run_turn_with_append(
   thinking? : @deepseek.ThinkingMode = Max,
   api_url? : String,
   workspace_root? : String = ".",
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_session.Session {
   @async.with_task_group() <| group => {
     run_turn_in_scope(
-      runtime=AgentRuntime(workspace_root~),
+      runtime=AgentRuntime(workspace_root~, approval?),
       scope=AgentTaskScope(group),
       api_key~,
       model~,

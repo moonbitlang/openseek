@@ -412,3 +412,39 @@ async test "a finished background job queues a notice and wakes the controller" 
     assert_true(steers.any(s => s is Notice(_)))
   })
 }
+
+///|
+/// A turn built by `run_turn_with_append` offers `escalated` only when the
+/// caller hands it a channel — which is the plumbing best-of-N runs were
+/// missing. `openseek run --concurrency N --approval always` parsed the flag,
+/// discarded it, and built every attempt's runtime without one, so the
+/// argument was never advertised and the option was silently inert.
+///
+/// The registry is what proves it: the field's presence in `run_moonbit`'s
+/// schema is decided by the runtime's channel, so asserting on the schema
+/// asserts the whole chain from this parameter down.
+async test "a turn advertises escalation exactly when it is given a channel" {
+  @async.with_task_group(group => {
+    let confined = build_tools(AgentRuntime(), AgentTaskScope(group))
+    guard confined.find("run_moonbit") is Some(tool) else {
+      fail("run_moonbit tool missing")
+    }
+    let JsonSchema(schema) = tool.schema
+    guard schema is { "properties": Object(properties), .. } else {
+      fail("expected an object schema")
+    }
+    assert_false(properties.contains("escalated"))
+    let asking = build_tools(
+      AgentRuntime(approval=ApprovalChannel(_ => Rejected)),
+      AgentTaskScope(group),
+    )
+    guard asking.find("run_moonbit") is Some(tool) else {
+      fail("run_moonbit tool missing")
+    }
+    let JsonSchema(schema) = tool.schema
+    guard schema is { "properties": Object(properties), .. } else {
+      fail("expected an object schema")
+    }
+    assert_true(properties.contains("escalated"))
+  })
+}

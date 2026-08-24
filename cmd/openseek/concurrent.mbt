@@ -18,6 +18,16 @@ async fn run_fleet(matches : @argparse.Matches, concurrency~ : Int) -> Unit {
     fail("an API key is required for \{model}: pass --api-key")
   }
   let max_steps = max_steps(matches)
+  // One desk for the whole fleet, not one per attempt. Every attempt writes to
+  // the same stdout JSONL stream, and a desk numbers its questions from `ap-1`
+  // — per-attempt desks would put several `ap-1`s on one stream with no way to
+  // tell them apart. `--approval ask` is already refused for `run`, so the only
+  // policy that reaches here and does anything is `always`; before this it was
+  // parsed and then dropped, leaving the flag silently ineffective.
+  let approval = approval_channel(
+    approval_policy(matches, interactive=false),
+    ApprovalDesk::new(),
+  )
   let (session, dir_input, session_root_input) = match matches {
     {
       values: {
@@ -71,6 +81,7 @@ async fn run_fleet(matches : @argparse.Matches, concurrency~ : Int) -> Unit {
               thinking~,
               api_key,
               api_url,
+              approval?,
             ),
           )
         },
@@ -158,6 +169,7 @@ async fn run_one_attempt(
   thinking~ : @deepseek.ThinkingMode,
   api_key : String,
   api_url : String?,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> AttemptOutcome {
   // Generated before the try so a failed attempt can still name its (partial)
   // session in the summary for inspection.
@@ -186,6 +198,7 @@ async fn run_one_attempt(
       thinking~,
       api_url?,
       workspace_root=run_dir,
+      approval?,
     )
     let (status, detail) = terminal_summary(completed)
     {
