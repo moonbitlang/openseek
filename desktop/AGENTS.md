@@ -15,9 +15,10 @@
   input, use `@processx.collect_output_no_stdin` from
   `desktop/internal/processx` instead of `@process.collect_output`.
 - `collect_output_no_stdin` gives the child a valid stdin handle that is
-  already at EOF. This is required for Windows GUI builds, where inheriting a
-  missing standard-input handle makes process creation fail before the child
-  starts.
+  already at EOF and always suppresses creation of a console window. Both are
+  required for Windows GUI builds: inheriting a missing standard-input handle
+  makes process creation fail, while launching a console application without
+  suppression flashes a visible console window.
 - Do not use it for interactive commands, long-lived protocol processes, or
   commands that receive a real stdin pipe, file, or PTY.
 

@@ -412,7 +412,6 @@ async fn git_untracked_numstat(
     cwd=dir.0,
     extra_env=git_environment(),
     inherit_env=false,
-    no_console_window=true,
   ) catch {
     error if @async.is_being_cancelled() => raise error
     _ => return None
@@ -461,7 +460,6 @@ async fn git_output_opt(dir : String, args : Array[String]) -> String? {
     cwd=dir,
     extra_env=git_environment(),
     inherit_env=false,
-    no_console_window=true,
   ) catch {
     error if @async.is_being_cancelled() => raise error
     _ => return None
@@ -505,7 +503,6 @@ async fn git_output(dir : String, args : Array[String]) -> String {
     cwd=dir,
     extra_env=git_environment(),
     inherit_env=false,
-    no_console_window=true,
   ) catch {
     error if @async.is_being_cancelled() => raise error
     _ => return ""
@@ -867,7 +864,6 @@ async fn git_collect(
     cwd=dir,
     extra_env=git_environment(),
     inherit_env=false,
-    no_console_window=true,
   ) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to run Git: \{error}")

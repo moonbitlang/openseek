@@ -311,7 +311,6 @@ async fn moonide_navigation_op(
     extra_env?=config.extra_env,
     inherit_env=config.extra_env is None,
     cwd=request.physical_workspace.to_string(),
-    no_console_window=true,
   ) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise HostError("could not run moon ide: \{error}")

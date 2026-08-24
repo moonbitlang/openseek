@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub async fn collect_output_no_stdin(StringView, ArrayView[String], extra_env? : Map[String, String], inherit_env? : Bool, cwd? : StringView, no_console_window? : Bool) -> (Int, &@io.Data, &@io.Data)
+pub async fn collect_output_no_stdin(StringView, ArrayView[String], extra_env? : Map[String, String], inherit_env? : Bool, cwd? : StringView) -> (Int, &@io.Data, &@io.Data)
 
 // Errors
 
