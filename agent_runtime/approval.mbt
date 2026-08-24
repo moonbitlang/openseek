@@ -48,55 +48,51 @@ pub(all) struct ApprovalAsk {
 } derive(Eq, Debug)
 
 ///|
-/// Whether anything at all can answer a question asked through this runtime.
+/// The channel a tool's permission question goes to, or `None` when nothing
+/// can answer one.
 ///
-/// Read by a tool REGISTRY, not by a tool: it is what decides whether the
-/// arguments that ask for permission are advertised to the model in the first
-/// place. Offering one with nothing behind it costs a whole turn — the model
-/// spends a call learning that the field it was shown cannot work — which is
-/// why this is a build-time question and `ask_approval` is a run-time one.
-pub fn AgentRuntime::approval_available(self : AgentRuntime) -> Bool {
-  self.approval is Some(_)
-}
-
-///|
-/// Ask whoever is attached to this runtime to allow one action.
+/// One accessor, because its two readers want the same fact in two forms and
+/// must never disagree about it. A tool REGISTRY reads the presence — that is
+/// what decides whether the arguments that ask are advertised to the model at
+/// all, since offering one with nothing behind it costs a whole turn to
+/// discover. The asking tool reads the payload. Splitting these into a Bool
+/// and a method left every caller rebuilding the option the runtime had just
+/// taken apart.
 ///
-/// The seam every asking tool sees. It is deliberately the whole of what a
-/// tool knows about approval: no policy, no transport, no controller. A
-/// runtime built without a channel answers `Unavailable` — the fail-closed
-/// default, which is also what every test that does not care about approval
-/// gets for free.
+/// Handing the closure over rather than wrapping it in a method is what keeps
+/// the asking package free of any dependency on the runtime's own type: it
+/// receives `async (ApprovalAsk) -> ApprovalOutcome` and knows nothing else.
+/// `None` is the fail-closed default, and the tool that holds it answers
+/// `Unavailable` itself — the one place that decision has to be made anyway,
+/// because the same absence already decided what its schema looks like.
 ///
-/// The wait is unbounded here. Whatever deadline an ask should have belongs to
-/// the channel that owns the human on the other end (`serve` gives it one),
-/// not to a tool that cannot know whether anyone is looking.
-pub async fn AgentRuntime::ask_approval(
+/// The wait behind the channel is unbounded here. Whatever deadline an ask
+/// should have belongs to whoever owns the human on the other end (`serve`
+/// gives it one), not to a tool that cannot know whether anyone is looking.
+pub fn AgentRuntime::approval_channel(
   self : AgentRuntime,
-  ask : ApprovalAsk,
-) -> ApprovalOutcome {
-  guard self.approval is Some(channel) else { return Unavailable }
-  channel(ask)
+) -> (async (ApprovalAsk) -> ApprovalOutcome)? {
+  self.approval
 }
 
 ///|
-async test "a runtime with no approval channel fails closed" {
-  let runtime = AgentRuntime()
-  let outcome = runtime.ask_approval({
-    tool_name: "run_moonbit",
-    detail: "run without the sandbox",
-  })
-  assert_true(outcome is Unavailable)
+/// The absent channel is the fail-closed default, and it is the same value the
+/// registry reads to decide whether to advertise the arguments that ask.
+test "a runtime with no approval channel offers none" {
+  assert_true(AgentRuntime().approval_channel() is None)
 }
 
 ///|
-async test "a wired channel answers the ask" {
+async test "a wired channel is handed over intact" {
   let asked : Array[ApprovalAsk] = []
   let runtime = AgentRuntime(approval=ask => {
     asked.push(ask)
     AllowedOnce
   })
-  let outcome = runtime.ask_approval({
+  guard runtime.approval_channel() is Some(channel) else {
+    fail("expected a channel")
+  }
+  let outcome = channel({
     tool_name: "run_moonbit",
     detail: "run without the sandbox",
   })

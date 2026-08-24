@@ -50,8 +50,8 @@ pub struct AgentRuntime {
   /// updates to be ignored, but user-visible input must never be the casualty.
   priv steers : @aqueue.Queue[SteerInput]
   /// Where a tool's permission question goes, when anything can answer one
-  /// (see `ask_approval`). `None` is the fail-closed default: a runtime with
-  /// no channel refuses every ask without dispatching it anywhere.
+  /// (see `approval_channel`). `None` is the fail-closed default, and it is
+  /// also what tells a tool registry not to advertise the arguments that ask.
   ///
   /// A bare function rather than a service type, so a tool package asking for
   /// approval does not acquire a dependency on the protocol, the engine, or
@@ -71,9 +71,10 @@ pub struct AgentRuntime {
 /// constructor does not perform I/O.
 ///
 /// `approval` is the channel a tool's permission question is dispatched to.
-/// Omitting it is the fail-closed default: `ask_approval` then answers
-/// `Unavailable` without asking anyone, which is what every caller that has no
-/// human attached — and every test that does not care — wants.
+/// Omitting it is the fail-closed default: `approval_channel` then hands out
+/// nothing, the tools that would ask do not offer the argument that asks, and
+/// a call that asks anyway is answered `Unavailable` — which is what every
+/// caller with no human attached, and every test that does not care, wants.
 pub fn AgentRuntime::AgentRuntime(
   workspace_root? : String = ".",
   approval? : async (ApprovalAsk) -> ApprovalOutcome,

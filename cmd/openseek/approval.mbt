@@ -23,9 +23,9 @@ const ApprovalDeadlineMs : Int = 300_000
 priv enum ApprovalPolicy {
   /// Ask whoever is on the other end of the wire and wait for the answer.
   Ask
-  /// Never ask. No approval channel is wired, so `ask_approval` answers
-  /// `Unavailable` without dispatching anything, and the tools that would have
-  /// asked do not offer the argument that asks.
+  /// Never ask. No approval channel is wired, so the tools that would have
+  /// asked do not offer the argument that asks, and a call that asks anyway is
+  /// answered `Unavailable` without dispatching anything.
   ///
   /// The stance for unattended runs, and the one whose outcome is knowable
   /// without asking: a turn nobody is watching must not stop to ask.
@@ -192,10 +192,10 @@ fn ApprovalDesk::settle(self : ApprovalDesk, id : String, allow : Bool) -> Unit 
 /// ask.
 ///
 /// `None` is not the same shape as "a channel that always refuses", and the
-/// difference is the point: an absent channel is what `AgentRuntime` reports
-/// through `approval_available()`, which is what decides whether the tools
-/// that would ask offer the argument that asks. A refusing channel would leave
-/// the argument advertised and every use of it dead on arrival.
+/// difference is the point: an absent channel is what `AgentRuntime` hands to
+/// a tool registry, and its absence is what decides whether the tools that
+/// would ask offer the argument that asks. A refusing channel would leave the
+/// argument advertised and every use of it dead on arrival.
 fn approval_channel(
   policy : ApprovalPolicy,
   desk : ApprovalDesk,
@@ -338,4 +338,41 @@ test "never wires no channel; ask and always do" {
   assert_true(approval_channel(Never, desk) is None)
   assert_true(approval_channel(Ask, desk) is Some(_))
   assert_true(approval_channel(Always, desk) is Some(_))
+}
+
+///|
+/// The other way a question settles as cancelled, and the one the `defer`
+/// exists for: the turn is interrupted while a tool sits blocked on it.
+///
+/// This exit leaves through the RAISE, not the return, so nothing the asker
+/// computes can report it — the model is gone with the turn either way. What
+/// must still happen is the wire pairing: the controller is holding a card for
+/// a question that no longer exists, and only `approval_resolved` takes it
+/// back. Moving that emit out of the defer would strand the card on screen,
+/// answerable and connected to nothing, and no other test would notice.
+async test "an interrupted wait still retires its question" {
+  let desk = ApprovalDesk::new()
+  @async.with_task_group(group => {
+    let asking = group.spawn(() => {
+      desk.ask({
+        tool_name: "run_moonbit",
+        detail: "run without the sandbox policy",
+      })
+    })
+    for _ in 0..<200 {
+      if desk.pending.length() > 0 {
+        break
+      }
+      @async.sleep(5)
+    }
+    // The pending entry proves a tool is blocked here right now.
+    assert_eq(desk.pending.length(), 1)
+    asking.cancel()
+  })
+  // Cancelled through the raise, and the desk is clean: the entry is gone, so
+  // a decision arriving late finds nothing and is discarded rather than
+  // settling a question that died with its turn.
+  assert_eq(desk.pending.length(), 0)
+  desk.settle("ap-1", true)
+  assert_eq(desk.pending.length(), 0)
 }

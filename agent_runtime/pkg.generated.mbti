@@ -19,8 +19,7 @@ pub struct AgentRuntime {
   // private fields
 }
 pub fn AgentRuntime::AgentRuntime(workspace_root? : String, approval? : async (ApprovalAsk) -> ApprovalOutcome) -> Self
-pub fn AgentRuntime::approval_available(Self) -> Bool
-pub async fn AgentRuntime::ask_approval(Self, ApprovalAsk) -> ApprovalOutcome
+pub fn AgentRuntime::approval_channel(Self) -> (async (ApprovalAsk) -> ApprovalOutcome)?
 pub fn AgentRuntime::drain_events(Self) -> Array[AgentEvent]
 pub fn AgentRuntime::drain_steers(Self) -> Array[SteerInput]
 pub fn AgentRuntime::emit_event(Self, AgentEvent) -> Unit
