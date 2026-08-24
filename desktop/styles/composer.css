@@ -381,43 +381,40 @@
   background: var(--color-bg-subtle);
 }
 
-/* A permission question the turn is blocked on. It keeps the notice surface
-   unchanged — no accent outline — because blue is reserved for selection and
-   the primary action, and an outlined card would spend it on the container.
-   What marks this one out is the pair of decisions on its right: every other
-   notice here carries advice, and this one carries a question.
+/* A permission question the turn is blocked on. It is a composer notice like
+   any other — same surface, same buttons — and nothing about it is louder than
+   its neighbours. What marks it out is the pair of decisions on its right:
+   every other notice here carries advice, and this one carries a question.
 
-   The `.codex-request` card is the same thing for the other agent, and the two
-   must not offer the same choice in two visual languages: surface, action
-   geometry, and which side is primary are shared with it deliberately. */
+   Two earlier attempts overshot. An accent outline on the container spent blue
+   on a box, after `56a798812` had reserved it for selection; filled
+   accent/danger buttons, copied from `.codex-request`, then made the card the
+   loudest thing in the window. The lesson both times was the same — the right
+   reference is not the other approval card, it is the notice sitting directly
+   above this one and the toolbar chips directly below. */
 .composer-approval-tool {
   color: var(--color-text-primary);
   font-weight: 600;
 }
-/* The grant is the primary action — one of the two places blue still belongs
-   — and the refusal reads as the destructive one, matching the Codex card's
-   Approve/Cancel pair rather than inventing a second convention. */
+/* Both decisions are ordinary notice buttons, like every other action docked
+   above the composer. The filled accent/danger pair this used to carry was
+   borrowed from the Codex card, and on screen it was the loudest thing in the
+   window: nothing else here is a wide saturated button — `.send-button` and
+   `.stop-button` wear those fills at 30px square, and blue otherwise means
+   selection or a link. The result read as a browser permission dialog dropped
+   into the app rather than a part of it.
+
+   They are told apart by emphasis instead of hue, which is enough for two
+   words a reader is already looking at: the grant carries the primary text
+   colour and weight, the refusal recedes. Deliberately NOT red — refusing is
+   the conservative answer here, and dressing it as the destructive one gets
+   the stakes backwards. */
 .composer-approval-allow {
-  border-color: var(--color-accent);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-}
-.composer-approval-allow:not(:disabled):hover {
-  border-color: var(--color-accent-strong);
-  background: var(--color-accent-strong);
-  color: var(--color-on-accent);
+  color: var(--color-text-primary);
+  font-weight: 600;
 }
 .composer-approval-deny {
-  border-color: var(--color-danger-border);
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-}
-.composer-approval-deny:not(:disabled):hover {
-  background: color-mix(
-    in srgb,
-    var(--color-danger-soft) 78%,
-    var(--color-danger)
-  );
+  color: var(--color-text-secondary);
 }
 .composer-approval-state {
   flex: none;

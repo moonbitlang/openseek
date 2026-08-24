@@ -137,14 +137,18 @@ test "the card shows the question and both answers" {
   assert_true(
     markup.contains("<code class=\"composer-approval-tool\">run_moonbit</code>"),
   )
-  // Both decisions are real buttons with the card's own action classes: the
-  // grant is the primary one and the refusal the destructive one, the same
-  // pairing the Codex request card advertises. A restyle that drops either
-  // class silently turns one of them into a plain button.
-  assert_true(markup.contains("composer-approval-allow"))
-  assert_true(markup.contains("composer-approval-deny"))
-  // No accent outline on the container: blue is reserved for selection and
-  // the primary action, so the card takes the ordinary notice surface.
+  // Both decisions are ordinary notice buttons — the same class every other
+  // action docked above the composer uses — carrying only an emphasis
+  // modifier. Two earlier versions gave the card an accent outline and then
+  // filled accent/danger buttons; each time it stopped looking like part of
+  // this app. Keeping `composer-notice-btn` on both is what holds that line.
+  assert_true(
+    markup.contains("class=\"composer-notice-btn composer-approval-deny\""),
+  )
+  assert_true(
+    markup.contains("class=\"composer-notice-btn composer-approval-allow\""),
+  )
+  // And the container is a plain notice, with no surface of its own.
   assert_true(markup.contains("class=\"composer-notice composer-approval\""))
 }
 
