@@ -6529,72 +6529,85 @@ fn update_device_msg(
       // Standing questions land last, once every conversation in this snapshot
       // has the run phase the snapshot gives it.
       //
-      // ONE pass over the frontier, both directions at once, because both are
-      // the same question asked of the same session: does the snapshot still
-      // describe it, and if so what should it be showing. The reply holds at
-      // most one question per session — that is how the host keys them, since
-      // an engine can only be blocked on one at a time — so it indexes by
-      // session and every lookup here is O(1).
-      //
-      // Iterating the FRONTIER rather than the reply is what applies the
-      // request-time gate uniformly. The reply describes a moment that has
-      // passed: if the captured question resolved and a new one was asked
-      // while the request was in flight, this page has moved past the snapshot
-      // and none of it may be applied to that session. Seeding then would put
-      // a dead question back over the live one, and answering a dead question
-      // is discarded by the engine while the real one stays blocked with
-      // nothing on screen.
-      let standing : Map[String, RecoveredApproval] = Map([])
-      for recovered in approvals {
-        standing[recovered.session] = recovered
+      // Two passes, because they answer two different questions of two
+      // different sets. Seeding asks what the reply says exists, so it iterates
+      // the REPLY — a fresh page captures an empty frontier (`BridgeReady`
+      // issues this alongside `session.list`, before any conversation exists),
+      // and iterating the frontier would drop every question on the one path
+      // the replay was built for. Retiring asks what this page was showing that
+      // the reply lacks, which only the frontier knows.
+      let captured_by_session : Map[String, RunSnapshotFrontier] = Map([])
+      for row in frontier {
+        captured_by_session[row.session] = row
       }
       let mut seeded = settled
-      for captured in frontier {
-        guard seeded.find_conversation(channel, captured.session) is Some(conv) else {
+      for recovered in approvals {
+        guard seeded.find_conversation(channel, recovered.session) is Some(conv) else {
           continue
         }
         let showing = conv.pending_approval.map(pending => pending.id)
-        // Unchanged since the request went out. Anything else is newer truth
-        // than the reply, live events having landed meanwhile.
-        guard showing == captured.pending_approval_id else { continue }
-        match standing.get(captured.session) {
-          // Still standing. Seed it if this page has no card — the reload case
-          // the host retains questions for — and otherwise leave the card
-          // exactly as it is: this resync runs on every reconnect, not only
-          // after a reload, so handing the buttons back to one the user has
-          // already answered would be one question with two decisions.
-          //
-          // The question must also belong to the run this conversation has
-          // open. The frontier guard above compares two endpoints, so it
-          // cannot see a value that changed and changed back: with no question
-          // captured, one asked and resolved while the request was in flight,
-          // and its run replaced by a successor, both endpoints read `None`
-          // and the reply's dead question would be seeded onto the new run.
-          // Its decision is then rejected by the run fence, which re-enables
-          // the card — a prompt that can never be dismissed and answers
-          // nothing. A question only exists inside a turn, so a conversation
-          // with no open run has none to restore.
-          Some(recovered) =>
-            if conv.run is Open(run_id~, ..) &&
-              recovered.approval.run_id == Some(run_id) &&
-              !(showing is Some(id) && id == recovered.approval.id) {
-              seeded = seeded.replace_conversation({
-                ..conv,
-                pending_approval: Some(recovered.approval),
-              })
-            }
-          // Gone from the host while this page was away: answered by another
-          // client, or taken by the run ending. Its `approval_resolved` is
-          // gone for good — reconnect is resync, transients are not replayed —
-          // so nothing else will ever retire this card, and pressing it sends
-          // a decision the engine's desk silently discards.
-          None =>
-            if showing is Some(_) {
-              seeded = seeded.replace_conversation({
-                ..conv,
-                pending_approval: None,
-              })
-            }
+        // Unchanged since the request went out — a session absent from the
+        // frontier captured nothing, so it must be showing nothing now.
+        // Anything else is newer truth than the reply, live events having
+        // landed meanwhile.
+        let captured = match captured_by_session.get(recovered.session) {
+          Some(row) => row.pending_approval_id
+          None => None
+        }
+        guard showing == captured else { continue }
+        // And the question must belong to the run this conversation has open.
+        // The check above compares two endpoints, so it cannot see a value
+        // that changed and changed back: with nothing captured, one question
+        // asked and resolved in flight, and its run replaced by a successor,
+        // both endpoints read `None` and this dead question would be seeded
+        // onto the new run — where answering it is rejected and the failure
+        // handler puts the buttons back, leaving a prompt that can never be
+        // dismissed. A question only exists inside a turn, so a conversation
+        // with no open run has none to restore.
+        guard conv.run is Open(run_id~, ..) &&
+          recovered.approval.run_id == Some(run_id) else {
+          continue
+        }
+        // Already on screen unchanged: leave it, answered flag and all. This
+        // resync runs on every reconnect, not only after a reload, so handing
+        // the buttons back to a card the user has already answered would be
+        // one question with two decisions.
+        if showing is Some(id) && id == recovered.approval.id {
+          continue
+        }
+        seeded = seeded.replace_conversation({
+          ..conv,
+          pending_approval: Some(recovered.approval),
+        })
+      }
+      // Retire: a question this page was showing that the reply lacks was
+      // answered while the page was away — by another client, or by the run
+      // ending. Its `approval_resolved` is gone for good (reconnect is resync;
+      // transients are not replayed), so nothing else will ever take that card
+      // down, and pressing it sends a decision the engine's desk discards.
+      //
+      // Matched on session AND id: ids are minted per engine and every one
+      // starts at `ap-1`, so another session still holding that number is not
+      // evidence that this one survives.
+      for captured in frontier {
+        guard captured.pending_approval_id is Some(captured_id) else {
+          continue
+        }
+        if approvals
+          .iter()
+          .any(item => {
+            item.session == captured.session && item.approval.id == captured_id
+          }) {
+          continue
+        }
+        guard seeded.find_conversation(channel, captured.session) is Some(conv) else {
+          continue
+        }
+        if conv.pending_approval is Some(current) && current.id == captured_id {
+          seeded = seeded.replace_conversation({
+            ..conv,
+            pending_approval: None,
+          })
         }
       }
       (@cmd.batch(commands), seeded)

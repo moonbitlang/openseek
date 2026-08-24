@@ -648,3 +648,54 @@ test "a question from a finished run is not seeded onto its successor" {
   }
   assert_true(after.pending_approval is None)
 }
+
+///|
+/// The reload path the replay exists for. `BridgeReady` captures the frontier
+/// and issues `agent.runs` alongside `session.list`, so on a fresh page the
+/// frontier is EMPTY — no conversation exists yet to capture. By the time the
+/// reply lands the conversation does exist, materialized by this snapshot's own
+/// run row or by the listing that raced it, and its standing question has to
+/// arrive with it.
+///
+/// Visiting only sessions named in the frontier drops exactly this case, which
+/// is the case the whole replay was built for.
+test "a session missing from the frontier still gets its question" {
+  let conv = running_conversation()
+  guard conv.run is Open(run_id~, ..) else { fail("expected an open run") }
+  let model = test_model().replace_conversation(conv)
+  let (_, resynced) = update(
+    test_dispatch(),
+    FromDevice(
+      @interop.ChannelId::Local,
+      RunsLoaded(
+        runs=[],
+        settled=[],
+        approvals=[
+          {
+            session: conv.session_id,
+            approval: {
+              id: "ap-1",
+              run_id: Some(run_id),
+              tool_name: "run_moonbit",
+              detail: "escalate",
+              body: Some("fn main { println(1) }"),
+              answered: false,
+            },
+          },
+        ],
+        live=[run_id],
+        // Captured before this page knew the conversation.
+        frontier=[],
+        connection_generation=0,
+      ),
+    ),
+    model,
+  )
+  guard resynced.active_conversation() is Some(after) else {
+    fail("expected the conversation")
+  }
+  guard after.pending_approval is Some(pending) else {
+    fail("a question for a session absent from the frontier was dropped")
+  }
+  assert_eq(pending.id, "ap-1")
+}
