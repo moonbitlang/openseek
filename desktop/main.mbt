@@ -125,9 +125,12 @@ async fn main {
   // entry serves from. The window is bridge-only: it makes no HTTP requests
   // at all. Remote browsers use the same method catalog over the relay
   // WebSocket instead (docs/remote-protocol.md).
-  let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760).debug_level(
-    1,
-  )
+  let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760)
+    // Let the page palette paint the native titlebar area. The default macOS
+    // titlebar follows the system appearance, so an explicit in-app dark theme
+    // otherwise leaves a bright strip above the dark application shell.
+    .titlebar_style(Overlay)
+    .debug_level(1)
   // Proton auto-fills only the Application menu; Edit and Window must be
   // declared or macOS loses their key equivalents (Cmd+A/C/V/X/Z, Cmd+W/M),
   // which is what dispatches editing shortcuts to every text field. The
