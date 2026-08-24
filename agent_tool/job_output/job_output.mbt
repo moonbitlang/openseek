@@ -2,15 +2,8 @@
 /// Tool `job_output`: read a background job's output and status by id.
 /// The id comes from `run_moonbit run_in_background`, or from a foreground command that
 /// was moved to the background when it exceeded its `timeout_ms`.
-/// `escalation` is whether this build can ask the user to run a snippet
-/// outside the sandbox. It only reaches the policy-refusal guidance below: a
-/// background job that was refused gets the same advice a foreground run
-/// would, because the retry it describes is a `run_moonbit` call either way,
-/// and being told the door exists in one place and not the other is worse
-/// than not being told at all.
 pub fn definition(
   bg_runtime : @bgjobs.BgJobRuntime,
-  escalation? : Bool = false,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="job_output",
@@ -38,7 +31,7 @@ pub fn definition(
       },
       "required": ["job_id"],
     }),
-    execute=Async(arguments => execute(bg_runtime, arguments, escalation~)),
+    execute=Async(arguments => execute(bg_runtime, arguments)),
   )
 }
 
@@ -46,7 +39,6 @@ pub fn definition(
 async fn execute(
   bg_runtime : @bgjobs.BgJobRuntime,
   arguments : Json,
-  escalation~ : Bool,
 ) -> @agent_tool.ToolAction {
   guard arguments is { "job_id": String(job_id), .. } else {
     return @agent_tool.ToolAction::respond(
@@ -114,7 +106,7 @@ async fn execute(
   // denial line can be earlier than the tail), but only for a sandboxed job — so
   // a full read happens only in that rarer case.
   let sandbox_denied = if @sandbox.output_reports_policy_refusal(output) {
-    Some(@sandbox.policy_refusal_feedback(escalation~))
+    Some(@sandbox.policy_refusal_feedback)
   } else if snapshot.sandboxed_command is Some(command) &&
     command.output_reports_denial(
       bg_runtime.read_output(job_id).unwrap_or(output),

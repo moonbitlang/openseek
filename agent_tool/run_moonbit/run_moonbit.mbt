@@ -716,7 +716,16 @@ async fn refusal_guidance(
   }
 
   if shows(@sandbox.output_reports_policy_refusal) {
-    return Some(@sandbox.policy_refusal_feedback(escalation~))
+    // The escalating variant only where a channel exists AND this is a
+    // foreground report: its wording assumes nothing ran, which is true here
+    // and false of `job_output`, whose job worked before it was refused.
+    return Some(
+      if escalation {
+        @sandbox.policy_refusal_with_escalation
+      } else {
+        @sandbox.policy_refusal_feedback
+      },
+    )
   }
   guard sandboxed_command is Some(command) else { return None }
   if shows(output => command.output_reports_denial(output)) {

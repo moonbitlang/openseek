@@ -39,7 +39,7 @@ test "a policy refusal is recognized by the runtime's own wording" {
 /// The guidance has to cover both rules, because a refused spawn carries no path
 /// and reading it as a blocked write once sent the model to debug one.
 test "policy guidance names both rules that produce a refusal" {
-  let feedback = @sandbox.policy_refusal_feedback(escalation=false)
+  let feedback = @sandbox.policy_refusal_feedback
   assert_true(feedback.contains("write outside its own"))
   assert_true(feedback.contains("spawn allowlist"))
   // And it ends on the move that answers the refusals that actually happen —
@@ -53,12 +53,14 @@ test "policy guidance names both rules that produce a refusal" {
 /// model is deciding what to do instead, and the moment it otherwise
 /// reconstructs the refused command out of allowed parts without saying so.
 test "policy guidance names escalation only where it exists" {
-  let without = @sandbox.policy_refusal_feedback(escalation=false)
+  let without = @sandbox.policy_refusal_feedback
   assert_false(without.contains("escalated"))
-  let with_escalation = @sandbox.policy_refusal_feedback(escalation=true)
+  let with_escalation = @sandbox.policy_refusal_with_escalation
   assert_true(with_escalation.contains("`escalated: true`"))
   // Pinned to the snippet already written, and to one attempt: naming an
-  // escape at a refusal risks making the escape the first move.
+  // escape at a refusal risks making the escape the first move. That same
+  // wording is why only a foreground report may carry it — it says nothing
+  // ran, which a background job's refusal cannot claim.
   assert_true(with_escalation.contains("this exact snippet ONCE"))
   // The refusal itself reads identically either way — only the answer differs.
   assert_true(with_escalation.has_prefix(without))
