@@ -2,6 +2,7 @@
 package "openseek_desktop/internal/fsx"
 
 import {
+  "moonbitlang/async/fs",
   "openseek_desktop/internal/pathx",
 }
 
@@ -32,6 +33,8 @@ pub async fn write_bytes(@pathx.Path, Bytes) -> Unit
 
 pub async fn write_text(@pathx.Path, String) -> Unit
 
+pub async fn write_text_atomic(@pathx.Path, String, permission? : Int) -> Unit
+
 // Errors
 
 // Types and methods
@@ -43,6 +46,11 @@ pub async fn Directory::try_open(@pathx.Path) -> Self?
 type DirectoryEntry
 pub fn DirectoryEntry::is_dir(Self) -> Bool
 pub fn DirectoryEntry::name(Self) -> String
+
+type FileLock
+pub async fn FileLock::acquire(@pathx.Path, @fs.Lock) -> Self
+pub fn FileLock::release(Self) -> Unit
+pub async fn FileLock::try_acquire(@pathx.Path, @fs.Lock) -> Self?
 
 // Type aliases
 

@@ -2,6 +2,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/os_error",
   "moonbitlang/async/fs",
+  "openseek_desktop/internal/entropy",
   "openseek_desktop/internal/pathx",
   "tonyfettes/platform",
 }

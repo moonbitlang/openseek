@@ -92,11 +92,17 @@ pub fn new_host_state(
 ///|
 /// The background tasks behind the host ops, spawned into the caller's
 /// app-lifetime task group: the moon-check diagnostics forwarder and the
-/// self-update pump with its startup leftover sweep. These are shared by
+/// self-update download pump. These are shared by
 /// every connection;
 /// connection-owned filesystem watcher tasks start in `HostConnection::run`.
 /// Every background task is best-effort: a language-service hiccup degrades
 /// that feature, never the connection.
+///
+/// The update pump is safe to start before this process knows whether it owns
+/// the runtime directory: it only ever acts on requests from a page, and a
+/// launch that gets handed to another host never has one. The one piece of
+/// update work that touches shared state unprompted is
+/// `sweep_update_leftovers`, which is separate for exactly that reason.
 pub fn[G] spawn_host_pumps(
   group : @async.TaskGroup[G],
   state : HostState,
@@ -114,6 +120,20 @@ pub fn[G] spawn_host_pumps(
     })
   })
   group.spawn_bg(allow_failure=true, () => state.updates.run(emit))
+}
+
+///|
+/// Clear what a previous update left in the runtime directory. Call this only
+/// from the host that owns that directory, and only once it does: the sweep
+/// discards a relaunch marker, which belongs to the owner and may be the one
+/// it is about to act on.
+pub async fn HostState::sweep_update_leftovers(self : HostState) -> Unit {
+  self.updates.cleanup() catch {
+    error if @async.is_being_cancelled() => raise error
+    error =>
+      @xlog.warn(category="update") <?
+        { "event": "cleanup_failed", "error": "\{error}" }
+  }
 }
 
 ///|

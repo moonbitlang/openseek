@@ -10,6 +10,7 @@ import {
   "openseek_desktop/internal/env" @envx,
   "openseek_desktop/internal/extension",
   "openseek_desktop/internal/host",
+  "openseek_desktop/internal/instance",
   "openseek_desktop/internal/protocol",
   "openseek_desktop/internal/remote",
   "openseek_desktop/internal/shellenv",

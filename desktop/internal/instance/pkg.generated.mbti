@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/instance"
+
+import {
+  "openseek_desktop/internal/pathx",
+}
+
+// Values
+pub async fn can_hand_off_to(@pathx.Path) -> Bool
+
+pub async fn hold(@pathx.Path, retry_interval_ms? : Int, on_claimed? : async () -> Unit) -> Unit
+
+pub async fn identity(@pathx.Path) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

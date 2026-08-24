@@ -46,6 +46,7 @@ pub fn HostConnection::new() -> Self
 pub async fn HostConnection::run(Self, async (@protocol.Notification) -> Unit) -> Unit
 
 type HostState
+pub async fn HostState::sweep_update_leftovers(Self) -> Unit
 
 type PackagedTools
 pub fn PackagedTools::apply_to_process_env(Self) -> Unit

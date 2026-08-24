@@ -55,7 +55,10 @@ const WorktreeBranchPrefix = "openseek/"
 /// Registry reads and read-modify-write mutations share one process-wide
 /// lock, exactly like `workspaces.json` — without it two concurrent
 /// create/remove operations could both read the same old list and let the
-/// later write silently erase the earlier one.
+/// later write silently erase the earlier one. And exactly like
+/// `workspaces.json`, it orders this process only: each mutation also takes
+/// the cross-process `@fsx.FileLock` on that workspace's registry file, while
+/// reads rely on the write being atomic.
 let worktree_registry_lock : @async.Mutex = Mutex()
 
 ///|
@@ -270,28 +273,17 @@ async fn write_worktrees(
     error => raise WorktreeError("could not create \{store}: \{error}")
   }
   let registry : Json = { "worktrees": entries.to_json() }
-  let target = worktrees_file(workspace)
-  let temp = store.join(WorktreesFile + ".tmp")
-  // A registry update may remove only one conversation's placement while
-  // retaining every unrelated row. Build the whole replacement beside the
-  // live file first: a failed or cancelled write then leaves the old registry
-  // intact instead of truncating it and orphaning all of those other rows.
-  @fs.write_file(
-    temp.to_string(),
+  // Atomic and self-cleaning: a concurrent reader never sees a truncated
+  // list and mistakes a bound conversation for one that runs in the
+  // workspace root, and a write that fails or is cancelled partway leaves
+  // the old registry intact instead of orphaning every unrelated row.
+  @fsx.write_text_atomic(
+    worktrees_file(workspace).to_path(),
     registry.stringify(indent=2),
-    create_mode=CreateOrTruncate,
   ) catch {
     error if @async.is_being_cancelled() => raise error
-    error => raise WorktreeError("could not stage the worktree list: \{error}")
+    error => raise WorktreeError("could not save the worktree list: \{error}")
   }
-  // `rename` replaces a present destination as one filesystem operation. A
-  // cancellation cannot interrupt this short publication step, so callers
-  // learn whether the complete old or complete new registry is authoritative.
-  @async.protect_from_cancel(() => {
-    @fs.rename(temp.to_string(), target.to_string()) catch {
-      error => raise WorktreeError("could not save the worktree list: \{error}")
-    }
-  })
 }
 
 ///|
@@ -778,6 +770,11 @@ pub async fn create(
   let submodule_checkout_timeout_seconds = workspace_settings.submodule_checkout_timeout_seconds
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
+  // Held across the git work below as well as the registry write: a create
+  // that released between them would let another instance's create pick the
+  // same `wt-N` after this one probed it as free.
+  let shared = @fsx.FileLock::acquire(worktrees_file(dir).to_path(), Exclusive)
+  defer shared.release()
   let entries = read_worktrees_unlocked(dir)
   // This conversation already holds its environment. Two shapes land here:
   // the idempotent replay of a create whose reply was lost, and the repair
@@ -884,11 +881,11 @@ pub async fn create(
   }
   @workspaces.exclude_from_git(dir, WorktreesDirName)
   let base = @gitx.run(dir, ["rev-parse", "HEAD"])
-  // The branch comes first, on its own: our locks are in-process only, so
-  // another process can race the probes above — `git branch` then fails
-  // atomically having created nothing, and from here on the branch is
-  // provably THIS invocation's, which is what makes the rollback's
-  // `branch -D` safe.
+  // The branch comes first, on its own: our locks bind desktop instances,
+  // not the user's own git, so anything outside the app can still race the
+  // probes above — `git branch` then fails atomically having created
+  // nothing, and from here on the branch is provably THIS invocation's,
+  // which is what makes the rollback's `branch -D` safe.
   ignore(@gitx.run(dir, ["branch", branch, base]))
   {
     errdefer @async.protect_from_cancel(() => {
@@ -1132,6 +1129,17 @@ pub async fn remove(
   if entry.session is Some(bound) {
     (host.drain_sessions)([bound])
   }
+  // Both locks precede the deletion, and in the order `create` takes them.
+  // Acquiring the file lock afterwards meant a sidecar this process may
+  // refuse to open — a symlink or a non-regular file the workspace carries —
+  // raised only once the checkout was already gone, reporting failure while
+  // leaving the registry row behind (and, under `force`, after the
+  // uncommitted work it discarded). The drain stays outside them: it re-enters
+  // the engine, which has registry paths of its own.
+  worktree_registry_lock.acquire()
+  defer worktree_registry_lock.release()
+  let shared = @fsx.FileLock::acquire(worktrees_file(dir).to_path(), Exclusive)
+  defer shared.release()
   let target = worktree_dir(dir, name)
   let present = @fsx.is_dir(target.to_path()) catch {
     error if @async.is_being_cancelled() => raise error
@@ -1151,10 +1159,9 @@ pub async fn remove(
     // The checkout is already gone; drop git's stale bookkeeping for it.
     ignore(@gitx.probe(dir, ["worktree", "prune"]))
   }
-  worktree_registry_lock.acquire()
-  defer worktree_registry_lock.release()
-  // Re-read: another worktree may have been created while the checkout was
-  // being removed (creation takes only the registry lock).
+  // Re-read: the lookup above ran before the drain and before these locks,
+  // so a create — this process's or another instance's — may have landed a
+  // row since. Nothing can land one from here on: both locks are held.
   let remaining = read_worktrees_unlocked(dir).filter(entry => {
     entry.name != name
   })
@@ -1297,10 +1304,12 @@ async test "failed worktree registry staging preserves every live row" {
     codex_thread: None,
   }
   write_worktrees(root, [retained])
-  // A directory at the candidate path makes the next file write fail before
-  // publication, modeling an interrupted or rejected staging write.
-  let temp = @workspaces.store_root(root).join(WorktreesFile + ".tmp")
-  @fs.mkdir(temp.to_string())
+  // An unwritable store makes the staging file impossible to create,
+  // modeling an interrupted or rejected staging write. A leftover at a
+  // guessable `.tmp` name no longer models it: the save names its temporary
+  // file randomly, precisely so that one crash cannot block every later save.
+  let store = @workspaces.store_root(root).to_string()
+  @fs.chmod(store, 0o555)
   let failed = try {
     write_worktrees(root, [])
     false
@@ -1308,6 +1317,7 @@ async test "failed worktree registry staging preserves every live row" {
     error if @async.is_being_cancelled() => raise error
     _ => true
   }
+  @fs.chmod(store, 0o755)
   assert_true(failed)
   guard read_worktrees_unlocked(root) is [after] else {
     fail("the previous worktree registry must remain readable")

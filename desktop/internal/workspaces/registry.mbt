@@ -30,6 +30,12 @@ const WorkspacesFile = "workspaces.json"
 /// lock. Remote requests run in independent tasks; without this serialization
 /// two concurrent add/remove operations can both read the same old list and
 /// let the later write silently erase the earlier one.
+///
+/// It orders this process only. The registry is shared with every other
+/// writer of the same session root — a second desktop instance, a TUI in the
+/// same workspace — so each mutation also takes the cross-process
+/// `@fsx.FileLock` on the registry file. Reads need neither lock: the write
+/// is atomic, so a reader sees one complete version or the other.
 let workspace_registry_lock : @async.Mutex = Mutex()
 
 ///|
@@ -38,6 +44,19 @@ let workspace_registry_lock : @async.Mutex = Mutex()
 /// store of the workspace this file registers.
 fn workspaces_file() -> @pathx.Absolute? {
   global_store_root().map(root => root.join(WorkspacesFile))
+}
+
+///|
+/// The registry file a mutation must lock and write. Unlike reads, which
+/// degrade to "no workspaces", a mutation with nowhere to persist has to say
+/// so rather than silently succeed against nothing.
+fn required_workspaces_file() -> @pathx.Absolute raise WorkspaceError {
+  guard workspaces_file() is Some(file) else {
+    raise WorkspaceError(
+      "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
+    )
+  }
+  file
 }
 
 ///|
@@ -113,13 +132,13 @@ pub async fn registered() -> Array[@pathx.Absolute] {
 }
 
 ///|
+/// Save the registry. Atomic, so the concurrent readers this file has — other
+/// desktop instances, a TUI, the next launch after a crash — never observe a
+/// truncated list and read it as "no workspaces attached".
 async fn write_registry(registry : Registry) -> Unit {
-  guard global_store_root() is Some(root) else {
-    raise WorkspaceError(
-      "cannot determine a session root; set OPENSEEK_SESSION_ROOT",
-    )
-  }
-  @fsx.ensure_dir(root.to_path()) catch {
+  let file = required_workspaces_file()
+  let root = file.to_path().dirname()
+  @fsx.ensure_dir(root) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise WorkspaceError("could not create \{root}: \{error}")
   }
@@ -127,7 +146,7 @@ async fn write_registry(registry : Registry) -> Unit {
     "workspaces": registry.workspaces.map(path => path.0).to_json(),
     "initialized": registry.initialized.to_json(),
   }
-  @fsx.write_text(root.join(WorkspacesFile).to_path(), json.stringify(indent=2)) catch {
+  @fsx.write_text_atomic(file.to_path(), json.stringify(indent=2)) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise WorkspaceError("could not save the workspace list: \{error}")
   }
@@ -181,6 +200,14 @@ pub async fn default_workspace() -> @pathx.Absolute? {
 pub async fn initialize() -> @pathx.Absolute? {
   workspace_registry_lock.acquire()
   defer workspace_registry_lock.release()
+  // The registry read has to follow both locks: a list read before another
+  // process released this one is exactly the stale snapshot whose write-back
+  // would erase that process's entry.
+  let shared = @fsx.FileLock::acquire(
+    required_workspaces_file().to_path(),
+    Exclusive,
+  )
+  defer shared.release()
   let registry = read_registry_unlocked()
   guard !registry.initialized else { return None }
   guard default_workspace_dir() is Some(dir) && dir.to_absolute() is Some(dir) else {
@@ -244,6 +271,14 @@ pub async fn add(
   exclude_from_git(dir, ".openseek")
   workspace_registry_lock.acquire()
   defer workspace_registry_lock.release()
+  // The registry read has to follow both locks: a list read before another
+  // process released this one is exactly the stale snapshot whose write-back
+  // would erase that process's entry.
+  let shared = @fsx.FileLock::acquire(
+    required_workspaces_file().to_path(),
+    Exclusive,
+  )
+  defer shared.release()
   let registry = read_registry_unlocked()
   let paths = registry.workspaces
   // The write and broadcast callback are one finite, cancellation-shielded
@@ -271,6 +306,14 @@ pub async fn remove(
   let target = canonical_path(expanded_path(path))
   workspace_registry_lock.acquire()
   defer workspace_registry_lock.release()
+  // The registry read has to follow both locks: a list read before another
+  // process released this one is exactly the stale snapshot whose write-back
+  // would erase that process's entry.
+  let shared = @fsx.FileLock::acquire(
+    required_workspaces_file().to_path(),
+    Exclusive,
+  )
+  defer shared.release()
   let registry = read_registry_unlocked()
   let paths = registry.workspaces.filter(p => p != target)
   @async.protect_from_cancel(() => {

@@ -53,7 +53,17 @@ fn SelfUpdate::new(
 
 ///|
 /// Sweep debris a previous update may have left behind (a staging dir, the
-/// old bundle parked aside) — the host's only unprompted update work.
+/// old bundle parked aside, a relaunch marker nobody acted on) — the host's
+/// only unprompted update work.
+///
+/// The relaunch marker is why this is not pump work. The marker is shared
+/// state belonging to whichever host owns the runtime directory, and it lives
+/// exactly across the gap between that host applying an update and its run
+/// loop returning. A launch that is about to be handed to that host runs its
+/// own pumps first and would sweep the marker out from under it — the bundle
+/// swapped on disk, and nothing left to say it should reopen. So the sweep
+/// belongs to the host that owns the directory, and runs only once that is
+/// settled.
 async fn SelfUpdate::cleanup(self : SelfUpdate) -> Unit {
   if self.work_dir is Some(dir) && self.bundle_path is Some(bundle) {
     @update.cleanup_leftovers(work_dir=dir, bundle_path=bundle)
@@ -184,10 +194,11 @@ async fn SelfUpdate::download_package(
 }
 
 ///|
-/// The app-lifetime pump: sweep leftovers once, then perform accepted
-/// downloads one at a time and report each outcome as a notification. Only
-/// this task downloads and installs staged state, so `busy` stays true from
-/// acceptance until the matching completion notification.
+/// The app-lifetime pump: perform accepted downloads one at a time and report
+/// each outcome as a notification. Only this task downloads and installs
+/// staged state, so `busy` stays true from acceptance until the matching
+/// completion notification. The leftover sweep is `SelfUpdate::cleanup`,
+/// which the owning host runs separately.
 async fn SelfUpdate::run(
   self : SelfUpdate,
   emit : async (@protocol.Notification) -> Unit,
@@ -195,12 +206,6 @@ async fn SelfUpdate::run(
   // A closed queue turns later `update.download` requests into rejections
   // instead of accepted work nobody will perform.
   defer self.downloads.close()
-  self.cleanup() catch {
-    error if @async.is_being_cancelled() => raise error
-    error =>
-      @xlog.warn(category="update") <?
-        { "event": "cleanup_failed", "error": "\{error}" }
-  }
   for ;; {
     self.downloads.get()
     try self.download_package(emit) catch {
@@ -310,6 +315,34 @@ async test "self-update pump reports download failures" {
     )
     group.return_immediately(())
   })
+}
+
+///|
+/// The relaunch marker belongs to whichever host owns the runtime directory,
+/// and it exists exactly across the gap between that host applying an update
+/// and its run loop returning. Every launch starts this pump, including one
+/// that is about to be handed straight to that host — so the pump must leave
+/// the marker alone, and only the owner's sweep may clear it.
+async test "the download pump leaves the relaunch marker to the owning host" {
+  let root : @pathx.Path = @fs.tmpdir(prefix="openseek-update-marker-")
+  let work_dir = root.to_string()
+  let bundle_path = "\{work_dir}/SeekMoon.app"
+  let updates = SelfUpdate::new(
+    Some(root),
+    Some("\{bundle_path}/Contents/MacOS/seekmoon"),
+  )
+  @update.write_relaunch_marker(work_dir~, bundle_path~)
+  @async.with_task_group(group => {
+    group.spawn_bg(allow_failure=true, () => updates.run(fn(_) {  }))
+    // Well past the point where a sweep at the pump's start would have run.
+    @async.sleep(50)
+    group.return_immediately(())
+  })
+  assert_true(@update.take_relaunch_target(work_dir~) is Some(_))
+  @update.write_relaunch_marker(work_dir~, bundle_path~)
+  updates.cleanup()
+  assert_true(@update.take_relaunch_target(work_dir~) is None)
+  @fs.rmdir(work_dir, recursive=true)
 }
 
 ///|

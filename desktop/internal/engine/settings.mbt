@@ -204,6 +204,12 @@ pub async fn update_settings(
   guard manager.runtime_dir is Some(dir) else {
     raise EngineError("engine settings cannot persist: no runtime directory")
   }
+  // `settings_lock` orders this process's clients; the runtime directory is
+  // shared with every other instance running against it. The load below has
+  // to follow this lock — settings read before it would carry back the very
+  // fields another instance just changed.
+  let shared = @fsx.FileLock::acquire(settings_file(dir), Exclusive)
+  defer shared.release()
   let current = load_engine_settings(manager.runtime_dir)
   guard current.version <= EngineSettingsVersion else {
     raise EngineError(
@@ -271,36 +277,15 @@ fn apply_text_patch(
 }
 
 ///|
-/// Atomic save: write a 0600 temp file, then rename over the target. The
-/// file holds a credential, so a crash mid-write must never leave a
-/// truncated store — the temp file keeps the full content until the rename
-/// lands. Windows may refuse to rename over an existing file; removing the
-/// target first narrows atomicity to that one platform's small window.
+/// Atomic save at 0600. The file holds a credential, so a crash mid-write
+/// must never leave a truncated store, and every reader of it — this process,
+/// another instance, the next launch — sees one complete version or the
+/// other. Reads therefore take no lock; only the read-modify-write in
+/// `update_settings` does.
 async fn write_settings_file(runtime_dir : @pathx.Path, text : String) -> Unit {
-  let target = settings_file(runtime_dir)
-  let temp = runtime_dir.join(EngineSettingsFileName + ".tmp")
-  @fs.write_file(
-    temp.to_string(),
-    text,
-    create_mode=CreateOrTruncate,
-    permission=0o600,
-  ) catch {
+  @fsx.write_text_atomic(settings_file(runtime_dir), text, permission=0o600) catch {
     error if @async.is_being_cancelled() => raise error
-    error => raise EngineError("could not write engine settings: \{error}")
-  }
-  @fs.rename(temp.to_string(), target.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => {
-      @fsx.remove_if_exists(target) catch {
-        error if @async.is_being_cancelled() => raise error
-        error =>
-          raise EngineError("could not replace engine settings: \{error}")
-      }
-      @fs.rename(temp.to_string(), target.to_string()) catch {
-        error if @async.is_being_cancelled() => raise error
-        error => raise EngineError("could not save engine settings: \{error}")
-      }
-    }
+    error => raise EngineError("could not save engine settings: \{error}")
   }
 }
 

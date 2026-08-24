@@ -43,6 +43,25 @@ async fn main {
   @xlog.info() <? { "message": "codex", "path": @codex.command() }
   @xlog.info() <? { "message": "app version", "version": app_version }
   let runtime_dir = @host.prepared_runtime_dir(executable)
+  // One host per runtime directory: a second launch is handed to whoever
+  // owns the state rather than starting a rival for it. The rule is
+  // suspended for the one case it cannot serve — an owner still alive but
+  // no longer running its event loop, which would accept the hand-off and
+  // never act on it, leaving the app simply refusing to open.
+  let instance_identity = match runtime_dir {
+    Some(dir) =>
+      if @instance.can_hand_off_to(dir) {
+        Some(@instance.identity(dir))
+      } else {
+        @xlog.warn() <?
+          {
+            "event": "desktop_instance_claim",
+            "message": "the host holding this runtime directory has stopped responding; starting alongside it",
+          }
+        None
+      }
+    None => None
+  }
   let codex_home = match runtime_dir {
     Some(dir) => @codex.prepared_home(dir)
     None => None
@@ -120,6 +139,11 @@ async fn main {
   let relay = @remote.RelayActor::new(state, announce=device => {
     @xlog.info() <? { "message": "relay registered", "device": device }
   })
+  // Set by the application lifecycle hook, which only the process that won
+  // the single-instance election reaches. A forwarded launch returns from
+  // `app.run()` having done nothing, and must not go on to act on state
+  // that belongs to the host still running.
+  let is_primary : Ref[Bool] = Ref(false)
   // Proton exposes the `__MoonBit__` bridge — both the ops and the event
   // channel the frontend listens on — only to the local origin its asset
   // entry serves from. The window is bridge-only: it makes no HTTP requests
@@ -186,6 +210,43 @@ async fn main {
         None => ()
       }
     })
+    // Everything that acts on state belonging to whoever owns the runtime
+    // directory starts here and nowhere earlier: this hook runs only in the
+    // process that won the single-instance election. A launch that is
+    // handed to another host returns from `app.run()` without ever reaching
+    // it, so it can neither stamp a heartbeat the other host's would be
+    // mistaken for, nor sweep away the relaunch marker that host is about
+    // to act on. Both are spawned on the application task group, so they
+    // stop exactly when the loop they belong to does.
+    .app_lifecycle(
+      on_start=fn(context) {
+        is_primary.val = true
+        let tasks = context.task_group()
+        match runtime_dir {
+          Some(dir) =>
+            // The sweep is the claim's continuation, not a task beside it.
+            // Winning the election does not yet mean owning the directory:
+            // a host started on the stopped-owner path holds the claim
+            // without ever entering one, and until it exits, the staging
+            // directory and the relaunch marker are still its own.
+            tasks.spawn_bg(allow_failure=true, () => {
+              @instance.hold(dir, on_claimed=async fn() {
+                state.host_state().sweep_update_leftovers()
+              })
+            })
+          // Without a runtime directory there is nothing to own: no claim to
+          // hold, and no leftovers of ours anywhere to sweep.
+          None => ()
+        }
+      },
+      // The claim needs no shutdown of its own: the kernel releases it when
+      // the process dies, however it dies.
+      on_shutdown=fn(_) {  },
+    )
+  let app = match instance_identity {
+    Some(identity) => app.single_instance(identity)
+    None => app
+  }
   @async.with_task_group(group => {
     // The bridge actor, engine actor, and host actors run for the app's
     // lifetime — they feed every page/client rather than borrowing a
@@ -249,17 +310,29 @@ async fn main {
   // relaunch marker: reopen the new version now that the run loop is done.
   // `open -n` hands the launch to LaunchServices, so the new instance is
   // not our child and this process can exit right after.
-  if runtime_dir is Some(dir) &&
-    @update.take_relaunch_target(work_dir=dir.to_string()) is Some(target) {
-    @xlog.info() <? { "message": "relaunch after update", "path": target }
-    let code = @process.run("open", ["-n", target]) catch {
-      error => {
-        @xlog.error() <? { "message": "relaunch failed", "error": "\{error}" }
-        return
+  //
+  // Only the host that ran the loop may take that marker. A forwarded
+  // launch reaches here too, having done nothing, and taking the marker
+  // there would consume the still-running primary's relaunch: the bundle
+  // would reopen, hand itself straight back to that primary, exit — and
+  // when the primary finally closed, its marker would be gone and the
+  // update would never be entered. The nesting is deliberate; a `&&` chain
+  // would take the marker while deciding whether it was allowed to.
+  if is_primary.val {
+    if runtime_dir is Some(dir) {
+      if @update.take_relaunch_target(work_dir=dir.to_string()) is Some(target) {
+        @xlog.info() <? { "message": "relaunch after update", "path": target }
+        let code = @process.run("open", ["-n", target]) catch {
+          error => {
+            @xlog.error() <?
+              { "message": "relaunch failed", "error": "\{error}" }
+            return
+          }
+        }
+        if code != 0 {
+          @xlog.error() <? { "message": "relaunch failed", "code": code }
+        }
       }
-    }
-    if code != 0 {
-      @xlog.error() <? { "message": "relaunch failed", "code": code }
     }
   }
   @xlog.info() <? { "event": "desktop_main_return" }
