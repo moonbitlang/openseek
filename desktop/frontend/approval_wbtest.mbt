@@ -699,3 +699,145 @@ test "a session missing from the frontier still gets its question" {
   }
   assert_eq(pending.id, "ap-1")
 }
+
+///|
+/// The run handoff Codex described: the snapshot carries r1's settlement, r2's
+/// active row, and r2's question, while this page still shows r1's. The
+/// settlement does not touch the card — only the run phase — so the captured
+/// and current ids still agree and r2's question is seeded over the stale one.
+test "a question survives a run handoff inside one snapshot" {
+  let conv = running_conversation()
+  guard conv.run is Open(run_id~, ..) else { fail("expected an open run") }
+  let asked = fold_engine(
+    conv,
+    ApprovalRequested(
+      id="ap-1",
+      tool_name="run_moonbit",
+      detail="escalate",
+      body=None,
+    ),
+  )
+  let model = test_model().replace_conversation(asked)
+  let (_, resynced) = update(
+    test_dispatch(),
+    FromDevice(
+      @interop.ChannelId::Local,
+      RunsLoaded(
+        runs=[
+          {
+            run_id: "r-successor",
+            session: asked.session_id,
+            model: High,
+            max_steps: 1000,
+            session_root: None,
+            submission_id: None,
+          },
+        ],
+        settled=[
+          {
+            run_id,
+            session: asked.session_id,
+            submission_id: None,
+            status: "finished",
+          },
+        ],
+        approvals=[
+          {
+            session: asked.session_id,
+            approval: {
+              id: "ap-2",
+              run_id: Some("r-successor"),
+              tool_name: "run_moonbit",
+              detail: "escalate again",
+              body: None,
+              answered: false,
+            },
+          },
+        ],
+        live=["r-successor"],
+        frontier=[
+          {
+            session: asked.session_id,
+            state: SnapshotOpen(run_id~),
+            initial_ids: [],
+            pending_approval_id: Some("ap-1"),
+          },
+        ],
+        connection_generation=0,
+      ),
+    ),
+    model,
+  )
+  guard resynced.active_conversation() is Some(after) else {
+    fail("expected the conversation")
+  }
+  guard after.pending_approval is Some(pending) else {
+    fail("the successor's question was dropped in the handoff")
+  }
+  assert_eq(pending.id, "ap-2")
+}
+
+///|
+/// A run that ends without resolving its question takes the card with it.
+///
+/// The engine settles its own on the way out, so this covers the engine that
+/// could not: a killed process emits no `approval_resolved`, and the host
+/// reports the run finished instead. Nothing else would ever retire the card —
+/// there is no deadline behind the question — and pressing it sends a decision
+/// to an engine that is gone. The host already drops its copy on the same
+/// evidence (`Hub::forget_run_approvals`).
+test "a finished run takes its unanswered question with it" {
+  let conv = running_conversation()
+  guard conv.run is Open(run_id~, ..) else { fail("expected an open run") }
+  // The engine stamps its events with the run they belong to, so a real
+  // pending approval always names the conversation's open run.
+  let asked = {
+    ..conv,
+    pending_approval: Some({
+      id: "ap-1",
+      run_id: Some(run_id),
+      tool_name: "run_moonbit",
+      detail: "escalate",
+      body: None,
+      answered: false,
+    }),
+  }
+  let (_, ended) = update_device_msg(
+    test_dispatch(),
+    @interop.ChannelId::Local,
+    Finished(run_id~, status="finished", answer=None),
+    test_model().replace_conversation(asked),
+  )
+  guard ended.active_conversation() is Some(after) else {
+    fail("expected the conversation")
+  }
+  assert_true(after.pending_approval is None)
+}
+
+///|
+/// But only its own. A question belonging to a live successor must survive an
+/// older run's terminal event arriving late.
+test "a finished run leaves a question belonging to another run" {
+  let successor = {
+    ..running_conversation(),
+    run: Open(run_id="r-successor", stage=Opened),
+    pending_approval: Some({
+      id: "ap-2",
+      run_id: Some("r-successor"),
+      tool_name: "run_moonbit",
+      detail: "escalate",
+      body: None,
+      answered: false,
+    }),
+  }
+  let (_, ended) = update_device_msg(
+    test_dispatch(),
+    @interop.ChannelId::Local,
+    Finished(run_id="r-stale", status="finished", answer=None),
+    test_model().replace_conversation(successor),
+  )
+  guard ended.active_conversation() is Some(after) else {
+    fail("expected the conversation")
+  }
+  assert_true(after.pending_approval is Some(_))
+}

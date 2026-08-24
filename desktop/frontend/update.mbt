@@ -7024,6 +7024,18 @@ fn update_device_msg(
         // Whether each submission reached the store is the record's question;
         // the transcript answers it without a local placeholder.
         let settled_inputs = conv.clear_streams().forget_steers_for_run(run_id)
+        // A question belonging to this run goes with it. The engine settles
+        // its own on the way out, so what reaches here is the engine that
+        // could not — a killed process emits no `approval_resolved` — and
+        // nothing else would ever retire the card, there being no deadline
+        // behind the question. The host drops its copy on the same evidence.
+        let settled_inputs = if settled_inputs.pending_approval
+          is Some({ run_id: Some(owner), .. }) &&
+          owner == run_id {
+          { ..settled_inputs, pending_approval: None }
+        } else {
+          settled_inputs
+        }
         let base = {
           ..settled_inputs,
           run: NoRun(ended=Some(RunFinished(RunOutcome::parse(status)))),
