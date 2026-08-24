@@ -183,27 +183,29 @@ pub impl ToJson for ApprovalReply with fn to_json(self) {
 
 ///|
 /// `agent.runs` is how a client that joins or rejoins mid-run rebuilds what is
-/// in flight, so each of its sections decodes independently: a section a peer
-/// does not send is empty rather than an error, while a section it sends in the
-/// wrong shape still fails at its exact path.
+/// in flight, so every section is REQUIRED. Desktop ships its frontend and host
+/// together, which leaves no version where one of these is legitimately absent;
+/// what an absent section would actually mean is drift in the current host, and
+/// reading it as empty turns that into silently lost state — a tool left
+/// waiting on an approval with no card to answer it, and no deadline behind the
+/// question. A decode error says so instead.
 ///
-/// `approvals` is the newest section and the one an older host omits entirely.
-/// Absent and null both read as "no questions are waiting", which is the truth
-/// for every host whose engines never ask.
+/// An empty section is still an empty array on the wire, which is what a host
+/// with nothing in flight sends.
 pub impl FromJson for RunsReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "agent.runs reply")
   let runs : Array[StartedPayload] = []
-  for index, raw in object.optional_array("runs") {
+  for index, raw in object.required_array("runs") {
     runs.push(@json.from_json(raw, path=path.add_key("runs").add_index(index)))
   }
   let settled : Array[RunSettlementPayload] = []
-  for index, raw in object.optional_array("settled") {
+  for index, raw in object.required_array("settled") {
     settled.push(
       @json.from_json(raw, path=path.add_key("settled").add_index(index)),
     )
   }
   let approvals : Array[PendingApprovalPayload] = []
-  for index, raw in object.optional_array("approvals") {
+  for index, raw in object.required_array("approvals") {
     approvals.push(
       @json.from_json(raw, path=path.add_key("approvals").add_index(index)),
     )

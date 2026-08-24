@@ -190,3 +190,35 @@ test "an approval reply requires its one field" {
   assert_true(reply.delivered)
   @debug.assert_eq(reply.to_json(), { "delivered": true })
 }
+
+///|
+/// Every section of the runs snapshot is required. Desktop ships its frontend
+/// and host together, so an absent section is drift in the current host — and
+/// reading it as empty loses live state silently: a tool left waiting on an
+/// approval with no card to answer it, and no deadline behind the question.
+test "the runs snapshot requires each of its sections" {
+  for missing in ["runs", "settled", "approvals"] {
+    let fields : Map[String, Json] = {
+      "runs": Json::array([]),
+      "settled": Json::array([]),
+      "approvals": Json::array([]),
+    }
+    fields.remove(missing)
+    let decoded : @protocol.RunsReply? = Some(
+      @json.from_json(Json::object(fields)),
+    ) catch {
+      _ => None
+    }
+    if decoded is Some(_) {
+      fail("a snapshot without \{missing} decoded")
+    }
+  }
+  // An empty section is an empty array, which is what a host with nothing in
+  // flight sends.
+  let empty : @protocol.RunsReply = @json.from_json({
+    "runs": [],
+    "settled": [],
+    "approvals": [],
+  })
+  assert_eq(empty.approvals.length(), 0)
+}
