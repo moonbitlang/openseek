@@ -10,25 +10,28 @@ fn default_prompt() -> String {
     #|
     #|Refactor and fix by compiler guidance, not by text. MoonBit is soundly typed and
     #|`moon check` is fast, so let the compiler tell you *what* to change and *where*.
-    #|Do not find edit sites with regex/`sed` or by syntax/AST reasoning — `a.method()`
-    #|resolves by the *type* of `a`, so text matching hits the wrong occurrences,
+    #|Do not find edit sites with `regex`/`sed` or by syntax/AST-based reasoning — `expr.method()`
+    #|resolves by the *type* of `expr`, so text matching hits the wrong occurrences,
     #|comments, strings, and other types, and misses spacing variants; only the type
-    #|checker knows which uses are real. Loop: `moon check` (use `--output-json` or
-    #|`--diagnostic-limit <N>` to group repeats) → fix the reported `path:line`s with
-    #|`edit`/`multi_edit` → re-check until clean. To rename an API, add the new name,
-    #|make the old one a deprecated alias, and fix the deprecations the compiler then
-    #|flags — far more reliable than a regex sweep. Use command runs only to analyze
-    #|diagnostics, never to rewrite source.
+    #|checker knows which uses are real.
     #|
-    #|Run `moon check` through `run_moonbit` (see Running Commands below) after
-    #|every edit as the primary fast feedback loop; add `--diagnostic-limit 5` for focused diagnostics. It skips code
-    #|generation, so it is much faster than `moon build` or `moon test`. Use
+    #|Loop: `moon check` (use `--output-json` or `--diagnostic-limit <N>` to group repeats) →
+    #|fix the reported `path:line`s with `edit`/`multi_edit` →
+    #|re-check until clean.
+    #|
+    #|To rename an API, add the new name, make the old one a deprecated alias,
+    #|and fix the deprecations the compiler then flags — far more reliable than a regex sweep.
+    #|Use command runs only to analyze diagnostics, never to rewrite source.
+    #|
+    #|Run `moon check` through `run_moonbit` (see Running Commands below) as the primary fast feedback loop;
+    #|add `--diagnostic-limit 5` for focused diagnostics. It skips code
+    #|generation, so it is way faster than `moon build` or `moon test`. Use
     #|`moon build` or `moon test` only when you need artifacts or test results.
     #|After `edit` or `write` changes `moon.mod`, `moon.pkg`, `moon.work`, `.mbt`,
     #|or `.mbt.md` inside a MoonBit module, the tool result may append bounded raw
     #|feedback from module-root `moon check --diagnostic-limit 1`, starting with
     #|`moon check:`; failures include `exit=<code>` or `exit=cancelled`. Treat it as
-    #|immediate compiler feedback, and run an explicit `moon check` when you need
+    #|immediate/synchronous compiler feedback, and run an explicit `moon check --output-json` when you need
     #|full diagnostics.
     #|
     #|## Running Commands
@@ -37,16 +40,16 @@ fn default_prompt() -> String {
     #|spawned from a `run_moonbit` snippet; that tool's description carries the shape
     #|of a snippet and the list of programs one may start.
     #|
-    #|- Make your own source edits with `edit`/`multi_edit`/`write`, which are
-    #|  line-anchored and reviewable — not by having a snippet rewrite files. The
-    #|  tools that rewrite source as their job (`moon fmt`, `moon info`,
-    #|  `moon test --update`, `git checkout`) do run normally.
+    #|Make your own source edits with `edit`/`multi_edit`/`write`, which are
+    #|line-anchored and reviewable — not by having a snippet rewrite files. The
+    #|tools that rewrite source as their job (`moon fmt`, `moon info`,
+    #|`moon test --update`, `git checkout`) do run normally.
     #|
     #|## Tool Protocol
     #|
     #|- Do not emit JSON action plans as assistant text, such as
-    #|  `{"tool":"run_moonbit"}`.
-    #|  Use the actual tool call interface. For a task with several distinct steps,
+    #|  `{"tool":"run_moonbit"}`. Use the actual tool call interface.
+    #|  For a task with several distinct steps,
     #|  record the plan with the `plan` tool (the complete step list each call, at
     #|  most one step `"in_progress"`) and update it as steps finish: mark steps
     #|  `"completed"` immediately — never while their checks still fail — and clear
