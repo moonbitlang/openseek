@@ -107,10 +107,13 @@ argument is unusable here and the snippet should be retried without it.
 ///|
 async test "run_moonbit escalation is refused without a grant" {
   let asked = []
-  let definition = @run_moonbit.definition(workspace_root=".", ask_approval=ask => {
-    asked.push(ask.detail)
-    Rejected
-  })
+  let definition = @run_moonbit.definition(
+    workspace_root=".",
+    approval=ApprovalChannel(ask => {
+      asked.push(ask.detail)
+      Rejected
+    }),
+  )
   // The argument exists here because a channel is wired.
   let JsonSchema(schema) = definition.schema
   guard schema is { "properties": Object(properties), .. } else {

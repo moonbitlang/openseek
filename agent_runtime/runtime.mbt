@@ -56,7 +56,7 @@ pub struct AgentRuntime {
   /// A bare function rather than a service type, so a tool package asking for
   /// approval does not acquire a dependency on the protocol, the engine, or
   /// whichever controller happens to be attached.
-  priv approval : (async (ApprovalAsk) -> ApprovalOutcome)?
+  priv approval : ApprovalChannel?
 }
 
 ///|
@@ -77,7 +77,7 @@ pub struct AgentRuntime {
 /// caller with no human attached, and every test that does not care, wants.
 pub fn AgentRuntime::AgentRuntime(
   workspace_root? : String = ".",
-  approval? : async (ApprovalAsk) -> ApprovalOutcome,
+  approval? : ApprovalChannel,
 ) -> AgentRuntime {
   {
     workspace_root,

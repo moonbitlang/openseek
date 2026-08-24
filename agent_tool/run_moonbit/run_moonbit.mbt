@@ -88,8 +88,8 @@ fn native_escape(source : String) -> String? {
 /// still takes a `sandbox-exec` profile: holding no editing tool is what defines
 /// it, so `read_only=true` puts "may not write source" in the kernel.
 ///
-/// `ask_approval` is where a request to run OUTSIDE the sandbox goes. Its
-/// presence is what advertises the `escalated` argument at all — the same rule
+/// `approval` is where a request to run OUTSIDE the sandbox goes. Its presence
+/// is what advertises the `escalated` argument at all — the same rule
 /// `bg_runtime` follows for `run_in_background`: a build with nobody to ask
 /// does not offer an argument whose every use would come back refused.
 pub fn definition(
@@ -100,7 +100,7 @@ pub fn definition(
   scratch_dir? : String,
   worker_sandbox? : WorkerSandbox,
   run_timeout_ms? : Int = RunTimeoutMs,
-  ask_approval? : async (@agent_runtime.ApprovalAsk) -> @agent_runtime.ApprovalOutcome,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.AgentToolDefinition {
   // Background snippet directories are numbered inside the caller's scratch
   // dir rather than created as fresh system temp dirs: a detached job outlives
@@ -111,13 +111,10 @@ pub fn definition(
     name="run_moonbit",
     description=description(
       background=bg_runtime is Some(_),
-      escalation=ask_approval is Some(_),
+      escalation=approval is Some(_),
     ),
     schema=JsonSchema(
-      schema(
-        background=bg_runtime is Some(_),
-        escalation=ask_approval is Some(_),
-      ),
+      schema(background=bg_runtime is Some(_), escalation=approval is Some(_)),
     ),
     execute=Async(arguments => {
       execute(
@@ -130,7 +127,7 @@ pub fn definition(
         worker_sandbox?,
         run_timeout_ms~,
         next_background~,
-        ask_approval?,
+        approval?,
       )
     }),
   )
@@ -185,7 +182,7 @@ async fn execute(
   // without waiting out the real one.
   run_timeout_ms~ : Int,
   next_background~ : Ref[Int],
-  ask_approval? : async (@agent_runtime.ApprovalAsk) -> @agent_runtime.ApprovalOutcome,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
     error =>
@@ -233,6 +230,16 @@ async fn execute(
       is_error=true,
     )
   }
+  // Escalation only means something on the backend the policy binds. The other
+  // targets never had `--wasm-policy` passed to them in the first place — they
+  // cannot spawn or touch files at all — so asking here would spend a person's
+  // attention on a grant that changes nothing about the run.
+  if input.escalated && input.target != "wasm" {
+    return @agent_tool.ToolAction::respond(
+      "run_moonbit: `escalated` applies to the wasm target, which is the one the sandbox policy binds; `\{input.target}` runs no policy to lift and cannot spawn or touch files anyway. Drop `escalated`, or drop `target` to use wasm.",
+      is_error=true,
+    )
+  }
   // Resolve the escalation request before anything is created or spawned, and
   // after every cheap check above: a snippet with a typo'd `cwd` must fail on
   // the typo rather than spend a person's attention on a prompt for a call
@@ -242,13 +249,13 @@ async fn execute(
   // no session-scoped grant and no rule to remember, so the next escalating
   // call asks again.
   let escalated = if input.escalated {
-    let outcome = match ask_approval {
-      Some(ask) =>
+    let outcome = match approval {
+      Some(channel) =>
         // The program goes with the question. It is what the user is actually
         // deciding about, and `detail` — which is a constant — describes only
         // the permission. Passed as the exact string this call was made with,
         // so what is approved and what runs cannot differ.
-        ask({
+        channel.ask({
           tool_name: "run_moonbit",
           detail: "run this snippet with no sandbox policy: no spawn allowlist, and writes anywhere",
           body: Some(input.source),
@@ -582,7 +589,7 @@ async fn execute(
       sandboxed_command,
       denial_scan_source,
       raw,
-      escalation=ask_approval is Some(_),
+      escalation=approval is Some(_),
     )
     exec.discard()
     let text = rewrite_temp_paths(raw, [real, dir])
@@ -638,7 +645,7 @@ async fn execute(
     sandboxed_command,
     Some(log),
     "",
-    escalation=ask_approval is Some(_),
+    escalation=approval is Some(_),
   )
   let action = match result {
     Some((exit_code, raw)) => {
@@ -1174,7 +1181,7 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
       $|program, and writes anywhere. The call then BLOCKS until a person answers, so
       $|it costs their attention — spend it only when the allowed programs cannot do
       $|the job, never as a first attempt or to skip reading a refusal. A refusal is
-      $|final for the task; an unanswered request expired and ran nothing. Either way
+      $|final for the task; a withdrawn request decided nothing and ran nothing. Either way
       $|the snippet did not run, and the reply says which happened. The user sees this
       $|program and decides on it, so write it to be read: no extra reach beyond what
       $|the task needs, and the reason evident in the code itself.

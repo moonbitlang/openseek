@@ -56,7 +56,7 @@ pub(all) enum EngineEvent {
   CompactionStarted
   CompactionFinished(String)
   CompactionFailed(String)
-  ApprovalRequested(id~ : String, tool_name~ : String, detail~ : String)
+  ApprovalRequested(id~ : String, tool_name~ : String, detail~ : String, body~ : String?)
   ApprovalResolved(id~ : String)
   SessionAppendFailed(String)
 }

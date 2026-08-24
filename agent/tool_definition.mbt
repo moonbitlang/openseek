@@ -104,14 +104,14 @@ pub async fn[X] build_tools(
       @goal.definition(),
       // The escalation argument exists for this registry only when the runtime
       // has somewhere to send the question — and the channel IS that fact, so
-      // it is passed straight through rather than tested and rebuilt. The tool
-      // package receives a bare closure and keeps knowing nothing about who
-      // answers.
+      // it is passed straight through rather than tested and rebuilt. What the
+      // tool package receives is the channel and nothing else: it can ask, and
+      // knows nothing about who answers.
       @run_moonbit.definition(
         workspace_root~,
         bg_runtime~,
         job_dir?=spill_dir,
-        ask_approval?=runtime.approval_channel(),
+        approval?=runtime.approval_channel(),
       ),
       // Deliberately NOT told about escalation. It reports a job that already
       // ran — a policy refusal reaches it after minutes of real work — and the

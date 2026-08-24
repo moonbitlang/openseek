@@ -7,11 +7,14 @@ priv enum ServeCommand {
   Compact
   Cancel
   Goal(GoalAction)
-  /// The answer to an `approval_requested` event. Unlike every other command
-  /// here it does not schedule work — it releases a tool that is already
-  /// running and blocked, which is why it is dispatched from the loop but
-  /// never queues behind active work.
-  Approval(String, Bool)
+  /// The answer to an `approval_requested` event: which question, and whether
+  /// it is granted. Both labelled — `Approval("ap-1", true)` reads as nothing
+  /// at a call site, and the second field is the decision itself.
+  ///
+  /// Unlike every other command here it does not schedule work. It releases a
+  /// tool that is already running and blocked, which is why it is dispatched
+  /// from the loop but never queues behind active work.
+  Approval(id~ : String, allow~ : Bool)
 }
 
 ///|
@@ -182,7 +185,7 @@ fn decode_serve_command(json : Json) -> Result[ServeCommand, String] {
         Ok(Goal(SetGoal(text, auto~)))
       }
     GoalClear => Ok(Goal(ClearGoal))
-    ApprovalDecision(id~, allow~) => Ok(Approval(id, allow))
+    ApprovalDecision(id~, allow~) => Ok(Approval(id~, allow~))
   }
 }
 
@@ -224,11 +227,11 @@ test "serve commands decode and reject with actionable errors" {
   assert_true(decode_serve_command({ "command": "cancel" }) is Ok(Cancel))
   assert_true(
     decode_serve_command({ "command": "approval", "id": "ap-1", "allow": true })
-    is Ok(Approval("ap-1", true)),
+    is Ok(Approval(id="ap-1", allow=true)),
   )
   assert_true(
     decode_serve_command({ "command": "approval", "id": "ap-1", "allow": false })
-    is Ok(Approval("ap-1", false)),
+    is Ok(Approval(id="ap-1", allow=false)),
   )
   guard decode_serve_command({ "command": "steer" }) is Err(message) else {
     fail("textless steer accepted")
@@ -1107,7 +1110,7 @@ async fn run_serve(
         // it answers is ALREADY running, inside the active turn, blocked on
         // this reply. Deferring it the way a prompt is deferred would wait for
         // the very turn the answer is needed to finish.
-        Wire(Approval(id, allow)) => approval_desk.settle(id, allow)
+        Wire(Approval(id~, allow~)) => approval_desk.settle(id, allow)
         Wire(Compact) =>
           if active_work is Some(_) {
             pending.push(PendingCompact)

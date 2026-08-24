@@ -3302,6 +3302,7 @@ fn update_msg(
         approve_openseek(
           dispatch,
           model.focused,
+          conv.session_id,
           pending.id,
           pending.run_id,
           allow~,
@@ -3309,6 +3310,20 @@ fn update_msg(
         model.replace_conversation({
           ..conv,
           pending_approval: Some({ ..pending, answered: true }),
+        }),
+      )
+    }
+    ApprovalAnswerFailed(channel~, session~, id~) => {
+      guard model.find_conversation(channel, session) is Some(conv) &&
+        conv.pending_approval is Some(pending) &&
+        pending.id == id else {
+        return (@cmd.none, model)
+      }
+      (
+        @cmd.none,
+        model.replace_conversation({
+          ..conv,
+          pending_approval: Some({ ..pending, answered: false }),
         }),
       )
     }
@@ -6512,13 +6527,14 @@ fn update_device_msg(
       )
       commands.push(settled_cmd)
       // Standing questions land last, once every conversation in this snapshot
-      // has the run phase the snapshot gives it.
+      // has the run phase the snapshot gives it. The reply is the complete set,
+      // so this reconciles both directions, like the run rows above.
       //
-      // A question already on screen is left exactly as it is. This resync runs
-      // on every reconnect, not only after a reload, so a card the user has
-      // already answered — and which is waiting for the engine to retire it —
-      // must not have its buttons handed back; that would be one question with
-      // two decisions.
+      // Positive: a question this page does not have is seeded — the reload
+      // case the host retains them for. A question already on screen is left
+      // exactly as it is, because this resync runs on every reconnect and not
+      // only after a reload: handing the buttons back to a card the user has
+      // already answered would be one question with two decisions.
       let mut seeded = settled
       for recovered in approvals {
         guard seeded.find_conversation(channel, recovered.session) is Some(conv) else {
@@ -6532,6 +6548,34 @@ fn update_device_msg(
           ..conv,
           pending_approval: Some(recovered.approval),
         })
+      }
+      // Negative: a question this page was showing that the host no longer
+      // lists was answered while this page was away — by another client, or by
+      // the run ending. Its `approval_resolved` is gone for good (reconnect is
+      // resync; transients are not replayed), so nothing else will ever take
+      // that card down, and pressing it sends a decision the engine's desk
+      // silently discards.
+      //
+      // Only the id captured when the request went out may be cleared this way.
+      // A question asked AFTER that moment is equally absent from the reply,
+      // and clearing it would take a live card off screen and leave the turn
+      // blocked with nothing to press.
+      for captured in frontier {
+        guard captured.pending_approval_id is Some(captured_id) else {
+          continue
+        }
+        if approvals.iter().any(item => item.approval.id == captured_id) {
+          continue
+        }
+        guard seeded.find_conversation(channel, captured.session) is Some(conv) else {
+          continue
+        }
+        if conv.pending_approval is Some(current) && current.id == captured_id {
+          seeded = seeded.replace_conversation({
+            ..conv,
+            pending_approval: None,
+          })
+        }
       }
       (@cmd.batch(commands), seeded)
     }
@@ -10597,11 +10641,13 @@ test "runs settled closes runs the host no longer has, sparing live and starting
         session: "desktop-test",
         state: SnapshotOpen(run_id="r7"),
         initial_ids: [],
+        pending_approval_id: None,
       },
       {
         session: "desktop-stale",
         state: SnapshotOpen(run_id="r9"),
         initial_ids: [],
+        pending_approval_id: None,
       },
     ]),
     model,

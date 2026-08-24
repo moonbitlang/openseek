@@ -798,10 +798,13 @@ async fn run_escalating(
   asked~ : Array[@agent_runtime.ApprovalAsk],
 ) -> @agent_tool.ToolOutput {
   @vfs.with_tmpdir(prefix="run-moonbit-escalate-", ws => {
-    let definition = @run_moonbit.definition(workspace_root=ws, ask_approval=ask => {
-      asked.push(ask)
-      answer
-    })
+    let definition = @run_moonbit.definition(
+      workspace_root=ws,
+      approval=ApprovalChannel(ask => {
+        asked.push(ask)
+        answer
+      }),
+    )
     let action = match definition.execute {
       Async(execute) => execute({ "source": source, "escalated": true })
       Sync(_) => fail("run_moonbit should be async")
@@ -823,9 +826,10 @@ test "the escalated argument is offered only with an approval channel" {
   }
   assert_false(plain_properties.contains("escalated"))
   assert_false(plain.description.contains("escalated=true"))
-  let asking = @run_moonbit.definition(workspace_root=".", ask_approval=_ => {
-    Rejected
-  })
+  let asking = @run_moonbit.definition(
+    workspace_root=".",
+    approval=ApprovalChannel(_ => Rejected),
+  )
   let JsonSchema(asking_schema) = asking.schema
   guard asking_schema is { "properties": Object(asking_properties), .. } else {
     fail("expected an object schema")
@@ -860,8 +864,8 @@ async test "an approved escalation runs outside the spawn allowlist" {
   )
   assert_false(out.is_error)
   assert_true(out.content.contains("chmod: ran"))
-  // The question named the tool and stated what would be granted; it carried
-  // no copy of the program, which the transcript already shows.
+  // The question names the tool, states what would be granted, and carries the
+  // program itself — the thing the user is actually deciding about.
   assert_eq(asked.length(), 1)
   assert_eq(asked[0].tool_name, "run_moonbit")
   assert_true(asked[0].detail.contains("no sandbox policy"))
@@ -920,10 +924,13 @@ async test "each way of not being granted says a different thing" {
 async test "an ordinary call never asks for approval" {
   let asked : Array[@agent_runtime.ApprovalAsk] = []
   @vfs.with_tmpdir(prefix="run-moonbit-noask-", ws => {
-    let definition = @run_moonbit.definition(workspace_root=ws, ask_approval=ask => {
-      asked.push(ask)
-      AllowedOnce
-    })
+    let definition = @run_moonbit.definition(
+      workspace_root=ws,
+      approval=ApprovalChannel(ask => {
+        asked.push(ask)
+        AllowedOnce
+      }),
+    )
     let action = match definition.execute {
       Async(execute) => execute({ "source": "fn main { println(6 * 7) }" })
       Sync(_) => fail("run_moonbit should be async")
@@ -948,9 +955,10 @@ async test "a refusal names escalation when a channel is wired" {
     #|  @myshell.Cmd("chmod", ["644", "/tmp"]).output() |> ignore
     #|}
   let asking = @vfs.with_tmpdir(prefix="run-moonbit-hint-", ws => {
-    let definition = @run_moonbit.definition(workspace_root=ws, ask_approval=_ => {
-      Rejected
-    })
+    let definition = @run_moonbit.definition(
+      workspace_root=ws,
+      approval=ApprovalChannel(_ => Rejected),
+    )
     let action = match definition.execute {
       Async(execute) => execute({ "source": source })
       Sync(_) => fail("run_moonbit should be async")
@@ -981,9 +989,10 @@ async test "a refusal names escalation when a channel is wired" {
 test "the description offers asking as an answer where it exists" {
   let plain = @run_moonbit.definition(workspace_root=".").description
   assert_true(plain.contains("say so rather than working around it"))
-  let asking = @run_moonbit.definition(workspace_root=".", ask_approval=_ => {
-      Rejected
-    }).description
+  let asking = @run_moonbit.definition(
+      workspace_root=".",
+      approval=ApprovalChannel(_ => Rejected),
+    ).description
   assert_true(asking.contains("two answers are legitimate"))
   assert_true(asking.contains("retry that one snippet with escalated=true"))
   // The stance survives the fork: reconstructing the command out of allowed
@@ -992,4 +1001,37 @@ test "the description offers asking as an answer where it exists" {
   // Both spellings still lead into the replacement table.
   assert_true(plain.contains("ls          → @fs.readdir(dir)"))
   assert_true(asking.contains("ls          → @fs.readdir(dir)"))
+}
+
+///|
+/// Escalation only means something on the backend the policy binds. The
+/// compute-only targets never had `--wasm-policy` passed to them, so a grant
+/// there would change nothing about the run — and the prompt behind it costs a
+/// person's attention. Refused before anyone is asked.
+async test "escalation is refused on a target that carries no policy" {
+  let asked : Array[@agent_runtime.ApprovalAsk] = []
+  let out = @vfs.with_tmpdir(prefix="run-moonbit-target-", ws => {
+    let definition = @run_moonbit.definition(
+      workspace_root=ws,
+      approval=ApprovalChannel(ask => {
+        asked.push(ask)
+        AllowedOnce
+      }),
+    )
+    let action = match definition.execute {
+      Async(execute) =>
+        execute({
+          "source": "fn main { println(1) }",
+          "target": "js",
+          "escalated": true,
+        })
+      Sync(_) => fail("run_moonbit should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    output
+  })
+  assert_true(out.is_error)
+  assert_true(out.content.contains("applies to the wasm target"))
+  // Nobody was interrupted for a grant that would have done nothing.
+  assert_eq(asked.length(), 0)
 }

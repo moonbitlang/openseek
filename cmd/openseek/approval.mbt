@@ -192,27 +192,29 @@ fn ApprovalDesk::settle(self : ApprovalDesk, id : String, allow : Bool) -> Unit 
 fn approval_channel(
   policy : ApprovalPolicy,
   desk : ApprovalDesk,
-) -> (async (@agent_runtime.ApprovalAsk) -> @agent_runtime.ApprovalOutcome)? {
+) -> @agent_runtime.ApprovalChannel? {
   match policy {
     Never => None
-    Ask => Some(ask => desk.ask(ask))
+    Ask => Some(ApprovalChannel(ask => desk.ask(ask)))
     // Announced and settled on the wire like any other question, so an
     // auto-granted escalation is as visible in the stream as an answered one.
     Always =>
-      Some(ask => {
-        desk.next_id += 1
-        let id = "ap-\{desk.next_id}"
-        @emit.emit(
-          ApprovalRequested(
-            id~,
-            tool_name=ask.tool_name,
-            detail=ask.detail,
-            body=ask.body,
-          ),
-        )
-        @emit.emit(ApprovalResolved(id~, outcome="allowed_once"))
-        AllowedOnce
-      })
+      Some(
+        ApprovalChannel(ask => {
+          desk.next_id += 1
+          let id = "ap-\{desk.next_id}"
+          @emit.emit(
+            ApprovalRequested(
+              id~,
+              tool_name=ask.tool_name,
+              detail=ask.detail,
+              body=ask.body,
+            ),
+          )
+          @emit.emit(ApprovalResolved(id~, outcome="allowed_once"))
+          AllowedOnce
+        }),
+      )
   }
 }
 

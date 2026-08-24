@@ -358,10 +358,10 @@ async fn run_serve_command(matches : @argparse.Matches) -> Unit {
 /// `base…HEAD`; stdout carries exactly one JSON ReviewReport, so progress logging
 /// is discarded rather than drained.
 async fn run_review_command(matches : @argparse.Matches) -> Unit {
-  // Before the log handler is swapped for the discarding one: review reads no
-  // commands either, and a refusal that goes into a discarded log is a silent
-  // exit.
-  approval_policy(matches, interactive=false) |> ignore
+  // No `--approval` check here: review does not declare the option, so argparse
+  // refuses it outright. Review builds its runtime with no approval channel, so
+  // `escalated` is not offered to its model either — a read-only audit has
+  // nothing to escalate.
   @xlog.global().set_handler(DiscardLog::{  })
   // Review runs a fixed built-in tool set; say so rather than silently ignoring
   // an accepted option. Straight to stderr: review's stdout carries exactly one
@@ -636,7 +636,6 @@ fn agent_options() -> Array[@argparse.OptionArg] {
       default_values=[""],
       about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"} | {\"url\", \"headers\"}}}); each server's tools (stdio subprocess or Streamable HTTP) are exposed to the agent, namespaced mcp__<server>__<tool>. Empty disables MCP.",
     ),
-    approval_option(),
   ]
 }
 
@@ -674,6 +673,11 @@ fn root_command() -> @argparse.Command {
         about="Run one task headlessly; stream JSONL events on stdout.",
         options=[
           ..agent_options(),
+          // Only `run` and `serve` build an approval channel. On the shared
+          // bundle this also reached `mcp`, `review` and `subrun`, where it
+          // parses and then does nothing — and where an exported
+          // OPENSEEK_APPROVAL would have bound commands that cannot honour it.
+          approval_option(),
           OptionArg(
             "concurrency",
             long="concurrency",
@@ -701,7 +705,7 @@ fn root_command() -> @argparse.Command {
       Command(
         "serve",
         about="Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.",
-        options=agent_options(),
+        options=[..agent_options(), approval_option()],
         flags=[
           FlagArg(
             "no-session",

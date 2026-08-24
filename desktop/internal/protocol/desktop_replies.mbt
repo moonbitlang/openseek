@@ -107,9 +107,9 @@ pub(all) struct SteerReply {
 ///|
 pub(all) struct ApprovalReply {
   // Whether the decision reached a live engine that could still be waiting
-  // for it. False means the question is already gone — the turn ended, or the
-  // engine's own deadline expired — and the client should retire its prompt
-  // rather than expect the run to resume.
+  // for it. False means the question is already gone — the turn that asked it
+  // ended — so the run this decision would have resumed is over. Nothing
+  // behind the question times out; that is not one of the ways this is false.
   delivered : Bool
 } derive(Debug, Eq)
 

@@ -343,3 +343,156 @@ fn runs_loaded_with_approvals(
     ),
   )
 }
+
+///|
+/// A decision that never reached the engine must leave the card answerable.
+///
+/// This is the pairing that makes it load-bearing: answering marks the card so
+/// a second click cannot double-decide, and the question behind it has no
+/// deadline. If a failed send left the mark in place, the card would read
+/// "Sending…" forever with the engine still blocked, and cancelling the run
+/// would be the only way out.
+test "a decision that never left the page restores the card" {
+  let asked = fold_engine(
+    running_conversation(),
+    ApprovalRequested(
+      id="ap-1",
+      tool_name="run_moonbit",
+      detail="escalate",
+      body=Some("fn main { println(1) }"),
+    ),
+  )
+  let model = test_model().replace_conversation(asked)
+  let (_, answered) = update(
+    test_dispatch(),
+    ApprovalAnswered(allow=true),
+    model,
+  )
+  guard answered.active_conversation() is Some(sending) else {
+    fail("expected the conversation")
+  }
+  assert_true(sending.pending_approval is Some({ answered: true, .. }))
+  let (_, restored) = update(
+    test_dispatch(),
+    ApprovalAnswerFailed(
+      channel=@interop.ChannelId::Local,
+      session=asked.session_id,
+      id="ap-1",
+    ),
+    answered,
+  )
+  guard restored.active_conversation() is Some(conv) else {
+    fail("expected the conversation")
+  }
+  guard conv.pending_approval is Some(pending) else {
+    fail("the card must survive a failed send")
+  }
+  assert_false(pending.answered)
+  // And it is answerable again, for real: the guard that refuses a second
+  // decision keys on the same flag.
+  let (_, again) = update(
+    test_dispatch(),
+    ApprovalAnswered(allow=false),
+    restored,
+  )
+  guard again.active_conversation() is Some(conv) else {
+    fail("expected the conversation")
+  }
+  assert_true(conv.pending_approval is Some({ answered: true, .. }))
+}
+
+///|
+/// A stale failure must not unlock a newer question: the restoration is
+/// addressed by id, not by "whatever card is up".
+test "a failure for an older question leaves the current one alone" {
+  let asked = fold_engine(
+    running_conversation(),
+    ApprovalRequested(
+      id="ap-2",
+      tool_name="run_moonbit",
+      detail="escalate",
+      body=None,
+    ),
+  )
+  let model = test_model().replace_conversation(asked)
+  let (_, answered) = update(
+    test_dispatch(),
+    ApprovalAnswered(allow=true),
+    model,
+  )
+  let (_, unchanged) = update(
+    test_dispatch(),
+    ApprovalAnswerFailed(
+      channel=@interop.ChannelId::Local,
+      session=asked.session_id,
+      id="ap-1",
+    ),
+    answered,
+  )
+  guard unchanged.active_conversation() is Some(conv) else {
+    fail("expected the conversation")
+  }
+  assert_true(conv.pending_approval is Some({ answered: true, .. }))
+}
+
+///|
+/// The resync reconciles both ways. A question this page was showing that the
+/// host no longer lists was answered while the page was away — by another
+/// client, or by the run ending — and its `approval_resolved` is gone for
+/// good, so nothing else would ever take the card down. Pressing it would send
+/// a decision the engine's desk silently discards.
+test "a resync retires a question the host no longer has" {
+  let asked = fold_engine(
+    running_conversation(),
+    ApprovalRequested(
+      id="ap-1",
+      tool_name="run_moonbit",
+      detail="escalate",
+      body=None,
+    ),
+  )
+  let model = test_model().replace_conversation(asked)
+  let (_, resynced) = update(
+    test_dispatch(),
+    runs_loaded_with_approvals(model, []),
+    model,
+  )
+  guard resynced.active_conversation() is Some(conv) else {
+    fail("expected the conversation")
+  }
+  assert_true(conv.pending_approval is None)
+}
+
+///|
+/// But only for the question that was on screen when the request went out. One
+/// asked afterwards is equally absent from the reply, and clearing it would
+/// take a live card off screen and leave the turn blocked with nothing to
+/// press.
+test "a resync leaves a question asked after the request went out" {
+  let model = test_model().replace_conversation(running_conversation())
+  // Captured while nothing was pending...
+  let resync = runs_loaded_with_approvals(model, [])
+  // ...and the question arrives before the reply is folded in.
+  guard model.active_conversation() is Some(conv) else {
+    fail("expected the conversation")
+  }
+  let racing = model.replace_conversation(
+    fold_engine(
+      conv,
+      ApprovalRequested(
+        id="ap-9",
+        tool_name="run_moonbit",
+        detail="escalate",
+        body=None,
+      ),
+    ),
+  )
+  let (_, resynced) = update(test_dispatch(), resync, racing)
+  guard resynced.active_conversation() is Some(after) else {
+    fail("expected the conversation")
+  }
+  guard after.pending_approval is Some(pending) else {
+    fail("a question asked after the request was wrongly retired")
+  }
+  assert_eq(pending.id, "ap-9")
+}

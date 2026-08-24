@@ -1579,15 +1579,20 @@ fn cancel_openseek(
 /// Answer the permission question `id`, which a tool in `run_id` is blocked
 /// on.
 ///
-/// The card is not retired here. What retires it is the engine's own
-/// `approval_resolved`, which is the only evidence the decision actually
-/// reached the tool — a reply saying the host wrote the line is not the same
-/// as the engine having read it. A failure, or a host that says the question
-/// is already gone, reports that instead and leaves the card for the
-/// settlement to clear.
+/// A successful send does not retire the card. What retires it is the engine's
+/// own `approval_resolved`, which is the only evidence the decision actually
+/// reached the tool — a reply saying the host wrote the line is not the same as
+/// the engine having read it.
+///
+/// A FAILED send must put the card back, though, and that is not symmetric with
+/// the above. The decision never left this page, so no settlement is coming for
+/// it, and there is no deadline behind the question either: leaving the card
+/// marked answered would strand it reading "Sending…" forever with the engine
+/// still blocked, and cancelling the run would be the only way out.
 fn approve_openseek(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
+  session : String,
   id : String,
   run_id : String?,
   allow~ : Bool,
@@ -1600,6 +1605,7 @@ fn approve_openseek(
         { id, allow, run_id },
       ) catch {
         error => {
+          scheduler.add(dispatch(ApprovalAnswerFailed(channel~, session~, id~)))
           scheduler.add(
             dispatch(
               HostActionFailed(
@@ -1612,10 +1618,14 @@ fn approve_openseek(
         }
       }
       if !reply.delivered {
+        // The host had no live engine to hand it to. Restore it anyway: being
+        // refused a second time is a better end than a card that cannot be
+        // pressed at all.
+        scheduler.add(dispatch(ApprovalAnswerFailed(channel~, session~, id~)))
         scheduler.add(
           dispatch(
             HostActionFailed(
-              "That approval request is no longer waiting — the turn ended, or it timed out.",
+              "That approval request is no longer waiting — the turn it belonged to has ended.",
             ),
           ),
         )

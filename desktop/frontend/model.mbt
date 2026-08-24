@@ -547,6 +547,12 @@ priv struct RunSnapshotFrontier {
   // Their submission id is still an exact owner and must survive the
   // lifecycle's transition to SnapshotIdle for reconnect settlement lookup.
   initial_ids : Array[String]
+  // The permission question this page was showing when the request began, if
+  // any. A snapshot that does not list it proves it was answered while this
+  // page was away — but only for THIS id: a question asked after the request
+  // went out is not in the reply either, and clearing that one would take a
+  // live card off screen and leave the turn blocked with nothing to press.
+  pending_approval_id : String?
 }
 
 ///|
@@ -925,11 +931,14 @@ priv struct PendingSteer {
 ///|
 /// A permission question the engine announced and is blocked on.
 ///
-/// It holds no copy of what is being asked ABOUT: the tool call carrying the
-/// program is already durably committed and rendered above the composer, so
-/// the card points at it rather than restating it. `detail` is the engine's
-/// one-line statement of what would be granted, shown verbatim — the client
-/// does not paraphrase a permission.
+/// It carries what is being asked ABOUT, not only what would be granted. An
+/// earlier version held neither, on the theory that the tool call was already
+/// rendered above — but this card docks above the composer, detached from a
+/// transcript row that is collapsed by default and may be scrolled away, so
+/// the user was deciding with the code nowhere on screen. `detail` is the
+/// engine's one-line statement of the permission and `body` the program it
+/// would be spent on; both are shown verbatim, since a client that paraphrases
+/// a permission is a client that can get it wrong.
 ///
 /// `run_id` is the run this question belongs to. It rides the answer so a
 /// decision the user takes a while over cannot settle a question in a later
@@ -1725,6 +1734,16 @@ priv enum Msg {
   // grants the one action it asked about; the card stays until the engine's
   // settlement retires it.
   ApprovalAnswered(allow~ : Bool)
+  // A decision that never reached the engine: the bridge call failed, or the
+  // host had no live engine to hand it to. Restores the card's buttons, since
+  // nothing else will — a settlement only follows a decision that arrived, and
+  // the question behind it has no deadline. Addressed exactly, so a stale
+  // failure cannot unlock a newer question.
+  ApprovalAnswerFailed(
+    channel~ : @interop.ChannelId,
+    session~ : String,
+    id~ : String
+  )
   NewChat
   // The channel is captured when rotation is requested, so a focus move can
   // fence the delayed id instead of activating it on the newly focused host.
@@ -2774,7 +2793,12 @@ fn Model::run_snapshot_frontier(
     if conv.pending_prompt is Some(pending) {
       initial_ids.push(pending.submission_id)
     }
-    { session: conv.session_id, state, initial_ids }
+    {
+      session: conv.session_id,
+      state,
+      initial_ids,
+      pending_approval_id: conv.pending_approval.map(pending => pending.id),
+    }
   })
 }
 

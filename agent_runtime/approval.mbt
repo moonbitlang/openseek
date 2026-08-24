@@ -64,6 +64,32 @@ pub(all) struct ApprovalAsk {
 } derive(Eq, Debug)
 
 ///|
+/// Where one tool's permission questions go.
+///
+/// A newtype over the function rather than the bare arrow, because the bare
+/// arrow was appearing verbatim in six signatures and reading as noise in all
+/// of them. Wrapping costs nothing here: an asking package already names
+/// `ApprovalAsk` and `ApprovalOutcome`, so the channel's own name adds no
+/// dependency it did not have. What it does add is somewhere for the contract
+/// to live — a caller holding one of these knows it may ask, and knows nothing
+/// else about who answers.
+pub(all) struct ApprovalChannel(async (ApprovalAsk) -> ApprovalOutcome)
+
+///|
+/// Ask, and wait for the answer.
+///
+/// The wait is unbounded, and `serve`'s implementation of this has no deadline
+/// either: neither reference puts a clock on a human prompt, and one can only
+/// misfire against a real person who stepped away. A question ends when it is
+/// answered or when its turn is cancelled.
+pub async fn ApprovalChannel::ask(
+  self : ApprovalChannel,
+  ask : ApprovalAsk,
+) -> ApprovalOutcome {
+  (self.0)(ask)
+}
+
+///|
 /// The channel a tool's permission question goes to, or `None` when nothing
 /// can answer one.
 ///
@@ -82,13 +108,7 @@ pub(all) struct ApprovalAsk {
 /// `Unavailable` itself — the one place that decision has to be made anyway,
 /// because the same absence already decided what its schema looks like.
 ///
-/// The wait behind the channel is unbounded, and `serve`'s implementation of
-/// it has no deadline either: neither reference puts a clock on a human
-/// prompt, and one can only misfire against a real person who stepped away.
-/// A question ends when it is answered or when its turn is cancelled.
-pub fn AgentRuntime::approval_channel(
-  self : AgentRuntime,
-) -> (async (ApprovalAsk) -> ApprovalOutcome)? {
+pub fn AgentRuntime::approval_channel(self : AgentRuntime) -> ApprovalChannel? {
   self.approval
 }
 
@@ -109,7 +129,7 @@ async test "a wired channel is handed over intact" {
   guard runtime.approval_channel() is Some(channel) else {
     fail("expected a channel")
   }
-  let outcome = channel({
+  let outcome = channel.ask({
     tool_name: "run_moonbit",
     detail: "run without the sandbox",
     body: Some("fn main { println(1) }"),
