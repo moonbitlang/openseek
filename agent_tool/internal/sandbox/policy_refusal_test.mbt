@@ -39,10 +39,27 @@ test "a policy refusal is recognized by the runtime's own wording" {
 /// The guidance has to cover both rules, because a refused spawn carries no path
 /// and reading it as a blocked write once sent the model to debug one.
 test "policy guidance names both rules that produce a refusal" {
-  let feedback = @sandbox.policy_refusal_feedback
+  let feedback = @sandbox.policy_refusal_feedback(escalation=false)
   assert_true(feedback.contains("write outside its own"))
   assert_true(feedback.contains("spawn allowlist"))
   // And it ends on the move that answers the refusals that actually happen —
   // POSIX utilities with a one-line MoonBit form.
   assert_true(feedback.contains("MoonBit replacement"))
+}
+
+///|
+/// The sanctioned way past a refusal is named AT the refusal, not only in a
+/// tool description read once at the top of a session — that is the moment the
+/// model is deciding what to do instead, and the moment it otherwise
+/// reconstructs the refused command out of allowed parts without saying so.
+test "policy guidance names escalation only where it exists" {
+  let without = @sandbox.policy_refusal_feedback(escalation=false)
+  assert_false(without.contains("escalated"))
+  let with_escalation = @sandbox.policy_refusal_feedback(escalation=true)
+  assert_true(with_escalation.contains("`escalated: true`"))
+  // Pinned to the snippet already written, and to one attempt: naming an
+  // escape at a refusal risks making the escape the first move.
+  assert_true(with_escalation.contains("this exact snippet ONCE"))
+  // The refusal itself reads identically either way — only the answer differs.
+  assert_true(with_escalation.has_prefix(without))
 }

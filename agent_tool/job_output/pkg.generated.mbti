@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn definition(@bgjobs.BgJobRuntime) -> @agent_tool.AgentToolDefinition
+pub fn definition(@bgjobs.BgJobRuntime, escalation? : Bool) -> @agent_tool.AgentToolDefinition
 
 // Errors
 

@@ -574,7 +574,10 @@ async fn execute(
     // session temp dir) has no such file, and there the head is all there is.
     let denial_scan_source = exec.spill_path()
     let sandbox_denied = refusal_guidance(
-      sandboxed_command, denial_scan_source, raw,
+      sandboxed_command,
+      denial_scan_source,
+      raw,
+      escalation=ask_approval is Some(_),
     )
     exec.discard()
     let text = rewrite_temp_paths(raw, [real, dir])
@@ -626,7 +629,12 @@ async fn execute(
   // failed even if the snippet swallowed the error and exited 0 — a swallowed
   // denial still means the access it needed did not happen. It runs for the
   // timeout arm too: a snippet can print a caught denial and then hang.
-  let sandbox_denied = refusal_guidance(sandboxed_command, Some(log), "")
+  let sandbox_denied = refusal_guidance(
+    sandboxed_command,
+    Some(log),
+    "",
+    escalation=ask_approval is Some(_),
+  )
   let action = match result {
     Some((exit_code, raw)) => {
       // Rewrite the throwaway temp path to `source` so the model reads
@@ -698,6 +706,7 @@ async fn refusal_guidance(
   sandboxed_command : @sandbox.SandboxedCommand?,
   log_path : String?,
   head : String,
+  escalation~ : Bool,
 ) -> String? {
   async fn shows(reports : (String) -> Bool) -> Bool {
     match log_path {
@@ -707,7 +716,7 @@ async fn refusal_guidance(
   }
 
   if shows(@sandbox.output_reports_policy_refusal) {
-    return Some(@sandbox.policy_refusal_feedback)
+    return Some(@sandbox.policy_refusal_feedback(escalation~))
   }
   guard sandboxed_command is Some(command) else { return None }
   if shows(output => command.output_reports_denial(output)) {
@@ -947,7 +956,39 @@ fn schema(background~ : Bool, escalation~ : Bool) -> Json {
 /// wrong — there is a sanctioned way to ask. The paragraph that says so must
 /// appear exactly where the way exists.
 fn description(background~ : Bool, escalation~ : Bool) -> String {
-  let base =
+  // The one sentence here that depends on what this build can actually do.
+  //
+  // Without an approval channel a refusal really is the end of the road, and
+  // "say so" is the whole of the advice. With one there is a sanctioned door,
+  // and a description that does not name it leaves the model to do what it did
+  // in practice: quietly reconstruct the refused command out of allowed parts
+  // and never mention that asking was an option. Reading the justfile and
+  // running the three `moon` commands it expands to is a fine outcome — being
+  // unable to weigh it against asking is not.
+  //
+  // Both spellings keep the same stance. Routing AROUND a refusal is still the
+  // thing not to do; what changes is whether there is a third answer beside
+  // "find the replacement" and "give up".
+  let refusal_advice = if escalation {
+    (
+      #|Anything else is REFUSED, including the obvious ones. When a refused command
+      #|is genuinely what the task needs, two answers are legitimate: reach for the
+      #|MoonBit replacement below, or — when no replacement is faithful and the
+      #|refused program IS the task — retry that one snippet with escalated=true and
+      #|let the user decide. Reconstructing the refused command out of allowed parts
+      #|without saying so is the answer that is not. Read the table rather than
+      #|finding this out one command at a time — each is a line of MoonBit that also
+      #|works on Windows, where these binaries do not exist:
+    )
+  } else {
+    (
+      #|Anything else is REFUSED, including the obvious ones; if a refused command is
+      #|genuinely what the task needs, say so rather than working around it. Reach for
+      #|the replacement rather than finding this out one command at a time — each is a
+      #|line of MoonBit that also works on Windows, where these binaries do not exist:
+    )
+  }
+  let base_head =
     #|Compile and run a self-contained MoonBit program and return its merged
     #|stdout/stderr and exit status. This is BOTH your command runner and your
     #|scripting surface: there is no shell tool, so commands are spawned from MoonBit
@@ -1060,12 +1101,7 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     #|  (`-c`, `-C`, `--git-dir`, `--work-tree`) is refused.
     #|- `gh` — pr, issue, run, `repo view`, api, `auth status`.
     #|- `rg` and `diff`.
-    #|
-    #|Anything else is REFUSED, including the obvious ones; if a refused command is
-    #|genuinely what the task needs, say so rather than working around it. Reach for
-    #|the replacement rather than finding this out one command at a time — each is a
-    #|line of MoonBit that also works on Windows, where these binaries do not exist:
-    #|
+  let base_tail =
     #|    ls          → @fs.readdir(dir)
     #|    find        → rg --files, or recurse @fs.readdir + @fs.kind
     #|    cat         → @fs.read_file(p).text()
@@ -1101,6 +1137,15 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     #|- Bounded to 300s. For independent commands or probes, emit SEVERAL
     #|  `run_moonbit` calls in the SAME assistant turn — they run and come back
     #|  together, saving a model round-trip each.
+  // Three raw pieces joined at the seam, rather than one interpolating block:
+  // the tail carries `\{@fs.tmpdir()}` inside a code sample, which a `$|` block
+  // would try to evaluate.
+  let base =
+    $|\{base_head}
+    $|
+    $|\{refusal_advice}
+    $|
+    $|\{base_tail}
   // The escalation paragraph goes BEFORE the background one so it sits next to
   // the refusal rules it qualifies.
   let base = if !escalation {

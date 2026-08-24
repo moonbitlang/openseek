@@ -116,7 +116,14 @@ pub async fn[X] build_tools(
           None
         },
       ),
-      @job_output.definition(bg_runtime),
+      // Same escalation fact as `run_moonbit` above: a job refused by the
+      // policy is reported here, and the retry it should be told about is a
+      // `run_moonbit` call. One registry must not name that door in one tool
+      // and hide it in the other.
+      @job_output.definition(
+        bg_runtime,
+        escalation=runtime.approval_available(),
+      ),
       @job_stop.definition(bg_runtime),
       @finish.definition(),
     ] +

@@ -4,7 +4,7 @@ package "bobzhang/openseek/agent_tool/internal/sandbox"
 // Values
 pub fn output_reports_policy_refusal(String) -> Bool
 
-pub let policy_refusal_feedback : String
+pub fn policy_refusal_feedback(escalation~ : Bool) -> String
 
 // Errors
 

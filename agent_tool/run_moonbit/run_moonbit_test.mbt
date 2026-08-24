@@ -933,3 +933,63 @@ async test "an ordinary call never asks for approval" {
   })
   assert_eq(asked.length(), 0)
 }
+
+///|
+/// The refusal a model actually hits has to name the sanctioned answer, or the
+/// answer only exists in a description read once at the top of the session.
+/// This is the whole path: a real refused spawn, a real run, the real guidance
+/// appended to the real output.
+#cfg(not(platform="windows"))
+async test "a refusal names escalation when a channel is wired" {
+  let source =
+    #|import { "bobzhang/myshell", "moonbitlang/async" }
+    #|
+    #|async fn main {
+    #|  @myshell.Cmd("chmod", ["644", "/tmp"]).output() |> ignore
+    #|}
+  let asking = @vfs.with_tmpdir(prefix="run-moonbit-hint-", ws => {
+    let definition = @run_moonbit.definition(workspace_root=ws, ask_approval=_ => {
+      Rejected
+    })
+    let action = match definition.execute {
+      Async(execute) => execute({ "source": source })
+      Sync(_) => fail("run_moonbit should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    output
+  })
+  assert_true(asking.is_error)
+  assert_true(asking.content.contains("spawn allowlist"))
+  assert_true(asking.content.contains("`escalated: true`"))
+  // Nothing was asked: the refusal teaches, it does not itself prompt.
+  assert_true(asking.content.contains("this exact snippet ONCE"))
+  // The same refusal without a channel must not advertise a field the schema
+  // does not carry — that would cost a whole call to discover.
+  let plain = @vfs.with_tmpdir(prefix="run-moonbit-hint-plain-", ws => {
+    run_in(ws, { "source": source })
+  })
+  assert_true(plain.is_error)
+  assert_true(plain.content.contains("spawn allowlist"))
+  assert_false(plain.content.contains("escalated"))
+}
+
+///|
+/// The allowlist section of the description carries the same fork, because the
+/// case that motivated this never reached a refusal at all: asked to run `just
+/// check`, the model read the justfile and quietly ran the three `moon`
+/// commands it expands to, never mentioning that asking was possible.
+test "the description offers asking as an answer where it exists" {
+  let plain = @run_moonbit.definition(workspace_root=".").description
+  assert_true(plain.contains("say so rather than working around it"))
+  let asking = @run_moonbit.definition(workspace_root=".", ask_approval=_ => {
+      Rejected
+    }).description
+  assert_true(asking.contains("two answers are legitimate"))
+  assert_true(asking.contains("retry that one snippet with escalated=true"))
+  // The stance survives the fork: reconstructing the command out of allowed
+  // parts without saying so is still the answer that is not.
+  assert_true(asking.contains("Reconstructing the refused command"))
+  // Both spellings still lead into the replacement table.
+  assert_true(plain.contains("ls          → @fs.readdir(dir)"))
+  assert_true(asking.contains("ls          → @fs.readdir(dir)"))
+}
