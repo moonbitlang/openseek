@@ -23,6 +23,8 @@ fn fresh_page() -> Page {
     file_count: 0,
     limit_hit: false,
     partial: false,
+    error_code: None,
+    error_message: None,
     collapsed: Map([]),
     visible_lines: InitialVisibleSearchLines,
     phase: Idle,
@@ -72,6 +74,8 @@ fn State::schedule(
       file_count: 0,
       limit_hit: false,
       partial: false,
+      error_code: None,
+      error_message: None,
       visible_lines: InitialVisibleSearchLines,
       phase: Idle,
       generation,
@@ -121,6 +125,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           matches: [],
           semantic_hits: [],
           partial: false,
+          error_code: None,
+          error_message: None,
           collapsed: Map([]),
         },
         input,
@@ -167,6 +173,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           file_count: 0,
           limit_hit: false,
           partial: false,
+          error_code: None,
+          error_message: None,
           visible_lines: InitialVisibleSearchLines,
           phase: Idle,
           generation,
@@ -238,6 +246,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           file_count: reply.file_count,
           limit_hit: reply.limit_hit,
           partial: false,
+          error_code: None,
+          error_message: None,
           visible_lines: InitialVisibleSearchLines.min(reply.matches.length()),
           phase,
         },
@@ -259,6 +269,10 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         None => Ready
         Some(error) => Failed(code=error.code, message=error.message)
       }
+      let (error_code, error_message) = match reply.error {
+        Some(error) => (Some(error.code), Some(error.message))
+        None => (None, None)
+      }
       {
         ..self,
         page: {
@@ -269,6 +283,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           file_count: reply.file_count,
           limit_hit: reply.limit_hit,
           partial: reply.partial,
+          error_code,
+          error_message,
           visible_lines: InitialVisibleSearchLines.min(reply.matches.length()),
           phase,
         },
@@ -288,6 +304,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
             file_count: 0,
             limit_hit: false,
             partial: false,
+            error_code: None,
+            error_message: None,
             visible_lines: InitialVisibleSearchLines,
             phase: Failed(code~, message~),
           },

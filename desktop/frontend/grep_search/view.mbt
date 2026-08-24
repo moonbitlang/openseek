@@ -640,24 +640,24 @@ fn semantic_search_body(
   }
   if search_message(page) is Some(message) {
     children.push(message)
-  } else {
-    for group in visible_semantic_file_groups(page) {
-      children.push(semantic_file_group_view(page, group, emit, open_match))
-    }
-    let shown = page.visible_lines.min(page.semantic_hits.length())
-    if shown < page.semantic_hits.length() {
-      let next = VisibleSearchLineStep.min(page.semantic_hits.length() - shown)
-      children.push(
-        @html.div(class="search-show-more", [
-          @html.button(on_click=emit(ShowMore), "Show \{next} more matches"),
-          @html.div(
-            class="search-show-more-detail",
-            "\{shown} of \{page.semantic_hits.length()} matches rendered",
-          ),
-        ]),
-      )
-    }
   }
+  for group in visible_semantic_file_groups(page) {
+    children.push(semantic_file_group_view(page, group, emit, open_match))
+  }
+  let shown = page.visible_lines.min(page.semantic_hits.length())
+  if shown < page.semantic_hits.length() {
+    let next = VisibleSearchLineStep.min(page.semantic_hits.length() - shown)
+    children.push(
+      @html.div(class="search-show-more", [
+        @html.button(on_click=emit(ShowMore), "Show \{next} more matches"),
+        @html.div(
+          class="search-show-more-detail",
+          "\{shown} of \{page.semantic_hits.length()} matches rendered",
+        ),
+      ]),
+    )
+  }
+
   @html.div(class="search-results", children)
 }
 

@@ -612,6 +612,12 @@ async fn run_semantic_search(
         message,
       })
     }
+    let error : SemanticSearchError? = if exit_code != 0 {
+      let (code, message) = semantic_search_error(stderr)
+      Some({ code, message })
+    } else {
+      None
+    }
     {
       root: reply_root,
       generation: payload.generation,
@@ -621,7 +627,7 @@ async fn run_semantic_search(
       limit_hit,
       cancelled: false,
       partial,
-      error: None,
+      error,
     }
   })
 }

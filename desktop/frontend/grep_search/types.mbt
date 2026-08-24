@@ -50,6 +50,8 @@ struct Page {
   file_count : Int
   limit_hit : Bool
   partial : Bool
+  error_code : String?
+  error_message : String?
   collapsed : Map[String, Bool]
   visible_lines : Int
   phase : Phase
