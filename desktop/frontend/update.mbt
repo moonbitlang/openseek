@@ -6527,54 +6527,61 @@ fn update_device_msg(
       )
       commands.push(settled_cmd)
       // Standing questions land last, once every conversation in this snapshot
-      // has the run phase the snapshot gives it. The reply is the complete set,
-      // so this reconciles both directions, like the run rows above.
+      // has the run phase the snapshot gives it.
       //
-      // Positive: a question this page does not have is seeded — the reload
-      // case the host retains them for. A question already on screen is left
-      // exactly as it is, because this resync runs on every reconnect and not
-      // only after a reload: handing the buttons back to a card the user has
-      // already answered would be one question with two decisions.
-      let mut seeded = settled
+      // ONE pass over the frontier, both directions at once, because both are
+      // the same question asked of the same session: does the snapshot still
+      // describe it, and if so what should it be showing. The reply holds at
+      // most one question per session — that is how the host keys them, since
+      // an engine can only be blocked on one at a time — so it indexes by
+      // session and every lookup here is O(1).
+      //
+      // Iterating the FRONTIER rather than the reply is what applies the
+      // request-time gate uniformly. The reply describes a moment that has
+      // passed: if the captured question resolved and a new one was asked
+      // while the request was in flight, this page has moved past the snapshot
+      // and none of it may be applied to that session. Seeding then would put
+      // a dead question back over the live one, and answering a dead question
+      // is discarded by the engine while the real one stays blocked with
+      // nothing on screen.
+      let standing : Map[String, RecoveredApproval] = Map([])
       for recovered in approvals {
-        guard seeded.find_conversation(channel, recovered.session) is Some(conv) else {
-          continue
-        }
-        if conv.pending_approval is Some(current) &&
-          current.id == recovered.approval.id {
-          continue
-        }
-        seeded = seeded.replace_conversation({
-          ..conv,
-          pending_approval: Some(recovered.approval),
-        })
+        standing[recovered.session] = recovered
       }
-      // Negative: a question this page was showing that the host no longer
-      // lists was answered while this page was away — by another client, or by
-      // the run ending. Its `approval_resolved` is gone for good (reconnect is
-      // resync; transients are not replayed), so nothing else will ever take
-      // that card down, and pressing it sends a decision the engine's desk
-      // silently discards.
-      //
-      // Only the id captured when the request went out may be cleared this way.
-      // A question asked AFTER that moment is equally absent from the reply,
-      // and clearing it would take a live card off screen and leave the turn
-      // blocked with nothing to press.
+      let mut seeded = settled
       for captured in frontier {
-        guard captured.pending_approval_id is Some(captured_id) else {
-          continue
-        }
-        if approvals.iter().any(item => item.approval.id == captured_id) {
-          continue
-        }
         guard seeded.find_conversation(channel, captured.session) is Some(conv) else {
           continue
         }
-        if conv.pending_approval is Some(current) && current.id == captured_id {
-          seeded = seeded.replace_conversation({
-            ..conv,
-            pending_approval: None,
-          })
+        let showing = conv.pending_approval.map(pending => pending.id)
+        // Unchanged since the request went out. Anything else is newer truth
+        // than the reply, live events having landed meanwhile.
+        guard showing == captured.pending_approval_id else { continue }
+        match standing.get(captured.session) {
+          // Still standing. Seed it if this page has no card — the reload case
+          // the host retains questions for — and otherwise leave the card
+          // exactly as it is: this resync runs on every reconnect, not only
+          // after a reload, so handing the buttons back to one the user has
+          // already answered would be one question with two decisions.
+          Some(recovered) =>
+            if !(showing is Some(id) && id == recovered.approval.id) {
+              seeded = seeded.replace_conversation({
+                ..conv,
+                pending_approval: Some(recovered.approval),
+              })
+            }
+          // Gone from the host while this page was away: answered by another
+          // client, or taken by the run ending. Its `approval_resolved` is
+          // gone for good — reconnect is resync, transients are not replayed —
+          // so nothing else will ever retire this card, and pressing it sends
+          // a decision the engine's desk silently discards.
+          None =>
+            if showing is Some(_) {
+              seeded = seeded.replace_conversation({
+                ..conv,
+                pending_approval: None,
+              })
+            }
         }
       }
       (@cmd.batch(commands), seeded)

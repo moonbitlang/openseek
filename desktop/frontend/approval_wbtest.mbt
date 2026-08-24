@@ -496,3 +496,118 @@ test "a resync leaves a question asked after the request went out" {
   }
   assert_eq(pending.id, "ap-9")
 }
+
+///|
+/// A snapshot that has been overtaken must not put its dead question back.
+///
+/// The request goes out while `ap-1` stands. In flight, `ap-1` resolves and
+/// `ap-2` is asked. Seeding on "the reply lists a question this page does not
+/// have" would then replace the live `ap-2` card with the dead `ap-1` — and
+/// answering a dead question is discarded by the engine, so the real one stays
+/// blocked with nothing on screen and only cancelling the run recovers.
+test "a stale snapshot does not overwrite a newer question" {
+  let asked = fold_engine(
+    running_conversation(),
+    ApprovalRequested(
+      id="ap-1",
+      tool_name="run_moonbit",
+      detail="escalate",
+      body=None,
+    ),
+  )
+  let model = test_model().replace_conversation(asked)
+  // Captured while ap-1 stood.
+  let resync = runs_loaded_with_approvals(model, [
+    {
+      session: asked.session_id,
+      approval: {
+        id: "ap-1",
+        run_id: None,
+        tool_name: "run_moonbit",
+        detail: "escalate",
+        body: None,
+        answered: false,
+      },
+    },
+  ])
+  // In flight: ap-1 settles and ap-2 is asked.
+  let moved_on = model.replace_conversation(
+    fold_engine(
+      fold_engine(asked, ApprovalResolved(id="ap-1")),
+      ApprovalRequested(
+        id="ap-2",
+        tool_name="run_moonbit",
+        detail="escalate again",
+        body=None,
+      ),
+    ),
+  )
+  let (_, resynced) = update(test_dispatch(), resync, moved_on)
+  guard resynced.active_conversation() is Some(conv) else {
+    fail("expected the conversation")
+  }
+  guard conv.pending_approval is Some(pending) else {
+    fail("the live question was cleared by a stale snapshot")
+  }
+  assert_eq(pending.id, "ap-2")
+}
+
+///|
+/// Absence is matched on session AND id. Ids repeat across engines — every desk
+/// starts at `ap-1` — so another conversation still holding that number is not
+/// evidence that this one's question survives; matching by id alone would keep
+/// a dead card up for as long as any other session happened to share it.
+test "another session's identical id does not keep a dead card alive" {
+  let mine = running_conversation()
+  let theirs = {
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      "other-session",
+      @interop.ChannelId::Local.test_project(),
+    ),
+    run: Open(run_id="r-other", stage=Opened),
+  }
+  let asked = fold_engine(
+    mine,
+    ApprovalRequested(
+      id="ap-1",
+      tool_name="run_moonbit",
+      detail="escalate",
+      body=None,
+    ),
+  )
+  let model = {
+    ..test_model(),
+    active_session: asked.session_id,
+    conversations: [asked, theirs],
+  }
+  // The host lists `ap-1` — but for the OTHER session. Mine is gone.
+  let (_, resynced) = update(
+    test_dispatch(),
+    runs_loaded_with_approvals(model, [
+      {
+        session: theirs.session_id,
+        approval: {
+          id: "ap-1",
+          run_id: Some("r-other"),
+          tool_name: "run_moonbit",
+          detail: "escalate",
+          body: None,
+          answered: false,
+        },
+      },
+    ]),
+    model,
+  )
+  guard resynced.find_conversation(@interop.ChannelId::Local, asked.session_id)
+    is Some(conv) else {
+    fail("expected my conversation")
+  }
+  assert_true(conv.pending_approval is None)
+  // And theirs was seeded, since it is genuinely standing.
+  guard resynced.find_conversation(@interop.ChannelId::Local, theirs.session_id)
+    is Some(other) else {
+    fail("expected the other conversation")
+  }
+  assert_true(other.pending_approval is Some(_))
+}
