@@ -91,8 +91,12 @@ fn approval_outcome_word(outcome : @agent_runtime.ApprovalOutcome) -> String {
 priv struct ApprovalDesk {
   /// Questions announced and not yet settled, by id. A settled question is
   /// removed by the asker itself, so an entry here means a tool is currently
-  /// blocked on it.
-  pending : Map[String, @aqueue.Queue[Bool]]
+  /// blocked on it. The queue carries the outcome itself, so withdrawing one
+  /// is the same operation as answering it.
+  pending : Map[String, @aqueue.Queue[@agent_runtime.ApprovalOutcome]]
+  /// Set when the command stream is gone. No answer can arrive after that, so
+  /// a question asked from here on is withdrawn without ever being announced.
+  mut closed : Bool
   /// Source of request ids, unique within this process. Ids are not durable
   /// and mean nothing to a later engine: a question outlives neither the turn
   /// that asked it nor the process.
@@ -101,7 +105,7 @@ priv struct ApprovalDesk {
 
 ///|
 fn ApprovalDesk::new() -> ApprovalDesk {
-  { pending: {}, next_id: 0 }
+  { pending: {}, next_id: 0, closed: false }
 }
 
 ///|
@@ -116,17 +120,23 @@ fn ApprovalDesk::new() -> ApprovalDesk {
 /// an answer, or the turn being cancelled.
 ///
 /// Every exit emits exactly one `approval_resolved` for the `approval_requested`
-/// it wrote, including the cancelled paths — the deadline, and the turn being
-/// interrupted while a tool sits here. That pairing is what a controller needs
-/// to retire a prompt it is showing: a question that vanished with its turn
-/// would otherwise stay on screen forever, answerable and connected to nothing.
+/// it wrote, including the withdrawn ones. That pairing is what a controller
+/// needs to retire a prompt it is showing: a question that vanished with its
+/// turn would otherwise stay on screen forever, answerable and connected to
+/// nothing.
 async fn ApprovalDesk::ask(
   self : ApprovalDesk,
   ask : @agent_runtime.ApprovalAsk,
 ) -> @agent_runtime.ApprovalOutcome {
+  // Nothing can answer once the command stream is gone, and an unbounded wait
+  // for an answer that cannot come is a turn that never ends. Not announced
+  // either: a request nobody can see is not a question.
+  guard !self.closed else { return Cancelled }
   self.next_id += 1
   let id = "ap-\{self.next_id}"
-  let replies : @aqueue.Queue[Bool] = Queue(kind=Unbounded)
+  let replies : @aqueue.Queue[@agent_runtime.ApprovalOutcome] = Queue(
+    kind=Unbounded,
+  )
   self.pending[id] = replies
   // Cancelled is the standing answer until something better is decided, so an
   // interrupted wait — which leaves through the raise, not the return — still
@@ -144,7 +154,7 @@ async fn ApprovalDesk::ask(
       body=ask.body,
     ),
   )
-  outcome = if replies.get() { AllowedOnce } else { Rejected }
+  outcome = replies.get()
   outcome
 }
 
@@ -152,13 +162,34 @@ async fn ApprovalDesk::ask(
 /// Deliver one controller decision to the question it answers.
 ///
 /// A decision for an id nobody is waiting on is discarded. It is a race, not a
-/// controller bug: the turn was interrupted, or the deadline expired, in the
-/// time the answer spent on the wire — and the `approval_resolved` that
-/// retired that question is already ahead of this decision on the stream, so
-/// the controller's own next state is not in question either.
+/// controller bug: the turn was interrupted in the time the answer spent on
+/// the wire — and the `approval_resolved` that retired that question is
+/// already ahead of this decision on the stream, so the controller's own next
+/// state is not in question either.
 fn ApprovalDesk::settle(self : ApprovalDesk, id : String, allow : Bool) -> Unit {
   guard self.pending.get(id) is Some(replies) else { return }
-  ignore(replies.try_put(allow) catch { _ => false })
+  ignore(
+    replies.try_put(if allow { AllowedOnce } else { Rejected }) catch {
+      _ => false
+    },
+  )
+}
+
+///|
+/// Withdraw every standing question, because the command stream that would
+/// have answered them is gone.
+///
+/// Shutdown does not cancel the turn in flight — stdin EOF means "no more
+/// commands", and the work already running is allowed to finish. That is only
+/// terminable if every wait inside it can still end, and an approval's wait is
+/// the one with no clock behind it: its sole producer was the reader that just
+/// died. Without this the turn never completes, so the loop never sees its
+/// `TurnDone`, and `openseek serve` waits forever instead of exiting.
+fn ApprovalDesk::withdraw_all(self : ApprovalDesk) -> Unit {
+  self.closed = true
+  for _, replies in self.pending {
+    ignore(replies.try_put(Cancelled) catch { _ => false })
+  }
 }
 
 ///|
@@ -354,5 +385,46 @@ async test "an interrupted wait still retires its question" {
   // settling a question that died with its turn.
   assert_eq(desk.pending.length(), 0)
   desk.settle("ap-1", true)
+  assert_eq(desk.pending.length(), 0)
+}
+
+///|
+/// Stdin EOF makes every standing question unanswerable, and an unanswerable
+/// wait with no clock behind it is a turn that never ends — so `serve` would
+/// never see its `TurnDone` and never exit.
+async test "closing the command stream withdraws a standing question" {
+  let desk = ApprovalDesk::new()
+  @async.with_task_group(group => {
+    let asking = group.spawn(() => {
+      desk.ask({ tool_name: "run_moonbit", detail: "escalate", body: None })
+    })
+    for _ in 0..<200 {
+      if desk.pending.length() > 0 {
+        break
+      }
+      @async.sleep(5)
+    }
+    desk.withdraw_all()
+    assert_true(asking.wait() is Cancelled)
+  })
+  assert_eq(desk.pending.length(), 0)
+}
+
+///|
+/// And a question asked AFTER that point is answered on the spot rather than
+/// announced: the turn may keep working through several more steps on EOF, and
+/// a model that retries the escalation must not open a second wait nobody can
+/// end.
+async test "a question asked after the stream closed does not wait" {
+  let desk = ApprovalDesk::new()
+  desk.withdraw_all()
+  @async.with_task_group(_ => {
+    let outcome = desk.ask({
+      tool_name: "run_moonbit",
+      detail: "escalate",
+      body: None,
+    })
+    assert_true(outcome is Cancelled)
+  })
   assert_eq(desk.pending.length(), 0)
 }

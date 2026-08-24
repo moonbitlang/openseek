@@ -1255,6 +1255,12 @@ async fn run_serve(
         }
         Shutdown => {
           shutting_down = true
+          // The reader that would have answered them is what just died, so
+          // every standing question is now unanswerable. Active work is
+          // allowed to finish on EOF rather than being cancelled, which only
+          // terminates if each wait inside it can still end — and an
+          // approval's is the one with no clock behind it.
+          approval_desk.withdraw_all()
           if active_work is None && pending.length() == 0 {
             break serve~
           }
