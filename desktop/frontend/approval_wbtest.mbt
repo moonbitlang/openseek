@@ -128,11 +128,24 @@ test "the card shows the question and both answers" {
   let markup = @rabbita.render_to_string(() => {
     @rabbita.Val::constant(@html.div(input.presentation.context))
   })
-  assert_true(markup.contains("run_moonbit"))
   assert_true(markup.contains("run this snippet with no sandbox policy"))
   assert_true(markup.contains("Allow once"))
   assert_true(markup.contains("Deny"))
   assert_false(markup.contains("Sending…"))
+  // A tool name is code, so it is a `code` element — that is where the app's
+  // monospace stack comes from now that the UI itself is sans.
+  assert_true(
+    markup.contains("<code class=\"composer-approval-tool\">run_moonbit</code>"),
+  )
+  // Both decisions are real buttons with the card's own action classes: the
+  // grant is the primary one and the refusal the destructive one, the same
+  // pairing the Codex request card advertises. A restyle that drops either
+  // class silently turns one of them into a plain button.
+  assert_true(markup.contains("composer-approval-allow"))
+  assert_true(markup.contains("composer-approval-deny"))
+  // No accent outline on the container: blue is reserved for selection and
+  // the primary action, so the card takes the ordinary notice surface.
+  assert_true(markup.contains("class=\"composer-notice composer-approval\""))
 }
 
 ///|

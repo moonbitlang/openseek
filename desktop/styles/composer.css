@@ -381,31 +381,43 @@
   background: var(--color-bg-subtle);
 }
 
-/* A permission question the turn is blocked on. It borrows the notice's
-   geometry and takes an accent border, because unlike every other notice
-   above the composer this one is not advice — nothing proceeds until it is
-   answered. */
-.composer-approval {
-  border-color: var(--color-accent);
-  color: var(--color-text-primary);
-}
-.composer-approval .composer-notice-icon {
-  color: var(--color-accent);
-}
+/* A permission question the turn is blocked on. It keeps the notice surface
+   unchanged — no accent outline — because blue is reserved for selection and
+   the primary action, and an outlined card would spend it on the container.
+   What marks this one out is the pair of decisions on its right: every other
+   notice here carries advice, and this one carries a question.
+
+   The `.codex-request` card is the same thing for the other agent, and the two
+   must not offer the same choice in two visual languages: surface, action
+   geometry, and which side is primary are shared with it deliberately. */
 .composer-approval-tool {
+  color: var(--color-text-primary);
   font-weight: 600;
 }
-.composer-approval-detail {
-  color: var(--color-text-secondary);
-}
-/* The grant is not the safe default, so it is not the visually dominant one
-   either: both actions read as ordinary buttons and the accent stays on the
-   border, where it marks the question rather than recommending an answer. */
-.composer-approval-allow:not(:disabled):hover {
+/* The grant is the primary action — one of the two places blue still belongs
+   — and the refusal reads as the destructive one, matching the Codex card's
+   Approve/Cancel pair rather than inventing a second convention. */
+.composer-approval-allow {
   border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+.composer-approval-allow:not(:disabled):hover {
+  border-color: var(--color-accent-strong);
+  background: var(--color-accent-strong);
+  color: var(--color-on-accent);
+}
+.composer-approval-deny {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 .composer-approval-deny:not(:disabled):hover {
-  border-color: var(--color-danger);
+  background: color-mix(
+    in srgb,
+    var(--color-danger-soft) 78%,
+    var(--color-danger)
+  );
 }
 .composer-approval-state {
   flex: none;

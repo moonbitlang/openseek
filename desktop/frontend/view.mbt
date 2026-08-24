@@ -647,9 +647,15 @@ fn pending_steers_panel(conv : Conversation) -> @html.Html {
 /// `detail` is the engine's sentence, shown verbatim: a client that
 /// paraphrases a permission is a client that can get it wrong.
 ///
-/// Once answered both buttons go disabled and the card says it is waiting.
-/// It stays until the engine's settlement retires it, because that event is
-/// the only proof the answer reached the tool.
+/// Once answered the decisions are replaced by a waiting line. The card itself
+/// stays until the engine's settlement retires it, because that event is the
+/// only proof the answer reached the blocked tool.
+///
+/// It takes the ordinary notice surface rather than an outline of its own:
+/// blue is reserved for selection and the primary action. What marks it as the
+/// thing the turn is waiting on is the pair of decisions, laid out like the
+/// Codex request card's so the app does not ask the same question in two
+/// visual languages.
 fn approval_card(
   dispatch : @cmd.Emit[Msg],
   pending : PendingApproval,
@@ -679,11 +685,12 @@ fn approval_card(
     [
       @html.span(class="composer-notice-icon", icon(icon_key)),
       @html.span(class="composer-notice-text", [
-        @html.span(class="composer-approval-tool", pending.tool_name),
-        @html.span(
-          class="composer-approval-detail",
-          " wants to \{pending.detail}",
-        ),
+        // A tool name is code, so it is a `code` element and picks up the
+        // monospace stack from `base.css` — not a bare span styled to look
+        // like one. No `inline-code` pill: that draws a subtle-on-subtle box
+        // that vanishes against this card's own background.
+        @html.code(class="composer-approval-tool", pending.tool_name),
+        @html.span(" wants to \{pending.detail}"),
       ]),
       ..actions,
     ],

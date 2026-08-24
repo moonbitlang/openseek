@@ -44,7 +44,7 @@ fn decode_run_moonbit(arguments : String) -> RunMoonbitCall? {
   let chips = scalar_chips(
     fields,
     // The order the tool's README introduces them in.
-    known=["target", "cwd", "warning", "run_in_background"],
+    known=["target", "cwd", "escalated", "warning", "run_in_background"],
     dramatized=["source"],
   )
   Some({ source, chips })
