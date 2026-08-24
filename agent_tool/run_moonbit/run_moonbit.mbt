@@ -244,9 +244,14 @@ async fn execute(
   let escalated = if input.escalated {
     let outcome = match ask_approval {
       Some(ask) =>
+        // The program goes with the question. It is what the user is actually
+        // deciding about, and `detail` — which is a constant — describes only
+        // the permission. Passed as the exact string this call was made with,
+        // so what is approved and what runs cannot differ.
         ask({
           tool_name: "run_moonbit",
           detail: "run this snippet with no sandbox policy: no spawn allowlist, and writes anywhere",
+          body: Some(input.source),
         })
       // The argument was not advertised in this build's schema, so reaching
       // here means the model asked for a field it was never offered.

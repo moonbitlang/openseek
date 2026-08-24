@@ -164,7 +164,14 @@ async fn ApprovalDesk::ask(
     self.pending.remove(id)
     @emit.emit(ApprovalResolved(id~, outcome=approval_outcome_word(outcome)))
   }
-  @emit.emit(ApprovalRequested(id~, tool_name=ask.tool_name, detail=ask.detail))
+  @emit.emit(
+    ApprovalRequested(
+      id~,
+      tool_name=ask.tool_name,
+      detail=ask.detail,
+      body=ask.body,
+    ),
+  )
   outcome = match
     @async.with_timeout_opt(self.deadline_ms, () => replies.get()) {
     Some(true) => AllowedOnce
@@ -210,7 +217,12 @@ fn approval_channel(
         desk.next_id += 1
         let id = "ap-\{desk.next_id}"
         @emit.emit(
-          ApprovalRequested(id~, tool_name=ask.tool_name, detail=ask.detail),
+          ApprovalRequested(
+            id~,
+            tool_name=ask.tool_name,
+            detail=ask.detail,
+            body=ask.body,
+          ),
         )
         @emit.emit(ApprovalResolved(id~, outcome="allowed_once"))
         AllowedOnce
@@ -265,6 +277,7 @@ async test "an answered question resolves to the controller's decision" {
       desk.ask({
         tool_name: "run_moonbit",
         detail: "run without the sandbox policy",
+        body: Some("fn main { println(1) }"),
       })
     })
     // The asker registers its pending entry before it blocks; wait for it
@@ -289,6 +302,7 @@ async test "a refused question resolves to rejected" {
       desk.ask({
         tool_name: "run_moonbit",
         detail: "run without the sandbox policy",
+        body: Some("fn main { println(1) }"),
       })
     })
     for _ in 0..<200 {
@@ -310,6 +324,7 @@ async test "an unanswered question settles itself as cancelled" {
     let outcome = desk.ask({
       tool_name: "run_moonbit",
       detail: "run without the sandbox policy",
+      body: Some("fn main { println(1) }"),
     })
     assert_true(outcome is Cancelled)
   })
@@ -323,7 +338,8 @@ async test "a decision for a settled question is discarded" {
   let desk = ApprovalDesk::new(deadline_ms=25)
   @async.with_task_group(_ => {
     assert_true(
-      desk.ask({ tool_name: "run_moonbit", detail: "escalate" }) is Cancelled,
+      desk.ask({ tool_name: "run_moonbit", detail: "escalate", body: None })
+      is Cancelled,
     )
   })
   desk.settle("ap-1", true)
@@ -357,6 +373,7 @@ async test "an interrupted wait still retires its question" {
       desk.ask({
         tool_name: "run_moonbit",
         detail: "run without the sandbox policy",
+        body: Some("fn main { println(1) }"),
       })
     })
     for _ in 0..<200 {

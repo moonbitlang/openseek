@@ -25,26 +25,41 @@ pub(all) enum ApprovalOutcome {
 ///|
 /// One permission question, as the asking tool states it.
 ///
-/// It deliberately carries no copy of the tool's arguments. A tool call is
-/// durably appended before the tool runs, so the arguments are already in the
-/// record every controller renders from — the desktop shows the `run_moonbit`
-/// program as a card of its own. A second copy here would be a rendering that
-/// can only drift from the one the user is already looking at, and the ask has
-/// no way to know which of the two they read.
+/// The three fields answer three different questions, and a prompt missing any
+/// of them cannot be decided: WHO is asking, WHAT they would be granted, and
+/// WHAT they would do with it.
 ///
-/// There is no field naming the tool CALL either. Only one asking call can be
+/// `body` exists because the first version left it out. The reasoning was that
+/// a tool call is durably appended before the tool runs, so every controller
+/// already renders the arguments and a second copy could only drift. Both
+/// halves were wrong. It cannot drift — it is the same string the tool was
+/// called with, not a re-rendering — and "already rendered" was not true in
+/// practice: the desktop docks this prompt above the composer, detached from a
+/// transcript row that is collapsed by default and may be scrolled away
+/// entirely. The user was being asked to allow arbitrary code to run with no
+/// sandbox, with the code nowhere on screen. Both references put the subject in
+/// the prompt: Codex renders the command in the card, and dsh's `callId` exists
+/// so a UI can attach the prompt to the call it already streamed.
+///
+/// There is still no field naming the tool CALL. Only one asking call can be
 /// in flight at a time: escalation belongs to `run_moonbit`, which does not
 /// declare itself `concurrent_safe`, so the agent loop never runs it beside
 /// another tool. A tool family that asks and admits adjacent concurrency would
-/// have to carry the call id here for a controller to attach the prompt to the
-/// right card.
+/// need the call id here to attach its prompt to the right card.
 pub(all) struct ApprovalAsk {
-  /// The tool asking, for the prompt's title.
+  /// The tool asking, for the prompt's title. Constant today — `run_moonbit`
+  /// is the only tool that asks — but the seam is on the runtime rather than
+  /// on that tool, and a controller with the name hardcoded would be the thing
+  /// to fix the day a second one appears.
   tool_name : String
-  /// What is being asked for, in the engine's own words: one line, shown to
-  /// the user verbatim. Written by the tool, never by the model — the model's
-  /// side of the request is the call's arguments, which the user already sees.
+  /// What would be GRANTED, in the engine's own words: one line, shown to the
+  /// user verbatim. Written by the tool, never by the model — a model-authored
+  /// justification is prose that can misdescribe the code beneath it, which is
+  /// exactly why the code is carried instead of a justification.
   detail : String
+  /// What would be RUN, verbatim: the `run_moonbit` program itself. `None` for
+  /// an asker with nothing to show, which no current one is.
+  body : String?
 } derive(Eq, Debug)
 
 ///|
@@ -95,8 +110,13 @@ async test "a wired channel is handed over intact" {
   let outcome = channel({
     tool_name: "run_moonbit",
     detail: "run without the sandbox",
+    body: Some("fn main { println(1) }"),
   })
   assert_true(outcome is AllowedOnce)
   assert_eq(asked.length(), 1)
   assert_eq(asked[0].tool_name, "run_moonbit")
+  // The subject reaches the channel verbatim: it is the string the tool was
+  // called with, not a rendering of it, so there is nothing for it to drift
+  // from.
+  assert_eq(asked[0].body, Some("fn main { println(1) }"))
 }

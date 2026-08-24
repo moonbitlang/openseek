@@ -1212,7 +1212,7 @@ fn apply_engine_event(
     // A tool is blocked until this is answered. It replaces whatever card was
     // showing: the engine asks one question at a time, so an unretired older
     // one is a card this client failed to clear, not a second live question.
-    ApprovalRequested(id~, tool_name~, detail~) =>
+    ApprovalRequested(id~, tool_name~, detail~, body~) =>
       (
         None,
         {
@@ -1222,6 +1222,7 @@ fn apply_engine_event(
             run_id: event_run_id,
             tool_name,
             detail,
+            body,
             answered: false,
           }),
         },

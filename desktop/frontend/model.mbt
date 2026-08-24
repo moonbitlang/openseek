@@ -929,6 +929,10 @@ priv struct PendingApproval {
   run_id : String?
   tool_name : String
   detail : String
+  /// What would actually run, verbatim. The card shows it: `detail` names the
+  /// permission, and a permission with its subject off screen is not something
+  /// anyone can decide on.
+  body : String?
   // Set once the answer has been handed to the host, so a second click cannot
   // send a second decision for the same question. The card stays on screen
   // until the engine's `approval_resolved` retires it, because until then the

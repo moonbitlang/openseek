@@ -50,13 +50,17 @@ pub(all) enum Event {
   /// events and never writes one leaves the turn stopped until the engine's
   /// own deadline expires.
   ///
-  /// It carries no copy of the call's arguments. The assistant message that
-  /// holds the tool call is durably appended before the tool runs, so every
-  /// controller already renders the call — for `run_moonbit`, the program
-  /// itself — and a second copy here could only drift from the one on screen.
-  ///
   /// `id` is minted by the engine and is unique within one engine process.
-  ApprovalRequested(id~ : String, tool_name~ : String, detail~ : String)
+  /// `body` is what would actually RUN, verbatim — the `run_moonbit` program —
+  /// while `detail` describes only what would be granted. A controller that
+  /// renders one without the other is asking someone to approve a permission
+  /// without showing them what it is for.
+  ApprovalRequested(
+    id~ : String,
+    tool_name~ : String,
+    detail~ : String,
+    body~ : String?
+  )
   /// How a previously requested approval settled — including when it settled
   /// without the controller's answer (it outlived its deadline, or a second
   /// controller answered first). Purely informational: a controller uses it to

@@ -21,6 +21,7 @@ test "a permission question becomes the conversation's pending approval" {
       id="ap-1",
       tool_name="run_moonbit",
       detail="run this snippet with no sandbox policy",
+      body=Some("fn main { @myshell.Cmd(\"npm\", [\"ci\"]) }"),
     ),
   )
   guard conv.pending_approval is Some(pending) else {
@@ -44,7 +45,12 @@ test "a permission question becomes the conversation's pending approval" {
 test "settlement retires the matching question and nothing else" {
   let asked = fold_engine(
     running_conversation(),
-    ApprovalRequested(id="ap-1", tool_name="run_moonbit", detail="escalate"),
+    ApprovalRequested(
+      id="ap-1",
+      tool_name="run_moonbit",
+      detail="escalate",
+      body=Some("fn main { println(1) }"),
+    ),
   )
   let stale = fold_engine(asked, ApprovalResolved(id="ap-0"))
   assert_true(stale.pending_approval is Some(_))
@@ -59,7 +65,12 @@ test "settlement retires the matching question and nothing else" {
 test "a finished turn takes its unanswered question with it" {
   let asked = fold_engine(
     running_conversation(),
-    ApprovalRequested(id="ap-1", tool_name="run_moonbit", detail="escalate"),
+    ApprovalRequested(
+      id="ap-1",
+      tool_name="run_moonbit",
+      detail="escalate",
+      body=Some("fn main { println(1) }"),
+    ),
   )
   assert_true(
     fold_engine(asked, AgentFinished("done")).pending_approval is None,
@@ -78,7 +89,12 @@ test "a finished turn takes its unanswered question with it" {
 test "answering is recorded once and does not retire the card" {
   let asked = fold_engine(
     running_conversation(),
-    ApprovalRequested(id="ap-1", tool_name="run_moonbit", detail="escalate"),
+    ApprovalRequested(
+      id="ap-1",
+      tool_name="run_moonbit",
+      detail="escalate",
+      body=Some("fn main { println(1) }"),
+    ),
   )
   let model = test_model().replace_conversation(asked)
   let (_, answered) = update(
@@ -108,10 +124,14 @@ test "answering is recorded once and does not retire the card" {
 }
 
 ///|
-/// The card states who is asking and what would be granted, and offers both
-/// answers. It deliberately does NOT restate the program: that tool call is
-/// already committed and rendered above the composer, and a second copy could
-/// drift from the one the decision is actually about.
+/// The card states who is asking, what would be granted, WHAT WOULD RUN, and
+/// offers both answers.
+///
+/// The program is the point. An earlier version left it out on the theory that
+/// the transcript already showed it — but this card docks above the composer,
+/// detached from a tool-call row that is collapsed by default and may be
+/// scrolled away, so the user was being asked to allow unsandboxed code with
+/// the code nowhere on screen.
 #warnings("-alert_unstable")
 test "the card shows the question and both answers" {
   let asked = fold_engine(
@@ -120,6 +140,7 @@ test "the card shows the question and both answers" {
       id="ap-1",
       tool_name="run_moonbit",
       detail="run this snippet with no sandbox policy",
+      body=Some("fn main { @myshell.Cmd(\"npm\", [\"ci\"]) }"),
     ),
   )
   let input = test_model()
@@ -151,8 +172,25 @@ test "the card shows the question and both answers" {
       "class=\"composer-approval-action composer-approval-allow\"",
     ),
   )
-  // And the container is a plain notice, with no surface of its own.
-  assert_true(markup.contains("class=\"composer-notice composer-approval\""))
+  // And the container is a plain notice, with no surface of its own, widened
+  // to stack the program under the question.
+  assert_true(
+    markup.contains(
+      "class=\"composer-notice composer-approval composer-approval-full\"",
+    ),
+  )
+  // The program is rendered in full, not summarised and not behind a
+  // disclosure: a permission prompt whose subject takes a click to see is the
+  // thing this card exists to prevent.
+  assert_true(markup.contains("<pre class=\"composer-approval-body\">"))
+  // Highlighted by the same helper the transcript's run_moonbit card uses, so
+  // the program reads identically in the place it is approved and the place it
+  // is recorded. That helper emits `code.language-moonbit` with per-token
+  // spans, which is why the assertions below look for fragments rather than
+  // the source string: it is no longer one text node.
+  assert_true(markup.contains("<code class=\"language-moonbit\">"))
+  assert_true(markup.contains("myshell"))
+  assert_true(markup.contains("npm"))
 }
 
 ///|
@@ -162,7 +200,12 @@ test "the card shows the question and both answers" {
 test "an answered card offers no second decision" {
   let asked = fold_engine(
     running_conversation(),
-    ApprovalRequested(id="ap-1", tool_name="run_moonbit", detail="escalate"),
+    ApprovalRequested(
+      id="ap-1",
+      tool_name="run_moonbit",
+      detail="escalate",
+      body=Some("fn main { println(1) }"),
+    ),
   )
   let model = test_model().replace_conversation(asked)
   let (_, answered) = update(

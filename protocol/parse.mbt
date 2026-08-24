@@ -117,7 +117,9 @@ pub fn parse(line : Json) -> Event? {
         text(fields, "detail") is Some(detail) else {
         return None
       }
-      Some(ApprovalRequested(id~, tool_name~, detail~))
+      Some(
+        ApprovalRequested(id~, tool_name~, detail~, body=text(fields, "body")),
+      )
     }
     // `outcome` is carried as the wire's own string rather than decoded into a
     // closed type: a controller renders it, and an engine newer than the

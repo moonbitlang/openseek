@@ -396,6 +396,39 @@
   color: var(--color-text-primary);
   font-weight: 600;
 }
+/* With a program attached the card stops being a one-line row: the question
+   and its decisions keep the row, and the code sits under them. */
+.composer-approval-full {
+  display: block;
+}
+.composer-approval-question {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* The program the decision is actually about, highlighted by the same helper
+   the transcript's run_moonbit card uses. Token colours come from the
+   `--vscode-token-*` bindings in `viewer_theme.css`, which is why this class
+   is named in that file's theme-bridge selector; nothing here sets `color`,
+   or it would override them.
+
+   Bounded and SCROLLABLE, not truncated and not behind a disclosure. The
+   transcript trims a long program because it is reading material; this is the
+   subject of a permission prompt, and hiding any part of what someone is about
+   to allow is exactly the failure this block was added to fix. */
+.composer-approval-body {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  max-height: 220px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 /* The decisions wear the composer chip's shape, not a dialog button's: no
    border, a plain fill that lifts on hover. The chips they match sit one row
    below this card, which is the comparison a reader actually makes.

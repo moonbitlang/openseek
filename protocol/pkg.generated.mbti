@@ -43,7 +43,7 @@ pub(all) enum Event {
   Usage(usage~ : Usage)
   ToolResult(tool_call_id~ : String, tool_name~ : String, is_error~ : Bool, content~ : String, brief~ : String?)
   ToolCallDecodeError(tool_call_id~ : String, tool_name~ : String, error~ : String)
-  ApprovalRequested(id~ : String, tool_name~ : String, detail~ : String)
+  ApprovalRequested(id~ : String, tool_name~ : String, detail~ : String, body~ : String?)
   ApprovalResolved(id~ : String, outcome~ : String)
   SteerApplied(kind~ : String, content~ : String)
   SteerDropped(content~ : String)

@@ -105,6 +105,13 @@ fn all_events() -> Array[@protocol.Event] {
       id="ap-1",
       tool_name="run_moonbit",
       detail="run without the sandbox policy",
+      body=Some("fn main { println(1) }"),
+    ),
+    ApprovalRequested(
+      id="ap-2",
+      tool_name="run_moonbit",
+      detail="run without the sandbox policy",
+      body=None,
     ),
     ApprovalResolved(id="ap-1", outcome="allowed_once"),
     ApprovalResolved(id="ap-2", outcome="rejected"),

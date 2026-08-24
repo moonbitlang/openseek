@@ -11,6 +11,7 @@ import {
   "moonbit-community/rabbita/sub",
   "moonbit-community/rabbita/url",
   "moonbitlang/editor/base/common",
+  "moonbitlang/editor/viewer/html" @syntax_html,
   "openseek_desktop/internal/jsonx",
   "openseek_desktop/internal/uri",
   "openseek_desktop/frontend/pathx",

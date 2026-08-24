@@ -55,7 +55,12 @@ pub(all) enum EngineEvent {
   // turn does not advance until `agent.approval` carries an answer back, so
   // this is the one engine event whose presentation has to be answerable
   // rather than merely readable.
-  ApprovalRequested(id~ : String, tool_name~ : String, detail~ : String)
+  ApprovalRequested(
+    id~ : String,
+    tool_name~ : String,
+    detail~ : String,
+    body~ : String?
+  )
   // The question settled: by this client's answer, by another client's, or by
   // the engine's own deadline. The prompt is retired either way, so the view
   // never has to decide whose answer it was.
@@ -114,8 +119,8 @@ pub fn decode_engine_event(
     // has no use for it and drops it, so unless the view reads it off the raw
     // stream nobody hears about it at all.
     SessionError(error~) => Some(SessionAppendFailed(error))
-    ApprovalRequested(id~, tool_name~, detail~) =>
-      Some(ApprovalRequested(id~, tool_name~, detail~))
+    ApprovalRequested(id~, tool_name~, detail~, body~) =>
+      Some(ApprovalRequested(id~, tool_name~, detail~, body~))
     // The outcome word is dropped: this view shows one prompt at a time and
     // retires it on settlement, so WHY it settled changes nothing it renders.
     // What ran, or did not, arrives as the tool's own result.

@@ -681,8 +681,8 @@ fn approval_card(
       ),
     ]
   }
-  @html.div(
-    class="composer-notice composer-approval",
+  let question = @html.div(
+    class="composer-approval-question",
     [
       @html.span(class="composer-notice-icon", icon(icon_key)),
       @html.span(class="composer-notice-text", [
@@ -696,6 +696,28 @@ fn approval_card(
       ..actions,
     ],
   )
+  // The program itself, under the question. `detail` names the permission;
+  // this is what the permission would be spent on, and deciding without it is
+  // not deciding. It is the exact string the call was made with, so what is
+  // approved and what runs cannot differ.
+  guard pending.body is Some(body) else {
+    return @html.div(class="composer-notice composer-approval", [question])
+  }
+  @html.div(class="composer-notice composer-approval composer-approval-full", [
+    question,
+    // Highlighted with the same helper the transcript's `run_moonbit` card
+    // uses, so the program a reader approves here and the program they see
+    // recorded there are rendered identically. The class is on the theme
+    // bridge in `viewer_theme.css`, which is where the highlighter's
+    // `--vscode-token-*` colours come from.
+    //
+    // Never truncated. The transcript trims a long program because it is
+    // reading material; this is the subject of a permission prompt, and
+    // hiding part of what someone is about to allow defeats the card.
+    @html.pre(class="composer-approval-body", [
+      @syntax_html.moonbit_source_code(body),
+    ]),
+  ])
 }
 
 ///|
