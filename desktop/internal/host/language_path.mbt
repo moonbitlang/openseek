@@ -12,8 +12,9 @@ priv struct LanguagePath {
 
 ///|
 /// Confirm that an explicit editor root is the checkout currently owned by
-/// `session`. Registered project roots, OpenSeek worktrees, and app-server
-/// authorized Codex cwd values all cross the same engine authority boundary.
+/// `session`. Keep `root` in its frontend resource form for the authorization
+/// lookup: on Windows, converting `/C:/work` to `C:\work` first would make the
+/// registered-workspace lookup reject the fresh conversation's first request.
 async fn LanguagePath::authorized_root(
   session : String,
   root : String,
@@ -23,11 +24,7 @@ async fn LanguagePath::authorized_root(
   }
   let lexical_root = lexical_root.normalize()
   let authorized = match
-    @work_dir.resolve_in_workspace(
-      session,
-      "",
-      workspace=lexical_root.to_string(),
-    ) {
+    @work_dir.resolve_in_workspace(session, "", workspace=root) {
     Some(root) => Some(root)
     None => @work_dir.resolve_in_workspace(session, "")
   }
@@ -77,7 +74,7 @@ async fn LanguagePath::resolve(
 }
 
 ///|
-async test "language paths accept explicit roots and reject escapes" {
+async test "language paths accept frontend resource roots and reject escapes" {
   let root = @fs.tmpdir(prefix="openseek-language-root-")
   let outside = @fs.tmpdir(prefix="openseek-language-outside-")
   defer (@fs.rmdir(outside, recursive=true) catch { _ => () })
@@ -95,8 +92,12 @@ async test "language paths accept explicit roots and reject escapes" {
     create_mode=CreateOrTruncate,
   )
   @fs.symlink(target="\{outside}/secret.mbt", "\{root}/src/link.mbt")
+  guard @pathx.Path(root).to_absolute() is Some(root_absolute) &&
+    root_absolute.to_uri_path() is Some(root_resource) else {
+    fail("test root could not be represented as a frontend resource")
+  }
   let unauthorized_rejected = try {
-    ignore(LanguagePath::resolve("unbound", root, "src/main.mbt"))
+    ignore(LanguagePath::resolve("unbound", root_resource, "src/main.mbt"))
     false
   } catch {
     _ => true
@@ -104,9 +105,13 @@ async test "language paths accept explicit roots and reject escapes" {
     rejected => rejected
   }
   @work_dir.authorize_host_workspace("language-test", root)
-  let resolved = LanguagePath::resolve("language-test", root, "src/main.mbt")
+  let resolved = LanguagePath::resolve(
+    "language-test", root_resource, "src/main.mbt",
+  )
   let traversal_rejected = try {
-    ignore(LanguagePath::resolve("language-test", root, "../outside.mbt"))
+    ignore(
+      LanguagePath::resolve("language-test", root_resource, "../outside.mbt"),
+    )
     false
   } catch {
     _ => true
@@ -114,7 +119,9 @@ async test "language paths accept explicit roots and reject escapes" {
     rejected => rejected
   }
   let symlink_rejected = try {
-    ignore(LanguagePath::resolve("language-test", root, "src/link.mbt"))
+    ignore(
+      LanguagePath::resolve("language-test", root_resource, "src/link.mbt"),
+    )
     false
   } catch {
     _ => true
