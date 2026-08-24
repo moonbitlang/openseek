@@ -875,7 +875,7 @@
 }
 .tool-argument-key {
   color: var(--color-accent);
-  font-family: var(--font-family-ui);
+  font-family: var(--font-family-sans);
   font-weight: 600;
 }
 .tool-argument-key::after {
@@ -884,7 +884,7 @@
   font-weight: 400;
 }
 .tool-argument-value {
-  font-family: var(--font-family-ui);
+  font-family: var(--font-family-sans);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

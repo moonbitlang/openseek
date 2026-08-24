@@ -1253,24 +1253,24 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         desc="Used by the app, editor, and terminal. System follows the OS appearance.",
       ),
       setting_row(
-        "Font",
+        "Monospace font",
         [
           setting_select(
             @html.select(
               on_change=dispatch.map(value => FontChanged(value)),
               attrs=@html.Attrs::build()
-                .aria_label("Font")
+                .aria_label("Monospace font")
                 .data_set("focus-owner", ""),
               [
-                @html.option(
-                  value="geist-mono",
-                  selected=model.app_font is GeistMono,
-                  "Geist Mono",
-                ),
                 @html.option(
                   value="system-mono",
                   selected=model.app_font is SystemMono,
                   "System monospace",
+                ),
+                @html.option(
+                  value="geist-mono",
+                  selected=model.app_font is GeistMono,
+                  "Geist Mono",
                 ),
                 @html.option(
                   value="menlo",
@@ -1281,7 +1281,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             ),
           ),
         ],
-        desc="Used by the app, editor, and terminal.",
+        desc="Used by code, the editor, and the terminal.",
       ),
       setting_row(
         "Font size",
@@ -1296,23 +1296,23 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
                 @html.option(
                   value="small",
                   selected=model.app_font_size is Small,
-                  "Small (12px)",
+                  "Small (13px)",
                 ),
                 @html.option(
                   value="medium",
                   selected=model.app_font_size is Medium,
-                  "Medium (13px)",
+                  "Medium (14px)",
                 ),
                 @html.option(
                   value="large",
                   selected=model.app_font_size is Large,
-                  "Large (14px)",
+                  "Large (15px)",
                 ),
               ],
             ),
           ),
         ],
-        desc="Scales text in the app, editor, and terminal.",
+        desc="Scales app text; code uses a visually matched monospace size.",
       ),
       setting_row(
         "Notification corner",

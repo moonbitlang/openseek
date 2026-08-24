@@ -181,7 +181,7 @@
 }
 .mention-glyph {
   flex: none;
-  font-family: var(--font-family-ui);
+  font-family: var(--font-family-sans);
   font-weight: 600;
   opacity: 0.75;
 }
@@ -189,7 +189,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-family-ui);
+  font-family: var(--font-family-sans);
 }
 .mention-remove {
   --icon-size: var(--icon-sm);
@@ -261,7 +261,7 @@
 .completion-label {
   flex: none;
   color: var(--color-text-primary);
-  font-family: var(--font-family-ui);
+  font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
 }
 .completion-item.selected .completion-label {

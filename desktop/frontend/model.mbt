@@ -203,7 +203,7 @@ const TreeLayoutStorageKey : String = "openseek.tree_layout"
 const ThemeStorageKey : String = "openseek.theme"
 
 ///|
-/// The page-local monospace family shared by the app chrome, editor, and
+/// The page-local monospace family shared by code content, the editor, and the
 /// terminal. The value is a fixed choice rather than arbitrary CSS so stored
 /// input can never become a style injection surface.
 const AppFontStorageKey : String = "openseek.font"
@@ -304,8 +304,8 @@ fn Theme::wire(self : Theme) -> String {
 }
 
 ///|
-/// The monospace family selected in Settings. Geist remains the bundled,
-/// offline-safe default; the other choices use fonts supplied by the OS.
+/// The monospace family selected in Settings. The system stack is the default;
+/// Geist remains available as an offline bundled alternative.
 priv enum AppFont {
   GeistMono
   SystemMono
@@ -314,7 +314,7 @@ priv enum AppFont {
 
 ///|
 /// Unknown or absent stored values retain the current choice, so a stale
-/// localStorage value cannot silently replace the app's bundled default.
+/// localStorage value cannot silently replace the active system default.
 fn AppFont::parse(value : String, fallback : AppFont) -> AppFont {
   match value {
     "geist-mono" => GeistMono
@@ -339,10 +339,11 @@ fn AppFont::wire(self : AppFont) -> String {
 fn AppFont::css_family(self : AppFont) -> String {
   match self {
     GeistMono =>
-      "\"Geist Mono\", \"SF Mono\", ui-monospace, \"Cascadia Mono\", Menlo, Consolas, monospace"
+      "\"Geist Mono\", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
     SystemMono =>
-      "ui-monospace, \"SF Mono\", \"Cascadia Mono\", Menlo, Consolas, monospace"
-    Menlo => "Menlo, Monaco, \"Courier New\", monospace"
+      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+    Menlo =>
+      "Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
   }
 }
 
@@ -378,11 +379,13 @@ fn AppFontSize::wire(self : AppFontSize) -> String {
 }
 
 ///|
+/// Measured monospace surfaces use one pixel less than the selected app base.
+/// Their larger-looking glyphs then align with surrounding system-sans text.
 fn AppFontSize::pixels(self : AppFontSize) -> Double {
   match self {
-    Small => 13.0
-    Medium => 14.0
-    Large => 15.0
+    Small => 12.0
+    Medium => 13.0
+    Large => 14.0
   }
 }
 
@@ -1233,7 +1236,7 @@ priv struct Model {
   // The Settings selection. Its effective palette drives the app root,
   // embedded viewer, and terminal together.
   theme : Theme
-  // The Settings selection shared by app chrome, editor text, and terminals.
+  // The Settings selection shared by code content, editor text, and terminals.
   app_font : AppFont
   // The Settings type scale shared by app chrome, editor text, and terminals.
   app_font_size : AppFontSize
@@ -1630,7 +1633,7 @@ priv enum Msg {
   ToggleSidebar
   // A Settings selection fixes the page to Light or Dark and persists it.
   ThemeChanged(String)
-  // A Settings selection changes all app-owned monospace text and persists it.
+  // A Settings selection changes code/editor/terminal monospace text and persists it.
   FontChanged(String)
   // A Settings selection changes the shared app/editor/terminal type scale.
   FontSizeChanged(String)
@@ -2319,7 +2322,7 @@ fn initial_model() -> Model {
     },
     system_dark: host_prefers_dark(),
     theme: System,
-    app_font: GeistMono,
+    app_font: SystemMono,
     app_font_size: Medium,
     narrow,
     sidebar_open: !narrow,

@@ -20,8 +20,10 @@ pub extern "js" fn install() -> Unit =
   #|      padding: 24px;
   #|      background: var(--color-bg-canvas, #fbfbf9);
   #|      color: var(--color-text-primary, #16171a);
-  #|      font: var(--font-size-md, 13px)/var(--line-height-relaxed, 1.6)
-  #|        var(--font-family-ui, "SF Mono", ui-monospace, Consolas, monospace);
+  #|      font: var(--font-size-md, 14px)/var(--line-height-relaxed, 1.6)
+  #|        var(--font-family-sans, ui-sans-serif, system-ui, -apple-system,
+  #|          BlinkMacSystemFont, "Segoe UI", sans-serif);
+  #|      font-weight: var(--font-weight-regular, 450);
   #|    }
   #|    body.frontend-crashed {
   #|      margin: 0;
@@ -51,7 +53,7 @@ pub extern "js" fn install() -> Unit =
   #|    #frontend-crash h1 {
   #|      margin: 0 0 8px;
   #|      color: var(--color-text-primary, #16171a);
-  #|      font-size: var(--font-size-lg, 16px);
+  #|      font-size: var(--font-size-lg, 17px);
   #|      font-weight: 600;
   #|    }
   #|    #frontend-crash p {
@@ -81,7 +83,7 @@ pub extern "js" fn install() -> Unit =
   #|      padding-top: 14px;
   #|      border-top: 1px solid var(--color-border-subtle, #f0efea);
   #|      color: var(--color-text-muted, #9a9da4);
-  #|      font-size: var(--font-size-sm, 12px);
+  #|      font-size: var(--font-size-sm, 13px);
   #|    }
   #|    #frontend-crash summary { cursor: pointer; }
   #|    #frontend-crash pre {
@@ -92,8 +94,9 @@ pub extern "js" fn install() -> Unit =
   #|      border-radius: var(--radius-sm, 6px);
   #|      background: var(--color-bg-subtle, #f6f6f3);
   #|      color: var(--color-code, #2b2f36);
-  #|      font: var(--font-size-sm, 12px)/var(--line-height-normal, 1.5)
-  #|        var(--font-family-ui, "SF Mono", ui-monospace, Consolas, monospace);
+  #|      font: 400 var(--font-size-sm, 13px)/var(--line-height-normal, 1.5)
+  #|        var(--font-family-mono, ui-monospace, SFMono-Regular, Menlo, Monaco,
+  #|          Consolas, "Liberation Mono", "Courier New", monospace);
   #|      white-space: pre-wrap;
   #|      word-break: break-word;
   #|    }

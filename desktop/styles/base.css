@@ -25,11 +25,11 @@ body,
 body {
   background: var(--color-bg-canvas);
   color: var(--color-text-primary);
-  font-family: var(--font-family-ui);
+  font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
+  font-weight: var(--font-weight-regular);
   line-height: var(--line-height-relaxed);
   letter-spacing: -0.01em;
-  -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
@@ -38,6 +38,16 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+/* Code-bearing content follows the same stack as the editor and terminal,
+   while ordinary application controls continue to inherit the sans stack. */
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-family-mono);
+  font-weight: 400;
 }
 
 /* A form field has exactly one focus-border owner. A plain input owns itself;

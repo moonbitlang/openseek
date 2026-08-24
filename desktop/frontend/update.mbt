@@ -11497,7 +11497,7 @@ test "loaded UI preferences parse their wire names" {
   )
   assert_true(unknown.notification_corner is BottomRight)
   assert_true(unknown.theme is System)
-  assert_true(unknown.app_font is GeistMono)
+  assert_true(unknown.app_font is SystemMono)
   assert_true(unknown.app_font_size is Medium)
   assert_true(unknown.default_model is High)
   assert_true(unknown.openseek_reasoning is ReasoningMax)
@@ -14469,36 +14469,41 @@ test "theme settings switch fixed palettes and are idempotent" {
 }
 
 ///|
-test "font settings switch every text surface and are idempotent" {
+test "monospace settings switch code surfaces and are idempotent" {
   let dispatch = test_dispatch()
   let model = test_model()
-  let (_, first) = update(dispatch, FontChanged("system-mono"), model)
-  let (_, second) = update(dispatch, FontChanged("system-mono"), model)
-  assert_true(first.app_font is SystemMono)
-  assert_true(second.app_font is SystemMono)
-  let (_, menlo) = update(dispatch, FontChanged("menlo"), first)
+  let (_, first) = update(dispatch, FontChanged("geist-mono"), model)
+  let (_, second) = update(dispatch, FontChanged("geist-mono"), first)
+  assert_true(first.app_font is GeistMono)
+  assert_true(second.app_font is GeistMono)
+  let (_, system) = update(dispatch, FontChanged("system-mono"), first)
+  assert_true(system.app_font is SystemMono)
+  let (_, menlo) = update(dispatch, FontChanged("menlo"), system)
   assert_true(menlo.app_font is Menlo)
   let (_, bundled) = update(dispatch, FontChanged("geist-mono"), menlo)
   assert_true(bundled.app_font is GeistMono)
   let (_, unchanged) = update(dispatch, FontChanged("unknown"), model)
-  assert_true(unchanged.app_font is GeistMono)
+  assert_true(unchanged.app_font is SystemMono)
 }
 
 ///|
 test "font-size settings switch every text surface and are idempotent" {
-  assert_eq(Small.pixels(), 13.0)
-  assert_eq(Medium.pixels(), 14.0)
-  assert_eq(Large.pixels(), 15.0)
+  assert_eq(Small.pixels(), 12.0)
+  assert_eq(Medium.pixels(), 13.0)
+  assert_eq(Large.pixels(), 14.0)
   let dispatch = test_dispatch()
   let model = test_model()
   let (_, first) = update(dispatch, FontSizeChanged("small"), model)
   let (_, second) = update(dispatch, FontSizeChanged("small"), model)
   assert_true(first.app_font_size is Small)
   assert_true(second.app_font_size is Small)
+  assert_eq(first.app_font_size.pixels(), 12.0)
   let (_, large) = update(dispatch, FontSizeChanged("large"), first)
   assert_true(large.app_font_size is Large)
+  assert_eq(large.app_font_size.pixels(), 14.0)
   let (_, medium) = update(dispatch, FontSizeChanged("medium"), large)
   assert_true(medium.app_font_size is Medium)
+  assert_eq(medium.app_font_size.pixels(), 13.0)
   let (_, unchanged) = update(dispatch, FontSizeChanged("unknown"), model)
   assert_true(unchanged.app_font_size is Medium)
 }

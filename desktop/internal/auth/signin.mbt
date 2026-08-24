@@ -243,11 +243,10 @@ async fn respond_html(
 
 ///|
 /// The console's look (desktop/index.html) reduced to what a static
-/// loopback page needs: paper surfaces, hairline border, mono stack. The
-/// bundled Geist Mono lives on the relay origin, so these pages fall back
-/// to the system mono fonts of the same stack. This response cannot load the
-/// app stylesheet, so it owns a small self-contained copy of the semantic
-/// palette while keeping the same names and values.
+/// loopback page needs: paper surfaces, hairline border, system sans text.
+/// This response cannot load the app stylesheet, so it owns a small
+/// self-contained copy of the semantic palette and typography tokens while
+/// keeping the same names and values.
 const SignInPageStyle : String =
   #|<style>
   #|  :root {
@@ -258,10 +257,13 @@ const SignInPageStyle : String =
   #|    --color-text-secondary: #5c5f66;
   #|    --color-border: #e9e8e3;
   #|    --color-accent-strong: #2a55cc;
-  #|    --font-family-ui: "Geist Mono", "SF Mono", ui-monospace,
-  #|      "Cascadia Mono", Menlo, Consolas, monospace;
-  #|    --font-size-md: 13px;
-  #|    --font-size-lg: 16px;
+  #|    --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco,
+  #|      Consolas, "Liberation Mono", "Courier New", monospace;
+  #|    --font-family-sans: ui-sans-serif, system-ui, -apple-system,
+  #|      BlinkMacSystemFont, "Segoe UI", sans-serif;
+  #|    --font-size-md: 14px;
+  #|    --font-size-lg: 17px;
+  #|    --font-weight-regular: 450;
   #|    --line-height-relaxed: 1.6;
   #|    --radius-md: 9px;
   #|  }
@@ -284,7 +286,8 @@ const SignInPageStyle : String =
   #|    border-radius: var(--radius-md);
   #|    background: var(--color-bg-surface);
   #|    color: var(--color-text-primary);
-  #|    font-family: var(--font-family-ui);
+  #|    font-family: var(--font-family-sans);
+  #|    font-weight: var(--font-weight-regular);
   #|  }
   #|  h1 { margin: 0 0 0.75rem; font-size: var(--font-size-lg); }
   #|  p {

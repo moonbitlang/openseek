@@ -44,7 +44,8 @@ html.is-resizing-terminal * {
   padding: 6px 12px;
   border-bottom: 1px solid var(--color-separator);
   color: var(--color-text-secondary);
-  font: 500 var(--font-size-sm)/var(--line-height-normal) var(--font-family-ui);
+  font: 500 var(--font-size-sm)/var(--line-height-normal)
+    var(--font-family-sans);
 }
 .terminal-title {
   margin-right: 4px;
@@ -70,7 +71,8 @@ html.is-resizing-terminal * {
   border: 0;
   background: none;
   color: var(--color-text-secondary);
-  font: 500 var(--font-size-xs)/var(--line-height-normal) var(--font-family-ui);
+  font: 500 var(--font-size-xs)/var(--line-height-normal)
+    var(--font-family-sans);
   cursor: pointer;
 }
 .terminal-tab.active .terminal-tab-select {
@@ -84,7 +86,7 @@ html.is-resizing-terminal * {
   border: 0;
   background: none;
   color: var(--color-text-muted);
-  font: 500 10px/1 var(--font-family-ui);
+  font: 500 10px/1 var(--font-family-sans);
   cursor: pointer;
 }
 .terminal-tab-close:hover {
@@ -96,7 +98,7 @@ html.is-resizing-terminal * {
   border-radius: var(--radius-sm);
   background: none;
   color: var(--color-text-muted);
-  font: 500 14px/1 var(--font-family-ui);
+  font: 500 14px/1 var(--font-family-sans);
   cursor: pointer;
 }
 .terminal-new:hover {
@@ -115,7 +117,8 @@ html.is-resizing-terminal * {
   border: 0;
   background: none;
   color: var(--color-text-muted);
-  font: 500 var(--font-size-sm)/var(--line-height-tight) var(--font-family-ui);
+  font: 500 var(--font-size-sm)/var(--line-height-tight)
+    var(--font-family-sans);
   cursor: pointer;
 }
 .terminal-close:hover {

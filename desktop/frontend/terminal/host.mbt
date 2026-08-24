@@ -63,7 +63,7 @@ fn terminal_style() -> @js.Value {
     Some(root) => {
       let style = @dom.window().get_computed_style(root)
       let font_size_text = style
-        .get_property_value("--font-size-md")
+        .get_property_value("--font-size-sm")
         .trim()
         .to_owned()
       let font_size = match font_size_text.strip_suffix("px") {
@@ -71,7 +71,7 @@ fn terminal_style() -> @js.Value {
         None => 13.0
       }
       (
-        style.get_property_value("--font-family-ui").trim().to_owned(),
+        style.get_property_value("--font-family-mono").trim().to_owned(),
         font_size,
         style.get_property_value("--color-bg-surface").trim().to_owned(),
         style.get_property_value("--color-text-primary").trim().to_owned(),

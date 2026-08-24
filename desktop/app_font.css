@@ -1,6 +1,6 @@
 /* Geist Mono is bundled (fonts/, SIL OFL 1.1) rather than fetched from
-   Google Fonts, so the app renders identically offline. The variable
-   file covers every weight the UI uses. */
+   Google Fonts, so the optional code-font choice works offline. The variable
+   file covers every weight used by code surfaces. */
 @font-face {
   font-family: "Geist Mono";
   src: url("fonts/GeistMono-Variable.woff2") format("woff2");

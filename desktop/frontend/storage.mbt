@@ -134,7 +134,7 @@ fn Theme::save(self : Theme) -> @cmd.Cmd {
 }
 
 ///|
-/// Persist the monospace family used by every app-owned text surface.
+/// Persist the monospace family used by code, the editor, and the terminal.
 fn AppFont::save(self : AppFont) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(AppFontStorageKey, self.wire()))
 }
