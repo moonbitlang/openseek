@@ -1394,6 +1394,7 @@ fn covering_overlay(model : Model) -> Bool {
   model.archive_confirm is Some(_) ||
   model.archived_delete_confirm is Some(_) ||
   model.quick_open.is_open() ||
+  model.api_setup_open ||
   model.update_ux is ConfirmingRestart(_) ||
   // Best effort: with the bridge gone the hide op may not deliver.
   model.bridge_state() is BridgeLost(_)
@@ -17764,6 +17765,20 @@ test "full-screen modals hide the native view and closing restores it" {
   )
   let (_, restored) = update(dispatch, BrowserPaneMeasured(rect~), closed)
   assert_true(restored.browser_pane.shown == Some(1))
+  // Setup API owns the whole screen too. The browser is a native view above
+  // the HTML shell, so opening the modal must hide it; dismissing the modal
+  // then re-measures and restores the active Browser tab.
+  let (_, setup) = update(dispatch, ProviderChanged("custom"), restored)
+  assert_true(setup.api_setup_open)
+  assert_true(setup.browser_pane.shown is None)
+  let (_, setup_closed) = update(dispatch, DismissApiSetup, setup)
+  assert_false(setup_closed.api_setup_open)
+  let (_, setup_restored) = update(
+    dispatch,
+    BrowserPaneMeasured(rect~),
+    setup_closed,
+  )
+  assert_true(setup_restored.browser_pane.shown == Some(1))
   // The topbar app launcher covers the pane too, and so does the composer's
   // git popover: it opens upward over the pane's bottom-left corner, and a
   // native view left showing would paint straight over it.
