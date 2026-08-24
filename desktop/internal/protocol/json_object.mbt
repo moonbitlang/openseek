@@ -142,6 +142,22 @@ fn JsonObject::required_array(
 }
 
 ///|
+/// An array field a peer may legitimately omit. Absent and null both read as
+/// empty — that is an older peer with nothing to send, or a newer one with an
+/// empty section. A field that is present and NOT an array is still an error:
+/// that is the wrong shape, not a missing one.
+fn JsonObject::optional_array(
+  self : JsonObject,
+  name : String,
+) -> Array[Json] raise @json.JsonDecodeError {
+  guard self.optional_json(name) is Some(value) else { return [] }
+  guard value is Array(values) else {
+    raise JsonDecodeError((self.path.add_key(name), "expected array or null"))
+  }
+  values
+}
+
+///|
 fn JsonObject::required_string_array(
   self : JsonObject,
   name : String,

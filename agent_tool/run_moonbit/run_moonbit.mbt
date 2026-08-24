@@ -142,9 +142,9 @@ pub fn definition(
 /// One text per outcome, and they are deliberately different sentences rather
 /// than one "escalation denied": what the model should do next differs for
 /// each, and a single text makes all three look like the same wall. A refusal
-/// by a person is final for this task; an expired request is not a decision at
-/// all; an absent channel means the argument itself is unusable here and the
-/// snippet should simply be retried without it.
+/// by a person is final for this task; a withdrawn request is not a decision
+/// at all; an absent channel means the argument itself is unusable here and
+/// the snippet should simply be retried without it.
 ///
 /// `AllowedOnce` is not a refusal, so it has no text — it is unreachable here,
 /// and answering it would be a fourth sentence nobody ever reads.
@@ -153,7 +153,7 @@ fn escalation_refused(outcome : @agent_runtime.ApprovalOutcome) -> String {
     Rejected =>
       "run_moonbit: the user declined to run this snippet outside the sandbox. That is an answer, not an obstacle to route around: do not ask again for this task — solve it within the spawn allowlist and the write-root bound, or say plainly what that makes impossible."
     Cancelled =>
-      "run_moonbit: nobody answered the request to run outside the sandbox before it expired, so NOTHING RAN. This is not a refusal — but do not ask a second time unless something has changed; retry the snippet without `escalated` instead."
+      "run_moonbit: the request to run outside the sandbox was withdrawn before anyone answered it, so NOTHING RAN. This is not a refusal — but do not ask a second time unless something has changed; retry the snippet without `escalated` instead."
     Unavailable =>
       "run_moonbit: this session has no approval channel, so running outside the sandbox cannot be granted here at all. Retry this exact snippet without `escalated`; the spawn allowlist and the write-root bound are what you have."
     // Unreachable: the caller only builds a refusal after the grant failed.
@@ -167,7 +167,7 @@ fn escalation_brief(outcome : @agent_runtime.ApprovalOutcome) -> String {
   match outcome {
     AllowedOnce => "allowed"
     Rejected => "refused"
-    Cancelled => "expired"
+    Cancelled => "withdrawn"
     Unavailable => "unavailable"
   }
 }

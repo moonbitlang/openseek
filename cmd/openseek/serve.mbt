@@ -560,9 +560,9 @@ test "auto-continue requires a finished idle serving turn with budget" {
 /// `approval` is the one command that answers the engine rather than
 /// instructing it, and the one whose absence stalls a turn: under
 /// `--approval ask` a tool that asks to run outside its sandbox blocks until
-/// the decision arrives (or the desk's deadline settles it). A controller that
-/// cannot answer must not ask to be asked — the flag defaults to `never`, and
-/// under it the argument that asks is not offered to the model at all.
+/// the decision arrives, with no deadline behind it. A controller that cannot
+/// answer must not ask to be asked — the flag defaults to `never`, and under
+/// it the argument that asks is not offered to the model at all.
 /// Session-server skeleton — one steps queue, three producers, one pump;
 /// `active_work` is the only mode state (turn │ compact │ idle):
 ///

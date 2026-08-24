@@ -14,8 +14,9 @@ pub(all) enum ApprovalOutcome {
   AllowedOnce
   /// A person saw the ask and refused it.
   Rejected
-  /// The ask was withdrawn before anyone answered — it outlived its deadline,
-  /// or the controller that would have answered went away.
+  /// The ask was withdrawn before anyone answered: the turn it belonged to
+  /// was interrupted, or whatever channel carried it gave up on it. Nothing
+  /// here imposes a clock — see `approval_channel`.
   Cancelled
   /// There was nobody to ask: no approval channel is wired to this runtime.
   /// The fail-closed default, and what an unconfigured runtime always answers.
@@ -81,9 +82,10 @@ pub(all) struct ApprovalAsk {
 /// `Unavailable` itself — the one place that decision has to be made anyway,
 /// because the same absence already decided what its schema looks like.
 ///
-/// The wait behind the channel is unbounded here. Whatever deadline an ask
-/// should have belongs to whoever owns the human on the other end (`serve`
-/// gives it one), not to a tool that cannot know whether anyone is looking.
+/// The wait behind the channel is unbounded, and `serve`'s implementation of
+/// it has no deadline either: neither reference puts a clock on a human
+/// prompt, and one can only misfire against a real person who stepped away.
+/// A question ends when it is answered or when its turn is cancelled.
 pub fn AgentRuntime::approval_channel(
   self : AgentRuntime,
 ) -> (async (ApprovalAsk) -> ApprovalOutcome)? {

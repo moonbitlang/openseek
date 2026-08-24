@@ -1,19 +1,4 @@
 ///|
-/// How long one permission question waits for its answer.
-///
-/// This is a bound on a HUMAN, not on work, so it is generous: a question that
-/// arrives while its reader is in another window should still be answerable
-/// when they come back. It exists at all because the alternative to a deadline
-/// is a turn wedged forever behind a controller that never answers — a script
-/// reading events and writing none, or a UI that was closed with the prompt
-/// still on screen.
-///
-/// It is deliberately not the tool's own run bound (`RunTimeoutMs`). Waiting
-/// for a person is not the snippet's execution time, and charging one against
-/// the other would leave a granted run with whatever was left over.
-const ApprovalDeadlineMs : Int = 300_000
-
-///|
 /// What happens to a tool's permission question in this engine.
 ///
 /// The knob is the engine's, never the controller's: an attached UI does not
@@ -131,17 +116,23 @@ priv struct ApprovalDesk {
   /// and mean nothing to a later engine: a question outlives neither the turn
   /// that asked it nor the process.
   mut next_id : Int
-  /// How long one question waits before it settles itself as `Cancelled`.
-  deadline_ms : Int
 }
 
 ///|
-fn ApprovalDesk::new(deadline_ms? : Int = ApprovalDeadlineMs) -> ApprovalDesk {
-  { pending: {}, next_id: 0, deadline_ms }
+fn ApprovalDesk::new() -> ApprovalDesk {
+  { pending: {}, next_id: 0 }
 }
 
 ///|
-/// Announce one question and wait for its answer.
+/// Announce one question and wait for its answer, for as long as that takes.
+///
+/// There is deliberately no deadline. Neither reference has one on a human
+/// prompt — dsh's approval service is settled by an `AbortSignal` and nothing
+/// else, and Codex's `TimedOut` comes only from its automated reviewer — and a
+/// clock here can only misfire against a real person: someone who steps away
+/// for six minutes must not come back to a question that expired and a task
+/// that silently did not happen. The ways out are the two that mean something:
+/// an answer, or the turn being cancelled.
 ///
 /// Every exit emits exactly one `approval_resolved` for the `approval_requested`
 /// it wrote, including the cancelled paths — the deadline, and the turn being
@@ -172,12 +163,7 @@ async fn ApprovalDesk::ask(
       body=ask.body,
     ),
   )
-  outcome = match
-    @async.with_timeout_opt(self.deadline_ms, () => replies.get()) {
-    Some(true) => AllowedOnce
-    Some(false) => Rejected
-    None => Cancelled
-  }
+  outcome = if replies.get() { AllowedOnce } else { Rejected }
   outcome
 }
 
@@ -317,31 +303,25 @@ async test "a refused question resolves to rejected" {
 }
 
 ///|
-/// A controller that reads events and never answers must not wedge the turn.
-async test "an unanswered question settles itself as cancelled" {
-  let desk = ApprovalDesk::new(deadline_ms=50)
-  @async.with_task_group(_ => {
-    let outcome = desk.ask({
-      tool_name: "run_moonbit",
-      detail: "run without the sandbox policy",
-      body: Some("fn main { println(1) }"),
+/// The race the desk is allowed to lose quietly: an answer that arrives after
+/// its question is gone changes nothing and reports nothing. Its question here
+/// is gone because the turn was cancelled — with no deadline, that is the only
+/// way one leaves unanswered.
+async test "a decision for a settled question is discarded" {
+  let desk = ApprovalDesk::new()
+  @async.with_task_group(group => {
+    let asking = group.spawn(() => {
+      desk.ask({ tool_name: "run_moonbit", detail: "escalate", body: None })
     })
-    assert_true(outcome is Cancelled)
+    for _ in 0..<200 {
+      if desk.pending.length() > 0 {
+        break
+      }
+      @async.sleep(5)
+    }
+    asking.cancel()
   })
   assert_eq(desk.pending.length(), 0)
-}
-
-///|
-/// The race the desk is allowed to lose quietly: an answer that arrives after
-/// its question is gone changes nothing and reports nothing.
-async test "a decision for a settled question is discarded" {
-  let desk = ApprovalDesk::new(deadline_ms=25)
-  @async.with_task_group(_ => {
-    assert_true(
-      desk.ask({ tool_name: "run_moonbit", detail: "escalate", body: None })
-      is Cancelled,
-    )
-  })
   desk.settle("ap-1", true)
   assert_eq(desk.pending.length(), 0)
 }

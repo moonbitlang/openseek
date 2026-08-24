@@ -109,14 +109,15 @@ pub fn decode_event(object : Json) -> AgentEvent? {
       )
     // This UI cannot answer a permission question — it has no prompt for one —
     // so it says so rather than dropping the line. The engines this UI starts
-    // are launched with `--approval never` and never ask; an engine reached
-    // through `--engine` is somebody else's, and a turn of theirs is about to
-    // sit here until its deadline. Naming that is the difference between a UI
-    // that looks hung and one that tells you to interrupt it.
+    // default to `--approval never` and never ask; an engine reached through
+    // `--engine` is somebody else's, and a turn of theirs will sit here
+    // indefinitely, since nothing behind the question times out. Naming that is
+    // the difference between a UI that looks hung and one that tells you to
+    // interrupt it.
     ApprovalRequested(tool_name~, detail~, ..) =>
       Some(
         BackgroundNotice(
-          "\{tool_name} is asking permission to \{detail}, which this UI cannot answer — the turn will wait out the engine's deadline unless you interrupt it",
+          "\{tool_name} is asking permission to \{detail}, which this UI cannot answer — the turn will wait indefinitely unless you interrupt it",
         ),
       )
     // Deliberately not shown. Each of these is a decision, and the compiler now

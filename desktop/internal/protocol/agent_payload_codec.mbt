@@ -180,3 +180,77 @@ pub impl FromJson for ApprovalReply with fn from_json(json, path) {
 pub impl ToJson for ApprovalReply with fn to_json(self) {
   { "delivered": self.delivered.to_json() }
 }
+
+///|
+/// `agent.runs` is how a client that joins or rejoins mid-run rebuilds what is
+/// in flight, so each of its sections decodes independently: a section a peer
+/// does not send is empty rather than an error, while a section it sends in the
+/// wrong shape still fails at its exact path.
+///
+/// `approvals` is the newest section and the one an older host omits entirely.
+/// Absent and null both read as "no questions are waiting", which is the truth
+/// for every host whose engines never ask.
+pub impl FromJson for RunsReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "agent.runs reply")
+  let runs : Array[StartedPayload] = []
+  for index, raw in object.optional_array("runs") {
+    runs.push(@json.from_json(raw, path=path.add_key("runs").add_index(index)))
+  }
+  let settled : Array[RunSettlementPayload] = []
+  for index, raw in object.optional_array("settled") {
+    settled.push(
+      @json.from_json(raw, path=path.add_key("settled").add_index(index)),
+    )
+  }
+  let approvals : Array[PendingApprovalPayload] = []
+  for index, raw in object.optional_array("approvals") {
+    approvals.push(
+      @json.from_json(raw, path=path.add_key("approvals").add_index(index)),
+    )
+  }
+  { runs, settled, approvals }
+}
+
+///|
+pub impl ToJson for RunsReply with fn to_json(self) {
+  {
+    "runs": Json::array(self.runs.map(run => run.to_json())),
+    "settled": Json::array(self.settled.map(entry => entry.to_json())),
+    "approvals": Json::array(self.approvals.map(approval => approval.to_json())),
+  }
+}
+
+///|
+/// Every field that says WHICH question this is, and what it is about, is
+/// required: a replayed prompt missing its `id` cannot be answered, and one
+/// missing `tool_name` or `detail` cannot be rendered. `run_id` and `body` are
+/// the two that are legitimately absent — a question asked outside a run, and
+/// an asker with nothing to show.
+pub impl FromJson for PendingApprovalPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "pending approval")
+  {
+    id: object.required_string("id"),
+    session: object.required_string("session"),
+    run_id: object.optional_string("run_id"),
+    tool_name: object.required_string("tool_name"),
+    detail: object.required_string("detail"),
+    body: object.optional_string("body"),
+  }
+}
+
+///|
+pub impl ToJson for PendingApprovalPayload with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "id": self.id.to_json(),
+    "session": self.session.to_json(),
+    "tool_name": self.tool_name.to_json(),
+    "detail": self.detail.to_json(),
+  }
+  if self.run_id is Some(run_id) {
+    fields["run_id"] = run_id.to_json()
+  }
+  if self.body is Some(body) {
+    fields["body"] = body.to_json()
+  }
+  Json::object(fields)
+}

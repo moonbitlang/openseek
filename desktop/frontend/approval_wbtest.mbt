@@ -221,3 +221,125 @@ test "an answered card offers no second decision" {
   assert_false(markup.contains("Allow once"))
   assert_false(markup.contains("Deny"))
 }
+
+///|
+/// Replay: a page that reloaded while a question stood gets it back.
+///
+/// This is the whole reason the host retains it. An approval request is a live
+/// event and was never in the durable record, so a reloaded page rebuilds the
+/// transcript perfectly and recovers everything about the turn EXCEPT the
+/// question holding it up — leaving a run that shows Working forever with no
+/// way to unblock it but cancelling.
+test "a rejoining page is handed the question it lost" {
+  let conv = running_conversation()
+  guard conv.run is Open(run_id~, ..) else { fail("expected an open run") }
+  let model = test_model().replace_conversation(conv)
+  // No card: this page was not here when the question was asked.
+  assert_true(conv.pending_approval is None)
+  let (_, resynced) = update(
+    test_dispatch(),
+    runs_loaded_with_approvals(model, [
+      {
+        session: conv.session_id,
+        approval: {
+          id: "ap-1",
+          run_id: Some(run_id),
+          tool_name: "run_moonbit",
+          detail: "run this snippet with no sandbox policy",
+          body: Some("fn main { println(1) }"),
+          answered: false,
+        },
+      },
+    ]),
+    model,
+  )
+  guard resynced.active_conversation() is Some(back) else {
+    fail("expected the conversation")
+  }
+  guard back.pending_approval is Some(pending) else {
+    fail("the standing question was not replayed")
+  }
+  // The SAME id: a rejoining page answers the question the engine is blocked
+  // on, not a new one.
+  assert_eq(pending.id, "ap-1")
+  assert_eq(pending.body, Some("fn main { println(1) }"))
+  assert_false(pending.answered)
+}
+
+///|
+/// The resync runs on every reconnect, not only after a reload — so it must
+/// not undo a decision this page already sent. Handing the buttons back to a
+/// card whose answer is in flight is one question with two decisions.
+test "a resync does not re-offer a question already answered here" {
+  let conv = running_conversation()
+  guard conv.run is Open(run_id~, ..) else { fail("expected an open run") }
+  let asked = fold_engine(
+    conv,
+    ApprovalRequested(
+      id="ap-1",
+      tool_name="run_moonbit",
+      detail="escalate",
+      body=Some("fn main { println(1) }"),
+    ),
+  )
+  let model = test_model().replace_conversation(asked)
+  let (_, answered) = update(
+    test_dispatch(),
+    ApprovalAnswered(allow=true),
+    model,
+  )
+  // The host still lists it: our decision has not reached the engine yet.
+  let (_, resynced) = update(
+    test_dispatch(),
+    runs_loaded_with_approvals(answered, [
+      {
+        session: conv.session_id,
+        approval: {
+          id: "ap-1",
+          run_id: Some(run_id),
+          tool_name: "run_moonbit",
+          detail: "escalate",
+          body: Some("fn main { println(1) }"),
+          answered: false,
+        },
+      },
+    ]),
+    answered,
+  )
+  guard resynced.active_conversation() is Some(back) else {
+    fail("expected the conversation")
+  }
+  guard back.pending_approval is Some(pending) else {
+    fail("expected the card to stand")
+  }
+  assert_true(pending.answered)
+}
+
+///|
+/// Build the `agent.runs` resync message for a model, replaying `approvals`
+/// and asserting nothing about runs: the frontier is taken from the model as
+/// it stands, so the snapshot reads as "everything unchanged, plus these
+/// standing questions".
+fn runs_loaded_with_approvals(
+  model : Model,
+  approvals : Array[RecoveredApproval],
+) -> Msg {
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let live : Array[String] = []
+  for conv in model.conversations {
+    if conv.run is Open(run_id~, ..) {
+      live.push(run_id)
+    }
+  }
+  FromDevice(
+    @interop.ChannelId::Local,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      approvals~,
+      live~,
+      frontier~,
+      connection_generation=0,
+    ),
+  )
+}

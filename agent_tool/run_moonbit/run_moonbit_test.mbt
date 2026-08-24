@@ -890,16 +890,16 @@ async test "a refused escalation does not run at all" {
 
 ///|
 /// Each refusal says something different, because what the model should do
-/// next differs: a person's no is final for the task, an expired request
+/// next differs: a person's no is final for the task, a withdrawn request
 /// decided nothing, and an absent channel means retry without the argument.
 /// A single shared text would make all three read as the same wall.
 async test "each way of not being granted says a different thing" {
   let refused = run_escalating("fn main {  }", Rejected, asked=[])
   assert_true(refused.content.contains("declined"))
   assert_true(refused.content.contains("do not ask again"))
-  let expired = run_escalating("fn main {  }", Cancelled, asked=[])
-  assert_true(expired.content.contains("NOTHING RAN"))
-  assert_true(expired.content.contains("not a refusal"))
+  let withdrawn = run_escalating("fn main {  }", Cancelled, asked=[])
+  assert_true(withdrawn.content.contains("NOTHING RAN"))
+  assert_true(withdrawn.content.contains("not a refusal"))
   // Asking where the argument was never advertised: the model sent a field it
   // was not offered, and is told to drop it rather than to try again.
   let unavailable = @vfs.with_tmpdir(prefix="run-moonbit-unasked-", ws => {
@@ -908,8 +908,8 @@ async test "each way of not being granted says a different thing" {
   assert_true(unavailable.content.contains("no approval channel"))
   assert_true(unavailable.content.contains("without `escalated`"))
   // No two of them are the same sentence.
-  assert_false(refused.content == expired.content)
-  assert_false(expired.content == unavailable.content)
+  assert_false(refused.content == withdrawn.content)
+  assert_false(withdrawn.content == unavailable.content)
   assert_false(refused.content == unavailable.content)
 }
 

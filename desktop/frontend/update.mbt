@@ -6384,7 +6384,14 @@ fn update_device_msg(
         (@cmd.batch(commands), updated)
       }
     }
-    RunsLoaded(runs~, settled~, live~, frontier~, connection_generation~) => {
+    RunsLoaded(
+      runs~,
+      settled~,
+      approvals~,
+      live~,
+      frontier~,
+      connection_generation~
+    ) => {
       guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
       }
@@ -6504,7 +6511,29 @@ fn update_device_msg(
         next,
       )
       commands.push(settled_cmd)
-      (@cmd.batch(commands), settled)
+      // Standing questions land last, once every conversation in this snapshot
+      // has the run phase the snapshot gives it.
+      //
+      // A question already on screen is left exactly as it is. This resync runs
+      // on every reconnect, not only after a reload, so a card the user has
+      // already answered — and which is waiting for the engine to retire it —
+      // must not have its buttons handed back; that would be one question with
+      // two decisions.
+      let mut seeded = settled
+      for recovered in approvals {
+        guard seeded.find_conversation(channel, recovered.session) is Some(conv) else {
+          continue
+        }
+        if conv.pending_approval is Some(current) &&
+          current.id == recovered.approval.id {
+          continue
+        }
+        seeded = seeded.replace_conversation({
+          ..conv,
+          pending_approval: Some(recovered.approval),
+        })
+      }
+      (@cmd.batch(commands), seeded)
     }
     RunsSettled(live~, frontier~) => {
       // A conversation still showing an open run the host no longer has: the
@@ -10729,6 +10758,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
       },
     ],
     settled=[],
+    approvals=[],
     live=["old-run"],
     frontier=generation_one.run_snapshot_frontier(@interop.ChannelId::Local),
     connection_generation=generation_one.dev().connection_generation,
@@ -10741,6 +10771,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
     RunsLoaded(
       runs=[],
       settled=[],
+      approvals=[],
       live=[],
       frontier=generation_two.run_snapshot_frontier(@interop.ChannelId::Local),
       connection_generation=generation_two.dev().connection_generation,
@@ -10788,6 +10819,7 @@ test "a settlement captured for an older Starting owner cannot close its success
           status: "failed",
         },
       ],
+      approvals=[],
       live=[],
       frontier~,
       connection_generation=model.dev().connection_generation,
@@ -10834,6 +10866,7 @@ test "an older positive runs row cannot replace a newer Started" {
         },
       ],
       settled=[],
+      approvals=[],
       live=["r7"],
       frontier~,
       connection_generation=0,
@@ -10868,6 +10901,7 @@ test "an older positive runs row cannot resurrect a finished run" {
         },
       ],
       settled=[],
+      approvals=[],
       live=["r7"],
       frontier~,
       connection_generation=0,

@@ -25,11 +25,26 @@ priv struct Hub {
   // process, so a reconnecting owner learns how its run ended. Run ids carry
   // host-wide random identity, so they are the deduplication key.
   settlements : Map[String, RunSettlement]
+  // Permission questions an engine is currently blocked on, keyed by request
+  // id, in ask order.
+  //
+  // The same job `active_starts` does, for the one piece of live state a
+  // reloading client cannot rebuild any other way. A transcript comes back
+  // from the durable record; an approval request was never in it — it is a
+  // live event with no deadline behind it — so without this a reloaded
+  // frontend recovers the whole turn except the question holding it up, and
+  // the only way out is to cancel the run.
+  pending_approvals : Map[String, @protocol.PendingApprovalPayload]
 }
 
 ///|
 fn Hub::new() -> Hub {
-  { subscribers: [], active_starts: Map([]), settlements: Map([]) }
+  {
+    subscribers: [],
+    active_starts: Map([]),
+    settlements: Map([]),
+    pending_approvals: Map([]),
+  }
 }
 
 ///|
@@ -108,7 +123,13 @@ fn Hub::publish(self : Hub, notification : @protocol.Notification) -> Unit {
     AgentFinished(payload) => {
       self.record_finished(payload)
       self.active_starts.remove(payload.run_id)
+      // A turn cannot end with a tool still blocked inside it, so anything
+      // left here belongs to a question that died with the run. The engine
+      // settles its own on the way out; this covers the engine that did not
+      // get to — a killed process emits no `approval_resolved`.
+      self.forget_run_approvals(payload.run_id)
     }
+    AgentEvent(payload) => self.track_approval(payload)
     _ => ()
   }
   let wedged : Array[Int] = []
@@ -121,6 +142,48 @@ fn Hub::publish(self : Hub, notification : @protocol.Notification) -> Unit {
   for cursor in wedged.rev_iter() {
     let queue = self.subscribers.remove(cursor)
     queue.close()
+  }
+}
+
+///|
+/// Follow one engine event's effect on the standing questions.
+///
+/// Only the two approval events matter, and only for their bookkeeping — the
+/// notification itself is published to live subscribers either way. What this
+/// adds is the answer for a subscriber that was not there to hear it.
+fn Hub::track_approval(
+  self : Hub,
+  payload : @protocol.AgentEventPayload,
+) -> Unit {
+  match payload.event.event {
+    ApprovalRequested(id~, tool_name~, detail~, body~) =>
+      self.pending_approvals[id] = {
+        id,
+        session: payload.session,
+        run_id: payload.run_id,
+        tool_name,
+        detail,
+        body,
+      }
+    // Settled by whoever answered it, including this host's own client. The
+    // question is gone for every client at once, which is why the resolution
+    // is broadcast rather than sent to the answerer alone.
+    ApprovalResolved(id~, ..) => self.pending_approvals.remove(id)
+    _ => ()
+  }
+}
+
+///|
+/// Drop every question belonging to `run_id`.
+fn Hub::forget_run_approvals(self : Hub, run_id : String) -> Unit {
+  let doomed : Array[String] = []
+  for id, approval in self.pending_approvals {
+    if approval.run_id is Some(owner) && owner == run_id {
+      doomed.push(id)
+    }
+  }
+  for id in doomed {
+    self.pending_approvals.remove(id)
   }
 }
 
@@ -171,7 +234,15 @@ fn Hub::runs(
       }
     }
   }
-  { runs, settled }
+  // Replayed unconditionally, unlike `settled`: a settlement is history a
+  // client only wants for runs it owns, while a standing question is a turn
+  // stopped RIGHT NOW that anyone looking at that session should be able to
+  // answer.
+  let approvals : Array[@protocol.PendingApprovalPayload] = []
+  for _, approval in self.pending_approvals {
+    approvals.push(approval)
+  }
+  { runs, settled, approvals }
 }
 
 ///|
@@ -199,6 +270,10 @@ fn Hub::engine_connected(
   payload : @protocol.ConnectedPayload,
 ) -> Unit {
   self.active_starts.clear()
+  // A question belongs to the engine process that asked it: the reply queue
+  // it was blocking on died with that process, so replaying it would offer an
+  // answer with nowhere to go.
+  self.pending_approvals.clear()
   self.publish(AgentConnected(payload))
 }
 
@@ -456,7 +531,7 @@ async test "agent.runs keeps old requests compatible and decodes known selectors
   let legacy : @protocol.RunsReply = @json.from_json(
     runs_endpoint.invoke_remote(Json::empty_object()),
   )
-  guard legacy is { runs: [], settled: [] } else {
+  guard legacy is { runs: [], settled: [], approvals: [] } else {
     fail("legacy agent.runs request changed shape")
   }
   let replay : @protocol.RunsReply = @json.from_json(
@@ -470,4 +545,99 @@ async test "agent.runs keeps old requests compatible and decodes known selectors
     fail("agent.runs did not decode the known selector")
   }
   assert_eq(settlement.run_id, "r-api")
+}
+
+///|
+/// Build the `agent.event` notification carrying one engine event.
+fn approval_event(
+  session : String,
+  run_id : String?,
+  event : @protocol.AgentStreamEvent,
+) -> @protocol.Notification {
+  AgentEvent({ run_id, session, event })
+}
+
+///|
+/// The hub retains a standing question the same way it retains an active run,
+/// and for the same reason: it is live state a reloading client cannot rebuild
+/// from anywhere else. The transcript comes back from the durable record; an
+/// approval request was never in it.
+test "a standing question is replayed until it is answered" {
+  let hub = Hub::new()
+  hub.publish(
+    approval_event("s1", Some("r1"), {
+      event: ApprovalRequested(
+        id="ap-1",
+        tool_name="run_moonbit",
+        detail="run with no sandbox policy",
+        body=Some("fn main { println(1) }"),
+      ),
+      submission_id: None,
+    }),
+  )
+  guard hub.runs().approvals is [pending] else {
+    fail("the question was not retained")
+  }
+  // Everything a rejoining client needs to render it AND answer it — the id
+  // above all, since a replay must address the question the engine is blocked
+  // on rather than open a new one.
+  assert_eq(pending.id, "ap-1")
+  assert_eq(pending.session, "s1")
+  assert_eq(pending.run_id, Some("r1"))
+  assert_eq(pending.body, Some("fn main { println(1) }"))
+  // Settled by whoever answered it — this client or another — and gone for
+  // everyone at once.
+  hub.publish(
+    approval_event("s1", Some("r1"), {
+      event: ApprovalResolved(id="ap-1", outcome="allowed_once"),
+      submission_id: None,
+    }),
+  )
+  guard hub.runs().approvals is [] else {
+    fail("an answered question was still replayed")
+  }
+}
+
+///|
+/// Two ways a question dies without an answer, both of which must stop it
+/// being offered to the next client that looks.
+test "a question does not outlive the engine that asked it" {
+  let hub = Hub::new()
+  let ask = approval_event("s1", Some("r1"), {
+    event: ApprovalRequested(
+      id="ap-1",
+      tool_name="run_moonbit",
+      detail="run with no sandbox policy",
+      body=None,
+    ),
+    submission_id: None,
+  })
+  // A run that ended without resolving its question: the engine settles its
+  // own on the way out, so reaching here means one that could not — a killed
+  // process emits no `approval_resolved`.
+  hub.publish(
+    AgentStarted(@json.from_json({ "run_id": "r1", "session": "s1" })),
+  )
+  hub.publish(ask)
+  hub.publish(
+    AgentFinished(
+      @json.from_json({
+        "run_id": "r1",
+        "session": "s1",
+        "status": "finished",
+        "terminal": true,
+      }),
+    ),
+  )
+  guard hub.runs().approvals is [] else {
+    fail("a question outlived the run it belonged to")
+  }
+  // A new engine process: the reply queue the question was blocking on died
+  // with the old one, so replaying it would offer an answer with nowhere to
+  // go.
+  hub.publish(ask)
+  hub.engine_connected({ stage: Serving })
+  guard hub.runs().approvals is [] else {
+    fail("a question outlived the engine that asked it")
+  }
 }

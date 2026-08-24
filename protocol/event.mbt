@@ -46,9 +46,10 @@ pub(all) enum Event {
   // ── approval ───────────────────────────────────────────────────────────
   /// A tool is asking the controller for permission and is BLOCKED until an
   /// `approval` command carrying this `id` comes back. The one event on this
-  /// stream that is a question rather than a report: a controller that reads
-  /// events and never writes one leaves the turn stopped until the engine's
-  /// own deadline expires.
+  /// stream that is a question rather than a report, and the only one a
+  /// controller MUST answer: there is no deadline behind it, so a controller
+  /// that reads events and never writes one leaves the turn stopped until
+  /// somebody cancels it.
   ///
   /// `id` is minted by the engine and is unique within one engine process.
   /// `body` is what would actually RUN, verbatim — the `run_moonbit` program —
@@ -62,8 +63,8 @@ pub(all) enum Event {
     body~ : String?
   )
   /// How a previously requested approval settled — including when it settled
-  /// without the controller's answer (it outlived its deadline, or a second
-  /// controller answered first). Purely informational: a controller uses it to
+  /// without the controller's answer — the turn was interrupted, or a second
+  /// controller answered first. Purely informational: a controller uses it to
   /// retire the prompt it is showing.
   ///
   /// `outcome` is `"allowed_once"`, `"rejected"`, or `"cancelled"`. The

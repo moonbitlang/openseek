@@ -188,10 +188,35 @@ pub impl FromJson for RunSettlementPayload with fn from_json(json, path) {
 }
 
 ///|
+/// One permission question a live engine is currently blocked on, replayed to
+/// a client that joins or rejoins while it stands.
+///
+/// An approval request is a live event, not durable state: the transcript is
+/// rebuilt from the session record and approvals were never in it, so a
+/// reloaded frontend recovers everything about a turn EXCEPT the question
+/// holding it up. The host outlives that reload and is the only party that
+/// still knows, which is why this rides the same snapshot `agent.runs` already
+/// uses to tell a rejoining client what is in flight.
+pub(all) struct PendingApprovalPayload {
+  /// The id the decision must carry back. Reused verbatim on replay: a
+  /// rejoining client answers the same question, not a new one.
+  id : String
+  session : String
+  run_id : String?
+  tool_name : String
+  detail : String
+  /// What would run. Absent for an asker with nothing to show.
+  body : String?
+} derive(Debug, Eq)
+
+///|
 pub(all) struct RunsReply {
   runs : Array[StartedPayload]
   settled : Array[RunSettlementPayload]
-} derive(Debug, Eq, FromJson, ToJson)
+  /// Questions still waiting for an answer. Empty for a host with none, and
+  /// for every engine that never asks.
+  approvals : Array[PendingApprovalPayload]
+} derive(Debug, Eq)
 
 ///|
 /// The subset of `sessions list --format=json` consumed by Desktop.
@@ -2257,6 +2282,18 @@ pub extend RunSettlementPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend RunSettlementPayload with ToJson::{to_json}
+
+///|
+pub extend PendingApprovalPayload with Debug::{to_repr}
+
+///|
+pub extend PendingApprovalPayload with FromJson::{from_json}
+
+///|
+pub extend PendingApprovalPayload with Eq::{equal, not_equal}
+
+///|
+pub extend PendingApprovalPayload with ToJson::{to_json}
 
 ///|
 pub extend RunsReply with Debug::{to_repr}

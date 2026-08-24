@@ -519,6 +519,16 @@ priv struct RecoveredSettlement {
 }
 
 ///|
+/// One standing permission question, routed back to its conversation. The
+/// question itself is the same value the live event produces; only the session
+/// it belongs to has to travel beside it, since `PendingApproval` lives inside
+/// a conversation and does not name one.
+priv struct RecoveredApproval {
+  session : String
+  approval : PendingApproval
+}
+
+///|
 /// The exact per-session lifecycle state at the instant an `agent.runs`
 /// request starts. An unversioned positive row is safe to replay only while
 /// the session still has this state; a live Started or Finished received
@@ -925,6 +935,8 @@ priv struct PendingSteer {
 /// decision the user takes a while over cannot settle a question in a later
 /// run that happens to reuse the id sequence.
 priv struct PendingApproval {
+  /// The id the decision carries back. Reused verbatim across a replay: a
+  /// rejoining page answers the same question, not a new one.
   id : String
   run_id : String?
   tool_name : String
@@ -2165,6 +2177,12 @@ priv enum DeviceMsg {
   RunsLoaded(
     runs~ : Array[RecoveredRun],
     settled~ : Array[RecoveredSettlement],
+    // Permission questions the host's engines are still blocked on. A card
+    // this page rendered before a reload is gone with the page, and nothing
+    // in the durable record can bring it back — so a rejoining client is
+    // handed the standing question rather than watching a run that never
+    // moves.
+    approvals~ : Array[RecoveredApproval],
     live~ : Array[String],
     frontier~ : Array[RunSnapshotFrontier],
     connection_generation~ : Int

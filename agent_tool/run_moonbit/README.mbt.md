@@ -100,7 +100,7 @@ widen: `native` stays refused whatever the answer.
 
 The three ways of not being granted are three different replies, because what
 the model should do next differs for each — a person's refusal is final for the
-task, an expired request decided nothing, and an absent channel means the
+task, a withdrawn request decided nothing, and an absent channel means the
 argument is unusable here and the snippet should be retried without it.
 
 ```mbt check

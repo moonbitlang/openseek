@@ -753,11 +753,34 @@ fn fetch_runs(
           recovered_settlements.push(settlement)
         }
       }
+      // Standing questions come back unfiltered: unlike a settlement, which is
+      // history only its owner wants, a blocked turn is stopped right now and
+      // whoever is looking at that session should be able to unblock it.
+      let recovered_approvals : Array[RecoveredApproval] = []
+      for item in reply.approvals {
+        recovered_approvals.push({
+          session: item.session,
+          approval: {
+            id: item.id,
+            run_id: item.run_id,
+            tool_name: item.tool_name,
+            detail: item.detail,
+            body: item.body,
+            // Replayed to a page that never sent a decision for it, so the
+            // card comes back answerable. A decision this page sent before it
+            // reloaded either reached the engine — and the question is gone
+            // from the host, so there is nothing here to replay — or it did
+            // not, and offering it again is the point.
+            answered: false,
+          },
+        })
+      }
       scheduler.add(
         dispatch(
           RunsLoaded(
             runs=recovered,
             settled=recovered_settlements,
+            approvals=recovered_approvals,
             live~,
             frontier~,
             connection_generation~,

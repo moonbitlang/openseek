@@ -1540,6 +1540,22 @@ pub fn OpenSeekThinking::wire(Self) -> String
 pub impl ToJson for OpenSeekThinking
 pub impl @json.FromJson for OpenSeekThinking
 
+pub(all) struct PendingApprovalPayload {
+  id : String
+  session : String
+  run_id : String?
+  tool_name : String
+  detail : String
+  body : String?
+} derive(Eq, @debug.Debug)
+pub fn PendingApprovalPayload::equal(Self, Self) -> Bool
+pub fn PendingApprovalPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PendingApprovalPayload::not_equal(Self, Self) -> Bool
+pub fn PendingApprovalPayload::to_json(Self) -> Json
+pub fn PendingApprovalPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for PendingApprovalPayload
+pub impl @json.FromJson for PendingApprovalPayload
+
 pub(all) struct ReadDirPayload {
   path : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
@@ -1609,12 +1625,15 @@ pub fn RunsPayload::to_repr(Self) -> @debug.Repr
 pub(all) struct RunsReply {
   runs : Array[StartedPayload]
   settled : Array[RunSettlementPayload]
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  approvals : Array[PendingApprovalPayload]
+} derive(Eq, @debug.Debug)
 pub fn RunsReply::equal(Self, Self) -> Bool
 pub fn RunsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn RunsReply::not_equal(Self, Self) -> Bool
 pub fn RunsReply::to_json(Self) -> Json
 pub fn RunsReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for RunsReply
+pub impl @json.FromJson for RunsReply
 
 pub(all) struct SearchFilesPayload {
   path : String
