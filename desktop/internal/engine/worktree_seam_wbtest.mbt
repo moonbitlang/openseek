@@ -76,6 +76,9 @@ async test "session workspace dir follows the worktree mapping while it exists" 
   @fsx.ensure_dir(ws.join(".openseek/sessions/s-wt").to_path())
   @fsx.ensure_dir(ws.join(".openseek/sessions/s-plain").to_path())
   ignore(@workspaces.add(ws.to_string(), fn(_) {  }))
+  guard ws.to_uri_path() is Some(ws_resource) else {
+    fail("workspace fixture could not be represented as a frontend resource")
+  }
   stage_worktree_placements(ws, [
     ("wt", "openseek/wt", Some("s-wt"), None),
     ("codex", "openseek/codex", None, Some("codex-thread-1")),
@@ -93,20 +96,28 @@ async test "session workspace dir follows the worktree mapping while it exists" 
   // The workspace hint refines to the worktree too — the FS bridge sends the
   // hint on every op.
   assert_eq(
-    @work_dir.resolve_in_workspace("s-wt", "src", workspace=ws.to_string()).map(dir => {
+    @work_dir.resolve_in_workspace("s-wt", "src", workspace=ws_resource).map(dir => {
+      dir.to_string()
+    }),
+    Some(ws.join(".worktrees/wt/src").to_string()),
+  )
+  // Before its first prompt, a workspace-root conversation has no durable
+  // session record. Its registered resource root is enough to establish the
+  // directory ownership used by Files, Terminal, and language operations.
+  assert_eq(
+    @work_dir.resolve_in_workspace("desktop-fresh", "", workspace=ws_resource).map(dir => {
         dir.to_string()
       },
     ),
-    Some(ws.join(".worktrees/wt/src").to_string()),
+    Some(ws.to_string()),
   )
   // Terminal and file operations use the same conversation id field for
   // both products; Codex ownership must route to its registered checkout.
   assert_eq(
-    @work_dir.resolve_in_workspace(
-      "codex-thread-1",
-      "",
-      workspace=ws.to_string(),
-    ).map(dir => dir.to_string()),
+    @work_dir.resolve_in_workspace("codex-thread-1", "", workspace=ws_resource).map(dir => {
+        dir.to_string()
+      },
+    ),
     Some(ws.join(".worktrees/codex").to_string()),
   )
   // Deleting the checkout retains the binding but removes the usable root:
@@ -114,7 +125,7 @@ async test "session workspace dir follows the worktree mapping while it exists" 
   @fs.rmdir(ws.join(".worktrees/wt").to_string(), recursive=true)
   assert_true(@work_dir.of_session("s-wt") is None)
   assert_true(
-    @work_dir.resolve_in_workspace("s-wt", "", workspace=ws.to_string()) is None,
+    @work_dir.resolve_in_workspace("s-wt", "", workspace=ws_resource) is None,
   )
   @fs.rmdir(root.to_string(), recursive=true)
 }

@@ -15,6 +15,9 @@ priv struct LanguagePath {
 /// `session`. Keep `root` in its frontend resource form for the authorization
 /// lookup: on Windows, converting `/C:/work` to `C:\work` first would make the
 /// registered-workspace lookup reject the fresh conversation's first request.
+/// The registry may return a canonical spelling with different case or after
+/// resolving a junction, so compare physical directory identity while keeping
+/// the client's lexical root for Viewer resources.
 async fn LanguagePath::authorized_root(
   session : String,
   root : String,
@@ -28,8 +31,36 @@ async fn LanguagePath::authorized_root(
     Some(root) => Some(root)
     None => @work_dir.resolve_in_workspace(session, "")
   }
-  guard authorized is Some(authorized) && authorized.normalize() == lexical_root else {
-    raise HostError("root is not authorized for this conversation")
+  guard authorized is Some(authorized) else {
+    @xlog.warn(category="language") <?
+      {
+        "event": "language_root_ownership_missing",
+        "session": session,
+        "requested_root": root,
+      }
+    raise HostError("root has no directory ownership for this conversation")
+  }
+  let requested_physical = @fs.realpath(lexical_root.to_string()) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => raise HostError("requested language root is unavailable")
+  }
+  let authorized_physical = @fs.realpath(authorized.to_string()) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => raise HostError("authorized language root is unavailable")
+  }
+  guard @pathx.Path(requested_physical).to_absolute()
+    is Some(requested_physical) &&
+    @pathx.Path(authorized_physical).to_absolute() is Some(authorized_physical) &&
+    requested_physical.relative_to(root=authorized_physical) is Some(relative) &&
+    relative.is_root() else {
+    @xlog.warn(category="language") <?
+      {
+        "event": "language_root_ownership_mismatch",
+        "session": session,
+        "requested_root": requested_physical,
+        "authorized_root": authorized_physical,
+      }
+    raise HostError("root does not match the conversation checkout")
   }
   lexical_root
 }
