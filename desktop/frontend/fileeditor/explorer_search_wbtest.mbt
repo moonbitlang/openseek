@@ -51,6 +51,17 @@ test "Search inventory hides unrelated file watcher errors" {
 }
 
 ///|
+test "file watcher errors stay off the Files inventory" {
+  let html = render_explorer_for_test({
+    ..owned_state(),
+    explorer_mode: ExplorerFiles,
+    watch_error: Some("watcher failure"),
+  })
+  assert_false(html.contains("watcher failure"))
+  assert_true(html.contains("file-panel-error empty"))
+}
+
+///|
 test "editor Search highlights follow the Search inventory visibility boundary" {
   let ctx = test_ctx()
   guard ctx.root() is Some(root) else { fail("test checkout root expected") }

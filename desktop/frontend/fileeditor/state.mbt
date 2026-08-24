@@ -497,7 +497,8 @@ pub(all) struct State {
   watch_generation : Int
   // `fs.watch` can reject activation, and an active watcher can later stop.
   // Keep either failure separate from directory/file requests so a later
-  // successful listing does not hide the loss of live updates.
+  // successful listing does not hide the loss of live updates. The root app
+  // owns its toast presentation; this state only prevents a retry loop.
   watch_error : String?
   // Directory paths the user has expanded, and those with a `read_directory`
   // in flight; plain arrays since a workspace tree is small.

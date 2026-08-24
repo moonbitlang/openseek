@@ -280,7 +280,17 @@ async fn FsWatchActive::watch(
 ) -> Unit {
   defer self.watcher.close()
   for ;; {
-    let events = self.watcher.wait()
+    // TODO(upstream): EINTR looping should be done in async. macOS kqueue may
+    // return EINTR when an unrelated process signal lands between the
+    // non-blocking event probe and its async wait. No event was consumed, so
+    // retrying preserves Watcher::wait's contract. A task cancellation must
+    // still propagate so replacing this watcher cannot keep the retired child
+    // alive.
+    let events = self.watcher.wait() catch {
+      error if @async.is_being_cancelled() => raise error
+      @os_error.OSError(_) as error if error.is_EINTR() => continue
+      error => raise error
+    }
     emit({
       root: self.target.root.resource_path(),
       baseline: false,

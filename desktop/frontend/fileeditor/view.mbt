@@ -483,18 +483,13 @@ fn history_diff_notice(state : State, diff : @dock.GitHistoryDiff) -> String {
 
 ///|
 /// The toggleable file-tree panel, docked flat under the viewer like an Emacs
-/// bottom window: the hierarchical tree rows and the last fs failure (blank
-/// and collapsed while there is none).
+/// bottom window. Request-local listing failures remain beside the inventory;
+/// watcher failures use the root app's transient toast rail instead.
 fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html {
-  // Losing the watcher is more important than a request-local failure: live
-  // updates remain disabled even if a later directory request succeeds.
   let visible_error = if state.explorer_mode is ExplorerSearch {
     None
   } else {
-    match state.watch_error {
-      Some(message) => Some(message)
-      None => state.error
-    }
+    state.error
   }
   let inventory = if ctx.placement is None {
     [@html.div(class="file-panel-empty", "Waiting for workspace placement…")]

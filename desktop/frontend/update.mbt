@@ -2405,6 +2405,35 @@ fn update_msg(
         model.notify_error(dispatch, message)
       }
     }
+    // Keep watcher lifecycle state in the file-editor package, but present an
+    // accepted current-generation failure on the app-owned toast rail. The
+    // before/after check uses that package's owner/root/generation fencing and
+    // also prevents a repeated host notification from stacking duplicates.
+    FileEditor(
+      @fileeditor.FileWatchFailed(channel~, root~, generation~, message~)
+    ) => {
+      let file_message = @fileeditor.FileWatchFailed(
+        channel~,
+        root~,
+        generation~,
+        message~,
+      )
+      let (cmd, panel) = @fileeditor.update(
+        dispatch.map(next => FileEditor(next)),
+        file_message,
+        model.file_panel,
+        file_ctx(model),
+      )
+      let next = { ..model, file_panel: panel }
+      if panel.watch_error == Some(message) &&
+        model.file_panel.watch_error != Some(message) &&
+        !model.notifications.iter().any(toast => toast.message == message) {
+        let (toast, next) = next.notify_error(dispatch, message)
+        (@cmd.batch([cmd, toast]), next)
+      } else {
+        (cmd, next)
+      }
+    }
     QuickOpenOpen(provider) => open_quick_open(dispatch, model, provider)
     QuickOpen(msg) => update_quick_open(dispatch, model, msg)
     ModelPicked(value) => {
@@ -17147,6 +17176,78 @@ test "language request failures toast once and remain conversation fenced" {
     repeated,
   )
   assert_true(stale.notifications == repeated.notifications)
+}
+
+///|
+test "file watcher failures toast once and retain lifecycle state" {
+  let dispatch = test_dispatch()
+  let model = desktop_model()
+  let owner = file_ctx(model).owner
+  let root = @interop.ChannelId::Local.test_project()
+  let generation = 7
+  let panel = {
+    ..model.file_panel,
+    owner: Some(owner),
+    placement: @fileeditor.PlacementLive(@interop.WorkspaceRoot(root~)),
+    watching: Some({ owner, root, files: [], directories: [], recursive: true }),
+    watch_generation: generation,
+  }
+  let model = { ..model, file_panel: panel }
+  // A live index keeps the recursive watcher desired while the file pane is
+  // closed, so the root update's ordinary sync pass preserves this failure.
+  let file_emit = dispatch.map(next => FileEditor(next))
+  let (_, loading) = @fileeditor.update(
+    file_emit,
+    @fileeditor.EnsureFileIndex,
+    panel,
+    file_ctx(model),
+  )
+  let (_, ready) = @fileeditor.update(
+    file_emit,
+    @fileeditor.FilesIndexed(
+      owner~,
+      epoch=loading.request_epoch,
+      files=[],
+      truncated=false,
+    ),
+    loading,
+    file_ctx(model),
+  )
+  let model = { ..model, file_panel: ready }
+  let message = "File watching stopped: too many open files"
+  let failure = FileEditor(
+    @fileeditor.FileWatchFailed(
+      channel=owner.channel,
+      root~,
+      generation="\{file_ctx(model).watch_namespace}:\{generation}",
+      message~,
+    ),
+  )
+  let (_, failed) = update(dispatch, failure, model)
+  assert_eq(failed.file_panel.watch_error, Some(message))
+  assert_eq(failed.notifications.length(), 1)
+  assert_eq(failed.notifications[0].message, message)
+  // The same current-generation notification neither mutates watcher state
+  // again nor stacks another toast while the first one is still visible.
+  let (_, repeated) = update(dispatch, failure, failed)
+  assert_eq(repeated.file_panel.watch_error, Some(message))
+  assert_eq(repeated.notifications.length(), 1)
+  // The file-editor package rejects a failure from another concrete watcher;
+  // the root therefore has no accepted failure to announce.
+  let (_, stale) = update(
+    dispatch,
+    FileEditor(
+      @fileeditor.FileWatchFailed(
+        channel=owner.channel,
+        root~,
+        generation="\{file_ctx(model).watch_namespace}:\{generation - 1}",
+        message="stale watcher failure",
+      ),
+    ),
+    repeated,
+  )
+  assert_eq(stale.file_panel.watch_error, Some(message))
+  assert_eq(stale.notifications.length(), 1)
 }
 
 ///|
