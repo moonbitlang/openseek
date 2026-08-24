@@ -883,8 +883,8 @@ fn description(background~ : Bool) -> String {
     #|These, and nothing else:
     #|
     #|- `moon` — check, test, build, run, fmt, info, add, remove, update, install,
-    #|  tree, clean, new, ide, doc, explain, coverage, cram, version. (Not `publish`,
-    #|  `login` or `register`.)
+    #|  tree, clean, new, ide, doc, explain, coverage, cram, package, version,
+    #|  plus `publish --dry-run`. (Not plain `publish`, `login` or `register`.)
     #|- `git` — status, log, diff, show, blame, describe, rev-parse, rev-list,
     #|  show-ref, for-each-ref, cat-file, check-ignore, merge-base, range-diff,
     #|  ls-files, ls-tree, ls-remote, shortlog, grep, branch, tag, remote, reflog,
@@ -893,7 +893,6 @@ fn description(background~ : Bool) -> String {
     #|  `stash list|show`. Not `config`. A global option BEFORE the subcommand
     #|  (`-c`, `-C`, `--git-dir`, `--work-tree`) is refused.
     #|- `gh` — pr, issue, run, `repo view`, api, `auth status`.
-    #|- `just`, for a repository whose gates live in a `justfile`.
     #|- `rg` and `diff`.
     #|
     #|Anything else is REFUSED, including the obvious ones; if a refused command is
@@ -928,6 +927,9 @@ fn description(background~ : Bool) -> String {
     #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
     #|  checkout` and friends are child processes and run normally. A write refusal
     #|  is that rule firing, not a filesystem fault to debug or route around.
+    #|- DNS and outbound connections are allowed. A snippet may bind/listen only on
+    #|  IPv4 or IPv6 localhost; wildcard and external-interface binds are refused.
+    #|  These network rules do not constrain an allowed child process.
     #|- Compiler warnings for the snippet are suppressed; pass `warning: "on"` to
     #|  see them.
     #|- Bounded to 300s. For independent commands or probes, emit SEVERAL

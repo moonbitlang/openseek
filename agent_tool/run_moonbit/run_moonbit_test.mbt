@@ -325,6 +325,10 @@ async test "the spawn allowlist discriminates between subcommands" {
       #|  println("stash-pop: \{probe("git", ["stash", "pop"])}")
       #|  println("reconfigured: \{probe("git", ["-c", "core.pager=cat", "status"])}")
       #|  println("moon-version-flag: \{probe("moon", ["--version"])}")
+      #|  println("moon-package: \{probe("moon", ["package"])}")
+      #|  println("moon-publish-dry-run: \{probe("moon", ["publish", "--dry-run"])}")
+      #|  println("moon-publish: \{probe("moon", ["publish"])}")
+      #|  println("just: \{probe("just", ["--version"])}")
       #|  println("curl: \{probe("curl", ["--version"])}")
       #|}
     ),
@@ -346,7 +350,49 @@ async test "the spawn allowlist discriminates between subcommands" {
   // `moon --version`, which a live run then spent three attempts working
   // around; both spellings are listed now.
   assert_true(out.content.contains("moon-version-flag: ran"))
+  // `package` and the non-publishing validation form may start, while plain
+  // `publish` still matches no prefix. `just` has likewise left the surface.
+  assert_true(out.content.contains("moon-package: ran"))
+  assert_true(out.content.contains("moon-publish-dry-run: ran"))
+  assert_true(out.content.contains("moon-publish: refused"))
+  assert_true(out.content.contains("just: refused"))
   assert_true(out.content.contains("curl: refused"))
+}
+
+///|
+/// The snippet may use network clients and localhost servers, but it must not
+/// expose a listener on every interface. The denied wildcard bind is caught by
+/// the snippet so both sides of the boundary are visible in one run.
+async test "network allows outbound use and localhost-only binds" {
+  let out = run(
+    (
+      #|import { "moonbitlang/async", "moonbitlang/async/socket" }
+      #|
+      #|async fn main {
+      #|  let localhost = try {
+      #|    let server = @socket.TcpServer(@socket.Addr::parse("127.0.0.1:0"))
+      #|    defer server.close()
+      #|    let client = @socket.Tcp::connect(server.addr())
+      #|    client.close()
+      #|    "allowed"
+      #|  } catch {
+      #|    error if @async.is_being_cancelled() => raise error
+      #|    _ => "refused"
+      #|  }
+      #|  let wildcard = try {
+      #|    let server = @socket.TcpServer(@socket.Addr::parse("0.0.0.0:0"))
+      #|    server.close()
+      #|    "allowed"
+      #|  } catch {
+      #|    error if @async.is_being_cancelled() => raise error
+      #|    _ => "refused"
+      #|  }
+      #|  println("localhost=\{localhost} wildcard=\{wildcard}")
+      #|}
+    ),
+  )
+  assert_true(out.content.contains("localhost=allowed"))
+  assert_true(out.content.contains("wildcard=refused"))
 }
 
 ///|

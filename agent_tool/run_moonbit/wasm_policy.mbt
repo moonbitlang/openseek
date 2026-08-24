@@ -52,6 +52,11 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("moon", ["explain"]),
   ("moon", ["coverage"]),
   ("moon", ["cram"]),
+  ("moon", ["package"]),
+  // Packaging may be checked against the registry contract, but publishing a
+  // release remains outside the snippet's command surface. Keeping
+  // `--dry-run` in the prefix makes that distinction enforceable.
+  ("moon", ["publish", "--dry-run"]),
   ("moon", ["version"]),
   // Asking what is installed is the first thing a turn does when something
   // looks wrong with the toolchain, and it is spelled with the FLAG far more
@@ -175,15 +180,10 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // `out.stdout` and filter it in MoonBit instead of reaching for grep and awk.
   ("diff", []),
   ("rg", []),
-  // A repository's gates live in its `justfile`; reimplementing recipes by hand
-  // runs something else and goes stale. Recipes are not listed one by one for
-  // the same reason. A recipe is shell, so this does admit arbitrary code — but
-  // so does `rebase --exec`, which a prefix cannot exclude.
-  ("just", []),
   // NOT listed: the general-purpose runners (`sh`, `bash`, `zsh`, `env`,
-  // `xargs`, `python`, `node`, `perl`, `make`). Not as a boundary — see `just`
-  // — but because myshell exists so no shell sits between the agent and a
-  // process. What the list buys is that going around it takes intent.
+  // `xargs`, `python`, `node`, `perl`, `make`). Myshell exists so no shell sits
+  // between the agent and a process; what the list buys is that going around
+  // it takes intent.
 ]
 
 ///|
@@ -268,9 +268,17 @@ fn wasm_policy_document(
     // `"*"` is moonrun's every-host-path wildcard — see the header for why
     // reads are open where writes are not.
     "fs": { "read": ["*"], "write": json_strings(write_roots) },
-    // Network stays denied: nothing a snippet does needs it except registry
-    // fetches, which run inside `moon` — a child, and so outside this policy
-    // either way.
+    // Snippets may resolve names and connect out, but may listen only on the
+    // exact IPv4 and IPv6 loopback addresses. moonrun requires IP literals in
+    // bind rules, so `localhost` itself is not a valid spelling here.
+    //
+    // Like `fs`, these rules stop at the process boundary: an admitted child
+    // retains the agent's ambient network access.
+    "net": {
+      "dns": ["*"],
+      "connect": ["*:*"],
+      "bind": ["127.0.0.1:*", "[::1]:*"],
+    },
     "process": { "allow": Json::array(allow) },
   }
 }
