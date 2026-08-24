@@ -137,16 +137,19 @@ test "the card shows the question and both answers" {
   assert_true(
     markup.contains("<code class=\"composer-approval-tool\">run_moonbit</code>"),
   )
-  // Both decisions are ordinary notice buttons — the same class every other
-  // action docked above the composer uses — carrying only an emphasis
-  // modifier. Two earlier versions gave the card an accent outline and then
-  // filled accent/danger buttons; each time it stopped looking like part of
-  // this app. Keeping `composer-notice-btn` on both is what holds that line.
+  // Both decisions wear the borderless chip shape, carrying only an emphasis
+  // modifier on top of it. Three earlier versions gave the card an accent
+  // outline, then filled accent/danger buttons, then outlined ones; each time
+  // it stopped looking like part of this app. Pinning the exact class pair is
+  // what holds that line — nothing else here can tell a chip from a dialog
+  // button.
   assert_true(
-    markup.contains("class=\"composer-notice-btn composer-approval-deny\""),
+    markup.contains("class=\"composer-approval-action composer-approval-deny\""),
   )
   assert_true(
-    markup.contains("class=\"composer-notice-btn composer-approval-allow\""),
+    markup.contains(
+      "class=\"composer-approval-action composer-approval-allow\"",
+    ),
   )
   // And the container is a plain notice, with no surface of its own.
   assert_true(markup.contains("class=\"composer-notice composer-approval\""))

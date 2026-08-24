@@ -396,25 +396,37 @@
   color: var(--color-text-primary);
   font-weight: 600;
 }
-/* Both decisions are ordinary notice buttons, like every other action docked
-   above the composer. The filled accent/danger pair this used to carry was
-   borrowed from the Codex card, and on screen it was the loudest thing in the
-   window: nothing else here is a wide saturated button — `.send-button` and
-   `.stop-button` wear those fills at 30px square, and blue otherwise means
-   selection or a link. The result read as a browser permission dialog dropped
-   into the app rather than a part of it.
+/* The decisions wear the composer chip's shape, not a dialog button's: no
+   border, a plain fill that lifts on hover. The chips they match sit one row
+   below this card, which is the comparison a reader actually makes.
 
-   They are told apart by emphasis instead of hue, which is enough for two
-   words a reader is already looking at: the grant carries the primary text
-   colour and weight, the refusal recedes. Deliberately NOT red — refusing is
-   the conservative answer here, and dressing it as the destructive one gets
-   the stakes backwards. */
+   The fill is `--color-bg-surface` rather than the chips' own
+   `--color-control-surface`. That token is `--color-bg-subtle` at 74% alpha,
+   which separates against the composer card it was made for and vanishes here,
+   where the notice background IS `--color-bg-subtle`. Same intent — a control
+   that reads as raised — spelled for the surface it actually sits on.
+
+   The global `button` rule already supplies the transparent border, the
+   radius, and the cursor. */
+.composer-approval-action {
+  flex: none;
+  padding: 4px 10px;
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+.composer-approval-action:not(:disabled):hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+}
+/* Told apart by emphasis, never by hue: the grant carries the primary colour
+   and weight, the refusal recedes. Deliberately NOT red — refusing is the
+   conservative answer here, and dressing it as the destructive one gets the
+   stakes backwards. */
 .composer-approval-allow {
   color: var(--color-text-primary);
   font-weight: 600;
-}
-.composer-approval-deny {
-  color: var(--color-text-secondary);
 }
 .composer-approval-state {
   flex: none;

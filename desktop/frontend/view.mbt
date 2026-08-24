@@ -651,11 +651,12 @@ fn pending_steers_panel(conv : Conversation) -> @html.Html {
 /// stays until the engine's settlement retires it, because that event is the
 /// only proof the answer reached the blocked tool.
 ///
-/// It is an ordinary composer notice — same surface, same buttons as the ones
-/// docked beside it. What marks it as the thing the turn is waiting on is the
-/// pair of decisions, not any colour of its own: the two are told apart by
-/// emphasis, with the grant carrying the weight and the refusal receding.
-/// Refusing is the conservative answer, so it is deliberately not the red one.
+/// It is an ordinary composer notice, and its two decisions wear the same
+/// borderless chip shape as the model and reasoning controls one row below.
+/// What marks it as the thing the turn is waiting on is that it asks anything
+/// at all, not any colour of its own: the pair is told apart by emphasis, with
+/// the grant carrying the weight and the refusal receding. Refusing is the
+/// conservative answer, so it is deliberately not the red one.
 fn approval_card(
   dispatch : @cmd.Emit[Msg],
   pending : PendingApproval,
@@ -665,14 +666,14 @@ fn approval_card(
   } else {
     [
       @html.button(
-        class="composer-notice-btn composer-approval-deny",
+        class="composer-approval-action composer-approval-deny",
         type_="button",
         title="Refuse this request; the tool reports the refusal and keeps working inside the sandbox",
         on_click=dispatch(ApprovalAnswered(allow=false)),
         "Deny",
       ),
       @html.button(
-        class="composer-notice-btn composer-approval-allow",
+        class="composer-approval-action composer-approval-allow",
         type_="button",
         title="Allow this one run; nothing beyond it is granted",
         on_click=dispatch(ApprovalAnswered(allow=true)),
