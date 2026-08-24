@@ -880,6 +880,106 @@ test "a tool row renders recorded arguments before its result" {
 
 ///|
 #warnings("-alert_unstable")
+test "JSON tool arguments render as readable fields with the original preserved" {
+  let rendered = tool_call_view({
+    kind: Tool(
+      call_id="c1",
+      name="write",
+      arguments=Some(
+        "{\"path\":\"notes.txt\",\"content\":\"alpha\\nbeta\",\"overwrite\":true,\"retries\":2}",
+      ),
+      has_result=true,
+      is_error=false,
+      brief=Some("wrote notes.txt"),
+    ),
+    content: "",
+    ts: None,
+    sequence: None,
+  })
+  let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
+  assert_true(markup.contains("class=\"tool-call-arguments-friendly\""))
+  assert_true(markup.contains("class=\"tool-argument-key\">path</span>"))
+  assert_true(
+    markup.contains(
+      "class=\"tool-argument-value tool-argument-string\">notes.txt</span>",
+    ),
+  )
+  assert_true(
+    markup.contains("class=\"tool-argument-value-block\">alpha\nbeta</pre>"),
+  )
+  assert_true(
+    markup.contains(
+      "class=\"tool-argument-value tool-argument-boolean\">true</span>",
+    ),
+  )
+  assert_true(
+    markup.contains(
+      "class=\"tool-argument-value tool-argument-number\">2</span>",
+    ),
+  )
+  assert_true(markup.contains("Original JSON"))
+  assert_true(markup.contains("alpha\\nbeta"))
+}
+
+///|
+#warnings("-alert_unstable")
+test "nested JSON arguments retain their object and array hierarchy" {
+  let rendered = tool_call_view({
+    kind: Tool(
+      call_id="c1",
+      name="batch",
+      arguments=Some(
+        "{\"options\":{\"cwd\":\"src\",\"limit\":null},\"steps\":[{\"op\":\"read\",\"path\":\"a.mbt\"},{\"op\":\"write\",\"path\":\"b.mbt\"}]}",
+      ),
+      has_result=false,
+      is_error=false,
+      brief=None,
+    ),
+    content: "",
+    ts: None,
+    sequence: None,
+  })
+  let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
+  assert_true(markup.contains("class=\"tool-argument-object\""))
+  assert_true(markup.contains("class=\"tool-argument-array\""))
+  assert_eq(markup.split("class=\"tool-argument-item\"").length(), 3)
+  assert_true(markup.contains("class=\"tool-argument-key\">cwd</span>"))
+  assert_true(markup.contains("class=\"tool-argument-key\">op</span>"))
+  assert_true(
+    markup.contains(
+      "class=\"tool-argument-value tool-argument-null\">null</span>",
+    ),
+  )
+}
+
+///|
+#warnings("-alert_unstable")
+test "non-object and malformed arguments keep the preformatted fallback" {
+  for arguments in ["[1,2,3]", "not json"] {
+    let rendered = tool_call_view({
+      kind: Tool(
+        call_id="c1",
+        name="batch",
+        arguments=Some(arguments),
+        has_result=false,
+        is_error=false,
+        brief=None,
+      ),
+      content: "",
+      ts: None,
+      sequence: None,
+    })
+    let markup = @rabbita.render_to_string(() => {
+      @rabbita.Val::constant(rendered)
+    })
+    assert_true(markup.contains("<pre class=\"tool-call-arguments\">"))
+    assert_false(markup.contains("tool-call-arguments-friendly"))
+    assert_false(markup.contains("Original JSON"))
+  }
+}
+
+///|
+#warnings("-alert_unstable")
 test "a MoonBit read highlights source without coloring its gutter or footer" {
   // More than the generic 100-line display limit proves the read protocol is
   // decoded before the plain-text fallback inserts skip markers.

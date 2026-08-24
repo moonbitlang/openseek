@@ -403,20 +403,10 @@ fn tool_call_view_mode(
   } else if arguments is Some(arguments) {
     let trimmed = arguments.trim()
     if !trimmed.is_empty() && trimmed != "{}" {
-      // Bound the raw payload before parsing: even a collapsed details node is
-      // built on every render, and write/edit arguments can contain whole
-      // files. Clamp again after pretty-printing because indentation can make a
-      // compact JSON payload substantially larger.
-      let bounded = truncate_output(arguments)
-      let rendered = truncate_output(
-        @json.parse(bounded).stringify(indent=2) catch {
-          _ => bounded
-        },
-      )
       body.push(
         @html.div(class="tool-call-section", [
           @html.div(class="tool-call-section-label", "Arguments"),
-          @html.pre(class="tool-call-arguments", rendered),
+          json_arguments_view(arguments),
         ]),
       )
     }

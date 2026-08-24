@@ -804,6 +804,68 @@
   background: var(--color-danger-soft);
 }
 
+/* Generic JSON arguments follow viz's human-readable form: one labeled field
+   per object member, decoded strings shown verbatim, and nested collections
+   retaining their hierarchy. The recorded payload remains under Original JSON
+   for exact debugging. */
+.tool-call-arguments-friendly {
+  margin: 6px 0 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-subtle);
+  color: var(--color-code);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+.tool-argument-field {
+  margin: 3px 0;
+}
+.tool-argument-key {
+  color: var(--color-accent);
+  font-family: var(--font-family-ui);
+  font-weight: 600;
+}
+.tool-argument-key::after {
+  content: ": ";
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+.tool-argument-value {
+  font-family: var(--font-family-ui);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tool-argument-number,
+.tool-argument-boolean {
+  color: var(--color-warning);
+}
+.tool-argument-null {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+.tool-call .tool-argument-value-block {
+  margin: 4px 0 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+}
+.tool-argument-object {
+  margin: 3px 0 3px 2px;
+  padding-left: 10px;
+  border-left: 1px solid var(--color-border);
+}
+.tool-argument-array {
+  margin: 3px 0 3px 2px;
+}
+.tool-argument-item {
+  margin: 4px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--color-border);
+}
+.tool-call-arguments-friendly .tool-card-original {
+  margin-top: 6px;
+}
+
 /* ---------- custom tool cards ----------
    One tool's arguments rendered in the shape a reader wants — a `run_moonbit`
    call as its program, an `edit` as the change it describes — instead of the
