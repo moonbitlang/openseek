@@ -590,6 +590,7 @@ async fn execute(
       denial_scan_source,
       raw,
       escalation=approval is Some(_),
+      escalated~,
     )
     exec.discard()
     let text = rewrite_temp_paths(raw, [real, dir])
@@ -646,6 +647,7 @@ async fn execute(
     Some(log),
     "",
     escalation=approval is Some(_),
+    escalated~,
   )
   let action = match result {
     Some((exit_code, raw)) => {
@@ -719,6 +721,7 @@ async fn refusal_guidance(
   log_path : String?,
   head : String,
   escalation~ : Bool,
+  escalated~ : Bool,
 ) -> String? {
   async fn shows(reports : (String) -> Bool) -> Bool {
     match log_path {
@@ -727,7 +730,12 @@ async fn refusal_guidance(
     }
   }
 
-  if shows(@sandbox.output_reports_policy_refusal) {
+  // An escalated run was given no policy, so nothing it prints can be this
+  // tool's policy refusing something. The spawn marker is only the guest's own
+  // `EPERM` text, which an unsandboxed child can produce for its own reasons —
+  // scanning for it here would report a successful run as an error and tell
+  // the model to ask for the escalation it was already granted.
+  if !escalated && shows(@sandbox.output_reports_policy_refusal) {
     // The escalating variant only where a channel exists AND this is a
     // foreground report: its wording assumes nothing ran, which is true here
     // and false of `job_output`, whose job worked before it was refused.

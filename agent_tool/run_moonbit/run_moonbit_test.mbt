@@ -1035,3 +1035,49 @@ async test "escalation is refused on a target that carries no policy" {
   // Nobody was interrupted for a grant that would have done nothing.
   assert_eq(asked.length(), 0)
 }
+
+///|
+/// An approved escalation runs with no policy, so the marker the refusal scan
+/// keys on cannot mean what it means elsewhere: `@process.spawn(): Permission
+/// denied` is the guest's own `EPERM` text, which an unsandboxed child raises
+/// for its own reasons. Scanning anyway reported a successful run as an error
+/// and told the model to ask for the escalation it had just been granted.
+#cfg(not(platform="windows"))
+async test "an escalated run is not read as a policy refusal" {
+  let out = @vfs.with_tmpdir(prefix="run-moonbit-escalated-scan-", ws => {
+    let definition = @run_moonbit.definition(
+      workspace_root=ws,
+      approval=ApprovalChannel(_ => AllowedOnce),
+    )
+    // Spawning something that exists but cannot be executed raises exactly the
+    // text the scan looks for — from the OS, not from any policy.
+    let source =
+      #|import { "bobzhang/myshell", "moonbitlang/async", "moonbitlang/async/fs" }
+      #|
+      #|async fn main {
+      #|  let dir = @fs.tmpdir(prefix="probe-")
+      #|  let path = dir + "/not-executable"
+      #|  @fs.write_file(path, "not a program", create_mode=CreateOrTruncate)
+      #|  let refused = try {
+      #|    @myshell.Cmd(path, []).output() |> ignore
+      #|    "ran"
+      #|  } catch { error => "\{error}" }
+      #|  println("child: \{refused}")
+      #|}
+    let action = match definition.execute {
+      Async(execute) => execute({ "source": source, "escalated": true })
+      Sync(_) => fail("run_moonbit should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    output
+  })
+  // Whatever the child did, this tool must not claim its own sandbox refused
+  // something, nor tell the model to escalate again.
+  // The marker really is in the output — otherwise this test would pass by
+  // having nothing for the scan to trip on.
+  assert_true(out.content.contains("@process.spawn(): Permission denied"))
+  // And this tool must not claim its own sandbox refused something, nor tell
+  // the model to escalate again.
+  assert_false(out.content.contains("this tool's policy refusing"))
+  assert_false(out.content.contains("escalated: true"))
+}
