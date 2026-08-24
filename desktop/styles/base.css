@@ -45,7 +45,8 @@ select {
 code,
 pre,
 kbd,
-samp {
+samp,
+.tool-diff {
   font-family: var(--font-family-mono);
   font-weight: 400;
 }
