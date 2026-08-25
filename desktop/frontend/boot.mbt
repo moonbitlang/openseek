@@ -400,15 +400,6 @@ pub fn boot() -> Unit {
             ),
           )
         }
-        if model.launcher.open {
-          subs.push(
-            dismiss_subscription(
-              "launcher-dismiss",
-              trigger=".launcher-button",
-              emit.map((_ : Unit) => CloseLauncher),
-            ),
-          )
-        }
         if model.right_panel_menu_open {
           subs.push(
             dismiss_subscription(

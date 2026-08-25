@@ -669,8 +669,6 @@ Notification:
 
 | method | params | result |
 |---|---|---|
-| `app.list` | `{}` | `{apps: [{id, name, icon}]}` — `icon` is a `data:image/png` URL, empty when extraction failed |
-| `app.launch` | `{session, cwd?, app}` | `{launched}` |
 | `host.open_path` | `{session, cwd?, path}` | `{opened, editor_target?, directory_target?, error?}` — return a viewer-sized UTF-8 text file inside the checkout as `{opened:false, editor_target:{path,line?,column?}}` for the built-in editor; hand other existing paths to the system opener as `{opened:true}`; missing paths and text files outside the checkout return a refusal as `{opened:false, error:"<reason>"}` (older hosts raised instead); an existing literal filename wins before `path:line[:column]` or `path#Lline` suffix parsing; relative input resolves against the conversation's working directory (`cwd` when present, otherwise derived from `session`) |
 
 Reserved notification (not yet emitted over the wire):

@@ -25,10 +25,6 @@ pub let agent_steer : Command[@protocol.SteerPayload, @protocol.SteerReply]
 
 pub let app_info : Command[@protocol.EmptyPayload, @protocol.AppInfoReply]
 
-pub let app_launch : Command[@protocol.LaunchAppPayload, @protocol.LaunchAppReply]
-
-pub let app_list : Command[@protocol.EmptyPayload, @protocol.ListAppsReply]
-
 pub let app_open_devtools : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
 
 pub let app_toggle_maximized : Command[@protocol.EmptyPayload, @protocol.EmptyReply]

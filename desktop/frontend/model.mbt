@@ -1402,10 +1402,6 @@ priv struct Model {
   // outstanding replies a number the new one accepts. Kept whole while the
   // frontend runs, it can only ever be spent.
   git_request_generation : Int
-  // The desktop topbar's app launcher. Installed apps belong to the native
-  // host, not a conversation or workspace, so this catalog is probed once
-  // and kept while the frontend runs.
-  launcher : Launcher
   // Whether the composer's git chip has its details popover open. Global UI
   // for the focused conversation like `quick_open`, not conversation state:
   // only one composer is on screen, and a popover left open across a switch
@@ -1471,14 +1467,6 @@ priv struct RemoteAccess {
 } derive(Eq)
 
 ///|
-/// The desktop topbar app launcher's state: whether its menu is open and the
-/// Local native host's process-wide installed-app catalog.
-priv struct Launcher {
-  open : Bool
-  apps : LauncherApps
-} derive(Eq)
-
-///|
 /// The host-side presentation of the active Browser tab's native view, as
 /// last commanded: `shown`/`rect` echo the `browser.set_visible`/
 /// `browser.set_bounds` already sent, and `geo` is the model-geometry
@@ -1527,17 +1515,6 @@ priv struct ProjectAdoption {
   picked : @common.Uri
   known : Array[@common.Uri]
   resolved : @common.Uri?
-} derive(Eq)
-
-///|
-/// The Local native host's installed-app catalog. `AppsLoading` makes the
-/// probe single-flight: closing and reopening the menu cannot start another
-/// request while the first is still running.
-priv enum LauncherApps {
-  AppsNotFetched
-  AppsLoading
-  AppsFetched(Array[@transcript.LauncherAppItem])
-  AppsFailed(String)
 } derive(Eq)
 
 ///|
@@ -1855,15 +1832,11 @@ priv enum Msg {
     generation~ : Int,
     path~ : String
   )
-  // Open or close the topbar app launcher; opening it fetches the installed-app
-  // list the first time.
-  ToggleLauncher
   // Open or close the composer git chip's details popover.
   ToggleGitDetails
   // Clicks away from a transient menu, one per menu. Each is separate from
   // its toggle on purpose: a dismissal must never reopen what it closed.
   CloseGitDetails
-  CloseLauncher
   // The right panel renders these root-owned values and reports only user
   // actions. Keeping the transitions here avoids a component mirror and a
   // second message that writes the same visibility back into the root.
@@ -1871,10 +1844,6 @@ priv enum Msg {
   ToggleRightPanelMenu
   ToggleRightPanelExpanded
   CloseRightPanelMenu
-  LauncherLoaded(Array[@transcript.LauncherAppItem])
-  LauncherFailed(String)
-  // Launch one detected app (by its id) on the active conversation's workspace.
-  LaunchApp(String)
   // The composer's goal-editing mode over the active conversation: open
   // (prefilled with the mirrored standing goal), edit its draft, send a
   // set/clear to the engine, or dismiss. Each acts on the conversation on
@@ -2455,7 +2424,6 @@ fn initial_model() -> Model {
     composer_entry_retirements: [],
     quick_open: @quick_open.State::empty(),
     git_request_generation: 0,
-    launcher: { open: false, apps: AppsNotFetched },
     git_details_open: false,
     dock: @dock.State::empty(),
     file_panel: @fileeditor.State::empty(),

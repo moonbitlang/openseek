@@ -12,7 +12,7 @@ extern "js" fn titlebar_test_element(
   #|     if (selector === ".window-titlebar-page") {
   #|       return inTitlebarPage ? this : null;
   #|     }
-  #|     if (selector === "button, a, input, textarea, select, [role=button], .editor-tab, .launcher-menu, .dock-menu") {
+  #|     if (selector === "button, a, input, textarea, select, [role=button], .editor-tab, .dock-menu") {
   #|       return excluded ? this : null;
   #|     }
   #|     return null;

@@ -12,8 +12,6 @@ pub fn apply_goal_marker(GoalStanding?, GoalMarker) -> GoalStanding?
 
 pub fn apply_session_item(Array[TranscriptItem], @protocol.SessionItem, ts? : Double, sequence? : Int) -> Bool
 
-pub fn apps_from_reply(@protocol.ListAppsReply) -> Array[LauncherAppItem]
-
 pub fn decode_engine_event(@protocol.AgentStreamEvent) -> EngineEvent?
 
 pub fn goal_marker(String) -> GoalMarker?
@@ -88,14 +86,6 @@ pub(all) enum ItemKind {
 } derive(Eq)
 pub fn ItemKind::equal(Self, Self) -> Bool
 pub fn ItemKind::not_equal(Self, Self) -> Bool
-
-pub(all) struct LauncherAppItem {
-  id : String
-  name : String
-  icon : String
-} derive(Eq)
-pub fn LauncherAppItem::equal(Self, Self) -> Bool
-pub fn LauncherAppItem::not_equal(Self, Self) -> Bool
 
 pub struct RuntimeUpdateView {
   status : String?

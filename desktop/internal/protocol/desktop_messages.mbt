@@ -371,13 +371,6 @@ pub(all) struct GitOriginalFilePayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-pub(all) struct LaunchAppPayload {
-  session : String
-  cwd : String?
-  app : String
-} derive(Debug, Eq, FromJson, ToJson)
-
-///|
 pub(all) struct ReadDirPayload {
   path : String
 } derive(Debug, Eq, FromJson, ToJson)
@@ -1504,18 +1497,6 @@ pub extend KnownRunPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend KnownRunPayload with ToJson::{to_json}
-
-///|
-pub extend LaunchAppPayload with Debug::{to_repr}
-
-///|
-pub extend LaunchAppPayload with FromJson::{from_json}
-
-///|
-pub extend LaunchAppPayload with Eq::{equal, not_equal}
-
-///|
-pub extend LaunchAppPayload with ToJson::{to_json}
 
 ///|
 pub extend LoadSessionPayload with Debug::{to_repr}

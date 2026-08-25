@@ -62,17 +62,6 @@ pub fn AgentStreamEvent::to_repr(Self) -> @debug.Repr
 pub impl ToJson for AgentStreamEvent
 pub impl @json.FromJson for AgentStreamEvent
 
-pub(all) struct AppEntry {
-  id : String
-  name : String
-  icon : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn AppEntry::equal(Self, Self) -> Bool
-pub fn AppEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn AppEntry::not_equal(Self, Self) -> Bool
-pub fn AppEntry::to_json(Self) -> Json
-pub fn AppEntry::to_repr(Self) -> @debug.Repr
-
 pub(all) struct AppInfoReply {
   version : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
@@ -1214,35 +1203,6 @@ pub fn KnownRunPayload::from_json(Json, @json.JsonPath) -> Self raise @json.Json
 pub fn KnownRunPayload::not_equal(Self, Self) -> Bool
 pub fn KnownRunPayload::to_json(Self) -> Json
 pub fn KnownRunPayload::to_repr(Self) -> @debug.Repr
-
-pub(all) struct LaunchAppPayload {
-  session : String
-  cwd : String?
-  app : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn LaunchAppPayload::equal(Self, Self) -> Bool
-pub fn LaunchAppPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn LaunchAppPayload::not_equal(Self, Self) -> Bool
-pub fn LaunchAppPayload::to_json(Self) -> Json
-pub fn LaunchAppPayload::to_repr(Self) -> @debug.Repr
-
-pub(all) struct LaunchAppReply {
-  launched : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn LaunchAppReply::equal(Self, Self) -> Bool
-pub fn LaunchAppReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn LaunchAppReply::not_equal(Self, Self) -> Bool
-pub fn LaunchAppReply::to_json(Self) -> Json
-pub fn LaunchAppReply::to_repr(Self) -> @debug.Repr
-
-pub(all) struct ListAppsReply {
-  apps : Array[AppEntry]
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn ListAppsReply::equal(Self, Self) -> Bool
-pub fn ListAppsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn ListAppsReply::not_equal(Self, Self) -> Bool
-pub fn ListAppsReply::to_json(Self) -> Json
-pub fn ListAppsReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LoadSessionPayload {
   session : String

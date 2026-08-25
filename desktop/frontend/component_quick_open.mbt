@@ -23,8 +23,7 @@ fn Model::quick_open_input(
 ///|
 /// Answer the shortcut. Whether the palette may appear is a shell question:
 /// another modal or a lost bridge already owns the screen, and the palette
-/// would render over it with no way back. The topbar's app launcher is not an
-/// exclusion but a casualty — the palette's backdrop covers it, so it closes.
+/// would render over it with no way back.
 fn open_quick_open(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -43,7 +42,7 @@ fn open_quick_open(
     model.quick_open_input(active),
     provider,
   )
-  (cmd, { ..model, quick_open, launcher: { ..model.launcher, open: false } })
+  (cmd, { ..model, quick_open, })
 }
 
 ///|

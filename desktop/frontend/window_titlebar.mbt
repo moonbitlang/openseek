@@ -10,7 +10,7 @@ const WindowTitlebarSelector = ".sidebar-header, .topbar, .editor-tabsbar"
 const WindowTitlebarPageSelector = ".window-titlebar-page"
 
 ///|
-const WindowTitlebarExcludedSelector = "button, a, input, textarea, select, [role=button], .editor-tab, .launcher-menu, .dock-menu"
+const WindowTitlebarExcludedSelector = "button, a, input, textarea, select, [role=button], .editor-tab, .dock-menu"
 
 ///|
 const WindowTitlebarPageHeight = 46

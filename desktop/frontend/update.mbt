@@ -1438,8 +1438,8 @@ fn covering_overlay(model : Model) -> Bool {
 /// tab's, once it has a URL (a blank tab has no view yet) — and only while
 /// the pane is actually visible and uncovered. Native views z-order above
 /// all HTML, so anything the frontend draws over the pane area — the `+`
-/// launcher popup, the narrow layout's sidebar drawer, the topbar app
-/// launcher, a custom select or the composer's Git popover, and every
+/// launcher popup, the narrow layout's sidebar drawer, a custom select, the
+/// composer's Git popover, and every
 /// `covering_overlay` — must hide the view rather than fight it.
 fn desired_browser_view(model : Model) -> Int? {
   let conversation_screen = model.screen is Chat || model.screen is Codex
@@ -1452,7 +1452,6 @@ fn desired_browser_view(model : Model) -> Int? {
     conversation_screen &&
     model.right_panel_open &&
     !model.right_panel_menu_open &&
-    !model.launcher.open &&
     model.select_menu is None &&
     !git_details_open &&
     !(model.narrow && model.sidebar_open) &&
@@ -3970,8 +3969,6 @@ fn update_msg(
       )
     }
     CloseGitDetails => (@cmd.none, { ..model, git_details_open: false })
-    CloseLauncher =>
-      (@cmd.none, { ..model, launcher: { ..model.launcher, open: false } })
     ToggleRightPanel => {
       let opening = !model.right_panel_open
       // A direct visibility toggle has no later semantic action to fence old
@@ -4015,55 +4012,6 @@ fn update_msg(
     }
     CloseRightPanelMenu =>
       (@cmd.none, { ..model, right_panel_menu_open: false })
-    ToggleLauncher => {
-      let opening = !model.launcher.open
-      // The launcher exists only in the desktop window, whose one native
-      // host is Local. Installed apps are host-global, while the workspace
-      // is supplied later to app.launch.
-      let (cmd, apps) = if opening {
-        match model.launcher.apps {
-          AppsNotFetched | AppsFailed(_) => (fetch_apps(dispatch), AppsLoading)
-          AppsLoading | AppsFetched(_) => (@cmd.none, model.launcher.apps)
-        }
-      } else {
-        (@cmd.none, model.launcher.apps)
-      }
-      (cmd, { ..model, launcher: { open: opening, apps } })
-    }
-    LauncherLoaded(apps) => {
-      // Only the one outstanding Local probe may settle the catalog. A
-      // duplicate or delayed reply after it settled cannot overwrite it.
-      guard model.launcher.apps is AppsLoading else {
-        return (@cmd.none, model)
-      }
-      (
-        @cmd.none,
-        { ..model, launcher: { ..model.launcher, apps: AppsFetched(apps) } },
-      )
-    }
-    LauncherFailed(message) => {
-      guard model.launcher.apps is AppsLoading else {
-        return (@cmd.none, model)
-      }
-      (
-        @cmd.none,
-        { ..model, launcher: { ..model.launcher, apps: AppsFailed(message) } },
-      )
-    }
-    LaunchApp(app) => {
-      guard model.active_conversation() is Some(conv) else {
-        return (@cmd.none, model)
-      }
-      (
-        launch_app(
-          dispatch,
-          conv.session_id,
-          cwd=model.conversation_root(conv),
-          app,
-        ),
-        { ..model, launcher: { ..model.launcher, open: false } },
-      )
-    }
     OpenGoalEditor => {
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
@@ -13464,18 +13412,8 @@ test "the composer's git details popover toggles shut again" {
 }
 
 ///|
-test "every click-away menu closes without reopening on a second dismissal" {
+test "right-panel menu closes without reopening on a second dismissal" {
   let dispatch = test_dispatch()
-  // The topbar app launcher.
-  let (_, launched) = update(dispatch, ToggleLauncher, test_model())
-  assert_true(launched.launcher.open)
-  let (_, dropped) = update(dispatch, CloseLauncher, launched)
-  assert_false(dropped.launcher.open)
-  let (_, twice) = update(dispatch, CloseLauncher, dropped)
-  assert_false(twice.launcher.open)
-  // Dismissing does not discard the catalog the launcher already probed, so
-  // reopening it does not go back to the host for a list it has.
-  assert_true(dropped.launcher.apps is AppsLoading)
   // Right-panel actions update the root's single visibility state directly.
   let (_, docked) = update(dispatch, ToggleRightPanel, desktop_model())
   // The empty strip is the launcher's deliberate open state. A delayed close
@@ -13521,7 +13459,7 @@ test "right-panel menu closes when the dock owner changes" {
   }
   // Any root message runs the centralized dock synchronization. The owner
   // transition closes the menu directly, with no rendered marker or observer.
-  let (_, synced) = update(dispatch, CloseLauncher, stale)
+  let (_, synced) = update(dispatch, CloseGitDetails, stale)
   assert_false(synced.right_panel_menu_open)
   assert_true(synced.dock.owner != Some(stale_owner))
 }
@@ -18167,12 +18105,9 @@ test "full-screen modals hide the native view and closing restores it" {
     setup_closed,
   )
   assert_true(setup_restored.browser_pane.shown == Some(1))
-  // The topbar app launcher covers the pane too, and so does the composer's
-  // git popover: it opens upward over the pane's bottom-left corner, and a
-  // native view left showing would paint straight over it.
-  let (_, launched) = update(dispatch, ToggleLauncher, restored)
-  assert_true(launched.browser_pane.shown is None)
-  // The popover needs a branch to have a trigger at all, so give the
+  // The composer's git popover opens upward over the pane's bottom-left
+  // corner, so a native view left showing would paint straight over it. The
+  // popover needs a branch to have a trigger at all, so give the
   // conversation one before opening it.
   let (_, on_branch) = update_dev(dispatch, branch_reply("feature/x"), restored)
   let (_, detailing) = update(dispatch, ToggleGitDetails, on_branch)

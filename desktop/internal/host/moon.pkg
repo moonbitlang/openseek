@@ -1,5 +1,4 @@
 import {
-  "openseek_desktop/internal/applauncher",
   "openseek_desktop/internal/commands",
   "openseek_desktop/internal/development",
   "openseek_desktop/internal/work_dir",

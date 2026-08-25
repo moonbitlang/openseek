@@ -133,8 +133,7 @@
     left: 8px;
   }
   .topbar-toggle,
-  .panel-toggle,
-  .launcher-button {
+  .panel-toggle {
     min-width: 44px;
     min-height: 44px;
   }

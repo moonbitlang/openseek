@@ -32,22 +32,6 @@ type OpenPathReply = @protocol.OpenPathReply
 type ApplyUpdateReply = @protocol.ApplyUpdateReply
 
 ///|
-/// Reply to `list_apps`: the launcher apps detected as installed on this
-/// machine, in catalog order. `icon` is a `data:image/png` URL (empty when the
-/// app's icon could not be extracted — the frontend falls back to an initial).
-type ListAppsReply = @protocol.ListAppsReply
-
-///|
-/// Launch one detected app (`app` = the `id` from `app.list`) with the
-/// conversation's working directory — `cwd` when the frontend has it, otherwise
-/// derived by the host from `session`, mirroring `host.open_path`.
-type LaunchAppPayload = @protocol.LaunchAppPayload
-
-///|
-/// Reply to `launch_app`: whether the app was handed the directory.
-type LaunchAppReply = @protocol.LaunchAppReply
-
-///|
 /// Reply to `skills_catalog`: the registry's installable skills.
 type SkillsCatalogReply = @protocol.SkillsCatalogReply
 

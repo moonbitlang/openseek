@@ -313,12 +313,6 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.update_apply, async fn(_) {
       state.updates.apply()
     }),
-    @endpoint.Endpoint::remote(@commands.app_list, async fn(_) {
-      list_apps_op()
-    }),
-    @endpoint.Endpoint::remote(@commands.app_launch, async fn(payload) {
-      launch_app_op(payload)
-    }),
     @endpoint.Endpoint::remote(@commands.git_branch, async fn(payload) {
       git_branch_op(payload)
     }),
