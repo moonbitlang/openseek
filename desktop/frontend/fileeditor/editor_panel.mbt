@@ -136,7 +136,7 @@ let viewer_state : ViewerHost = {
     ),
     layout=@viewer.SideBySide,
     automatic_inline=false,
-    diff_word_wrap=@viewer.Inherit,
+    diff_word_wrap=@viewer.Off,
   ),
   diff_provider: @moon_diff_provider.MoonDocumentDiffProvider(),
   diff_mode: ReviewDiffCore,
