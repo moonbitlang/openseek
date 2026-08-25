@@ -64,8 +64,9 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
     return refusal("Could not resolve path")
   }
   // A literal directory inside this conversation belongs to the built-in Files
-  // tree. Check both its lexical and real path so an in-checkout symlink cannot
-  // expose a directory outside the checkout. Files retain the upstream text
+  // tree, except for macOS application bundles, which belong to LaunchServices.
+  // Check both its lexical and real path so an in-checkout symlink cannot expose
+  // a directory outside the checkout. Files retain the upstream text
   // classification above; other paths retain the system-opener policy.
   if base is Some(root) &&
     @pathx.Path(system_path).to_absolute() is Some(absolute) &&
@@ -74,7 +75,11 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
       error if @async.is_being_cancelled() => raise error
       _ => None
     }
-    if kind is Some(Directory) {
+    if kind is Some(Directory) &&
+      should_reveal_checkout_directory(
+        system_path,
+        is_darwin=@platform.is_darwin(),
+      ) {
       let real_root_text = Some(@fs.realpath(root.to_string())) catch {
         error if @async.is_being_cancelled() => raise error
         _ => None
@@ -98,6 +103,20 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
   }
   guard code == 0 else { return refusal("Could not open \{system_path}") }
   Opened
+}
+
+///|
+async fn should_reveal_checkout_directory(
+  path : String,
+  is_darwin~ : Bool,
+) -> Bool {
+  guard is_darwin && path.has_suffix(".app") else { return true }
+  let info_plist = "\{path}/Contents/Info.plist"
+  let info_kind = Some(@fs.kind(info_plist)) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => None
+  }
+  !(info_kind is Some(Regular))
 }
 
 ///|
@@ -199,6 +218,23 @@ async test "open_path returns workspace editor positions without a system open" 
     path: "src",
   })
   assert_eq(directory_reply, Directory({ path: "src" }))
+}
+
+///|
+async test "macOS application bundles bypass the workspace Files tree" {
+  let dir = @fs.tmpdir(prefix="openseek-host-open-app-bundle-")
+  let bundle = "\{dir}/SeekMoon.app"
+  @fs.mkdir("\{bundle}/Contents", recursive=true)
+  @fs.write_file(
+    "\{bundle}/Contents/Info.plist",
+    "<?xml version=\"1.0\"?>",
+    create_mode=CreateOrTruncate,
+  )
+  assert_false(should_reveal_checkout_directory(bundle, is_darwin=true))
+  assert_true(should_reveal_checkout_directory(bundle, is_darwin=false))
+  let suffix_only = "\{dir}/NotAnApplication.app"
+  @fs.mkdir(suffix_only)
+  assert_true(should_reveal_checkout_directory(suffix_only, is_darwin=true))
 }
 
 ///|
