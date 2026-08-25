@@ -46,24 +46,30 @@ extern "js" fn scroll_path_row(id : String) -> Unit =
 pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
   let visible_entries = picker.visible_entries()
   let filter_active = !picker.path_filter().is_empty()
+  let suggestion_active = picker.selected_path_suggestion() is Some(_)
+  let path_editing = picker.path_draft is Some(_)
   let rows : Array[@html.Html] = []
   if picker.new_folder is Some(name) {
     rows.push(new_folder_row(emit, picker, name))
   }
   for index, name in visible_entries {
     let target = picker.entry_target(name)
-    let selected = filter_active && index == picker.path_selection
+    let selected = suggestion_active && index == picker.path_selection
+    let row_attrs = @html.Attrs::build()
+      .id(path_row_id(index))
+      .aria_label("Open folder \{name}")
+    let row_attrs = if path_editing {
+      row_attrs.role("option").aria_selected(selected.to_string())
+    } else {
+      row_attrs
+    }
     rows.push(
       @html.button(
         class=if selected { "picker-row selected" } else { "picker-row" },
         type_="button",
         disabled=picker.loading,
         on_click=emit(Navigate(target)),
-        attrs=@html.Attrs::build()
-          .id(path_row_id(index))
-          .role("option")
-          .aria_selected(selected.to_string())
-          .aria_label("Open folder \{name}"),
+        attrs=row_attrs,
         [
           @html.span(class="picker-row-icon", @icons.icon(@icons.icon_folder)),
           @html.span(class="picker-row-name", name),
@@ -94,6 +100,15 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
     "1 folder"
   } else {
     "\{folder_count} folders"
+  }
+  let list_attrs = @html.Attrs::build()
+    .id(PathListId)
+    .aria_label("Folders")
+    .aria_busy(picker.loading.to_string())
+  let list_attrs = if path_editing {
+    list_attrs.role("listbox")
+  } else {
+    list_attrs
   }
   @html.div(class="modal-backdrop picker-backdrop", on_click=emit(Close), [
     @html.div(
@@ -148,28 +163,20 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
           ),
         ]),
         @html.div(class="picker-browser", [
-          @html.div(
-            class="picker-list",
-            attrs=@html.Attrs::build()
-              .id(PathListId)
-              .role("listbox")
-              .aria_label("Folders")
-              .aria_busy(picker.loading.to_string()),
-            [
-              @html.div(class="picker-list-heading", [
-                @html.span("Name"),
-                @html.span(
-                  class="picker-list-count",
-                  if picker.loading {
-                    "Loading…"
-                  } else {
-                    folder_count_label
-                  },
-                ),
-              ]),
-              @html.div(class="picker-list-rows", rows),
-            ],
-          ),
+          @html.div(class="picker-list", attrs=list_attrs, [
+            @html.div(class="picker-list-heading", [
+              @html.span("Name"),
+              @html.span(
+                class="picker-list-count",
+                if picker.loading {
+                  "Loading…"
+                } else {
+                  folder_count_label
+                },
+              ),
+            ]),
+            @html.div(class="picker-list-rows", rows),
+          ]),
         ]),
         picker_footer(emit, picker),
       ],

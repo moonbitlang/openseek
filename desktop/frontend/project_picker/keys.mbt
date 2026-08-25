@@ -90,10 +90,6 @@ extern "js" fn add_project_picker_capture(
   #|     if (editPath) {
   #|       event.preventDefault();
   #|       event.stopPropagation();
-  #|       if (event.target?.closest?.(".picker-path-editor")) {
-  #|         event.target.select?.();
-  #|         return;
-  #|       }
   #|       onEditPath();
   #|       return;
   #|     }

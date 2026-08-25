@@ -225,6 +225,34 @@ test "path editing filters the loaded rows and ranks prefixes first" {
   assert_eq(absolute.path_filter(), "")
   assert_eq(absolute.visible_entries(), picker.entries)
   assert_eq(absolute.path_destination(), Some("/tmp/other"))
+  let (_, different_case, _) = State::handle(
+    filtered,
+    emit(),
+    PathChanged("/HOME/u/be"),
+  )
+  guard different_case is Some(different_case) else {
+    fail("case-sensitive path closed picker")
+  }
+  assert_eq(different_case.path_filter(), "")
+  assert_eq(different_case.path_destination(), Some("/HOME/u/be"))
+  let windows = opened(
+    location=Directory(test_resource(@interop.ChannelId::Local, "/C:/Code")),
+    entries=["Project"],
+  )
+  let (_, windows_editing, _) = State::handle(windows, emit(), EditPath)
+  guard windows_editing is Some(windows_editing) else {
+    fail("Windows path editor did not open")
+  }
+  let (_, windows_filtered, _) = State::handle(
+    windows_editing,
+    emit(),
+    PathChanged("/C:/CODE/pro"),
+  )
+  guard windows_filtered is Some(windows_filtered) else {
+    fail("Windows path filter closed picker")
+  }
+  assert_eq(windows_filtered.path_filter(), "pro")
+  assert_eq(windows_filtered.selected_path_suggestion(), Some("Project"))
 }
 
 ///|
@@ -248,6 +276,8 @@ test "path keyboard selection wraps and completion remains local" {
   let (_, completed, _) = State::handle(moved, emit(), CompletePath)
   guard completed is Some(completed) else { fail("completion closed picker") }
   assert_eq(completed.path_draft, Some("/home/u/better"))
+  assert_eq(completed.selected_path_suggestion(), None)
+  assert_eq(completed.path_destination(), Some("/home/u/better"))
   assert_false(completed.loading)
   assert_true(completed.location == picker.location)
 }
@@ -378,6 +408,8 @@ test "picker view exposes the folder controls" {
   )
   let html = markup(picker)
   assert_true(html.contains("role=\"dialog\""))
+  assert_false(html.contains("role=\"listbox\""))
+  assert_false(html.contains("role=\"option\""))
   assert_true(html.contains("Choose a folder to use as a project workspace"))
   assert_true(html.contains("New folder"))
   assert_true(html.contains("Open folder alpha"))
@@ -391,6 +423,8 @@ test "picker view exposes the folder controls" {
   guard editing is Some(editing) else { fail("path editor did not open") }
   let editor_html = markup(editing)
   assert_true(editor_html.contains("role=\"combobox\""))
+  assert_true(editor_html.contains("role=\"listbox\""))
+  assert_true(editor_html.contains("role=\"option\""))
   assert_true(editor_html.contains("aria-label=\"Folder path\""))
   assert_true(editor_html.contains("value=\"/home/u\""))
   assert_true(editor_html.contains("placeholder=\"Enter a folder path\""))

@@ -12,6 +12,17 @@ fn State::editable_path(self : State) -> String {
 }
 
 ///|
+/// Protocol paths encode a Windows drive as `/c:/...`. Only those paths use
+/// case-insensitive parent matching; POSIX directory names remain exact.
+fn is_windows_drive_resource_path(path : String) -> Bool {
+  guard path.length() >= 3 && path[0] == '/' && path[2] == ':' else {
+    return false
+  }
+  let drive = path[1]
+  (drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z')
+}
+
+///|
 /// The part of the draft that can describe a child of the current listing.
 /// An absolute path under another parent remains directly submittable but does
 /// not pretend that the current directory's rows are its completions.
@@ -25,21 +36,36 @@ fn State::path_filter(self : State) -> String {
       } else {
         resource.path + "/"
       }
-      let draft_lower = draft.to_lower()
-      let base_lower = base.to_lower()
-      if draft_lower == resource.path.to_lower() || draft_lower == base_lower {
+      let case_insensitive = is_windows_drive_resource_path(resource.path)
+      let comparable_draft = if case_insensitive {
+        draft.to_lower()
+      } else {
+        draft
+      }
+      let comparable_path = if case_insensitive {
+        resource.path.to_lower()
+      } else {
+        resource.path
+      }
+      let comparable_base = if case_insensitive {
+        base.to_lower()
+      } else {
+        base
+      }
+      if comparable_draft == comparable_path ||
+        comparable_draft == comparable_base {
         return ""
       }
-      match draft_lower.strip_prefix(base_lower) {
+      match comparable_draft.strip_prefix(comparable_base) {
         Some(suffix) => {
-          let suffix = "\{suffix}"
+          let suffix = "\{suffix}".to_lower()
           if suffix.contains("/") {
             ""
           } else {
             suffix
           }
         }
-        None => if draft.contains("/") { "" } else { draft_lower }
+        None => if draft.contains("/") { "" } else { draft.to_lower() }
       }
     }
     Some(DriveList) => {
@@ -95,7 +121,15 @@ fn State::entry_target(self : State, name : String) -> String {
 /// current directory prefilled must not make Enter unexpectedly choose row 0.
 fn State::selected_path_suggestion(self : State) -> String? {
   guard !self.path_filter().is_empty() else { return None }
-  self.visible_entries().get(self.path_selection)
+  guard self.visible_entries().get(self.path_selection) is Some(name) else {
+    return None
+  }
+  guard self.path_draft is Some(raw) && raw.trim() == self.entry_target(name) else {
+    return Some(name)
+  }
+  // Tab has already expanded this exact target. The next Tab must retain its
+  // native focus-navigation behavior instead of accepting the same row again.
+  None
 }
 
 ///|

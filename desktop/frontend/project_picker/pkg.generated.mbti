@@ -28,6 +28,12 @@ pub(all) enum Msg {
   Navigate(String)
   Loaded(channel~ : @interop.ChannelId, location~ : Location, entries~ : Array[String], generation~ : Int)
   Failed(channel~ : @interop.ChannelId, message~ : String, generation~ : Int)
+  EditPath
+  PathChanged(String)
+  MovePathSelection(Int)
+  CompletePath
+  SubmitPath
+  CancelPathEdit
   BeginCreateFolder
   NewFolderNameChanged(String)
   CancelCreateFolder
