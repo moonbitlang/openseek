@@ -121,15 +121,18 @@ fn State::entry_target(self : State, name : String) -> String {
 /// current directory prefilled must not make Enter unexpectedly choose row 0.
 fn State::selected_path_suggestion(self : State) -> String? {
   guard !self.path_filter().is_empty() else { return None }
-  guard self.visible_entries().get(self.path_selection) is Some(name) else {
-    return None
+  let visible = self.visible_entries()
+  guard self.path_draft is Some(raw) else { return None }
+  let draft = raw.trim()
+  // An exact loaded child is already complete, even when a longer sibling
+  // sorts ahead of it after refiltering (`better` beside `betterment`).
+  for name in visible {
+    if draft == self.entry_target(name) {
+      return None
+    }
   }
-  guard self.path_draft is Some(raw) && raw.trim() == self.entry_target(name) else {
-    return Some(name)
-  }
-  // Tab has already expanded this exact target. The next Tab must retain its
-  // native focus-navigation behavior instead of accepting the same row again.
-  None
+  guard visible.get(self.path_selection) is Some(name) else { return None }
+  Some(name)
 }
 
 ///|

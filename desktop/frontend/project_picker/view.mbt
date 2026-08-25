@@ -151,7 +151,7 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
         ]),
         @html.div(class="picker-location-bar", [
           match picker.path_draft {
-            Some(value) => path_editor(emit, picker, value, filter_active)
+            Some(value) => path_editor(emit, picker, value, suggestion_active)
             None => picker_breadcrumbs(emit, picker)
           },
           @html.button(
@@ -189,7 +189,7 @@ fn path_editor(
   emit : @cmd.Emit[Msg],
   picker : State,
   value : String,
-  filter_active : Bool,
+  suggestion_active : Bool,
 ) -> @html.Html {
   let base_attrs = @html.Attrs::build()
     .id(PathInputId)
@@ -232,7 +232,7 @@ fn path_editor(
         _ => @cmd.none
       }
     })
-  let input_attrs = if filter_active &&
+  let input_attrs = if suggestion_active &&
     picker.visible_entries().get(picker.path_selection) is Some(_) {
     base_attrs.aria_activedescendant(path_row_id(picker.path_selection))
   } else {

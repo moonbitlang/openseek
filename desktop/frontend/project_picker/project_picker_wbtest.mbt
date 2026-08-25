@@ -259,7 +259,7 @@ test "path editing filters the loaded rows and ranks prefixes first" {
 test "path keyboard selection wraps and completion remains local" {
   let picker = opened(
     location=Directory(test_resource(@interop.ChannelId::Local, "/home/u")),
-    entries=["alpha", "beta", "better"],
+    entries=["alpha", "betterment", "better"],
   )
   let (_, editing, _) = State::handle(picker, emit(), EditPath)
   guard editing is Some(editing) else { fail("path editor did not open") }
@@ -276,6 +276,7 @@ test "path keyboard selection wraps and completion remains local" {
   let (_, completed, _) = State::handle(moved, emit(), CompletePath)
   guard completed is Some(completed) else { fail("completion closed picker") }
   assert_eq(completed.path_draft, Some("/home/u/better"))
+  assert_eq(completed.visible_entries(), ["betterment", "better"])
   assert_eq(completed.selected_path_suggestion(), None)
   assert_eq(completed.path_destination(), Some("/home/u/better"))
   assert_false(completed.loading)
@@ -439,6 +440,12 @@ test "picker view exposes the folder controls" {
   assert_true(filtered_html.contains("Open folder alpha"))
   assert_false(filtered_html.contains("Open folder beta"))
   assert_true(filtered_html.contains("picker-row selected"))
+  let (_, completed, _) = State::handle(filtered, emit(), CompletePath)
+  guard completed is Some(completed) else {
+    fail("path completion closed picker")
+  }
+  let completed_html = markup(completed)
+  assert_false(completed_html.contains("aria-activedescendant"))
   let (_, composing, _) = State::handle(picker, emit(), BeginCreateFolder)
   guard composing is Some(composing) else { fail("composer did not open") }
   let composer_html = markup(composing)
