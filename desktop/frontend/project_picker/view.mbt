@@ -27,6 +27,11 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
         [
           @html.span(class="picker-row-icon", @icons.icon(@icons.icon_folder)),
           @html.span(class="picker-row-name", name),
+          @html.span(
+            class="picker-row-chevron",
+            attrs=@html.Attrs::build().aria_hidden("true"),
+            @icons.icon(@icons.icon_chevron_down),
+          ),
         ],
       ),
     )
@@ -37,7 +42,13 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
   let can_create = !picker.loading &&
     picker.location is Some(Directory(_)) &&
     picker.new_folder is None
-  @html.div(class="modal-backdrop", on_click=emit(Close), [
+  let folder_count = picker.entries.length()
+  let folder_count_label = if folder_count == 1 {
+    "1 folder"
+  } else {
+    "\{folder_count} folders"
+  }
+  @html.div(class="modal-backdrop picker-backdrop", on_click=emit(Close), [
     @html.div(
       class="modal picker-modal",
       attrs=@html.Attrs::build()
@@ -50,16 +61,22 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
         }),
       [
         @html.div(class="picker-header", [
-          @html.div(class="picker-header-copy", [
-            @html.div(
-              id="project-picker-title",
-              class="modal-title",
-              "Add a project",
+          @html.div(class="picker-header-leading", [
+            @html.span(
+              class="picker-header-icon",
+              @icons.icon(@icons.icon_folder_opened),
             ),
-            @html.div(
-              class="picker-subtitle",
-              "Choose a folder, or create a new one for this project.",
-            ),
+            @html.div(class="picker-header-copy", [
+              @html.div(
+                id="project-picker-title",
+                class="modal-title",
+                "Add a project",
+              ),
+              @html.div(
+                class="picker-subtitle",
+                "Choose a folder to use as a project workspace.",
+              ),
+            ]),
           ]),
           @html.button(
             class="picker-close",
@@ -84,7 +101,20 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
           @html.div(
             class="picker-list",
             attrs=@html.Attrs::build().aria_busy(picker.loading.to_string()),
-            rows,
+            [
+              @html.div(class="picker-list-heading", [
+                @html.span("Name"),
+                @html.span(
+                  class="picker-list-count",
+                  if picker.loading {
+                    "Loading…"
+                  } else {
+                    folder_count_label
+                  },
+                ),
+              ]),
+              @html.div(class="picker-list-rows", rows),
+            ],
           ),
         ]),
         picker_footer(emit, picker),
@@ -173,6 +203,7 @@ fn picker_footer(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
     picker.location is Some(Directory(_)) &&
     picker.new_folder is None
   @html.div(class="picker-footer", [
+    current_location(picker),
     @html.div(class="modal-actions", [
       @html.button(type_="button", on_click=emit(Close), "Cancel"),
       @html.button(
@@ -182,6 +213,29 @@ fn picker_footer(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
         on_click=emit(Confirm),
         "Add project",
       ),
+    ]),
+  ])
+}
+
+///|
+/// The footer keeps the directory being confirmed visible even when the
+/// breadcrumb has scrolled horizontally, mirroring a native picker's compact
+/// selection summary. A loading navigation intentionally keeps showing the
+/// last successful location while the primary action is disabled.
+fn current_location(picker : State) -> @html.Html {
+  let (label, path) = match picker.location {
+    Some(Directory(resource)) => ("Current folder", resource.path)
+    Some(DriveList) => ("Location", "This PC")
+    None => ("Location", "Loading…")
+  }
+  @html.div(class="picker-current-location", [
+    @html.span(
+      class="picker-current-icon",
+      @icons.icon(@icons.icon_folder_opened),
+    ),
+    @html.div(class="picker-current-copy", [
+      @html.span(class="picker-current-label", label),
+      @html.span(class="picker-current-path", path),
     ]),
   ])
 }
