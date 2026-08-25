@@ -164,6 +164,14 @@ priv struct CodexItem {
   id : String
   kind : String
   value : Json
+  // Items without their own status (web search and hook prompts, for example)
+  // still need the notification boundary to say whether their shared tool row
+  // is pending. Thread snapshots contain settled history by default; live
+  // `item/started` and `item/completed` notifications override it exactly.
+  completed : Bool
+  // Live lifecycle notifications stamp an item exactly. Thread snapshots do
+  // not carry that field, so reloaded history remains honestly undated.
+  ts : Double?
   // Deltas are presentation-only. `item/completed` replaces `value` and
   // clears this field because the completed item is authoritative.
   streamed : String
@@ -1247,13 +1255,17 @@ pub fn State::with_editor_comment(
 }
 
 ///|
-fn CodexItem::decode(value : Json) -> CodexItem? {
+fn CodexItem::decode(
+  value : Json,
+  completed? : Bool = true,
+  ts? : Double,
+) -> CodexItem? {
   guard value is Object(fields) &&
     @jsonx.json_text(fields, "id") is Some(id) &&
     @jsonx.json_text(fields, "type") is Some(kind) else {
     return None
   }
-  Some({ id, kind, value, streamed: "", })
+  Some({ id, kind, value, completed, ts, streamed: "", })
 }
 
 ///|
@@ -2183,6 +2195,69 @@ fn CodexThread::with_item(
 }
 
 ///|
+/// Convert app-server's structured standing-plan notification into the exact
+/// `{steps:[{title,status}]}` payload consumed by OpenSeek's shared plan card.
+/// The notification has no item id, so the client-local row is replaced and
+/// moved to the latest activity position on every update instead of inventing
+/// several durable calls. A malformed step rejects the whole update: showing a
+/// partial checklist would claim a plan Codex never reported.
+fn CodexThread::with_plan_update(
+  self : CodexThread,
+  turn_id : String,
+  fields : Map[String, Json],
+) -> CodexThread {
+  guard fields.get("plan") is Some(Array(entries)) else { return self }
+  let steps : Array[Json] = []
+  for entry in entries {
+    guard entry is Object(step) &&
+      @jsonx.json_text(step, "step") is Some(title) &&
+      @jsonx.json_text(step, "status") is Some(status) else {
+      return self
+    }
+    let status = if status == "inProgress" { "in_progress" } else { status }
+    steps.push({ "title": title, "status": status })
+  }
+  let id = "openseek-plan:\{turn_id}"
+  let value : Json = {
+    "id": id,
+    "type": "planUpdate",
+    "steps": Json::array(steps),
+    "explanation": fields.get("explanation").unwrap_or(Json::null()),
+  }
+  let item : CodexItem = {
+    id,
+    kind: "planUpdate",
+    value,
+    completed: true,
+    ts: None,
+    streamed: "",
+  }
+  let mut found = false
+  let turns = self.turns.map(turn => {
+    if turn.id == turn_id {
+      found = true
+      let items = turn.items.filter(existing => existing.kind != "planUpdate")
+      items.push(item)
+      { ..turn, items, }
+    } else {
+      turn
+    }
+  })
+  if !found {
+    turns.push({
+      id: turn_id,
+      status: "inProgress",
+      started_at: None,
+      completed_at: None,
+      items: [item],
+      items_view: None,
+      error: None,
+    })
+  }
+  { ..self, turns, }
+}
+
+///|
 fn CodexThread::with_delta(
   self : CodexThread,
   turn_id : String,
@@ -2194,6 +2269,41 @@ fn CodexThread::with_delta(
     turns: self.turns.map(turn => {
       if turn.id == turn_id {
         turn.with_delta(item_id, delta)
+      } else {
+        turn
+      }
+    }),
+  }
+}
+
+///|
+/// Adopt app-server's authoritative live patch for one file-change item. The
+/// item id and all lifecycle fields stay untouched; only the `changes` payload
+/// that the shared diff card reads is replaced.
+fn CodexThread::with_file_changes(
+  self : CodexThread,
+  turn_id : String,
+  item_id : String,
+  changes : Json,
+) -> CodexThread {
+  {
+    ..self,
+    turns: self.turns.map(turn => {
+      if turn.id == turn_id {
+        {
+          ..turn,
+          items: turn.items.map(item => {
+            if item.id == item_id &&
+              item.kind == "fileChange" &&
+              item.value is Object(fields) {
+              let fields = fields.copy()
+              fields["changes"] = changes
+              { ..item, value: Json::object(fields), }
+            } else {
+              item
+            }
+          }),
+        }
       } else {
         turn
       }
@@ -2265,19 +2375,33 @@ fn State::with_notification(
       } else {
         observed
       }
-    "item/started" | "item/completed" =>
-      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
-        fields.get("item") is Some(value) &&
-        CodexItem::decode(value) is Some(item) {
+    "turn/plan/updated" =>
+      if @jsonx.json_text(fields, "turnId") is Some(turn_id) {
         {
           ..observed,
-          selection: CodexStoredTask(
-            active.with_item(
-              turn_id,
-              item,
-              completed=method_ == "item/completed",
+          selection: CodexStoredTask(active.with_plan_update(turn_id, fields)),
+        }
+      } else {
+        observed
+      }
+    "item/started" | "item/completed" =>
+      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
+        fields.get("item") is Some(value) {
+        let completed = method_ == "item/completed"
+        let ts = match
+          fields.get(if completed { "completedAtMs" } else { "startedAtMs" }) {
+          Some(Number(value, ..)) => Some(value)
+          _ => None
+        }
+        if CodexItem::decode(value, completed~, ts?) is Some(item) {
+          {
+            ..observed,
+            selection: CodexStoredTask(
+              active.with_item(turn_id, item, completed~),
             ),
-          ),
+          }
+        } else {
+          observed
         }
       } else {
         observed
@@ -2286,13 +2410,40 @@ fn State::with_notification(
     | "item/plan/delta"
     | "item/reasoning/summaryTextDelta"
     | "item/reasoning/textDelta"
-    | "item/commandExecution/outputDelta" =>
+    | "item/commandExecution/outputDelta"
+    | "item/fileChange/outputDelta" =>
       if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
         @jsonx.json_text(fields, "itemId") is Some(item_id) &&
         @jsonx.json_text(fields, "delta") is Some(delta) {
         {
           ..observed,
           selection: CodexStoredTask(active.with_delta(turn_id, item_id, delta)),
+        }
+      } else {
+        observed
+      }
+    "item/mcpToolCall/progress" =>
+      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
+        @jsonx.json_text(fields, "itemId") is Some(item_id) &&
+        @jsonx.json_text(fields, "message") is Some(message) {
+        {
+          ..observed,
+          selection: CodexStoredTask(
+            active.with_delta(turn_id, item_id, "\{message}\n"),
+          ),
+        }
+      } else {
+        observed
+      }
+    "item/fileChange/patchUpdated" =>
+      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
+        @jsonx.json_text(fields, "itemId") is Some(item_id) &&
+        fields.get("changes") is Some(changes) {
+        {
+          ..observed,
+          selection: CodexStoredTask(
+            active.with_file_changes(turn_id, item_id, changes),
+          ),
         }
       } else {
         observed
@@ -2491,6 +2642,22 @@ fn CodexItem::text(self : CodexItem) -> String {
                 line=0,
               ),
             )
+          } else if value is Object(input) &&
+            @jsonx.json_text(input, "type") is Some("skill") &&
+            @jsonx.json_text(input, "name") is Some(name) {
+            // Skills already have a native shared mention kind, so they can
+            // retain the same chip the composer showed instead of disappearing
+            // from the historical user message.
+            mentions.push(@mention_context.Skill(name~))
+          } else if value is Object(input) &&
+            (
+              @jsonx.json_text(input, "type") is Some("localImage") ||
+              @jsonx.json_text(input, "type") is Some("localAudio")
+            ) &&
+            @jsonx.json_text(input, "path") is Some(path) {
+            // The shared transcript does not own a media attachment card yet,
+            // but it can preserve a local attachment as a navigable file chip.
+            mentions.push(@mention_context.File(path~))
           }
         }
       }
@@ -2607,9 +2774,10 @@ fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
   }
   {
     kind,
-    // The current app-server item snapshot has no durable display timestamp.
-    // Leaving it absent is honest; the shared turn rule simply omits its clock.
-    ts: None,
+    // Live notifications carry exact item lifecycle stamps. Reloaded snapshots
+    // do not, so those items continue to omit the clock instead of borrowing a
+    // turn-level time that may belong to a different model step.
+    ts: self.ts,
     // App-server items have their own ids but no OpenSeek store sequence. The
     // transcript overview therefore derives a stable fallback turn key.
     sequence: None,
@@ -2617,12 +2785,59 @@ fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
 }
 
 ///|
+/// The app-server classifies simple file reads inside a command execution. Only
+/// that exact single-action shape becomes OpenSeek's `read`; pipelines and
+/// mixed commands remain `shell` rather than being summarized as a file read.
+fn CodexItem::command_read_action(self : CodexItem) -> Map[String, Json]? {
+  guard self.kind == "commandExecution" && self.value is Object(fields) else {
+    return None
+  }
+  guard fields.get("commandActions") is Some(Array(actions)) &&
+    actions is [Object(action)] &&
+    @jsonx.json_text(action, "type") is Some("read") else {
+    return None
+  }
+  Some(action)
+}
+
+///|
 /// Normalize app-server tool-like item names to the categories already used
-/// by OpenSeek's activity summary (read/edit/shell) where the meaning matches.
+/// by OpenSeek's activity summary and semantic cards where the meaning and
+/// payload agree. Dynamic tools retain their advertised tool name, which lets
+/// a Codex `run_moonbit`, `read`, or `edit` call reach the same shared card.
 fn CodexItem::tool_name(self : CodexItem) -> String {
+  guard self.value is Object(fields) else { return self.kind }
   match self.kind {
-    "commandExecution" => "shell"
-    "fileChange" => "edit"
+    "commandExecution" =>
+      if self.command_read_action() is Some(_) {
+        "read"
+      } else {
+        "shell"
+      }
+    "fileChange" =>
+      if fields.get("changes") is Some(Array(changes)) && changes.length() > 1 {
+        "multi_edit"
+      } else {
+        "edit"
+      }
+    "mcpToolCall" => {
+      let server = @jsonx.json_text(fields, "server").unwrap_or("")
+      let tool = @jsonx.json_text(fields, "tool").unwrap_or("tool")
+      if server.is_blank() {
+        tool
+      } else {
+        "mcp__\{server}__\{tool}"
+      }
+    }
+    "dynamicToolCall" => @jsonx.json_text(fields, "tool").unwrap_or("tool")
+    "collabAgentToolCall" => @jsonx.json_text(fields, "tool").unwrap_or("agent")
+    "subAgentActivity" => "subagent"
+    "hookPrompt" => "hook_prompt"
+    "webSearch" => "web_search"
+    "imageView" => "image_view"
+    "imageGeneration" => "image_generation"
+    "enteredReviewMode" | "exitedReviewMode" => "review"
+    "planUpdate" => "plan"
     other => other
   }
 }
@@ -2636,22 +2851,66 @@ fn CodexItem::tool_arguments(self : CodexItem) -> String? {
   }
   match self.kind {
     "commandExecution" => {
-      let arguments : Json = {
-        "command": @jsonx.json_text(fields, "command").unwrap_or(""),
+      let arguments : Json = if self.command_read_action() is Some(action) {
+        {
+          "path": @jsonx.json_text(action, "path").unwrap_or(""),
+          "name": @jsonx.json_text(action, "name").unwrap_or(""),
+          "command": @jsonx.json_text(action, "command").unwrap_or(""),
+          "cwd": @jsonx.json_text(fields, "cwd").unwrap_or(""),
+        }
+      } else {
+        {
+          "command": @jsonx.json_text(fields, "command").unwrap_or(""),
+          "cwd": @jsonx.json_text(fields, "cwd").unwrap_or(""),
+        }
       }
       Some(arguments.stringify())
     }
     "fileChange" =>
-      match fields.get("changes") {
-        Some(changes) => {
-          let arguments : Json = { "changes": changes }
+      if fields.get("changes") is Some(Array(changes)) {
+        if changes.length() == 1 {
+          Some(changes[0].stringify())
+        } else {
+          let arguments : Json = { "edits": Json::array(changes) }
           Some(arguments.stringify())
         }
-        None => None
+      } else {
+        fields.get("changes").map(value => value.stringify())
       }
+    "mcpToolCall" | "dynamicToolCall" =>
+      fields.get("arguments").map(value => value.stringify())
+    "collabAgentToolCall" => {
+      let arguments : Json = {
+        "tool": @jsonx.json_text(fields, "tool").unwrap_or("agent"),
+        "prompt": fields.get("prompt").unwrap_or(Json::null()),
+        "model": fields.get("model").unwrap_or(Json::null()),
+        "reasoningEffort": fields.get("reasoningEffort").unwrap_or(Json::null()),
+        "senderThreadId": fields.get("senderThreadId").unwrap_or(Json::null()),
+        "receiverThreadIds": fields
+        .get("receiverThreadIds")
+        .unwrap_or(Json::array([])),
+      }
+      Some(arguments.stringify())
+    }
+    "subAgentActivity" => {
+      let arguments : Json = {
+        "agentPath": @jsonx.json_text(fields, "agentPath").unwrap_or(""),
+        "agentThreadId": @jsonx.json_text(fields, "agentThreadId").unwrap_or(""),
+        "kind": @jsonx.json_text(fields, "kind").unwrap_or(""),
+      }
+      Some(arguments.stringify())
+    }
+    "hookPrompt" =>
+      fields
+      .get("fragments")
+      .map(fragments => {
+        let arguments : Json = { "fragments": fragments }
+        arguments.stringify()
+      })
     "webSearch" => {
       let arguments : Json = {
         "query": @jsonx.json_text(fields, "query").unwrap_or(""),
+        "action": fields.get("action").unwrap_or(Json::null()),
       }
       Some(arguments.stringify())
     }
@@ -2661,6 +2920,35 @@ fn CodexItem::tool_arguments(self : CodexItem) -> String? {
       }
       Some(arguments.stringify())
     }
+    "sleep" =>
+      fields
+      .get("durationMs")
+      .map(duration => {
+        let arguments : Json = { "durationMs": duration }
+        arguments.stringify()
+      })
+    "imageGeneration" => {
+      let arguments : Json = {
+        "revisedPrompt": fields.get("revisedPrompt").unwrap_or(Json::null()),
+        "transparentBackground": fields
+        .get("transparentBackground")
+        .unwrap_or(Json::null()),
+      }
+      Some(arguments.stringify())
+    }
+    "enteredReviewMode" | "exitedReviewMode" => {
+      let arguments : Json = {
+        "review": @jsonx.json_text(fields, "review").unwrap_or(""),
+      }
+      Some(arguments.stringify())
+    }
+    "planUpdate" =>
+      fields
+      .get("steps")
+      .map(steps => {
+        let arguments : Json = { "steps": steps }
+        arguments.stringify()
+      })
     _ => Some(self.value.stringify())
   }
 }
@@ -2670,10 +2958,10 @@ fn CodexItem::tool_arguments(self : CodexItem) -> String? {
 /// progress the shared row remains a pending call with any streamed output it
 /// has already received.
 fn CodexItem::tool_has_result(self : CodexItem) -> Bool {
-  guard self.value is Object(fields) else { return true }
+  guard self.value is Object(fields) else { return self.completed }
   match @jsonx.json_text(fields, "status") {
     Some("inProgress") | Some("pending") => false
-    _ => true
+    _ => self.completed
   }
 }
 
@@ -2687,7 +2975,10 @@ fn CodexItem::tool_failed(self : CodexItem) -> Bool {
     _ => false
   }
   failed_status ||
-  @jsonx.json_int(fields, "exitCode").map(code => code != 0).unwrap_or(false)
+  @jsonx.json_int(fields, "exitCode").map(code => code != 0).unwrap_or(false) ||
+  fields.get("success") is Some(False) ||
+  (fields.get("error") is Some(error) && !(error is Null)) ||
+  (fields.get("failure") is Some(failure) && !(failure is Null))
 }
 
 ///|
@@ -2698,10 +2989,98 @@ fn CodexItem::tool_output(self : CodexItem) -> String {
   match self.kind {
     "commandExecution" =>
       @jsonx.json_text(fields, "aggregatedOutput").unwrap_or(self.streamed)
-    "fileChange" => @jsonx.json_text(fields, "status").unwrap_or("")
+    "fileChange" =>
+      if self.streamed.is_empty() {
+        @jsonx.json_text(fields, "status").unwrap_or("")
+      } else {
+        self.streamed
+      }
+    "mcpToolCall" => {
+      if fields.get("error") is Some(Object(error)) &&
+        @jsonx.json_text(error, "message") is Some(message) {
+        return message
+      }
+      if fields.get("result") is Some(Object(result)) &&
+        result.get("content") is Some(Array(blocks)) {
+        let text : Array[String] = []
+        let mut text_only = true
+        for block in blocks {
+          if block is Object(content) &&
+            @jsonx.json_text(content, "type") is Some("text") &&
+            @jsonx.json_text(content, "text") is Some(value) {
+            text.push(value)
+          } else {
+            text_only = false
+          }
+        }
+        if text_only && !text.is_empty() {
+          return text.join("\n")
+        }
+      }
+      match fields.get("result") {
+        Some(Null) | None => self.streamed
+        Some(result) => result.stringify(indent=2)
+      }
+    }
+    "dynamicToolCall" => {
+      if fields.get("contentItems") is Some(Array(items)) {
+        let text : Array[String] = []
+        let mut text_only = true
+        for item in items {
+          if item is Object(content) &&
+            @jsonx.json_text(content, "type") is Some("inputText") &&
+            @jsonx.json_text(content, "text") is Some(value) {
+            text.push(value)
+          } else {
+            text_only = false
+          }
+        }
+        if text_only && !text.is_empty() {
+          return text.join("\n")
+        }
+        return Json::array(items).stringify(indent=2)
+      }
+      ""
+    }
+    "collabAgentToolCall" =>
+      fields
+      .get("agentsStates")
+      .map(value => value.stringify(indent=2))
+      .unwrap_or(@jsonx.json_text(fields, "status").unwrap_or(""))
+    "webSearch" =>
+      match fields.get("results") {
+        Some(Null) | None => ""
+        Some(results) => results.stringify(indent=2)
+      }
+    "imageGeneration" =>
+      match fields.get("failure") {
+        Some(failure) if !(failure is Null) => failure.stringify(indent=2)
+        _ => @jsonx.json_text(fields, "result").unwrap_or("")
+      }
+    "hookPrompt" => {
+      let text : Array[String] = []
+      if fields.get("fragments") is Some(Array(fragments)) {
+        for fragment in fragments {
+          if fragment is Object(fragment) &&
+            @jsonx.json_text(fragment, "text") is Some(value) {
+            text.push(value)
+          }
+        }
+      }
+      text.join("\n")
+    }
     "enteredReviewMode" | "exitedReviewMode" =>
       @jsonx.json_text(fields, "review").unwrap_or("")
-    _ => ""
+    _ => {
+      for key in ["output", "result", "content"] {
+        match fields.get(key) {
+          Some(String(value)) => return value
+          Some(value) if !(value is Null) => return value.stringify(indent=2)
+          _ => ()
+        }
+      }
+      ""
+    }
   }
 }
 
@@ -2713,12 +3092,75 @@ fn CodexItem::tool_brief(self : CodexItem) -> String? {
   Some(
     match self.kind {
       "commandExecution" =>
-        @jsonx.json_text(fields, "command").unwrap_or("Command")
-      "fileChange" => "Changed files"
-      "webSearch" => "Searched the web"
-      "imageView" => "Viewed image"
+        if self.command_read_action() is Some(action) {
+          "read " + @jsonx.json_text(action, "path").unwrap_or("file")
+        } else {
+          @jsonx.json_text(fields, "command").unwrap_or("command")
+        }
+      "fileChange" =>
+        if fields.get("changes") is Some(Array(changes)) {
+          if changes is [Object(change)] &&
+            @jsonx.json_text(change, "path") is Some(path) {
+            "changed \{path}"
+          } else {
+            "changed \{changes.length()} files"
+          }
+        } else {
+          "changed files"
+        }
+      "mcpToolCall" => {
+        let server = @jsonx.json_text(fields, "server").unwrap_or("MCP")
+        let tool = @jsonx.json_text(fields, "tool").unwrap_or("tool")
+        "\{server} · \{tool}"
+      }
+      "dynamicToolCall" => {
+        let tool = @jsonx.json_text(fields, "tool").unwrap_or("tool")
+        match @jsonx.json_text(fields, "namespace") {
+          Some(namespace_) if !namespace_.is_blank() =>
+            "\{namespace_} · \{tool}"
+          _ => tool
+        }
+      }
+      "collabAgentToolCall" =>
+        @jsonx.json_text(fields, "tool").unwrap_or("agent")
+      "subAgentActivity" => {
+        let kind = @jsonx.json_text(fields, "kind").unwrap_or("activity")
+        let path = @jsonx.json_text(fields, "agentPath").unwrap_or("agent")
+        "\{kind} \{path}"
+      }
+      "hookPrompt" => "hook prompt"
+      "webSearch" =>
+        "searched " + @jsonx.json_text(fields, "query").unwrap_or("the web")
+      "imageView" =>
+        "viewed " + @jsonx.json_text(fields, "path").unwrap_or("image")
+      "sleep" =>
+        "slept \{@jsonx.json_int(fields, "durationMs").unwrap_or(0)} ms"
+      "imageGeneration" =>
+        match @jsonx.json_text(fields, "savedPath") {
+          Some(path) if !path.is_blank() => "generated \{path}"
+          _ => "generated image"
+        }
       "enteredReviewMode" => "Entered review mode"
       "exitedReviewMode" => "Exited review mode"
+      "planUpdate" => {
+        let mut completed = 0
+        let mut total = 0
+        let mut current : String? = None
+        if fields.get("steps") is Some(Array(steps)) {
+          total = steps.length()
+          for step in steps {
+            if step is Object(step) {
+              match @jsonx.json_text(step, "status") {
+                Some("completed") => completed = completed + 1
+                Some("in_progress") => current = @jsonx.json_text(step, "title")
+                _ => ()
+              }
+            }
+          }
+        }
+        let progress = "plan \{completed}/\{total}"
+        current.map(title => progress + " · " + title).unwrap_or(progress)
+      }
       other => other
     },
   )
