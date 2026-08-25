@@ -39,6 +39,38 @@ async test "denial scan is bounded to the log's head and tail" {
   })
 }
 
+///|
+/// Proton CLI is admitted one subcommand at a time. In particular, there is no
+/// bare rule and no global working-directory prefix: callers set the child
+/// process cwd instead of letting the command redirect itself elsewhere.
+test "the spawn policy admits Proton subcommands but not global cwd options" {
+  let proton_prefixes : Array[Array[String]] = []
+  for entry in spawnable_commands {
+    let (program, args_prefix) = entry
+    if program == "proton_cli" {
+      proton_prefixes.push(args_prefix)
+    }
+  }
+  assert_eq(proton_prefixes.length(), 9)
+  for
+    args_prefix in [
+      ["--version"],
+      ["--help"],
+      ["new"],
+      ["dev"],
+      ["build"],
+      ["package"],
+      ["doctor"],
+      ["cef"],
+      ["updater"],
+    ] {
+    assert_true(proton_prefixes.contains(args_prefix))
+  }
+  assert_false(proton_prefixes.contains([]))
+  assert_false(proton_prefixes.contains(["-C"]))
+  assert_false(proton_prefixes.contains(["--cwd"]))
+}
+
 // The spawn allowlist is taught by each role's system prompt now, and that
 // prose is NOT pinned by a test: asserting a prompt contains particular words
 // only breaks on rewrites. Keeping the list and the prompts in step is a

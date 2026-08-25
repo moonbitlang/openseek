@@ -1121,6 +1121,9 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     #|- `moon` — check, test, build, run, fmt, info, add, remove, update, install,
     #|  tree, clean, new, ide, doc, explain, coverage, cram, package, version,
     #|  plus `publish --dry-run`. (Not plain `publish`, `login` or `register`.)
+    #|- `proton_cli` — `--version`, `--help`, new, dev, build, package, doctor,
+    #|  cef, and updater. Set `Cmd.cwd` for the project directory; the global
+    #|  `-C`/`--cwd` options before the subcommand are refused.
     #|- `git` — status, log, diff, show, blame, describe, rev-parse, rev-list,
     #|  show-ref, for-each-ref, cat-file, check-ignore, merge-base, range-diff,
     #|  ls-files, ls-tree, ls-remote, shortlog, grep, branch, tag, remote, reflog,

@@ -567,6 +567,21 @@ test "a definition without a job runtime does not advertise background runs" {
 }
 
 ///|
+/// The command policy and its model-facing description are maintained
+/// separately, so pin the Proton entry at the public definition boundary too.
+test "the description advertises the Proton CLI command surface" {
+  let description = @run_moonbit.definition(workspace_root=".").description
+  assert_true(description.contains("`proton_cli`"))
+  assert_true(description.contains("doctor"))
+  assert_true(description.contains("cef"))
+  assert_true(
+    description.contains(
+      "`-C`/`--cwd` options before the subcommand are refused",
+    ),
+  )
+}
+
+///|
 /// The schema is the model-facing argument contract, so pin its shape: the
 /// arguments the tool decodes are all present, and only `source` is required.
 test "the schema advertises every decoded argument" {

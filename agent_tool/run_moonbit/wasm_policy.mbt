@@ -67,6 +67,19 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // already here; the asymmetry was an oversight, not a decision.
   ("moon", ["--version"]),
   ("moon", ["--help"]),
+  // Proton CLI is SeekMoon's supported desktop application workflow, but it
+  // is still listed per subcommand so the surface remains reviewable. Callers
+  // set `Cmd.cwd` instead of passing the global `-C`/`--cwd` option, whose
+  // position before the subcommand deliberately matches no rule below.
+  ("proton_cli", ["--version"]),
+  ("proton_cli", ["--help"]),
+  ("proton_cli", ["new"]),
+  ("proton_cli", ["dev"]),
+  ("proton_cli", ["build"]),
+  ("proton_cli", ["package"]),
+  ("proton_cli", ["doctor"]),
+  ("proton_cli", ["cef"]),
+  ("proton_cli", ["updater"]),
   // Version control, listed per subcommand for two reasons. The obvious one is
   // that whole dangerous subcommands can be left out. The second falls out of
   // how prefixes match: git's reconfiguring GLOBAL options come BEFORE the
