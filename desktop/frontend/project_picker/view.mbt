@@ -4,26 +4,66 @@
 // focused controls keep their own Enter and Escape behavior here.
 
 ///|
+const PathInputId : String = "project-picker-path-input"
+
+///|
+const PathListId : String = "project-picker-folder-list"
+
+///|
+fn path_row_id(index : Int) -> String {
+  "project-picker-folder-\{index}"
+}
+
+///|
+/// Entering path mode replaces an existing breadcrumb node, so focus and the
+/// native Cmd/Ctrl+L-style full selection happen after that render.
+fn select_path_after_render() -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => select_path_input(), kind=@cmd.after_render)
+}
+
+///|
+extern "js" fn select_path_input() -> Unit =
+  #| () => {
+  #|   const input = document.getElementById("project-picker-path-input");
+  #|   input?.focus();
+  #|   input?.select();
+  #| }
+
+///|
+/// Keep keyboard completion visible while focus stays in the combobox.
+fn scroll_path_row_after_render(index : Int) -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => scroll_path_row(path_row_id(index)),
+    kind=@cmd.after_render,
+  )
+}
+
+///|
+extern "js" fn scroll_path_row(id : String) -> Unit =
+  #| (id) => document.getElementById(id)?.scrollIntoView({ block: "nearest" })
+
+///|
 pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
+  let visible_entries = picker.visible_entries()
+  let filter_active = !picker.path_filter().is_empty()
   let rows : Array[@html.Html] = []
   if picker.new_folder is Some(name) {
     rows.push(new_folder_row(emit, picker, name))
   }
-  for name in picker.entries {
-    let target = match picker.location {
-      Some(Directory(path)) => path.picker_child_path(name)
-      // A drive row ("C:") enters that drive's root; the trailing slash is
-      // the drive root's canonical resource spelling ("/C:/").
-      Some(DriveList) => "/" + name + "/"
-      None => name
-    }
+  for index, name in visible_entries {
+    let target = picker.entry_target(name)
+    let selected = filter_active && index == picker.path_selection
     rows.push(
       @html.button(
-        class="picker-row",
+        class=if selected { "picker-row selected" } else { "picker-row" },
         type_="button",
         disabled=picker.loading,
         on_click=emit(Navigate(target)),
-        attrs=@html.Attrs::build().aria_label("Open folder \{name}"),
+        attrs=@html.Attrs::build()
+          .id(path_row_id(index))
+          .role("option")
+          .aria_selected(selected.to_string())
+          .aria_label("Open folder \{name}"),
         [
           @html.span(class="picker-row-icon", @icons.icon(@icons.icon_folder)),
           @html.span(class="picker-row-name", name),
@@ -36,14 +76,21 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
       ),
     )
   }
-  if picker.entries.is_empty() && picker.new_folder is None {
-    rows.push(empty_view(picker))
+  if visible_entries.is_empty() && picker.new_folder is None {
+    rows.push(empty_view(picker, filter_active))
   }
   let can_create = !picker.loading &&
     picker.location is Some(Directory(_)) &&
-    picker.new_folder is None
-  let folder_count = picker.entries.length()
-  let folder_count_label = if folder_count == 1 {
+    picker.new_folder is None &&
+    picker.path_draft is None
+  let folder_count = visible_entries.length()
+  let folder_count_label = if filter_active {
+    if folder_count == 1 {
+      "1 match"
+    } else {
+      "\{folder_count} matches"
+    }
+  } else if folder_count == 1 {
     "1 folder"
   } else {
     "\{folder_count} folders"
@@ -88,7 +135,10 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
           ),
         ]),
         @html.div(class="picker-location-bar", [
-          picker_breadcrumbs(emit, picker),
+          match picker.path_draft {
+            Some(value) => path_editor(emit, picker, value, filter_active)
+            None => picker_breadcrumbs(emit, picker)
+          },
           @html.button(
             class="picker-new-folder",
             type_="button",
@@ -100,7 +150,11 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
         @html.div(class="picker-browser", [
           @html.div(
             class="picker-list",
-            attrs=@html.Attrs::build().aria_busy(picker.loading.to_string()),
+            attrs=@html.Attrs::build()
+              .id(PathListId)
+              .role("listbox")
+              .aria_label("Folders")
+              .aria_busy(picker.loading.to_string()),
             [
               @html.div(class="picker-list-heading", [
                 @html.span("Name"),
@@ -119,6 +173,85 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
         ]),
         picker_footer(emit, picker),
       ],
+    ),
+  ])
+}
+
+///|
+fn path_editor(
+  emit : @cmd.Emit[Msg],
+  picker : State,
+  value : String,
+  filter_active : Bool,
+) -> @html.Html {
+  let base_attrs = @html.Attrs::build()
+    .id(PathInputId)
+    .role("combobox")
+    .aria_label("Folder path")
+    .aria_controls(PathListId)
+    .aria_expanded("true")
+    .aria_autocomplete("list")
+    .aria_keyshortcuts("Meta+L Control+L")
+    .data_set("focus-owner", "")
+    .disabled(picker.loading)
+    .on_keydown(event => {
+      if event.is_composing() {
+        return @cmd.none
+      }
+      match event.key() {
+        "ArrowDown" => {
+          event.prevent_default()
+          emit(MovePathSelection(1))
+        }
+        "ArrowUp" => {
+          event.prevent_default()
+          emit(MovePathSelection(-1))
+        }
+        "Tab" =>
+          if picker.selected_path_suggestion() is Some(_) {
+            event.prevent_default()
+            emit(CompletePath)
+          } else {
+            @cmd.none
+          }
+        "Enter" => {
+          event.prevent_default()
+          emit(SubmitPath)
+        }
+        "Escape" => {
+          event.prevent_default()
+          emit(CancelPathEdit)
+        }
+        _ => @cmd.none
+      }
+    })
+  let input_attrs = if filter_active &&
+    picker.visible_entries().get(picker.path_selection) is Some(_) {
+    base_attrs.aria_activedescendant(path_row_id(picker.path_selection))
+  } else {
+    base_attrs
+  }
+  @html.div(class="picker-path-editor", [
+    @html.span(
+      class="picker-path-editor-icon",
+      attrs=@html.Attrs::build().aria_hidden("true"),
+      @icons.icon(@icons.icon_folder_opened),
+    ),
+    @html.input(
+      input_type=@html.InputType::Text,
+      value~,
+      autofocus=true,
+      placeholder="Enter a folder path",
+      on_input=emit.map(next => PathChanged(next)),
+      attrs=input_attrs,
+    ),
+    @html.button(
+      class="picker-path-editor-cancel",
+      type_="button",
+      title="Cancel path editing",
+      on_click=emit(CancelPathEdit),
+      attrs=@html.Attrs::build().aria_label("Cancel path editing"),
+      @icons.icon(@icons.icon_close),
     ),
   ])
 }
@@ -185,9 +318,11 @@ fn new_folder_row(
 }
 
 ///|
-fn empty_view(picker : State) -> @html.Html {
+fn empty_view(picker : State, filter_active : Bool) -> @html.Html {
   let (title, detail) = if picker.loading {
     ("Loading folders…", "This should only take a moment.")
+  } else if filter_active {
+    ("No matching folders", "Try a different name or enter a complete path.")
   } else {
     ("No folders here", "Create a folder here, or add this location as-is.")
   }
@@ -201,7 +336,8 @@ fn empty_view(picker : State) -> @html.Html {
 fn picker_footer(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
   let can_confirm = !picker.loading &&
     picker.location is Some(Directory(_)) &&
-    picker.new_folder is None
+    picker.new_folder is None &&
+    picker.path_draft is None
   @html.div(class="picker-footer", [
     current_location(picker),
     @html.div(class="modal-actions", [
@@ -257,8 +393,10 @@ fn picker_breadcrumbs(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
       @html.button(
         class="picker-crumb current",
         type_="button",
+        title="Edit path (⌘L)",
         disabled=picker.loading,
-        on_click=emit(Navigate("/")),
+        on_click=emit(EditPath),
+        attrs=@html.Attrs::build().aria_label("Edit current path"),
         "This PC",
       ),
     )
@@ -283,8 +421,18 @@ fn picker_breadcrumbs(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
         "picker-crumb"
       },
       type_="button",
+      title=if segments.is_empty() { "Edit path (⌘L)" } else { "Open root" },
       disabled=picker.loading,
-      on_click=emit(Navigate("/")),
+      on_click=if segments.is_empty() {
+        emit(EditPath)
+      } else {
+        emit(Navigate("/"))
+      },
+      attrs=if segments.is_empty() {
+        @html.Attrs::build().aria_label("Edit current path")
+      } else {
+        @html.Attrs::build().aria_label("Open root folder")
+      },
       if drive_root is Some(_) {
         "This PC"
       } else {
@@ -316,8 +464,22 @@ fn picker_breadcrumbs(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
           "picker-crumb"
         },
         type_="button",
+        title=if index == segments.length() - 1 {
+          "Edit path (⌘L)"
+        } else {
+          "Open \{segment}"
+        },
         disabled=picker.loading,
-        on_click=emit(Navigate(prefix)),
+        on_click=if index == segments.length() - 1 {
+          emit(EditPath)
+        } else {
+          emit(Navigate(prefix))
+        },
+        attrs=if index == segments.length() - 1 {
+          @html.Attrs::build().aria_label("Edit current path")
+        } else {
+          @html.Attrs::build().aria_label("Open folder \{segment}")
+        },
         segment,
       ),
     )

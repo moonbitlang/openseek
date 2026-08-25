@@ -644,6 +644,59 @@ button.row-twisty:hover {
 .picker-crumbs::-webkit-scrollbar {
   display: none;
 }
+.picker-path-editor {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 26px;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  min-height: 32px;
+  padding: 2px 3px 2px 7px;
+  border: 1px solid var(--color-focus-ring);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--color-focus-ring) 16%, transparent);
+}
+.picker-path-editor-icon {
+  --icon-size: var(--icon-sm);
+  display: grid;
+  place-items: center;
+  color: var(--color-accent-strong);
+}
+.picker-path-editor input {
+  width: 100%;
+  min-width: 0;
+  height: 26px;
+  padding: 0 5px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+}
+.picker-path-editor-cancel {
+  --icon-size: var(--icon-xs);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.picker-path-editor-cancel:hover {
+  background: var(--color-hover-subtle);
+  color: var(--color-text-primary);
+}
+.picker-path-editor-cancel:focus-visible {
+  outline: 1px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
 .picker-crumb {
   flex: none;
   padding: 3px 6px;
@@ -666,6 +719,7 @@ button.row-twisty:hover {
 .picker-crumb.current {
   color: var(--color-text-primary);
   font-weight: 600;
+  cursor: text;
 }
 .picker-crumb-sep {
   color: var(--color-text-muted, var(--color-text-secondary));
@@ -763,6 +817,7 @@ button.row-twisty:hover {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
+.picker-row.selected:not(:disabled),
 .picker-row:not(:disabled):focus-visible {
   background: var(--color-accent-soft);
   color: var(--color-text-primary);
@@ -798,6 +853,7 @@ button.row-twisty:hover {
   transition: opacity 0.1s ease, transform 0.1s ease;
 }
 .picker-row:not(:disabled):hover .picker-row-chevron,
+.picker-row.selected:not(:disabled) .picker-row-chevron,
 .picker-row:not(:disabled):focus-visible .picker-row-chevron {
   opacity: 1;
   transform: rotate(-90deg) translateY(1px);
@@ -954,6 +1010,9 @@ button.row-twisty:hover {
     flex-wrap: wrap;
   }
   .picker-crumbs {
+    flex-basis: 100%;
+  }
+  .picker-path-editor {
     flex-basis: 100%;
   }
   .picker-new-folder {

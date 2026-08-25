@@ -33,6 +33,7 @@ fn project_picker_capture_loader(
       let listeners = add_project_picker_capture(
         () => scheduler.add(emit(Confirm)),
         () => scheduler.add(emit(Close)),
+        () => scheduler.add(emit(EditPath)),
         text => {
           // `getData` answers "" when the clipboard holds no text; an empty
           // paste has no destination, and stray whitespace never names one.
@@ -66,7 +67,8 @@ fn capture_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
 
 ///|
 /// One keydown and one paste listener, installed together and removed
-/// together. Enter is only the confirm chord when it arrives bare: a
+/// together. Cmd/Ctrl+L opens the local path editor without involving the
+/// Host. Enter is only the confirm chord when it arrives bare: a
 /// modifier or a composing IME means the key was meant for something else,
 /// and a focused control inside the modal itself (Cancel, a breadcrumb, a
 /// folder row's buttons) keeps its own Enter — swallowing it there would
@@ -77,11 +79,24 @@ fn capture_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
 extern "js" fn add_project_picker_capture(
   on_confirm : () -> Unit,
   on_close : () -> Unit,
+  on_edit_path : () -> Unit,
   on_paste : (String) -> Unit,
 ) -> @js.Value =
-  #| (onConfirm, onClose, onPaste) => {
+  #| (onConfirm, onClose, onEditPath, onPaste) => {
   #|   const keydown = (event) => {
   #|     if (event.isComposing || event.repeat) return;
+  #|     const editPath = (event.metaKey || event.ctrlKey) &&
+  #|       !event.altKey && !event.shiftKey && event.key.toLowerCase() === "l";
+  #|     if (editPath) {
+  #|       event.preventDefault();
+  #|       event.stopPropagation();
+  #|       if (event.target?.closest?.(".picker-path-editor")) {
+  #|         event.target.select?.();
+  #|         return;
+  #|       }
+  #|       onEditPath();
+  #|       return;
+  #|     }
   #|     if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
   #|     if (event.key === "Enter") {
   #|       const control = event.target?.closest?.("button, a, input, select, textarea");

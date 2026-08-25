@@ -28,6 +28,11 @@ struct State {
   // `Some` renders the inline new-folder composer. Its value stays present
   // across a failed create so the user can correct it without retyping.
   new_folder : String?
+  // `Some` replaces the breadcrumb with an editable path. Suggestions are
+  // derived locally from `entries`; no extra Host request is issued while the
+  // user types.
+  path_draft : String?
+  path_selection : Int
   generation : Int
 } derive(Eq)
 
@@ -70,6 +75,14 @@ pub(all) enum Msg {
   // A browse or create failed; the shell pops the message as a toast and the
   // previous listing stays usable.
   Failed(channel~ : @interop.ChannelId, message~ : String, generation~ : Int)
+  // Edit and submit a path in place of the breadcrumb. Matching rows come
+  // only from the directory listing already held by this state.
+  EditPath
+  PathChanged(String)
+  MovePathSelection(Int)
+  CompletePath
+  SubmitPath
+  CancelPathEdit
   // Open, edit, cancel, and submit the inline new-folder composer. Creation
   // enters the new directory by delivering the same `Loaded` reply as browse.
   BeginCreateFolder
@@ -118,6 +131,8 @@ pub fn State::open(
     entries: [],
     loading: true,
     new_folder: None,
+    path_draft: None,
+    path_selection: 0,
     generation,
   }
   (browse(emit, channel, "", generation~), picker)
@@ -133,14 +148,7 @@ pub fn State::handle(
   msg : Msg,
 ) -> (@cmd.Cmd, State?, Outcome?) {
   match msg {
-    Navigate(path) => {
-      let generation = fresh_request_generation()
-      (
-        browse(emit, self.channel, path, generation~),
-        Some({ ..self, loading: true, new_folder: None, generation }),
-        None,
-      )
-    }
+    Navigate(path) => self.navigate_to(emit, path)
     Loaded(channel~, location~, entries~, generation~) =>
       // A listing for a picker the user already closed — or one answering
       // a navigation that has since been superseded — is dropped.
@@ -153,6 +161,8 @@ pub fn State::handle(
             entries,
             loading: false,
             new_folder: None,
+            path_draft: None,
+            path_selection: 0,
           }),
           None,
         )
@@ -173,8 +183,75 @@ pub fn State::handle(
       } else {
         (@cmd.none, Some(self), None)
       }
+    EditPath =>
+      if !self.loading && self.new_folder is None && self.path_draft is None {
+        (
+          select_path_after_render(),
+          Some({
+            ..self,
+            path_draft: Some(self.editable_path()),
+            path_selection: 0,
+          }),
+          None,
+        )
+      } else if !self.loading &&
+        self.new_folder is None &&
+        self.path_draft is Some(_) {
+        (select_path_after_render(), Some(self), None)
+      } else {
+        (@cmd.none, Some(self), None)
+      }
+    PathChanged(value) =>
+      if !self.loading && self.path_draft is Some(_) {
+        (
+          @cmd.none,
+          Some({ ..self, path_draft: Some(value), path_selection: 0 }),
+          None,
+        )
+      } else {
+        (@cmd.none, Some(self), None)
+      }
+    MovePathSelection(delta) =>
+      if !self.loading && self.path_draft is Some(_) {
+        let next = self.move_path_selection(delta)
+        let command = if next.path_selection == self.path_selection {
+          @cmd.none
+        } else {
+          scroll_path_row_after_render(next.path_selection)
+        }
+        (command, Some(next), None)
+      } else {
+        (@cmd.none, Some(self), None)
+      }
+    CompletePath =>
+      match self.selected_path_suggestion() {
+        Some(name) if !self.loading =>
+          (
+            @cmd.none,
+            Some({
+              ..self,
+              path_draft: Some(self.entry_target(name)),
+              path_selection: 0,
+            }),
+            None,
+          )
+        _ => (@cmd.none, Some(self), None)
+      }
+    SubmitPath =>
+      match self.path_destination() {
+        Some(path) if !self.loading => self.navigate_to(emit, path)
+        _ => (@cmd.none, Some(self), None)
+      }
+    CancelPathEdit =>
+      if !self.loading && self.path_draft is Some(_) {
+        (@cmd.none, Some({ ..self, path_draft: None, path_selection: 0 }), None)
+      } else {
+        (@cmd.none, Some(self), None)
+      }
     BeginCreateFolder =>
-      if self.location is Some(Directory(_)) && !self.loading {
+      if self.location is Some(Directory(_)) &&
+        !self.loading &&
+        self.path_draft is None {
         (@cmd.none, Some({ ..self, new_folder: Some("") }), None)
       } else {
         (@cmd.none, Some(self), None)
@@ -219,11 +296,36 @@ pub fn State::handle(
       // not a directory and cannot be registered.
       if self.location is Some(Directory(path)) &&
         !self.loading &&
-        self.new_folder is None {
+        self.new_folder is None &&
+        self.path_draft is None {
         (@cmd.none, None, Some(Picked(self.channel, path)))
       } else {
         (@cmd.none, Some(self), None)
       }
     Close => (@cmd.none, None, None)
   }
+}
+
+///|
+/// Start every path transition through one fence and clear transient input.
+/// Direct row clicks, breadcrumb navigation, pasted paths, and manual path
+/// submission therefore have identical loading and stale-reply behavior.
+fn State::navigate_to(
+  self : State,
+  emit : @cmd.Emit[Msg],
+  path : String,
+) -> (@cmd.Cmd, State?, Outcome?) {
+  let generation = fresh_request_generation()
+  (
+    browse(emit, self.channel, path, generation~),
+    Some({
+      ..self,
+      loading: true,
+      new_folder: None,
+      path_draft: None,
+      path_selection: 0,
+      generation,
+    }),
+    None,
+  )
 }
