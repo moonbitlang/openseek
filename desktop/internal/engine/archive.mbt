@@ -626,10 +626,9 @@ async fn move_session_record(
 /// default workspace it attaches lands in its own temporary tree instead of
 /// the developer's real one.
 ///
-/// Other ambient variables the tests touch — `OPENSEEK_DIR`,
-/// `OPENSEEK_API_URL` — need no lock: the host always writes them explicitly
-/// into a child's environment, so nothing reads the ambient value except the
-/// test that set it.
+/// The other ambient variable the tests touch, `OPENSEEK_API_URL`, needs no
+/// lock: the host always writes it explicitly into a child's environment, so
+/// nothing reads the ambient value except the test that set it.
 let ambient_env_test_lock : @async.Mutex = Mutex()
 
 ///|

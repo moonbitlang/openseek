@@ -115,7 +115,7 @@ priv struct AttemptOutcome {
 /// directory already exists.
 async fn resolve_run_dirs(dir : String, n : Int) -> (Array[String], String?) {
   if dir.is_empty() {
-    fail("--dir or OPENSEEK_DIR must not be empty")
+    fail("--dir must not be empty")
   }
   let (parent, base, source) = if @fs.exists(dir) {
     if @fs.kind(dir) != Directory {

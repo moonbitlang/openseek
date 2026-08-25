@@ -10,6 +10,7 @@ import {
   "openseek_desktop/internal/home",
   "openseek_desktop/internal/moonbit",
   "openseek_desktop/internal/pathx",
+  "openseek_desktop/internal/processx",
   "openseek_desktop/internal/protocol",
   "openseek_desktop/internal/session_record",
   "openseek_desktop/internal/session_store",

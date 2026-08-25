@@ -44,12 +44,11 @@ defaults to `deepseek-v4-pro`. `--max-steps` can also be supplied with
 window instead of a step count. `--api-url` can also be supplied
 with `OPENSEEK_API_URL`; when omitted, OpenSeek uses the default DeepSeek chat
 completions endpoint, or the Kimi endpoint for Kimi models.
-`--dir` can also be supplied with `OPENSEEK_DIR`; it defaults to `.` and becomes
-the workspace root for relative prompt files, sessions, workspace skills, and
-agent tools. If the directory itself is missing but its parent exists, OpenSeek
-creates that final component and logs a `workspace_created` event. Missing
-parents are rejected, so `--dir a/b/c` creates only `c` when `a/b` already
-exists.
+`--dir` defaults to `.` and becomes the workspace root for relative prompt
+files, sessions, workspace skills, and agent tools. If the directory itself is
+missing but its parent exists, OpenSeek creates that final component and logs a
+`workspace_created` event. Missing parents are rejected, so `--dir a/b/c`
+creates only `c` when `a/b` already exists.
 `--system-prompt-file` and `--system-prompt-addendum-file` can also be supplied
 with `OPENSEEK_SYSTEM_PROMPT_FILE` and
 `OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE`. `--session` explicitly creates or

@@ -1135,25 +1135,6 @@ fn open_run_engine(manager : EngineManager, run_id? : String) -> ServeEngine? {
 }
 
 ///|
-/// An empty file redirected into one-shot engine runs as stdin. It lives in
-/// the per-user runtime dir, not beside the engine binary: the bundle a
-/// packaged engine sits in is read-only (App Translocation even enforces
-/// it), so writing next to the executable would fail every `sessions list` in
-/// a packaged app.
-async fn prepare_engine_stdin(
-  runtime_dir : @pathx.Path?,
-  engine : @pathx.Path,
-) -> &@process.ProcessInput {
-  let path = if runtime_dir is Some(dir) {
-    dir.join("engine.stdin")
-  } else {
-    "\{engine}.stdin"
-  }
-  @fs.write_file(path.to_string(), "", create_mode=CreateOrTruncate)
-  @process.redirect_from_file(path.to_string())
-}
-
-///|
 /// Close an open run on the stream event that ended its turn, and report
 /// whether it did. The engine's stdout is the run's lifecycle: a turn is over
 /// exactly when the event that ends it arrives, and this is the one place
@@ -1449,6 +1430,7 @@ async fn engine_process_env(
   // Unix, so overriding PATH with inheritance enabled can leave two PATH
   // entries and let `/bin/sh` observe the original one.
   let env = @sys.get_env_vars()
+  discard_retired_workspace_override(env)
   // The engine reads the key from `DEEPSEEK` but the model from `OPENSEEK_MODEL`
   // (the CLI's `--deepseek-api-key`/`--model` env bindings); the prefixes differ
   // on purpose, so the model must not go into `DEEPSEEK_MODEL` — the engine
@@ -1457,7 +1439,6 @@ async fn engine_process_env(
   env["OPENSEEK_MODEL"] = config.model
   env["OPENSEEK_THINKING"] = config.thinking.wire()
   env["OPENSEEK_MAX_STEPS"] = config.max_steps.to_string()
-  env["OPENSEEK_DIR"] = "."
   if resolved_global_skills_dir() is Some(dir) {
     env["OPENSEEK_GLOBAL_SKILLS_DIR"] = dir.to_string()
   }
@@ -1471,6 +1452,22 @@ async fn engine_process_env(
   }
   add_moonbit_path_for_native_engine(env, config, runtime_dir)
   env
+}
+
+///|
+/// A removed ambient workspace selector must not leak through the desktop
+/// engine into tools or legacy nested commands.
+fn discard_retired_workspace_override(env : Map[String, String]) -> Unit {
+  let retired = ["OPENSEEK", "DIR"].join("_")
+  let remove : Array[String] = []
+  for name, _ in env {
+    if name.to_upper() == retired {
+      remove.push(name)
+    }
+  }
+  for name in remove {
+    env.remove(name)
+  }
 }
 
 ///|
@@ -2778,6 +2775,19 @@ async test "native engine env has one authoritative bundled moon path" {
     moon_bin
   }
   assert_eq(env["PATH"], expected_path)
+}
+
+///|
+test "desktop engine env discards the retired workspace override" {
+  let env = { "PATH": "/bin" }
+  let retired_workspace_override = ["OpenSeek", "Dir"].join("_")
+  let duplicate_retired_override = ["OPENSEEK", "DIR"].join("_")
+  env[retired_workspace_override] = "/tmp/parent-workspace"
+  env[duplicate_retired_override] = "/tmp/duplicate-workspace"
+  discard_retired_workspace_override(env)
+  assert_true(env.get(retired_workspace_override) is None)
+  assert_true(env.get(duplicate_retired_override) is None)
+  assert_eq(env.get("PATH"), Some("/bin"))
 }
 
 ///|

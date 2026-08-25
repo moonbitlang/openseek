@@ -154,10 +154,10 @@ moon run cmd/openseek -- --model kimi-k2.7-code-highspeed run "inspect this proj
 model's context window (a checkpoint summary carries each turn into the
 next) rather than a step count. Pass `--max-steps` to cap steps for one run. `--thinking no|high|max` controls DeepSeek
 thinking mode and effort (default: max).
-Pass `--dir <workspace>` or set `OPENSEEK_DIR` to run one-shot commands against
-another workspace while still launching from the current shell. The default is
-`.`; if the final directory component is missing and its parent exists,
-OpenSeek creates it and logs `workspace_created`.
+Pass `--dir <workspace>` to run one-shot commands against another workspace
+while still launching from the current shell. The default is `.`; if the final
+directory component is missing and its parent exists, OpenSeek creates it and
+logs `workspace_created`.
 
 ## MCP Servers
 

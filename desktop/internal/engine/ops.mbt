@@ -485,14 +485,13 @@ pub fn approve_run(
 /// message rather than a bare exit code when one is available.
 async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String {
   let engine = manager.engine
-  let child_stdin = prepare_engine_stdin(manager.runtime_dir, engine)
-  let (code, stdout, stderr) = @process.collect_output(
+  let env = @sys.get_env_vars()
+  discard_retired_workspace_override(env)
+  let (code, stdout, stderr) = @processx.collect_output_no_stdin(
     engine,
     args,
-    extra_env={ "OPENSEEK_DIR": "." },
-    inherit_env=true,
-    stdin=child_stdin,
-    no_console_window=true,
+    extra_env=env,
+    inherit_env=false,
   ) catch {
     error if @async.is_being_cancelled() => raise error
     error => raise EngineError("failed to run engine: \{error}")
@@ -510,6 +509,31 @@ async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String 
   stdout.text() catch {
     _ => raise EngineError("engine wrote malformed output")
   }
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "session-list engine does not inherit the retired workspace override" {
+  let dir = @fs.tmpdir(prefix="openseek-session-env-")
+  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  let engine = dir + "/engine.sh"
+  @fs.write_file(
+    engine,
+    "#!/bin/sh\nif env | grep -F \"$1=\" >/dev/null; then printf leaked; else printf clean; fi\n",
+    create_mode=CreateOrTruncate,
+  )
+  assert_eq(@process.run("chmod", ["+x", engine]), 0)
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let name = ["OpenSeek", "Dir"].join("_")
+  let previous = @sys.get_env_var(name)
+  @sys.set_env_var(name, "/tmp/retired-workspace")
+  defer (match previous {
+    Some(value) => @sys.set_env_var(name, value)
+    None => @sys.unset_env_var(name)
+  })
+  let manager = new_engine_manager(engine)
+  assert_eq(engine_stdout(manager, [name]), "clean")
 }
 
 ///|
@@ -761,37 +785,6 @@ pub async fn detach_workspace(
     on_committed(paths.map(path => path.resource_path()))
   })
   Workspaces(paths.map(path => path.resource_path()))
-}
-
-///|
-#cfg(not(platform="windows"))
-async test "one-shot session engine overrides ambient OPENSEEK_DIR" {
-  let previous = @sys.get_env_var("OPENSEEK_DIR")
-  @sys.set_env_var("OPENSEEK_DIR", "/missing/openseek-dir")
-  defer restore_openseek_dir(previous)
-  let dir = @fs.tmpdir(prefix="openseek-session-env-")
-  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
-  let engine = "\{dir}/engine.sh"
-  @fs.write_file(
-    engine,
-    "#!/bin/sh\nprintf '%s' \"$OPENSEEK_DIR\"\n",
-    create_mode=CreateOrTruncate,
-  )
-  let chmod = @process.run("chmod", ["+x", engine])
-  assert_eq(chmod, 0)
-  let manager = new_engine_manager(engine)
-  let output = engine_stdout(manager, [])
-  assert_eq(output, ".")
-}
-
-///|
-#cfg(not(platform="windows"))
-fn restore_openseek_dir(previous : String?) -> Unit {
-  if previous is Some(value) {
-    @sys.set_env_var("OPENSEEK_DIR", value)
-  } else {
-    @sys.unset_env_var("OPENSEEK_DIR")
-  }
 }
 
 ///|
