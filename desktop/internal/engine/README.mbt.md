@@ -315,9 +315,12 @@ that boundary:
 ///|
 test "engine errors carry their message" {
   let error : @engine.EngineError = EngineError("engine failed to start")
-  debug_inspect(error, content=(
-    #|EngineError("engine failed to start")
-  ))
+  debug_inspect(
+    error,
+    content=(
+      #|EngineError("engine failed to start")
+    ),
+  )
 }
 ```
 
