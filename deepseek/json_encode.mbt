@@ -1,18 +1,19 @@
 ///|
 /// Keep assistant reasoning_content when the provider requires it.
 ///
-/// DeepSeek requires the reasoning from an assistant tool-call response to be
-/// sent back with the tool result. Kimi K2.7 Code requires the reasoning from
-/// every historical assistant message to be preserved.
+/// DeepSeek requires every historical assistant reasoning trace to be sent
+/// back when tools are enabled. Kimi K2.7 Code always requires the reasoning
+/// from every historical assistant message to be preserved.
 ///
 /// See: https://api-docs.deepseek.com/guides/thinking_mode#thinking-mode-with-tool-calls
 /// See: https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model#using-the-kimi-k2-7-code-model
 fn ChatMessage::reasoning_json_fields(
   message : ChatMessage,
   model : Model,
+  preserve_deepseek_reasoning : Bool,
 ) -> Array[(String, Json)] {
   match (model, message.role, message.reasoning_content) {
-    (Deepseek(_), Assistant, Some(reasoning)) if message.tool_calls.length() > 0 =>
+    (Deepseek(_), Assistant, Some(reasoning)) if preserve_deepseek_reasoning =>
       [("reasoning_content", Json::string(reasoning))]
     (Kimi(_), Assistant, Some(reasoning)) =>
       [("reasoning_content", Json::string(reasoning))]
@@ -25,7 +26,11 @@ fn ChatMessage::reasoning_json_fields(
 ///
 /// Assistant messages whose `content` is empty but carry tool calls are
 /// encoded with JSON `content: null`, as the API requires.
-fn ChatMessage::to_json_for_model(message : ChatMessage, model : Model) -> Json {
+fn ChatMessage::to_json_for_model(
+  message : ChatMessage,
+  model : Model,
+  preserve_deepseek_reasoning? : Bool = false,
+) -> Json {
   let content = match message.role {
     Assistant if message.tool_calls.length() > 0 && message.content == "" =>
       Json::null()
@@ -42,7 +47,7 @@ fn ChatMessage::to_json_for_model(message : ChatMessage, model : Model) -> Json 
         ..if message.tool_calls.length() > 0 {
           [("tool_calls", ([ for call in message.tool_calls => call ] : Json))]
         },
-        ..message.reasoning_json_fields(model),
+        ..message.reasoning_json_fields(model, preserve_deepseek_reasoning),
       ],
     ),
   )
@@ -97,7 +102,12 @@ pub fn encode_chat_request(
         (
           "messages",
           [
-            for message in messages => message.to_json_for_model(model)
+            for message in messages => {
+              message.to_json_for_model(
+                model,
+                preserve_deepseek_reasoning=tools.length() > 0,
+              )
+            }
           ],
         ),
         ("stream", Json::boolean(stream)),
@@ -183,25 +193,28 @@ test "deepseek assistant tool calls preserve reasoning content" {
     ],
     reasoning_content="checked available tools",
   )
-  json_inspect(body.to_json_for_model(Deepseek(V4Pro)), content={
-    "role": "assistant",
-    "content": null,
-    "tool_calls": [
-      {
-        "id": "call_123",
-        "type": "function",
-        "function": {
-          "name": "get_weather",
-          "arguments": "{\"location\":\"Hangzhou\"}",
+  json_inspect(
+    body.to_json_for_model(Deepseek(V4Pro), preserve_deepseek_reasoning=true),
+    content={
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_123",
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "arguments": "{\"location\":\"Hangzhou\"}",
+          },
         },
-      },
-    ],
-    "reasoning_content": "checked available tools",
-  })
+      ],
+      "reasoning_content": "checked available tools",
+    },
+  )
 }
 
 ///|
-test "deepseek assistant replies without tool calls omit reasoning content" {
+test "deepseek reasoning follows tool availability" {
   let body = ChatMessage(
     Assistant,
     content="The tests pass.",
@@ -211,6 +224,14 @@ test "deepseek assistant replies without tool calls omit reasoning content" {
     "role": "assistant",
     "content": "The tests pass.",
   })
+  json_inspect(
+    body.to_json_for_model(Deepseek(V4Pro), preserve_deepseek_reasoning=true),
+    content={
+      "role": "assistant",
+      "content": "The tests pass.",
+      "reasoning_content": "checked the test output",
+    },
+  )
 }
 
 ///|
