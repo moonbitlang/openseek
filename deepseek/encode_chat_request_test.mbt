@@ -202,7 +202,7 @@ test "kimi highspeed uses the same code-model request policy" {
 }
 
 ///|
-test "assistant tool-call echo and tool result round-trip" {
+test "deepseek tool-call reasoning and tool result round-trip" {
   let call = @deepseek.ToolCall(
     id="call_42",
     name="shell",
@@ -211,7 +211,12 @@ test "assistant tool-call echo and tool result round-trip" {
   let body = @deepseek.encode_chat_request(model=Deepseek(V4Flash)) <| [
     ChatMessage(System, content="be terse"),
     ChatMessage(User, content="run the tests"),
-    ChatMessage(Assistant, content="", tool_calls=[call]),
+    ChatMessage(
+      Assistant,
+      content="",
+      tool_calls=[call],
+      reasoning_content="need to run the tests",
+    ),
     ChatMessage(Tool("call_42"), content="exit=0\nok"),
   ]
   json_inspect(body, content={
@@ -232,6 +237,7 @@ test "assistant tool-call echo and tool result round-trip" {
             },
           },
         ],
+        "reasoning_content": "need to run the tests",
       },
       { "role": "tool", "content": "exit=0\nok", "tool_call_id": "call_42" },
     ],
