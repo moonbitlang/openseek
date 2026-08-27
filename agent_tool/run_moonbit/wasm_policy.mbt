@@ -17,9 +17,10 @@
 /// A prefix matches whole argument tokens from the front, so `moon` with
 /// `["test"]` allows `moon test --filter x` but not `moon build`.
 ///
-/// The mbtx tool description carries this list in prose. Admitting a command
-/// here without adding it there costs a turn steps: the model never learns it
-/// may use it.
+/// The mbtx tool description and the default system prompt
+/// (`prompt/default_prompt.mbt.md`, "Only these programs can be started")
+/// both carry this list in prose. Admitting a command here without adding it
+/// to both costs a turn steps: the model never learns it may use it.
 let spawnable_commands : Array[(String, Array[String])] = [
   // The MoonBit toolchain, which is most of what a turn runs. Listed per
   // subcommand rather than as a bare `moon` so the set is reviewable, and so

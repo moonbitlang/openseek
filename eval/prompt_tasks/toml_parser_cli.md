@@ -1,8 +1,5 @@
-You are running a MoonBit prompt A/B eval.
-
-Workspace: {{WORKSPACE}}
-
-Build a small MoonBit TOML parser library and native CLI in that workspace.
+Build a small MoonBit TOML parser library and native CLI in the current
+workspace.
 
 Requirements:
 

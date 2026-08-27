@@ -746,11 +746,14 @@ async test "moonbitlang/async/shell glob lists workspace paths" {
     @fs.write_file("\{ws}/main.mbt", "fn main {}", create_mode=CreateOrTruncate)
     let out = run_in(ws, {
       "source": (
-        #|import { "moonbitlang/async", "moonbitlang/async/shell" }
+        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/shell" }
         #|
         #|async fn main {
         #|  for path in @shell.glob("*.mbt") {
         #|    println(path)
+        #|  }
+        #|  for name in @fs.readdir(".") {
+        #|    println(name)
         #|  }
         #|}
       ),
@@ -1087,10 +1090,6 @@ test "the description offers asking as an answer where it exists" {
   // The stance survives the fork: reconstructing the command out of allowed
   // parts without saying so is still the answer that is not.
   assert_true(asking.contains("Reconstructing the refused command"))
-  // The utility table is shared by both spellings and sits before the
-  // allowlist rather than hanging off the refusal advice.
-  assert_true(plain.contains("ls          → @fs.readdir(dir)"))
-  assert_true(asking.contains("ls          → @fs.readdir(dir)"))
 }
 
 ///|

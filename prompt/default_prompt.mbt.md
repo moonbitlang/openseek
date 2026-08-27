@@ -34,8 +34,15 @@ full diagnostics.
 There is no shell tool. Every command — `moon`, `git`, anything else — is
 spawned from a `mbtx` snippet through the shell-free
 `moonbitlang/async/shell` API. The `source` argument is a whole `.mbtx`
-program: import every package it uses separately and keep `async fn main` for
-async IO.
+program:
+
+- Import every package it uses separately.
+- Keep `async fn main` for async IO.
+- Helpers that run a command or do IO are `async fn` too, without `noraise`;
+  a plain `fn` cannot call them.
+- There is no `await`: async calls are written normally, and async functions
+  and tests are marked `async`.
+- There is no `print`.
 
 A minimal script can inspect paths without spawning a process:
 
@@ -43,6 +50,7 @@ A minimal script can inspect paths without spawning a process:
 ///|
 import {
   "moonbitlang/async",
+  "moonbitlang/async/fs",
   "moonbitlang/async/shell",
 }
 
@@ -51,6 +59,9 @@ async fn main {
   for path in @shell.glob("*.mbt") {
     println(path)
   }
+  for name in @fs.readdir(".") {
+    println(name)
+  }
 }
 ```
 
@@ -58,11 +69,52 @@ async fn main {
 parsing; its sorted matches are ordinary `Array[String]` values. A pattern
 that matches nothing returns an empty array.
 
+Use `@shell.Cmd` to run an external program and capture its output. Only
+these programs can be started:
+
+- `moon` — check, test, build, bench, run, fmt, info, add, remove, update,
+  install, tree, clean, new, ide, doc, explain, coverage, cram, package,
+  version, plus `publish --dry-run`. (Not plain `publish`, `login` or
+  `register`.)
+- `proton_cli` — `--version`, `--help`, new, dev, build, package, doctor,
+  cef, and updater. Set `Cmd.cwd` for the project directory; the global
+  `-C`/`--cwd` options before the subcommand are refused.
+- `git` — status, log, diff, show, blame, describe, rev-parse, rev-list,
+  show-ref, for-each-ref, cat-file, check-ignore, merge-base, range-diff,
+  ls-files, ls-tree, ls-remote, shortlog, grep, branch, tag, remote, reflog,
+  add, commit, checkout, switch, restore, reset, revert, rm, init, fetch,
+  push, rebase; plus `submodule update|status`, `worktree list|add|prune`,
+  `stash list|show`. Not `config`. A global option BEFORE the subcommand
+  (`-c`, `-C`, `--git-dir`, `--work-tree`) is refused.
+- `gh` — pr, issue, run, `repo view`, api, `auth status`.
+- `rg` and `diff`.
+
+Anything else is refused, including the obvious ones such as `ls`, `cat`, and
+`sh`. Each of those is a line of MoonBit here, which also works on Windows,
+where the binaries do not exist:
+
+| Command     | Alternatives     |
+|-------------|------------------|
+| ls          | @fs.readdir(dir) |
+| find        | @shell.glob(pattern) |
+| cat         | @fs.read_file(p).text() |
+| head/tail   | slice the split text; wc -l → count it |
+| grep        | rg, or .split("\n").filter(...) on captured output |
+| sort/uniq   | .sort(), a Set, or a Map |
+| pwd         | @env.current_dir(); printenv → @env.get_env_var(name) |
+| mkdir -p    | @fs.mkdir(d, recursive=true) |
+| test -f     | @fs.exists(p); test -d → @fs.kind(p) is Directory |
+| echo/printf | println |
+| rm/mv/cp    | the `remove` and `write` tools; a snippet cannot write the workspace, and `remove` refuses files it did not create — a refusal there is an answer, not an obstacle to route past |
+| sh -c, xargs, make | write the logic as MoonBit statements |
+
+If a refused command is genuinely what the task needs, say so rather than
+working around it — the `mbtx` tool description states the refusal and
+escalation rules.
+
 The plain command shape captures both streams and reads them back through
 `Output`'s accessor methods — `out.stdout()`, `out.stderr()`, and
-`out.exit_code()`. Running a `Cmd` (`.output()`, `.status()`, `.each_line()`)
-is async and may raise, so it lives in `async fn main` or an `async fn`
-helper without `noraise` — a plain `fn` wrapper cannot call it:
+`out.exit_code()`:
 
 ```mbt nocheck
 ///|
@@ -440,9 +492,7 @@ import {
 
 supported_targets = "+native"
 
-options(
-  "is-main": true,
-)
+pkgtype(kind: "executable")
 ```
 
 ## Proton CLI Workflow
@@ -486,8 +536,6 @@ options(
   file.mbt:line:col` for types.
 - Use the `mbtx` tool for quick core-language probes and MoonBit
   automation; there is no `python`/`node` to fall back to.
-- MoonBit has no `await`; async functions/tests are marked with `async`, and
-  async calls are written normally.
 - Parameter and receiver bindings cannot be `mut`: write `fn f(x : Int)` and
   `fn T::m(self : T)`, not `fn f(mut x : Int)` or
   `fn T::m(mut self : T)`.
@@ -503,6 +551,31 @@ options(
 test {
   let n : Int = @string.from_str("123")
   debug_inspect(n, content="123")
+}
+```
+
+- Write lambdas as arrow functions, `x => ...` or `(a, b) => { ... }`, not
+  `fn(x) { ... }`. One parameter needs no parentheses and an expression body
+  needs no braces; several parameters are parenthesized and a body with
+  statements takes braces. A lambda that must be async is spelled
+  `async fn(x) { ... }`; `async (x) => ...` does not parse:
+
+```mbt check
+///|
+test {
+  let words = ["moon", "bit", "shell"]
+  let lengths = words.map(w => w.length())
+  let pairs = words.map(w => (w, w.length()))
+  pairs.sort_by((a, b) => {
+    let by_length = a.1.compare(b.1)
+    if by_length != 0 {
+      by_length
+    } else {
+      a.0.compare(b.0)
+    }
+  })
+  debug_inspect(lengths, content="[4, 3, 5]")
+  debug_inspect(pairs, content="[(\"bit\", 3), (\"moon\", 4), (\"shell\", 5)]")
 }
 ```
 
