@@ -79,7 +79,7 @@ fn parse_console_me(body : String) -> ConsoleMsg? {
 /// requests — fold it into the signed-out state rather than an error.
 fn fetch_console_roster(
   dispatch : @cmd.Emit[Msg],
-  generation : Int,
+  request_id : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     js_fetch(
@@ -94,18 +94,18 @@ fn fetch_console_roster(
               match status {
                 200 =>
                   match parse_console_roster(body) {
-                    Some(metas) => RosterLoaded(metas, generation~)
+                    Some(metas) => RosterLoaded(metas, request_id~)
                     None =>
                       RosterFailed(
                         message="the device list answered malformed JSON",
-                        generation~,
+                        request_id~,
                       )
                   }
                 401 => MeUnauthorized
                 _ =>
                   RosterFailed(
                     message="the device list answered HTTP \{status}",
-                    generation~,
+                    request_id~,
                   )
               },
             ),
@@ -118,7 +118,7 @@ fn fetch_console_roster(
             Console(
               RosterFailed(
                 message="the relay is unreachable: \{detail}",
-                generation~,
+                request_id~,
               ),
             ),
           ),

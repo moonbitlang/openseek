@@ -17,6 +17,7 @@ import {
   "openseek_desktop/frontend/sidebar/conversation",
   "openseek_desktop/frontend/sidebar/section",
   "openseek_desktop/frontend/transcript",
+  "openseek_desktop/internal/uuid/browser" @uuid,
 }
 
 supported_targets = "js"

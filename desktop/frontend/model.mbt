@@ -812,17 +812,16 @@ priv struct Conversation {
   // measured again. Not `DiffStat::base`: that is the ref the host resolved the
   // hint to, so comparing the two would never agree and would probe forever.
   diffstat_hint : String?
-  // The newest branch probe. Replies carry it, so one that is still counting
+  // The newest branch probe UUID. Replies carry it, so one still counting
   // untracked files cannot land on top of a later probe's answer — a run's
   // start and its finish each issue one, and so does opening the popover.
-  branch_generation : Int
+  branch_request_id : String?
   // What GitHub says about that branch; see `PullRequestProbe`. `None` until
   // the first lookup is issued.
   pull_request : PullRequestProbe?
-  // The newest pull-request lookup, counted the same way and for the same
-  // reason. It sits out here rather than in the probe because clearing the
-  // probe must not rewind it — see `Conversation::forget_pull_request`.
-  pull_request_generation : Int
+  // The newest pull-request lookup UUID. It sits out here rather than in the
+  // probe because clearing the probe must still retire an in-flight answer.
+  pull_request_id : String?
   // The engine's `moon_check --watch` state, as its last `runtime_update`
   // notice reported it. `None` until one arrives — a conversation whose
   // engine runs no watcher never shows the chip at all.
@@ -1031,21 +1030,21 @@ priv struct PendingPrompt {
 
 ///|
 /// Whether the conversation's durable transcript is up to date with the
-/// store, a generation-tagged re-read is in flight, or a bounded retry round
+/// store, a UUID-tagged re-read is in flight, or a bounded retry round
 /// has stopped. Commits stay buffered across every failure. A later commit,
-/// reconnect, or explicit open starts a fresh generation from `ReloadFailed`.
+/// reconnect, or explicit open starts a fresh request from `ReloadFailed`.
 priv enum TranscriptSync {
   Synced
   Reloading(
-    generation~ : Int,
+    request_id~ : String,
     attempt~ : Int,
     buffered~ : Array[BufferedCommit],
     // A durable boundary arrived after this request started. Keep the read
-    // single-flight, then run one more generation so an older in-flight
+    // single-flight, then run one more request so an older in-flight
     // snapshot cannot become the final view of that boundary.
     reload_after_current~ : Bool
   )
-  ReloadFailed(generation~ : Int, buffered~ : Array[BufferedCommit])
+  ReloadFailed(request_id~ : String, buffered~ : Array[BufferedCommit])
 } derive(Eq)
 
 ///|
@@ -1172,27 +1171,29 @@ priv struct DeviceState {
   // Page-unique identity of this remote device connection lifecycle. A
   // removed device may later return with the same relay id; delayed socket
   // callbacks and reconnect timers carry the old value and are ignored.
-  // The desktop's non-WebSocket Local channel always uses 0.
-  websocket_epoch : Int
-  // Advances when reconnect backoff expires. The terminal component observes
-  // this transport input and opens exactly one socket for each attempt.
-  reconnect_attempt : Int
+  // The desktop's non-WebSocket Local channel still receives an inert UUID.
+  websocket_id : String
+  // Replaced when reconnect backoff expires. The terminal component observes
+  // this transport identity and opens exactly one socket for each attempt.
+  reconnect_id : String
   // Consecutive WebSocket losses since the last successful connection.
   // Drives the reconnect backoff and the BridgeLost threshold; always 0 for
   // the proton channel, whose bridge never reconnects.
   reconnect_failures : Int
-  // Incremented at every BridgeReady. Session-list replies carry the value
-  // captured when their request was issued, so a reply from a dead connection
-  // cannot overwrite the lists rebuilt after reconnect.
-  connection_generation : Int
-  // Page-lifetime request tokens for the independently fetched sidebar
-  // collections. Connection generation rejects dead sockets; these reject an
-  // older reply from the same connection after a newer request was issued.
-  sessions_request_generation : Int
-  archived_request_generation : Int
-  projects_request_generation : Int
-  worktrees_request_generation : Int
-  workspace_settings_request_generation : Int
+  // Replaced at every BridgeReady. Host replies without their own request
+  // UUID still carry this lifecycle identity so a dead connection cannot
+  // overwrite state rebuilt after reconnect.
+  connection_id : String
+  // App-global UUIDs for the independently fetched sidebar collections. A
+  // reply needs only its exact UUID; the device channel already comes from
+  // `FromDevice`, and a previous connection cannot mint the current value.
+  sessions_request_id : String
+  archived_request_id : String
+  projects_request_id : String
+  // The exact request currently accepted for each workspace; sibling
+  // workspaces never invalidate one another.
+  worktree_request_ids : Array[(@common.Uri, String)]
+  workspace_settings_request_ids : Array[(@common.Uri, String)]
   // Durable sessions known to the engine's store, newest first, refreshed
   // when the bridge connects and when a run reaches the store. A new
   // conversation appears here once its first turn has been persisted.
@@ -1231,15 +1232,15 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
   {
     channel,
     bridge: Connecting,
-    websocket_epoch: 0,
-    reconnect_attempt: 0,
+    websocket_id: @uuid.mint(),
+    reconnect_id: @uuid.mint(),
     reconnect_failures: 0,
-    connection_generation: 0,
-    sessions_request_generation: 0,
-    archived_request_generation: 0,
-    projects_request_generation: 0,
-    worktrees_request_generation: 0,
-    workspace_settings_request_generation: 0,
+    connection_id: @uuid.mint(),
+    sessions_request_id: @uuid.mint(),
+    archived_request_id: @uuid.mint(),
+    projects_request_id: @uuid.mint(),
+    worktree_request_ids: [],
+    workspace_settings_request_ids: [],
     sessions: [],
     archived: [],
     archive_overrides: [],
@@ -1285,10 +1286,6 @@ priv struct Model {
   // Local host, or a browser console's roster devices — empty there until
   // the roster loads (`apply_roster`).
   devices : Array[DeviceState]
-  // Last WebSocket lifecycle identity issued by this page. It deliberately
-  // survives sign-out, so re-adding the same relay device cannot collide with
-  // a reconnect timer queued by its retired connection.
-  websocket_epoch : Int
   // The device channel selected by in-app navigation — this is not DOM or
   // window focus. Settings/Skills, the composer, and the active conversation
   // all target it. The desktop window is born with `Local`; a browser console
@@ -1410,15 +1407,6 @@ priv struct Model {
   // Sidebar selections can race across devices; only the latest full identity
   // may activate a stored conversation.
   loading_conversation : @interop.ConversationKey?
-  // Last token allocated to a transcript snapshot request in this app run.
-  // This lives above individual conversations so pruning, archive removal,
-  // and reopening cannot reuse a token that an older host reply still carries.
-  transcript_request_generation : Int
-  // A page-lifetime namespace lets independent monotonic counters become
-  // globally unique identities without making `update` read randomness.
-  // Different windows get independent timestamp/random namespaces; replaying
-  // the same model remains deterministic.
-  page_namespace : String
   submission_sequence : Int
   // Every conversation with live client state this app run: the active one,
   // those still running in the background, and those visited and kept for an
@@ -1440,11 +1428,11 @@ priv struct Model {
   // because the composer's `$` completion reads the same list, which is why
   // it refreshes on connect instead of when the Skills page opens.
   installed_skills : Array[@skills.InstalledItem]
-  // Advances only when navigation changes which composer is visible. Local
+  // Replaced only when navigation changes which composer is visible. Local
   // component entries use it to dismiss an old completion menu while keeping
   // each conversation's unsent draft; textarea edits never touch this field or
   // any other part of the root Model.
-  composer_context_generation : Int
+  composer_context_id : String
   // Transient presentation for the visible custom select. It closes on
   // context changes, selection, and click-away dismissal.
   select_menu : SelectMenu?
@@ -1461,12 +1449,6 @@ priv struct Model {
   // state. Owned by the `quick_open` package: this shell only opens it, fences
   // it against conversation changes, and opens the row it accepts.
   quick_open : @quick_open.State
-  // Every git probe's request number, minted here rather than per conversation
-  // because a conversation archived and reopened is a *new* record, so a
-  // counter living on it restarts at zero and hands the old checkout's
-  // outstanding replies a number the new one accepts. Kept whole while the
-  // frontend runs, it can only ever be spent.
-  git_request_generation : Int
   // Whether the composer's git chip has its details popover open. Global UI
   // for the focused conversation like `quick_open`, not conversation state:
   // only one composer is on screen, and a popover left open across a switch
@@ -1486,18 +1468,16 @@ priv struct Model {
   // `FileEditor` messages to it.
   file_panel : @fileeditor.State
   // The browser subsystem behind the dock's Browser tabs: per-page address
-  // state, keyed by page-global ids that only grow. The pages themselves
-  // are native web contents views the desktop host owns.
+  // state keyed by page-global UUIDs. The pages themselves are native web
+  // contents views the desktop host owns.
   preview : @preview.State
   // What the host has been told about the active page's native view: which
   // view is visible, at which bounds, and the geometry signature the last
   // measurement was requested for (see `sync_browser_view`).
   browser_pane : BrowserPane
-  // Transient error toasts, oldest first, and the id the next toast will
-  // take. Ids only ever grow, so a toast's auto-dismiss timer can never
-  // collide with a later toast.
+  // Transient error toasts, oldest first. Each carries a fresh UUID, so an
+  // old auto-dismiss timer cannot name a later toast.
   notifications : Array[Notification]
-  notification_seq : Int
   // Which window corner toasts pop up in; a Settings choice, persisted.
   notification_corner : NotificationCorner
   // Where the editor panel's file tree docks; a Settings choice, persisted.
@@ -1538,7 +1518,7 @@ priv struct RemoteAccess {
 /// signature the last pane measurement was requested under — the damping
 /// that keeps the per-dispatch sync pass from measuring forever.
 priv struct BrowserPane {
-  shown : Int?
+  shown : String?
   rect : @preview.Rect?
   geo : BrowserGeometry?
 } derive(Eq)
@@ -1550,7 +1530,7 @@ priv struct BrowserPane {
 /// caught by the pane element's ResizeObserver instead.
 priv struct BrowserGeometry {
   // Which view should be visible (`desired_browser_view`), or none.
-  desired : Int?
+  desired : String?
   sidebar_open : Bool
   narrow : Bool
   terminal_open : Bool
@@ -1687,9 +1667,9 @@ priv enum Msg {
   // The Settings choice of where the editor's file tree docks.
   TreeLayoutChanged(String)
   // A toast's lifetime elapsed; drops it unless a click already did.
-  NotificationExpired(Int)
+  NotificationExpired(String)
   // A toast was clicked: dismiss it now.
-  DismissNotification(Int)
+  DismissNotification(String)
   // The active conversation's "archived while a prompt was in flight" advice
   // was acknowledged.
   DismissArchivedPendingInput
@@ -1820,7 +1800,7 @@ priv enum Msg {
   // after a newer editor navigation has already taken precedence.
   OpenFileFailed(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    request_id~ : String,
     message~ : String
   )
   // A safe external anchor was clicked in the Proton page. The document-level
@@ -1887,25 +1867,25 @@ priv enum Msg {
   ColorSchemeChanged(Bool)
   // A local path in the transcript was clicked. Files and directories in the
   // conversation checkout stay in the right panel; other existing paths may
-  // use the system opener. Each click spends a generation before the
+  // use the system opener. Each click spends a request UUID before the
   // asynchronous request, so only the newest click may steer the panel.
   OpenFile(String)
   // The host resolved this text file and optional position inside the
-  // checkout. Owner and generation fence replies that arrive after a
+  // checkout. Owner and request UUID fence replies that arrive after a
   // conversation change or a newer transcript file-link click.
   OpenFileAt(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    request_id~ : String,
     path~ : String,
     line~ : Int?,
     column~ : Int?
   )
   // The host proved that this literal checkout-relative path is a directory.
-  // Reveal and expand it in the Files tree. The same owner/generation fence as
+  // Reveal and expand it in the Files tree. The same owner/request fence as
   // file links applies.
   OpenDirectoryAt(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    request_id~ : String,
     path~ : String
   )
   // Open or close the composer git chip's details popover.
@@ -1986,12 +1966,12 @@ priv enum DeviceMsg {
   BridgeUnavailable(String)
   // The channel's WebSocket closed (or failed to open). The handler counts
   // the loss and schedules `ReconnectDue`, making the model's device list
-  // the single authority over which reconnect loops keep running. The epoch
+  // the single authority over which reconnect loops keep running. The UUID
   // rejects a callback queued by an earlier occupant of the same device id.
-  ChannelDown(websocket_epoch~ : Int)
+  ChannelDown(websocket_id~ : String)
   // A scheduled reconnect attempt came due. Dropped harmlessly when the
   // device was removed or re-added in the meantime.
-  ReconnectDue(websocket_epoch~ : Int)
+  ReconnectDue(websocket_id~ : String)
   // A file-panel-scoped host push (`fs.changed`, `fs.watch_failed`,
   // `lsp.diagnostics`),
   // stamped with its channel: the panel serves the focused conversation,
@@ -2000,19 +1980,15 @@ priv enum DeviceMsg {
   // The host's settings, from a `settings.get` reply or a peer client's
   // edit broadcast as `settings.changed`. Applied only while no local write
   // is in flight — see `Model::settings_saves`.
-  HostSettingsLoaded(HostSettings, connection_generation~ : Int?)
+  HostSettingsLoaded(HostSettings, connection_id~ : String?)
   // A `settings.set` this client sent came back with the post-write state.
   HostSettingsApplied(
     HostSettings,
-    connection_generation~ : Int,
+    connection_id~ : String,
     cleans_legacy~ : Bool
   )
   // A `settings.set` this client sent failed; the message pops as a toast.
-  HostSettingsSaveFailed(
-    String,
-    connection_generation~ : Int,
-    cleans_legacy~ : Bool
-  )
+  HostSettingsSaveFailed(String, connection_id~ : String, cleans_legacy~ : Bool)
   // A `skills.installed` reply is channel-scoped just like the invalidation
   // that prompted it. Only the currently focused host may replace the
   // page's library mirror.
@@ -2024,18 +2000,13 @@ priv enum DeviceMsg {
   // The steer RPC failed before its outcome was known. Whether the host took
   // it is unknowable here, so the queue entry ends rather than being guessed
   // at.
-  SteerUndelivered(
-    session~ : String,
-    submission_id~ : String,
-    text~ : String,
-    run_id~ : String
-  )
+  SteerUndelivered(submission_id~ : String, text~ : String, run_id~ : String)
   // The host definitively returned `steered:false`; no canonical User can
   // follow, so the queue entry retires and its draft comes back. The text is
   // not carried: the entry holds the draft to restore, and without an entry
   // this client did not send it and must not put another client's text in
   // this composer.
-  SteerRejected(session~ : String, submission_id~ : String, run_id~ : String)
+  SteerRejected(submission_id~ : String, run_id~ : String)
   // The addressed run was already absent when Stop reached the host. This is
   // success for the user's intent, but no future Finished notification can
   // retire a stale local Cancelling phase, so the reply itself must do it.
@@ -2044,12 +2015,10 @@ priv enum DeviceMsg {
   // into a stoppable phase. A lifecycle resync follows in case the response
   // failed after the run independently ended.
   CancelFailed(run_id~ : String, message~ : String)
-  SessionsLoaded(
-    Array[@transcript.SessionListItem],
-    connection_generation~ : Int,
-    request_generation~ : Int
-  )
-  SessionsFailed(String)
+  SessionsLoaded(Array[@transcript.SessionListItem], request_id~ : String)
+  // A failed list request carries the same UUID as a successful one. A failure
+  // from an older request is no more relevant than its stale success reply.
+  SessionsFailed(request_id~ : String, message~ : String)
   // The host's identity-bearing `session.changed` broadcast. Archive changes
   // invalidate that exact live target immediately; both sidebar lists are
   // then re-read for their durable contents.
@@ -2064,11 +2033,11 @@ priv enum DeviceMsg {
     watermark~ : Int,
     goal~ : @transcript.GoalStanding?,
     goal_markers~ : Array[(Int, @transcript.GoalMarker)],
-    generation~ : Int
+    request_id~ : String
   )
-  // A foreground stored-session read failed. Generation guards stale replies;
+  // A foreground stored-session read failed. Its UUID guards stale replies;
   // bounded retries keep the selection pending before final failure is shown.
-  SessionLoadFailed(session~ : String, message~ : String, generation~ : Int)
+  SessionLoadFailed(session~ : String, message~ : String, request_id~ : String)
   // A background re-read of a conversation's durable record (a commit-gap
   // resync, or a reload for a foreign run): same data as `SessionLoaded`,
   // but it never activates the conversation or steals the screen.
@@ -2078,11 +2047,11 @@ priv enum DeviceMsg {
     watermark~ : Int,
     goal~ : @transcript.GoalStanding?,
     goal_markers~ : Array[(Int, @transcript.GoalMarker)],
-    generation~ : Int
+    request_id~ : String
   )
-  // A background re-read failed. The generation identifies the exact read,
+  // A background re-read failed. The UUID identifies the exact read,
   // so an old failure cannot stop a newer one.
-  SessionRefreshFailed(session~ : String, generation~ : Int)
+  SessionRefreshFailed(session~ : String, request_id~ : String)
   // The host's `session.event` broadcast: one durably committed store event.
   // Together with `session.load` snapshots these are the transcript's only
   // durable sources; the live `agent.event` stream is lifecycle/stream state.
@@ -2106,14 +2075,9 @@ priv enum DeviceMsg {
     steps~ : Int,
     activity~ : String
   )
-  // The registered projects — the reply to `workspace.list`. Both
-  // generations are required: reconnect rejects a dead socket, while request
-  // generation rejects an older reply from the current connection.
-  ProjectsLoaded(
-    Array[@common.Uri],
-    connection_generation~ : Int,
-    request_generation~ : Int
-  )
+  // The registered projects — the reply to `workspace.list`, identified by
+  // the exact app-global request UUID that produced it.
+  ProjectsLoaded(Array[@common.Uri], request_id~ : String)
   // The host's canonical post-commit registry broadcast. Every client adopts
   // the same list in durable write order and invalidates older list replies.
   ProjectsChanged(Array[@common.Uri])
@@ -2133,8 +2097,7 @@ priv enum DeviceMsg {
     worktree_mode~ : Bool,
     checkout_submodules~ : Bool,
     submodule_checkout_timeout_seconds~ : Int,
-    connection_generation~ : Int,
-    request_generation~ : Int
+    request_id~ : String
   )
   // The post-commit `workspace.settings_changed` broadcast for one
   // workspace: every client adopts the committed state in write order.
@@ -2147,21 +2110,19 @@ priv enum DeviceMsg {
   // A `workspace.settings_set` this client sent failed; the message pops as
   // a toast and the workspace's settings are re-read.
   WorkspaceSettingsSaveFailed(workspace~ : @common.Uri, message~ : String)
-  // One workspace's worktree registry — the reply to `worktree.list`, with
-  // the same two-generation staleness fence as `ProjectsLoaded`.
+  // One workspace's worktree registry — the reply to `worktree.list`, named
+  // by the exact per-workspace request UUID that produced it.
   WorktreesLoaded(
     Array[WorktreeRow],
     workspace~ : @common.Uri,
-    connection_generation~ : Int,
-    request_generation~ : Int
+    request_id~ : String
   )
-  // A failed list leaves that workspace's placement unresolved. Carry both
-  // generations so a dead connection or an older request cannot surface a
-  // stale error after a newer snapshot or broadcast has already arrived.
+  // A failed list leaves that workspace's placement unresolved. The request
+  // UUID prevents an older failure surfacing after a newer snapshot or
+  // broadcast has already arrived.
   WorktreesFailed(
     workspace~ : @common.Uri,
-    connection_generation~ : Int,
-    request_generation~ : Int,
+    request_id~ : String,
     message~ : String
   )
   // The post-commit `worktree.changed` broadcast for one workspace.
@@ -2180,8 +2141,7 @@ priv enum DeviceMsg {
   // successful `archive_session`/`unarchive_session` alike.
   ArchivedLoaded(
     Array[@transcript.SessionListItem],
-    connection_generation~ : Int,
-    request_generation~ : Int,
+    request_id~ : String,
     fresh_session~ : String
   )
   // The successful delete reply names the identity it removed and a fresh
@@ -2191,8 +2151,7 @@ priv enum DeviceMsg {
     key~ : ArchiveRecordKey,
     sessions~ : Array[String],
     items~ : Array[@transcript.SessionListItem],
-    connection_generation~ : Int,
-    request_generation~ : Int,
+    request_id~ : String,
     fresh_session~ : String
   )
   ArchiveFailed(String)
@@ -2200,20 +2159,19 @@ priv enum DeviceMsg {
   // A rebuild of a missing worktree failed. The canonical rows still arrive
   // as `worktree.changed`, so this only reports the refusal.
   WorktreeFailed(String)
-  // A `workspace_branch` reply: the git branch of `session`'s workspace —
+  // A `workspace_branch` reply: the git branch reported by the probe —
   // `Some("")` when it is not a repository, `None` when the probe failed or
   // answered unintelligibly — and how much uncommitted work sits on it.
-  // `generation` is the probe that asked; an older one's answer is discarded.
+  // `request_id` is the probe UUID; an older one's answer is discarded.
   // `base_hint` is the baseline that probe was given, carried back rather than
   // remembered: it says what the diffstat in the same message measures from.
   BranchLoaded(
-    session~ : String,
     branch~ : String?,
     diffstat~ : DiffStat?,
-    generation~ : Int,
+    request_id~ : String,
     base_hint~ : String?
   )
-  // A `git.pull_request` reply. `generation` is which request this answers,
+  // A `git.pull_request` reply. `request_id` is which request this answers,
   // and is what matches it to the probe waiting for it; `branch` is the one
   // that request was issued against, kept for the label when the host reports
   // none; `queried` is the branch the host actually read from `HEAD`, and is
@@ -2221,9 +2179,8 @@ priv enum DeviceMsg {
   // two. A failed lookup arrives here too, with nothing in it, so the
   // conversation never stays wedged waiting for an answer that will not come.
   PullRequestLoaded(
-    session~ : String,
     branch~ : String,
-    generation~ : Int,
+    request_id~ : String,
     queried~ : String?,
     pull_request~ : PullRequest?,
     compare_url~ : String?
@@ -2240,7 +2197,7 @@ priv enum DeviceMsg {
   )
   // One complete `agent.runs` reply. Replayed starts and the negative-set
   // frontier must be accepted or rejected together at one connection
-  // generation; dispatching its rows separately would let a stale reply
+  // identity; dispatching its rows separately would let a stale reply
   // resurrect a run after a later BridgeReady already resynced it away.
   RunsLoaded(
     runs~ : Array[RecoveredRun],
@@ -2253,7 +2210,7 @@ priv enum DeviceMsg {
     approvals~ : Array[RecoveredApproval],
     live~ : Array[String],
     frontier~ : Array[RunSnapshotFrontier],
-    connection_generation~ : Int
+    connection_id~ : String
   )
   // The complete in-flight run set, from an `agent.runs` resync. Any
   // conversation still showing an open run this set lacks ended while the
@@ -2272,7 +2229,6 @@ priv enum DeviceMsg {
   // the same connection; any other status leaves delivery unconfirmed. A
   // reply that returns always names the run it opened.
   StartResponded(
-    session~ : String,
     submission_id~ : String,
     run_id~ : String,
     status~ : String,
@@ -2281,22 +2237,14 @@ priv enum DeviceMsg {
   // The response path failed before host acceptance was knowable. Nothing
   // guesses on the client's behalf: the prompt in flight settles and a reload
   // shows what the record actually holds.
-  StartUndelivered(
-    session~ : String,
-    submission_id~ : String,
-    message~ : String
-  )
+  StartUndelivered(submission_id~ : String, message~ : String)
   // The host definitively refused this exact request. Restore its draft and
   // retire the prompt in flight immediately.
-  StartRejected(session~ : String, submission_id~ : String, message~ : String)
+  StartRejected(submission_id~ : String, message~ : String)
   // `worktree.create` failed before `agent.start` was sent. Restore the draft
   // like StartRejected, but report this recoverable setup failure as a toast
   // rather than putting an agent-style error in the transcript.
-  WorktreeSetupFailed(
-    session~ : String,
-    submission_id~ : String,
-    message~ : String
-  )
+  WorktreeSetupFailed(submission_id~ : String, message~ : String)
   // A host error without a run (`run_id` is `None` — a pre-run failure)
   // belongs to whatever conversation the user is looking at; `diagnostics`
   // is stderr worth appending, when the host captured any. With a run,
@@ -2318,12 +2266,7 @@ priv enum DeviceMsg {
   // it to the user, the way a rejected prompt restores its own draft. `None`
   // was a clear, which has nothing to restore. `command` names which send
   // this answers, so a late reply cannot retire the one that replaced it.
-  GoalRejected(
-    session~ : String,
-    command~ : String,
-    draft~ : String?,
-    message~ : String
-  )
+  GoalRejected(command~ : String, draft~ : String?, message~ : String)
   // The `agent.goal` call failed on the transport rather than being refused,
   // so whether the host took it is unknown: the socket can drop after the
   // command reached the engine and before the reply came back, and the
@@ -2336,12 +2279,7 @@ priv enum DeviceMsg {
   // still makes a claim — that this text's fate is unknown — and that claim
   // goes stale the moment the record settles the send or a newer one
   // replaces it.
-  GoalUndelivered(
-    session~ : String,
-    command~ : String,
-    draft~ : String?,
-    message~ : String
-  )
+  GoalUndelivered(command~ : String, draft~ : String?, message~ : String)
   // `answer` accompanies normal success and context yield (where it is
   // continuation guidance); other terminal statuses carry none.
   Finished(run_id~ : String, status~ : String, answer~ : String?)
@@ -2380,9 +2318,9 @@ fn empty_conversation(
     branch: None,
     diffstat: None,
     diffstat_hint: None,
-    branch_generation: 0,
+    branch_request_id: None,
     pull_request: None,
-    pull_request_generation: 0,
+    pull_request_id: None,
     watcher_status: None,
     turn: RunState::empty(),
     pending_steers: [],
@@ -2451,7 +2389,6 @@ fn initial_model() -> Model {
         [{ ..empty_device_state(channel), active_project: preselect_project, }]
       None => []
     },
-    websocket_epoch: 0,
     focused: page_channel.unwrap_or(@interop.ChannelId::Local),
     default_model: High,
     default_agent: OpenSeekAgent,
@@ -2492,8 +2429,6 @@ fn initial_model() -> Model {
     terminal: @terminal.State::empty(),
     active_session: "",
     loading_conversation: None,
-    transcript_request_generation: 0,
-    page_namespace: generated_session_id(),
     submission_sequence: 0,
     conversations: [],
     project_picker: None,
@@ -2504,19 +2439,17 @@ fn initial_model() -> Model {
     codex: @codex.State(),
     skills: @skills.State::empty(),
     installed_skills: [],
-    composer_context_generation: 0,
+    composer_context_id: @uuid.mint(),
     select_menu: None,
     composer_entry_replacements: [],
     composer_entry_retirements: [],
     quick_open: @quick_open.State::empty(),
-    git_request_generation: 0,
     git_details_open: false,
     dock: @dock.State::empty(),
     file_panel: @fileeditor.State::empty(),
     preview: @preview.State::empty(),
     browser_pane: { shown: None, rect: None, geo: None, },
     notifications: [],
-    notification_seq: 0,
     notification_corner: BottomRight,
     tree_layout: RightSidebar,
     update_ux: UpdateUnknown,
@@ -2572,10 +2505,10 @@ fn Model::replace_device(self : Model, dev : DeviceState) -> Model {
 /// The focused channel's connection generation — the fence root-scoped
 /// fetches (host settings, session snapshots) stamp on their requests. 0
 /// when the page holds no devices; no reply ever arrives to check it there.
-fn Model::focused_connection_generation(self : Model) -> Int {
+fn Model::focused_connection_id(self : Model) -> String {
   match self.focused_device() {
-    Some(dev) => dev.connection_generation
-    None => 0
+    Some(dev) => dev.connection_id
+    None => ""
   }
 }
 
@@ -3185,13 +3118,13 @@ fn Model::conversation_for_composer_action(
   // archive has an exact handoff for its fact; a background archive has none,
   // so its old actions expire instead of reaching a later unarchived record.
   for
-    index in identity.archive_generation..<self.composer_entry_retirements.length() {
+    index in identity.archive_cursor..<self.composer_entry_retirements.length() {
     if self.composer_entry_retirements[index] == owner {
-      let archive_generation = index + 1
+      let archive_cursor = index + 1
       let mut transferred = false
       for replacement in self.composer_entry_replacements {
         if replacement.archived == owner &&
-          replacement.archive_generation == archive_generation {
+          replacement.archive_cursor == archive_cursor {
           owner = replacement.fresh
           transferred = true
           break
@@ -3240,14 +3173,11 @@ fn Model::replace_conversation(self : Model, conv : Conversation) -> Model {
 }
 
 ///|
-/// The conversation that owns run `run_id`. Engine events route by run id,
-/// so a backgrounded conversation keeps receiving its own stream.
-fn Model::conversation_by_run(
-  self : Model,
-  channel : @interop.ChannelId,
-  run_id : String,
-) -> Conversation? {
-  for conv in self.conversations.filter(conv => conv.device == channel) {
+/// The conversation that owns run `run_id`. Engine events route by the
+/// app-global run UUID, so a backgrounded conversation keeps receiving its
+/// own stream without adding a device channel to the identity.
+fn Model::conversation_by_run(self : Model, run_id : String) -> Conversation? {
+  for conv in self.conversations {
     if conv.run is Open(run_id=active, ..) && active == run_id {
       return Some(conv)
     }
@@ -3258,13 +3188,12 @@ fn Model::conversation_by_run(
 ///|
 /// The conversation that most recently owned run `run_id`, matched even after
 /// the run finished. Used to route compaction events, which the engine stamps
-/// with its last run id while sitting idle between turns.
+/// with its last run UUID while sitting idle between turns.
 fn Model::conversation_by_last_run(
   self : Model,
-  channel : @interop.ChannelId,
   run_id : String,
 ) -> Conversation? {
-  for conv in self.conversations.filter(conv => conv.device == channel) {
+  for conv in self.conversations {
     if conv.last_run_id is Some(last) && last == run_id {
       return Some(conv)
     }
@@ -3275,20 +3204,82 @@ fn Model::conversation_by_last_run(
 ///|
 /// The conversation holding an exact id-bearing steer receipt. A receipt may
 /// trail its run's Finished event and even the next run's Started event, so
-/// current/last run ownership alone is not enough to route it.
+/// current/last run ownership alone is not enough to route it. Both ids are
+/// app-global UUIDs; a device channel adds no information.
 fn Model::conversation_by_pending_steer(
   self : Model,
-  channel : @interop.ChannelId,
   submission_id : String,
   run_id : String,
 ) -> Conversation? {
-  for conv in self.conversations.filter(conv => conv.device == channel) {
+  for conv in self.conversations {
     for input in conv.pending_steers {
       if input.submission_id == submission_id &&
         input.run_id is Some(owner) &&
         owner == run_id {
         return Some(conv)
       }
+    }
+  }
+  None
+}
+
+///|
+/// The conversation holding an exact pending initial submission. This lookup
+/// replaces echoing a conversation/session/channel through the asynchronous
+/// reply: the app-global submission UUID already identifies its owner.
+fn Model::conversation_by_pending_prompt(
+  self : Model,
+  submission_id : String,
+) -> Conversation? {
+  for conv in self.conversations {
+    if conv.has_initial_submission(submission_id) {
+      return Some(conv)
+    }
+  }
+  None
+}
+
+///|
+/// The conversation holding an exact goal command UUID. The command is
+/// sufficient to route its asynchronous outcome; the durable session id is
+/// still sent to the host but does not need to be echoed into this message.
+fn Model::conversation_by_goal_command(
+  self : Model,
+  command : String,
+) -> Conversation? {
+  for conv in self.conversations {
+    if conv.goal_pending is Some(pending) && pending.id == command {
+      return Some(conv)
+    }
+  }
+  None
+}
+
+///|
+/// Route an exact branch-probe outcome by its app-global UUID. The UUID
+/// replaces the session/channel tuple previously echoed through the reply.
+fn Model::conversation_by_branch_request(
+  self : Model,
+  request_id : String,
+) -> Conversation? {
+  for conv in self.conversations {
+    if conv.branch_request_id == Some(request_id) {
+      return Some(conv)
+    }
+  }
+  None
+}
+
+///|
+/// Route an exact pull-request probe outcome by its app-global UUID. The
+/// conversation supplies the device channel for any follow-up host request.
+fn Model::conversation_by_pull_request(
+  self : Model,
+  request_id : String,
+) -> Conversation? {
+  for conv in self.conversations {
+    if conv.pull_request_id == Some(request_id) {
+      return Some(conv)
     }
   }
   None
@@ -3509,10 +3500,7 @@ fn Conversation::complete_reasoning(self : Conversation) -> Conversation {
 ///|
 fn Model::allocate_submission_id(self : Model) -> (Model, String) {
   let sequence = self.submission_sequence + 1
-  (
-    { ..self, submission_sequence: sequence, },
-    self.page_namespace + "-submission-" + sequence.to_string(),
-  )
+  ({ ..self, submission_sequence: sequence }, @uuid.mint())
 }
 
 ///|
@@ -3814,50 +3802,44 @@ fn Conversation::apply_commit(
 
 ///|
 /// Start one reload unless this conversation already has a request in flight.
-/// Tokens come from the model rather than the conversation: a pruned or
+/// UUIDs come from the model rather than the conversation: a pruned or
 /// archived conversation can therefore be recreated without accepting a late
 /// reply issued to its earlier incarnation. Buffered commits from an exhausted
 /// retry round carry into the next one.
 fn Model::begin_transcript_reload(
   self : Model,
   conv : Conversation,
-) -> (Model, Int?) {
+) -> (Model, String?) {
   match conv.sync {
     Reloading(..) => (self.replace_conversation(conv), None)
     Synced => {
-      let generation = self.transcript_request_generation + 1
+      let request_id = @uuid.mint()
       (
-        {
-          ..self.replace_conversation({
-            ..conv,
-            sync: Reloading(
-              generation~,
-              attempt=1,
-              buffered=[],
-              reload_after_current=false,
-            ),
-          }),
-          transcript_request_generation: generation,
-        },
-        Some(generation),
+        self.replace_conversation({
+          ..conv,
+          sync: Reloading(
+            request_id~,
+            attempt=1,
+            buffered=[],
+            reload_after_current=false,
+          ),
+        }),
+        Some(request_id),
       )
     }
     ReloadFailed(buffered~, ..) => {
-      let generation = self.transcript_request_generation + 1
+      let request_id = @uuid.mint()
       (
-        {
-          ..self.replace_conversation({
-            ..conv,
-            sync: Reloading(
-              generation~,
-              attempt=1,
-              buffered=buffered.copy(),
-              reload_after_current=false,
-            ),
-          }),
-          transcript_request_generation: generation,
-        },
-        Some(generation),
+        self.replace_conversation({
+          ..conv,
+          sync: Reloading(
+            request_id~,
+            attempt=1,
+            buffered=buffered.copy(),
+            reload_after_current=false,
+          ),
+        }),
+        Some(request_id),
       )
     }
   }
@@ -3866,18 +3848,18 @@ fn Model::begin_transcript_reload(
 ///|
 /// Require a snapshot whose read cut starts after the current transition.
 /// An existing read stays single-flight but is followed by one fresh
-/// generation; otherwise start that generation now.
+/// request; otherwise start that request now.
 fn Model::ensure_transcript_reload_after_current(
   self : Model,
   conv : Conversation,
-) -> (Model, Int?) {
+) -> (Model, String?) {
   match conv.sync {
-    Reloading(generation~, attempt~, buffered~, reload_after_current=false) =>
+    Reloading(request_id~, attempt~, buffered~, reload_after_current=false) =>
       (
         self.replace_conversation({
           ..conv,
           sync: Reloading(
-            generation~,
+            request_id~,
             attempt~,
             buffered~,
             reload_after_current=true,
@@ -3892,7 +3874,7 @@ fn Model::ensure_transcript_reload_after_current(
 }
 
 ///|
-/// Buffer a commit while a snapshot generation is unresolved. The array is
+/// Buffer a commit while a snapshot request is unresolved. The array is
 /// copied so earlier Rabbita model snapshots remain immutable. Buffered
 /// terminals do not advance the applied terminal frontier: an earlier
 /// non-terminal must still capture the frontier that preceded it when the
@@ -3902,18 +3884,18 @@ fn Conversation::buffer_commit(
   commit : BufferedCommit,
 ) -> Conversation {
   match self.sync {
-    Reloading(generation~, attempt~, buffered~, reload_after_current~) => {
+    Reloading(request_id~, attempt~, buffered~, reload_after_current~) => {
       let buffered = buffered.copy()
       buffered.push(commit)
       {
         ..self,
-        sync: Reloading(generation~, attempt~, buffered~, reload_after_current~),
+        sync: Reloading(request_id~, attempt~, buffered~, reload_after_current~),
       }
     }
-    ReloadFailed(generation~, buffered~) => {
+    ReloadFailed(request_id~, buffered~) => {
       let buffered = buffered.copy()
       buffered.push(commit)
-      { ..self, sync: ReloadFailed(generation~, buffered~), }
+      { ..self, sync: ReloadFailed(request_id~, buffered~) }
     }
     Synced => self
   }
@@ -3941,7 +3923,7 @@ fn Conversation::has_seen_durable_sequence(
 ///|
 /// Adopt a fresh `session.load` snapshot: it replaces the durable transcript
 /// wholesale, preserves client-local notices, and drains commits buffered
-/// while the read was in flight. The caller has already checked generation
+/// while the read was in flight. The caller has already checked its UUID
 /// and watermark monotonicity. Returns whether buffered commits from beyond
 /// the snapshot failed to connect — a remaining gap answered by a new read.
 fn Conversation::adopt_snapshot(
@@ -3951,8 +3933,8 @@ fn Conversation::adopt_snapshot(
   goal~ : @transcript.GoalStanding?,
   goal_markers~ : Array[(Int, @transcript.GoalMarker)],
 ) -> (Conversation, Bool) {
-  let (generation, pending) = match self.sync {
-    Reloading(generation~, buffered~, ..) => (generation, buffered.copy())
+  let (request_id, pending) = match self.sync {
+    Reloading(request_id~, buffered~, ..) => (request_id, buffered.copy())
     _ => return (self, false)
   }
   // Sequence order, whatever the arrival order was.
@@ -4003,7 +3985,7 @@ fn Conversation::adopt_snapshot(
   if leftover.is_empty() {
     (conv, false)
   } else {
-    ({ ..conv, sync: ReloadFailed(generation~, buffered=leftover), }, true)
+    ({ ..conv, sync: ReloadFailed(request_id~, buffered=leftover) }, true)
   }
 }
 

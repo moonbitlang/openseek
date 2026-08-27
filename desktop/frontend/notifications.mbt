@@ -7,11 +7,11 @@
 const NotificationLifetimeMs : Int = 6000
 
 ///|
-/// One transient toast. `id` pairs the auto-dismiss timer with its toast, so
+/// One transient toast. Its UUID pairs the auto-dismiss timer with its toast, so
 /// a timer whose toast was already clicked away expires harmlessly instead
 /// of touching a newer one.
 priv struct Notification {
-  id : Int
+  id : String
   message : String
 } derive(Eq)
 
@@ -54,11 +54,11 @@ fn Model::notify_error(
   dispatch : @cmd.Emit[Msg],
   message : String,
 ) -> (@cmd.Cmd, Model) {
-  let toast : Notification = { id: self.notification_seq, message, }
+  let toast : Notification = { id: @uuid.mint(), message }
   let notifications = self.notifications.copy()
   notifications.push(toast)
   (
     @cmd.delay(dispatch(NotificationExpired(toast.id)), NotificationLifetimeMs),
-    { ..self, notification_seq: toast.id + 1, notifications, },
+    { ..self, notifications, },
   )
 }

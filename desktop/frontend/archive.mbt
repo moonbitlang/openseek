@@ -24,8 +24,7 @@ priv struct ArchivedDeleteConfirm {
 fn fetch_archived(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  connection_generation : Int,
-  request_generation : Int,
+  request_id : String,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
@@ -43,8 +42,7 @@ fn fetch_archived(
         dispatch(
           ArchivedLoaded(
             @transcript.sessions_from_reply(reply, channel),
-            connection_generation~,
-            request_generation~,
+            request_id~,
             fresh_session=generated_session_id(),
           ),
         ),
@@ -58,16 +56,15 @@ fn archive_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
-  connection_generation : Int,
-  sessions_request_generation : Int,
-  archived_request_generation : Int,
+  sessions_request_id : String,
+  archived_request_id : String,
   force? : Bool = false,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       archive_session_into(
-        scheduler, dispatch, channel, session, connection_generation, sessions_request_generation,
-        archived_request_generation, force,
+        scheduler, dispatch, channel, session, sessions_request_id, archived_request_id,
+        force,
       )
     })
   })
@@ -79,9 +76,8 @@ async fn archive_session_into(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
-  connection_generation : Int,
-  sessions_request_generation : Int,
-  archived_request_generation : Int,
+  sessions_request_id : String,
+  archived_request_id : String,
   force : Bool,
 ) -> Unit noraise {
   let reply = @interop.bridge_request(
@@ -110,8 +106,7 @@ async fn archive_session_into(
       )
     Archived(reply) =>
       apply_archive_list_reply(
-        scheduler, dispatch, channel, reply, connection_generation, sessions_request_generation,
-        archived_request_generation,
+        scheduler, dispatch, channel, reply, sessions_request_id, archived_request_id,
       )
   }
 }
@@ -121,18 +116,16 @@ fn unarchive_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
-  connection_generation : Int,
-  sessions_request_generation : Int,
-  archived_request_generation : Int,
+  sessions_request_id : String,
+  archived_request_id : String,
 ) -> @cmd.Cmd {
   archive_action(
     dispatch,
     channel,
     @commands.session_unarchive,
-    { session, force: None, },
-    connection_generation,
-    sessions_request_generation,
-    archived_request_generation,
+    { session, force: None },
+    sessions_request_id,
+    archived_request_id,
   )
 }
 
@@ -145,8 +138,7 @@ fn delete_archived_session(
   channel : @interop.ChannelId,
   key : ArchiveRecordKey,
   sessions : Array[String],
-  connection_generation : Int,
-  archived_request_generation : Int,
+  archived_request_id : String,
 ) -> @cmd.Cmd {
   guard key.workspace_payload(channel) is Some(workspace) else {
     return @cmd.none
@@ -176,8 +168,7 @@ fn delete_archived_session(
             key~,
             sessions~,
             items=@transcript.sessions_from_reply(reply, channel),
-            connection_generation~,
-            request_generation=archived_request_generation,
+            request_id=archived_request_id,
             fresh_session=generated_session_id(),
           ),
         ),
@@ -223,9 +214,8 @@ fn archive_action(
   channel : @interop.ChannelId,
   command : @commands.Command[@protocol.SessionPayload, @protocol.SessionsReply],
   payload : @protocol.SessionPayload,
-  connection_generation : Int,
-  sessions_request_generation : Int,
-  archived_request_generation : Int,
+  sessions_request_id : String,
+  archived_request_id : String,
 ) -> @cmd.Cmd {
   let device_dispatch = dispatch.map((msg : DeviceMsg) => {
     FromDevice(channel, msg)
@@ -241,8 +231,7 @@ fn archive_action(
         }
       }
       apply_archive_list_reply(
-        scheduler, dispatch, channel, reply, connection_generation, sessions_request_generation,
-        archived_request_generation,
+        scheduler, dispatch, channel, reply, sessions_request_id, archived_request_id,
       )
     })
   })
@@ -256,23 +245,19 @@ async fn apply_archive_list_reply(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   reply : @protocol.SessionsReply,
-  connection_generation : Int,
-  sessions_request_generation : Int,
-  archived_request_generation : Int,
+  sessions_request_id : String,
+  archived_request_id : String,
 ) -> Unit noraise {
   scheduler.add(
     dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))(
       ArchivedLoaded(
         @transcript.sessions_from_reply(reply, channel),
-        connection_generation~,
-        request_generation=archived_request_generation,
+        request_id=archived_request_id,
         fresh_session=generated_session_id(),
       ),
     ),
   )
   // The record moved between the live and archived stores; the sidebar's
   // live list is stale until re-fetched.
-  refresh_sessions_into(
-    scheduler, dispatch, channel, connection_generation, sessions_request_generation,
-  )
+  refresh_sessions_into(scheduler, dispatch, channel, sessions_request_id)
 }

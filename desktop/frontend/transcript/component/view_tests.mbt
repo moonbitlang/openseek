@@ -18,7 +18,7 @@ test "transcript stream children use stable typed keys in display order" {
     focused=@interop.ChannelId::Local,
     active_session="desktop-test",
     root=None,
-    submission_generation=1,
+    submission_sequence=1,
     items=[
       {
         item: { kind: User, content: "question", ts: None, sequence: Some(41), },
@@ -73,7 +73,7 @@ test "transcript stream section key scopes equal session ids by channel" {
     focused=@interop.ChannelId::Local,
     active_session="desktop-test",
     root=None,
-    submission_generation=0,
+    submission_sequence=0,
     items=[],
     streaming_response=None,
     streaming_identity="idle",

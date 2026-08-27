@@ -17,7 +17,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   }
   let identity : @composer.Identity = {
     owner,
-    archive_generation: self.composer_entry_retirements.length(),
+    archive_cursor: self.composer_entry_retirements.length(),
   }
   let checkout_ready = checkout is Some(value) && value.is_ready()
   // Sending needs a live engine and a workspace to run in — nothing about the
@@ -159,7 +159,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     ],
     root: self.conversation_root(conv),
     installed_skills: self.installed_skills,
-    context_generation: self.composer_context_generation,
+    context_id: self.composer_context_id,
     submission_sequence: self.submission_sequence,
     replacements: self.composer_entry_replacements,
     retirements: self.composer_entry_retirements,
@@ -186,17 +186,20 @@ fn Model::composer_input(self : Model) -> @composer.Input {
 ///|
 /// The file-index lifecycle is a root-owned fact shared by every composer
 /// instance. Each component keeps its own draft and completion state while
-/// observing this one authoritative index epoch.
+/// observing this one authoritative index checkout_id.
 fn Model::composer_file_index(self : Model) -> @composer.FileIndex {
   match self.file_panel.index {
     @fileeditor.IndexEmpty =>
-      @composer.FileIndexEmpty(epoch=self.file_panel.request_epoch)
+      @composer.FileIndexEmpty(checkout_id=self.file_panel.checkout_id)
     @fileeditor.IndexLoading(_) =>
-      @composer.FileIndexLoading(epoch=self.file_panel.request_epoch)
+      @composer.FileIndexLoading(checkout_id=self.file_panel.checkout_id)
     @fileeditor.IndexReady(truncated~, ..) =>
-      @composer.FileIndexReady(epoch=self.file_panel.request_epoch, truncated~)
+      @composer.FileIndexReady(
+        checkout_id=self.file_panel.checkout_id,
+        truncated~,
+      )
     @fileeditor.IndexFailed =>
-      @composer.FileIndexFailed(epoch=self.file_panel.request_epoch)
+      @composer.FileIndexFailed(checkout_id=self.file_panel.checkout_id)
   }
 }
 
@@ -238,7 +241,7 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
     file_index: if workspace_ready {
       self.composer_file_index()
     } else {
-      @composer.FileIndexEmpty(epoch=self.file_panel.request_epoch)
+      @composer.FileIndexEmpty(checkout_id=self.file_panel.checkout_id)
     },
   })
 }
@@ -250,8 +253,8 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
 fn Model::dormant_composer_input(self : Model) -> @composer.Input {
   {
     identity: {
-      owner: { channel: self.focused, session: self.active_session, },
-      archive_generation: self.composer_entry_retirements.length(),
+      owner: { channel: self.focused, session: self.active_session },
+      archive_cursor: self.composer_entry_retirements.length(),
     },
     draft: { task: "", mentions: [], },
     run: None,
@@ -259,7 +262,7 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
     slash_commands: [],
     root: None,
     installed_skills: self.installed_skills,
-    context_generation: self.composer_context_generation,
+    context_id: self.composer_context_id,
     submission_sequence: self.submission_sequence,
     replacements: self.composer_entry_replacements,
     retirements: self.composer_entry_retirements,

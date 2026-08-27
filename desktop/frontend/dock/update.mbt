@@ -81,7 +81,7 @@ pub fn open_history_diff(state : State, diff : GitHistoryDiff) -> State {
 /// Open browser page `id`'s tab (appending one if it is not in the strip
 /// yet) and make it active. The caller owns the id: allocating the page and
 /// asking the host for its native view are the browser subsystem's business.
-pub fn open_browser(state : State, id : Int) -> State {
+pub fn open_browser(state : State, id : String) -> State {
   let tab = DockTab::Browser(id~)
   let tabs = if tab_index(state, tab) is Some(_) {
     state.tabs

@@ -98,20 +98,20 @@ fn State::refresh_catalog(
   let next = {
     ..self,
     activity,
-    live_catalog_generation: self.live_catalog_generation + 1,
-    archived_catalog_generation: self.archived_catalog_generation + 1,
+    live_catalog_request_id: @uuid.mint(),
+    archived_catalog_request_id: @uuid.mint(),
   }
   (
     @cmd.batch([
       CodexCatalogReplyContext::{
         archived: false,
-        generation: next.live_catalog_generation,
         activity_frontier,
+        request_id: next.live_catalog_request_id,
       }.run(dispatch, channel),
       CodexCatalogReplyContext::{
         archived: true,
-        generation: next.archived_catalog_generation,
         activity_frontier,
+        request_id: next.archived_catalog_request_id,
       }.run(dispatch, channel),
     ]),
     next,

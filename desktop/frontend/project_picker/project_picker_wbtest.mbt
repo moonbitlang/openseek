@@ -9,16 +9,14 @@ test "picker paths join with URI separators" {
 test "a listing keeps its raw protocol path" {
   assert_true(
     reply_message(
-      @interop.ChannelId::Local,
       @protocol.Listing(path="/C:/project", parent=Some("/C:/"), entries=[]),
-      generation=7,
+      request_id="00000000-0000-8000-8000-000000000007",
       drives=true,
     )
     is Loaded(
-      channel=@interop.ChannelId::Local,
       location=Directory("/C:/project"),
       entries=[],
-      generation=7
+      request_id="00000000-0000-8000-8000-000000000007"
     ),
   )
 }
@@ -40,7 +38,7 @@ fn opened(
   let (_, loaded, _) = State::handle(
     opening,
     emit(),
-    Loaded(channel~, location~, entries~, generation=opening.generation),
+    Msg::Loaded(location~, entries~, request_id=opening.request_id),
   )
   guard loaded is Some(picker) else { fail("picker closed by its own listing") }
   picker
@@ -63,11 +61,10 @@ test "the picker opens loading and adopts the first listing" {
   let (_, loaded, _) = State::handle(
     opening,
     emit(),
-    Loaded(
-      channel=@interop.ChannelId::Local,
-      location=Directory(home),
+    Msg::Loaded(
+      location=Location::Directory(home),
       entries=["proj"],
-      generation=opening.generation,
+      request_id=opening.request_id,
     ),
   )
   guard loaded is Some(picker) else { fail("picker closed by its own listing") }
@@ -77,24 +74,23 @@ test "the picker opens loading and adopts the first listing" {
 }
 
 ///|
-test "a listing for another channel or generation is dropped" {
-  let opening = opened(location=Directory("/home/u"), entries=["proj"])
-  // A different device's listing cannot replace this picker's.
+test "a listing for another request UUID is dropped" {
+  let opening = opened(location=Location::Directory("/home/u"), entries=["proj"])
+  // A request from a picker that is no longer current cannot replace this one.
   let (_, foreign, _) = State::handle(
     opening,
     emit(),
-    Loaded(
-      channel=@interop.ChannelId::Remote("d_b"),
-      location=Directory("/from-b"),
+    Msg::Loaded(
+      location=Location::Directory("/from-b"),
       entries=["wrong"],
-      generation=opening.generation,
+      request_id="00000000-0000-8000-8000-000000000099",
     ),
   )
   guard foreign is Some(picker) else {
     fail("current picker closed by a foreign listing")
   }
   assert_true(picker == opening)
-  // A navigation bumps the generation and keeps the current listing; the
+  // A navigation mints a UUID and keeps the current listing; the
   // original listing's late reply cannot move the picker back.
   let (_, navigated, _) = State::handle(
     opening,
@@ -107,11 +103,10 @@ test "a listing for another channel or generation is dropped" {
   let (_, stale, _) = State::handle(
     browsing,
     emit(),
-    Loaded(
-      channel=@interop.ChannelId::Local,
-      location=Directory("/elsewhere"),
+    Msg::Loaded(
+      location=Location::Directory("/elsewhere"),
       entries=["wrong"],
-      generation=opening.generation,
+      request_id=opening.request_id,
     ),
   )
   guard stale is Some(picker) else { fail("picker closed by a stale listing") }
@@ -124,10 +119,9 @@ test "a failed navigation keeps the listing" {
   let (_, failed, outcome) = State::handle(
     opening,
     emit(),
-    Failed(
-      channel=@interop.ChannelId::Local,
+    Msg::Failed(
       message="no such directory: /gone",
-      generation=opening.generation,
+      request_id=opening.request_id,
     ),
   )
   guard failed is Some(picker) else {
@@ -143,10 +137,10 @@ test "a failed navigation keeps the listing" {
 }
 
 ///|
-test "reopened pickers do not reuse request generations" {
+test "reopened pickers do not reuse request UUIDs" {
   let (_, first) = State::open(@interop.ChannelId::Local, emit())
   let (_, second) = State::open(@interop.ChannelId::Local, emit())
-  assert_true(first.generation != second.generation)
+  assert_true(first.request_id != second.request_id)
 }
 
 ///|
@@ -232,14 +226,13 @@ test "typing a separator after an exact child navigates immediately" {
   let cancelled = updated(navigating, Escape)
   assert_false(cancelled.loading)
   assert_eq(cancelled.path_draft, None)
-  assert_true(cancelled.generation != navigating.generation)
+  assert_true(cancelled.request_id != navigating.request_id)
   let loaded_after_cancel = updated(
     cancelled,
     Loaded(
-      channel=@interop.ChannelId::Local,
       location=Directory(git),
       entries=["openseek"],
-      generation=navigating.generation,
+      request_id=navigating.request_id,
     ),
   )
   assert_true(loaded_after_cancel == cancelled)
@@ -248,17 +241,16 @@ test "typing a separator after an exact child navigates immediately" {
   let loaded = updated(
     navigating,
     Loaded(
-      channel=@interop.ChannelId::Local,
       location=Directory(git),
       entries=["openseek"],
-      generation=navigating.generation,
+      request_id=navigating.request_id,
     ),
   )
   assert_eq(loaded.path_draft, Some("/Users/dii/git/"))
   let submitted = updated(loaded, SubmitPath)
   assert_false(submitted.loading)
   assert_eq(submitted.path_draft, None)
-  assert_eq(submitted.generation, loaded.generation)
+  assert_eq(submitted.request_id, loaded.request_id)
   assert_true(submitted.location == loaded.location)
   let nested = updated(loaded, PathChanged("/Users/dii/git/openseek/"))
   assert_true(nested.loading)
@@ -272,24 +264,23 @@ test "typing a separator after an exact child navigates immediately" {
   let loaded_drive = updated(
     navigating_drive,
     Loaded(
-      channel=@interop.ChannelId::Local,
       location=Directory(drive),
       entries=["Users"],
-      generation=navigating_drive.generation,
+      request_id=navigating_drive.request_id,
     ),
   )
   assert_eq(loaded_drive.path_draft, Some("/C:/"))
   let submitted_drive = updated(loaded_drive, SubmitPath)
   assert_false(submitted_drive.loading)
   assert_eq(submitted_drive.path_draft, None)
-  assert_eq(submitted_drive.generation, loaded_drive.generation)
+  assert_eq(submitted_drive.request_id, loaded_drive.request_id)
 
   let code = opened(location=Directory("/C:/Code"), entries=["src"])
   let mixed_case = updated(updated(code, EditPath), PathChanged("/c:/CODE/"))
   let submitted_mixed_case = updated(mixed_case, SubmitPath)
   assert_true(submitted_mixed_case.loading)
   assert_eq(submitted_mixed_case.path_draft, None)
-  assert_true(submitted_mixed_case.generation != mixed_case.generation)
+  assert_true(submitted_mixed_case.request_id != mixed_case.request_id)
   assert_true(submitted_mixed_case.location == code.location)
   let mixed_case_child = updated(
     updated(code, EditPath),
@@ -306,14 +297,14 @@ test "typing a separator after an exact child navigates immediately" {
   )
   let validating = updated(alternate, SubmitPath)
   assert_true(validating.loading)
-  assert_true(validating.generation != alternate.generation)
+  assert_true(validating.request_id != alternate.request_id)
 
   let upper = opened(location=Directory("/C:/project"))
   let upper_editing = updated(upper, EditPath)
   assert_eq(upper_editing.path_draft, Some("/C:/project"))
   let upper_submitted = updated(upper_editing, SubmitPath)
   assert_false(upper_submitted.loading)
-  assert_eq(upper_submitted.generation, upper_editing.generation)
+  assert_eq(upper_submitted.request_id, upper_editing.request_id)
   assert_true(upper_submitted.location == upper.location)
 }
 
@@ -325,7 +316,7 @@ test "submitting or cancelling a path keeps one navigation path" {
   let navigating = updated(typed, SubmitPath)
   assert_true(navigating.loading)
   assert_eq(navigating.path_draft, None)
-  assert_true(navigating.generation != typed.generation)
+  assert_true(navigating.request_id != typed.request_id)
   let cancelled = updated(updated(picker, EditPath), CancelPathEdit)
   assert_eq(cancelled.path_draft, None)
   assert_true(cancelled.location == picker.location)
@@ -367,17 +358,16 @@ test "new folder creation enters the created directory" {
     fail("picker closed while creating a folder")
   }
   assert_true(creating.loading)
-  assert_true(creating.generation != named.generation)
+  assert_true(creating.request_id != named.request_id)
   assert_eq(creating.new_folder, Some("new project"))
   let created = "/home/u/new project"
   let (_, loaded, outcome) = State::handle(
     creating,
     emit(),
     Loaded(
-      channel=@interop.ChannelId::Local,
       location=Directory(created),
       entries=[],
-      generation=creating.generation,
+      request_id=creating.request_id,
     ),
   )
   assert_true(outcome is None)
@@ -403,11 +393,7 @@ test "a failed folder create keeps its name editable" {
   let (_, failed, outcome) = State::handle(
     creating,
     emit(),
-    Failed(
-      channel=@interop.ChannelId::Local,
-      message="already exists",
-      generation=creating.generation,
-    ),
+    Failed(message="already exists", request_id=creating.request_id),
   )
   guard failed is Some(failed) else { fail("failed create closed picker") }
   assert_eq(failed.new_folder, Some("taken"))

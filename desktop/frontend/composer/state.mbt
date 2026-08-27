@@ -163,12 +163,12 @@ fn Draft::reconciled(self : Draft, source~ : Draft, incoming~ : Draft) -> Draft 
 }
 
 ///|
-fn FileIndex::epoch(self : FileIndex) -> Int {
+fn FileIndex::checkout_id(self : FileIndex) -> String {
   match self {
-    FileIndexEmpty(epoch~)
-    | FileIndexLoading(epoch~)
-    | FileIndexReady(epoch~, ..)
-    | FileIndexFailed(epoch~) => epoch
+    FileIndexEmpty(checkout_id~)
+    | FileIndexLoading(checkout_id~)
+    | FileIndexReady(checkout_id~, ..)
+    | FileIndexFailed(checkout_id~) => checkout_id
   }
 }
 

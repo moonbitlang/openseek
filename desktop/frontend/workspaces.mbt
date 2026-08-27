@@ -8,8 +8,7 @@
 fn fetch_projects(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  connection_generation : Int,
-  request_generation : Int,
+  request_id : String,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
@@ -30,11 +29,7 @@ fn fetch_projects(
         guard @resource.of_path(channel, path) is Some(resource) else { return }
         projects.push(resource)
       }
-      scheduler.add(
-        dispatch(
-          ProjectsLoaded(projects, connection_generation~, request_generation~),
-        ),
-      )
+      scheduler.add(dispatch(ProjectsLoaded(projects, request_id~)))
     })
   })
 }
@@ -213,15 +208,11 @@ test "detaching the active workspace opens the newest remaining conversation" {
     })
   let (_, next) = update_dev(
     dispatch,
-    ProjectsLoaded(
-      [kept_workspace],
-      connection_generation=0,
-      request_generation=0,
-    ),
+    ProjectsLoaded([kept_workspace], request_id=model.dev().projects_request_id),
     model,
   )
   inspect(next.dev().projects.length(), content="1")
-  inspect(next.dev().sessions_request_generation, content="1")
+  assert_true(next.dev().sessions_request_id != model.dev().sessions_request_id)
   inspect(next.dev().sessions.length(), content="1")
   inspect(next.active_session, content="desktop-kept")
   assert_eq(next.active().workspace, Project(root=kept_workspace))
@@ -229,18 +220,14 @@ test "detaching the active workspace opens the newest remaining conversation" {
   assert_true(next.find_conversation(Local, "desktop-test") is None)
   assert_eq(next.dev().active_project, Some(kept_workspace))
   // The handler is pure: replaying the same message from the same model makes
-  // the same selection and starts the same generation.
+  // the same selection and starts the same request.
   let (_, replayed) = update_dev(
     dispatch,
-    ProjectsLoaded(
-      [kept_workspace],
-      connection_generation=0,
-      request_generation=0,
-    ),
+    ProjectsLoaded([kept_workspace], request_id=model.dev().projects_request_id),
     model,
   )
   inspect(replayed.active_session, content="desktop-kept")
-  inspect(replayed.transcript_request_generation, content="1")
+  assert_true(replayed.active().sync is Reloading(..))
   // A still-registered placement survives the same reply.
   let attached = test_model()
     .replace_conversation({
@@ -252,12 +239,13 @@ test "detaching the active workspace opens the newest remaining conversation" {
     dispatch,
     ProjectsLoaded(
       [kept_workspace],
-      connection_generation=0,
-      request_generation=0,
+      request_id=attached.dev().projects_request_id,
     ),
     attached,
   )
-  inspect(kept.dev().sessions_request_generation, content="1")
+  assert_true(
+    kept.dev().sessions_request_id != attached.dev().sessions_request_id,
+  )
   assert_eq(kept.active().workspace, Project(root=kept_workspace))
   assert_eq(kept.dev().active_project, Some(kept_workspace))
 }
@@ -349,7 +337,7 @@ test "detaching the last workspace leaves the app on onboarding" {
     ]),
     detached,
   )
-  // The detach refresh advanced the session request generation, so a list
+  // The detach refresh replaced the session request UUID, so a list
   // issued before the registry commit cannot resurrect the removed chat.
   inspect(stale.dev().sessions.length(), content="0")
   assert_true(stale.conversations.is_empty())
@@ -381,26 +369,29 @@ test "an older workspace reply cannot replace a newer same-connection reply" {
   let dispatch = test_dispatch()
   let current = @interop.ChannelId::Local.test_resource("/current")
   let old = @interop.ChannelId::Local.test_resource("/old")
+  let current_request_id = "00000000-0000-8000-8000-000000000031"
   let model = test_model().with_dev(dev => {
     ..dev,
-    projects_request_generation: 2,
+    projects_request_id: current_request_id,
   })
   let (_, newest) = update_dev(
     dispatch,
-    ProjectsLoaded([current], connection_generation=0, request_generation=2),
+    ProjectsLoaded([current], request_id=current_request_id),
     model,
   )
   inspect(newest.dev().projects.length(), content="1")
   assert_eq(newest.dev().projects[0], current)
-  inspect(newest.dev().sessions_request_generation, content="1")
+  assert_true(
+    newest.dev().sessions_request_id != model.dev().sessions_request_id,
+  )
   let (_, stale) = update_dev(
     dispatch,
-    ProjectsLoaded([old], connection_generation=0, request_generation=1),
+    ProjectsLoaded([old], request_id=@uuid.mint()),
     newest,
   )
   inspect(stale.dev().projects.length(), content="1")
   assert_eq(stale.dev().projects[0], current)
-  inspect(stale.dev().sessions_request_generation, content="1")
+  assert_eq(stale.dev().sessions_request_id, newest.dev().sessions_request_id)
 }
 
 ///|
@@ -408,19 +399,22 @@ test "a workspace commit broadcast supersedes list replies and refreshes session
   let dispatch = test_dispatch()
   let current = @interop.ChannelId::Local.test_resource("/current")
   let new_ = @interop.ChannelId::Local.test_resource("/new")
+  let current_request_id = "00000000-0000-8000-8000-000000000032"
   let model = test_model().with_dev(dev => {
     ..dev,
     projects: [current],
-    projects_request_generation: 2,
+    projects_request_id: current_request_id,
   })
   let (_, changed) = update_dev(dispatch, ProjectsChanged([new_]), model)
-  inspect(changed.dev().projects_request_generation, content="3")
+  assert_true(changed.dev().projects_request_id != current_request_id)
   inspect(changed.dev().projects.length(), content="1")
   assert_eq(changed.dev().projects[0], new_)
-  inspect(changed.dev().sessions_request_generation, content="1")
+  assert_true(
+    changed.dev().sessions_request_id != model.dev().sessions_request_id,
+  )
   let (_, stale) = update_dev(
     dispatch,
-    ProjectsLoaded([current], connection_generation=0, request_generation=2),
+    ProjectsLoaded([current], request_id=current_request_id),
     changed,
   )
   assert_eq(stale.dev().projects[0], new_)
@@ -473,25 +467,21 @@ test "opening a stored session joins its project and loaded worktree" {
       watermark=0,
       goal=None,
       goal_markers=[],
-      generation=1,
+      request_id=opening.reload_request_id(session="desktop-w"),
     ),
     opening,
   )
   assert_eq(loaded.active().workspace, Project(root=workspace))
   let bound = model.with_dev(dev => {
-    dev.with_worktrees(
-      workspace,
-      [
-        {
-          name: "feature",
-          session: Some("desktop-w"),
-          codex_thread: None,
-          path: None,
-          present: true,
-        },
-      ],
-      generation=1,
-    )
+    dev.with_worktrees(workspace, [
+      {
+        name: "feature",
+        session: Some("desktop-w"),
+        codex_thread: None,
+        path: None,
+        present: true,
+      },
+    ])
   })
   let (_, worktree_opening) = update(
     dispatch,
@@ -546,10 +536,9 @@ test "a picker message with no picker open is dropped" {
     dispatch,
     ProjectPicker(
       @project_picker.Msg::Loaded(
-        channel=Local,
         location=@project_picker.Location::Directory("/home/u"),
         entries=[],
-        generation=1,
+        request_id="orphan-picker-request",
       ),
     ),
     test_model(),
@@ -559,11 +548,11 @@ test "a picker message with no picker open is dropped" {
 
 ///|
 /// Test-only: the request fence currently expected by an open picker.
-fn picker_generation(model : Model) -> Int raise {
-  guard model.project_picker is Some(picker) else {
+fn Model::picker_request_id(self : Model) -> String raise {
+  guard self.project_picker is Some(picker) else {
     fail("expected an open project picker")
   }
-  picker.request_generation()
+  picker.request_id()
 }
 
 ///|
@@ -578,10 +567,9 @@ test "a failed navigation keeps the listing and pops a toast" {
     dispatch,
     ProjectPicker(
       @project_picker.Msg::Loaded(
-        channel=Local,
         location=@project_picker.Location::Directory("/home/u"),
         entries=["proj"],
-        generation=picker_generation(opened),
+        request_id=opened.picker_request_id(),
       ),
     ),
     opened,
@@ -590,9 +578,8 @@ test "a failed navigation keeps the listing and pops a toast" {
     dispatch,
     ProjectPicker(
       @project_picker.Msg::Failed(
-        channel=Local,
         message="no such directory: /gone",
-        generation=picker_generation(loaded),
+        request_id=loaded.picker_request_id(),
       ),
     ),
     loaded,
@@ -617,9 +604,8 @@ test "a failed navigation keeps the listing and pops a toast" {
     dispatch,
     ProjectPicker(
       @project_picker.Msg::Failed(
-        channel=Local,
         message="stale",
-        generation=picker_generation(failed) + 1,
+        request_id="stale-picker-request",
       ),
     ),
     failed,
@@ -639,10 +625,9 @@ test "confirming registers the browsed directory and closes the picker" {
     dispatch,
     ProjectPicker(
       @project_picker.Msg::Loaded(
-        channel=Local,
         location=@project_picker.Location::Directory("/home/u/proj"),
         entries=[],
-        generation=picker_generation(opened),
+        request_id=opened.picker_request_id(),
       ),
     ),
     opened,
@@ -653,7 +638,10 @@ test "confirming registers the browsed directory and closes the picker" {
     loaded,
   )
   assert_true(confirmed.project_picker is None)
-  inspect(confirmed.dev().projects_request_generation, content="0")
+  assert_eq(
+    confirmed.dev().projects_request_id,
+    opened.dev().projects_request_id,
+  )
   // Confirming before anything was browsed has nothing to register and
   // keeps the picker open.
   let (_, early) = update(
@@ -690,10 +678,9 @@ test "the add-project chord opens the picker once and never restarts it" {
     dispatch,
     ProjectPicker(
       @project_picker.Msg::Loaded(
-        channel=Local,
         location=@project_picker.Location::Directory("/home/u"),
         entries=["proj"],
-        generation=picker_generation(opened),
+        request_id=opened.picker_request_id(),
       ),
     ),
     opened,
@@ -722,10 +709,9 @@ fn confirmed_add(
     dispatch,
     ProjectPicker(
       @project_picker.Msg::Loaded(
-        channel=Local,
         location=@project_picker.Location::Directory(requested),
         entries=[],
-        generation=picker_generation(opened),
+        request_id=opened.picker_request_id(),
       ),
     ),
     opened,
@@ -874,10 +860,10 @@ test "a stale list read cannot eat a resolved focus" {
     confirmed,
   )
   // A list request begun before our commit answers without the new row on
-  // the still-current generation: the pending must survive it.
+  // the still-current request UUID: the pending must survive it.
   let (_, raced) = update_dev(
     dispatch,
-    ProjectsLoaded([], connection_generation=0, request_generation=0),
+    ProjectsLoaded([], request_id=@uuid.mint()),
     resolved,
   )
   assert_true(raced.dev().active_project is None)
@@ -902,10 +888,9 @@ test "a superseded confirm's reply cannot resolve the newer pending" {
     dispatch,
     ProjectPicker(
       @project_picker.Msg::Loaded(
-        channel=Local,
         location=@project_picker.Location::Directory(second.path),
         entries=[],
-        generation=picker_generation(reopened),
+        request_id=reopened.picker_request_id(),
       ),
     ),
     reopened,
@@ -970,10 +955,9 @@ test "a resolved add wins over the detach fallback in one snapshot" {
     dispatch,
     ProjectPicker(
       @project_picker.Msg::Loaded(
-        channel=Local,
         location=@project_picker.Location::Directory(picked.path),
         entries=[],
-        generation=picker_generation(opened),
+        request_id=opened.picker_request_id(),
       ),
     ),
     opened,
@@ -1010,10 +994,9 @@ test "confirm waits for an in-flight navigation" {
     dispatch,
     ProjectPicker(
       @project_picker.Msg::Loaded(
-        channel=Local,
         location=@project_picker.Location::Directory(picked.path),
         entries=[],
-        generation=picker_generation(opened),
+        request_id=opened.picker_request_id(),
       ),
     ),
     opened,

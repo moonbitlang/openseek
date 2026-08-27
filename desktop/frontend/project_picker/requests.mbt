@@ -8,15 +8,14 @@
 
 ///|
 /// Ask the host to list one location. `path` "" starts at the host's home
-/// directory; "/" is a Windows host's drive list. `generation` rides along
-/// on the reply with `channel`, so the state machine can drop answers to
-/// superseded navigations and to a picker that was reopened for another
-/// device.
+/// directory; "/" is a Windows host's drive list. The request UUID rides on
+/// the reply, so the state machine can drop answers to superseded navigations
+/// and to a picker that has been reopened.
 fn browse(
   emit : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   path : String,
-  generation~ : Int,
+  request_id~ : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -28,20 +27,12 @@ fn browse(
       }) catch {
         error => {
           scheduler.add(
-            emit(
-              Failed(
-                channel~,
-                message=@interop.bridge_error_text(error),
-                generation~,
-              ),
-            ),
+            emit(Failed(message=@interop.bridge_error_text(error), request_id~)),
           )
           return
         }
       }
-      scheduler.add(
-        emit(reply_message(channel, reply, generation~, drives=true)),
-      )
+      scheduler.add(emit(reply_message(reply, request_id~, drives=true)))
     })
   })
 }
@@ -49,13 +40,13 @@ fn browse(
 ///|
 /// Ask the host to create one child of the current directory. A successful
 /// reply is the new directory's listing, so creation and navigation share the
-/// state machine's existing channel/generation fence.
+/// state machine's existing request UUID fence.
 fn create_folder(
   emit : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   parent : String,
   name : String,
-  generation~ : Int,
+  request_id~ : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -73,27 +64,19 @@ fn create_folder(
             path: Some(parent.picker_child_path(name)),
           }) catch {
             _ => {
-              scheduler.add(emit(Failed(channel~, message~, generation~)))
+              scheduler.add(emit(Failed(message~, request_id~)))
               return
             }
           }
         }
         error => {
           scheduler.add(
-            emit(
-              Failed(
-                channel~,
-                message=@interop.bridge_error_text(error),
-                generation~,
-              ),
-            ),
+            emit(Failed(message=@interop.bridge_error_text(error), request_id~)),
           )
           return
         }
       }
-      scheduler.add(
-        emit(reply_message(channel, reply, generation~, drives=false)),
-      )
+      scheduler.add(emit(reply_message(reply, request_id~, drives=false)))
     })
   })
 }
@@ -102,40 +85,33 @@ fn create_folder(
 /// Turn either browse-shaped host reply into the one state-machine result
 /// path. Only an ordinary browse may return the Windows drive list.
 fn reply_message(
-  channel : @interop.ChannelId,
   reply : @protocol.BrowseDirectoryReply,
-  generation~ : Int,
+  request_id~ : String,
   drives~ : Bool,
 ) -> Msg {
   match reply {
     Listing(path~, entries~, ..) =>
       Loaded(
-        channel~,
         location=Directory(path),
         entries=entries.filter(name => !name.is_empty()),
-        generation~,
+        request_id~,
       )
     Drives(entries~) if drives =>
       Loaded(
-        channel~,
         location=DriveList,
         entries=entries.filter(name => !name.is_empty()),
-        generation~,
+        request_id~,
       )
     Drives(_) =>
-      Failed(
-        channel~,
-        message="created directory returned a drive list",
-        generation~,
-      )
-    BrowseError(message) => Failed(channel~, message~, generation~)
+      Failed(message="created directory returned a drive list", request_id~)
+    BrowseError(message) => Failed(message~, request_id~)
   }
 }
 
 ///|
 /// The protocol path for one child of a directory the picker already
-/// loaded. Resource URI paths always use `/`, including Windows drive
-/// resources such as `/C:/code`.
+/// loaded. Host paths use `/` in this protocol, including Windows drive
+/// paths such as `/C:/code`.
 fn String::picker_child_path(self : String, name : String) -> String {
   if self.has_suffix("/") {
     self + name

@@ -198,40 +198,46 @@ pub impl ToJson for BrowseDirectoryReply
 pub impl @json.FromJson for BrowseDirectoryReply
 
 pub(all) struct BrowserBoundsPayload {
-  id : Int
+  id : String
   x : Int
   y : Int
   width : Int
   height : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn BrowserBoundsPayload::equal(Self, Self) -> Bool
 pub fn BrowserBoundsPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserBoundsPayload::not_equal(Self, Self) -> Bool
 pub fn BrowserBoundsPayload::to_json(Self) -> Json
 pub fn BrowserBoundsPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserBoundsPayload
+pub impl @json.FromJson for BrowserBoundsPayload
 
 pub(all) struct BrowserIdPayload {
-  id : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  id : String
+} derive(Eq, @debug.Debug)
 pub fn BrowserIdPayload::equal(Self, Self) -> Bool
 pub fn BrowserIdPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserIdPayload::not_equal(Self, Self) -> Bool
 pub fn BrowserIdPayload::to_json(Self) -> Json
 pub fn BrowserIdPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserIdPayload
+pub impl @json.FromJson for BrowserIdPayload
 
 pub(all) struct BrowserOpenPayload {
-  id : Int
+  id : String
   url : String
   dark : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn BrowserOpenPayload::equal(Self, Self) -> Bool
 pub fn BrowserOpenPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserOpenPayload::not_equal(Self, Self) -> Bool
 pub fn BrowserOpenPayload::to_json(Self) -> Json
 pub fn BrowserOpenPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserOpenPayload
+pub impl @json.FromJson for BrowserOpenPayload
 
 pub(all) struct BrowserThemePayload {
-  id : Int
+  id : String
   dark : Bool
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn BrowserThemePayload::equal(Self, Self) -> Bool
@@ -241,14 +247,16 @@ pub fn BrowserThemePayload::to_json(Self) -> Json
 pub fn BrowserThemePayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct BrowserVisiblePayload {
-  id : Int
+  id : String
   visible : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn BrowserVisiblePayload::equal(Self, Self) -> Bool
 pub fn BrowserVisiblePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserVisiblePayload::not_equal(Self, Self) -> Bool
 pub fn BrowserVisiblePayload::to_json(Self) -> Json
 pub fn BrowserVisiblePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserVisiblePayload
+pub impl @json.FromJson for BrowserVisiblePayload
 
 pub(all) struct CancelPayload {
   run_id : String?
@@ -272,17 +280,18 @@ pub impl @json.FromJson for CancelReply
 
 pub(all) struct CancelSearchFilesPayload {
   cache_key : String
-  generation : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  request_id : String
+} derive(Eq, @debug.Debug)
 pub fn CancelSearchFilesPayload::equal(Self, Self) -> Bool
 pub fn CancelSearchFilesPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CancelSearchFilesPayload::not_equal(Self, Self) -> Bool
 pub fn CancelSearchFilesPayload::to_json(Self) -> Json
 pub fn CancelSearchFilesPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for CancelSearchFilesPayload
+pub impl @json.FromJson for CancelSearchFilesPayload
 
 pub(all) struct CancelSearchSemanticPayload {
-  session_key : String
-  generation : Int
+  request_id : String
 } derive(Eq, @debug.Debug)
 pub fn CancelSearchSemanticPayload::equal(Self, Self) -> Bool
 pub fn CancelSearchSemanticPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -293,8 +302,7 @@ pub impl ToJson for CancelSearchSemanticPayload
 pub impl @json.FromJson for CancelSearchSemanticPayload
 
 pub(all) struct CancelSearchTextPayload {
-  session_key : String
-  generation : Int
+  request_id : String
 } derive(Eq, @debug.Debug)
 pub fn CancelSearchTextPayload::equal(Self, Self) -> Bool
 pub fn CancelSearchTextPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -871,13 +879,15 @@ pub(all) struct FsChangedPayload {
   root : String
   baseline : Bool
   events : Array[FsEventPayload]
-  generation : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  watch_id : String
+} derive(Eq, @debug.Debug)
 pub fn FsChangedPayload::equal(Self, Self) -> Bool
 pub fn FsChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn FsChangedPayload::not_equal(Self, Self) -> Bool
 pub fn FsChangedPayload::to_json(Self) -> Json
 pub fn FsChangedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for FsChangedPayload
+pub impl @json.FromJson for FsChangedPayload
 
 pub(all) struct FsEventPayload {
   kind_ : String
@@ -893,13 +903,15 @@ pub fn FsEventPayload::to_repr(Self) -> @debug.Repr
 pub(all) struct FsWatchFailedPayload {
   root : String
   message : String
-  generation : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  watch_id : String
+} derive(Eq, @debug.Debug)
 pub fn FsWatchFailedPayload::equal(Self, Self) -> Bool
 pub fn FsWatchFailedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn FsWatchFailedPayload::not_equal(Self, Self) -> Bool
 pub fn FsWatchFailedPayload::to_json(Self) -> Json
 pub fn FsWatchFailedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for FsWatchFailedPayload
+pub impl @json.FromJson for FsWatchFailedPayload
 
 pub(all) struct GitBranchPayload {
   session : String
@@ -1636,13 +1648,15 @@ pub(all) struct SearchFilesPayload {
   cache_key : String
   query : String
   max_results : Int
-  generation : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  request_id : String
+} derive(Eq, @debug.Debug)
 pub fn SearchFilesPayload::equal(Self, Self) -> Bool
 pub fn SearchFilesPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SearchFilesPayload::not_equal(Self, Self) -> Bool
 pub fn SearchFilesPayload::to_json(Self) -> Json
 pub fn SearchFilesPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SearchFilesPayload
+pub impl @json.FromJson for SearchFilesPayload
 
 pub(all) struct SearchFilesReply {
   files : Array[String]
@@ -1661,8 +1675,7 @@ pub(all) struct SearchSemanticPayload {
   patterns : Array[String]
   include_glob : String
   exclude_glob : String
-  session_key : String
-  generation : Int
+  request_id : String
   max_results : Int
 } derive(Eq, @debug.Debug)
 pub fn SearchSemanticPayload::equal(Self, Self) -> Bool
@@ -1675,7 +1688,7 @@ pub impl @json.FromJson for SearchSemanticPayload
 
 pub(all) struct SearchSemanticReply {
   root : String
-  generation : Int
+  request_id : String
   matches : Array[SemanticSearchHit]
   match_count : Int
   file_count : Int
@@ -1700,8 +1713,7 @@ pub(all) struct SearchTextPayload {
   whole_word : Bool
   include_glob : String
   exclude_glob : String
-  session_key : String
-  generation : Int
+  request_id : String
   max_results : Int
 } derive(Eq, @debug.Debug)
 pub fn SearchTextPayload::equal(Self, Self) -> Bool
@@ -1714,7 +1726,7 @@ pub impl @json.FromJson for SearchTextPayload
 
 pub(all) struct SearchTextReply {
   root : String
-  generation : Int
+  request_id : String
   matches : Array[TextSearchMatch]
   match_count : Int
   file_count : Int
@@ -1776,8 +1788,7 @@ pub impl @json.FromJson for SemanticSearchHit
 
 pub(all) struct SemanticSearchProgressPayload {
   root : String
-  session_key : String
-  generation : Int
+  request_id : String
   matches : Array[SemanticSearchHit]
   match_count : Int
   file_count : Int
@@ -2178,44 +2189,52 @@ pub fn SymbolRange::to_json(Self) -> Json
 pub fn SymbolRange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TerminalAckPayload {
-  id : Int
+  id : String
   sequence : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn TerminalAckPayload::equal(Self, Self) -> Bool
 pub fn TerminalAckPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalAckPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalAckPayload::to_json(Self) -> Json
 pub fn TerminalAckPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalAckPayload
+pub impl @json.FromJson for TerminalAckPayload
 
 pub(all) struct TerminalClosePayload {
-  id : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  id : String
+} derive(Eq, @debug.Debug)
 pub fn TerminalClosePayload::equal(Self, Self) -> Bool
 pub fn TerminalClosePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalClosePayload::not_equal(Self, Self) -> Bool
 pub fn TerminalClosePayload::to_json(Self) -> Json
 pub fn TerminalClosePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalClosePayload
+pub impl @json.FromJson for TerminalClosePayload
 
 pub(all) struct TerminalExitPayload {
-  id : Int
+  id : String
   code : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn TerminalExitPayload::equal(Self, Self) -> Bool
 pub fn TerminalExitPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalExitPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalExitPayload::to_json(Self) -> Json
 pub fn TerminalExitPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalExitPayload
+pub impl @json.FromJson for TerminalExitPayload
 
 pub(all) struct TerminalInputPayload {
-  id : Int
+  id : String
   data : String?
   data_base64 : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn TerminalInputPayload::equal(Self, Self) -> Bool
 pub fn TerminalInputPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalInputPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalInputPayload::to_json(Self) -> Json
 pub fn TerminalInputPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalInputPayload
+pub impl @json.FromJson for TerminalInputPayload
 
 pub(all) struct TerminalOpenPayload {
   session : String
@@ -2230,35 +2249,41 @@ pub fn TerminalOpenPayload::to_json(Self) -> Json
 pub fn TerminalOpenPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TerminalOpenReply {
-  id : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  id : String
+} derive(Eq, @debug.Debug)
 pub fn TerminalOpenReply::equal(Self, Self) -> Bool
 pub fn TerminalOpenReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalOpenReply::not_equal(Self, Self) -> Bool
 pub fn TerminalOpenReply::to_json(Self) -> Json
 pub fn TerminalOpenReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalOpenReply
+pub impl @json.FromJson for TerminalOpenReply
 
 pub(all) struct TerminalOutputPayload {
-  id : Int
+  id : String
   sequence : Int
   data : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn TerminalOutputPayload::equal(Self, Self) -> Bool
 pub fn TerminalOutputPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalOutputPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalOutputPayload::to_json(Self) -> Json
 pub fn TerminalOutputPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalOutputPayload
+pub impl @json.FromJson for TerminalOutputPayload
 
 pub(all) struct TerminalResizePayload {
-  id : Int
+  id : String
   cols : Int
   rows : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn TerminalResizePayload::equal(Self, Self) -> Bool
 pub fn TerminalResizePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalResizePayload::not_equal(Self, Self) -> Bool
 pub fn TerminalResizePayload::to_json(Self) -> Json
 pub fn TerminalResizePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalResizePayload
+pub impl @json.FromJson for TerminalResizePayload
 
 pub(all) struct TextSearchError {
   code : String
@@ -2346,13 +2371,15 @@ pub(all) struct WatchWorkspacePayload {
   files : Array[String]
   directories : Array[String]
   recursive : Bool?
-  generation : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  watch_id : String
+} derive(Eq, @debug.Debug)
 pub fn WatchWorkspacePayload::equal(Self, Self) -> Bool
 pub fn WatchWorkspacePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WatchWorkspacePayload::not_equal(Self, Self) -> Bool
 pub fn WatchWorkspacePayload::to_json(Self) -> Json
 pub fn WatchWorkspacePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WatchWorkspacePayload
+pub impl @json.FromJson for WatchWorkspacePayload
 
 pub(all) struct WorkspacePayload {
   path : String

@@ -61,7 +61,7 @@ fn notification_msg(
       Some(
         FromDevice(
           channel,
-          FilePanel(FsChanged(root~, generation=payload.generation, changes~)),
+          FilePanel(FsChanged(root~, watch_id=payload.watch_id, changes~)),
         ),
       )
     }
@@ -74,9 +74,8 @@ fn notification_msg(
           channel,
           FilePanel(
             FileWatchFailed(
-              channel~,
               root~,
-              generation=payload.generation,
+              watch_id=payload.watch_id,
               message=payload.message,
             ),
           ),
@@ -144,8 +143,8 @@ fn notification_msg(
         None
       }
     // A long semantic scan streams partial hits while the final reply is
-    // still running. The Search reducer fences the stream by
-    // session_key/generation and the final reply replaces these rows, so a
+    // still running. The Search reducer fences the stream by request UUID and
+    // the final reply replaces these rows, so a
     // dropped frame only delays a paint — never corrupts the result set.
     SemanticSearchProgress(payload) =>
       Some(
@@ -154,9 +153,7 @@ fn notification_msg(
           FilePanel(
             @fileeditor.Msg::Search(
               @grep_search.Msg::SemanticProgress(
-                root=payload.root,
-                session_key=payload.session_key,
-                generation=payload.generation,
+                request_id=payload.request_id,
                 matches=payload.matches,
                 match_count=payload.match_count,
                 file_count=payload.file_count,
@@ -215,7 +212,7 @@ fn device_msg(
       Some(
         HostSettingsLoaded(
           HostSettings::from_status(payload),
-          connection_generation=None,
+          connection_id=None,
         ),
       )
     // The payload is intentionally empty: the installed library is the
@@ -284,8 +281,8 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
       }
     @bridge.Event::Unavailable(channel~, message~) =>
       dispatch(FromDevice(channel, BridgeUnavailable(message)))
-    @bridge.Event::ChannelDown(channel~, websocket_epoch~) =>
-      dispatch(FromDevice(channel, ChannelDown(websocket_epoch~)))
+    @bridge.Event::ChannelDown(channel~, websocket_id~) =>
+      dispatch(FromDevice(channel, ChannelDown(websocket_id~)))
     @bridge.Event::BrowserEvent(payload~) =>
       if browser_event_msg(payload) is Some(msg) {
         dispatch(msg)
@@ -316,8 +313,8 @@ fn DeviceState::bridge_subscription(
     Remote(device) =>
       @bridge.remote_connection(
         device_id=device,
-        websocket_epoch=self.websocket_epoch,
-        reconnect_attempt=self.reconnect_attempt,
+        websocket_id=self.websocket_id,
+        reconnect_id=self.reconnect_id,
         dispatch=bridge_dispatch,
       )
   }
@@ -424,13 +421,13 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
         root: "/work/project",
         baseline: true,
         events: [],
-        generation: "page-a:7",
+        watch_id: "page-a:7",
       }),
     )
     is Some(
       FromDevice(
         Remote("d1"),
-        FilePanel(FsChanged(root=_, generation="page-a:7", changes=None))
+        FilePanel(FsChanged(root=_, watch_id="page-a:7", changes=None))
       )
     ),
   )
@@ -448,7 +445,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
             old_path: Some("src/old.mbt"),
           },
         ],
-        generation: "page-a:7",
+        watch_id: "page-a:7",
       }),
     )
     is Some(
@@ -457,7 +454,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
         FilePanel(
           FsChanged(
             root=_,
-            generation="page-a:7",
+            watch_id="page-a:7",
             changes=Some(
               [
                 Modified(Relative("src/main.mbt")),
@@ -478,7 +475,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
       @protocol.Notification::FsWatchFailed({
         root: "/work/project",
         message: "File watching stopped",
-        generation: "page-a:7",
+        watch_id: "page-a:7",
       }),
     )
     is Some(
@@ -486,9 +483,8 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
         Remote("d1"),
         FilePanel(
           FileWatchFailed(
-            channel=Remote("d1"),
             root=_,
-            generation="page-a:7",
+            watch_id="page-a:7",
             message="File watching stopped"
           )
         )
@@ -546,7 +542,7 @@ fn fetch_runs(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   frontier : Array[RunSnapshotFrontier],
-  connection_generation : Int,
+  connection_id : String,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   let payload = runs_payload(frontier)
@@ -601,7 +597,7 @@ fn fetch_runs(
             approvals=recovered_approvals,
             live~,
             frontier~,
-            connection_generation~,
+            connection_id~,
           ),
         ),
       )
@@ -857,7 +853,7 @@ fn start_openseek(
         @interop.session_command_lane(channel, session),
         () => {
           request_agent_start(
-            scheduler, dispatch, channel, payload, session, submission_id,
+            scheduler, dispatch, channel, payload, submission_id,
           )
         },
       ) catch {
@@ -878,7 +874,6 @@ async fn request_agent_start(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   payload : @protocol.StartPayload,
-  session : String,
   submission_id : String,
 ) -> Unit noraise {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
@@ -888,9 +883,9 @@ async fn request_agent_start(
       scheduler.add(
         dispatch(
           if @interop.bridge_error_is_definite(error) {
-            StartRejected(session~, submission_id~, message~)
+            StartRejected(submission_id~, message~)
           } else {
-            StartUndelivered(session~, submission_id~, message~)
+            StartUndelivered(submission_id~, message~)
           },
         ),
       )
@@ -900,7 +895,6 @@ async fn request_agent_start(
   scheduler.add(
     dispatch(
       StartResponded(
-        session~,
         submission_id~,
         run_id=reply.run_id,
         status=reply.status,
@@ -957,14 +951,11 @@ fn parsed_max_steps(text : String) -> Int? {
 fn fetch_sessions(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  connection_generation : Int,
-  request_generation : Int,
+  request_id : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      refresh_sessions_into(
-        scheduler, dispatch, channel, connection_generation, request_generation,
-      )
+      refresh_sessions_into(scheduler, dispatch, channel, request_id)
     })
   })
 }
@@ -977,8 +968,7 @@ async fn refresh_sessions_into(
   scheduler : &@cmd.Scheduler,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  connection_generation : Int,
-  request_generation : Int,
+  request_id : String,
 ) -> Unit noraise {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   let reply = @interop.bridge_request(
@@ -987,7 +977,11 @@ async fn refresh_sessions_into(
     @protocol.EmptyPayload::NoPayload,
   ) catch {
     error => {
-      scheduler.add(dispatch(SessionsFailed(@interop.bridge_error_text(error))))
+      scheduler.add(
+        dispatch(
+          SessionsFailed(request_id~, message=@interop.bridge_error_text(error)),
+        ),
+      )
       return
     }
   }
@@ -995,8 +989,7 @@ async fn refresh_sessions_into(
     dispatch(
       SessionsLoaded(
         @transcript.sessions_from_reply(reply, channel),
-        connection_generation~,
-        request_generation~,
+        request_id~,
       ),
     ),
   )
@@ -1011,7 +1004,7 @@ fn open_session(
   channel : @interop.ChannelId,
   session_id : String,
   workspace~ : @common.Uri?,
-  generation~ : Int,
+  request_id~ : String,
   archived? : Bool = false,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
@@ -1028,7 +1021,7 @@ fn open_session(
           watermark=view.watermark,
           goal=view.goal,
           goal_markers=view.goal_markers,
-          generation~,
+          request_id~,
         ),
       )
     },
@@ -1041,7 +1034,7 @@ fn open_session(
           } else {
             "failed to load session \{session_id}: " + detail
           },
-          generation~,
+          request_id~,
         ),
       )
     },
@@ -1057,7 +1050,7 @@ fn refresh_session(
   channel : @interop.ChannelId,
   session_id : String,
   workspace~ : @common.Uri?,
-  generation~ : Int,
+  request_id~ : String,
   archived? : Bool = false,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
@@ -1074,12 +1067,12 @@ fn refresh_session(
           watermark=view.watermark,
           goal=view.goal,
           goal_markers=view.goal_markers,
-          generation~,
+          request_id~,
         ),
       )
     },
     on_failed=_ => {
-      dispatch(SessionRefreshFailed(session=session_id, generation~))
+      dispatch(SessionRefreshFailed(session=session_id, request_id~))
     },
   )
 }
@@ -1185,7 +1178,6 @@ fn SessionExport::command(
 fn steer_openseek(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  session : String,
   submission_id : String,
   text : String,
   run_id : String,
@@ -1198,9 +1190,9 @@ fn steer_openseek(
           scheduler.add(
             dispatch(
               if @interop.bridge_error_is_definite(error) {
-                SteerRejected(session~, submission_id~, run_id~)
+                SteerRejected(submission_id~, run_id~)
               } else {
-                SteerUndelivered(session~, submission_id~, text~, run_id~)
+                SteerUndelivered(submission_id~, text~, run_id~)
               },
             ),
           )
@@ -1208,9 +1200,7 @@ fn steer_openseek(
         }
       }
       if !delivered {
-        scheduler.add(
-          dispatch(SteerRejected(session~, submission_id~, run_id~)),
-        )
+        scheduler.add(dispatch(SteerRejected(submission_id~, run_id~)))
       }
     })
   })
@@ -1315,7 +1305,7 @@ fn goal_openseek(
         @interop.session_command_lane(channel, session),
         () => {
           request_agent_goal(
-            scheduler, dispatch, channel, payload, session, command, text,
+            scheduler, dispatch, channel, payload, command, text,
           )
         },
       ) catch {
@@ -1366,7 +1356,6 @@ async fn request_agent_goal(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   payload : @protocol.GoalPayload,
-  session : String,
   command : String,
   text : String?,
 ) -> Unit noraise {
@@ -1381,10 +1370,8 @@ async fn request_agent_goal(
         scheduler.add(
           dispatch(
             match @interop.bridge_failure(error) {
-              Refused | Unsent =>
-                GoalRejected(session~, command~, draft=text, message~)
-              Unknown =>
-                GoalUndelivered(session~, command~, draft=text, message~)
+              Refused | Unsent => GoalRejected(command~, draft=text, message~)
+              Unknown => GoalUndelivered(command~, draft=text, message~)
             },
           ),
         )
@@ -1576,7 +1563,7 @@ fn open_file(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
-  generation : Int,
+  request_id : String,
   cwd~ : @common.Uri?,
   path : String,
 ) -> @cmd.Cmd {
@@ -1596,8 +1583,8 @@ fn open_file(
           scheduler.add(
             dispatch(
               OpenFileFailed(
-                owner={ channel, session, },
-                generation~,
+                owner={ channel, session },
+                request_id~,
                 message=@interop.bridge_error_text(error),
               ),
             ),
@@ -1610,8 +1597,8 @@ fn open_file(
           scheduler.add(
             dispatch(
               OpenFileAt(
-                owner={ channel, session, },
-                generation~,
+                owner={ channel, session },
+                request_id~,
                 path=target.path,
                 line=target.line,
                 column=target.column,
@@ -1622,8 +1609,8 @@ fn open_file(
           scheduler.add(
             dispatch(
               OpenDirectoryAt(
-                owner={ channel, session, },
-                generation~,
+                owner={ channel, session },
+                request_id~,
                 path=target.path,
               ),
             ),
@@ -1631,7 +1618,7 @@ fn open_file(
         Refused(message) =>
           scheduler.add(
             dispatch(
-              OpenFileFailed(owner={ channel, session, }, generation~, message~),
+              OpenFileFailed(owner={ channel, session }, request_id~, message~),
             ),
           )
         // The host already handed the path to the system opener.

@@ -43,7 +43,7 @@ priv enum Phase {
 /// One open palette run. `value` is the exact text shown in the input,
 /// including the `#` provider prefix when symbols are active. `owner` and
 /// `root` are the conversation identity captured when the run started, so
-/// `reconcile` can tell a shell change from a no-op. `generation` separates
+/// `reconcile` can tell a shell change from a no-op. `request_id` separates
 /// successive queries even when their text is identical.
 priv struct Open {
   owner : @interop.ConversationKey
@@ -52,7 +52,7 @@ priv struct Open {
   items : Array[Item]
   selected : Int
   phase : Phase
-  generation : Int
+  request_id : String
 } derive(Eq)
 
 ///|
@@ -72,9 +72,6 @@ priv struct FileQueryCache {
 /// it; every transition goes through `open`, `handle`, or `reconcile`.
 pub struct State {
   priv open : Open?
-  /// Page-level counter, kept across close so an old reply cannot become
-  /// current again by reopening the palette.
-  priv generation : Int
   priv cache : FileQueryCache
 } derive(Eq)
 
@@ -82,8 +79,7 @@ pub struct State {
 pub fn State::empty() -> State {
   {
     open: None,
-    generation: 0,
-    cache: { owner: None, root: None, active_key: None, loading_key: None, },
+    cache: { owner: None, root: None, active_key: None, loading_key: None },
   }
 }
 
@@ -93,6 +89,14 @@ pub fn State::empty() -> State {
 /// while the palette covers them.
 pub fn State::is_open(self : State) -> Bool {
   self.open is Some(_)
+}
+
+///|
+/// The UUID expected on the open palette's current asynchronous reply, or
+/// `None` while the palette is closed. Exposed for black-box adapters that
+/// drive the state machine without reading `Open`.
+pub fn State::request_id(self : State) -> String? {
+  self.open.map(open => open.request_id)
 }
 
 ///|
@@ -131,52 +135,25 @@ pub(all) struct Accepted {
 ///|
 pub(all) enum Msg {
   ValueChanged(String)
-  FilesDue(
-    owner~ : @interop.ConversationKey,
-    query~ : String,
-    generation~ : Int
-  )
-  FileCacheLoaded(
-    owner~ : @interop.ConversationKey,
-    cache_key~ : String,
-    generation~ : Int
-  )
-  FileCacheRequestFailed(
-    owner~ : @interop.ConversationKey,
-    cache_key~ : String,
-    generation~ : Int
-  )
+  FilesDue(query~ : String, request_id~ : String)
+  FileCacheLoaded(cache_key~ : String, request_id~ : String)
+  FileCacheRequestFailed(cache_key~ : String, request_id~ : String)
   FilesLoaded(
-    owner~ : @interop.ConversationKey,
     cache_key~ : String,
     query~ : String,
-    generation~ : Int,
+    request_id~ : String,
     files~ : Array[@pathx.Relative],
     from_cache~ : Bool,
     limit_hit~ : Bool
   )
-  FilesRequestFailed(
-    owner~ : @interop.ConversationKey,
-    cache_key~ : String,
-    query~ : String,
-    generation~ : Int
-  )
-  SymbolsDue(
-    owner~ : @interop.ConversationKey,
-    query~ : String,
-    generation~ : Int
-  )
+  FilesRequestFailed(cache_key~ : String, query~ : String, request_id~ : String)
+  SymbolsDue(query~ : String, request_id~ : String)
   SymbolsLoaded(
-    owner~ : @interop.ConversationKey,
     query~ : String,
-    generation~ : Int,
+    request_id~ : String,
     items~ : Array[@symbols.Symbol]
   )
-  SymbolsRequestFailed(
-    owner~ : @interop.ConversationKey,
-    query~ : String,
-    generation~ : Int
-  )
+  SymbolsRequestFailed(query~ : String, request_id~ : String)
   Move(Int)
   Select(Int)
   Pick(Int)

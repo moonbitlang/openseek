@@ -42,11 +42,7 @@ pub impl FromJson for SearchSemanticPayload with fn from_json(json, path) {
     patterns: object.required_string_array("patterns"),
     include_glob: object.required_string("include_glob"),
     exclude_glob: object.required_string("exclude_glob"),
-    session_key: object.required_string("session_key"),
-    generation: require_text_search_non_negative(
-      object.required_int("generation"),
-      path.add_key("generation"),
-    ),
+    request_id: object.required_string("request_id"),
     max_results: require_text_search_non_negative(
       object.required_int("max_results"),
       path.add_key("max_results"),
@@ -63,8 +59,7 @@ pub impl ToJson for SearchSemanticPayload with fn to_json(self) {
     "patterns": self.patterns,
     "include_glob": self.include_glob,
     "exclude_glob": self.exclude_glob,
-    "session_key": self.session_key,
-    "generation": self.generation,
+    "request_id": self.request_id,
     "max_results": self.max_results,
   }
 }
@@ -76,20 +71,14 @@ pub impl FromJson for CancelSearchSemanticPayload with fn from_json(json, path) 
   let object = JsonObject::decode(
     json, path, "semantic-search cancellation payload",
   )
-  {
-    session_key: object.required_string("session_key"),
-    generation: require_text_search_non_negative(
-      object.required_int("generation"),
-      path.add_key("generation"),
-    ),
-  }
+  { request_id: object.required_string("request_id") }
 }
 
 //|
 
 ///|
 pub impl ToJson for CancelSearchSemanticPayload with fn to_json(self) {
-  { "session_key": self.session_key, "generation": self.generation }
+  { "request_id": self.request_id }
 }
 
 //|
@@ -219,10 +208,7 @@ pub impl ToJson for SemanticSearchError with fn to_json(self) {
 ///|
 pub impl FromJson for SearchSemanticReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "semantic-search reply")
-  let generation = require_text_search_non_negative(
-    object.required_int("generation"),
-    path.add_key("generation"),
-  )
+  let request_id = object.required_string("request_id")
   let match_count = require_text_search_non_negative(
     object.required_int("match_count"),
     path.add_key("match_count"),
@@ -262,7 +248,7 @@ pub impl FromJson for SearchSemanticReply with fn from_json(json, path) {
   }
   {
     root: object.required_string("root"),
-    generation,
+    request_id,
     matches: hits,
     match_count,
     file_count,
@@ -279,7 +265,7 @@ pub impl FromJson for SearchSemanticReply with fn from_json(json, path) {
 pub impl ToJson for SearchSemanticReply with fn to_json(self) {
   let fields : Map[String, Json] = {
     "root": self.root.to_json(),
-    "generation": self.generation.to_json(),
+    "request_id": self.request_id.to_json(),
     "matches": self.matches.to_json(),
     "match_count": self.match_count.to_json(),
     "file_count": self.file_count.to_json(),
@@ -310,11 +296,7 @@ pub impl FromJson for SemanticSearchProgressPayload with fn from_json(
   }
   {
     root: object.required_string("root"),
-    session_key: object.required_string("session_key"),
-    generation: require_text_search_non_negative(
-      object.required_int("generation"),
-      path.add_key("generation"),
-    ),
+    request_id: object.required_string("request_id"),
     matches,
     match_count: require_text_search_non_negative(
       object.required_int("match_count"),
@@ -331,8 +313,7 @@ pub impl FromJson for SemanticSearchProgressPayload with fn from_json(
 pub impl ToJson for SemanticSearchProgressPayload with fn to_json(self) {
   {
     "root": self.root,
-    "session_key": self.session_key,
-    "generation": self.generation,
+    "request_id": self.request_id,
     "matches": self.matches,
     "match_count": self.match_count,
     "file_count": self.file_count,

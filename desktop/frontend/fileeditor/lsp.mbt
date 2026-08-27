@@ -173,7 +173,7 @@ fn HoverProjection::range(self : HoverProjection) -> @common.Range {
 fn request_diagnostics(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  epoch : Int,
+  checkout_id : String,
   root : @common.Uri,
   path : @pathx.Relative,
   absolute : @common.Uri,
@@ -186,7 +186,9 @@ fn request_diagnostics(
       // problems".
       guard reply.diagnostics is Some(diagnostics) else { return }
       scheduler.add(
-        dispatch(DiagnosticsLoaded(owner~, epoch~, absolute~, diagnostics~)),
+        dispatch(
+          DiagnosticsLoaded(owner~, checkout_id~, absolute~, diagnostics~),
+        ),
       )
     })
   })

@@ -8,7 +8,7 @@ priv suberror BridgeSubscription {
   RemoteBridge(
     dispatch~ : @cmd.Emit[Event],
     device_id~ : String,
-    websocket_epoch~ : Int
+    websocket_id~ : String
   )
 }
 
@@ -24,20 +24,20 @@ pub fn local_connection(dispatch : @cmd.Emit[Event]) -> @sub.Sub {
 }
 
 ///|
-/// Declare one remote device connection. Advancing either generation replaces
+/// Declare one remote device connection. Replacing either identity replaces
 /// the socket; ordinary model changes only refresh the event emitter.
 pub fn remote_connection(
   device_id~ : String,
-  websocket_epoch~ : Int,
-  reconnect_attempt~ : Int,
+  websocket_id~ : String,
+  reconnect_id~ : String,
   dispatch~ : @cmd.Emit[Event],
 ) -> @sub.Sub {
   @sub.custom_sub(
     RemoteBridgeSub::subscription_key(
-      device_id, websocket_epoch, reconnect_attempt,
+      device_id, websocket_id, reconnect_id,
     ),
     @sub.Global,
-    RemoteBridge(dispatch~, device_id~, websocket_epoch~),
+    RemoteBridge(dispatch~, device_id~, websocket_id~),
     bridge_sub_loader,
   )
 }
@@ -61,8 +61,8 @@ fn bridge_sub_loader(
         },
       })
     }
-    RemoteBridge(dispatch~, device_id~, websocket_epoch~) => {
-      let running = RemoteBridgeSub(device_id, websocket_epoch, dispatch)
+    RemoteBridge(dispatch~, device_id~, websocket_id~) => {
+      let running = RemoteBridgeSub(device_id, websocket_id, dispatch)
       running.install(scheduler)
       Some({
         unload: _ => running.unload(),
@@ -80,8 +80,25 @@ fn bridge_sub_loader(
 
 ///|
 test "bridge identity changes only when its resource must restart" {
-  let remote = RemoteBridgeSub::subscription_key("device-a", 0, 0)
-  assert_eq(RemoteBridgeSub::subscription_key("device-a", 0, 0), remote)
-  assert_not_eq(RemoteBridgeSub::subscription_key("device-a", 0, 1), remote)
-  assert_not_eq(RemoteBridgeSub::subscription_key("device-a", 1, 0), remote)
+  let remote = RemoteBridgeSub::subscription_key(
+    "device-a", "websocket-a", "reconnect-a",
+  )
+  assert_eq(
+    RemoteBridgeSub::subscription_key(
+      "device-a", "websocket-a", "reconnect-a",
+    ),
+    remote,
+  )
+  assert_not_eq(
+    RemoteBridgeSub::subscription_key(
+      "device-a", "websocket-a", "reconnect-b",
+    ),
+    remote,
+  )
+  assert_not_eq(
+    RemoteBridgeSub::subscription_key(
+      "device-a", "websocket-b", "reconnect-a",
+    ),
+    remote,
+  )
 }

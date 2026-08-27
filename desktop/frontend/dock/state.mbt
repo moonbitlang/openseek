@@ -30,7 +30,7 @@ pub(all) enum DockTab {
   // A browser page, rendered by a host-owned native web contents view; the
   // id keys the `preview` package's page state and the host's view. Page
   // ids are global, so a parked strip's tabs keep naming their pages.
-  Browser(id~ : Int)
+  Browser(id~ : String)
   // The transient open-a-file tab (at most one): the file view's tree with
   // a pick-a-file placeholder. Picking a file replaces it in place.
   FilePicker
@@ -109,7 +109,7 @@ pub fn active_history_diff(state : State) -> GitHistoryDiff? {
 
 ///|
 /// The active tab's browser page id, when the active tab is a browser page.
-pub fn active_browser(state : State) -> Int? {
+pub fn active_browser(state : State) -> String? {
   match state.active {
     Some(Browser(id~)) => Some(id)
     _ => None

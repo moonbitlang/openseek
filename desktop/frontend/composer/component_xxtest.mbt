@@ -5,21 +5,21 @@ fn Input::fixture(task : String) -> Input {
     session: "composer-test",
   }
   {
-    identity: { owner, archive_generation: 0, },
-    draft: { task, mentions: [], },
+    identity: { owner, archive_cursor: 0 },
+    draft: { task, mentions: [] },
     run: None,
     goal: { draft: None, standing: None, pending: None, },
     slash_commands: [],
     root: Some(@common.Uri::file("/workspace")),
     installed_skills: [],
-    context_generation: 0,
+    context_id: "00000000-0000-8000-8000-000000000001",
     submission_sequence: 0,
     replacements: [],
     retirements: [],
     file_candidates: [],
     open_files: [],
     active_file: None,
-    file_index: FileIndexReady(epoch=0, truncated=false),
+    file_index: FileIndexReady(checkout_id="checkout-0", truncated=false),
     presentation: {
       context: [],
       status: [],
@@ -68,10 +68,7 @@ test "each conversation keeps an independent local draft" {
     channel: @interop.ChannelId::Local,
     session: "composer-second",
   }
-  let second = {
-    ..first,
-    identity: { owner: second_owner, archive_generation: 0, },
-  }
+  let second = { ..first, identity: { owner: second_owner, archive_cursor: 0 } }
   let (with_first, _) = Model(first).update(
     first,
     TextChanged("first draft"),
@@ -126,14 +123,10 @@ test "queued archive replacements preserve every draft handoff" {
   }
   let rotated = {
     ..input,
-    identity: { owner: second_fresh, archive_generation: 2, },
+    identity: { owner: second_fresh, archive_cursor: 2 },
     replacements: [
-      {
-        archived: input.identity.owner,
-        fresh: first_fresh,
-        archive_generation: 1,
-      },
-      { archived: first_fresh, fresh: second_fresh, archive_generation: 2, },
+      { archived: input.identity.owner, fresh: first_fresh, archive_cursor: 1 },
+      { archived: first_fresh, fresh: second_fresh, archive_cursor: 2 },
     ],
     retirements: [input.identity.owner, first_fresh],
   }
@@ -148,7 +141,7 @@ test "queued archive replacements preserve every draft handoff" {
   assert_true(entry.owner == second_fresh)
   // The moved draft keeps the generation at which it was authored. The root
   // follows later archive facts from that cursor to resolve queued actions.
-  inspect(entry.identity().archive_generation, content="0")
+  inspect(entry.identity().archive_cursor, content="0")
 }
 
 ///|
@@ -275,7 +268,7 @@ test "a context switch drops a late symbols reply instead of reopening" {
     Msg::test_emit(),
     Action::test_emit(),
   )
-  let switched = { ..input, context_generation: 1, }
+  let switched = { ..input, context_id: "00000000-0000-8000-8000-000000000002" }
   let (after, _) = typing.update(
     switched,
     SymbolsLoaded(
@@ -295,7 +288,7 @@ test "a remote file reply settles a truncated index menu, stale epochs do not" {
   let input = {
     ..Input::fixture(""),
     file_candidates: [@pathx.Relative("src/local.mbt")],
-    file_index: FileIndexReady(epoch=3, truncated=true),
+    file_index: FileIndexReady(checkout_id="checkout-3", truncated=true),
   }
   let (typing, _) = Model(input).update(
     input,
@@ -312,22 +305,29 @@ test "a remote file reply settles a truncated index menu, stale epochs do not" {
   let root = @common.Uri::file("/workspace")
   let (stale, _) = typing.update(
     input,
-    FilesLoaded(owner=input.identity.owner, root~, query="ma", epoch=2, files=[
-      @pathx.Relative("src/main.mbt"),
-    ]),
+    FilesLoaded(
+      owner=input.identity.owner,
+      root~,
+      query="ma",
+      checkout_id="checkout-2",
+      files=[@pathx.Relative("src/main.mbt")],
+    ),
     Msg::test_emit(),
     Action::test_emit(),
   )
   guard stale.active(input).completion is Some(still_loading) else {
-    fail("a stale epoch must not settle the menu")
+    fail("a stale checkout_id must not settle the menu")
   }
   assert_true(still_loading.menu.loading())
   let (settled, _) = typing.update(
     input,
-    FilesLoaded(owner=input.identity.owner, root~, query="ma", epoch=3, files=[
-      @pathx.Relative("src/main.mbt"),
-      @pathx.Relative("docs/notes.md"),
-    ]),
+    FilesLoaded(
+      owner=input.identity.owner,
+      root~,
+      query="ma",
+      checkout_id="checkout-3",
+      files=[@pathx.Relative("src/main.mbt"), @pathx.Relative("docs/notes.md")],
+    ),
     Msg::test_emit(),
     Action::test_emit(),
   )

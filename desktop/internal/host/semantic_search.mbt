@@ -1,14 +1,14 @@
 // Connection-owned workspace semantic search. One actor serializes session
-// state while each generation runs its own moongrep scan (via a bundled
+// state while each request UUID runs its own moongrep scan (via a bundled
 // moongrep binary or `moonx moonbit-community/moongrep --`) in a cancellable
 // task. The text-search service owns the sibling ripgrep mode; both share the
-// Search panel's generation/cancel contract.
+// Search panel's request/cancel contract.
 
 ///|
 const MaxSemanticSearchResults : Int = 20000
 
 ///|
-const MaxSemanticSearchCancellationFrontiers : Int = 128
+const MaxSemanticSearchCancellations : Int = 128
 
 ///|
 const MaxSemanticSearchStderrBytes : Int = 1000000
@@ -59,44 +59,52 @@ priv enum SemanticSearchOutcome {
 
 ///|
 priv struct RunningSemanticSearch {
-  generation : Int
+  request_id : String
   root : String
   reply : @async.Queue[SearchSemanticReply]
   task : @async.Task[Unit]
 }
 
 ///|
-priv struct SemanticSearchCancellationFrontiers {
-  values : Map[String, Int]
+priv struct SemanticSearchCancellations {
+  values : Map[String, Bool]
   order : Array[String]
 }
 
 ///|
-fn SemanticSearchCancellationFrontiers::SemanticSearchCancellationFrontiers() -> SemanticSearchCancellationFrontiers {
+fn SemanticSearchCancellations::SemanticSearchCancellations() -> SemanticSearchCancellations {
   { values: Map([]), order: [], }
 }
 
 ///|
-fn SemanticSearchCancellationFrontiers::get(
-  self : SemanticSearchCancellationFrontiers,
-  session_key : String,
-) -> Int {
-  self.values.get(session_key).unwrap_or(-1)
+fn SemanticSearchCancellations::contains(
+  self : SemanticSearchCancellations,
+  request_id : String,
+) -> Bool {
+  self.values.contains(request_id)
 }
 
 ///|
-fn SemanticSearchCancellationFrontiers::record(
-  self : SemanticSearchCancellationFrontiers,
-  session_key : String,
-  generation : Int,
+fn SemanticSearchCancellations::record(
+  self : SemanticSearchCancellations,
+  request_id : String,
 ) -> Unit {
-  self.values[session_key] = self.get(session_key).max(generation)
-  self.order.retain(key => key != session_key)
-  self.order.push(session_key)
-  if self.order.length() > MaxSemanticSearchCancellationFrontiers {
+  self.values[request_id] = true
+  self.order.retain(id => id != request_id)
+  self.order.push(request_id)
+  if self.order.length() > MaxSemanticSearchCancellations {
     let oldest = self.order.remove(0)
     self.values.remove(oldest)
   }
+}
+
+///|
+fn SemanticSearchCancellations::remove(
+  self : SemanticSearchCancellations,
+  request_id : String,
+) -> Unit {
+  self.values.remove(request_id)
+  self.order.retain(id => id != request_id)
 }
 
 ///|
@@ -107,12 +115,8 @@ priv enum SemanticSearchRequest {
     payload~ : SearchSemanticPayload,
     reply~ : @async.Queue[SearchSemanticReply]
   )
-  Cancel(session_key~ : String, generation~ : Int, reply~ : @async.Queue[Unit])
-  Finished(
-    session_key~ : String,
-    generation~ : Int,
-    outcome~ : SemanticSearchOutcome
-  )
+  Cancel(request_id~ : String, reply~ : @async.Queue[Unit])
+  Finished(request_id~ : String, outcome~ : SemanticSearchOutcome)
 }
 
 ///|
@@ -128,14 +132,14 @@ fn SemanticSearchService::SemanticSearchService() -> SemanticSearchService {
 ///|
 fn empty_semantic_search_reply(
   root : String,
-  generation : Int,
+  request_id : String,
   cancelled? : Bool = false,
   partial? : Bool = false,
   error? : SemanticSearchError,
 ) -> SearchSemanticReply {
   {
     root,
-    generation,
+    request_id,
     matches: [],
     match_count: 0,
     file_count: 0,
@@ -161,11 +165,10 @@ async fn SemanticSearchService::search(
 ///|
 async fn SemanticSearchService::cancel(
   self : SemanticSearchService,
-  session_key : String,
-  generation : Int,
+  request_id : String,
 ) -> Unit {
   let reply : @async.Queue[Unit] = Queue(kind=Blocking(1))
-  self.requests.put(Cancel(session_key~, generation~, reply~))
+  self.requests.put(Cancel(request_id~, reply~))
   reply.get()
 }
 
@@ -176,7 +179,7 @@ async fn cancel_running_semantic_search(
 ) -> Unit {
   running.task.cancel()
   running.reply.put(
-    empty_semantic_search_reply(root, running.generation, cancelled=true),
+    empty_semantic_search_reply(root, running.request_id, cancelled=true),
   ) catch {
     _ => ()
   }
@@ -189,46 +192,42 @@ async fn SemanticSearchService::run(
 ) -> Unit {
   @async.with_task_group(group => {
     let running : Map[String, RunningSemanticSearch] = Map([])
-    let cancelled_through = SemanticSearchCancellationFrontiers::SemanticSearchCancellationFrontiers()
+    let cancellations = SemanticSearchCancellations()
     for ;; {
       match self.requests.get() {
         Search(command~, root~, payload~, reply~) => {
-          let session_key = payload.session_key
+          let request_id = payload.request_id
           let reply_root = root.resource_path()
-          if session_key.is_blank() {
+          if request_id.is_blank() {
             reply.put(
-              empty_semantic_search_reply(reply_root, payload.generation, error={
+              empty_semantic_search_reply(reply_root, request_id, error={
                 code: "invalid_request",
-                message: "Search session key is empty.",
+                message: "Search request id is empty.",
               }),
             )
             continue
           }
-          if cancelled_through.get(session_key) >= payload.generation {
+          if cancellations.contains(request_id) {
+            cancellations.remove(request_id)
             reply.put(
               empty_semantic_search_reply(
                 reply_root,
-                payload.generation,
+                request_id,
                 cancelled=true,
               ),
             )
             continue
           }
-          if running.get(session_key) is Some(previous) {
-            if payload.generation <= previous.generation {
-              reply.put(
-                empty_semantic_search_reply(
-                  reply_root,
-                  payload.generation,
-                  cancelled=true,
-                ),
-              )
-              continue
-            }
-            cancel_running_semantic_search(previous, previous.root)
-            running.remove(session_key)
+          if running.contains(request_id) {
+            reply.put(
+              empty_semantic_search_reply(
+                reply_root,
+                request_id,
+                cancelled=true,
+              ),
+            )
+            continue
           }
-          let generation = payload.generation
           let task = group.spawn(no_wait=true, allow_failure=true, () => {
             let outcome = SemanticSearchFinished(
               run_semantic_search(command, root, payload, emit),
@@ -236,31 +235,28 @@ async fn SemanticSearchService::run(
               _ if @async.is_being_cancelled() => return
               error => SemanticSearchFailed("Semantic search failed: \{error}")
             }
-            self.requests.put(Finished(session_key~, generation~, outcome~))
+            self.requests.put(Finished(request_id~, outcome~))
           })
-          running[session_key] = { generation, root: reply_root, reply, task, }
+          running[request_id] = { request_id, root: reply_root, reply, task }
         }
-        Cancel(session_key~, generation~, reply~) => {
-          cancelled_through.record(session_key, generation)
-          if running.get(session_key) is Some(current) &&
-            current.generation <= generation {
+        Cancel(request_id~, reply~) => {
+          cancellations.record(request_id)
+          if running.get(request_id) is Some(current) {
             cancel_running_semantic_search(current, current.root)
-            running.remove(session_key)
+            running.remove(request_id)
+            cancellations.remove(request_id)
           }
           reply.put(())
         }
-        Finished(session_key~, generation~, outcome~) => {
-          guard running.get(session_key) is Some(current) &&
-            current.generation == generation else {
-            continue
-          }
-          running.remove(session_key)
+        Finished(request_id~, outcome~) => {
+          guard running.get(request_id) is Some(current) else { continue }
+          running.remove(request_id)
           let root = current.root
           match outcome {
             SemanticSearchFinished(result) => current.reply.put(result)
             SemanticSearchFailed(message) =>
               current.reply.put(
-                empty_semantic_search_reply(root, generation, error={
+                empty_semantic_search_reply(root, request_id, error={
                   code: "search_failed",
                   message,
                 }),
@@ -559,8 +555,7 @@ fn bounded_semantic_error_message(message : String) -> String {
 async fn publish_semantic_progress(
   emit : async (@protocol.Notification) -> Unit,
   root : String,
-  session_key : String,
-  generation : Int,
+  request_id : String,
   matches : Array[SemanticSearchHit],
   match_count : Int,
   file_count : Int,
@@ -568,8 +563,7 @@ async fn publish_semantic_progress(
   emit(
     SemanticSearchProgress({
       root,
-      session_key,
-      generation,
+      request_id,
       matches,
       match_count,
       file_count,
@@ -594,13 +588,13 @@ async fn run_semantic_search(
   let reply_root = root.resource_path()
   let native_root = root.to_string()
   if payload.patterns.is_empty() {
-    return empty_semantic_search_reply(reply_root, payload.generation, error={
+    return empty_semantic_search_reply(reply_root, payload.request_id, error={
       code: "invalid_request",
       message: "Provide a structural code pattern, a rule file, or select built-in rules.",
     })
   }
   guard command is Some(command) else {
-    return empty_semantic_search_reply(reply_root, payload.generation, error={
+    return empty_semantic_search_reply(reply_root, payload.request_id, error={
       code: "moongrep_unavailable",
       message: "This SeekMoon installation does not include a semantic-search provider.",
     })
@@ -608,7 +602,7 @@ async fn run_semantic_search(
   let directory = @fs.opendir(native_root) catch {
     error if @async.is_being_cancelled() => raise error
     error =>
-      return empty_semantic_search_reply(reply_root, payload.generation, error={
+      return empty_semantic_search_reply(reply_root, payload.request_id, error={
         code: if "\{error}".to_lower().contains("permission") {
           "permission_denied"
         } else {
@@ -644,7 +638,7 @@ async fn run_semantic_search(
       error => {
         stdout_reader.close()
         stderr_reader.close()
-        return empty_semantic_search_reply(reply_root, payload.generation, error={
+        return empty_semantic_search_reply(reply_root, payload.request_id, error={
           code: "moongrep_unavailable",
           message: "Cannot start semantic search: \{error}",
         })
@@ -699,8 +693,7 @@ async fn run_semantic_search(
         publish_semantic_progress(
           emit,
           reply_root,
-          payload.session_key,
-          payload.generation,
+          payload.request_id,
           batch,
           match_count,
           files.length(),
@@ -712,8 +705,7 @@ async fn run_semantic_search(
       publish_semantic_progress(
         emit,
         reply_root,
-        payload.session_key,
-        payload.generation,
+        payload.request_id,
         hits[published_hits:].to_owned(),
         match_count,
         files.length(),
@@ -741,7 +733,7 @@ async fn run_semantic_search(
       (code, message)
     }
     if semantic_search_exit_is_fatal(exit_code, !hits.is_empty()) {
-      return empty_semantic_search_reply(reply_root, payload.generation, error={
+      return empty_semantic_search_reply(reply_root, payload.request_id, error={
         code,
         message,
       })
@@ -753,7 +745,7 @@ async fn run_semantic_search(
     }
     {
       root: reply_root,
-      generation: payload.generation,
+      request_id: payload.request_id,
       matches: hits,
       match_count,
       file_count: files.length(),
@@ -781,7 +773,7 @@ async fn cancel_search_semantic_op(
   service : SemanticSearchService,
   payload : CancelSearchSemanticPayload,
 ) -> @protocol.EmptyReply {
-  service.cancel(payload.session_key, payload.generation)
+  service.cancel(payload.request_id)
   Acknowledged
 }
 
@@ -792,8 +784,7 @@ test "semantic search builds moonx and bundled moongrep invocations" {
     patterns: ["inspect($(x:arg))"],
     include_glob: "",
     exclude_glob: "",
-    session_key: "sem:one",
-    generation: 1,
+    request_id: "semantic-request-1",
     max_results: 20000,
   }
   assert_eq(semantic_search_args("moonx", pattern), [
@@ -820,8 +811,7 @@ test "semantic path globs filter include and exclude results" {
     patterns: ["foo()"],
     include_glob: "src/**",
     exclude_glob: "src/generated/**",
-    session_key: "sem:glob",
-    generation: 1,
+    request_id: "semantic-glob-request",
     max_results: 20000,
   }
   assert_true(semantic_path_is_included("src/main.mbt", payload))
@@ -871,8 +861,7 @@ async test "semantic search argument validation requires a rule source" {
     patterns: [],
     include_glob: "",
     exclude_glob: "",
-    session_key: "sem:none",
-    generation: 1,
+    request_id: "semantic-request-1",
     max_results: 20000,
   }
   // The no-command path returns the same validation refusal before probing the
@@ -883,11 +872,11 @@ async test "semantic search argument validation requires a rule source" {
 }
 
 ///|
-async test "cancel-before-semantic-search frontier rejects the stale generation" {
-  let service = SemanticSearchService::SemanticSearchService()
+async test "cancel-before-semantic-search rejects the exact request UUID" {
+  let service = SemanticSearchService()
   @async.with_task_group(group => {
     group.spawn_bg(() => service.run(_ => ()))
-    service.cancel("sem:stale", 7)
+    service.cancel("semantic-request-7")
     let root = @pathx.Path(".").resolve()
     let resource_root = root.resource_path()
     let payload : SearchSemanticPayload = {
@@ -895,13 +884,12 @@ async test "cancel-before-semantic-search frontier rejects the stale generation"
       patterns: ["foo()"],
       include_glob: "",
       exclude_glob: "",
-      session_key: "sem:stale",
-      generation: 7,
+      request_id: "semantic-request-7",
       max_results: 20000,
     }
     let reply = service.search(None, root, payload)
     assert_true(reply.cancelled)
-    assert_eq(reply.generation, 7)
+    assert_eq(reply.request_id, "semantic-request-7")
     assert_eq(reply.root, resource_root)
     group.return_immediately(())
   })

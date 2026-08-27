@@ -7,6 +7,7 @@ import {
   "openseek_desktop/internal/protocol",
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/interop",
+  "openseek_desktop/internal/uuid/browser" @uuid,
 }
 
 import {

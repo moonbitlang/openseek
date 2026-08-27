@@ -32,7 +32,7 @@ fn open_new_tab(
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
   guard workspace_key(ctx) is Some(group) else { return (@cmd.none, state) }
-  let key = state.next_key
+  let key = @uuid.mint()
   let tab : Tab = {
     key,
     id: None,
@@ -42,12 +42,7 @@ fn open_new_tab(
     workspace_path: ctx.placement.bind(placement => placement.project_root()),
     status: TabOpening,
   }
-  let state = {
-    ..state,
-    next_key: key + 1,
-    tabs: state.tabs + [tab],
-    shown: Some(key),
-  }
+  let state = { ..state, tabs: state.tabs + [tab], shown: Some(key) }
   (
     @cmd.batch([terminal_resizer.mount(), mount_tab(dispatch, key)]),
     state.remember_active(group, key),
@@ -59,7 +54,7 @@ fn open_new_tab(
 /// the panel with it: an open panel over an empty group would immediately
 /// respawn a shell (see `sync`), which must not happen when the user
 /// deliberately ended the last one.
-fn drop_tab(state : State, ctx : Ctx, key : Int) -> (Array[@cmd.Cmd], State) {
+fn drop_tab(state : State, ctx : Ctx, key : String) -> (Array[@cmd.Cmd], State) {
   let cmds = [dispose_tab(key)]
   let state = {
     ..state,
@@ -83,7 +78,7 @@ fn State::retire_missing_session(
   self : State,
   ctx : Ctx,
 ) -> (Array[@cmd.Cmd], State) {
-  let retired : Array[Int] = []
+  let retired : Array[String] = []
   let commands : Array[@cmd.Cmd] = []
   for tab in self.tabs {
     if tab.workspace.channel() == ctx.channel && tab.session == ctx.session {
@@ -112,14 +107,8 @@ pub fn State::handle(
   msg : Msg,
   input : Input,
 ) -> (@cmd.Cmd, State) {
-  // Replies queued by a retired connection cannot attach to a later PTY that
-  // happens to reuse the same numeric id.
-  let owner_live = match msg {
-    Opened(channel~, key=_, id=_) | SessionExited(channel~, id=_, code=_) =>
-      input.live_channels.contains(channel)
-    _ => true
-  }
-  guard owner_live else { return (@cmd.none, self) }
+  // Tab keys and terminal ids are UUIDs, so a delayed reply from a retired
+  // connection cannot attach itself to a later tab or PTY.
   update(dispatch, msg, self, input.ctx)
 }
 
@@ -285,7 +274,7 @@ fn update(
         (@cmd.none, state)
       }
     SessionExited(channel~, id~, code=_) =>
-      match state.tab_by_id(channel, id) {
+      match state.tab_by_id(id) {
         // The shell ended (Ctrl+D, `exit`, or a crash): its tab retires,
         // and the visible group's last tab takes the panel with it.
         Some(tab) => {
@@ -318,14 +307,12 @@ fn update(
 }
 
 ///|
-/// Retire all tabs owned by one dead connection. Terminal ids cannot survive a
-/// WebSocket reconnect: the host tears down the old connection's PTYs before
-/// the browser dials again. Keeping another channel's same-numbered tab is
-/// safe because both model lookup and the imperative pre-open buffer use the
-/// `(channel, id)` pair.
+/// Retire all tabs owned by one dead connection. The host tears down that
+/// connection's PTYs before the browser dials again; UUID identities make
+/// delayed lifecycle messages unable to match replacement tabs.
 fn disconnect(state : State, channel : @interop.ChannelId) -> (@cmd.Cmd, State) {
   let commands : Array[@cmd.Cmd] = [term_host.clear_pending(channel)]
-  let retired_keys : Array[Int] = []
+  let retired_keys : Array[String] = []
   for tab in state.tabs {
     if tab.workspace.channel() == channel {
       retired_keys.push(tab.key)

@@ -268,13 +268,13 @@ priv struct FsEventPayload {
 ///|
 /// A filesystem change batch. A new watcher emits `baseline=true` once it is
 /// attached, telling the frontend to stat/re-list everything in its selection;
-/// later batches carry the exact debounced events. `generation` identifies the
+/// later batches carry the exact debounced events. `watch_id` identifies the
 /// root incarnation and can therefore survive a same-root watcher replacement.
 priv struct FsChangedPayload {
   root : String
   baseline : Bool
   events : Array[FsEventPayload]
-  generation : String
+  watch_id : String
 }
 
 ///|
@@ -304,25 +304,25 @@ test "filesystem events keep their concrete kind and paths on the wire" {
 ///|
 /// A watcher that stopped after its request had successfully activated it.
 /// Construction failures are returned by `fs.watch` itself. `root` reports
-/// the active location; `generation` identifies the exact concrete watcher
+/// the active location; `watch_id` identifies the exact concrete watcher
 /// whose failure may race a replacement.
 priv struct FsWatchFailedPayload {
   root : String
   message : String
-  generation : String
+  watch_id : String
 } derive(ToJson)
 
 ///|
-test "filesystem watcher failures retain root and generation on the wire" {
+test "filesystem watcher failures retain root and watch_id on the wire" {
   let payload : FsWatchFailedPayload = {
     root: "/work/project",
     message: "File watching stopped: too many open files",
-    generation: "page-a:7",
+    watch_id: "page-a:7",
   }
   assert_eq(ToJson::to_json(payload), {
     "root": "/work/project",
     "message": "File watching stopped: too many open files",
-    "generation": "page-a:7",
+    "watch_id": "page-a:7",
   })
 }
 

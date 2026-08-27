@@ -35,23 +35,21 @@ pub(all) struct PageState {
 
 ///|
 /// The browser subsystem's state: every live page keyed by its dock tab id.
-/// Ids are page-global (never per conversation) so parked strips can keep
-/// referring to their pages, and only ever grow.
+/// UUIDs are page-global (never per conversation) so parked strips can keep
+/// referring to their pages without a counter or conversation scope.
 pub(all) struct State {
-  pages : Map[Int, PageState]
-  next_id : Int
+  pages : Map[String, PageState]
 } derive(Eq)
 
 ///|
 pub fn State::empty() -> State {
-  { pages: Map([]), next_id: 1, }
+  { pages: Map([]) }
 }
 
 ///|
 /// Allocate a page. A blank tab starts without a URL; a routed link opens
 /// with one (the caller also asks the host to create the native view then).
-pub fn open_page(state : State, url? : String) -> (State, Int) {
-  let id = state.next_id
+pub fn open_page(state : State, id~ : String, url? : String) -> State {
   let pages = state.pages.copy()
   pages[id] = {
     url,
@@ -60,18 +58,18 @@ pub fn open_page(state : State, url? : String) -> (State, Int) {
     loading: url is Some(_),
     failure: None,
   }
-  ({ pages, next_id: id + 1, }, id)
+  { pages, }
 }
 
 ///|
-pub fn close_page(state : State, id : Int) -> State {
+pub fn close_page(state : State, id : String) -> State {
   let pages = state.pages.copy()
   pages.remove(id)
-  { ..state, pages, }
+  { pages, }
 }
 
 ///|
-pub fn page(state : State, id : Int) -> PageState? {
+pub fn page(state : State, id : String) -> PageState? {
   state.pages.get(id)
 }
 
@@ -96,11 +94,11 @@ fn PageState::commit_url(self : PageState, url : String) -> PageState {
 ///|
 /// Commit a navigation optimistically. The caller sends the matching
 /// `browser.open`/`browser.navigate` to the host.
-pub fn navigate(state : State, id : Int, url : String) -> State {
+pub fn navigate(state : State, id : String, url : String) -> State {
   guard state.pages.get(id) is Some(previous) else { return state }
   let pages = state.pages.copy()
-  pages[id] = { ..previous.commit_url(url), loading: true, }
-  { ..state, pages, }
+  pages[id] = { ..previous.commit_url(url), loading: true }
+  { pages, }
 }
 
 ///|

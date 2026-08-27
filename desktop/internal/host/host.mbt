@@ -167,7 +167,7 @@ pub async fn HostConnection::run(
               path: event.path,
               old_path: event.old_path,
             }),
-            generation: push.generation,
+            watch_id: push.watch_id,
           }),
         )
       },
@@ -176,7 +176,7 @@ pub async fn HostConnection::run(
           FsWatchFailed({
             root: failure.root,
             message: failure.message,
-            generation: failure.generation,
+            watch_id: failure.watch_id,
           }),
         )
       },
@@ -188,8 +188,12 @@ pub async fn HostConnection::run(
 /// A desktop page reload cannot reclaim its old emulator instances. Retire
 /// those PTYs before attaching the new page; WebSocket-owned sessions are
 /// cancelled automatically with their connection task group.
-pub fn HostConnection::close_terminals(self : HostConnection) -> Unit {
-  @terminal.close_all_terminals(self.terminal)
+pub fn HostConnection::close_terminals(
+  self : HostConnection,
+) -> Unit raise HostError {
+  @terminal.close_all_terminals(self.terminal) catch {
+    TerminalError(message) => raise HostError(message)
+  }
 }
 
 ///|

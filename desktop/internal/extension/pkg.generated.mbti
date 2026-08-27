@@ -4,14 +4,15 @@ package "openseek_desktop/internal/extension"
 import {
   "moonbit-community/proton",
   "openseek_desktop/internal/api",
+  "openseek_desktop/internal/host",
 }
 
 // Values
-pub fn browser_view_id(String) -> Int?
+pub fn browser_view_id(String) -> String?
 
 pub fn openseek_capability(@api.ApiState, DesktopBridgeActor, BrowserViews) -> @moonbit-community/proton/extension.RendererCapability
 
-pub fn view_event_json(Int, @proton.ViewEvent) -> Json
+pub fn view_event_json(String, @proton.ViewEvent) -> Json
 
 // Errors
 

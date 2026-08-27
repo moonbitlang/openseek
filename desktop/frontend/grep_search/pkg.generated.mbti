@@ -17,29 +17,38 @@ pub fn focus_query_after_render() -> @cmd.Cmd
 // Errors
 
 // Types and methods
+type EditorHighlights derive(Eq, @debug.Debug)
+pub fn EditorHighlights::ranges(Self) -> Array[@common.Range]
+
 pub(all) struct Input {
   owner : @interop.ConversationKey
   root : @common.Uri?
 } derive(Eq)
 pub fn Input::Input(owner~ : @interop.ConversationKey, root~ : @common.Uri?) -> Self
 
+type Mode derive(Eq, @debug.Debug)
+
 pub(all) enum Msg {
   QueryChanged(String)
+  ModeChanged(Mode)
   ToggleCaseSensitive
   ToggleWholeWord
   ToggleRegex
   ToggleDetails
   IncludeChanged(String)
   ExcludeChanged(String)
+  RulesDirChanged(String)
+  ToggleBuiltinRules
   Submit
   Refresh
   ClearResults
   CollapseAll
   ShowMore
   ToggleFile(String)
-  RequestStarted(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int)
-  Loaded(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int, reply~ : @protocol.SearchTextReply)
-  RequestFailed(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int, code~ : String, message~ : String)
+  RequestStarted(request_id~ : String)
+  Loaded(request_id~ : String, reply~ : @protocol.SearchTextReply)
+  SemanticLoaded(request_id~ : String, reply~ : @protocol.SearchSemanticReply)
+  RequestFailed(request_id~ : String, code~ : String, message~ : String)
 }
 
 type Page derive(Eq)
@@ -49,10 +58,12 @@ type Phase derive(Eq, @debug.Debug)
 pub struct State {
   // private fields
 } derive(Eq)
+pub fn State::editor_highlights(Self, String) -> EditorHighlights?
 pub fn State::empty() -> Self
 pub fn State::explorer_view(Self, Input, @cmd.Emit[Msg], (String, @common.Range) -> @cmd.Cmd) -> @html.Html
 pub fn State::handle(Self, Msg, Input) -> Self
 pub fn State::park(Self) -> Self
+pub fn State::request_id(Self) -> String
 pub fn State::reset_checkout(Self) -> Self
 pub fn State::subscription(Self, Input, @cmd.Emit[Msg]) -> @sub.Sub
 

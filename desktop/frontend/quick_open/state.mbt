@@ -29,7 +29,7 @@ pub fn State::open(
     }
     return self.change_value(emit, input, value)
   }
-  let generation = self.generation + 1
+  let request_id = @uuid.mint()
   let open : Open = {
     owner: input.owner,
     root: input.root,
@@ -37,9 +37,9 @@ pub fn State::open(
     items: [],
     selected: 0,
     phase: Loading,
-    generation,
+    request_id,
   }
-  let started = { ..self, open: Some(open), generation, }
+  let started = { ..self, open: Some(open) }
   match provider {
     Files => {
       let projected = with_file_candidates(input, open, [], Loading)
@@ -52,7 +52,7 @@ pub fn State::open(
     Symbols =>
       (
         @cmd.batch([
-          symbol_request(emit, input.root, input.owner, "", generation),
+          symbol_request(emit, input.root, input.owner, "", request_id),
           focus_after_render(),
         ]),
         started,
@@ -76,60 +76,47 @@ pub fn State::handle(
       let (cmd, next) = self.change_value(emit, input, value)
       (cmd, next, None)
     }
-    FilesDue(owner~, query~, generation~) => {
-      let (cmd, next) = self.begin_file_request(
-        emit, input, owner, query, generation,
-      )
+    FilesDue(query~, request_id~) => {
+      let (cmd, next) = self.begin_file_request(emit, input, query, request_id)
       (cmd, next, None)
     }
-    FileCacheLoaded(owner~, cache_key~, generation~) => {
+    FileCacheLoaded(cache_key~, request_id~) => {
       let (cmd, next) = self.apply_cache_loaded(
-        emit, input, owner, cache_key, generation,
+        emit, input, cache_key, request_id,
       )
       (cmd, next, None)
     }
-    FileCacheRequestFailed(owner~, cache_key~, generation~) => {
-      let (cmd, next) = self.fail_cache_load(owner, cache_key, generation)
+    FileCacheRequestFailed(cache_key~, request_id~) => {
+      let (cmd, next) = self.fail_cache_load(cache_key, request_id)
       (cmd, next, None)
     }
     // `from_cache` and `limit_hit` describe how the Host answered, not which
     // rows to show; the palette renders the same list either way.
     FilesLoaded(
-      owner~,
       cache_key~,
       query~,
-      generation~,
+      request_id~,
       files~,
       from_cache=_,
       limit_hit=_
     ) =>
       (
         @cmd.none,
-        self.apply_file_result(
-          input, owner, cache_key, query, generation, files,
-        ),
+        self.apply_file_result(input, cache_key, query, request_id, files),
         None,
       )
-    FilesRequestFailed(owner~, cache_key~, query~, generation~) =>
-      (
-        @cmd.none,
-        self.fail_file_request(owner, cache_key, query, generation),
-        None,
-      )
-    SymbolsDue(owner~, query~, generation~) => {
+    FilesRequestFailed(cache_key~, query~, request_id~) =>
+      (@cmd.none, self.fail_file_request(cache_key, query, request_id), None)
+    SymbolsDue(query~, request_id~) => {
       let (cmd, next) = self.begin_symbol_request(
-        emit, input, owner, query, generation,
+        emit, input, query, request_id,
       )
       (cmd, next, None)
     }
-    SymbolsLoaded(owner~, query~, generation~, items~) =>
-      (
-        @cmd.none,
-        self.apply_symbol_result(owner, query, generation, items),
-        None,
-      )
-    SymbolsRequestFailed(owner~, query~, generation~) =>
-      (@cmd.none, self.fail_symbol_request(owner, query, generation), None)
+    SymbolsLoaded(query~, request_id~, items~) =>
+      (@cmd.none, self.apply_symbol_result(query, request_id, items), None)
+    SymbolsRequestFailed(query~, request_id~) =>
+      (@cmd.none, self.fail_symbol_request(query, request_id), None)
     Move(delta) => {
       let (cmd, next) = self.move_selection(delta)
       (cmd, next, None)
@@ -161,18 +148,18 @@ pub fn State::reconcile(
     return (self.cancel_file_request(open), { ..self, open: None, })
   }
   guard open.root != input.root else { return (@cmd.none, self) }
-  // Advancing the generation also fences replies already in flight against the
+  // A fresh request UUID also fences replies already in flight against the
   // previous root.
-  let generation = self.generation + 1
+  let request_id = @uuid.mint()
   let restarted : Open = {
     ..open,
     root: input.root,
     items: [],
     selected: 0,
     phase: Loading,
-    generation,
+    request_id,
   }
-  let next = { ..self, open: Some(restarted), generation, }
+  let next = { ..self, open: Some(restarted) }
   match restarted.provider() {
     Files => {
       // Keep only currently open relative paths as provisional rows; Host
@@ -191,7 +178,7 @@ pub fn State::reconcile(
           input.root,
           restarted.owner,
           restarted.query(),
-          generation,
+          request_id,
         ),
         next,
       )
@@ -201,7 +188,7 @@ pub fn State::reconcile(
 ///|
 /// Replace the visible input. File queries filter the latest bounded rows
 /// immediately; both providers then arm a delayed request. Changing providers
-/// also increments the generation so an old reply cannot land in another mode.
+/// also mints a request UUID so an old reply cannot land in another mode.
 fn State::change_value(
   self : State,
   emit : @cmd.Emit[Msg],
@@ -213,7 +200,7 @@ fn State::change_value(
     return (@cmd.none, self)
   }
   let cancel = self.cancel_file_request(open)
-  let generation = self.generation + 1
+  let request_id = @uuid.mint()
   let keeps_file_rows = open.provider() is Files && !value.has_prefix("#")
   let next_open : Open = {
     ..open,
@@ -224,9 +211,9 @@ fn State::change_value(
       []
     },
     selected: 0,
-    generation,
+    request_id,
   }
-  let started = { ..self, open: Some(next_open), generation, }
+  let started = { ..self, open: Some(next_open) }
   match next_open.provider() {
     Files => {
       let projected = with_file_candidates(
@@ -244,9 +231,7 @@ fn State::change_value(
           cancel,
           cache_cmd,
           @cmd.delay(
-            emit(
-              FilesDue(owner=open.owner, query=next_open.query(), generation~),
-            ),
+            emit(FilesDue(query=next_open.query(), request_id~)),
             FileDebounceMs,
           ),
         ]),
@@ -259,10 +244,7 @@ fn State::change_value(
       (
         @cmd.batch([
           cancel,
-          @cmd.delay(
-            emit(SymbolsDue(owner=open.owner, query~, generation~)),
-            SymbolDebounceMs,
-          ),
+          @cmd.delay(emit(SymbolsDue(query~, request_id~)), SymbolDebounceMs),
         ]),
         next,
       )
@@ -277,15 +259,13 @@ fn State::begin_file_request(
   self : State,
   emit : @cmd.Emit[Msg],
   input : Input,
-  owner : @interop.ConversationKey,
   query : String,
-  generation : Int,
+  request_id : String,
 ) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) &&
-    open.owner == owner &&
     open.provider() is Files &&
     open.query() == query &&
-    open.generation == generation &&
+    open.request_id == request_id &&
     open.phase is Debouncing else {
     return (@cmd.none, self)
   }
@@ -301,17 +281,16 @@ fn State::apply_cache_loaded(
   self : State,
   emit : @cmd.Emit[Msg],
   input : Input,
-  owner : @interop.ConversationKey,
   cache_key : String,
-  _generation : Int,
+  _request_id : String,
 ) -> (@cmd.Cmd, State) {
   let cache = self.cache
-  guard cache.owner == Some(owner) && cache.loading_key == Some(cache_key) else {
-    return (@cmd.none, self)
-  }
+  guard cache.loading_key == Some(cache_key) else { return (@cmd.none, self) }
   let cmds : Array[@cmd.Cmd] = []
   if cache.active_key is Some(previous) && previous != cache_key {
-    cmds.push(clear_file_cache(owner, previous))
+    if cache.owner is Some(owner) {
+      cmds.push(clear_file_cache(owner, previous))
+    }
   }
   let mut next = {
     ..self,
@@ -321,7 +300,7 @@ fn State::apply_cache_loaded(
   // issue the current query. During a debounce, let the already-scheduled due
   // message retain VS Code's typing delay.
   if next.open is Some(open) &&
-    open.owner == owner &&
+    cache.owner == Some(open.owner) &&
     open.provider() is Files &&
     !(open.phase is Debouncing) {
     next = { ..next, open: Some({ ..open, phase: Loading, }), }
@@ -333,12 +312,11 @@ fn State::apply_cache_loaded(
 ///|
 fn State::fail_cache_load(
   self : State,
-  owner : @interop.ConversationKey,
   cache_key : String,
-  _generation : Int,
+  _request_id : String,
 ) -> (@cmd.Cmd, State) {
   let cache = self.cache
-  guard cache.owner == Some(owner) && cache.loading_key == Some(cache_key) else {
+  guard cache.loading_key == Some(cache_key) && cache.owner is Some(owner) else {
     return (@cmd.none, self)
   }
   let next = { ..self, cache: { ..cache, loading_key: None, }, }
@@ -357,18 +335,16 @@ fn State::fail_cache_load(
 fn State::apply_file_result(
   self : State,
   input : Input,
-  owner : @interop.ConversationKey,
   cache_key : String,
   query : String,
-  generation : Int,
+  request_id : String,
   files : Array[@pathx.Relative],
 ) -> State {
   guard self.open is Some(open) &&
-    open.owner == owner &&
     open.provider() is Files &&
     self.cache.active_key == Some(cache_key) &&
     open.query() == query &&
-    open.generation == generation else {
+    open.request_id == request_id else {
     return self
   }
   { ..self, open: Some(with_file_candidates(input, open, files, Ready)), }
@@ -377,17 +353,15 @@ fn State::apply_file_result(
 ///|
 fn State::fail_file_request(
   self : State,
-  owner : @interop.ConversationKey,
   cache_key : String,
   query : String,
-  generation : Int,
+  request_id : String,
 ) -> State {
   guard self.open is Some(open) &&
-    open.owner == owner &&
     open.provider() is Files &&
     self.cache.active_key == Some(cache_key) &&
     open.query() == query &&
-    open.generation == generation else {
+    open.request_id == request_id else {
     return self
   }
   { ..self, open: Some({ ..open, phase: Failed, }), }
@@ -400,21 +374,19 @@ fn State::begin_symbol_request(
   self : State,
   emit : @cmd.Emit[Msg],
   input : Input,
-  owner : @interop.ConversationKey,
   query : String,
-  generation : Int,
+  request_id : String,
 ) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) &&
-    open.owner == owner &&
     open.provider() is Symbols &&
     open.query() == query &&
-    open.generation == generation &&
+    open.request_id == request_id &&
     open.phase is Debouncing else {
     return (@cmd.none, self)
   }
   (
-    symbol_request(emit, input.root, owner, query, generation),
-    { ..self, open: Some({ ..open, phase: Loading, }), },
+    symbol_request(emit, input.root, open.owner, query, request_id),
+    { ..self, open: Some({ ..open, phase: Loading }) },
   )
 }
 
@@ -424,16 +396,14 @@ fn State::begin_symbol_request(
 /// there is nowhere useful to navigate.
 fn State::apply_symbol_result(
   self : State,
-  owner : @interop.ConversationKey,
   query : String,
-  generation : Int,
+  request_id : String,
   items : Array[@symbols.Symbol],
 ) -> State {
   guard self.open is Some(open) &&
-    open.owner == owner &&
     open.provider() is Symbols &&
     open.query() == query &&
-    open.generation == generation &&
+    open.request_id == request_id &&
     open.phase is Loading else {
     return self
   }
@@ -457,15 +427,13 @@ fn State::apply_symbol_result(
 ///|
 fn State::fail_symbol_request(
   self : State,
-  owner : @interop.ConversationKey,
   query : String,
-  generation : Int,
+  request_id : String,
 ) -> State {
   guard self.open is Some(open) &&
-    open.owner == owner &&
     open.provider() is Symbols &&
     open.query() == query &&
-    open.generation == generation &&
+    open.request_id == request_id &&
     open.phase is Loading else {
     return self
   }
@@ -546,8 +514,8 @@ fn Open::result_files(self : Open) -> Array[@pathx.Relative] {
 }
 
 ///|
-fn file_cache_key(owner : @interop.ConversationKey, generation : Int) -> String {
-  "quick-open:\{owner.session}:\{generation}"
+fn file_cache_key(request_id : String) -> String {
+  "quick-open:\{request_id}"
 }
 
 ///|
@@ -588,8 +556,8 @@ fn State::ensure_cache(
     }
   }
   if cache.loading_key is None && (cache.active_key is None || replace_loaded) {
-    let cache_key = file_cache_key(open.owner, open.generation)
-    cache = { ..cache, loading_key: Some(cache_key), }
+    let cache_key = file_cache_key(open.request_id)
+    cache = { ..cache, loading_key: Some(cache_key) }
     cmds.push(
       file_request(
         emit,
@@ -597,7 +565,7 @@ fn State::ensure_cache(
         root=input.root,
         cache_key,
         "",
-        open.generation,
+        open.request_id,
         PopulateCache,
       ),
     )
@@ -623,7 +591,7 @@ fn State::query_active_cache(
     root=input.root,
     cache_key,
     open.query(),
-    open.generation,
+    open.request_id,
     QueryCache,
   )
 }
@@ -633,5 +601,5 @@ fn State::cancel_file_request(self : State, open : Open) -> @cmd.Cmd {
   guard open.provider() is Files && self.cache.active_key is Some(cache_key) else {
     return @cmd.none
   }
-  cancel_file_search(open.owner, cache_key, open.generation)
+  cancel_file_search(open.owner, cache_key, open.request_id)
 }

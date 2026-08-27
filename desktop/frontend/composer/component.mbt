@@ -10,17 +10,17 @@ priv enum PendingSubmission {
 
 ///|
 /// File completion follows the component-local draft. A settled Host result
-/// stays valid only while owner, root, query, and index epoch all still
+/// stays valid only while owner, root, query, and index checkout_id all still
 /// match. There is no pending variant: while a remote lookup is wanted, the
 /// declared `Request::searching` subscription IS the in-flight state.
 priv enum FileCompletion {
-  Local(files~ : Array[@files.Match], loading~ : Bool, epoch~ : Int)
+  Local(files~ : Array[@files.Match], loading~ : Bool, checkout_id~ : String)
   RemoteSettled(
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
     files~ : Array[@files.Match],
-    epoch~ : Int
+    checkout_id~ : String
   )
 } derive(Eq)
 
@@ -45,20 +45,20 @@ fn FileCompletion::matches(
   owner : @interop.ConversationKey,
   root : @common.Uri?,
   query : String?,
-  epoch : Int,
+  checkout_id : String,
 ) -> Bool {
   match self {
     RemoteSettled(
       owner=remote_owner,
       root=remote_root,
       query=remote_query,
-      epoch=remote_epoch,
+      checkout_id=remote_epoch,
       ..
     ) =>
       remote_owner == owner &&
       root == Some(remote_root) &&
       query == Some(remote_query) &&
-      remote_epoch == epoch
+      remote_epoch == checkout_id
     Local(..) => false
   }
 }
@@ -68,7 +68,7 @@ fn FileCompletion::matches(
 /// lifetime, so navigation never mirrors keystrokes into the root Model.
 priv struct Entry {
   owner : @interop.ConversationKey
-  action_generation : Int
+  action_cursor : Int
   source : Draft
   draft : Draft
   source_goal : String?
@@ -78,7 +78,7 @@ priv struct Entry {
   file_completion : FileCompletion
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]
-  context_generation : Int
+  context_id : String
   pending_submission : PendingSubmission?
 } derive(Eq)
 
@@ -87,24 +87,28 @@ fn Entry::Entry(input : Input) -> Entry {
   let (files, loading) = input.completion_files(input.draft.task)
   {
     owner: input.identity.owner,
-    action_generation: input.identity.archive_generation,
+    action_cursor: input.identity.archive_cursor,
     source: input.draft,
     draft: input.draft,
     source_goal: input.goal.draft,
     goal_draft: input.goal.draft,
     completion: None,
     symbol_cache: SymbolCache(),
-    file_completion: Local(files~, loading~, epoch=input.file_index.epoch()),
+    file_completion: Local(
+      files~,
+      loading~,
+      checkout_id=input.file_index.checkout_id(),
+    ),
     root: input.root,
     installed_skills: input.installed_skills,
-    context_generation: input.context_generation,
+    context_id: input.context_id,
     pending_submission: None,
   }
 }
 
 ///|
 fn Entry::identity(self : Entry) -> Identity {
-  { owner: self.owner, archive_generation: self.action_generation, }
+  { owner: self.owner, archive_cursor: self.action_cursor }
 }
 
 ///|
@@ -124,12 +128,12 @@ fn Entry::file_completion_for(
       self.owner,
       root,
       query,
-      input.file_index.epoch(),
+      input.file_index.checkout_id(),
     ) {
     self.file_completion
   } else {
     let (files, loading) = input.completion_files(text)
-    Local(files~, loading~, epoch=input.file_index.epoch())
+    Local(files~, loading~, checkout_id=input.file_index.checkout_id())
   }
 }
 
@@ -140,7 +144,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
   let incoming = input.draft
   let incoming_goal = input.goal.draft
   let root_changed = input.root != self.root
-  let context_changed = self.context_generation != input.context_generation
+  let context_changed = self.context_id != input.context_id
   let skills_changed = self.installed_skills != input.installed_skills
   match self.pending_submission {
     Some(PromptSubmission(sequence_before~, _)) if input.submission_sequence >
@@ -164,7 +168,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
         ),
         root: input.root,
         installed_skills: input.installed_skills,
-        context_generation: input.context_generation,
+        context_id: input.context_id,
         pending_submission: None,
       }
     Some(GoalSubmission(sequence_before~, _)) if input.submission_sequence >
@@ -185,7 +189,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
         file_completion: self.file_completion_for(input, draft.task, input.root),
         root: input.root,
         installed_skills: input.installed_skills,
-        context_generation: input.context_generation,
+        context_id: input.context_id,
         pending_submission: None,
       }
     }
@@ -254,7 +258,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
     file_completion,
     root: input.root,
     installed_skills: input.installed_skills,
-    context_generation: input.context_generation,
+    context_id: input.context_id,
     pending_submission,
   }
 }
@@ -389,14 +393,14 @@ priv enum Msg {
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
-    epoch~ : Int,
+    checkout_id~ : String,
     files~ : Array[@pathx.Relative]
   )
   FilesFailed(
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
-    epoch~ : Int
+    checkout_id~ : String
   )
 }
 
@@ -430,7 +434,7 @@ fn Entry::edited(
   let file_completion = Local(
     files~,
     loading=files_loading,
-    epoch=input.file_index.epoch(),
+    checkout_id=input.file_index.checkout_id(),
   )
   let completion = input.completion(
     value,
@@ -535,7 +539,7 @@ fn Entry::accept_completion(
 
 ///|
 /// Adopt one remote file-search reply. The declared subscription already
-/// muted replies whose (owner, root, query, epoch) key is no longer wanted;
+/// muted replies whose (owner, root, query, checkout_id) key is no longer wanted;
 /// this guard restates that declaration against the reconciled entry, so a
 /// menu closed by a context switch in the same pass also rejects the reply.
 fn Entry::settled_file_completion(
@@ -544,12 +548,12 @@ fn Entry::settled_file_completion(
   owner : @interop.ConversationKey,
   root : @common.Uri,
   query : String,
-  epoch : Int,
+  checkout_id : String,
   remote_files : Array[@pathx.Relative]?,
 ) -> Entry? {
   guard owner == self.owner &&
     self.root == Some(root) &&
-    epoch == input.file_index.epoch() &&
+    checkout_id == input.file_index.checkout_id() &&
     Trigger::parse(self.draft.task, inline_markers="$#@") is Some(trigger) &&
     trigger.marker() == "@" &&
     trigger.query() == query &&
@@ -563,7 +567,13 @@ fn Entry::settled_file_completion(
   } else {
     @files.Search(input.file_candidates, [], None).rank(query)
   }
-  let file_completion = RemoteSettled(owner~, root~, query~, files~, epoch~)
+  let file_completion = RemoteSettled(
+    owner~,
+    root~,
+    query~,
+    files~,
+    checkout_id~,
+  )
   Some({
     ..self,
     file_completion,
@@ -804,13 +814,13 @@ fn Model::update(
         action_emit(FileIndexEnsured(identity=entry.identity())),
       )
     }
-    FilesLoaded(owner~, root~, query~, epoch~, files~) => {
+    FilesLoaded(owner~, root~, query~, checkout_id~, files~) => {
       guard entry.settled_file_completion(
           input,
           owner,
           root,
           query,
-          epoch,
+          checkout_id,
           Some(files),
         )
         is Some(next) else {
@@ -818,13 +828,13 @@ fn Model::update(
       }
       (self.with_entry(next), @cmd.none)
     }
-    FilesFailed(owner~, root~, query~, epoch~) => {
+    FilesFailed(owner~, root~, query~, checkout_id~) => {
       guard entry.settled_file_completion(
           input,
           owner,
           root,
           query,
-          epoch,
+          checkout_id,
           None,
         )
         is Some(next) else {
@@ -911,15 +921,15 @@ fn Model::editing_subscriptions(
         input.file_index is FileIndexReady(truncated=true, ..) {
         let owner = entry.owner
         let query = trigger.query()
-        let epoch = input.file_index.epoch()
+        let checkout_id = input.file_index.checkout_id()
         subs.push(
           @files.Request(owner.channel, owner.session, Some(root)).searching(
             query,
-            epoch~,
+            checkout_id~,
             loaded=(files, _limit_hit) => {
-              emit(FilesLoaded(owner~, root~, query~, epoch~, files~))
+              emit(FilesLoaded(owner~, root~, query~, checkout_id~, files~))
             },
-            failed=() => emit(FilesFailed(owner~, root~, query~, epoch~)),
+            failed=() => emit(FilesFailed(owner~, root~, query~, checkout_id~)),
           ),
         )
       }

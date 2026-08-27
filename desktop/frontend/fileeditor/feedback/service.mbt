@@ -30,7 +30,6 @@ struct DesktopFeedbackService {
   items_by_resource : Map[String, Array[@agent_feedback_api.AgentFeedback]]
   navigation_anchor_by_resource : Map[String, String]
   enabled_resources : Map[String, Bool]
-  mut next_feedback_handle : Int
 }
 
 ///|
@@ -43,7 +42,6 @@ pub fn DesktopFeedbackService::DesktopFeedbackService() -> DesktopFeedbackServic
     items_by_resource: Map([]),
     navigation_anchor_by_resource: Map([]),
     enabled_resources: Map([]),
-    next_feedback_handle: 1,
   }
 }
 
@@ -208,7 +206,7 @@ pub fn DesktopFeedbackService::add_feedback(
   state? : @agent_feedback_api.AgentFeedbackState = @agent_feedback_api.Accepted,
 ) -> @agent_feedback_api.AgentFeedback {
   let feedback : @agent_feedback_api.AgentFeedback = {
-    id: "viewer-feedback-" + self.next_feedback_handle.to_string(),
+    id: @uuid.mint(),
     text,
     resource,
     range,
@@ -216,7 +214,6 @@ pub fn DesktopFeedbackService::add_feedback(
     replies: [],
     state,
   }
-  self.next_feedback_handle += 1
   let items = self.items_for(resource)
   let has_existing_for_file = !items.is_empty()
   items.push(feedback)

@@ -305,7 +305,7 @@ pub(all) enum HistoryDiffSide {
 ///|
 pub(all) struct HistoryDiffDoc {
   diff : @dock.GitHistoryDiff
-  generation : Int
+  request_id : String
   original : HistoryBlob
   modified : HistoryBlob
 } derive(Eq)
@@ -426,10 +426,10 @@ pub(all) struct State {
   // refreshed only at meaningful repository boundaries rather than on the
   // three-second working-tree poll.
   git_graph : GitGraphState
-  git_graph_generation : Int
+  git_graph_request_id : String
   git_graph_selected : String?
   git_commit_files : GitCommitFiles
-  git_commit_files_generation : Int
+  git_commit_files_request_id : String
   git_actual_head : String?
   git_actual_head_known : Bool
   // Section presentation is a page-lifetime preference and survives owner
@@ -440,23 +440,23 @@ pub(all) struct State {
   // Historical content is not a filesystem document and never joins the
   // watcher/LSP projections. Keys combine commit and current path.
   history_docs : Map[String, HistoryDiffDoc]
-  history_generation : Int
+  history_request_id : String
   // Exact changed rows the user has marked reviewed in the current checkout.
   // Watcher events and run boundaries invalidate affected progress; a final
   // Git refresh also drops rows whose status or rename identity changed.
   reviewed_changes : Array[ChangedFile]
-  // Monotonic request token retained across conversation re-roots and advanced
-  // across same-owner placement changes. Owner plus this generation rejects an
+  // Request UUID retained across conversation re-roots and replaced across
+  // same-owner placement changes. Owner plus this identity rejects an
   // old A→B→A reply or one from an earlier checkout incarnation.
-  changes_generation : Int
-  // Placement/conversation epoch carried by filesystem request replies.
-  // Advancing this value on either boundary rejects reads, listings, and
+  changes_request_id : String
+  // Placement/conversation UUID carried by filesystem request replies.
+  // Replacing this value on either boundary rejects reads, listings, and
   // stats that outlived the checkout they addressed.
-  request_epoch : Int
-  // Page-lifetime navigation token. Transcript file-link clicks capture it;
-  // every competing editor navigation advances it, so a slower older click
+  checkout_id : String
+  // Page-lifetime navigation UUID. Transcript file-link clicks capture it;
+  // every competing editor navigation replaces it, so a slower older click
   // cannot move the viewer after a newer user action has taken precedence.
-  file_link_generation : Int
+  file_link_request_id : String
   // Last settled Git comparison identity (task/branch base, or HEAD fallback).
   // The legacy field name stays internal; `changes_head_known` distinguishes
   // a first/unborn snapshot from no snapshot yet so a comparison transition
@@ -465,7 +465,7 @@ pub(all) struct State {
   changes_head_known : Bool
   // Monotonic token shared by changed-file baseline and working-tree reads.
   // Each side records its current token in `ReviewState`; it outlives
-  // conversation re-roots for the same A→B→A reason as `changes_generation`.
+  // conversation re-roots for the same A→B→A reason as `changes_request_id`.
   review_generation : Int
   // The pending comparison whose loading notice has survived the reveal
   // delay. A newer review generation does not inherit this value, so rapid
@@ -492,10 +492,9 @@ pub(all) struct State {
   // workspace-wide watch, so equality means the native watch policy is truly
   // unchanged rather than merely producing an equivalent Host filter.
   watching : WatchedPaths?
-  // Monotonic counter of the most recently requested watcher configuration.
-  // Combined with `Ctx.watch_namespace`, it advances on every replacement or
-  // park independently of root and filesystem request epochs.
-  watch_generation : Int
+  // UUID of the most recently requested watcher configuration. It changes on
+  // every replacement or park independently of root and filesystem epochs.
+  watch_id : String
   // `fs.watch` can reject activation, and an active watcher can later stop.
   // Keep either failure separate from directory/file requests so a later
   // successful listing does not hide the loss of live updates. The root app
@@ -543,20 +542,20 @@ pub fn State::empty() -> State {
     review_diff_navigation_available: false,
     changes: ChangeListIdle,
     git_graph: GitGraphIdle,
-    git_graph_generation: 0,
+    git_graph_request_id: @uuid.mint(),
     git_graph_selected: None,
     git_commit_files: GitCommitFilesIdle,
-    git_commit_files_generation: 0,
+    git_commit_files_request_id: @uuid.mint(),
     git_actual_head: None,
     git_actual_head_known: false,
     changes_collapsed: false,
     git_graph_collapsed: false,
     history_docs: Map([]),
-    history_generation: 0,
+    history_request_id: @uuid.mint(),
     reviewed_changes: [],
-    changes_generation: 0,
-    request_epoch: 0,
-    file_link_generation: 0,
+    changes_request_id: @uuid.mint(),
+    checkout_id: @uuid.mint(),
+    file_link_request_id: @uuid.mint(),
     changes_head: None,
     changes_head_known: false,
     review_generation: 0,
@@ -565,7 +564,7 @@ pub fn State::empty() -> State {
     background_review_requests: Map([]),
     explorer_was_visible: false,
     watching: None,
-    watch_generation: 0,
+    watch_id: @uuid.mint(),
     watch_error: None,
     expanded: [],
     loading: [],
@@ -608,11 +607,11 @@ pub fn State::prepare_owner(
     review_diff_mode: self.review_diff_mode,
     review_diff_ignore_comments: self.review_diff_ignore_comments,
     review_diff_ignore_tests: self.review_diff_ignore_tests,
-    changes_generation: self.changes_generation,
-    request_epoch: self.request_epoch + 1,
-    file_link_generation: self.file_link_generation,
+    changes_request_id: self.changes_request_id,
+    checkout_id: @uuid.mint(),
+    file_link_request_id: self.file_link_request_id,
     review_generation: self.review_generation,
-    watch_generation: self.watch_generation,
+    watch_id: self.watch_id,
     // Preserve the old host configuration until `sync` can explicitly retire
     // or replace it against the newly resolved checkout placement.
     watching: self.watching,
@@ -657,11 +656,8 @@ pub fn TreeLayout::wire(self : TreeLayout) -> String {
 /// file tree docks.
 pub(all) struct Ctx {
   owner : @interop.ConversationKey
-  // The current placement incarnation for filesystem request/reply fencing.
-  request_epoch : Int
-  // Page-unique prefix for watcher identities. The native watcher outlives a
-  // page reload, so the counter alone is not enough to prevent reuse.
-  watch_namespace : String
+  // The current placement incarnation UUID for filesystem request/reply fencing.
+  checkout_id : String
   // `None` while this connection has not loaded the conversation's placement.
   // Unknown and missing placements both block filesystem requests so neither
   // can be resolved against the registered project's main checkout.
@@ -736,41 +732,41 @@ pub(all) enum Msg {
   // reply that lost a conversation switch can be dropped.
   DirLoaded(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    checkout_id~ : String,
     path~ : @pathx.Relative,
     entries~ : Array[FileEntry]
   )
   DirFailed(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    checkout_id~ : String,
     path~ : @pathx.Relative,
     message~ : String
   )
-  // A workspace snapshot reply. The owner/epoch pair rejects a result that
+  // A workspace snapshot reply. The owner/checkout_id pair rejects a result that
   // outlived a conversation or concrete-root transition.
   FilesIndexed(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    checkout_id~ : String,
     files~ : Array[@pathx.Relative],
     truncated~ : Bool
   )
   // A request failed or was cancelled. A failed background refresh keeps the
   // previously ready snapshot; only an initial fetch becomes IndexFailed.
-  FileIndexFailed(owner~ : @interop.ConversationKey, epoch~ : Int)
+  FileIndexFailed(owner~ : @interop.ConversationKey, checkout_id~ : String)
   // A `git.changes` reply. `head` carries the immutable comparison when the
   // host can identify one: a task or branch baseline when present, otherwise
   // resolved HEAD. `None` means no commit exists or a legacy host omitted the
   // identity. The owner fence rejects late responses.
   ChangesLoaded(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    request_id~ : String,
     repository~ : Bool,
     head~ : String?,
     files~ : Array[ChangedFile]
   )
   ChangesFailed(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    request_id~ : String,
     message~ : String
   )
   // A low-frequency fallback while Changes is visible. The selective file
@@ -787,25 +783,25 @@ pub(all) enum Msg {
   GitHistoryLoadMoreRequested
   GitHistoryLoaded(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    request_id~ : String,
     append~ : Bool,
     reply~ : @protocol.GitHistoryReply
   )
   GitHistoryFailed(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    request_id~ : String,
     append~ : Bool,
     message~ : String
   )
   GitCommitSelected(String)
   GitCommitChangesLoaded(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    request_id~ : String,
     reply~ : @protocol.GitCommitChangesReply
   )
   GitCommitChangesFailed(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    request_id~ : String,
     commit~ : String,
     message~ : String
   )
@@ -872,14 +868,14 @@ pub(all) enum Msg {
   HistoryBlobLoaded(
     owner~ : @interop.ConversationKey,
     key~ : String,
-    generation~ : Int,
+    request_id~ : String,
     side~ : HistoryDiffSide,
     blob~ : @protocol.GitOriginalFileReply
   )
   HistoryBlobFailed(
     owner~ : @interop.ConversationKey,
     key~ : String,
-    generation~ : Int,
+    request_id~ : String,
     side~ : HistoryDiffSide,
     message~ : String
   )
@@ -899,7 +895,7 @@ pub(all) enum Msg {
   // `annotation`, when present (an annotation chip's jump), is the user's
   // comment text,
   // re-shown as an editor bubble over `range`. A plain tree click leaves
-  // both `None`. `file_link_generation` identifies the explicit editor
+  // both `None`. `file_link_request_id` identifies the explicit editor
   // navigation that started this read. Positioned transcript links supply the
   // captured click generation; direct file, symbol, and mention opens use the
   // current generation. It fences the viewer navigation while still allowing
@@ -908,11 +904,11 @@ pub(all) enum Msg {
   // changed-row open.
   FileLoaded(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    checkout_id~ : String,
     path~ : @pathx.Relative,
     name~ : String,
     file~ : FileContent,
-    file_link_generation~ : Int?,
+    file_link_request_id~ : String?,
     review_generation~ : Int?,
     range~ : @common.Range?,
     annotation~ : String?
@@ -923,25 +919,20 @@ pub(all) enum Msg {
   // reads leave both generation fields `None`.
   FileFailed(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    checkout_id~ : String,
     path~ : @pathx.Relative,
-    file_link_generation~ : Int?,
+    file_link_request_id~ : String?,
     review_generation~ : Int?,
     message~ : String
   )
   // An `fs.watch` request rejection or an asynchronous watcher failure. The
-  // generation identifies the exact watcher configuration that produced it.
-  FileWatchFailed(
-    channel~ : @interop.ChannelId,
-    root~ : @common.Uri,
-    generation~ : String,
-    message~ : String
-  )
+  // UUID identifies the exact watcher configuration that produced it.
+  FileWatchFailed(root~ : @common.Uri, watch_id~ : String, message~ : String)
   // A new watcher sends `changes=None` once it is attached, requesting a full
   // baseline reconciliation. Later pushes contain the exact debounced events.
   FsChanged(
     root~ : @common.Uri,
-    generation~ : String,
+    watch_id~ : String,
     changes~ : Array[FileChange]?
   )
   // The conversation's agent run finished: the workspace has settled, so
@@ -952,18 +943,18 @@ pub(all) enum Msg {
   // conversation's finish.
   RunSettled(owner~ : @interop.ConversationKey)
   // A `stat_files` reply: each open tab's current mtime signature, or that
-  // the file is gone or could not be inspected. Owner plus request epoch
+  // the file is gone or could not be inspected. Owner plus checkout id
   // fence a request that outlived either its conversation or checkout.
   StatsLoaded(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    checkout_id~ : String,
     stats~ : Array[FileStat]
   )
   // The language server's diagnostics returned by `lsp_open`. The full owner
   // fences a reply that lost a device/session switch while the request ran.
   DiagnosticsLoaded(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    checkout_id~ : String,
     absolute~ : @common.Uri,
     diagnostics~ : Array[@protocol.LspDiagnostic]
   )

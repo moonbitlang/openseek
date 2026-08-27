@@ -43,9 +43,9 @@ priv struct ConsoleState {
   // only to verify and describe its one query-selected device.
   roster : Array[DeviceMeta]
   roster_sync : RosterSync
-  // The newest `/v1/devices` request. Replies carry this generation so a
+  // The newest `/v1/devices` request. Replies carry this UUID so a
   // slower pre-mutation snapshot cannot overwrite a newer roster.
-  roster_request_generation : Int
+  roster_request_id : String
   // The required `?device=` from the page's own query. It remains for the
   // page's lifetime: one browser page/tab owns one device and never falls
   // through to another roster entry.
@@ -77,7 +77,7 @@ fn empty_console_state(
     auth: AuthChecking,
     roster: [],
     roster_sync: RosterLoading,
-    roster_request_generation: 0,
+    roster_request_id: @uuid.mint(),
     page_device,
     login_return_to,
     preselect_project,
@@ -115,8 +115,8 @@ priv enum ConsoleMsg {
   MeUnauthorized
   MeFailed(String)
   // `/v1/devices` settled.
-  RosterLoaded(Array[DeviceMeta], generation~ : Int)
-  RosterFailed(message~ : String, generation~ : Int)
+  RosterLoaded(Array[DeviceMeta], request_id~ : String)
+  RosterFailed(message~ : String, request_id~ : String)
   // The gate card's retry / the account row's refresh — re-runs the load.
   RefreshClicked
   SignOutClicked
@@ -133,16 +133,16 @@ fn update_console_msg(
   guard model.console is Some(console) else { return (@cmd.none, model) }
   match msg {
     MeLoaded(login~, avatar~) => {
-      let generation = console.roster_request_generation + 1
+      let request_id = @uuid.mint()
       (
-        fetch_console_roster(dispatch, generation),
+        fetch_console_roster(dispatch, request_id),
         {
           ..model,
           console: Some({
             ..console,
             auth: AuthSignedIn(login~, avatar~),
             roster_sync: RosterLoading,
-            roster_request_generation: generation,
+            roster_request_id: request_id,
             notice: None,
           }),
         },
@@ -154,18 +154,18 @@ fn update_console_msg(
         @cmd.none,
         { ..model, console: Some({ ..console, notice: Some(message), }), },
       )
-    RosterLoaded(metas, generation~) => {
+    RosterLoaded(metas, request_id~) => {
       // A reply that outlived the session, or was overtaken by a later roster
       // request, must not resurrect stale device channels.
       guard console.auth is AuthSignedIn(..) &&
-        generation == console.roster_request_generation else {
+        request_id == console.roster_request_id else {
         return (@cmd.none, model)
       }
       apply_roster(dispatch, model, console, metas)
     }
-    RosterFailed(message~, generation~) => {
+    RosterFailed(message~, request_id~) => {
       guard console.auth is AuthSignedIn(..) &&
-        generation == console.roster_request_generation else {
+        request_id == console.roster_request_id else {
         return (@cmd.none, model)
       }
       (
@@ -208,7 +208,7 @@ fn update_console_msg(
 /// channel: every other roster entry stays metadata, and a missing, revoked,
 /// or offline target never falls through to another device. A retired target
 /// loses its state here; if the same relay id is later re-added, its fresh
-/// WebSocket epoch also rejects delayed callbacks from the retired connection.
+/// WebSocket UUID also rejects delayed callbacks from the retired connection.
 fn apply_roster(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -216,7 +216,6 @@ fn apply_roster(
   metas : Array[DeviceMeta],
 ) -> (@cmd.Cmd, Model) {
   let commands : Array[@cmd.Cmd] = []
-  let mut websocket_epoch = model.websocket_epoch
   let page_channel : @interop.ChannelId? = console.page_device.map(id => {
     @interop.ChannelId::Remote(id)
   })
@@ -246,8 +245,7 @@ fn apply_roster(
       if meta.id == id && meta.online {
         let channel : @interop.ChannelId = Remote(id)
         if !devices.iter().any(dev => dev.channel == channel) {
-          websocket_epoch += 1
-          devices.push({ ..empty_device_state(channel), websocket_epoch, })
+          devices.push(empty_device_state(channel))
         }
         break
       }
@@ -292,7 +290,6 @@ fn apply_roster(
   let reconciled = {
     ..model,
     devices,
-    websocket_epoch,
     conversations,
     console: Some({
       ..console,
@@ -328,6 +325,14 @@ fn console_test_model() -> Model {
 }
 
 ///|
+/// Test-only: the roster UUID currently accepted by a browser model. A reply
+/// fixture must name this request exactly; there is no numeric ordering left.
+fn Model::console_request_id(self : Model) -> String raise {
+  guard self.console is Some(console) else { fail("console lost") }
+  console.roster_request_id
+}
+
+///|
 fn console_test_roster() -> Array[DeviceMeta] {
   [
     { id: "d_on", name: "Mac", hostname: Some("mac.local"), online: true, },
@@ -347,7 +352,12 @@ test "sign-in loads the roster and connects only the page device" {
   assert_true(console.auth is AuthSignedIn(login="octocat", avatar="a.png"))
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster(), generation=1)),
+    Console(
+      RosterLoaded(
+        console_test_roster(),
+        request_id=signed.console_request_id(),
+      ),
+    ),
     signed,
   )
   // The query-selected online device gets the page's only channel. Other
@@ -378,12 +388,22 @@ test "a browser page without device never selects the first online roster entry"
   )
   let (_, listed_once) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster(), generation=1)),
+    Console(
+      RosterLoaded(
+        console_test_roster(),
+        request_id=signed.console_request_id(),
+      ),
+    ),
     signed,
   )
   let (_, listed_twice) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster(), generation=1)),
+    Console(
+      RosterLoaded(
+        console_test_roster(),
+        request_id=signed.console_request_id(),
+      ),
+    ),
     signed,
   )
   inspect(listed_once.devices.length(), content="0")
@@ -405,7 +425,12 @@ test "a 401 anywhere signs the console out and drops every channel" {
   )
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster(), generation=1)),
+    Console(
+      RosterLoaded(
+        console_test_roster(),
+        request_id=signed.console_request_id(),
+      ),
+    ),
     signed,
   )
   let (_, out) = update(dispatch, Console(MeUnauthorized), listed)
@@ -417,7 +442,12 @@ test "a 401 anywhere signs the console out and drops every channel" {
   // A roster reply that outlived the session must not resurrect channels.
   let (_, stale) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster(), generation=1)),
+    Console(
+      RosterLoaded(
+        console_test_roster(),
+        request_id=signed.console_request_id(),
+      ),
+    ),
     out,
   )
   inspect(stale.devices.length(), content="0")
@@ -444,7 +474,7 @@ test "the page device is the only connection and receives the initial workspace"
   ]
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(metas, generation=1)),
+    Console(RosterLoaded(metas, request_id=signed.console_request_id())),
     signed,
   )
   assert_true(listed.focused == Remote("d_two"))
@@ -479,7 +509,7 @@ test "an unavailable page device never falls through to an online device" {
   ]
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(metas, generation=1)),
+    Console(RosterLoaded(metas, request_id=signed.console_request_id())),
     signed,
   )
   assert_true(listed.focused == @interop.ChannelId::Local)
@@ -509,7 +539,7 @@ test "a revoked page device is retired without connecting a survivor" {
   ]
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(metas, generation=1)),
+    Console(RosterLoaded(metas, request_id=signed.console_request_id())),
     signed,
   )
   assert_true(listed.focused == Remote("d_a"))
@@ -551,7 +581,7 @@ test "a revoked page device is retired without connecting a survivor" {
   ]
   let (_, refreshed) = update(
     dispatch,
-    Console(RosterLoaded(survivor, generation=1)),
+    Console(RosterLoaded(survivor, request_id=signed.console_request_id())),
     seeded,
   )
   assert_true(refreshed.focused == @interop.ChannelId::Local)
@@ -594,10 +624,10 @@ test "an older roster reply cannot restore a device removed by a newer one" {
   ]
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(original, generation=1)),
+    Console(RosterLoaded(original, request_id=signed.console_request_id())),
     signed,
   )
-  // A fresh account check starts generation 2. Its authoritative roster
+  // A fresh account check mints another request UUID. Its authoritative roster
   // reply removes A.
   let (_, refreshing) = update(
     dispatch,
@@ -609,12 +639,12 @@ test "an older roster reply cannot restore a device removed by a newer one" {
   ]
   let (_, current) = update(
     dispatch,
-    Console(RosterLoaded(survivor, generation=2)),
+    Console(RosterLoaded(survivor, request_id=refreshing.console_request_id())),
     refreshing,
   )
   let (_, stale) = update(
     dispatch,
-    Console(RosterLoaded(original, generation=1)),
+    Console(RosterLoaded(original, request_id=signed.console_request_id())),
     current,
   )
   guard stale.console is Some(console) else { fail("console lost") }
@@ -643,7 +673,7 @@ test "an action for another roster device cannot move page focus" {
   ]
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(metas, generation=1)),
+    Console(RosterLoaded(metas, request_id=signed.console_request_id())),
     signed,
   )
   assert_true(listed.focused == Remote("d_a"))
@@ -680,7 +710,7 @@ test "new chat and workspace picker reject another roster device" {
   ]
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(metas, generation=1)),
+    Console(RosterLoaded(metas, request_id=signed.console_request_id())),
     signed,
   )
   let (_, chat_once) = update(dispatch, NewChatIn(Remote("d_b"), None), listed)
@@ -714,7 +744,7 @@ test "a row click that raced its device's removal is dropped" {
   ]
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(metas, generation=1)),
+    Console(RosterLoaded(metas, request_id=signed.console_request_id())),
     signed,
   )
   let (_, next) = update(dispatch, OpenSession(Remote("gone"), "s-x"), listed)
@@ -738,7 +768,12 @@ test "sign-out tears every channel down and returns to the gate" {
   )
   let (_, listed) = update(
     dispatch,
-    Console(RosterLoaded(console_test_roster(), generation=1)),
+    Console(
+      RosterLoaded(
+        console_test_roster(),
+        request_id=signed.console_request_id(),
+      ),
+    ),
     signed,
   )
   let (_, out) = update(dispatch, Console(SignOutDone), listed)
@@ -787,7 +822,9 @@ test "a roster failure reports without leaving the signed-in frame" {
   )
   let (_, failed) = update(
     dispatch,
-    Console(RosterFailed(message="boom", generation=1)),
+    Console(
+      RosterFailed(message="boom", request_id=signed.console_request_id()),
+    ),
     signed,
   )
   guard failed.console is Some(console) else { fail("console lost") }

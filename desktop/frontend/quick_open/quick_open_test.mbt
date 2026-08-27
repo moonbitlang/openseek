@@ -36,9 +36,8 @@ fn input(
 
 ///|
 /// A palette showing one workspace symbol. `SymbolsLoaded` carries the
-/// generation its request was minted with; standing in for the effect layer
-/// means minting it here too, and a run opened out of `State::empty` is the
-/// first, so it is generation 1.
+/// request UUID its request was minted with; standing in for the effect layer
+/// means reading that opaque fence from the state.
 fn symbol_run(name : String, path : String) -> @quick_open.State raise {
   let input = input()
   let (_, opened) = @quick_open.State::empty().open(
@@ -46,9 +45,12 @@ fn symbol_run(name : String, path : String) -> @quick_open.State raise {
     input,
     @quick_open.Symbols,
   )
+  guard opened.request_id() is Some(request_id) else {
+    fail("opening the palette should arm a symbol request")
+  }
   let (_, ready, _) = opened.handle(
     emit(),
-    @quick_open.SymbolsLoaded(owner=owner(), query="", generation=1, items=[
+    @quick_open.SymbolsLoaded(query="", request_id~, items=[
       {
         name,
         kind: Some(12),

@@ -21,7 +21,7 @@ fn file_request(
   root~ : @common.Uri?,
   cache_key : String,
   query : String,
-  generation : Int,
+  request_id : String,
   kind : FileRequestKind,
 ) -> @cmd.Cmd {
   guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
@@ -40,17 +40,16 @@ fn file_request(
             PopulateCache => 0
             QueryCache => MaxFileResults
           },
-          generation,
+          request_id,
         },
       ) catch {
         _ => {
           scheduler.add(
             emit(
               match kind {
-                PopulateCache =>
-                  FileCacheRequestFailed(owner~, cache_key~, generation~)
+                PopulateCache => FileCacheRequestFailed(cache_key~, request_id~)
                 QueryCache =>
-                  FilesRequestFailed(owner~, cache_key~, query~, generation~)
+                  FilesRequestFailed(cache_key~, query~, request_id~)
               },
             ),
           )
@@ -62,7 +61,7 @@ fn file_request(
       }
       match kind {
         PopulateCache =>
-          scheduler.add(emit(FileCacheLoaded(owner~, cache_key~, generation~)))
+          scheduler.add(emit(FileCacheLoaded(cache_key~, request_id~)))
         QueryCache => {
           let files = reply.files.filter_map(path => {
             if path.is_empty() {
@@ -74,10 +73,9 @@ fn file_request(
           scheduler.add(
             emit(
               FilesLoaded(
-                owner~,
                 cache_key~,
                 query~,
-                generation~,
+                request_id~,
                 files~,
                 from_cache=reply.from_cache,
                 limit_hit=reply.limit_hit,
@@ -96,7 +94,7 @@ fn file_request(
 fn cancel_file_search(
   owner : @interop.ConversationKey,
   cache_key : String,
-  generation : Int,
+  request_id : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     @js.async_run(() => {
@@ -104,7 +102,7 @@ fn cancel_file_search(
         @interop.bridge_request(
           owner.channel,
           @commands.fs_cancel_search_files,
-          { cache_key, generation, },
+          { cache_key, request_id },
         ),
       ) catch {
         _ => ()
@@ -141,7 +139,7 @@ fn symbol_request(
   root : @common.Uri?,
   owner : @interop.ConversationKey,
   query : String,
-  generation : Int,
+  request_id : String,
 ) -> @cmd.Cmd {
   guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
     return @cmd.none
@@ -150,7 +148,7 @@ fn symbol_request(
     owner,
     query,
     root~,
-    loaded=items => emit(SymbolsLoaded(owner~, query~, generation~, items~)),
-    failed=emit(SymbolsRequestFailed(owner~, query~, generation~)),
+    loaded=items => emit(SymbolsLoaded(query~, request_id~, items~)),
+    failed=emit(SymbolsRequestFailed(query~, request_id~)),
   )
 }

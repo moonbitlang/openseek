@@ -52,18 +52,18 @@ fn git_review_revision(reply : @protocol.GitChangesReply) -> String? {
 fn list_changes(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  generation : Int,
+  request_id : String,
   workspace~ : @common.Uri?,
 ) -> @cmd.Cmd {
   match workspace {
     Some(resource) if !@resource.belongs_to(resource, owner.channel) =>
-      // `refresh_changes` has already marked this generation in flight. A
+      // `refresh_changes` has already marked this UUID in flight. A
       // silent no-op would wedge the inventory in Loading/refreshing forever;
       // settle it through the ordinary fenced failure path instead.
       return dispatch(
         ChangesFailed(
           owner~,
-          generation~,
+          request_id~,
           message="workspace moved to another host before Git refresh",
         ),
       )
@@ -84,7 +84,7 @@ fn list_changes(
             dispatch(
               ChangesFailed(
                 owner~,
-                generation~,
+                request_id~,
                 message=@interop.bridge_error_text(error),
               ),
             ),
@@ -101,7 +101,7 @@ fn list_changes(
         dispatch(
           ChangesLoaded(
             owner~,
-            generation~,
+            request_id~,
             repository=reply.repository,
             head=revision,
             files~,

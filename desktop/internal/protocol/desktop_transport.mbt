@@ -289,10 +289,13 @@ pub fn Notification::params(self : Notification) -> Json {
 
 ///|
 test "desktop notifications round-trip at the wire edge" {
-  let event = Notification::from_wire("terminal.exit", { "id": 1, "code": 0 })
+  let event = Notification::from_wire("terminal.exit", {
+    "id": "terminal-1",
+    "code": 0,
+  })
   guard event is Some(event) else { fail("known notification was rejected") }
   assert_eq(event.wire_name(), "terminal.exit")
-  assert_eq(event.params(), { "id": 1, "code": 0 })
+  assert_eq(event.params(), { "id": "terminal-1", "code": 0 })
   let settings = Notification::from_wire("workspace.settings_changed", {
     "workspace": "/home/u/proj",
     "worktree_mode": true,
@@ -328,8 +331,7 @@ test "malformed agent errors remain visible notifications" {
 test "semantic search progress notifications round-trip at the wire edge" {
   let wire : Json = {
     "root": "/work",
-    "session_key": "semantic-search:local:one:/work",
-    "generation": 3,
+    "request_id": "semantic-request-3",
     "matches": [
       {
         "path": "src/main.mbt",
@@ -351,8 +353,7 @@ test "semantic search progress notifications round-trip at the wire edge" {
     fail("known notification was rejected")
   }
   assert_eq(payload.root, "/work")
-  assert_eq(payload.session_key, "semantic-search:local:one:/work")
-  assert_eq(payload.generation, 3)
+  assert_eq(payload.request_id, "semantic-request-3")
   assert_eq(payload.match_count, 1)
   assert_eq(payload.file_count, 1)
   assert_eq(payload.matches.length(), 1)

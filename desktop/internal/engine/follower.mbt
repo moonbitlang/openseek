@@ -48,10 +48,10 @@ priv enum FollowerMsg {
   Barrier(@async.Queue[String?])
   // Stop after a final scan. `writer_exited` is supplied only by a caller
   // that has crossed the process-exit barrier; it lets a brand-new session
-  // with no record file retire as an empty drain. The completed generation
+  // with no record file retire as an empty drain. The completed stop UUID
   // is a drain barrier: no scan is in flight and none will start, so the
   // record can be moved.
-  Stop(final_scan~ : Bool, writer_exited~ : Bool, generation~ : Int)
+  Stop(final_scan~ : Bool, writer_exited~ : Bool, stop_id~ : String)
 }
 
 ///|
@@ -85,11 +85,12 @@ priv struct SessionFollower {
   mut load_pending : Bool
   mut stopping : Bool
   mut retired : Bool
-  // Stop callers poll a generation-stamped result, avoiding a consumable
+  // Stop callers poll a UUID-stamped result, avoiding a consumable
   // one-shot ack (and an unbounded waiter collection). A failed final scan
-  // completes the generation with an error and reactivates the actor.
-  mut stop_generation : Int
-  mut completed_stop_generation : Int
+  // completes the exact stop with an error and reactivates the actor. Both
+  // are `None` until the first stop is requested or completed.
+  mut stop_id : String?
+  mut completed_stop_id : String?
   mut completed_stop_error : String?
   mut stop_observers : Int
   // The highest sequence already broadcast. Commits at or below it are old
@@ -189,7 +190,7 @@ async fn SessionFollower::run(
   follower.watermark = follower.tail.watermark()
   ready.put(baseline_failure)
   guard baseline_failure is None else { return }
-  let mut retired_generation = 0
+  let mut retired_stop_id : String? = None
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
       for ;; {
@@ -251,11 +252,11 @@ async fn SessionFollower::run(
           }
           reply.put(failure)
         }
-        Stop(final_scan~, writer_exited~, generation~) => {
+        Stop(final_scan~, writer_exited~, stop_id~) => {
           let failure = if final_scan {
             try {
               // Everything the departed writer persisted is broadcast
-              // before this generation can retire successfully.
+              // before this stop can retire successfully.
               follower.scan(sink)
               None
             } catch {
@@ -282,14 +283,14 @@ async fn SessionFollower::run(
           if failure is Some(detail) {
             // A failed final scan is not a drain. Keep the actor installed
             // and polling, and publish the exact failure to every caller
-            // waiting on this stop generation.
-            follower.completed_stop_generation = generation
+            // waiting on this stop UUID.
+            follower.completed_stop_id = Some(stop_id)
             follower.completed_stop_error = Some(detail)
             if follower.stop_observers == 0 {
               follower.stopping = false
             }
           } else {
-            retired_generation = generation
+            retired_stop_id = Some(stop_id)
             break
           }
         }
@@ -297,15 +298,15 @@ async fn SessionFollower::run(
     }
     group.return_immediately(())
   })
-  // Publish the successful generation before removing the identity. A stop
+  // Publish the successful stop UUID before removing the identity. A stop
   // waiter can therefore distinguish this deliberate retirement from an
   // actor that vanished without completing its final scan.
-  follower.completed_stop_generation = retired_generation
+  follower.completed_stop_id = retired_stop_id
   follower.completed_stop_error = None
 }
 
 ///|
-/// Remove exactly this follower generation and make every queued caller
+/// Remove exactly this follower instance and make every queued caller
 /// observe retirement. Closing is synchronous, so startup rollback can use
 /// this from a cancellation path even when the follower task itself belongs
 /// to a task group that is already being torn down. The identity check only
@@ -406,8 +407,8 @@ async fn[G] ensure_follower(
     load_pending: false,
     stopping: false,
     retired: false,
-    stop_generation: 0,
-    completed_stop_generation: 0,
+    stop_id: None,
+    completed_stop_id: None,
     completed_stop_error: None,
     stop_observers: 0,
     watermark: 0,
@@ -450,7 +451,7 @@ async fn stop_follower(
 }
 
 ///|
-/// Stop one captured follower generation, but only while it is still the
+/// Stop one captured follower identity, but only while it is still the
 /// manager's current identity. EOF cleanup captures this before publishing
 /// the engine-exit latch, so a delayed cleanup can never stop a successor.
 async fn stop_follower_instance(
@@ -464,43 +465,48 @@ async fn stop_follower_instance(
     physical_equal(current, follower) else {
     return
   }
-  let generation = if follower.stopping {
-    follower.stop_generation
-  } else {
-    // This flag is set before the first possible yield. No load/kick can
-    // slip behind the drain request, and ensure_follower can never mistake
-    // this generation for an active reusable actor.
-    follower.stopping = true
-    follower.stop_generation += 1
-    let generation = follower.stop_generation
-    let queued = follower.inbox.try_put(
-      Stop(final_scan~, writer_exited~, generation~),
-    ) catch {
-      _ => false
+  let stop_id = match (follower.stopping, follower.stop_id) {
+    (true, Some(stop_id)) => stop_id
+    _ => {
+      guard @uuid.mint() is Some(stop_id) else {
+        raise EngineError(
+          "cannot mint a follower stop id: OS entropy unavailable",
+        )
+      }
+      // This flag is set before the first possible yield. No load/kick can
+      // slip behind the drain request, and ensure_follower can never mistake
+      // this stop for an active reusable actor.
+      follower.stopping = true
+      follower.stop_id = Some(stop_id)
+      let queued = follower.inbox.try_put(
+        Stop(final_scan~, writer_exited~, stop_id~),
+      ) catch {
+        _ => false
+      }
+      if !queued {
+        follower.completed_stop_id = Some(stop_id)
+        follower.completed_stop_error = Some("follower control queue is closed")
+        follower.stopping = false
+        raise EngineError("follower control queue is closed")
+      }
+      stop_id
     }
-    if !queued {
-      follower.completed_stop_generation = generation
-      follower.completed_stop_error = Some("follower control queue is closed")
-      follower.stopping = false
-      raise EngineError("follower control queue is closed")
-    }
-    generation
   }
   follower.stop_observers += 1
   defer {
-    follower.stop_observers -= 1
-    // Keep a failed generation closed while any of its callers still need
+    follower.stop_observers = follower.stop_observers - 1
+    // Keep a failed stop closed while any of its callers still need
     // to observe the result. The last observer reactivates the actor, after
-    // which a later lifecycle operation may start a fresh retry generation.
-    if follower.stop_generation == generation &&
-      follower.completed_stop_generation == generation &&
+    // which a later lifecycle operation may start a fresh retry UUID.
+    if follower.stop_id == Some(stop_id) &&
+      follower.completed_stop_id == Some(stop_id) &&
       follower.completed_stop_error is Some(_) &&
       follower.stop_observers == 0 {
       follower.stopping = false
     }
   }
   for ;; {
-    if follower.completed_stop_generation == generation {
+    if follower.completed_stop_id == Some(stop_id) {
       if follower.completed_stop_error is Some(detail) {
         raise EngineError(detail)
       }
@@ -1338,8 +1344,8 @@ fn follower_state_fixture(session : String) -> SessionFollower {
     load_pending: false,
     stopping: false,
     retired: false,
-    stop_generation: 0,
-    completed_stop_generation: 0,
+    stop_id: None,
+    completed_stop_id: None,
     completed_stop_error: None,
     stop_observers: 0,
     watermark: 0,
@@ -1381,7 +1387,7 @@ test "pump reset completes every queued follower load" {
   assert_true(follower.load_requests.try_put(request))
   manager.followers["s-reset"] = follower
   manager.pump = Serving(sessions=Map([]))
-  reset_engine_generation(manager, Ref(None))
+  reset_engine_cycle(manager, Ref(None))
   assert_true(manager.pump is Stopped)
   assert_true(manager.followers.get("s-reset") is None)
   assert_false(request.active)
@@ -1488,7 +1494,7 @@ async test "backpressured load schedules the next control generation" {
 }
 
 ///|
-async test "stop requires its generation proof when follower identity vanishes" {
+async test "stop requires its UUID proof when follower identity vanishes" {
   let manager = new_engine_manager("unused")
   let follower = follower_state_fixture("s-stop-proof")
   manager.followers["s-stop-proof"] = follower
@@ -1503,7 +1509,7 @@ async test "stop requires its generation proof when follower identity vanishes" 
         error => "\{error}"
       }
     })
-    guard follower.inbox.get() is Stop(generation~, ..) else {
+    guard follower.inbox.get() is Stop(stop_id~, ..) else {
       fail("expected Stop")
     }
     manager.followers.remove("s-stop-proof")
@@ -1516,13 +1522,13 @@ async test "stop requires its generation proof when follower identity vanishes" 
       stop_follower(manager, "s-stop-complete", writer_exited=false)
       true
     })
-    guard completed.inbox.get() is Stop(generation=completed_generation, ..) else {
+    guard completed.inbox.get() is Stop(stop_id=completed_stop_id, ..) else {
       fail("expected second Stop")
     }
-    completed.completed_stop_generation = completed_generation
+    completed.completed_stop_id = Some(completed_stop_id)
     completed.completed_stop_error = None
     manager.followers.remove("s-stop-complete")
     assert_true(successful.wait())
-    ignore(generation)
+    ignore(stop_id)
   })
 }

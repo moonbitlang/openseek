@@ -11,7 +11,7 @@ pub enum Event {
     notification~ : @protocol.Notification
   )
   Unavailable(channel~ : @interop.ChannelId, message~ : String)
-  ChannelDown(channel~ : @interop.ChannelId, websocket_epoch~ : Int)
+  ChannelDown(channel~ : @interop.ChannelId, websocket_id~ : String)
   BrowserEvent(payload~ : Map[String, Json])
   MenuCommand(command_id~ : String)
   NotificationClicked(run_id~ : String)

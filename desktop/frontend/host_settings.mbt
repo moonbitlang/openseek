@@ -26,7 +26,7 @@ fn HostSettings::from_status(
 fn fetch_host_settings(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  connection_generation : Int,
+  connection_id : String,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
@@ -42,7 +42,7 @@ fn fetch_host_settings(
         dispatch(
           HostSettingsLoaded(
             HostSettings::from_status(reply),
-            connection_generation=Some(connection_generation),
+            connection_id=Some(connection_id),
           ),
         ),
       )
@@ -59,7 +59,7 @@ fn push_host_settings(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   patch : @protocol.SettingsSetPayload,
-  connection_generation : Int,
+  connection_id : String,
   cleans_legacy? : Bool = false,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
@@ -73,7 +73,7 @@ fn push_host_settings(
             dispatch(
               HostSettingsSaveFailed(
                 @interop.bridge_error_text(error),
-                connection_generation~,
+                connection_id~,
                 cleans_legacy~,
               ),
             ),
@@ -85,7 +85,7 @@ fn push_host_settings(
         dispatch(
           HostSettingsApplied(
             HostSettings::from_status(reply),
-            connection_generation~,
+            connection_id~,
             cleans_legacy~,
           ),
         ),

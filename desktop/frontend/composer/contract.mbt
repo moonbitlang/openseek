@@ -20,7 +20,7 @@ pub(all) struct Draft {
 /// archive changes.
 pub(all) struct Identity {
   owner : @interop.ConversationKey
-  archive_generation : Int
+  archive_cursor : Int
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -29,7 +29,7 @@ pub(all) struct Identity {
 pub(all) struct Replacement {
   archived : @interop.ConversationKey
   fresh : @interop.ConversationKey
-  archive_generation : Int
+  archive_cursor : Int
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -37,10 +37,10 @@ pub(all) struct Replacement {
 /// needs enough information to decide whether local matches are final, a full
 /// Host query is required, or the index must be started.
 pub(all) enum FileIndex {
-  FileIndexEmpty(epoch~ : Int)
-  FileIndexLoading(epoch~ : Int)
-  FileIndexReady(epoch~ : Int, truncated~ : Bool)
-  FileIndexFailed(epoch~ : Int)
+  FileIndexEmpty(checkout_id~ : String)
+  FileIndexLoading(checkout_id~ : String)
+  FileIndexReady(checkout_id~ : String, truncated~ : Bool)
+  FileIndexFailed(checkout_id~ : String)
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -201,7 +201,7 @@ pub(all) struct Input {
   slash_commands : Array[SlashCommand]
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]
-  context_generation : Int
+  context_id : String
   submission_sequence : Int
   replacements : Array[Replacement]
   retirements : Array[@interop.ConversationKey]

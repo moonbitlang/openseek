@@ -67,7 +67,7 @@ struct Page {
   collapsed : Map[String, Bool]
   visible_lines : Int
   phase : Phase
-  generation : Int
+  request_id : String
   delay_ms : Int
 } derive(Eq)
 
@@ -88,12 +88,18 @@ pub fn EditorHighlights::ranges(
 ///|
 pub struct State {
   priv page : Page
-  priv generation : Int
 } derive(Eq)
 
 ///|
 pub fn State::empty() -> State {
-  { page: fresh_page(), generation: 0, }
+  { page: Page::fresh(@uuid.mint()) }
+}
+
+///|
+/// Expose the current request UUID to the owning file-editor package. Replies
+/// use this UUID directly, without echoing the conversation or checkout root.
+pub fn State::request_id(self : State) -> String {
+  self.page.request_id
 }
 
 ///|
@@ -130,42 +136,20 @@ pub(all) enum Msg {
   CollapseAll
   ShowMore
   ToggleFile(String)
-  RequestStarted(
-    owner~ : @interop.ConversationKey,
-    root~ : String,
-    generation~ : Int
-  )
-  Loaded(
-    owner~ : @interop.ConversationKey,
-    root~ : String,
-    generation~ : Int,
-    reply~ : @protocol.SearchTextReply
-  )
-  SemanticLoaded(
-    owner~ : @interop.ConversationKey,
-    root~ : String,
-    generation~ : Int,
-    reply~ : @protocol.SearchSemanticReply
-  )
+  RequestStarted(request_id~ : String)
+  Loaded(request_id~ : String, reply~ : @protocol.SearchTextReply)
+  SemanticLoaded(request_id~ : String, reply~ : @protocol.SearchSemanticReply)
   // One partial batch of a semantic search still in flight. The Host pushes
   // these through the notification channel so a long scan paints hits early;
-  // the final `SemanticLoaded` reply replaces them. The session_key/generation
-  // pair fences the stream exactly like the reply does.
+  // the final `SemanticLoaded` reply replaces them. The request UUID fences
+  // the stream exactly like the reply does.
   SemanticProgress(
-    root~ : String,
-    session_key~ : String,
-    generation~ : Int,
+    request_id~ : String,
     matches~ : Array[@protocol.SemanticSearchHit],
     match_count~ : Int,
     file_count~ : Int
   )
-  RequestFailed(
-    owner~ : @interop.ConversationKey,
-    root~ : String,
-    generation~ : Int,
-    code~ : String,
-    message~ : String
-  )
+  RequestFailed(request_id~ : String, code~ : String, message~ : String)
 }
 
 ///|

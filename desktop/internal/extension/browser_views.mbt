@@ -47,26 +47,24 @@ fn BrowserViews::close_all(self : BrowserViews) -> Unit {
 }
 
 ///|
-fn view_name(id : Int) -> String {
+fn view_name(id : String) -> String {
   "browser-\{id}"
 }
 
 ///|
 /// The page id a view name encodes, or `None` for views that are not
 /// browser tabs. The inverse of `view_name`.
-pub fn browser_view_id(name : String) -> Int? {
-  guard name.strip_prefix("browser-") is Some(digits) && !digits.is_empty() else {
+pub fn browser_view_id(name : String) -> String? {
+  guard name.strip_prefix("browser-") is Some(id) && !id.is_empty() else {
     return None
   }
-  Some(@string.parse_int(digits, base=10)) catch {
-    _ => None
-  }
+  Some(id.to_owned())
 }
 
 ///|
 /// A view event as the `browser.event` notification payload the frontend
 /// decodes.
-pub fn view_event_json(id : Int, event : @proton.ViewEvent) -> Json {
+pub fn view_event_json(id : String, event : @proton.ViewEvent) -> Json {
   match event {
     Navigated(url~) =>
       { "id": id.to_json(), "kind": "navigated", "url": url.to_json() }
@@ -102,7 +100,7 @@ pub fn view_event_json(id : Int, event : @proton.ViewEvent) -> Json {
 ///|
 priv suberror BrowserViewError {
   WindowNotReady
-  UnknownView(Int)
+  UnknownView(String)
   BlockedURL(String)
   TitlebarThemeUnavailable
 } derive(Debug)
@@ -206,7 +204,7 @@ fn BrowserViews::attached_window(
 ///|
 fn BrowserViews::view(
   self : BrowserViews,
-  id : Int,
+  id : String,
 ) -> @proton.ViewHandle raise BrowserViewError {
   guard self.attached_window().view(view_name(id)) is Some(view) else {
     raise UnknownView(id)
@@ -441,21 +439,25 @@ test "browser ops refuse to run without a window; close tolerates it" {
 
   let views = BrowserViews::BrowserViews()
   assert_true(
-    raises(() => views.open({ id: 1, url: "http://x/", dark: true, })),
+    raises(() => views.open({ id: "browser-1", url: "http://x/", dark: true })),
   )
-  assert_true(raises(() => views.back({ id: 1, })))
-  assert_true(raises(() => views.forward({ id: 1, })))
-  assert_true(raises(() => views.reload({ id: 1, })))
-  assert_true(raises(() => views.set_theme({ id: 1, dark: true, })))
+  assert_true(raises(() => views.back({ id: "browser-1" })))
+  assert_true(raises(() => views.forward({ id: "browser-1" })))
+  assert_true(raises(() => views.reload({ id: "browser-1" })))
+  assert_true(raises(() => views.set_theme({ id: "browser-1", dark: true })))
   assert_true(raises(() => views.open_app_devtools()))
   assert_true(raises(() => views.toggle_app_maximized()))
   assert_true(
-    raises(() => views.set_bounds({ id: 1, x: 0, y: 0, width: 10, height: 10, })),
+    raises(() => {
+      views.set_bounds({ id: "browser-1", x: 0, y: 0, width: 10, height: 10 })
+    }),
   )
-  assert_true(raises(() => views.set_visible({ id: 1, visible: true, })))
+  assert_true(
+    raises(() => views.set_visible({ id: "browser-1", visible: true })),
+  )
   // Closing with no window (or no view) is deliberately not an error:
   // the close raced a page reload's `close_all`.
-  assert_true(views.close({ id: 1, }) is Acknowledged)
+  assert_true(views.close({ id: "browser-1" }) is Acknowledged)
 }
 
 ///|
@@ -475,11 +477,11 @@ test "browser page theme bridge uses only opted-in theme conventions" {
 
 ///|
 test "view names round-trip and reject foreign views" {
-  assert_true(browser_view_id("browser-3") == Some(3))
-  assert_true(browser_view_id("browser-42") == Some(42))
+  assert_true(browser_view_id("browser-id-3") == Some("id-3"))
+  assert_true(browser_view_id("browser-id-42") == Some("id-42"))
   assert_true(browser_view_id("browser-") is None)
   assert_true(browser_view_id("sidebar") is None)
-  assert_true(browser_view_id("browser-x") is None)
+  assert_true(browser_view_id("browser-x") == Some("x"))
 }
 
 ///|

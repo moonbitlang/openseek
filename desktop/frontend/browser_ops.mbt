@@ -49,7 +49,7 @@ fn[Payload : ToJson] browser_op(
 /// the pane sync shows and places it after the next measurement.
 fn browser_open(
   dispatch : @cmd.Emit[Msg],
-  id : Int,
+  id : String,
   url : String,
   dark : Bool,
 ) -> @cmd.Cmd {
@@ -59,7 +59,7 @@ fn browser_open(
 ///|
 fn browser_navigate(
   dispatch : @cmd.Emit[Msg],
-  id : Int,
+  id : String,
   url : String,
   dark : Bool,
 ) -> @cmd.Cmd {
@@ -77,7 +77,7 @@ fn browser_navigate(
 /// color-scheme hints and theme attributes the page already opted into.
 fn browser_set_theme(
   dispatch : @cmd.Emit[Msg],
-  id : Int,
+  id : String,
   dark : Bool,
 ) -> @cmd.Cmd {
   browser_op(dispatch, @commands.browser_set_theme, { id, dark, }, quiet=true)
@@ -126,7 +126,7 @@ fn browser_history_for_active(
 ///|
 fn browser_set_bounds(
   dispatch : @cmd.Emit[Msg],
-  id : Int,
+  id : String,
   rect : @preview.Rect,
 ) -> @cmd.Cmd {
   browser_op(
@@ -140,7 +140,7 @@ fn browser_set_bounds(
 ///|
 fn browser_set_visible(
   dispatch : @cmd.Emit[Msg],
-  id : Int,
+  id : String,
   visible : Bool,
 ) -> @cmd.Cmd {
   browser_op(
@@ -152,7 +152,7 @@ fn browser_set_visible(
 }
 
 ///|
-fn browser_close_view(dispatch : @cmd.Emit[Msg], id : Int) -> @cmd.Cmd {
+fn browser_close_view(dispatch : @cmd.Emit[Msg], id : String) -> @cmd.Cmd {
   browser_op(dispatch, @commands.browser_close, { id, }, quiet=true)
 }
 
@@ -250,7 +250,7 @@ fn focus_browser_address() -> @cmd.Cmd {
 /// Decode one `browser.event` notification into the preview subsystem's
 /// message. Unknown kinds and malformed payloads drop.
 fn browser_event_msg(payload : Map[String, Json]) -> Msg? {
-  guard @jsonx.json_int(payload, "id") is Some(id) &&
+  guard @jsonx.json_text(payload, "id") is Some(id) &&
     @jsonx.json_text(payload, "kind") is Some(kind) else {
     return None
   }
@@ -290,7 +290,7 @@ fn browser_event_msg(payload : Map[String, Json]) -> Msg? {
 ///|
 test "browser event decode drops ERR_ABORTED but keeps real failures" {
   let aborted : Map[String, Json] = {
-    "id": Json(1),
+    "id": "browser-1",
     "kind": "load_failed",
     "url": "https://www.baidu.com/s?wd=x",
     "code": Json(-3),
@@ -298,7 +298,7 @@ test "browser event decode drops ERR_ABORTED but keeps real failures" {
   }
   assert_true(browser_event_msg(aborted) is None)
   let refused : Map[String, Json] = {
-    "id": Json(1),
+    "id": "browser-1",
     "kind": "load_failed",
     "url": "http://127.0.0.1:5173/",
     "code": Json(-102),
@@ -306,15 +306,17 @@ test "browser event decode drops ERR_ABORTED but keeps real failures" {
   }
   assert_true(
     browser_event_msg(refused)
-    is Some(Preview(LoadFailed(id=1, url="http://127.0.0.1:5173/", ..))),
+    is Some(
+      Preview(LoadFailed(id="browser-1", url="http://127.0.0.1:5173/", ..))
+    ),
   )
   let navigated : Map[String, Json] = {
-    "id": Json(2),
+    "id": "browser-2",
     "kind": "navigated",
     "url": "https://www.google.com/",
   }
   assert_true(
     browser_event_msg(navigated)
-    is Some(Preview(Navigated(id=2, url="https://www.google.com/"))),
+    is Some(Preview(Navigated(id="browser-2", url="https://www.google.com/"))),
   )
 }

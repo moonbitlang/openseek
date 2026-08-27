@@ -94,10 +94,10 @@ pub fn Draft::to_repr(Self) -> @debug.Repr
 pub fn Draft::with_mention(Self, Mention) -> Self
 
 pub(all) enum FileIndex {
-  FileIndexEmpty(epoch~ : Int)
-  FileIndexLoading(epoch~ : Int)
-  FileIndexReady(epoch~ : Int, truncated~ : Bool)
-  FileIndexFailed(epoch~ : Int)
+  FileIndexEmpty(checkout_id~ : String)
+  FileIndexLoading(checkout_id~ : String)
+  FileIndexReady(checkout_id~ : String, truncated~ : Bool)
+  FileIndexFailed(checkout_id~ : String)
 } derive(Eq, @debug.Debug)
 pub fn FileIndex::equal(Self, Self) -> Bool
 pub fn FileIndex::not_equal(Self, Self) -> Bool
@@ -152,7 +152,7 @@ pub fn GoalPending::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Identity {
   owner : @interop.ConversationKey
-  archive_generation : Int
+  archive_cursor : Int
 } derive(Eq, @debug.Debug)
 pub fn Identity::equal(Self, Self) -> Bool
 pub fn Identity::not_equal(Self, Self) -> Bool
@@ -255,7 +255,7 @@ pub(all) struct ReasoningSelect {
 pub(all) struct Replacement {
   archived : @interop.ConversationKey
   fresh : @interop.ConversationKey
-  archive_generation : Int
+  archive_cursor : Int
 } derive(Eq, @debug.Debug)
 pub fn Replacement::equal(Self, Self) -> Bool
 pub fn Replacement::not_equal(Self, Self) -> Bool

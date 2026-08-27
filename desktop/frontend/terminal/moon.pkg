@@ -9,6 +9,7 @@ import {
   "openseek_desktop/frontend/internal/terminal_input",
   "openseek_desktop/internal/protocol",
   "openseek_desktop/internal/commands",
+  "openseek_desktop/internal/uuid/browser" @uuid,
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/resource",
 }

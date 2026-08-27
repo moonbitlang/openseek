@@ -423,21 +423,57 @@ pub(all) struct SearchFilesPayload {
   // Zero warms the cache without returning rows; interactive queries use the
   // picker limit. The Host applies its own hard upper bound.
   max_results : Int
-  // Monotonic within the page. It identifies one cancellable query, not a
-  // cache generation.
-  generation : Int
-} derive(Debug, Eq, FromJson, ToJson)
+  // App-global UUID identifying one cancellable query, independent of the
+  // cache lifetime and device channel.
+  request_id : String
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for SearchFilesPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "file search payload")
+  {
+    path: object.required_string("path"),
+    cache_key: object.required_string("cache_key"),
+    query: object.required_string("query"),
+    max_results: object.required_int("max_results"),
+    request_id: object.required_string("request_id"),
+  }
+}
+
+///|
+pub impl ToJson for SearchFilesPayload with fn to_json(self) {
+  {
+    "path": self.path,
+    "cache_key": self.cache_key,
+    "query": self.query,
+    "max_results": self.max_results,
+    "request_id": self.request_id,
+  }
+}
 
 ///|
 pub(all) struct CancelSearchFilesPayload {
   cache_key : String
-  generation : Int
-} derive(Debug, Eq, FromJson, ToJson)
+  request_id : String
+} derive(Debug, Eq)
 
 ///|
-/// Search workspace text through the Host's bundled ripgrep. `session_key`
-/// names one panel/search lifetime; generations are monotonic inside it, so a
-/// newer request can cancel an older process without affecting another panel.
+pub impl FromJson for CancelSearchFilesPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "file search cancellation")
+  {
+    cache_key: object.required_string("cache_key"),
+    request_id: object.required_string("request_id"),
+  }
+}
+
+///|
+pub impl ToJson for CancelSearchFilesPayload with fn to_json(self) {
+  { "cache_key": self.cache_key, "request_id": self.request_id }
+}
+
+///|
+/// Search workspace text through the Host's bundled ripgrep. `request_id` is
+/// app-global and identifies the exact cancellable process.
 pub(all) struct SearchTextPayload {
   root : String
   query : String
@@ -446,41 +482,35 @@ pub(all) struct SearchTextPayload {
   whole_word : Bool
   include_glob : String
   exclude_glob : String
-  session_key : String
-  generation : Int
+  request_id : String
   max_results : Int
 } derive(Debug, Eq)
 
 ///|
-/// Cancel one text-search generation. The Host also remembers the cancelled
-/// frontier so cancel-before-search message ordering remains safe.
+/// Cancel one exact text-search request UUID.
 pub(all) struct CancelSearchTextPayload {
-  session_key : String
-  generation : Int
+  request_id : String
 } derive(Debug, Eq)
 
 ///|
 /// Search workspace MoonBit code with structural patterns through the Host's
-/// moongrep provider. `session_key` and `generation` follow the text-search
-/// contract exactly, so one panel can own both modes without replaying an old
-/// semantic reply as current text results. `patterns` contains one or more
-/// anonymous structural moongrep patterns.
+/// moongrep provider. `request_id` follows the text-search contract exactly,
+/// so one panel can own both modes without replaying an old semantic reply as
+/// current text results. `patterns` contains one or more anonymous structural
+/// moongrep patterns.
 pub(all) struct SearchSemanticPayload {
   root : String
   patterns : Array[String]
   include_glob : String
   exclude_glob : String
-  session_key : String
-  generation : Int
+  request_id : String
   max_results : Int
 } derive(Debug, Eq)
 
 ///|
-/// Cancel one semantic-search generation. The Host also remembers the
-/// cancelled frontier so cancel-before-search message ordering remains safe.
+/// Cancel one exact semantic-search request UUID.
 pub(all) struct CancelSearchSemanticPayload {
-  session_key : String
-  generation : Int
+  request_id : String
 } derive(Debug, Eq)
 
 ///|
@@ -488,12 +518,11 @@ pub(all) struct CancelSearchSemanticPayload {
 /// notification so the client can render hits before the final reply arrives.
 /// The reply remains authoritative: `matches` are the Host's partial
 /// accumulation and the client replaces them when `SearchSemanticReply`
-/// lands. `session_key`/`generation` carry the same fence as the reply so a
-/// stale stream can never overwrite a newer search.
+/// lands. `request_id` carries the same UUID fence as the reply so a stale
+/// stream can never overwrite a newer search.
 pub(all) struct SemanticSearchProgressPayload {
   root : String
-  session_key : String
-  generation : Int
+  request_id : String
   matches : Array[SemanticSearchHit]
   match_count : Int
   file_count : Int
@@ -528,8 +557,31 @@ pub(all) struct WatchWorkspacePayload {
   recursive : Bool?
   // Concrete watcher/failure identity. Clients change it for every desired
   // configuration so a replaced watcher's delayed failure is stale.
-  generation : String
-} derive(Debug, Eq, FromJson, ToJson)
+  watch_id : String
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for WatchWorkspacePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "workspace watch payload")
+  {
+    path: object.required_string("path"),
+    files: object.required_string_array("files"),
+    directories: object.required_string_array("directories"),
+    recursive: object.optional_bool("recursive"),
+    watch_id: object.required_string("watch_id"),
+  }
+}
+
+///|
+pub impl ToJson for WatchWorkspacePayload with fn to_json(self) {
+  {
+    "path": self.path,
+    "files": self.files,
+    "directories": self.directories,
+    "recursive": self.recursive,
+    "watch_id": self.watch_id,
+  }
+}
 
 ///|
 pub(all) struct BrowseDirectoryPayload {
@@ -591,28 +643,83 @@ pub(all) struct TerminalOpenPayload {
 
 ///|
 pub(all) struct TerminalInputPayload {
-  id : Int
+  id : String
   data : String?
   data_base64 : String?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for TerminalInputPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal input payload")
+  {
+    id: object.required_string("id"),
+    data: object.optional_string("data"),
+    data_base64: object.optional_string("data_base64"),
+  }
+}
+
+///|
+pub impl ToJson for TerminalInputPayload with fn to_json(self) {
+  { "id": self.id, "data": self.data, "data_base64": self.data_base64 }
+}
 
 ///|
 pub(all) struct TerminalResizePayload {
-  id : Int
+  id : String
   cols : Int
   rows : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for TerminalResizePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal resize payload")
+  {
+    id: object.required_string("id"),
+    cols: object.required_int("cols"),
+    rows: object.required_int("rows"),
+  }
+}
+
+///|
+pub impl ToJson for TerminalResizePayload with fn to_json(self) {
+  { "id": self.id, "cols": self.cols, "rows": self.rows }
+}
 
 ///|
 pub(all) struct TerminalAckPayload {
-  id : Int
+  id : String
   sequence : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for TerminalAckPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal ack payload")
+  {
+    id: object.required_string("id"),
+    sequence: object.required_int("sequence"),
+  }
+}
+
+///|
+pub impl ToJson for TerminalAckPayload with fn to_json(self) {
+  { "id": self.id, "sequence": self.sequence }
+}
 
 ///|
 pub(all) struct TerminalClosePayload {
-  id : Int
-} derive(Debug, Eq, FromJson, ToJson)
+  id : String
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for TerminalClosePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal close payload")
+  { id: object.required_string("id") }
+}
+
+///|
+pub impl ToJson for TerminalClosePayload with fn to_json(self) {
+  { "id": self.id }
+}
 
 ///|
 pub(all) struct LspOpenPayload {
@@ -737,21 +844,58 @@ pub(all) struct ExternalLinkPayload {
 
 ///|
 pub(all) struct BrowserOpenPayload {
-  id : Int
+  id : String
   url : String
   dark : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for BrowserOpenPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "browser open payload")
+  {
+    id: object.required_string("id"),
+    url: object.required_string("url"),
+    dark: object.required_bool("dark"),
+  }
+}
+
+///|
+pub impl ToJson for BrowserOpenPayload with fn to_json(self) {
+  { "id": self.id, "url": self.url, "dark": self.dark }
+}
 
 ///|
 pub(all) struct BrowserIdPayload {
-  id : Int
-} derive(Debug, Eq, FromJson, ToJson)
+  id : String
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for BrowserIdPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "browser id payload")
+  { id: object.required_string("id") }
+}
+
+///|
+pub impl ToJson for BrowserIdPayload with fn to_json(self) {
+  { "id": self.id }
+}
 
 ///|
 pub(all) struct BrowserThemePayload {
-  id : Int
+  id : String
   dark : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for BrowserThemePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "browser theme payload")
+  { id: object.required_string("id"), dark: object.required_bool("dark") }
+}
+
+///|
+pub impl ToJson for BrowserThemePayload with fn to_json(self) {
+  { "id": self.id, "dark": self.dark }
+}
 
 ///|
 pub(all) struct AppTitlebarThemePayload {
@@ -760,18 +904,52 @@ pub(all) struct AppTitlebarThemePayload {
 
 ///|
 pub(all) struct BrowserBoundsPayload {
-  id : Int
+  id : String
   x : Int
   y : Int
   width : Int
   height : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for BrowserBoundsPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "browser bounds payload")
+  {
+    id: object.required_string("id"),
+    x: object.required_int("x"),
+    y: object.required_int("y"),
+    width: object.required_int("width"),
+    height: object.required_int("height"),
+  }
+}
+
+///|
+pub impl ToJson for BrowserBoundsPayload with fn to_json(self) {
+  {
+    "id": self.id,
+    "x": self.x,
+    "y": self.y,
+    "width": self.width,
+    "height": self.height,
+  }
+}
 
 ///|
 pub(all) struct BrowserVisiblePayload {
-  id : Int
+  id : String
   visible : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for BrowserVisiblePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "browser visibility payload")
+  { id: object.required_string("id"), visible: object.required_bool("visible") }
+}
+
+///|
+pub impl ToJson for BrowserVisiblePayload with fn to_json(self) {
+  { "id": self.id, "visible": self.visible }
+}
 // Notification payloads.
 
 ///|
@@ -1136,29 +1314,97 @@ pub(all) struct FsChangedPayload {
   baseline : Bool
   events : Array[FsEventPayload]
   // Identifies the concrete activated watcher that produced this batch.
-  generation : String
-} derive(Debug, Eq, FromJson, ToJson)
+  watch_id : String
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for FsChangedPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "filesystem change payload")
+  let events : Array[FsEventPayload] = []
+  for index, raw in object.required_array("events") {
+    events.push(
+      @json.from_json(raw, path=path.add_key("events").add_index(index)),
+    )
+  }
+  {
+    root: object.required_string("root"),
+    baseline: object.required_bool("baseline"),
+    events,
+    watch_id: object.required_string("watch_id"),
+  }
+}
+
+///|
+pub impl ToJson for FsChangedPayload with fn to_json(self) {
+  {
+    "root": self.root,
+    "baseline": self.baseline,
+    "events": self.events,
+    "watch_id": self.watch_id,
+  }
+}
 
 ///|
 pub(all) struct FsWatchFailedPayload {
   root : String
   message : String
   // Identifies the concrete watcher that produced this failure.
-  generation : String
-} derive(Debug, Eq, FromJson, ToJson)
+  watch_id : String
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for FsWatchFailedPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "filesystem watch failure")
+  {
+    root: object.required_string("root"),
+    message: object.required_string("message"),
+    watch_id: object.required_string("watch_id"),
+  }
+}
+
+///|
+pub impl ToJson for FsWatchFailedPayload with fn to_json(self) {
+  { "root": self.root, "message": self.message, "watch_id": self.watch_id }
+}
 
 ///|
 pub(all) struct TerminalOutputPayload {
-  id : Int
+  id : String
   sequence : Int
   data : String
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for TerminalOutputPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal output payload")
+  {
+    id: object.required_string("id"),
+    sequence: object.required_int("sequence"),
+    data: object.required_string("data"),
+  }
+}
+
+///|
+pub impl ToJson for TerminalOutputPayload with fn to_json(self) {
+  { "id": self.id, "sequence": self.sequence, "data": self.data }
+}
 
 ///|
 pub(all) struct TerminalExitPayload {
-  id : Int
+  id : String
   code : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for TerminalExitPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal exit payload")
+  { id: object.required_string("id"), code: object.required_int("code") }
+}
+
+///|
+pub impl ToJson for TerminalExitPayload with fn to_json(self) {
+  { "id": self.id, "code": self.code }
+}
 
 ///|
 pub extend AgentErrorPayload with Debug::{to_repr}

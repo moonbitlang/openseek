@@ -117,7 +117,7 @@ priv enum FileScanOutcome {
 ///|
 priv struct PendingFileSearch {
   query : String
-  request_generation : Int
+  request_id : String
   max_results : Int
   from_cache : Bool
   reply : @async.Queue[FileSearchResponse]
@@ -140,13 +140,13 @@ priv enum FileRankOutcome {
 priv struct FileSearchCache {
   root_key : String
   snapshot : FileIndexSnapshot?
-  scan_generation : Int
+  scan_id : String
 }
 
 ///|
 priv struct RunningFileScan {
   root_key : String
-  generation : Int
+  id : String
   waiters : Array[PendingFileSearch]
   task : @async.Task[Unit]
 }
@@ -154,7 +154,7 @@ priv struct RunningFileScan {
 ///|
 priv struct RunningFileRank {
   cache_key : String
-  scan_generation : Int
+  scan_id : String
   query_key : String
   max_results : Int
   waiters : Array[PendingFileSearch]
@@ -169,25 +169,21 @@ priv enum FileSearchRequest {
     cache_key~ : String,
     query~ : String,
     max_results~ : Int,
-    request_generation~ : Int,
+    request_id~ : String,
     reply~ : @async.Queue[FileSearchResponse]
   )
-  Cancel(
-    cache_key~ : String,
-    request_generation~ : Int,
-    reply~ : @async.Queue[Unit]
-  )
+  Cancel(cache_key~ : String, request_id~ : String, reply~ : @async.Queue[Unit])
   Clear(cache_key~ : String, reply~ : @async.Queue[Unit])
   ScanFinished(
     cache_key~ : String,
     root_key~ : String,
-    generation~ : Int,
+    id~ : String,
     outcome~ : FileScanOutcome
   )
   RankFinished(
     cache_key~ : String,
-    scan_generation~ : Int,
-    generation~ : Int,
+    scan_id~ : String,
+    id~ : String,
     outcome~ : FileRankOutcome
   )
 }
@@ -217,7 +213,7 @@ async fn FileSearchService::search(
   cache_key : String,
   query : String,
   max_results : Int,
-  request_generation : Int,
+  request_id : String,
 ) -> SearchFilesReply {
   let reply : @async.Queue[FileSearchResponse] = Queue(kind=Blocking(1))
   self.requests.put(
@@ -227,7 +223,7 @@ async fn FileSearchService::search(
       cache_key~,
       query~,
       max_results~,
-      request_generation~,
+      request_id~,
       reply~,
     ),
   )
@@ -243,10 +239,10 @@ async fn FileSearchService::search(
 async fn FileSearchService::cancel(
   self : FileSearchService,
   cache_key : String,
-  request_generation : Int,
+  request_id : String,
 ) -> Unit {
   let reply : @async.Queue[Unit] = Queue(kind=Blocking(1))
-  self.requests.put(Cancel(cache_key~, request_generation~, reply~))
+  self.requests.put(Cancel(cache_key~, request_id~, reply~))
   reply.get()
 }
 
@@ -335,13 +331,10 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
     let scan_permit : @semaphore.Semaphore = Semaphore(1, initial_value=1)
     let caches : Map[String, FileSearchCache] = Map([])
     let running_scans : Map[String, RunningFileScan] = Map([])
-    let running_ranks : Map[Int, RunningFileRank] = Map([])
-    // The bridge exposes cancellation as a second RPC. Remember its exact
-    // monotonic request frontier so cancel-before-search reordering remains
-    // equivalent to an in-process CancellationToken.
-    let cancelled_through : Map[String, Int] = Map([])
-    let mut next_scan_generation = 0
-    let mut next_rank_generation = 0
+    let running_ranks : Map[String, RunningFileRank] = Map([])
+    // Cancellation is a second RPC and may overtake its search. Remember the
+    // exact request UUID until that search arrives or its cache is cleared.
+    let cancelled_requests : Map[String, String] = Map([])
 
     async fn launch_rank(
       cache_key : String,
@@ -364,26 +357,24 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
         )
         return
       }
-      let mut joined : Int? = None
-      for generation, running in running_ranks {
+      let mut joined : String? = None
+      for id, running in running_ranks {
         if running.cache_key == cache_key &&
-          running.scan_generation == cache.scan_generation &&
+          running.scan_id == cache.scan_id &&
           running.query_key == prepared.key() &&
           running.max_results == waiter.max_results {
-          joined = Some(generation)
+          joined = Some(id)
           break
         }
       }
-      if joined is Some(generation) &&
-        running_ranks.get(generation) is Some(running) {
+      if joined is Some(id) && running_ranks.get(id) is Some(running) {
         let waiters = running.waiters.copy()
         waiters.push(waiter)
-        running_ranks[generation] = { ..running, waiters, }
+        running_ranks[id] = { ..running, waiters, }
         return
       }
-      next_rank_generation += 1
-      let generation = next_rank_generation
-      let scan_generation = cache.scan_generation
+      let id = waiter.request_id
+      let scan_id = cache.scan_id
       let task = group.spawn(no_wait=true, allow_failure=true, () => {
         let outcome = RankSucceeded(
           compute_file_search(snapshot, waiter.query, waiter.max_results),
@@ -391,13 +382,11 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
           _ if @async.is_being_cancelled() => return
           error => RankFailed("failed to rank workspace files: \{error}")
         }
-        self.requests.put(
-          RankFinished(cache_key~, scan_generation~, generation~, outcome~),
-        )
+        self.requests.put(RankFinished(cache_key~, scan_id~, id~, outcome~))
       })
-      running_ranks[generation] = {
+      running_ranks[id] = {
         cache_key,
-        scan_generation,
+        scan_id,
         query_key: prepared.key(),
         max_results: waiter.max_results,
         waiters: [waiter],
@@ -413,15 +402,15 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
           cache_key~,
           query~,
           max_results~,
-          request_generation~,
+          request_id~,
           reply~
         ) => {
           if cache_key.is_empty() {
             reply.put(SearchFailed("file search cache key is empty"))
             continue
           }
-          if cancelled_through.get(cache_key).unwrap_or(-1) >=
-            request_generation {
+          if cancelled_requests.get(request_id) == Some(cache_key) {
+            cancelled_requests.remove(request_id)
             reply.put(SearchCancelled)
             continue
           }
@@ -429,7 +418,7 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
           let existed = caches.contains(cache_key)
           let waiter : PendingFileSearch = {
             query,
-            request_generation,
+            request_id,
             max_results,
             from_cache: existed,
             reply,
@@ -451,13 +440,8 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
                 reply.put(SearchFailed("file search cache lost its scan"))
               }
             None => {
-              next_scan_generation += 1
-              let generation = next_scan_generation
-              caches[cache_key] = {
-                root_key,
-                snapshot: None,
-                scan_generation: generation,
-              }
+              let id = request_id
+              caches[cache_key] = { root_key, snapshot: None, scan_id: id }
               let task = group.spawn(no_wait=true, allow_failure=true, () => {
                 let outcome = try {
                   scan_permit.acquire()
@@ -468,28 +452,26 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
                   error => ScanFailed("failed to index workspace: \{error}")
                 }
                 self.requests.put(
-                  ScanFinished(cache_key~, root_key~, generation~, outcome~),
+                  ScanFinished(cache_key~, root_key~, id~, outcome~),
                 )
               })
               running_scans[cache_key] = {
                 root_key,
-                generation,
+                id,
                 waiters: [waiter],
                 task,
               }
             }
           }
         }
-        Cancel(cache_key~, request_generation~, reply~) => {
-          cancelled_through[cache_key] = cancelled_through
-            .get(cache_key)
-            .unwrap_or(-1)
-            .max(request_generation)
+        Cancel(cache_key~, request_id~, reply~) => {
+          cancelled_requests[request_id] = cache_key
           if running_scans.get(cache_key) is Some(running) {
             let kept : Array[PendingFileSearch] = []
             for waiter in running.waiters {
-              if waiter.request_generation == request_generation {
+              if waiter.request_id == request_id {
                 waiter.reply.put(SearchCancelled)
+                cancelled_requests.remove(request_id)
               } else {
                 kept.push(waiter)
               }
@@ -498,27 +480,28 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
             // one query, matching VS Code's preventCancellation cache row.
             running_scans[cache_key] = { ..running, waiters: kept, }
           }
-          let affected : Array[Int] = []
-          for generation, running in running_ranks {
+          let affected : Array[String] = []
+          for id, running in running_ranks {
             if running.cache_key == cache_key {
-              affected.push(generation)
+              affected.push(id)
             }
           }
-          for generation in affected {
-            if running_ranks.get(generation) is Some(running) {
+          for id in affected {
+            if running_ranks.get(id) is Some(running) {
               let kept : Array[PendingFileSearch] = []
               for waiter in running.waiters {
-                if waiter.request_generation == request_generation {
+                if waiter.request_id == request_id {
                   waiter.reply.put(SearchCancelled)
+                  cancelled_requests.remove(request_id)
                 } else {
                   kept.push(waiter)
                 }
               }
               if kept.is_empty() {
                 running.task.cancel()
-                running_ranks.remove(generation)
+                running_ranks.remove(id)
               } else {
-                running_ranks[generation] = { ..running, waiters: kept, }
+                running_ranks[id] = { ..running, waiters: kept }
               }
             }
           }
@@ -526,7 +509,15 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
         }
         Clear(cache_key~, reply~) => {
           caches.remove(cache_key)
-          cancelled_through.remove(cache_key)
+          let cancelled_ids : Array[String] = []
+          for request_id, owner in cancelled_requests {
+            if owner == cache_key {
+              cancelled_ids.push(request_id)
+            }
+          }
+          for request_id in cancelled_ids {
+            cancelled_requests.remove(request_id)
+          }
           if running_scans.get(cache_key) is Some(running) {
             running.task.cancel()
             for waiter in running.waiters {
@@ -534,34 +525,34 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
             }
             running_scans.remove(cache_key)
           }
-          let affected : Array[Int] = []
-          for generation, running in running_ranks {
+          let affected : Array[String] = []
+          for id, running in running_ranks {
             if running.cache_key == cache_key {
-              affected.push(generation)
+              affected.push(id)
             }
           }
-          for generation in affected {
-            if running_ranks.get(generation) is Some(running) {
+          for id in affected {
+            if running_ranks.get(id) is Some(running) {
               running.task.cancel()
               for waiter in running.waiters {
                 waiter.reply.put(SearchCancelled)
               }
-              running_ranks.remove(generation)
+              running_ranks.remove(id)
             }
           }
           reply.put(())
         }
-        ScanFinished(cache_key~, root_key~, generation~, outcome~) => {
+        ScanFinished(cache_key~, root_key~, id~, outcome~) => {
           guard running_scans.get(cache_key) is Some(running) &&
             running.root_key == root_key &&
-            running.generation == generation else {
+            running.id == id else {
             continue
           }
           running_scans.remove(cache_key)
           let waiters = running.waiters
           guard caches.get(cache_key) is Some(cache) &&
             cache.root_key == root_key &&
-            cache.scan_generation == generation else {
+            cache.scan_id == id else {
             for waiter in waiters {
               waiter.reply.put(SearchCancelled)
             }
@@ -582,13 +573,13 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
             }
           }
         }
-        RankFinished(cache_key~, scan_generation~, generation~, outcome~) => {
-          guard running_ranks.get(generation) is Some(running) else { continue }
-          running_ranks.remove(generation)
+        RankFinished(cache_key~, scan_id~, id~, outcome~) => {
+          guard running_ranks.get(id) is Some(running) else { continue }
+          running_ranks.remove(id)
           guard running.cache_key == cache_key &&
-            running.scan_generation == scan_generation &&
+            running.scan_id == scan_id &&
             caches.get(cache_key) is Some(cache) &&
-            cache.scan_generation == scan_generation &&
+            cache.scan_id == scan_id &&
             cache.snapshot is Some(_) else {
             for waiter in running.waiters {
               waiter.reply.put(SearchCancelled)
@@ -626,7 +617,7 @@ async fn search_files_op(
     payload.cache_key,
     payload.query,
     payload.max_results,
-    payload.generation,
+    payload.request_id,
   )
 }
 
@@ -635,7 +626,7 @@ async fn cancel_search_files_op(
   service : FileSearchService,
   payload : CancelSearchFilesPayload,
 ) -> @protocol.EmptyReply {
-  service.cancel(payload.cache_key, payload.generation)
+  service.cancel(payload.cache_key, payload.request_id)
   Acknowledged
 }
 
@@ -783,6 +774,28 @@ async test "successive queries retain complete-snapshot recall" {
 }
 
 ///|
+async test "cancel-before-search rejects only the exact request UUID" {
+  @async.with_task_group(group => {
+    let service = FileSearchService::new_with_scan(fn(_) {
+      { files: ["target.mbt"] }
+    })
+    group.spawn_bg(() => service.run())
+    let root = @pathx.Path("/workspace-cancel-before").resolve()
+    service.cancel("cache-a", "cancelled-request")
+    let cancelled = service.search(
+      root, "cache-a", "target", 200, "cancelled-request",
+    )
+    assert_true(cancelled.cancelled)
+    let accepted = service.search(
+      root, "cache-a", "target", 200, "accepted-request",
+    )
+    assert_false(accepted.cancelled)
+    assert_eq(accepted.files, ["target.mbt"])
+    group.return_immediately(())
+  })
+}
+
+///|
 async test "query cancellation keeps the cache-populating scan alive" {
   @async.with_task_group(group => {
     let starts : @async.Queue[Unit] = Queue(kind=Blocking(1))
@@ -794,14 +807,16 @@ async test "query cancellation keeps the cache-populating scan alive" {
     })
     group.spawn_bg(() => service.run())
     let root = @pathx.Path("/workspace-cancel").resolve()
-    let first = group.spawn(() => service.search(root, "cache-a", "", 0, 1))
+    let first = group.spawn(() => {
+      service.search(root, "cache-a", "", 0, "request-1")
+    })
     @async.with_timeout(1000, () => starts.get())
-    service.cancel("cache-a", 1)
+    service.cancel("cache-a", "request-1")
     let cancelled = @async.with_timeout(1000, () => first.wait())
     assert_true(cancelled.cancelled)
     release.put(())
     @async.pause()
-    let cached = service.search(root, "cache-a", "target", 200, 2)
+    let cached = service.search(root, "cache-a", "target", 200, "request-2")
     assert_true(cached.from_cache)
     assert_eq(cached.files, ["target.mbt"])
     group.return_immediately(())
@@ -819,10 +834,12 @@ async test "cache keys coalesce scans and clearCache retires one session" {
     })
     group.spawn_bg(() => service.run())
     let root = @pathx.Path("/workspace-cache").resolve()
-    let warm = group.spawn(() => service.search(root, "cache-a", "", 0, 1))
+    let warm = group.spawn(() => {
+      service.search(root, "cache-a", "", 0, "request-1")
+    })
     @async.with_timeout(1000, () => starts.get())
     let joined = group.spawn(() => {
-      service.search(root, "cache-a", "old", 200, 2)
+      service.search(root, "cache-a", "old", 200, "request-2")
     })
     @async.pause()
     assert_true(starts.try_get() is None)
@@ -831,11 +848,13 @@ async test "cache keys coalesce scans and clearCache retires one session" {
     let joined_reply = @async.with_timeout(1000, () => joined.wait())
     assert_true(joined_reply.from_cache)
     assert_eq(joined_reply.files, ["old.mbt"])
-    let narrowed = service.search(root, "cache-a", "old.m", 200, 3)
+    let narrowed = service.search(root, "cache-a", "old.m", 200, "request-3")
     assert_true(narrowed.from_cache)
     assert_eq(narrowed.files, ["old.mbt"])
     service.clear_cache("cache-a")
-    let fresh = group.spawn(() => service.search(root, "cache-a", "new", 200, 4))
+    let fresh = group.spawn(() => {
+      service.search(root, "cache-a", "new", 200, "request-4")
+    })
     @async.with_timeout(1000, () => starts.get())
     outcomes.put({ files: ["new.mbt"], })
     let fresh_reply = @async.with_timeout(1000, () => fresh.wait())
@@ -859,14 +878,14 @@ async test "one connection serializes discovery across cache sessions" {
     let first_root = @pathx.Path("/workspace-one").resolve()
     let second_root = @pathx.Path("/workspace-two").resolve()
     let first = group.spawn(() => {
-      service.search(first_root, "cache-one", "", 0, 1)
+      service.search(first_root, "cache-one", "", 0, "request-1")
     })
     assert_eq(
       @async.with_timeout(1000, () => starts.get()),
       first_root.to_string(),
     )
     let second = group.spawn(() => {
-      service.search(second_root, "cache-two", "", 0, 2)
+      service.search(second_root, "cache-two", "", 0, "request-2")
     })
     @async.pause()
     assert_true(starts.try_get() is None)
@@ -896,12 +915,12 @@ async test "a failed cache population is not installed and can retry" {
     group.spawn_bg(() => service.run())
     let root = @pathx.Path("/workspace-retry").resolve()
     let mut failed = false
-    ignore(service.search(root, "cache-a", "", 0, 1)) catch {
+    ignore(service.search(root, "cache-a", "", 0, "request-1")) catch {
       HostError(_) => failed = true
       error => raise error
     }
     assert_true(failed)
-    let recovered = service.search(root, "cache-a", "recover", 512, 2)
+    let recovered = service.search(root, "cache-a", "recover", 512, "request-2")
     assert_false(recovered.from_cache)
     assert_eq(recovered.files, ["recovered.mbt"])
     assert_eq(attempts.val, 2)
@@ -918,9 +937,9 @@ async test "a cache key cannot cross workspace roots" {
     group.spawn_bg(() => service.run())
     let first = @pathx.Path("/workspace-one").resolve()
     let second = @pathx.Path("/workspace-two").resolve()
-    ignore(service.search(first, "cache-a", "", 0, 1))
+    ignore(service.search(first, "cache-a", "", 0, "request-1"))
     let mut failed = false
-    ignore(service.search(second, "cache-a", "", 0, 2)) catch {
+    ignore(service.search(second, "cache-a", "", 0, "request-2")) catch {
       HostError(_) => failed = true
       error => raise error
     }

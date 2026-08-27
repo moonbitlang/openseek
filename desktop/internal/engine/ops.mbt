@@ -115,15 +115,14 @@ pub async fn start_run(
 }
 
 ///|
-/// A fresh run id: 128 bits of OS randomness, never intentionally reused
-/// across host lifetimes. A remote page that reconnects across a host restart
-/// may still hold pre-restart runs, so a counter reset to 1 would hand their
-/// ids to new runs and cross-wire two conversations' event streams.
+/// A fresh run id backed by the same UUID source as every other Desktop-owned
+/// identity. The `r` prefix remains engine protocol syntax; UUID formatting and
+/// entropy ownership belong to the shared package.
 fn mint_run_id() -> String raise EngineError {
-  guard @entropy.random_hex(16) is Some(hex) else {
+  guard @uuid.mint() is Some(id) else {
     raise EngineError("cannot mint a run id: OS entropy unavailable")
   }
-  "r\{hex}"
+  "r\{id}"
 }
 
 ///|

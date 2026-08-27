@@ -1,5 +1,5 @@
 // State-transition coverage for the quick pick. Commands are intentionally
-// opaque here; these tests assert that only the matching owner/query/generation
+// opaque here; these tests assert that only the matching query/request UUID
 // can change the plain-data state, and that the Host cache session survives the
 // failures it is designed to survive. What the palette *shows* is covered by
 // the black-box tests against its rendered markup.
@@ -86,12 +86,12 @@ test "opening picks a provider and re-entering rewrites only its prefix" {
   assert_eq(symbols.value, "#parse")
   assert_eq(symbols.query(), "parse")
   assert_true(symbols.phase is Debouncing)
-  let generation = symbols.generation
+  let request_id = symbols.request_id
   // Invoking the provider that is already selected only restores focus.
   let refocused = symbols_state.begin(input, Symbols)
   guard refocused.open is Some(same) else { fail("palette expected") }
   assert_eq(same.value, "#parse")
-  assert_eq(same.generation, generation)
+  assert_eq(same.request_id, request_id)
   let back = refocused.begin(input, Files)
   guard back.open is Some(back) else { fail("palette expected") }
   assert_eq(back.value, "parse")
@@ -114,10 +114,8 @@ test "a root that arrives after opening restarts both providers once" {
   }
   assert_eq(waiting.cache.root, None)
   let placed = test_input(root=test_uri("/work/api"))
-  // The same state and input must produce the same plain-data result, and a
-  // second reconciliation against an unchanged root must not restart again.
+  // A second reconciliation against an unchanged root must not restart again.
   let first = waiting.settle(placed)
-  assert_true(first == waiting.settle(placed))
   assert_true(first.settle(placed) == first)
   assert_eq(first.cache.root, Some(test_uri("/work/api")))
   guard first.cache.loading_key is Some(restarted_key) else {
@@ -127,26 +125,24 @@ test "a root that arrives after opening restarts both providers once" {
   guard first.open is Some(retrying) else {
     fail("the arriving root should leave the picker open")
   }
-  assert_eq(retrying.generation, pending.generation + 1)
+  assert_true(retrying.request_id != pending.request_id)
   assert_true(retrying.phase is Loading)
   let symbol_waiting = State::empty().begin(rootless, Symbols)
   guard symbol_waiting.open is Some(symbol_pending) else {
     fail("rootless symbol Quick Open should remain open")
   }
   let symbol_first = symbol_waiting.settle(placed)
-  assert_true(symbol_first == symbol_waiting.settle(placed))
   guard symbol_first.open is Some(symbol_retrying) else {
     fail("the arriving root should leave the symbol picker open")
   }
-  assert_eq(symbol_retrying.generation, symbol_pending.generation + 1)
+  assert_true(symbol_retrying.request_id != symbol_pending.request_id)
   assert_eq(symbol_retrying.query(), symbol_pending.query())
   assert_true(symbol_retrying.phase is Loading)
   // A reply minted against the previous root cannot settle the restarted run.
   let stale = symbol_first.step(
     SymbolsLoaded(
-      owner=test_owner(),
       query=symbol_pending.query(),
-      generation=symbol_pending.generation,
+      request_id=symbol_pending.request_id,
       items=[test_symbol("stale", "src/old.mbt")],
     ),
     placed,
@@ -173,21 +169,16 @@ test "file Quick Open populates a cache session before adopting ranked rows" {
     "src/active.mbt", "src/open.mbt",
   ])
   let populated = opened.step(
-    FileCacheLoaded(
-      owner=test_owner(),
-      cache_key~,
-      generation=loading.generation,
-    ),
+    FileCacheLoaded(cache_key~, request_id=loading.request_id),
     input,
   )
   assert_eq(populated.cache.active_key, Some(cache_key))
   assert_true(populated.cache.loading_key is None)
   let indexed = populated.step(
     FilesLoaded(
-      owner=test_owner(),
       cache_key~,
       query="",
-      generation=loading.generation,
+      request_id=loading.request_id,
       files=[
         Relative("src/open.mbt"),
         Relative("src/other.mbt"),
@@ -217,11 +208,7 @@ test "an initial file cache failure is visible and retryable" {
     fail("cache load expected")
   }
   let failed = opened.step(
-    FileCacheRequestFailed(
-      owner=test_owner(),
-      cache_key~,
-      generation=initial.generation,
-    ),
+    FileCacheRequestFailed(cache_key~, request_id=initial.request_id),
     input,
   )
   guard failed.open is Some(failure) else { fail("palette expected") }
@@ -241,11 +228,12 @@ test "reopening while cache population is running does not start another load" {
   guard opened.cache.loading_key is Some(first_key) else {
     fail("cache load expected")
   }
+  guard opened.open is Some(first) else { fail("palette expected") }
   let dismissed = opened.step(Dismiss, input)
   assert_false(dismissed.is_open())
   let reopened = dismissed.begin(input, Files)
   guard reopened.open is Some(second) else { fail("palette expected") }
-  assert_true(second.generation > 1)
+  assert_true(second.request_id != first.request_id)
   assert_eq(reopened.cache.loading_key, Some(first_key))
   assert_true(reopened.cache.active_key is None)
 }
@@ -271,10 +259,9 @@ test "file cache keeps the previous key until replacement succeeds" {
   assert_true(initial.phase is Loading)
   let cached = opened.step(
     FilesLoaded(
-      owner=test_owner(),
       cache_key="old-cache",
       query="",
-      generation=initial.generation,
+      request_id=initial.request_id,
       files=[Relative("src/main.mbt"), Relative("README.md")],
       from_cache=true,
       limit_hit=false,
@@ -287,11 +274,7 @@ test "file cache keeps the previous key until replacement succeeds" {
     "src/main.mbt", "README.md",
   ])
   let refresh_failed = cached.step(
-    FileCacheRequestFailed(
-      owner=test_owner(),
-      cache_key=replacement,
-      generation=ready.generation,
-    ),
+    FileCacheRequestFailed(cache_key=replacement, request_id=ready.request_id),
     input,
   )
   guard refresh_failed.open is Some(still_ready) else {
@@ -309,10 +292,9 @@ test "file cache keeps the previous key until replacement succeeds" {
   assert_eq(debouncing.items.map(item => item.detail()), ["src/main.mbt"])
   let stale = changed.step(
     FilesLoaded(
-      owner=test_owner(),
       cache_key="old-cache",
       query="",
-      generation=ready.generation,
+      request_id=ready.request_id,
       files=[Relative("wrong.mbt")],
       from_cache=true,
       limit_hit=false,
@@ -323,17 +305,16 @@ test "file cache keeps the previous key until replacement succeeds" {
   assert_true(still_debouncing.phase is Debouncing)
   assert_eq(still_debouncing.items.map(item => item.detail()), ["src/main.mbt"])
   let loading = stale.step(
-    FilesDue(owner=test_owner(), query="src", generation=debouncing.generation),
+    FilesDue(query="src", request_id=debouncing.request_id),
     input,
   )
   guard loading.open is Some(in_flight) else { fail("palette expected") }
   assert_true(in_flight.phase is Loading)
   let loaded = loading.step(
     FilesLoaded(
-      owner=test_owner(),
       cache_key="old-cache",
       query="src",
-      generation=in_flight.generation,
+      request_id=in_flight.request_id,
       files=[Relative("src/current.mbt")],
       from_cache=true,
       limit_hit=false,
@@ -354,12 +335,7 @@ test "leading hash switches providers and fences stale symbol replies" {
   guard changed.open is Some(pending) else { fail("palette expected") }
   let item = test_symbol("parse_hover", "src/main.mbt")
   let stale = changed.step(
-    SymbolsLoaded(
-      owner=initial.owner,
-      query="",
-      generation=initial.generation,
-      items=[item],
-    ),
+    SymbolsLoaded(query="", request_id=initial.request_id, items=[item]),
     input,
   )
   guard stale.open is Some(still_pending) else {
@@ -371,12 +347,9 @@ test "leading hash switches providers and fences stale symbol replies" {
   guard files.open is Some(files_open) else { fail("palette expected") }
   assert_true(files_open.provider() is Files)
   let still_files = files.step(
-    SymbolsLoaded(
-      owner=pending.owner,
-      query=pending.query(),
-      generation=pending.generation,
-      items=[item],
-    ),
+    SymbolsLoaded(query=pending.query(), request_id=pending.request_id, items=[
+      item,
+    ]),
     input,
   )
   guard still_files.open is Some(current) else { fail("palette expected") }
@@ -391,33 +364,20 @@ test "symbol Quick Open distinguishes failure from an empty result" {
   let changed = opened.step(ValueChanged("#missing"), input)
   guard changed.open is Some(pending) else { fail("palette expected") }
   let loading = changed.step(
-    SymbolsDue(
-      owner=pending.owner,
-      query=pending.query(),
-      generation=pending.generation,
-    ),
+    SymbolsDue(query=pending.query(), request_id=pending.request_id),
     input,
   )
   guard loading.open is Some(in_flight) else { fail("palette expected") }
   assert_true(in_flight.phase is Loading)
   let failed = loading.step(
-    SymbolsRequestFailed(
-      owner=pending.owner,
-      query=pending.query(),
-      generation=pending.generation,
-    ),
+    SymbolsRequestFailed(query=pending.query(), request_id=pending.request_id),
     input,
   )
   guard failed.open is Some(failure) else { fail("palette expected") }
   assert_true(failure.phase is Failed)
   assert_eq(failure.items.length(), 0)
   let loaded = loading.step(
-    SymbolsLoaded(
-      owner=pending.owner,
-      query=pending.query(),
-      generation=pending.generation,
-      items=[],
-    ),
+    SymbolsLoaded(query=pending.query(), request_id=pending.request_id, items=[]),
     input,
   )
   guard loaded.open is Some(empty) else { fail("palette expected") }
@@ -431,12 +391,10 @@ test "symbols without a source path are dropped from the rows" {
   let opened = State::empty().begin(input, Symbols)
   guard opened.open is Some(search) else { fail("palette expected") }
   let ready = opened.step(
-    SymbolsLoaded(
-      owner=search.owner,
-      query=search.query(),
-      generation=search.generation,
-      items=[test_symbol("placed", "src/main.mbt"), test_symbol("unplaced", "")],
-    ),
+    SymbolsLoaded(query=search.query(), request_id=search.request_id, items=[
+      test_symbol("placed", "src/main.mbt"),
+      test_symbol("unplaced", ""),
+    ]),
     input,
   )
   guard ready.open is Some(rows) else { fail("palette expected") }

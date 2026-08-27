@@ -22,20 +22,25 @@ pub(all) struct Accepted {
   path : String
   range : @common.Range?
 } derive(Eq, @debug.Debug)
+pub fn Accepted::equal(Self, Self) -> Bool
+pub fn Accepted::not_equal(Self, Self) -> Bool
+pub fn Accepted::to_repr(Self) -> @debug.Repr
 
 type Input derive(Eq)
 pub fn Input::Input(owner~ : @interop.ConversationKey, root~ : @common.Uri?, open_files~ : Array[@pathx.Relative], active_file~ : @pathx.Relative?) -> Self
+pub fn Input::equal(Self, Self) -> Bool
+pub fn Input::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
   ValueChanged(String)
-  FilesDue(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int)
-  FileCacheLoaded(owner~ : @interop.ConversationKey, cache_key~ : String, generation~ : Int)
-  FileCacheRequestFailed(owner~ : @interop.ConversationKey, cache_key~ : String, generation~ : Int)
-  FilesLoaded(owner~ : @interop.ConversationKey, cache_key~ : String, query~ : String, generation~ : Int, files~ : Array[@pathx.Relative], from_cache~ : Bool, limit_hit~ : Bool)
-  FilesRequestFailed(owner~ : @interop.ConversationKey, cache_key~ : String, query~ : String, generation~ : Int)
-  SymbolsDue(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int)
-  SymbolsLoaded(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int, items~ : Array[@symbols.Symbol])
-  SymbolsRequestFailed(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int)
+  FilesDue(query~ : String, request_id~ : String)
+  FileCacheLoaded(cache_key~ : String, request_id~ : String)
+  FileCacheRequestFailed(cache_key~ : String, request_id~ : String)
+  FilesLoaded(cache_key~ : String, query~ : String, request_id~ : String, files~ : Array[@pathx.Relative], from_cache~ : Bool, limit_hit~ : Bool)
+  FilesRequestFailed(cache_key~ : String, query~ : String, request_id~ : String)
+  SymbolsDue(query~ : String, request_id~ : String)
+  SymbolsLoaded(query~ : String, request_id~ : String, items~ : Array[@symbols.Symbol])
+  SymbolsRequestFailed(query~ : String, request_id~ : String)
   Move(Int)
   Select(Int)
   Pick(Int)
@@ -46,16 +51,21 @@ pub(all) enum Provider {
   Files
   Symbols
 } derive(Eq)
+pub fn Provider::equal(Self, Self) -> Bool
+pub fn Provider::not_equal(Self, Self) -> Bool
 
 pub struct State {
   // private fields
 } derive(Eq)
 pub fn State::close(Self) -> (@cmd.Cmd, Self)
 pub fn State::empty() -> Self
+pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(Self, @cmd.Emit[Msg], Msg, Input) -> (@cmd.Cmd, Self, Accepted?)
 pub fn State::is_open(Self) -> Bool
+pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::open(Self, @cmd.Emit[Msg], Input, Provider) -> (@cmd.Cmd, Self)
 pub fn State::reconcile(Self, @cmd.Emit[Msg], Input) -> (@cmd.Cmd, Self)
+pub fn State::request_id(Self) -> String?
 
 // Type aliases
 

@@ -14,7 +14,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         focused=self.focused,
         active_session=self.codex.active_id().unwrap_or("none"),
         root=placement.bind(value => value.checkout_root()),
-        submission_generation=0,
+        submission_sequence=0,
         items=@transcript_component.VisibleRow::history(
           self.codex.transcript_items(),
         ),
@@ -30,7 +30,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
             focused=self.focused,
             active_session=self.active_session,
             root=None,
-            submission_generation=self.submission_sequence,
+            submission_sequence=self.submission_sequence,
             items=[],
             streaming_response=None,
             streaming_identity="",
@@ -44,7 +44,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
             root=self
               .conversation_placement(conversation)
               .bind(value => value.checkout_root()),
-            submission_generation=self.submission_sequence,
+            submission_sequence=self.submission_sequence,
             items=conversation.visible_transcript_rows(),
             streaming_response=conversation.turn.streaming_response,
             streaming_reasoning?,

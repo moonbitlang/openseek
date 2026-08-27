@@ -35,7 +35,7 @@ priv struct FsWatchTarget {
   // One concrete watcher identity. Replacements always receive a new token
   // and a new baseline, so late events and failures from the old instance are
   // stale at the frontend without a second identity.
-  generation : String
+  watch_id : String
   // Cleared before reporting a watcher failure, so an equivalent request that
   // races with that report rebuilds instead of acknowledging a dead watcher.
   alive : Ref[Bool]
@@ -145,7 +145,7 @@ fn WatchInterest::ignores(self : WatchInterest, path : @pathx.Relative) -> Bool 
 
 ///|
 /// A repeated request is idempotent only when it names the same concrete
-/// generation and effective pruning rules. A different generation always
+/// watch_id and effective pruning rules. A different watch_id always
 /// activates a replacement and emits its own baseline; renaming an active
 /// watcher would otherwise lose events between the request and reply.
 async fn FsWatchRequest::keeps_active_watcher(
@@ -165,7 +165,7 @@ async fn FsWatchRequest::keeps_active_watcher(
       if target.alive.val &&
         root.absolute == target.root &&
         interest == target.interest &&
-        payload.generation == target.generation {
+        payload.watch_id == target.watch_id {
         reply.put(None)
         true
       } else {
@@ -227,7 +227,7 @@ async fn FsWatchRequest::activate(
       let target : FsWatchTarget = {
         root: root.absolute,
         interest: WatchInterest(payload),
-        generation: payload.generation,
+        watch_id: payload.watch_id,
         alive: Ref(true),
       }
       let active = target.activate(emit) catch {
@@ -266,7 +266,7 @@ async fn FsWatchTarget::activate(
     root: self.root.resource_path(),
     baseline: true,
     events: [],
-    generation: self.generation,
+    watch_id: self.watch_id,
   })
   { target: self, watcher, }
 }
@@ -295,7 +295,7 @@ async fn FsWatchActive::watch(
       root: self.target.root.resource_path(),
       baseline: false,
       events: events.map(FsEventPayload::from_event),
-      generation: self.target.generation,
+      watch_id: self.target.watch_id,
     })
   }
 }
@@ -339,7 +339,7 @@ async fn FsWatchActor::run(
             emit_failed({
               root: target.root.resource_path(),
               message,
-              generation: target.generation,
+              watch_id: target.watch_id,
             })
           }
         }
@@ -370,7 +370,7 @@ test "watch interest retains selected files, listed children, and ancestors" {
     files: ["src/main.mbt", "node_modules/pkg/index.js"],
     directories: ["", "docs"],
     recursive: Some(false),
-    generation: "page-a:7",
+    watch_id: "page-a:7",
   }
   let interest = WatchInterest(payload)
   // Root rows and one level under an expanded directory stay observable.
@@ -396,7 +396,7 @@ test "recursive watch interest covers non-indexed workspace directories" {
     files: ["node_modules/pkg/index.js"],
     directories: ["node_modules/vendor"],
     recursive: Some(true),
-    generation: "page-a:8",
+    watch_id: "page-a:8",
   })
   assert_false(interest.ignores(Relative("empty/deep/new.mbt")))
   assert_false(interest.ignores(Relative("beyond-result-cap/new.mbt")))
@@ -419,14 +419,14 @@ test "recursive watch interest ignores shallow non-pruned selections" {
     files: ["src/main.mbt"],
     directories: ["", "src"],
     recursive: Some(true),
-    generation: "page-a:8",
+    watch_id: "page-a:8",
   })
   let navigated = WatchInterest({
     path: "/work/project",
     files: ["docs/guide.md"],
     directories: ["", "docs"],
     recursive: Some(true),
-    generation: "page-a:9",
+    watch_id: "page-a:9",
   })
   assert_eq(initial, navigated)
 }
@@ -462,7 +462,7 @@ async test "watch activation fails through its request and can be retried" {
       files: [],
       directories: [],
       recursive: Some(true),
-      generation: "page-a:failed-1",
+      watch_id: "page-a:failed-1",
     }) catch {
       HostError(_) => rejected = true
       error => raise error
@@ -479,19 +479,19 @@ async test "watch activation fails through its request and can be retried" {
       files: [],
       directories: [],
       recursive: Some(true),
-      generation: "page-a:ready-2",
+      watch_id: "page-a:ready-2",
     })
     guard changes.try_get() is Some(baseline) else {
       fail("successful watch returned before its baseline")
     }
     assert_true(baseline.baseline)
-    assert_eq(baseline.generation, "page-a:ready-2")
+    assert_eq(baseline.watch_id, "page-a:ready-2")
     group.return_immediately(())
   })
 }
 
 ///|
-async test "only an identical generation retains its active watcher" {
+async test "only an identical watch_id retains its active watcher" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-fs-watch-idempotent-")
     group.add_defer(() => {
@@ -505,7 +505,7 @@ async test "only an identical generation retains its active watcher" {
       files: ["src/main.mbt"],
       directories: ["", "src"],
       recursive: Some(true),
-      generation: "page-a:9",
+      watch_id: "page-a:9",
     }
     actor.watch(payload)
     assert_true(changes.try_get() is Some({ baseline: true, .. }))
@@ -517,15 +517,15 @@ async test "only an identical generation retains its active watcher" {
       ..payload,
       files: ["docs/guide.mbt"],
       directories: ["", "docs"],
-      generation: "page-a:10",
+      watch_id: "page-a:10",
     })
     // The recursive filter is equivalent, but a new concrete identity still
     // activates a replacement and closes its event gap with a baseline.
     guard changes.try_get() is Some(replacement) else {
-      fail("new generation returned without a replacement baseline")
+      fail("new watch_id returned without a replacement baseline")
     }
     assert_true(replacement.baseline)
-    assert_eq(replacement.generation, "page-a:10")
+    assert_eq(replacement.watch_id, "page-a:10")
     group.return_immediately(())
   })
 }
@@ -543,17 +543,17 @@ test "filesystem payloads carry absolute target paths" {
     "files": ["src/main.mbt"],
     "directories": ["", "src"],
     "recursive": true,
-    "generation": "page-a:7",
+    "watch_id": "page-a:7",
   })
   assert_eq(selected.files, ["src/main.mbt"])
   assert_eq(selected.directories, ["", "src"])
   assert_eq(selected.recursive, Some(true))
-  assert_eq(selected.generation, "page-a:7")
+  assert_eq(selected.watch_id, "page-a:7")
   let legacy : WatchWorkspacePayload = @json.from_json({
     "path": "/work/project",
     "files": [],
     "directories": [],
-    "generation": "page-a:6",
+    "watch_id": "page-a:6",
   })
   assert_true(legacy.recursive is None)
 }

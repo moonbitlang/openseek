@@ -1,5 +1,5 @@
 // Connection-owned workspace text search. One actor serializes session state
-// while each generation runs its own ripgrep process in a cancellable task.
+// while each request UUID runs its own ripgrep process in a cancellable task.
 
 ///|
 const MaxTextSearchResults : Int = 20000
@@ -8,7 +8,7 @@ const MaxTextSearchResults : Int = 20000
 const MaxTextSearchFileSizeBytes : String = "17179869184"
 
 ///|
-const MaxTextSearchCancellationFrontiers : Int = 128
+const MaxTextSearchCancellations : Int = 128
 
 ///|
 /// VS Code drains all stderr but retains at most one million characters for
@@ -48,48 +48,55 @@ priv enum TextSearchOutcome {
 
 ///|
 priv struct RunningTextSearch {
-  generation : Int
+  request_id : String
   root : String
   reply : @async.Queue[SearchTextReply]
   task : @async.Task[Unit]
 }
 
 ///|
-/// Cancellation requests can overtake their matching search request at the
-/// transport boundary. Retain a bounded LRU of per-session generation
-/// frontiers so that race stays safe without growing for the whole connection
-/// lifetime.
-priv struct TextSearchCancellationFrontiers {
-  values : Map[String, Int]
+/// Cancellation can overtake its matching search at the transport boundary.
+/// Retain a bounded set of exact UUIDs so that race stays safe without a
+/// monotonic frontier or unbounded connection-lifetime growth.
+priv struct TextSearchCancellations {
+  values : Map[String, Bool]
   order : Array[String]
 }
 
 ///|
-fn TextSearchCancellationFrontiers::TextSearchCancellationFrontiers() -> TextSearchCancellationFrontiers {
+fn TextSearchCancellations::TextSearchCancellations() -> TextSearchCancellations {
   { values: Map([]), order: [], }
 }
 
 ///|
-fn TextSearchCancellationFrontiers::get(
-  self : TextSearchCancellationFrontiers,
-  session_key : String,
-) -> Int {
-  self.values.get(session_key).unwrap_or(-1)
+fn TextSearchCancellations::contains(
+  self : TextSearchCancellations,
+  request_id : String,
+) -> Bool {
+  self.values.contains(request_id)
 }
 
 ///|
-fn TextSearchCancellationFrontiers::record(
-  self : TextSearchCancellationFrontiers,
-  session_key : String,
-  generation : Int,
+fn TextSearchCancellations::record(
+  self : TextSearchCancellations,
+  request_id : String,
 ) -> Unit {
-  self.values[session_key] = self.get(session_key).max(generation)
-  self.order.retain(key => key != session_key)
-  self.order.push(session_key)
-  if self.order.length() > MaxTextSearchCancellationFrontiers {
+  self.values[request_id] = true
+  self.order.retain(id => id != request_id)
+  self.order.push(request_id)
+  if self.order.length() > MaxTextSearchCancellations {
     let oldest = self.order.remove(0)
     self.values.remove(oldest)
   }
+}
+
+///|
+fn TextSearchCancellations::remove(
+  self : TextSearchCancellations,
+  request_id : String,
+) -> Unit {
+  self.values.remove(request_id)
+  self.order.retain(id => id != request_id)
 }
 
 ///|
@@ -100,12 +107,8 @@ priv enum TextSearchRequest {
     payload~ : SearchTextPayload,
     reply~ : @async.Queue[SearchTextReply]
   )
-  Cancel(session_key~ : String, generation~ : Int, reply~ : @async.Queue[Unit])
-  Finished(
-    session_key~ : String,
-    generation~ : Int,
-    outcome~ : TextSearchOutcome
-  )
+  Cancel(request_id~ : String, reply~ : @async.Queue[Unit])
+  Finished(request_id~ : String, outcome~ : TextSearchOutcome)
 }
 
 ///|
@@ -121,13 +124,13 @@ fn TextSearchService::TextSearchService() -> TextSearchService {
 ///|
 fn empty_text_search_reply(
   root : String,
-  generation : Int,
+  request_id : String,
   cancelled? : Bool = false,
   error? : @protocol.TextSearchError,
 ) -> SearchTextReply {
   {
     root,
-    generation,
+    request_id,
     matches: [],
     match_count: 0,
     file_count: 0,
@@ -152,11 +155,10 @@ async fn TextSearchService::search(
 ///|
 async fn TextSearchService::cancel(
   self : TextSearchService,
-  session_key : String,
-  generation : Int,
+  request_id : String,
 ) -> Unit {
   let reply : @async.Queue[Unit] = Queue(kind=Blocking(1))
-  self.requests.put(Cancel(session_key~, generation~, reply~))
+  self.requests.put(Cancel(request_id~, reply~))
   reply.get()
 }
 
@@ -167,7 +169,7 @@ async fn cancel_running_text_search(
 ) -> Unit {
   running.task.cancel()
   running.reply.put(
-    empty_text_search_reply(root, running.generation, cancelled=true),
+    empty_text_search_reply(root, running.request_id, cancelled=true),
   ) catch {
     _ => ()
   }
@@ -177,46 +179,34 @@ async fn cancel_running_text_search(
 async fn TextSearchService::run(self : TextSearchService) -> Unit {
   @async.with_task_group(group => {
     let running : Map[String, RunningTextSearch] = Map([])
-    let cancelled_through = TextSearchCancellationFrontiers::TextSearchCancellationFrontiers()
+    let cancellations = TextSearchCancellations()
     for ;; {
       match self.requests.get() {
         Search(command~, root~, payload~, reply~) => {
-          let session_key = payload.session_key
+          let request_id = payload.request_id
           let reply_root = root.resource_path()
-          if session_key.is_blank() {
+          if request_id.is_blank() {
             reply.put(
-              empty_text_search_reply(reply_root, payload.generation, error={
+              empty_text_search_reply(reply_root, request_id, error={
                 code: "invalid_request",
-                message: "Search session key is empty.",
+                message: "Search request id is empty.",
               }),
             )
             continue
           }
-          if cancelled_through.get(session_key) >= payload.generation {
+          if cancellations.contains(request_id) {
+            cancellations.remove(request_id)
             reply.put(
-              empty_text_search_reply(
-                reply_root,
-                payload.generation,
-                cancelled=true,
-              ),
+              empty_text_search_reply(reply_root, request_id, cancelled=true),
             )
             continue
           }
-          if running.get(session_key) is Some(previous) {
-            if payload.generation <= previous.generation {
-              reply.put(
-                empty_text_search_reply(
-                  reply_root,
-                  payload.generation,
-                  cancelled=true,
-                ),
-              )
-              continue
-            }
-            cancel_running_text_search(previous, previous.root)
-            running.remove(session_key)
+          if running.contains(request_id) {
+            reply.put(
+              empty_text_search_reply(reply_root, request_id, cancelled=true),
+            )
+            continue
           }
-          let generation = payload.generation
           let task = group.spawn(no_wait=true, allow_failure=true, () => {
             let outcome = TextSearchFinished(
               run_text_search(command, root, payload),
@@ -224,31 +214,28 @@ async fn TextSearchService::run(self : TextSearchService) -> Unit {
               _ if @async.is_being_cancelled() => return
               error => TextSearchFailed("Workspace search failed: \{error}")
             }
-            self.requests.put(Finished(session_key~, generation~, outcome~))
+            self.requests.put(Finished(request_id~, outcome~))
           })
-          running[session_key] = { generation, root: reply_root, reply, task, }
+          running[request_id] = { request_id, root: reply_root, reply, task }
         }
-        Cancel(session_key~, generation~, reply~) => {
-          cancelled_through.record(session_key, generation)
-          if running.get(session_key) is Some(current) &&
-            current.generation <= generation {
+        Cancel(request_id~, reply~) => {
+          cancellations.record(request_id)
+          if running.get(request_id) is Some(current) {
             cancel_running_text_search(current, current.root)
-            running.remove(session_key)
+            running.remove(request_id)
+            cancellations.remove(request_id)
           }
           reply.put(())
         }
-        Finished(session_key~, generation~, outcome~) => {
-          guard running.get(session_key) is Some(current) &&
-            current.generation == generation else {
-            continue
-          }
-          running.remove(session_key)
+        Finished(request_id~, outcome~) => {
+          guard running.get(request_id) is Some(current) else { continue }
+          running.remove(request_id)
           let root = current.root
           match outcome {
             TextSearchFinished(result) => current.reply.put(result)
             TextSearchFailed(message) =>
               current.reply.put(
-                empty_text_search_reply(root, generation, error={
+                empty_text_search_reply(root, request_id, error={
                   code: "search_failed",
                   message,
                 }),
@@ -994,17 +981,17 @@ async fn run_text_search(
   let reply_root = root.resource_path()
   let native_root = root.to_string()
   if payload.query.is_empty() {
-    return empty_text_search_reply(reply_root, payload.generation)
+    return empty_text_search_reply(reply_root, payload.request_id)
   }
   if external_text_search_path(payload.include_glob) is Some(_) ||
     external_text_search_path(payload.exclude_glob) is Some(_) {
-    return empty_text_search_reply(reply_root, payload.generation, error={
+    return empty_text_search_reply(reply_root, payload.request_id, error={
       code: "invalid_request",
       message: "Search paths outside the selected workspace are not supported; use ./ for a root-relative pattern.",
     })
   }
   guard command is Some(command) else {
-    return empty_text_search_reply(reply_root, payload.generation, error={
+    return empty_text_search_reply(reply_root, payload.request_id, error={
       code: "rg_unavailable",
       message: "This SeekMoon installation does not include ripgrep.",
     })
@@ -1012,7 +999,7 @@ async fn run_text_search(
   let directory = @fs.opendir(native_root) catch {
     error if @async.is_being_cancelled() => raise error
     error =>
-      return empty_text_search_reply(reply_root, payload.generation, error={
+      return empty_text_search_reply(reply_root, payload.request_id, error={
         code: if "\{error}".to_lower().contains("permission") {
           "permission_denied"
         } else {
@@ -1049,7 +1036,7 @@ async fn run_text_search(
       error => {
         stdout_reader.close()
         stderr_reader.close()
-        return empty_text_search_reply(reply_root, payload.generation, error={
+        return empty_text_search_reply(reply_root, payload.request_id, error={
           code: "rg_unavailable",
           message: "Cannot start ripgrep: \{error}",
         })
@@ -1112,14 +1099,14 @@ async fn run_text_search(
     // but reports a recoverable error for another one.
     if text_search_exit_is_fatal(exit_code, limit_hit, got_output) {
       let (code, message) = text_search_error(stderr)
-      return empty_text_search_reply(reply_root, payload.generation, error={
+      return empty_text_search_reply(reply_root, payload.request_id, error={
         code,
         message,
       })
     }
     {
       root: reply_root,
-      generation: payload.generation,
+      request_id: payload.request_id,
       matches,
       match_count,
       file_count: files.length(),
@@ -1146,7 +1133,7 @@ async fn cancel_search_text_op(
   service : TextSearchService,
   payload : CancelSearchTextPayload,
 ) -> @protocol.EmptyReply {
-  service.cancel(payload.session_key, payload.generation)
+  service.cancel(payload.request_id)
   Acknowledged
 }
 
@@ -1160,8 +1147,7 @@ test "text search arguments mirror VS Code regex, ignore, and glob defaults" {
     whole_word: true,
     include_glob: "src/**,tests/*.{mbt,md}",
     exclude_glob: "**/*.snap,generated/**",
-    session_key: "search:one",
-    generation: 1,
+    request_id: "search-request-1",
     max_results: 20000,
   }
   let args = text_search_args(payload)
@@ -1300,8 +1286,7 @@ test "literal case-sensitive arguments are deterministic and follow symlinks" {
     whole_word: false,
     include_glob: "",
     exclude_glob: "",
-    session_key: "search:literal",
-    generation: 2,
+    request_id: "search-request-2",
     max_results: 20000,
   }
   let args = text_search_args(payload)
@@ -1355,8 +1340,7 @@ test "JavaScript Unicode escapes and double-dash queries use regex arguments" {
     whole_word: false,
     include_glob: "",
     exclude_glob: "",
-    session_key: "search:double-dash",
-    generation: 3,
+    request_id: "search-request-3",
     max_results: 20000,
   }
   let args = text_search_args(payload)
@@ -1495,8 +1479,7 @@ async test "text search replies echo resource-form workspace roots" {
     whole_word: false,
     include_glob: "",
     exclude_glob: "",
-    session_key: "search:resource-root",
-    generation: 3,
+    request_id: "search-request-3",
     max_results: 20000,
   }
   let reply = run_text_search(None, root, payload)
@@ -1504,11 +1487,11 @@ async test "text search replies echo resource-form workspace roots" {
 }
 
 ///|
-async test "cancel-before-search frontier rejects the stale generation" {
-  let service = TextSearchService::TextSearchService()
+async test "cancel-before-search rejects the exact request UUID" {
+  let service = TextSearchService()
   @async.with_task_group(group => {
     group.spawn_bg(() => service.run())
-    service.cancel("search:stale", 7)
+    service.cancel("search-request-7")
     let root = @pathx.Path(".").resolve()
     let resource_root = root.resource_path()
     let payload : SearchTextPayload = {
@@ -1519,29 +1502,27 @@ async test "cancel-before-search frontier rejects the stale generation" {
       whole_word: false,
       include_glob: "",
       exclude_glob: "",
-      session_key: "search:stale",
-      generation: 7,
+      request_id: "search-request-7",
       max_results: 20000,
     }
     let reply = service.search(None, root, payload)
     assert_true(reply.cancelled)
-    assert_eq(reply.generation, 7)
+    assert_eq(reply.request_id, "search-request-7")
     assert_eq(reply.root, resource_root)
     group.return_immediately(())
   })
 }
 
 ///|
-test "cancellation frontiers stay bounded across long-lived connections" {
-  let frontiers = TextSearchCancellationFrontiers::TextSearchCancellationFrontiers()
-  for index in 0..<(MaxTextSearchCancellationFrontiers + 5) {
-    frontiers.record("session:\{index}", index)
+test "cancellation UUIDs stay bounded across long-lived connections" {
+  let cancellations = TextSearchCancellations()
+  for index in 0..<(MaxTextSearchCancellations + 5) {
+    cancellations.record("request:\{index}")
   }
-  assert_eq(frontiers.values.length(), MaxTextSearchCancellationFrontiers)
-  assert_eq(frontiers.order.length(), MaxTextSearchCancellationFrontiers)
-  assert_eq(frontiers.get("session:0"), -1)
-  assert_eq(
-    frontiers.get("session:\{MaxTextSearchCancellationFrontiers + 4}"),
-    MaxTextSearchCancellationFrontiers + 4,
+  assert_eq(cancellations.values.length(), MaxTextSearchCancellations)
+  assert_eq(cancellations.order.length(), MaxTextSearchCancellations)
+  assert_false(cancellations.contains("request:0"))
+  assert_true(
+    cancellations.contains("request:\{MaxTextSearchCancellations + 4}"),
   )
 }

@@ -56,7 +56,7 @@ struct Input {
   // The concrete project or worktree root sent alongside relative Markdown
   // image paths so the owning host, rather than the frontend, resolves them.
   root : @common.Uri?
-  submission_generation : Int
+  submission_sequence : Int
   items : Array[VisibleRow]
   // The in-flight assistant text to show below the committed rows, or `None`
   // when nothing is streaming. It is deliberately not a `VisibleRow`: the
@@ -75,7 +75,7 @@ pub fn Input::Input(
   focused~ : @interop.ChannelId,
   active_session~ : String,
   root~ : @common.Uri?,
-  submission_generation~ : Int,
+  submission_sequence~ : Int,
   items~ : Array[VisibleRow],
   streaming_response~ : String?,
   streaming_reasoning? : String,
@@ -87,7 +87,7 @@ pub fn Input::Input(
     focused,
     active_session,
     root,
-    submission_generation,
+    submission_sequence,
     items,
     streaming_response,
     streaming_reasoning,
@@ -116,7 +116,7 @@ priv struct Model {
   active_session : String
   image_owner : ImageOwner
   images : ImageCache
-  submission_generation : Int
+  submission_sequence : Int
   mounted : Bool
 } derive(Eq)
 
@@ -166,12 +166,12 @@ fn Model::update(
         self.source != input.source ||
         self.focused != input.focused ||
         self.active_session != input.active_session
-      // Submission generation changes synchronously when Send accepts either
+      // The submission sequence advances synchronously when Send accepts either
       // a prompt or a steer, before its durable User item arrives. Re-pin on
       // that explicit signal so early streamed work is immediately visible;
       // another client's later User item must not impersonate a local send.
       let submitted = !navigated &&
-        input.submission_generation != self.submission_generation
+        input.submission_sequence != self.submission_sequence
       let pinned = navigated || submitted || self.pinned
       let next = {
         pinned,
@@ -185,7 +185,7 @@ fn Model::update(
         active_session: input.active_session,
         image_owner,
         images: self.images,
-        submission_generation: input.submission_generation,
+        submission_sequence: input.submission_sequence,
         mounted,
       }
       let commands : Array[@cmd.Cmd] = []
@@ -251,7 +251,7 @@ pub fn component(
           active_session: input.active_session,
           image_owner: input.image_owner(),
           images: ImageCache::empty(),
-          submission_generation: input.submission_generation,
+          submission_sequence: input.submission_sequence,
           mounted: false,
         },
         @cmd.none,
@@ -646,7 +646,7 @@ test "local pinned transitions are pure" {
     focused=Local,
     active_session="desktop-test",
     root=None,
-    submission_generation=0,
+    submission_sequence=0,
     items=[],
     streaming_response=None,
     streaming_identity="idle",
@@ -659,7 +659,7 @@ test "local pinned transitions are pure" {
     active_session: "desktop-test",
     image_owner: input.image_owner(),
     images: ImageCache::empty(),
-    submission_generation: 0,
+    submission_sequence: 0,
     mounted: true,
   }
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
@@ -684,7 +684,7 @@ test "local pinned transitions are pure" {
   )
   assert_false(received.pinned)
   let (submitted, _) = first.update(
-    { ..input, submission_generation: 1, },
+    { ..input, submission_sequence: 1 },
     ContentRendered(mounted=true),
     emit,
   )
@@ -707,7 +707,7 @@ test "an overview click unpins and highlights inside the component" {
     focused=Local,
     active_session="desktop-test",
     root=None,
-    submission_generation=0,
+    submission_sequence=0,
     items=[],
     streaming_response=None,
     streaming_identity="idle",
@@ -720,7 +720,7 @@ test "an overview click unpins and highlights inside the component" {
     active_session: "desktop-test",
     image_owner: input.image_owner(),
     images: ImageCache::empty(),
-    submission_generation: 0,
+    submission_sequence: 0,
     mounted: true,
   }
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
@@ -736,7 +736,7 @@ test "a conversation switch clears component-owned overview state" {
     focused=Local,
     active_session="desktop-test",
     root=None,
-    submission_generation=0,
+    submission_sequence=0,
     items=[],
     streaming_response=None,
     streaming_identity="idle",
@@ -756,7 +756,7 @@ test "a conversation switch clears component-owned overview state" {
     active_session: "desktop-test",
     image_owner: input.image_owner(),
     images: ImageCache::empty(),
-    submission_generation: 0,
+    submission_sequence: 0,
     mounted: true,
   }
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)

@@ -42,9 +42,9 @@ pub fn mount_cmds(@cmd.Emit[Msg]) -> @cmd.Cmd
 
 pub fn open_changed_document(@cmd.Emit[Msg], State, Ctx, ChangedFile, had_active~ : Bool) -> (@cmd.Cmd, State)
 
-pub fn open_document(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, name~ : String, file_link_generation? : Int, range~ : @common.Range?, annotation? : String, had_active~ : Bool) -> (@cmd.Cmd, State)
+pub fn open_document(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, name~ : String, file_link_request_id? : String, range~ : @common.Range?, annotation? : String, had_active~ : Bool) -> (@cmd.Cmd, State)
 
-pub fn open_file(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, file_link_generation? : Int, range~ : @common.Range?, annotation? : String, had_active~ : Bool) -> (@cmd.Cmd, State)
+pub fn open_file(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, file_link_request_id? : String, range~ : @common.Range?, annotation? : String, had_active~ : Bool) -> (@cmd.Cmd, State)
 
 pub fn open_history_diff(@cmd.Emit[Msg], State, Ctx, @dock.GitHistoryDiff) -> (@cmd.Cmd, State)
 
@@ -104,8 +104,7 @@ pub fn ChangedFile::not_equal(Self, Self) -> Bool
 
 pub(all) struct Ctx {
   owner : @interop.ConversationKey
-  request_epoch : Int
-  watch_namespace : String
+  checkout_id : String
   placement : @interop.CheckoutPlacement?
   dark_mode : Bool
   tree_layout : TreeLayout
@@ -202,7 +201,7 @@ pub(all) enum HistoryBlob {
 
 pub(all) struct HistoryDiffDoc {
   diff : @dock.GitHistoryDiff
-  generation : Int
+  request_id : String
   original : HistoryBlob
   modified : HistoryBlob
 } derive(Eq)
@@ -224,21 +223,21 @@ pub(all) enum Msg {
   SearchMatchSelected(path~ : String, range~ : @common.Range)
   DirToggle(@pathx.Relative)
   EnsureFileIndex
-  DirLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, entries~ : Array[FileEntry])
-  DirFailed(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, message~ : String)
-  FilesIndexed(owner~ : @interop.ConversationKey, epoch~ : Int, files~ : Array[@pathx.Relative], truncated~ : Bool)
-  FileIndexFailed(owner~ : @interop.ConversationKey, epoch~ : Int)
-  ChangesLoaded(owner~ : @interop.ConversationKey, generation~ : Int, repository~ : Bool, head~ : String?, files~ : Array[ChangedFile])
-  ChangesFailed(owner~ : @interop.ConversationKey, generation~ : Int, message~ : String)
+  DirLoaded(owner~ : @interop.ConversationKey, checkout_id~ : String, path~ : @pathx.Relative, entries~ : Array[FileEntry])
+  DirFailed(owner~ : @interop.ConversationKey, checkout_id~ : String, path~ : @pathx.Relative, message~ : String)
+  FilesIndexed(owner~ : @interop.ConversationKey, checkout_id~ : String, files~ : Array[@pathx.Relative], truncated~ : Bool)
+  FileIndexFailed(owner~ : @interop.ConversationKey, checkout_id~ : String)
+  ChangesLoaded(owner~ : @interop.ConversationKey, request_id~ : String, repository~ : Bool, head~ : String?, files~ : Array[ChangedFile])
+  ChangesFailed(owner~ : @interop.ConversationKey, request_id~ : String, message~ : String)
   ChangesPollDue
   GitHeadObserved(owner~ : @interop.ConversationKey, head~ : String?)
   GitHistoryRefreshRequested
   GitHistoryLoadMoreRequested
-  GitHistoryLoaded(owner~ : @interop.ConversationKey, generation~ : Int, append~ : Bool, reply~ : @protocol.GitHistoryReply)
-  GitHistoryFailed(owner~ : @interop.ConversationKey, generation~ : Int, append~ : Bool, message~ : String)
+  GitHistoryLoaded(owner~ : @interop.ConversationKey, request_id~ : String, append~ : Bool, reply~ : @protocol.GitHistoryReply)
+  GitHistoryFailed(owner~ : @interop.ConversationKey, request_id~ : String, append~ : Bool, message~ : String)
   GitCommitSelected(String)
-  GitCommitChangesLoaded(owner~ : @interop.ConversationKey, generation~ : Int, reply~ : @protocol.GitCommitChangesReply)
-  GitCommitChangesFailed(owner~ : @interop.ConversationKey, generation~ : Int, commit~ : String, message~ : String)
+  GitCommitChangesLoaded(owner~ : @interop.ConversationKey, request_id~ : String, reply~ : @protocol.GitCommitChangesReply)
+  GitCommitChangesFailed(owner~ : @interop.ConversationKey, request_id~ : String, commit~ : String, message~ : String)
   GitCommitChangesRetry(String)
   HistoricalFileSelected(@dock.GitHistoryDiff)
   ToggleChangesSection
@@ -259,16 +258,16 @@ pub(all) enum Msg {
   ToggleReviewProgress
   GitOriginalLoaded(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, original~ : @protocol.GitOriginalFileReply)
   GitOriginalFailed(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, message~ : String)
-  HistoryBlobLoaded(owner~ : @interop.ConversationKey, key~ : String, generation~ : Int, side~ : HistoryDiffSide, blob~ : @protocol.GitOriginalFileReply)
-  HistoryBlobFailed(owner~ : @interop.ConversationKey, key~ : String, generation~ : Int, side~ : HistoryDiffSide, message~ : String)
+  HistoryBlobLoaded(owner~ : @interop.ConversationKey, key~ : String, request_id~ : String, side~ : HistoryDiffSide, blob~ : @protocol.GitOriginalFileReply)
+  HistoryBlobFailed(owner~ : @interop.ConversationKey, key~ : String, request_id~ : String, side~ : HistoryDiffSide, message~ : String)
   OpenNavigationLocation(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, range~ : @common.Range)
-  FileLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, name~ : String, file~ : FileContent, file_link_generation~ : Int?, review_generation~ : Int?, range~ : @common.Range?, annotation~ : String?)
-  FileFailed(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, file_link_generation~ : Int?, review_generation~ : Int?, message~ : String)
-  FileWatchFailed(channel~ : @interop.ChannelId, root~ : @common.Uri, generation~ : String, message~ : String)
-  FsChanged(root~ : @common.Uri, generation~ : String, changes~ : Array[FileChange]?)
+  FileLoaded(owner~ : @interop.ConversationKey, checkout_id~ : String, path~ : @pathx.Relative, name~ : String, file~ : FileContent, file_link_request_id~ : String?, review_generation~ : Int?, range~ : @common.Range?, annotation~ : String?)
+  FileFailed(owner~ : @interop.ConversationKey, checkout_id~ : String, path~ : @pathx.Relative, file_link_request_id~ : String?, review_generation~ : Int?, message~ : String)
+  FileWatchFailed(root~ : @common.Uri, watch_id~ : String, message~ : String)
+  FsChanged(root~ : @common.Uri, watch_id~ : String, changes~ : Array[FileChange]?)
   RunSettled(owner~ : @interop.ConversationKey)
-  StatsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, stats~ : Array[FileStat])
-  DiagnosticsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
+  StatsLoaded(owner~ : @interop.ConversationKey, checkout_id~ : String, stats~ : Array[FileStat])
+  DiagnosticsLoaded(owner~ : @interop.ConversationKey, checkout_id~ : String, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
   DiagnosticsPublished(channel~ : @interop.ChannelId, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
   LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : String)
   EditorCommentAdded(resource~ : ModelUri, file~ : @pathx.Relative, range~ : @common.Range, quote~ : String, comment~ : String, feedback_id~ : String)
@@ -365,20 +364,20 @@ pub(all) struct State {
   review_diff_navigation_available : Bool
   changes : ChangeList
   git_graph : GitGraphState
-  git_graph_generation : Int
+  git_graph_request_id : String
   git_graph_selected : String?
   git_commit_files : GitCommitFiles
-  git_commit_files_generation : Int
+  git_commit_files_request_id : String
   git_actual_head : String?
   git_actual_head_known : Bool
   changes_collapsed : Bool
   git_graph_collapsed : Bool
   history_docs : Map[String, HistoryDiffDoc]
-  history_generation : Int
+  history_request_id : String
   reviewed_changes : Array[ChangedFile]
-  changes_generation : Int
-  request_epoch : Int
-  file_link_generation : Int
+  changes_request_id : String
+  checkout_id : String
+  file_link_request_id : String
   changes_head : String?
   changes_head_known : Bool
   review_generation : Int
@@ -387,7 +386,7 @@ pub(all) struct State {
   background_review_requests : Map[@pathx.Relative, Int]
   explorer_was_visible : Bool
   watching : WatchedPaths?
-  watch_generation : Int
+  watch_id : String
   watch_error : String?
   expanded : Array[@pathx.Relative]
   loading : Array[@pathx.Relative]
@@ -401,7 +400,7 @@ pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@pathx.Relative]) -> Self
-pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
+pub fn State::retire_watcher(Self, @cmd.Emit[Msg]) -> (Self, @cmd.Cmd)
 
 pub(all) enum TabState {
   TabLoading

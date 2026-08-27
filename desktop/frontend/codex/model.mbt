@@ -292,10 +292,10 @@ priv enum CodexSteerDelivery {
 ///|
 /// The request-time identity and activity cut for one half of the paged
 /// sidebar catalog. Keeping these fields together prevents a reply from
-/// accidentally pairing one generation with another request's frontier.
+/// accidentally pairing one UUID with another request's frontier.
 priv struct CodexCatalogReplyContext {
   archived : Bool
-  generation : Int
+  request_id : String
   activity_frontier : CodexActivityFrontier
 }
 
@@ -587,11 +587,11 @@ struct State {
   // not selected. Request frontiers prevent older snapshots from overwriting
   // notifications that arrived while those requests were in flight.
   activity : CodexActivityLedger
-  // Live and archived pagination are independent requests. Each refresh
-  // advances both generations so a slower older walk cannot overwrite a
+  // Live and archived pagination are independent requests. Each complete
+  // paginated walk owns a UUID, so a slower older walk cannot overwrite a
   // newer catalog after reconnect, archive, or device focus changes.
-  live_catalog_generation : Int
-  archived_catalog_generation : Int
+  live_catalog_request_id : String
+  archived_catalog_request_id : String
   selection : CodexSelection
   // The last sidebar selection awaiting a history snapshot. A reply carries
   // the same id, so an older request can never replace a newer selection.
@@ -649,8 +649,8 @@ pub fn State::State(loading? : Bool = false) -> State {
     threads: [],
     archived_threads: [],
     activity: CodexActivityLedger::empty(),
-    live_catalog_generation: 0,
-    archived_catalog_generation: 0,
+    live_catalog_request_id: @uuid.mint(),
+    archived_catalog_request_id: @uuid.mint(),
     selection: CodexNoTask,
     requested_thread: None,
     git_status: None,
@@ -924,9 +924,9 @@ fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
   match kind {
     CodexThreadsReply(context) =>
       if context.archived {
-        context.generation == self.archived_catalog_generation
+        context.request_id == self.archived_catalog_request_id
       } else {
-        context.generation == self.live_catalog_generation
+        context.request_id == self.live_catalog_request_id
       }
     CodexThreadReply(thread_id, frontier) =>
       frontier.connection_epoch == self.activity.connection_epoch &&

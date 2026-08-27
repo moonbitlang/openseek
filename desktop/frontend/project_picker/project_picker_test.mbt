@@ -20,10 +20,9 @@ fn listed(
     opening,
     emit(),
     @project_picker.Msg::Loaded(
-      channel~,
       location~,
       entries~,
-      generation=opening.request_generation(),
+      request_id=opening.request_id(),
     ),
   )
   assert_true(outcome is None)
@@ -68,7 +67,7 @@ test "confirm picks the browsed directory and closes the picker" {
 }
 
 ///|
-test "a listing for another channel is dropped" {
+test "a listing for another request UUID is dropped" {
   let picker = listed(
     channel=@interop.ChannelId::Local,
     location=@project_picker.Location::Directory("/home/u"),
@@ -78,10 +77,9 @@ test "a listing for another channel is dropped" {
     picker,
     emit(),
     @project_picker.Msg::Loaded(
-      channel=@interop.ChannelId::Remote("d_b"),
       location=@project_picker.Location::Directory("/from-b"),
       entries=["wrong"],
-      generation=picker.request_generation(),
+      request_id="00000000-0000-8000-8000-000000000099",
     ),
   )
   assert_true(outcome is None)
@@ -108,15 +106,14 @@ test "a stale listing leaves the picker untouched" {
     fail("picker closed by navigation")
   }
   // The reply to the original listing lands after navigation moved to a new
-  // generation: it must not move the picker back.
+  // request UUID: it must not move the picker back.
   let (_, stale, outcome) = @project_picker.State::handle(
     navigating,
     emit(),
     @project_picker.Msg::Loaded(
-      channel=@interop.ChannelId::Local,
       location=@project_picker.Location::Directory("/elsewhere"),
       entries=["wrong"],
-      generation=picker.request_generation(),
+      request_id=picker.request_id(),
     ),
   )
   assert_true(outcome is None)
@@ -136,9 +133,8 @@ test "a failed navigation reports the failure and keeps the picker" {
     picker,
     emit(),
     @project_picker.Msg::Failed(
-      channel=@interop.ChannelId::Local,
       message="no such directory: /gone",
-      generation=picker.request_generation(),
+      request_id=picker.request_id(),
     ),
   )
   guard kept is Some(state) else {
@@ -154,9 +150,8 @@ test "a failed navigation reports the failure and keeps the picker" {
     picker,
     emit(),
     @project_picker.Msg::Failed(
-      channel=@interop.ChannelId::Local,
       message="stale",
-      generation=99,
+      request_id="00000000-0000-8000-8000-000000000099",
     ),
   )
   guard stale is Some(state) else { fail("picker closed by a stale failure") }

@@ -64,7 +64,7 @@ test "a final changes refresh invalidates progress when the row changes" {
     test_emit(),
     ChangesLoaded(
       owner=ctx.owner,
-      generation=refreshing.changes_generation,
+      request_id=refreshing.changes_request_id,
       repository=true,
       head=None,
       files=[changed_again],
@@ -89,7 +89,7 @@ test "a final changes refresh invalidates progress when the row changes" {
     test_emit(),
     ChangesLoaded(
       owner=ctx.owner,
-      generation=same_row_refresh.changes_generation,
+      request_id=same_row_refresh.changes_request_id,
       repository=true,
       head=Some("new-head"),
       files=[selected],
@@ -108,7 +108,7 @@ test "file events and run completion invalidate stale review progress" {
     test_emit(),
     FsChanged(
       root=ctx.test_root(),
-      generation=ctx.watch_identity(state.watch_generation),
+      watch_id=state.watch_id,
       changes=Some([Modified(@pathx.Relative("README.md"))]),
     ),
     reviewed,
@@ -120,7 +120,7 @@ test "file events and run completion invalidate stale review progress" {
     test_emit(),
     FsChanged(
       root=ctx.test_root(),
-      generation=ctx.watch_identity(state.watch_generation),
+      watch_id=state.watch_id,
       changes=Some([Modified(selected.path)]),
     ),
     unrelated,

@@ -13,7 +13,7 @@ const AckRetryDelayMs = 100
 fn open_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  key : Int,
+  key : String,
   session : String,
   workspace : @common.Uri?,
   cols : Int,
@@ -50,7 +50,7 @@ fn open_session(
 fn send_input(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  id : Int,
+  id : String,
   data : String,
   binary : Bool,
 ) -> @cmd.Cmd {
@@ -85,7 +85,7 @@ fn send_input(
 ///|
 fn send_resize(
   channel : @interop.ChannelId,
-  id : Int,
+  id : String,
   cols : Int,
   rows : Int,
 ) -> @cmd.Cmd {
@@ -110,7 +110,7 @@ fn send_resize(
 /// outstanding sequence at most once.
 priv struct TerminalAck {
   channel : @interop.ChannelId
-  id : Int
+  id : String
   sequence : Int
 }
 
@@ -124,13 +124,10 @@ fn TerminalAck::send(self : TerminalAck) -> @cmd.Cmd {
           sequence: self.sequence,
         }) catch {
           _ => {
-            // The in-process bridge keeps one terminal-id namespace, so a lost
-            // reply is safe to retry there. A remote WebSocket failure ends the
-            // namespace together with all of its PTYs; replaying this id after
-            // reconnect could acknowledge an unrelated new terminal.
-            if self.channel is @interop.ChannelId::Local {
-              _scheduler.add(@cmd.delay(self.send(), AckRetryDelayMs))
-            }
+            // UUIDs are never reused by a replacement connection. A delayed
+            // acknowledgement can only name its original terminal, where the
+            // sequence is idempotent, or an unknown id, which is a no-op.
+            _scheduler.add(@cmd.delay(self.send(), AckRetryDelayMs))
             return
           }
         },
@@ -140,7 +137,7 @@ fn TerminalAck::send(self : TerminalAck) -> @cmd.Cmd {
 }
 
 ///|
-fn send_close(channel : @interop.ChannelId, id : Int) -> @cmd.Cmd {
+fn send_close(channel : @interop.ChannelId, id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     @js.async_run(() => {
       ignore(

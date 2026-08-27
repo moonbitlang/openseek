@@ -3,9 +3,11 @@ test "editor Search highlights follow the Search inventory visibility boundary" 
   let ctx = test_ctx()
   guard ctx.root() is Some(root) else { fail("test checkout root expected") }
   let path = @pathx.Relative("src/main.mbt")
+  let search = @grep_search.State::empty()
+  let request_id = search.request_id()
   let reply : @protocol.SearchTextReply = {
     root: root.path,
-    generation: 0,
+    request_id,
     matches: [
       {
         path: path.0,
@@ -24,8 +26,8 @@ test "editor Search highlights follow the Search inventory visibility boundary" 
     cancelled: false,
     error: None,
   }
-  let search = @grep_search.State::empty().handle(
-    @grep_search.Loaded(owner=ctx.owner, root=root.path, generation=0, reply~),
+  let search = search.handle(
+    @grep_search.Loaded(request_id~, reply~),
     ctx.search_input(),
   )
   let visible = { ..owned_state(), explorer_mode: ExplorerSearch, search, }

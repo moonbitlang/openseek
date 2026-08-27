@@ -11,7 +11,7 @@
 fn read_directory(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  epoch : Int,
+  checkout_id : String,
   path : @pathx.Relative,
   root~ : @common.Uri?,
 ) -> @cmd.Cmd {
@@ -31,7 +31,7 @@ fn read_directory(
             dispatch(
               DirFailed(
                 owner~,
-                epoch~,
+                checkout_id~,
                 path~,
                 message=@interop.bridge_error_text(error),
               ),
@@ -46,26 +46,26 @@ fn read_directory(
           entries.push(entry)
         }
       }
-      scheduler.add(dispatch(DirLoaded(owner~, epoch~, path~, entries~)))
+      scheduler.add(dispatch(DirLoaded(owner~, checkout_id~, path~, entries~)))
     })
   })
 }
 
 ///|
 /// Load the bounded workspace snapshot used by file-completion consumers.
-/// The request carries this panel incarnation's owner and epoch so the update
+/// The request carries this panel incarnation's owner and checkout_id so the update
 /// loop can reject a reply that outlived a conversation or worktree switch.
 fn list_files(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  epoch : Int,
+  checkout_id : String,
   root~ : @common.Uri?,
 ) -> @cmd.Cmd {
   @files.Request(owner.channel, owner.session, root).run(
     (files, truncated) => {
-      dispatch(FilesIndexed(owner~, epoch~, files~, truncated~))
+      dispatch(FilesIndexed(owner~, checkout_id~, files~, truncated~))
     },
-    () => dispatch(FileIndexFailed(owner~, epoch~)),
+    () => dispatch(FileIndexFailed(owner~, checkout_id~)),
   )
 }
 
@@ -81,10 +81,10 @@ fn list_files(
 fn read_file(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  epoch : Int,
+  checkout_id : String,
   path : @pathx.Relative,
   name : String,
-  file_link_generation? : Int,
+  file_link_request_id? : String,
   review_generation? : Int,
   range~ : @common.Range?,
   annotation? : String,
@@ -98,9 +98,9 @@ fn read_file(
     return dispatch(
       FileFailed(
         owner~,
-        epoch~,
+        checkout_id~,
         path~,
-        file_link_generation~,
+        file_link_request_id~,
         review_generation~,
         message="file root moved to another host before file read",
       ),
@@ -119,9 +119,9 @@ fn read_file(
             dispatch(
               FileFailed(
                 owner~,
-                epoch~,
+                checkout_id~,
                 path~,
-                file_link_generation~,
+                file_link_request_id~,
                 review_generation~,
                 message=@interop.bridge_error_text(error),
               ),
@@ -136,11 +136,11 @@ fn read_file(
             dispatch(
               FileLoaded(
                 owner~,
-                epoch~,
+                checkout_id~,
                 path~,
                 name~,
                 file~,
-                file_link_generation~,
+                file_link_request_id~,
                 review_generation~,
                 range~,
                 annotation~,
@@ -152,9 +152,9 @@ fn read_file(
             dispatch(
               FileFailed(
                 owner~,
-                epoch~,
+                checkout_id~,
                 path~,
-                file_link_generation~,
+                file_link_request_id~,
                 review_generation~,
                 message="could not read file",
               ),
@@ -251,7 +251,7 @@ async fn read_file_snapshot(
 fn stat_files(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  epoch : Int,
+  checkout_id : String,
   paths : Array[@pathx.Relative],
   root~ : @common.Uri?,
 ) -> @cmd.Cmd {
@@ -261,7 +261,7 @@ fn stat_files(
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       // Stat snapshots mutate cached document/review state. Keep their host
-      // observations in issue order, while `epoch` fences a placement or
+      // observations in issue order, while `checkout_id` fences a placement or
       // conversation boundary that an already-issued request outlives.
       let reply = @interop.bridge_request_in_order(
         owner.channel,
@@ -278,7 +278,7 @@ fn stat_files(
         }
         stats.push({ path, signature: stat.signature, })
       }
-      scheduler.add(dispatch(StatsLoaded(owner~, epoch~, stats~)))
+      scheduler.add(dispatch(StatsLoaded(owner~, checkout_id~, stats~)))
     })
   })
 }
@@ -290,7 +290,7 @@ fn stat_files(
 fn watch_workspace(
   dispatch : @cmd.Emit[Msg],
   channel~ : @interop.ChannelId,
-  generation~ : String,
+  watch_id~ : String,
   watched : WatchedPaths?,
 ) -> @cmd.Cmd {
   if watched is Some(watched) && !@resource.belongs_to(watched.root, channel) {
@@ -315,15 +315,14 @@ fn watch_workspace(
             files: watched.files.map(path => path.0),
             directories: watched.directories.map(path => path.0),
             recursive: Some(watched.recursive),
-            generation,
+            watch_id,
           }) catch {
             error => {
               scheduler.add(
                 dispatch(
                   FileWatchFailed(
-                    channel=watched.owner.channel,
                     root=watched.root,
-                    generation~,
+                    watch_id~,
                     message="File watching failed: \{@interop.bridge_error_text(error)}",
                   ),
                 ),
@@ -338,7 +337,7 @@ fn watch_workspace(
 }
 
 ///|
-test "a cross-host file read settles through its generation-fenced failure" {
+test "a cross-host file read settles through its UUID-fenced failure" {
   let seen : Ref[Msg?] = Ref(None)
   let dispatch = @cmd.Emit(message => {
     seen.val = Some(message)
@@ -350,8 +349,8 @@ test "a cross-host file read settles through its generation-fenced failure" {
   ignore(
     read_file(
       dispatch,
-      { channel: @interop.ChannelId::Remote("other"), session: "remote-test", },
-      0,
+      { channel: @interop.ChannelId::Remote("other"), session: "remote-test" },
+      "checkout-0",
       @pathx.Relative("src/main.mbt"),
       "main.mbt",
       review_generation=7,
@@ -364,9 +363,9 @@ test "a cross-host file read settles through its generation-fenced failure" {
     is Some(
       FileFailed(
         owner={ channel: @interop.ChannelId::Remote("other"), .. },
-        epoch=0,
+        checkout_id="checkout-0",
         path=@pathx.Relative("src/main.mbt"),
-        file_link_generation=None,
+        file_link_request_id=None,
         review_generation=Some(7),
         message="file root moved to another host before file read"
       )

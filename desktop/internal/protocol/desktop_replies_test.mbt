@@ -505,17 +505,17 @@ test "Git original-file payloads pin a revision and accept legacy omission" {
 test "file search payload and reply round-trip at the JSON boundary" {
   let raw_payload : Json = {
     "path": "/work/project",
-    "cache_key": "quick-open:session-1:7",
+    "cache_key": "quick-open:request-7",
     "query": "src main",
     "max_results": 512,
-    "generation": 7,
+    "request_id": "request-7",
   }
   let payload : @protocol.SearchFilesPayload = @json.from_json(raw_payload)
   assert_eq(payload.path, "/work/project")
-  assert_eq(payload.cache_key, "quick-open:session-1:7")
+  assert_eq(payload.cache_key, "quick-open:request-7")
   assert_eq(payload.query, "src main")
   assert_eq(payload.max_results, 512)
-  assert_eq(payload.generation, 7)
+  assert_eq(payload.request_id, "request-7")
   @debug.assert_eq(payload.to_json(), raw_payload)
   let raw_reply : Json = {
     "files": ["src/main.mbt", "src/main_test.mbt"],
@@ -530,16 +530,16 @@ test "file search payload and reply round-trip at the JSON boundary" {
   assert_false(reply.cancelled)
   @debug.assert_eq(reply.to_json(), raw_reply)
   let raw_cancel : Json = {
-    "cache_key": "quick-open:session-1:7",
-    "generation": 7,
+    "cache_key": "quick-open:request-7",
+    "request_id": "request-7",
   }
   let cancel : @protocol.CancelSearchFilesPayload = @json.from_json(raw_cancel)
-  assert_eq(cancel.cache_key, "quick-open:session-1:7")
-  assert_eq(cancel.generation, 7)
+  assert_eq(cancel.cache_key, "quick-open:request-7")
+  assert_eq(cancel.request_id, "request-7")
   @debug.assert_eq(cancel.to_json(), raw_cancel)
-  let raw_clear : Json = { "cache_key": "quick-open:session-1:7" }
+  let raw_clear : Json = { "cache_key": "quick-open:request-7" }
   let clear : @protocol.ClearFileSearchCachePayload = @json.from_json(raw_clear)
-  assert_eq(clear.cache_key, "quick-open:session-1:7")
+  assert_eq(clear.cache_key, "quick-open:request-7")
   @debug.assert_eq(clear.to_json(), raw_clear)
 }
 
@@ -553,8 +553,7 @@ test "text search payload and UTF-16 reply round-trip at the JSON boundary" {
     "whole_word": true,
     "include_glob": "src/**,tests/**",
     "exclude_glob": "**/*.snap",
-    "session_key": "search:session-1:/work/project",
-    "generation": 9,
+    "request_id": "search-request-9",
     "max_results": 20000,
   }
   let payload : @protocol.SearchTextPayload = @json.from_json(raw_payload)
@@ -565,13 +564,12 @@ test "text search payload and UTF-16 reply round-trip at the JSON boundary" {
   assert_true(payload.whole_word)
   assert_eq(payload.include_glob, "src/**,tests/**")
   assert_eq(payload.exclude_glob, "**/*.snap")
-  assert_eq(payload.session_key, "search:session-1:/work/project")
-  assert_eq(payload.generation, 9)
+  assert_eq(payload.request_id, "search-request-9")
   assert_eq(payload.max_results, 20000)
   @debug.assert_eq(payload.to_json(), raw_payload)
   let raw_reply : Json = {
     "root": "/work/project",
-    "generation": 9,
+    "request_id": "search-request-9",
     "matches": [
       {
         "path": "src/main.mbt",
@@ -592,8 +590,7 @@ test "text search payload and UTF-16 reply round-trip at the JSON boundary" {
   assert_true(reply.error is None)
   @debug.assert_eq(reply.to_json(), raw_reply)
   let cancel : @protocol.CancelSearchTextPayload = {
-    session_key: "search:session-1:/work/project",
-    generation: 9,
+    request_id: "search-request-9",
   }
   let decoded : @protocol.CancelSearchTextPayload = @json.from_json(
     cancel.to_json(),
@@ -601,7 +598,7 @@ test "text search payload and UTF-16 reply round-trip at the JSON boundary" {
   @debug.assert_eq(decoded, cancel)
   let raw_error_reply : Json = {
     "root": "/work/project",
-    "generation": 10,
+    "request_id": "search-request-10",
     "matches": [],
     "match_count": 0,
     "file_count": 0,
@@ -629,7 +626,6 @@ test "text search payload rejects missing and invalid required fields" {
       "whole_word": false,
       "include_glob": "",
       "exclude_glob": "",
-      "generation": 1,
       "max_results": 20000,
     })
   } catch {
@@ -640,8 +636,7 @@ test "text search payload rejects missing and invalid required fields" {
   assert_true(missing_rejected)
   let invalid_rejected = try {
     let _ : @protocol.CancelSearchTextPayload = @json.from_json({
-      "session_key": 7,
-      "generation": 1,
+      "request_id": 7,
     })
   } catch {
     _ => true
@@ -658,8 +653,7 @@ test "text search payload rejects missing and invalid required fields" {
       "whole_word": false,
       "include_glob": "",
       "exclude_glob": "",
-      "session_key": "search:null",
-      "generation": 1,
+      "request_id": "search-request-null",
       "max_results": 20000,
     })
   } catch {
@@ -671,7 +665,7 @@ test "text search payload rejects missing and invalid required fields" {
   let half_error_rejected = try {
     let _ : @protocol.SearchTextReply = @json.from_json({
       "root": "/work/project",
-      "generation": 1,
+      "request_id": "search-request-1",
       "matches": [],
       "match_count": 0,
       "file_count": 0,
@@ -688,7 +682,7 @@ test "text search payload rejects missing and invalid required fields" {
   let empty_error_sentinel_rejected = try {
     let _ : @protocol.SearchTextReply = @json.from_json({
       "root": "/work/project",
-      "generation": 1,
+      "request_id": "search-request-1",
       "matches": [],
       "match_count": 0,
       "file_count": 0,

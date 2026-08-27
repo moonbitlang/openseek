@@ -9,6 +9,7 @@ import {
   "openseek_desktop/frontend/resource",
   "openseek_desktop/internal/commands",
   "openseek_desktop/internal/file_search_score",
+  "openseek_desktop/internal/uuid/browser" @uuid,
 }
 
 supported_targets = "js"

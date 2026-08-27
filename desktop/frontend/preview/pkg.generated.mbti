@@ -9,7 +9,7 @@ import {
 // Values
 pub const AddressInputId : String = "browser-address-input"
 
-pub fn close_page(State, Int) -> State
+pub fn close_page(State, String) -> State
 
 pub fn failure_view(PageState) -> @html.Html
 
@@ -19,13 +19,13 @@ pub fn is_loopback(String) -> Bool
 
 pub fn is_web_url(String) -> Bool
 
-pub fn navigate(State, Int, String) -> State
+pub fn navigate(State, String, String) -> State
 
 pub fn normalize_url(String) -> String?
 
-pub fn open_page(State, url? : String) -> (State, Int)
+pub fn open_page(State, id~ : String, url? : String) -> State
 
-pub fn page(State, Int) -> PageState?
+pub fn page(State, String) -> PageState?
 
 pub fn page_label(PageState) -> String
 
@@ -37,11 +37,11 @@ pub fn update(Msg, State) -> State
 
 // Types and methods
 pub(all) enum Msg {
-  InputChanged(id~ : Int, value~ : String)
-  Navigated(id~ : Int, url~ : String)
-  LoadingChanged(id~ : Int, loading~ : Bool)
-  TitleUpdated(id~ : Int, title~ : String)
-  LoadFailed(id~ : Int, url~ : String, text~ : String)
+  InputChanged(id~ : String, value~ : String)
+  Navigated(id~ : String, url~ : String)
+  LoadingChanged(id~ : String, loading~ : Bool)
+  TitleUpdated(id~ : String, title~ : String)
+  LoadFailed(id~ : String, url~ : String, text~ : String)
 }
 
 pub(all) struct PageState {
@@ -51,6 +51,8 @@ pub(all) struct PageState {
   loading : Bool
   failure : String?
 } derive(Eq)
+pub fn PageState::equal(Self, Self) -> Bool
+pub fn PageState::not_equal(Self, Self) -> Bool
 
 pub(all) struct Rect {
   x : Int
@@ -58,12 +60,15 @@ pub(all) struct Rect {
   width : Int
   height : Int
 } derive(Eq)
+pub fn Rect::equal(Self, Self) -> Bool
+pub fn Rect::not_equal(Self, Self) -> Bool
 
 pub(all) struct State {
-  pages : Map[Int, PageState]
-  next_id : Int
+  pages : Map[String, PageState]
 } derive(Eq)
 pub fn State::empty() -> Self
+pub fn State::equal(Self, Self) -> Bool
+pub fn State::not_equal(Self, Self) -> Bool
 
 pub(all) struct ToolbarActions {
   input : @cmd.Emit[String]

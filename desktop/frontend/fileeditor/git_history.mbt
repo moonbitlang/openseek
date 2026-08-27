@@ -23,7 +23,7 @@ fn short_commit(commit : String) -> String {
 fn request_git_history(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  generation : Int,
+  request_id : String,
   append : Bool,
   snapshot : @protocol.GitHistorySnapshot?,
   skip : Int,
@@ -34,7 +34,7 @@ fn request_git_history(
       return dispatch(
         GitHistoryFailed(
           owner~,
-          generation~,
+          request_id~,
           append~,
           message="workspace moved to another host before Git history refresh",
         ),
@@ -59,7 +59,7 @@ fn request_git_history(
             dispatch(
               GitHistoryFailed(
                 owner~,
-                generation~,
+                request_id~,
                 append~,
                 message=@interop.bridge_error_text(error),
               ),
@@ -69,7 +69,7 @@ fn request_git_history(
         }
       }
       scheduler.add(
-        dispatch(GitHistoryLoaded(owner~, generation~, append~, reply~)),
+        dispatch(GitHistoryLoaded(owner~, request_id~, append~, reply~)),
       )
     })
   })
@@ -79,7 +79,7 @@ fn request_git_history(
 fn request_git_commit_changes(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  generation : Int,
+  request_id : String,
   commit : String,
   workspace~ : @common.Uri?,
 ) -> @cmd.Cmd {
@@ -88,7 +88,7 @@ fn request_git_commit_changes(
       return dispatch(
         GitCommitChangesFailed(
           owner~,
-          generation~,
+          request_id~,
           commit~,
           message="workspace moved to another host before commit inspection",
         ),
@@ -111,7 +111,7 @@ fn request_git_commit_changes(
             dispatch(
               GitCommitChangesFailed(
                 owner~,
-                generation~,
+                request_id~,
                 commit~,
                 message=@interop.bridge_error_text(error),
               ),
@@ -121,7 +121,7 @@ fn request_git_commit_changes(
         }
       }
       scheduler.add(
-        dispatch(GitCommitChangesLoaded(owner~, generation~, reply~)),
+        dispatch(GitCommitChangesLoaded(owner~, request_id~, reply~)),
       )
     })
   })
@@ -132,7 +132,7 @@ fn request_history_blob(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
   key : String,
-  generation : Int,
+  request_id : String,
   side : HistoryDiffSide,
   path : @pathx.Relative,
   revision : String,
@@ -144,7 +144,7 @@ fn request_history_blob(
         HistoryBlobFailed(
           owner~,
           key~,
-          generation~,
+          request_id~,
           side~,
           message="workspace moved to another host before historical diff",
         ),
@@ -169,7 +169,7 @@ fn request_history_blob(
               HistoryBlobFailed(
                 owner~,
                 key~,
-                generation~,
+                request_id~,
                 side~,
                 message=@interop.bridge_error_text(error),
               ),
@@ -179,7 +179,7 @@ fn request_history_blob(
         }
       }
       scheduler.add(
-        dispatch(HistoryBlobLoaded(owner~, key~, generation~, side~, blob~)),
+        dispatch(HistoryBlobLoaded(owner~, key~, request_id~, side~, blob~)),
       )
     })
   })
@@ -196,12 +196,12 @@ fn refresh_git_graph(
     !ctx.owner.session.is_empty() else {
     return (@cmd.none, state)
   }
-  let generation = state.git_graph_generation + 1
+  let request_id = @uuid.mint()
   (
     request_git_history(
       dispatch,
       ctx.owner,
-      generation,
+      request_id,
       false,
       None,
       0,
@@ -210,7 +210,7 @@ fn refresh_git_graph(
     {
       ..state,
       git_graph: GitGraphLoading,
-      git_graph_generation: generation,
+      git_graph_request_id: request_id,
       git_graph_selected: None,
       git_commit_files: GitCommitFilesIdle,
     },
@@ -236,12 +236,12 @@ fn load_more_git_history(
     ) else {
     return (@cmd.none, state)
   }
-  let generation = state.git_graph_generation + 1
+  let request_id = @uuid.mint()
   (
     request_git_history(
       dispatch,
       ctx.owner,
-      generation,
+      request_id,
       true,
       Some(snapshot),
       commits.length(),
@@ -249,7 +249,7 @@ fn load_more_git_history(
     ),
     {
       ..state,
-      git_graph_generation: generation,
+      git_graph_request_id: request_id,
       git_graph: GitGraphReady(
         repository=true,
         snapshot~,
@@ -283,19 +283,19 @@ fn select_git_commit(
     commits.any(item => item.id == commit) else {
     return (@cmd.none, state)
   }
-  let generation = state.git_commit_files_generation + 1
+  let request_id = @uuid.mint()
   (
     request_git_commit_changes(
       dispatch,
       ctx.owner,
-      generation,
+      request_id,
       commit,
       workspace=ctx.workspace(),
     ),
     {
       ..state,
       git_graph_selected: Some(commit),
-      git_commit_files_generation: generation,
+      git_commit_files_request_id: request_id,
       git_commit_files: GitCommitFilesLoading(commit~),
     },
   )
@@ -313,18 +313,18 @@ fn retry_git_commit_changes(
     commits.any(item => item.id == commit) else {
     return (@cmd.none, state)
   }
-  let generation = state.git_commit_files_generation + 1
+  let request_id = @uuid.mint()
   (
     request_git_commit_changes(
       dispatch,
       ctx.owner,
-      generation,
+      request_id,
       commit,
       workspace=ctx.workspace(),
     ),
     {
       ..state,
-      git_commit_files_generation: generation,
+      git_commit_files_request_id: request_id,
       git_commit_files: GitCommitFilesLoading(commit~),
     },
   )
@@ -371,7 +371,7 @@ pub fn open_history_diff(
       state,
     )
   }
-  let generation = state.history_generation + 1
+  let request_id = @uuid.mint()
   let original = if diff.parent is None {
     HistoryBlobMissing
   } else {
@@ -379,7 +379,7 @@ pub fn open_history_diff(
   }
   let doc : HistoryDiffDoc = {
     diff,
-    generation,
+    request_id,
     original,
     modified: HistoryBlobLoading,
   }
@@ -392,7 +392,7 @@ pub fn open_history_diff(
         dispatch,
         ctx.owner,
         key,
-        generation,
+        request_id,
         HistoryOriginal,
         diff.original_path.unwrap_or(diff.path),
         parent,
@@ -405,14 +405,14 @@ pub fn open_history_diff(
       dispatch,
       ctx.owner,
       key,
-      generation,
+      request_id,
       HistoryModified,
       diff.path,
       diff.commit,
       workspace=ctx.workspace(),
     ),
   )
-  (@cmd.batch(cmds), { ..state, history_docs, history_generation: generation, })
+  (@cmd.batch(cmds), { ..state, history_docs, history_request_id: request_id })
 }
 
 ///|

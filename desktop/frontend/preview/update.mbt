@@ -6,21 +6,21 @@
 ///|
 pub(all) enum Msg {
   // The address bar's draft changed.
-  InputChanged(id~ : Int, value~ : String)
+  InputChanged(id~ : String, value~ : String)
   // Host view events, decoded from `browser.event` notifications.
-  Navigated(id~ : Int, url~ : String)
-  LoadingChanged(id~ : Int, loading~ : Bool)
-  TitleUpdated(id~ : Int, title~ : String)
-  LoadFailed(id~ : Int, url~ : String, text~ : String)
+  Navigated(id~ : String, url~ : String)
+  LoadingChanged(id~ : String, loading~ : Bool)
+  TitleUpdated(id~ : String, title~ : String)
+  LoadFailed(id~ : String, url~ : String, text~ : String)
 }
 
 ///|
 pub fn update(msg : Msg, state : State) -> State {
-  fn patch(id : Int, apply : (PageState) -> PageState) -> State {
+  fn patch(id : String, apply : (PageState) -> PageState) -> State {
     guard state.pages.get(id) is Some(page) else { return state }
     let pages = state.pages.copy()
     pages[id] = apply(page)
-    { ..state, pages, }
+    { pages, }
   }
 
   match msg {

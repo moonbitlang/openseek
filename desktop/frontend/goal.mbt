@@ -273,7 +273,6 @@ test "a rejected goal request reports it and hands the text back" {
   let (_, next) = update_dev(
     dispatch,
     GoalRejected(
-      session="desktop-test",
       command="goal-1",
       draft=Some("ship the feature"),
       message="no engine",
@@ -297,12 +296,7 @@ test "a rejected clear has nothing to restore, and never steals goal mode" {
   // A clear carries no draft.
   let (_, cleared) = update_dev(
     dispatch,
-    GoalRejected(
-      session="desktop-test",
-      command="goal-1",
-      draft=None,
-      message="no engine",
-    ),
+    GoalRejected(command="goal-1", draft=None, message="no engine"),
     test_model(),
   )
   inspect(cleared.notifications.length(), content="1")
@@ -315,7 +309,6 @@ test "a rejected clear has nothing to restore, and never steals goal mode" {
   let (_, kept) = update_dev(
     dispatch,
     GoalRejected(
-      session="desktop-test",
       command="goal-1",
       draft=Some("the request that died"),
       message="no engine",
@@ -469,7 +462,7 @@ test "re-asserting an unchanged goal waits for its own marker too" {
         session="desktop-test",
         items=[],
         watermark=9,
-        generation=1,
+        request_id=TestTranscriptRequestId,
       ),
       {
         ..model,
@@ -525,7 +518,7 @@ test "a set is recorded even when the record has moved on since" {
       session="desktop-test",
       items=[],
       watermark=9,
-      generation=1,
+      request_id=TestTranscriptRequestId,
     ),
     model,
   )
@@ -732,14 +725,19 @@ test "the frontier a goal is sent from counts what is already buffered" {
   let reloading : Conversation = {
     ..test_conversation(),
     watermark: 3,
-    sync: Reloading(generation=1, attempt=1, reload_after_current=false, buffered=[
-      {
-        sequence: 7,
-        ts: None,
-        item: @protocol.RuntimeNotice({ content: "[goal]\nship the feature", }),
-      },
-    ]),
-    goal_edit: Some({ draft: "ship the feature", }),
+    sync: Reloading(
+      request_id=TestTranscriptRequestId,
+      attempt=1,
+      reload_after_current=false,
+      buffered=[
+        {
+          sequence: 7,
+          ts: None,
+          item: @protocol.RuntimeNotice({ content: "[goal]\nship the feature" }),
+        },
+      ],
+    ),
+    goal_edit: Some({ draft: "ship the feature" }),
   }
   inspect(reloading.durable_frontier(), content="7")
   // A read that failed keeps its buffer, and `begin_transcript_reload` carries
@@ -747,7 +745,7 @@ test "the frontier a goal is sent from counts what is already buffered" {
   inspect(
     {
       ..reloading,
-      sync: ReloadFailed(generation=1, buffered=[
+      sync: ReloadFailed(request_id=TestTranscriptRequestId, buffered=[
         {
           sequence: 7,
           ts: None,
@@ -804,15 +802,14 @@ test "a request in flight is reason enough to re-read the record" {
       session="desktop-test",
       items=[],
       watermark=0,
-      generation=1,
+      request_id=TestTranscriptRequestId,
     ),
     {
       ..test_model().replace_conversation({
         ..test_conversation(),
         goal_pending: Some(test_goal_command(Setting("ship the feature"))),
         sync: test_reloading([]),
-      }),
-      transcript_request_generation: 1,
+      })
     },
   )
   assert_true(empty.active().sync is Synced)
@@ -830,7 +827,8 @@ test "a request in flight is reason enough to re-read the record" {
     ]),
     empty,
   )
-  guard proved.active().sync is Reloading(generation=2, ..) else {
+  guard proved.active().sync is Reloading(request_id~, ..) &&
+    request_id != TestTranscriptRequestId else {
     fail("durable session-list proof did not retry the pending goal")
   }
 }
@@ -855,7 +853,6 @@ test "a dead request cannot retire the one that replaced it" {
     let (_, next) = update_dev(
       dispatch,
       GoalRejected(
-        session="desktop-test",
         command~,
         draft=Some("ship the feature"),
         message="a goal command is already in flight",
@@ -945,7 +942,6 @@ test "an undelivered reply goes quiet once its send has been settled" {
     let (_, next) = update_dev(
       dispatch,
       GoalUndelivered(
-        session="desktop-test",
         command~,
         draft=Some("ship the feature"),
         message="bridge unavailable",
@@ -1001,7 +997,6 @@ test "a rejection that arrives after the record has spoken only reports" {
   let (_, late) = update_dev(
     dispatch,
     GoalRejected(
-      session="desktop-test",
       command="goal-1",
       draft=Some("the goal that lost"),
       message="a goal command is already in flight",
@@ -1061,7 +1056,6 @@ test "an unconfirmed delivery keeps waiting instead of handing the text back" {
   let (_, next) = update_dev(
     dispatch,
     GoalUndelivered(
-      session="desktop-test",
       command="goal-1",
       draft=Some("ship the feature"),
       message="bridge unavailable",
@@ -1105,7 +1099,7 @@ test "a reload settles a request the transport never answered" {
         session="desktop-test",
         items=[],
         watermark=9,
-        generation=1,
+        request_id=TestTranscriptRequestId,
       ),
       model,
     )

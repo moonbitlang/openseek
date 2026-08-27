@@ -3,11 +3,11 @@
 // every assertion is on returned state or parsed text.
 
 ///|
-test "open_page allocates growing ids and blank tabs have no url" {
-  let (state, first) = @preview.open_page(@preview.State::empty())
-  let (state, second) = @preview.open_page(state, url="http://127.0.0.1:5173/")
-  assert_eq(first, 1)
-  assert_eq(second, 2)
+test "open_page stores caller-minted UUIDs and blank tabs have no url" {
+  let first = "browser-a"
+  let second = "browser-b"
+  let state = @preview.open_page(@preview.State::empty(), id=first)
+  let state = @preview.open_page(state, id=second, url="http://127.0.0.1:5173/")
   let blank = @preview.page(state, first).unwrap()
   assert_true(blank.url is None)
   assert_eq(blank.input, "")
@@ -20,21 +20,19 @@ test "open_page allocates growing ids and blank tabs have no url" {
 
 ///|
 test "close_page drops only its page" {
-  let (state, first) = @preview.open_page(@preview.State::empty())
-  let (state, second) = @preview.open_page(state)
+  let first = "browser-a"
+  let second = "browser-b"
+  let state = @preview.open_page(@preview.State::empty(), id=first)
+  let state = @preview.open_page(state, id=second)
   let state = @preview.close_page(state, first)
   assert_true(@preview.page(state, first) is None)
   assert_true(@preview.page(state, second) is Some(_))
-  // Ids never regress: the next page cannot collide with a parked strip's
-  // closed id.
-  let (state, third) = @preview.open_page(state)
-  assert_eq(third, 3)
-  ignore(state)
 }
 
 ///|
 test "navigate commits url, mirrors the draft, clears the failure" {
-  let (state, id) = @preview.open_page(@preview.State::empty())
+  let id = "browser-a"
+  let state = @preview.open_page(@preview.State::empty(), id~)
   let state = @preview.update(
     @preview.Msg::LoadFailed(id~, url="http://x/", text="boom"),
     state,
@@ -49,8 +47,10 @@ test "navigate commits url, mirrors the draft, clears the failure" {
 
 ///|
 test "update applies host events and is idempotent" {
-  let (state, id) = @preview.open_page(
+  let id = "browser-a"
+  let state = @preview.open_page(
     @preview.State::empty(),
+    id~,
     url="http://localhost:5173/",
   )
   let msgs : Array[@preview.Msg] = [
@@ -73,8 +73,10 @@ test "update applies host events and is idempotent" {
 
 ///|
 test "a new document drops the title; a fragment jump keeps it" {
-  let (state, id) = @preview.open_page(
+  let id = "browser-a"
+  let state = @preview.open_page(
     @preview.State::empty(),
+    id~,
     url="https://example.com/docs",
   )
   let titled = @preview.update(
@@ -108,8 +110,10 @@ test "a new document drops the title; a fragment jump keeps it" {
 
 ///|
 test "a failure for a superseded URL never reaches the page" {
-  let (state, id) = @preview.open_page(
+  let id = "browser-a"
+  let state = @preview.open_page(
     @preview.State::empty(),
+    id~,
     url="http://localhost:5173/",
   )
   // The user moves on before the old load's error is reported.
@@ -141,7 +145,7 @@ test "a failure for a superseded URL never reaches the page" {
 test "events for unknown pages are dropped" {
   let state = @preview.State::empty()
   let next = @preview.update(
-    @preview.Msg::TitleUpdated(id=7, title="ghost"),
+    @preview.Msg::TitleUpdated(id="ghost", title="ghost"),
     state,
   )
   assert_true(next == state)
@@ -149,8 +153,10 @@ test "events for unknown pages are dropped" {
 
 ///|
 test "load failure records and navigation label falls back sensibly" {
-  let (state, id) = @preview.open_page(
+  let id = "browser-a"
+  let state = @preview.open_page(
     @preview.State::empty(),
+    id~,
     url="http://localhost:5173/",
   )
   let state = @preview.update(
@@ -166,7 +172,8 @@ test "load failure records and navigation label falls back sensibly" {
     state,
   )
   assert_eq(@preview.page_label(@preview.page(titled, id).unwrap()), "Docs")
-  let (blank_state, blank) = @preview.open_page(state)
+  let blank = "browser-blank"
+  let blank_state = @preview.open_page(state, id=blank)
   assert_eq(
     @preview.page_label(@preview.page(blank_state, blank).unwrap()),
     "New Tab",

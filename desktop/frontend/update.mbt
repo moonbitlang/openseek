@@ -5,7 +5,17 @@ const TranscriptReloadMaxAttempts : Int = 3
 const ArchivedPendingInputNotice : String = "This conversation was archived while a prompt was being sent. The input was restored here; check the archived transcript before resubmitting."
 
 ///|
-/// Build the request for one transcript generation. Foreground loads may
+/// Stable UUIDs used by package-local reply fixtures.
+const TestWorktreeRequestId = "00000000-0000-8000-8000-000000000014"
+
+///|
+const TestWorkspaceSettingsRequestId = "00000000-0000-8000-8000-000000000015"
+
+///|
+const TestTranscriptRequestId = "00000000-0000-8000-8000-000000000016"
+
+///|
+/// Build one transcript snapshot request. Foreground loads may
 /// activate a selected stored session; background refreshes only reconcile
 /// the conversation already in the model.
 fn session_snapshot_command(
@@ -13,7 +23,7 @@ fn session_snapshot_command(
   channel : @interop.ChannelId,
   model : Model,
   session : String,
-  generation : Int,
+  request_id : String,
   activate_on_success : Bool,
 ) -> @cmd.Cmd {
   let (workspace, archived) = match model.find_conversation(channel, session) {
@@ -21,14 +31,14 @@ fn session_snapshot_command(
     None => (model.session_project(channel, session), false)
   }
   if activate_on_success {
-    open_session(dispatch, channel, session, workspace~, generation~, archived~)
+    open_session(dispatch, channel, session, workspace~, request_id~, archived~)
   } else {
     refresh_session(
       dispatch,
       channel,
       session,
       workspace~,
-      generation~,
+      request_id~,
       archived~,
     )
   }
@@ -52,10 +62,10 @@ fn focus_channel(
   guard channel != model.focused else { return (@cmd.none, model) }
   let focus_cmd = if model.device_state(channel) is Some(dev) {
     @cmd.batch([
-      fetch_host_settings(dispatch, channel, dev.connection_generation),
+      fetch_host_settings(dispatch, channel, dev.connection_id),
       fetch_installed_skills(dispatch, channel),
-      // Let update advance the catalog generations after focus moves. Calling
-      // the request method against the old state would reuse an old token.
+      // Let update replace the catalog request UUIDs after focus moves.
+      // Calling the request method against the old state would reuse one.
       dispatch(Codex(channel~, @codex.Msg::refresh())),
     ])
   } else if channel == @interop.ChannelId::Local && model.console is Some(_) {
@@ -65,7 +75,6 @@ fn focus_channel(
   }
   let (file_panel, unwatch_cmd) = model.file_panel.retire_watcher(
     dispatch.map(msg => FileEditor(msg)),
-    file_ctx(model),
   )
   (
     @cmd.batch([focus_cmd, unwatch_cmd]),
@@ -106,12 +115,12 @@ fn open_session_on(
     match model.find_conversation(channel, session_id) {
       Some(conv) if !(conv.sync is Reloading(..)) &&
         model.can_reload_transcript(conv) => {
-        let (next, generation) = base.begin_transcript_reload(conv)
-        let next = { ..next, loading_conversation: Some(owner), }
-        if generation is Some(generation) {
+        let (next, request_id) = base.begin_transcript_reload(conv)
+        let next = { ..next, loading_conversation: Some(owner) }
+        if request_id is Some(request_id) {
           (
             session_snapshot_command(
-              dispatch, channel, next, session_id, generation, true,
+              dispatch, channel, next, session_id, request_id, true,
             ),
             next,
           )
@@ -140,7 +149,7 @@ fn open_session_on(
     // reply is in flight. A failed/ongoing first load also needs to stay
     // attached even though it has no transcript yet.
     let reread = model.can_reload_transcript(conv) || !(conv.sync is Synced)
-    let (model, generation) = if reread {
+    let (model, request_id) = if reread {
       model.begin_transcript_reload(conv)
     } else {
       (model.replace_conversation(conv), None)
@@ -148,17 +157,17 @@ fn open_session_on(
     let next = {
       ..model.activate(channel, session_id, conv.project()),
       screen: Chat,
-      loading_conversation: if generation is Some(_) {
+      loading_conversation: if request_id is Some(_) {
         Some(owner)
       } else {
         None
       },
     }.with_active_project(Some(conv.project()))
     let commands : Array[@cmd.Cmd] = []
-    if generation is Some(generation) {
+    if request_id is Some(request_id) {
       commands.push(
         session_snapshot_command(
-          dispatch, channel, next, session_id, generation, true,
+          dispatch, channel, next, session_id, request_id, true,
         ),
       )
     }
@@ -197,14 +206,14 @@ fn open_session_on(
     } else {
       conversation
     }
-    let (model, generation) = model.begin_transcript_reload(conversation)
-    let next = { ..model, screen: Chat, loading_conversation: Some(owner), }.with_active_project(
+    let (model, request_id) = model.begin_transcript_reload(conversation)
+    let next = { ..model, screen: Chat, loading_conversation: Some(owner) }.with_active_project(
       Some(project),
     )
-    if generation is Some(generation) {
+    if request_id is Some(request_id) {
       (
         session_snapshot_command(
-          dispatch, channel, next, session_id, generation, true,
+          dispatch, channel, next, session_id, request_id, true,
         ),
         next,
       )
@@ -217,7 +226,7 @@ fn open_session_on(
 ///|
 /// Open one archived row against its archived durable twin. Reusing an
 /// already-open archived transcript preserves its rendered snapshot while a
-/// fresh generation catches up. A live same-id entry or an archived twin from
+/// fresh request catches up. A live same-id entry or an archived twin from
 /// another store is replaced, so neither writable state nor an in-flight
 /// snapshot can cross the store-qualified archive boundary.
 fn Model::open_archived_session_on(
@@ -258,16 +267,16 @@ fn Model::open_archived_session_on(
   } else {
     { ..conversation, record: ArchivedRecord, }
   }
-  let (model, generation) = self.begin_transcript_reload(conversation)
+  let (model, request_id) = self.begin_transcript_reload(conversation)
   let next = {
     ..model.activate(channel, session_id, workspace),
     screen: Chat,
     loading_conversation: Some(owner),
   }.with_active_project(Some(workspace))
-  if generation is Some(generation) {
+  if request_id is Some(request_id) {
     (
       session_snapshot_command(
-        dispatch, channel, next, session_id, generation, true,
+        dispatch, channel, next, session_id, request_id, true,
       ),
       next,
     )
@@ -277,9 +286,9 @@ fn Model::open_archived_session_on(
 }
 
 ///|
-/// Issue a live-session list request with a page-lifetime token. The token is
-/// advanced before the command leaves update, so any older same-connection
-/// reply is stale even if it returns last.
+/// Issue a live-session list request stamped with a fresh UUID. The UUID is
+/// stored before the command leaves update, so every older reply is stale
+/// without also echoing the connection lifecycle version.
 fn request_sessions_refresh(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -288,18 +297,10 @@ fn request_sessions_refresh(
   guard model.device_state(channel) is Some(dev) else {
     return (@cmd.none, model)
   }
-  let request_generation = dev.sessions_request_generation + 1
+  let request_id = @uuid.mint()
   (
-    fetch_sessions(
-      dispatch,
-      channel,
-      dev.connection_generation,
-      request_generation,
-    ),
-    model.replace_device({
-      ..dev,
-      sessions_request_generation: request_generation,
-    }),
+    fetch_sessions(dispatch, channel, request_id),
+    model.replace_device({ ..dev, sessions_request_id: request_id }),
   )
 }
 
@@ -315,18 +316,10 @@ fn request_archived_refresh(
   guard model.device_state(channel) is Some(dev) else {
     return (@cmd.none, model)
   }
-  let request_generation = dev.archived_request_generation + 1
+  let request_id = @uuid.mint()
   (
-    fetch_archived(
-      dispatch,
-      channel,
-      dev.connection_generation,
-      request_generation,
-    ),
-    model.replace_device({
-      ..dev,
-      archived_request_generation: request_generation,
-    }),
+    fetch_archived(dispatch, channel, request_id),
+    model.replace_device({ ..dev, archived_request_id: request_id }),
   )
 }
 
@@ -353,7 +346,7 @@ fn adopt_projects(
   // A pending add whose reply already resolved its registry row waits here
   // for that row to exist: the snapshot that contains it consumes the
   // pending and focuses. A snapshot without the row leaves it waiting —
-  // a list read begun before our commit is still current-generation and
+  // a list read begun before our commit is still current and
   // must not eat the focus the commit broadcast is about to deliver. An
   // unresolved pending stays untouched too: a snapshot alone cannot say
   // which row is ours (another client's commit broadcasts through this
@@ -376,36 +369,35 @@ fn adopt_projects(
   }
   // Each workspace's worktree list and settings mirror refresh with the
   // adopted registry; a detached workspace's cached rows drop with its
-  // section. One request token per collection covers the whole fan-out
-  // round.
-  let worktrees_request_generation = dev.worktrees_request_generation + 1
-  let workspace_settings_request_generation = dev.workspace_settings_request_generation +
-    1
+  // section. Each workspace receives an independent UUID so a sibling's
+  // broadcast cannot invalidate its in-flight reply.
+  let mut dev = dev
   let commands : Array[@cmd.Cmd] = []
   for path in paths {
+    let (worktrees_request_id, next_dev) = dev.begin_worktree_request(path)
+    dev = next_dev
     commands.push(
-      fetch_worktrees(
-        dispatch,
-        channel,
-        path,
-        dev.connection_generation,
-        worktrees_request_generation,
-      ),
+      fetch_worktrees(dispatch, channel, path, worktrees_request_id),
     )
+    let (settings_request_id, next_dev) = dev.begin_workspace_settings_request(
+      path,
+    )
+    dev = next_dev
     commands.push(
-      fetch_workspace_settings(
-        dispatch,
-        channel,
-        path,
-        dev.connection_generation,
-        workspace_settings_request_generation,
-      ),
+      fetch_workspace_settings(dispatch, channel, path, settings_request_id),
     )
   }
   let worktrees = dev.worktrees.filter(group => paths.contains(group.project))
   let workspace_settings = dev.workspace_settings.filter(row => {
     paths.contains(row.project)
   })
+  let worktree_request_ids = dev.worktree_request_ids.filter(entry => {
+    paths.contains(entry.0)
+  })
+  let workspace_settings_request_ids = dev.workspace_settings_request_ids.filter(entry => {
+      paths.contains(entry.0)
+    },
+  )
   // The old whole-session snapshot can outlive the workspace commit
   // broadcast. Prune it immediately so neither the sidebar nor fallback
   // selection can retain a conversation whose store is no longer attached.
@@ -431,9 +423,9 @@ fn adopt_projects(
       projects: paths,
       active_project,
       worktrees,
-      worktrees_request_generation,
+      worktree_request_ids,
       workspace_settings,
-      workspace_settings_request_generation,
+      workspace_settings_request_ids,
     }),
     conversations,
     loading_conversation,
@@ -542,23 +534,23 @@ fn adopt_projects(
 }
 
 ///|
-/// Retry one failed generation without losing commits that arrived while its
+/// Retry one failed request without losing commits that arrived while its
 /// snapshot was in flight. Three attempts form one bounded round. Exhaustion
-/// keeps the buffer; a later commit/reconnect/open starts a fresh generation,
+/// keeps the buffer; a later commit/reconnect/open starts a fresh request,
 /// which is what an exhausted background round waits for.
 fn retry_session_snapshot(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   model : Model,
   session : String,
-  generation : Int,
+  request_id : String,
   activate_on_success : Bool,
   message : String,
 ) -> (@cmd.Cmd, Model) {
   guard model.find_conversation(channel, session) is Some(conv) &&
     conv.sync
-    is Reloading(generation=current, attempt~, buffered~, reload_after_current~) &&
-    current == generation else {
+    is Reloading(request_id=current, attempt~, buffered~, reload_after_current~) &&
+    current == request_id else {
     return (@cmd.none, model)
   }
   if attempt < TranscriptReloadMaxAttempts {
@@ -566,7 +558,7 @@ fn retry_session_snapshot(
     let next = model.replace_conversation({
       ..conv,
       sync: Reloading(
-        generation~,
+        request_id~,
         attempt=next_attempt,
         buffered=buffered.copy(),
         reload_after_current~,
@@ -579,7 +571,7 @@ fn retry_session_snapshot(
     (
       @cmd.delay(
         session_snapshot_command(
-          dispatch, channel, next, session, generation, activate_on_success,
+          dispatch, channel, next, session, request_id, activate_on_success,
         ),
         delay_ms,
       ),
@@ -588,7 +580,7 @@ fn retry_session_snapshot(
   } else {
     let failed = {
       ..conv,
-      sync: ReloadFailed(generation~, buffered=buffered.copy()),
+      sync: ReloadFailed(request_id~, buffered=buffered.copy()),
     }
     let next = model.replace_conversation(failed)
     let scroll = @cmd.none
@@ -614,9 +606,9 @@ fn retry_session_snapshot(
 }
 
 ///|
-/// Fold one current-generation snapshot into its conversation. Lower
-/// watermarks retry instead of rolling the transcript back; stale generations
-/// are no-ops. Buffered gaps start one new background generation. A
+/// Fold one current-request snapshot into its conversation. Lower
+/// watermarks retry instead of rolling the transcript back; stale UUIDs are
+/// no-ops. Buffered gaps start one new background request. A
 /// foreground result activates only if it still owns `loading_conversation`.
 fn apply_session_snapshot(
   dispatch : @cmd.Emit[Msg],
@@ -627,12 +619,12 @@ fn apply_session_snapshot(
   watermark : Int,
   goal : @transcript.GoalStanding?,
   goal_markers : Array[(Int, @transcript.GoalMarker)],
-  generation : Int,
+  request_id : String,
   activate_on_success : Bool,
 ) -> (@cmd.Cmd, Model) {
   guard model.find_conversation(channel, session) is Some(conv) &&
-    conv.sync is Reloading(generation=current, reload_after_current~, ..) &&
-    current == generation else {
+    conv.sync is Reloading(request_id=current, reload_after_current~, ..) &&
+    current == request_id else {
     return (@cmd.none, model)
   }
   if watermark < conv.watermark {
@@ -641,7 +633,7 @@ fn apply_session_snapshot(
       channel,
       model,
       session,
-      generation,
+      request_id,
       activate_on_success,
       "failed to load session \{session}: snapshot watermark moved backwards",
     )
@@ -679,12 +671,12 @@ fn apply_session_snapshot(
     guard next.find_conversation(channel, session) is Some(conv) else {
       return (@cmd.batch(commands), next)
     }
-    let (reloading, next_generation) = next.begin_transcript_reload(conv)
+    let (reloading, next_request_id) = next.begin_transcript_reload(conv)
     next = reloading
-    if next_generation is Some(next_generation) {
+    if next_request_id is Some(next_request_id) {
       commands.push(
         session_snapshot_command(
-          dispatch, channel, next, session, next_generation, false,
+          dispatch, channel, next, session, next_request_id, false,
         ),
       )
     }
@@ -742,15 +734,12 @@ fn conversation_relative(
 
 ///|
 /// Begin a non-transcript editor navigation. Transcript links capture this
-/// page-lifetime token before their asynchronous host lookup; advancing it at
+/// page-lifetime token before their asynchronous host lookup; replacing it at
 /// every competing navigation makes the user's latest action authoritative.
 fn Model::begin_editor_navigation(self : Model) -> Model {
   {
     ..self,
-    file_panel: {
-      ..self.file_panel,
-      file_link_generation: self.file_panel.file_link_generation + 1,
-    },
+    file_panel: { ..self.file_panel, file_link_request_id: @uuid.mint() },
   }
 }
 
@@ -860,12 +849,12 @@ fn open_editor_at(
   model : Model,
   path : String,
   range : @common.Range?,
-  file_link_generation? : Int,
+  file_link_request_id? : String,
   annotation? : String,
 ) -> (@cmd.Cmd, Model) {
   // A transcript host reply already carries the token its click spent. Every
   // direct mention, Quick Open, or location jump is a newer competing action.
-  let model = if file_link_generation is Some(_) {
+  let model = if file_link_request_id is Some(_) {
     model
   } else {
     model.begin_editor_navigation()
@@ -923,7 +912,7 @@ fn open_editor_at(
     panel,
     ctx,
     relative,
-    file_link_generation?,
+    file_link_request_id?,
     range~,
     annotation?,
     had_active~,
@@ -1340,11 +1329,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // stable owner lets an interrupted changed-file review resume after Repair
     // without ever treating the project root as a fallback checkout.
     owner: active.owner,
-    request_epoch: model.file_panel.request_epoch,
-    // The native bridge and its watcher survive a page reload. Namespace the
-    // panel's monotonic counter with this page's existing random identity so
-    // a reloaded frontend cannot reuse the outgoing page's watcher token.
-    watch_namespace: model.page_namespace + "-watch",
+    checkout_id: model.file_panel.checkout_id,
     placement: file_placement,
     dark_mode: model.theme.is_dark(model.system_dark),
     tree_layout: model.tree_layout,
@@ -1438,9 +1423,9 @@ fn covering_overlay(model : Model) -> Bool {
 /// the pane is actually visible and uncovered. Native views z-order above
 /// all HTML, so anything the frontend draws over the pane area — the `+`
 /// launcher popup, the narrow layout's sidebar drawer, a custom select, the
-/// composer's Git popover, and every
+/// topbar app launcher, the composer's Git popover, and every
 /// `covering_overlay` — must hide the view rather than fight it.
-fn desired_browser_view(model : Model) -> Int? {
+fn desired_browser_view(model : Model) -> String? {
   let conversation_screen = model.screen is Chat || model.screen is Codex
   let git_details_open = match model.screen {
     Chat => model.git_details_open
@@ -1588,17 +1573,17 @@ fn replace_archived_active(
   }
   let fresh = { ..fresh, archived_pending_input: pending_initial, }
   let composer_entry_replacements = model.composer_entry_replacements.copy()
-  let archived_owner : @interop.ConversationKey = { channel, session, }
-  let mut archive_generation = 0
+  let archived_owner : @interop.ConversationKey = { channel, session }
+  let mut archive_cursor = 0
   for index, retired in model.composer_entry_retirements {
     if retired == archived_owner {
-      archive_generation = index + 1
+      archive_cursor = index + 1
     }
   }
   composer_entry_replacements.push({
     archived: archived_owner,
-    fresh: { channel, session: fresh_session, },
-    archive_generation,
+    fresh: { channel, session: fresh_session },
+    archive_cursor,
   })
   {
     ..activated.replace_conversation(fresh).with_active_project(Some(workspace)),
@@ -1625,11 +1610,7 @@ fn update(
     model.focused != previous.focused ||
     model.screen != previous.screen
   let model = if composer_context_changed {
-    {
-      ..model,
-      composer_context_generation: previous.composer_context_generation + 1,
-      select_menu: None,
-    }
+    { ..model, composer_context_id: @uuid.mint(), select_menu: None }
   } else {
     model
   }
@@ -1931,7 +1912,7 @@ fn update_msg(
             dispatch,
             model.focused,
             patch,
-            model.focused_connection_generation(),
+            model.focused_connection_id(),
             cleans_legacy=true,
           ),
           next,
@@ -2607,18 +2588,11 @@ fn update_msg(
       }
     }
     // Keep watcher lifecycle state in the file-editor package, but present an
-    // accepted current-generation failure on the app-owned toast rail. The
-    // before/after check uses that package's owner/root/generation fencing and
+    // accepted current-watch failure on the app-owned toast rail. The
+    // before/after check uses that package's root/UUID fencing and
     // also prevents a repeated host notification from stacking duplicates.
-    FileEditor(
-      @fileeditor.FileWatchFailed(channel~, root~, generation~, message~)
-    ) => {
-      let file_message = @fileeditor.FileWatchFailed(
-        channel~,
-        root~,
-        generation~,
-        message~,
-      )
+    FileEditor(@fileeditor.FileWatchFailed(root~, watch_id~, message~)) => {
+      let file_message = @fileeditor.FileWatchFailed(root~, watch_id~, message~)
       let (cmd, panel) = @fileeditor.update(
         dispatch.map(next => FileEditor(next)),
         file_message,
@@ -2837,7 +2811,7 @@ fn update_msg(
         dispatch,
         model.focused,
         provider_settings_patch(provider),
-        model.focused_connection_generation(),
+        model.focused_connection_id(),
       )
       let next = {
         ..model,
@@ -2859,7 +2833,7 @@ fn update_msg(
           dispatch,
           model.focused,
           custom_url_settings_patch(value),
-          model.focused_connection_generation(),
+          model.focused_connection_id(),
         ),
         {
           ..model,
@@ -3288,7 +3262,7 @@ fn update_msg(
                 dispatch,
                 model.focused,
                 api_key_settings_patch(provider, api_key),
-                model.focused_connection_generation(),
+                model.focused_connection_id(),
               ),
               next.settle_api_setup(),
             )
@@ -3362,14 +3336,7 @@ fn update_msg(
             conv.mentions,
           )
           (
-            steer_openseek(
-              dispatch,
-              model.focused,
-              conv.session_id,
-              submission_id,
-              task,
-              run_id,
-            ),
+            steer_openseek(dispatch, model.focused, submission_id, task, run_id),
             {
               ..model.replace_conversation({
                 ..conv,
@@ -3579,19 +3546,10 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let workspace = conv.project()
-      let request_generation = dev.worktrees_request_generation + 1
+      let (request_id, next_dev) = dev.begin_worktree_request(workspace)
       (
-        fetch_worktrees(
-          dispatch,
-          conv.device,
-          workspace,
-          dev.connection_generation,
-          request_generation,
-        ),
-        model.replace_device({
-          ..dev,
-          worktrees_request_generation: request_generation,
-        }),
+        fetch_worktrees(dispatch, conv.device, workspace, request_id),
+        model.replace_device(next_dev),
       )
     }
     RepairWorktree => {
@@ -3617,28 +3575,27 @@ fn update_msg(
       match model.archive_confirm {
         Some(confirm) => {
           // The dialog's confirm IS the force: retry the archive discarding
-          // the worktree's uncommitted changes. Same generation dance as
-          // the plain archive click.
+          // the worktree's uncommitted changes. Each affected list receives
+          // a fresh exact request UUID, just like the plain archive click.
           guard model.device_state(confirm.channel) is Some(dev) else {
             return (@cmd.none, { ..model, archive_confirm: None, })
           }
-          let sessions_request_generation = dev.sessions_request_generation + 1
-          let archived_request_generation = dev.archived_request_generation + 1
+          let sessions_request_id = @uuid.mint()
+          let archived_request_id = @uuid.mint()
           (
             archive_session(
               dispatch,
               confirm.channel,
               confirm.session,
-              dev.connection_generation,
-              sessions_request_generation,
-              archived_request_generation,
+              sessions_request_id,
+              archived_request_id,
               force=true,
             ),
             {
               ..model.replace_device({
                 ..dev,
-                sessions_request_generation,
-                archived_request_generation,
+                sessions_request_id,
+                archived_request_id,
               }),
               archive_confirm: None,
             },
@@ -3653,18 +3610,17 @@ fn update_msg(
           guard model.device_state(confirm.channel) is Some(dev) else {
             return (@cmd.none, { ..model, archived_delete_confirm: None, })
           }
-          let archived_request_generation = dev.archived_request_generation + 1
+          let archived_request_id = @uuid.mint()
           (
             delete_archived_session(
               dispatch,
               confirm.channel,
               confirm.key,
               confirm.sessions,
-              dev.connection_generation,
-              archived_request_generation,
+              archived_request_id,
             ),
             {
-              ..model.replace_device({ ..dev, archived_request_generation, }),
+              ..model.replace_device({ ..dev, archived_request_id, }),
               archived_delete_confirm: None,
             },
           )
@@ -3813,20 +3769,15 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let worktree_mode = value == "worktree"
-      // Apply optimistically under a fresh token, so a slower list reply
+      // Apply optimistically under a fresh UUID, so a slower list reply
       // cannot roll the page's select back; the commit broadcast lands on a
       // newer token still. The failure path re-reads the disk state.
-      let request_generation = dev.workspace_settings_request_generation + 1
+      let (_, next_dev) = dev.begin_workspace_settings_request(workspace)
       (
         save_workspace_settings(dispatch, channel, workspace, worktree_mode~),
-        model.replace_device({
-          ..dev.with_workspace_settings(
-            workspace,
-            worktree_mode,
-            generation=request_generation,
-          ),
-          workspace_settings_request_generation: request_generation,
-        }),
+        model.replace_device(
+          next_dev.with_workspace_settings(workspace, worktree_mode),
+        ),
       )
     }
     WorkspaceSubmodulesChosen(channel, workspace, value) => {
@@ -3840,9 +3791,9 @@ fn update_msg(
         _ => return (@cmd.none, model)
       }
       // Preserve the workspace's launch mode locally and patch only the
-      // submodule field on disk. The generation fence has the same job as
+      // submodule field on disk. The request UUID has the same job as
       // the launch-mode edit above: an older read cannot undo this choice.
-      let request_generation = dev.workspace_settings_request_generation + 1
+      let (_, next_dev) = dev.begin_workspace_settings_request(workspace)
       (
         save_workspace_settings(
           dispatch,
@@ -3850,15 +3801,13 @@ fn update_msg(
           workspace,
           checkout_submodules~,
         ),
-        model.replace_device({
-          ..dev.with_workspace_settings(
+        model.replace_device(
+          next_dev.with_workspace_settings(
             workspace,
             row.worktree_mode,
-            generation=request_generation,
             checkout_submodules~,
           ),
-          workspace_settings_request_generation: request_generation,
-        }),
+        ),
       )
     }
     WorkspaceSubmoduleTimeoutChosen(channel, workspace, value) => {
@@ -3874,8 +3823,8 @@ fn update_msg(
         _ => return (@cmd.none, model)
       }
       // Patch only the timeout and keep both neighboring workspace choices.
-      // A fresh generation prevents an older read from undoing this select.
-      let request_generation = dev.workspace_settings_request_generation + 1
+      // A fresh request UUID prevents an older read undoing this select.
+      let (_, next_dev) = dev.begin_workspace_settings_request(workspace)
       (
         save_workspace_settings(
           dispatch,
@@ -3883,16 +3832,14 @@ fn update_msg(
           workspace,
           submodule_checkout_timeout_seconds~,
         ),
-        model.replace_device({
-          ..dev.with_workspace_settings(
+        model.replace_device(
+          next_dev.with_workspace_settings(
             workspace,
             row.worktree_mode,
-            generation=request_generation,
             checkout_submodules=row.checkout_submodules,
             submodule_checkout_timeout_seconds~,
           ),
-          workspace_settings_request_generation: request_generation,
-        }),
+        ),
       )
     }
     ArchiveSession(channel, session_id) => {
@@ -3900,44 +3847,26 @@ fn update_msg(
       guard model.device_state(channel) is Some(dev) else {
         return (@cmd.none, model)
       }
-      let sessions_request_generation = dev.sessions_request_generation + 1
-      let archived_request_generation = dev.archived_request_generation + 1
+      let sessions_request_id = @uuid.mint()
+      let archived_request_id = @uuid.mint()
       (
         archive_session(
-          dispatch,
-          channel,
-          session_id,
-          dev.connection_generation,
-          sessions_request_generation,
-          archived_request_generation,
+          dispatch, channel, session_id, sessions_request_id, archived_request_id,
         ),
-        model.replace_device({
-          ..dev,
-          sessions_request_generation,
-          archived_request_generation,
-        }),
+        model.replace_device({ ..dev, sessions_request_id, archived_request_id }),
       )
     }
     UnarchiveSession(channel, session_id) => {
       guard model.device_state(channel) is Some(dev) else {
         return (@cmd.none, model)
       }
-      let sessions_request_generation = dev.sessions_request_generation + 1
-      let archived_request_generation = dev.archived_request_generation + 1
+      let sessions_request_id = @uuid.mint()
+      let archived_request_id = @uuid.mint()
       (
         unarchive_session(
-          dispatch,
-          channel,
-          session_id,
-          dev.connection_generation,
-          sessions_request_generation,
-          archived_request_generation,
+          dispatch, channel, session_id, sessions_request_id, archived_request_id,
         ),
-        model.replace_device({
-          ..dev,
-          sessions_request_generation,
-          archived_request_generation,
-        }),
+        model.replace_device({ ..dev, sessions_request_id, archived_request_id }),
       )
     }
     DeleteArchivedSession(channel, key) => {
@@ -3971,13 +3900,13 @@ fn update_msg(
       )
     }
     NotificationClicked(run_id~) => {
-      // Proton notifications are emitted only for the embedded local host. A
-      // finished run usually matches by last run id; a permission request
-      // still owns the active run while its tool waits for the answer.
-      let conv = if model.conversation_by_last_run(Local, run_id) is Some(conv) {
+      // The run has finished by the time its notification is clicked, so the
+      // owner usually matches by last run id; a still-running owner (steered
+      // runs re-notify per turn) matches by active run.
+      let conv = if model.conversation_by_last_run(run_id) is Some(conv) {
         Some(conv)
       } else {
-        model.conversation_by_run(Local, run_id)
+        model.conversation_by_run(run_id)
       }
       if conv is Some(conv) {
         update_msg(dispatch, OpenSession(conv.device, conv.session_id), model)
@@ -4095,27 +4024,27 @@ fn update_msg(
       // Spend the token before starting host work. This synchronously makes
       // every older host reply and positioned read stale, even if this click
       // ultimately opens a non-text path through the system instead.
-      let generation = model.file_panel.file_link_generation + 1
+      let request_id = @uuid.mint()
       let model = {
         ..model,
-        file_panel: { ..model.file_panel, file_link_generation: generation, },
+        file_panel: { ..model.file_panel, file_link_request_id: request_id },
       }
       (
         open_file(
           dispatch,
           active.owner.channel,
           active.owner.session,
-          generation,
+          request_id,
           cwd=Some(cwd),
           path,
         ),
         model,
       )
     }
-    OpenFileAt(owner~, generation~, path~, line~, column~) => {
+    OpenFileAt(owner~, request_id~, path~, line~, column~) => {
       guard model.active_checkout() is Some(active) &&
         owner == active.owner &&
-        generation == model.file_panel.file_link_generation else {
+        request_id == model.file_panel.file_link_request_id else {
         return (@cmd.none, model)
       }
       let range = match line {
@@ -4130,13 +4059,13 @@ fn update_msg(
         model,
         path,
         range,
-        file_link_generation=generation,
+        file_link_request_id=request_id,
       )
     }
-    OpenDirectoryAt(owner~, generation~, path~) => {
+    OpenDirectoryAt(owner~, request_id~, path~) => {
       guard model.active_checkout() is Some(active) &&
         owner == active.owner &&
-        generation == model.file_panel.file_link_generation else {
+        request_id == model.file_panel.file_link_request_id else {
         return (@cmd.none, model)
       }
       reveal_local_directory(dispatch, model, Relative(path))
@@ -4557,8 +4486,9 @@ fn update_msg(
       (theme_cmd, { ..model, preview: @preview.update(msg, model.preview), })
     }
     BrowserTabRequested => {
+      let id = @uuid.mint()
       let model = model.begin_editor_navigation()
-      let (preview, id) = @preview.open_page(model.preview)
+      let preview = @preview.open_page(model.preview, id~)
       let dock = @dock.open_browser(model.dock, id)
       (
         focus_browser_address(),
@@ -4725,10 +4655,10 @@ fn update_msg(
         dispatch,
         "Saved to \{path}, but couldn't open it automatically.",
       )
-    OpenFileFailed(owner~, generation~, message~) =>
+    OpenFileFailed(owner~, request_id~, message~) =>
       if model.active_checkout() is Some(active) &&
         owner == active.owner &&
-        generation == model.file_panel.file_link_generation {
+        request_id == model.file_panel.file_link_request_id {
         model.notify_error(dispatch, message)
       } else {
         (@cmd.none, model)
@@ -4796,7 +4726,8 @@ fn update_msg(
             )
           }
           None => {
-            let (preview, id) = @preview.open_page(model.preview, url~)
+            let id = @uuid.mint()
+            let preview = @preview.open_page(model.preview, id~, url~)
             let dock = @dock.open_browser(model.dock, id)
             (
               browser_open(
@@ -4830,12 +4761,10 @@ fn update_msg(
 fn Model::reject_start(
   self : Model,
   dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  session : String,
   submission_id : String,
   message : String,
 ) -> (@cmd.Cmd, Model) {
-  guard self.find_conversation(channel, session) is Some(conv) else {
+  guard self.conversation_by_pending_prompt(submission_id) is Some(conv) else {
     return (@cmd.none, self)
   }
   let (rejected, removed) = conv.reject_pending_prompt(submission_id)
@@ -4849,26 +4778,18 @@ fn Model::reject_start(
   let (notice, updated) = self
     .replace_conversation(next)
     .notify_error(dispatch, message)
+  let channel = conv.device
   if updated.device_state(channel) is Some(dev) {
     // A checkout deleted outside the app cannot publish a registry
     // notification. Refresh placement after every rejected workspace start;
     // a newly missing row then exposes Repair/Archive immediately.
-    let request_generation = dev.worktrees_request_generation + 1
+    let (request_id, next_dev) = dev.begin_worktree_request(conv.project())
     (
       @cmd.batch([
         notice,
-        fetch_worktrees(
-          dispatch,
-          channel,
-          conv.project(),
-          dev.connection_generation,
-          request_generation,
-        ),
+        fetch_worktrees(dispatch, channel, conv.project(), request_id),
       ]),
-      updated.replace_device({
-        ..dev,
-        worktrees_request_generation: request_generation,
-      }),
+      updated.replace_device(next_dev),
     )
   } else {
     (notice, updated)
@@ -5039,28 +4960,22 @@ fn update_device_msg(
         (@cmd.none, model)
       }
     BridgeReady => {
-      let connection_generation = dev.connection_generation + 1
-      let sessions_request_generation = dev.sessions_request_generation + 1
-      let archived_request_generation = dev.archived_request_generation + 1
-      let projects_request_generation = dev.projects_request_generation + 1
+      let connection_id = @uuid.mint()
+      let sessions_request_id = @uuid.mint()
+      let archived_request_id = @uuid.mint()
+      let projects_request_id = @uuid.mint()
       // Capture the exact per-session lifecycle frontier before issuing the
       // unversioned runs snapshot. A live Started or Finished received before
       // its reply then wins over both stale positive rows and stale absence.
       let run_frontier = model.run_snapshot_frontier(channel)
       let commands = [
-        fetch_sessions(
-          dispatch, channel, connection_generation, sessions_request_generation,
-        ),
+        fetch_sessions(dispatch, channel, sessions_request_id),
         // In-flight runs, so a page that joined (or reconnected) mid-run
         // learns each live run's identity — the resync half of the
         // protocol's reconnect story (docs/remote-protocol.md).
-        fetch_runs(dispatch, channel, run_frontier, connection_generation),
-        fetch_archived(
-          dispatch, channel, connection_generation, archived_request_generation,
-        ),
-        fetch_projects(
-          dispatch, channel, connection_generation, projects_request_generation,
-        ),
+        fetch_runs(dispatch, channel, run_frontier, connection_id),
+        fetch_archived(dispatch, channel, archived_request_id),
+        fetch_projects(dispatch, channel, projects_request_id),
       ]
       // The focused-scoped half: the host-settings mirror and installed
       // skills (they feed the composer's `$` completion, so
@@ -5068,9 +4983,7 @@ fn update_device_msg(
       // the device the UI acts on — always this one while the app runs a
       // single channel.
       if channel == model.focused {
-        commands.push(
-          fetch_host_settings(dispatch, channel, connection_generation),
-        )
+        commands.push(fetch_host_settings(dispatch, channel, connection_id))
         // Legacy client-stored engine settings: the desktop migrates them
         // up to the host, a browser purges them (see `LegacySettingsRead`).
         commands.push(read_legacy_engine_settings(dispatch))
@@ -5107,14 +5020,24 @@ fn update_device_msg(
           conv
         }
       })
+      // A reply carries its request UUID rather than the bridge connection.
+      // Retire every UUID minted on the old connection before clearing the
+      // mirrors, so a late reply cannot repopulate either one during resync.
+      let mut dev = dev
+      for workspace in dev.projects {
+        let (_, next_dev) = dev.begin_worktree_request(workspace)
+        dev = next_dev
+        let (_, next_dev) = dev.begin_workspace_settings_request(workspace)
+        dev = next_dev
+      }
       let model = model.replace_device({
         ..dev,
         bridge: Connected,
         reconnect_failures: 0,
-        connection_generation,
-        sessions_request_generation,
-        archived_request_generation,
-        projects_request_generation,
+        connection_id,
+        sessions_request_id,
+        archived_request_id,
+        projects_request_id,
         archive_overrides: [],
         // Worktree notifications are not replayed across a connection gap.
         // Keep every workspace blocked until this connection returns a fresh
@@ -5151,19 +5074,19 @@ fn update_device_msg(
             model.loading_conversation is None => {
             // A real engine pump can restart while the transport remains
             // open. If an older read is already in flight, it may carry a
-            // pre-ready cut, so require one follow-up generation rather than
+            // pre-ready cut, so require one follow-up request rather than
             // treating the old single-flight request as sufficient.
-            let (model, generation) = model.ensure_transcript_reload_after_current(
+            let (model, request_id) = model.ensure_transcript_reload_after_current(
               conv,
             )
-            if generation is Some(generation) {
+            if request_id is Some(request_id) {
               commands.push(
                 session_snapshot_command(
                   dispatch,
                   channel,
                   model,
                   conv.session_id,
-                  generation,
+                  request_id,
                   false,
                 ),
               )
@@ -5194,17 +5117,15 @@ fn update_device_msg(
       )
     }
     BridgeUnavailable(message) =>
-      (@cmd.none, model.replace_device({ ..dev, bridge: BridgeLost(message), }))
-    ChannelDown(websocket_epoch~) => {
+      (@cmd.none, model.replace_device({ ..dev, bridge: BridgeLost(message) }))
+    ChannelDown(websocket_id~) => {
       // A close callback may already be queued when sign-out retires a
-      // device. If the same relay id is later re-added, it owns a new epoch
+      // device. If the same relay id is later re-added, it owns a new UUID
       // and must not inherit the retired connection's failure or timer.
-      guard websocket_epoch == dev.websocket_epoch else {
-        return (@cmd.none, model)
-      }
+      guard websocket_id == dev.websocket_id else { return (@cmd.none, model) }
       // Count the loss and schedule the next attempt. Because the attempt
       // comes back through this function, a removed or re-added device fails
-      // the state/epoch guards and its old loop simply ends.
+      // the state/UUID guards and its old loop simply ends.
       let failures = dev.reconnect_failures + 1
       let bridge = if failures == WsLostAfter {
         BridgeLost(
@@ -5215,23 +5136,15 @@ fn update_device_msg(
       }
       (
         @cmd.delay(
-          dispatch(FromDevice(channel, ReconnectDue(websocket_epoch~))),
+          dispatch(FromDevice(channel, ReconnectDue(websocket_id~))),
           reconnect_delay(failures),
         ),
         model.replace_device({ ..dev, bridge, reconnect_failures: failures, }),
       )
     }
-    ReconnectDue(websocket_epoch~) => {
-      guard websocket_epoch == dev.websocket_epoch else {
-        return (@cmd.none, model)
-      }
-      (
-        @cmd.none,
-        model.replace_device({
-          ..dev,
-          reconnect_attempt: dev.reconnect_attempt + 1,
-        }),
-      )
+    ReconnectDue(websocket_id~) => {
+      guard websocket_id == dev.websocket_id else { return (@cmd.none, model) }
+      (@cmd.none, model.replace_device({ ..dev, reconnect_id: @uuid.mint() }))
     }
     FilePanel(msg) => {
       // The file panel serves the focused conversation; a background
@@ -5239,9 +5152,8 @@ fn update_device_msg(
       guard channel == model.focused else { return (@cmd.none, model) }
       update_msg(dispatch, FileEditor(msg), model)
     }
-    HostSettingsLoaded(settings, connection_generation~) => {
-      guard connection_generation is None ||
-        connection_generation == Some(dev.connection_generation) else {
+    HostSettingsLoaded(settings, connection_id~) => {
+      guard connection_id is None || connection_id == Some(dev.connection_id) else {
         return (@cmd.none, model)
       }
       // The settings mirror is the focused host's. A generation-carrying
@@ -5261,8 +5173,8 @@ fn update_device_msg(
         (@cmd.none, model.apply_host_settings(settings).settle_api_setup())
       }
     }
-    HostSettingsApplied(settings, connection_generation~, cleans_legacy~) => {
-      guard connection_generation == dev.connection_generation else {
+    HostSettingsApplied(settings, connection_id~, cleans_legacy~) => {
+      guard connection_id == dev.connection_id else {
         return (@cmd.none, model)
       }
       // A save issued on the old focus may settle after the user switches
@@ -5298,8 +5210,8 @@ fn update_device_msg(
         },
       )
     }
-    HostSettingsSaveFailed(message, connection_generation~, cleans_legacy~) => {
-      guard connection_generation == dev.connection_generation else {
+    HostSettingsSaveFailed(message, connection_id~, cleans_legacy~) => {
+      guard connection_id == dev.connection_id else {
         return (@cmd.none, model)
       }
       guard channel == model.focused else { return (@cmd.none, model) }
@@ -5332,18 +5244,17 @@ fn update_device_msg(
         // No successful reply may follow to correct the optimistic form.
         // An authoritative get (same-revision statuses are accepted) restores
         // host truth after a definite or ambiguous write failure.
-        commands.push(
-          fetch_host_settings(dispatch, channel, dev.connection_generation),
-        )
+        commands.push(fetch_host_settings(dispatch, channel, dev.connection_id))
       }
       (@cmd.batch(commands), notified)
     }
-    SteerUndelivered(session~, submission_id~, text~, run_id~) => {
+    SteerUndelivered(submission_id~, text~, run_id~) => {
       // The response path failed and the host may or may not have taken the
       // steer. Neither answer is knowable here and neither is worth guessing
       // at: the entry ends, and the transcript says what actually happened.
       ignore(text)
-      if model.find_conversation(channel, session) is Some(conv) {
+      if model.conversation_by_pending_steer(submission_id, run_id)
+        is Some(conv) {
         let (next, changed) = conv.acknowledge_steer(
           submission_id,
           Some(run_id),
@@ -5357,10 +5268,11 @@ fn update_device_msg(
         (@cmd.none, model)
       }
     }
-    SteerRejected(session~, submission_id~, run_id~) =>
+    SteerRejected(submission_id~, run_id~) =>
       // A concrete `steered:false` cannot later commit. Retire the queue entry
       // and restore its exact draft; a later same-text submission is unrelated.
-      if model.find_conversation(channel, session) is Some(conv) {
+      if model.conversation_by_pending_steer(submission_id, run_id)
+        is Some(conv) {
         let (next, removed) = conv.reject_steer(submission_id, Some(run_id))
         if removed {
           model
@@ -5373,7 +5285,8 @@ fn update_device_msg(
         (@cmd.none, model)
       }
     CancelNotOpen(run_id~) => {
-      guard model.conversation_by_run(channel, run_id) is Some(conv) else {
+      guard model.conversation_by_run(run_id) is Some(conv) &&
+        model.device_state(conv.device) is Some(owner_dev) else {
         return (@cmd.none, model)
       }
       // The id-addressed reply is authoritative: this exact run is no longer
@@ -5397,15 +5310,16 @@ fn update_device_msg(
       (
         fetch_runs(
           dispatch,
-          channel,
-          updated.run_snapshot_frontier(channel),
-          dev.connection_generation,
+          conv.device,
+          updated.run_snapshot_frontier(conv.device),
+          owner_dev.connection_id,
         ),
         updated,
       )
     }
     CancelFailed(run_id~, message~) => {
-      guard model.conversation_by_run(channel, run_id) is Some(conv) &&
+      guard model.conversation_by_run(run_id) is Some(conv) &&
+        model.device_state(conv.device) is Some(owner_dev) &&
         conv.run is Open(run_id=current, stage=Cancelling) &&
         current == run_id else {
         return (@cmd.none, model)
@@ -5422,17 +5336,16 @@ fn update_device_msg(
           notice,
           fetch_runs(
             dispatch,
-            channel,
-            notified.run_snapshot_frontier(channel),
-            dev.connection_generation,
+            conv.device,
+            notified.run_snapshot_frontier(conv.device),
+            owner_dev.connection_id,
           ),
         ]),
         notified,
       )
     }
-    SessionsLoaded(items, connection_generation~, request_generation~) => {
-      guard connection_generation == dev.connection_generation &&
-        request_generation == dev.sessions_request_generation else {
+    SessionsLoaded(items, request_id~) => {
+      guard request_id == dev.sessions_request_id else {
         return (@cmd.none, model)
       }
       // Whole-list replies have no store revision. An identity notification
@@ -5499,7 +5412,7 @@ fn update_device_msg(
       // this connection is then the first proof that a cached read-only record
       // was restored elsewhere. Reclassify it before the archived-list reply:
       // the override admits new commits immediately, and the new transcript
-      // generation fences the archived request started by BridgeReady.
+      // request UUID fences the archived request started by BridgeReady.
       for conv in next.conversations {
         let key : ArchiveRecordKey = {
           session: conv.session_id,
@@ -5511,7 +5424,7 @@ fn update_device_msg(
           let foreground = channel == next.focused &&
             next.active_session == conv.session_id
           next = next.with_archive_override(channel, key, ArchiveLive)
-          let (updated, generation) = next.begin_transcript_reload({
+          let (updated, request_id) = next.begin_transcript_reload({
             ..conv,
             record: LiveRecord,
             sync: Synced,
@@ -5524,14 +5437,14 @@ fn update_device_msg(
           } else {
             updated
           }
-          if generation is Some(generation) {
+          if request_id is Some(request_id) {
             commands.push(
               session_snapshot_command(
                 dispatch,
                 channel,
                 next,
                 conv.session_id,
-                generation,
+                request_id,
                 foreground,
               ),
             )
@@ -5547,16 +5460,16 @@ fn update_device_msg(
           conv.awaits_durable_proof() &&
           !(conv.sync is Reloading(..)) &&
           items.iter().any(item => item.id == conv.session_id) {
-          let (updated, generation) = next.begin_transcript_reload(conv)
+          let (updated, request_id) = next.begin_transcript_reload(conv)
           next = updated
-          if generation is Some(generation) {
+          if request_id is Some(request_id) {
             commands.push(
               session_snapshot_command(
                 dispatch,
                 channel,
                 next,
                 conv.session_id,
-                generation,
+                request_id,
                 false,
               ),
             )
@@ -5565,9 +5478,8 @@ fn update_device_msg(
       }
       (@cmd.batch(commands), next)
     }
-    ProjectsLoaded(paths, connection_generation~, request_generation~) => {
-      guard connection_generation == dev.connection_generation &&
-        request_generation == dev.projects_request_generation else {
+    ProjectsLoaded(paths, request_id~) => {
+      guard request_id == dev.projects_request_id else {
         return (@cmd.none, model)
       }
       // The registry snapshot is also the authority for what this page may
@@ -5577,12 +5489,11 @@ fn update_device_msg(
       adopt_projects(dispatch, channel, model, paths)
     }
     ProjectsChanged(paths) => {
-      // The post-commit broadcast is newer than every list request issued so
-      // far. Advance the token before applying it, so an older list reply can
-      // never roll any client back after this canonical mutation order.
+      // A post-commit broadcast invalidates the exact list request currently
+      // in flight, so its reply cannot roll the canonical mutation back.
       let next = model.replace_device({
         ..dev,
-        projects_request_generation: dev.projects_request_generation + 1,
+        projects_request_id: @uuid.mint(),
       })
       adopt_projects(dispatch, channel, next, paths)
     }
@@ -5653,27 +5564,21 @@ fn update_device_msg(
       worktree_mode~,
       checkout_submodules~,
       submodule_checkout_timeout_seconds~,
-      connection_generation~,
-      request_generation~
+      request_id~
     ) => {
-      // The same per-workspace staleness fence as `WorktreesLoaded` — plus a
-      // registry-membership check, because pruning a detached workspace's
-      // row also discards the generation it was applied under. Without the
-      // membership check, a straggler reply issued before the detach would
-      // pass the reset (-1) fence and resurrect a row that could outlive a
-      // reattach until the fresh fan-out answers.
+      // The exact per-workspace UUID is the same fence as `WorktreesLoaded`.
+      // Membership also prevents a pre-detach reply resurrecting its row.
       guard dev.projects.contains(workspace) &&
-        connection_generation == dev.connection_generation &&
-        request_generation > dev.workspace_settings_generation(workspace) else {
+        dev.workspace_settings_request_id(workspace) == Some(request_id) else {
         return (@cmd.none, model)
       }
+      let (_, next_dev) = dev.begin_workspace_settings_request(workspace)
       (
         @cmd.none,
         model.replace_device(
-          dev.with_workspace_settings(
+          next_dev.with_workspace_settings(
             workspace,
             worktree_mode,
-            generation=request_generation,
             checkout_submodules~,
             submodule_checkout_timeout_seconds~,
           ),
@@ -5690,29 +5595,27 @@ fn update_device_msg(
       // (the hub orders them per client, so an attach is always processed
       // before settings broadcasts that follow it).
       guard dev.projects.contains(workspace) else { return (@cmd.none, model) }
-      // The post-commit broadcast is newer than every list request issued so
-      // far; advance the mint and stamp this workspace's row with the new
-      // token so an older reply for it can never roll the broadcast back.
-      let workspace_settings_request_generation = dev.workspace_settings_request_generation +
-        1
+      // Replace this workspace's accepted UUID before adopting the broadcast,
+      // so every older read reply becomes stale without touching siblings.
+      let (_, next_dev) = dev.begin_workspace_settings_request(workspace)
       (
         @cmd.none,
-        model.replace_device({
-          ..dev.with_workspace_settings(
+        model.replace_device(
+          next_dev.with_workspace_settings(
             workspace,
             worktree_mode,
-            generation=workspace_settings_request_generation,
             checkout_submodules~,
             submodule_checkout_timeout_seconds~,
           ),
-          workspace_settings_request_generation,
-        }),
+        ),
       )
     }
     WorkspaceSettingsSaveFailed(workspace~, message~) => {
       // The page's optimistic value may be wrong now: alongside the toast,
-      // re-read the disk state under a fresh token.
-      let request_generation = dev.workspace_settings_request_generation + 1
+      // re-read the disk state under a fresh UUID.
+      let (request_id, next_dev) = dev.begin_workspace_settings_request(
+        workspace,
+      )
       let (toast, next) = model.notify_error(
         dispatch,
         "Workspace settings not saved for \{workspace.path}: \{message}",
@@ -5720,45 +5623,24 @@ fn update_device_msg(
       (
         @cmd.batch([
           toast,
-          fetch_workspace_settings(
-            dispatch,
-            channel,
-            workspace,
-            dev.connection_generation,
-            request_generation,
-          ),
+          fetch_workspace_settings(dispatch, channel, workspace, request_id),
         ]),
-        next.replace_device({
-          ..dev,
-          workspace_settings_request_generation: request_generation,
-        }),
+        next.replace_device(next_dev),
       )
     }
-    WorktreesLoaded(
-      rows,
-      workspace~,
-      connection_generation~,
-      request_generation~
-    ) => {
-      // The staleness fence is per workspace: this reply is stale only when
-      // THIS workspace's rows were already applied under a newer token — a
-      // broadcast for a sibling workspace must not discard it.
-      guard connection_generation == dev.connection_generation &&
-        request_generation > dev.worktree_generation(workspace) else {
+    WorktreesLoaded(rows, workspace~, request_id~) => {
+      // The staleness fence is per workspace: a sibling broadcast does not
+      // replace this workspace's accepted UUID.
+      guard dev.projects.contains(workspace) &&
+        dev.worktree_request_id(workspace) == Some(request_id) else {
         return (@cmd.none, model)
       }
-      let next_dev = dev.with_worktrees(
-        workspace,
-        rows,
-        generation=request_generation,
-      )
+      let (_, next_dev) = dev.begin_worktree_request(workspace)
+      let next_dev = next_dev.with_worktrees(workspace, rows)
       let next = model.replace_device(next_dev)
       // A fresh list can be the first proof that a binding disappeared while
-      // this client was disconnected. Spend one Git request number just like
-      // the live broadcast path: every conversation unbound by this snapshot
-      // must reject branch and pull-request answers still in flight for the
-      // checkout that no longer owns it.
-      let (fence, next) = next.mint_git_request()
+      // this client was disconnected. Clear accepted Git request UUIDs for
+      // conversations whose checkout no longer owns them.
       let conversations = next.conversations.map(conv => {
         if conv.device == channel && conv.project() == workspace {
           let placement = next_dev.conversation_workspace(
@@ -5767,7 +5649,7 @@ fn update_device_msg(
             conv.workspace,
           )
           if conv.workspace is Worktree(..) && placement is Project(..) {
-            { ..conv.forget_git(fence~), workspace: placement, }
+            { ..conv.forget_git(), workspace: placement }
           } else {
             { ..conv, workspace: placement, }
           }
@@ -5782,41 +5664,27 @@ fn update_device_msg(
         dispatch, channel, workspace, rows,
       )
     }
-    WorktreesFailed(
-      workspace~,
-      connection_generation~,
-      request_generation~,
-      message~
-    ) => {
-      // A later snapshot or broadcast for this workspace makes an older
-      // failure irrelevant, just as a dead connection's rejection must not
-      // pop over the newly connected UI.
-      guard connection_generation == dev.connection_generation &&
-        request_generation > dev.worktree_generation(workspace) else {
+    WorktreesFailed(workspace~, request_id~, message~) => {
+      // A later snapshot, broadcast, or reconnect UUID makes this failure
+      // irrelevant.
+      guard dev.projects.contains(workspace) &&
+        dev.worktree_request_id(workspace) == Some(request_id) else {
         return (@cmd.none, model)
       }
-      model.notify_error(
+      let (_, next_dev) = dev.begin_worktree_request(workspace)
+      model
+      .replace_device(next_dev)
+      .notify_error(
         dispatch,
         "Worktree list unavailable for \{workspace.path}: \{message}",
       )
     }
     WorktreesChanged(rows, workspace~) => {
-      // The post-commit broadcast is newer than every list request issued so
-      // far; advance the mint and stamp this workspace's rows with the new
-      // token so an older reply for it can never roll the broadcast back.
-      let worktrees_request_generation = dev.worktrees_request_generation + 1
-      let next_dev = {
-        ..dev.with_worktrees(
-          workspace,
-          rows,
-          generation=worktrees_request_generation,
-        ),
-        worktrees_request_generation,
-      }
+      // Replace only this workspace's accepted UUID, then adopt the canonical
+      // rows. Older list replies can no longer roll the broadcast back.
+      let (_, next_dev) = dev.begin_worktree_request(workspace)
+      let next_dev = next_dev.with_worktrees(workspace, rows)
       let next = model.replace_device(next_dev)
-      // Every conversation this broadcast unbinds is unbound at the same
-      // instant, so one spent request number fences all of their probes.
-      let (fence, next) = next.mint_git_request()
       // Only an actual registry-row removal unbinds its conversations. Archive
       // keeps the row with `present: false`, so it passes through unchanged and
       // later Unarchive still surfaces Repair. Stand down any staged confirm
@@ -5833,7 +5701,7 @@ fn update_device_msg(
             // too. `forget_git` retires probes already in flight for the removed
             // checkout; the enum transition simultaneously makes every file,
             // LSP, terminal and launcher root re-project to the project.
-            { ..conv.forget_git(fence~), workspace: placement, }
+            { ..conv.forget_git(), workspace: placement }
           } else {
             { ..conv, workspace: placement, }
           }
@@ -5883,14 +5751,8 @@ fn update_device_msg(
         @cmd.none,
         { ..model, archive_confirm: Some({ channel, session, refusal, }), },
       )
-    ArchivedLoaded(
-      items,
-      connection_generation~,
-      request_generation~,
-      fresh_session~
-    ) => {
-      guard connection_generation == dev.connection_generation &&
-        request_generation == dev.archived_request_generation else {
+    ArchivedLoaded(items, request_id~, fresh_session~) => {
+      guard request_id == dev.archived_request_id else {
         return (@cmd.none, model)
       }
       // A newer unarchive notification wins over an older whole-list reply;
@@ -5964,16 +5826,8 @@ fn update_device_msg(
         },
       )
     }
-    ArchivedDeleted(
-      key~,
-      sessions~,
-      items~,
-      connection_generation~,
-      request_generation~,
-      fresh_session~
-    ) => {
-      guard connection_generation == dev.connection_generation &&
-        request_generation == dev.archived_request_generation else {
+    ArchivedDeleted(key~, sessions~, items~, request_id~, fresh_session~) => {
+      guard request_id == dev.archived_request_id else {
         return (@cmd.none, model)
       }
       // Install the permanent tombstone before folding the unversioned list
@@ -6024,13 +5878,8 @@ fn update_device_msg(
       update_device_msg(
         dispatch,
         channel,
-        ArchivedLoaded(
-          items,
-          connection_generation~,
-          request_generation~,
-          fresh_session~,
-        ),
-        { ..tombstoned, conversations, archived_delete_confirm: None, },
+        ArchivedLoaded(items, request_id~, fresh_session~),
+        { ..tombstoned, conversations, archived_delete_confirm: None },
       )
     }
     ArchiveFailed(message) => {
@@ -6040,14 +5889,9 @@ fn update_device_msg(
       // prunes detached conversations and refreshes the live list) and the
       // archived list, so the state that made the click possible heals
       // instead of failing identically forever.
-      let projects_request_generation = dev.projects_request_generation + 1
-      let refresh = fetch_projects(
-        dispatch,
-        channel,
-        dev.connection_generation,
-        projects_request_generation,
-      )
-      let model = model.replace_device({ ..dev, projects_request_generation, })
+      let projects_request_id = @uuid.mint()
+      let refresh = fetch_projects(dispatch, channel, projects_request_id)
+      let model = model.replace_device({ ..dev, projects_request_id, })
       let (archived, model) = request_archived_refresh(dispatch, channel, model)
       let (toast, model) = model.notify_error(
         dispatch,
@@ -6064,8 +5908,12 @@ fn update_device_msg(
       (@cmd.batch([refresh, toast]), model)
     }
     WorktreeFailed(message) => model.notify_error(dispatch, message)
-    SessionsFailed(message) =>
+    SessionsFailed(request_id~, message~) => {
+      guard request_id == dev.sessions_request_id else {
+        return (@cmd.none, model)
+      }
       model.notify_error(dispatch, "Session list unavailable: \{message}")
+    }
     // Another client archived, restored, or deleted a conversation. Both
     // sidebar lists are stale, but this identity-bearing fact takes effect
     // immediately and remains authoritative over in-flight replies.
@@ -6129,17 +5977,17 @@ fn update_device_msg(
           .with_archive_override(channel, key, ArchiveLive)
         // Fence an archived read that was already in flight, then re-read the
         // now-live record. The transcript stays visible while this new
-        // generation settles; only the record source and composer capability
+        // request settles; only the record source and composer capability
         // change immediately.
         if next.find_conversation(channel, key.session) is Some(conv) &&
           conv.project() == key.workspace &&
           conv.is_archived_read_only() {
-          let (next, generation) = next.begin_transcript_reload({
+          let (next, request_id) = next.begin_transcript_reload({
             ..conv,
             record: LiveRecord,
             sync: Synced,
           })
-          if generation is Some(generation) {
+          if request_id is Some(request_id) {
             let foreground = channel == next.focused &&
               next.active_session == key.session &&
               next.session_project(channel, key.session) == Some(key.workspace)
@@ -6159,7 +6007,7 @@ fn update_device_msg(
                   channel,
                   next,
                   key.session,
-                  generation,
+                  request_id,
                   foreground,
                 ),
               ]),
@@ -6240,11 +6088,11 @@ fn update_device_msg(
       watermark~,
       goal~,
       goal_markers~,
-      generation~
+      request_id~
     ) =>
       apply_session_snapshot(
         dispatch, channel, model, session, items, watermark, goal, goal_markers,
-        generation, true,
+        request_id, true,
       )
     SessionRefreshed(
       session~,
@@ -6252,23 +6100,23 @@ fn update_device_msg(
       watermark~,
       goal~,
       goal_markers~,
-      generation~
+      request_id~
     ) =>
       apply_session_snapshot(
         dispatch, channel, model, session, items, watermark, goal, goal_markers,
-        generation, false,
+        request_id, false,
       )
-    SessionLoadFailed(session~, message~, generation~) =>
+    SessionLoadFailed(session~, message~, request_id~) =>
       retry_session_snapshot(
-        dispatch, channel, model, session, generation, true, message,
+        dispatch, channel, model, session, request_id, true, message,
       )
-    SessionRefreshFailed(session~, generation~) =>
+    SessionRefreshFailed(session~, request_id~) =>
       retry_session_snapshot(
         dispatch,
         channel,
         model,
         session,
-        generation,
+        request_id,
         false,
         "failed to refresh session \{session}",
       )
@@ -6345,13 +6193,13 @@ fn update_device_msg(
             (@cmd.none, model.replace_conversation(conv.buffer_commit(commit)))
           // A new commit is also a retry signal after a bounded round stopped.
           ReloadFailed(..) => {
-            let (model, generation) = model.begin_transcript_reload(
+            let (model, request_id) = model.begin_transcript_reload(
               conv.buffer_commit(commit),
             )
-            if generation is Some(generation) {
+            if request_id is Some(request_id) {
               (
                 session_snapshot_command(
-                  dispatch, channel, model, session, generation, false,
+                  dispatch, channel, model, session, request_id, false,
                 ),
                 model,
               )
@@ -6378,17 +6226,17 @@ fn update_device_msg(
               // A gap: this client missed a broadcast (kicked as a slow
               // subscriber, a host restart, an external writer). The record
               // is the source of truth — re-read it, buffering from here.
-              let (model, generation) = model.begin_transcript_reload(conv)
+              let (model, request_id) = model.begin_transcript_reload(conv)
               guard model.find_conversation(channel, session) is Some(reloading) else {
                 return (@cmd.none, model)
               }
               let model = model.replace_conversation(
                 reloading.buffer_commit(commit),
               )
-              if generation is Some(generation) {
+              if request_id is Some(request_id) {
                 (
                   session_snapshot_command(
-                    dispatch, channel, model, session, generation, false,
+                    dispatch, channel, model, session, request_id, false,
                   ),
                   model,
                 )
@@ -6412,14 +6260,14 @@ fn update_device_msg(
         (commit_cmd, next)
       }
     }
-    BranchLoaded(session~, branch~, diffstat~, generation~, base_hint~) => {
-      guard model.find_conversation(channel, session) is Some(conv) else {
+    BranchLoaded(branch~, diffstat~, request_id~, base_hint~) => {
+      guard model.conversation_by_branch_request(request_id) is Some(conv) else {
         return (@cmd.none, model)
       }
       // A probe that is still counting untracked files while a later one has
       // already answered would otherwise put its older branch and totals back
       // on screen, where nothing would correct them until the next refresh.
-      guard generation == conv.branch_generation else {
+      guard Some(request_id) == conv.branch_request_id else {
         return (@cmd.none, model)
       }
       let conv = { ..conv, branch, diffstat, diffstat_hint: base_hint, }
@@ -6430,10 +6278,9 @@ fn update_device_msg(
       guard branch is Some(branch) && !branch.is_empty() else {
         // Not a repository any more: an answer about the branch it used to
         // have would only mislead, including one still on its way.
-        let (fence, model) = model.mint_git_request()
         return (
           @cmd.none,
-          model.replace_conversation(conv.forget_pull_request(fence~)),
+          model.replace_conversation(conv.forget_pull_request()),
         )
       }
       // A lookup already in flight for this same branch is not stacked on —
@@ -6450,23 +6297,22 @@ fn update_device_msg(
           model.replace_conversation({ ..conv, pull_request, }),
         )
       }
-      probe_pull_request(dispatch, model, channel, conv, branch)
+      probe_pull_request(dispatch, model, conv.device, conv, branch)
     }
     PullRequestLoaded(
-      session~,
       branch~,
-      generation~,
+      request_id~,
       queried~,
       pull_request~,
       compare_url~
     ) => {
-      guard model.find_conversation(channel, session) is Some(conv) else {
+      guard model.conversation_by_pull_request(request_id) is Some(conv) else {
         return (@cmd.none, model)
       }
       // Matched by which request this answers, not by branch: a checkout that
       // moves X → Y → X leaves two lookups for X in flight, and if the newer
       // settles first, matching by name would let the older overwrite it.
-      guard generation == conv.pull_request_generation else {
+      guard Some(request_id) == conv.pull_request_id else {
         return (@cmd.none, model)
       }
       // Read before the answer overwrites it: whether a refresh landed while
@@ -6487,7 +6333,7 @@ fn update_device_msg(
       // A refresh arrived while this lookup was in flight: its answer predates
       // that refresh, so run one more against the branch now checked out.
       if stale && conv.branch is Some(current) && !current.is_empty() {
-        return probe_pull_request(dispatch, model, channel, conv, current)
+        return probe_pull_request(dispatch, model, conv.device, conv, current)
       }
       let model = model.replace_conversation(conv)
       // This answer may have named a base nobody knew when the diffstat beside
@@ -6504,8 +6350,8 @@ fn update_device_msg(
       probe_branch(
         dispatch,
         model,
-        channel,
-        session,
+        conv.device,
+        conv.session_id,
         model.conversation_root(conv),
       )
     }
@@ -6632,7 +6478,7 @@ fn update_device_msg(
       // prior run as a steer. Re-read active and background conversations
       // alike; commits buffer until that snapshot establishes the new run's
       // terminal floor. If an older read is already in flight, mark one
-      // follow-up generation: its pre-Started cut may drain commits, but may
+      // follow-up request: its pre-Started cut may drain commits, but may
       // not establish this run's floor.
       // Every newly observed Started boundary gets a post-Started snapshot,
       // including an owned local start. External/CLI turns may have advanced
@@ -6653,8 +6499,8 @@ fn update_device_msg(
       }
       let sync = if refresh &&
         conv.sync
-        is Reloading(generation~, attempt~, buffered~, reload_after_current=_) {
-        Reloading(generation~, attempt~, buffered~, reload_after_current=true)
+        is Reloading(request_id~, attempt~, buffered~, reload_after_current=_) {
+        Reloading(request_id~, attempt~, buffered~, reload_after_current=true)
       } else {
         conv.sync
       }
@@ -6688,7 +6534,7 @@ fn update_device_msg(
         // only the chip changes it.
         last_run_id: Some(run_id),
       }
-      let (updated, generation) = if refresh {
+      let (updated, request_id) = if refresh {
         model.begin_transcript_reload(conv)
       } else {
         (model.replace_conversation(conv), None)
@@ -6702,10 +6548,10 @@ fn update_device_msg(
         updated.conversation_root(conv),
       )
       let commands = [branch_cmd]
-      if generation is Some(generation) {
+      if request_id is Some(request_id) {
         commands.push(
           session_snapshot_command(
-            dispatch, channel, updated, session, generation, false,
+            dispatch, channel, updated, session, request_id, false,
           ),
         )
       }
@@ -6736,15 +6582,8 @@ fn update_device_msg(
         (@cmd.batch(commands), updated)
       }
     }
-    RunsLoaded(
-      runs~,
-      settled~,
-      approvals~,
-      live~,
-      frontier~,
-      connection_generation~
-    ) => {
-      guard connection_generation == dev.connection_generation else {
+    RunsLoaded(runs~, settled~, approvals~, live~, frontier~, connection_id~) => {
+      guard connection_id == dev.connection_id else {
         return (@cmd.none, model)
       }
       // Accept the snapshot as one state transition. No intermediate replayed
@@ -7000,7 +6839,7 @@ fn update_device_msg(
       // that case too; the conversation that last held the id remains the
       // fallback for unstamped events.
       let conv = if run_id is Some(id) &&
-        model.conversation_by_run(channel, id) is Some(conv) {
+        model.conversation_by_run(id) is Some(conv) {
         Some(conv)
       } else if is_steer_receipt(event) && run_id is Some(id) {
         // Host settling receipts may intentionally trail the terminal event;
@@ -7008,22 +6847,22 @@ fn update_device_msg(
         // the exact pending-steer match before the legacy run fallback.
         let exact = match event {
           SteerApplied(submission_id=Some(submission_id), ..) =>
-            model.conversation_by_pending_steer(channel, submission_id, id)
+            model.conversation_by_pending_steer(submission_id, id)
           SteerDropped(submission_id=Some(submission_id), ..) =>
-            model.conversation_by_pending_steer(channel, submission_id, id)
+            model.conversation_by_pending_steer(submission_id, id)
           _ => None
         }
         if exact is Some(conv) {
           Some(conv)
         } else {
-          model.conversation_by_last_run(channel, id)
+          model.conversation_by_last_run(id)
         }
       } else if is_idle_event(event) {
         if session is Some(session) &&
           model.find_conversation(channel, session) is Some(conv) {
           Some(conv)
         } else if run_id is Some(id) {
-          model.conversation_by_last_run(channel, id)
+          model.conversation_by_last_run(id)
         } else {
           None
         }
@@ -7068,9 +6907,8 @@ fn update_device_msg(
     }
     // Everything else the panel owns (tree, viewer, diagnostics) is the
     // fileeditor package's business; route it there and adopt its state.
-    StartResponded(session~, submission_id~, run_id~, status~, exit_code~) => {
-      guard model.find_conversation(channel, session) is Some(conv) &&
-        conv.has_initial_submission(submission_id) else {
+    StartResponded(submission_id~, run_id~, status~, exit_code~) => {
+      guard model.conversation_by_pending_prompt(submission_id) is Some(conv) else {
         return (@cmd.none, model)
       }
       // The id-bearing reply always settles its exact submission, even when
@@ -7130,7 +6968,7 @@ fn update_device_msg(
         } else {
           settled
         }
-        let (updated, generation) = if missed_started || late_abnormal {
+        let (updated, request_id) = if missed_started || late_abnormal {
           model.ensure_transcript_reload_after_current(next)
         } else {
           (model.replace_conversation(next), None)
@@ -7138,15 +6976,20 @@ fn update_device_msg(
         let (branch_cmd, updated) = probe_branch(
           dispatch,
           updated,
-          channel,
-          session,
+          conv.device,
+          conv.session_id,
           updated.conversation_root(settled),
         )
         let commands = [branch_cmd]
-        if generation is Some(generation) {
+        if request_id is Some(request_id) {
           commands.push(
             session_snapshot_command(
-              dispatch, channel, updated, session, generation, false,
+              dispatch,
+              conv.device,
+              updated,
+              conv.session_id,
+              request_id,
+              false,
             ),
           )
         }
@@ -7175,33 +7018,41 @@ fn update_device_msg(
         } else {
           closed
         }
-        let (model, generation) = model.ensure_transcript_reload_after_current(
+        let (model, request_id) = model.ensure_transcript_reload_after_current(
           next,
         )
         let (sessions, model) = request_sessions_refresh(
-          dispatch, channel, model,
+          dispatch,
+          conv.device,
+          model,
         )
+        let owner_dev = model.device_state(conv.device).unwrap_or(dev)
         let commands = [
           sessions,
           fetch_runs(
             dispatch,
-            channel,
-            model.run_snapshot_frontier(channel),
-            dev.connection_generation,
+            conv.device,
+            model.run_snapshot_frontier(conv.device),
+            owner_dev.connection_id,
           ),
         ]
-        if generation is Some(generation) {
+        if request_id is Some(request_id) {
           commands.push(
             session_snapshot_command(
-              dispatch, channel, model, session, generation, false,
+              dispatch,
+              conv.device,
+              model,
+              conv.session_id,
+              request_id,
+              false,
             ),
           )
         }
         (@cmd.batch(commands), model)
       }
     }
-    StartUndelivered(session~, submission_id~, message~) =>
-      if model.find_conversation(channel, session) is Some(conv) {
+    StartUndelivered(submission_id~, message~) =>
+      if model.conversation_by_pending_prompt(submission_id) is Some(conv) {
         // The response path failed, so whether the host took this prompt is
         // unknowable here. Nothing guesses on the client's behalf: the entry
         // ends and the reload below shows what the record actually holds.
@@ -7221,15 +7072,18 @@ fn update_device_msg(
           }
           let updated = model.replace_conversation(next)
           let (sessions, updated) = request_sessions_refresh(
-            dispatch, channel, updated,
+            dispatch,
+            conv.device,
+            updated,
           )
+          let owner_dev = updated.device_state(conv.device).unwrap_or(dev)
           let commands = [
             sessions,
             fetch_runs(
               dispatch,
-              channel,
-              updated.run_snapshot_frontier(channel),
-              dev.connection_generation,
+              conv.device,
+              updated.run_snapshot_frontier(conv.device),
+              owner_dev.connection_id,
             ),
           ]
           if changed {
@@ -7240,19 +7094,19 @@ fn update_device_msg(
       } else {
         (@cmd.none, model)
       }
-    StartRejected(session~, submission_id~, message~) =>
-      model.reject_start(dispatch, channel, session, submission_id, message)
-    WorktreeSetupFailed(session~, submission_id~, message~) =>
-      model.reject_start(dispatch, channel, session, submission_id, message)
+    StartRejected(submission_id~, message~) =>
+      model.reject_start(dispatch, submission_id, message)
+    WorktreeSetupFailed(submission_id~, message~) =>
+      model.reject_start(dispatch, submission_id, message)
     Error(run_id~, message~, diagnostics~, exit_code~) => {
       // Agent-side semantic errors are lifecycle-only here; their durable
       // status is classified by the subsequent Finished event. Process
       // diagnostics carry `exit_code` and have no durable twin.
       let conv = if run_id is Some(run_id) {
-        if model.conversation_by_run(channel, run_id) is Some(conv) {
+        if model.conversation_by_run(run_id) is Some(conv) {
           Some(conv)
         } else {
-          model.conversation_by_last_run(channel, run_id)
+          model.conversation_by_last_run(run_id)
         }
       } else if channel == model.focused {
         model.active_conversation()
@@ -7293,8 +7147,8 @@ fn update_device_msg(
       } else {
         (@cmd.none, model)
       }
-    GoalRejected(session~, command~, draft~, message~) =>
-      if model.find_conversation(channel, session) is Some(conv) {
+    GoalRejected(command~, draft~, message~) =>
+      if model.conversation_by_goal_command(command) is Some(conv) {
         // A rejection acts only on the send it answers, and only while that
         // send is still the one in flight. The row keeps its actions while a
         // command is out, so the user can send a second over the first — and
@@ -7324,10 +7178,12 @@ fn update_device_msg(
         }
         model.replace_conversation(restored).notify_error(dispatch, message)
       } else {
-        (@cmd.none, model)
+        // The command UUID no longer belongs to mutable goal state, but a
+        // definitive rejection is still worth reporting globally.
+        model.notify_error(dispatch, message)
       }
-    GoalUndelivered(session~, command~, draft~, message~) =>
-      if model.find_conversation(channel, session) is Some(conv) &&
+    GoalUndelivered(command~, draft~, message~) =>
+      if model.conversation_by_goal_command(command) is Some(conv) &&
         conv.goal_pending is Some(pending) &&
         pending.id == command {
         // Only while this send is still the one in flight. It retires
@@ -7359,12 +7215,12 @@ fn update_device_msg(
         (@cmd.none, model)
       }
     Finished(run_id~, status~, answer~) =>
-      if (if model.conversation_by_run(channel, run_id) is Some(conv) {
+      if (if model.conversation_by_run(run_id) is Some(conv) {
           Some(conv)
         } else {
           // RunsSettled may have closed the phase first; Finished is still the
           // authoritative outcome for the conversation that last owned it.
-          model.conversation_by_last_run(channel, run_id)
+          model.conversation_by_last_run(run_id)
         })
         is Some(conv) {
         let first_finish = !(conv.run is NoRun(ended=Some(RunFinished(_))) &&
@@ -7442,15 +7298,15 @@ fn update_device_msg(
         // so the reconciliation ends in Synced either way.
         if first_finish && !base.session_id.is_empty() {
           match base.sync {
-            Reloading(generation~, attempt~, buffered~, reload_after_current~) =>
+            Reloading(request_id~, attempt~, buffered~, reload_after_current~) =>
               // The current snapshot may have been captured before this
               // Finished boundary. Do not start a concurrent read; remember
-              // to run exactly one fresh generation after it settles.
+              // to run exactly one fresh request after it settles.
               if !reload_after_current {
                 next = next.replace_conversation({
                   ..base,
                   sync: Reloading(
-                    generation~,
+                    request_id~,
                     attempt~,
                     buffered~,
                     reload_after_current=true,
@@ -7458,16 +7314,16 @@ fn update_device_msg(
                 })
               }
             Synced | ReloadFailed(..) => {
-              let (reloading, generation) = next.begin_transcript_reload(base)
+              let (reloading, request_id) = next.begin_transcript_reload(base)
               next = reloading
-              if generation is Some(generation) {
+              if request_id is Some(request_id) {
                 commands.push(
                   session_snapshot_command(
                     dispatch,
                     channel,
                     next,
                     base.session_id,
-                    generation,
+                    request_id,
                     false,
                   ),
                 )
@@ -7555,21 +7411,53 @@ fn @interop.ChannelId::test_store_root(
 fn @interop.ChannelId::test_worktrees(
   self : @interop.ChannelId,
 ) -> ProjectWorktrees {
-  { project: self.test_project(), rows: [], generation: 0, }
+  { project: self.test_project(), rows: [] }
 }
 
 ///|
 fn test_conversation() -> Conversation {
-  empty_conversation(
-    @interop.ChannelId::Local,
-    "desktop-test",
-    @interop.ChannelId::Local.test_project(),
-  )
+  {
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      "desktop-test",
+      @interop.ChannelId::Local.test_project(),
+    ),
+    branch_request_id: Some("00000000-0000-8000-8000-000000000001"),
+    pull_request_id: Some("00000000-0000-8000-8000-000000000002"),
+  }
 }
 
 ///|
 fn test_reloading(buffered : Array[BufferedCommit]) -> TranscriptSync {
-  Reloading(generation=1, attempt=1, buffered~, reload_after_current=false)
+  Reloading(
+    request_id=TestTranscriptRequestId,
+    attempt=1,
+    buffered~,
+    reload_after_current=false,
+  )
+}
+
+///|
+/// Test-only: the snapshot request UUID in flight for `session` on `channel`
+/// — by default the foreground load in progress, else the focused device's
+/// active conversation. Reply fixtures must name that exact request; a stale
+/// one names any other UUID.
+fn Model::reload_request_id(
+  self : Model,
+  session? : String,
+  channel? : @interop.ChannelId,
+) -> String raise {
+  let (default_channel, default_session) = match self.loading_conversation {
+    Some(owner) => (owner.channel, owner.session)
+    None => (self.focused, self.active_session)
+  }
+  let channel = channel.unwrap_or(default_channel)
+  let session = session.unwrap_or(default_session)
+  guard self.find_conversation(channel, session) is Some(conv) &&
+    conv.sync is Reloading(request_id~, ..) else {
+    fail("no transcript reload in flight for \{session}")
+  }
+  request_id
 }
 
 ///|
@@ -7589,6 +7477,20 @@ fn test_model() -> Model {
       {
         ..empty_device_state(@interop.ChannelId::Local),
         bridge: Connected,
+        // Stable UUIDs let reply fixtures name the exact in-flight request.
+        // Tests that need a stale reply derive a different UUID explicitly.
+        sessions_request_id: "00000000-0000-8000-8000-000000000011",
+        archived_request_id: "00000000-0000-8000-8000-000000000012",
+        projects_request_id: "00000000-0000-8000-8000-000000000013",
+        worktree_request_ids: [
+          (@interop.ChannelId::Local.test_project(), TestWorktreeRequestId),
+        ],
+        workspace_settings_request_ids: [
+          (
+            @interop.ChannelId::Local.test_project(),
+            TestWorkspaceSettingsRequestId,
+          ),
+        ],
         projects: [@interop.ChannelId::Local.test_project()],
         worktrees: [@interop.ChannelId::Local.test_worktrees()],
       },
@@ -7663,9 +7565,9 @@ fn Model::with_listed(self : Model, ids : Array[String]) -> Model raise {
 ///|
 fn sessions_loaded(
   items : Array[@transcript.SessionListItem],
-  request_generation? : Int = 0,
+  request_id? : String = "00000000-0000-8000-8000-000000000011",
 ) -> Msg {
-  on_home(SessionsLoaded(items, connection_generation=0, request_generation~))
+  on_home(SessionsLoaded(items, request_id~))
 }
 
 ///|
@@ -7760,13 +7662,12 @@ test "the narrow drawer closes when navigation lands elsewhere" {
 ///|
 fn archived_loaded(
   items : Array[@transcript.SessionListItem],
-  request_generation? : Int = 0,
+  request_id? : String = "00000000-0000-8000-8000-000000000012",
 ) -> Msg {
   on_home(
     ArchivedLoaded(
       items,
-      connection_generation=0,
-      request_generation~,
+      request_id~,
       fresh_session="desktop-archive-replacement",
     ),
   )
@@ -7903,7 +7804,7 @@ fn with_pending_prompt(
 ///|
 /// Run A has finished but its exact start response is still in flight; run B
 /// has already been sent and announced on the same conversation.
-fn second_run_started_before_first_response() -> (Model, String)? {
+fn second_run_started_before_first_response() -> (Model, String)? raise {
   let dispatch = test_dispatch()
   let first = with_pending_prompt(
     { ..test_conversation(), run: Starting(submission_id="first-start"), },
@@ -7935,7 +7836,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
       session="desktop-test",
       items=[],
       watermark=1,
-      generation=1,
+      request_id=first_finished.reload_request_id(),
     ),
     first_finished,
   )
@@ -7947,7 +7848,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
       session="desktop-test",
       items=[],
       watermark=1,
-      generation=2,
+      request_id=reconciled.reload_request_id(),
     ),
     reconciled,
   )
@@ -7978,7 +7879,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
 
 ///|
 /// Run A ended with one steer receipt still in flight, then run B started.
-fn second_run_started_before_first_steer_receipt() -> Model? {
+fn second_run_started_before_first_steer_receipt() -> Model? raise {
   let dispatch = test_dispatch()
   let first = with_pending_steers(running_conversation(), ["late steer"])
   let (_, first_finished) = update_dev(
@@ -7996,7 +7897,7 @@ fn second_run_started_before_first_steer_receipt() -> Model? {
       session="desktop-test",
       items=[],
       watermark=1,
-      generation=1,
+      request_id=first_finished.reload_request_id(),
     ),
     first_finished,
   )
@@ -8528,7 +8429,7 @@ test "finished run reloads the named durable session for an old host" {
     running_model(),
   )
   guard finished.active().sync
-    is Reloading(generation=1, reload_after_current=false, ..) else {
+    is Reloading(request_id~, reload_after_current=false, ..) else {
     fail("Finished did not start the compatibility snapshot")
   }
   // Old hosts send no session.event; their post-Finished full snapshot is
@@ -8549,7 +8450,7 @@ test "finished run reloads the named durable session for an old host" {
         },
       ],
       watermark=3,
-      generation=1,
+      request_id~,
     ),
     finished,
   )
@@ -8566,20 +8467,21 @@ test "Finished queues one follow-up behind an older in-flight snapshot" {
     ..running_model().replace_conversation({
       ..running_conversation(),
       sync: test_reloading([]),
-    }),
-    transcript_request_generation: 1,
+    })
   }
   let finish : DeviceMsg = Finished(run_id="r7", status="finished", answer=None)
   let (_, finished) = update_dev(dispatch, finish, model)
   guard finished.active().sync
-    is Reloading(generation=1, reload_after_current=true, ..) else {
+    is Reloading(request_id~, reload_after_current=true, ..) &&
+    request_id == TestTranscriptRequestId else {
     fail("Finished did not remember the post-boundary reload")
   }
   // A duplicate lifecycle notification is idempotent: it is not a second
-  // durable boundary and must not queue another generation.
+  // durable boundary and must not queue another request.
   let (_, duplicate) = update_dev(dispatch, finish, finished)
   guard duplicate.active().sync
-    is Reloading(generation=1, reload_after_current=true, ..) else {
+    is Reloading(request_id~, reload_after_current=true, ..) &&
+    request_id == TestTranscriptRequestId else {
     fail("duplicate Finished changed the queued follow-up")
   }
   let (_, followed) = update_dev(
@@ -8590,13 +8492,14 @@ test "Finished queues one follow-up behind an older in-flight snapshot" {
       session="desktop-test",
       items=[],
       watermark=0,
-      generation=1,
+      request_id=TestTranscriptRequestId,
     ),
     duplicate,
   )
   guard followed.active().sync
-    is Reloading(generation=2, reload_after_current=false, ..) else {
-    fail("the older snapshot did not hand off to one fresh generation")
+    is Reloading(request_id~, reload_after_current=false, ..) &&
+    request_id != TestTranscriptRequestId else {
+    fail("the older snapshot did not hand off to one fresh request")
   }
 }
 
@@ -8818,7 +8721,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
           updated_at_ms: None,
         },
       ],
-      request_generation=committed.dev().sessions_request_generation,
+      request_id=committed.dev().sessions_request_id,
     ),
     committed.activate(
       @interop.ChannelId::Local,
@@ -8941,6 +8844,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
       },
     ],
   })
+  let before = model.dev().sessions_request_id
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
@@ -8952,7 +8856,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
     ),
     model,
   )
-  assert_eq(committed.dev().sessions_request_generation, 1)
+  assert_true(committed.dev().sessions_request_id != before)
   // The store that is already listed asks for nothing: this exact record has
   // its row, and the conversation is new to the page either way.
   let (_, same_store) = update_dev(
@@ -8966,7 +8870,10 @@ test "a commit for an unlisted store refreshes past a same-id row" {
     ),
     committed,
   )
-  assert_eq(same_store.dev().sessions_request_generation, 1)
+  assert_eq(
+    same_store.dev().sessions_request_id,
+    committed.dev().sessions_request_id,
+  )
 }
 
 ///|
@@ -9005,7 +8912,7 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
     ),
     model,
   )
-  assert_eq(first.dev().sessions_request_generation, 0)
+  assert_eq(first.dev().sessions_request_id, model.dev().sessions_request_id)
   guard first.find_conversation(@interop.ChannelId::Local, "desktop-shared")
     is Some(consumed) else {
     fail("listed commit did not materialize its conversation")
@@ -9024,7 +8931,9 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
     ),
     first,
   )
-  assert_eq(committed.dev().sessions_request_generation, 1)
+  assert_true(
+    committed.dev().sessions_request_id != first.dev().sessions_request_id,
+  )
 }
 
 ///|
@@ -9046,8 +8955,12 @@ test "a background session list updates only its channel's same-id workspace" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected, },
-      { ..empty_device_state(remote), bridge: Connected, },
+      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
+      {
+        ..empty_device_state(remote),
+        bridge: Connected,
+        sessions_request_id: "00000000-0000-8000-8000-000000000021",
+      },
     ],
     active_session: "shared",
     conversations: [local_conv, remote_conv],
@@ -9066,8 +8979,7 @@ test "a background session list updates only its channel's same-id workspace" {
             updated_at_ms: None,
           },
         ],
-        connection_generation=0,
-        request_generation=0,
+        request_id="00000000-0000-8000-8000-000000000021",
       ),
     ),
     model,
@@ -9179,7 +9091,14 @@ test "sessions failure pops a toast without touching the transcript" {
     ..test_conversation(),
     messages: [{ kind: User, content: "hi", ts: None, sequence: None, }],
   })
-  let (_, next) = update_dev(dispatch, SessionsFailed("engine exploded"), model)
+  let (_, next) = update_dev(
+    dispatch,
+    SessionsFailed(
+      request_id=model.dev().sessions_request_id,
+      message="engine exploded",
+    ),
+    model,
+  )
   inspect(next.notifications.length(), content="1")
   inspect(
     next.notifications[0].message,
@@ -9260,7 +9179,8 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
     watermark: 1,
   })
   let (_, refreshing) = update_dev(dispatch, BridgeReady, model)
-  guard refreshing.active().sync is Reloading(generation=1, attempt=1, ..) else {
+  guard refreshing.active().sync
+    is Reloading(request_id=first_request_id, attempt=1, ..) else {
     fail("expected the first reconnect refresh")
   }
   let (_, buffered) = update_dev(
@@ -9276,8 +9196,9 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
   )
   let (_, reconnected_again) = update_dev(dispatch, BridgeReady, buffered)
   guard reconnected_again.active().sync
-    is Reloading(generation=1, attempt=1, buffered=commits, ..) else {
-    fail("a second reconnect started another generation")
+    is Reloading(request_id~, attempt=1, buffered=commits, ..) &&
+    request_id == first_request_id else {
+    fail("a second reconnect started another request")
   }
   inspect(commits.length(), content="1")
   inspect(commits[0].sequence, content="3")
@@ -9365,7 +9286,7 @@ test "a reconnect retires the file index watcher until placement returns" {
     owner: Some(owner),
     placement: @fileeditor.PlacementLive(@interop.WorkspaceRoot(root~)),
     watching: Some(watched),
-    watch_generation: 7,
+    watch_id: "watch-7",
   }
   let model = { ..model, file_panel: panel, }
   let file_emit = dispatch.map(msg => FileEditor(msg))
@@ -9379,7 +9300,7 @@ test "a reconnect retires the file index watcher until placement returns" {
     file_emit,
     @fileeditor.FilesIndexed(
       owner~,
-      epoch=loading.request_epoch,
+      checkout_id=loading.checkout_id,
       files=[],
       truncated=false,
     ),
@@ -9400,8 +9321,10 @@ test "a reconnect retires the file index watcher until placement returns" {
     WorktreesLoaded(
       [],
       workspace=@interop.ChannelId::Local.test_project(),
-      connection_generation=reconnected.dev().connection_generation,
-      request_generation=reconnected.dev().worktrees_request_generation,
+      request_id=reconnected
+        .dev()
+        .worktree_request_id(@interop.ChannelId::Local.test_project())
+        .unwrap(),
     ),
     reconnected,
   )
@@ -9429,8 +9352,8 @@ test "device focus retires the outgoing watcher and file index" {
     ..model.file_panel,
     owner: Some(owner),
     placement: @fileeditor.PlacementLive(@interop.WorkspaceRoot(root~)),
-    watching: Some({ owner, root, files: [], directories: [], recursive: true, }),
-    watch_generation: 7,
+    watching: Some({ owner, root, files: [], directories: [], recursive: true }),
+    watch_id: "watch-7",
   }
   let model = { ..model, devices, conversations, file_panel: panel, }
   let (_, loading) = @fileeditor.update(
@@ -9452,7 +9375,7 @@ test "device focus retires the outgoing watcher and file index" {
     next.file_panel.owner is Some({ channel: Remote("remote-device"), .. }),
   )
   assert_true(next.file_panel.watching is None)
-  assert_eq(next.file_panel.watch_generation, 8)
+  assert_true(next.file_panel.watch_id != "watch-7")
   assert_true(next.file_panel.index is @fileeditor.IndexEmpty)
 }
 
@@ -9516,27 +9439,27 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
   }
   let (_, one) = update(
     dispatch,
-    FromDevice(channel, ChannelDown(websocket_epoch=0)),
+    FromDevice(channel, ChannelDown(websocket_id=model.dev().websocket_id)),
     model,
   )
   let (_, due) = update(
     dispatch,
-    FromDevice(channel, ReconnectDue(websocket_epoch=0)),
+    FromDevice(channel, ReconnectDue(websocket_id=one.dev().websocket_id)),
     one,
   )
-  inspect(due.dev().reconnect_attempt, content="1")
+  assert_true(due.dev().reconnect_id != one.dev().reconnect_id)
   // Terminal retirement is covered by the terminal component's disconnect
   // test; the application state owns only the reconnect policy now.
   let (_, two) = update(
     dispatch,
-    FromDevice(channel, ChannelDown(websocket_epoch=0)),
+    FromDevice(channel, ChannelDown(websocket_id=due.dev().websocket_id)),
     due,
   )
   inspect(two.dev().reconnect_failures, content="2")
   assert_true(two.bridge_state() is Connected)
   let (_, three) = update(
     dispatch,
-    FromDevice(channel, ChannelDown(websocket_epoch=0)),
+    FromDevice(channel, ChannelDown(websocket_id=two.dev().websocket_id)),
     two,
   )
   assert_true(three.bridge_state() is BridgeLost(_))
@@ -9569,14 +9492,13 @@ test "late reconnect ticks cannot act on removed or re-added devices" {
   let model = test_model()
   let (_, next) = update(
     dispatch,
-    FromDevice(channel, ReconnectDue(websocket_epoch=1)),
+    FromDevice(channel, ReconnectDue(websocket_id="retired-websocket")),
     model,
   )
   inspect(next.devices.length(), content="1")
   assert_true(next.device_state(channel) is None)
-  // Reusing the relay id after sign-out is not reusing the connection. The
-  // page-wide epoch survives account teardown and advances when the roster
-  // adopts the same id again.
+  // Reusing the relay id after sign-out is not reusing the connection: the
+  // roster adopting the same id again mints a fresh websocket UUID.
   let roster : Array[DeviceMeta] = [
     { id: "same", name: "Mac", hostname: None, online: true, },
   ]
@@ -9591,14 +9513,13 @@ test "late reconnect ticks cannot act on removed or re-added devices" {
   )
   let (_, first) = update(
     dispatch,
-    Console(RosterLoaded(roster, generation=1)),
+    Console(RosterLoaded(roster, request_id=signed.console_request_id())),
     signed,
   )
   let same : @interop.ChannelId = Remote("same")
   guard first.device_state(same) is Some(first_dev) else {
     fail("first device connection missing")
   }
-  inspect(first_dev.websocket_epoch, content="1")
   let (_, out) = update(dispatch, Console(MeUnauthorized), first)
   let (_, signed_again) = update(
     dispatch,
@@ -9607,20 +9528,19 @@ test "late reconnect ticks cannot act on removed or re-added devices" {
   )
   let (_, current) = update(
     dispatch,
-    Console(RosterLoaded(roster, generation=2)),
+    Console(RosterLoaded(roster, request_id=signed_again.console_request_id())),
     signed_again,
   )
   guard current.device_state(same) is Some(current_dev) else {
     fail("re-added device connection missing")
   }
-  inspect(current_dev.websocket_epoch, content="2")
+  assert_true(current_dev.websocket_id != first_dev.websocket_id)
   let (_, stale) = update(
     dispatch,
-    FromDevice(same, ReconnectDue(websocket_epoch=1)),
+    FromDevice(same, ReconnectDue(websocket_id=first_dev.websocket_id)),
     current,
   )
   assert_true(stale.devices == current.devices)
-  inspect(stale.websocket_epoch, content="2")
 }
 
 ///|
@@ -9633,17 +9553,12 @@ test "an explicit rejected fresh start does not force reconnect reloads" {
   )
   let (_, rejected) = update_dev(
     dispatch,
-    StartRejected(
-      session="desktop-test",
-      submission_id="rejected-id",
-      message="host refused",
-    ),
+    StartRejected(submission_id="rejected-id", message="host refused"),
     test_model().replace_conversation(conv),
   )
   inspect(rejected.active().pending_steers.length(), content="0")
   let (_, reconnected) = update_dev(dispatch, BridgeReady, rejected)
   assert_true(reconnected.active().sync is Synced)
-  inspect(reconnected.transcript_request_generation, content="0")
 }
 
 ///|
@@ -9679,7 +9594,7 @@ test "open session tracks the latest load and ignores stale replies" {
       session="desktop-a",
       items=a_items,
       watermark=0,
-      generation=1,
+      request_id=loading_a.reload_request_id(session="desktop-a"),
     ),
     loading_b,
   )
@@ -9699,7 +9614,7 @@ test "open session tracks the latest load and ignores stale replies" {
       session="desktop-b",
       items=b_items,
       watermark=0,
-      generation=2,
+      request_id=loading_b.reload_request_id(session="desktop-b"),
     ),
     after_a,
   )
@@ -9745,7 +9660,7 @@ test "a restored session keeps the placement its listing named" {
       watermark=0,
       goal=None,
       goal_markers=[],
-      generation=1,
+      request_id=loading.reload_request_id(),
     ),
     loading,
   )
@@ -9820,7 +9735,10 @@ test "same-id session loads are fenced by channel owner" {
           },
         ],
         watermark=1,
-        generation=1,
+        request_id=loading_remote.reload_request_id(
+          session="shared",
+          channel=remote,
+        ),
       ),
     ),
     loading_local,
@@ -9861,7 +9779,8 @@ test "reselecting a synced active session reloads idle external writes" {
     reloading.loading_conversation
     is Some({ channel: Local, session: "desktop-test", }),
   )
-  guard reloading.active().sync is Reloading(generation=1, attempt=1, ..) else {
+  guard reloading.active().sync
+    is Reloading(request_id=reselect_request_id, attempt=1, ..) else {
     fail("expected active reselect to catch up")
   }
   let (_, still_single_flight) = update(
@@ -9869,9 +9788,9 @@ test "reselecting a synced active session reloads idle external writes" {
     OpenSession(@interop.ChannelId::Local, "desktop-test"),
     reloading,
   )
-  inspect(still_single_flight.transcript_request_generation, content="1")
   guard still_single_flight.active().sync
-    is Reloading(generation=1, attempt=1, ..) else {
+    is Reloading(request_id~, attempt=1, ..) &&
+    request_id == reselect_request_id else {
     fail("active reselect duplicated an in-flight request")
   }
   let (_, loaded) = update_dev(
@@ -9889,7 +9808,7 @@ test "reselecting a synced active session reloads idle external writes" {
         },
       ],
       watermark=1,
-      generation=1,
+      request_id=reloading.reload_request_id(),
     ),
     still_single_flight,
   )
@@ -9916,7 +9835,6 @@ test "returning to a fresh active chat does not load a missing session" {
   )
   assert_true(next.screen is Chat)
   assert_true(next.loading_conversation is None)
-  inspect(next.transcript_request_generation, content="0")
   assert_true(next.active().sync is Synced)
   inspect(next.active().task, content="unsent draft")
 }
@@ -9931,7 +9849,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
   )
   guard opening.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
     is Some(first) &&
-    first.sync is Reloading(generation=1, ..) else {
+    first.sync is Reloading(request_id=first_request_id, ..) else {
     fail("expected the original request")
   }
   let pruned = opening.activate(
@@ -9950,7 +9868,8 @@ test "pruning and reopening cannot reuse a transcript request token" {
   )
   guard reopened.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
     is Some(second) &&
-    second.sync is Reloading(generation=2, ..) else {
+    second.sync is Reloading(request_id=second_request_id, ..) &&
+    second_request_id != first_request_id else {
     fail("reopened conversation reused its old request token")
   }
   let (_, stale) = update_dev(
@@ -9963,7 +9882,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
         { kind: User, content: "late old snapshot", ts: None, sequence: None, },
       ],
       watermark=9,
-      generation=1,
+      request_id=opening.reload_request_id(),
     ),
     reopened,
   )
@@ -9973,7 +9892,8 @@ test "pruning and reopening cannot reuse a transcript request token" {
   )
   guard stale.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
     is Some(current) &&
-    current.sync is Reloading(generation=2, ..) else {
+    current.sync is Reloading(request_id~, ..) &&
+    request_id == second_request_id else {
     fail("late reply changed the reopened conversation")
   }
   inspect(current.messages.length(), content="0")
@@ -9988,7 +9908,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
         { kind: User, content: "fresh snapshot", ts: None, sequence: None, },
       ],
       watermark=1,
-      generation=2,
+      request_id=reopened.reload_request_id(),
     ),
     stale,
   )
@@ -10026,7 +9946,8 @@ test "archive removal and reopening cannot reuse a transcript request token" {
       "desktop-archived",
     )
     is Some(current) &&
-    current.sync is Reloading(generation=2, ..) else {
+    current.sync is Reloading(request_id=reopened_request_id, ..) &&
+    reopened_request_id != opening.reload_request_id() else {
     fail("archive removal allowed a request token to be reused")
   }
   let (_, stale) = update_dev(
@@ -10044,13 +9965,14 @@ test "archive removal and reopening cannot reuse a transcript request token" {
         },
       ],
       watermark=4,
-      generation=1,
+      request_id=opening.reload_request_id(),
     ),
     reopened,
   )
   guard stale.find_conversation(@interop.ChannelId::Local, "desktop-archived")
     is Some(unchanged) &&
-    unchanged.sync is Reloading(generation=2, ..) else {
+    unchanged.sync is Reloading(request_id~, ..) &&
+    request_id == reopened_request_id else {
     fail("late pre-archive reply changed the reopened conversation")
   }
   inspect(unchanged.messages.length(), content="0")
@@ -10071,7 +9993,7 @@ test "an abandoned session load retries silently" {
     SessionLoadFailed(
       session="desktop-a",
       message="failed to load session desktop-a",
-      generation=1,
+      request_id=loading.reload_request_id(),
     ),
     abandoned,
   )
@@ -10091,7 +10013,7 @@ test "a foreground load preserves state through retries and reports exhaustion" 
   let failure = SessionLoadFailed(
     session="desktop-a",
     message="failed to load session desktop-a: no such file",
-    generation=1,
+    request_id=loading.reload_request_id(),
   )
   let (_, retrying2) = update_dev(dispatch, failure, loading)
   assert_true(
@@ -10161,7 +10083,7 @@ test "a saved export that could not open pops a toast" {
     first.notifications[0].message,
     content="Saved to /exports/conversation.html, but couldn't open it automatically.",
   )
-  assert_eq(first.notification_seq, second.notification_seq)
+  assert_true(first.notifications[0].id != second.notifications[0].id)
   assert_eq(first.notifications.length(), second.notifications.length())
   assert_eq(first.notifications[0].message, second.notifications[0].message)
 }
@@ -10177,13 +10099,21 @@ test "a file-link host failure is visible only for the latest navigation" {
   let newer = model.begin_editor_navigation()
   let (_, stale) = update(
     dispatch,
-    OpenFileFailed(owner~, generation=0, message="old path failed"),
+    OpenFileFailed(
+      owner~,
+      request_id=model.file_panel.file_link_request_id,
+      message="old path failed",
+    ),
     newer,
   )
   inspect(stale.notifications.length(), content="0")
   let (_, current) = update(
     dispatch,
-    OpenFileFailed(owner~, generation=1, message="current path failed"),
+    OpenFileFailed(
+      owner~,
+      request_id=newer.file_panel.file_link_request_id,
+      message="current path failed",
+    ),
     newer,
   )
   inspect(current.notifications.length(), content="1")
@@ -10214,7 +10144,7 @@ test "a Codex file-link failure is fenced by the selected Codex task" {
     dispatch,
     OpenFileFailed(
       owner=hidden_openseek,
-      generation=1,
+      request_id=model.file_panel.file_link_request_id,
       message="hidden OpenSeek failure",
     ),
     model,
@@ -10222,15 +10152,17 @@ test "a Codex file-link failure is fenced by the selected Codex task" {
   inspect(hidden.notifications.length(), content="0")
   let message = OpenFileFailed(
     owner=codex_owner,
-    generation=1,
+    request_id=model.file_panel.file_link_request_id,
     message="Codex path failed",
   )
   let (_, first) = update(dispatch, message, model)
   let (_, second) = update(dispatch, message, model)
   inspect(first.notifications.length(), content="1")
   inspect(first.notifications[0].message, content="Codex path failed")
-  assert_true(first.notifications == second.notifications)
-  assert_eq(first.notification_seq, second.notification_seq)
+  assert_eq(
+    first.notifications.map(toast => toast.message),
+    second.notifications.map(toast => toast.message),
+  )
 }
 
 ///|
@@ -10368,7 +10300,7 @@ test "session loaded swaps the active conversation onto the stored session" {
       session="desktop-stored",
       items~,
       watermark=0,
-      generation=1,
+      request_id=loading.reload_request_id(),
     ),
     loading,
   )
@@ -10380,7 +10312,7 @@ test "session loaded swaps the active conversation onto the stored session" {
       session="desktop-stored",
       items~,
       watermark=0,
-      generation=1,
+      request_id=loading.reload_request_id(),
     ),
     loading,
   )
@@ -10419,7 +10351,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
       session="desktop-stored",
       items~,
       watermark=0,
-      generation=1,
+      request_id=loading_other.reload_request_id(),
     ),
     loading_other,
   )
@@ -10454,7 +10386,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
       session="desktop-test",
       items~,
       watermark=0,
-      generation=1,
+      request_id=TestTranscriptRequestId,
     ),
     loading_same,
   )
@@ -10726,7 +10658,7 @@ test "a distinct started id replaces a stale open run as foreign" {
   inspect(next.active().pending_steers.length(), content="0")
   // The replaced run took its pending input with it and left no placeholder:
   // what the turn actually recorded is in the transcript.
-  guard next.active().sync is Reloading(generation=1, attempt=1, ..) else {
+  guard next.active().sync is Reloading(attempt=1, ..) else {
     fail("a foreign replacement did not refresh the transcript")
   }
   // The replaced run's start belonged to the run that just lost the seat.
@@ -10767,7 +10699,6 @@ test "a repeated started id is idempotent" {
   assert_eq(next.active().turn.streaming_response, Some("current fragment"))
   inspect(next.active().pending_steers.length(), content="1")
   inspect(next.active().pending_steers[0].content, content="current steer")
-  inspect(next.transcript_request_generation, content="0")
   assert_true(next.active().sync is Synced)
 }
 
@@ -10807,11 +10738,7 @@ test "a start failure cannot close a run opened by a winning push" {
   )
   let (_, failed) = update_dev(
     dispatch,
-    StartRejected(
-      session="desktop-test",
-      submission_id="mine",
-      message="start was rejected",
-    ),
+    StartRejected(submission_id="mine", message="start was rejected"),
     opened,
   )
   guard failed.active().run is Open(run_id="r-foreign", stage=Opened) else {
@@ -10826,7 +10753,7 @@ test "a start failure cannot close a run opened by a winning push" {
   inspect(failed.active().task, content="my competing prompt")
   inspect(failed.notifications.length(), content="1")
   inspect(failed.notifications[0].message, content="start was rejected")
-  guard failed.active().sync is Reloading(generation=1, ..) else {
+  guard failed.active().sync is Reloading(..) else {
     fail("the raced start failure did not catch up the transcript")
   }
 }
@@ -10846,18 +10773,14 @@ test "a start failure closes only a still-starting run" {
   let model = test_model().replace_conversation(conv)
   let (_, failed) = update_dev(
     dispatch,
-    StartRejected(
-      session="desktop-test",
-      submission_id="prompt-id",
-      message="start failed",
-    ),
+    StartRejected(submission_id="prompt-id", message="start failed"),
     model,
   )
   assert_true(failed.active().run is NoRun(ended=Some(RunFailed)))
   assert_eq(failed.active().turn.streaming_response, None)
   inspect(failed.notifications.length(), content="1")
   inspect(failed.active().task, content="prompt")
-  inspect(failed.transcript_request_generation, content="0")
+  assert_true(failed.active().sync is Synced)
 }
 
 ///|
@@ -10870,11 +10793,7 @@ test "a matching Started establishes the run after an undelivered response" {
   )
   let (_, failed) = update_dev(
     dispatch,
-    StartUndelivered(
-      session="desktop-test",
-      submission_id="prompt-id",
-      message="connection lost",
-    ),
+    StartUndelivered(submission_id="prompt-id", message="connection lost"),
     test_model().replace_conversation(conv),
   )
   let (_, started) = update_dev(
@@ -10906,7 +10825,6 @@ test "an accepted start response opens the run without Started" {
   let (_, responded) = update_dev(
     dispatch,
     StartResponded(
-      session="desktop-test",
       submission_id="prompt-id",
       run_id="r-response",
       status="accepted",
@@ -10918,7 +10836,7 @@ test "an accepted start response opens the run without Started" {
   assert_true(responded.active().last_run_id is Some("r-response"))
   // The reply is the entry's last consumer: a prompt is sent once.
   inspect(responded.active().pending_steers.length(), content="0")
-  assert_true(responded.active().sync is Reloading(generation=1, ..))
+  assert_true(responded.active().sync is Reloading(..))
   let (_, started) = update_dev(
     dispatch,
     Started(
@@ -10932,8 +10850,8 @@ test "an accepted start response opens the run without Started" {
     responded,
   )
   // The delayed Started is idempotent with the response-first recovery: it
-  // neither drops nor queues a second generation.
-  assert_true(started.active().sync is Reloading(generation=1, ..))
+  // neither drops nor queues a second request.
+  assert_true(started.active().sync is Reloading(..))
   let (_, loaded) = update_dev(
     dispatch,
     SessionRefreshed(
@@ -10951,7 +10869,7 @@ test "an accepted start response opens the run without Started" {
         { kind: User, content: "prompt", ts: None, sequence: None, },
       ],
       watermark=4,
-      generation=1,
+      request_id=responded.reload_request_id(),
     ),
     started,
   )
@@ -10984,7 +10902,6 @@ test "an old-host Started without an id is settled by the exact start response" 
   let (_, responded) = update_dev(
     dispatch,
     StartResponded(
-      session="desktop-test",
       submission_id="prompt-id",
       run_id="r-old-host",
       status="accepted",
@@ -11007,7 +10924,6 @@ test "a late accepted response settles run A without replacing open run B" {
   let (_, responded) = update_dev(
     dispatch,
     StartResponded(
-      session="desktop-test",
       submission_id="first-start",
       run_id="r-first",
       status="accepted",
@@ -11033,7 +10949,6 @@ test "a late failed response for durable run A cannot disturb open run B" {
   let (_, responded) = update_dev(
     dispatch,
     StartResponded(
-      session="desktop-test",
       submission_id="first-start",
       run_id="r-first",
       status="failed",
@@ -11155,7 +11070,7 @@ test "an old empty runs snapshot cannot close a start sent after reconnect" {
     dispatch,
     HostSettingsLoaded(
       host_settings(provider="deepseek", has_deepseek_key=true),
-      connection_generation=None,
+      connection_id=None,
     ),
     bridged,
   )
@@ -11197,11 +11112,7 @@ test "an older start rejection cannot close the current start" {
   )
   let (_, next) = update_dev(
     dispatch,
-    StartRejected(
-      session="desktop-test",
-      submission_id="older-start",
-      message="older start rejected",
-    ),
+    StartRejected(submission_id="older-start", message="older start rejected"),
     test_model().replace_conversation(current),
   )
   assert_true(next.active().run is Starting(submission_id="current-start"))
@@ -11256,10 +11167,10 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
     approvals=[],
     live=["old-run"],
     frontier=generation_one.run_snapshot_frontier(@interop.ChannelId::Local),
-    connection_generation=generation_one.dev().connection_generation,
+    connection_id=generation_one.dev().connection_id,
   )
   let (_, generation_two) = update_dev(dispatch, BridgeReady, generation_one)
-  // The current generation's empty answer wins first. The delayed older
+  // The current connection's empty answer wins first. The delayed older
   // answer must then be rejected whole, before replaying its Started row.
   let (_, current) = update_dev(
     dispatch,
@@ -11269,7 +11180,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
       approvals=[],
       live=[],
       frontier=generation_two.run_snapshot_frontier(@interop.ChannelId::Local),
-      connection_generation=generation_two.dev().connection_generation,
+      connection_id=generation_two.dev().connection_id,
     ),
     generation_two,
   )
@@ -11281,8 +11192,8 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
   assert_true(
     twice.find_conversation(@interop.ChannelId::Local, "old-session") is None,
   )
-  inspect(once.dev().connection_generation, content="2")
-  inspect(twice.dev().connection_generation, content="2")
+  assert_eq(once.dev().connection_id, generation_two.dev().connection_id)
+  assert_eq(twice.dev().connection_id, generation_two.dev().connection_id)
 }
 
 ///|
@@ -11317,7 +11228,7 @@ test "a settlement captured for an older Starting owner cannot close its success
       approvals=[],
       live=[],
       frontier~,
-      connection_generation=model.dev().connection_generation,
+      connection_id=model.dev().connection_id,
     ),
     model,
   )
@@ -11364,7 +11275,7 @@ test "an older positive runs row cannot replace a newer Started" {
       approvals=[],
       live=["r7"],
       frontier~,
-      connection_generation=0,
+      connection_id=model.dev().connection_id,
     ),
     newer,
   )
@@ -11399,7 +11310,7 @@ test "an older positive runs row cannot resurrect a finished run" {
       approvals=[],
       live=["r7"],
       frontier~,
-      connection_generation=0,
+      connection_id=model.dev().connection_id,
     ),
     finished,
   )
@@ -11462,7 +11373,6 @@ test "a failed response after durable Finished cannot resurrect its prompt" {
   let (_, failed) = update_dev(
     dispatch,
     StartResponded(
-      session="desktop-test",
       submission_id="fast-start",
       run_id="r-fast",
       status="failed",
@@ -11480,7 +11390,7 @@ test "a failed response after durable Finished cannot resurrect its prompt" {
       session="desktop-test",
       items=[],
       watermark=0,
-      generation=1,
+      request_id=failed.reload_request_id(),
     ),
     failed,
   )
@@ -11503,7 +11413,6 @@ test "an accepted response consumes a fast-finished prompt without reopening" {
   let (_, accepted) = update_dev(
     dispatch,
     StartResponded(
-      session="desktop-test",
       submission_id="fast-start",
       run_id="r-fast",
       status="accepted",
@@ -11709,26 +11618,14 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
     running_model(),
   )
   assert_true(direct.active().messages[0].ts is Some(1781144351123))
-  // The same stamp survives the buffer a reconnect drains commits through.
+  // The same stamp lands when the commit arrives right after a reconnect.
   let (_, reconnecting) = update_dev(dispatch, BridgeReady, running_model())
-  let (_, buffered) = update_dev(
+  let (_, after_reconnect) = update_dev(
     dispatch,
     stamped("desktop-test", 1, 1781144352000),
     reconnecting,
   )
-  let (_, drained) = update_dev(
-    dispatch,
-    SessionRefreshed(
-      session="desktop-test",
-      items=[],
-      watermark=0,
-      generation=1,
-      goal=None,
-      goal_markers=[],
-    ),
-    buffered,
-  )
-  assert_true(drained.active().messages[0].ts is Some(1781144352000))
+  assert_true(after_reconnect.active().messages[0].ts is Some(1781144352000))
 }
 
 ///|
@@ -11773,7 +11670,7 @@ test "a snapshot never settles a local steer by text" {
       session="desktop-test",
       items=[{ kind: User, content: "same", ts: None, sequence: None, }],
       watermark=1,
-      generation=1,
+      request_id=TestTranscriptRequestId,
     ),
     model,
   )
@@ -11903,10 +11800,7 @@ test "a foreign background run schedules one causal read after Started" {
     watermark: 1,
     sync: test_reloading([]),
   }
-  let model = {
-    ..test_model().replace_conversation(conv),
-    transcript_request_generation: 1,
-  }
+  let model = { ..test_model().replace_conversation(conv) }
   // This previous-run answer arrived behind a snapshot whose read cut was
   // already taken, but before the next run's lifecycle announcement.
   let (_, buffered_answer) = update_dev(
@@ -11942,7 +11836,8 @@ test "a foreign background run schedules one causal read after Started" {
     fail("missing background conversation")
   }
   assert_true(
-    started_conv.sync is Reloading(generation=1, reload_after_current=true, ..),
+    started_conv.sync is Reloading(request_id~, reload_after_current=true, ..) &&
+    request_id == TestTranscriptRequestId,
   )
   let (_, buffered_terminal) = update_dev(
     dispatch,
@@ -11966,7 +11861,7 @@ test "a foreign background run schedules one causal read after Started" {
     ),
     buffered_terminal,
   )
-  // Generation 1 predates Started. It may drain the ordered buffer, and the
+  // The first request predates Started. It may drain the ordered buffer, and the
   // causal read it scheduled still runs after it.
   let (_, after_old_cut) = update_dev(
     dispatch,
@@ -11976,7 +11871,7 @@ test "a foreign background run schedules one causal read after Started" {
       watermark=1,
       goal=None,
       goal_markers=[],
-      generation=1,
+      request_id=TestTranscriptRequestId,
     ),
     buffered_user,
   )
@@ -11984,7 +11879,10 @@ test "a foreign background run schedules one causal read after Started" {
     is Some(after_old) else {
     fail("missing conversation after old snapshot")
   }
-  assert_true(after_old.sync is Reloading(generation=2, ..))
+  guard after_old.sync is Reloading(request_id=causal_request_id, ..) &&
+    causal_request_id != TestTranscriptRequestId else {
+    fail("the old cut did not schedule the causal read")
+  }
   let (_, causal) = update_dev(
     dispatch,
     SessionRefreshed(
@@ -12001,7 +11899,7 @@ test "a foreign background run schedules one causal read after Started" {
       watermark=4,
       goal=None,
       goal_markers=[],
-      generation=2,
+      request_id=causal_request_id,
     ),
     after_old_cut,
   )
@@ -12072,7 +11970,7 @@ test "buffered commits are delivery, not applied chronology" {
       session="desktop-test",
       items=[],
       watermark=1,
-      generation=1,
+      request_id=TestTranscriptRequestId,
     ),
     terminal,
   )
@@ -12699,10 +12597,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   // default: keyless DeepSeek, which needs setup.
   let (_, zero_config) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="openseek"),
-      connection_generation=None,
-    ),
+    HostSettingsLoaded(host_settings(provider="openseek"), connection_id=None),
     test_model(),
   )
   assert_true(zero_config.screen is Chat)
@@ -12711,10 +12606,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   assert_true(zero_config.display_status() is ApiKeyRequired)
   let (_, keyless) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    HostSettingsLoaded(host_settings(provider="deepseek"), connection_id=None),
     test_model(),
   )
   assert_true(keyless.screen is Chat)
@@ -12724,7 +12616,7 @@ test "an unusable first settings snapshot opens the setup modal" {
     dispatch,
     HostSettingsLoaded(
       host_settings(provider="deepseek", has_deepseek_key=true),
-      connection_generation=None,
+      connection_id=None,
     ),
     test_model(),
   )
@@ -12738,10 +12630,7 @@ test "the setup modal tracks endpoint usability without toasts" {
   let dispatch = test_dispatch()
   let (_, keyless) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    HostSettingsLoaded(host_settings(provider="deepseek"), connection_id=None),
     test_model(),
   )
   assert_true(keyless.api_setup_open)
@@ -12752,7 +12641,7 @@ test "the setup modal tracks endpoint usability without toasts" {
     dispatch,
     HostSettingsLoaded(
       host_settings(provider="deepseek", has_deepseek_key=true),
-      connection_generation=None,
+      connection_id=None,
     ),
     { ..test_model(), api_setup_open: true, },
   )
@@ -12763,7 +12652,7 @@ test "the setup modal tracks endpoint usability without toasts" {
     dispatch,
     HostSettingsLoaded(
       host_settings(provider="custom", custom_api_url=""),
-      connection_generation=None,
+      connection_id=None,
     ),
     {
       ..test_model(),
@@ -12782,10 +12671,7 @@ test "the setup modal tracks endpoint usability without toasts" {
   assert_true(!dismissed.api_setup_open)
   let (_, still) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    HostSettingsLoaded(host_settings(provider="deepseek"), connection_id=None),
     dismissed,
   )
   assert_true(!still.api_setup_open)
@@ -12802,7 +12688,7 @@ test "the setup modal tracks endpoint usability without toasts" {
     dispatch,
     HostSettingsLoaded(
       host_settings(provider="custom", custom_api_url=""),
-      connection_generation=None,
+      connection_id=None,
     ),
     {
       ..test_model(),
@@ -12859,7 +12745,7 @@ test "the GLM provider aligns only a fresh chat to its model family" {
     dispatch,
     HostSettingsLoaded(
       host_settings(provider="glm", has_glm_key=true),
-      connection_generation=None,
+      connection_id=None,
     ),
     test_model(),
   )
@@ -12902,10 +12788,7 @@ test "a dismissal survives the mirror reset a reconnect performs" {
   let dispatch = test_dispatch()
   let (_, keyless) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    HostSettingsLoaded(host_settings(provider="deepseek"), connection_id=None),
     test_model(),
   )
   let (_, dismissed) = update(dispatch, DismissApiSetup, keyless)
@@ -12916,10 +12799,7 @@ test "a dismissal survives the mirror reset a reconnect performs" {
   assert_true(!cleared.api_setup_open)
   let (_, reconnected) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    HostSettingsLoaded(host_settings(provider="deepseek"), connection_id=None),
     cleared,
   )
   assert_true(!reconnected.api_setup_open)
@@ -12929,17 +12809,14 @@ test "a dismissal survives the mirror reset a reconnect performs" {
     dispatch,
     HostSettingsLoaded(
       host_settings(provider="deepseek", has_deepseek_key=true),
-      connection_generation=None,
+      connection_id=None,
     ),
     reconnected,
   )
   assert_true(!ready.api_setup_open)
   let (_, broken) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    HostSettingsLoaded(host_settings(provider="deepseek"), connection_id=None),
     ready,
   )
   assert_true(broken.api_setup_open)
@@ -12950,10 +12827,7 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
   let dispatch = test_dispatch()
   let (_, keyless) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    HostSettingsLoaded(host_settings(provider="deepseek"), connection_id=None),
     test_model(),
   )
   let (_, dismissed) = update(dispatch, DismissApiSetup, keyless)
@@ -12970,10 +12844,7 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
   assert_true(reopened.api_setup_open)
   let (_, still_open) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    HostSettingsLoaded(host_settings(provider="deepseek"), connection_id=None),
     reopened,
   )
   assert_true(still_open.api_setup_open)
@@ -13114,10 +12985,7 @@ test "a background device's pushes leave the focused mirrors alone" {
     dispatch,
     FromDevice(
       background,
-      HostSettingsLoaded(
-        host_settings(provider="deepseek"),
-        connection_generation=None,
-      ),
+      HostSettingsLoaded(host_settings(provider="deepseek"), connection_id=None),
     ),
     model,
   )
@@ -13135,7 +13003,7 @@ test "host settings are deferred while this client's writes are in flight" {
     dispatch,
     HostSettingsLoaded(
       host_settings(provider="deepseek", revision=1),
-      connection_generation=None,
+      connection_id=None,
     ),
     model,
   )
@@ -13146,7 +13014,7 @@ test "host settings are deferred while this client's writes are in flight" {
     dispatch,
     HostSettingsApplied(
       host_settings(provider="deepseek", revision=2, has_deepseek_key=true),
-      connection_generation=0,
+      connection_id=model.dev().connection_id,
       cleans_legacy=false,
     ),
     model,
@@ -13161,7 +13029,7 @@ test "host settings are deferred while this client's writes are in flight" {
     dispatch,
     HostSettingsApplied(
       host_settings(provider="deepseek", revision=1),
-      connection_generation=0,
+      connection_id=stacked.dev().connection_id,
       cleans_legacy=false,
     ),
     stacked,
@@ -13183,7 +13051,7 @@ test "a newer peer broadcast beats a delayed local settings reply" {
     dispatch,
     HostSettingsLoaded(
       host_settings(provider="deepseek", revision=7),
-      connection_generation=None,
+      connection_id=None,
     ),
     model,
   )
@@ -13193,7 +13061,7 @@ test "a newer peer broadcast beats a delayed local settings reply" {
     dispatch,
     HostSettingsApplied(
       host_settings(provider="openseek", revision=6),
-      connection_generation=0,
+      connection_id=broadcast.dev().connection_id,
       cleans_legacy=false,
     ),
     broadcast,
@@ -13247,7 +13115,7 @@ test "only the migration settings response owns legacy cleanup" {
     dispatch,
     HostSettingsApplied(
       host_settings(provider="custom", revision=1),
-      connection_generation=0,
+      connection_id=pending.dev().connection_id,
       cleans_legacy=false,
     ),
     pending,
@@ -13258,7 +13126,7 @@ test "only the migration settings response owns legacy cleanup" {
     dispatch,
     HostSettingsApplied(
       host_settings(provider="deepseek", revision=2, has_deepseek_key=true),
-      connection_generation=0,
+      connection_id=unrelated.dev().connection_id,
       cleans_legacy=true,
     ),
     unrelated,
@@ -13281,7 +13149,7 @@ test "a failed migration keeps legacy storage for a later launch" {
     dispatch,
     HostSettingsSaveFailed(
       "host write failed",
-      connection_generation=0,
+      connection_id=pending.dev().connection_id,
       cleans_legacy=true,
     ),
     pending,
@@ -13312,7 +13180,7 @@ test "background settings replies cannot alter the focused host mirror" {
       Local,
       HostSettingsApplied(
         host_settings(provider="deepseek", revision=7),
-        connection_generation=0,
+        connection_id=home.devices[0].connection_id,
         cleans_legacy=false,
       ),
     ),
@@ -13326,7 +13194,7 @@ test "background settings replies cannot alter the focused host mirror" {
       Local,
       HostSettingsSaveFailed(
         "old host failed",
-        connection_generation=0,
+        connection_id=home.devices[0].connection_id,
         cleans_legacy=false,
       ),
     ),
@@ -13453,18 +13321,11 @@ test "sidebar navigation leaves the settings page" {
 /// A `git.branch` reply for the test conversation.
 fn branch_reply(
   branch : String,
-  generation? : Int = 0,
-  session? : String = "desktop-test",
+  request_id? : String = "00000000-0000-8000-8000-000000000001",
   diffstat? : DiffStat,
   base_hint? : String,
 ) -> DeviceMsg {
-  BranchLoaded(
-    session~,
-    branch=Some(branch),
-    diffstat~,
-    generation~,
-    base_hint~,
-  )
+  BranchLoaded(branch=Some(branch), diffstat~, request_id~, base_hint~)
 }
 
 ///|
@@ -13473,15 +13334,14 @@ fn branch_reply(
 /// moved mid-request makes them differ.
 fn pull_request_reply(
   branch : String,
-  generation~ : Int,
+  request_id~ : String,
   queried? : String,
   pull_request? : PullRequest,
   compare_url? : String,
 ) -> DeviceMsg {
   PullRequestLoaded(
-    session="desktop-test",
     branch~,
-    generation~,
+    request_id~,
     queried=Some(queried.unwrap_or(branch)),
     pull_request~,
     compare_url~,
@@ -13535,28 +13395,28 @@ test "a branch reply lands on its conversation and an empty one hides it" {
   // A named branch is also what the pull-request lookup keys on, and the
   // lookup it issued is on record so a second reply cannot stack another.
   assert_eq(named.active().pull_request, Some(probing_for("feature/x")))
-  assert_eq(named.active().pull_request_generation, 1)
+  let pull_request_id = named.active().pull_request_id.unwrap()
   let (_, cleared) = update_dev(dispatch, branch_reply(""), named)
   assert_true(cleared.active().branch is Some(""))
   // A workspace that stopped being a repository keeps no pull request from
   // the branch it used to have — and the lookup still running for it is
   // retired rather than left holding a number the next one would reuse.
   assert_eq(cleared.active().pull_request, None)
-  assert_eq(cleared.active().pull_request_generation, 2)
+  assert_true(cleared.active().pull_request_id is None)
   let (_, overtaken) = update_dev(
     dispatch,
     pull_request_reply(
       "feature/x",
-      generation=1,
+      request_id=pull_request_id,
       pull_request=test_pull_request(),
     ),
     cleared,
   )
   assert_eq(overtaken.active().pull_request, None)
-  // A reply for an unknown session is dropped.
+  // A reply for an unknown request UUID is dropped.
   let (_, ignored) = update_dev(
     dispatch,
-    branch_reply("main", session="desktop-gone"),
+    branch_reply("main", request_id="00000000-0000-8000-8000-000000000099"),
     test_model(),
   )
   assert_true(ignored.active().branch is None)
@@ -13574,6 +13434,7 @@ test "a superseded branch probe cannot put its older answer back" {
     "desktop-test",
     None,
   )
+  let first_id = first.active().branch_request_id.unwrap()
   let (_, second) = probe_branch(
     dispatch,
     first,
@@ -13581,7 +13442,8 @@ test "a superseded branch probe cannot put its older answer back" {
     "desktop-test",
     None,
   )
-  assert_eq(second.active().branch_generation, 2)
+  let second_id = second.active().branch_request_id.unwrap()
+  assert_true(second_id != first_id)
   let newer : DiffStat = {
     added: 9,
     removed: 0,
@@ -13591,7 +13453,7 @@ test "a superseded branch probe cannot put its older answer back" {
   }
   let (_, settled) = update_dev(
     dispatch,
-    branch_reply("feature/new", generation=2, diffstat=newer),
+    branch_reply("feature/new", request_id=second_id, diffstat=newer),
     second,
   )
   assert_eq(settled.active().diffstat, Some(newer))
@@ -13599,7 +13461,7 @@ test "a superseded branch probe cannot put its older answer back" {
   // corrected its stale totals until the next refresh.
   let (_, overtaken) = update_dev(
     dispatch,
-    branch_reply("feature/old", generation=1),
+    branch_reply("feature/old", request_id=first_id),
     settled,
   )
   assert_true(overtaken.active().branch is Some("feature/new"))
@@ -13616,13 +13478,18 @@ test "a pull-request reply only lands on the branch it was asked about" {
     branch_reply("feature/x", base_hint="main"),
     test_model(),
   )
+  let pull_request_id = probing.active().pull_request_id.unwrap()
   let answer = test_pull_request()
   // A reply from a lookup that has since been superseded is dropped. The
   // branch name cannot decide this: a checkout that moves X → Y → X leaves two
   // lookups for X in flight at once, so which request answered is the question.
   let (_, stale) = update_dev(
     dispatch,
-    pull_request_reply("feature/x", generation=0, pull_request=answer),
+    pull_request_reply(
+      "feature/x",
+      request_id="00000000-0000-8000-8000-000000000099",
+      pull_request=answer,
+    ),
     probing,
   )
   assert_eq(stale.active().pull_request.unwrap().pull_request, None)
@@ -13635,7 +13502,7 @@ test "a pull-request reply only lands on the branch it was asked about" {
     dispatch,
     pull_request_reply(
       "feature/x",
-      generation=1,
+      request_id=pull_request_id,
       queried="feature/y",
       pull_request=answer,
     ),
@@ -13646,9 +13513,8 @@ test "a pull-request reply only lands on the branch it was asked about" {
   let (_, settled) = update_dev(
     dispatch,
     PullRequestLoaded(
-      session="desktop-test",
       branch="feature/x",
-      generation=1,
+      request_id=pull_request_id,
       queried=Some("feature/x"),
       pull_request=Some(answer),
       compare_url=None,
@@ -13661,7 +13527,7 @@ test "a pull-request reply only lands on the branch it was asked about" {
   )
   // Refreshing the same branch keeps that answer on screen while it re-probes,
   // so the chip does not blink on every run boundary. A new request means a new
-  // number; the answer it carries is the old one's, kept only until this lookup
+  // UUID; the answer it carries is the old one's, kept only until this lookup
   // replaces it.
   let (_, refreshing) = update_dev(
     dispatch,
@@ -13672,7 +13538,7 @@ test "a pull-request reply only lands on the branch it was asked about" {
     refreshing.active().pull_request,
     Some(probing_for("feature/x", pull_request=answer)),
   )
-  assert_eq(refreshing.active().pull_request_generation, 2)
+  assert_true(refreshing.active().pull_request_id != Some(pull_request_id))
 }
 
 ///|
@@ -13693,17 +13559,22 @@ test "a pull request's base is measured from as soon as it is known" {
     test_model(),
   )
   assert_eq(probing.active().diffstat_hint, None)
-  let branch_generation = probing.active().branch_generation
+  let branch_request_id = probing.active().branch_request_id
+  let pull_request_id = probing.active().pull_request_id.unwrap()
   // The lookup comes back naming a base no local rule would have guessed: this
   // branch sits on another one, so the totals on screen are the stack's, not
   // this branch's. Settling therefore asks for another measurement.
   let stacked = { ..test_pull_request(), base: "feature/x", }
   let (_, settled) = update_dev(
     dispatch,
-    pull_request_reply("feature/y", generation=1, pull_request=stacked),
+    pull_request_reply(
+      "feature/y",
+      request_id=pull_request_id,
+      pull_request=stacked,
+    ),
     probing,
   )
-  assert_true(settled.active().branch_generation > branch_generation)
+  assert_true(settled.active().branch_request_id != branch_request_id)
   // That measurement answers with the base it was given, which is what stops
   // the next settled answer from asking again.
   let measured : DiffStat = {
@@ -13715,7 +13586,7 @@ test "a pull request's base is measured from as soon as it is known" {
     dispatch,
     branch_reply(
       "feature/y",
-      generation=settled.active().branch_generation,
+      request_id=settled.active().branch_request_id.unwrap(),
       diffstat=measured,
       base_hint="feature/x",
     ),
@@ -13727,14 +13598,14 @@ test "a pull request's base is measured from as soon as it is known" {
     dispatch,
     pull_request_reply(
       "feature/y",
-      generation=remeasured.active().pull_request_generation,
+      request_id=remeasured.active().pull_request_id.unwrap(),
       pull_request=stacked,
     ),
     remeasured,
   )
   assert_eq(
-    quiet.active().branch_generation,
-    remeasured.active().branch_generation,
+    quiet.active().branch_request_id,
+    remeasured.active().branch_request_id,
   )
 }
 
@@ -13744,12 +13615,13 @@ test "a checkout that returns to a branch does not accept the older lookup" {
   // X, then away to Y, then back to X: the first X lookup is still running,
   // and a second one for the same branch is now in flight beside it.
   let (_, first) = update_dev(dispatch, branch_reply("feature/x"), test_model())
-  assert_eq(first.active().pull_request_generation, 1)
+  let first_id = first.active().pull_request_id.unwrap()
   let (_, away) = update_dev(dispatch, branch_reply("feature/y"), first)
   let (_, back) = update_dev(dispatch, branch_reply("feature/x"), away)
-  assert_eq(back.active().pull_request_generation, 3)
-  fn answered(generation : Int, number : Int) {
-    pull_request_reply("feature/x", generation~, pull_request={
+  let back_id = back.active().pull_request_id.unwrap()
+  assert_true(back_id != first_id)
+  fn answered(request_id : String, number : Int) {
+    pull_request_reply("feature/x", request_id~, pull_request={
       ..test_pull_request(),
       number,
     })
@@ -13760,11 +13632,11 @@ test "a checkout that returns to a branch does not accept the older lookup" {
   }
 
   // The newer one settles first.
-  let (_, settled) = update_dev(dispatch, answered(3, 710), back)
+  let (_, settled) = update_dev(dispatch, answered(back_id, 710), back)
   assert_eq(picked(settled), 710)
   // The older one for the same branch arrives afterwards. Matching by name
   // would take it; matching by request does not.
-  let (_, overtaken) = update_dev(dispatch, answered(1, 404), settled)
+  let (_, overtaken) = update_dev(dispatch, answered(first_id, 404), settled)
   assert_eq(picked(overtaken), 710)
 }
 
@@ -13776,20 +13648,19 @@ test "a reopened conversation does not accept the old record's replies" {
     branch_reply("feature/x"),
     test_model(),
   )
-  let generation = probing.active().pull_request_generation
+  let request_id = probing.active().pull_request_id.unwrap()
   // Archiving and reopening the same session does not clear the record, it
-  // builds a new one — counters included, which is why they cannot live there.
+  // builds a new one. The new lookup receives a fresh app-global UUID.
   let reopened = probing.replace_conversation(test_conversation())
-  assert_eq(reopened.active().pull_request_generation, 0)
   let (_, again) = update_dev(dispatch, branch_reply("feature/x"), reopened)
-  assert_true(again.active().pull_request_generation > generation)
+  assert_true(again.active().pull_request_id != Some(request_id))
   // The lookup the first record left running answers now, for a checkout the
   // reopened conversation has not confirmed anything about yet.
   let (_, late) = update_dev(
     dispatch,
     pull_request_reply(
       "feature/x",
-      generation~,
+      request_id~,
       pull_request=test_pull_request(),
     ),
     again,
@@ -13816,7 +13687,11 @@ test "a refresh during a lookup is run afterwards, not dropped" {
   let compare = "https://github.test/acme/app/compare/feature/x"
   let (_, followed) = update_dev(
     dispatch,
-    pull_request_reply("feature/x", generation=1, compare_url=compare),
+    pull_request_reply(
+      "feature/x",
+      request_id=queued.active().pull_request_id.unwrap(),
+      compare_url=compare,
+    ),
     queued,
   )
   guard followed.active().pull_request is Some(probe) else {
@@ -13829,7 +13704,10 @@ test "a refresh during a lookup is run afterwards, not dropped" {
   // With nothing queued, settling is the end of it.
   let (_, quiet) = update_dev(
     dispatch,
-    pull_request_reply("feature/x", generation=1),
+    pull_request_reply(
+      "feature/x",
+      request_id=probing.active().pull_request_id.unwrap(),
+    ),
     probing,
   )
   assert_false(quiet.active().pull_request.unwrap().probing)
@@ -13841,14 +13719,16 @@ test "a refresh during a lookup is run afterwards, not dropped" {
     dispatch,
     pull_request_reply(
       "feature/x",
-      generation=1,
+      request_id=queued.active().pull_request_id.unwrap(),
       queried="feature/y",
       pull_request=test_pull_request(),
     ),
     queued,
   )
   assert_eq(elsewhere.active().pull_request, Some(probing_for("feature/x")))
-  assert_eq(elsewhere.active().pull_request_generation, 2)
+  assert_true(
+    elsewhere.active().pull_request_id != queued.active().pull_request_id,
+  )
 }
 
 ///|
@@ -13979,7 +13859,7 @@ test "the composer's git details popover toggles shut again" {
   assert_false(switched.git_details_open)
   let (_, lost) = update_dev(
     dispatch,
-    branch_reply("", generation=opened.active().branch_generation),
+    branch_reply("", request_id=opened.active().branch_request_id.unwrap()),
     opened,
   )
   assert_false(lost.active().shows_git_chip())
@@ -14089,7 +13969,7 @@ test "opening an archived row creates a read-only transcript owner" {
   let (_, loading) = update(dispatch, open, model)
   inspect(loading.active_session, content="desktop-archived")
   assert_true(loading.active().record is ArchivedRecord)
-  guard loading.active().sync is Reloading(generation=1, attempt=1, ..) else {
+  guard loading.active().sync is Reloading(request_id=first_read, attempt=1, ..) else {
     fail("the archived transcript did not begin its first read")
   }
   assert_true(
@@ -14097,10 +13977,11 @@ test "opening an archived row creates a read-only transcript owner" {
     is Some({ channel: Local, session: "desktop-archived", }),
   )
   // Re-selecting the same row stays single-flight; it does not mint a second
-  // generation that could overtake the first archived snapshot.
+  // request UUID that could overtake the first archived snapshot.
   let (_, selected_again) = update(dispatch, open, loading)
-  guard selected_again.active().sync is Reloading(generation=1, ..) else {
-    fail("re-selecting an archived row replaced the in-flight generation")
+  guard selected_again.active().sync is Reloading(request_id~, ..) &&
+    request_id == first_read else {
+    fail("re-selecting an archived row replaced the in-flight request")
   }
 }
 
@@ -14135,7 +14016,8 @@ test "switching same-id archived stores fences the first transcript load" {
     ),
     model,
   )
-  guard loading_first.active().sync is Reloading(generation=1, ..) else {
+  guard loading_first.active().sync
+    is Reloading(request_id=first_store_request_id, ..) else {
     fail("the first archived store did not begin loading")
   }
   assert_eq(loading_first.active().workspace, Project(root=first))
@@ -14148,8 +14030,9 @@ test "switching same-id archived stores fences the first transcript load" {
     ),
     loading_first,
   )
-  guard loading_second.active().sync is Reloading(generation=2, ..) else {
-    fail("the second archived store reused the first request generation")
+  guard loading_second.active().sync is Reloading(request_id~, ..) &&
+    request_id != first_store_request_id else {
+    fail("the second archived store reused the first request UUID")
   }
   assert_eq(loading_second.active().workspace, Project(root=second))
   let (_, stale_first) = update_dev(
@@ -14167,7 +14050,7 @@ test "switching same-id archived stores fences the first transcript load" {
       watermark=1,
       goal=None,
       goal_markers=[],
-      generation=1,
+      request_id=loading_first.reload_request_id(),
     ),
     loading_second,
   )
@@ -14188,7 +14071,7 @@ test "switching same-id archived stores fences the first transcript load" {
       watermark=1,
       goal=None,
       goal_markers=[],
-      generation=2,
+      request_id=loading_second.reload_request_id(),
     ),
     stale_first,
   )
@@ -14249,7 +14132,7 @@ test "an archived snapshot stays open across archived-list reconciliation" {
         },
       ],
       watermark=1,
-      generation=1,
+      request_id=loading.reload_request_id(),
     ),
     loading,
   )
@@ -14287,7 +14170,6 @@ test "unarchiving an open transcript fences its archived snapshot" {
     .replace_conversation(archived)
     .with_dev(dev => { ..dev, archived: [item], }),
     active_session: item.id,
-    transcript_request_generation: 1,
   }
   let (_, restoring) = update_dev(
     dispatch,
@@ -14299,8 +14181,9 @@ test "unarchiving an open transcript fences its archived snapshot" {
     model,
   )
   assert_true(restoring.active().record is LiveRecord)
-  guard restoring.active().sync is Reloading(generation=2, ..) else {
-    fail("unarchive did not fence the archived read with a live generation")
+  guard restoring.active().sync is Reloading(request_id~, ..) &&
+    request_id != TestTranscriptRequestId else {
+    fail("unarchive did not fence the archived read with a live request")
   }
   let (_, stale) = update_dev(
     dispatch,
@@ -14317,7 +14200,7 @@ test "unarchiving an open transcript fences its archived snapshot" {
         },
       ],
       watermark=1,
-      generation=1,
+      request_id=TestTranscriptRequestId,
     ),
     restoring,
   )
@@ -14402,15 +14285,19 @@ test "archived deletion confirmation owns one visible conversation family" {
     cancelled,
   )
   assert_true(cancelled_twice.archived_delete_confirm is None)
+  let before = staged.dev().archived_request_id
   let (_, confirmed) = update(dispatch, ConfirmDeleteArchivedSession, staged)
   assert_true(confirmed.archived_delete_confirm is None)
-  assert_eq(confirmed.dev().archived_request_generation, 1)
+  assert_true(confirmed.dev().archived_request_id != before)
   let (_, confirmed_twice) = update(
     dispatch,
     ConfirmDeleteArchivedSession,
     confirmed,
   )
-  assert_eq(confirmed_twice.dev().archived_request_generation, 1)
+  assert_eq(
+    confirmed_twice.dev().archived_request_id,
+    confirmed.dev().archived_request_id,
+  )
 }
 
 ///|
@@ -14460,9 +14347,10 @@ test "archived deletion keeps same-id rows in other stores" {
   }
   assert_true(confirm.key == key)
   assert_eq(confirm.sessions, ["shared", "shared-sr-1"])
+  let response_id = @uuid.mint()
   let response_model = staged.with_dev(dev => {
     ..dev,
-    archived_request_generation: 1,
+    archived_request_id: response_id,
   })
   let (_, deleted) = update_dev(
     dispatch,
@@ -14470,8 +14358,7 @@ test "archived deletion keeps same-id rows in other stores" {
       key~,
       sessions=confirm.sessions,
       items=[unplaced, project_parent, project_child],
-      connection_generation=0,
-      request_generation=1,
+      request_id=response_id,
       fresh_session="desktop-fresh",
     ),
     response_model,
@@ -14487,10 +14374,11 @@ test "delete response tombstones a family before stale list replies" {
   let parent = archived_item("desktop-parent")
   let child = archived_item("desktop-parent-sr-1")
   let other = archived_item("desktop-other")
+  let response_id = "00000000-0000-8000-8000-000000000022"
   let model = {
     ..test_model().with_dev(dev => {
       ..dev,
-      archived_request_generation: 1,
+      archived_request_id: response_id,
       archived: [parent, child, other],
       sessions: [parent, child],
     }),
@@ -14519,8 +14407,7 @@ test "delete response tombstones a family before stale list replies" {
     },
     sessions=["desktop-parent", "desktop-parent-sr-1"],
     items=[parent, child, other],
-    connection_generation=0,
-    request_generation=1,
+    request_id=response_id,
     fresh_session="desktop-fresh",
   )
   let (_, deleted) = update_dev(dispatch, deleted_msg, model)
@@ -14543,11 +14430,7 @@ test "delete response tombstones a family before stale list replies" {
   )
   let (_, stale_live) = update_dev(
     dispatch,
-    SessionsLoaded(
-      [parent, child],
-      connection_generation=0,
-      request_generation=0,
-    ),
+    SessionsLoaded([parent, child], request_id=@uuid.mint()),
     deleted,
   )
   assert_false(stale_live.dev().sessions.contains(parent))
@@ -14559,9 +14442,10 @@ test "a new Started incarnation retires its exact deleted tombstone" {
   let dispatch = test_dispatch()
   let deleted_item = archived_item("desktop-recreated")
   let project = @interop.ChannelId::Local.test_resource("/project")
+  let response_id = "00000000-0000-8000-8000-000000000023"
   let model = test_model().with_dev(dev => {
     ..dev,
-    archived_request_generation: 1,
+    archived_request_id: response_id,
     archived: [deleted_item],
     projects: [project],
   })
@@ -14574,8 +14458,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
       },
       sessions=[deleted_item.id],
       items=[deleted_item],
-      connection_generation=0,
-      request_generation=1,
+      request_id=response_id,
       fresh_session="desktop-fresh",
     ),
     model,
@@ -14650,7 +14533,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
     is Some(recreated) else {
     fail("the recreated conversation stayed hidden")
   }
-  guard recreated.sync is Reloading(generation~, buffered~, ..) else {
+  guard recreated.sync is Reloading(request_id~, buffered~, ..) else {
     fail("the recreated conversation did not retain its first commit")
   }
   inspect(buffered.length(), content="1")
@@ -14663,7 +14546,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
       watermark=0,
       goal=None,
       goal_markers=[],
-      generation~,
+      request_id~,
     ),
     committed,
   )
@@ -14841,7 +14724,7 @@ test "archive broadcast invalidates the active send target before list replies" 
       mentions: [mention],
     })
     .with_dev(dev => {
-      ..dev.with_workspace_settings(workspace, true, generation=1),
+      ..dev.with_workspace_settings(workspace, true),
       sessions: [
         {
           ..placed_archived_item("desktop-test"),
@@ -14850,7 +14733,7 @@ test "archive broadcast invalidates the active send target before list replies" 
           updated_at_ms: None,
         },
       ],
-      worktrees: [{ project: workspace, rows: [], generation: 1, }],
+      worktrees: [{ project: workspace, rows: [] }],
     })
   let (_, invalidated) = update_dev(
     dispatch,
@@ -15000,7 +14883,7 @@ test "an archive notification wins over a stale live-list reply" {
   )
   let (_, stale) = update(
     dispatch,
-    sessions_loaded([item], request_generation=1),
+    sessions_loaded([item], request_id=@uuid.mint()),
     invalidated,
   )
   assert_false(
@@ -15029,8 +14912,12 @@ test "a background archive removes only its channel's same-id conversation" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected, },
-      { ..empty_device_state(remote), bridge: Connected, },
+      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected },
+      {
+        ..empty_device_state(remote),
+        bridge: Connected,
+        archived_request_id: "00000000-0000-8000-8000-000000000024",
+      },
     ],
     active_session: "shared",
     conversations: [local_conv, remote_conv],
@@ -15041,8 +14928,7 @@ test "a background archive removes only its channel's same-id conversation" {
       remote,
       ArchivedLoaded(
         [archived_item("shared", channel=remote)],
-        connection_generation=0,
-        request_generation=0,
+        request_id="00000000-0000-8000-8000-000000000024",
         fresh_session="remote-fresh",
       ),
     ),
@@ -15077,7 +14963,7 @@ test "an unarchive notification wins over a stale archived-list reply" {
   )
   let (_, stale) = update(
     dispatch,
-    archived_loaded([item], request_generation=1),
+    archived_loaded([item], request_id=@uuid.mint()),
     restored,
   )
   assert_false(
@@ -15122,11 +15008,13 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
     active_session: item.id,
   }
   let (_, ready) = update_dev(dispatch, BridgeReady, model)
-  inspect(ready.dev().connection_generation, content="1")
+  assert_true(ready.dev().connection_id != model.dev().connection_id)
   inspect(ready.dev().archive_overrides.length(), content="0")
+  let live_request_id = ready.dev().sessions_request_id
+  let archived_request_id = ready.dev().archived_request_id
   let (_, live) = update_dev(
     dispatch,
-    SessionsLoaded([item], connection_generation=1, request_generation=1),
+    SessionsLoaded([item], request_id=live_request_id),
     ready,
   )
   guard live.find_conversation(@interop.ChannelId::Local, item.id)
@@ -15140,7 +15028,8 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
     .archive_override({ session: item.id, workspace: item.workspace, })
     is Some(ArchiveLive),
   )
-  guard restored.sync is Reloading(generation=2, ..) else {
+  guard restored.sync is Reloading(request_id~, ..) &&
+    request_id != ready.reload_request_id() else {
     fail("fresh live-list truth did not fence the archived reload")
   }
   let (_, stale_archived) = update_dev(
@@ -15158,7 +15047,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
         },
       ],
       watermark=1,
-      generation=1,
+      request_id=ready.reload_request_id(),
     ),
     live,
   )
@@ -15169,7 +15058,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
   )
   let (_, live_again) = update_dev(
     dispatch,
-    SessionsLoaded([item], connection_generation=1, request_generation=1),
+    SessionsLoaded([item], request_id=live_request_id),
     ready,
   )
   guard live_again.find_conversation(@interop.ChannelId::Local, item.id)
@@ -15177,15 +15066,15 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
     fail("the repeated live-list update dropped the restored record")
   }
   assert_true(restored_again.record is LiveRecord)
-  guard restored_again.sync is Reloading(generation=2, ..) else {
+  guard restored_again.sync is Reloading(request_id~, ..) &&
+    request_id != ready.reload_request_id() else {
     fail("the reconnect transition was not idempotent")
   }
   let (_, reconciled) = update_dev(
     dispatch,
     ArchivedLoaded(
       [],
-      connection_generation=1,
-      request_generation=1,
+      request_id=archived_request_id,
       fresh_session="desktop-unused",
     ),
     stale_archived,
@@ -15198,8 +15087,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
     dispatch,
     ArchivedLoaded(
       [item],
-      connection_generation=0,
-      request_generation=1,
+      request_id=@uuid.mint(),
       fresh_session="desktop-stale",
     ),
     reconciled,
@@ -15217,19 +15105,20 @@ test "an older same-connection live list cannot replace a newer reply" {
     workspace_name: "",
     updated_at_ms: None,
   }
-  let current = { ..old, title: Some("current title"), }
+  let current = { ..old, title: Some("current title") }
+  let current_request_id = "00000000-0000-8000-8000-000000000025"
   let model = test_model().with_dev(dev => {
     ..dev,
-    sessions_request_generation: 2,
+    sessions_request_id: current_request_id,
   })
   let (_, newest) = update_dev(
     dispatch,
-    SessionsLoaded([current], connection_generation=0, request_generation=2),
+    SessionsLoaded([current], request_id=current_request_id),
     model,
   )
   let (_, stale) = update_dev(
     dispatch,
-    SessionsLoaded([old], connection_generation=0, request_generation=1),
+    SessionsLoaded([old], request_id=@uuid.mint()),
     newest,
   )
   inspect(stale.dev().sessions.length(), content="1")
@@ -15246,17 +15135,17 @@ test "an older same-connection archived list cannot replace a newer reply" {
     workspace_name: "",
     updated_at_ms: None,
   }
-  let current = { ..old, title: Some("current title"), }
+  let current = { ..old, title: Some("current title") }
+  let current_request_id = "00000000-0000-8000-8000-000000000026"
   let model = test_model().with_dev(dev => {
     ..dev,
-    archived_request_generation: 2,
+    archived_request_id: current_request_id,
   })
   let (_, newest) = update_dev(
     dispatch,
     ArchivedLoaded(
       [current],
-      connection_generation=0,
-      request_generation=2,
+      request_id=current_request_id,
       fresh_session="desktop-unused",
     ),
     model,
@@ -15265,8 +15154,7 @@ test "an older same-connection archived list cannot replace a newer reply" {
     dispatch,
     ArchivedLoaded(
       [old],
-      connection_generation=0,
-      request_generation=1,
+      request_id=@uuid.mint(),
       fresh_session="desktop-unused",
     ),
     newest,
@@ -15351,10 +15239,13 @@ test "an archive failure pops a toast that a click or its timer dismisses" {
 test "toast ids only ever grow, so timers and toasts stay paired" {
   let dispatch = test_dispatch()
   let (_, first) = update_dev(dispatch, ArchiveFailed("one"), test_model())
-  let (_, second) = update_dev(dispatch, SessionsFailed("two"), first)
+  let (_, second) = update_dev(
+    dispatch,
+    SessionsFailed(request_id=first.dev().sessions_request_id, message="two"),
+    first,
+  )
   inspect(second.notifications.length(), content="2")
   assert_true(second.notifications[0].id != second.notifications[1].id)
-  inspect(second.notification_seq, content="2")
 }
 
 ///|
@@ -15665,8 +15556,8 @@ test "file editor context reports the file body actual visibility" {
     ..file_model,
     dock: {
       ..file_model.dock,
-      tabs: [Browser(id=1)],
-      active: Some(Browser(id=1)),
+      tabs: [Browser(id="browser-1")],
+      active: Some(Browser(id="browser-1")),
     },
   }
   assert_false(file_ctx(browser_model).panel_open)
@@ -15685,7 +15576,7 @@ test "only synchronous file-open messages suppress panel reactivation" {
     channel: Local,
     session: "desktop-test",
   }
-  let identity : ComposerActionIdentity = { owner, archive_generation: 0, }
+  let identity : ComposerActionIdentity = { owner, archive_cursor: 0 }
   assert_true(JumpToMention(0).opens_file_before_panel_reconciliation())
   assert_true(
     ComposerAction(
@@ -15710,7 +15601,13 @@ test "only synchronous file-open messages suppress panel reactivation" {
     QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(),
   )
   assert_true(
-    OpenFileAt(owner~, generation=1, path="a.mbt", line=Some(1), column=None).opens_file_before_panel_reconciliation(),
+    OpenFileAt(
+      owner~,
+      request_id="00000000-0000-8000-8000-000000000043",
+      path="a.mbt",
+      line=Some(1),
+      column=None,
+    ).opens_file_before_panel_reconciliation(),
   )
   // This only starts the asynchronous host lookup. The later OpenFileAt is
   // the message that actually opens the document.
@@ -15732,7 +15629,10 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
   let (_, next) = update(dispatch, JumpToMention(0), model)
   assert_true(next.right_panel_open)
   assert_true(@dock.active_file(next.dock) is Some(Relative("src/main.mbt")))
-  assert_eq(next.file_panel.file_link_generation, 1)
+  assert_true(
+    next.file_panel.file_link_request_id !=
+    model.file_panel.file_link_request_id,
+  )
   // The document table follows the strip: the jumped-to file has an entry.
   assert_true(next.file_panel.docs.contains(Relative("src/main.mbt")))
 }
@@ -15750,7 +15650,7 @@ test "resolved transcript files and directories stay in the right panel" {
     dispatch,
     OpenFileAt(
       owner~,
-      generation=1,
+      request_id=file_pending.file_panel.file_link_request_id,
       path="src/main.mbt",
       line=None,
       column=None,
@@ -15761,7 +15661,11 @@ test "resolved transcript files and directories stay in the right panel" {
   assert_true(@dock.active_file(file.dock) is Some(Relative("src/main.mbt")))
 
   let (_, directory_pending) = update(dispatch, OpenFile("src"), model)
-  let directory_msg = OpenDirectoryAt(owner~, generation=1, path="src")
+  let directory_msg = OpenDirectoryAt(
+    owner~,
+    request_id=directory_pending.file_panel.file_link_request_id,
+    path="src",
+  )
   let (_, directory) = update(dispatch, directory_msg, directory_pending)
   assert_true(directory.right_panel_open)
   assert_true(directory.dock.active is Some(FilePicker))
@@ -15800,7 +15704,6 @@ test "update is pure: a resolved transcript position opens its owning file" {
               present: true,
             },
           ],
-          generation: 1,
         },
       ],
     })
@@ -15808,23 +15711,27 @@ test "update is pure: a resolved transcript position opens its owning file" {
     channel: @interop.ChannelId::Local,
     session: "desktop-test",
   }
-  // Spending the generation is part of the pure click transition, before the
-  // host command runs. Replaying the same input therefore produces the same
-  // token rather than consulting hidden state.
+  // Spending a fresh token is part of the click transition, before the host
+  // command runs; replaying the same input spends another one.
   let (_, first_pending) = update(dispatch, OpenFile("src/main.mbt:1"), model)
   let (_, replayed_pending) = update(
     dispatch,
     OpenFile("src/main.mbt:1"),
     model,
   )
-  assert_eq(first_pending.file_panel.file_link_generation, 1)
-  assert_eq(replayed_pending.file_panel.file_link_generation, 1)
+  let first_request_id = first_pending.file_panel.file_link_request_id
+  assert_true(first_request_id != model.file_panel.file_link_request_id)
+  assert_true(
+    replayed_pending.file_panel.file_link_request_id !=
+    model.file_panel.file_link_request_id,
+  )
   let (_, latest_pending) = update(
     dispatch,
     OpenFile("src/main.mbt:2738:17"),
     first_pending,
   )
-  assert_eq(latest_pending.file_panel.file_link_generation, 2)
+  let latest_request_id = latest_pending.file_panel.file_link_request_id
+  assert_true(latest_request_id != first_request_id)
   // Routing is asynchronous: a path that later goes to the system must not
   // open an empty panel while the host is still classifying it.
   assert_false(latest_pending.right_panel_open)
@@ -15834,12 +15741,12 @@ test "update is pure: a resolved transcript position opens its owning file" {
   let panel_open_pending = { ..latest_pending, right_panel_open: true, }
   let (_, panel_closed) = update(dispatch, ToggleRightPanel, panel_open_pending)
   assert_false(panel_closed.right_panel_open)
-  assert_eq(panel_closed.file_panel.file_link_generation, 3)
+  assert_true(panel_closed.file_panel.file_link_request_id != latest_request_id)
   let (_, after_closed_reply) = update(
     dispatch,
     OpenFileAt(
       owner~,
-      generation=2,
+      request_id=latest_request_id,
       path="src/main.mbt",
       line=Some(2738),
       column=Some(17),
@@ -15857,7 +15764,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
   }
   let (_, panel_opened) = update(dispatch, ToggleRightPanel, hidden_pending)
   assert_true(panel_opened.right_panel_open)
-  assert_eq(panel_opened.file_panel.file_link_generation, 3)
+  assert_true(panel_opened.file_panel.file_link_request_id != latest_request_id)
   assert_true(
     @dock.active_file(panel_opened.dock) is Some(Relative("README.md")),
   )
@@ -15865,7 +15772,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     dispatch,
     OpenFileAt(
       owner~,
-      generation=2,
+      request_id=latest_request_id,
       path="src/main.mbt",
       line=Some(2738),
       column=Some(17),
@@ -15885,7 +15792,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     dispatch,
     OpenFileAt(
       owner~,
-      generation=1,
+      request_id=first_request_id,
       path="src/main.mbt",
       line=Some(1),
       column=None,
@@ -15895,7 +15802,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
   assert_true(old_host_reply.dock.active is None)
   let msg = OpenFileAt(
     owner~,
-    generation=2,
+    request_id=latest_request_id,
     path="src/main.mbt",
     line=Some(2738),
     column=Some(17),
@@ -15922,15 +15829,16 @@ test "update is pure: a resolved transcript position opens its owning file" {
     ),
     first,
   )
-  assert_eq(ordinary_pending.file_panel.file_link_generation, 3)
+  let ordinary_request_id = ordinary_pending.file_panel.file_link_request_id
+  assert_true(ordinary_request_id != latest_request_id)
   let (_, ordinary_failed) = update(
     dispatch,
     FileEditor(
       @fileeditor.FileFailed(
         owner~,
-        epoch=ordinary_pending.file_panel.request_epoch,
+        checkout_id=ordinary_pending.file_panel.checkout_id,
         path=Relative("src/main.mbt"),
-        file_link_generation=Some(3),
+        file_link_request_id=Some(ordinary_request_id),
         review_generation=None,
         message="newer ordinary read failed",
       ),
@@ -15948,11 +15856,11 @@ test "update is pure: a resolved transcript position opens its owning file" {
     FileEditor(
       @fileeditor.FileLoaded(
         owner~,
-        epoch=ordinary_failed.file_panel.request_epoch,
+        checkout_id=ordinary_failed.file_panel.checkout_id,
         path=Relative("src/main.mbt"),
         name="main.mbt",
         file=@fileeditor.Content(content="old", absolute=target, sig="1:3"),
-        file_link_generation=Some(2),
+        file_link_request_id=Some(latest_request_id),
         review_generation=None,
         range=Some(@common.Range(2738, 17, 2738, 17)),
         annotation=None,
@@ -15969,11 +15877,11 @@ test "update is pure: a resolved transcript position opens its owning file" {
     FileEditor(
       @fileeditor.FileLoaded(
         owner~,
-        epoch=first.file_panel.request_epoch,
+        checkout_id=first.file_panel.checkout_id,
         path=Relative("src/main.mbt"),
         name="main.mbt",
         file=@fileeditor.Content(content="old", absolute=target, sig="1:3"),
-        file_link_generation=Some(1),
+        file_link_request_id=Some(first_request_id),
         review_generation=None,
         range=Some(@common.Range(1, 1, 1, 1)),
         annotation=None,
@@ -15992,9 +15900,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
     FileEditor(
       @fileeditor.FileFailed(
         owner~,
-        epoch=first.file_panel.request_epoch,
+        checkout_id=first.file_panel.checkout_id,
         path=Relative("src/main.mbt"),
-        file_link_generation=Some(1),
+        file_link_request_id=Some(first_request_id),
         review_generation=None,
         message="old read failed",
       ),
@@ -16013,9 +15921,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
     FileEditor(
       @fileeditor.FileFailed(
         owner~,
-        epoch=first.file_panel.request_epoch,
+        checkout_id=first.file_panel.checkout_id,
         path=Relative("src/main.mbt"),
-        file_link_generation=Some(2),
+        file_link_request_id=Some(latest_request_id),
         review_generation=None,
         message="current read failed",
       ),
@@ -16032,11 +15940,11 @@ test "update is pure: a resolved transcript position opens its owning file" {
     FileEditor(
       @fileeditor.FileLoaded(
         owner~,
-        epoch=first.file_panel.request_epoch,
+        checkout_id=first.file_panel.checkout_id,
         path=Relative("src/main.mbt"),
         name="main.mbt",
         file=@fileeditor.Content(content="new", absolute=target, sig="2:3"),
-        file_link_generation=Some(2),
+        file_link_request_id=Some(latest_request_id),
         review_generation=None,
         range=Some(@common.Range(2738, 17, 2738, 17)),
         annotation=None,
@@ -16061,15 +15969,14 @@ test "update is pure: a resolved transcript position opens its owning file" {
     OpenFile("src/main.mbt:40"),
     other_file,
   )
-  let pending_generation = inactive_pending.file_panel.file_link_generation
+  let pending_request_id = inactive_pending.file_panel.file_link_request_id
   let (_, inactive_closed) = update(
     dispatch,
     Dock(TabClosed(@dock.DockTab::File(path=Relative("src/main.mbt")))),
     inactive_pending,
   )
-  assert_eq(
-    inactive_closed.file_panel.file_link_generation,
-    pending_generation + 1,
+  assert_true(
+    inactive_closed.file_panel.file_link_request_id != pending_request_id,
   )
   assert_false(
     inactive_closed.dock.tabs.contains(
@@ -16080,7 +15987,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     dispatch,
     OpenFileAt(
       owner~,
-      generation=pending_generation,
+      request_id=pending_request_id,
       path="src/main.mbt",
       line=Some(40),
       column=None,
@@ -16099,12 +16006,12 @@ test "update is pure: a resolved transcript position opens its owning file" {
     FileEditor(FileSelected(path=Relative("README.md"), name="README.md")),
     latest_pending,
   )
-  assert_eq(tree_opened.file_panel.file_link_generation, 3)
+  assert_true(tree_opened.file_panel.file_link_request_id != latest_request_id)
   let (_, delayed_transcript_reply) = update(
     dispatch,
     OpenFileAt(
       owner~,
-      generation=2,
+      request_id=latest_request_id,
       path="src/main.mbt",
       line=Some(2738),
       column=Some(17),
@@ -16122,8 +16029,8 @@ test "update is pure: a resolved transcript position opens its owning file" {
   let (_, stale) = update(
     dispatch,
     OpenFileAt(
-      owner={ ..owner, session: "another-session", },
-      generation=2,
+      owner={ ..owner, session: "another-session" },
+      request_id=latest_request_id,
       path="/work/project/src/main.mbt",
       line=Some(1),
       column=None,
@@ -16436,10 +16343,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
       ..test_conversation(),
       workspace: Project(root=workspace),
     })
-    .with_dev(dev => {
-      ..dev,
-      worktrees: [{ project: workspace, rows: [], generation: 1, }],
-    })
+    .with_dev(dev => { ..dev, worktrees: [{ project: workspace, rows: [] }] })
   let model = {
     ..model,
     file_panel: {
@@ -16451,8 +16355,8 @@ test "chip jumps relativize legacy absolute paths against the roots" {
       tree_open: false,
       explorer_mode: @fileeditor.ExplorerChanges,
       review_view_mode: @fileeditor.ReviewDiff,
-      changes_generation: 7,
-      watch_generation: 11,
+      changes_request_id: "changes-7",
+      watch_id: "watch-11",
     },
   }
   let (_, next) = update(
@@ -16470,10 +16374,9 @@ test "chip jumps relativize legacy absolute paths against the roots" {
   assert_true(next.file_panel.review_view_mode is @fileeditor.ReviewDiff)
   // The eager re-root retains 7. The jump keeps the explorer hidden while the
   // file is active, so Changes waits until the pane is shown before refreshing.
-  assert_true(next.file_panel.changes_generation == 7)
-  // The fresh watch spends the next page-lifetime identity; resetting the
-  // eager panel to zero would let an older generation 1 push collide here.
-  assert_eq(next.file_panel.watch_generation, 12)
+  assert_true(next.file_panel.changes_request_id == "changes-7")
+  // The fresh watch gets a new UUID, so an older watcher push cannot collide.
+  assert_true(next.file_panel.watch_id != "watch-11")
   // The registry can still be loading; once loaded, the project root remains
   // the conversation root when no worktree row binds this session.
   let model = test_model()
@@ -16481,10 +16384,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
       ..test_conversation(),
       workspace: Project(root=workspace),
     })
-    .with_dev(dev => {
-      ..dev,
-      worktrees: [{ project: workspace, rows: [], generation: 1, }],
-    })
+    .with_dev(dev => { ..dev, worktrees: [{ project: workspace, rows: [] }] })
   let (_, next) = update(
     dispatch,
     JumpToLocation(
@@ -16876,7 +16776,6 @@ test "AppInfoLoaded replaces the displayed package version idempotently" {
   let (_, twice) = update(dispatch, AppInfoLoaded("0.2.0"), once)
   assert_eq(once.app_version, "0.2.0")
   assert_eq(twice.app_version, once.app_version)
-  assert_eq(twice.notification_seq, once.notification_seq)
 }
 
 ///|
@@ -16923,7 +16822,6 @@ test "an unavailable startup update reports why without offering Update" {
       result.notifications[0].message,
       content="Move SeekMoon.app to Applications.",
     )
-    assert_eq(result.notification_seq, 1)
   }
 }
 
@@ -17086,7 +16984,6 @@ test "a failed apply says why and withdraws the offer" {
   for failed in [first, replayed] {
     assert_eq(failed.notifications.length(), 1)
     assert_true(failed.notifications[0].message.contains("read-only"))
-    assert_eq(failed.notification_seq, 1)
     assert_true(
       failed.update_ux is UpdateAvailable(version="0.2.0", installable=false),
     )
@@ -17290,7 +17187,7 @@ test "a snapshot drains buffered commits in sequence order" {
         },
       ],
       watermark=2,
-      generation=1,
+      request_id=TestTranscriptRequestId,
     ),
     model,
   )
@@ -17325,7 +17222,7 @@ test "a snapshot already containing the buffered commits drops them" {
         { kind: User, content: "dup", ts: None, sequence: None, },
       ],
       watermark=2,
-      generation=1,
+      request_id=TestTranscriptRequestId,
     ),
     model,
   )
@@ -17355,7 +17252,7 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
       session="desktop-test",
       items=[{ kind: User, content: "one", ts: None, sequence: None, }],
       watermark=2,
-      generation=1,
+      request_id=TestTranscriptRequestId,
     ),
     model,
   )
@@ -17382,8 +17279,10 @@ test "background retries preserve buffered commits until a later success" {
       },
     ]),
   })
-  let model = { ..model, transcript_request_generation: 1, }
-  let failure = SessionRefreshFailed(session="desktop-test", generation=1)
+  let failure = SessionRefreshFailed(
+    session="desktop-test",
+    request_id=TestTranscriptRequestId,
+  )
   let (_, retrying2) = update_dev(dispatch, failure, model)
   guard retrying2.active().sync is Reloading(attempt=2, buffered=buffered2, ..) else {
     fail("expected the second background attempt")
@@ -17400,7 +17299,7 @@ test "background retries preserve buffered commits until a later success" {
   inspect(failed_buffer.length(), content="1")
   inspect(failed.active().messages.length(), content="1")
   inspect(failed.notifications.length(), content="0")
-  // The next commit starts a fresh generation without applying out of order.
+  // The next commit starts a fresh request without applying out of order.
   let (_, retrying) = update_dev(
     dispatch,
     SessionCommitted(
@@ -17413,8 +17312,9 @@ test "background retries preserve buffered commits until a later success" {
     failed,
   )
   guard retrying.active().sync
-    is Reloading(generation=2, buffered=retry_buffer, ..) else {
-    fail("expected a new generation")
+    is Reloading(request_id~, buffered=retry_buffer, ..) &&
+    request_id != TestTranscriptRequestId else {
+    fail("expected a new request")
   }
   inspect(retry_buffer.length(), content="2")
   let (_, healed) = update_dev(
@@ -17425,7 +17325,7 @@ test "background retries preserve buffered commits until a later success" {
       session="desktop-test",
       items=[{ kind: User, content: "kept", ts: None, sequence: None, }],
       watermark=1,
-      generation=2,
+      request_id~,
     ),
     retrying,
   )
@@ -17443,7 +17343,7 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
     ..test_conversation(),
     messages: [{ kind: User, content: "kept", ts: None, sequence: None, }],
     watermark: 1,
-    sync: ReloadFailed(generation=1, buffered=[
+    sync: ReloadFailed(request_id=TestTranscriptRequestId, buffered=[
       {
         sequence: 2,
         ts: None,
@@ -17451,7 +17351,6 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
       },
     ]),
   })
-  let model = { ..model, transcript_request_generation: 1, }
   let (_, reopened) = update(
     dispatch,
     OpenSession(@interop.ChannelId::Local, "desktop-test"),
@@ -17462,7 +17361,8 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
     is Some({ channel: Local, session: "desktop-test", }),
   )
   guard reopened.active().sync
-    is Reloading(generation=2, attempt=1, buffered~, ..) else {
+    is Reloading(request_id~, attempt=1, buffered~, ..) &&
+    request_id != TestTranscriptRequestId else {
     fail("expected the active click to restart the reload")
   }
   inspect(buffered.length(), content="1")
@@ -17474,7 +17374,7 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
       session="desktop-test",
       items=[{ kind: User, content: "kept", ts: None, sequence: None, }],
       watermark=1,
-      generation=2,
+      request_id~,
     ),
     reopened,
   )
@@ -17494,7 +17394,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
     messages: [{ kind: User, content: "current", ts: None, sequence: None, }],
     watermark: 5,
     sync: Reloading(
-      generation=2,
+      request_id=TestTranscriptRequestId,
       attempt=1,
       buffered=[
         {
@@ -17512,19 +17412,18 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[
-        { kind: User, content: "stale generation", ts: None, sequence: None, },
-      ],
+      items=[{ kind: User, content: "stale request", ts: None, sequence: None }],
       watermark=9,
-      generation=1,
+      request_id="00000000-0000-8000-8000-000000000099",
     ),
     model,
   )
   inspect(stale.active().messages[0].content, content="current")
   inspect(stale.active().watermark, content="5")
   assert_eq(stale.active().workspace, Project(root=current_root))
-  guard stale.active().sync is Reloading(generation=2, attempt=1, ..) else {
-    fail("stale generation changed the active reload")
+  guard stale.active().sync is Reloading(request_id~, attempt=1, ..) &&
+    request_id == TestTranscriptRequestId else {
+    fail("stale request changed the active reload")
   }
   let (_, lower) = update_dev(
     dispatch,
@@ -17536,15 +17435,16 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
         { kind: User, content: "older snapshot", ts: None, sequence: None, },
       ],
       watermark=4,
-      generation=2,
+      request_id=TestTranscriptRequestId,
     ),
     stale,
   )
   inspect(lower.active().messages[0].content, content="current")
   inspect(lower.active().watermark, content="5")
   assert_eq(lower.active().workspace, Project(root=current_root))
-  guard lower.active().sync is Reloading(generation=2, attempt=2, buffered~, ..) else {
-    fail("lower watermark did not retry the current generation")
+  guard lower.active().sync is Reloading(request_id~, attempt=2, buffered~, ..) &&
+    request_id == TestTranscriptRequestId else {
+    fail("lower watermark did not retry the current request")
   }
   inspect(buffered.length(), content="1")
 }
@@ -17763,6 +17663,8 @@ test "commit-first assistant semantics do not append again" {
 ///|
 test "a sequence-one commit materializes an unknown hidden conversation" {
   let dispatch = test_dispatch()
+  let model = test_model()
+  let previous_request_id = model.dev().sessions_request_id
   let (_, next) = update_dev(
     dispatch,
     SessionCommitted(
@@ -17772,7 +17674,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       item=@protocol.User({ content: "hi", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
-    test_model(),
+    model,
   )
   inspect(next.conversations.length(), content="2")
   inspect(next.active().messages.length(), content="0")
@@ -17783,7 +17685,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
   inspect(hidden.messages.length(), content="1")
   inspect(hidden.messages[0].content, content="hi")
   inspect(hidden.watermark, content="1")
-  inspect(next.dev().sessions_request_generation, content="1")
+  assert_true(next.dev().sessions_request_id != previous_request_id)
   let (_, repeated) = update_dev(
     dispatch,
     SessionCommitted(
@@ -17795,7 +17697,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
     ),
     next,
   )
-  inspect(repeated.dev().sessions_request_generation, content="1")
+  assert_eq(repeated.dev().sessions_request_id, next.dev().sessions_request_id)
 }
 
 ///|
@@ -17817,7 +17719,7 @@ test "a gapped commit for an unknown session materializes then reloads" {
     fail("gapped commit did not materialize its session")
   }
   inspect(hidden.messages.length(), content="0")
-  guard hidden.sync is Reloading(generation=1, buffered~, ..) else {
+  guard hidden.sync is Reloading(buffered~, ..) else {
     fail("unknown gap did not start a snapshot recovery")
   }
   inspect(buffered.length(), content="1")
@@ -17968,7 +17870,7 @@ fn desktop_model() -> Model {
   let model = { ..test_model(), is_desktop: true, }
   let (_, model) = update(
     test_dispatch(),
-    Terminal(@terminal.TabSelected(key=0)),
+    Terminal(@terminal.TabSelected(key="missing-tab")),
     model,
   )
   model
@@ -17994,15 +17896,16 @@ test "launcher rows open Browser and all Explorer destinations" {
   assert_true(model.right_panel_menu_open)
   let (_, model) = update(dispatch, BrowserTabRequested, model)
   assert_false(model.right_panel_menu_open)
-  assert_true(@dock.active_browser(model.dock) == Some(1))
-  let page = @preview.page(model.preview, 1).unwrap()
+  let browser_id = @dock.active_browser(model.dock).unwrap()
+  let page = @preview.page(model.preview, browser_id).unwrap()
   assert_true(page.url is None)
   assert_false(page.loading)
   let (_, model) = update(dispatch, ExplorerRequested(ExplorerFiles), model)
   assert_true(model.dock.active == Some(@dock.DockTab::FilePicker))
   assert_true(model.file_panel.explorer_mode is ExplorerFiles)
   assert_true(
-    model.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
+    model.dock.tabs ==
+    [@dock.DockTab::Browser(id=browser_id), @dock.DockTab::FilePicker],
   )
   let (_, model) = update(dispatch, ExplorerRequested(ExplorerChanges), model)
   assert_true(model.dock.active == Some(@dock.DockTab::FilePicker))
@@ -18091,7 +17994,6 @@ test "file rows and location jumps cannot open while checkout placement is missi
               present: false,
             },
           ],
-          generation: 1,
         },
       ],
     })
@@ -18157,8 +18059,10 @@ test "language request failures toast once and remain conversation fenced" {
   )
   let (_, first) = update(dispatch, msg, model)
   let (_, same_input) = update(dispatch, msg, model)
-  assert_true(first.notifications == same_input.notifications)
-  assert_eq(first.notification_seq, same_input.notification_seq)
+  assert_eq(
+    first.notifications.map(toast => toast.message),
+    same_input.notifications.map(toast => toast.message),
+  )
   assert_eq(first.notifications.length(), 1)
   assert_eq(
     first.notifications[0].message,
@@ -18185,13 +18089,13 @@ test "file watcher failures toast once and retain lifecycle state" {
   let model = desktop_model()
   let owner = file_ctx(model).owner
   let root = @interop.ChannelId::Local.test_project()
-  let generation = 7
+  let watch_id = "watch-7"
   let panel = {
     ..model.file_panel,
     owner: Some(owner),
     placement: @fileeditor.PlacementLive(@interop.WorkspaceRoot(root~)),
-    watching: Some({ owner, root, files: [], directories: [], recursive: true, }),
-    watch_generation: generation,
+    watching: Some({ owner, root, files: [], directories: [], recursive: true }),
+    watch_id,
   }
   let model = { ..model, file_panel: panel, }
   // A live index keeps the recursive watcher desired while the file pane is
@@ -18207,7 +18111,7 @@ test "file watcher failures toast once and retain lifecycle state" {
     file_emit,
     @fileeditor.FilesIndexed(
       owner~,
-      epoch=loading.request_epoch,
+      checkout_id=loading.checkout_id,
       files=[],
       truncated=false,
     ),
@@ -18217,18 +18121,13 @@ test "file watcher failures toast once and retain lifecycle state" {
   let model = { ..model, file_panel: ready, }
   let message = "File watching stopped: too many open files"
   let failure = FileEditor(
-    @fileeditor.FileWatchFailed(
-      channel=owner.channel,
-      root~,
-      generation="\{file_ctx(model).watch_namespace}:\{generation}",
-      message~,
-    ),
+    @fileeditor.FileWatchFailed(root~, watch_id=ready.watch_id, message~),
   )
   let (_, failed) = update(dispatch, failure, model)
   assert_eq(failed.file_panel.watch_error, Some(message))
   assert_eq(failed.notifications.length(), 1)
   assert_eq(failed.notifications[0].message, message)
-  // The same current-generation notification neither mutates watcher state
+  // The same current-watch notification neither mutates watcher state
   // again nor stacks another toast while the first one is still visible.
   let (_, repeated) = update(dispatch, failure, failed)
   assert_eq(repeated.file_panel.watch_error, Some(message))
@@ -18239,9 +18138,8 @@ test "file watcher failures toast once and retain lifecycle state" {
     dispatch,
     FileEditor(
       @fileeditor.FileWatchFailed(
-        channel=owner.channel,
         root~,
-        generation="\{file_ctx(model).watch_namespace}:\{generation - 1}",
+        watch_id="stale-watch-id",
         message="stale watcher failure",
       ),
     ),
@@ -18255,17 +18153,18 @@ test "file watcher failures toast once and retain lifecycle state" {
 test "web links open (and reuse) a dock browser tab; other schemes do not" {
   let dispatch = test_dispatch()
   let model = desktop_model()
-  let generation = model.file_panel.file_link_generation
+  let request_id = model.file_panel.file_link_request_id
   let (_, model) = update(
     dispatch,
     ExternalLinkClicked("http://127.0.0.1:5173/"),
     model,
   )
   assert_true(model.right_panel_open)
-  assert_eq(model.file_panel.file_link_generation, generation + 1)
-  assert_true(@dock.active_browser(model.dock) == Some(1))
+  let first_request_id = model.file_panel.file_link_request_id
+  assert_true(first_request_id != request_id)
+  let first_id = @dock.active_browser(model.dock).unwrap()
   assert_true(
-    @preview.page(model.preview, 1).unwrap().url ==
+    @preview.page(model.preview, first_id).unwrap().url ==
     Some("http://127.0.0.1:5173/"),
   )
   // The terminal component forwards its semantic link action to this same
@@ -18276,10 +18175,12 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
     model,
   )
   assert_eq(model.dock.tabs.length(), 2)
-  assert_eq(model.file_panel.file_link_generation, generation + 2)
-  assert_true(@dock.active_browser(model.dock) == Some(2))
+  let second_request_id = model.file_panel.file_link_request_id
+  assert_true(second_request_id != first_request_id)
+  let second_id = @dock.active_browser(model.dock).unwrap()
+  assert_true(second_id != first_id)
   assert_true(
-    @preview.page(model.preview, 2).unwrap().url ==
+    @preview.page(model.preview, second_id).unwrap().url ==
     Some("https://terminal.example/docs"),
   )
   // The same URL re-activates the existing tab instead of duplicating, and
@@ -18291,13 +18192,14 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
   )
   assert_eq(model.dock.tabs.length(), 2)
   assert_eq(model.preview.pages.length(), 2)
-  assert_true(@dock.active_browser(model.dock) == Some(1))
+  let third_request_id = model.file_panel.file_link_request_id
+  assert_true(third_request_id != second_request_id)
+  assert_true(@dock.active_browser(model.dock) == Some(first_id))
   assert_true(
-    @preview.page(model.preview, 1).unwrap().url ==
+    @preview.page(model.preview, first_id).unwrap().url ==
     Some("http://127.0.0.1:5173/"),
   )
-  assert_true(@preview.page(model.preview, 1).unwrap().loading)
-  assert_eq(model.file_panel.file_link_generation, generation + 3)
+  assert_true(@preview.page(model.preview, first_id).unwrap().loading)
   // External sites are web pages too: they get their own tab.
   let (_, model) = update(
     dispatch,
@@ -18305,8 +18207,10 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
     model,
   )
   assert_eq(model.dock.tabs.length(), 3)
-  assert_true(@dock.active_browser(model.dock) == Some(3))
-  assert_eq(model.file_panel.file_link_generation, generation + 4)
+  let third_id = @dock.active_browser(model.dock).unwrap()
+  assert_true(third_id != first_id && third_id != second_id)
+  let fourth_request_id = model.file_panel.file_link_request_id
+  assert_true(fourth_request_id != third_request_id)
   // A non-web scheme keeps the system handler: no tab appears.
   let (_, model) = update(
     dispatch,
@@ -18314,7 +18218,7 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
     model,
   )
   assert_eq(model.dock.tabs.length(), 3)
-  assert_eq(model.file_panel.file_link_generation, generation + 4)
+  assert_eq(model.file_panel.file_link_request_id, fourth_request_id)
   // So does a link clicked on another screen, where the dock is not on
   // screen to show a tab — Settings' device-page link wants the browser the
   // user is signed in to anyway.
@@ -18325,7 +18229,7 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
   )
   assert_eq(settings.dock.tabs.length(), 3)
   assert_eq(settings.preview.pages.length(), 3)
-  assert_eq(settings.file_panel.file_link_generation, generation + 4)
+  assert_eq(settings.file_panel.file_link_request_id, fourth_request_id)
 }
 
 ///|
@@ -18352,9 +18256,9 @@ test "Codex web links use the same dock browser route as OpenSeek" {
     model,
   )
   assert_true(model.right_panel_open)
-  assert_true(@dock.active_browser(model.dock) == Some(1))
+  let browser_id = @dock.active_browser(model.dock).unwrap()
   assert_true(
-    @preview.page(model.preview, 1).unwrap().url ==
+    @preview.page(model.preview, browser_id).unwrap().url ==
     Some("https://github.com/moonbit-community/pty/pull/18"),
   )
 }
@@ -18366,8 +18270,12 @@ test "same-URL reuse scans this strip, not the global page map" {
   // Another conversation's parked strip already holds this URL: its page
   // sits in the global map with no tab in this strip. It must not shadow
   // this strip's own tab.
-  let (foreign, _) = @preview.open_page(@preview.State::empty(), url~)
-  let model = { ..desktop_model(), preview: foreign, }
+  let foreign = @preview.open_page(
+    @preview.State::empty(),
+    id="foreign-browser",
+    url~,
+  )
+  let model = { ..desktop_model(), preview: foreign }
   let (_, model) = update(dispatch, ExternalLinkClicked(url), model)
   assert_eq(model.dock.tabs.length(), 1)
   assert_eq(model.preview.pages.length(), 2)
@@ -18444,39 +18352,40 @@ test "submitting the address bar normalizes the draft and commits it" {
   let model = desktop_model()
   let (_, model) = update(dispatch, ToggleRightPanel, model)
   let (_, model) = update(dispatch, BrowserTabRequested, model)
+  let browser_id = @dock.active_browser(model.dock).unwrap()
   let (_, model) = update(
     dispatch,
     BrowserAddressEdited("localhost:5173"),
     model,
   )
-  let generation = model.file_panel.file_link_generation
+  let request_id = model.file_panel.file_link_request_id
   let (_, model) = update(dispatch, BrowserNavigateSubmitted, model)
-  let page = @preview.page(model.preview, 1).unwrap()
+  let page = @preview.page(model.preview, browser_id).unwrap()
   assert_true(page.url == Some("http://localhost:5173"))
   assert_eq(page.input, "http://localhost:5173")
   assert_true(page.loading)
-  assert_eq(model.file_panel.file_link_generation, generation + 1)
+  assert_true(model.file_panel.file_link_request_id != request_id)
   // A non-navigable draft changes nothing — including a bare scheme, which
   // the host would reject after the URL had already been committed.
   let (_, edited) = update(dispatch, BrowserAddressEdited("two words"), model)
   let (_, unchanged) = update(dispatch, BrowserNavigateSubmitted, edited)
   assert_true(
-    @preview.page(unchanged.preview, 1).unwrap().url ==
+    @preview.page(unchanged.preview, browser_id).unwrap().url ==
     Some("http://localhost:5173"),
   )
   assert_eq(
-    unchanged.file_panel.file_link_generation,
-    model.file_panel.file_link_generation,
+    unchanged.file_panel.file_link_request_id,
+    model.file_panel.file_link_request_id,
   )
   let (_, edited) = update(dispatch, BrowserAddressEdited("http://"), unchanged)
   let (_, still) = update(dispatch, BrowserNavigateSubmitted, edited)
   assert_true(
-    @preview.page(still.preview, 1).unwrap().url ==
+    @preview.page(still.preview, browser_id).unwrap().url ==
     Some("http://localhost:5173"),
   )
   assert_eq(
-    still.file_panel.file_link_generation,
-    model.file_panel.file_link_generation,
+    still.file_panel.file_link_request_id,
+    model.file_panel.file_link_request_id,
   )
 }
 
@@ -18489,9 +18398,10 @@ test "navigating an already-placed tab re-places its view" {
     ExternalLinkClicked("http://127.0.0.1:5173/"),
     model,
   )
-  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700, }
+  let browser_id = @dock.active_browser(model.dock).unwrap()
+  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700 }
   let (_, model) = update(dispatch, BrowserPaneMeasured(rect~), model)
-  assert_true(model.browser_pane.shown == Some(1))
+  assert_true(model.browser_pane.shown == Some(browser_id))
   // The host may have rebuilt the view under `browser.navigate` (nothing
   // acknowledges the ops that placed the old one), and a rebuilt view is
   // hidden at a placeholder size. Keeping the placement would leave the tab
@@ -18506,7 +18416,7 @@ test "navigating an already-placed tab re-places its view" {
   assert_true(navigated.browser_pane.rect is None)
   // …and the re-measure it provokes places the view again.
   let (_, replaced) = update(dispatch, BrowserPaneMeasured(rect~), navigated)
-  assert_true(replaced.browser_pane.shown == Some(1))
+  assert_true(replaced.browser_pane.shown == Some(browser_id))
   assert_true(replaced.browser_pane.rect == Some(rect))
 }
 
@@ -18675,9 +18585,10 @@ test "pane measurements place the active view and idempotently settle" {
     ExternalLinkClicked("http://127.0.0.1:5173/"),
     model,
   )
-  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700, }
+  let browser_id = @dock.active_browser(model.dock).unwrap()
+  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700 }
   let (_, model) = update(dispatch, BrowserPaneMeasured(rect~), model)
-  assert_true(model.browser_pane.shown == Some(1))
+  assert_true(model.browser_pane.shown == Some(browser_id))
   assert_true(model.browser_pane.rect == Some(rect))
   let (_, again) = update(dispatch, BrowserPaneMeasured(rect~), model)
   assert_true(again == model)
@@ -18697,9 +18608,10 @@ test "the launcher popup and final tab close both retire the shown view" {
     ExternalLinkClicked("http://127.0.0.1:5173/"),
     model,
   )
-  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700, }
+  let browser_id = @dock.active_browser(model.dock).unwrap()
+  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700 }
   let (_, model) = update(dispatch, BrowserPaneMeasured(rect~), model)
-  assert_true(model.browser_pane.shown == Some(1))
+  assert_true(model.browser_pane.shown == Some(browser_id))
   // The popup overlaps the pane, so the native view must hide under it.
   let (_, covered) = update(dispatch, ToggleRightPanelMenu, model)
   assert_true(covered.browser_pane.shown is None)
@@ -18707,17 +18619,22 @@ test "the launcher popup and final tab close both retire the shown view" {
   let closing = { ..model, right_panel_expanded: true, }
   let (_, closed) = update(
     dispatch,
-    Dock(TabClosed(@dock.DockTab::Browser(id=1))),
+    Dock(TabClosed(@dock.DockTab::Browser(id=browser_id))),
     closing,
   )
   let (_, closed_again) = update(
     dispatch,
-    Dock(TabClosed(@dock.DockTab::Browser(id=1))),
+    Dock(TabClosed(@dock.DockTab::Browser(id=browser_id))),
     closing,
   )
-  assert_true(closed_again == closed)
+  assert_true(
+    closed_again.dock == closed.dock &&
+    closed_again.preview == closed.preview &&
+    closed_again.browser_pane == closed.browser_pane &&
+    closed_again.right_panel_open == closed.right_panel_open,
+  )
   assert_true(closed.browser_pane.shown is None)
-  assert_true(@preview.page(closed.preview, 1) is None)
+  assert_true(@preview.page(closed.preview, browser_id) is None)
   assert_true(closed.dock.tabs.is_empty())
   assert_false(closed.right_panel_open)
   assert_false(closed.right_panel_menu_open)
@@ -18737,18 +18654,20 @@ test "closing a background Browser tab keeps the shown view placement" {
     ExternalLinkClicked("http://127.0.0.1:5173/two"),
     first,
   )
-  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700, }
+  let first_id = @dock.active_browser(first.dock).unwrap()
+  let second_id = @dock.active_browser(second.dock).unwrap()
+  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700 }
   let (_, shown) = update(dispatch, BrowserPaneMeasured(rect~), second)
-  assert_true(shown.browser_pane.shown == Some(2))
+  assert_true(shown.browser_pane.shown == Some(second_id))
   let (_, closed) = update(
     dispatch,
-    Dock(TabClosed(@dock.DockTab::Browser(id=1))),
+    Dock(TabClosed(@dock.DockTab::Browser(id=first_id))),
     shown,
   )
-  assert_true(closed.browser_pane.shown == Some(2))
+  assert_true(closed.browser_pane.shown == Some(second_id))
   assert_true(closed.browser_pane.rect == Some(rect))
-  assert_true(@preview.page(closed.preview, 1) is None)
-  assert_true(@preview.page(closed.preview, 2) is Some(_))
+  assert_true(@preview.page(closed.preview, first_id) is None)
+  assert_true(@preview.page(closed.preview, second_id) is Some(_))
   assert_true(closed.right_panel_open)
 }
 
@@ -18761,9 +18680,10 @@ test "full-screen modals hide the native view and closing restores it" {
     ExternalLinkClicked("http://127.0.0.1:5173/"),
     model,
   )
-  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700, }
+  let browser_id = @dock.active_browser(model.dock).unwrap()
+  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700 }
   let (_, model) = update(dispatch, BrowserPaneMeasured(rect~), model)
-  assert_true(model.browser_pane.shown == Some(1))
+  assert_true(model.browser_pane.shown == Some(browser_id))
   // The workspace picker's modal covers the pane; native views z-order
   // above HTML, so the view must hide first.
   let (_, covered) = update(dispatch, PickProject(Local), model)
@@ -18776,7 +18696,7 @@ test "full-screen modals hide the native view and closing restores it" {
     covered,
   )
   let (_, restored) = update(dispatch, BrowserPaneMeasured(rect~), closed)
-  assert_true(restored.browser_pane.shown == Some(1))
+  assert_true(restored.browser_pane.shown == Some(browser_id))
   // Setup API owns the whole screen too. The browser is a native view above
   // the HTML shell, so opening the modal must hide it; dismissing the modal
   // then re-measures and restores the active Browser tab.
@@ -18790,11 +18710,10 @@ test "full-screen modals hide the native view and closing restores it" {
     BrowserPaneMeasured(rect~),
     setup_closed,
   )
-  assert_true(setup_restored.browser_pane.shown == Some(1))
-  // The composer's git popover opens upward over the pane's bottom-left
+  assert_true(setup_restored.browser_pane.shown == Some(browser_id))
+  // The composer's Git popover opens upward over the pane's bottom-left
   // corner, so a native view left showing would paint straight over it. The
-  // popover needs a branch to have a trigger at all, so give the
-  // conversation one before opening it.
+  // popover needs a branch to have a trigger at all.
   let (_, on_branch) = update_dev(dispatch, branch_reply("feature/x"), restored)
   let (_, detailing) = update(dispatch, ToggleGitDetails, on_branch)
   assert_true(detailing.browser_pane.shown is None)
@@ -18876,18 +18795,16 @@ test "a sub-run's progress refreshes the child transcript on screen" {
     ),
     page,
   )
-  // A fresh generation was minted for the read. `Cmd` is opaque, so this is
+  // A fresh request UUID was minted for the read. `Cmd` is opaque, so this is
   // what separates an issued load from a conversation parked in `Reloading`
   // with nothing on the way to settle it.
-  let generation = page.transcript_request_generation + 1
-  assert_eq(next.transcript_request_generation, generation)
   guard subrun_child_of(next).sync
-    is Reloading(generation=minted, reload_after_current=false, ..) else {
+    is Reloading(request_id=minted, reload_after_current=false, ..) else {
     fail("expected the viewed child to start a background reload")
   }
-  assert_eq(minted, generation)
-  // The reply that generation fences is accepted and adopted, proving the read
-  // this started is one the model can actually settle.
+  assert_false(minted.is_blank())
+  // The reply that UUID fences is accepted and adopted, proving the read this
+  // started is one the model can actually settle.
   let (_, settled) = update_dev(
     test_dispatch(),
     SessionRefreshed(
@@ -18903,7 +18820,7 @@ test "a sub-run's progress refreshes the child transcript on screen" {
       watermark=5,
       goal=None,
       goal_markers=[],
-      generation~,
+      request_id=minted,
     ),
     next,
   )
@@ -18959,7 +18876,7 @@ test "progress during an in-flight read is coalesced, not dropped" {
     subrun_page(
       active="desktop-test-sr-1",
       child_sync=Reloading(
-        generation=1,
+        request_id="child-reload-current",
         attempt=1,
         buffered=[],
         reload_after_current=false,
@@ -18967,8 +18884,12 @@ test "progress during an in-flight read is coalesced, not dropped" {
     ),
   )
   guard subrun_child_of(next).sync
-    is Reloading(generation=1, reload_after_current=true, ..) else {
-    fail("expected the in-flight read to be followed by one fresh generation")
+    is Reloading(
+      request_id="child-reload-current",
+      reload_after_current=true,
+      ..
+    ) else {
+    fail("expected the in-flight read to be followed by one fresh request")
   }
 }
 
@@ -19013,11 +18934,8 @@ test "a sub-run's finish refreshes the child transcript one last time" {
     ),
     page,
   )
-  assert_eq(
-    next.transcript_request_generation,
-    page.transcript_request_generation + 1,
-  )
-  guard subrun_child_of(next).sync is Reloading(..) else {
+  guard subrun_child_of(next).sync is Reloading(request_id~, ..) else {
     fail("expected the finish to catch the child transcript up")
   }
+  assert_false(request_id.is_blank())
 }

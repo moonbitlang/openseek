@@ -10,10 +10,10 @@
 /// the rows inside it — a directory's subdirectories, or the Windows drive
 /// list's drives. `loading` marks a browse or folder creation in flight; a
 /// failed operation pops a toast while the previous listing stays usable.
-/// `channel` owns every browse and the eventual project mutation;
-/// `generation` numbers that picker's latest request. Both ride on replies,
-/// so neither a superseded navigation nor a closed picker from another
-/// device can replace the current listing.
+/// `channel` selects the host for browsing and the eventual project mutation;
+/// `request_id` is the UUID of the latest request. Only the UUID rides on
+/// replies, so a superseded navigation or a closed picker cannot replace the
+/// current listing.
 ///
 /// Opaque outside this package: the shell holds the value but cannot read
 /// into it — every transition goes through `open`, `handle`, `view`, or
@@ -33,7 +33,7 @@ struct State {
   // commits that directory without waiting for a separate Enter press.
   path_draft : String?
   path_selection : Int
-  generation : Int
+  request_id : String
 } derive(Eq)
 
 ///|
@@ -42,8 +42,8 @@ pub extend State with Eq::{equal, not_equal}
 ///|
 /// The fence expected by the current host reply. Exposed with the otherwise
 /// opaque state so black-box adapters can drive the state machine directly.
-pub fn State::request_generation(self : State) -> Int {
-  self.generation
+pub fn State::request_id(self : State) -> String {
+  self.request_id
 }
 
 ///|
@@ -65,17 +65,12 @@ pub(all) enum Msg {
   // a path pasted while the picker is open.
   Navigate(String)
   // One location's listing came back from the host — a directory, or the
-  // Windows drive list; `generation` names the browse request it answers,
+  // Windows drive list; `request_id` names the browse request it answers,
   // so a stale reply is dropped.
-  Loaded(
-    channel~ : @interop.ChannelId,
-    location~ : Location,
-    entries~ : Array[String],
-    generation~ : Int
-  )
+  Loaded(location~ : Location, entries~ : Array[String], request_id~ : String)
   // A browse or create failed; the shell pops the message as a toast and the
   // previous listing stays usable.
-  Failed(channel~ : @interop.ChannelId, message~ : String, generation~ : Int)
+  Failed(message~ : String, request_id~ : String)
   // Edit and submit a path in place of the breadcrumb. Matching rows and
   // separator-committed children come only from the directory listing already
   // held by this state.
@@ -111,17 +106,6 @@ pub enum Outcome {
 }
 
 ///|
-/// One process-wide sequence keeps replies from a closed picker from matching
-/// a later picker opened on the same channel.
-let next_request_generation : Ref[Int] = Ref(0)
-
-///|
-fn fresh_request_generation() -> Int {
-  next_request_generation.val += 1
-  next_request_generation.val
-}
-
-///|
 fn State::resume_path_edit_after_render(self : State) -> @cmd.Cmd {
   if self.path_draft is Some(_) {
     focus_path_after_render(false)
@@ -137,7 +121,7 @@ pub fn State::open(
   channel : @interop.ChannelId,
   emit : @cmd.Emit[Msg],
 ) -> (@cmd.Cmd, State) {
-  let generation = fresh_request_generation()
+  let request_id = @uuid.mint()
   let picker : State = {
     channel,
     location: None,
@@ -146,9 +130,9 @@ pub fn State::open(
     new_folder: None,
     path_draft: None,
     path_selection: 0,
-    generation,
+    request_id,
   }
-  (browse(emit, channel, "", generation~), picker)
+  (browse(emit, channel, "", request_id~), picker)
 }
 
 ///|
@@ -162,10 +146,10 @@ pub fn State::handle(
 ) -> (@cmd.Cmd, State?, Outcome?) {
   match msg {
     Navigate(path) => self.navigate_to(emit, path)
-    Loaded(channel~, location~, entries~, generation~) =>
+    Loaded(location~, entries~, request_id~) =>
       // A listing for a picker the user already closed — or one answering
       // a navigation that has since been superseded — is dropped.
-      if channel == self.channel && generation == self.generation {
+      if request_id == self.request_id {
         (
           self.resume_path_edit_after_render(),
           Some({
@@ -191,11 +175,11 @@ pub fn State::handle(
       } else {
         (@cmd.none, Some(self), None)
       }
-    Failed(channel~, message~, generation~) =>
+    Failed(message~, request_id~) =>
       // The failure pops as a toast while the previous listing stays usable.
       // One answering a superseded request stays silent: its toast would
       // describe an operation the user has already replaced.
-      if channel == self.channel && generation == self.generation {
+      if request_id == self.request_id {
         let message = if self.new_folder is Some(_) {
           "Cannot create folder: \{message}"
         } else {
@@ -295,7 +279,7 @@ pub fn State::handle(
       // Separator completion may have started a browse while the editor is
       // still visible. Cancelling must also fence that request; otherwise its
       // late reply would move the picker after the edit was discarded.
-      let generation = fresh_request_generation()
+      let request_id = @uuid.mint()
       (
         @cmd.none,
         Some({
@@ -303,7 +287,7 @@ pub fn State::handle(
           loading: false,
           path_draft: None,
           path_selection: 0,
-          generation,
+          request_id,
         }),
         None,
       )
@@ -334,16 +318,16 @@ pub fn State::handle(
       match (self.location, self.new_folder) {
         (Some(Directory(parent)), Some(name)) if !self.loading &&
           !name.trim().is_empty() => {
-          let generation = fresh_request_generation()
+          let request_id = @uuid.mint()
           (
             create_folder(
               emit,
               self.channel,
               parent,
               name.trim().to_owned(),
-              generation~,
+              request_id~,
             ),
-            Some({ ..self, loading: true, generation, }),
+            Some({ ..self, loading: true, request_id }),
             None,
           )
         }
@@ -378,16 +362,16 @@ fn State::navigate_to(
   path : String,
   path_draft? : String,
 ) -> (@cmd.Cmd, State?, Outcome?) {
-  let generation = fresh_request_generation()
+  let request_id = @uuid.mint()
   (
-    browse(emit, self.channel, path, generation~),
+    browse(emit, self.channel, path, request_id~),
     Some({
       ..self,
       loading: true,
       new_folder: None,
       path_draft,
       path_selection: 0,
-      generation,
+      request_id,
     }),
     None,
   )

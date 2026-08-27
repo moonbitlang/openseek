@@ -33,10 +33,8 @@ priv struct DiffStat {
 /// than left standing as the last word.
 ///
 /// Which request a probe describes is *not* here — it is the conversation's
-/// `pull_request_generation`, which outlives this struct on purpose. Kept
-/// here, the counter would restart from zero every time the display state is
-/// cleared (a checkout that stops being a repository, a worktree removed) and
-/// hand a number to a new lookup that an in-flight one still holds.
+/// `pull_request_id`, which outlives this display state and is replaced by a
+/// fresh UUID whenever an in-flight lookup must be retired.
 priv struct PullRequestProbe {
   branch : String
   probing : Bool
@@ -213,7 +211,7 @@ fn fetch_branch(
   channel : @interop.ChannelId,
   session : String,
   cwd : @common.Uri?,
-  generation~ : Int,
+  request_id~ : String,
   base_hint? : String,
 ) -> @cmd.Cmd {
   match cwd {
@@ -232,13 +230,7 @@ fn fetch_branch(
         _ => {
           scheduler.add(
             dispatch(
-              BranchLoaded(
-                session~,
-                branch=None,
-                diffstat=None,
-                generation~,
-                base_hint~,
-              ),
+              BranchLoaded(branch=None, diffstat=None, request_id~, base_hint~),
             ),
           )
           return
@@ -247,10 +239,9 @@ fn fetch_branch(
       scheduler.add(
         dispatch(
           BranchLoaded(
-            session~,
             branch=reply.branch,
             diffstat=reply.diffstat.map(DiffStat::from_reply),
-            generation~,
+            request_id~,
             base_hint~,
           ),
         ),
@@ -260,7 +251,7 @@ fn fetch_branch(
 }
 
 ///|
-/// Issue a branch probe, stamped with a fresh generation so an earlier one
+/// Issue a branch probe, stamped with a fresh UUID so an earlier one
 /// still counting untracked files cannot land on top of this answer. Two are
 /// ordinarily in flight — a run's start and its finish, or either of those and
 /// the popover being opened — and the untracked pass is what makes the older
@@ -275,7 +266,7 @@ fn probe_branch(
   guard model.find_conversation(channel, session) is Some(conv) else {
     return (@cmd.none, model)
   }
-  let (generation, model) = model.mint_git_request()
+  let request_id = @uuid.mint()
   // The branch's pull request, once one has answered, is the only exact word
   // on what this work is measured from. The first probe has none and the host
   // guesses; every one after it does not have to.
@@ -284,19 +275,9 @@ fn probe_branch(
     .bind(probe => probe.pull_request)
     .map(pull_request => pull_request.base)
   (
-    fetch_branch(dispatch, channel, session, cwd, generation~, base_hint?),
-    model.replace_conversation({ ..conv, branch_generation: generation, }),
+    fetch_branch(dispatch, channel, session, cwd, request_id~, base_hint?),
+    model.replace_conversation({ ..conv, branch_request_id: Some(request_id) }),
   )
-}
-
-///|
-/// Take the next git request number. Nothing else holds it, which is what
-/// makes it good for both jobs: stamping a probe whose reply will be matched
-/// against it, and — spent without a probe — fencing off the replies of
-/// probes whose answers are no longer wanted.
-fn Model::mint_git_request(self : Model) -> (Int, Model) {
-  let generation = self.git_request_generation + 1
-  (generation, { ..self, git_request_generation: generation, })
 }
 
 ///|
@@ -401,7 +382,7 @@ test "the chip's tint follows CI, and its label follows the pull request" {
 }
 
 ///|
-/// Start a pull-request lookup for `branch`, stamped with the next generation.
+/// Start a pull-request lookup for `branch`, stamped with a fresh UUID.
 /// The answer already on screen is carried when it describes that branch, so
 /// the chip does not blank while the lookup runs; one about any other branch
 /// is dropped rather than relabelled, which is the mislabelling the reply's
@@ -416,9 +397,7 @@ fn probe_pull_request(
   conv : Conversation,
   branch : String,
 ) -> (@cmd.Cmd, Model) {
-  // Counted across branch changes, not per branch: a checkout that moves
-  // X → Y → X must not reuse a number an in-flight lookup already holds.
-  let (generation, model) = model.mint_git_request()
+  let request_id = @uuid.mint()
   let fresh : PullRequestProbe = {
     branch,
     probing: true,
@@ -438,43 +417,36 @@ fn probe_pull_request(
       conv.session_id,
       branch,
       model.conversation_root(conv),
-      generation~,
+      request_id~,
     ),
     model.replace_conversation({
       ..conv,
       pull_request: Some(probe),
-      pull_request_generation: generation,
+      pull_request_id: Some(request_id),
     }),
   )
 }
 
 ///|
-/// Drop what GitHub said about this conversation's branch, and retire the
-/// number the lookup that is still in flight carries. Without that second
-/// half, clearing is only a repaint: the outstanding reply still matches, and
-/// puts the pull request of a branch this conversation no longer has back on
-/// the chip. `fence` is a minted request number spent on nothing, so no reply
-/// in flight or yet to be issued can carry it.
-fn Conversation::forget_pull_request(
-  self : Conversation,
-  fence~ : Int,
-) -> Conversation {
-  { ..self, pull_request: None, pull_request_generation: fence, }
+/// Drop what GitHub said about this conversation's branch and clear the
+/// accepted request UUID. Any reply already in flight carries a different,
+/// retired UUID and cannot match a later lookup.
+fn Conversation::forget_pull_request(self : Conversation) -> Conversation {
+  { ..self, pull_request: None, pull_request_id: None }
 }
 
 ///|
 /// Forget the whole git side of a conversation — the branch, its diffstat, and
 /// its pull request — fencing off every probe still in flight for it. For a
 /// checkout that has gone away, where anything still arriving describes a
-/// directory that no longer exists. One `fence` retires both probes: it is
-/// spent on neither.
-fn Conversation::forget_git(self : Conversation, fence~ : Int) -> Conversation {
+/// directory that no longer exists.
+fn Conversation::forget_git(self : Conversation) -> Conversation {
   {
-    ..self.forget_pull_request(fence~),
+    ..self.forget_pull_request(),
     branch: None,
     diffstat: None,
     diffstat_hint: None,
-    branch_generation: fence,
+    branch_request_id: None,
   }
 }
 
@@ -488,7 +460,7 @@ fn fetch_pull_request(
   session : String,
   branch : String,
   cwd : @common.Uri?,
-  generation~ : Int,
+  request_id~ : String,
 ) -> @cmd.Cmd {
   match cwd {
     Some(resource) if !@resource.belongs_to(resource, channel) =>
@@ -499,9 +471,8 @@ fn fetch_pull_request(
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let empty = PullRequestLoaded(
-        session~,
         branch~,
-        generation~,
+        request_id~,
         queried=None,
         pull_request=None,
         compare_url=None,
@@ -519,9 +490,8 @@ fn fetch_pull_request(
       scheduler.add(
         dispatch(
           PullRequestLoaded(
-            session~,
             branch~,
-            generation~,
+            request_id~,
             queried=reply.branch,
             pull_request=reply.pull_request.bind(PullRequest::from_reply),
             compare_url=reply.compare_url,

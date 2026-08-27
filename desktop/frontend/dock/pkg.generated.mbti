@@ -4,22 +4,29 @@ package "openseek_desktop/frontend/dock"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/pathx",
 }
 
 // Values
-pub fn active_browser(State) -> Int?
+pub fn active_browser(State) -> String?
 
 pub fn active_file(State) -> @pathx.Relative?
 
+pub fn active_history_diff(State) -> GitHistoryDiff?
+
 pub fn file_paths(State) -> Array[@pathx.Relative]
+
+pub fn history_diffs(State) -> Array[GitHistoryDiff]
 
 pub fn launcher_pane(LauncherActions) -> @html.Html
 
-pub fn open_browser(State, Int) -> State
+pub fn open_browser(State, String) -> State
 
 pub fn open_file(State, @pathx.Relative) -> State
+
+pub fn open_history_diff(State, GitHistoryDiff) -> State
 
 pub fn open_picker(State) -> State
 
@@ -36,9 +43,21 @@ pub fn update(Msg, State) -> State
 // Types and methods
 pub(all) enum DockTab {
   File(path~ : @pathx.Relative)
-  Browser(id~ : Int)
+  GitDiff(diff~ : GitHistoryDiff)
+  Browser(id~ : String)
   FilePicker
 } derive(Eq)
+pub fn DockTab::equal(Self, Self) -> Bool
+pub fn DockTab::not_equal(Self, Self) -> Bool
+
+pub(all) struct GitHistoryDiff {
+  commit : String
+  parent : String?
+  path : @pathx.Relative
+  original_path : @pathx.Relative?
+  status : String
+  kind : String
+} derive(Eq, @debug.Debug)
 
 pub(all) struct LauncherActions {
   browser : @cmd.Cmd?
@@ -56,6 +75,8 @@ pub(all) struct RememberedStrip {
   tabs : Array[DockTab]
   active : DockTab?
 } derive(Eq)
+pub fn RememberedStrip::equal(Self, Self) -> Bool
+pub fn RememberedStrip::not_equal(Self, Self) -> Bool
 
 pub(all) struct State {
   owner : @interop.ConversationKey?
@@ -64,6 +85,8 @@ pub(all) struct State {
   remembered : Map[@interop.ConversationKey, RememberedStrip]
 } derive(Eq)
 pub fn State::empty() -> Self
+pub fn State::equal(Self, Self) -> Bool
+pub fn State::not_equal(Self, Self) -> Bool
 
 pub(all) struct TabChip {
   tab : DockTab

@@ -35,8 +35,8 @@ priv struct ServeEngine {
   commands : @async.Queue[EngineCommand]
   process : @process.Process
   sink : EventSink
-  // Exact follower generation established for this writer. Cleanup never
-  // performs a session-key lookup that could stop a successor generation.
+  // Exact follower instance established for this writer. Cleanup never
+  // performs a session-key lookup that could stop a successor instance.
   follower : SessionFollower?
   // This engine's stdout consumer. Its completion IS retirement: it publishes
   // every remaining lifecycle event, stops the owned follower and clears the
@@ -1201,10 +1201,10 @@ pub async fn EngineActor::run(
     // Refuse a producer that was backpressured on the bounded lifecycle
     // mailbox, then settle every command that was accepted before closure.
     self.manager.commands.close()
-    reset_engine_generation(self.manager, Ref(None))
+    reset_engine_cycle(self.manager, Ref(None))
   }
   for ;; {
-    let _ = self.run_generation(sink) catch {
+    let _ = self.run_cycle(sink) catch {
       error if @async.is_being_cancelled() => raise error
       error => {
         on_failed("engine host failed: \{error}")
@@ -1219,10 +1219,7 @@ pub async fn EngineActor::run(
 ///|
 /// One process-owning generation of the engine actor. All children are scoped
 /// to this task group; reset publishes `Stopped` only after they have unwound.
-async fn EngineActor::run_generation(
-  self : EngineActor,
-  sink : EventSink,
-) -> Unit {
+async fn EngineActor::run_cycle(self : EngineActor, sink : EventSink) -> Unit {
   let manager = self.manager
   guard manager.pump is Stopped else {
     raise EngineError("engine host is already connected")
@@ -1234,7 +1231,7 @@ async fn EngineActor::run_generation(
   // claim. Queued commands are failed by the same reset path.
   let active_spawn : Ref[@async.Queue[EngineError?]?] = Ref(None)
   fn reset() -> Unit {
-    reset_engine_generation(manager, active_spawn)
+    reset_engine_cycle(manager, active_spawn)
   }
 
   manager.pump = Serving(sessions~)
@@ -1273,7 +1270,7 @@ async fn EngineActor::run_generation(
 /// the shielded current requester and every queued requester with an error;
 /// draining the cross-reconnect queue also prevents a successor pump from
 /// executing commands prepared against the departed sessions map.
-fn reset_engine_generation(
+fn reset_engine_cycle(
   manager : EngineManager,
   active_spawn : Ref[@async.Queue[EngineError?]?],
 ) -> Unit {
@@ -2507,10 +2504,10 @@ test "context yield has a distinct non-success wire status" {
 }
 
 ///|
-test "run ids carry 128 bits of cross-host entropy" {
+test "run ids use the shared UUID source" {
   let id = mint_run_id()
   assert_true(id.has_prefix("r"))
-  assert_eq(id.length(), 33)
+  assert_eq(id.length(), 37)
 }
 
 ///|
@@ -2992,7 +2989,7 @@ async test "pump reset acks active and queued spawn requests" {
     SpawnEngine(queued_claim, pump_test_config("queued"), queued_ack),
   )
   let active = Ref(Some(active_ack))
-  reset_engine_generation(manager, active)
+  reset_engine_cycle(manager, active)
   assert_true(manager.pump is Stopped)
   assert_true(active_ack.try_get() is Some(Some(EngineError(_))))
   assert_true(queued_ack.try_get() is Some(Some(EngineError(_))))

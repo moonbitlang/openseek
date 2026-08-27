@@ -123,14 +123,16 @@ test "sync does not park a strip owned by an empty session" {
 test "open_browser appends and re-activates without duplicating" {
   let state = @dock.State::empty()
     |> @dock.open_file(@pathx.Relative("a.mbt"))
-    |> @dock.open_browser(7)
-  assert_true(state.tabs == [file_tab("a.mbt"), @dock.DockTab::Browser(id=7)])
-  assert_true(state.active == Some(@dock.DockTab::Browser(id=7)))
-  assert_true(@dock.active_browser(state) == Some(7))
+    |> @dock.open_browser("browser-7")
+  assert_true(
+    state.tabs == [file_tab("a.mbt"), @dock.DockTab::Browser(id="browser-7")],
+  )
+  assert_true(state.active == Some(@dock.DockTab::Browser(id="browser-7")))
+  assert_true(@dock.active_browser(state) == Some("browser-7"))
   assert_true(@dock.active_file(state) is None)
   // Files projection skips non-file tabs.
   assert_true(@dock.file_paths(state) == [@pathx.Relative("a.mbt")])
-  let again = @dock.open_browser(state, 7)
+  let again = @dock.open_browser(state, "browser-7")
   assert_true(again.tabs == state.tabs)
 }
 
@@ -190,13 +192,14 @@ test "closing the picker activates a neighbor like any tab" {
 ///|
 test "park and restore keeps browser and picker tabs" {
   let state = @dock.sync(@dock.State::empty(), owner("s1"))
-    |> @dock.open_browser(3)
+    |> @dock.open_browser("browser-3")
     |> @dock.open_picker
   let state = @dock.sync(state, owner("s2"))
   assert_true(state.tabs.is_empty())
   let state = @dock.sync(state, owner("s1"))
   assert_true(
-    state.tabs == [@dock.DockTab::Browser(id=3), @dock.DockTab::FilePicker],
+    state.tabs ==
+    [@dock.DockTab::Browser(id="browser-3"), @dock.DockTab::FilePicker],
   )
   assert_true(state.active == Some(@dock.DockTab::FilePicker))
 }

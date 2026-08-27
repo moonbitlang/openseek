@@ -214,8 +214,8 @@ fn State::composer_identity(
   channel : @interop.ChannelId,
 ) -> @composer.Identity {
   {
-    owner: { channel, session: self.active_id().unwrap_or("codex.none"), },
-    archive_generation: 0,
+    owner: { channel, session: self.active_id().unwrap_or("codex.none") },
+    archive_cursor: 0,
   }
 }
 
@@ -372,7 +372,7 @@ pub fn State::composer_input(
     .active_placement(context.channel)
     .bind(placement => placement.checkout_root()),
     installed_skills: self.installed_codex_skills(),
-    context_generation: 0,
+    context_id: "00000000-0000-8000-8000-000000000017",
     submission_sequence: self.submission_sequence,
     replacements: [],
     retirements: [],
@@ -575,7 +575,10 @@ test "Codex projects app-server facts into the shared composer contract" {
     file_candidates: [@pathx.Relative("src/main.mbt")],
     open_files: [],
     active_file: None,
-    file_index: @composer.FileIndexReady(epoch=1, truncated=false),
+    file_index: @composer.FileIndexReady(
+      checkout_id="checkout-1",
+      truncated=false,
+    ),
   })
   assert_eq(input.identity.owner.session, "thread-shared-composer")
   assert_eq(input.slash_commands.length(), 2)

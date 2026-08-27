@@ -165,7 +165,7 @@ fn query_key_attrs(emit : @cmd.Emit[Msg]) -> @html.Attrs {
 ///|
 /// The mode selector, modeled on semgrep's two search engines: plain text/grep
 /// matching versus structural MoonBit code patterns. Switching modes retires
-/// the armed query and its results via the generation fence.
+/// the armed query and its results via the request UUID fence.
 fn mode_control(mode : Mode, emit : @cmd.Emit[Msg]) -> @html.Html {
   @html.div(class="search-mode", [
     @html.button(
