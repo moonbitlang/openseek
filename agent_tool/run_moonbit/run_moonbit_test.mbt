@@ -559,7 +559,6 @@ async test "a worker's snippet writes neither its own tree nor a sibling's" {
 test "a definition without a job runtime does not advertise background runs" {
   let definition = @run_moonbit.definition(workspace_root=".")
   assert_false(definition.description.contains("run_in_background"))
-  assert_true(definition.description.contains("bobzhang/myshell"))
   let JsonSchema(schema) = definition.schema
   assert_false(schema.stringify().contains("run_in_background"))
 }
@@ -740,24 +739,101 @@ async test "error diagnostics name `source`, not the throwaway temp path" {
 }
 
 ///|
-/// Spawning processes is what this tool is for now — the refusal that used to
-/// send commands to the shell tool would make the registry unable to run any.
+/// The system prompt's minimal shell example exercises the library without
+/// spawning a child process: glob expansion itself is useful MoonBit IO.
+async test "moonbitlang/async/shell glob lists workspace paths" {
+  @vfs.with_tmpdir(prefix="mbtx-glob-", ws => {
+    @fs.write_file("\{ws}/main.mbt", "fn main {}", create_mode=CreateOrTruncate)
+    let out = run_in(ws, {
+      "source": (
+        #|import { "moonbitlang/async", "moonbitlang/async/shell" }
+        #|
+        #|async fn main {
+        #|  for path in @shell.glob("*.mbt") {
+        #|    println(path)
+        #|  }
+        #|}
+      ),
+    })
+    assert_false(out.is_error)
+    assert_true(out.content.contains("main.mbt"))
+  })
+}
+
+///|
+/// The system prompt's plain command example reads a captured run back through
+/// `Output`'s accessor methods: the type is opaque, so field access does not
+/// compile, and a non-zero exit is reported rather than raised.
 #cfg(not(platform="windows"))
-async test "runs a command through the myshell EDSL" {
+async test "reads a captured command through Output accessors" {
   let out = run(
     (
-      #|import { "bobzhang/myshell", "moonbitlang/async" }
+      #|import { "moonbitlang/async", "moonbitlang/async/shell" }
       #|
       #|async fn main {
-      #|  let result = @myshell.Cmd("git", ["--version"]).output()
-      #|  println("out=\{result.stdout}")
-      #|  println("exit=\{result.exit_code}")
+      #|  let out = @shell.Cmd("git", ["--version"]).output()
+      #|  println(out.stdout())
+      #|  println(out.stderr())
+      #|  println("exit=\{out.exit_code()}")
+      #|  let missing = @shell.Cmd("git", ["rev-parse", "--verify", "no-such-ref"]).output()
+      #|  println("missing exit=\{missing.exit_code()}")
       #|}
     ),
   )
   assert_false(out.is_error)
-  assert_true(out.content.contains("out=git version"))
+  assert_true(out.content.contains("git version"))
   assert_true(out.content.contains("exit=0"))
+  assert_true(out.content.contains("missing exit=128"))
+}
+
+///|
+/// The system prompt's compiler example combines structured diagnostics with
+/// incremental stdout handling instead of teaching two `moon check` shapes.
+#cfg(not(platform="windows"))
+async test "streams structured moon check diagnostics with async shell" {
+  @vfs.with_tmpdir(prefix="mbtx-json-check-", ws => {
+    @fs.write_file(
+      "\{ws}/moon.mod",
+      "name = \"tmp/mbtx_json_check\"\n",
+      create_mode=CreateOrTruncate,
+    )
+    @fs.write_file(
+      "\{ws}/main.mbt",
+      "pub fn broken() -> Int { \"not an int\" }\n",
+      create_mode=CreateOrTruncate,
+    )
+    @fs.write_file("\{ws}/moon.pkg", "", create_mode=CreateOrTruncate)
+    let out = run_in(ws, {
+      "source": (
+        #|import { "moonbitlang/async", "moonbitlang/async/shell", "moonbitlang/core/json" }
+        #|
+        #|async fn main {
+        #|  let mut errors = 0
+        #|  let exit_code = @shell.Cmd(
+        #|    "moon",
+        #|    ["check", "--output-json", "--diagnostic-limit", "5"],
+        #|    env={ "NO_COLOR": "1" },
+        #|  ).each_line() <| line => {
+        #|    let diagnostic = @json.parse(line) catch { _ => return }
+        #|    if diagnostic is {
+        #|      "level": String("error"),
+        #|      "path": String(path),
+        #|      "loc": String(loc),
+        #|      "message": String(message),
+        #|      ..
+        #|    } {
+        #|      errors += 1
+        #|      println("\{path}:\{loc}  \{message}")
+        #|    }
+        #|  }
+        #|  println("exit=\{exit_code} errors=\{errors}")
+        #|}
+      ),
+    })
+    assert_false(out.is_error)
+    assert_true(out.content.contains("main.mbt:"))
+    assert_true(out.content.contains("errors=1"))
+  })
 }
 
 ///|

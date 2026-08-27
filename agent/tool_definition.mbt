@@ -25,7 +25,7 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
 /// `multi_edit`, `write`, `remove`, `plan`, `goal`, `mbtx`, `job_output`,
 /// `job_stop`, and `finish`. Commands are `mbtx`'s job — it compiles and
 /// runs a MoonBit program that spawns processes through the shell-free
-/// `bobzhang/myshell` EDSL, so there is no shell tool and no shell parsing
+/// `moonbitlang/async/shell` API, so there is no shell tool and no shell parsing
 /// anywhere in the registry. A snippet that would outlast the foreground bound
 /// is detached as a background job, which `job_output` and `job_stop` then
 /// watch.
@@ -160,9 +160,6 @@ async test "the registry has no shell tool family" {
     assert_false(names.contains("shell_output"))
     assert_false(names.contains("shell_stop"))
     guard tools.find("mbtx") is Some(mbtx) else { fail("mbtx tool missing") }
-    // The command surface teaches the process EDSL rather than deferring to a
-    // shell tool that is no longer there.
-    assert_true(mbtx.description.contains("bobzhang/myshell"))
     // A job runtime is wired here, so the background argument must be OFFERED:
     // the schema is what decides whether the model can make the call at all.
     let JsonSchema(schema) = mbtx.schema

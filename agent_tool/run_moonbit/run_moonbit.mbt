@@ -989,12 +989,11 @@ fn schema(background~ : Bool, escalation~ : Bool) -> Json {
 ///|
 /// The `mbtx` tool description.
 ///
-/// Holds the whole command surface: every role that registers this tool gets it
-/// and nothing else does. The five system prompts carried this text for one
-/// revision and had already drifted apart within a single commit, while the
-/// prompt-versus-tool A/B that motivated the move showed no effect either way.
-/// What stays in a prompt is what varies by role — which file tools exist, and
-/// whether the role may commit.
+/// Holds the tool-local contract every role must see: the admitted child
+/// processes, refusal and escalation behavior, isolation, limits, and the
+/// arguments this build actually supports. The default system prompt owns the
+/// `moonbitlang/async/shell` tutorial and worked examples; those teach one
+/// role's workflow rather than describing what the tool enforces.
 ///
 /// The spawn list is prose about `spawnable_commands`, kept by hand so the
 /// groupings survive; adding an entry there means editing this text too.
@@ -1042,102 +1041,14 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
   let base_head =
     #|Compile and run a self-contained MoonBit program and return its merged
     #|stdout/stderr and exit status. This is BOTH your command runner and your
-    #|scripting surface: there is no shell tool, so commands are spawned from MoonBit
-    #|with the `bobzhang/myshell` EDSL.
+    #|scripting surface: there is no shell tool, so commands, IO, and computation
+    #|happen inside the submitted MoonBit program.
     #|
     #|This tool was previously named `run_moonbit` — a resumed session's older
     #|history may still call it that.
     #|
     #|`source` is the whole program. Diagnostics are rewritten to `source:LINE:COL`
     #|about your input; `target` defaults to wasm, the sandboxed backend.
-    #|
-    #|```
-    #|import { "bobzhang/myshell", "moonbitlang/async", "moonbitlang/async/fs" }
-    #|
-    #|async fn main {
-    #|  let out = @myshell.Cmd("moon", ["check", "--diagnostic-limit", "5"]).output()
-    #|  println(out.stdout)
-    #|  println(out.stderr)
-    #|  println("exit=\{out.exit_code}")
-    #|  for name in @fs.readdir(".") {
-    #|    println(name)
-    #|  }
-    #|}
-    #|```
-    #|
-    #|- Every `@pkg` is imported SEPARATELY, as `@fs` is above: `"moonbitlang/async"`
-    #|  alone does not bring in `fs` or `stdio`, and the failure reads
-    #|  `Package "fs" not found`.
-    #|- Keep `async fn main`: a plain `fn main` may not call anything that raises,
-    #|  which nearly every `@fs`/`@myshell` call does.
-    #|- ALWAYS `println` each command's stdout, stderr and exit code — what you do not
-    #|  print is invisible to you. But a run that prints more than ~48KB is STOPPED
-    #|  mid-print, so filter before printing, or park the bulk with
-    #|  `stdout=ToFile("\{@fs.tmpdir(prefix="run-")}/out.log")` and read back the part
-    #|  you need. `prefix~` is required and the call CREATES the directory. A snippet
-    #|  may write ONLY inside its own `@fs.tmpdir`, so that redirect cannot target the
-    #|  workspace.
-    #|- `Cmd(program, args)` passes the argument VECTOR literally: no shell parsing, no
-    #|  quoting, and `|`, `>`, `&&`, `$()`, `*` mean nothing. Other labels: `cwd`,
-    #|  `env`, `stdin=Text(...)`. Run several commands as sequential statements in ONE
-    #|  snippet and branch on `out.exit_code`; do NOT reach for `@myshell.Pipeline` —
-    #|  filter captured output in MoonBit instead.
-    #|
-    #|## Two worked examples
-    #|
-    #|A scoped check, reduced to the `path:line` list the next edit needs.
-    #|`--output-json` prints one diagnostic per line ON STDOUT — only the
-    #|`Failed with N errors` summary goes to stderr, so reading `out.stderr` here
-    #|finds nothing and looks like a clean build. `NO_COLOR` keeps ANSI escapes out
-    #|of the captured text, which otherwise break every `contains`/`has_prefix`:
-    #|
-    #|```
-    #|import { "bobzhang/myshell", "moonbitlang/async", "moonbitlang/core/json" }
-    #|
-    #|async fn main {
-    #|  let out = @myshell.Cmd("moon", ["check", "--output-json"], cwd="agent_tool",
-    #|    env={ "NO_COLOR": "1" }).output()
-    #|  let mut errors = 0
-    #|  for line in out.stdout.split("\n") {
-    #|    let d = @json.parse(line.to_owned()) catch { _ => continue }
-    #|    guard d is { "level": String("error"), "path": String(p), "loc": String(loc),
-    #|                 "message": String(msg), .. } else { continue }
-    #|    errors += 1
-    #|    if errors <= 20 {
-    #|      println("\{p}:\{loc}  \{msg.split("\n").head().unwrap_or("")}")
-    #|    }
-    #|  }
-    #|  println("exit=\{out.exit_code} errors=\{errors}")
-    #|}
-    #|```
-    #|
-    #|Several commands in one snippet, with the bulk parked instead of printed —
-    #|this is what `&&` and `| head` used to do, except the branch can inspect WHAT
-    #|failed, not just whether something did:
-    #|
-    #|```
-    #|import { "bobzhang/myshell", "moonbitlang/async", "moonbitlang/async/fs" }
-    #|
-    #|async fn main {
-    #|  if @myshell.Cmd("moon", ["check"]).output().exit_code != 0 {
-    #|    println("check failed; not running tests")
-    #|    return
-    #|  }
-    #|  let log = "\{@fs.tmpdir(prefix="run-")}/test.log"
-    #|  let out = @myshell.Cmd("moon", ["test"], stdout=ToFile(log)).output()
-    #|  let lines = [..@fs.read_file(log).text().split("\n")]
-    #|  let failed = lines.filter(l => l.contains("FAILED"))
-    #|  println("exit=\{out.exit_code} lines=\{lines.length()} failed=\{failed.length()}")
-    #|  for i, l in failed {
-    #|    if i >= 20 { break }
-    #|    println(l)
-    #|  }
-    #|}
-    #|```
-    #|
-    #|A redirected stream is NOT captured, so `out.stdout` is empty above and the
-    #|file holds everything — that is the only safe way to handle output over ~64KB.
-    #|Slice with a bounded loop, not `failed[:20]`: a view past the end PANICS.
     #|
     #|## Which programs a snippet may start
     #|
@@ -1181,7 +1092,7 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     #|  stay in a temp dir — your `_build` is untouched.
     #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits.
     #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
-    #|  `moon test` through a `@myshell.Cmd`.
+    #|  `moon test` as an admitted child process.
     #|- A snippet READS anywhere and WRITES only its own `@fs.tmpdir()`. Changing a
     #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
     #|  checkout` and friends are child processes and run normally. A write refusal

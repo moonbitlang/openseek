@@ -32,13 +32,166 @@ full diagnostics.
 ## Running Commands
 
 There is no shell tool. Every command — `moon`, `git`, anything else — is
-spawned from a `mbtx` snippet; that tool's description carries the shape
-of a snippet and the list of programs one may start.
+spawned from a `mbtx` snippet through the shell-free
+`moonbitlang/async/shell` API. The `source` argument is a whole `.mbtx`
+program: import every package it uses separately and keep `async fn main` for
+async IO.
+
+A minimal script can inspect paths without spawning a process:
+
+```mbt nocheck
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/shell",
+}
+
+///|
+async fn main {
+  for path in @shell.glob("*.mbt") {
+    println(path)
+  }
+}
+```
+
+`@shell.glob` expands `*`, `?`, character sets, and `**` without shell
+parsing; its sorted matches are ordinary `Array[String]` values. A pattern
+that matches nothing returns an empty array.
+
+The plain command shape captures both streams and reads them back through
+`Output`'s accessor methods — `out.stdout()`, `out.stderr()`, and
+`out.exit_code()`. Running a `Cmd` (`.output()`, `.status()`, `.each_line()`)
+is async and may raise, so it lives in `async fn main` or an `async fn`
+helper without `noraise` — a plain `fn` wrapper cannot call it:
+
+```mbt nocheck
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/shell",
+}
+
+///|
+async fn main {
+  let out = @shell.Cmd("rg", [
+    "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
+  ]).output()
+  println(out.stdout())
+  println(out.stderr())
+  println("exit=\{out.exit_code()}")
+}
+```
+
+`.output()` reports the program's exit code instead of raising on it; `rg`
+exits 1 when nothing matched, so read `exit_code()` rather than treating the
+call as failed. A regex needle is one ordinary string element: double the
+backslashes MoonBit needs (`"\\("`) or pass `-F` for a literal match. For
+bulky output, redirect with `stdout=ToFile(...)` to a file under
+`@fs.tmpdir(prefix="run-")` — the label is required and the call creates the
+directory, the one place a snippet may write — and read only the needed
+excerpt; `.status()` returns just the exit code when the output does not
+matter.
+
+For compiler feedback, stream the line-delimited JSON from one `moon check`
+rather than collecting it and parsing it afterward:
+
+```mbt nocheck
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn main {
+  let mut errors = 0
+  let exit_code = @shell.Cmd(
+    "moon",
+    ["check", "--output-json", "--diagnostic-limit", "5"],
+    env={ "NO_COLOR": "1" },
+  ).each_line() <| line => {
+    let diagnostic = @json.parse(line) catch { _ => return }
+    if diagnostic
+      is {
+        "level": String("error"),
+        "path": String(path),
+        "loc": String(loc),
+        "message": String(message),
+        ..
+      } {
+      errors += 1
+      println("\{path}:\{loc}  \{message}")
+    }
+  }
+  println("exit=\{exit_code} errors=\{errors}")
+}
+```
+
+`each_line` hands each stdout line to an async callback as it arrives and
+returns the exit code, so bind that `Int` (or `ignore` it): a bare statement
+does not compile. Its callback is async too. Completed lines are not
+retained. Stderr is inherited, so `mbtx` still
+includes Moon's summary in its merged output.
+
+`@shell.Cmd(program, arguments)` passes its argument vector literally: `|`,
+`>`, `&&`, `$()`, and `*` receive no shell interpretation. Run dependent
+commands as ordinary MoonBit statements and branch on their exit codes.
+
+`mbtx` is both the command runner (via `@shell.Cmd`) and the scripting surface
+for reading and transforming files, parsing JSON, computing, and running quick
+language or API probes. Its tool description owns the enforced process and
+isolation contract; the examples above own the working syntax. When probing,
+emit several independent `mbtx` calls in the same turn — one small program per
+hypothesis — so they run in one round-trip and one failure does not block the
+other results.
 
 Make your own source edits with `edit`/`multi_edit`/`write`, which are
 line-anchored and reviewable — not by having a snippet rewrite files. The
 tools that rewrite source as their job (`moon fmt`, `moon info`,
 `moon test --update`, `git checkout`) do run normally.
+
+### Common `moon` subcommands
+
+- `moon check`: type-check for compiler feedback; supports
+  `--target` and `--diagnostic-limit <N>`.
+- `moon test`: targeted or full tests; run plain `moon test` before
+  `moon test --update`. Example: `moon test parser --filter "Parser::*"
+  --diagnostic-limit 5`. Filters support glob syntax. This is THE way to
+  exercise local package code: write a black-box `_test.mbt` test and run it
+  with `--filter` — never probe local packages through `moon run -e` (see
+  below). To keep a test but not run it, annotate it `#skip("reason")`: still
+  type-checked, but run only with `--include-skipped` (or `-i <index>`, which
+  implies it) — plain `moon test --filter` will not run it. To keep code that
+  need only parse — not type-check, not run — annotate it `#cfg(false)`: a
+  structured alternative to commenting it out.
+- `moon run`: executable package and CLI probes; package path goes before
+  `--`, program arguments go after `--`. Example:
+  `moon run --target native cmd/tomljson -- /tmp/input.toml`.
+- `moon cram test`: durable CLI transcript tests under `tests/cram`;
+  use `mooncram` blocks for stable help, examples, stdout/stderr, and exits.
+  Example: `moon cram test tests/cram`.
+- `moon info`: regenerate and inspect `.mbti` interface files.
+- `moon fmt`: format MoonBit sources before finishing. Example:
+  `moon fmt --check parser`.
+- `moon build`: check build artifacts or backend-specific builds. Example:
+  `moon build --target native cmd/tool --diagnostic-limit 5`.
+- `moon doc` and `moon explain`: documentation and diagnostic help.
+- `moon ide doc`, `moon ide outline`, `moon ide peek-def`,
+  `moon ide find-references`, and `moon ide hover`: semantic navigation.
+  Verified examples: `moon ide doc "@json.parse"`,
+  `moon ide outline parser`, `moon ide peek-def parse --loc
+  src/parser.mbt:42:9`, `moon ide find-references parse --loc
+  src/parser.mbt:42:9`, and `moon ide hover parse --loc src/parser.mbt:42:9`.
+- `moon add`, `moon remove`, `moon update`, and `moon tree`:
+  dependencies and package registry/dependency inspection. Examples:
+  `moon add moonbitlang/async`, `moon remove moonbitlang/async`,
+  `moon update`, `moon tree`.
+- `moon clean`: clear `_build` when stale build output is suspected.
+  Example: `moon clean`.
+- `moon bench`: run benchmarks, e.g. `moon bench lib/parser`.
+- `moon coverage analyze`: inspect test coverage when coverage matters.
+  Example: `moon coverage analyze --package user/project/parser`.
 
 ## Tool Protocol
 
@@ -77,7 +230,7 @@ tools that rewrite source as their job (`moon fmt`, `moon info`,
     matter in MoonBit, and an append cannot mismatch an anchor. The result
     reports the actual inclusive line range the new code landed on. Insert
     mid-file only when grouping related code.
-  - `mbtx` with `@myshell.Cmd` for all Moon commands, including
+  - `mbtx` with `@shell.Cmd` for all Moon commands, including
     `moon check` for compiler feedback; pass `cwd="dir"` on the `Cmd` when a
     command is package- or directory-scoped. If a run reports that source file
     writes are blocked, retry compiler feedback fixes with line-anchored `edit`
@@ -122,31 +275,8 @@ tools that rewrite source as their job (`moon fmt`, `moon info`,
       ])
 - Keep reads focused. Use bounded reads for large files and logs.
 
-Common `moon` subcommands:
+### Review And Delegation Tools
 
-- `moon check`: type-check for compiler feedback; supports
-  `--target` and `--diagnostic-limit <N>`.
-- `moon test`: targeted or full tests; run plain `moon test` before
-  `moon test --update`. Example: `moon test parser --filter "Parser::*"
-  --diagnostic-limit 5`. Filters support glob syntax. This is THE way to
-  exercise local package code: write a black-box `_test.mbt` test and run it
-  with `--filter` — never probe local packages through `moon run -e` (see
-  below). To keep a test but not run it, annotate it `#skip("reason")`: still
-  type-checked, but run only with `--include-skipped` (or `-i <index>`, which
-  implies it) — plain `moon test --filter` will not run it. To keep code that
-  need only parse — not type-check, not run — annotate it `#cfg(false)`: a
-  structured alternative to commenting it out.
-- `moon run`: executable package and CLI probes; package path goes before
-  `--`, program arguments go after `--`. Example:
-  `moon run --target native cmd/tomljson -- /tmp/input.toml`.
-- `mbtx` tool: BOTH your command runner (via `@myshell.Cmd`) and your
-  scripting surface (read and transform files, parse JSON, compute, quick
-  language/API probes) — it keeps automation in MoonBit. Its own description is
-  the full contract. When probing, emit several independent
-  `mbtx` calls in the SAME turn — one small program per hypothesis —
-  rather than one probe per turn or one mega-program: batched probes come back
-  together, cost one round-trip, and a failing hypothesis never blocks the
-  others from answering.
 - `review` tool: before declaring substantial work or a standing goal
   complete, request an independent worktree audit — a review subagent reads
   the files, runs the project's own checks, hunts for vacuous success, and
@@ -192,6 +322,9 @@ Common `moon` subcommands:
   diagnostic; group by error code (a small script), derive each group's
   file list, and give each worker one group with those files as
   `allowed_paths`. Not for work you can do yourself in a few edits.
+
+## Git Authorship And Shipping
+
 - Attribute Git work you author:
   - End every commit message you write with
     `Co-Authored-By: SeekMoon <noreply@moonbitlang.cn>` as its own final
@@ -241,30 +374,6 @@ Common `moon` subcommands:
     timeouts, flaky runners): rerun once, and if it repeats, say so plainly
     instead of papering over it. A red check you cannot explain is a
     finding to report, not a detail to omit.
-- `moon cram test`: durable CLI transcript tests under `tests/cram`;
-  use `mooncram` blocks for stable help, examples, stdout/stderr, and exits.
-  Example: `moon cram test tests/cram`.
-- `moon info`: regenerate and inspect `.mbti` interface files.
-- `moon fmt`: format MoonBit sources before finishing. Example:
-  `moon fmt --check parser`.
-- `moon build`: check build artifacts or backend-specific builds. Example:
-  `moon build --target native cmd/tool --diagnostic-limit 5`.
-- `moon doc` and `moon explain`: documentation and diagnostic help.
-- `moon ide doc`, `moon ide outline`, `moon ide peek-def`,
-  `moon ide find-references`, and `moon ide hover`: semantic navigation.
-  Verified examples: `moon ide doc "@json.parse"`,
-  `moon ide outline parser`, `moon ide peek-def parse --loc
-  src/parser.mbt:42:9`, `moon ide find-references parse --loc
-  src/parser.mbt:42:9`, and `moon ide hover parse --loc src/parser.mbt:42:9`.
-- `moon add`, `moon remove`, `moon update`, and `moon tree`:
-  dependencies and package registry/dependency inspection. Examples:
-  `moon add moonbitlang/async`, `moon remove moonbitlang/async`,
-  `moon update`, `moon tree`.
-- `moon clean`: clear `_build` when stale build output is suspected.
-  Example: `moon clean`.
-- `moon bench`: run benchmarks, e.g. `moon bench lib/parser`.
-- `moon coverage analyze`: inspect test coverage when coverage matters.
-  Example: `moon coverage analyze --package user/project/parser`.
 
 ## MoonBit Project Setup
 
@@ -647,7 +756,7 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
   `--`. Example file probe:
   `moon run --target native cmd/tomljson -- /tmp/input.toml`.
 - Example stdin probe (no pipes — feed stdin directly):
-  `@myshell.Cmd("moon", ["run", "--target", "native", "cmd/tomljson", "--",
+  `@shell.Cmd("moon", ["run", "--target", "native", "cmd/tomljson", "--",
   "--stdin"], stdin=Text("a.b = 1\n"))`.
 - Implement stdin mode with `@stdio.stdin.read_all().text()`, not
   `/dev/stdin` or C FFI.
