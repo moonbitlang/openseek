@@ -75,8 +75,11 @@ pub fn update(
           permission_picker: state.permission_picker.cancel_full_access(),
         },
       )
-    GitLoaded(thread_id~, reply~) =>
-      (@cmd.none, state.with_git_reply(thread_id, reply))
+    GitLoaded(thread_id~, generation~, requested_cwd~, reply~) =>
+      (
+        @cmd.none,
+        state.with_git_reply(thread_id, generation, requested_cwd, reply),
+      )
     ToggleGitDetails =>
       (
         @cmd.none,
@@ -265,8 +268,10 @@ pub fn update(
           // place. Only a verified selection may retarget Files/Terminal.
           if next.requested_thread is None {
             next = next.loading_context(false)
+            let (git, refreshed) = next.refresh_git(dispatch, channel)
+            next = refreshed
             cmd = @cmd.batch([
-              next.refresh_git(dispatch, channel),
+              git,
               next.load_skills(dispatch, channel, force_reload=false),
             ])
           }
@@ -278,9 +283,11 @@ pub fn update(
           // notification observes the stored selection. The preserved draft
           // and placement now flow through the ordinary Local/Worktree send.
           next = next.loading_context(false)
+          let (git, refreshed) = next.refresh_git(dispatch, channel)
+          next = refreshed
           cmd = @cmd.batch([
             next.send(dispatch, channel),
-            next.refresh_git(dispatch, channel),
+            git,
             next.load_skills(dispatch, channel, force_reload=false),
           ])
           if next.active_thread() is Some(active) {
@@ -290,15 +297,19 @@ pub fn update(
         CodexTurnReply(_) => next = next.with_turn_reply(value)
         CodexWorktreeTurnReply(_, worktree) => {
           next = next.with_created_worktree(worktree).with_turn_reply(value)
+          let (git, refreshed) = next.refresh_git(dispatch, channel)
+          next = refreshed
           cmd = @cmd.batch([
-            next.refresh_git(dispatch, channel),
+            git,
             next.load_skills(dispatch, channel, force_reload=false),
           ])
         }
         CodexWorktreeRepairReply(_, worktree) => {
           next = next.with_created_worktree(worktree)
+          let (git, refreshed) = next.refresh_git(dispatch, channel)
+          next = refreshed
           cmd = @cmd.batch([
-            next.refresh_git(dispatch, channel),
+            git,
             next.load_skills(dispatch, channel, force_reload=false),
           ])
         }
@@ -479,7 +490,9 @@ pub fn update(
       } else if method_ == "turn/completed" {
         // A turn may check out another branch or create a PR. Refresh the same
         // compact status chip OpenSeek updates at its run boundary.
-        next.refresh_git(dispatch, channel)
+        let (git, refreshed) = next.refresh_git(dispatch, channel)
+        next = refreshed
+        git
       } else {
         @cmd.none
       }
@@ -1102,6 +1115,134 @@ test "Codex missing worktree waits for rebuild or archive confirmation" {
     .map(uri => uri.path),
     Some("/work/project/.worktrees/wt-1"),
   )
+}
+
+///|
+test "Codex Git replies stay with the latest checkout request" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let main_cwd = "/workspace/openseek"
+  let worktree_cwd = "/workspace/.codex/worktrees/wt-3/openseek"
+  let opened = State().with_thread_reply({
+    "thread": {
+      "id": "thread-1",
+      "cwd": main_cwd,
+      "projectRoot": main_cwd,
+      "gitInfo": { "branch": "docs/desktop-ux-guidelines" },
+      "turns": [],
+    },
+  })
+  // Opening the thread starts the lookup against the main checkout.
+  let (_, main_pending) = opened.refresh_git(
+    dispatch,
+    @interop.ChannelId::Local,
+  )
+  assert_eq(main_pending.git_request_generation, 1)
+
+  // Fresh-worktree creation retargets the same thread and starts a newer
+  // lookup. Neither request is executed in this pure update test; their
+  // messages below deliberately arrive in the opposite order.
+  let worktree : CodexWorktree = {
+    name: "wt-3",
+    path: worktree_cwd,
+    present: true,
+  }
+  let retargeted = main_pending.with_created_worktree(worktree)
+  let (_, worktree_pending) = retargeted.refresh_git(
+    dispatch,
+    @interop.ChannelId::Local,
+  )
+  assert_eq(worktree_pending.git_request_generation, 2)
+
+  let worktree_reply = GitLoaded(
+    thread_id="thread-1",
+    generation=2,
+    requested_cwd=worktree_cwd,
+    reply={
+      pull_request: Some({
+        number: 759,
+        title: "Worktree pull request",
+        state: "open",
+        draft: false,
+        url: "https://github.com/moonbitlang/openseek/pull/759",
+        base: "main",
+        additions: 1,
+        deletions: 0,
+        changed_files: 1,
+        checks: None,
+      }),
+      compare_url: None,
+      branch: Some("openseek/wt-3"),
+    },
+  )
+  let (_, applied) = update(
+    dispatch,
+    worktree_reply,
+    worktree_pending,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, applied_again) = update(
+    dispatch,
+    worktree_reply,
+    worktree_pending,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  // The handler is pure: the same state and message produce the same result.
+  assert_true(applied_again == applied)
+  assert_eq(applied.git_status.unwrap().pull_request.unwrap().number, 759)
+
+  let main_reply = GitLoaded(
+    thread_id="thread-1",
+    generation=1,
+    requested_cwd=main_cwd,
+    reply={
+      pull_request: Some({
+        number: 1079,
+        title: "Main checkout pull request",
+        state: "open",
+        draft: false,
+        url: "https://github.com/moonbitlang/openseek/pull/1079",
+        base: "main",
+        additions: 2,
+        deletions: 0,
+        changed_files: 1,
+        checks: None,
+      }),
+      compare_url: None,
+      branch: Some("docs/desktop-ux-guidelines"),
+    },
+  )
+  let (_, stale) = update(
+    dispatch,
+    main_reply,
+    applied,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  // The main-checkout reply arrives last but cannot replace the worktree's
+  // newer answer.
+  assert_true(stale == applied)
+  assert_eq(stale.git_status.unwrap().pull_request.unwrap().number, 759)
+
+  let wrong_cwd_reply = GitLoaded(
+    thread_id="thread-1",
+    generation=2,
+    requested_cwd=main_cwd,
+    reply={
+      pull_request: None,
+      compare_url: None,
+      branch: Some("wrong-checkout"),
+    },
+  )
+  let (_, wrong_cwd) = update(
+    dispatch,
+    wrong_cwd_reply,
+    worktree_pending,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(wrong_cwd == worktree_pending)
 }
 
 ///|

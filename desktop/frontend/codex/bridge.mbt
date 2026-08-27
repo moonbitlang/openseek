@@ -376,25 +376,33 @@ fn State::refresh_git(
   self : State,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-) -> @cmd.Cmd {
+) -> (@cmd.Cmd, State) {
   guard self.active_thread() is Some(active) && active.cwd is Some(cwd) else {
-    return @cmd.none
+    return (@cmd.none, self)
   }
   let thread_id = active.id
-  @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
-      let reply : @protocol.GitPullRequestReply = @interop.bridge_request(
-        channel,
-        @commands.git_pull_request,
-        { session: thread_id, cwd: Some(cwd), branch_hint: active.branch },
-      ) catch {
-        // Git/gh decoration never blocks the conversation. Keep app-server's
-        // captured branch label when the live lookup is unavailable.
-        _ => return
-      }
-      scheduler.add(dispatch(GitLoaded(thread_id~, reply~)))
-    })
-  })
+  let generation = self.git_request_generation + 1
+  (
+    @cmd.custom_cmd(scheduler => {
+      @js.async_run(() => {
+        let reply : @protocol.GitPullRequestReply = @interop.bridge_request(
+          channel,
+          @commands.git_pull_request,
+          { session: thread_id, cwd: Some(cwd), branch_hint: active.branch },
+        ) catch {
+          // Git/gh decoration never blocks the conversation. Keep app-server's
+          // captured branch label when the live lookup is unavailable.
+          _ => return
+        }
+        scheduler.add(
+          dispatch(
+            GitLoaded(thread_id~, generation~, requested_cwd=cwd, reply~),
+          ),
+        )
+      })
+    }),
+    { ..self, git_request_generation: generation },
+  )
 }
 
 ///|
