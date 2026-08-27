@@ -47,8 +47,8 @@ pub(all) enum Msg {
   ShowMore
   ToggleFile(String)
   RequestStarted(request_id~ : String)
-  Loaded(request_id~ : String, reply~ : @protocol.SearchTextReply)
-  SemanticLoaded(request_id~ : String, reply~ : @protocol.SearchSemanticReply)
+  Loaded(reply~ : @protocol.SearchTextReply)
+  SemanticLoaded(reply~ : @protocol.SearchSemanticReply)
   RequestFailed(request_id~ : String, code~ : String, message~ : String)
 }
 

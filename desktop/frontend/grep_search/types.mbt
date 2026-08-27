@@ -54,7 +54,7 @@ struct SearchResultSummary {
 } derive(Eq)
 
 ///|
-struct Page {
+struct State {
   mode : Mode
   text : TextSearchState
   semantic : SemanticSearchState
@@ -86,20 +86,15 @@ pub fn EditorHighlights::ranges(
 }
 
 ///|
-pub struct State {
-  priv page : Page
-} derive(Eq)
-
-///|
 pub fn State::empty() -> State {
-  { page: Page::fresh(@uuid.mint()) }
+  State::fresh(@uuid.mint())
 }
 
 ///|
 /// Expose the current request UUID to the owning file-editor package. Replies
 /// use this UUID directly, without echoing the conversation or checkout root.
 pub fn State::request_id(self : State) -> String {
-  self.page.request_id
+  self.request_id
 }
 
 ///|
@@ -137,8 +132,8 @@ pub(all) enum Msg {
   ShowMore
   ToggleFile(String)
   RequestStarted(request_id~ : String)
-  Loaded(request_id~ : String, reply~ : @protocol.SearchTextReply)
-  SemanticLoaded(request_id~ : String, reply~ : @protocol.SearchSemanticReply)
+  Loaded(reply~ : @protocol.SearchTextReply)
+  SemanticLoaded(reply~ : @protocol.SearchSemanticReply)
   // One partial batch of a semantic search still in flight. The Host pushes
   // these through the notification channel so a long scan paints hits early;
   // the final `SemanticLoaded` reply replaces them. The request UUID fences
@@ -166,9 +161,6 @@ pub extend Mode with Debug::{to_repr}
 
 ///|
 pub extend Mode with Eq::{equal, not_equal}
-
-///|
-pub extend Page with Eq::{equal, not_equal}
 
 ///|
 pub extend Phase with Debug::{to_repr}

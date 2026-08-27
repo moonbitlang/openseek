@@ -26,11 +26,8 @@ test "editor Search highlights follow the Search inventory visibility boundary" 
     cancelled: false,
     error: None,
   }
-  let search = search.handle(
-    @grep_search.Loaded(request_id~, reply~),
-    ctx.search_input(),
-  )
-  let visible = { ..owned_state(), explorer_mode: ExplorerSearch, search, }
+  let search = search.handle(@grep_search.Loaded(reply~), ctx.search_input())
+  let visible = { ..owned_state(), explorer_mode: ExplorerSearch, search }
   guard visible.editor_search_highlights(path) is Some(highlights) else {
     fail("Search inventory should expose active editor matches")
   }

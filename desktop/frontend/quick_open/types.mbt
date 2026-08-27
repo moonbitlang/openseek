@@ -94,14 +94,6 @@ pub fn State::is_open(self : State) -> Bool {
 }
 
 ///|
-/// The UUID expected on the open palette's current asynchronous reply, or
-/// `None` while the palette is closed. Exposed for black-box adapters that
-/// drive the state machine without reading `Open`.
-pub fn State::request_id(self : State) -> String? {
-  self.open.map(open => open.request_id)
-}
-
-///|
 /// The shell data one palette run reads. Rebuilt every render, so a change of
 /// conversation, root, or open editor tabs reaches the palette without the
 /// package knowing how the application derives any of it.

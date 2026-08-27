@@ -381,3 +381,45 @@ test "symbols without a source path are dropped from the rows" {
   guard ready.open is Some(rows) else { fail("palette expected") }
   assert_eq(rows.items.map(item => item.name()), ["placed"])
 }
+
+///|
+/// A palette showing one workspace symbol: the reply names the request UUID
+/// the open minted, which only the state itself can read.
+fn symbol_run(name : String, path : String) -> State raise {
+  let input = test_input(root=test_uri("/work/proj"))
+  let opened = State::empty().begin(input, Symbols)
+  guard opened.open is Some(search) else { fail("palette expected") }
+  opened.step(
+    SymbolsLoaded(request_id=search.request_id, items=[test_symbol(name, path)]),
+    input,
+  )
+}
+
+///|
+test "accepting a symbol row closes the palette and hands back its range" {
+  let input = test_input(root=test_uri("/work/proj"))
+  let ready = symbol_run("parse_hover", "src/main.mbt")
+  guard ready.open is Some(rows) else { fail("palette expected") }
+  assert_eq(rows.items.map(item => item.name()), ["parse_hover"])
+  let (_, accepted, target) = ready.handle(test_emit(), Pick(0), input)
+  assert_false(accepted.is_open())
+  assert_eq(
+    target,
+    Some({
+      path: "src/main.mbt",
+      range: Some(@common.Range::Range(5, 2, 5, 13)),
+    }),
+  )
+}
+
+///|
+test "selection wraps in both directions" {
+  let input = test_input(root=test_uri("/work/proj"))
+  let ready = symbol_run("parse_hover", "src/main.mbt")
+  let up = ready.step(Move(-1), input)
+  guard up.open is Some(single) else { fail("palette expected") }
+  // One row, so either direction returns to it and it stays selected.
+  assert_eq(single.selected, 0)
+  let down = up.step(Move(1), input)
+  assert_true(down == up)
+}
