@@ -817,13 +817,13 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
     {
       values: { "input"? : Some([input, ..]), .. },
       flags: { "stdin"? : Some(stdin), .. },
-      ..
-    } => { input, stdin, }
+      ..,
+    } => { input, stdin }
     {
       values: { "input"? : Some([input, ..]), .. },
       flags: { "stdin"? : None, .. },
-      ..
-    } => { input, stdin: false, }
+      ..,
+    } => { input, stdin: false }
     _ => fail("missing parsed argument: input")
   }
 }
