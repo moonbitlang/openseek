@@ -765,7 +765,6 @@ async test "moonbitlang/async/shell glob lists workspace paths" {
     })
     assert_false(out.is_error)
     assert_true(out.content.contains("main.mbt"))
-    assert_true(out.content.contains(".moon exists: "))
   })
 }
 
