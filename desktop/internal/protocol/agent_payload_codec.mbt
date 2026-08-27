@@ -24,7 +24,7 @@ pub impl FromJson for StartPayload with fn from_json(json, path) {
     thinking: object.optional_thinking("thinking"),
     max_steps: object.optional_int("max_steps"),
     session: object.required_string("session"),
-    workspace: object.optional_string("workspace"),
+    workspace: object.required_string("workspace"),
   }
 }
 
@@ -33,6 +33,7 @@ pub impl ToJson for StartPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
     "task": self.task.to_json(),
     "session": self.session.to_json(),
+    "workspace": self.workspace.to_json(),
   }
   if self.submission_id is Some(submission_id) {
     fields["submission_id"] = submission_id.to_json()
@@ -46,9 +47,6 @@ pub impl ToJson for StartPayload with fn to_json(self) {
   if self.max_steps is Some(max_steps) {
     fields["max_steps"] = max_steps.to_json()
   }
-  if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
-  }
   Json::object(fields)
 }
 
@@ -60,13 +58,16 @@ pub impl FromJson for CompactPayload with fn from_json(json, path) {
     model: object.optional_string("model"),
     thinking: object.optional_thinking("thinking"),
     max_steps: object.optional_int("max_steps"),
-    workspace: object.optional_string("workspace"),
+    workspace: object.required_string("workspace"),
   }
 }
 
 ///|
 pub impl ToJson for CompactPayload with fn to_json(self) {
-  let fields : Map[String, Json] = { "session": self.session.to_json() }
+  let fields : Map[String, Json] = {
+    "session": self.session.to_json(),
+    "workspace": self.workspace.to_json(),
+  }
   if self.model is Some(model) {
     fields["model"] = model.to_json()
   }
@@ -75,9 +76,6 @@ pub impl ToJson for CompactPayload with fn to_json(self) {
   }
   if self.max_steps is Some(max_steps) {
     fields["max_steps"] = max_steps.to_json()
-  }
-  if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
   }
   Json::object(fields)
 }
@@ -92,13 +90,16 @@ pub impl FromJson for GoalPayload with fn from_json(json, path) {
     model: object.optional_string("model"),
     thinking: object.optional_thinking("thinking"),
     max_steps: object.optional_int("max_steps"),
-    workspace: object.optional_string("workspace"),
+    workspace: object.required_string("workspace"),
   }
 }
 
 ///|
 pub impl ToJson for GoalPayload with fn to_json(self) {
-  let fields : Map[String, Json] = { "session": self.session.to_json() }
+  let fields : Map[String, Json] = {
+    "session": self.session.to_json(),
+    "workspace": self.workspace.to_json(),
+  }
   if self.text is Some(text) {
     fields["text"] = text.to_json()
   }
@@ -113,9 +114,6 @@ pub impl ToJson for GoalPayload with fn to_json(self) {
   }
   if self.max_steps is Some(max_steps) {
     fields["max_steps"] = max_steps.to_json()
-  }
-  if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
   }
   Json::object(fields)
 }

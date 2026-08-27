@@ -9,17 +9,15 @@ import {
 // Values
 pub fn archived_root(@pathx.Absolute) -> @pathx.Absolute
 
-pub async fn archived_root_of(String) -> @pathx.Absolute?
-
 pub fn deleting_root(@pathx.Absolute) -> @pathx.Absolute
 
-pub async fn ensure_not_archived(String) -> Unit
+pub async fn ensure_not_archived(String, @pathx.Absolute?) -> Unit
 
 pub async fn family_in(@pathx.Absolute, String) -> Array[String]
 
-pub async fn known_roots() -> Array[@pathx.Absolute]
+pub async fn holders_of(String) -> Array[RecordHolder]
 
-pub async fn live_root_of(String) -> @pathx.Absolute?
+pub async fn known_roots() -> Array[@pathx.Absolute]
 
 pub async fn root_of(String) -> @pathx.Absolute?
 
@@ -34,12 +32,18 @@ pub suberror StoreError {
 pub fn StoreError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
-pub struct ArchivedStore {
+pub struct RecordHolder {
+  store : @pathx.Absolute
+  archived : Bool
+}
+
+pub struct StoreSelection {
   root : @pathx.Absolute
   workspace : @pathx.Absolute
   workspace_token : String
 }
-pub async fn ArchivedStore::for_workspace(String) -> Self
+pub async fn StoreSelection::from_workspace(String) -> Self
+pub fn StoreSelection::of_workspace(@pathx.Absolute) -> Self raise StoreError
 
 // Type aliases
 

@@ -20,9 +20,9 @@ pub async fn start_run(
   let mut placement_locked = true
   defer (if placement_locked { manager.workspace_lifecycle_lock.release() })
   // Acquire the persistent record lease from the request's canonical key
-  // before run_config probes live/workspace stores. Otherwise an unarchive
-  // can move the record between that probe and the archived check, leaving a
-  // stale global session_root that forks the conversation.
+  // before the record is read at all: without it an archive could move this
+  // record between the check below and the prompt, and the turn would append
+  // to a record no list still shows.
   let key = payload.session.trim().to_owned()
   // The record lease is acquired before `run_config`, so reject a blank key
   // here as well as at that standalone config boundary. There is no shared
@@ -33,7 +33,8 @@ pub async fn start_run(
   let record_guard = manager.begin_record_op(key)
   defer manager.end_record_op(key, record_guard)
   let config = run_config(manager, payload)
-  @session_store.ensure_not_archived(key)
+  @session_store.ensure_not_archived(key, config.session_root)
+  ensure_new_record_is_unique(key, selected?=config.session_root)
   let sessions = manager.serving()
   let slot = slot_for(sessions, key)
   // Busy-ness is a property of the handle, not of admission: a condemned
@@ -176,6 +177,37 @@ async fn ensure_run_cwd(config : RunConfig) -> Unit {
 }
 
 ///|
+/// The live engine a command addressed to `store` may be written to, if any.
+///
+/// Session slots are keyed by id alone — the host runs at most one engine per
+/// id — so the engine holding this slot may be the one writing a same-id
+/// record in *another* store. Handing it the command would mutate that record
+/// and route its events into this conversation, so a mismatched engine is not
+/// returned: the caller spawns its own, which replaces it. Taking the slot
+/// from an idle conversation costs it only a warm process (the next prompt
+/// respawns, exactly as after a fingerprint change), but taking it from one
+/// mid-turn would destroy work this request never named, so that is refused.
+fn engine_writing_store(
+  slot : SessionSlot,
+  store : @pathx.Absolute,
+) -> ServeEngine? raise EngineError {
+  guard slot.live() is Some(live) else { return None }
+  if live.writes_store(store) {
+    return Some(live)
+  }
+  guard live.phase is Idle(..) else {
+    let elsewhere = match live.session_root {
+      Some(root) => root.to_string()
+      None => "another store"
+    }
+    raise EngineError(
+      "a conversation with this id is still active in \{elsewhere}; wait for it to finish",
+    )
+  }
+  None
+}
+
+///|
 /// Ask the pump to spawn (or replace) this conversation's serve engine and
 /// wait for its ack; the spawn failure, if any, is re-raised here.
 async fn request_spawn(
@@ -225,7 +257,16 @@ pub async fn compact_run(
   let session = payload.session.trim().to_owned()
   let record_guard = manager.begin_record_op(session)
   defer manager.end_record_op(session, record_guard)
-  @session_store.ensure_not_archived(session)
+  // Which record this compaction rewrites, resolved before the slot is read:
+  // the engine on that slot counts as this conversation's only if it writes
+  // the same store. Resolved here rather than from `compact_config` because a
+  // reused engine never builds one, and the store must be known either way.
+  let store = requested_store(payload.workspace)
+  @session_store.ensure_not_archived(session, Some(store))
+  // A compaction with no live engine spawns one, and a spawn writes the
+  // record: without this the command would open a second record for an id
+  // another store already owns, which `start_run` refuses.
+  ensure_new_record_is_unique(session, selected=store)
   let sessions = manager.serving()
   let slot = slot_for(sessions, session)
   // Claim before anything else — even with a live engine. A start between
@@ -238,12 +279,13 @@ pub async fn compact_run(
   placement_locked = false
   manager.workspace_lifecycle_lock.release()
   // A changed model, reasoning choice, or endpoint replaces an idle engine
-  // before the compaction. During a turn the compact command must stay behind
-  // that turn on its current process; do not resolve new endpoint settings in
-  // that active path, because they do not configure the process accepting the
+  // before the compaction, and so does an engine writing another store's
+  // same-id record. During a turn the compact command must stay behind that
+  // turn on its current process; do not resolve new endpoint settings in that
+  // active path, because they do not configure the process accepting the
   // queued command. The next start applies the new fingerprint after both
   // settle.
-  let replacement = match slot.live() {
+  let replacement = match engine_writing_store(slot, store) {
     None => Some(compact_config(manager, payload))
     Some(live) =>
       match live.phase {
@@ -341,7 +383,13 @@ pub async fn goal_run(
   }
   let record_guard = manager.begin_record_op(session)
   defer manager.end_record_op(session, record_guard)
-  @session_store.ensure_not_archived(session)
+  // The goal is durable state of one record, so the store is resolved before
+  // the slot is read — see `compact_run`.
+  let store = requested_store(payload.workspace)
+  @session_store.ensure_not_archived(session, Some(store))
+  // A goal is reachable before the first prompt, and its spawn writes the
+  // record just as a start's does — see `compact_run`.
+  ensure_new_record_is_unique(session, selected=store)
   let sessions = manager.serving()
   let slot = slot_for(sessions, session)
   // Claim before looking at the engine, exactly as compact_run does: this op
@@ -351,12 +399,13 @@ pub async fn goal_run(
   defer claim.release(manager)
   placement_locked = false
   manager.workspace_lifecycle_lock.release()
-  // A goal sent while idle observes the selected engine settings immediately.
-  // Mid-turn and queued-compaction goals stay on the current process because
-  // replacing it would destroy the operation they are ordered behind. New
+  // A goal sent while idle observes the selected engine settings immediately,
+  // and replaces an engine writing another store's same-id record. Mid-turn
+  // and queued-compaction goals stay on the current process because replacing
+  // it would destroy the operation they are ordered behind. New
   // endpoint settings are therefore not resolved in that active path; the
   // next idle start applies their fingerprint.
-  let replacement = match slot.live() {
+  let replacement = match engine_writing_store(slot, store) {
     None => Some(goal_config(manager, payload))
     Some(live) =>
       match live.phase {
@@ -562,23 +611,10 @@ pub async fn load_session(
   // B's archive after a host restart.
   let record_guard = manager.begin_record_read(session)
   defer manager.end_record_read(session, record_guard)
-  // The client's workspace hint says which registered store to read. A
-  // detached workspace is rejected instead of silently probing another
-  // store, which could return a different history for the same session id.
-  let root = if payload.workspace is Some(hint) && !hint.is_blank() {
-    guard @pathx.Absolute::from_uri_path(hint) is Some(absolute) &&
-      @workspaces.registered_dir(absolute) is Some(workspace) else {
-      raise EngineError("\{hint} is not a registered workspace")
-    }
-    Some(@workspaces.store_root(workspace))
-  } else {
-    @session_store.root_of(session)
-  }
-  guard root is Some(root) else {
-    raise EngineError(
-      "no attached workspace holds this conversation; attach its project first",
-    )
-  }
+  // The client names which store to read. A detached workspace is rejected
+  // instead of silently probing another store, which could return a
+  // different history for the same session id.
+  let root = @session_store.StoreSelection::from_workspace(payload.workspace).root
   // A followed session (a live engine is writing to it) is read through its
   // follower actor: the snapshot then comes out of the same serial loop
   // that broadcasts `session.event` commits, so the two can never disagree
@@ -590,12 +626,27 @@ pub async fn load_session(
       watermark: Some(session_max_sequence(document)),
     }
   }
-  // A record that moved to an archived twin is a different answer than one
-  // that was never written: say so, rather than reporting this store's
-  // emptiness for a conversation that does have durable content elsewhere.
-  if !@fsx.is_dir(root.join("sessions").join(session).to_path()) &&
-    @session_store.archived_root_of(session) is Some(_) {
-    raise EngineError("this conversation is archived; unarchive it first")
+  // A record this store does not hold has three different answers, and only
+  // the first two are failures. It may have moved to this store's archived
+  // twin; it may live in another store, which means the request named the
+  // wrong one; or it may simply not be written yet, which is an accepted
+  // conversation whose first turn has not committed — the empty snapshot
+  // below, not an error a client can only retry forever.
+  if !@fsx.is_dir(root.join("sessions").join(session).to_path()) {
+    if @fsx.is_dir(
+        @session_store.archived_root(root)
+        .join("sessions")
+        .join(session)
+        .to_path(),
+      ) {
+      raise EngineError("this conversation is archived; unarchive it first")
+    }
+    for holder in @session_store.holders_of(session) {
+      guard holder.store.to_string() != root.to_string() else { continue }
+      raise EngineError(
+        "no durable record for this conversation in the selected store",
+      )
+    }
   }
   let document = @session_record.read_document(root, session) catch {
     error if @async.is_being_cancelled() => raise error
@@ -638,34 +689,16 @@ pub async fn load_archived_session(
   }
   let record_guard = manager.begin_record_read(session)
   defer manager.end_record_read(session, record_guard)
-  // A workspace hint selects that registered store's archived twin. Without
-  // one, find the archived record across all attached stores and the global
-  // store, matching the placement rules of the archived index.
-  let root = if payload.workspace is Some(hint) && !hint.is_blank() {
-    guard @pathx.Absolute::from_uri_path(hint) is Some(absolute) &&
-      @workspaces.registered_dir(absolute) is Some(workspace) else {
-      raise EngineError("\{hint} is not a registered workspace")
-    }
-    Some(@session_store.archived_root(@workspaces.store_root(workspace)))
-  } else {
-    match @session_store.archived_root_of(session) {
-      Some(root) => Some(@session_store.archived_root(root))
-      None => None
-    }
-  }
-  guard root is Some(root) else {
-    if @session_store.live_root_of(session) is Some(_) {
+  // The client names the store whose archived twin to read.
+  let live = @session_store.StoreSelection::from_workspace(payload.workspace).root
+  let root = @session_store.archived_root(live)
+  if !@fsx.is_dir(root.join("sessions").join(session).to_path()) {
+    if @fsx.is_dir(live.join("sessions").join(session).to_path()) {
       raise EngineError("this conversation is not archived")
     }
     raise EngineError(
-      "no archived record for this conversation in the global store or any attached workspace",
+      "no archived record for this conversation in the selected store",
     )
-  }
-  if !@fsx.is_dir(root.join("sessions").join(session).to_path()) {
-    if @session_store.live_root_of(session) is Some(_) {
-      raise EngineError("this conversation is not archived")
-    }
-    raise EngineError("no archived record for this conversation")
   }
   let document = @session_record.read_document(root, session) catch {
     error if @async.is_being_cancelled() => raise error
@@ -879,7 +912,7 @@ async test "start echoes the client submission id in Started" {
         thinking: None,
         max_steps: None,
         session,
-        workspace: Some(workspace),
+        workspace,
       }),
     )
     let mut echoed : String? = None
@@ -954,7 +987,7 @@ async test "a goal is delivered only once its command is on the wire" {
       model: None,
       thinking: None,
       max_steps: None,
-      workspace: Some(workspace),
+      workspace,
     })
     assert_true(delivered.delivered)
     // The reply already means the bytes left this host, so the child has them
@@ -1080,7 +1113,7 @@ async test "setup failure retires the writer before an immediate next start" {
         thinking: None,
         max_steps: None,
         session,
-        workspace: Some(workspace),
+        workspace,
       }).run_id
     assert_true(
       @async.with_timeout_opt(3000, () => {
@@ -1104,7 +1137,7 @@ async test "setup failure retires the writer before an immediate next start" {
       thinking: None,
       max_steps: None,
       session,
-      workspace: Some(workspace),
+      workspace,
     })
     assert_eq(second.status, "accepted")
     assert_true(@fsx.exists(old_done))
@@ -1199,7 +1232,7 @@ async test "a prompt bigger than the pipe still settles exactly once" {
       thinking: None,
       max_steps: None,
       session,
-      workspace: Some(workspace),
+      workspace,
     })
     assert_eq(reply.status, "accepted")
     assert_eq(started.val, Some(reply.run_id))
@@ -1293,7 +1326,7 @@ async test "named session retries after its first prompt creates no record" {
       thinking: None,
       max_steps: None,
       session,
-      workspace: Some(workspace),
+      workspace,
     })
     assert_eq(first.status, "accepted")
     assert_eq(started.val, Some(first.run_id))
@@ -1334,7 +1367,7 @@ async test "named session retries after its first prompt creates no record" {
       thinking: None,
       max_steps: None,
       session,
-      workspace: Some(workspace),
+      workspace,
     })
     assert_eq(second.status, "accepted")
     let second_run_id = second.run_id
@@ -1361,9 +1394,9 @@ async test "session load preserves a future item without hiding known events" {
   let dir = @fs.tmpdir(prefix="openseek-load-future-item-")
   @sys.set_env_var("HOME", dir + "/global")
   defer restore_home_env(previous)
-  // A hint-less load resolves the store from where the record actually
-  // lives, so the record goes in an attached workspace's own store.
-  ignore(attach_run_workspace(Path(dir)))
+  // The load names the store it reads, so the record goes in an attached
+  // workspace's own store and the request spells that workspace.
+  let workspace = attach_run_workspace(Path(dir))
   write_session_record(
     @pathx.Path(dir + "/ws/.openseek").resolve(),
     "s-future",
@@ -1377,7 +1410,7 @@ async test "session load preserves a future item without hiding known events" {
   // read in this process.
   let reply = load_session(new_engine_manager(dir + "/engine.sh"), {
     session: "s-future",
-    workspace: None,
+    workspace,
   })
   guard reply.session.events is Some(events) else {
     fail("expected session events")
@@ -1397,9 +1430,9 @@ async test "archived session load reads without restoring the record" {
   let dir = @fs.tmpdir(prefix="openseek-load-archived-")
   @sys.set_env_var("HOME", dir + "/global")
   defer restore_home_env(previous)
-  // A hint-less load resolves the store from where the record actually
-  // lives, so the record goes in an attached workspace's own store.
-  ignore(attach_run_workspace(Path(dir)))
+  // The load names the store it reads, so the record goes in an attached
+  // workspace's own store and the request spells that workspace.
+  let workspace = attach_run_workspace(Path(dir))
   let store = dir + "/ws/.openseek"
   write_session_record(
     @pathx.Path(store + "/archived").resolve(),
@@ -1412,7 +1445,7 @@ async test "archived session load reads without restoring the record" {
   let manager = new_engine_manager(dir + "/engine.sh")
   let reply = load_archived_session(manager, {
     session: "s-archived",
-    workspace: None,
+    workspace,
   })
   guard reply.session.events is Some(events) else {
     fail("expected archived session events")
@@ -1448,7 +1481,7 @@ async test "load rejects a detached workspace hint instead of probing global" {
     ignore(
       load_session(manager, {
         session: "s-detached",
-        workspace: Some(dir + "/detached-workspace"),
+        workspace: dir + "/detached-workspace",
       }),
     )
     "no error"
@@ -1520,7 +1553,7 @@ async test "workspace detach refuses a running conversation without hiding it" {
       thinking: None,
       max_steps: None,
       session: "s-detach-running",
-      workspace: Some(workspace.to_string()),
+      workspace: workspace.to_string(),
     })
     assert_eq(reply.status, "accepted")
     let committed : Ref[Bool] = Ref(false)
@@ -1607,7 +1640,7 @@ async test "workspace detach drains an idle writer and its follower first" {
       thinking: None,
       max_steps: None,
       session: "s-detach-idle",
-      workspace: Some(workspace.to_string()),
+      workspace: workspace.to_string(),
     })
     let run_id = reply.run_id
     assert_true(
@@ -1662,7 +1695,7 @@ async test "a goal request is refused before it can reach the wrong engine" {
       model: None,
       thinking: None,
       max_steps: None,
-      workspace: None,
+      workspace: "",
     }).contains("autonomous goal continuation is not supported yet"),
   )
   // Manual, named: past the refusal and on to the engine, which is where a
@@ -1675,7 +1708,7 @@ async test "a goal request is refused before it can reach the wrong engine" {
       model: None,
       thinking: None,
       max_steps: None,
-      workspace: None,
+      workspace: "",
     }).contains("not supported yet"),
   )
 }

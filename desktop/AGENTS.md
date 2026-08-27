@@ -1,5 +1,8 @@
 # Desktop Agent Notes
 
+`CONTEXT.md` fixes the vocabulary — store, root, workspace, checkout,
+placement, family. Read it before naming anything in this tree.
+
 ## Frontend And Host Compatibility
 
 - The desktop frontend and host are versioned and shipped together. Do not

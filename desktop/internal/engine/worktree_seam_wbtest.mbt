@@ -216,7 +216,7 @@ async test "a bound session routes every start through its checkout" {
     thinking: None,
     max_steps: None,
     session: "s-bind",
-    workspace: Some(ws.to_string()),
+    workspace: ws.to_string(),
   })
   assert_eq(
     first.cwd.map(dir => dir.to_string()),
@@ -224,10 +224,11 @@ async test "a bound session routes every start through its checkout" {
   )
   // The durable record stays in the MAIN repository's store.
   assert_eq(
-    first.session_root.map(dir => dir.to_string()),
-    Some(ws.join(".openseek").to_string()),
+    first.session_root.unwrap().to_string(),
+    ws.join(".openseek").to_string(),
   )
-  // A hint-less resume goes through the durable record and the mapping.
+  // A resume names the same store and goes through the registry again: the
+  // binding is the registry's, not the first start's.
   @fsx.ensure_dir(ws.join(".openseek/sessions/s-bind").to_path())
   let resumed = run_config(manager, {
     task: "resume",
@@ -236,15 +237,15 @@ async test "a bound session routes every start through its checkout" {
     thinking: None,
     max_steps: None,
     session: "s-bind",
-    workspace: None,
+    workspace: ws.to_string(),
   })
   assert_eq(
     resumed.cwd.map(dir => dir.to_string()),
     Some(ws.join(".worktrees/wt").to_string()),
   )
   assert_eq(
-    resumed.session_root.map(dir => dir.to_string()),
-    Some(ws.join(".openseek").to_string()),
+    resumed.session_root.unwrap().to_string(),
+    ws.join(".openseek").to_string(),
   )
   @fs.rmdir(root.to_string(), recursive=true)
 }
@@ -308,7 +309,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
       thinking: None,
       max_steps: None,
       session: "s-wt-run",
-      workspace: Some(ws.to_string()),
+      workspace: ws.to_string(),
     })
     assert_eq(reply.status, "accepted")
     let committed : Ref[Bool] = Ref(false)
@@ -420,7 +421,7 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
         thinking: None,
         max_steps: None,
         session: "s-vanish",
-        workspace: Some(repo.to_string()),
+        workspace: repo.to_string(),
       }),
     )
     "no error"
@@ -430,27 +431,6 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
     error => "\{error}"
   }
   assert_true(hinted_refusal.contains("wt") && hinted_refusal.contains("gone"))
-  let resumed_refusal = try {
-    ignore(
-      run_config(manager, {
-        task: "resume",
-        submission_id: None,
-        model: None,
-        thinking: None,
-        max_steps: None,
-        session: "s-vanish",
-        workspace: None,
-      }),
-    )
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
-  assert_true(
-    resumed_refusal.contains("wt") && resumed_refusal.contains("gone"),
-  )
   // Recreating repairs the SAME environment: same name, same branch, and the
   // branch's commit is back in the working tree.
   let repaired = @worktree.create(
@@ -533,7 +513,8 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   )
   // A dirty checkout returns a structured confirmation state before anything
   // irreversible: the record stays live and the checkout stays on disk.
-  guard archive_session(manager, "s-arc", (_, _) => ()) is NeedsForce(refusal) else {
+  guard archive_session(manager, "s-arc", repo.resource_path(), (_, _) => ())
+    is NeedsForce(refusal) else {
     fail("dirty archive returned no force confirmation")
   }
   assert_eq(refusal.worktree, "wt-1")
@@ -549,10 +530,14 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   // the branch, archived history, and placement row all survive. The retained
   // row broadcasts as missing before the conversation is archived.
   let changes : Array[(String, Array[WorktreeInfo])] = []
-  guard archive_session(manager, "s-arc", (_, _) => (), force=true, on_worktree_changed=(
-      workspace,
-      rows,
-    ) => changes.push((workspace, rows)))
+  guard archive_session(
+      manager,
+      "s-arc",
+      repo.resource_path(),
+      (_, _) => (),
+      force=true,
+      on_worktree_changed=(workspace, rows) => changes.push((workspace, rows)),
+    )
     is Archived(_) else {
     fail("forced archive did not commit")
   }
@@ -586,7 +571,9 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   assert_false(retained.present)
   // Unarchive restores only the durable conversation. The retained placement
   // keeps every workspace surface blocked until the user explicitly repairs.
-  ignore(unarchive_session(manager, "s-arc", (_, _) => ()))
+  ignore(
+    unarchive_session(manager, "s-arc", repo.resource_path(), (_, _) => ()),
+  )
   assert_true(
     @fsx.is_dir(
       @workspaces.store_root(repo).join("sessions").join("s-arc").to_path(),
@@ -617,7 +604,10 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   @fsx.ensure_dir(
     @workspaces.store_root(repo).join("sessions").join("s-arc2").to_path(),
   )
-  assert_true(archive_session(manager, "s-arc2", (_, _) => ()) is Archived(_))
+  assert_true(
+    archive_session(manager, "s-arc2", repo.resource_path(), (_, _) => ())
+    is Archived(_),
+  )
   assert_false(@fsx.exists(repo.join(".worktrees/wt-2").to_path()))
   guard @worktree.list(repo.to_string()).worktrees is [first, second] else {
     fail("both worktree placements must survive archive")

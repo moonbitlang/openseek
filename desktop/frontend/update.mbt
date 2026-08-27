@@ -16,10 +16,14 @@ fn session_snapshot_command(
   generation : Int,
   activate_on_success : Bool,
 ) -> @cmd.Cmd {
+  // A snapshot reads one record, so it needs that record's store. An open
+  // conversation carries it; otherwise the listing places the id, and a page
+  // that can place it nowhere has nothing to read.
   let (workspace, archived) = match model.find_conversation(channel, session) {
     Some(conv) => (Some(conv.project()), conv.is_archived_read_only())
     None => (model.session_project(channel, session), false)
   }
+  guard workspace is Some(workspace) else { return @cmd.none }
   if activate_on_success {
     open_session(dispatch, channel, session, workspace~, generation~, archived~)
   } else {
@@ -88,16 +92,128 @@ fn focus_channel(
 }
 
 ///|
+/// What a host listing says about one session id: the single store carrying
+/// it, or that several do. Session ids repeat only across stores, so this
+/// collapses to `OneStore` for every ordinary id.
+priv enum ListedStore {
+  OneStore(@common.Uri)
+  SeveralStores
+}
+
+///|
+/// Index the listings by session id, so placement reconciliation is one lookup
+/// per conversation rather than a scan of the whole listing. Live and archived
+/// rows go in together: both say a store holds a record under that id, which
+/// is the only question this index answers.
+fn listed_stores(
+  items : Array[@transcript.SessionListItem],
+  archived : Array[@transcript.SessionListItem],
+) -> Map[String, ListedStore] {
+  items
+  .iter()
+  .concat(archived.iter())
+  .fold(init=Map([]), (index, item) => {
+    index[item.id] = match index.get(item.id) {
+      None => OneStore(item.workspace)
+      Some(OneStore(store)) if store == item.workspace => OneStore(store)
+      Some(_) => SeveralStores
+    }
+    index
+  })
+}
+
+///|
+/// Reconcile every conversation's store against one device's two listings,
+/// and with it the store the sidebar follows for the active id.
+///
+/// A commit or Started broadcast can materialize a conversation before
+/// `session.list` says which durable store owns it, and that provisional
+/// placement is what every later request names — so it has to be reconciled
+/// before the next send. But it may only be reconciled from evidence that is
+/// whole: a record's absence from the live list means it was archived where
+/// it already was, which only the archived list can confirm. Callers therefore
+/// run this once both listings are the current connection's, and leave every
+/// binding alone until then.
+fn reconcile_placements(
+  model : Model,
+  conversations : Array[Conversation],
+  channel : @interop.ChannelId,
+  dev : DeviceState,
+  live : Array[@transcript.SessionListItem],
+  archived : Array[@transcript.SessionListItem],
+) -> (Array[Conversation], @common.Uri?) {
+  let stores = listed_stores(live, archived)
+  let reconciled = conversations.map(conv => {
+    if conv.device == channel {
+      {
+        ..conv,
+        workspace: dev.conversation_workspace(
+          listed_project(stores, conv),
+          conv.session_id,
+          conv.workspace,
+        ),
+      }
+    } else {
+      conv
+    }
+  })
+  // The active conversation's own placement is the store the sidebar should
+  // follow. Only when the page holds no conversation for the active id does
+  // the listing have to answer, under the same rule.
+  let mut active_project = dev.active_project
+  if channel == model.focused {
+    if model.find_conversation(channel, model.active_session) is Some(active) {
+      active_project = Some(listed_project(stores, active))
+    } else if stores.get(model.active_session) is Some(OneStore(store)) {
+      active_project = Some(store)
+    }
+  }
+  (reconciled, active_project)
+}
+
+///|
+/// Where `session.list` says this conversation's record lives.
+///
+/// The listings are the authority on placement only while they are
+/// unambiguous. A conversation materialized from a broadcast before they
+/// arrived carries a provisional store, and the single row bearing its id
+/// names the real one. But a host really can hold two records under one id —
+/// one per attached project — and then the conversation's own binding is the
+/// better answer: it came from the row the user clicked or from the store root
+/// a commit named, whereas picking a row by id alone would rebind the
+/// conversation to a record it never opened.
+///
+/// Both listings count, because a record that left the live list did not move
+/// stores — records never do — it was archived where it already was. Reading
+/// the live list alone would see one remaining row, call that unambiguous, and
+/// move the conversation onto a stranger's record while its own sat in its
+/// store's archived twin.
+fn listed_project(
+  index : Map[String, ListedStore],
+  conv : Conversation,
+) -> @common.Uri {
+  match index.get(conv.session_id) {
+    Some(OneStore(store)) => store
+    Some(SeveralStores) | None => conv.workspace.project()
+  }
+}
+
+///|
 /// The OpenSession body against an explicit channel — the caller has
-/// already moved focus there, so `channel == model.focused` throughout.
+/// already moved focus there, so `channel == model.focused` throughout. `key`
+/// names the durable record the clicked row stands for; an open conversation
+/// bound to another store's same-id record is not this one and is replaced,
+/// exactly as opening an archived twin already does.
 fn open_session_on(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   model : Model,
-  session_id : String,
+  key : RecordKey,
 ) -> (@cmd.Cmd, Model) {
+  let session_id = key.session
   let owner : @interop.ConversationKey = { channel, session: session_id }
-  if session_id == model.active_session {
+  if session_id == model.active_session &&
+    model.find_record_conversation(channel, key) is Some(_) {
     let base = { ..model, screen: Chat }
     // Re-selecting is an explicit catch-up point for writes made by an
     // idle CLI or another client. It also restarts an exhausted retry
@@ -132,7 +248,7 @@ fn open_session_on(
           },
         )
     }
-  } else if model.find_conversation(channel, session_id) is Some(conv) {
+  } else if model.find_record_conversation(channel, key) is Some(conv) {
     // Switching focus; the transcript re-pins at the tail. The store is
     // also re-read behind the switch — the local copy may date from
     // before a reconnect, or another client may be driving this
@@ -164,17 +280,12 @@ fn open_session_on(
     }
     (@cmd.batch(commands), next)
   } else {
-    // The sidebar item says which project store holds the session, while the
+    // The row names the project store holding the record, while the
     // already-loaded worktree registry may place it in a specific checkout.
-    // Join both snapshots before the conversation exists: no later registry
-    // reply is guaranteed after a user opens an already-listed session.
-    //
-    // A session this page can place in no project is not openable: there is
-    // no store to read it from. That is a row on its way out — its project
-    // was detached — so the click is dropped rather than reported.
-    guard model.session_project(channel, session_id) is Some(project) else {
-      return (@cmd.none, model)
-    }
+    // Join both before the conversation exists: no later registry reply is
+    // guaranteed after a user opens an already-listed session. The clicked
+    // row names the store, so nothing here has to place the id.
+    let project = key.workspace
     let conversation = empty_conversation(
       channel,
       session_id,
@@ -495,12 +606,10 @@ fn adopt_projects(
         // `activate` just placed this session, so it is on screen.
         None => activated
       }
-      let (fallback_cmd, next) = open_session_on(
-        dispatch,
-        channel,
-        activated,
-        fallback.id,
-      )
+      let (fallback_cmd, next) = open_session_on(dispatch, channel, activated, {
+        session: fallback.id,
+        workspace: fallback.workspace,
+      })
       commands.push(fallback_cmd)
       return (@cmd.batch(commands), next)
     }
@@ -2049,7 +2158,7 @@ fn update_msg(
             @composer.MissingWorktreeArchiveRequested(..) =>
               update_msg(
                 dispatch,
-                ArchiveSession(conv.device, conv.session_id),
+                ArchiveSession(conv.device, conv.record_key()),
                 model,
               )
             @composer.PermissionMenuToggled(..)
@@ -3543,7 +3652,7 @@ fn update_msg(
             archive_session(
               dispatch,
               confirm.channel,
-              confirm.session,
+              confirm.key,
               dev.connection_generation,
               sessions_request_generation,
               archived_request_generation,
@@ -3808,9 +3917,10 @@ fn update_msg(
         }),
       )
     }
-    ArchiveSession(channel, session_id) => {
+    ArchiveSession(channel, key) => {
       // Archiving acts on the row's own device and never moves focus.
-      guard model.device_state(channel) is Some(dev) else {
+      guard model.device_state(channel) is Some(dev) &&
+        key.workspace_payload(channel) is Some(_) else {
         return (@cmd.none, model)
       }
       let sessions_request_generation = dev.sessions_request_generation + 1
@@ -3819,7 +3929,7 @@ fn update_msg(
         archive_session(
           dispatch,
           channel,
-          session_id,
+          key,
           dev.connection_generation,
           sessions_request_generation,
           archived_request_generation,
@@ -3831,8 +3941,9 @@ fn update_msg(
         }),
       )
     }
-    UnarchiveSession(channel, session_id) => {
-      guard model.device_state(channel) is Some(dev) else {
+    UnarchiveSession(channel, key) => {
+      guard model.device_state(channel) is Some(dev) &&
+        key.workspace_payload(channel) is Some(_) else {
         return (@cmd.none, model)
       }
       let sessions_request_generation = dev.sessions_request_generation + 1
@@ -3841,7 +3952,7 @@ fn update_msg(
         unarchive_session(
           dispatch,
           channel,
-          session_id,
+          key,
           dev.connection_generation,
           sessions_request_generation,
           archived_request_generation,
@@ -3893,23 +4004,37 @@ fn update_msg(
         model.conversation_by_run(Local, run_id)
       }
       if conv is Some(conv) {
-        update_msg(dispatch, OpenSession(conv.device, conv.session_id), model)
+        update_msg(dispatch, OpenSession(conv.device, conv.record_key()), model)
       } else {
         (@cmd.none, model)
       }
     }
     // A transcript link naming a session on the device already focused. It
     // delegates rather than duplicating: the sub-run child this opens is an
-    // ordinary durable session, and `OpenSession` is how one is opened.
+    // ordinary durable session, and `OpenSession` is how one is opened. The
+    // link carries no store because it needs none — a sub-run's record is
+    // filed beside the transcript that names it, so the store is the one the
+    // conversation being read is bound to.
     OpenSessionHere(session_id) =>
-      update_msg(dispatch, OpenSession(model.focused, session_id), model)
-    OpenSession(channel, session_id) =>
+      match model.active_conversation() {
+        Some(conv) =>
+          update_msg(
+            dispatch,
+            OpenSession(model.focused, {
+              session: session_id,
+              workspace: conv.record_key().workspace,
+            }),
+            model,
+          )
+        None => (@cmd.none, model)
+      }
+    OpenSession(channel, key) =>
       // Selecting a conversation always returns to the chat — including
       // re-selecting the active one from the Skills page. The explicit channel
       // may also move device selection before the focused-scoped mirrors
       // refetch and the conversation opens there; current sidebar rows pass
       // the selected channel.
-      if session_id.is_empty() {
+      if key.session.is_empty() {
         (@cmd.none, model)
       } else {
         // A row click that raced its device's removal has nowhere to go.
@@ -3917,7 +4042,7 @@ fn update_msg(
           return (@cmd.none, model)
         }
         let (focus_cmd, model) = focus_channel(dispatch, model, channel)
-        let (cmd, model) = open_session_on(dispatch, channel, model, session_id)
+        let (cmd, model) = open_session_on(dispatch, channel, model, key)
         (@cmd.batch([focus_cmd, cmd]), model)
       }
     OpenArchivedSession(channel, session~, workspace~) => {
@@ -3927,7 +4052,7 @@ fn update_msg(
       // The row may have been restored while its click was queued. Re-read
       // the current archived index and use its placement rather than opening
       // a stale archived target or trusting an obsolete workspace hint.
-      let key : ArchiveRecordKey = { session, workspace }
+      let key : RecordKey = { session, workspace }
       guard dev.archived.iter().any(item => key.matches(item)) &&
         !(dev.archive_override(key) is Some(ArchiveLive)) else {
         return (@cmd.none, model)
@@ -5292,41 +5417,32 @@ fn update_device_msg(
           }
         }
       }
-      // A commit or Started broadcast can materialize a conversation before
-      // session.list tells this page which durable store owns it. Reconcile
-      // that provisional placement from the list before any later send: an
-      // empty workspace hint here would otherwise fork the same session into
-      // the default store.
-      let conversations = model.conversations.map(conv => {
-        if conv.device == channel {
-          let mut project = conv.project()
-          for item in items {
-            if item.id == conv.session_id {
-              project = item.workspace
-            }
-          }
-          {
-            ..conv,
-            workspace: dev.conversation_workspace(
-              project,
-              conv.session_id,
-              conv.workspace,
-            ),
-          }
-        } else {
-          conv
-        }
-      })
-      let mut active_project = dev.active_project
-      if channel == model.focused {
-        for item in items {
-          if item.id == model.active_session {
-            active_project = Some(item.workspace)
-          }
-        }
+      // Reconcile provisional placements from the listings — but only once
+      // this connection's archived reply has landed too. Both are requested
+      // together at BridgeReady and race each other; acting on the live one
+      // alone is what rebinds a conversation archived while the page was away
+      // onto another project's same-id record. Whichever reply is second runs
+      // this.
+      let (conversations, active_project) = if dev.archived_connection ==
+        connection_generation {
+        reconcile_placements(
+          model,
+          model.conversations,
+          channel,
+          dev,
+          items,
+          dev.archived,
+        )
+      } else {
+        (model.conversations, dev.active_project)
       }
       let mut next = {
-        ..model.replace_device({ ..dev, sessions: items, active_project }),
+        ..model.replace_device({
+          ..dev,
+          sessions: items,
+          sessions_connection: connection_generation,
+          active_project,
+        }),
         conversations,
       }
       let commands : Array[@cmd.Cmd] = []
@@ -5336,7 +5452,7 @@ fn update_device_msg(
       // the override admits new commits immediately, and the new transcript
       // generation fences the archived request started by BridgeReady.
       for conv in next.conversations {
-        let key : ArchiveRecordKey = {
+        let key : RecordKey = {
           session: conv.session_id,
           workspace: conv.project(),
         }
@@ -5678,9 +5794,9 @@ fn update_device_msg(
       // confirming it later would fire a stale forced archive.
       let archive_confirm = match next.archive_confirm {
         Some(confirm) if confirm.channel == channel &&
-          next.find_conversation(channel, confirm.session) is Some(conv) &&
-          conv.project() == workspace &&
-          !rows.iter().any(row => row.session == Some(confirm.session)) => None
+          confirm.key.workspace == workspace &&
+          !rows.iter().any(row => row.session == Some(confirm.key.session)) =>
+          None
         other => other
       }
       let next = { ..next, conversations, archive_confirm }
@@ -5707,14 +5823,11 @@ fn update_device_msg(
         }),
       )
     }
-    ArchiveNeedsForce(session~, refusal~) =>
+    ArchiveNeedsForce(key~, refusal~) =>
       // The host refused to archive over the worktree's uncommitted
       // changes; stage the discard-confirmation dialog, whose confirm
-      // retries with force.
-      (
-        @cmd.none,
-        { ..model, archive_confirm: Some({ channel, session, refusal }) },
-      )
+      // retries with force against the same record.
+      (@cmd.none, { ..model, archive_confirm: Some({ channel, key, refusal }) })
     ArchivedLoaded(
       items,
       connection_generation~,
@@ -5750,10 +5863,7 @@ fn update_device_msg(
       // so a stale live-list reply cannot reopen it in that delivery gap.
       let mut next = model
       for item in items {
-        let key : ArchiveRecordKey = {
-          session: item.id,
-          workspace: item.workspace,
-        }
+        let key : RecordKey = { session: item.id, workspace: item.workspace }
         if next.archive_override(channel, key) is None {
           next = next.with_archive_override(channel, key, ArchiveStored)
         }
@@ -5788,10 +5898,27 @@ fn update_device_msg(
       let sessions = ndev.sessions.filter(item => {
         !archived_now(item.id, item.workspace)
       })
+      // The live reply may have arrived while this one was still in flight,
+      // in which case it left every placement alone. Both listings are this
+      // connection's now, so the reconciliation it deferred runs here.
+      let (conversations, active_project) = if ndev.sessions_connection ==
+        connection_generation {
+        reconcile_placements(
+          next, conversations, channel, ndev, sessions, items,
+        )
+      } else {
+        (conversations, ndev.active_project)
+      }
       (
         @cmd.none,
         {
-          ..next.replace_device({ ..ndev, archived: items, sessions }),
+          ..next.replace_device({
+            ..ndev,
+            archived: items,
+            archived_connection: connection_generation,
+            sessions,
+            active_project,
+          }),
           conversations,
         },
       )
@@ -5972,9 +6099,12 @@ fn update_device_msg(
             sync: Synced,
           })
           if generation is Some(generation) {
+            // `conv` above is already the conversation bound to this exact
+            // record, so being the active id is the whole question — asking
+            // the listing again would answer for whichever store happens to
+            // list this id first.
             let foreground = channel == next.focused &&
-              next.active_session == key.session &&
-              next.session_project(channel, key.session) == Some(key.workspace)
+              next.active_session == key.session
             let next = if foreground {
               {
                 ..next,
@@ -6123,7 +6253,7 @@ fn update_device_msg(
       // Archiving removes live client state after the hub's ordered final
       // commit. A stale/replayed commit seen after that local fact must not
       // resurrect the archived record as a live hidden conversation.
-      let key : ArchiveRecordKey = { session, workspace: commit_project }
+      let key : RecordKey = { session, workspace: commit_project }
       let archived = match dev.archive_override(key) {
         Some(ArchiveStored | ArchiveDeleted) => true
         Some(ArchiveLive) => false
@@ -6368,7 +6498,7 @@ fn update_device_msg(
       // distinguish same-id records in different stores and leave it intact.
       let model = match (session_root, started_project) {
         (Some(_), Some(workspace)) => {
-          let key : ArchiveRecordKey = { session, workspace }
+          let key : RecordKey = { session, workspace }
           if dev.archive_override(key) is Some(ArchiveDeleted) {
             model.with_archive_override(channel, key, ArchiveLive)
           } else {
@@ -7410,6 +7540,15 @@ fn running_conversation() -> Conversation {
 }
 
 ///|
+/// The record a fixture row stands for: the fixture project's store on the
+/// channel that owns it. Naming the store explicitly keeps the
+/// store-qualified messages readable, and keeps a remote channel's record
+/// from being addressed with a local path.
+fn listed_record(channel : @interop.ChannelId, session : String) -> RecordKey {
+  { session, workspace: channel.test_project() }
+}
+
+///|
 fn test_model() -> Model {
   {
     ..initial_model()
@@ -7496,8 +7635,9 @@ fn Model::with_listed(self : Model, ids : Array[String]) -> Model raise {
 fn sessions_loaded(
   items : Array[@transcript.SessionListItem],
   request_generation? : Int = 0,
+  connection_generation? : Int = 0,
 ) -> Msg {
-  on_home(SessionsLoaded(items, connection_generation=0, request_generation~))
+  on_home(SessionsLoaded(items, connection_generation~, request_generation~))
 }
 
 ///|
@@ -7593,11 +7733,12 @@ test "the narrow drawer closes when navigation lands elsewhere" {
 fn archived_loaded(
   items : Array[@transcript.SessionListItem],
   request_generation? : Int = 0,
+  connection_generation? : Int = 0,
 ) -> Msg {
   on_home(
     ArchivedLoaded(
       items,
-      connection_generation=0,
+      connection_generation~,
       request_generation~,
       fresh_session="desktop-archive-replacement",
     ),
@@ -7630,6 +7771,9 @@ test "an approval notification click opens its local conversation" {
 
 ///|
 fn encoded_start_workspace(conv : Conversation) -> String? {
+  guard conv.record_key().workspace_payload(conv.device) is Some(workspace) else {
+    return None
+  }
   let payload = start_payload(
     "continue",
     High,
@@ -7637,7 +7781,7 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
     "1000",
     conv.session_id,
     "test-submission",
-    workspace=conv.project(),
+    workspace~,
   )
   let json = payload.to_json()
   guard json is Object(fields) else { return None }
@@ -9022,7 +9166,10 @@ test "open session is a no-op for the current session" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-test"),
+    ),
     test_model(),
   )
   inspect(next.active_session, content="desktop-test")
@@ -9054,12 +9201,18 @@ test "open session keeps live state on screen while re-reading the store" {
   let model = running_model().replace_conversation(background)
   let (_, once) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-bg"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-bg"),
+    ),
     model,
   )
   let (_, twice) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-bg"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-bg"),
+    ),
     model,
   )
   inspect(once.active_session, content="desktop-bg")
@@ -9265,10 +9418,11 @@ test "device focus retires the outgoing watcher and file index" {
     file_ctx(model),
   )
   assert_true(loading.index is @fileeditor.IndexLoading(_))
-  let (_, next) = update(dispatch, OpenSession(remote, "remote-session"), {
-    ..model,
-    file_panel: loading,
-  })
+  let (_, next) = update(
+    dispatch,
+    OpenSession(remote, listed_record(remote, "remote-session")),
+    { ..model, file_panel: loading },
+  )
   // The old Local HostConnection receives `fs.unwatch` before the common sync
   // replaces its owner. That sync also retires the in-flight Local index key;
   // the new remote conversation starts without either resource.
@@ -9476,7 +9630,10 @@ test "open session tracks the latest load and ignores stale replies" {
   let dispatch = test_dispatch()
   let (_, loading_a) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-a"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-a"),
+    ),
     test_model().with_listed(["desktop-a", "desktop-b"]),
   )
   inspect(loading_a.active_session, content="desktop-test")
@@ -9486,7 +9643,10 @@ test "open session tracks the latest load and ignores stale replies" {
   )
   let (_, loading_b) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-b"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-b"),
+    ),
     loading_a,
   )
   assert_true(
@@ -9552,7 +9712,10 @@ test "a restored session keeps the placement its listing named" {
   )
   let (_, loading) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, session),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, session),
+    ),
     listed,
   )
   guard loading.find_conversation(@interop.ChannelId::Local, session)
@@ -9616,12 +9779,15 @@ test "same-id session loads are fenced by channel owner" {
   }
   let (_, loading_remote) = update(
     dispatch,
-    OpenSession(remote, "shared"),
+    OpenSession(remote, listed_record(remote, "shared")),
     model,
   )
   let (_, loading_local) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "shared"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "shared"),
+    ),
     loading_remote,
   )
   assert_true(
@@ -9663,6 +9829,314 @@ test "same-id session loads are fenced by channel owner" {
 }
 
 ///|
+test "an archived twin keeps its conversation from adopting the other store" {
+  let dispatch = test_dispatch()
+  let mine = @interop.ChannelId::Local.test_project()
+  let other = @interop.ChannelId::Local.test_resource("/work/alpha")
+  // Archived while this page was away: the conversation is bound to its own
+  // project, whose record now sits in that store's archived twin, and the
+  // live list that comes back holds only the other project's same-id row.
+  let model = test_model()
+    .replace_conversation({
+      ..test_conversation(),
+      session_id: "desktop-shared",
+      workspace: Project(root=mine),
+      messages: [
+        { kind: User, content: "my transcript", ts: None, sequence: None },
+      ],
+    })
+    .with_dev(dev => {
+      ..dev,
+      projects: [mine, other],
+      archived: [
+        {
+          id: "desktop-shared",
+          title: Some("my transcript"),
+          workspace: mine,
+          workspace_name: "work",
+          updated_at_ms: None,
+        },
+      ],
+    })
+  let (_, listed) = update(
+    dispatch,
+    sessions_loaded([
+      {
+        id: "desktop-shared",
+        title: Some("their copy"),
+        workspace: other,
+        workspace_name: "alpha",
+        updated_at_ms: None,
+      },
+    ]),
+    model,
+  )
+  guard listed.find_conversation(@interop.ChannelId::Local, "desktop-shared")
+    is Some(conv) else {
+    fail("the open conversation disappeared")
+  }
+  // One live row is not a relocation: records never change store, so the
+  // conversation stays on its own — where the archived reply can still
+  // recognize it — instead of writing through the other project's record.
+  assert_eq(conv.workspace, Project(root=mine))
+}
+
+///|
+test "a reconnect's live list alone cannot rebind a conversation" {
+  let dispatch = test_dispatch()
+  let mine = @interop.ChannelId::Local.test_project()
+  let other = @interop.ChannelId::Local.test_resource("/work/alpha")
+  // Mid-reconnect: BridgeReady issued both listing requests, and the live
+  // reply wins the race. The cached archived list is the one from before the
+  // drop, which cannot know about the record archived while the page was away.
+  let model = test_model()
+    .replace_conversation({
+      ..test_conversation(),
+      session_id: "desktop-shared",
+      workspace: Project(root=mine),
+      messages: [
+        { kind: User, content: "my transcript", ts: None, sequence: None },
+      ],
+    })
+    .with_dev(dev => {
+      ..dev,
+      projects: [mine, other],
+      connection_generation: 1,
+      sessions_connection: 0,
+      archived_connection: 0,
+      archived: [],
+    })
+  let (_, listed) = update(
+    dispatch,
+    sessions_loaded(
+      [
+        {
+          id: "desktop-shared",
+          title: Some("their copy"),
+          workspace: other,
+          workspace_name: "alpha",
+          updated_at_ms: None,
+        },
+      ],
+      connection_generation=1,
+    ),
+    model,
+  )
+  guard listed.find_conversation(@interop.ChannelId::Local, "desktop-shared")
+    is Some(conv) else {
+    fail("the open conversation disappeared")
+  }
+  // Half the evidence is no evidence: the other project's row is the only one
+  // in the live list, but this connection has not said yet whether this
+  // conversation's own record is archived. Rebinding here would leave the
+  // open transcript writable through a store that never held it.
+  assert_eq(conv.workspace, Project(root=mine))
+}
+
+///|
+test "the archived reply performs the rebinding the live one deferred" {
+  let dispatch = test_dispatch()
+  let mine = @interop.ChannelId::Local.test_project()
+  let project = @interop.ChannelId::Local.test_resource("/work/alpha")
+  // A commit-first conversation: it exists on the page with a provisional
+  // placement, and only the listings can say which store owns its record.
+  let model = test_model()
+    .replace_conversation({
+      ..test_conversation(),
+      session_id: "desktop-commit-first",
+      workspace: Project(root=mine),
+    })
+    .with_dev(dev => {
+      ..dev,
+      projects: [mine, project],
+      connection_generation: 1,
+      sessions_connection: 0,
+      archived_connection: 0,
+      archived: [],
+    })
+  let (_, listed) = update(
+    dispatch,
+    sessions_loaded(
+      [
+        {
+          id: "desktop-commit-first",
+          title: Some("the record"),
+          workspace: project,
+          workspace_name: "alpha",
+          updated_at_ms: None,
+        },
+      ],
+      connection_generation=1,
+    ),
+    model,
+  )
+  let (_, settled) = update(
+    dispatch,
+    archived_loaded([], connection_generation=1),
+    listed,
+  )
+  guard settled.find_conversation(
+      @interop.ChannelId::Local,
+      "desktop-commit-first",
+    )
+    is Some(conv) else {
+    fail("the open conversation disappeared")
+  }
+  // Deferring is not dropping: with both listings in from this connection,
+  // the id appears in exactly one store and the placement follows it.
+  assert_eq(conv.workspace, Project(root=project))
+}
+
+///|
+test "a session list holding one id twice never rebinds an open conversation" {
+  let dispatch = test_dispatch()
+  let first = @interop.ChannelId::Local.test_project()
+  let project = @interop.ChannelId::Local.test_resource("/work/alpha")
+  // The first project's record is the one on screen. The list then arrives
+  // carrying both stores' rows for this id — the second project last, as
+  // `list_sessions` orders it (one group per registered workspace).
+  let model = test_model()
+    .replace_conversation({
+      ..test_conversation(),
+      session_id: "desktop-shared",
+      workspace: Project(root=first),
+      messages: [
+        { kind: User, content: "first copy", ts: None, sequence: None },
+      ],
+    })
+    .with_dev(dev => { ..dev, projects: [first, project] })
+  let model = {
+    ..model.activate(@interop.ChannelId::Local, "desktop-shared", first),
+    screen: Chat,
+  }
+  let (_, listed) = update(
+    dispatch,
+    sessions_loaded([
+      {
+        id: "desktop-shared",
+        title: Some("first copy"),
+        workspace: first,
+        workspace_name: "work",
+        updated_at_ms: None,
+      },
+      {
+        id: "desktop-shared",
+        title: Some("project copy"),
+        workspace: project,
+        workspace_name: "alpha",
+        updated_at_ms: None,
+      },
+    ]),
+    model,
+  )
+  guard listed.find_conversation(@interop.ChannelId::Local, "desktop-shared")
+    is Some(conv) else {
+    fail("the open conversation disappeared")
+  }
+  // It stays bound to the first project. Adopting the last same-id row would
+  // move a transcript the user opened there into the other project's group.
+  assert_eq(conv.workspace, Project(root=first))
+  assert_eq(listed.dev().active_project, Some(first))
+  // A conversation whose store the page does NOT yet know still learns it
+  // from an unambiguous listing — that is what this reconcile is for.
+  let (_, provisional) = update(
+    dispatch,
+    sessions_loaded([
+      {
+        id: "desktop-only-there",
+        title: Some("project copy"),
+        workspace: project,
+        workspace_name: "alpha",
+        updated_at_ms: None,
+      },
+    ]),
+    listed.replace_conversation({
+      ..test_conversation(),
+      session_id: "desktop-only-there",
+    }),
+  )
+  guard provisional.find_conversation(
+      @interop.ChannelId::Local,
+      "desktop-only-there",
+    )
+    is Some(adopted) else {
+    fail("the provisional conversation disappeared")
+  }
+  assert_eq(adopted.workspace, Project(root=project))
+}
+
+///|
+test "a row opens its own store's record beside a same-id conversation" {
+  let dispatch = test_dispatch()
+  let first = @interop.ChannelId::Local.test_project()
+  let project = @interop.ChannelId::Local.test_resource("/work/alpha")
+  // The page already holds this id as the first project's conversation — and
+  // that project is listed first, so a search by id alone would settle there.
+  let model = test_model()
+    .replace_conversation({
+      ..test_conversation(),
+      session_id: "desktop-shared",
+      workspace: Project(root=first),
+      messages: [
+        { kind: User, content: "first copy", ts: None, sequence: None },
+      ],
+    })
+    .with_dev(dev => {
+      ..dev,
+      projects: [first, project],
+      sessions: [
+        {
+          id: "desktop-shared",
+          title: Some("first copy"),
+          workspace: first,
+          workspace_name: "work",
+          updated_at_ms: None,
+        },
+        {
+          id: "desktop-shared",
+          title: Some("project copy"),
+          workspace: project,
+          workspace_name: "alpha",
+          updated_at_ms: None,
+        },
+      ],
+    })
+  let (_, opened) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, {
+      session: "desktop-shared",
+      workspace: project,
+    }),
+    model,
+  )
+  guard opened.find_conversation(@interop.ChannelId::Local, "desktop-shared")
+    is Some(conv) else {
+    fail("the project row opened no conversation")
+  }
+  // The clicked row's store wins: the conversation is bound to the second
+  // project's record and starts empty rather than showing the first's
+  // transcript.
+  assert_eq(conv.workspace, Project(root=project))
+  assert_eq(conv.messages.length(), 0)
+  assert_eq(opened.dev().active_project, Some(project))
+  // Clicking the first project's row afterwards rebinds the same way.
+  let (_, back) = update(
+    dispatch,
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-shared"),
+    ),
+    opened,
+  )
+  guard back.find_conversation(@interop.ChannelId::Local, "desktop-shared")
+    is Some(conv) else {
+    fail("the first project's row opened no conversation")
+  }
+  assert_eq(conv.workspace, Project(root=first))
+  assert_eq(back.dev().active_project, Some(first))
+}
+
+///|
 test "reselecting a synced active session reloads idle external writes" {
   let dispatch = test_dispatch()
   let model = test_model().with_dev(dev => {
@@ -9679,7 +10153,10 @@ test "reselecting a synced active session reloads idle external writes" {
   })
   let (_, reloading) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-test"),
+    ),
     model,
   )
   assert_true(
@@ -9691,7 +10168,10 @@ test "reselecting a synced active session reloads idle external writes" {
   }
   let (_, still_single_flight) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-test"),
+    ),
     reloading,
   )
   inspect(still_single_flight.transcript_request_generation, content="1")
@@ -9736,7 +10216,10 @@ test "returning to a fresh active chat does not load a missing session" {
   }
   let (_, next) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-test"),
+    ),
     model,
   )
   assert_true(next.screen is Chat)
@@ -9751,7 +10234,10 @@ test "pruning and reopening cannot reuse a transcript request token" {
   let dispatch = test_dispatch()
   let (_, opening) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-pruned"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-pruned"),
+    ),
     test_model().with_listed(["desktop-pruned"]),
   )
   guard opening.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
@@ -9770,7 +10256,10 @@ test "pruning and reopening cannot reuse a transcript request token" {
   )
   let (_, reopened) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-pruned"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-pruned"),
+    ),
     pruned,
   )
   guard reopened.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
@@ -9826,7 +10315,10 @@ test "archive removal and reopening cannot reuse a transcript request token" {
   let dispatch = test_dispatch()
   let (_, opening) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-archived"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-archived"),
+    ),
     test_model().with_listed(["desktop-archived"]),
   )
   let (_, archived) = update(
@@ -9843,7 +10335,10 @@ test "archive removal and reopening cannot reuse a transcript request token" {
   // unarchive is what puts it back, and the row is what names its store.
   let (_, reopened) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-archived"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-archived"),
+    ),
     restored.with_listed(["desktop-archived"]),
   )
   guard reopened.find_conversation(
@@ -9887,7 +10382,10 @@ test "an abandoned session load retries silently" {
   let dispatch = test_dispatch()
   let (_, loading) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-a"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-a"),
+    ),
     test_model().with_listed(["desktop-a"]),
   )
   let (_, abandoned) = update(dispatch, NewChat, loading)
@@ -9910,7 +10408,10 @@ test "a foreground load preserves state through retries and reports exhaustion" 
   let dispatch = test_dispatch()
   let (_, loading) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-a"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-a"),
+    ),
     test_model().with_listed(["desktop-a"]),
   )
   let failure = SessionLoadFailed(
@@ -10173,7 +10674,10 @@ test "session loaded swaps the active conversation onto the stored session" {
     })
   let (_, loading) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-stored"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-stored"),
+    ),
     model,
   )
   let items : Array[@transcript.TranscriptItem] = [
@@ -10233,7 +10737,10 @@ test "session loaded adopts the store transcript and keeps live run state" {
   // The active conversation runs; loading some other stored session is fine.
   let (_, loading_other) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-stored"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-stored"),
+    ),
     model,
   )
   let (_, other) = update_dev(
@@ -14126,7 +14633,7 @@ test "archived deletion keeps same-id rows in other stores" {
     }),
     active_session: "shared",
   }
-  let key : ArchiveRecordKey = { session: "shared", workspace: project }
+  let key : RecordKey = { session: "shared", workspace: project }
   let (_, staged) = update(
     dispatch,
     DeleteArchivedSession(@interop.ChannelId::Local, key),
@@ -15114,7 +15621,10 @@ test "selecting a conversation returns from the skills page to the chat" {
   // Re-selecting the active conversation is enough to switch back…
   let (_, back) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-test"),
+    ),
     opened,
   )
   assert_true(back.screen is Chat)
@@ -17047,7 +17557,10 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
   let model = { ..model, transcript_request_generation: 1 }
   let (_, reopened) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    OpenSession(
+      @interop.ChannelId::Local,
+      listed_record(@interop.ChannelId::Local, "desktop-test"),
+    ),
     model,
   )
   assert_true(
@@ -18375,11 +18888,14 @@ test "full-screen modals hide the native view and closing restores it" {
   // archive-discard confirmation and Quick Open.
   let (_, archiving) = update_dev(
     dispatch,
-    ArchiveNeedsForce(session="desktop-test", refusal={
-      worktree: "wt-1",
-      dirty_paths: ["desktop/lepus"],
-      dirty_path_count: 1,
-    }),
+    ArchiveNeedsForce(
+      key=listed_record(@interop.ChannelId::Local, "desktop-test"),
+      refusal={
+        worktree: "wt-1",
+        dirty_paths: ["desktop/lepus"],
+        dirty_path_count: 1,
+      },
+    ),
     restored,
   )
   assert_true(archiving.archive_confirm is Some(_))

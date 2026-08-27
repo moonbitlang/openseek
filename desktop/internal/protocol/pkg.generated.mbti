@@ -706,10 +706,10 @@ pub impl @json.FromJson for CodexTurnSteerPayload
 
 pub(all) struct CompactPayload {
   session : String
+  workspace : String
   model : String?
   thinking : OpenSeekThinking?
   max_steps : Int?
-  workspace : String?
 } derive(Eq, @debug.Debug)
 pub fn CompactPayload::equal(Self, Self) -> Bool
 pub fn CompactPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1143,12 +1143,12 @@ pub fn GitPullRequestReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GoalPayload {
   session : String
+  workspace : String
   text : String?
   auto : Bool?
   model : String?
   thinking : OpenSeekThinking?
   max_steps : Int?
-  workspace : String?
 } derive(Eq, @debug.Debug)
 pub fn GoalPayload::equal(Self, Self) -> Bool
 pub fn GoalPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1221,13 +1221,15 @@ pub fn KnownRunPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LoadSessionPayload {
   session : String
-  workspace : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  workspace : String
+} derive(Eq, @debug.Debug)
 pub fn LoadSessionPayload::equal(Self, Self) -> Bool
 pub fn LoadSessionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LoadSessionPayload::not_equal(Self, Self) -> Bool
 pub fn LoadSessionPayload::to_json(Self) -> Json
 pub fn LoadSessionPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for LoadSessionPayload
+pub impl @json.FromJson for LoadSessionPayload
 
 pub(all) struct LoadSessionReply {
   session : SessionDocument
@@ -1898,13 +1900,16 @@ pub impl @json.FromJson for SessionListEntry
 
 pub(all) struct SessionPayload {
   session : String
+  workspace : String
   force : Bool?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn SessionPayload::equal(Self, Self) -> Bool
 pub fn SessionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionPayload::not_equal(Self, Self) -> Bool
 pub fn SessionPayload::to_json(Self) -> Json
 pub fn SessionPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionPayload
+pub impl @json.FromJson for SessionPayload
 
 pub(all) struct SessionRuntimeNotice {
   content : String
@@ -2029,7 +2034,7 @@ pub(all) struct StartPayload {
   thinking : OpenSeekThinking?
   max_steps : Int?
   session : String
-  workspace : String?
+  workspace : String
 } derive(Eq, @debug.Debug)
 pub fn StartPayload::equal(Self, Self) -> Bool
 pub fn StartPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

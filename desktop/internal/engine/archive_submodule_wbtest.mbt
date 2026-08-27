@@ -58,13 +58,21 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
     b"x",
     create_mode=CreateOrTruncate,
   )
-  guard archive_session(manager, "s-sub-dirty", (_, _) => ())
+  guard archive_session(manager, "s-sub-dirty", repo.resource_path(), (_, _) => {
+      ()
+    })
     is NeedsForce(refusal) else {
     fail("dirty submodule checkout must ask for confirmation")
   }
   assert_eq(refusal.worktree, "wt-1")
   assert_eq(refusal.dirty_paths, ["junk.txt"])
-  guard archive_session(manager, "s-sub-dirty", (_, _) => (), force=true)
+  guard archive_session(
+      manager,
+      "s-sub-dirty",
+      repo.resource_path(),
+      (_, _) => (),
+      force=true,
+    )
     is Archived(_) else {
     fail("forced archive must delete the submodule checkout")
   }
@@ -84,7 +92,10 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   )
   let clean_checkout = repo.join(".worktrees/wt-2")
   assert_true(@fsx.exists(clean_checkout.join("deps/one/.git").to_path()))
-  guard archive_session(manager, "s-sub-clean", (_, _) => ()) is Archived(_) else {
+  guard archive_session(manager, "s-sub-clean", repo.resource_path(), (_, _) => {
+      ()
+    })
+    is Archived(_) else {
     fail("clean submodule checkout must archive without confirmation")
   }
   assert_false(@fsx.exists(clean_checkout.to_path()))
@@ -168,7 +179,15 @@ async test "worktree deletion refuses a replaced checkout" {
   }
   assert_true(remove_detail != "no error")
   let archive_detail = try {
-    ignore(archive_session(manager, "s-replaced", (_, _) => (), force=true))
+    ignore(
+      archive_session(
+        manager,
+        "s-replaced",
+        repo.resource_path(),
+        (_, _) => (),
+        force=true,
+      ),
+    )
     "no error"
   } catch {
     error if @async.is_being_cancelled() => raise error

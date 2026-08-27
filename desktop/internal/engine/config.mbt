@@ -104,7 +104,7 @@ async fn run_config(
     thinking?=payload.thinking,
     max_steps?=payload.max_steps,
     session~,
-    workspace?=payload.workspace,
+    workspace=payload.workspace,
   )
 }
 
@@ -124,7 +124,7 @@ async fn compact_config(
     model?=payload.model,
     thinking?=payload.thinking,
     max_steps?=payload.max_steps,
-    workspace?=payload.workspace,
+    workspace=payload.workspace,
   )
 }
 
@@ -142,7 +142,7 @@ async fn goal_config(
     model?=payload.model,
     thinking?=payload.thinking,
     max_steps?=payload.max_steps,
-    workspace?=payload.workspace,
+    workspace=payload.workspace,
   )
 }
 
@@ -153,13 +153,36 @@ async fn session_command_config(
   model? : String,
   thinking? : @protocol.OpenSeekThinking,
   max_steps? : Int,
-  workspace? : String,
+  workspace~ : String,
 ) -> RunConfig {
   let session = session.trim().to_owned()
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
   }
-  serve_config("", manager, model?, thinking?, max_steps?, session~, workspace?)
+  serve_config("", manager, model?, thinking?, max_steps?, session~, workspace~)
+}
+
+///|
+/// The registered project a request names. The registry, not the payload,
+/// decides which directories a run may work in, so a path that is not
+/// registered — a workspace the user detached, say — is refused by name
+/// rather than redirected to whatever else holds the id.
+async fn named_workspace(workspace : String) -> @pathx.Absolute {
+  guard @pathx.Absolute::from_uri_path(workspace) is Some(absolute) else {
+    raise EngineError("workspace is not a supported absolute resource path")
+  }
+  match @workspaces.registered_dir(absolute) {
+    Some(dir) => dir
+    None => raise EngineError("\{workspace} is not a registered workspace")
+  }
+}
+
+///|
+/// The store a session command addresses. Every op that spawns an engine
+/// resolves it here, and so does every op that must decide whether a live
+/// engine is writing the record it names — the two answers have to agree.
+async fn requested_store(workspace : String) -> @pathx.Absolute {
+  @workspaces.store_root(named_workspace(workspace))
 }
 
 ///|
@@ -167,6 +190,10 @@ async fn session_command_config(
 /// engine. The endpoint (provider, key, URL) comes from the host-owned
 /// settings store, never from the request — a client carries no credentials
 /// (docs/remote-protocol.md).
+///
+/// A workspace run happens in the project directory itself, with the session's
+/// durable record in the in-project store. Only registered workspaces qualify:
+/// the registry, not the payload, decides which directories a run may work in.
 async fn serve_config(
   task : String,
   manager : EngineManager,
@@ -174,40 +201,16 @@ async fn serve_config(
   thinking? : @protocol.OpenSeekThinking,
   max_steps? : Int,
   session~ : String,
-  workspace? : String,
+  workspace~ : String,
 ) -> RunConfig {
   let engine = manager.engine
   let (settings, _) = manager.settings_snapshot()
   let endpoint = resolved_endpoint(settings)
   // A workspace run happens in the project directory itself, with the
-  // session's durable record in the in-project store. Only registered
-  // workspaces qualify — the registry, not the payload, decides which
-  // directories a run may work in.
-  let hinted : @pathx.Absolute? = if workspace is Some(path) {
-    guard @pathx.Absolute::from_uri_path(path) is Some(absolute) else {
-      raise EngineError("workspace is not a supported absolute resource path")
-    }
-    match @workspaces.registered_dir(absolute) {
-      Some(dir) => Some(dir)
-      None => raise EngineError("\{path} is not a registered workspace")
-    }
-  } else {
-    None
-  }
-  // Every run belongs to a workspace. The hint names one; a hint-less client
-  // resuming an existing conversation recovers the workspace that already
-  // owns the durable record, so one id can never fork into two histories.
-  // With neither, there is nowhere to run — the client must attach a project
-  // rather than have the host invent a directory.
-  let dir = if hinted is Some(dir) {
-    dir
-  } else if @session_store.workspace_of(session) is Some(dir) {
-    dir
-  } else {
-    raise EngineError(
-      "this conversation has no workspace; attach a project first",
-    )
-  }
+  // session's durable record in that project's store. The request names the
+  // workspace; nothing here recovers it from the id, so one id can never fork
+  // into two histories behind a client that forgot which store it meant.
+  let dir = named_workspace(workspace)
   {
     task,
     api_key: endpoint.api_key,
@@ -263,7 +266,7 @@ test "a different endpoint cannot reuse a live engine process" {
     engine: "openseek",
     cwd: None,
     session: "s-fingerprint",
-    session_root: None,
+    session_root: Some(@pathx.Path("/sessions").resolve()),
   }
   let custom = {
     ..base,
@@ -350,7 +353,7 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
     thinking: None,
     max_steps: None,
     session: "s-default",
-    workspace: Some(workspace),
+    workspace,
   })
   assert_true(config.api_url is None)
   assert_eq(config.api_key, "sk-official")
@@ -370,7 +373,7 @@ async test "run config rejects a blank session" {
           thinking: None,
           max_steps: None,
           session,
-          workspace: None,
+          workspace: "",
         }),
       )
       "no error"
@@ -404,7 +407,9 @@ async test "host chooses durable placement from workspace state" {
   let home = dir + "/home"
   let global_root = home + "/.openseek"
   let workspace = dir + "/workspace"
+  let other = dir + "/other"
   let workspace_resource = @pathx.Path(workspace).resolve().resource_path()
+  let other_resource = @pathx.Path(other).resolve().resource_path()
   set_test_home(home)
   defer (if previous_home is Some(value) {
     @sys.set_env_var(test_home_env_name(), value)
@@ -413,39 +418,55 @@ async test "host chooses durable placement from workspace state" {
   })
   @fsx.ensure_dir(Path(global_root))
   @fsx.ensure_dir(Path(workspace + "/.openseek/sessions/s-workspace"))
+  @fsx.ensure_dir(Path(other + "/.openseek"))
   @fs.write_file(
     global_root + "/workspaces.json",
-    ({ "workspaces": [workspace] } : Json).stringify(),
+    ({ "workspaces": [workspace, other] } : Json).stringify(),
     create_mode=CreateOrTruncate,
   )
   let manager = new_engine_manager("openseek")
-  let config = run_config(manager, {
+  // The store comes from what the request named, never from which store
+  // happens to hold the id: a request that names the other project is that
+  // project's request, even for an id this one owns. (`start_run` refuses
+  // this particular one — it would open a second record for an id another
+  // store owns — but the placement it refuses is decided here.)
+  let elsewhere = run_config(manager, {
     task: "resume",
     submission_id: None,
     model: None,
     thinking: None,
     max_steps: None,
     session: "s-workspace",
-    workspace: None,
+    workspace: other_resource,
+  })
+  assert_eq(elsewhere.session_root.unwrap().to_string(), other + "/.openseek")
+  let attached = run_config(manager, {
+    task: "attached",
+    submission_id: None,
+    model: None,
+    thinking: None,
+    max_steps: None,
+    session: "s-workspace",
+    workspace: workspace_resource,
   })
   assert_eq(
-    config.session_root.map(root => root.to_string()),
-    Some(workspace + "/.openseek"),
+    attached.session_root.unwrap().to_string(),
+    workspace + "/.openseek",
   )
-  assert_eq(config.cwd.map(cwd => cwd.to_string()), Some(workspace))
-  // A hint-less session that no attached workspace claims has nowhere to run.
-  // The host refuses instead of inventing a directory and a store for it,
-  // which is what would fork one id into two histories.
-  let unclaimed = try {
+  assert_eq(attached.cwd.map(cwd => cwd.to_string()), Some(workspace))
+  // An unregistered directory is refused by name. The registry, not the
+  // payload, decides which directories a run may work in — and a refusal
+  // keeps a stale client from silently filing the record in another store.
+  let detail = try {
     ignore(
       run_config(manager, {
-        task: "fresh",
+        task: "detached",
         submission_id: None,
         model: None,
         thinking: None,
         max_steps: None,
-        session: "s-unclaimed",
-        workspace: None,
+        session: "s-workspace",
+        workspace: @pathx.Path(dir + "/elsewhere").resolve().resource_path(),
       }),
     )
     "no error"
@@ -454,20 +475,6 @@ async test "host chooses durable placement from workspace state" {
     error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
-  assert_true(unclaimed.contains("has no workspace"))
-  let attached = run_config(manager, {
-    task: "attached",
-    submission_id: None,
-    model: None,
-    thinking: None,
-    max_steps: None,
-    session: "s-attached",
-    workspace: Some(workspace_resource),
-  })
-  assert_eq(
-    attached.session_root.map(root => root.to_string()),
-    Some(workspace + "/.openseek"),
-  )
-  assert_eq(attached.cwd.map(cwd => cwd.to_string()), Some(workspace))
+  assert_true(detail.has_suffix("is not a registered workspace"))
   @fs.rmdir(dir, recursive=true)
 }

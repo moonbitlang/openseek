@@ -267,11 +267,11 @@ This is lifecycle correlation only; durable transcript items still come from
 
 | method | params | result |
 |---|---|---|
-| `agent.start` | `{task, session, submission_id?, model?, thinking?, max_steps?, workspace?}` — `session` is a required non-blank durable conversation id. `thinking`, when present, is `no`, `high`, or `max`. No credentials or store path are accepted: the host resolves settings and durable placement; `workspace` is honored only when registered. A session bound to one of the workspace's worktrees (`worktree.create` binds at creation) runs in that checkout — the start never names or mutates worktrees | `{run_id, status, …}` — `accepted` after the complete prompt command is written; a post-`started` write failure returns `failed`, while pre-`started` failures use the error response. Every reply that returns names the run it opened; the host does not deduplicate a resent `submission_id` |
+| `agent.start` | `{task, session, workspace, submission_id?, model?, thinking?, max_steps?}` — `(workspace, session)` is the record this run writes: a required non-blank conversation id, and the store holding it (see *Naming the store* below). `thinking`, when present, is `no`, `high`, or `max`. No credentials or store root are accepted — the host resolves settings, and honors `workspace` only while registered. A session bound to one of the workspace's worktrees (`worktree.create` binds at creation) runs in that checkout — the start never names or mutates worktrees | `{run_id, status, …}` — `accepted` after the complete prompt command is written; a post-`started` write failure returns `failed`, while pre-`started` failures use the error response. Every reply that returns names the run it opened; the host does not deduplicate a resent `submission_id` |
 | `agent.cancel` | `{run_id?}` (absent = the latest run) | `{run_id?}` — the run the cancellation reached, absent when no turn was open. Absence is an answer, not a failure: a Stop racing a turn that just ended wanted the run over, and it is. The call fails only when the cancellation could not be delivered, which means the turn is still running and nobody asked it to stop. Delivery is not the end of the turn — the run ends through its own `agent.finished` |
 | `agent.steer` | `{text, run_id?, submission_id?}` | steer outcome |
-| `agent.compact` | `{session, model?, thinking?, max_steps?, workspace?}` — `agent.start` minus `task`: a conversation resumed after a restart has no live process, and compacting spawns one with these settings | compaction outcome |
-| `agent.goal` | `{session, text?, auto?, model?, thinking?, max_steps?, workspace?}` — sets the session's standing goal to `text`, or clears it when `text` is absent; the engine settings match `agent.compact`'s, and a blank `session` is refused before engine lookup. `auto` arms the engine's autonomous continuation and is **currently rejected**: serve announces the turns it starts with `goal_continue`, which this host does not yet fold into a run's lifecycle, so an autonomous turn would leave the engine looking idle to `agent.start` | `{delivered}` — delivery, not durability: the command reached a live engine's stdin. The goal itself is confirmed by the `[goal]` / `[goal cleared]` runtime-notice arriving as a `session.event` commit, which is also what clients should render from; the engine's `goal_updated` stream event duplicates it |
+| `agent.compact` | `{session, workspace, model?, thinking?, max_steps?}` — `agent.start` minus `task`: the same required record identity, and a conversation resumed after a restart has no live process, so compacting spawns one with these settings | compaction outcome |
+| `agent.goal` | `{session, workspace, text?, auto?, model?, thinking?, max_steps?}` — sets the record's standing goal to `text`, or clears it when `text` is absent; the record identity and engine settings match `agent.compact`'s, and a blank `session` is refused before engine lookup. `auto` arms the engine's autonomous continuation and is **currently rejected**: serve announces the turns it starts with `goal_continue`, which this host does not yet fold into a run's lifecycle, so an autonomous turn would leave the engine looking idle to `agent.start` | `{delivered}` — delivery, not durability: the command reached a live engine's stdin. The goal itself is confirmed by the `[goal]` / `[goal cleared]` runtime-notice arriving as a `session.event` commit, which is also what clients should render from; the engine's `goal_updated` stream event duplicates it |
 | `agent.runs` | `{known?: [{session, run_id?, submission_id?}]}` — each selector must carry a run or submission id; `{}` remains valid | `{runs: […], settled: […]}` — every in-flight run's `agent.started` params plus selector-matched `{run_id, session, submission_id?, status, exit_code?}` lifecycle settlements. Every settlement a selector names is replayed, whatever its status: how much the run committed is a question the transcript read answers. Active and settled state are captured atomically |
 
 All three engine-spawning requests use the same `thinking` setting. A present
@@ -294,12 +294,56 @@ Notifications:
 | method | params | result |
 |---|---|---|
 | `session.list` | `{}` | the session index |
-| `session.load` | `{session, workspace?}` — a non-blank workspace must still be registered; omitted/blank locates the session across registered stores, then the global store | `{session: <the durable session JSON>, watermark?}` — current hosts include `watermark`, the highest event `sequence` the snapshot contains (0 for an empty record); older hosts may omit it, in which case clients derive it from the stored events' own sequences. |
-| `session.load_archived` | `{session, workspace?}` — the same store selection rules as `session.load`, but reads only from that store's archived twin | `{session: <the durable session JSON>, watermark?}` without restoring or otherwise changing the archived record |
+| `session.load` | `{session, workspace}` — the exact store to read, as a registered project path (see *Naming the store* below) | `{session: <the durable session JSON>, watermark?}` — current hosts include `watermark`, the highest event `sequence` the snapshot contains (0 for an empty record); older hosts may omit it, in which case clients derive it from the stored events' own sequences. |
+| `session.load_archived` | `{session, workspace}` — the same store selection as `session.load`, but reads only from that store's archived twin | `{session: <the durable session JSON>, watermark?}` without restoring or otherwise changing the archived record |
 | `session.list_archived` | `{}` | the archived index |
-| `session.archive` | `{session, force?}` | success returns the archived session index (the legacy `{groups}` shape) and moves the conversation plus every sibling `<session>-sr-N` descendant transcript as one family. A dirty checkout returns `{kind:"needs_force", worktree, dirty_paths, dirty_path_count}` without changing durable state; `dirty_paths` previews up to 8 paths and `dirty_path_count` counts all status rows. Clients show a discard-confirmation dialog and retry with `force` only after explicit confirmation. On success the conversation's checkout goes with it, but its name/branch/session placement remains registered (the branch survives; a `worktree.changed` broadcast reports `present: false`). "Dirty" means tracked modifications or non-ignored untracked files; ignored files count as disposable and are removed with the checkout, matching `git worktree remove`'s own semantics |
-| `session.unarchive` | `{session}` | outcome — restores the conversation and every archived subagent descendant record together. A retained worktree placement whose checkout was removed returns as missing, so clients offer Repair before any agent, terminal, or file operation can continue |
-| `session.delete_archived` | `{session, workspace}` | permanently deletes the archived conversation record from the exact host-listed project store and every archived subagent descendant record in that store, then returns the archived index. Its retained worktree placement is removed and broadcast, but project files and the Git branch remain. The operation refuses unknown stores, live records, and running/compacting family members |
+| `session.archive` | `{session, workspace, force?}` — `workspace` selects the store exactly, the way `session.delete_archived` does | success returns the archived session index (the legacy `{groups}` shape) and moves the conversation plus every sibling `<session>-sr-N` descendant transcript as one family. A dirty checkout returns `{kind:"needs_force", worktree, dirty_paths, dirty_path_count}` without changing durable state; `dirty_paths` previews up to 8 paths and `dirty_path_count` counts all status rows. Clients show a discard-confirmation dialog and retry with `force` only after explicit confirmation. On success the conversation's checkout goes with it, but its name/branch/session placement remains registered (the branch survives; a `worktree.changed` broadcast reports `present: false`). "Dirty" means tracked modifications or non-ignored untracked files; ignored files count as disposable and are removed with the checkout, matching `git worktree remove`'s own semantics |
+| `session.unarchive` | `{session, workspace}` — the store whose archived twin holds the record | outcome — restores the conversation and every archived subagent descendant record together. A retained worktree placement whose checkout was removed returns as missing, so clients offer Repair before any agent, terminal, or file operation can continue |
+| `session.delete_archived` | `{session, workspace}` | permanently deletes the archived conversation record from the named store and every archived subagent descendant record in that store, then returns the archived index. Its retained worktree placement is removed and broadcast, but project/scratch files and the Git branch remain. The operation refuses unknown stores, live records, and running/compacting family members |
+
+#### Naming the store
+
+A session id is unique only within one durable store, so every op that
+addresses a record carries `workspace` beside the id — the `session.*` ops
+above, and `agent.start` / `agent.compact` / `agent.goal`, which write one.
+It is the host-reported project resource path, the same spelling
+`session.changed` and both listings report. The host
+validates a project path against its registry (a detached workspace is
+refused by name) and then selects that store exactly. It never falls back to
+searching, so a same-id record in another store can be neither read, written,
+nor moved by mistake, and a client that guesses gets an error instead of the
+wrong conversation.
+
+This matters because `session.list` really can return two rows with one id —
+one per attached project — and a client that keeps only `session` is
+unable to tell them apart. Persist `(workspace, session)` together for
+anything you can act on later; a client that persists a workspace session
+across a host restart must send that workspace back, because the record is
+unreachable without it once the store is no longer the default.
+
+An archived record is read-only, so a write to one is refused ("session is
+archived") — but only when the store the request named archived it. An
+archived record under the same id in another store is a different
+conversation and does not hold this one back.
+
+The host does not add to that population. `agent.start` opens a record in the
+store its `workspace` selects, or continues one already there; a start that
+would file a *second* record for an id another store owns is refused, naming
+the store that holds it — the rule `worktree.create` has always applied to a
+binding, now applied to the ordinary start path. Duplicate ids therefore
+arrive only from outside the app (the `openseek` CLI takes `--session <name>`
+verbatim under any `--session-root`, and a project's store travels inside the
+project directory), which is why clients must still handle them rather than
+assume they cannot occur.
+
+Because a host runs at most one engine per session id, a live engine is also
+filed under the id alone. Every op compares its store before treating one as
+its own, so archiving one project's record is not refused by — and does not
+close — another project's conversation that merely shares the id, and a compaction or goal
+is never written to an engine serving the other store's record. When that
+engine is idle, the command replaces it (the conversation loses only a warm
+process); when it is mid-turn, the command is refused, naming the store that
+holds it.
 
 Notifications:
 
@@ -445,12 +489,10 @@ directory or sessions. Clients keep the workspace attached to already-open
 conversation state, so a stale attempt names that now-unregistered path and
 is rejected instead of silently relocating the session into the global store.
 
-That workspace hint is part of a client's resume state. A protocol client
-that persists a workspace session across a host restart must persist and send
-its `workspace` too: once the workspace is no longer registered, an omitted
-hint leaves a missing id indistinguishable from a brand-new session.
-The current wire has no persistent detached-session tombstone; the bundled
-client retains the hint and therefore gets the intended rejection.
+That workspace is part of a client's resume state — see *Naming the store*
+above, where every record-addressing op requires it. The current wire has no
+persistent detached-session tombstone; the bundled client retains the store
+and therefore gets the intended rejection instead of a silent relocation.
 
 ### worktree.*
 

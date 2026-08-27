@@ -118,17 +118,22 @@ fn session_component_input(
   channel : @interop.ChannelId,
   session_id : String,
   label : String,
+  store : @common.Uri,
   archivable? : Bool = false,
   nested? : Bool = false,
   worktree? : String,
   subrun? : Bool = false,
-  root? : String,
   children? : Array[@conversation.Input] = [],
 ) -> @conversation.Input {
+  // Every live-state question this row asks is about the record in this
+  // group's store. A same-id conversation open against another store gets
+  // its own row there and must not light this one up.
+  let key : RecordKey = { session: session_id, workspace: store }
+  let conv = model.find_record_conversation(channel, key)
   let active = model.screen is Chat &&
     channel == model.focused &&
-    session_id == model.active_session
-  let conv = model.find_conversation(channel, session_id)
+    session_id == model.active_session &&
+    conv is Some(_)
   let running = conv is Some(conv) && conv.is_running()
   // The row's status dot: pulsing while a run is in flight, then — when the
   // run finished off screen — settling into a solid dot (accent for success,
@@ -155,12 +160,13 @@ fn session_component_input(
   {
     // The store placement rides in `root`: session ids may repeat across
     // project stores, and without it two same-id rows would collide on one
-    // key in the sidebar's keyed container.
+    // key in the sidebar's keyed container. It is also what the dispatcher
+    // reads back to name the record a click acts on.
     id: @conversation.Id(
       source="openseek.live",
       channel=channel.uri_authority(),
       conversation=session_id,
-      root?,
+      root=store.path,
     ),
     title,
     label,
@@ -209,18 +215,16 @@ fn Model::push_group_component_inputs(
   rows : Array[(RowStamp, @conversation.Input)],
   dev : DeviceState,
   workspace : @common.Uri,
-  listed~ : (String) -> Bool,
-  archived~ : (String) -> Bool,
+  listed~ : @hashset.HashSet[RecordKey],
+  archived~ : @hashset.HashSet[RecordKey],
 ) -> Unit {
   let composing = self.composing_new_chat()
-  // Every row in this group shares the group's store placement; it becomes
-  // the `root` half of each conversation's component id.
-  let root = workspace.path
   for conv in self.conversations.rev_iter() {
+    let key : RecordKey = { session: conv.session_id, workspace }
     if conv.device != dev.channel ||
       conv.project() != workspace ||
-      listed(conv.session_id) ||
-      archived(conv.session_id) {
+      listed.contains(key) ||
+      archived.contains(key) {
       continue
     }
     // A fresh worktree conversation knows its binding locally; once the
@@ -250,19 +254,17 @@ fn Model::push_group_component_inputs(
           } else {
             "New chat"
           },
+          workspace,
           nested=true,
           worktree?,
-          root~,
         ),
       ),
     )
   }
-  let durable : Array[@transcript.SessionListItem] = []
-  for item in dev.sessions {
-    if item.workspace == workspace && !archived(item.id) {
-      durable.push(item)
-    }
-  }
+  let durable = dev.sessions.filter(item => {
+    item.workspace == workspace &&
+    !archived.contains({ session: item.id, workspace })
+  })
   // Sub-run transcripts fold under the conversation that launched them: they
   // are that turn's evidence, not conversations of their own. They ride the
   // parent's component input, so their disclosure state lives in the
@@ -270,7 +272,8 @@ fn Model::push_group_component_inputs(
   // is the one on screen (its title settles at the first send), and
   // otherwise comes from the host's listing.
   for tree in @transcript.session_tree(durable) {
-    let parent_label = if self.find_conversation(dev.channel, tree.item.id)
+    let parent_key : RecordKey = { session: tree.item.id, workspace }
+    let parent_label = if self.find_record_conversation(dev.channel, parent_key)
       is Some(conv) &&
       dev.channel == self.focused &&
       tree.item.id == self.active_session {
@@ -299,9 +302,9 @@ fn Model::push_group_component_inputs(
           dev.channel,
           child.id,
           child_label,
+          workspace,
           nested=true,
           subrun=true,
-          root~,
         ),
       )
     }
@@ -317,6 +320,7 @@ fn Model::push_group_component_inputs(
           dev.channel,
           tree.item.id,
           parent_label,
+          workspace,
           // Ordinary children are folded below a live parent and receive no
           // action. A child-shaped root is legacy split state (or belongs to a
           // parent in another store), so it remains independently archivable;
@@ -324,7 +328,6 @@ fn Model::push_group_component_inputs(
           archivable=true,
           nested=true,
           worktree?=worktree_name_for(dev, workspace, tree.item.id),
-          root~,
           children~,
         ),
       ),
@@ -389,11 +392,14 @@ fn Model::sidebar_component_sections(
   self : Model,
   dev : DeviceState,
 ) -> Array[@section.Input] {
-  let listed = (id : String) => dev.sessions.iter().any(item => item.id == id)
-  // An archived record has moved out of the live store, so the live list
-  // normally cannot contain it; the filter covers the moment between the
-  // archive reply and the list refetch that follows it.
-  let archived = (id : String) => dev.archived.iter().any(item => item.id == id)
+  // Both filters answer about one durable record, not one id: a record
+  // archived in a project store says nothing about the Scratch record beside
+  // it, and suppressing that row would read as archiving both.
+  let listed = listed_records(dev.sessions)
+  // An archived record has moved out of its own live store, so that store's
+  // live list normally cannot contain it; the filter covers the moment
+  // between the archive reply and the list refetch that follows it.
+  let archived = listed_records(dev.archived)
   let channel = dev.channel.uri_authority()
   let chat_selected = self.screen is Chat && dev.channel == self.focused
   // The activation identity handed to sections and projects: which
@@ -500,7 +506,11 @@ fn Model::sidebar_component_sections(
     let item = tree.item
     let active = self.focused == dev.channel &&
       self.active_session == item.id &&
-      self.find_conversation(dev.channel, item.id) is Some(conv) &&
+      self.find_record_conversation(dev.channel, {
+        session: item.id,
+        workspace: item.workspace,
+      })
+      is Some(conv) &&
       conv.is_archived_read_only()
     archived_entries.push(
       @section.Conversation({
@@ -642,7 +652,7 @@ fn Conversation::archived_read_only_view(
         class="archived-read-only-restore",
         type_="button",
         title="Restore this conversation before continuing it",
-        on_click=dispatch(UnarchiveSession(self.device, self.session_id)),
+        on_click=dispatch(UnarchiveSession(self.device, self.record_key())),
         "Restore",
       ),
     ]),
@@ -2298,6 +2308,128 @@ test "same-id records in two project stores keep distinct row keys" {
   }
   assert_eq(keys.length(), 2)
   assert_true(keys[0] != keys[1])
+}
+
+///|
+test "archiving one store's record leaves the same id listed in the other" {
+  let other = @interop.ChannelId::Local.test_project()
+  let project = @interop.ChannelId::Local.test_resource("/work/alpha")
+  // What the sidebar shows right after one project's record is archived: the
+  // archived index holds it, and the live list still holds the other's.
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    projects: [project, other],
+    sessions: [
+      {
+        id: "desktop-shared",
+        title: Some("other copy"),
+        workspace: other,
+        workspace_name: "work",
+        updated_at_ms: None,
+      },
+    ],
+    archived: [
+      {
+        id: "desktop-shared",
+        title: Some("project copy"),
+        workspace: project,
+        workspace_name: "alpha",
+        updated_at_ms: None,
+      },
+    ],
+  })
+  let live : Array[String?] = []
+  let mut archived_rows = 0
+  for section in model.sidebar_component_sections(model.dev()) {
+    for entry in section.entries {
+      match entry {
+        @section.Project(row) =>
+          for conversation in row.conversations {
+            if conversation.id.conversation() == "desktop-shared" {
+              live.push(conversation.id.root())
+            }
+          }
+        @section.Conversation(conversation) =>
+          if conversation.id.conversation() == "desktop-shared" &&
+            conversation.id.source() == "openseek.archived" {
+            archived_rows = archived_rows + 1
+          }
+        _ => ()
+      }
+    }
+  }
+  // The other project's row survives its neighbour's archive; only the
+  // selected record moved into the Archived group.
+  assert_eq(live, [Some(other.path)])
+  assert_eq(archived_rows, 1)
+}
+
+///|
+test "a same-id row lights up only for the store its conversation is bound to" {
+  let other = @interop.ChannelId::Local.test_project()
+  let project = @interop.ChannelId::Local.test_resource("/work/alpha")
+  // One open conversation, running, bound to the second project's store. The
+  // other project holds its own record under the same id.
+  let model = test_model()
+    .replace_conversation({
+      ..running_conversation(),
+      session_id: "desktop-shared",
+      workspace: Project(root=project),
+    })
+    .with_dev(dev => {
+      ..dev,
+      projects: [project, other],
+      sessions: [
+        {
+          id: "desktop-shared",
+          title: Some("project copy"),
+          workspace: project,
+          workspace_name: "alpha",
+          updated_at_ms: None,
+        },
+        {
+          id: "desktop-shared",
+          title: Some("other copy"),
+          workspace: other,
+          workspace_name: "work",
+          updated_at_ms: None,
+        },
+      ],
+    })
+  let model = {
+    ..model.activate(@interop.ChannelId::Local, "desktop-shared", project),
+    screen: Chat,
+  }
+  let mut in_project : @conversation.Input? = None
+  let mut in_other : @conversation.Input? = None
+  // Both rows are project rows now, so each is picked by the store its group
+  // renders rather than by its section kind.
+  for section in model.sidebar_component_sections(model.dev()) {
+    for entry in section.entries {
+      guard entry is @section.Project(row) else { continue }
+      for conversation in row.conversations {
+        guard conversation.id.conversation() == "desktop-shared" else {
+          continue
+        }
+        if conversation.id.root() == Some(project.path) {
+          in_project = Some(conversation)
+        } else if conversation.id.root() == Some(other.path) {
+          in_other = Some(conversation)
+        }
+      }
+    }
+  }
+  guard in_project is Some(in_project) && in_other is Some(in_other) else {
+    fail("both stores must render a row for the shared id")
+  }
+  // The run belongs to the second project's record; the other project's row
+  // is a different durable record and stays idle and unselected.
+  assert_true(in_project.running)
+  assert_true(in_project.active)
+  assert_true(in_project.run_mark is RunningMark)
+  assert_false(in_other.running)
+  assert_false(in_other.active)
+  assert_true(in_other.run_mark is NoRunMark)
 }
 
 ///|

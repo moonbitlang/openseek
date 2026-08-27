@@ -39,36 +39,52 @@ test "OpenSeek thinking values round-trip through their closed codec" {
 test "agent payload optional fields accept null and encode absence by omission" {
   let compact : @protocol.CompactPayload = @json.from_json({
     "session": "session-1",
+    "workspace": "/work/project",
     "model": null,
     "thinking": null,
     "max_steps": null,
-    "workspace": null,
   })
-  @debug.assert_eq(compact.to_json(), { "session": "session-1" })
+  @debug.assert_eq(compact.to_json(), {
+    "session": "session-1",
+    "workspace": "/work/project",
+  })
   let goal : @protocol.GoalPayload = @json.from_json({
     "session": "session-1",
+    "workspace": "/work/project",
     "text": null,
     "auto": null,
   })
-  @debug.assert_eq(goal.to_json(), { "session": "session-1" })
+  @debug.assert_eq(goal.to_json(), {
+    "session": "session-1",
+    "workspace": "/work/project",
+  })
 }
 
 ///|
 test "agent payload codecs reject malformed known and missing required fields" {
   let malformed_thinking : @protocol.StartPayload? = Some(
-    @json.from_json({ "task": "inspect", "session": "session-1", "thinking": 7 }),
+    @json.from_json({
+      "task": "inspect",
+      "session": "session-1",
+      "workspace": "/work/project",
+      "thinking": 7,
+    }),
   ) catch {
     _ => None
   }
   assert_true(malformed_thinking is None)
   let malformed_auto : @protocol.GoalPayload? = Some(
-    @json.from_json({ "session": "session-1", "auto": "yes" }),
+    @json.from_json({
+      "session": "session-1",
+      "workspace": "/work/project",
+      "auto": "yes",
+    }),
   ) catch {
     _ => None
   }
   assert_true(malformed_auto is None)
   let missing_session : @protocol.CompactPayload? = Some(
-    @json.from_json({ "thinking": "high" }),
+    @json.from_json({ "workspace": "/work/project", "thinking": "high" }),
   ) catch {
     _ => None
   }
@@ -81,6 +97,7 @@ test "agent payload codecs reject unsupported thinking values uniformly" {
     @json.from_json({
       "task": "inspect",
       "session": "session-1",
+      "workspace": "/work/project",
       "thinking": "invalid",
     }),
   ) catch {
@@ -88,13 +105,21 @@ test "agent payload codecs reject unsupported thinking values uniformly" {
   }
   assert_true(start is None)
   let compact : @protocol.CompactPayload? = Some(
-    @json.from_json({ "session": "session-1", "thinking": "invalid" }),
+    @json.from_json({
+      "session": "session-1",
+      "workspace": "/work/project",
+      "thinking": "invalid",
+    }),
   ) catch {
     _ => None
   }
   assert_true(compact is None)
   let goal : @protocol.GoalPayload? = Some(
-    @json.from_json({ "session": "session-1", "thinking": "invalid" }),
+    @json.from_json({
+      "session": "session-1",
+      "workspace": "/work/project",
+      "thinking": "invalid",
+    }),
   ) catch {
     _ => None
   }
@@ -103,6 +128,7 @@ test "agent payload codecs reject unsupported thinking values uniformly" {
     @json.from_json({
       "task": "inspect",
       "session": "session-1",
+      "workspace": "/work/project",
       "thinking": " high ",
     }),
   ) catch {

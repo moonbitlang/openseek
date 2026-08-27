@@ -13,7 +13,7 @@
 /// the dialog appear to authorize a different conversation.
 priv struct ArchivedDeleteConfirm {
   channel : @interop.ChannelId
-  key : ArchiveRecordKey
+  key : RecordKey
   // The parent plus every descendant visible in the same archived snapshot.
   // Host notifications still cover a child created after that snapshot.
   sessions : Array[String]
@@ -57,16 +57,19 @@ fn fetch_archived(
 fn archive_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  session : String,
+  key : RecordKey,
   connection_generation : Int,
   sessions_request_generation : Int,
   archived_request_generation : Int,
   force? : Bool = false,
 ) -> @cmd.Cmd {
+  guard key.workspace_payload(channel) is Some(workspace) else {
+    return @cmd.none
+  }
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       archive_session_into(
-        scheduler, dispatch, channel, session, connection_generation, sessions_request_generation,
+        scheduler, dispatch, channel, key, workspace, connection_generation, sessions_request_generation,
         archived_request_generation, force,
       )
     })
@@ -78,7 +81,8 @@ async fn archive_session_into(
   scheduler : &@cmd.Scheduler,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  session : String,
+  key : RecordKey,
+  workspace : String,
   connection_generation : Int,
   sessions_request_generation : Int,
   archived_request_generation : Int,
@@ -90,7 +94,15 @@ async fn archive_session_into(
     // Archiving removes the conversation's checkout but retains its placement;
     // the retry after the discard-confirmation dialog carries force on the
     // wire.
-    { session, force: if force { Some(true) } else { None } },
+    {
+      session: key.session,
+      workspace,
+      force: if force {
+        Some(true)
+      } else {
+        None
+      },
+    },
   ) catch {
     error => {
       scheduler.add(
@@ -105,7 +117,7 @@ async fn archive_session_into(
     NeedsForce(refusal) =>
       scheduler.add(
         dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))(
-          ArchiveNeedsForce(session~, refusal~),
+          ArchiveNeedsForce(key~, refusal~),
         ),
       )
     Archived(reply) =>
@@ -120,16 +132,19 @@ async fn archive_session_into(
 fn unarchive_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  session : String,
+  key : RecordKey,
   connection_generation : Int,
   sessions_request_generation : Int,
   archived_request_generation : Int,
 ) -> @cmd.Cmd {
+  guard key.workspace_payload(channel) is Some(workspace) else {
+    return @cmd.none
+  }
   archive_action(
     dispatch,
     channel,
     @commands.session_unarchive,
-    { session, force: None },
+    { session: key.session, workspace, force: None },
     connection_generation,
     sessions_request_generation,
     archived_request_generation,
@@ -143,7 +158,7 @@ fn unarchive_session(
 fn delete_archived_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  key : ArchiveRecordKey,
+  key : RecordKey,
   sessions : Array[String],
   connection_generation : Int,
   archived_request_generation : Int,

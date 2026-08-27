@@ -33,11 +33,14 @@ impl Show for WorktreeError with fn output(self, logger) {
 /// conversation already has a slot in the running pump (binding is only for
 /// conversations that are new everywhere), and `drain_sessions` closes the
 /// engines of conversations whose checkout is about to be deleted — an idle
-/// serve process still has its cwd inside that directory.
+/// serve process still has its cwd inside that directory. It takes the store
+/// root beside the ids because engine slots are keyed by session id alone: a
+/// same-id conversation recording in another store is a different one, and
+/// draining it would tear down a writer this removal was never given.
 pub(all) struct WorktreeHost {
   lifecycle_lock : @async.Mutex
   session_is_live : (String) -> Bool
-  drain_sessions : async (Array[String]) -> Unit
+  drain_sessions : async (Array[String], @pathx.Absolute) -> Unit
 }
 
 ///|
@@ -418,21 +421,17 @@ pub async fn run_dir(
 }
 
 ///|
-/// Find this owner's registry row while `worktree_registry_lock` is held.
-/// OpenSeek can start from its durable session store; Codex deliberately scans
-/// only Desktop registries, never app-server or Git path conventions.
+/// Find this owner's registry row in one of `within`, while
+/// `worktree_registry_lock` is held. The caller names those projects, because
+/// which of them may hold the row is a question about the owner: an OpenSeek
+/// record's worktree belongs to the project whose store owns it, while a Codex
+/// thread lives in no session store and is deliberately looked up only in
+/// Desktop registries, never in app-server state or Git path conventions.
 async fn WorktreeOwner::binding_unlocked(
   self : WorktreeOwner,
+  within : Array[@pathx.Absolute],
 ) -> (@pathx.Absolute, WorktreeEntry)? {
-  let workspaces = match self {
-    OpenSeekSession(session) =>
-      match @session_store.workspace_of(session) {
-        Some(workspace) => [workspace]
-        None => []
-      }
-    CodexThread(_) => @workspaces.registered()
-  }
-  for workspace in workspaces {
+  for workspace in within {
     for entry in read_worktrees_unlocked(workspace) {
       if entry.belongs_to(self) {
         return Some((workspace, entry))
@@ -446,13 +445,18 @@ async fn WorktreeOwner::binding_unlocked(
 /// Inspect whether archiving would discard uncommitted, untracked, or ignored
 /// checkout files. This preflight changes nothing; the final removal repeats
 /// the check after the backend writer has been archived, closing the race
-/// between confirmation and deletion.
+/// between confirmation and deletion. Codex archives through this preflight
+/// because its thread lives in no session store; OpenSeek's archive names the
+/// store it selected and goes straight to `archive_bound_worktree_checkout`.
 pub async fn WorktreeOwner::archive_check(
   self : WorktreeOwner,
 ) -> ArchiveNeedsForceReply? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
-  guard self.binding_unlocked() is Some((workspace, entry)) else { return None }
+  guard self.binding_unlocked(@workspaces.registered())
+    is Some((workspace, entry)) else {
+    return None
+  }
   let target = worktree_dir(workspace, entry.name)
   let present = @fsx.is_dir(target.to_path()) catch {
     error if @async.is_being_cancelled() => raise error
@@ -477,14 +481,17 @@ pub async fn WorktreeOwner::archive_check(
 /// checkout refuses; committed work stays on the branch either way. The caller
 /// must first fence its own backend writer (OpenSeek's slot claim or a
 /// successful Codex `thread/archive`). An owner without a worktree is a no-op.
-pub async fn WorktreeOwner::archive_checkout(
+async fn WorktreeOwner::archive_checkout_within(
   self : WorktreeOwner,
+  within : Array[@pathx.Absolute],
   force : Bool,
   on_committed? : (String, Array[WorktreeInfo]) -> Unit,
 ) -> ArchiveNeedsForceReply? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
-  guard self.binding_unlocked() is Some((workspace, entry)) else { return None }
+  guard self.binding_unlocked(within) is Some((workspace, entry)) else {
+    return None
+  }
   let entries = read_worktrees_unlocked(workspace)
   let target = worktree_dir(workspace, entry.name)
   let present = @fsx.is_dir(target.to_path()) catch {
@@ -540,6 +547,41 @@ pub async fn drop_placements(
   guard remaining.length() < entries.length() else { return None }
   write_worktrees(workspace, remaining)
   Some(worktree_infos(workspace, remaining))
+}
+
+///|
+/// Free the checkout of a Codex thread. A thread lives in no session store, so
+/// its registry row is looked up across Desktop's registered projects.
+pub async fn WorktreeOwner::archive_checkout(
+  self : WorktreeOwner,
+  force : Bool,
+  on_committed? : (String, Array[WorktreeInfo]) -> Unit,
+) -> ArchiveNeedsForceReply? {
+  self.archive_checkout_within(@workspaces.registered(), force, on_committed?)
+}
+
+///|
+/// Free the checkout bound to `session`, if any, while retaining its registry
+/// entry. Archiving frees the directory, but the name/branch/session row
+/// remains the durable placement needed to make a later unarchive read as
+/// `MissingTree` and offer an explicit rebuild.
+///
+/// `workspace` is the project whose store the archive selected, not a project
+/// rediscovered from the session id: a worktree belongs to the project that
+/// owns the record being moved, and looking the id up again would find the
+/// first registered project holding it — a forced archive would then delete
+/// another project's uncommitted checkout.
+pub async fn archive_bound_checkout(
+  session : String,
+  force : Bool,
+  workspace : @pathx.Absolute,
+  on_committed? : (String, Array[WorktreeInfo]) -> Unit,
+) -> ArchiveNeedsForceReply? {
+  WorktreeOwner::openseek(session).archive_checkout_within(
+    [workspace],
+    force,
+    on_committed?,
+  )
 }
 
 ///|
@@ -768,7 +810,12 @@ pub async fn create(
   }
   require_main_worktree(dir)
   if owner is OpenSeekSession(session) {
-    @session_store.ensure_not_archived(session)
+    // The checkout binds to a record in this project's store; an archived
+    // record elsewhere under the same id is a different conversation.
+    @session_store.ensure_not_archived(
+      session,
+      Some(@workspaces.store_root(dir)),
+    )
   }
   // Snapshot this workspace's setting once for the lifecycle operation. A
   // concurrent page edit applies to the next create or repair instead of
@@ -824,7 +871,12 @@ pub async fn create(
     let global_record : @pathx.Absolute? = @workspaces.global_store_root().map(root => {
       root.join("sessions").join(session)
     })
-    let has_history = if @session_store.workspace_of(session) is Some(_) {
+    // The same population question `agent.start` asks, and for the same
+    // reason: a binding this call commits is worthless if the start that
+    // follows refuses the id. An archived record in another project counts
+    // there, so it has to count here — otherwise a checkout is created and
+    // bound to a conversation that can never run in it.
+    let has_history = if !@session_store.holders_of(session).is_empty() {
       true
     } else if global_record is Some(record) {
       @fsx.is_dir(record.to_path()) catch {
@@ -1130,7 +1182,7 @@ pub async fn remove(
     )
   }
   if entry.session is Some(bound) {
-    (host.drain_sessions)([bound])
+    (host.drain_sessions)([bound], @workspaces.store_root(dir))
   }
   let target = worktree_dir(dir, name)
   let present = @fsx.is_dir(target.to_path()) catch {
@@ -1199,18 +1251,19 @@ fn restore_home_env(previous : String?) -> Unit {
 ///|
 /// A host with no engine behind it: `live` names the conversations the pump
 /// would report a slot for, and every drained session is appended to
-/// `drained` instead of closing a process.
+/// `drained` — with the store it was drained for — instead of closing a
+/// process.
 #cfg(not(platform="windows"))
 fn test_host(
   live? : Array[String] = [],
-  drained? : Array[String] = [],
+  drained? : Array[(String, String)] = [],
 ) -> WorktreeHost {
   {
     lifecycle_lock: Mutex(),
     session_is_live: session => live.contains(session),
-    drain_sessions: sessions => {
+    drain_sessions: (sessions, root) => {
       for session in sessions {
-        drained.push(session)
+        drained.push((session, root.to_string()))
       }
     },
   }
@@ -1608,6 +1661,20 @@ async test "worktree create names the holder in every refusal" {
   let elsewhere = root.join("elsewhere")
   @fsx.ensure_dir(elsewhere.to_path())
   ignore(@workspaces.add(elsewhere.to_string(), fn(_) {  }))
+  // An archived record in another project counts as history, because
+  // `agent.start` counts it: binding a checkout the following start would
+  // refuse leaves a conversation that can never run in the worktree it owns.
+  @fsx.ensure_dir(
+    @session_store.archived_root(@workspaces.store_root(elsewhere))
+    .join("sessions")
+    .join("s-put-away")
+    .to_path(),
+  )
+  assert_true(
+    create_refusal(host, repo.to_string(), "s-put-away", "x").contains(
+      "already has history",
+    ),
+  )
   write_worktrees(elsewhere, [
     {
       name: "wt-e",

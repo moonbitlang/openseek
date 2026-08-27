@@ -9,6 +9,8 @@ import {
 }
 
 // Values
+pub async fn archive_bound_checkout(String, Bool, @pathx.Absolute, on_committed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveNeedsForceReply?
+
 pub async fn create(WorktreeHost, String, WorktreeOwner, (Array[@protocol.WorktreeInfo]) -> Unit, name? : String) -> @protocol.WorktreeCreateReply
 
 pub async fn drop_placements(@pathx.Absolute, Array[String]) -> Array[@protocol.WorktreeInfo]?
@@ -46,7 +48,7 @@ pub fn CodexWorktreeBinding::to_repr(Self) -> @debug.Repr
 pub(all) struct WorktreeHost {
   lifecycle_lock : @async.Mutex
   session_is_live : (String) -> Bool
-  drain_sessions : async (Array[String]) -> Unit
+  drain_sessions : async (Array[String], @pathx.Absolute) -> Unit
 }
 
 type WorktreeOwner derive(Eq, @debug.Debug)

@@ -18,9 +18,9 @@
 priv struct ServeEngine {
   // The conversation this process serves: its slot in the manager's map.
   session_key : String
-  // Canonical durable store selected from host-owned workspace state when
-  // this process was spawned. Workspace detach uses this placement to close
-  // idle writers before hiding their store, and to refuse while one is busy.
+  // The durable store selected from host-owned workspace state when this
+  // process was spawned. Workspace detach uses it to close idle writers before
+  // hiding their store, and to refuse while one is busy.
   session_root : @pathx.Absolute?
   // Fingerprint of the config this process was spawned with; a prompt whose
   // config differs cannot reuse it.
@@ -347,6 +347,22 @@ async fn ServeEngine::write_commands(self : ServeEngine) -> Unit {
       self.process.cancel()
     }
   }
+}
+
+///|
+/// Whether this engine's durable writes land in `root`. Session slots are
+/// keyed by id alone — the host runs at most one engine per id — so every
+/// lifecycle operation that addresses one named store must ask this before
+/// treating a live engine as its own. A same-id record in another store is a
+/// different conversation: blocking on its engine refuses a move that store
+/// never contended for, and closing it tears down a writer the operation was
+/// never given.
+fn ServeEngine::writes_store(
+  self : ServeEngine,
+  root : @pathx.Absolute,
+) -> Bool {
+  self.session_root is Some(session_root) &&
+  session_root.to_string() == root.to_string()
 }
 
 ///|
@@ -888,7 +904,9 @@ pub fn EngineManager::worktree_host(
     session_is_live: session => {
       self.pump is Serving(sessions~) && sessions.get(session) is Some(_)
     },
-    drain_sessions: sessions => self.close_engines_for_sessions(sessions),
+    drain_sessions: (sessions, root) => {
+      self.close_engines_for_sessions(sessions, root~)
+    },
   }
 }
 
@@ -929,7 +947,7 @@ async fn EngineManager::close_engines_for_workspace(
   workspace : @pathx.Absolute,
 ) -> Unit {
   guard self.pump is Serving(sessions~) else { return }
-  let root = @workspaces.store_root(workspace).to_string()
+  let root = @workspaces.store_root(workspace)
   let idle : Array[ServeEngine] = []
   for _, slot in sessions {
     if slot.pending is Some(_) {
@@ -937,9 +955,7 @@ async fn EngineManager::close_engines_for_workspace(
         "another conversation operation is still being prepared; wait for it to finish",
       )
     }
-    if slot.engine is Some(engine) &&
-      engine.session_root is Some(session_root) &&
-      session_root.to_string() == root {
+    if slot.engine is Some(engine) && engine.writes_store(root) {
       match engine.phase {
         Running(..) =>
           raise EngineError(
@@ -972,7 +988,7 @@ async fn EngineManager::close_engines_for_workspace(
   // held, and identity checks make already-retired captures harmless.
   let retained : Array[SessionFollower] = []
   for _, follower in self.followers {
-    if follower.root.to_string() == root {
+    if follower.tails_store(root) {
       retained.push(follower)
     }
   }
@@ -989,9 +1005,14 @@ async fn EngineManager::close_engines_for_workspace(
 /// start/compact claim can appear between this scan and the registry
 /// commit. A pending operation or a busy engine is refused; idle writers
 /// receive EOF and join their follower's final durable scan.
+///
+/// `root` is the workspace's store, not a store rediscovered from the ids:
+/// a worktree's conversations record there, and a same-id record in another
+/// store has nothing to do with the checkout being removed.
 async fn EngineManager::close_engines_for_sessions(
   self : EngineManager,
   ids : Array[String],
+  root~ : @pathx.Absolute,
 ) -> Unit {
   guard self.pump is Serving(sessions~) else { return }
   let idle : Array[ServeEngine] = []
@@ -1002,7 +1023,7 @@ async fn EngineManager::close_engines_for_sessions(
         "another conversation operation is still being prepared; wait for it to finish",
       )
     }
-    if slot.engine is Some(engine) {
+    if slot.engine is Some(engine) && engine.writes_store(root) {
       match engine.phase {
         Running(..) =>
           raise EngineError(
@@ -1027,7 +1048,7 @@ async fn EngineManager::close_engines_for_sessions(
   // for the idle-engine pass above to discover. Followers are keyed by
   // session id, so the mapped ids find them directly.
   for id in ids {
-    if self.followers.get(id) is Some(follower) {
+    if self.followers.get(id) is Some(follower) && follower.tails_store(root) {
       stop_follower_instance(self, follower, writer_exited=true)
     }
   }

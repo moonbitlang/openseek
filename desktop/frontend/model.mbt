@@ -1038,17 +1038,36 @@ priv enum ArchiveDisposition {
 } derive(Eq)
 
 ///|
-/// One durable archive identity. Session ids may repeat across project
-/// stores, so archive actions, notifications, and tombstones always retain
-/// the host-listed workspace beside the id.
-priv struct ArchiveRecordKey {
+/// One durable record identity: the store that holds it and the session id
+/// within that store. Session ids repeat across project stores, so everything
+/// that names an existing record — opening, archiving, restoring, deleting,
+/// and the notifications and tombstones that answer them — carries the
+/// host-listed workspace beside the id. Nothing here identifies a
+/// *conversation*: the page holds at most one open conversation per session
+/// id (`Model::find_conversation`), because the host runs at most one engine
+/// per session id. This says which record that conversation is bound to.
+priv struct RecordKey {
   session : String
   workspace : @common.Uri
-} derive(Eq)
+} derive(Eq, Hash)
 
 ///|
-fn ArchiveRecordKey::matches(
-  self : ArchiveRecordKey,
+/// The records a host listing names, for membership questions asked once per
+/// row: the sidebar re-renders on every dispatch, and scanning the live and
+/// archived listings per row is quadratic in the number of conversations.
+fn listed_records(
+  items : Array[@transcript.SessionListItem],
+) -> @hashset.HashSet[RecordKey] {
+  @hashset.HashSet::from_iter(
+    items
+    .iter()
+    .map(item => ({ session: item.id, workspace: item.workspace } : RecordKey)),
+  )
+}
+
+///|
+fn RecordKey::matches(
+  self : RecordKey,
   item : @transcript.SessionListItem,
 ) -> Bool {
   item.id == self.session && item.workspace == self.workspace
@@ -1058,11 +1077,11 @@ fn ArchiveRecordKey::matches(
 /// Bind a host protocol workspace path to the channel that produced it. A
 /// blank or malformed path invalidates the notification: every durable
 /// record belongs to a workspace store, so a key without one names nothing.
-fn ArchiveRecordKey::from_protocol(
+fn RecordKey::from_protocol(
   channel : @interop.ChannelId,
   session : String,
   workspace : String,
-) -> ArchiveRecordKey? {
+) -> RecordKey? {
   guard @resource.of_path(channel, workspace) is Some(resource) else {
     return None
   }
@@ -1070,10 +1089,18 @@ fn ArchiveRecordKey::from_protocol(
 }
 
 ///|
+/// The durable record an open conversation is bound to. A worktree
+/// conversation reports its owning project, which is also the store holding
+/// its record.
+fn Conversation::record_key(self : Conversation) -> RecordKey {
+  { session: self.session_id, workspace: self.workspace.project() }
+}
+
+///|
 /// Encode the selected store for a request only when its resource belongs to
 /// the channel that produced it.
-fn ArchiveRecordKey::workspace_payload(
-  self : ArchiveRecordKey,
+fn RecordKey::workspace_payload(
+  self : RecordKey,
   channel : @interop.ChannelId,
 ) -> String? {
   if @resource.belongs_to(self.workspace, channel) {
@@ -1088,7 +1115,7 @@ fn ArchiveRecordKey::workspace_payload(
 /// so they are reconciled through this override until the next connection
 /// boundary starts a fresh authoritative list round.
 priv struct ArchiveOverride {
-  key : ArchiveRecordKey
+  key : RecordKey
   disposition : ArchiveDisposition
 } derive(Eq)
 
@@ -1127,6 +1154,14 @@ priv struct DeviceState {
   projects_request_generation : Int
   worktrees_request_generation : Int
   workspace_settings_request_generation : Int
+  // The connection each cached listing came from. Placement is only legible
+  // from the pair: this connection's live list beside the last connection's
+  // archived one reads a record archived while the page was away as simply
+  // gone, and another project's same-id row then looks like its one true
+  // placement. Both listings are refreshed together at every BridgeReady, so
+  // the wait is the round trip of whichever reply is slower.
+  sessions_connection : Int
+  archived_connection : Int
   // Durable sessions known to the engine's store, newest first, refreshed
   // when the bridge connects and when a run reaches the store. A new
   // conversation appears here once its first turn has been persisted.
@@ -1174,6 +1209,9 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     projects_request_generation: 0,
     worktrees_request_generation: 0,
     workspace_settings_request_generation: 0,
+    // No connection has answered yet, and the first one is generation 1.
+    sessions_connection: 0,
+    archived_connection: 0,
     sessions: [],
     archived: [],
     archive_overrides: [],
@@ -1723,8 +1761,10 @@ priv enum Msg {
   // fence the delayed id instead of activating it on the newly focused host.
   SessionRotated(@interop.ConversationKey)
   // Open a conversation on one device's explicit channel, selecting that
-  // channel first when it differs from the current one.
-  OpenSession(@interop.ChannelId, String)
+  // channel first when it differs from the current one. The row names the
+  // exact durable record, so a same-id record in another store is never the
+  // one opened.
+  OpenSession(@interop.ChannelId, RecordKey)
   // Open a conversation on the channel already focused. A transcript link has
   // only a session id to go on — the child session a sub-run tool card names
   // belongs to the same device as the transcript that names it — and the
@@ -1804,15 +1844,15 @@ priv enum Msg {
   // (discarding the worktree's uncommitted changes), or stand down.
   ConfirmArchiveDiscard
   CancelArchiveDiscard
-  // Archive a conversation on its device: the host moves its durable
-  // record into the store's `archived` twin and the sidebar moves the row
-  // under the Archived group.
-  ArchiveSession(@interop.ChannelId, String)
-  // Restore an archived conversation into its device's live list.
-  UnarchiveSession(@interop.ChannelId, String)
+  // Archive a conversation on its device: the host moves the named durable
+  // record into that same store's `archived` twin and the sidebar moves the
+  // row under the Archived group.
+  ArchiveSession(@interop.ChannelId, RecordKey)
+  // Restore an archived record into its own store's live list.
+  UnarchiveSession(@interop.ChannelId, RecordKey)
   // Stage, confirm, or cancel permanent deletion of an archived conversation.
   // The confirmation's display title comes from the archived record itself.
-  DeleteArchivedSession(@interop.ChannelId, ArchiveRecordKey)
+  DeleteArchivedSession(@interop.ChannelId, RecordKey)
   ConfirmDeleteArchivedSession
   CancelDeleteArchivedSession
   // The host's dark-mode preference changed. It updates the palette only while
@@ -1978,11 +2018,7 @@ priv enum DeviceMsg {
   // The host's identity-bearing `session.changed` broadcast. Archive changes
   // invalidate that exact live target immediately; both sidebar lists are
   // then re-read for their durable contents.
-  SessionsChanged(
-    change~ : String,
-    key~ : ArchiveRecordKey,
-    fresh_session~ : String?
-  )
+  SessionsChanged(change~ : String, key~ : RecordKey, fresh_session~ : String?)
   SessionLoaded(
     session~ : String,
     items~ : Array[@transcript.TranscriptItem],
@@ -2098,7 +2134,7 @@ priv enum DeviceMsg {
   // An archive was refused because the conversation's worktree holds
   // uncommitted changes; the client stages the discard-confirmation dialog.
   ArchiveNeedsForce(
-    session~ : String,
+    key~ : RecordKey,
     refusal~ : @protocol.ArchiveNeedsForceReply
   )
   // The archived conversations — the reply to `archived_sessions` and to a
@@ -2113,7 +2149,7 @@ priv enum DeviceMsg {
   // send target, so it can tombstone and leave an active deleted record even
   // when the broadcast arrives later.
   ArchivedDeleted(
-    key~ : ArchiveRecordKey,
+    key~ : RecordKey,
     sessions~ : Array[String],
     items~ : Array[@transcript.SessionListItem],
     connection_generation~ : Int,
@@ -2733,6 +2769,11 @@ fn Model::display_status(self : Model) -> Status {
 }
 
 ///|
+/// The one conversation this channel holds open for a session id, whichever
+/// store it is bound to. Live-run routing goes through here: the host runs at
+/// most one engine per session id, so an event carrying only the id can name
+/// only this conversation. Anything that acts on a durable *record* must ask
+/// `find_record_conversation` instead.
 fn Model::find_conversation(
   self : Model,
   channel : @interop.ChannelId,
@@ -2744,6 +2785,25 @@ fn Model::find_conversation(
     }
   }
   None
+}
+
+///|
+/// The open conversation bound to exactly this durable record. A same-id
+/// conversation bound to another store is not it: it renders its own sidebar
+/// row, and acting on this record must not read that one's live state.
+fn Model::find_record_conversation(
+  self : Model,
+  channel : @interop.ChannelId,
+  key : RecordKey,
+) -> Conversation? {
+  guard self.find_conversation(channel, key.session) is Some(conv) else {
+    return None
+  }
+  if conv.workspace.project() == key.workspace {
+    Some(conv)
+  } else {
+    None
+  }
 }
 
 ///|
@@ -2917,7 +2977,7 @@ fn DeviceState::placement_for_store_root(
 /// store-qualified record.
 fn DeviceState::archive_override(
   self : DeviceState,
-  key : ArchiveRecordKey,
+  key : RecordKey,
 ) -> ArchiveDisposition? {
   for fact in self.archive_overrides {
     if fact.key == key {
@@ -2933,7 +2993,7 @@ fn DeviceState::archive_override(
 fn Model::archive_override(
   self : Model,
   channel : @interop.ChannelId,
-  key : ArchiveRecordKey,
+  key : RecordKey,
 ) -> ArchiveDisposition? {
   guard self.device_state(channel) is Some(dev) else { return None }
   dev.archive_override(key)
@@ -2946,7 +3006,7 @@ fn Model::archive_override(
 fn Model::with_archive_override(
   self : Model,
   channel : @interop.ChannelId,
-  key : ArchiveRecordKey,
+  key : RecordKey,
   disposition : ArchiveDisposition,
 ) -> Model {
   guard self.device_state(channel) is Some(dev) else { return self }
@@ -2983,8 +3043,12 @@ fn Model::can_reload_transcript(self : Model, conv : Conversation) -> Bool {
     conv.awaits_durable_proof() {
     return true
   }
+  // Whether THIS conversation's record is listed. A same-id record in
+  // another store is a different conversation, and reloading against it
+  // would ask the host to read a store this conversation is not bound to.
   match self.device_state(conv.device) {
-    Some(dev) => dev.sessions.iter().any(item => item.id == conv.session_id)
+    Some(dev) =>
+      dev.sessions.iter().any(item => conv.record_key().matches(item))
     None => false
   }
 }

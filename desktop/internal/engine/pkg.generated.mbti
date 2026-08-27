@@ -11,7 +11,7 @@ import {
 // Values
 pub fn approve_run(EngineManager, @protocol.ApprovalPayload) -> @protocol.ApprovalReply
 
-pub async fn archive_session(EngineManager, String, (String, String) -> Unit, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveReply
+pub async fn archive_session(EngineManager, String, String, (String, String) -> Unit, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveReply
 
 pub async fn archived_sessions(EngineManager) -> @protocol.SessionsReply
 
@@ -51,7 +51,7 @@ pub async fn start_run(EventSink, EngineManager, @protocol.StartPayload) -> @pro
 
 pub fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply
 
-pub async fn unarchive_session(EngineManager, String, (String, String) -> Unit) -> @protocol.SessionsReply
+pub async fn unarchive_session(EngineManager, String, String, (String, String) -> Unit) -> @protocol.SessionsReply
 
 pub async fn update_settings(EngineManager, SettingsPatch, legacy_migration? : Bool, on_committed? : (@protocol.SettingsStatusPayload) -> Unit) -> @protocol.SettingsStatusPayload
 

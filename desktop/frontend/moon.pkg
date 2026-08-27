@@ -1,6 +1,7 @@
 import {
   "moonbitlang/core/cmp",
   "moonbitlang/core/debug",
+  "moonbitlang/core/hashset",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "moonbit-community/rabbita",

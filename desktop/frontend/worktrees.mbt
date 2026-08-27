@@ -39,7 +39,9 @@ priv struct ProjectWorktrees {
 /// and carries a bounded path preview without exposing arbitrary host errors.
 priv struct ArchiveConfirm {
   channel : @interop.ChannelId
-  session : String
+  // The exact record the refused attempt named. The forced retry must reach
+  // that same store, not whichever one a fresh lookup would pick.
+  key : RecordKey
   refusal : @protocol.ArchiveNeedsForceReply
 } derive(Eq)
 
@@ -184,6 +186,9 @@ fn start_in_new_worktree(
               WorktreeCreated(workspace~, name=reply.name, session~),
             ),
           )
+          // The store is this project: `start_in_new_worktree` accepted the
+          // workspace for this channel, and a worktree conversation records
+          // in its project's store while working in the checkout.
           let start = start_payload(
             task,
             selected_model,
@@ -191,7 +196,7 @@ fn start_in_new_worktree(
             max_steps,
             session,
             submission_id,
-            workspace~,
+            workspace=workspace.path,
           )
           request_agent_start(
             scheduler, dispatch, channel, start, session, submission_id,
@@ -330,8 +335,14 @@ fn set_goal_in_new_worktree(
               WorktreeCreated(workspace~, name=reply.name, session~),
             ),
           )
+          // The project this goal's record lives in — see the start chain.
           let payload = goal_payload(
-            session, engine_model, reasoning, max_steps, workspace, text,
+            session,
+            engine_model,
+            reasoning,
+            max_steps,
+            workspace.path,
+            text,
           )
           request_agent_goal(
             scheduler, dispatch, channel, payload, session, command, text,
@@ -1089,12 +1100,18 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   // until the host moves the conversation out of the live list.
   let (_, archiving) = update(
     dispatch,
-    ArchiveSession(@interop.ChannelId::Local, "desktop-test"),
+    ArchiveSession(@interop.ChannelId::Local, {
+      session: "desktop-test",
+      workspace,
+    }),
     gone,
   )
   let (_, archiving_again) = update(
     dispatch,
-    ArchiveSession(@interop.ChannelId::Local, "desktop-test"),
+    ArchiveSession(@interop.ChannelId::Local, {
+      session: "desktop-test",
+      workspace,
+    }),
     gone,
   )
   assert_true(
@@ -1461,7 +1478,10 @@ test "a remote removal closes this client's discard dialog" {
     })
   let (_, staged) = update_dev(
     dispatch,
-    ArchiveNeedsForce(session="desktop-test", refusal=test_archive_refusal()),
+    ArchiveNeedsForce(
+      key={ session: "desktop-test", workspace },
+      refusal=test_archive_refusal(),
+    ),
     model,
   )
   assert_true(staged.archive_confirm is Some(_))
@@ -1657,7 +1677,7 @@ test "a dirty archive stages the discard dialog and confirm retries forced" {
   let (_, staged) = update_dev(
     dispatch,
     ArchiveNeedsForce(
-      session="desktop-test",
+      key=listed_record(@interop.ChannelId::Local, "desktop-test"),
       refusal=test_archive_refusal(
         dirty_paths=["desktop/lepus", "editor/tokenizer.mbt"],
         dirty_path_count=4,
@@ -1668,7 +1688,7 @@ test "a dirty archive stages the discard dialog and confirm retries forced" {
   guard staged.archive_confirm is Some(confirm) else {
     fail("refusal staged no dialog")
   }
-  inspect(confirm.session, content="desktop-test")
+  inspect(confirm.key.session, content="desktop-test")
   assert_eq(confirm.refusal.worktree, "wt-1")
   assert_eq(confirm.refusal.dirty_paths[0], "desktop/lepus")
   let warning = @composer.WorktreeArchiveDialog::{
@@ -1686,7 +1706,10 @@ test "a dirty archive stages the discard dialog and confirm retries forced" {
   // a plain archive click) and closes the dialog.
   let (_, restaged) = update_dev(
     dispatch,
-    ArchiveNeedsForce(session="desktop-test", refusal=test_archive_refusal()),
+    ArchiveNeedsForce(
+      key=listed_record(@interop.ChannelId::Local, "desktop-test"),
+      refusal=test_archive_refusal(),
+    ),
     cancelled,
   )
   let before = restaged.dev().archived_request_generation
@@ -1696,6 +1719,47 @@ test "a dirty archive stages the discard dialog and confirm retries forced" {
   // Confirming with nothing staged is inert.
   let (_, inert) = update(dispatch, ConfirmArchiveDiscard, confirmed)
   assert_true(inert.archive_confirm is None)
+}
+
+///|
+test "the discard dialog retries against the store the refusal named" {
+  let dispatch = test_dispatch()
+  let workspace = @interop.ChannelId::Local.test_resource("/proj")
+  let model = test_model().with_dev(dev => { ..dev, projects: [workspace] })
+  // The refused attempt named the project store; the retry must carry that
+  // same store rather than re-deriving one from the session id, which a
+  // same-id Scratch record would answer first.
+  let (_, staged) = update_dev(
+    dispatch,
+    ArchiveNeedsForce(
+      key={ session: "desktop-shared", workspace },
+      refusal=test_archive_refusal(),
+    ),
+    model,
+  )
+  guard staged.archive_confirm is Some(confirm) else {
+    fail("refusal staged no dialog")
+  }
+  assert_eq(confirm.key.workspace, workspace)
+  assert_eq(confirm.key.session, "desktop-shared")
+  let before = staged.dev().archived_request_generation
+  let (_, confirmed) = update(dispatch, ConfirmArchiveDiscard, staged)
+  assert_eq(confirmed.dev().archived_request_generation, before + 1)
+  // A record whose store belongs to another channel cannot be encoded for
+  // this one, so the request is refused rather than sent storeless.
+  let foreign = @interop.ChannelId::Remote("d_other").test_resource("/proj")
+  let (_, foreign_archive) = update(
+    dispatch,
+    ArchiveSession(@interop.ChannelId::Local, {
+      session: "desktop-shared",
+      workspace: foreign,
+    }),
+    model,
+  )
+  assert_eq(
+    foreign_archive.dev().archived_request_generation,
+    model.dev().archived_request_generation,
+  )
 }
 
 ///|
@@ -1710,14 +1774,14 @@ test "a start payload never names a worktree" {
     "1000",
     "desktop-wt",
     "sub-1",
-    workspace~,
+    workspace=workspace.path,
   )
-  // The typed wire shape has no worktree field at all; the workspace hint
-  // is the only placement the start carries.
+  // The typed wire shape has no worktree field at all; the store the record
+  // lives in is the only placement the start carries.
   assert_true(
     payload.to_json() is Object(fields) && fields.get("worktree") is None,
   )
-  assert_eq(payload.workspace, Some("/proj"))
+  assert_eq(payload.workspace, "/proj")
   assert_eq(payload.thinking, Some(ThinkingMax))
   let unknown_model = start_payload(
     "go",
@@ -1726,7 +1790,7 @@ test "a start payload never names a worktree" {
     "1000",
     "desktop-kimi",
     "sub-2",
-    workspace~,
+    workspace=workspace.path,
   )
   assert_true(unknown_model.thinking is None)
 }

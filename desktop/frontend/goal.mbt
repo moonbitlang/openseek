@@ -876,8 +876,8 @@ test "a kept goal draft is a conversation you can get back to" {
       rows,
       dev,
       @interop.ChannelId::Local.test_project(),
-      listed=_ => false,
-      archived=_ => false,
+      listed=listed_records([]),
+      archived=listed_records([]),
     )
     assert_true(
       rows.iter().any(row => row.1.id().conversation() == "desktop-fresh"),

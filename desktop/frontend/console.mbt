@@ -653,7 +653,11 @@ test "an action for another roster device cannot move page focus" {
     custom_api_url: "https://old.example/chat",
     host_settings_revision: 7,
   }
-  let (_, opened) = update(dispatch, OpenSession(Remote("d_b"), "s-b"), seeded)
+  let (_, opened) = update(
+    dispatch,
+    OpenSession(Remote("d_b"), listed_record(Remote("d_b"), "s-b")),
+    seeded,
+  )
   assert_true(opened.focused == Remote("d_a"))
   assert_true(opened.active_session != "s-b")
   assert_true(opened.api_provider is Custom)
@@ -716,7 +720,11 @@ test "a row click that raced its device's removal is dropped" {
     Console(RosterLoaded(metas, generation=1)),
     signed,
   )
-  let (_, next) = update(dispatch, OpenSession(Remote("gone"), "s-x"), listed)
+  let (_, next) = update(
+    dispatch,
+    OpenSession(Remote("gone"), listed_record(Remote("gone"), "s-x")),
+    listed,
+  )
   assert_true(next.focused == Remote("d_a"))
   inspect(
     next.conversations

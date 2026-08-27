@@ -234,11 +234,7 @@ fn session_changed_msg(
   channel : @interop.ChannelId,
   payload : @protocol.SessionChangedPayload,
 ) -> DeviceMsg? {
-  guard ArchiveRecordKey::from_protocol(
-      channel,
-      payload.session,
-      payload.workspace,
-    )
+  guard RecordKey::from_protocol(channel, payload.session, payload.workspace)
     is Some(key) else {
     return None
   }
@@ -838,7 +834,10 @@ fn start_openseek(
   session : String,
   workspace~ : @common.Uri,
 ) -> @cmd.Cmd {
-  guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
+  let key : RecordKey = { session, workspace }
+  guard key.workspace_payload(channel) is Some(workspace) else {
+    return @cmd.none
+  }
   let payload = start_payload(
     task,
     selected_model,
@@ -912,12 +911,13 @@ async fn request_agent_start(
 
 ///|
 /// The start payload. Optional fields are trimmed and omitted when blank.
-/// `session` is required: every frontend conversation is minted with a
-/// durable id before it can submit a prompt, and the host rejects a blank id.
-/// It carries no `cwd` (`workspace`, the conversation's attached project,
-/// is the only placement the host takes; everything else it derives from
-/// the session id) and no credentials — the endpoint is
-/// resolved host-side from the settings store.
+/// `session` and `workspace` are the record this run writes: every frontend
+/// conversation is minted with a durable id before it can submit a prompt,
+/// and the store says which of the same-id records that id means. It carries
+/// no `cwd` (`workspace`, the conversation's attached project, is the only
+/// placement the host takes; everything else it derives from the session id)
+/// and no credentials — the endpoint is resolved host-side from the settings
+/// store.
 fn start_payload(
   task : String,
   selected_model : EngineModel,
@@ -925,7 +925,7 @@ fn start_payload(
   max_steps : String,
   session : String,
   submission_id : String,
-  workspace~ : @common.Uri,
+  workspace~ : String,
 ) -> @protocol.StartPayload {
   let session = session.trim().to_owned()
   {
@@ -935,7 +935,7 @@ fn start_payload(
     thinking: selected_model.thinking(reasoning),
     max_steps: parsed_max_steps(max_steps),
     session,
-    workspace: Some(workspace.path),
+    workspace,
   }
 }
 
@@ -1004,13 +1004,14 @@ async fn refresh_sessions_into(
 
 ///|
 /// Load a durable session's transcript so the conversation can be resumed.
-/// `workspace` says which registered store holds it; `None` selects the
-/// default store. The protocol conversion happens only in `load_session_cmd`.
+/// `workspace` is the store holding the record — a record is addressed by
+/// `(store, session)`, never by id alone. The protocol conversion happens
+/// only in `load_session_cmd`.
 fn open_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session_id : String,
-  workspace~ : @common.Uri?,
+  workspace~ : @common.Uri,
   generation~ : Int,
   archived? : Bool = false,
 ) -> @cmd.Cmd {
@@ -1056,7 +1057,7 @@ fn refresh_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session_id : String,
-  workspace~ : @common.Uri?,
+  workspace~ : @common.Uri,
   generation~ : Int,
   archived? : Bool = false,
 ) -> @cmd.Cmd {
@@ -1088,15 +1089,14 @@ fn refresh_session(
 fn load_session_cmd(
   channel : @interop.ChannelId,
   session_id : String,
-  workspace~ : @common.Uri?,
+  workspace~ : @common.Uri,
   archived~ : Bool,
   on_loaded~ : (@transcript.SessionLoadView) -> @cmd.Cmd,
   on_failed~ : (String) -> @cmd.Cmd,
 ) -> @cmd.Cmd {
-  match workspace {
-    Some(resource) if !@resource.belongs_to(resource, channel) =>
-      return @cmd.none
-    _ => ()
+  let key : RecordKey = { session: session_id, workspace }
+  guard key.workspace_payload(channel) is Some(workspace) else {
+    return @cmd.none
   }
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -1104,12 +1104,12 @@ fn load_session_cmd(
         if archived {
           @interop.bridge_request(channel, @commands.session_load_archived, {
             session: session_id,
-            workspace: workspace.map(path => path.path),
+            workspace,
           })
         } else {
           @interop.bridge_request(channel, @commands.session_load, {
             session: session_id,
-            workspace: workspace.map(path => path.path),
+            workspace,
           })
         }
       } catch {
@@ -1248,7 +1248,10 @@ fn compact_openseek(
   max_steps~ : String,
   workspace~ : @common.Uri,
 ) -> @cmd.Cmd {
-  guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
+  let key : RecordKey = { session, workspace }
+  guard key.workspace_payload(channel) is Some(workspace) else {
+    return @cmd.none
+  }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -1260,10 +1263,10 @@ fn compact_openseek(
           @commands.agent_compact,
           {
             session,
+            workspace,
             model: Some(model.wire()),
             thinking: model.thinking(reasoning),
             max_steps: parsed_max_steps(max_steps),
-            workspace: Some(workspace.path),
           },
           lane=@interop.session_command_lane(channel, session),
         ) catch {
@@ -1305,7 +1308,10 @@ fn goal_openseek(
   command : String,
   text : String?,
 ) -> @cmd.Cmd {
-  guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
+  let key : RecordKey = { session, workspace }
+  guard key.workspace_payload(channel) is Some(workspace) else {
+    return @cmd.none
+  }
   let payload = goal_payload(
     session, model, reasoning, max_steps, workspace, text,
   )
@@ -1336,11 +1342,12 @@ fn goal_payload(
   model : EngineModel,
   reasoning : OpenSeekReasoning,
   max_steps : String,
-  workspace : @common.Uri,
+  workspace : String,
   text : String?,
 ) -> @protocol.GoalPayload {
   {
     session,
+    workspace,
     text,
     // Always manual. `auto` arms the engine's autonomous continuation, and
     // the desktop cannot yet see the turns that continuation starts: serve
@@ -1352,7 +1359,6 @@ fn goal_payload(
     model: Some(model.wire()),
     thinking: model.thinking(reasoning),
     max_steps: parsed_max_steps(max_steps),
-    workspace: Some(workspace.path),
   }
 }
 

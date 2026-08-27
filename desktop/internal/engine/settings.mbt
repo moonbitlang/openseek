@@ -740,7 +740,7 @@ async test "run config resolves the endpoint from the stored provider" {
       thinking: None,
       max_steps: None,
       session: "s-settings-default",
-      workspace: Some(workspace),
+      workspace,
     })
     // The official endpoint is the engine default: no URL override.
     assert_true(config.api_url is None)
@@ -758,7 +758,7 @@ async test "run config resolves the endpoint from the stored provider" {
       thinking: None,
       max_steps: None,
       session: "s-settings-custom",
-      workspace: Some(workspace),
+      workspace,
     })
     assert_true(
       custom.api_url is Some("https://proxy.example/chat/completions"),
@@ -786,7 +786,7 @@ async test "a custom provider without a URL refuses to start" {
         thinking: None,
         max_steps: None,
         session: "s-settings-missing-url",
-        workspace: None,
+        workspace: "",
       })
     catch {
       EngineError(message) => message

@@ -102,6 +102,18 @@ priv struct SessionFollower {
 }
 
 ///|
+/// Whether this actor tails a record in `root`. The follower map is keyed by
+/// session id, so a lifecycle operation on one store must ask this before
+/// draining an actor — see `ServeEngine::writes_store` for why the id alone
+/// cannot decide it.
+fn SessionFollower::tails_store(
+  self : SessionFollower,
+  root : @pathx.Absolute,
+) -> Bool {
+  self.root.to_string() == root.to_string()
+}
+
+///|
 /// The highest event sequence in a session document — what a snapshot's
 /// watermark is. 0 for a record with no events.
 fn session_max_sequence(session : @protocol.SessionDocument) -> Int {
@@ -369,9 +381,7 @@ fn EngineManager::kick_follower(self : EngineManager, session : String) -> Unit 
 /// pump's spawn path, so the follower task lives in the same task group as
 /// the engines. The returned identity is present only when this call installed
 /// a new follower; its caller owns startup rollback until the engine reader
-/// and consumer have both been scheduled. A session root can still be absent
-/// only when the durable store cannot be resolved; in that case there is no
-/// record for a follower to scan.
+/// and consumer have both been scheduled.
 async fn[G] ensure_follower(
   sink~ : EventSink,
   group~ : @async.TaskGroup[G],

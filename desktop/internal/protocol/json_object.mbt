@@ -114,11 +114,33 @@ fn JsonObject::optional_bool(
 }
 
 ///|
+/// A whole number, refused rather than truncated when it is not one. The
+/// standard `Int` decoder range-checks and then truncates, so `1.9` would
+/// decode as `1` — a run with a different step limit than the client asked
+/// for, and no way for it to learn that. A malformed number is a client
+/// defect, and saying so is the whole point of decoding a field explicitly.
+fn JsonObject::whole_number(
+  self : JsonObject,
+  name : String,
+  value : Json,
+) -> Int raise @json.JsonDecodeError {
+  let path = self.path.add_key(name)
+  guard value is Number(number, ..) else {
+    raise JsonDecodeError((path, "expected an integer"))
+  }
+  let integer : Int = @json.from_json(value, path~)
+  guard integer.to_double() == number else {
+    raise JsonDecodeError((path, "expected an integer"))
+  }
+  integer
+}
+
+///|
 fn JsonObject::required_int(
   self : JsonObject,
   name : String,
 ) -> Int raise @json.JsonDecodeError {
-  @json.from_json(self.required_json(name), path=self.path.add_key(name))
+  self.whole_number(name, self.required_json(name))
 }
 
 ///|
@@ -127,7 +149,7 @@ fn JsonObject::optional_int(
   name : String,
 ) -> Int? raise @json.JsonDecodeError {
   guard self.optional_json(name) is Some(value) else { return None }
-  Some(@json.from_json(value, path=self.path.add_key(name)))
+  Some(self.whole_number(name, value))
 }
 
 ///|

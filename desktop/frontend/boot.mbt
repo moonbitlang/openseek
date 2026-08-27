@@ -167,7 +167,11 @@ fn SidebarDispatcher::conversation_open(
     return self.unroutable("open", "channel \{id.channel()}")
   }
   match id.source() {
-    "openseek.live" => self.emit(OpenSession(channel, id.conversation()))
+    "openseek.live" =>
+      match row_record_key(channel, id) {
+        Some(key) => self.emit(OpenSession(channel, key))
+        None => self.unroutable("open", "live row with no store")
+      }
     "openseek.archived" => {
       // The row carries the store its record lives in; without one the click
       // would name a session id in no particular store.
@@ -186,6 +190,21 @@ fn SidebarDispatcher::conversation_open(
 }
 
 ///|
+/// The durable record a sidebar row stands for. Its `root` is the store its
+/// group renders, so the row acts on that record even when another store
+/// holds one with the same session id.
+fn row_record_key(
+  channel : @interop.ChannelId,
+  id : @conversation.Id,
+) -> RecordKey? {
+  guard id.root() is Some(root) &&
+    @resource.of_path(channel, root) is Some(workspace) else {
+    return None
+  }
+  Some({ session: id.conversation(), workspace })
+}
+
+///|
 fn SidebarDispatcher::conversation_archive(
   self : SidebarDispatcher,
   id : @conversation.Id,
@@ -194,7 +213,11 @@ fn SidebarDispatcher::conversation_archive(
     return self.unroutable("archive", "channel \{id.channel()}")
   }
   match id.source() {
-    "openseek.live" => self.emit(ArchiveSession(channel, id.conversation()))
+    "openseek.live" =>
+      match row_record_key(channel, id) {
+        Some(key) => self.emit(ArchiveSession(channel, key))
+        None => self.unroutable("archive", "live row with no store")
+      }
     "codex.live" => self.emit(CodexArchiveThread(id.conversation()))
     source => self.unroutable("archive", "\{source}@\{id.channel()}")
   }
@@ -210,7 +233,10 @@ fn SidebarDispatcher::conversation_restore(
   }
   match id.source() {
     "openseek.archived" =>
-      self.emit(UnarchiveSession(channel, id.conversation()))
+      match row_record_key(channel, id) {
+        Some(key) => self.emit(UnarchiveSession(channel, key))
+        None => self.unroutable("restore", "archived row with no store")
+      }
     "codex.archived" => self.emit(CodexUnarchiveThread(id.conversation()))
     source => self.unroutable("restore", "\{source}@\{id.channel()}")
   }

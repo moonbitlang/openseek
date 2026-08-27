@@ -1,12 +1,13 @@
 // Where a conversation's durable record lives. Every store the desktop can
-// reach — the global Scratch root and one `.openseek` per attached workspace —
-// has the engine CLI's own layout: live records under `sessions/<id>`, archived
-// ones under `archived/sessions/<id>`, and records condemned by a committed
-// deletion under `archived/deleting/<id>`.
+// reach — one `.openseek` per attached workspace — has the engine CLI's own
+// layout: live records under `sessions/<id>`, archived ones under
+// `archived/sessions/<id>`, and records condemned by a committed deletion
+// under `archived/deleting/<id>`.
 //
 // Nothing here moves a record or decides policy; it answers where things are.
-// A session id alone says nothing about which store owns it, so every lookup
-// searches the stores rather than trusting a request hint.
+// A session id names a record only inside one store, so a request that
+// addresses a record names its store and this module selects it; the searches
+// that remain ask about the population of stores, not about one record.
 
 ///|
 /// Debug is what the host boundary logs: proton renders a failed handler's
@@ -48,16 +49,46 @@ pub fn deleting_root(root : @pathx.Absolute) -> @pathx.Absolute {
 }
 
 ///|
-/// Every store that can own a session id — one per attached workspace.
-/// Correlation and stale-client defenses must search all of them: request
-/// hints are optional and cannot be trusted to identify where an existing
-/// record lives.
+/// Every store that can own a session id — one per attached workspace. Ops
+/// that address one record name its store and select it exactly; this is for
+/// the whole-host sweeps and for the archived-correlation defense, whose
+/// request carries no store at all.
 pub async fn known_roots() -> Array[@pathx.Absolute] {
   let roots : Array[@pathx.Absolute] = []
   for path in @workspaces.registered() {
     roots.push(@workspaces.store_root(path))
   }
   roots
+}
+
+///|
+/// Where a record for `session` already exists, and which half of that store
+/// holds it. A session id names a record only inside one store, so no single
+/// store's answer settles whether an id is new — and an archived record counts,
+/// because it is one unarchive away from standing beside a live one.
+///
+/// This is the population question, asked identically by every rule that has to
+/// decide whether an id is free: `agent.start` before it opens a record, and
+/// `worktree.create` before it binds a checkout to one.
+pub struct RecordHolder {
+  store : @pathx.Absolute
+  archived : Bool
+}
+
+///|
+pub async fn holders_of(session : String) -> Array[RecordHolder] {
+  let holders : Array[RecordHolder] = []
+  guard safe_session_id(session) else { return holders }
+  for root in known_roots() {
+    if @fsx.is_dir(root.join("sessions").join(session).to_path()) {
+      holders.push({ store: root, archived: false })
+    } else if @fsx.is_dir(
+        archived_root(root).join("sessions").join(session).to_path(),
+      ) {
+      holders.push({ store: root, archived: true })
+    }
+  }
+  holders
 }
 
 ///|
@@ -100,68 +131,60 @@ pub async fn root_of(session : String) -> @pathx.Absolute? {
 }
 
 ///|
-/// The exact archived store selected by a host-produced sidebar row. Every
-/// durable record lives in a registered workspace's store, and paths are
-/// accepted only while that workspace is registered. Naming the store this
-/// exactly is what prevents a same-ID record in another one from being chosen
-/// by search order.
-pub struct ArchivedStore {
+/// The exact durable store a client's request names: a registered workspace's
+/// in-project store, accepted only while that workspace is registered. Every
+/// op that addresses an existing record goes through this, so a same-id record
+/// in another store can never be chosen by search order.
+pub struct StoreSelection {
   root : @pathx.Absolute
   workspace : @pathx.Absolute
   workspace_token : String
 }
 
 ///|
-pub async fn ArchivedStore::for_workspace(workspace : String) -> ArchivedStore {
+pub async fn StoreSelection::from_workspace(
+  workspace : String,
+) -> StoreSelection {
   guard @pathx.Absolute::from_uri_path(workspace) is Some(path) &&
     @workspaces.registered_dir(path) is Some(registered) else {
     raise StoreError("\{workspace} is not a registered workspace")
   }
+  StoreSelection::of_workspace(registered)
+}
+
+///|
+/// The store of a workspace the caller has already put through the registry.
+/// `from_workspace` is the entry point that validates a client's spelling;
+/// this one states the same value for a directory the host itself resolved.
+pub fn StoreSelection::of_workspace(
+  workspace : @pathx.Absolute,
+) -> StoreSelection raise StoreError {
   // Resource URIs use their authority for the device, so a UNC path has no
   // reversible encoding and is rejected explicitly instead of being published
   // under a new host.
-  guard registered.to_uri_path() is Some(workspace_token) else {
+  guard workspace.to_uri_path() is Some(workspace_token) else {
     raise StoreError("UNC paths are not supported by frontend resources")
   }
-  {
-    root: @workspaces.store_root(registered),
-    workspace: registered,
-    workspace_token,
-  }
+  { root: @workspaces.store_root(workspace), workspace, workspace_token }
 }
 
 ///|
-/// The store root whose archived `sessions/<id>` holds this conversation's
-/// durable record.
-pub async fn archived_root_of(session : String) -> @pathx.Absolute? {
-  guard !session.is_empty() else { return None }
-  for root in known_roots() {
-    if @fsx.is_dir(archived_root(root).join("sessions").join(session).to_path()) {
-      return Some(root)
-    }
-  }
-  None
-}
-
-///|
-/// The store root whose live `sessions/<id>` holds this conversation's
-/// durable record, searched like `archived_root_of`. Archive must find the
-/// record where it actually lives: a stale client can name a conversation long
-/// after its workspace detached, and the session id alone says nothing about
-/// which store owns it.
-pub async fn live_root_of(session : String) -> @pathx.Absolute? {
-  guard !session.is_empty() else { return None }
-  for root in known_roots() {
-    if @fsx.is_dir(root.join("sessions").join(session).to_path()) {
-      return Some(root)
-    }
-  }
-  None
-}
-
-///|
-pub async fn ensure_not_archived(session : String) -> Unit {
-  if archived_root_of(session) is Some(_) {
+/// Refuse to write a record its own store has archived. An archived record is
+/// a read-only snapshot, and appending to one would resurrect a conversation
+/// the user put away without it reappearing in any list.
+///
+/// The check is scoped to the store the request named, because an archived
+/// record in another store is a different conversation: searching every store
+/// would make a live conversation impossible to continue — its prompts,
+/// compactions, and goals all refused as "archived" — until an unrelated twin
+/// was restored or deleted.
+pub async fn ensure_not_archived(
+  session : String,
+  store : @pathx.Absolute?,
+) -> Unit {
+  guard !session.is_empty() && store is Some(store) else { return }
+  let archived = archived_root(store).join("sessions").join(session)
+  if @fsx.is_dir(archived.to_path()) {
     raise StoreError("session is archived; unarchive it first")
   }
 }

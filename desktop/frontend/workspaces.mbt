@@ -454,7 +454,7 @@ test "opening a stored session joins its project and loaded worktree" {
   })
   let (_, opening) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-w"),
+    OpenSession(@interop.ChannelId::Local, { session: "desktop-w", workspace }),
     model,
   )
   assert_eq(opening.dev().active_project, Some(workspace))
@@ -492,7 +492,7 @@ test "opening a stored session joins its project and loaded worktree" {
   })
   let (_, worktree_opening) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-w"),
+    OpenSession(@interop.ChannelId::Local, { session: "desktop-w", workspace }),
     bound,
   )
   guard worktree_opening.find_conversation(Local, "desktop-w") is Some(pending) else {

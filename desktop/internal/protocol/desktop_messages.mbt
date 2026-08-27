@@ -7,6 +7,14 @@
 // request channel, so scheme and authority never appear in these strings.
 // UNC paths are outside this contract. Workspace-relative fields remain
 // slash-separated relative strings.
+//
+// Session ids are unique only within one durable store, so every payload that
+// addresses a record names the store beside the id: the host-reported project
+// resource path, the same encoding `session.changed` and the sidebar's
+// listings report. The host still validates project paths against its registry rather
+// than trusting a client to name an arbitrary directory, and it selects that
+// store exactly instead of searching, so a same-id record in another store can
+// never be read, written, or moved by mistake.
 
 ///|
 /// OpenSeek's closed reasoning setting. Keeping the wire values typed in the
@@ -53,11 +61,11 @@ pub(all) struct StartPayload {
   // Every desktop run belongs to a durable conversation. The engine rejects
   // a blank id before it acquires that conversation's record lease.
   session : String
-  // The registered workspace directory this conversation works in. A
-  // session bound to one of that workspace's worktrees (`worktree.create`
-  // binds at creation) runs in that checkout — the start itself never names
-  // or mutates worktrees.
-  workspace : String?
+  // The store this run's record lives in: the registered workspace directory
+  // this conversation works in. A session bound to one of that workspace's
+  // worktrees (`worktree.create` binds at creation) runs in that checkout —
+  // the start itself never names or mutates worktrees.
+  workspace : String
 } derive(Debug, Eq)
 
 ///|
@@ -97,21 +105,24 @@ pub(all) struct RunsPayload {
 
 ///|
 pub(all) struct CompactPayload {
-  // Compaction addresses a durable conversation rather than a live run.
+  // Compaction addresses a durable conversation rather than a live run: the
+  // record it rewrites is `(workspace, session)`.
   session : String
+  workspace : String
   // A resumed conversation may need a new engine process with these settings.
   model : String?
   thinking : OpenSeekThinking?
   max_steps : Int?
-  workspace : String?
 } derive(Debug, Eq)
 
 ///|
 pub(all) struct GoalPayload {
   // Like compaction, a standing goal addresses a durable conversation rather
   // than a live run: the serve engine accepts one in any phase (idle append,
-  // mid-turn steer, queued behind a compaction).
+  // mid-turn steer, queued behind a compaction). Like compaction, the goal is
+  // durable state of the record `(workspace, session)`.
   session : String
+  workspace : String
   // The new standing goal; absent clears it.
   text : String?
   // Arms the engine's autonomous continuation for this goal. Optional, and
@@ -122,15 +133,41 @@ pub(all) struct GoalPayload {
   model : String?
   thinking : OpenSeekThinking?
   max_steps : Int?
-  workspace : String?
+} derive(Debug, Eq)
+
+// Session ids are unique only within one durable store, so every op that
+// addresses a record names the store beside the id: the host-reported project
+// resource path, the same spelling `session.changed` and the sidebar's
+// listings report. The host validates it against its registry rather than
+// trusting a client to name an arbitrary directory, and selects that store
+// exactly instead of searching, so a same-id record in another store can
+// never be read, written, or moved by mistake.
+
+///|
+/// `session.load` / `session.load_archived` read one durable record in one
+/// exact store.
+pub(all) struct LoadSessionPayload {
+  session : String
+  workspace : String
 } derive(Debug, Eq)
 
 ///|
-pub(all) struct LoadSessionPayload {
-  session : String
-  // The workspace holding the session, when the client already knows it.
-  workspace : String?
-} derive(Debug, Eq, FromJson, ToJson)
+/// The store is required: a load that does not name one leaves the host
+/// guessing which record it meant, and a same-id record in another project is
+/// a different conversation. Unknown fields are ignored, which is what lets a
+/// host accept and drop a client-authored `session_root`.
+pub impl FromJson for LoadSessionPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "session load payload")
+  {
+    session: object.required_string("session"),
+    workspace: object.required_string("workspace"),
+  }
+}
+
+///|
+pub impl ToJson for LoadSessionPayload with fn to_json(self) {
+  { "session": self.session, "workspace": self.workspace }
+}
 
 ///|
 /// Export one exact conversation from one registered workspace. The native
@@ -168,20 +205,43 @@ pub impl ToJson for SessionExportPayload with fn to_json(self) {
 }
 
 ///|
-/// `session.archive` / `session.unarchive` address a conversation by its
-/// durable session id. Archiving takes the conversation's worktree with
-/// it; `force` (archive only) discards that checkout's uncommitted
-/// changes — the client sends it after its confirmation dialog.
+/// `session.archive` / `session.unarchive` move one durable record between
+/// one exact store and its archived twin. Archiving takes the conversation's
+/// worktree with it; `force` (archive only) discards that checkout's
+/// uncommitted changes — the client sends it after its confirmation dialog.
 pub(all) struct SessionPayload {
   session : String
+  workspace : String
   force : Bool?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+/// `force` is the only optional field, and absence means the client has not
+/// confirmed a discard yet — so `null` and a missing key read alike, while
+/// any other type is a client defect rather than a silent `false`.
+pub impl FromJson for SessionPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "session move payload")
+  {
+    session: object.required_string("session"),
+    workspace: object.required_string("workspace"),
+    force: object.optional_bool("force"),
+  }
+}
+
+///|
+pub impl ToJson for SessionPayload with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "session": Json::string(self.session),
+    "workspace": Json::string(self.workspace),
+  }
+  if self.force is Some(force) {
+    fields["force"] = Json::boolean(force)
+  }
+  Json::object(fields)
+}
 
 ///|
 /// Permanent deletion addresses one archived record in one exact store.
-/// `workspace` is the host-reported project resource path; the host validates
-/// it against its registry instead of trusting the client to choose an
-/// arbitrary directory.
 pub(all) struct ArchivedSessionPayload {
   session : String
   workspace : String
