@@ -440,7 +440,6 @@ pub(all) struct State {
   // Historical content is not a filesystem document and never joins the
   // watcher/LSP projections. Keys combine commit and current path.
   history_docs : Map[String, HistoryDiffDoc]
-  history_request_id : String
   // Exact changed rows the user has marked reviewed in the current checkout.
   // Watcher events and run boundaries invalidate affected progress; a final
   // Git refresh also drops rows whose status or rename identity changed.
@@ -551,7 +550,6 @@ pub fn State::empty() -> State {
     changes_collapsed: false,
     git_graph_collapsed: false,
     history_docs: Map([]),
-    history_request_id: @uuid.mint(),
     reviewed_changes: [],
     changes_request_id: @uuid.mint(),
     checkout_id: @uuid.mint(),

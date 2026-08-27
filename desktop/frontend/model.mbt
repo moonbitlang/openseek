@@ -1044,7 +1044,7 @@ priv enum TranscriptSync {
     // snapshot cannot become the final view of that boundary.
     reload_after_current~ : Bool
   )
-  ReloadFailed(request_id~ : String, buffered~ : Array[BufferedCommit])
+  ReloadFailed(buffered~ : Array[BufferedCommit])
 } derive(Eq)
 
 ///|
@@ -3446,7 +3446,7 @@ fn Conversation::durable_frontier(self : Conversation) -> Int {
   // carries a failed read's buffer forward, so a marker held there is just as
   // much already-in-hand as one held by a reload still running.
   let buffered = match self.sync {
-    Reloading(buffered~, ..) | ReloadFailed(buffered~, ..) => buffered
+    Reloading(buffered~, ..) | ReloadFailed(buffered~) => buffered
     Synced => []
   }
   for commit in buffered {
@@ -3868,7 +3868,7 @@ fn Model::begin_transcript_reload(
         Some(request_id),
       )
     }
-    ReloadFailed(buffered~, ..) => {
+    ReloadFailed(buffered~) => {
       let request_id = @uuid.mint()
       (
         self.replace_conversation({
@@ -3933,10 +3933,10 @@ fn Conversation::buffer_commit(
         sync: Reloading(request_id~, attempt~, buffered~, reload_after_current~),
       }
     }
-    ReloadFailed(request_id~, buffered~) => {
+    ReloadFailed(buffered~) => {
       let buffered = buffered.copy()
       buffered.push(commit)
-      { ..self, sync: ReloadFailed(request_id~, buffered~) }
+      { ..self, sync: ReloadFailed(buffered~) }
     }
     Synced => self
   }
@@ -3955,7 +3955,7 @@ fn Conversation::has_seen_durable_sequence(
     return true
   }
   match self.sync {
-    Reloading(buffered~, ..) | ReloadFailed(buffered~, ..) =>
+    Reloading(buffered~, ..) | ReloadFailed(buffered~) =>
       buffered.iter().any(commit => commit.sequence == sequence)
     Synced => false
   }
@@ -3974,8 +3974,8 @@ fn Conversation::adopt_snapshot(
   goal~ : @transcript.GoalStanding?,
   goal_markers~ : Array[(Int, @transcript.GoalMarker)],
 ) -> (Conversation, Bool) {
-  let (request_id, pending) = match self.sync {
-    Reloading(request_id~, buffered~, ..) => (request_id, buffered.copy())
+  let pending = match self.sync {
+    Reloading(buffered~, ..) => buffered.copy()
     _ => return (self, false)
   }
   // Sequence order, whatever the arrival order was.
@@ -4026,7 +4026,7 @@ fn Conversation::adopt_snapshot(
   if leftover.is_empty() {
     (conv, false)
   } else {
-    ({ ..conv, sync: ReloadFailed(request_id~, buffered=leftover) }, true)
+    ({ ..conv, sync: ReloadFailed(buffered=leftover) }, true)
   }
 }
 

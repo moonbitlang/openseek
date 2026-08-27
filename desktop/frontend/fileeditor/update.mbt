@@ -1913,7 +1913,6 @@ pub fn sync(
           state.git_graph_request_id
         },
         git_commit_files_request_id: state.git_commit_files_request_id,
-        history_request_id: state.history_request_id,
         // Like filesystem request epochs, watcher identities must outlive the
         // per-conversation cache or an A→B→A cycle could reuse one.
         watch_id: reroot_watch_id,
@@ -1977,7 +1976,6 @@ pub fn sync(
       git_graph_selected: None,
       git_commit_files: GitCommitFilesIdle,
       history_docs: Map([]),
-      history_request_id: @uuid.mint(),
       placement: state.placement.reconcile(ctx.placement),
       checkout_id,
     }

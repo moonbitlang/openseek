@@ -575,10 +575,7 @@ fn retry_session_snapshot(
       next,
     )
   } else {
-    let failed = {
-      ..conv,
-      sync: ReloadFailed(request_id~, buffered=buffered.copy()),
-    }
+    let failed = { ..conv, sync: ReloadFailed(buffered=buffered.copy()) }
     let next = model.replace_conversation(failed)
     let scroll = @cmd.none
     let owner : @interop.ConversationKey = { channel, session, }
@@ -6267,16 +6264,14 @@ fn update_device_msg(
       }
     }
     BranchLoaded(branch~, diffstat~, request_id~, base_hint~) => {
+      // Only the exact probe in flight may answer: one that is still counting
+      // untracked files while a later one has already answered would
+      // otherwise put its older branch and totals back on screen, where
+      // nothing would correct them until the next refresh.
       guard model.conversation_by_branch_request(request_id) is Some(conv) else {
         return (@cmd.none, model)
       }
-      // A probe that is still counting untracked files while a later one has
-      // already answered would otherwise put its older branch and totals back
-      // on screen, where nothing would correct them until the next refresh.
-      guard Some(request_id) == conv.branch_request_id else {
-        return (@cmd.none, model)
-      }
-      let conv = { ..conv, branch, diffstat, diffstat_hint: base_hint, }
+      let conv = { ..conv, branch, diffstat, diffstat_hint: base_hint }
       // The pull-request lookup rides on the branch answer rather than on the
       // four places that ask for it: whatever refreshes the branch — a run
       // starting, a session opening, a run finishing — is exactly when the
@@ -6312,13 +6307,10 @@ fn update_device_msg(
       pull_request~,
       compare_url~
     ) => {
-      guard model.conversation_by_pull_request(request_id) is Some(conv) else {
-        return (@cmd.none, model)
-      }
       // Matched by which request this answers, not by branch: a checkout that
       // moves X → Y → X leaves two lookups for X in flight, and if the newer
       // settles first, matching by name would let the older overwrite it.
-      guard Some(request_id) == conv.pull_request_id else {
+      guard model.conversation_by_pull_request(request_id) is Some(conv) else {
         return (@cmd.none, model)
       }
       // Read before the answer overwrites it: whether a refresh landed while
@@ -7169,10 +7161,7 @@ fn update_device_msg(
         // successor and reopening the editor would claim a failure that is
         // not what this conversation now stands at. The toast still reports
         // it; nothing here is silent.
-        let restored = if !(conv.goal_pending is Some(pending) &&
-          pending.id == command) {
-          conv
-        } else if draft is Some(draft) && conv.goal_edit is None {
+        let restored = if draft is Some(draft) && conv.goal_edit is None {
           // Hand the goal text back, the way a rejected prompt restores its
           // draft: nothing durable will ever carry it, so losing it here
           // loses it for good. Only when this conversation has not claimed
@@ -7189,9 +7178,7 @@ fn update_device_msg(
         model.notify_error(dispatch, message)
       }
     GoalUndelivered(command~, draft~, message~) =>
-      if model.conversation_by_goal_command(command) is Some(conv) &&
-        conv.goal_pending is Some(pending) &&
-        pending.id == command {
+      if model.conversation_by_goal_command(command) is Some(conv) {
         // Only while this send is still the one in flight. It retires
         // nothing, but "the fate of this text is unknown" is still a claim
         // about the world, and it stops being true the moment the record
@@ -17304,7 +17291,7 @@ test "background retries preserve buffered commits until a later success" {
     fail("expected the third background attempt")
   }
   let (_, failed) = update_dev(dispatch, failure, retrying3)
-  guard failed.active().sync is ReloadFailed(buffered=failed_buffer, ..) else {
+  guard failed.active().sync is ReloadFailed(buffered=failed_buffer) else {
     fail("expected bounded retry exhaustion")
   }
   inspect(failed_buffer.length(), content="1")
@@ -17354,7 +17341,7 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
     ..test_conversation(),
     messages: [{ kind: User, content: "kept", ts: None, sequence: None, }],
     watermark: 1,
-    sync: ReloadFailed(request_id=TestTranscriptRequestId, buffered=[
+    sync: ReloadFailed(buffered=[
       {
         sequence: 2,
         ts: None,

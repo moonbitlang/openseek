@@ -373,7 +373,6 @@ pub(all) struct State {
   changes_collapsed : Bool
   git_graph_collapsed : Bool
   history_docs : Map[String, HistoryDiffDoc]
-  history_request_id : String
   reviewed_changes : Array[ChangedFile]
   changes_request_id : String
   checkout_id : String

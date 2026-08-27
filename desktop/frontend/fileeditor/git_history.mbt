@@ -412,7 +412,7 @@ pub fn open_history_diff(
       workspace=ctx.workspace(),
     ),
   )
-  (@cmd.batch(cmds), { ..state, history_docs, history_request_id: request_id })
+  (@cmd.batch(cmds), { ..state, history_docs, })
 }
 
 ///|
