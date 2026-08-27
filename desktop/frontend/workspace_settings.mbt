@@ -13,7 +13,7 @@ const DefaultWorkspaceSubmoduleCheckoutTimeoutSeconds : Int = 10
 
 ///|
 /// One project's settings mirror, keyed like `ProjectWorktrees`. Its current
-/// request UUID lives separately on `DeviceState`.
+/// request UUID lives separately in `DeviceState::workspace_requests`.
 priv struct ProjectSettings {
   project : @common.Uri
   worktree_mode : Bool
@@ -181,63 +181,6 @@ fn DeviceState::workspace_settings_row(
 }
 
 ///|
-/// Start one workspace's settings request without disturbing a sibling
-/// workspace's in-flight request.
-fn DeviceState::begin_workspace_settings_request(
-  self : DeviceState,
-  workspace : @common.Uri,
-) -> (String, DeviceState) {
-  let request_id = @uuid.mint()
-  (
-    request_id,
-    {
-      ..self,
-      workspace_settings_request_ids: self.workspace_settings_request_ids.put(
-        workspace, request_id,
-      ),
-    },
-  )
-}
-
-///|
-/// Replace the exact settings request UUID accepted for one workspace.
-fn DeviceState::with_workspace_settings_request_id(
-  self : DeviceState,
-  workspace : @common.Uri,
-  request_id : String,
-) -> DeviceState {
-  {
-    ..self,
-    workspace_settings_request_ids: self.workspace_settings_request_ids.put(
-      workspace, request_id,
-    ),
-  }
-}
-
-///|
-/// Retire the accepted settings request for one workspace. No request is in
-/// flight after this point, so absence is the complete stale-reply fence.
-fn DeviceState::retire_workspace_settings_request(
-  self : DeviceState,
-  workspace : @common.Uri,
-) -> DeviceState {
-  {
-    ..self,
-    workspace_settings_request_ids: self.workspace_settings_request_ids.without(
-      workspace,
-    ),
-  }
-}
-
-///|
-fn DeviceState::workspace_settings_request_id(
-  self : DeviceState,
-  workspace : @common.Uri,
-) -> String? {
-  self.workspace_settings_request_ids.get(workspace)
-}
-
-///|
 /// The launch-mode default copied into a new conversation in `project`. A
 /// workspace whose settings have not loaded stays on the safe Local default.
 fn DeviceState::default_worktree_mode(
@@ -356,12 +299,10 @@ test "a settings reply lands once and an older token cannot roll it back" {
   let sibling = @interop.ChannelId::Local.test_resource("/other")
   let sibling_request_id = "workspace-settings-sibling"
   let attached = test_model().with_dev(dev => {
-    ..dev
-    .with_workspace_settings_request_id(
-      workspace,
-      TestWorkspaceSettingsRequestId,
-    )
-    .with_workspace_settings_request_id(sibling, sibling_request_id),
+    ..dev,
+    workspace_requests: dev.workspace_requests
+    .put(SettingsFile, workspace, TestWorkspaceSettingsRequestId)
+    .put(SettingsFile, sibling, sibling_request_id),
     projects: [workspace, sibling],
   })
   let (_, loaded) = update_dev(
@@ -376,9 +317,11 @@ test "a settings reply lands once and an older token cannot roll it back" {
     attached,
   )
   assert_true(loaded.default_worktree_mode(Local, workspace))
-  assert_true(loaded.dev().workspace_settings_request_id(workspace) is None)
+  assert_true(
+    loaded.dev().workspace_request_id(SettingsFile, workspace) is None,
+  )
   assert_eq(
-    loaded.dev().workspace_settings_request_id(sibling),
+    loaded.dev().workspace_request_id(SettingsFile, sibling),
     Some(sibling_request_id),
   )
   // An older reply for the same workspace is stale; one for a sibling
@@ -435,7 +378,9 @@ test "a settings commit broadcast supersedes list replies" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let attached = test_model().with_dev(dev => {
-    ..dev.with_workspace_settings_request_id(
+    ..dev,
+    workspace_requests: dev.workspace_requests.put(
+      SettingsFile,
       workspace,
       TestWorkspaceSettingsRequestId,
     ),
@@ -452,7 +397,9 @@ test "a settings commit broadcast supersedes list replies" {
     attached,
   )
   assert_true(changed.default_worktree_mode(Local, workspace))
-  assert_true(changed.dev().workspace_settings_request_id(workspace) is None)
+  assert_true(
+    changed.dev().workspace_request_id(SettingsFile, workspace) is None,
+  )
   // A list reply issued before the commit answers on an older token.
   let (_, stale) = update_dev(
     dispatch,
@@ -472,10 +419,12 @@ test "a settings commit broadcast supersedes list replies" {
 test "the settings page select applies optimistically" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
-  // The state the adopt fan-out leaves behind: the mint spent one token on
-  // the round and this workspace's reply landed under it.
+  // The state the adopt fan-out leaves behind: this workspace's read is in
+  // flight and its reply lands under that UUID.
   let fetched = test_model().with_dev(dev => {
-    ..dev.with_workspace_settings_request_id(
+    ..dev,
+    workspace_requests: dev.workspace_requests.put(
+      SettingsFile,
       workspace,
       TestWorkspaceSettingsRequestId,
     ),
@@ -500,7 +449,9 @@ test "the settings page select applies optimistically" {
   assert_true(chosen.default_worktree_mode(Local, workspace))
   // The optimistic write retired the previous read, so its reply cannot flip
   // the select back under the user.
-  assert_true(chosen.dev().workspace_settings_request_id(workspace) is None)
+  assert_true(
+    chosen.dev().workspace_request_id(SettingsFile, workspace) is None,
+  )
   let (_, raced) = update_dev(
     dispatch,
     WorkspaceSettingsLoaded(
@@ -526,7 +477,9 @@ test "the workspace submodule select preserves its launch mode" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let attached = test_model().with_dev(dev => {
-    ..dev.with_workspace_settings_request_id(
+    ..dev,
+    workspace_requests: dev.workspace_requests.put(
+      SettingsFile,
       workspace,
       TestWorkspaceSettingsRequestId,
     ),
@@ -571,7 +524,9 @@ test "the workspace submodule timeout select preserves neighboring settings" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let attached = test_model().with_dev(dev => {
-    ..dev.with_workspace_settings_request_id(
+    ..dev,
+    workspace_requests: dev.workspace_requests.put(
+      SettingsFile,
       workspace,
       TestWorkspaceSettingsRequestId,
     ),
@@ -615,7 +570,9 @@ test "a failed save pops a toast and re-reads under a fresh token" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let attached = test_model().with_dev(dev => {
-    ..dev.with_workspace_settings_request_id(
+    ..dev,
+    workspace_requests: dev.workspace_requests.put(
+      SettingsFile,
       workspace,
       TestWorkspaceSettingsRequestId,
     ),
@@ -626,7 +583,9 @@ test "a failed save pops a toast and re-reads under a fresh token" {
     WorkspaceDefaultModeChosen(Local, workspace, "worktree"),
     attached,
   )
-  assert_true(chosen.dev().workspace_settings_request_id(workspace) is None)
+  assert_true(
+    chosen.dev().workspace_request_id(SettingsFile, workspace) is None,
+  )
   let (_, failed) = update_dev(
     dispatch,
     WorkspaceSettingsSaveFailed(workspace~, message="disk full"),
@@ -636,7 +595,7 @@ test "a failed save pops a toast and re-reads under a fresh token" {
   assert_true(failed.notifications[0].message.contains("disk full"))
   let refetch_id = failed
     .dev()
-    .workspace_settings_request_id(workspace)
+    .workspace_request_id(SettingsFile, workspace)
     .unwrap()
   assert_true(refetch_id != TestWorkspaceSettingsRequestId)
   // The refetch it issued may answer on the fresh token and correct the
@@ -660,7 +619,9 @@ test "a reconnect clears the settings mirror until fresh reads land" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let attached = test_model().with_dev(dev => {
-    ..dev.with_workspace_settings_request_id(
+    ..dev,
+    workspace_requests: dev.workspace_requests.put(
+      SettingsFile,
       workspace,
       TestWorkspaceSettingsRequestId,
     ),
@@ -692,7 +653,9 @@ test "a straggler reply for a detached workspace is rejected" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let attached = test_model().with_dev(dev => {
-    ..dev.with_workspace_settings_request_id(
+    ..dev,
+    workspace_requests: dev.workspace_requests.put(
+      SettingsFile,
       workspace,
       TestWorkspaceSettingsRequestId,
     ),

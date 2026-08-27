@@ -530,54 +530,6 @@ fn DeviceState::with_worktrees(
 }
 
 ///|
-/// Start one workspace's list request without disturbing a sibling
-/// workspace's in-flight request.
-fn DeviceState::begin_worktree_request(
-  self : DeviceState,
-  workspace : @common.Uri,
-) -> (String, DeviceState) {
-  let request_id = @uuid.mint()
-  (
-    request_id,
-    {
-      ..self,
-      worktree_request_ids: self.worktree_request_ids.put(workspace, request_id),
-    },
-  )
-}
-
-///|
-/// Replace the exact request UUID accepted for one workspace.
-fn DeviceState::with_worktree_request_id(
-  self : DeviceState,
-  workspace : @common.Uri,
-  request_id : String,
-) -> DeviceState {
-  {
-    ..self,
-    worktree_request_ids: self.worktree_request_ids.put(workspace, request_id),
-  }
-}
-
-///|
-/// Retire the accepted request for one workspace. A delayed reply carrying
-/// its old UUID then fails the same exact-id check without minting a fake id.
-fn DeviceState::retire_worktree_request(
-  self : DeviceState,
-  workspace : @common.Uri,
-) -> DeviceState {
-  { ..self, worktree_request_ids: self.worktree_request_ids.without(workspace) }
-}
-
-///|
-fn DeviceState::worktree_request_id(
-  self : DeviceState,
-  workspace : @common.Uri,
-) -> String? {
-  self.worktree_request_ids.get(workspace)
-}
-
-///|
 /// Whether the next submit should run the create-then-start chain: the
 /// composer chose worktree mode, nothing is bound yet, and the conversation
 /// has no durable history. Durable emptiness is the whole test, so a rejected
@@ -1144,7 +1096,12 @@ test "a restored workspace conversation waits for placement before using root" {
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let unresolved = test_model()
     .with_dev(dev => {
-      ..dev.with_worktree_request_id(workspace, TestWorktreeRequestId),
+      ..dev,
+      workspace_requests: dev.workspace_requests.put(
+        WorktreeList,
+        workspace,
+        TestWorktreeRequestId,
+      ),
       projects: [workspace],
     })
     .replace_conversation({
@@ -1159,9 +1116,15 @@ test "a restored workspace conversation waits for placement before using root" {
   // Placement is a separate typed fence; preserving the real identity lets
   // open review state survive while every host-backed action remains parked.
   assert_eq(file_ctx(unresolved).owner.session, "desktop-test")
-  let request_id = unresolved.dev().worktree_request_id(workspace).unwrap()
+  let request_id = unresolved
+    .dev()
+    .workspace_request_id(WorktreeList, workspace)
+    .unwrap()
   let (_, retrying) = update(dispatch, RetryWorktreePlacement, unresolved)
-  assert_true(retrying.dev().worktree_request_id(workspace) != Some(request_id))
+  assert_true(
+    retrying.dev().workspace_request_id(WorktreeList, workspace) !=
+    Some(request_id),
+  )
   assert_true(retrying.conversation_placement(retrying.active()) is None)
   let (_, loaded) = update_dev(
     dispatch,
@@ -1200,7 +1163,12 @@ test "worktrees loaded respects the request UUID fence" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let model = test_model().with_dev(dev => {
-    ..dev.with_worktree_request_id(workspace, TestWorktreeRequestId),
+    ..dev,
+    workspace_requests: dev.workspace_requests.put(
+      WorktreeList,
+      workspace,
+      TestWorktreeRequestId,
+    ),
     projects: [workspace],
   })
   let (_, applied) = update_dev(
@@ -1215,7 +1183,9 @@ test "worktrees loaded respects the request UUID fence" {
   assert_true(
     worktree_name_for(applied.dev(), workspace, "desktop-wt") is Some("wt"),
   )
-  assert_true(applied.dev().worktree_request_id(workspace) is None)
+  assert_true(
+    applied.dev().workspace_request_id(WorktreeList, workspace) is None,
+  )
   let (_, stale) = update_dev(
     dispatch,
     WorktreesLoaded([], workspace~, request_id=TestWorktreeRequestId),
@@ -1232,7 +1202,12 @@ test "a worktree list failure retires its request and retries explicitly" {
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let unresolved = test_model()
     .with_dev(dev => {
-      ..dev.with_worktree_request_id(workspace, TestWorktreeRequestId),
+      ..dev,
+      workspace_requests: dev.workspace_requests.put(
+        WorktreeList,
+        workspace,
+        TestWorktreeRequestId,
+      ),
       projects: [workspace],
     })
     .replace_conversation({
@@ -1251,7 +1226,9 @@ test "a worktree list failure retires its request and retries explicitly" {
   assert_true(failed.conversation_placement(failed.active()) is None)
   assert_eq(failed.notifications.length(), 1)
   assert_true(failed.notifications[0].message.contains("offline"))
-  assert_true(failed.dev().worktree_request_id(workspace) is None)
+  assert_true(
+    failed.dev().workspace_request_id(WorktreeList, workspace) is None,
+  )
   let (_, stale_loaded) = update_dev(
     dispatch,
     WorktreesLoaded([], workspace~, request_id=TestWorktreeRequestId),
@@ -1261,7 +1238,10 @@ test "a worktree list failure retires its request and retries explicitly" {
     stale_loaded.conversation_placement(stale_loaded.active()) is None,
   )
   let (_, retrying) = update(dispatch, RetryWorktreePlacement, failed)
-  let retry_request_id = retrying.dev().worktree_request_id(workspace).unwrap()
+  let retry_request_id = retrying
+    .dev()
+    .workspace_request_id(WorktreeList, workspace)
+    .unwrap()
   let (_, loaded) = update_dev(
     dispatch,
     WorktreesLoaded([], workspace~, request_id=retry_request_id),
@@ -1292,9 +1272,10 @@ test "a broadcast for one workspace never fences a sibling's reply" {
   // broadcast lands between them. /b's still-current reply must apply.
   let b_request_id = @uuid.mint()
   let model = test_model().with_dev(dev => {
-    ..dev
-    .with_worktree_request_id(a, TestWorktreeRequestId)
-    .with_worktree_request_id(b, b_request_id),
+    ..dev,
+    workspace_requests: dev.workspace_requests
+    .put(WorktreeList, a, TestWorktreeRequestId)
+    .put(WorktreeList, b, b_request_id),
     projects: [a, b],
   })
   let (_, changed) = update_dev(
@@ -1352,7 +1333,12 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
       branch: Some("openseek/wt"),
     })
     .with_dev(dev => {
-      ..dev.with_worktree_request_id(workspace, TestWorktreeRequestId),
+      ..dev,
+      workspace_requests: dev.workspace_requests.put(
+        WorktreeList,
+        workspace,
+        TestWorktreeRequestId,
+      ),
       projects: [workspace],
       worktrees: [{ project: workspace, rows: test_worktree_rows() }],
     })
@@ -1366,7 +1352,9 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
   let (_, repeated) = update_dev(dispatch, changed_msg, model)
   let (_, changed) = update_dev(dispatch, changed_msg, model)
   assert_true(changed.quick_open.is_open() == repeated.quick_open.is_open())
-  assert_true(changed.dev().worktree_request_id(workspace) is None)
+  assert_true(
+    changed.dev().workspace_request_id(WorktreeList, workspace) is None,
+  )
   assert_true(worktree_name_for(changed.dev(), workspace, "desktop-wt") is None)
   // The removed worktree's conversation is a plain workspace conversation
   // now — exactly what the host's registry prune did to the mapping — and
@@ -1404,13 +1392,19 @@ test "a failed worktree setup is an actionable toast and keeps retry eligible" {
       task: "go",
     })
     .with_dev(dev => {
-      ..dev
-      .with_workspace_settings(workspace, true)
-      .with_worktree_request_id(workspace, TestWorktreeRequestId),
+      ..dev.with_workspace_settings(workspace, true),
+      workspace_requests: dev.workspace_requests.put(
+        WorktreeList,
+        workspace,
+        TestWorktreeRequestId,
+      ),
       projects: [workspace],
       worktrees: [{ project: workspace, rows: [] }],
     })
-  let worktrees_request_id = model.dev().worktree_request_id(workspace).unwrap()
+  let worktrees_request_id = model
+    .dev()
+    .workspace_request_id(WorktreeList, workspace)
+    .unwrap()
   let (_, sent) = update(dispatch, Send, model)
   guard sent.active().pending_prompt is Some(entry) else {
     fail("expected the submission to be in flight")
@@ -1428,7 +1422,8 @@ test "a failed worktree setup is an actionable toast and keeps retry eligible" {
   assert_eq(repeated.notifications.length(), 1)
   assert_eq(repeated.notifications[0].message, message)
   assert_true(
-    repeated.dev().worktree_request_id(workspace) != Some(worktrees_request_id),
+    repeated.dev().workspace_request_id(WorktreeList, workspace) !=
+    Some(worktrees_request_id),
   )
   // Setup never reached an agent, so the explanation is a toast rather than
   // an agent-style transcript error. The exact prompt returns to the composer.
@@ -1443,7 +1438,8 @@ test "a failed worktree setup is an actionable toast and keeps retry eligible" {
   // failed setup honest, this is how an externally deleted checkout becomes
   // the typed missing state without restarting the app.
   assert_true(
-    rejected.dev().worktree_request_id(workspace) != Some(worktrees_request_id),
+    rejected.dev().workspace_request_id(WorktreeList, workspace) !=
+    Some(worktrees_request_id),
   )
   // And the escape hatch stays open: the toggle still switches the chat back
   // to Local without touching the workspace's own default.
@@ -1462,7 +1458,12 @@ test "a remote removal closes this client's discard dialog" {
       workspace: Worktree(project=workspace, name="wt"),
     })
     .with_dev(dev => {
-      ..dev.with_worktree_request_id(workspace, TestWorktreeRequestId),
+      ..dev,
+      workspace_requests: dev.workspace_requests.put(
+        WorktreeList,
+        workspace,
+        TestWorktreeRequestId,
+      ),
       projects: [workspace],
       worktrees: [{ project: workspace, rows: test_worktree_rows() }],
     })
@@ -1507,7 +1508,12 @@ test "worktree broadcasts and reconnect snapshots update an open Codex task" {
     },
   })
   let model = { ..test_model(), codex, screen: Codex }.with_dev(dev => {
-    ..dev.with_worktree_request_id(workspace, TestWorktreeRequestId),
+    ..dev,
+    workspace_requests: dev.workspace_requests.put(
+      WorktreeList,
+      workspace,
+      TestWorktreeRequestId,
+    ),
     projects: [workspace],
   })
   let rows = [
@@ -1579,7 +1585,12 @@ test "a removed worktree's probes cannot repopulate the composer" {
       workspace: Worktree(project=workspace, name="wt"),
     })
     .with_dev(dev => {
-      ..dev.with_worktree_request_id(workspace, TestWorktreeRequestId),
+      ..dev,
+      workspace_requests: dev.workspace_requests.put(
+        WorktreeList,
+        workspace,
+        TestWorktreeRequestId,
+      ),
       projects: [workspace],
       worktrees: [{ project: workspace, rows: test_worktree_rows() }],
     })

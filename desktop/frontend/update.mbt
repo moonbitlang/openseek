@@ -374,12 +374,16 @@ fn adopt_projects(
   let mut dev = dev
   let commands : Array[@cmd.Cmd] = []
   for path in paths {
-    let (worktrees_request_id, next_dev) = dev.begin_worktree_request(path)
+    let (worktrees_request_id, next_dev) = dev.begin_workspace_request(
+      WorktreeList,
+      path,
+    )
     dev = next_dev
     commands.push(
       fetch_worktrees(dispatch, channel, path, worktrees_request_id),
     )
-    let (settings_request_id, next_dev) = dev.begin_workspace_settings_request(
+    let (settings_request_id, next_dev) = dev.begin_workspace_request(
+      SettingsFile,
       path,
     )
     dev = next_dev
@@ -391,10 +395,7 @@ fn adopt_projects(
   let workspace_settings = dev.workspace_settings.filter(row => {
     paths.contains(row.project)
   })
-  let worktree_request_ids = dev.worktree_request_ids.retain_workspaces(paths)
-  let workspace_settings_request_ids = dev.workspace_settings_request_ids.retain_workspaces(
-    paths,
-  )
+  let workspace_requests = dev.workspace_requests.retain_workspaces(paths)
   // The old whole-session snapshot can outlive the workspace commit
   // broadcast. Prune it immediately so neither the sidebar nor fallback
   // selection can retain a conversation whose store is no longer attached.
@@ -420,9 +421,8 @@ fn adopt_projects(
       projects: paths,
       active_project,
       worktrees,
-      worktree_request_ids,
+      workspace_requests,
       workspace_settings,
-      workspace_settings_request_ids,
     }),
     conversations,
     loading_conversation,
@@ -3549,7 +3549,10 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let workspace = conv.project()
-      let (request_id, next_dev) = dev.begin_worktree_request(workspace)
+      let (request_id, next_dev) = dev.begin_workspace_request(
+        WorktreeList,
+        workspace,
+      )
       (
         fetch_worktrees(dispatch, conv.device, workspace, request_id),
         model.replace_device(next_dev),
@@ -3775,7 +3778,7 @@ fn update_msg(
       // Apply optimistically after retiring the in-flight read, so a slower
       // reply cannot roll the page's select back. The failure path re-reads
       // the disk state under a newly minted request UUID.
-      let next_dev = dev.retire_workspace_settings_request(workspace)
+      let next_dev = dev.retire_workspace_request(SettingsFile, workspace)
       (
         save_workspace_settings(dispatch, channel, workspace, worktree_mode~),
         model.replace_device(
@@ -3796,7 +3799,7 @@ fn update_msg(
       // Preserve the workspace's launch mode locally and patch only the
       // submodule field on disk. Retiring its current read prevents that
       // older reply from undoing this choice.
-      let next_dev = dev.retire_workspace_settings_request(workspace)
+      let next_dev = dev.retire_workspace_request(SettingsFile, workspace)
       (
         save_workspace_settings(
           dispatch,
@@ -3827,7 +3830,7 @@ fn update_msg(
       }
       // Patch only the timeout and keep both neighboring workspace choices.
       // No read is accepted until the save either broadcasts or re-fetches.
-      let next_dev = dev.retire_workspace_settings_request(workspace)
+      let next_dev = dev.retire_workspace_request(SettingsFile, workspace)
       (
         save_workspace_settings(
           dispatch,
@@ -4786,7 +4789,10 @@ fn Model::reject_start(
     // A checkout deleted outside the app cannot publish a registry
     // notification. Refresh placement after every rejected workspace start;
     // a newly missing row then exposes Repair/Archive immediately.
-    let (request_id, next_dev) = dev.begin_worktree_request(conv.project())
+    let (request_id, next_dev) = dev.begin_workspace_request(
+      WorktreeList,
+      conv.project(),
+    )
     (
       @cmd.batch([
         notice,
@@ -5023,15 +5029,6 @@ fn update_device_msg(
           conv
         }
       })
-      // A reply carries its request UUID rather than the bridge connection.
-      // Remove every request owned by the old connection before clearing the
-      // mirrors, so a late reply cannot repopulate either one during resync.
-      let mut dev = dev
-      for workspace in dev.projects {
-        dev = dev
-          .retire_worktree_request(workspace)
-          .retire_workspace_settings_request(workspace)
-      }
       let model = model.replace_device({
         ..dev,
         bridge: Connected,
@@ -5040,6 +5037,11 @@ fn update_device_msg(
         sessions_request_id,
         archived_request_id,
         projects_request_id,
+        // A reply carries its request UUID rather than the bridge connection.
+        // Forget every read the old connection had in flight before clearing
+        // the mirrors, so a late reply cannot repopulate either one during
+        // resync.
+        workspace_requests: WorkspaceRequestIds(),
         archive_overrides: [],
         // Worktree notifications are not replayed across a connection gap.
         // Keep every workspace blocked until this connection returns a fresh
@@ -5571,10 +5573,10 @@ fn update_device_msg(
       // The exact per-workspace UUID is the same fence as `WorktreesLoaded`.
       // Membership also prevents a pre-detach reply resurrecting its row.
       guard dev.projects.contains(workspace) &&
-        dev.workspace_settings_request_id(workspace) == Some(request_id) else {
+        dev.workspace_request_id(SettingsFile, workspace) == Some(request_id) else {
         return (@cmd.none, model)
       }
-      let next_dev = dev.retire_workspace_settings_request(workspace)
+      let next_dev = dev.retire_workspace_request(SettingsFile, workspace)
       (
         @cmd.none,
         model.replace_device(
@@ -5600,7 +5602,7 @@ fn update_device_msg(
       // A broadcast completes the workspace's current read frontier. Remove
       // that accepted UUID so every older reply is stale without touching
       // sibling workspaces.
-      let next_dev = dev.retire_workspace_settings_request(workspace)
+      let next_dev = dev.retire_workspace_request(SettingsFile, workspace)
       (
         @cmd.none,
         model.replace_device(
@@ -5616,7 +5618,8 @@ fn update_device_msg(
     WorkspaceSettingsSaveFailed(workspace~, message~) => {
       // The page's optimistic value may be wrong now: alongside the toast,
       // re-read the disk state under a fresh UUID.
-      let (request_id, next_dev) = dev.begin_workspace_settings_request(
+      let (request_id, next_dev) = dev.begin_workspace_request(
+        SettingsFile,
         workspace,
       )
       let (toast, next) = model.notify_error(
@@ -5635,10 +5638,10 @@ fn update_device_msg(
       // The staleness fence is per workspace: a sibling broadcast does not
       // replace this workspace's accepted UUID.
       guard dev.projects.contains(workspace) &&
-        dev.worktree_request_id(workspace) == Some(request_id) else {
+        dev.workspace_request_id(WorktreeList, workspace) == Some(request_id) else {
         return (@cmd.none, model)
       }
-      let next_dev = dev.retire_worktree_request(workspace)
+      let next_dev = dev.retire_workspace_request(WorktreeList, workspace)
       let next_dev = next_dev.with_worktrees(workspace, rows)
       let next = model.replace_device(next_dev)
       // A fresh list can be the first proof that a binding disappeared while
@@ -5671,10 +5674,10 @@ fn update_device_msg(
       // A later snapshot, broadcast, or reconnect UUID makes this failure
       // irrelevant.
       guard dev.projects.contains(workspace) &&
-        dev.worktree_request_id(workspace) == Some(request_id) else {
+        dev.workspace_request_id(WorktreeList, workspace) == Some(request_id) else {
         return (@cmd.none, model)
       }
-      let next_dev = dev.retire_worktree_request(workspace)
+      let next_dev = dev.retire_workspace_request(WorktreeList, workspace)
       model
       .replace_device(next_dev)
       .notify_error(
@@ -5685,7 +5688,7 @@ fn update_device_msg(
     WorktreesChanged(rows, workspace~) => {
       // Retire only this workspace's accepted UUID, then adopt the canonical
       // rows. Older list replies can no longer roll the broadcast back.
-      let next_dev = dev.retire_worktree_request(workspace)
+      let next_dev = dev.retire_workspace_request(WorktreeList, workspace)
       let next_dev = next_dev.with_worktrees(workspace, rows)
       let next = model.replace_device(next_dev)
       // Only an actual registry-row removal unbinds its conversations. Archive
@@ -7474,11 +7477,14 @@ fn test_model() -> Model {
         sessions_request_id: "sessions-request-current",
         archived_request_id: "archived-request-current",
         projects_request_id: "projects-request-current",
-        worktree_request_ids: WorkspaceRequestIds(values=[
-          (@interop.ChannelId::Local.test_project(), TestWorktreeRequestId),
-        ]),
-        workspace_settings_request_ids: WorkspaceRequestIds(values=[
+        workspace_requests: WorkspaceRequestIds(values=[
           (
+            WorktreeList,
+            @interop.ChannelId::Local.test_project(),
+            TestWorktreeRequestId,
+          ),
+          (
+            SettingsFile,
             @interop.ChannelId::Local.test_project(),
             TestWorkspaceSettingsRequestId,
           ),
@@ -9322,7 +9328,10 @@ test "a reconnect retires the file index watcher until placement returns" {
     WorktreesLoaded(
       [],
       workspace=root,
-      request_id=rediscovered.dev().worktree_request_id(root).unwrap(),
+      request_id=rediscovered
+        .dev()
+        .workspace_request_id(WorktreeList, root)
+        .unwrap(),
     ),
     rediscovered,
   )
