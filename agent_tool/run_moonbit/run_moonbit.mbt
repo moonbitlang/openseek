@@ -912,54 +912,76 @@ async fn read_capped(path : String) -> String {
 /// it would come back refused, and the cheapest way to not waste a turn on
 /// that is for the argument not to exist.
 fn schema(background~ : Bool, escalation~ : Bool) -> Json {
-  let properties : Map[String, Json] = {
-    "source": { "type": "string" },
-    "target": {
-      "type": "string",
-      "enum": ["wasm", "wasm-gc", "js", "llvm"],
-      "description": "Backend to run on; defaults to wasm, which is the sandboxed one. The alternatives run pure computation only — they cannot spawn commands or touch files.",
-    },
-    "cwd": {
-      "type": "string",
-      "description": "Working directory the program runs in (relative paths resolve against the workspace root); defaults to the workspace root.",
-    },
-    "warning": {
-      "type": "string",
-      "enum": ["off", "on"],
-      "description": (
-        #|Whether compiler warnings appear in the output; defaults to off (a snippet
-        #|is a throwaway script, so unused-variable style noise is suppressed). Set
-        #|"on" only when the warnings themselves are what you are probing.
-      ),
-    },
-  }
-  if background {
-    properties["run_in_background"] = {
-      "type": "boolean",
-      "description": (
-        #|Run as a background job: returns a job id immediately and a completion
-        #|notice arrives when it exits. Use for long-running work (full test
-        #|suites, long builds, watchers) instead of blocking on the 300s
-        #|foreground bound, which moves the run to a job when it expires.
-      ),
-    }
-  }
-  if escalation {
-    properties["escalated"] = {
-      "type": "boolean",
-      "description": (
-        #|Ask the user to run this snippet with NO sandbox policy — any program may
-        #|be spawned and the snippet may write anywhere. The call blocks on a
-        #|person's answer, and a refusal or an unanswered request means nothing ran.
-        #|Use it only when the allowed programs genuinely cannot do the job, and say
-        #|in the snippet's own code what it needs the extra reach for: the user is
-        #|shown this program, and decides on it.
-      ),
-    }
-  }
   {
     "type": "object",
-    "properties": Json::object(properties),
+    "properties": Json(
+      Map(
+        [
+          ("source", Json({ "type": "string" })),
+          (
+            "target",
+            {
+              "type": "string",
+              "enum": ["wasm", "wasm-gc", "js", "llvm"],
+              "description": "Backend to run on; defaults to wasm, which is the sandboxed one. The alternatives run pure computation only — they cannot spawn commands or touch files.",
+            },
+          ),
+          (
+            "cwd",
+            {
+              "type": "string",
+              "description": "Working directory the program runs in (relative paths resolve against the workspace root); defaults to the workspace root.",
+            },
+          ),
+          (
+            "warning",
+            {
+              "type": "string",
+              "enum": ["off", "on"],
+              "description": (
+                #|Whether compiler warnings appear in the output; defaults to off (a snippet
+                #|is a throwaway script, so unused-variable style noise is suppressed). Set
+                #|"on" only when the warnings themselves are what you are probing.
+              ),
+            },
+          ),
+          ..if background {
+            [
+              (
+                "run_in_background",
+                Json({
+                  "type": "boolean",
+                  "description": (
+                    #|Run as a background job: returns a job id immediately and a completion
+                    #|notice arrives when it exits. Use for long-running work (full test
+                    #|suites, long builds, watchers) instead of blocking on the 300s
+                    #|foreground bound, which moves the run to a job when it expires.
+                  ),
+                }),
+              ),
+            ]
+          },
+          ..if escalation {
+            [
+              (
+                "escalated",
+                Json({
+                  "type": "boolean",
+                  "description": (
+                    #|Ask the user to run this snippet with NO sandbox policy — any program may
+                    #|be spawned and the snippet may write anywhere. The call blocks on a
+                    #|person's answer, and a refusal or an unanswered request means nothing ran.
+                    #|Use it only when the allowed programs genuinely cannot do the job, and say
+                    #|in the snippet's own code what it needs the extra reach for: the user is
+                    #|shown this program, and decides on it.
+                  ),
+                }),
+              ),
+            ]
+          },
+        ],
+      ),
+    ),
     "required": ["source"],
   }
 }
