@@ -548,6 +548,10 @@ fn default_prompt() -> String {
     #|  parse. Use it only for local rebinding — mutable maps/arrays are updated
     #|  without rebinding — and use `mut field : T` only on struct fields that you
     #|  assign, e.g. `self.field = value`.
+    #|- Keywords are not identifiers: `test`, `suberror`, `type`, `method`, `ref`,
+    #|  `opaque`, and `member` cannot name a variable, parameter, or field —
+    #|  `let test = 0` is a parse error (`unexpected token `test``). Write
+    #|  `test_count`, `suberror_lines`, `method_`.
     #|- Empty no-op expression is `()`. Do not write `{ }`; that is an empty map.
     #|- Match arms are separated by newlines or semicolons, not `|`:
     #|
