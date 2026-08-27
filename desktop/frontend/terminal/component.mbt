@@ -4,18 +4,19 @@
 struct Input {
   ctx : Ctx
   live_channels : Array[@interop.ChannelId]
-  // Retained even while a channel reconnects. An empty device set closes the
-  // panel, while `live_channels` separately retires the dead PTY generation.
-  devices : Array[@interop.ChannelId]
+  // Stays true while a channel reconnects; only a device-less (signed-out)
+  // console closes the panel. `live_channels` separately retires the dead PTY
+  // generation.
+  has_devices : Bool
 } derive(Eq)
 
 ///|
 pub fn Input::Input(
   ctx~ : Ctx,
   live_channels~ : Array[@interop.ChannelId],
-  devices~ : Array[@interop.ChannelId],
+  has_devices~ : Bool,
 ) -> Input {
-  { ctx, live_channels, devices }
+  { ctx, live_channels, has_devices }
 }
 
 ///|
@@ -23,11 +24,11 @@ pub fn Input::Input(
 /// boundary, but preserve the user's visibility choice while retained devices
 /// reconnect; their old PTYs are still retired through `live_channels`
 /// reconciliation.
-fn State::close_without_devices(self : State, device_count : Int) -> State {
-  if device_count == 0 {
-    { ..self, open: false }
-  } else {
+fn State::close_without_devices(self : State, has_devices : Bool) -> State {
+  if has_devices {
     self
+  } else {
+    { ..self, open: false }
   }
 }
 
@@ -49,7 +50,7 @@ pub fn State::reconcile(
       state = next
     }
   }
-  state = state.close_without_devices(input.devices.length())
+  state = state.close_without_devices(input.has_devices)
   let (state, sync_command) = sync(dispatch, state, input.ctx)
   commands.push(sync_command)
   // Output bypasses Rabbita, so refresh the terminal package's imperative
@@ -72,9 +73,9 @@ pub fn component(
 ///|
 test "terminal visibility distinguishes disconnect from device removal" {
   let open = { ..State::empty(), open: true }
-  let disconnected = open.close_without_devices(1)
+  let disconnected = open.close_without_devices(true)
   assert_true(disconnected.open)
-  let signed_out = open.close_without_devices(0)
+  let signed_out = open.close_without_devices(false)
   assert_false(signed_out.open)
 }
 

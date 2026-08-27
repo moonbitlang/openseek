@@ -32,7 +32,7 @@ pub fn Ctx::equal(Self, Self) -> Bool
 pub fn Ctx::not_equal(Self, Self) -> Bool
 
 type Input derive(Eq)
-pub fn Input::Input(ctx~ : Ctx, live_channels~ : Array[@interop.ChannelId], devices~ : Array[@interop.ChannelId]) -> Self
+pub fn Input::Input(ctx~ : Ctx, live_channels~ : Array[@interop.ChannelId], has_devices~ : Bool) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 

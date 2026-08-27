@@ -17,9 +17,7 @@ fn LocalBridgeSub::LocalBridgeSub(
 }
 
 ///|
-fn LocalBridgeSub::subscription_key() -> String {
-  "host-bridge:local"
-}
+const LocalBridgeKey = "host-bridge:local"
 
 ///|
 /// Wait for Proton to inject the bridge, wire this connection's events, and
@@ -102,20 +100,9 @@ fn LocalBridgeSub::subscribe(
 }
 
 ///|
-/// Notification kinds exposed by the host extension. Proton needs one
-/// listener per kind, so this derives directly from the shared catalog.
-fn LocalBridgeSub::notification_kinds() -> Array[@protocol.NotificationKind] {
-  @protocol.NotificationKind::all()
-}
-
-///|
 /// Decode a Proton event's structured-clone payload back into JSON fields.
 /// A payload-less event reads as empty fields; malformed values are dropped.
-fn LocalBridgeSub::event_payload(
-  self : LocalBridgeSub,
-  event : @js.Value,
-) -> Map[String, Json]? {
-  guard self.active else { return None }
+fn event_payload(event : @js.Value) -> Map[String, Json]? {
   guard @interop.js_prop(event, "payload") is Some(payload) else {
     return Some(Map([]))
   }
@@ -131,10 +118,12 @@ fn LocalBridgeSub::wire(
   extension_events : @js.Value,
   application_events : @js.Value,
 ) -> Unit {
-  for kind_ in LocalBridgeSub::notification_kinds() {
+  // Proton needs one listener per notification kind, so the listeners derive
+  // directly from the shared catalog.
+  for kind_ in @protocol.NotificationKind::all() {
     let method_ = kind_.wire_name()
     let handler = (event : @js.Value) => {
-      guard self.event_payload(event) is Some(payload) &&
+      guard event_payload(event) is Some(payload) &&
         @protocol.Notification::from_wire(method_, Json::object(payload))
         is Some(notification) else {
         return
@@ -150,13 +139,13 @@ fn LocalBridgeSub::wire(
   // Native browser-view events are intentionally window-local rather than
   // shared protocol notifications. The parent frontend owns their UI decode.
   self.subscribe(extension_events, "openseek.browser.event", event => {
-    guard self.event_payload(event) is Some(payload) else { return }
+    guard event_payload(event) is Some(payload) else { return }
     scheduler.add((self.dispatch)(Event::BrowserEvent(payload~)))
   })
   // Application events use `__MoonBit__.app.on`; keep their command id typed
   // while leaving command policy to the parent frontend.
   self.subscribe(application_events, "menu.command", event => {
-    guard self.event_payload(event) is Some(payload) &&
+    guard event_payload(event) is Some(payload) &&
       payload.get("command_id") is Some(String(command_id)) else {
       return
     }
@@ -164,7 +153,7 @@ fn LocalBridgeSub::wire(
   })
   // The notification extension stamps the owning run id in `payload`.
   self.subscribe(extension_events, "notification.click", event => {
-    guard self.event_payload(event) is Some(payload) &&
+    guard event_payload(event) is Some(payload) &&
       payload.get("payload") is Some(String(run_id)) &&
       !run_id.is_empty() else {
       return
@@ -188,23 +177,4 @@ fn LocalBridgeSub::unload(self : LocalBridgeSub) -> Unit {
   for unsubscribe in self.unsubscribers {
     let _ : @js.Value = unsubscribe.apply(([] : Array[@js.Value]))
   }
-}
-
-///|
-test "local bridge listens to the shared host notification catalog" {
-  let kinds = LocalBridgeSub::notification_kinds()
-  assert_true(kinds.contains(@protocol.NotificationKind::CodexStatusChanged))
-  assert_true(kinds.contains(@protocol.NotificationKind::CodexNotification))
-  assert_true(kinds.contains(@protocol.NotificationKind::CodexServerRequest))
-  assert_true(kinds.contains(@protocol.NotificationKind::AuthChanged))
-  assert_true(kinds.contains(@protocol.NotificationKind::SkillsChanged))
-  assert_true(kinds.contains(@protocol.NotificationKind::FsWatchFailed))
-  assert_true(kinds.contains(@protocol.NotificationKind::SessionEvent))
-  assert_true(kinds.contains(@protocol.NotificationKind::WorkspaceChanged))
-  assert_true(kinds.contains(@protocol.NotificationKind::WorktreeChanged))
-  assert_true(kinds.contains(@protocol.NotificationKind::UpdateDownloaded))
-  assert_true(
-    kinds.contains(@protocol.NotificationKind::UpdateDownloadProgress),
-  )
-  assert_true(kinds.contains(@protocol.NotificationKind::UpdateDownloadFailed))
 }

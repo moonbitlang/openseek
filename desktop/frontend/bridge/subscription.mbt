@@ -16,7 +16,7 @@ priv suberror BridgeSubscription {
 /// Declare the desktop window's injected Proton connection.
 pub fn local_connection(dispatch : @cmd.Emit[Event]) -> @sub.Sub {
   @sub.custom_sub(
-    LocalBridgeSub::subscription_key(),
+    LocalBridgeKey,
     @sub.Global,
     LocalBridge(dispatch~),
     bridge_sub_loader,
@@ -82,10 +82,6 @@ fn bridge_sub_loader(
 test "bridge identity changes only when its resource must restart" {
   let remote = RemoteBridgeSub::subscription_key("device-a", 0, 0)
   assert_eq(RemoteBridgeSub::subscription_key("device-a", 0, 0), remote)
-  assert_false(RemoteBridgeSub::subscription_key("device-a", 0, 1) == remote)
-  assert_false(RemoteBridgeSub::subscription_key("device-a", 1, 0) == remote)
-  assert_eq(
-    LocalBridgeSub::subscription_key(),
-    LocalBridgeSub::subscription_key(),
-  )
+  assert_not_eq(RemoteBridgeSub::subscription_key("device-a", 0, 1), remote)
+  assert_not_eq(RemoteBridgeSub::subscription_key("device-a", 1, 0), remote)
 }

@@ -2,8 +2,8 @@
 // notifications (docs/remote-protocol.md). Methods go through
 // `@interop.bridge_request`; notifications arrive either as `openseek.*`
 // proton events (the desktop window) or as JSON-RPC notifications on the
-// page's WebSocket (a browser through the relay), and both feed the same
-// decoders below.
+// page's WebSocket (a browser through the relay). `frontend/bridge` owns both
+// transports; both feed the same decoders below.
 
 ///|
 /// Purely decode one non-terminal host notification, retaining the channel it
@@ -265,9 +265,10 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
     @bridge.Event::ChannelDown(channel~, websocket_epoch~) =>
       dispatch(FromDevice(channel, ChannelDown(websocket_epoch~)))
     @bridge.Event::BrowserEvent(payload~) =>
-      match browser_event_msg(payload) {
-        Some(msg) => dispatch(msg)
-        None => @cmd.none
+      if browser_event_msg(payload) is Some(msg) {
+        dispatch(msg)
+      } else {
+        @cmd.none
       }
     @bridge.Event::MenuCommand(command_id~) =>
       if command_id == @commands.app_open_devtools.name() {

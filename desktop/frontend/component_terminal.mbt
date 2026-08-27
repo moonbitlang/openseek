@@ -15,6 +15,6 @@ fn Model::terminal_input(self : Model) -> @terminal.Input {
         }
       })
       .to_array(),
-    devices=self.devices.map(dev => dev.channel),
+    has_devices=!self.devices.is_empty(),
   )
 }
