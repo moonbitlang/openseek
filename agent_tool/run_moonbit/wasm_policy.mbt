@@ -17,7 +17,7 @@
 /// A prefix matches whole argument tokens from the front, so `moon` with
 /// `["test"]` allows `moon test --filter x` but not `moon build`.
 ///
-/// Each role's system prompt carries this list in prose. Admitting a command
+/// The mbtx tool description carries this list in prose. Admitting a command
 /// here without adding it there costs a turn steps: the model never learns it
 /// may use it.
 let spawnable_commands : Array[(String, Array[String])] = [

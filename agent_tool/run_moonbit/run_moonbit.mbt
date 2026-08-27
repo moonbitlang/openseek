@@ -989,9 +989,12 @@ fn schema(background~ : Bool, escalation~ : Bool) -> Json {
 ///|
 /// The `mbtx` tool description.
 ///
-/// Holds the tool-local contract every role must see: the admitted child
-/// processes, refusal and escalation behavior, isolation, limits, and the
-/// arguments this build actually supports. The default system prompt owns the
+/// Holds the tool-local contract every role must see: what a shell's utilities
+/// are in MoonBit, the admitted child processes, refusal and escalation
+/// behavior, isolation, limits, and the arguments this build actually
+/// supports. The utility table comes before the allowlist on purpose: it is
+/// how a snippet does its work, read before reaching for `ls`, not advice
+/// handed out after a refusal. The default system prompt owns the
 /// `moonbitlang/async/shell` tutorial and worked examples; those teach one
 /// role's workflow rather than describing what the tool enforces.
 ///
@@ -1023,19 +1026,15 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     (
       #|Anything else is REFUSED, including the obvious ones. When a refused command
       #|is genuinely what the task needs, two answers are legitimate: reach for the
-      #|MoonBit replacement below, or — when no replacement is faithful and the
+      #|MoonBit replacement above, or — when no replacement is faithful and the
       #|refused program IS the task — retry that one snippet with escalated=true and
       #|let the user decide. Reconstructing the refused command out of allowed parts
-      #|without saying so is the answer that is not. Read the table rather than
-      #|finding this out one command at a time — each is a line of MoonBit that also
-      #|works on Windows, where these binaries do not exist:
+      #|without saying so is the answer that is not.
     )
   } else {
     (
       #|Anything else is REFUSED, including the obvious ones; if a refused command is
-      #|genuinely what the task needs, say so rather than working around it. Reach for
-      #|the replacement rather than finding this out one command at a time — each is a
-      #|line of MoonBit that also works on Windows, where these binaries do not exist:
+      #|genuinely what the task needs, say so rather than working around it.
     )
   }
   let base_head =
@@ -1049,6 +1048,26 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     #|
     #|`source` is the whole program. Diagnostics are rewritten to `source:LINE:COL`
     #|about your input; `target` defaults to wasm, the sandboxed backend.
+    #|
+    #|## What a shell's utilities are here
+    #|
+    #|Each is a line of MoonBit that also works on Windows, where these binaries
+    #|do not exist:
+    #|
+    #|    ls          → @fs.readdir(dir)
+    #|    find        → rg --files, or recurse @fs.readdir + @fs.kind
+    #|    cat         → @fs.read_file(p).text()
+    #|    head/tail   → slice the split text; wc -l → count it
+    #|    grep        → rg, or .split("\n").filter(...) on captured output
+    #|    sort/uniq   → .sort(), a Set, or a Map
+    #|    pwd         → @env.current_dir(); printenv → @env.get_env_var(name)
+    #|    mkdir -p    → @fs.mkdir(d, recursive=true)
+    #|    test -f     → @fs.exists(p); test -d → @fs.kind(p) is Directory
+    #|    echo/printf → println
+    #|    rm/mv/cp    → the `remove` and `write` tools; a snippet cannot write the
+    #|                  workspace, and `remove` refuses files it did not create —
+    #|                  a refusal there is an answer, not an obstacle to route past
+    #|    sh -c, xargs, make → write the logic as MoonBit statements
     #|
     #|## Which programs a snippet may start
     #|
@@ -1070,21 +1089,6 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     #|- `gh` — pr, issue, run, `repo view`, api, `auth status`.
     #|- `rg` and `diff`.
   let base_tail =
-    #|    ls          → @fs.readdir(dir)
-    #|    find        → rg --files, or recurse @fs.readdir + @fs.kind
-    #|    cat         → @fs.read_file(p).text()
-    #|    head/tail   → slice the split text; wc -l → count it
-    #|    grep        → rg, or .split("\n").filter(...) on captured output
-    #|    sort/uniq   → .sort(), a Set, or a Map
-    #|    pwd         → @env.current_dir(); printenv → @env.get_env_var(name)
-    #|    mkdir -p    → @fs.mkdir(d, recursive=true)
-    #|    test -f     → @fs.exists(p); test -d → @fs.kind(p) is Directory
-    #|    echo/printf → println
-    #|    rm/mv/cp    → the `remove` and `write` tools; a snippet cannot write the
-    #|                  workspace, and `remove` refuses files it did not create —
-    #|                  a refusal there is an answer, not an obstacle to route past
-    #|    sh -c, xargs, make → write the logic as MoonBit statements
-    #|
     #|## Isolation and limits
     #|
     #|- A snippet runs with the workspace as its working directory, so RELATIVE paths
