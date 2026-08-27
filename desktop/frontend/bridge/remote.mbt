@@ -54,10 +54,7 @@ fn RemoteBridgeSub::install(
     on_down=() => {
       self.events.enqueue(
         scheduler,
-        ChannelDown(
-          channel=self.channel,
-          websocket_epoch=self.websocket_epoch,
-        ),
+        ChannelDown(channel=self.channel, websocket_epoch=self.websocket_epoch),
       )
     },
   )

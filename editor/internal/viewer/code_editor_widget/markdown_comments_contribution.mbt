@@ -32,7 +32,7 @@ priv struct MarkdownCommentContributionState {
 
 ///|
 fn MarkdownCommentContributionState::MarkdownCommentContributionState(
-  viewport_measure_scheduler? : @base_browser.RunOnceScheduler = @base_browser.RunOnceScheduler(
+  viewport_measure_scheduler? : @base_browser.RunOnceScheduler = RunOnceScheduler(
     MarkdownCommentWidthSettleMs,
   ),
 ) -> MarkdownCommentContributionState {

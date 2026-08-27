@@ -10,9 +10,7 @@ priv struct LocalBridgeSub {
 }
 
 ///|
-fn LocalBridgeSub::LocalBridgeSub(
-  events : EventHandler,
-) -> LocalBridgeSub {
+fn LocalBridgeSub::LocalBridgeSub(events : EventHandler) -> LocalBridgeSub {
   { events, active: true, unsubscribers: [], }
 }
 

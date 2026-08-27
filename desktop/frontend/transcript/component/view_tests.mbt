@@ -378,7 +378,7 @@ test "a committed reasoning step takes the next durable activity key" {
       },
     ],
   }
-  let settled = { ..renderer, input: settled_input }.stream_children()
+  let settled = { ..renderer, input: settled_input, }.stream_children()
   assert_true(settled.get(handoff_key) is Some(_))
   let settled_markup = @rabbita.render_to_string(() => {
     @rabbita.Val::constant(settled[handoff_key])
@@ -765,12 +765,7 @@ test "a controlled closed thought omits its body DOM" {
   let render = expanded => {
     @rabbita.render_to_string(() => {
       @rabbita.Val::constant(
-        activity_view(
-          items,
-          _ => @cmd.none,
-          expanded~,
-          on_toggle=@cmd.none,
-        ),
+        activity_view(items, _ => @cmd.none, expanded~, on_toggle=@cmd.none),
       )
     })
   }

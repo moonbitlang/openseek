@@ -35,7 +35,7 @@ fn EventHandler::enqueue(
   scheduler : &@cmd.Scheduler,
   event : Event,
 ) -> Unit {
-  if self.0(event) is Some(command) {
+  if (self.0)(event) is Some(command) {
     scheduler.add(command)
   }
 }

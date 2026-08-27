@@ -58,6 +58,7 @@ fn Conversation::streaming_render_identity(self : Conversation) -> String {
   }
 }
 
+///|
 test "transcript row identities include event ordinals" {
   let conv = {
     ..test_conversation(),

@@ -282,7 +282,7 @@ fn LiveReasoningState::update(
 ) -> (LiveReasoningState, LiveReasoningEffect) {
   match msg {
     Focused(target) => {
-      let next = { ..self, active: target }
+      let next = { ..self, active: target, }
       // Always re-sync, even when the logical target is unchanged: the host
       // may have been remounted while another application screen was visible.
       (next, next.sync_effect(target))
@@ -483,7 +483,11 @@ struct LiveReasoning {
 ///|
 pub fn LiveReasoning::LiveReasoning() -> LiveReasoning {
   {
-    state: { connections: @vector.new(), previews: @vector.new(), active: None },
+    state: {
+      connections: @vector.new(),
+      previews: @vector.new(),
+      active: None,
+    },
     preview: @live_preview.LivePreview(),
   }
 }
@@ -546,7 +550,7 @@ pub fn LiveReasoning::delta(
   run_id~ : String?,
   content~ : String,
 ) -> Unit {
-  self.apply(Delta({ channel, session, run_id }, websocket_epoch~, content))
+  self.apply(Delta({ channel, session, run_id, }, websocket_epoch~, content))
 }
 
 ///|
@@ -559,7 +563,7 @@ pub fn LiveReasoning::finish(
   session~ : String,
   run_id~ : String?,
 ) -> Unit {
-  self.apply(Finished({ channel, session, run_id }, websocket_epoch~))
+  self.apply(Finished({ channel, session, run_id, }, websocket_epoch~))
 }
 
 ///|
@@ -754,7 +758,7 @@ fn Model::update(
         // move the rail beneath the pointer and transfer hover to a neighbor.
         Clicked(key) =>
           (
-            { ..next, pinned: false },
+            { ..next, pinned: false, },
             @cmd.batch([
               pin_live_reasoning(false),
               scroll_turn_into_view(emit, key),

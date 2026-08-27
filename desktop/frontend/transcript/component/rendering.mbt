@@ -98,7 +98,7 @@ fn TranscriptSectionKey::jump_latest() -> TranscriptSectionKey {
 
 ///|
 fn TranscriptSectionKey::live_reasoning() -> TranscriptSectionKey {
-  { value: "live-reasoning" }
+  { value: "live-reasoning", }
 }
 
 ///|

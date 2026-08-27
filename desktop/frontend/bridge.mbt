@@ -276,7 +276,10 @@ fn bridge_event(
         TerminalOutput(payload) =>
           Some(
             @terminal.output(
-              channel, payload.id, payload.sequence, payload.data,
+              channel,
+              payload.id,
+              payload.sequence,
+              payload.data,
             ),
           )
         TerminalExit(payload) =>
@@ -291,9 +294,7 @@ fn bridge_event(
         }
         AgentEvent(payload) =>
           match engine_msg(payload) {
-            Some(
-              Engine(run_id, ReasoningDelta(content), session=Some(session)),
-            ) => {
+            Some(Engine(run_id, ReasoningDelta(content), session=Some(session))) => {
               live_reasoning.delta(
                 channel~,
                 websocket_epoch~,
@@ -303,17 +304,21 @@ fn bridge_event(
               )
               None
             }
-            Some(
-              Engine(run_id, ReasoningMessage(_), session=Some(session)),
-            ) => {
+            Some(Engine(run_id, ReasoningMessage(_), session=Some(session))) => {
               live_reasoning.finish(
-                channel~, websocket_epoch~, session~, run_id~,
+                channel~,
+                websocket_epoch~,
+                session~,
+                run_id~,
               )
               None
             }
             Some(Engine(run_id, AgentStep(_), session=Some(session)) as msg) => {
               live_reasoning.finish(
-                channel~, websocket_epoch~, session~, run_id~,
+                channel~,
+                websocket_epoch~,
+                session~,
+                run_id~,
               )
               Some(dispatch(FromDevice(channel, msg)))
             }
@@ -323,9 +328,7 @@ fn bridge_event(
         AgentError(payload) =>
           match error_msg(payload) {
             Some(Error(run_id=Some(run_id), ..) as msg) => {
-              live_reasoning.finish_run(
-                channel~, websocket_epoch~, run_id~,
-              )
+              live_reasoning.finish_run(channel~, websocket_epoch~, run_id~)
               Some(dispatch(FromDevice(channel, msg)))
             }
             Some(msg) => Some(dispatch(FromDevice(channel, msg)))
@@ -334,16 +337,13 @@ fn bridge_event(
         AgentFinished(payload) =>
           match finished_msg(payload) {
             Some(Finished(run_id~, ..) as msg) => {
-              live_reasoning.finish_run(
-                channel~, websocket_epoch~, run_id~,
-              )
+              live_reasoning.finish_run(channel~, websocket_epoch~, run_id~)
               Some(dispatch(FromDevice(channel, msg)))
             }
             Some(msg) => Some(dispatch(FromDevice(channel, msg)))
             None => None
           }
-        _ =>
-          notification_msg(channel, notification).map(msg => dispatch(msg))
+        _ => notification_msg(channel, notification).map(msg => dispatch(msg))
       }
     @bridge.Event::Unavailable(channel~, message~) =>
       Some(dispatch(FromDevice(channel, BridgeUnavailable(message))))

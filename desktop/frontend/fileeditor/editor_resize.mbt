@@ -210,7 +210,7 @@ fn sync_root_style() -> Unit {
 
 ///|
 fn set_editor_width(width : Int) -> Unit {
-  let value : EditorWidth = { pixels: width }
+  let value : EditorWidth = { pixels: width, }
   editor_width.val = Some(value)
   if resizing.val &&
     @dom.document().query_selector(".content").to_option() is Some(content) {

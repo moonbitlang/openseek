@@ -135,9 +135,7 @@ fn activity_view(
       class="msg-content activity-thinking activity-thinking-live",
       @html.text(content),
     )
-    rows.push(
-      thought_fold("Thinking…", prose, true),
-    )
+    rows.push(thought_fold("Thinking…", prose, true))
   }
   @html.div(class="activity-row", rows)
 }

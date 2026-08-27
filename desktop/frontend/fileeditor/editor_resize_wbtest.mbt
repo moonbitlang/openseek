@@ -6,7 +6,7 @@
 
 ///|
 test "a live editor width produces a valid concrete grid track" {
-  let width : EditorWidth = { pixels: 504 }
+  let width : EditorWidth = { pixels: 504, }
   assert_eq(width.grid_template(), "minmax(0, 1fr) 504px")
   assert_eq(width.custom_property(), "504px")
 }
