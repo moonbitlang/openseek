@@ -26,7 +26,14 @@ jobs:
         target: [native, js]
         include:
           - moonbit-channel: stable
-            moonbit-version: latest
+            # Pinned, not `latest`: stable 0.10.11 (moon 0.1.20260827) crashes
+            # the native backend on moonbit-community/graphviz@0.1.3
+            # ("Machine_of_clam_lower.lower_break: break value is required for
+            # scalar loop"), which the editor pulls in through kokic/uml, so
+            # every `moon test --target native` dies before running. Its
+            # formatter also changed (trailing commas in struct literals), so
+            # unpinning means reformatting the workspace in the same change.
+            moonbit-version: "0.10.10+f8a486b6f"
             deny-warn: "--deny-warn"
     steps:
       - name: Checkout code
