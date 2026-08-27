@@ -8,20 +8,20 @@ const MaxSearchResults : Int = 20000
 fn fresh_page() -> Page {
   {
     mode: Text,
-    query: "",
-    regex: false,
-    case_sensitive: false,
-    whole_word: false,
+    text: {
+      query: "",
+      regex: false,
+      case_sensitive: false,
+      whole_word: false,
+      matches: [],
+    },
+    semantic: { patterns: [""], hits: [], partial: false },
     details_open: false,
     include_glob: "",
     exclude_glob: "",
-    patterns: [""],
-    matches: [],
-    semantic_hits: [],
     match_count: 0,
     file_count: 0,
     limit_hit: false,
-    partial: false,
     collapsed: Map([]),
     visible_lines: InitialVisibleSearchLines,
     phase: Idle,
@@ -42,7 +42,8 @@ pub fn State::reset_checkout(self : State) -> State {
       ..fresh_page(),
       generation,
       mode: self.page.mode,
-      patterns: self.page.patterns,
+      text: fresh_page().text,
+      semantic: { ..self.page.semantic, hits: [], partial: false },
     },
     generation,
   }
@@ -70,18 +71,18 @@ fn State::schedule(
 ) -> State {
   let generation = self.generation + 1
   let has_query = match page.mode {
-    Text => !page.query.is_empty()
-    Semantic => page.patterns.any(pattern => !pattern.trim().is_empty())
+    Text => !page.text.query.is_empty()
+    Semantic =>
+      page.semantic.patterns.any(pattern => !pattern.trim().is_empty())
   }
   let page = if !has_query || input.root is None {
     {
       ..page,
-      matches: [],
-      semantic_hits: [],
+      text: { ..page.text, matches: [] },
+      semantic: { ..page.semantic, hits: [], partial: false },
       match_count: 0,
       file_count: 0,
       limit_hit: false,
-      partial: false,
       visible_lines: InitialVisibleSearchLines,
       phase: Idle,
       generation,
@@ -89,11 +90,8 @@ fn State::schedule(
   } else {
     {
       ..page,
-      semantic_hits: if page.mode is Semantic {
-        []
-      } else {
-        page.semantic_hits
-      },
+      text: page.text,
+      semantic: { ..page.semantic, hits: [], partial: false },
       match_count: if page.mode is Semantic {
         0
       } else {
@@ -137,18 +135,21 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
   let page = self.page
   match msg {
     QueryChanged(query) =>
-      self.schedule({ ..page, query, }, input, immediate=false)
+      self.schedule(
+        { ..page, text: { ..page.text, query, } },
+        input,
+        immediate=false,
+      )
     ModeChanged(mode) =>
       self.schedule(
         {
           ..page,
           mode,
           details_open: page.details_open,
-          matches: [],
-          semantic_hits: [],
+          text: { ..page.text, matches: [] },
+          semantic: { ..page.semantic, hits: [], partial: false },
           match_count: 0,
           file_count: 0,
-          partial: false,
           collapsed: Map([]),
         },
         input,
@@ -156,18 +157,25 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       )
     ToggleCaseSensitive =>
       self.schedule(
-        { ..page, case_sensitive: !page.case_sensitive, },
+        {
+          ..page,
+          text: { ..page.text, case_sensitive: !page.text.case_sensitive },
+        },
         input,
         immediate=false,
       )
     ToggleWholeWord =>
       self.schedule(
-        { ..page, whole_word: !page.whole_word, },
+        { ..page, text: { ..page.text, whole_word: !page.text.whole_word } },
         input,
         immediate=false,
       )
     ToggleRegex =>
-      self.schedule({ ..page, regex: !page.regex, }, input, immediate=false)
+      self.schedule(
+        { ..page, text: { ..page.text, regex: !page.text.regex } },
+        input,
+        immediate=false,
+      )
     ToggleDetails =>
       { ..self, page: { ..page, details_open: !page.details_open, }, }
     IncludeChanged(include_glob) =>
@@ -175,19 +183,34 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
     ExcludeChanged(exclude_glob) =>
       self.schedule({ ..page, exclude_glob, }, input, immediate=false)
     PatternChanged(index, value) => {
-      let patterns = page.patterns.copy()
+      let patterns = page.semantic.patterns.copy()
       if index < patterns.length() {
         patterns[index] = value
       }
-      self.schedule({ ..page, patterns, }, input, immediate=false)
+      self.schedule(
+        { ..page, semantic: { ..page.semantic, patterns, } },
+        input,
+        immediate=false,
+      )
     }
-    AddPattern => { ..self, page: { ..page, patterns: page.patterns + [""], }, }
+    AddPattern =>
+      {
+        ..self,
+        page: {
+          ..page,
+          semantic: { ..page.semantic, patterns: page.semantic.patterns + [""] },
+        },
+      }
     RemovePattern(index) => {
-      let patterns = page.patterns.copy()
+      let patterns = page.semantic.patterns.copy()
       if index < patterns.length() && patterns.length() > 1 {
         let _ = patterns.remove(index)
       }
-      self.schedule({ ..page, patterns, }, input, immediate=false)
+      self.schedule(
+        { ..page, semantic: { ..page.semantic, patterns, } },
+        input,
+        immediate=false,
+      )
     }
     Submit | Refresh => self.schedule(page, input, immediate=true)
     ClearResults => {
@@ -196,12 +219,11 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         generation,
         page: {
           ..page,
-          matches: [],
-          semantic_hits: [],
+          text: { ..page.text, matches: [] },
+          semantic: { ..page.semantic, hits: [], partial: false },
           match_count: 0,
           file_count: 0,
           limit_hit: false,
-          partial: false,
           visible_lines: InitialVisibleSearchLines,
           phase: Idle,
           generation,
@@ -211,8 +233,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
     CollapseAll => {
       let collapsed : Map[String, Bool] = Map([])
       let active = match page.mode {
-        Text => page.matches.map(result => result.path)
-        Semantic => page.semantic_hits.map(hit => hit.path)
+        Text => page.text.matches.map(result => result.path)
+        Semantic => page.semantic.hits.map(hit => hit.path)
       }
       for path in active {
         collapsed[path] = true
@@ -267,12 +289,11 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         ..self,
         page: {
           ..page,
-          matches: reply.matches,
-          semantic_hits: [],
+          text: { ..page.text, matches: reply.matches },
+          semantic: { ..page.semantic, hits: [], partial: false },
           match_count: reply.match_count,
           file_count: reply.file_count,
           limit_hit: reply.limit_hit,
-          partial: false,
           visible_lines: InitialVisibleSearchLines.min(reply.matches.length()),
           phase,
         },
@@ -292,7 +313,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           ..self,
           page: {
             ..page,
-            semantic_hits: [],
+            semantic: { ..page.semantic, hits: [], partial: false },
             match_count: 0,
             file_count: 0,
             phase: Idle,
@@ -307,12 +328,14 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         ..self,
         page: {
           ..page,
-          matches: [],
-          semantic_hits: reply.matches,
+          semantic: {
+            ..page.semantic,
+            hits: reply.matches,
+            partial: reply.partial,
+          },
           match_count: reply.match_count,
           file_count: reply.file_count,
           limit_hit: reply.limit_hit,
-          partial: reply.partial,
           visible_lines: InitialVisibleSearchLines.min(reply.matches.length()),
           phase,
         },
@@ -341,7 +364,11 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         ..self,
         page: {
           ..page,
-          semantic_hits: page.semantic_hits + matches,
+          semantic: {
+            ..page.semantic,
+            hits: page.semantic.hits + matches,
+            partial: true,
+          },
           match_count,
           file_count,
         },
@@ -355,12 +382,11 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           ..self,
           page: {
             ..page,
-            matches: [],
-            semantic_hits: [],
+            text: { ..page.text, matches: [] },
+            semantic: { ..page.semantic, hits: [], partial: false },
             match_count: 0,
             file_count: 0,
             limit_hit: false,
-            partial: false,
             visible_lines: InitialVisibleSearchLines,
             phase: Failed(code~, message~),
           },
@@ -384,7 +410,7 @@ pub fn State::editor_highlights(
   let ranges : Array[@common.Range] = []
   match self.page.mode {
     Text =>
-      for result in self.page.matches {
+      for result in self.page.text.matches {
         if result.path == path {
           for range in result.ranges {
             ranges.push(
@@ -399,7 +425,7 @@ pub fn State::editor_highlights(
         }
       }
     Semantic =>
-      for hit in self.page.semantic_hits {
+      for hit in self.page.semantic.hits {
         if hit.path == path {
           ranges.push(
             @common.Range(
@@ -419,8 +445,8 @@ pub fn State::editor_highlights(
 ///|
 fn Page::active_result_count(self : Page) -> Int {
   match self.mode {
-    Text => self.matches.length()
-    Semantic => self.semantic_hits.length()
+    Text => self.text.matches.length()
+    Semantic => self.semantic.hits.length()
   }
 }
 
@@ -430,13 +456,15 @@ fn Page::text_request_payload(
   input : Input,
 ) -> @protocol.SearchTextPayload? {
   guard self.mode is Text else { return None }
-  guard input.root is Some(root) && !self.query.is_empty() else { return None }
+  guard input.root is Some(root) && !self.text.query.is_empty() else {
+    return None
+  }
   Some({
     root: root.path,
-    query: self.query,
-    regex: self.regex,
-    case_sensitive: self.case_sensitive,
-    whole_word: self.whole_word,
+    query: self.text.query,
+    regex: self.text.regex,
+    case_sensitive: self.text.case_sensitive,
+    whole_word: self.text.whole_word,
     include_glob: self.include_glob,
     exclude_glob: self.exclude_glob,
     session_key: "grep-search:\{input.owner.channel.uri_authority()}:\{input.owner.session}:\{root.path}",
@@ -452,7 +480,9 @@ fn Page::semantic_request_payload(
 ) -> @protocol.SearchSemanticPayload? {
   guard self.mode is Semantic else { return None }
   guard input.root is Some(root) else { return None }
-  let patterns = self.patterns.filter(pattern => !pattern.trim().is_empty())
+  let patterns = self.semantic.patterns.filter(pattern => {
+    !pattern.trim().is_empty()
+  })
   guard !patterns.is_empty() else { return None }
   Some({
     root: root.path,
@@ -474,8 +504,8 @@ test "checkout reset clears results while preserving the generation fence" {
   let state = State::empty().handle(QueryChanged("moon"), input)
   let old_generation = state.page.generation
   let reset = state.reset_checkout()
-  assert_eq(reset.page.query, "")
-  assert_true(reset.page.matches.is_empty())
+  assert_eq(reset.page.text.query, "")
+  assert_true(reset.page.text.matches.is_empty())
   assert_true(reset.page.phase is Idle)
   assert_true(reset.page.generation > old_generation)
 }
@@ -495,8 +525,10 @@ test "mode changes preserve each search input and shared details" {
     .handle(AddPattern, input)
     .handle(PatternChanged(1, "match($x)"), input)
   let switched_back = state.handle(ModeChanged(Text), input)
-  assert_eq(switched_back.page.query, "text query")
-  assert_eq(switched_back.page.patterns, ["inspect($(x:arg))", "match($x)"])
+  assert_eq(switched_back.page.text.query, "text query")
+  assert_eq(switched_back.page.semantic.patterns, [
+    "inspect($(x:arg))", "match($x)",
+  ])
   assert_eq(switched_back.page.include_glob, "src/**")
   assert_eq(switched_back.page.exclude_glob, "generated/**")
   assert_false(switched_back.page.details_open)
@@ -568,7 +600,7 @@ test "semantic progress streams partial hits and late progress is fenced" {
     ),
     input,
   )
-  assert_eq(streamed.page.semantic_hits, [hit])
+  assert_eq(streamed.page.semantic.hits, [hit])
   assert_eq(streamed.page.match_count, 1)
   assert_eq(streamed.page.file_count, 1)
   // A progress frame for a previous generation must not touch the page.
@@ -583,7 +615,7 @@ test "semantic progress streams partial hits and late progress is fenced" {
     ),
     input,
   )
-  assert_true(stale.page.semantic_hits.is_empty())
+  assert_true(stale.page.semantic.hits.is_empty())
 }
 
 ///|
@@ -634,7 +666,7 @@ test "semantic progress batches append only new hits" {
     ),
     input,
   )
-  assert_eq(streamed.page.semantic_hits, [hit, second])
+  assert_eq(streamed.page.semantic.hits, [hit, second])
 }
 
 ///|
@@ -674,12 +706,12 @@ test "new semantic search clears partial results and cancellation clears them" {
     input,
   )
   let next = streamed.handle(PatternChanged(0, "match($x)"), input)
-  assert_true(next.page.semantic_hits.is_empty())
+  assert_true(next.page.semantic.hits.is_empty())
   assert_eq(next.page.match_count, 0)
-  let cancelled = streamed.handle(
-    SemanticLoaded(owner~, root=root.path, generation=page.generation, reply={
+  let cancelled = next.handle(
+    SemanticLoaded(owner~, root=root.path, generation=next.page.generation, reply={
       root: root.path,
-      generation: page.generation,
+      generation: next.page.generation,
       matches: [],
       match_count: 0,
       file_count: 0,
@@ -690,7 +722,7 @@ test "new semantic search clears partial results and cancellation clears them" {
     }),
     input,
   )
-  assert_true(cancelled.page.semantic_hits.is_empty())
+  assert_true(cancelled.page.semantic.hits.is_empty())
   assert_eq(cancelled.page.match_count, 0)
 }
 
@@ -711,7 +743,7 @@ test "parking a checkout keeps its draft and fences the in-flight reply" {
   let suspended = running.park()
   let page = suspended.page
   assert_true(page.phase is Idle)
-  assert_eq(page.query, "moon")
+  assert_eq(page.text.query, "moon")
   assert_true(page.generation > old_generation)
   let stale : @protocol.SearchTextReply = {
     root: root.path,
@@ -779,8 +811,8 @@ test "refresh is immediate and loaded file groups can collapse and clear" {
   assert_false(page.collapsed.get("src/main.mbt").unwrap_or(false))
   let cleared = expanded.handle(ClearResults, input)
   let page = cleared.page
-  assert_eq(page.query, "moon")
-  assert_true(page.matches.is_empty())
+  assert_eq(page.text.query, "moon")
+  assert_true(page.text.matches.is_empty())
   assert_true(page.phase is Idle)
 }
 

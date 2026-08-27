@@ -62,7 +62,7 @@ fn grouped_matches(
 fn visible_file_groups(page : Page) -> Array[FileGroup] {
   let visible : Array[FileGroup] = []
   let mut remaining = page.visible_lines.max(0)
-  for group in grouped_matches(page.matches) {
+  for group in grouped_matches(page.text.matches) {
     guard remaining > 0 else { break }
     let rows : Array[@protocol.TextSearchMatch] = []
     for result in group.matches {
@@ -203,18 +203,18 @@ fn mode_options(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
       toggle_button(
         "Aa",
         "Match Case",
-        page.case_sensitive,
+        page.text.case_sensitive,
         emit(ToggleCaseSensitive),
       ),
       whole_word_toggle_button(
         "Match Whole Word",
-        page.whole_word,
+        page.text.whole_word,
         emit(ToggleWholeWord),
       ),
       toggle_button(
         ".*",
         "Use Regular Expression",
-        page.regex,
+        page.text.regex,
         emit(ToggleRegex),
       ),
     ])
@@ -360,7 +360,7 @@ fn search_message(page : Page) -> @html.Html? {
           },
         ),
       )
-    Idle if page.query.is_empty() =>
+    Idle if page.text.query.is_empty() =>
       Some(
         @html.div(
           class="search-empty",
@@ -432,9 +432,9 @@ fn text_search_body(
     for group in visible_file_groups(page) {
       children.push(file_group_view(page, group, emit, open_match))
     }
-    let shown = page.visible_lines.min(page.matches.length())
-    if shown < page.matches.length() {
-      let next = VisibleSearchLineStep.min(page.matches.length() - shown)
+    let shown = page.visible_lines.min(page.text.matches.length())
+    if shown < page.text.matches.length() {
+      let next = VisibleSearchLineStep.min(page.text.matches.length() - shown)
       children.push(
         @html.div(class="search-show-more", [
           @html.button(
@@ -443,7 +443,7 @@ fn text_search_body(
           ),
           @html.div(
             class="search-show-more-detail",
-            "\{shown} of \{page.matches.length()} matching lines rendered",
+            "\{shown} of \{page.text.matches.length()} matching lines rendered",
           ),
         ]),
       )
@@ -486,7 +486,7 @@ fn semantic_grouped_hits(
 fn visible_semantic_file_groups(page : Page) -> Array[SemanticFileGroup] {
   let visible : Array[SemanticFileGroup] = []
   let mut remaining = page.visible_lines.max(0)
-  for group in semantic_grouped_hits(page.semantic_hits) {
+  for group in semantic_grouped_hits(page.semantic.hits) {
     guard remaining > 0 else { break }
     let rows : Array[@protocol.SemanticSearchHit] = []
     for hit in group.hits {
@@ -598,7 +598,7 @@ fn semantic_search_body(
   let children : Array[@html.Html] = []
   let busy = page.phase is Debouncing || page.phase is Loading
   let summary = if busy {
-    if page.semantic_hits.is_empty() {
+    if page.semantic.hits.is_empty() {
       "Searching…"
     } else {
       // The scan is still running; these counts are the partial stream, not
@@ -626,7 +626,7 @@ fn semantic_search_body(
       ),
     )
   }
-  if page.partial {
+  if page.semantic.partial {
     children.push(
       @html.div(
         class="search-truncated",
@@ -641,15 +641,15 @@ fn semantic_search_body(
   for group in visible_semantic_file_groups(page) {
     children.push(semantic_file_group_view(page, group, emit, open_match))
   }
-  let shown = page.visible_lines.min(page.semantic_hits.length())
-  if shown < page.semantic_hits.length() {
-    let next = VisibleSearchLineStep.min(page.semantic_hits.length() - shown)
+  let shown = page.visible_lines.min(page.semantic.hits.length())
+  if shown < page.semantic.hits.length() {
+    let next = VisibleSearchLineStep.min(page.semantic.hits.length() - shown)
     children.push(
       @html.div(class="search-show-more", [
         @html.button(on_click=emit(ShowMore), "Show \{next} more matches"),
         @html.div(
           class="search-show-more-detail",
-          "\{shown} of \{page.semantic_hits.length()} matches rendered",
+          "\{shown} of \{page.semantic.hits.length()} matches rendered",
         ),
       ]),
     )
@@ -701,7 +701,7 @@ fn page_view(
       if page.mode is Text {
         @html.input(
           input_type=@html.InputType::Text,
-          value=page.query,
+          value=page.text.query,
           placeholder="Search",
           on_input=emit.map(value => QueryChanged(value)),
           attrs=query_key_attrs(emit),
@@ -709,7 +709,7 @@ fn page_view(
       } else {
         @html.input(
           input_type=@html.InputType::Text,
-          value=page.patterns[0],
+          value=page.semantic.patterns[0],
           placeholder="inspect($(x:arg))",
           on_input=emit.map(value => PatternChanged(0, value)),
           attrs=@html.Attrs::build()
@@ -733,7 +733,7 @@ fn page_view(
     ]),
     if page.mode is Semantic {
       let patterns : Array[@html.Html] = []
-      for index, pattern in page.patterns {
+      for index, pattern in page.semantic.patterns {
         if index > 0 {
           patterns.push(
             @html.div(class="search-semantic-source", [

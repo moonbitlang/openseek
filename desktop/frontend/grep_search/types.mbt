@@ -31,22 +31,32 @@ enum Mode {
 } derive(Eq, Debug)
 
 ///|
-struct Page {
-  mode : Mode
+struct TextSearchState {
   query : String
   regex : Bool
   case_sensitive : Bool
   whole_word : Bool
+  matches : Array[@protocol.TextSearchMatch]
+} derive(Eq)
+
+///|
+struct SemanticSearchState {
+  patterns : Array[String]
+  hits : Array[@protocol.SemanticSearchHit]
+  partial : Bool
+} derive(Eq)
+
+///|
+struct Page {
+  mode : Mode
+  text : TextSearchState
+  semantic : SemanticSearchState
   details_open : Bool
   include_glob : String
   exclude_glob : String
-  patterns : Array[String]
-  matches : Array[@protocol.TextSearchMatch]
-  semantic_hits : Array[@protocol.SemanticSearchHit]
   match_count : Int
   file_count : Int
   limit_hit : Bool
-  partial : Bool
   collapsed : Map[String, Bool]
   visible_lines : Int
   phase : Phase
