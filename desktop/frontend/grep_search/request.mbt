@@ -45,12 +45,9 @@ priv enum LoadedReply {
 }
 
 ///|
-fn cancel_search(
-  owner : @interop.ConversationKey,
-  request : SearchRequest,
-) -> Unit {
+fn SearchRequest::cancel(self : SearchRequest, owner : @interop.ConversationKey) -> Unit {
   @js.async_run(() => {
-    match request {
+    match self {
       Text(payload) =>
         ignore(
           @interop.bridge_request(
@@ -179,7 +176,7 @@ fn search_request_loader(
       active = false
       @dom.window().clear_timeout(timer)
       if !settled {
-        cancel_search(owner, request)
+        request.cancel(owner)
       }
     },
     update_tagger: payload => {
