@@ -1,36 +1,16 @@
 ///|
-/// Keep assistant reasoning_content when the provider requires it.
-///
-/// DeepSeek requires every historical assistant reasoning trace to be sent
-/// back when tools are enabled. Kimi K2.7 Code always requires the reasoning
-/// from every historical assistant message to be preserved.
-///
-/// See: https://api-docs.deepseek.com/guides/thinking_mode#thinking-mode-with-tool-calls
-/// See: https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model#using-the-kimi-k2-7-code-model
-fn ChatMessage::reasoning_json_fields(
-  message : ChatMessage,
-  model : Model,
-  preserve_deepseek_reasoning : Bool,
-) -> Array[(String, Json)] {
-  match (model, message.role, message.reasoning_content) {
-    (Deepseek(_), Assistant, Some(reasoning)) if preserve_deepseek_reasoning =>
-      [("reasoning_content", Json::string(reasoning))]
-    (Kimi(_), Assistant, Some(reasoning)) =>
-      [("reasoning_content", Json::string(reasoning))]
-    _ => []
-  }
-}
-
-///|
-/// Encodes a `ChatMessage` for a selected chat-completions model.
+/// Encodes a `ChatMessage` as a chat-completions `messages[]` entry.
 ///
 /// Assistant messages whose `content` is empty but carry tool calls are
 /// encoded with JSON `content: null`, as the API requires.
-fn ChatMessage::to_json_for_model(
-  message : ChatMessage,
-  model : Model,
-  preserve_deepseek_reasoning? : Bool = false,
-) -> Json {
+///
+/// Assistant `reasoning_content` is always replayed: DeepSeek requires it
+/// when tools are enabled and ignores it otherwise, and Kimi K2.7 Code
+/// always requires it.
+///
+/// See: https://api-docs.deepseek.com/guides/thinking_mode#thinking-mode-with-tool-calls
+/// See: https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model#using-the-kimi-k2-7-code-model
+impl ToJson for ChatMessage with fn to_json(message : ChatMessage) -> Json {
   let content = match message.role {
     Assistant if message.tool_calls.length() > 0 && message.content == "" =>
       Json::null()
@@ -47,7 +27,10 @@ fn ChatMessage::to_json_for_model(
         ..if message.tool_calls.length() > 0 {
           [("tool_calls", ([ for call in message.tool_calls => call ] : Json))]
         },
-        ..message.reasoning_json_fields(model, preserve_deepseek_reasoning),
+        ..if message.role is Assistant &&
+          message.reasoning_content is Some(reasoning) {
+          [("reasoning_content", Json::string(reasoning))]
+        },
       ],
     ),
   )
@@ -99,17 +82,7 @@ pub fn encode_chat_request(
     Map(
       [
         ("model", Json::string(Show::to_string(model))),
-        (
-          "messages",
-          [
-            for message in messages => {
-              message.to_json_for_model(
-                model,
-                preserve_deepseek_reasoning=tools.length() > 0,
-              )
-            }
-          ],
-        ),
+        ("messages", ([ for message in messages => message ] : Json)),
         ("stream", Json::boolean(stream)),
         ..if response_format is Some(format) {
           [("response_format", ({ "type": "\{format}" } : Json))]
@@ -145,7 +118,7 @@ pub fn encode_chat_request(
 ///|
 test "tool messages include tool call id" {
   let body = ChatMessage(Tool("call_123"), content="tool result")
-  json_inspect(body.to_json_for_model(Deepseek(V4Pro)), content={
+  json_inspect(body, content={
     "role": "tool",
     "content": "tool result",
     "tool_call_id": "call_123",
@@ -180,7 +153,7 @@ test "tool definitions encode as native DeepSeek tools" {
 }
 
 ///|
-test "deepseek assistant tool calls preserve reasoning content" {
+test "assistant tool calls preserve reasoning content" {
   let body = ChatMessage(
     Assistant,
     content="",
@@ -193,62 +166,7 @@ test "deepseek assistant tool calls preserve reasoning content" {
     ],
     reasoning_content="checked available tools",
   )
-  json_inspect(
-    body.to_json_for_model(Deepseek(V4Pro), preserve_deepseek_reasoning=true),
-    content={
-      "role": "assistant",
-      "content": null,
-      "tool_calls": [
-        {
-          "id": "call_123",
-          "type": "function",
-          "function": {
-            "name": "get_weather",
-            "arguments": "{\"location\":\"Hangzhou\"}",
-          },
-        },
-      ],
-      "reasoning_content": "checked available tools",
-    },
-  )
-}
-
-///|
-test "deepseek reasoning follows tool availability" {
-  let body = ChatMessage(
-    Assistant,
-    content="The tests pass.",
-    reasoning_content="checked the test output",
-  )
-  json_inspect(body.to_json_for_model(Deepseek(V4Pro)), content={
-    "role": "assistant",
-    "content": "The tests pass.",
-  })
-  json_inspect(
-    body.to_json_for_model(Deepseek(V4Pro), preserve_deepseek_reasoning=true),
-    content={
-      "role": "assistant",
-      "content": "The tests pass.",
-      "reasoning_content": "checked the test output",
-    },
-  )
-}
-
-///|
-test "kimi assistant messages preserve reasoning content" {
-  let body = ChatMessage(
-    Assistant,
-    content="",
-    tool_calls=[
-      ToolCall(
-        id="call_123",
-        name="get_weather",
-        arguments="{\"location\":\"Hangzhou\"}",
-      ),
-    ],
-    reasoning_content="checked available tools",
-  )
-  json_inspect(body.to_json_for_model(Kimi(K27Code)), content={
+  json_inspect(body, content={
     "role": "assistant",
     "content": null,
     "tool_calls": [
@@ -266,6 +184,20 @@ test "kimi assistant messages preserve reasoning content" {
 }
 
 ///|
+test "assistant reasoning content is always replayed" {
+  let body = ChatMessage(
+    Assistant,
+    content="The tests pass.",
+    reasoning_content="checked the test output",
+  )
+  json_inspect(body, content={
+    "role": "assistant",
+    "content": "The tests pass.",
+    "reasoning_content": "checked the test output",
+  })
+}
+
+///|
 test "assistant tool call messages preserve content when present" {
   let body = ChatMessage(Assistant, content="I will check that now.", tool_calls=[
     ToolCall(
@@ -274,7 +206,7 @@ test "assistant tool call messages preserve content when present" {
       arguments="{\"location\":\"Hangzhou\"}",
     ),
   ])
-  json_inspect(body.to_json_for_model(Deepseek(V4Pro)), content={
+  json_inspect(body, content={
     "role": "assistant",
     "content": "I will check that now.",
     "tool_calls": [
@@ -298,7 +230,7 @@ test "tool call arguments pass through as opaque strings" {
     arguments="not even valid json{",
   )
   let body = ChatMessage(Assistant, content="", tool_calls=[call])
-  json_inspect(body.to_json_for_model(Deepseek(V4Pro)), content={
+  json_inspect(body, content={
     "role": "assistant",
     "content": null,
     "tool_calls": [
