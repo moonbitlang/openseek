@@ -56,10 +56,7 @@ pub fn State::reconcile(
   // session-to-emulator routing after the low-frequency state transition that
   // can change it. This is a projection of `State`, not a second state owner.
   commands.push(state.sync_host_routes())
-  (
-    { ..state, live_channels: input.live_channels, devices: input.devices },
-    @cmd.batch(commands),
-  )
+  ({ ..state, live_channels: input.live_channels }, @cmd.batch(commands))
 }
 
 ///|

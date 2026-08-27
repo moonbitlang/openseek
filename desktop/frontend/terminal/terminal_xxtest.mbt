@@ -177,7 +177,6 @@ test "a disconnected channel retires only its terminal tabs" {
     exited_before_open: [(remote, 9), (local_channel, 9)],
     synced_dark_mode: Some(false),
     live_channels: [local_channel, remote],
-    devices: [local_channel, remote],
   }
   let (_, disconnected) = disconnect(state, remote)
   inspect(disconnected.tabs.length(), content="1")
