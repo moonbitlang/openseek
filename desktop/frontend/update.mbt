@@ -1726,16 +1726,12 @@ fn update(
     model
   }
   // Terminal input changes are reconciled as part of the root transition.
-  // This replaces the component's rendered marker and MutationObserver while
-  // preserving one installation per connection generation.
+  // Host transport installation is declared separately by the root
+  // subscriptions, so terminal reconciliation owns only terminal state.
   let terminal_emit = dispatch.map(msg => Terminal(msg))
   let terminal_input = model.terminal_input()
   let (terminal, terminal_cmd) = model.terminal.reconcile(
-    terminal_emit,
-    terminal_input,
-    (channel, websocket_epoch) => {
-      install_bridge(dispatch, terminal_emit, channel, websocket_epoch)
-    },
+    terminal_emit, terminal_input,
   )
   let model = { ..model, terminal, }
   let (model, browser_cmd) = sync_browser_view(dispatch, model)

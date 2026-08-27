@@ -74,12 +74,11 @@ pub struct State {
   /// model state lets `sync` refresh existing xterm instances exactly once
   /// when the application switches between light and dark mode.
   priv synced_dark_mode : Bool?
-  /// Root-owned input snapshots used to retire dead channels and install each
-  /// transport generation exactly once. Keeping them beside the tabs makes
-  /// input reconciliation a normal state transition instead of a DOM
-  /// MutationObserver callback.
+  /// Root-owned input snapshots used to retire dead channels and distinguish
+  /// a temporarily reconnecting device from a signed-out device. Keeping them
+  /// beside the tabs makes input reconciliation a normal state transition.
   priv live_channels : Array[@interop.ChannelId]
-  priv connections : Array[Connection]
+  priv devices : Array[@interop.ChannelId]
 } derive(Eq)
 
 ///|
@@ -93,7 +92,7 @@ pub fn State::empty() -> State {
     exited_before_open: [],
     synced_dark_mode: None,
     live_channels: [],
-    connections: [],
+    devices: [],
   }
 }
 

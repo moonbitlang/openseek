@@ -221,8 +221,9 @@ fn apply_roster(
     @interop.ChannelId::Remote(id)
   })
   // Retire first: anything other than this page's target, or a target the
-  // roster no longer grants, closes its socket (a command — update stays
-  // pure), drops its state and conversations, and disposes its PTYs.
+  // roster no longer grants, drops its state and conversations and disposes
+  // its PTYs. Removing the device also removes its root subscription, whose
+  // unload closes the socket before update's commands run.
   let devices : Array[DeviceState] = []
   for dev in model.devices {
     let granted = if dev.channel is Remote(id) {
@@ -230,9 +231,7 @@ fn apply_roster(
     } else {
       false
     }
-    if Some(dev.channel) != page_channel || !granted {
-      commands.push(close_channel(dev.channel))
-    } else {
+    if Some(dev.channel) == page_channel && granted {
       devices.push(dev)
     }
   }
@@ -804,12 +803,8 @@ fn console_signed_out(
   model : Model,
   console : ConsoleState,
 ) -> (@cmd.Cmd, Model) {
-  let commands : Array[@cmd.Cmd] = []
-  for dev in model.devices {
-    commands.push(close_channel(dev.channel))
-  }
   (
-    @cmd.batch(commands),
+    @cmd.none,
     {
       ..model,
       devices: [],

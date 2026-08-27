@@ -425,7 +425,7 @@ test "a workspace commit broadcast supersedes list replies and refreshes session
 
 ///|
 test "workspace commit decoder carries the canonical registry list" {
-  guard bridge_msg(
+  guard notification_msg(
       @interop.ChannelId::Local,
       @protocol.Notification::WorkspaceChanged({ workspaces: ["/one", "/two"] }),
     )
@@ -434,13 +434,6 @@ test "workspace commit decoder carries the canonical registry list" {
   }
   inspect(paths.length(), content="2")
   assert_eq(paths[1].path, "/two")
-}
-
-///|
-test "proton subscribes to canonical durable and workspace notifications" {
-  let methods = proton_event_methods()
-  assert_true(methods.contains(@protocol.NotificationKind::SessionEvent))
-  assert_true(methods.contains(@protocol.NotificationKind::WorkspaceChanged))
 }
 
 ///|

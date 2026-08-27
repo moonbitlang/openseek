@@ -20,9 +20,6 @@ pub fn output(@interop.ChannelId, Int, Int, String) -> @cmd.Cmd
 // Errors
 
 // Types and methods
-type Connection derive(Eq)
-pub fn Connection::Connection(channel~ : @interop.ChannelId, websocket_epoch~ : Int, attempt~ : Int) -> Self
-
 pub struct Ctx {
   channel : @interop.ChannelId
   session : String
@@ -31,9 +28,13 @@ pub struct Ctx {
   connected : Bool
 } derive(Eq)
 pub fn Ctx::Ctx(channel~ : @interop.ChannelId, session~ : String, placement~ : @interop.CheckoutPlacement?, dark_mode~ : Bool, connected~ : Bool) -> Self
+pub fn Ctx::equal(Self, Self) -> Bool
+pub fn Ctx::not_equal(Self, Self) -> Bool
 
 type Input derive(Eq)
-pub fn Input::Input(ctx~ : Ctx, live_channels~ : Array[@interop.ChannelId], connections~ : Array[Connection]) -> Self
+pub fn Input::Input(ctx~ : Ctx, live_channels~ : Array[@interop.ChannelId], devices~ : Array[@interop.ChannelId]) -> Self
+pub fn Input::equal(Self, Self) -> Bool
+pub fn Input::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
   ToggleTerminal
@@ -55,9 +56,11 @@ pub struct State {
   // private fields
 } derive(Eq)
 pub fn State::empty() -> Self
+pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(Self, @cmd.Emit[Msg], Msg, Input) -> (@cmd.Cmd, Self)
 pub fn State::is_open(Self) -> Bool
-pub fn State::reconcile(Self, @cmd.Emit[Msg], Input, (@interop.ChannelId, Int) -> @cmd.Cmd) -> (Self, @cmd.Cmd)
+pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::reconcile(Self, @cmd.Emit[Msg], Input) -> (Self, @cmd.Cmd)
 
 // Type aliases
 

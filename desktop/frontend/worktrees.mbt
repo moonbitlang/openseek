@@ -663,7 +663,7 @@ test "worktree commit decoder carries the workspace and its rows" {
     is Some(notification) else {
     fail("known notification was rejected")
   }
-  guard bridge_msg(@interop.ChannelId::Local, notification)
+  guard notification_msg(@interop.ChannelId::Local, notification)
     is Some(FromDevice(_, WorktreesChanged(rows, workspace~))) else {
     fail("expected a worktree change")
   }
@@ -678,11 +678,6 @@ test "worktree commit decoder carries the workspace and its rows" {
     @protocol.Notification::from_wire("worktree.changed", { "worktrees": [] })
     is None,
   )
-}
-
-///|
-test "proton subscribes to the worktree commit notification" {
-  assert_true(proton_event_methods().contains(WorktreeChanged))
 }
 
 ///|

@@ -15,12 +15,6 @@ fn Model::terminal_input(self : Model) -> @terminal.Input {
         }
       })
       .to_array(),
-    connections=self.devices.map(dev => {
-      @terminal.Connection(
-        channel=dev.channel,
-        websocket_epoch=dev.websocket_epoch,
-        attempt=dev.reconnect_attempt,
-      )
-    }),
+    devices=self.devices.map(dev => dev.channel),
   )
 }

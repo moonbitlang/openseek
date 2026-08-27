@@ -6,54 +6,11 @@
 // decoders below.
 
 ///|
-/// Decode one host notification into the owner that consumes it. Raw terminal
-/// output goes straight to the terminal package's emulator command: it changes
-/// neither terminal state nor application state, so sending it through either
-/// Rabbita update loop would only redraw unrelated UI. Terminal lifecycle
-/// events still use the terminal emitter because they do change its root-owned
-/// state; everything else uses the app emitter.
-fn host_notification(
-  terminal : @cmd.Emit[@terminal.Msg],
-  app_emit : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  notification : @protocol.Notification,
-) -> @cmd.Cmd {
-  match notification {
-    TerminalOutput(payload) =>
-      @terminal.output(channel, payload.id, payload.sequence, payload.data)
-    TerminalExit(payload) =>
-      match terminal_exit_msg(channel, payload) {
-        Some(msg) => terminal(msg)
-        None => @cmd.none
-      }
-    _ =>
-      match bridge_msg(channel, notification) {
-        Some(msg) => app_emit(msg)
-        None => @cmd.none
-      }
-  }
-}
-
-///|
-/// Wire a host's notification stream into messages, once, over the
-/// channel's transport.
-fn install_bridge(
-  app_emit : @cmd.Emit[Msg],
-  terminal : @cmd.Emit[@terminal.Msg],
-  channel : @interop.ChannelId,
-  websocket_epoch : Int,
-) -> @cmd.Cmd {
-  match channel {
-    Local => install_proton_bridge(app_emit, terminal, 0)
-    Remote(device) => connect_ws(app_emit, terminal, device, websocket_epoch)
-  }
-}
-
-///|
-/// Route one notification to its decoder, stamped with the channel it
-/// arrived on. Device-scoped notifications wrap as `FromDevice`; the rest
-/// back page-global or focused-scoped state and stay root messages.
-fn bridge_msg(
+/// Purely decode one non-terminal host notification, retaining the channel it
+/// arrived on. Device-scoped notifications wrap as `FromDevice`; page-global
+/// and focused-scoped notifications stay root messages. Terminal notifications
+/// return `None` because `bridge_event` sends their commands directly.
+fn notification_msg(
   channel : @interop.ChannelId,
   notification : @protocol.Notification,
 ) -> Msg? {
@@ -278,111 +235,86 @@ fn session_changed_msg(
 }
 
 // ---------------------------------------------------------------------------
-// The desktop window: the injected proton bridge.
+// Adapt the bridge package's transport-neutral events into this application's
+// root messages and direct terminal commands.
 
 ///|
-let bridge_events_wired : Ref[Bool] = Ref(false)
-
-///|
-/// Wait for proton to inject the bridge (it loads alongside this bundle),
-/// wire the notification events into messages once, and open the host
-/// connection. The 25ms retries add up to ~3 seconds before the bridge is
-/// declared unavailable.
-fn install_proton_bridge(
-  dispatch : @cmd.Emit[Msg],
-  terminal : @cmd.Emit[@terminal.Msg],
-  attempt : Int,
-) -> @cmd.Cmd {
-  @cmd.custom_cmd(scheduler => {
-    // The request API and the two event actors are separate injected objects.
-    // Do not wire a partially initialized page; retry until every method used
-    // below is available.
-    guard @interop.openseek_api() is Some(request_api) &&
-      @interop.moonbit_bridge_root() is Some(root) &&
-      @interop.js_prop(root, "events") is Some(extension_events) &&
-      @interop.js_prop(root, "app") is Some(application_events) &&
-      @interop.js_prop(request_api, "host.connect") is Some(_) &&
-      @interop.js_prop(request_api, "agent.start") is Some(_) &&
-      @interop.js_prop(extension_events, "on") is Some(_) &&
-      @interop.js_prop(application_events, "on") is Some(_) else {
-      if attempt > 120 {
-        scheduler.add(
-          dispatch(FromDevice(Local, BridgeUnavailable("Bridge unavailable"))),
-        )
+/// Turn one event emitted by a local or remote bridge subscription into a
+/// command understood by the root application. Raw terminal output bypasses
+/// application dispatch to avoid an unrelated redraw; other notifications are
+/// decoded into root messages here alongside connection and window events.
+fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
+  match event {
+    @bridge.Event::Notification(channel~, notification~) =>
+      match notification {
+        TerminalOutput(payload) =>
+          @terminal.output(channel, payload.id, payload.sequence, payload.data)
+        TerminalExit(payload) =>
+          @terminal.SessionExited(channel~, id=payload.id, code=payload.code)
+          |> Terminal
+          |> dispatch
+        _ =>
+          if notification_msg(channel, notification) is Some(msg) {
+            dispatch(msg)
+          } else {
+            @cmd.none
+          }
+      }
+    @bridge.Event::Unavailable(channel~, message~) =>
+      dispatch(FromDevice(channel, BridgeUnavailable(message)))
+    @bridge.Event::ChannelDown(channel~, websocket_epoch~) =>
+      dispatch(FromDevice(channel, ChannelDown(websocket_epoch~)))
+    @bridge.Event::BrowserEvent(payload~) =>
+      match browser_event_msg(payload) {
+        Some(msg) => dispatch(msg)
+        None => @cmd.none
+      }
+    @bridge.Event::MenuCommand(command_id~) =>
+      if command_id == @commands.app_open_devtools.name() {
+        dispatch(AppDeveloperToolsRequested)
       } else {
-        scheduler.add(
-          @cmd.delay(install_proton_bridge(dispatch, terminal, attempt + 1), 25),
-        )
+        @cmd.none
       }
-      return
-    }
-    if !bridge_events_wired.val {
-      bridge_events_wired.val = true
-      wire_proton_events(
-        scheduler, dispatch, terminal, extension_events, application_events,
-      )
-      open_host_connection(scheduler, dispatch, request_api)
-    }
-  })
+    @bridge.Event::NotificationClicked(run_id~) =>
+      dispatch(NotificationClicked(run_id~))
+  }
 }
 
 ///|
-/// Attach this page to the host's app-lifetime notification actor. The call
-/// resolves once the actor has emitted its readiness event; a rejection means
-/// the page could not attach to the native bridge.
-fn open_host_connection(
-  scheduler : &@cmd.Scheduler,
+fn DeviceState::bridge_subscription(
+  self : DeviceState,
   dispatch : @cmd.Emit[Msg],
-  api : @js.Value,
-) -> Unit {
-  @js.async_run(() => {
-    let _ : @js.Value = @interop.js_method_promise(
-      api,
-      "host.connect",
-      @js.Object::new().to_value(),
-    ).wait() catch {
-      error => {
-        scheduler.add(
-          dispatch(
-            FromDevice(
-              Local,
-              BridgeUnavailable(@interop.bridge_error_text(error)),
-            ),
-          ),
-        )
-        return
-      }
-    }
-  })
+) -> @sub.Sub {
+  let bridge_dispatch : @cmd.Emit[@bridge.Event] = event => {
+    bridge_event(dispatch, event)
+  }
+  match self.channel {
+    Local => @bridge.local_connection(bridge_dispatch)
+    Remote(device) =>
+      @bridge.remote_connection(
+        device_id=device,
+        websocket_epoch=self.websocket_epoch,
+        reconnect_attempt=self.reconnect_attempt,
+        dispatch=bridge_dispatch,
+      )
+  }
 }
 
 ///|
-/// Notification kinds exposed by the host extension. Proton requires an
-/// explicit listener for each one, unlike the WebSocket transport's generic
-/// notification callback, so the listeners derive from the shared catalog.
-fn proton_event_methods() -> Array[@protocol.NotificationKind] {
-  @protocol.NotificationKind::all()
+/// Declare one host notification source per device in the model. Rabbita
+/// owns installation and cleanup from here; request/reply commands remain
+/// independent one-shot effects.
+fn Model::bridge_subscriptions(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+) -> @sub.Sub {
+  @sub.batch(self.devices.map(dev => dev.bridge_subscription(dispatch)))
 }
 
 ///|
-test "proton subscribes to all Codex app-server events" {
+test "Codex app-server notifications route to Codex state" {
   assert_true(
-    proton_event_methods().contains(
-      @protocol.NotificationKind::CodexStatusChanged,
-    ),
-  )
-  assert_true(
-    proton_event_methods().contains(
-      @protocol.NotificationKind::CodexNotification,
-    ),
-  )
-  assert_true(
-    proton_event_methods().contains(
-      @protocol.NotificationKind::CodexServerRequest,
-    ),
-  )
-  assert_true(
-    bridge_msg(
+    notification_msg(
       Local,
       @protocol.Notification::CodexNotification({
         "method": "turn/completed",
@@ -395,26 +327,17 @@ test "proton subscribes to all Codex app-server events" {
 }
 
 ///|
-test "proton subscribes to remote-access status changes" {
-  assert_true(proton_event_methods().contains(AuthChanged))
-}
-
-///|
 test "skill invalidations are device-scoped catalog events" {
-  assert_true(proton_event_methods().contains(SkillsChanged))
   assert_true(
-    bridge_msg(Remote("d1"), @protocol.Notification::SkillsChanged)
+    notification_msg(Remote("d1"), @protocol.Notification::SkillsChanged)
     is Some(FromDevice(Remote("d1"), SkillsChanged)),
   )
 }
 
 ///|
 test "update download notifications control only the local desktop flow" {
-  assert_true(proton_event_methods().contains(UpdateDownloadProgress))
-  assert_true(proton_event_methods().contains(UpdateDownloaded))
-  assert_true(proton_event_methods().contains(UpdateDownloadFailed))
   assert_true(
-    bridge_msg(
+    notification_msg(
       Local,
       @protocol.Notification::UpdateDownloadProgress({
         downloaded_bytes: 42,
@@ -424,14 +347,14 @@ test "update download notifications control only the local desktop flow" {
     is Some(UpdateDownloadProgress(downloaded_bytes=42, total_bytes=Some(100))),
   )
   assert_true(
-    bridge_msg(
+    notification_msg(
       Local,
       @protocol.Notification::UpdateDownloaded({ version: "test" }),
     )
     is Some(UpdateDownloaded),
   )
   assert_true(
-    bridge_msg(
+    notification_msg(
       Local,
       @protocol.Notification::UpdateDownloadFailed({
         message: "digest mismatch",
@@ -440,7 +363,7 @@ test "update download notifications control only the local desktop flow" {
     is Some(UpdateFailed(message="digest mismatch")),
   )
   assert_true(
-    bridge_msg(
+    notification_msg(
       Local,
       @protocol.Notification::UpdateDownloadProgress({
         downloaded_bytes: -1,
@@ -450,7 +373,7 @@ test "update download notifications control only the local desktop flow" {
     is None,
   )
   assert_true(
-    bridge_msg(
+    notification_msg(
       Remote("d1"),
       @protocol.Notification::UpdateDownloadProgress({
         downloaded_bytes: 42,
@@ -460,7 +383,7 @@ test "update download notifications control only the local desktop flow" {
     is None,
   )
   assert_true(
-    bridge_msg(
+    notification_msg(
       Remote("d1"),
       @protocol.Notification::UpdateDownloaded({ version: "test" }),
     )
@@ -472,7 +395,7 @@ test "update download notifications control only the local desktop flow" {
 test "file-panel pushes carry their channel; auth.changed is Local-only" {
   let channel : @interop.ChannelId = Remote("d1")
   assert_true(
-    bridge_msg(
+    notification_msg(
       channel,
       @protocol.Notification::FsChanged({
         root: "/work/project",
@@ -489,7 +412,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
     ),
   )
   assert_true(
-    bridge_msg(
+    notification_msg(
       channel,
       @protocol.Notification::FsChanged({
         root: "/work/project",
@@ -526,9 +449,8 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
       )
     ),
   )
-  assert_true(proton_event_methods().contains(FsWatchFailed))
   assert_true(
-    bridge_msg(
+    notification_msg(
       channel,
       @protocol.Notification::FsWatchFailed({
         root: "/work/project",
@@ -552,7 +474,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
   )
   // A remote device's relay registration is its host's business.
   assert_true(
-    bridge_msg(
+    notification_msg(
       channel,
       @protocol.Notification::AuthChanged({
         connected: false,
@@ -566,96 +488,6 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
   )
 }
 
-///|
-test "terminal lifecycle pushes retain the channel that owns their host session" {
-  let payload : @protocol.TerminalExitPayload = { id: 1, code: 0 }
-  assert_true(
-    terminal_exit_msg(Local, payload)
-    is Some(SessionExited(channel=Local, id=1, code=0)),
-  )
-  assert_true(
-    terminal_exit_msg(Remote("d1"), payload)
-    is Some(SessionExited(channel=Remote("d1"), id=1, code=0)),
-  )
-}
-
-///|
-fn wire_proton_events(
-  scheduler : &@cmd.Scheduler,
-  dispatch : @cmd.Emit[Msg],
-  terminal : @cmd.Emit[@terminal.Msg],
-  extension_events : @js.Value,
-  application_events : @js.Value,
-) -> Unit {
-  fn on(name : String, decode : (Map[String, Json]) -> Msg?) -> Unit {
-    let handler = (event : @js.Value) => {
-      guard event_payload(event) is Some(payload) else { return }
-      guard decode(payload) is Some(msg) else { return }
-      scheduler.add(dispatch(msg))
-    }
-    let _ : @js.Value = extension_events.apply_with_string("on", [
-      @js.Value::cast_from(name),
-      @js.Value::cast_from(handler),
-    ])
-  }
-
-  for kind_ in proton_event_methods() {
-    let method_ = kind_.wire_name()
-    let handler = (event : @js.Value) => {
-      guard event_payload(event) is Some(payload) &&
-        @protocol.Notification::from_wire(method_, Json::object(payload))
-        is Some(notification) else {
-        return
-      }
-      scheduler.add(host_notification(terminal, dispatch, Local, notification))
-    }
-    let _ : @js.Value = extension_events.apply_with_string("on", [
-      @js.Value::cast_from("openseek." + method_),
-      @js.Value::cast_from(handler),
-    ])
-  }
-  // Native view events describe this window's own browser tabs. Like
-  // `notification.click` below, the event is window-local: it has no
-  // `NotificationKind` because the shared wire catalog must never carry it
-  // to a relay client, which has no native views.
-  on("openseek.browser.event", browser_event_msg)
-  // Proton forwards native menu commands as application events.
-  // Application events use `__MoonBit__.app.on`; the shared event hub above
-  // is reserved for extension events. Ignore unknown ids so another menu
-  // item cannot accidentally map to developer tools.
-  let menu_handler = (event : @js.Value) => {
-    guard event_payload(event) is Some(payload) &&
-      @jsonx.json_text(payload, "command_id") ==
-      Some(@commands.app_open_devtools.name()) else {
-      return
-    }
-    scheduler.add(dispatch(AppDeveloperToolsRequested))
-  }
-  let _ : @js.Value = application_events.apply_with_string("on", [
-    @js.Value::cast_from("menu.command"),
-    @js.Value::cast_from(menu_handler),
-  ])
-  // Emitted by the notification extension when the user clicks a system
-  // notification; the payload is the run id this frontend stamped on it.
-  // Desktop-only by nature.
-  on("notification.click", notification_clicked_msg)
-}
-
-///|
-/// A proton event's payload as JSON fields. Payloads cross the bridge as
-/// structured clones of the host's JSON, so the round trip back through
-/// JSON is lossless; an event without a decodable payload is dropped —
-/// except a payload-less notification, which reads as empty fields
-/// and is then accepted only if that notification's typed payload permits it.
-fn event_payload(event : @js.Value) -> Map[String, Json]? {
-  guard @interop.js_prop(event, "payload") is Some(payload) else {
-    return Some(Map([]))
-  }
-  let json = payload.to_json() catch { _ => return None }
-  guard json is Object(fields) else { return None }
-  Some(fields)
-}
-
 // ---------------------------------------------------------------------------
 // A browser: JSON-RPC over the page's WebSocket, with reconnection.
 
@@ -664,43 +496,6 @@ fn event_payload(event : @js.Value) -> Map[String, Json]? {
 /// unreachable. The loop keeps reconnecting regardless; the next
 /// `agent.connected` restores the UI.
 const WsLostAfter = 3
-
-///|
-/// Open a device's WebSocket once. Reconnection is model-driven: the socket
-/// closing dispatches `ChannelDown`, whose handler counts the loss and
-/// schedules `ReconnectDue` with backoff — so a device dropped from the
-/// model (revoked, signed out) stops reconnecting by itself, and a
-/// successful connection (the host's `agent.connected`) resets the count.
-fn connect_ws(
-  dispatch : @cmd.Emit[Msg],
-  terminal : @cmd.Emit[@terminal.Msg],
-  device : String,
-  websocket_epoch : Int,
-) -> @cmd.Cmd {
-  @cmd.custom_cmd(scheduler => {
-    let channel : @interop.ChannelId = Remote(device)
-    @interop.ws_connect(
-      device,
-      on_notification=notification => {
-        scheduler.add(
-          host_notification(terminal, dispatch, channel, notification),
-        )
-      },
-      on_down=() => {
-        scheduler.add(
-          dispatch(FromDevice(channel, ChannelDown(websocket_epoch~))),
-        )
-      },
-    )
-  })
-}
-
-///|
-/// Close a channel's socket and forget it, as a command — the roster
-/// reconcile retires channels from inside `update`, which stays pure.
-fn close_channel(channel : @interop.ChannelId) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => @interop.ws_close(channel))
-}
 
 ///|
 /// Reconnect backoff: quick first retries, settling at 15s so an
@@ -1006,26 +801,6 @@ fn diagnostics_msg(
   Some(
     DiagnosticsPublished(channel~, absolute~, diagnostics=payload.diagnostics),
   )
-}
-
-///|
-fn terminal_exit_msg(
-  channel : @interop.ChannelId,
-  payload : @protocol.TerminalExitPayload,
-) -> @terminal.Msg? {
-  Some(SessionExited(channel~, id=payload.id, code=payload.code))
-}
-
-///|
-/// A clicked notification's payload is the run id `system_notification.mbt`
-/// stamped on it; an empty payload is dropped (a stale notification from an
-/// older build, or a payload another surface posted).
-fn notification_clicked_msg(payload : Map[String, Json]) -> Msg? {
-  guard @jsonx.json_text(payload, "payload") is Some(run_id) &&
-    !run_id.is_empty() else {
-    return None
-  }
-  Some(NotificationClicked(run_id~))
 }
 
 ///|

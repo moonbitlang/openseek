@@ -363,6 +363,10 @@ pub fn boot() -> Unit {
             emit.map(viewport => ViewportResized(width=viewport.width)),
           ),
           app_shortcut_subscription(emit),
+          // Host event sources follow the device roster. Removing a device
+          // therefore unloads its WebSocket immediately; advancing its retry
+          // identity replaces only that device's connection.
+          model.bridge_subscriptions(emit),
         ]
         // The project picker's Enter/Escape/paste surface, only while its
         // modal is open — same lifetime rule as the dismissal listeners.
