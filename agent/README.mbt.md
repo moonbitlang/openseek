@@ -106,7 +106,7 @@ calls `@agent.run`, but that decision lives outside the `agent` package.
 - `mbtx`: compile and run a self-contained MoonBit program — both the
   scripting surface (transform files, parse JSON, compute, probe the language)
   and the command runner, since processes are spawned from the program through
-  the shell-free `bobzhang/myshell` EDSL. Supports `run_in_background`;
+  the shell-free `moonbitlang/async/shell` API. Supports `run_in_background`;
 - `job_output` / `job_stop`: read or stop a background job;
 - `read`: read a text file;
 - `edit`: replace exact text in a file;
@@ -119,7 +119,7 @@ calls `@agent.run`, but that decision lives outside the `agent` package.
 - `finish`: end the task with a final answer.
 
 There is no shell tool: every command the agent runs is an argument vector
-handed to `@myshell.Cmd`, so no command text is ever parsed by a shell.
+handed to `@shell.Cmd`, so no command text is ever parsed by a shell.
 
 File-oriented tools capture `runtime.workspace_root()` when the registry is
 built. The registry also receives the runtime and task scope for stateful

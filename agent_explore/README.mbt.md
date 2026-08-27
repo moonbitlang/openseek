@@ -14,7 +14,7 @@ Contract highlights:
 
 - Child toolset: `read` + `mbtx` + `submit_answer` — no edit tools, no
   nested subagent tools. Commands run from a `mbtx` snippet through the
-  shell-free `bobzhang/myshell` EDSL, and the source-write sandbox denies
+  shell-free `moonbitlang/async/shell` API, and the source-write sandbox denies
   writes to the workspace's own sources. A per-child scratch lab (temp dir) is
   the one writable place: the scout may scaffold throwaway projects and run any
   moon command there to verify claims empirically.
