@@ -403,21 +403,22 @@ fn text_search_body(
 ) -> @html.Html {
   let children : Array[@html.Html] = []
   let busy = page.phase is Debouncing || page.phase is Loading
-  let summary = if busy {
+  let summary = page.result_summary()
+  let summary_text = if busy {
     "Searching…"
-  } else if page.match_count == 1 {
-    "1 result in \{page.file_count} file"
+  } else if summary.match_count == 1 {
+    "1 result in \{summary.file_count} file"
   } else {
-    "\{page.match_count} results in \{page.file_count} files"
+    "\{summary.match_count} results in \{summary.file_count} files"
   }
   children.push(
     @html.div(
       class="search-summary",
       attrs=@html.Attrs::build().aria_live("polite").aria_busy(busy.to_string()),
-      summary,
+      summary_text,
     ),
   )
-  if page.limit_hit {
+  if summary.limit_hit {
     children.push(
       @html.div(
         class="search-truncated",

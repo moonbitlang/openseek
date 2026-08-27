@@ -217,17 +217,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       let generation = self.generation + 1
       {
         generation,
-        page: {
-          ..page,
-          text: { ..page.text, matches: [] },
-          semantic: { ..page.semantic, hits: [], partial: false },
-          match_count: 0,
-          file_count: 0,
-          limit_hit: false,
-          visible_lines: InitialVisibleSearchLines,
-          phase: Idle,
-          generation,
-        },
+        page: { ..page.clear_results(), phase: Idle, generation, },
       }
     }
     CollapseAll => {
@@ -288,9 +278,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       {
         ..self,
         page: {
-          ..page,
+          ..page.clear_results(),
           text: { ..page.text, matches: reply.matches },
-          semantic: { ..page.semantic, hits: [], partial: false },
           match_count: reply.match_count,
           file_count: reply.file_count,
           limit_hit: reply.limit_hit,
@@ -447,6 +436,28 @@ fn Page::active_result_count(self : Page) -> Int {
   match self.mode {
     Text => self.text.matches.length()
     Semantic => self.semantic.hits.length()
+  }
+}
+
+///|
+fn Page::clear_results(self : Page) -> Page {
+  {
+    ..self,
+    text: { ..self.text, matches: [] },
+    semantic: { ..self.semantic, hits: [], partial: false },
+    match_count: 0,
+    file_count: 0,
+    limit_hit: false,
+    visible_lines: InitialVisibleSearchLines,
+  }
+}
+
+///|
+fn Page::result_summary(self : Page) -> SearchResultSummary {
+  {
+    match_count: self.match_count,
+    file_count: self.file_count,
+    limit_hit: self.limit_hit,
   }
 }
 

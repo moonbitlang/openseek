@@ -47,6 +47,13 @@ struct SemanticSearchState {
 } derive(Eq)
 
 ///|
+struct SearchResultSummary {
+  match_count : Int
+  file_count : Int
+  limit_hit : Bool
+} derive(Eq)
+
+///|
 struct Page {
   mode : Mode
   text : TextSearchState
