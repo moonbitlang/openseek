@@ -95,26 +95,27 @@ fn State::refresh_catalog(
   channel : @interop.ChannelId,
 ) -> (@cmd.Cmd, State) {
   let (activity_frontier, activity) = self.activity.reserve_snapshot()
-  let next = {
-    ..self,
-    activity,
-    live_catalog_request_id: @uuid.mint(),
-    archived_catalog_request_id: @uuid.mint(),
-  }
+  let live_catalog_request_id = @uuid.mint()
+  let archived_catalog_request_id = @uuid.mint()
   (
     @cmd.batch([
       CodexCatalogReplyContext::{
         archived: false,
         activity_frontier,
-        request_id: next.live_catalog_request_id,
+        request_id: live_catalog_request_id,
       }.run(dispatch, channel),
       CodexCatalogReplyContext::{
         archived: true,
         activity_frontier,
-        request_id: next.archived_catalog_request_id,
+        request_id: archived_catalog_request_id,
       }.run(dispatch, channel),
     ]),
-    next,
+    {
+      ..self,
+      activity,
+      live_catalog_request_id: Some(live_catalog_request_id),
+      archived_catalog_request_id: Some(archived_catalog_request_id),
+    },
   )
 }
 

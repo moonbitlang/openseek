@@ -77,7 +77,7 @@ test "Git history replies are fenced by request UUID" {
   let state = {
     ..graph_fixture_state(),
     git_graph: GitGraphLoading,
-    git_graph_request_id: request_id,
+    git_graph_request_id: Some(request_id),
   }
   let reply : @protocol.GitHistoryReply = {
     repository: true,

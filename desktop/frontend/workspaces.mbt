@@ -208,7 +208,10 @@ test "detaching the active workspace opens the newest remaining conversation" {
     })
   let (_, next) = update_dev(
     dispatch,
-    ProjectsLoaded([kept_workspace], request_id=model.dev().projects_request_id),
+    ProjectsLoaded(
+      [kept_workspace],
+      request_id=model.dev().projects_request_id.unwrap(),
+    ),
     model,
   )
   inspect(next.dev().projects.length(), content="1")
@@ -223,7 +226,10 @@ test "detaching the active workspace opens the newest remaining conversation" {
   // the same selection and starts the same request.
   let (_, replayed) = update_dev(
     dispatch,
-    ProjectsLoaded([kept_workspace], request_id=model.dev().projects_request_id),
+    ProjectsLoaded(
+      [kept_workspace],
+      request_id=model.dev().projects_request_id.unwrap(),
+    ),
     model,
   )
   inspect(replayed.active_session, content="desktop-kept")
@@ -239,7 +245,7 @@ test "detaching the active workspace opens the newest remaining conversation" {
     dispatch,
     ProjectsLoaded(
       [kept_workspace],
-      request_id=attached.dev().projects_request_id,
+      request_id=attached.dev().projects_request_id.unwrap(),
     ),
     attached,
   )
@@ -372,7 +378,7 @@ test "an older workspace reply cannot replace a newer same-connection reply" {
   let current_request_id = "projects-current-reply"
   let model = test_model().with_dev(dev => {
     ..dev,
-    projects_request_id: current_request_id,
+    projects_request_id: Some(current_request_id),
   })
   let (_, newest) = update_dev(
     dispatch,
@@ -403,10 +409,10 @@ test "a workspace commit broadcast supersedes list replies and refreshes session
   let model = test_model().with_dev(dev => {
     ..dev,
     projects: [current],
-    projects_request_id: current_request_id,
+    projects_request_id: Some(current_request_id),
   })
   let (_, changed) = update_dev(dispatch, ProjectsChanged([new_]), model)
-  assert_true(changed.dev().projects_request_id != current_request_id)
+  assert_true(changed.dev().projects_request_id != Some(current_request_id))
   inspect(changed.dev().projects.length(), content="1")
   assert_eq(changed.dev().projects[0], new_)
   assert_true(

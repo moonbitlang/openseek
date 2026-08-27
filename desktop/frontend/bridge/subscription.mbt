@@ -33,9 +33,7 @@ pub fn remote_connection(
   dispatch~ : @cmd.Emit[Event],
 ) -> @sub.Sub {
   @sub.custom_sub(
-    RemoteBridgeSub::subscription_key(
-      device_id, websocket_id, reconnect_id,
-    ),
+    RemoteBridgeSub::subscription_key(device_id, websocket_id, reconnect_id),
     @sub.Global,
     RemoteBridge(dispatch~, device_id~, websocket_id~),
     bridge_sub_loader,
@@ -84,21 +82,15 @@ test "bridge identity changes only when its resource must restart" {
     "device-a", "websocket-a", "reconnect-a",
   )
   assert_eq(
-    RemoteBridgeSub::subscription_key(
-      "device-a", "websocket-a", "reconnect-a",
-    ),
+    RemoteBridgeSub::subscription_key("device-a", "websocket-a", "reconnect-a"),
     remote,
   )
   assert_not_eq(
-    RemoteBridgeSub::subscription_key(
-      "device-a", "websocket-a", "reconnect-b",
-    ),
+    RemoteBridgeSub::subscription_key("device-a", "websocket-a", "reconnect-b"),
     remote,
   )
   assert_not_eq(
-    RemoteBridgeSub::subscription_key(
-      "device-a", "websocket-b", "reconnect-a",
-    ),
+    RemoteBridgeSub::subscription_key("device-a", "websocket-b", "reconnect-a"),
     remote,
   )
 }

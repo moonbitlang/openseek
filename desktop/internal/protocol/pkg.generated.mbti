@@ -239,12 +239,14 @@ pub impl @json.FromJson for BrowserOpenPayload
 pub(all) struct BrowserThemePayload {
   id : String
   dark : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn BrowserThemePayload::equal(Self, Self) -> Bool
 pub fn BrowserThemePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserThemePayload::not_equal(Self, Self) -> Bool
 pub fn BrowserThemePayload::to_json(Self) -> Json
 pub fn BrowserThemePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserThemePayload
+pub impl @json.FromJson for BrowserThemePayload
 
 pub(all) struct BrowserVisiblePayload {
   id : String

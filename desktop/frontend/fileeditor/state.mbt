@@ -426,10 +426,12 @@ pub(all) struct State {
   // refreshed only at meaningful repository boundaries rather than on the
   // three-second working-tree poll.
   git_graph : GitGraphState
-  git_graph_request_id : String
+  // The graph and commit-file reads whose replies are still accepted; `None`
+  // while none is in flight.
+  git_graph_request_id : String?
   git_graph_selected : String?
   git_commit_files : GitCommitFiles
-  git_commit_files_request_id : String
+  git_commit_files_request_id : String?
   git_actual_head : String?
   git_actual_head_known : Bool
   // Section presentation is a page-lifetime preference and survives owner
@@ -444,10 +446,11 @@ pub(all) struct State {
   // Watcher events and run boundaries invalidate affected progress; a final
   // Git refresh also drops rows whose status or rename identity changed.
   reviewed_changes : Array[ChangedFile]
-  // Request UUID retained across conversation re-roots and replaced across
-  // same-owner placement changes. Owner plus this identity rejects an
-  // old A→B→A reply or one from an earlier checkout incarnation.
-  changes_request_id : String
+  // The Changes read whose reply is still accepted, or `None` while no read
+  // is in flight. Retained across conversation re-roots and cleared across
+  // same-owner placement changes, so owner plus this identity rejects an old
+  // A→B→A reply or one from an earlier checkout incarnation.
+  changes_request_id : String?
   // Placement/conversation UUID carried by filesystem request replies.
   // Replacing this value on either boundary rejects reads, listings, and
   // stats that outlived the checkout they addressed.
@@ -541,17 +544,17 @@ pub fn State::empty() -> State {
     review_diff_navigation_available: false,
     changes: ChangeListIdle,
     git_graph: GitGraphIdle,
-    git_graph_request_id: @uuid.mint(),
+    git_graph_request_id: None,
     git_graph_selected: None,
     git_commit_files: GitCommitFilesIdle,
-    git_commit_files_request_id: @uuid.mint(),
+    git_commit_files_request_id: None,
     git_actual_head: None,
     git_actual_head_known: false,
     changes_collapsed: false,
     git_graph_collapsed: false,
     history_docs: Map([]),
     reviewed_changes: [],
-    changes_request_id: @uuid.mint(),
+    changes_request_id: None,
     checkout_id: @uuid.mint(),
     file_link_request_id: @uuid.mint(),
     changes_head: None,

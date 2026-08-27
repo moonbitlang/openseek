@@ -300,7 +300,7 @@ fn request_sessions_refresh(
   let request_id = @uuid.mint()
   (
     fetch_sessions(dispatch, channel, request_id),
-    model.replace_device({ ..dev, sessions_request_id: request_id }),
+    model.replace_device({ ..dev, sessions_request_id: Some(request_id) }),
   )
 }
 
@@ -319,7 +319,7 @@ fn request_archived_refresh(
   let request_id = @uuid.mint()
   (
     fetch_archived(dispatch, channel, request_id),
-    model.replace_device({ ..dev, archived_request_id: request_id }),
+    model.replace_device({ ..dev, archived_request_id: Some(request_id) }),
   )
 }
 
@@ -3618,7 +3618,10 @@ fn update_msg(
               archived_request_id,
             ),
             {
-              ..model.replace_device({ ..dev, archived_request_id, }),
+              ..model.replace_device({
+                ..dev,
+                archived_request_id: Some(archived_request_id),
+              }),
               archived_delete_confirm: None,
             },
           )
@@ -5024,9 +5027,9 @@ fn update_device_msg(
         bridge: Connected,
         reconnect_failures: 0,
         connection_id,
-        sessions_request_id,
-        archived_request_id,
-        projects_request_id,
+        sessions_request_id: Some(sessions_request_id),
+        archived_request_id: Some(archived_request_id),
+        projects_request_id: Some(projects_request_id),
         // A reply carries its request UUID rather than the bridge connection.
         // Forget every read the old connection had in flight before clearing
         // the mirrors, so a late reply cannot repopulate either one during
@@ -5339,7 +5342,7 @@ fn update_device_msg(
       )
     }
     SessionsLoaded(items, request_id~) => {
-      guard request_id == dev.sessions_request_id else {
+      guard dev.sessions_request_id == Some(request_id) else {
         return (@cmd.none, model)
       }
       // Whole-list replies have no store revision. An identity notification
@@ -5473,7 +5476,7 @@ fn update_device_msg(
       (@cmd.batch(commands), next)
     }
     ProjectsLoaded(paths, request_id~) => {
-      guard request_id == dev.projects_request_id else {
+      guard dev.projects_request_id == Some(request_id) else {
         return (@cmd.none, model)
       }
       // The registry snapshot is also the authority for what this page may
@@ -5485,10 +5488,7 @@ fn update_device_msg(
     ProjectsChanged(paths) => {
       // A post-commit broadcast invalidates the exact list request currently
       // in flight, so its reply cannot roll the canonical mutation back.
-      let next = model.replace_device({
-        ..dev,
-        projects_request_id: @uuid.mint(),
-      })
+      let next = model.replace_device({ ..dev, projects_request_id: None })
       adopt_projects(dispatch, channel, next, paths)
     }
     ProjectAddCommitted(added~, paths~) => {
@@ -5748,7 +5748,7 @@ fn update_device_msg(
         { ..model, archive_confirm: Some({ channel, session, refusal, }), },
       )
     ArchivedLoaded(items, request_id~, fresh_session~) => {
-      guard request_id == dev.archived_request_id else {
+      guard dev.archived_request_id == Some(request_id) else {
         return (@cmd.none, model)
       }
       // A newer unarchive notification wins over an older whole-list reply;
@@ -5823,7 +5823,7 @@ fn update_device_msg(
       )
     }
     ArchivedDeleted(key~, sessions~, items~, request_id~, fresh_session~) => {
-      guard request_id == dev.archived_request_id else {
+      guard dev.archived_request_id == Some(request_id) else {
         return (@cmd.none, model)
       }
       // Install the permanent tombstone before folding the unversioned list
@@ -5887,7 +5887,10 @@ fn update_device_msg(
       // instead of failing identically forever.
       let projects_request_id = @uuid.mint()
       let refresh = fetch_projects(dispatch, channel, projects_request_id)
-      let model = model.replace_device({ ..dev, projects_request_id, })
+      let model = model.replace_device({
+        ..dev,
+        projects_request_id: Some(projects_request_id),
+      })
       let (archived, model) = request_archived_refresh(dispatch, channel, model)
       let (toast, model) = model.notify_error(
         dispatch,
@@ -5905,7 +5908,7 @@ fn update_device_msg(
     }
     WorktreeFailed(message) => model.notify_error(dispatch, message)
     SessionsFailed(request_id~, message~) => {
-      guard request_id == dev.sessions_request_id else {
+      guard dev.sessions_request_id == Some(request_id) else {
         return (@cmd.none, model)
       }
       model.notify_error(dispatch, "Session list unavailable: \{message}")
@@ -7462,9 +7465,9 @@ fn test_model() -> Model {
         ..empty_device_state(@interop.ChannelId::Local),
         bridge: Connected,
         // Stable labels let reply fixtures name the exact in-flight request.
-        sessions_request_id: "sessions-request-current",
-        archived_request_id: "archived-request-current",
-        projects_request_id: "projects-request-current",
+        sessions_request_id: Some("sessions-request-current"),
+        archived_request_id: Some("archived-request-current"),
+        projects_request_id: Some("projects-request-current"),
         workspace_requests: WorkspaceRequestIds(values=[
           (
             WorktreeList,
@@ -8707,7 +8710,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
           updated_at_ms: None,
         },
       ],
-      request_id=committed.dev().sessions_request_id,
+      request_id=committed.dev().sessions_request_id.unwrap(),
     ),
     committed.activate(
       @interop.ChannelId::Local,
@@ -8945,7 +8948,7 @@ test "a background session list updates only its channel's same-id workspace" {
       {
         ..empty_device_state(remote),
         bridge: Connected,
-        sessions_request_id: "remote-sessions-current",
+        sessions_request_id: Some("remote-sessions-current"),
       },
     ],
     active_session: "shared",
@@ -9080,7 +9083,7 @@ test "sessions failure pops a toast without touching the transcript" {
   let (_, next) = update_dev(
     dispatch,
     SessionsFailed(
-      request_id=model.dev().sessions_request_id,
+      request_id=model.dev().sessions_request_id.unwrap(),
       message="engine exploded",
     ),
     model,
@@ -9308,7 +9311,10 @@ test "a reconnect retires the file index watcher until placement returns" {
   let root = @interop.ChannelId::Local.test_project()
   let (_, rediscovered) = update_dev(
     dispatch,
-    ProjectsLoaded([root], request_id=reconnected.dev().projects_request_id),
+    ProjectsLoaded(
+      [root],
+      request_id=reconnected.dev().projects_request_id.unwrap(),
+    ),
     reconnected,
   )
   let (_, placed) = update_dev(
@@ -14345,7 +14351,7 @@ test "archived deletion keeps same-id rows in other stores" {
   let response_id = @uuid.mint()
   let response_model = staged.with_dev(dev => {
     ..dev,
-    archived_request_id: response_id,
+    archived_request_id: Some(response_id),
   })
   let (_, deleted) = update_dev(
     dispatch,
@@ -14373,7 +14379,7 @@ test "delete response tombstones a family before stale list replies" {
   let model = {
     ..test_model().with_dev(dev => {
       ..dev,
-      archived_request_id: response_id,
+      archived_request_id: Some(response_id),
       archived: [parent, child, other],
       sessions: [parent, child],
     }),
@@ -14440,7 +14446,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
   let response_id = "archive-recreated-current"
   let model = test_model().with_dev(dev => {
     ..dev,
-    archived_request_id: response_id,
+    archived_request_id: Some(response_id),
     archived: [deleted_item],
     projects: [project],
   })
@@ -14911,7 +14917,7 @@ test "a background archive removes only its channel's same-id conversation" {
       {
         ..empty_device_state(remote),
         bridge: Connected,
-        archived_request_id: "remote-archived-current",
+        archived_request_id: Some("remote-archived-current"),
       },
     ],
     active_session: "shared",
@@ -15005,8 +15011,8 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
   let (_, ready) = update_dev(dispatch, BridgeReady, model)
   assert_true(ready.dev().connection_id != model.dev().connection_id)
   inspect(ready.dev().archive_overrides.length(), content="0")
-  let live_request_id = ready.dev().sessions_request_id
-  let archived_request_id = ready.dev().archived_request_id
+  let live_request_id = ready.dev().sessions_request_id.unwrap()
+  let archived_request_id = ready.dev().archived_request_id.unwrap()
   let (_, live) = update_dev(
     dispatch,
     SessionsLoaded([item], request_id=live_request_id),
@@ -15104,7 +15110,7 @@ test "an older same-connection live list cannot replace a newer reply" {
   let current_request_id = "sessions-list-current"
   let model = test_model().with_dev(dev => {
     ..dev,
-    sessions_request_id: current_request_id,
+    sessions_request_id: Some(current_request_id),
   })
   let (_, newest) = update_dev(
     dispatch,
@@ -15134,7 +15140,7 @@ test "an older same-connection archived list cannot replace a newer reply" {
   let current_request_id = "archived-list-current"
   let model = test_model().with_dev(dev => {
     ..dev,
-    archived_request_id: current_request_id,
+    archived_request_id: Some(current_request_id),
   })
   let (_, newest) = update_dev(
     dispatch,
@@ -15236,7 +15242,10 @@ test "toast ids only ever grow, so timers and toasts stay paired" {
   let (_, first) = update_dev(dispatch, ArchiveFailed("one"), test_model())
   let (_, second) = update_dev(
     dispatch,
-    SessionsFailed(request_id=first.dev().sessions_request_id, message="two"),
+    SessionsFailed(
+      request_id=first.dev().sessions_request_id.unwrap(),
+      message="two",
+    ),
     first,
   )
   inspect(second.notifications.length(), content="2")
@@ -16350,7 +16359,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
       tree_open: false,
       explorer_mode: @fileeditor.ExplorerChanges,
       review_view_mode: @fileeditor.ReviewDiff,
-      changes_request_id: "changes-7",
+      changes_request_id: Some("changes-7"),
       watch_id: "watch-11",
     },
   }
@@ -16369,7 +16378,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
   assert_true(next.file_panel.review_view_mode is @fileeditor.ReviewDiff)
   // The eager re-root retains 7. The jump keeps the explorer hidden while the
   // file is active, so Changes waits until the pane is shown before refreshing.
-  assert_true(next.file_panel.changes_request_id == "changes-7")
+  assert_true(next.file_panel.changes_request_id == Some("changes-7"))
   // The fresh watch gets a new UUID, so an older watcher push cannot collide.
   assert_true(next.file_panel.watch_id != "watch-11")
   // The registry can still be loading; once loaded, the project root remains

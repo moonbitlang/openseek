@@ -1709,7 +1709,7 @@ fn refresh_changes(
           ),
           {
             ..state,
-            changes_request_id: request_id,
+            changes_request_id: Some(request_id),
             changes: ChangeListReady(
               repository~,
               files~,
@@ -1726,7 +1726,7 @@ fn refresh_changes(
         {
           ..state,
           changes: ChangeListLoading(refresh_again=false),
-          changes_request_id: request_id,
+          changes_request_id: Some(request_id),
         },
       )
     }
@@ -1890,10 +1890,11 @@ pub fn sync(
         review_diff_ignore_tests: state.review_diff_ignore_tests,
         changes_collapsed: state.changes_collapsed,
         git_graph_collapsed: state.git_graph_collapsed,
-        // Request tokens must outlive the per-conversation cache. Resetting
-        // here would let a late A reply collide after switching A→B→A.
+        // A same-owner placement change retires the in-flight Changes read;
+        // its late reply then fails the exact-id check. A conversation re-root
+        // keeps it, so the read can still settle the cached inventory.
         changes_request_id: if placement_identity_changed {
-          @uuid.mint()
+          None
         } else {
           state.changes_request_id
         },
@@ -1908,7 +1909,7 @@ pub fn sync(
         },
         review_generation: state.review_generation,
         git_graph_request_id: if owner_changed || placement_identity_changed {
-          @uuid.mint()
+          None
         } else {
           state.git_graph_request_id
         },
@@ -1967,12 +1968,12 @@ pub fn sync(
       index: IndexEmpty,
       error: None,
       search: state.search.park(),
-      changes_request_id: @uuid.mint(),
+      changes_request_id: None,
       review_generation,
       review_recovery_pending,
       background_review_requests: Map([]),
       git_graph: GitGraphIdle,
-      git_graph_request_id: @uuid.mint(),
+      git_graph_request_id: None,
       git_graph_selected: None,
       git_commit_files: GitCommitFilesIdle,
       history_docs: Map([]),
@@ -2623,7 +2624,8 @@ pub fn update(
     GitHistoryRefreshRequested => refresh_git_graph(dispatch, state, ctx)
     GitHistoryLoadMoreRequested => load_more_git_history(dispatch, state, ctx)
     GitHistoryLoaded(owner~, request_id~, append~, reply~) =>
-      if state.owner != Some(owner) || state.git_graph_request_id != request_id {
+      if state.owner != Some(owner) ||
+        state.git_graph_request_id != Some(request_id) {
         (@cmd.none, state)
       } else if append {
         match state.git_graph {
@@ -2670,7 +2672,8 @@ pub fn update(
         )
       }
     GitHistoryFailed(owner~, request_id~, append~, message~) =>
-      if state.owner != Some(owner) || state.git_graph_request_id != request_id {
+      if state.owner != Some(owner) ||
+        state.git_graph_request_id != Some(request_id) {
         (@cmd.none, state)
       } else if append {
         match state.git_graph {
@@ -2697,7 +2700,7 @@ pub fn update(
     GitCommitSelected(commit) => select_git_commit(dispatch, state, ctx, commit)
     GitCommitChangesLoaded(owner~, request_id~, reply~) =>
       if state.owner == Some(owner) &&
-        state.git_commit_files_request_id == request_id &&
+        state.git_commit_files_request_id == Some(request_id) &&
         state.git_graph_selected == Some(reply.commit) &&
         state.git_commit_files is GitCommitFilesLoading(commit=loading_commit) &&
         loading_commit == reply.commit {
@@ -2716,7 +2719,7 @@ pub fn update(
       }
     GitCommitChangesFailed(owner~, request_id~, commit~, message~) =>
       if state.owner == Some(owner) &&
-        state.git_commit_files_request_id == request_id &&
+        state.git_commit_files_request_id == Some(request_id) &&
         state.git_graph_selected == Some(commit) {
         (
           @cmd.none,
@@ -2731,7 +2734,8 @@ pub fn update(
     GitCommitChangesRetry(commit) =>
       retry_git_commit_changes(dispatch, state, ctx, commit)
     ChangesLoaded(owner~, request_id~, repository~, head~, files~) =>
-      if state.owner != Some(owner) || state.changes_request_id != request_id {
+      if state.owner != Some(owner) ||
+        state.changes_request_id != Some(request_id) {
         (@cmd.none, state)
       } else {
         let refresh_again = match state.changes {
@@ -2827,7 +2831,7 @@ pub fn update(
             } else {
               true
             },
-            changes_request_id: next_request_id,
+            changes_request_id: Some(next_request_id),
             review_generation,
             reviewed_changes,
             background_review_requests,
@@ -2846,7 +2850,8 @@ pub fn update(
         )
       }
     ChangesFailed(owner~, request_id~, message~) =>
-      if state.owner != Some(owner) || state.changes_request_id != request_id {
+      if state.owner != Some(owner) ||
+        state.changes_request_id != Some(request_id) {
         (@cmd.none, state)
       } else {
         match state.changes {
@@ -2866,7 +2871,7 @@ pub fn update(
                 {
                   ..state,
                   changes: ChangeListLoading(refresh_again=false),
-                  changes_request_id: next_request_id,
+                  changes_request_id: Some(next_request_id),
                 },
               )
             } else {
@@ -2888,7 +2893,7 @@ pub fn update(
                 ),
                 {
                   ..state,
-                  changes_request_id: next_request_id,
+                  changes_request_id: Some(next_request_id),
                   changes: ChangeListReady(
                     repository~,
                     files~,
@@ -5048,7 +5053,7 @@ test "a resolved placement change reroots documents and fences old replies" {
     ),
     changes_head: Some("root-head"),
     changes_head_known: true,
-    changes_request_id: "changes-2",
+    changes_request_id: Some("changes-2"),
     file_link_request_id: "file-link-before-placement-change",
     review_generation: 4,
     docs,
@@ -5140,7 +5145,7 @@ test "a resolved placement change reroots documents and fences old replies" {
     emit,
     ChangesLoaded(
       owner=worktree_ctx.owner,
-      request_id=state.changes_request_id,
+      request_id=state.changes_request_id.unwrap(),
       repository=true,
       head=Some("root-head"),
       files=[test_modified_change(path)],
@@ -5447,7 +5452,7 @@ test "a missing checkout settles an in-flight Changes request for retry" {
     ..owned_state_at(present),
     explorer_mode: ExplorerChanges,
     changes: ChangeListLoading(refresh_again=true),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     watching: Some({
       owner: present.owner,
       root: present.test_root(),
@@ -5472,7 +5477,7 @@ test "a missing checkout settles an in-flight Changes request for retry" {
     emit,
     ChangesLoaded(
       owner=present.owner,
-      request_id=state.changes_request_id,
+      request_id=state.changes_request_id.unwrap(),
       repository=true,
       head=None,
       files=[],
@@ -5519,7 +5524,7 @@ test "checkout recovery restarts a review whose paired replies were parked" {
       refreshing=true,
       refresh_again=false,
     ),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     changes_head: Some("same-head"),
     changes_head_known: true,
     review_generation: 3,
@@ -5570,7 +5575,7 @@ test "checkout recovery restarts a review whose paired replies were parked" {
     emit,
     ChangesLoaded(
       owner=present.owner,
-      request_id=restored.changes_request_id,
+      request_id=restored.changes_request_id.unwrap(),
       repository=true,
       head=Some("same-head"),
       files=[change],
@@ -5621,7 +5626,7 @@ test "hidden checkout recovery retries failed Changes once before parking" {
     ..owned_state_at(present),
     tree_open: false,
     changes: ChangeListFailed("transient Git failure"),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     changes_head: Some("same-head"),
     changes_head_known: true,
     review_generation: 3,
@@ -5650,7 +5655,7 @@ test "hidden checkout recovery retries failed Changes once before parking" {
     emit,
     ChangesFailed(
       owner=present.owner,
-      request_id=restored.changes_request_id,
+      request_id=restored.changes_request_id.unwrap(),
       message="Git still unavailable",
     ),
     restored,
@@ -5663,7 +5668,7 @@ test "hidden checkout recovery retries failed Changes once before parking" {
     emit,
     ChangesLoaded(
       owner=present.owner,
-      request_id=restored.changes_request_id,
+      request_id=restored.changes_request_id.unwrap(),
       repository=true,
       head=Some("same-head"),
       files=[change],
@@ -5708,7 +5713,7 @@ test "ordinary Changes polls do not supersede healthy in-flight reviews" {
       refreshing=true,
       refresh_again=false,
     ),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     changes_head: Some("same-head"),
     changes_head_known: true,
     review_generation: 3,
@@ -5970,7 +5975,7 @@ test "reopening Changes latches a follow-up for an in-flight refresh" {
       refreshing=true,
       refresh_again=false,
     ),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     explorer_was_visible: false,
     watching: Some({
       owner: test_ctx().owner,
@@ -5985,7 +5990,7 @@ test "reopening Changes latches a follow-up for an in-flight refresh" {
     refreshed.changes
     is ChangeListReady(refreshing=true, refresh_again=true, ..),
   )
-  assert_true(refreshed.changes_request_id == "changes-1")
+  assert_true(refreshed.changes_request_id == Some("changes-1"))
 }
 
 ///|
@@ -5994,7 +5999,7 @@ test "reopening Changes latches a follow-up for the initial load" {
     ..owned_state(),
     explorer_mode: ExplorerChanges,
     changes: ChangeListLoading(refresh_again=false),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     explorer_was_visible: false,
     watching: Some({
       owner: test_ctx().owner,
@@ -6006,7 +6011,7 @@ test "reopening Changes latches a follow-up for the initial load" {
   }
   let (refreshed, _) = sync(test_emit(), state, test_ctx())
   assert_true(refreshed.changes is ChangeListLoading(refresh_again=true))
-  assert_true(refreshed.changes_request_id == "changes-1")
+  assert_true(refreshed.changes_request_id == Some("changes-1"))
 }
 
 ///|
@@ -6035,7 +6040,7 @@ test "selecting Changes loads once and coalesces an in-flight refresh" {
     emit,
     ChangesLoaded(
       owner=test_ctx().owner,
-      request_id=loading.changes_request_id,
+      request_id=loading.changes_request_id.unwrap(),
       repository=true,
       head=None,
       files=[],
@@ -6062,7 +6067,7 @@ test "moving focus to a ready Changes snapshot defers its fallback refresh" {
       refreshing=false,
       refresh_again=false,
     ),
-    changes_request_id: "changes-4",
+    changes_request_id: Some("changes-4"),
   }
   let (_, selected) = update(
     emit,
@@ -6071,7 +6076,7 @@ test "moving focus to a ready Changes snapshot defers its fallback refresh" {
     test_ctx(),
   )
   assert_true(selected.explorer_mode is ExplorerChanges)
-  assert_true(selected.changes_request_id == "changes-4")
+  assert_true(selected.changes_request_id == Some("changes-4"))
   assert_true(selected.changes is ChangeListReady(refreshing=false, ..))
   // Re-selecting the active tab remains the explicit, immediate refresh.
   let (_, refreshing) = update(
@@ -6091,7 +6096,7 @@ test "watcher events latch a follow-up during the initial change load" {
     ..owned_state(),
     explorer_mode: ExplorerChanges,
     changes: ChangeListLoading(refresh_again=false),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
   }
   let (_, latched) = update(
     emit,
@@ -6113,7 +6118,7 @@ test "changed-file replies are owner-and-generation-fenced" {
     ..owned_state(),
     explorer_mode: ExplorerChanges,
     changes: ChangeListLoading(refresh_again=false),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
   }
   let files = [
     {
@@ -6188,7 +6193,7 @@ test "changed-file replies are owner-and-generation-fenced" {
     test_ctx(),
   )
   assert_true(stale_result == ready)
-  let idle = { ..owned_state(), changes_request_id: "changes-1" }
+  let idle = { ..owned_state(), changes_request_id: Some("changes-1") }
   let (_, stale_idle_failure) = update(
     emit,
     ChangesFailed(
@@ -6220,7 +6225,7 @@ test "a settled Changes snapshot re-stats loaded reviews whose rows disappeared"
     ..owned_state(),
     explorer_mode: ExplorerChanges,
     changes: ChangeListLoading(refresh_again=false),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     review_generation: 3,
     docs,
   }
@@ -6287,7 +6292,7 @@ test "a review that becomes a symlink clears its cached regular-file source" {
       ..owned_state(),
       explorer_mode: ExplorerChanges,
       changes: ChangeListLoading(refresh_again=false),
-      changes_request_id: "changes-1",
+      changes_request_id: Some("changes-1"),
       review_generation: 3,
       docs,
     },
@@ -6421,7 +6426,7 @@ test "a disappearing review row hands an active reload to an ordinary read" {
     {
       ..reloading,
       changes: ChangeListLoading(refresh_again=false),
-      changes_request_id: "changes-1",
+      changes_request_id: Some("changes-1"),
     },
     ctx,
   )
@@ -6622,7 +6627,7 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
     ..owned_state(),
     explorer_mode: ExplorerChanges,
     changes: ChangeListLoading(refresh_again=true),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     changes_head: Some("old-head"),
     changes_head_known: true,
     review_generation: 3,
@@ -6667,7 +6672,7 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
     test_emit(),
     ChangesLoaded(
       owner=test_ctx().owner,
-      request_id=following_up.changes_request_id,
+      request_id=following_up.changes_request_id.unwrap(),
       repository=true,
       head=Some("new-head"),
       files~,
@@ -6734,7 +6739,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
   let state = {
     ..owned_state(),
     changes: ChangeListLoading(refresh_again=false),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     changes_head: Some("old-head"),
     changes_head_known: true,
     review_generation: 3,
@@ -6852,7 +6857,7 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
   let state = {
     ..owned_state(),
     changes: ChangeListLoading(refresh_again=false),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     // Legacy hosts decode as `None` even though their repository has a HEAD.
     changes_head: None,
     changes_head_known: true,
@@ -6900,7 +6905,7 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
     test_emit(),
     ChangesLoaded(
       owner=test_ctx().owner,
-      request_id=polling.changes_request_id,
+      request_id=polling.changes_request_id.unwrap(),
       repository=true,
       head=None,
       files=[change],
@@ -6965,7 +6970,7 @@ test "unborn repository polls do not churn untracked reviews" {
   let state = {
     ..owned_state(),
     changes: ChangeListLoading(refresh_again=false),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     changes_head: None,
     changes_head_known: true,
     review_generation: 3,
@@ -7023,7 +7028,7 @@ test "legacy HEAD omission refreshes a missing baseline once tracking is proven"
   let state = {
     ..owned_state(),
     changes: ChangeListLoading(refresh_again=false),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     changes_head: None,
     changes_head_known: true,
     review_generation: 3,
@@ -7082,7 +7087,7 @@ test "Changes reconciliation preserves the selected duplicate-path row" {
   let refreshing = {
     ..reviewing,
     changes: ChangeListLoading(refresh_again=false),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     changes_head: Some("old-head"),
     changes_head_known: true,
   }
@@ -7149,7 +7154,7 @@ test "moved HEAD normalizes reviewed tabs across the working-file boundary" {
     ..owned_state(),
     explorer_mode: ExplorerChanges,
     changes: ChangeListLoading(refresh_again=false),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     changes_head: Some("old-head"),
     changes_head_known: true,
     review_generation: 3,
@@ -7254,7 +7259,7 @@ test "a changed rename source refreshes its review without moving HEAD" {
       refreshing=true,
       refresh_again=false,
     ),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     changes_head: Some("same-head"),
     changes_head_known: true,
     review_generation: 3,
@@ -7293,7 +7298,7 @@ test "only a visible settled Changes snapshot accepts its polling fallback" {
       refreshing=false,
       refresh_again=false,
     ),
-    changes_request_id: "changes-4",
+    changes_request_id: Some("changes-4"),
   }
   let (_, refreshing) = update(emit, ChangesPollDue, state, test_ctx())
   assert_true(refreshing.changes_request_id != state.changes_request_id)
@@ -7319,7 +7324,7 @@ test "only a visible settled Changes snapshot accepts its polling fallback" {
     test_ctx(),
   )
   assert_true(files_mode.explorer_mode is ExplorerFiles)
-  assert_true(files_mode.changes_request_id == "changes-4")
+  assert_true(files_mode.changes_request_id == Some("changes-4"))
 }
 
 ///|
@@ -7433,7 +7438,7 @@ test "a parked checkout stops the fallback poll until repair" {
       refreshing=false,
       refresh_again=false,
     ),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     changes_head: Some("same-head"),
     changes_head_known: true,
     review_generation: 3,
@@ -7465,7 +7470,7 @@ test "a parked checkout stops the fallback poll until repair" {
     emit,
     ChangesLoaded(
       owner=present.owner,
-      request_id=restored.changes_request_id,
+      request_id=restored.changes_request_id.unwrap(),
       repository=true,
       head=Some("same-head"),
       files=[change],
@@ -7488,7 +7493,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
       refreshing=true,
       refresh_again=true,
     ),
-    changes_request_id: "changes-4",
+    changes_request_id: Some("changes-4"),
   }
   let (_, loaded) = update(
     emit,
@@ -7502,7 +7507,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
     refreshing,
     hidden,
   )
-  assert_true(loaded.changes_request_id == "changes-4")
+  assert_true(loaded.changes_request_id == Some("changes-4"))
   assert_true(
     loaded.changes is ChangeListReady(refreshing=false, refresh_again=false, ..),
   )
@@ -7516,7 +7521,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
     refreshing,
     hidden,
   )
-  assert_true(failed_refresh.changes_request_id == "changes-4")
+  assert_true(failed_refresh.changes_request_id == Some("changes-4"))
   assert_true(
     failed_refresh.changes
     is ChangeListReady(refreshing=false, refresh_again=false, ..),
@@ -7524,7 +7529,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
   let loading = {
     ..owned_state(),
     changes: ChangeListLoading(refresh_again=true),
-    changes_request_id: "changes-4",
+    changes_request_id: Some("changes-4"),
   }
   let (_, failed_load) = update(
     emit,
@@ -7536,7 +7541,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
     loading,
     hidden,
   )
-  assert_true(failed_load.changes_request_id == "changes-4")
+  assert_true(failed_load.changes_request_id == Some("changes-4"))
   assert_true(failed_load.changes is ChangeListIdle)
   let (_, failed_unlatched_load) = update(
     emit,
@@ -7548,7 +7553,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
     { ..loading, changes: ChangeListLoading(refresh_again=false) },
     hidden,
   )
-  assert_true(failed_unlatched_load.changes_request_id == "changes-4")
+  assert_true(failed_unlatched_load.changes_request_id == Some("changes-4"))
   assert_true(failed_unlatched_load.changes is ChangeListIdle)
 }
 
@@ -7561,7 +7566,7 @@ test "conversation re-roots replace the change request UUID" {
       session: "previous-session",
     }),
     explorer_mode: ExplorerChanges,
-    changes_request_id: "changes-7",
+    changes_request_id: Some("changes-7"),
   }
   let (rerooted, _) = sync(test_emit(), state, test_ctx())
   assert_true(rerooted.owner == Some(test_ctx().owner))
@@ -7626,7 +7631,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
     emit,
     ChangesLoaded(
       owner=test_ctx().owner,
-      request_id=refreshing.changes_request_id,
+      request_id=refreshing.changes_request_id.unwrap(),
       repository=true,
       head=None,
       files=[],
@@ -7648,7 +7653,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
     emit,
     ChangesLoaded(
       owner=test_ctx().owner,
-      request_id=following_up.changes_request_id,
+      request_id=following_up.changes_request_id.unwrap(),
       repository=true,
       head=None,
       files=[],
@@ -7678,7 +7683,7 @@ test "hidden explorer parks event-driven change refreshes until reopen" {
       refreshing=false,
       refresh_again=false,
     ),
-    changes_request_id: "changes-4",
+    changes_request_id: Some("changes-4"),
   }
   let hidden = { ..test_ctx(), panel_open: false, }
   let (_, after_watch) = update(
@@ -7691,7 +7696,7 @@ test "hidden explorer parks event-driven change refreshes until reopen" {
     state,
     hidden,
   )
-  assert_true(after_watch.changes_request_id == "changes-4")
+  assert_true(after_watch.changes_request_id == Some("changes-4"))
   assert_true(after_watch.changes is ChangeListReady(refreshing=false, ..))
   let (_, after_run) = update(
     emit,
@@ -7699,7 +7704,7 @@ test "hidden explorer parks event-driven change refreshes until reopen" {
     after_watch,
     hidden,
   )
-  assert_true(after_run.changes_request_id == "changes-4")
+  assert_true(after_run.changes_request_id == Some("changes-4"))
   assert_true(after_run.changes is ChangeListReady(refreshing=false, ..))
 }
 
@@ -7725,7 +7730,7 @@ test "hidden explorer keeps Git refresh live for an open review" {
       refreshing=false,
       refresh_again=false,
     ),
-    changes_request_id: "changes-4",
+    changes_request_id: Some("changes-4"),
     docs,
   }
   let hidden = {
@@ -7771,7 +7776,7 @@ test "sync refreshes a hidden review after its workspace watch was parked" {
       refreshing=false,
       refresh_again=false,
     ),
-    changes_request_id: "changes-4",
+    changes_request_id: Some("changes-4"),
     docs,
   }
   let hidden = {
@@ -7815,7 +7820,7 @@ test "a hidden review accepts its file-only watch without a refresh loop" {
       refreshing=false,
       refresh_again=false,
     ),
-    changes_request_id: "changes-4",
+    changes_request_id: Some("changes-4"),
     docs,
   }
   let hidden = {
@@ -7825,7 +7830,7 @@ test "a hidden review accepts its file-only watch without a refresh loop" {
     active_file: Some(path),
   }
   let (settled, _) = sync(test_emit(), state, hidden)
-  assert_true(settled.changes_request_id == "changes-4")
+  assert_true(settled.changes_request_id == Some("changes-4"))
   assert_true(
     settled.changes
     is ChangeListReady(refreshing=false, refresh_again=false, ..),
@@ -7852,7 +7857,7 @@ test "change-list failures stay isolated from file errors and watcher retries" {
   let state = {
     ..owned_state(),
     changes: ChangeListLoading(refresh_again=false),
-    changes_request_id: "changes-1",
+    changes_request_id: Some("changes-1"),
     error: Some("file read failed"),
   }
   let (_, failed) = update(
@@ -8241,7 +8246,7 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
     {
       ..reviewed,
       changes: ChangeListLoading(refresh_again=false),
-      changes_request_id: "changes-1",
+      changes_request_id: Some("changes-1"),
       changes_head: Some("same-head"),
       changes_head_known: true,
     },
@@ -8326,7 +8331,7 @@ test "a vanished review retries a failed ordinary read" {
       ..owned_state(),
       docs,
       changes: ChangeListLoading(refresh_again=false),
-      changes_request_id: "changes-1",
+      changes_request_id: Some("changes-1"),
       changes_head: Some("old-head"),
       changes_head_known: true,
     },

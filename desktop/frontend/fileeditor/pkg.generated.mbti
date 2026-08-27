@@ -364,17 +364,17 @@ pub(all) struct State {
   review_diff_navigation_available : Bool
   changes : ChangeList
   git_graph : GitGraphState
-  git_graph_request_id : String
+  git_graph_request_id : String?
   git_graph_selected : String?
   git_commit_files : GitCommitFiles
-  git_commit_files_request_id : String
+  git_commit_files_request_id : String?
   git_actual_head : String?
   git_actual_head_known : Bool
   changes_collapsed : Bool
   git_graph_collapsed : Bool
   history_docs : Map[String, HistoryDiffDoc]
   reviewed_changes : Array[ChangedFile]
-  changes_request_id : String
+  changes_request_id : String?
   checkout_id : String
   file_link_request_id : String
   changes_head : String?

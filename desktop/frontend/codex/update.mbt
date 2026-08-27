@@ -1330,6 +1330,9 @@ test "Codex update handlers are pure and idempotent" {
     }),
     draft: "inspect this",
     login_id: Some("login-1"),
+    // Catalog replies below name the reads in flight.
+    live_catalog_request_id: Some("live-catalog-current"),
+    archived_catalog_request_id: Some("archived-catalog-current"),
     pending_requests: [
       {
         request_id: Json("request-1"),
@@ -1392,7 +1395,7 @@ test "Codex update handlers are pure and idempotent" {
     Reply(
       kind=CodexThreadsReply({
         archived: false,
-        request_id: state.live_catalog_request_id,
+        request_id: state.live_catalog_request_id.unwrap(),
         activity_frontier: state.activity.frontier(),
       }),
       value={ "data": [] },
@@ -1400,7 +1403,7 @@ test "Codex update handlers are pure and idempotent" {
     Reply(
       kind=CodexThreadsReply({
         archived: true,
-        request_id: state.archived_catalog_request_id,
+        request_id: state.archived_catalog_request_id.unwrap(),
         activity_frontier: state.activity.frontier(),
       }),
       value={ "data": [] },
@@ -2265,7 +2268,7 @@ test "newer Codex catalog refresh rejects an older pagination result" {
     Reply(
       kind=CodexThreadsReply({
         archived: false,
-        request_id: first.live_catalog_request_id,
+        request_id: first.live_catalog_request_id.unwrap(),
         activity_frontier: first.activity.frontier(),
       }),
       value={ "data": [{ "id": "stale", "preview": "Stale" }] },
@@ -2280,7 +2283,7 @@ test "newer Codex catalog refresh rejects an older pagination result" {
     Reply(
       kind=CodexThreadsReply({
         archived: false,
-        request_id: second.live_catalog_request_id,
+        request_id: second.live_catalog_request_id.unwrap(),
         activity_frontier: second.activity.frontier(),
       }),
       value={ "data": [{ "id": "current", "preview": "Current" }] },
@@ -2330,7 +2333,7 @@ test "Codex list and history snapshots follow request order" {
     Reply(
       kind=CodexThreadsReply({
         archived: false,
-        generation: 1,
+        request_id: refreshing.live_catalog_request_id.unwrap(),
         activity_frontier: catalog_frontier,
       }),
       value={
@@ -2365,7 +2368,7 @@ test "Codex list and history snapshots follow request order" {
     Reply(
       kind=CodexThreadsReply({
         archived: false,
-        generation: 2,
+        request_id: reloading.live_catalog_request_id.unwrap(),
         activity_frontier: reloading.activity.frontier(),
       }),
       value={
@@ -2394,13 +2397,18 @@ test "archived Codex catalog removes a selected task in either reply order" {
   let snapshot = State::from_thread_snapshot({
     "thread": { "id": "thread-a", "cwd": "/work/a", "turns": [] },
   })
-  let selected = snapshot.begin_foreground(
-    CodexThreadReply("thread-a", snapshot.activity.frontier()),
-  )
+  // Both catalog reads are in flight when the replies arrive.
+  let selected = {
+    ..snapshot.begin_foreground(
+      CodexThreadReply("thread-a", snapshot.activity.frontier()),
+    ),
+    live_catalog_request_id: Some("live-catalog-current"),
+    archived_catalog_request_id: Some("archived-catalog-current"),
+  }
   let live = Reply(
     kind=CodexThreadsReply({
       archived: false,
-      request_id: selected.live_catalog_request_id,
+      request_id: selected.live_catalog_request_id.unwrap(),
       activity_frontier: selected.activity.frontier(),
     }),
     value={ "data": [] },
@@ -2408,7 +2416,7 @@ test "archived Codex catalog removes a selected task in either reply order" {
   let archived = Reply(
     kind=CodexThreadsReply({
       archived: true,
-      request_id: selected.archived_catalog_request_id,
+      request_id: selected.archived_catalog_request_id.unwrap(),
       activity_frontier: selected.activity.frontier(),
     }),
     value={

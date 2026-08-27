@@ -276,12 +276,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         phase,
       }
     }
-    SemanticProgress(
-      request_id~,
-      matches~,
-      match_count~,
-      file_count~
-    ) => {
+    SemanticProgress(request_id~, matches~, match_count~, file_count~) => {
       // Partial rows are only meaningful for the search that is currently
       // in flight: once the final reply landed (Ready/Failed) or a newer
       // request started, late progress is stale and must not touch the

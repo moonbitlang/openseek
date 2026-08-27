@@ -1270,7 +1270,11 @@ fn DeviceState::begin_list_requests(
   (
     sessions_request_id,
     archived_request_id,
-    { ..self, sessions_request_id, archived_request_id },
+    {
+      ..self,
+      sessions_request_id: Some(sessions_request_id),
+      archived_request_id: Some(archived_request_id),
+    },
   )
 }
 
@@ -1311,9 +1315,11 @@ priv struct DeviceState {
   // App-global UUIDs for the independently fetched sidebar collections. A
   // reply needs only its exact UUID; the device channel already comes from
   // `FromDevice`, and a previous connection cannot mint the current value.
-  sessions_request_id : String
-  archived_request_id : String
-  projects_request_id : String
+  // `None` while no read has been issued, or after a broadcast made the one
+  // in flight irrelevant.
+  sessions_request_id : String?
+  archived_request_id : String?
+  projects_request_id : String?
   // The exact request currently accepted for each workspace read; sibling
   // workspaces never invalidate one another.
   workspace_requests : WorkspaceRequestIds
@@ -1359,9 +1365,9 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     reconnect_id: @uuid.mint(),
     reconnect_failures: 0,
     connection_id: @uuid.mint(),
-    sessions_request_id: @uuid.mint(),
-    archived_request_id: @uuid.mint(),
-    projects_request_id: @uuid.mint(),
+    sessions_request_id: None,
+    archived_request_id: None,
+    projects_request_id: None,
     workspace_requests: WorkspaceRequestIds(),
     sessions: [],
     archived: [],

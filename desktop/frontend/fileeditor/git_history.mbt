@@ -210,7 +210,7 @@ fn refresh_git_graph(
     {
       ..state,
       git_graph: GitGraphLoading,
-      git_graph_request_id: request_id,
+      git_graph_request_id: Some(request_id),
       git_graph_selected: None,
       git_commit_files: GitCommitFilesIdle,
     },
@@ -249,7 +249,7 @@ fn load_more_git_history(
     ),
     {
       ..state,
-      git_graph_request_id: request_id,
+      git_graph_request_id: Some(request_id),
       git_graph: GitGraphReady(
         repository=true,
         snapshot~,
@@ -295,7 +295,7 @@ fn select_git_commit(
     {
       ..state,
       git_graph_selected: Some(commit),
-      git_commit_files_request_id: request_id,
+      git_commit_files_request_id: Some(request_id),
       git_commit_files: GitCommitFilesLoading(commit~),
     },
   )
@@ -324,7 +324,7 @@ fn retry_git_commit_changes(
     ),
     {
       ..state,
-      git_commit_files_request_id: request_id,
+      git_commit_files_request_id: Some(request_id),
       git_commit_files: GitCommitFilesLoading(commit~),
     },
   )
