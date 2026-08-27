@@ -1260,6 +1260,21 @@ fn DeviceState::retire_workspace_request(
 }
 
 ///|
+/// Mint fresh UUIDs for both sidebar list reads at once, for the actions
+/// whose one reply carries the live and the archived list together.
+fn DeviceState::begin_list_requests(
+  self : DeviceState,
+) -> (String, String, DeviceState) {
+  let sessions_request_id = @uuid.mint()
+  let archived_request_id = @uuid.mint()
+  (
+    sessions_request_id,
+    archived_request_id,
+    { ..self, sessions_request_id, archived_request_id },
+  )
+}
+
+///|
 fn DeviceState::workspace_request_id(
   self : DeviceState,
   read : WorkspaceRead,
@@ -3273,12 +3288,9 @@ fn Model::replace_conversation(self : Model, conv : Conversation) -> Model {
 /// app-global run UUID, so a backgrounded conversation keeps receiving its
 /// own stream without adding a device channel to the identity.
 fn Model::conversation_by_run(self : Model, run_id : String) -> Conversation? {
-  for conv in self.conversations {
-    if conv.run is Open(run_id=active, ..) && active == run_id {
-      return Some(conv)
-    }
-  }
-  None
+  self.conversations
+  .iter()
+  .find_first(conv => conv.run is Open(run_id=active, ..) && active == run_id)
 }
 
 ///|
@@ -3289,12 +3301,7 @@ fn Model::conversation_by_last_run(
   self : Model,
   run_id : String,
 ) -> Conversation? {
-  for conv in self.conversations {
-    if conv.last_run_id is Some(last) && last == run_id {
-      return Some(conv)
-    }
-  }
-  None
+  self.conversations.iter().find_first(conv => conv.last_run_id == Some(run_id))
 }
 
 ///|
@@ -3307,16 +3314,15 @@ fn Model::conversation_by_pending_steer(
   submission_id : String,
   run_id : String,
 ) -> Conversation? {
-  for conv in self.conversations {
-    for input in conv.pending_steers {
-      if input.submission_id == submission_id &&
-        input.run_id is Some(owner) &&
-        owner == run_id {
-        return Some(conv)
-      }
-    }
-  }
-  None
+  self.conversations
+  .iter()
+  .find_first(conv => {
+    conv.pending_steers
+    .iter()
+    .any(input => {
+      input.submission_id == submission_id && input.run_id == Some(run_id)
+    })
+  })
 }
 
 ///|
@@ -3327,12 +3333,9 @@ fn Model::conversation_by_pending_prompt(
   self : Model,
   submission_id : String,
 ) -> Conversation? {
-  for conv in self.conversations {
-    if conv.has_initial_submission(submission_id) {
-      return Some(conv)
-    }
-  }
-  None
+  self.conversations
+  .iter()
+  .find_first(conv => conv.has_initial_submission(submission_id))
 }
 
 ///|
@@ -3343,12 +3346,11 @@ fn Model::conversation_by_goal_command(
   self : Model,
   command : String,
 ) -> Conversation? {
-  for conv in self.conversations {
-    if conv.goal_pending is Some(pending) && pending.id == command {
-      return Some(conv)
-    }
-  }
-  None
+  self.conversations
+  .iter()
+  .find_first(conv => {
+    conv.goal_pending is Some(pending) && pending.id == command
+  })
 }
 
 ///|
@@ -3358,12 +3360,9 @@ fn Model::conversation_by_branch_request(
   self : Model,
   request_id : String,
 ) -> Conversation? {
-  for conv in self.conversations {
-    if conv.branch_request_id == Some(request_id) {
-      return Some(conv)
-    }
-  }
-  None
+  self.conversations
+  .iter()
+  .find_first(conv => conv.branch_request_id == Some(request_id))
 }
 
 ///|
@@ -3373,12 +3372,9 @@ fn Model::conversation_by_pull_request(
   self : Model,
   request_id : String,
 ) -> Conversation? {
-  for conv in self.conversations {
-    if conv.pull_request_id == Some(request_id) {
-      return Some(conv)
-    }
-  }
-  None
+  self.conversations
+  .iter()
+  .find_first(conv => conv.pull_request_id == Some(request_id))
 }
 
 ///|

@@ -3586,8 +3586,7 @@ fn update_msg(
           guard model.device_state(confirm.channel) is Some(dev) else {
             return (@cmd.none, { ..model, archive_confirm: None, })
           }
-          let sessions_request_id = @uuid.mint()
-          let archived_request_id = @uuid.mint()
+          let (sessions_request_id, archived_request_id, next_dev) = dev.begin_list_requests()
           (
             archive_session(
               dispatch,
@@ -3597,14 +3596,7 @@ fn update_msg(
               archived_request_id,
               force=true,
             ),
-            {
-              ..model.replace_device({
-                ..dev,
-                sessions_request_id,
-                archived_request_id,
-              }),
-              archive_confirm: None,
-            },
+            { ..model.replace_device(next_dev), archive_confirm: None },
           )
         }
         None => (@cmd.none, model)
@@ -3853,26 +3845,24 @@ fn update_msg(
       guard model.device_state(channel) is Some(dev) else {
         return (@cmd.none, model)
       }
-      let sessions_request_id = @uuid.mint()
-      let archived_request_id = @uuid.mint()
+      let (sessions_request_id, archived_request_id, next_dev) = dev.begin_list_requests()
       (
         archive_session(
           dispatch, channel, session_id, sessions_request_id, archived_request_id,
         ),
-        model.replace_device({ ..dev, sessions_request_id, archived_request_id }),
+        model.replace_device(next_dev),
       )
     }
     UnarchiveSession(channel, session_id) => {
       guard model.device_state(channel) is Some(dev) else {
         return (@cmd.none, model)
       }
-      let sessions_request_id = @uuid.mint()
-      let archived_request_id = @uuid.mint()
+      let (sessions_request_id, archived_request_id, next_dev) = dev.begin_list_requests()
       (
         unarchive_session(
           dispatch, channel, session_id, sessions_request_id, archived_request_id,
         ),
-        model.replace_device({ ..dev, sessions_request_id, archived_request_id }),
+        model.replace_device(next_dev),
       )
     }
     DeleteArchivedSession(channel, key) => {
@@ -6909,7 +6899,10 @@ fn update_device_msg(
     // Everything else the panel owns (tree, viewer, diagnostics) is the
     // fileeditor package's business; route it there and adopt its state.
     StartResponded(submission_id~, run_id~, status~, exit_code~) => {
-      guard model.conversation_by_pending_prompt(submission_id) is Some(conv) else {
+      // The reply returns on the channel the start was sent on, which is the
+      // owner's device; the submission UUID alone names the owner.
+      guard model.conversation_by_pending_prompt(submission_id) is Some(conv) &&
+        conv.device == channel else {
         return (@cmd.none, model)
       }
       // The id-bearing reply always settles its exact submission, even when
@@ -7023,18 +7016,15 @@ fn update_device_msg(
           next,
         )
         let (sessions, model) = request_sessions_refresh(
-          dispatch,
-          conv.device,
-          model,
+          dispatch, channel, model,
         )
-        let owner_dev = model.device_state(conv.device).unwrap_or(dev)
         let commands = [
           sessions,
           fetch_runs(
             dispatch,
-            conv.device,
-            model.run_snapshot_frontier(conv.device),
-            owner_dev.connection_id,
+            channel,
+            model.run_snapshot_frontier(channel),
+            dev.connection_id,
           ),
         ]
         if request_id is Some(request_id) {
@@ -7053,7 +7043,8 @@ fn update_device_msg(
       }
     }
     StartUndelivered(submission_id~, message~) =>
-      if model.conversation_by_pending_prompt(submission_id) is Some(conv) {
+      if model.conversation_by_pending_prompt(submission_id) is Some(conv) &&
+        conv.device == channel {
         // The response path failed, so whether the host took this prompt is
         // unknowable here. Nothing guesses on the client's behalf: the entry
         // ends and the reload below shows what the record actually holds.
@@ -7073,18 +7064,15 @@ fn update_device_msg(
           }
           let updated = model.replace_conversation(next)
           let (sessions, updated) = request_sessions_refresh(
-            dispatch,
-            conv.device,
-            updated,
+            dispatch, channel, updated,
           )
-          let owner_dev = updated.device_state(conv.device).unwrap_or(dev)
           let commands = [
             sessions,
             fetch_runs(
               dispatch,
-              conv.device,
-              updated.run_snapshot_frontier(conv.device),
-              owner_dev.connection_id,
+              channel,
+              updated.run_snapshot_frontier(channel),
+              dev.connection_id,
             ),
           ]
           if changed {

@@ -33,8 +33,8 @@ priv struct DiffStat {
 /// than left standing as the last word.
 ///
 /// Which request a probe describes is *not* here — it is the conversation's
-/// `pull_request_id`, which outlives this display state and is replaced by a
-/// fresh UUID whenever an in-flight lookup must be retired.
+/// `pull_request_id`, which outlives this display state and is cleared
+/// whenever an in-flight lookup must be retired.
 priv struct PullRequestProbe {
   branch : String
   probing : Bool

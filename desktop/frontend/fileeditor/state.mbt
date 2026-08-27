@@ -895,8 +895,8 @@ pub(all) enum Msg {
   // re-shown as an editor bubble over `range`. A plain tree click leaves
   // both `None`. `file_link_request_id` identifies the explicit editor
   // navigation that started this read. Positioned transcript links supply the
-  // captured click generation; direct file, symbol, and mention opens use the
-  // current generation. It fences the viewer navigation while still allowing
+  // UUID their click spent; direct file, symbol, and mention opens use the
+  // current one. It fences the viewer navigation while still allowing
   // a late reply to settle a loading tab when no newer read owns that path.
   // `review_generation` is present only for the working-tree half of a
   // changed-row open.

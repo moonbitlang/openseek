@@ -139,7 +139,7 @@ test "queued archive replacements preserve every draft handoff" {
   let entry = moved.active(rotated)
   inspect(entry.draft.task, content="draft through two rotations")
   assert_true(entry.owner == second_fresh)
-  // The moved draft keeps the generation at which it was authored. The root
+  // The moved draft keeps the archive cursor at which it was authored. The root
   // follows later archive facts from that cursor to resolve queued actions.
   inspect(entry.identity().archive_cursor, content="0")
 }
