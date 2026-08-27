@@ -1,9 +1,10 @@
 // Drag-to-resize for the editor side-panel. The panel's width is a CSS custom
-// property `--editor-width` on the document element, set imperatively as the
-// user drags a handle on the panel's left edge — never through the model, so a
-// drag never re-renders the (possibly large) transcript. The grid in
-// `index.html` reads the property through a `clamp(...)`, so the bounds live in
-// CSS and survive a window resize on their own.
+// property `--editor-width` on the document element, committed when a drag
+// ends — never through the model, so a drag never re-renders the (possibly
+// large) transcript. During the drag, the `.content` grid is written directly:
+// changing an inherited root custom property on every move would invalidate
+// styles across the whole transcript. The CSS `clamp(...)` remains the durable
+// layout and survives a later window resize on its own.
 
 ///|
 /// The id of the grab strip the view renders on the editor's left edge.
@@ -26,6 +27,24 @@ const MinEditorWidth = 360
 /// excluded), so it holds whether or not the sidebar is collapsed. Mirrors the
 /// CSS `clamp` ceiling, `calc(100% - 240px)`.
 const MinChatWidth = 240
+
+///|
+/// A completed editor width owns both CSS spellings used by the drag. Keeping
+/// the concrete track here makes the live value testable: malformed CSS is
+/// otherwise silently ignored and the pane appears frozen until mouseup.
+priv struct EditorWidth {
+  pixels : Int
+}
+
+///|
+fn EditorWidth::grid_template(self : EditorWidth) -> String {
+  "minmax(0, 1fr) \{self.pixels}px"
+}
+
+///|
+fn EditorWidth::custom_property(self : EditorWidth) -> String {
+  "\{self.pixels}px"
+}
 
 ///|
 /// Whether the drag listeners have been installed yet (once, after first paint).
@@ -80,6 +99,7 @@ fn start_resize(event : @dom.Event) -> Unit {
   // Stop the press from starting a text selection in the viewer underneath.
   event.prevent_default()
   resizing.val = true
+  viewer_state.set_continuous_width_resize(true)
   set_root_class(ResizingClass)
 }
 
@@ -127,8 +147,24 @@ fn drag_size(raw : Double, floor~ : Double, max~ : Double) -> Int {
 /// drag flag of whichever resizer is ending — see `resizing` / `tree_resizing`.
 fn end_drag(active : Ref[Bool]) -> Unit {
   guard active.val else { return }
+  let editor_drag_ended = resizing.val
   active.val = false
   set_root_class("")
+  if editor_drag_ended {
+    // Commit the final width once, then return ownership of the grid template
+    // to CSS. This one root-style invalidation happens after pointer tracking,
+    // not once per live frame.
+    sync_root_style()
+    if @dom.document().query_selector(".content").to_option() is Some(content) {
+      let style : @js.Value = @js.Value::cast_from(content).get_with_string(
+        "style",
+      )
+      let _ : @js.Value = style.apply_with_string("removeProperty", [
+        @js.Value::cast_from("grid-template-columns"),
+      ])
+    }
+  }
+  viewer_state.set_continuous_width_resize(false)
   layout_active_editor_surface()
 }
 
@@ -136,7 +172,7 @@ fn end_drag(active : Ref[Bool]) -> Unit {
 /// The dragged sizes, kept so the resizers (editor width, tree height, tree
 /// width) can rewrite the shared root `style` attribute without erasing each
 /// other's property.
-let editor_width : Ref[Int?] = Ref(None)
+let editor_width : Ref[EditorWidth?] = Ref(None)
 
 ///|
 let tree_height : Ref[Int?] = Ref(None)
@@ -155,7 +191,7 @@ fn sync_root_style() -> Unit {
   if editor_width.val is Some(width) {
     let _ : @js.Value = style.apply_with_string("setProperty", [
       @js.Value::cast_from("--editor-width"),
-      @js.Value::cast_from("\{width}px"),
+      @js.Value::cast_from(width.custom_property()),
     ])
   }
   if tree_height.val is Some(height) {
@@ -174,8 +210,23 @@ fn sync_root_style() -> Unit {
 
 ///|
 fn set_editor_width(width : Int) -> Unit {
-  editor_width.val = Some(width)
-  sync_root_style()
+  let value : EditorWidth = { pixels: width }
+  editor_width.val = Some(value)
+  if resizing.val &&
+    @dom.document().query_selector(".content").to_option() is Some(content) {
+    // The value has already been clamped against the live content box. Write
+    // the concrete grid track instead of an inherited variable so the browser
+    // only invalidates the layout that actually changed.
+    let style : @js.Value = @js.Value::cast_from(content).get_with_string(
+      "style",
+    )
+    let _ : @js.Value = style.apply_with_string("setProperty", [
+      @js.Value::cast_from("grid-template-columns"),
+      @js.Value::cast_from(value.grid_template()),
+    ])
+  } else {
+    sync_root_style()
+  }
 }
 
 ///|
@@ -204,9 +255,9 @@ fn document_element() -> @dom.Element? {
 }
 
 ///|
-/// Re-measure the viewer at most once per animation frame while dragging, so a
-/// flood of `mousemove`s does not thrash its layout (the viewer fills its host
-/// with absolutely-positioned layers and cannot see a CSS width change itself).
+/// Re-measure an active code or Markdown viewer at most once per animation
+/// frame while dragging. DiffEditor owns a ResizeObserver on the same host, so
+/// calling its layout here as well would render both panes twice for one width.
 fn schedule_remeasure() -> Unit {
   if remeasure_pending.val ||
     (
@@ -219,7 +270,7 @@ fn schedule_remeasure() -> Unit {
   remeasure_pending.val = true
   @dom.window().request_animation_frame(_ => {
     remeasure_pending.val = false
-    layout_active_editor_surface()
+    layout_active_editor_surface(layout_observed_diff=false)
   })
   |> ignore
 }

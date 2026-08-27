@@ -1,7 +1,15 @@
 // `drag_size` is shared by three drags (editor width, tree width, tree
 // height), so its rules are pinned once here rather than in any one of them.
 // The DOM-driven halves of the resizers (`end_drag`, the listener install)
-// need a browser and are covered by using the app, not by these tests.
+// need a browser. The live grid value is pure and pinned here because a browser
+// silently ignores malformed CSS, which otherwise looks like a frozen drag.
+
+///|
+test "a live editor width produces a valid concrete grid track" {
+  let width : EditorWidth = { pixels: 504 }
+  assert_eq(width.grid_template(), "minmax(0, 1fr) 504px")
+  assert_eq(width.custom_property(), "504px")
+}
 
 ///|
 test "a dragged size passes through inside its range and saturates outside" {

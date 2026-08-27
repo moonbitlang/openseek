@@ -200,8 +200,14 @@ fn editor_surface_host_visible(host_id : String) -> Bool {
   guard @dom.document().get_element_by_id(host_id).to_option() is Some(host) else {
     return false
   }
-  let rect = host.get_bounding_client_rect()
-  rect.get_width() > 0.0 && rect.get_height() > 0.0
+  // Rabbita owns the stable host classes. Reading that state avoids forcing
+  // three synchronous layout measurements on every resize animation frame.
+  for class_name in host.get_attribute("class").unwrap_or("").split(" ") {
+    if class_name == "moonbit-viewer-surface-hidden" {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -214,7 +220,7 @@ fn active_editor_surface() -> ActiveEditorSurface? {
 }
 
 ///|
-fn layout_active_editor_surface() -> Unit {
+fn layout_active_editor_surface(layout_observed_diff? : Bool = true) -> Unit {
   match active_editor_surface() {
     Some(CodeEditorSurface) =>
       match mounted_viewer() {
@@ -227,11 +233,36 @@ fn layout_active_editor_surface() -> Unit {
         None => ()
       }
     Some(DiffEditorSurface) =>
-      match mounted_diff_editor() {
-        Some(viewer) => viewer.layout()
-        None => ()
+      if layout_observed_diff {
+        match mounted_diff_editor() {
+          Some(viewer) => viewer.layout()
+          None => ()
+        }
       }
     None => ()
+  }
+}
+
+///|
+/// Tell the active code surface whether a continuous width drag is in
+/// progress. Code lines continue to lay out at every width; derived diff
+/// geometry, overview rulers, and offscreen Markdown measures wait for mouseup.
+fn ViewerHost::set_continuous_width_resize(
+  self : ViewerHost,
+  active : Bool,
+) -> Unit {
+  match active_editor_surface() {
+    Some(CodeEditorSurface) =>
+      match self.viewer {
+        Some(viewer) => viewer.set_continuous_width_resize(active)
+        None => ()
+      }
+    Some(DiffEditorSurface) =>
+      match self.diff_editor {
+        Some(editor) => editor.set_continuous_width_resize(active)
+        None => ()
+      }
+    Some(MarkdownEditorSurface) | None => ()
   }
 }
 

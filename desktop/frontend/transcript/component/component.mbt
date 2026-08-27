@@ -620,6 +620,10 @@ fn Actions::pin_live_reasoning_after_render(
 priv struct Model {
   pinned : Bool
   overview : @transcript_overview.State
+  // Closed activity disclosures retain only their summary DOM. Keys are
+  // scoped by transcript identity, so equal durable rows in another session
+  // never inherit an open body during the intermediate input render.
+  expanded_activities : @vector.Vector[String]
   source : Source
   focused : @interop.ChannelId
   active_session : String
@@ -633,6 +637,7 @@ priv struct Model {
 priv enum Msg {
   Pinned(Bool)
   JumpToLatest
+  ToggleActivity(String)
   ContentRendered(mounted~ : Bool)
   ImageRequested(String)
   ImageResolved(ImageOwner, String, ImageReadResult)
@@ -668,6 +673,14 @@ fn Model::update(
           report_visible_turn_after_render(emit, skip_unchanged=true),
         ]),
       )
+    ToggleActivity(key) => {
+      let expanded_activities = if self.expanded_activities.contains(key) {
+        self.expanded_activities.filter(current => current != key)
+      } else {
+        self.expanded_activities.push(key)
+      }
+      ({ ..self, expanded_activities, }, @cmd.none)
+    }
     ContentRendered(mounted~) => {
       // The component outlives the Chat DOM while Skills, Settings, or the
       // signed-out console gate is shown. A newly mounted scroller therefore
@@ -691,6 +704,11 @@ fn Model::update(
           @transcript_overview.State::empty()
         } else {
           self.overview
+        },
+        expanded_activities: if navigated {
+          @vector.new()
+        } else {
+          self.expanded_activities
         },
         source: input.source,
         focused: input.focused,
@@ -770,6 +788,7 @@ pub fn component(
         {
           pinned: true,
           overview: @transcript_overview.State::empty(),
+          expanded_activities: @vector.new(),
           source: input.source,
           focused: input.focused,
           active_session: input.active_session,
@@ -802,6 +821,8 @@ pub fn component(
       pinned=state.pinned,
       overview=state.overview,
       overview_emit=emit.map(msg => Overview(msg)),
+      expanded_activity_keys=state.expanded_activities,
+      on_toggle_activity=key => emit(ToggleActivity(key)),
       path => (actions.open)(path),
       target => (actions.jump)(target),
       session => (actions.open_session)(session),
@@ -1212,6 +1233,7 @@ test "local pinned transitions are pure" {
   let state : Model = {
     pinned: true,
     overview: @transcript_overview.State::empty(),
+    expanded_activities: @vector.new(),
     source: OpenSeek,
     focused: Local,
     active_session: "desktop-test",
@@ -1249,6 +1271,12 @@ test "local pinned transitions are pure" {
   assert_true(submitted.pinned)
   let (jumped, _) = grown.update(input, JumpToLatest, emit)
   assert_true(jumped.pinned)
+  let (opened, _) = state.update(input, ToggleActivity("activity-a"), emit)
+  let (replayed, _) = state.update(input, ToggleActivity("activity-a"), emit)
+  assert_true(opened.expanded_activities.contains("activity-a"))
+  @debug.assert_eq(opened.expanded_activities, replayed.expanded_activities)
+  let (closed, _) = opened.update(input, ToggleActivity("activity-a"), emit)
+  assert_false(closed.expanded_activities.contains("activity-a"))
   let (navigated, _) = grown.update(
     { ..input, active_session: "another-session", },
     ContentRendered(mounted=true),
@@ -1273,6 +1301,7 @@ test "an overview click unpins and highlights inside the component" {
   let state : Model = {
     pinned: true,
     overview: @transcript_overview.State::empty(),
+    expanded_activities: @vector.new(),
     source: OpenSeek,
     focused: Local,
     active_session: "desktop-test",
@@ -1309,6 +1338,7 @@ test "a conversation switch clears component-owned overview state" {
       }),
       active: Some(@transcript_overview.Durable(3)),
     },
+    expanded_activities: @vector.singleton("activity-a"),
     source: OpenSeek,
     focused: Local,
     active_session: "desktop-test",
@@ -1326,6 +1356,7 @@ test "a conversation switch clears component-owned overview state" {
   assert_true(next.pinned)
   @debug.assert_eq(next.overview.hover, None)
   @debug.assert_eq(next.overview.active, None)
+  assert_true(next.expanded_activities.is_empty())
   let (removed, _) = state.update(input, ContentRendered(mounted=false), emit)
   let (remounted, _) = removed.update(
     input,

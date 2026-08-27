@@ -753,6 +753,39 @@ test "a mixed activity keeps its call on display beside the thought fold" {
 
 ///|
 #warnings("-alert_unstable")
+test "a controlled closed thought omits its body DOM" {
+  let items : Array[@transcript.TranscriptItem] = [
+    {
+      kind: Reasoning,
+      content: "large historical reasoning",
+      ts: None,
+      sequence: Some(2),
+    },
+  ]
+  let render = expanded => {
+    @rabbita.render_to_string(() => {
+      @rabbita.Val::constant(
+        activity_view(
+          items,
+          _ => @cmd.none,
+          expanded~,
+          on_toggle=@cmd.none,
+        ),
+      )
+    })
+  }
+  let closed = render(false)
+  assert_true(closed.contains("activity-summary"))
+  assert_false(closed.contains("activity-body"))
+  assert_false(closed.contains("large historical reasoning"))
+
+  let opened = render(true)
+  assert_true(opened.contains("activity-body"))
+  assert_true(opened.contains("large historical reasoning"))
+}
+
+///|
+#warnings("-alert_unstable")
 test "the turn rule dates itself only from a real stamp" {
   let render = rule => {
     @rabbita.render_to_string(() => @rabbita.Val::constant(rule))

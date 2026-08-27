@@ -215,6 +215,12 @@ pub struct CodeEditorOverviewRuler {
   mut entries : Array[CodeEditorOverviewRulerEntry]
   mut bands : Array[CodeEditorOverviewRulerBand]
   mut generation : Int
+  /// Scroll, ViewZone, and ResizeObserver events often arrive several times in
+  /// one editor frame. Keep only one canvas redraw queued for that frame.
+  priv mut render_frame : Double?
+  /// The code lines still resize continuously, but the overview projection is
+  /// derived decoration and may wait until the host releases a width drag.
+  priv mut continuous_width_resize : Bool
   mut disposed : Bool
 }
 
@@ -300,6 +306,11 @@ fn CodeEditorOverviewRuler::render(self : CodeEditorOverviewRuler) -> Unit {
   if self.disposed {
     return
   }
+  match self.render_frame {
+    Some(frame) => @rdom.window().cancel_animation_frame(frame)
+    None => ()
+  }
+  self.render_frame = None
   self.root.set_attribute(
     "data-overview-ruler-generation",
     self.generation.to_string(),
@@ -359,6 +370,45 @@ fn CodeEditorOverviewRuler::render(self : CodeEditorOverviewRuler) -> Unit {
     "data-overview-ruler-band-count",
     render_bands.length().to_string(),
   )
+}
+
+///|
+/// Coalesces geometry-driven redraws without delaying semantic `set_entries`
+/// updates, which still call `render` synchronously.
+fn CodeEditorOverviewRuler::request_render(
+  self : CodeEditorOverviewRuler,
+) -> Unit {
+  if self.disposed ||
+    self.continuous_width_resize ||
+    self.render_frame is Some(_) {
+    return
+  }
+  self.render_frame = Some(
+    @rdom.window().request_animation_frame(_ => {
+      self.render_frame = None
+      self.render()
+    }),
+  )
+}
+
+///|
+fn CodeEditorOverviewRuler::set_continuous_width_resize(
+  self : CodeEditorOverviewRuler,
+  active : Bool,
+) -> Unit {
+  if self.disposed || self.continuous_width_resize == active {
+    return
+  }
+  self.continuous_width_resize = active
+  if active {
+    match self.render_frame {
+      Some(frame) => @rdom.window().cancel_animation_frame(frame)
+      None => ()
+    }
+    self.render_frame = None
+  } else {
+    self.request_render()
+  }
 }
 
 ///|
@@ -449,6 +499,8 @@ pub fn CodeEditorWidget::create_overview_ruler(
     entries: [],
     bands: [],
     generation: 0,
+    render_frame: None,
+    continuous_width_resize: false,
     disposed: false,
   }
   let pointer_down = event => ruler.handle_pointer_down(event)
@@ -464,12 +516,16 @@ pub fn CodeEditorWidget::create_overview_ruler(
   ruler.listeners.push(
     self.on_did_change_model_content(_ => ruler.clear_for_content_change()),
   )
-  ruler.listeners.push(self.on_did_scroll_change(_ => ruler.render()))
-  ruler.listeners.push(self.on_did_change_view_zones(() => ruler.render()))
-  ruler.listeners.push(self.on_did_change_hidden_areas(() => ruler.render()))
+  ruler.listeners.push(self.on_did_scroll_change(_ => ruler.request_render()))
+  ruler.listeners.push(
+    self.on_did_change_view_zones(() => ruler.request_render()),
+  )
+  ruler.listeners.push(
+    self.on_did_change_hidden_areas(() => ruler.request_render()),
+  )
   ruler.resize_observer = @base_browser.observe_element_resize(
     self.get_container_dom_node(),
-    () => ruler.render(),
+    () => ruler.request_render(),
   )
   if self.disposed {
     ruler.dispose()
@@ -550,7 +606,7 @@ fn CodeEditorWidget::refresh_managed_overview_rulers(
   self : CodeEditorWidget,
 ) -> Unit {
   for ruler in self.overview_rulers {
-    ruler.render()
+    ruler.request_render()
   }
 }
 
@@ -570,6 +626,11 @@ pub fn CodeEditorOverviewRuler::dispose(self : CodeEditorOverviewRuler) -> Unit 
     return
   }
   self.disposed = true
+  match self.render_frame {
+    Some(frame) => @rdom.window().cancel_animation_frame(frame)
+    None => ()
+  }
+  self.render_frame = None
   match self.resize_observer {
     Some(observer) => observer.dispose()
     None => ()

@@ -43,6 +43,7 @@ pub fn DiffEditor::on_did_update_diff(Self, () -> Unit) -> @common.Disposable
 pub fn DiffEditor::reveal_first_diff(Self) -> Unit
 pub fn DiffEditor::reveal_next_change(Self) -> Bool
 pub fn DiffEditor::reveal_previous_change(Self) -> Bool
+pub fn DiffEditor::set_continuous_width_resize(Self, Bool) -> Unit
 pub fn DiffEditor::set_diff_provider(Self, &@diff.DocumentDiffProvider) -> Unit
 pub fn DiffEditor::set_model(Self, DiffEditorModel?) -> DiffEditorModel?
 pub fn DiffEditor::update_options(Self, DiffEditorOptions) -> Unit
@@ -214,6 +215,7 @@ pub fn Viewer::reveal_range_in_center_if_outside_viewport(Self, @common.Range) -
 pub fn Viewer::reveal_range_near_top(Self, @common.Range) -> Unit
 pub fn Viewer::reveal_range_near_top_if_outside_viewport(Self, @common.Range) -> Unit
 pub fn Viewer::save_view_state(Self) -> ViewerViewState?
+pub fn Viewer::set_continuous_width_resize(Self, Bool) -> Unit
 pub fn Viewer::set_model(Self, @model.TextModel?) -> Unit
 pub fn Viewer::set_position(Self, @common.Position, source? : String) -> Unit
 pub fn Viewer::set_scroll_left(Self, Double) -> Unit

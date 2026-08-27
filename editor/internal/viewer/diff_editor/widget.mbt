@@ -50,6 +50,13 @@ pub struct DiffEditorWidget {
   layout_render_waiters : Array[@base_common.Disposable]
   mut layout_render_generation : Int
   mut layout_render_remaining : Int
+  /// During a host drag, code panes still render each observed width. Derived
+  /// diff geometry, viewport restoration, and overview projection reconcile
+  /// once after mouseup instead of being rebuilt for every intermediate width.
+  priv mut continuous_width_resize : Bool
+  /// The two expensive code-pane rewraps alternate while the outer boundary
+  /// moves. Both hosts still receive every live width through `apply_layout_dom`.
+  priv mut continuous_layout_original_next : Bool
   /// Model-relative modified viewport captured before an outer layout mutates
   /// pane widths/options. Modified is the canonical viewport: keep this anchor
   /// across the first render and every follow-up Markdown/ViewZone measurement
@@ -210,6 +217,8 @@ pub fn DiffEditorWidget::create(
     layout_render_waiters: [],
     layout_render_generation: 0,
     layout_render_remaining: 0,
+    continuous_width_resize: false,
+    continuous_layout_original_next: true,
     pending_layout_modified_viewport: None,
     has_valid_layout_box: false,
     inline_original_strip_width: -1.0,
@@ -283,14 +292,19 @@ fn DiffEditorWidget::complete_layout_pane_render(
     return
   }
   self.cancel_layout_render_barrier()
+  if self.continuous_width_resize {
+    return
+  }
   if !self.host_has_positive_layout_box() {
     self.has_valid_layout_box = false
     self.pending_layout_modified_viewport = None
     return
   }
   self.has_valid_layout_box = true
-  // Every outer layout, including height-only resizes, gets exactly one
-  // reconcile using geometry from the completed pane render(s).
+  // A completed ordinary layout is also the synchronization point for
+  // semantic diffs and option changes that may have arrived before either pane
+  // painted. Continuous host drags bypass this barrier and reconcile once on
+  // their final non-continuous layout instead.
   self.reconcile_view_model()
   match self.pending_layout_modified_viewport {
     Some(state) => self.restore_modified_viewport_and_sync_original(state)
@@ -307,6 +321,11 @@ fn DiffEditorWidget::layout_editors_after_render(
   if !self.has_valid_layout_box || !self.host_has_positive_layout_box() {
     self.has_valid_layout_box = false
     self.pending_layout_modified_viewport = None
+    return
+  }
+  if self.continuous_width_resize {
+    self.editors.layout_continuous_pane(self.continuous_layout_original_next)
+    self.continuous_layout_original_next = !self.continuous_layout_original_next
     return
   }
   self.layout_render_generation += 1
@@ -677,7 +696,9 @@ fn DiffEditorWidget::relayout_inline_strip(self : DiffEditorWidget) -> Unit {
     !self.host_has_positive_layout_box() {
     return
   }
-  self.capture_layout_modified_viewport_if_absent()
+  if !self.continuous_width_resize {
+    self.capture_layout_modified_viewport_if_absent()
+  }
   self.apply_layout_dom()
   self.layout_editors_after_render()
 }
@@ -1210,6 +1231,7 @@ fn DiffEditorWidget::reconcile_geometry_if_changed(
   self : DiffEditorWidget,
 ) -> Unit {
   if self.disposed ||
+    self.continuous_width_resize ||
     self.editors.is_committing_model_pair() ||
     self.is_reconciling ||
     self.diff_state is None ||
@@ -1715,18 +1737,46 @@ pub fn DiffEditorWidget::layout(self : DiffEditorWidget) -> Unit {
     return
   }
   self.has_valid_layout_box = true
-  self.capture_layout_modified_viewport_if_absent()
-  self.layout_state.layout(width) |> ignore
-  self.editors.update_options(
-    self.editor_options,
-    self.options.diff_word_wrap,
-    self.layout_state.actual_layout,
-  )
-  self.apply_layout_dom()
-  self.editors.sync_markdown_comment_presentations(
-    self.layout_state.actual_layout,
-  )
+  if !self.continuous_width_resize {
+    self.capture_layout_modified_viewport_if_absent()
+  }
+  let layout_changed = self.layout_state.layout(width)
+  if layout_changed {
+    self.editors.update_options(
+      self.editor_options,
+      self.options.diff_word_wrap,
+      self.layout_state.actual_layout,
+    )
+    self.editors.sync_markdown_comment_presentations(
+      self.layout_state.actual_layout,
+    )
+  }
+  // SideBySide panes use stable percentage flex bases, so their hosts follow
+  // an outer width change without rewriting identical class/ARIA/style
+  // attributes. Inline owns a clipped pixel strip and must recompute it.
+  if layout_changed || self.layout_state.actual_layout == Inline {
+    self.apply_layout_dom()
+  }
   self.layout_editors_after_render()
+}
+
+///|
+/// Keep code layout live during a continuous host-width resize while deferring
+/// derived diff geometry, overview projection, and offscreen Markdown measures
+/// until the host releases the drag.
+pub fn DiffEditorWidget::set_continuous_width_resize(
+  self : DiffEditorWidget,
+  active : Bool,
+) -> Unit {
+  if self.disposed || self.continuous_width_resize == active {
+    return
+  }
+  self.continuous_width_resize = active
+  if active {
+    self.pending_layout_modified_viewport = None
+    self.continuous_layout_original_next = true
+  }
+  self.editors.set_continuous_width_resize(active)
 }
 
 ///|

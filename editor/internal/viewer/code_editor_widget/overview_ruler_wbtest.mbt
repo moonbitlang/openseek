@@ -42,6 +42,8 @@ fn overview_ruler_eof_offset_entry(
     entries: [{ id: 1, range, color: "red", lane: Full, }],
     bands: [],
     generation: 0,
+    render_frame: None,
+    continuous_width_resize: false,
     disposed: false,
   }
   ruler.model_offset_entries()[0]
@@ -214,6 +216,8 @@ fn overview_ruler_disposal_test_handle(
     entries: [{ id: 1, range: LineRange(1, 2), color: "red", lane: Full, }],
     bands: [{ id: 1, from: 0, to: 4, color: "red", lane: Full, }],
     generation: 3,
+    render_frame: None,
+    continuous_width_resize: false,
     disposed: false,
   }
 }

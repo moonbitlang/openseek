@@ -6,9 +6,11 @@
 /// hiding them. Only reasoning stays behind a fold: a step that opens with a
 /// thought carries the ordinal and commit instant on that fold's summary
 /// ("#2 14:32:10 · Thought"), and a step that goes straight to tools puts
-/// the same columns on a plain heading line instead. The open state of every
-/// disclosure is the browser's (`<details>`), so a reader's toggle survives
-/// re-renders and the run growing while live.
+/// the same columns on a plain heading line instead. When the transcript
+/// component supplies disclosure state, a closed reasoning fold omits its
+/// body DOM entirely; stable activity keys preserve the body while the run
+/// grows. Focused rendering tests may omit that state and retain native
+/// `<details>` behavior.
 ///
 /// Failures need no badge up here: a failed call's own row is visible and
 /// carries its own literal `failed` marker. Its potentially large arguments
@@ -23,6 +25,8 @@ fn activity_view(
   live_reasoning? : String,
   step_label? : String = "",
   subrun? : SubrunLink,
+  expanded? : Bool,
+  on_toggle? : @cmd.Cmd,
 ) -> @html.Html {
   // The step ordinal is its own span so it can carry the accent and a fixed
   // numeral column, then the instant in a second fixed column: the run reads
@@ -73,12 +77,27 @@ fn activity_view(
     } else {
       text.push(@html.text(label))
     }
-    @html.details(class="activity", open=unfolded, [
-      @html.summary(class="activity-summary", [
+    let controlled = expanded is Some(_)
+    let open = unfolded || expanded.unwrap_or(false)
+    let summary_attrs = match (controlled, on_toggle) {
+      (true, Some(toggle)) =>
+        @html.Attrs::build()
+        .class("activity-summary")
+        .on_click(event => {
+          event.prevent_default()
+          toggle
+        })
+      _ => @html.Attrs::build().class("activity-summary")
+    }
+    let children : Array[@html.Html] = [
+      @html.summary(attrs=summary_attrs, [
         @html.span(class="activity-text", text),
       ]),
-      @html.div(class="activity-body", [prose]),
-    ])
+    ]
+    if !controlled || open {
+      children.push(@html.div(class="activity-body", [prose]))
+    }
+    @html.details(class="activity", open~, children)
   }
 
   let mut index = 0
@@ -881,6 +900,8 @@ fn transcript_view(
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
+  expanded_activity_keys? : @vector.Vector[String] = @vector.new(),
+  on_toggle_activity? : (String) -> @cmd.Cmd = _ => @cmd.none,
   on_open : (String) -> @cmd.Cmd,
   on_jump : (@mention_context.Target) -> @cmd.Cmd,
   on_open_session : (String) -> @cmd.Cmd,
@@ -893,7 +914,8 @@ fn transcript_view(
     on_open_session,
   }
   let children = renderer.section_children(
-    pinned, overview, overview_emit, on_jump_latest,
+    pinned, overview, overview_emit, expanded_activity_keys, on_toggle_activity,
+    on_jump_latest,
   )
   // These identity attributes make conversation and root changes observable
   // even when the rendered children stay identical. The component subscription
