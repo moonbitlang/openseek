@@ -170,16 +170,17 @@ pub fn update(
         // any foreground Stop authority.
         (@cmd.none, state)
       } else {
-        let commands : Array[@cmd.Cmd] = [
-          state.open_thread(dispatch, channel, thread_id),
-        ]
+        let (read, activity_frontier, reading) = state.open_thread(
+          dispatch, channel, thread_id,
+        )
+        let commands : Array[@cmd.Cmd] = [read]
         if state.active_draft() is Some(draft) {
           commands.push(state.close_draft(channel, draft.id))
         }
         (
           @cmd.batch(commands),
           {
-            ..state,
+            ..reading,
             git_details_open: false,
             requested_thread: Some(thread_id),
             // These fields are the adapter's last canonical submission snapshot.
@@ -190,7 +191,7 @@ pub fn update(
             submitted_first_prompt: None,
             pending_steers: [],
             notice: "",
-          }.begin_foreground(CodexThreadReply(thread_id)),
+          }.begin_foreground(CodexThreadReply(thread_id, activity_frontier)),
         )
       }
     ArchiveThread(thread_id) =>
@@ -275,19 +276,28 @@ pub fn update(
         CodexRequestsReply => next = next.with_requests(value)
         CodexAccountReply => next = next.with_account(value)
         CodexModelsReply => next = next.with_models(value)
-        CodexThreadsReply(archived, _) =>
-          next = next.with_threads(value, archived)
+        CodexThreadsReply(context) =>
+          next = next.with_threads(
+            value,
+            context.archived,
+            context.activity_frontier,
+          )
         CodexDraftOpenReply(draft_id) => {
           next = next.with_open_draft(draft_id, value).loading_context(false)
           cmd = @cmd.batch([
             next.load_skills(dispatch, channel, force_reload=false),
           ])
         }
-        CodexThreadReply(requested_thread) => {
-          next = next.with_thread_reply(value, requested_thread~)
+        CodexThreadReply(requested_thread, activity_frontier) => {
+          next = next.with_thread_reply(
+            value,
+            CodexHistoryRead(requested_thread, activity_frontier),
+          )
           // A malformed or mismatched snapshot leaves the requested id in
           // place. Only a verified selection may retarget Files/Terminal.
-          if next.requested_thread is None {
+          if next.requested_thread is None &&
+            next.active_thread() is Some(active) &&
+            active.id == requested_thread {
             next = next.loading_context(false)
             let (git, refreshed) = next.refresh_git(dispatch, channel)
             next = refreshed
@@ -299,7 +309,7 @@ pub fn update(
         }
         CodexResumeReply(_) => ()
         CodexDraftThreadReply(_) => {
-          next = next.with_thread_reply(value)
+          next = next.with_thread_reply(value, CodexThreadStart)
           // Install the real id before starting the turn so every app-server
           // notification observes the stored selection. The preserved draft
           // and placement now flow through the ordinary Local/Worktree send.
@@ -405,10 +415,14 @@ pub fn update(
         CodexRequestsReply => "Codex requests"
         CodexAccountReply => "Codex account"
         CodexModelsReply => "Codex models"
-        CodexThreadsReply(false, _) => "Codex threads"
-        CodexThreadsReply(true, _) => "Archived Codex threads"
+        CodexThreadsReply(context) =>
+          if context.archived {
+            "Archived Codex threads"
+          } else {
+            "Codex threads"
+          }
         CodexDraftOpenReply(_) => "Codex draft"
-        CodexThreadReply(_) | CodexDraftThreadReply(_) => "Codex thread"
+        CodexThreadReply(_, _) | CodexDraftThreadReply(_) => "Codex thread"
         CodexTurnStartReply(_)
         | CodexTurnSteerReply(_)
         | CodexWorktreeTurnReply(_, _) => "Codex turn"
@@ -462,8 +476,23 @@ pub fn update(
       let cmd = if next.connection is CodexReady {
         let (refresh, refreshed) = next.refresh(dispatch, channel)
         current = refreshed
-        if next.active_thread() is Some(active) {
-          @cmd.batch([refresh, next.open_thread(dispatch, channel, active.id)])
+        // A disconnect invalidates the old history request's activity epoch.
+        // Retry its pending target before refreshing the still-rendered prior
+        // selection; `open_thread` captures the new epoch in the reply kind.
+        if next.requested_thread is Some(thread_id) {
+          let (read, _, reading) = current.open_thread(
+            dispatch, channel, thread_id,
+          )
+          current = reading
+          @cmd.batch([refresh, read])
+        } else if next.active_thread() is Some(active) {
+          let (read, _, reading) = current.open_thread(
+            dispatch,
+            channel,
+            active.id,
+          )
+          current = reading
+          @cmd.batch([refresh, read])
         } else if next.active_draft() is Some(draft) && !draft.cwd.is_empty() {
           @cmd.batch([
             refresh,
@@ -538,6 +567,11 @@ fn State::with_turn_start_reply(self : State, value : Json) -> State {
     { ..self, selection: CodexStoredTask(active.with_turn(turn)), draft: "", }
   } else {
     { ..self, draft: "", }
+  }
+  let next = match next.active_thread() {
+    Some(active) if active.turns.iter().any(turn => turn.is_running()) =>
+      { ..next, activity: next.activity.started(active.id), }
+    _ => next
   }
   { ..next, mentions: [], submission_sequence: next.submission_sequence + 1, }.with_observed_first_prompt()
 }
@@ -1362,9 +1396,23 @@ test "Codex update handlers are pure and idempotent" {
       "account": Json::null(),
     }),
     Reply(kind=CodexModelsReply, value={ "data": [] }),
-    Reply(kind=CodexThreadsReply(false, 0), value={ "data": [] }),
-    Reply(kind=CodexThreadsReply(true, 0), value={ "data": [] }),
-    Reply(kind=CodexThreadReply("thread-1"), value={
+    Reply(
+      kind=CodexThreadsReply({
+        archived: false,
+        generation: 0,
+        activity_frontier: State().activity.frontier(),
+      }),
+      value={ "data": [] },
+    ),
+    Reply(
+      kind=CodexThreadsReply({
+        archived: true,
+        generation: 0,
+        activity_frontier: State().activity.frontier(),
+      }),
+      value={ "data": [] },
+    ),
+    Reply(kind=CodexThreadReply("thread-1", State().activity.frontier()), value={
       "thread": { "id": "thread-1", "turns": [] },
     }),
     Reply(kind=CodexDraftThreadReply("desktop-test"), value={
@@ -1557,15 +1605,18 @@ test "Codex Git replies stay with the latest checkout request" {
   let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let main_cwd = "/workspace/openseek"
   let worktree_cwd = "/workspace/.codex/worktrees/wt-3/openseek"
-  let opened = State().with_thread_reply({
-    "thread": {
-      "id": "thread-1",
-      "cwd": main_cwd,
-      "projectRoot": main_cwd,
-      "gitInfo": { "branch": "docs/desktop-ux-guidelines" },
-      "turns": [],
+  let opened = State().with_thread_reply(
+    {
+      "thread": {
+        "id": "thread-1",
+        "cwd": main_cwd,
+        "projectRoot": main_cwd,
+        "gitInfo": { "branch": "docs/desktop-ux-guidelines" },
+        "turns": [],
+      },
     },
-  })
+    CodexImportedSnapshot,
+  )
   // Opening the thread starts the lookup against the main checkout.
   let (_, main_pending) = opened.refresh_git(
     dispatch,
@@ -1691,6 +1742,7 @@ test "Codex history replies stay with the latest selected thread" {
       ],
     },
     false,
+    State().activity.frontier(),
   )
   let (_, waiting_a) = update(
     dispatch,
@@ -1712,7 +1764,7 @@ test "Codex history replies stay with the latest selected thread" {
   // neither may settle B's loading state or replace its pending target.
   let (_, stale_success) = update(
     dispatch,
-    Reply(kind=CodexThreadReply("thread-a"), value={
+    Reply(kind=CodexThreadReply("thread-a", listed.activity.frontier()), value={
       "thread": { "id": "thread-a", "turns": [] },
     }),
     waiting_b,
@@ -1722,7 +1774,10 @@ test "Codex history replies stay with the latest selected thread" {
   assert_true(stale_success == waiting_b)
   let (_, stale_failure) = update(
     dispatch,
-    Failed(kind=CodexThreadReply("thread-a"), message="late failure"),
+    Failed(
+      kind=CodexThreadReply("thread-a", listed.activity.frontier()),
+      message="late failure",
+    ),
     waiting_b,
     @interop.ChannelId::Local,
     _ => @cmd.none,
@@ -1731,7 +1786,7 @@ test "Codex history replies stay with the latest selected thread" {
 
   let (_, selected_b) = update(
     dispatch,
-    Reply(kind=CodexThreadReply("thread-b"), value={
+    Reply(kind=CodexThreadReply("thread-b", listed.activity.frontier()), value={
       "thread": { "id": "thread-b", "turns": [] },
     }),
     waiting_b,
@@ -1745,7 +1800,7 @@ test "Codex history replies stay with the latest selected thread" {
   // Once B is selected, even an A response arriving after B cannot rewind it.
   let (_, late_a) = update(
     dispatch,
-    Reply(kind=CodexThreadReply("thread-a"), value={
+    Reply(kind=CodexThreadReply("thread-a", listed.activity.frontier()), value={
       "thread": { "id": "thread-a", "turns": [] },
     }),
     selected_b,
@@ -1753,6 +1808,80 @@ test "Codex history replies stay with the latest selected thread" {
     _ => @cmd.none,
   )
   assert_true(late_a == selected_b)
+}
+
+///|
+test "Codex reconnect preserves a pending history target for a new epoch" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let selected = State()
+    .with_threads(
+      {
+        "data": [
+          { "id": "thread-a", "preview": "Thread A" },
+          { "id": "thread-b", "preview": "Thread B" },
+        ],
+      },
+      false,
+      State().activity.frontier(),
+    )
+    .with_thread_reply(
+      { "thread": { "id": "thread-a", "turns": [] } },
+      CodexImportedSnapshot,
+    )
+  let ready = { ..selected, connection: CodexReady, }
+  let old_frontier = ready.activity.frontier()
+  let (_, opening) = update(
+    dispatch,
+    OpenThread("thread-b"),
+    ready,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, disconnected) = update(
+    dispatch,
+    StatusChanged({ "status": "starting" }),
+    opening,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(disconnected.requested_thread, Some("thread-b"))
+  assert_true(
+    disconnected.activity.frontier().connection_epoch !=
+    old_frontier.connection_epoch,
+  )
+
+  // The dead connection's reply is inert. Ready retries thread-b with the
+  // new frontier, whose reply can settle the pending selection normally.
+  let reply : Json = { "thread": { "id": "thread-b", "turns": [] } }
+  let (_, stale) = update(
+    dispatch,
+    Reply(kind=CodexThreadReply("thread-b", old_frontier), value=reply),
+    disconnected,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(stale == disconnected)
+  let (_, reconnected) = update(
+    dispatch,
+    StatusChanged({ "status": "ready" }),
+    disconnected,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(reconnected.requested_thread, Some("thread-b"))
+  let (_, opened) = update(
+    dispatch,
+    Reply(
+      kind=CodexThreadReply("thread-b", reconnected.activity.frontier()),
+      value=reply,
+    ),
+    reconnected,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(opened.active_id(), Some("thread-b"))
+  assert_eq(opened.requested_thread, None)
+  assert_false(opened.loading)
 }
 
 ///|
@@ -2147,9 +2276,14 @@ test "newer Codex catalog refresh rejects an older pagination result" {
   )
   let (_, stale) = update(
     dispatch,
-    Reply(kind=CodexThreadsReply(false, 1), value={
-      "data": [{ "id": "stale", "preview": "Stale" }],
-    }),
+    Reply(
+      kind=CodexThreadsReply({
+        archived: false,
+        generation: 1,
+        activity_frontier: first.activity.frontier(),
+      }),
+      value={ "data": [{ "id": "stale", "preview": "Stale" }] },
+    ),
     second,
     @interop.ChannelId::Local,
     _ => @cmd.none,
@@ -2157,9 +2291,14 @@ test "newer Codex catalog refresh rejects an older pagination result" {
   assert_true(stale == second)
   let (_, current) = update(
     dispatch,
-    Reply(kind=CodexThreadsReply(false, 2), value={
-      "data": [{ "id": "current", "preview": "Current" }],
-    }),
+    Reply(
+      kind=CodexThreadsReply({
+        archived: false,
+        generation: 2,
+        activity_frontier: second.activity.frontier(),
+      }),
+      value={ "data": [{ "id": "current", "preview": "Current" }] },
+    ),
     stale,
     @interop.ChannelId::Local,
     _ => @cmd.none,
@@ -2168,15 +2307,128 @@ test "newer Codex catalog refresh rejects an older pagination result" {
 }
 
 ///|
+test "Codex list and history snapshots follow request order" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let listed = State().with_threads(
+    { "data": [{ "id": "thread-a", "preview": "Thread A" }] },
+    false,
+    State().activity.frontier(),
+  )
+  let (_, refreshing) = update(
+    dispatch,
+    Refresh,
+    listed,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let catalog_frontier = refreshing.activity.frontier()
+  let (_, opening) = update(
+    dispatch,
+    OpenThread("thread-a"),
+    refreshing,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let read_frontier = opening.activity.frontier()
+  let (_, idle) = update(
+    dispatch,
+    Reply(kind=CodexThreadReply("thread-a", read_frontier), value={
+      "thread": { "id": "thread-a", "status": { "type": "idle" }, "turns": [] },
+    }),
+    opening,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, stale_active) = update(
+    dispatch,
+    Reply(
+      kind=CodexThreadsReply({
+        archived: false,
+        generation: 1,
+        activity_frontier: catalog_frontier,
+      }),
+      value={
+        "data": [
+          {
+            "id": "thread-a",
+            "preview": "Thread A",
+            "status": { "type": "active" },
+          },
+        ],
+      },
+    ),
+    idle,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(
+    stale_active.activity.presentation("thread-a") is @conversation.NoRunMark,
+  )
+
+  // A subsequently requested catalog is newer than the history read and may
+  // authoritatively recover running state even if no notification was seen.
+  let (_, reloading) = update(
+    dispatch,
+    Refresh,
+    stale_active,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, current_active) = update(
+    dispatch,
+    Reply(
+      kind=CodexThreadsReply({
+        archived: false,
+        generation: 2,
+        activity_frontier: reloading.activity.frontier(),
+      }),
+      value={
+        "data": [
+          {
+            "id": "thread-a",
+            "preview": "Thread A",
+            "status": { "type": "active" },
+          },
+        ],
+      },
+    ),
+    reloading,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(
+    current_active.activity.presentation("thread-a")
+    is @conversation.RunningMark,
+  )
+}
+
+///|
 test "archived Codex catalog removes a selected task in either reply order" {
   let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  let selected = State::from_thread_snapshot({
+  let snapshot = State::from_thread_snapshot({
     "thread": { "id": "thread-a", "cwd": "/work/a", "turns": [] },
-  }).begin_foreground(CodexThreadReply("thread-a"))
-  let live = Reply(kind=CodexThreadsReply(false, 0), value={ "data": [] })
-  let archived = Reply(kind=CodexThreadsReply(true, 0), value={
-    "data": [{ "id": "thread-a", "cwd": "/work/a", "preview": "Archived A" }],
   })
+  let selected = snapshot.begin_foreground(
+    CodexThreadReply("thread-a", snapshot.activity.frontier()),
+  )
+  let live = Reply(
+    kind=CodexThreadsReply({
+      archived: false,
+      generation: 0,
+      activity_frontier: selected.activity.frontier(),
+    }),
+    value={ "data": [] },
+  )
+  let archived = Reply(
+    kind=CodexThreadsReply({
+      archived: true,
+      generation: 0,
+      activity_frontier: selected.activity.frontier(),
+    }),
+    value={
+      "data": [{ "id": "thread-a", "cwd": "/work/a", "preview": "Archived A" }],
+    },
+  )
   let (_, live_first) = update(
     dispatch,
     live,

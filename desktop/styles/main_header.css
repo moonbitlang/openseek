@@ -107,6 +107,7 @@ main {
 .run-dot {
   width: 7px;
   height: 7px;
+  box-sizing: border-box;
   border-radius: var(--radius-pill);
   background: var(--color-text-muted);
   flex: 0 0 auto;
@@ -122,6 +123,12 @@ main {
 }
 .run-dot.accent {
   background: var(--color-text-secondary);
+}
+.run-dot.running {
+  border: 2px solid var(--color-text-secondary);
+  border-right-color: transparent;
+  background: transparent;
+  animation: spinRunDot 0.9s linear infinite;
 }
 .run-dot.pulse {
   animation: pulseDot 1.6s ease-out infinite;

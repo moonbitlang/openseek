@@ -159,7 +159,7 @@
 }
 
 /* Keep status changes visible without forcing motion on users who disable it
-   at the operating-system level. Static color and text still show each state. */
+   at the operating-system level. Static shape and color still show each state. */
 @media (prefers-reduced-motion: reduce) {
   .pending-steer-state,
   .subrun-mark,
@@ -170,7 +170,8 @@
   .msg.streaming .msg-content::after,
   .activity-row,
   .browser-nav-button.loading .icon svg,
-  .run-dot.pulse {
+  .run-dot.pulse,
+  .run-dot.running {
     animation: none;
   }
 }

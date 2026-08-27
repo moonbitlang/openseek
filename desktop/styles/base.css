@@ -241,6 +241,12 @@ samp,
     box-shadow: 0 0 0 0 transparent;
   }
 }
+
+@keyframes spinRunDot {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @keyframes riseIn {
   from {
     opacity: 0;

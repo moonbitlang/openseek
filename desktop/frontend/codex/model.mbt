@@ -126,10 +126,19 @@ priv struct CodexThreadRow {
   cwd : String?
   project_root : String?
   worktree : CodexWorktree?
+  runtime : CodexThreadRuntime?
   // App-server last-activity stamp, converted to milliseconds so it is
   // directly comparable with OpenSeek's session mtimes when the shared
   // sidebar interleaves the two sources by recency.
   updated_at_ms : Double?
+} derive(Eq)
+
+///|
+/// App-server's durable thread status, reduced to the distinction the sidebar
+/// needs. Unknown future variants remain absent instead of being guessed idle.
+priv enum CodexThreadRuntime {
+  ThreadActive
+  ThreadInactive
 } derive(Eq)
 
 ///|
@@ -201,6 +210,7 @@ priv struct CodexThread {
   // composer an immediate label while the host verifies the current checkout
   // and asks GitHub for its pull request.
   branch : String?
+  runtime : CodexThreadRuntime?
   turns : Array[CodexTurn]
 } derive(Eq)
 
@@ -280,14 +290,34 @@ priv enum CodexSteerDelivery {
 } derive(Eq)
 
 ///|
+/// The request-time identity and activity cut for one half of the paged
+/// sidebar catalog. Keeping these fields together prevents a reply from
+/// accidentally pairing one generation with another request's frontier.
+priv struct CodexCatalogReplyContext {
+  archived : Bool
+  generation : Int
+  activity_frontier : CodexActivityFrontier
+}
+
+///|
+/// Why one complete thread snapshot is entering State. History reads carry
+/// the request-time activity cut and expected id; thread creation and the
+/// public test boundary are authoritative local transitions.
+priv enum CodexThreadSnapshotOrigin {
+  CodexHistoryRead(String, CodexActivityFrontier)
+  CodexThreadStart
+  CodexImportedSnapshot
+}
+
+///|
 /// The typed operation associated with one app-server reply.
 priv enum CodexReplyKind {
   CodexStatusReply
   CodexRequestsReply
   CodexAccountReply
   CodexModelsReply
-  CodexThreadsReply(Bool, Int)
-  CodexThreadReply(String)
+  CodexThreadsReply(CodexCatalogReplyContext)
+  CodexThreadReply(String, CodexActivityFrontier)
   CodexResumeReply(String)
   CodexDraftOpenReply(String)
   CodexDraftThreadReply(String)
@@ -553,6 +583,10 @@ struct State {
   permission_picker : CodexPermissionPicker
   threads : Array[CodexThreadRow]
   archived_threads : Array[CodexThreadRow]
+  // Ordered lifecycle evidence remains available when a task's transcript is
+  // not selected. Request frontiers prevent older snapshots from overwriting
+  // notifications that arrived while those requests were in flight.
+  activity : CodexActivityLedger
   // Live and archived pagination are independent requests. Each refresh
   // advances both generations so a slower older walk cannot overwrite a
   // newer catalog after reconnect, archive, or device focus changes.
@@ -614,6 +648,7 @@ pub fn State::State(loading? : Bool = false) -> State {
     permission_picker: CodexPermissionClosed(@protocol.AutoReview),
     threads: [],
     archived_threads: [],
+    activity: CodexActivityLedger::empty(),
     live_catalog_generation: 0,
     archived_catalog_generation: 0,
     selection: CodexNoTask,
@@ -670,7 +705,7 @@ fn State::can_choose_permission(self : State) -> Bool {
 /// The shell's black-box workspace tests use the same boundary as production
 /// instead of constructing Codex's private thread representation.
 pub fn State::from_thread_snapshot(value : Json) -> State {
-  State().with_thread_reply(value)
+  State().with_thread_reply(value, CodexImportedSnapshot)
 }
 
 ///|
@@ -887,11 +922,15 @@ fn State::accepts_thread_reply(self : State, requested_thread : String) -> Bool 
 /// so an overtaken draft/turn reply is inert rather than partly applied.
 fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
   match kind {
-    CodexThreadsReply(false, generation) =>
-      generation == self.live_catalog_generation
-    CodexThreadsReply(true, generation) =>
-      generation == self.archived_catalog_generation
-    CodexThreadReply(thread_id) => self.accepts_thread_reply(thread_id)
+    CodexThreadsReply(context) =>
+      if context.archived {
+        context.generation == self.archived_catalog_generation
+      } else {
+        context.generation == self.live_catalog_generation
+      }
+    CodexThreadReply(thread_id, frontier) =>
+      frontier.connection_epoch == self.activity.connection_epoch &&
+      self.accepts_thread_reply(thread_id)
     CodexResumeReply(thread_id) =>
       self
       .active_thread()
@@ -922,7 +961,7 @@ fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
 fn CodexReplyKind::foreground(self : CodexReplyKind) -> CodexForeground? {
   match self {
     CodexDraftOpenReply(id) => Some(CodexDraftOpenForeground(id))
-    CodexThreadReply(id) => Some(CodexThreadForeground(id))
+    CodexThreadReply(id, _) => Some(CodexThreadForeground(id))
     CodexResumeReply(id) => Some(CodexResumeForeground(id))
     CodexDraftThreadReply(id) => Some(CodexDraftStartForeground(id))
     CodexTurnStartReply(id)
@@ -940,7 +979,7 @@ fn CodexReplyKind::foreground(self : CodexReplyKind) -> CodexForeground? {
     | CodexRequestsReply
     | CodexAccountReply
     | CodexModelsReply
-    | CodexThreadsReply(_, _)
+    | CodexThreadsReply(_)
     | CodexInterruptReply
     | CodexApprovalReply => None
   }
@@ -1249,6 +1288,19 @@ fn CodexWorktree::decode(value : Json) -> CodexWorktree? {
 }
 
 ///|
+fn CodexThreadRuntime::decode(value : Json?) -> CodexThreadRuntime? {
+  guard value is Some(Object(fields)) &&
+    @jsonx.json_text(fields, "type") is Some(type_) else {
+    return None
+  }
+  match type_ {
+    "active" => Some(ThreadActive)
+    "idle" | "notLoaded" | "systemError" => Some(ThreadInactive)
+    _ => None
+  }
+}
+
+///|
 /// Select the exact registry row created or rebuilt for this Codex owner.
 /// The host reply is authoritative; name alone is insufficient because the
 /// same workspace can contain worktrees owned by OpenSeek conversations.
@@ -1280,6 +1332,11 @@ fn CodexThread::decode(value : Json) -> CodexThread? {
       }
     }
   }
+  let runtime = match CodexThreadRuntime::decode(fields.get("status")) {
+    Some(runtime) => Some(runtime)
+    None if turns.iter().any(turn => turn.is_running()) => Some(ThreadActive)
+    None => None
+  }
   Some({
     id,
     title: CodexThreadRow::title(fields),
@@ -1287,6 +1344,7 @@ fn CodexThread::decode(value : Json) -> CodexThread? {
     project_root: @jsonx.json_text(fields, "projectRoot"),
     worktree: fields.get("openseekWorktree").bind(CodexWorktree::decode),
     branch: CodexThreadRow::branch(fields),
+    runtime,
     turns,
   })
 }
@@ -1369,9 +1427,20 @@ fn CodexThreadRow::branch(fields : Map[String, Json]) -> String? {
 
 ///|
 fn State::with_status(self : State, value : Json) -> State {
-  guard value is Object(fields) &&
-    @jsonx.json_text(fields, "status") is Some(status) else {
-    return { ..self, connection: CodexUnavailable("Malformed status reply"), }
+  let connection = match value {
+    Object(fields) =>
+      match @jsonx.json_text(fields, "status") {
+        Some("ready") => CodexReady
+        Some("starting") => CodexStarting
+        Some(_) =>
+          CodexUnavailable(
+            @jsonx.json_text(fields, "message").unwrap_or(
+              "Codex is unavailable",
+            ),
+          )
+        None => CodexUnavailable("Malformed status reply")
+      }
+    _ => CodexUnavailable("Malformed status reply")
   }
   {
     ..self
@@ -1384,13 +1453,14 @@ fn State::with_status(self : State, value : Json) -> State {
     } else {
       self.loading
     },
-    connection: match status {
-      "ready" => CodexReady
-      "starting" => CodexStarting
-      _ =>
-        CodexUnavailable(
-          @jsonx.json_text(fields, "message").unwrap_or("Codex is unavailable"),
-        )
+    connection,
+    // A disconnect ends running work owned by that process.
+    // Advance the connection epoch only on the ready-to-disconnected edge so
+    // repeated starting/unavailable reports do not invalidate fresh requests.
+    activity: if self.connection is CodexReady && !(connection is CodexReady) {
+      self.activity.disconnected()
+    } else {
+      self.activity
     },
   }
 }
@@ -1471,7 +1541,12 @@ fn State::with_models(self : State, value : Json) -> State {
 }
 
 ///|
-fn State::with_threads(self : State, value : Json, archived : Bool) -> State {
+fn State::with_threads(
+  self : State,
+  value : Json,
+  archived : Bool,
+  activity_frontier : CodexActivityFrontier,
+) -> State {
   guard value is Object(fields) && fields.get("data") is Some(Array(values)) else {
     return { ..self, notice: "Malformed Codex thread list", }
   }
@@ -1486,12 +1561,17 @@ fn State::with_threads(self : State, value : Json, archived : Bool) -> State {
     // missed while disconnected. Remove matching live rows in either reply
     // order, and settle a selected task through the same removal transition as
     // a live `thread/archived` notification.
+    let mut activity = self.activity
+    for thread in threads {
+      activity = activity.retired(thread.id)
+    }
     let next = {
       ..self,
       threads: self.threads.filter(live => {
         !threads.iter().any(archived => archived.id == live.id)
       }),
       archived_threads: threads,
+      activity,
       notice: "",
     }
     if next.active_thread() is Some(active) &&
@@ -1524,6 +1604,7 @@ fn State::with_threads(self : State, value : Json, archived : Bool) -> State {
         cwd: active.cwd,
         project_root: active.project_root,
         worktree: active.worktree,
+        runtime: active.runtime,
         updated_at_ms: carried_ms,
       },
     ]
@@ -1534,7 +1615,15 @@ fn State::with_threads(self : State, value : Json, archived : Bool) -> State {
   } else {
     threads
   }
-  { ..self, threads: visible, notice: "", }
+  // Only rows returned by this list response carry new runtime evidence. The
+  // selected row may be carried forward solely for navigation continuity, and
+  // its cached runtime must not overwrite a newer lifecycle notification.
+  let statuses = threads.map(thread => (thread.id, thread.runtime))
+  let next = { ..self, threads: visible, notice: "", }
+  {
+    ..next,
+    activity: next.activity.reconcile_snapshot(statuses, activity_frontier),
+  }
 }
 
 ///|
@@ -1553,6 +1642,7 @@ fn CodexThreadRow::decode(value : Json) -> CodexThreadRow? {
     cwd: @jsonx.json_text(thread, "cwd"),
     project_root: @jsonx.json_text(thread, "projectRoot"),
     worktree: thread.get("openseekWorktree").bind(CodexWorktree::decode),
+    runtime: CodexThreadRuntime::decode(thread.get("status")),
     updated_at_ms,
   })
 }
@@ -1595,8 +1685,12 @@ fn State::with_requests(self : State, value : Json) -> State {
 fn State::with_thread_reply(
   self : State,
   value : Json,
-  requested_thread? : String,
+  origin : CodexThreadSnapshotOrigin,
 ) -> State {
+  let (requested_thread, activity_frontier) = match origin {
+    CodexHistoryRead(thread_id, frontier) => (Some(thread_id), frontier)
+    CodexThreadStart | CodexImportedSnapshot => (None, self.activity.frontier())
+  }
   guard value is Object(fields) &&
     fields.get("thread") is Some(thread) &&
     CodexThread::decode(thread) is Some(active) else {
@@ -1625,6 +1719,7 @@ fn State::with_thread_reply(
     cwd: active.cwd,
     project_root: active.project_root,
     worktree: active.worktree,
+    runtime: active.runtime,
     updated_at_ms: reply_stamp_ms,
   }
   let threads : Array[CodexThreadRow] = []
@@ -1654,7 +1749,7 @@ fn State::with_thread_reply(
     }
     visible
   }
-  {
+  let next = {
     ..self,
     threads: visible,
     selection: CodexStoredTask(active),
@@ -1692,6 +1787,13 @@ fn State::with_thread_reply(
       None => @composer.LocalCheckout
     },
     notice: "",
+  }
+  {
+    ..next,
+    activity: next.activity.reconcile_snapshot(
+      [(active.id, active.runtime)],
+      activity_frontier,
+    ),
   }
 }
 
@@ -1821,6 +1923,7 @@ fn State::without_thread(self : State, thread_id : String) -> State {
   {
     ..self,
     threads: self.threads.filter(thread => thread.id != thread_id),
+    activity: self.activity.retired(thread_id),
     selection: if removing_active {
       CodexNoTask
     } else {
@@ -2121,30 +2224,46 @@ fn State::with_notification(
     @jsonx.json_text(fields, "threadId") is Some(thread_id) {
     return self.without_archived_thread(thread_id)
   }
-  guard self.active_thread() is Some(active) &&
-    @jsonx.json_text(fields, "threadId").unwrap_or(active.id) == active.id else {
-    return self
+  let thread_id = @jsonx.json_text(fields, "threadId")
+  let observed = match (method_, thread_id, fields.get("turn")) {
+    ("turn/started", Some(thread_id), Some(Object(_))) =>
+      { ..self, activity: self.activity.started(thread_id), }
+    ("turn/completed", Some(thread_id), Some(Object(_))) =>
+      { ..self, activity: self.activity.completed(thread_id), }
+    ("thread/status/changed", Some(thread_id), _) =>
+      {
+        ..self,
+        activity: self.activity.status_changed(
+          thread_id,
+          CodexThreadRuntime::decode(fields.get("status")),
+        ),
+      }
+    _ => self
+  }
+  guard observed.active_thread() is Some(active) &&
+    thread_id.unwrap_or(active.id) == active.id else {
+    return observed
   }
   let next = match method_ {
     "thread/name/updated" =>
       if @jsonx.json_text(fields, "name") is Some(title) {
-        { ..self, selection: CodexStoredTask({ ..active, title, }), }
+        { ..observed, selection: CodexStoredTask({ ..active, title, }), }
       } else {
-        self
+        observed
       }
     "turn/started" | "turn/completed" =>
       if fields.get("turn") is Some(value) &&
         CodexTurn::decode(value) is Some(turn) {
-        { ..self, selection: CodexStoredTask(active.with_turn(turn)), }
+        { ..observed, selection: CodexStoredTask(active.with_turn(turn)), }
       } else {
-        self
+        observed
       }
     "item/started" | "item/completed" =>
       if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
         fields.get("item") is Some(value) &&
         CodexItem::decode(value) is Some(item) {
         {
-          ..self,
+          ..observed,
           selection: CodexStoredTask(
             active.with_item(
               turn_id,
@@ -2154,7 +2273,7 @@ fn State::with_notification(
           ),
         }
       } else {
-        self
+        observed
       }
     "item/agentMessage/delta"
     | "item/plan/delta"
@@ -2165,26 +2284,26 @@ fn State::with_notification(
         @jsonx.json_text(fields, "itemId") is Some(item_id) &&
         @jsonx.json_text(fields, "delta") is Some(delta) {
         {
-          ..self,
+          ..observed,
           selection: CodexStoredTask(active.with_delta(turn_id, item_id, delta)),
         }
       } else {
-        self
+        observed
       }
     "error" =>
       if fields.get("error") is Some(Object(error)) &&
         @jsonx.json_text(error, "message") is Some(message) {
-        { ..self, notice: message, }
+        { ..observed, notice: message, }
       } else {
-        self
+        observed
       }
     "warning" =>
       if @jsonx.json_text(fields, "message") is Some(message) {
-        { ..self, notice: message, }
+        { ..observed, notice: message, }
       } else {
-        self
+        observed
       }
-    _ => self
+    _ => observed
   }
   next.with_observed_first_prompt()
 }
@@ -2802,7 +2921,10 @@ test "a summary turn/completed keeps the streamed user message" {
   // user and agent messages arrive only as items, and turn/completed's
   // "summary" view lists the agent message alone.
   let state = State()
-    .with_thread_reply({ "thread": { "id": "thread-1", "turns": [] } })
+    .with_thread_reply(
+      { "thread": { "id": "thread-1", "turns": [] } },
+      CodexImportedSnapshot,
+    )
     .with_notification(
       "turn/started",
       {
@@ -2879,9 +3001,10 @@ test "a summary turn/completed keeps the streamed user message" {
 
 ///|
 test "Codex archive notification closes the active thread" {
-  let state = State().with_thread_reply({
-    "thread": { "id": "thread-1", "turns": [] },
-  })
+  let state = State().with_thread_reply(
+    { "thread": { "id": "thread-1", "turns": [] } },
+    CodexImportedSnapshot,
+  )
   let settled = state.with_notification(
     "thread/archived",
     { "threadId": "thread-1" },
@@ -2897,10 +3020,12 @@ test "Codex active and archived catalogs remain independent" {
     .with_threads(
       { "data": [{ "id": "thread-live", "preview": "Live" }] },
       false,
+      State().activity.frontier(),
     )
     .with_threads(
       { "data": [{ "id": "thread-archived", "preview": "Archived" }] },
       true,
+      State().activity.frontier(),
     )
   assert_eq(state.threads.map(thread => thread.id), ["thread-live"])
   assert_eq(state.archived_threads.map(thread => thread.id), ["thread-archived"])
@@ -2915,35 +3040,80 @@ test "Codex active and archived catalogs remain independent" {
 
 ///|
 test "Codex thread replies are visible before catalog refresh" {
-  let state = State().with_thread_reply({
-    "thread": {
-      "id": "thread-1",
-      "cwd": "/project",
-      "projectRoot": "/project",
-      "preview": "Smoke test",
-      "turns": [],
+  let state = State().with_thread_reply(
+    {
+      "thread": {
+        "id": "thread-1",
+        "cwd": "/project",
+        "projectRoot": "/project",
+        "preview": "Smoke test",
+        "turns": [],
+      },
     },
-  })
+    CodexThreadStart,
+  )
   assert_eq(state.threads.length(), 1)
   assert_eq(state.threads[0].id, "thread-1")
   assert_eq(state.threads[0].title, "Smoke test")
   assert_eq(state.threads[0].project_root, Some("/project"))
   assert_eq(state.worktree_launch_workspace(@interop.ChannelId::Local), None)
-  let external_worktree = State().with_thread_reply({
-    "thread": {
-      "id": "thread-external",
-      "cwd": "/external/worktree",
-      "projectRoot": "/project",
-      "turns": [],
+  let external_worktree = State().with_thread_reply(
+    {
+      "thread": {
+        "id": "thread-external",
+        "cwd": "/external/worktree",
+        "projectRoot": "/project",
+        "turns": [],
+      },
     },
-  })
+    CodexImportedSnapshot,
+  )
   assert_eq(
     external_worktree.worktree_launch_workspace(@interop.ChannelId::Local),
     None,
   )
-  let refreshed = state.with_threads({ "data": [] }, false)
+  let refreshed = state.with_threads(
+    { "data": [] },
+    false,
+    state.activity.frontier(),
+  )
   assert_eq(refreshed.threads.length(), 1)
   assert_eq(refreshed.threads[0].id, "thread-1")
+}
+
+///|
+test "carried Codex rows do not revive running after completion" {
+  let started = State().with_thread_reply(
+    {
+      "thread": {
+        "id": "thread-1",
+        "status": { "type": "active" },
+        "turns": [{ "id": "turn-1", "status": "inProgress", "items": [] }],
+      },
+    },
+    CodexThreadStart,
+  )
+  let completed = started.with_notification(
+    "turn/completed",
+    {
+      "threadId": "thread-1",
+      "turn": { "id": "turn-1", "status": "completed", "items": [] },
+    },
+    0,
+  )
+  assert_true(
+    completed.activity.presentation("thread-1") is @conversation.NoRunMark,
+  )
+  let (frontier, activity) = completed.activity.reserve_snapshot()
+  let refreshed = { ..completed, activity, }.with_threads(
+    { "data": [] },
+    false,
+    frontier,
+  )
+  assert_eq(refreshed.threads.map(thread => thread.id), ["thread-1"])
+  assert_true(
+    refreshed.activity.presentation("thread-1") is @conversation.NoRunMark,
+  )
 }
 
 ///|
@@ -2957,14 +3127,18 @@ test "opening a Codex conversation preserves its catalog position" {
       ],
     },
     false,
+    State().activity.frontier(),
   )
-  let opened = listed.with_thread_reply({
-    "thread": {
-      "id": "thread-middle",
-      "preview": "Middle refreshed",
-      "turns": [],
+  let opened = listed.with_thread_reply(
+    {
+      "thread": {
+        "id": "thread-middle",
+        "preview": "Middle refreshed",
+        "turns": [],
+      },
     },
-  })
+    CodexHistoryRead("thread-middle", listed.activity.frontier()),
+  )
   assert_eq(opened.threads.map(thread => thread.id), [
     "thread-new", "thread-middle", "thread-old",
   ])
@@ -2973,15 +3147,18 @@ test "opening a Codex conversation preserves its catalog position" {
 
 ///|
 test "Codex Git status starts from app-server and accepts current checkout" {
-  let state = State().with_thread_reply({
-    "thread": {
-      "id": "thread-1",
-      "cwd": "/worktrees/a/project",
-      "projectRoot": "/workspace/project",
-      "gitInfo": { "branch": "captured-branch" },
-      "turns": [],
+  let state = State().with_thread_reply(
+    {
+      "thread": {
+        "id": "thread-1",
+        "cwd": "/worktrees/a/project",
+        "projectRoot": "/workspace/project",
+        "gitInfo": { "branch": "captured-branch" },
+        "turns": [],
+      },
     },
-  })
+    CodexImportedSnapshot,
+  )
   assert_eq(state.new_thread_cwd(), "/workspace/project")
   assert_eq(state.git_status.unwrap().branch, Some("captured-branch"))
   let refreshed = state.with_git_reply("thread-1", 0, "/worktrees/a/project", {
@@ -3018,6 +3195,7 @@ test "Codex worktree conversations share their main project key" {
       ],
     },
     false,
+    State().activity.frontier(),
   )
   assert_eq(state.threads.length(), 2)
   assert_eq(

@@ -209,18 +209,36 @@ pub fn component(
     }
     match input.run_mark {
       NoRunMark => ()
-      RunningMark => status.push(@html.span(class="run-dot accent pulse", ""))
+      RunningMark =>
+        status.push(
+          @html.span(
+            class="run-dot running",
+            attrs=@html.Attrs::build()
+              .role("status")
+              .aria_live("polite")
+              .aria_label("Running"),
+            "",
+          ),
+        )
       CompletedMark => status.push(@html.span(class="run-dot accent", ""))
       FailedMark => status.push(@html.span(class="run-dot warn", ""))
     }
-    if !status.is_empty() || !input.trailing.is_empty() {
+    // Runtime callers advertise the row's durable actions. The shared row
+    // owns the safety rule that none of them are actionable during a run, so a
+    // caller cannot accidentally pair a running mark with Archive.
+    let trailing_actions = if input.run_mark is RunningMark {
+      []
+    } else {
+      input.trailing
+    }
+    if !status.is_empty() || !trailing_actions.is_empty() {
       let trailing : Array[@html.Html] = []
       if !status.is_empty() {
         trailing.push(@html.span(class="row-status", status))
       }
-      if !input.trailing.is_empty() {
+      if !trailing_actions.is_empty() {
         let buttons : Array[@html.Html] = []
-        for action in input.trailing {
+        for action in trailing_actions {
           let (title, button_class, image) = match action {
             Archive(title~) => (title, "row-archive", @icons.icon_archive)
             Restore(title~) => (title, "row-archive", @icons.icon_arrow_up)

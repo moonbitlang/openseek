@@ -29,14 +29,8 @@ fn[Payload : ToJson, Response : FromJson + ToJson] CodexReplyKind::request(
 /// Read one complete active or archived catalog. App-server deliberately
 /// pages `thread/list`; the sidebar must follow `nextCursor` instead of making
 /// old tasks disappear once an account has more than one page.
-priv struct CodexThreadCatalogRequest {
-  archived : Bool
-  generation : Int
-}
-
-///|
-fn CodexThreadCatalogRequest::run(
-  self : CodexThreadCatalogRequest,
+fn CodexCatalogReplyContext::run(
+  self : CodexCatalogReplyContext,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
@@ -55,7 +49,7 @@ fn CodexThreadCatalogRequest::run(
             scheduler.add(
               dispatch(
                 Failed(
-                  kind=CodexThreadsReply(self.archived, self.generation),
+                  kind=CodexThreadsReply(self),
                   message=@interop.bridge_error_text(error),
                 ),
               ),
@@ -75,7 +69,7 @@ fn CodexThreadCatalogRequest::run(
           scheduler.add(
             dispatch(
               Failed(
-                kind=CodexThreadsReply(self.archived, self.generation),
+                kind=CodexThreadsReply(self),
                 message="Codex thread list repeated cursor " + next,
               ),
             ),
@@ -86,11 +80,7 @@ fn CodexThreadCatalogRequest::run(
         cursor = Some(next)
       }
       scheduler.add(
-        dispatch(
-          Reply(kind=CodexThreadsReply(self.archived, self.generation), value={
-            "data": rows,
-          }),
-        ),
+        dispatch(Reply(kind=CodexThreadsReply(self), value={ "data": rows })),
       )
     })
   })
@@ -104,20 +94,24 @@ fn State::refresh_catalog(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
 ) -> (@cmd.Cmd, State) {
+  let (activity_frontier, activity) = self.activity.reserve_snapshot()
   let next = {
     ..self,
+    activity,
     live_catalog_generation: self.live_catalog_generation + 1,
     archived_catalog_generation: self.archived_catalog_generation + 1,
   }
   (
     @cmd.batch([
-      CodexThreadCatalogRequest::{
+      CodexCatalogReplyContext::{
         archived: false,
         generation: next.live_catalog_generation,
+        activity_frontier,
       }.run(dispatch, channel),
-      CodexThreadCatalogRequest::{
+      CodexCatalogReplyContext::{
         archived: true,
         generation: next.archived_catalog_generation,
+        activity_frontier,
       }.run(dispatch, channel),
     ]),
     next,
@@ -333,19 +327,24 @@ fn State::start_draft_thread(
 
 ///|
 fn State::open_thread(
-  _self : State,
+  self : State,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   thread_id : String,
-) -> @cmd.Cmd {
+) -> (@cmd.Cmd, CodexActivityFrontier, State) {
   // The host keeps this read-only across both legacy inline histories and
   // paginated histories. Selecting a row never resumes the task or claims its
   // writer merely to render the transcript.
-  CodexThreadReply(thread_id).request(
-    dispatch,
-    channel,
-    @commands.codex_thread_history_read,
-    { thread_id, },
+  let (activity_frontier, activity) = self.activity.reserve_snapshot()
+  (
+    CodexThreadReply(thread_id, activity_frontier).request(
+      dispatch,
+      channel,
+      @commands.codex_thread_history_read,
+      { thread_id, },
+    ),
+    activity_frontier,
+    { ..self, activity, },
   )
 }
 

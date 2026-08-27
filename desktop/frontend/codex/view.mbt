@@ -311,7 +311,7 @@ fn CodexThreadRow::sidebar_input(
 ) -> @conversation.Input {
   let selected = context.selected &&
     state.active_thread().map(item => item.id == self.id).unwrap_or(false)
-  let running = selected && state.is_running()
+  let run_mark = state.activity.presentation(self.id)
   {
     id: @conversation.Id(
       source="codex.live",
@@ -324,21 +324,13 @@ fn CodexThreadRow::sidebar_input(
     nested,
     subrun: false,
     active: selected,
-    running,
+    running: run_mark is @conversation.RunningMark,
     openable: true,
     worktree: self.worktree
     .filter(worktree => worktree.present)
     .map(worktree => worktree.name),
-    run_mark: if running {
-      @conversation.RunningMark
-    } else {
-      @conversation.NoRunMark
-    },
-    trailing: if running {
-      []
-    } else {
-      [@conversation.Archive(title="Archive Codex conversation")]
-    },
+    run_mark,
+    trailing: [@conversation.Archive(title="Archive Codex conversation")],
     children: [],
   }
 }
@@ -534,6 +526,7 @@ test "Codex archived catalog contributes restore inputs" {
   let state = State().with_threads(
     { "data": [{ "id": "thread-archived", "preview": "Archived task" }] },
     true,
+    State().activity.frontier(),
   )
   let entries = state.archived_sidebar_entries(@interop.ChannelId::Local)
   assert_eq(entries.length(), 1)
@@ -555,7 +548,11 @@ test "Codex threads join their registered project's shared row" {
       "preview": "Codex task \{number}",
     })
   }
-  let state = State().with_threads({ "data": data }, false)
+  let state = State().with_threads(
+    { "data": data },
+    false,
+    State().activity.frontier(),
+  )
   let context : SidebarContext = {
     channel: @interop.ChannelId::Local,
     selected: true,
@@ -566,4 +563,181 @@ test "Codex threads join their registered project's shared row" {
   assert_true(conversations[0].input.nested)
   assert_eq(state.project_conversations(context, "/work/other").length(), 0)
   assert_eq(state.loose_entries(context).length(), 0)
+}
+
+///|
+test "Codex snapshots preserve running activity across task switches" {
+  let context : SidebarContext = {
+    channel: @interop.ChannelId::Local,
+    selected: true,
+    registered_projects: ["/work/openseek"],
+  }
+  let listed = State().with_threads(
+    {
+      "data": [
+        {
+          "id": "thread-running",
+          "projectRoot": "/work/openseek",
+          "cwd": "/work/openseek",
+          "preview": "Running task",
+          "status": { "type": "active", "activeFlags": [] },
+        },
+        {
+          "id": "thread-selected",
+          "projectRoot": "/work/openseek",
+          "cwd": "/work/openseek",
+          "preview": "Selected task",
+          "status": { "type": "idle" },
+        },
+      ],
+    },
+    false,
+    State().activity.frontier(),
+  )
+  let listed_rows = listed.project_conversations(context, "/work/openseek")
+  assert_true(listed_rows[0].input.run_mark is @conversation.RunningMark)
+  assert_true(listed_rows[0].input.trailing is [@conversation.Archive(..)])
+
+  // Older app-server snapshots may omit thread status. A full read still
+  // carries the active turn and must survive after another task is selected.
+  let read = State()
+    .with_threads(
+      {
+        "data": [
+          {
+            "id": "thread-running",
+            "projectRoot": "/work/openseek",
+            "cwd": "/work/openseek",
+            "preview": "Running task",
+          },
+          {
+            "id": "thread-selected",
+            "projectRoot": "/work/openseek",
+            "cwd": "/work/openseek",
+            "preview": "Selected task",
+          },
+        ],
+      },
+      false,
+      State().activity.frontier(),
+    )
+    .with_thread_reply(
+      {
+        "thread": {
+          "id": "thread-running",
+          "projectRoot": "/work/openseek",
+          "cwd": "/work/openseek",
+          "preview": "Running task",
+          "turns": [{ "id": "turn-1", "status": "inProgress", "items": [] }],
+        },
+      },
+      CodexHistoryRead("thread-running", State().activity.frontier()),
+    )
+  assert_true(
+    read.activity.presentation("thread-running") is @conversation.RunningMark,
+  )
+  let switched = read.with_thread_reply(
+    {
+      "thread": {
+        "id": "thread-selected",
+        "projectRoot": "/work/openseek",
+        "cwd": "/work/openseek",
+        "preview": "Selected task",
+        "turns": [],
+      },
+    },
+    CodexHistoryRead("thread-selected", read.activity.frontier()),
+  )
+  let switched_rows = switched.project_conversations(context, "/work/openseek")
+  assert_true(switched_rows[0].input.run_mark is @conversation.RunningMark)
+  assert_true(switched_rows[0].input.trailing is [@conversation.Archive(..)])
+
+  let notified = State().with_notification(
+    "thread/status/changed",
+    {
+      "threadId": "thread-running",
+      "status": { "type": "active", "activeFlags": [] },
+    },
+    1,
+  )
+  assert_true(
+    notified.activity.presentation("thread-running")
+    is @conversation.RunningMark,
+  )
+  let idle = notified.with_notification(
+    "thread/status/changed",
+    { "threadId": "thread-running", "status": { "type": "idle" } },
+    2,
+  )
+  assert_true(
+    idle.activity.presentation("thread-running") is @conversation.NoRunMark,
+  )
+}
+
+///|
+test "background Codex activity follows its thread instead of selection" {
+  let state = State()
+    .with_threads(
+      {
+        "data": [
+          {
+            "id": "thread-background",
+            "projectRoot": "/work/openseek",
+            "cwd": "/work/openseek",
+            "preview": "Background task",
+          },
+          {
+            "id": "thread-selected",
+            "projectRoot": "/work/openseek",
+            "cwd": "/work/openseek",
+            "preview": "Selected task",
+          },
+        ],
+      },
+      false,
+      State().activity.frontier(),
+    )
+    .with_thread_reply(
+      {
+        "thread": {
+          "id": "thread-selected",
+          "projectRoot": "/work/openseek",
+          "cwd": "/work/openseek",
+          "preview": "Selected task",
+          "turns": [],
+        },
+      },
+      CodexHistoryRead("thread-selected", State().activity.frontier()),
+    )
+  let running = state.with_notification(
+    "turn/started",
+    {
+      "threadId": "thread-background",
+      "turn": { "id": "turn-1", "status": "inProgress", "items": [] },
+    },
+    1,
+  )
+  assert_eq(running.active_id(), Some("thread-selected"))
+  let context : SidebarContext = {
+    channel: @interop.ChannelId::Local,
+    selected: true,
+    registered_projects: ["/work/openseek"],
+  }
+  let rows = running.project_conversations(context, "/work/openseek")
+  assert_eq(rows.length(), 2)
+  assert_true(rows[0].input.run_mark is @conversation.RunningMark)
+  assert_true(rows[0].input.trailing is [@conversation.Archive(..)])
+  assert_true(rows[1].input.run_mark is @conversation.NoRunMark)
+
+  let completed = running.with_notification(
+    "turn/completed",
+    {
+      "threadId": "thread-background",
+      "turn": { "id": "turn-1", "status": "completed", "items": [] },
+    },
+    2,
+  )
+  let settled = completed.project_conversations(context, "/work/openseek")
+  assert_true(settled[0].input.run_mark is @conversation.NoRunMark)
+  assert_true(settled[0].input.trailing is [@conversation.Archive(..)])
 }
