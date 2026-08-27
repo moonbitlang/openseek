@@ -746,7 +746,7 @@ async test "moonbitlang/async/shell glob lists workspace paths" {
     @fs.write_file("\{ws}/main.mbt", "fn main {}", create_mode=CreateOrTruncate)
     let out = run_in(ws, {
       "source": (
-        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/shell" }
+        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/shell", "moonbitlang/core/env" }
         #|
         #|async fn main {
         #|  for path in @shell.glob("*.mbt") {
@@ -755,11 +755,17 @@ async test "moonbitlang/async/shell glob lists workspace paths" {
         #|  for name in @fs.readdir(".") {
         #|    println(name)
         #|  }
+        #|  guard @env.get_env_var("HOME") is Some(home) else {
+        #|    println("HOME is not set")
+        #|    return
+        #|  }
+        #|  println("\{home}/.moon exists: \{@fs.exists("\{home}/.moon")}")
         #|}
       ),
     })
     assert_false(out.is_error)
     assert_true(out.content.contains("main.mbt"))
+    assert_true(out.content.contains(".moon exists: "))
   })
 }
 

@@ -36,7 +36,9 @@ spawned from a `mbtx` snippet through the shell-free
 `moonbitlang/async/shell` API. The `source` argument is a whole `.mbtx`
 program:
 
-- Import every package it uses separately.
+- Import every package it uses separately, core packages included and by
+  their real path: `moonbitlang/core/encoding/base64`, not
+  `moonbitlang/core/base64` — `moon ide doc "@base64"` prints the path.
 - Keep `async fn main` for async IO.
 - Helpers that run a command or do IO are `async fn` too, without `noraise`;
   a plain `fn` cannot call them.
@@ -52,6 +54,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/shell",
+  "moonbitlang/core/env",
 }
 
 ///|
@@ -62,8 +65,16 @@ async fn main {
   for name in @fs.readdir(".") {
     println(name)
   }
+  guard @env.get_env_var("HOME") is Some(home) else {
+    println("HOME is not set")
+    return
+  }
+  println("\{home}/.moon exists: \{@fs.exists("\{home}/.moon")}")
 }
 ```
+
+`@env.get_env_var` and `@env.current_dir` return `String?`: unwrap before
+interpolating, or `"\{home}/.moon"` renders as `Some(/Users/me)/.moon`.
 
 `@shell.glob` expands `*`, `?`, character sets, and `**` without shell
 parsing; its sorted matches are ordinary `Array[String]` values. A pattern
@@ -101,7 +112,7 @@ where the binaries do not exist:
 | head/tail   | slice the split text; wc -l → count it |
 | grep        | rg, or .split("\n").filter(...) on captured output |
 | sort/uniq   | .sort(), a Set, or a Map |
-| pwd         | @env.current_dir(); printenv → @env.get_env_var(name) |
+| pwd         | @env.current_dir(); printenv → @env.get_env_var(name) — both `String?` |
 | mkdir -p    | @fs.mkdir(d, recursive=true) |
 | test -f     | @fs.exists(p); test -d → @fs.kind(p) is Directory |
 | echo/printf | println |
@@ -139,9 +150,9 @@ exits 1 when nothing matched, so read `exit_code()` rather than treating the
 call as failed. A regex needle is one ordinary string element: double the
 backslashes MoonBit needs (`"\\("`) or pass `-F` for a literal match. For
 bulky output, redirect with `stdout=ToFile(...)` to a file under
-`@fs.tmpdir(prefix="run-")` — the label is required and the call creates the
-directory, the one place a snippet may write — and read only the needed
-excerpt; `.status()` returns just the exit code when the output does not
+`@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
+directory, and that directory is the one place a snippet may write (`/tmp`
+itself is refused) — and read only the needed excerpt; `.status()` returns just the exit code when the output does not
 matter.
 
 For compiler feedback, stream the line-delimited JSON from one `moon check`
@@ -219,7 +230,8 @@ tools that rewrite source as their job (`moon fmt`, `moon info`,
   structured alternative to commenting it out.
 - `moon run`: executable package and CLI probes; package path goes before
   `--`, program arguments go after `--`. Example:
-  `moon run --target native cmd/tomljson -- /tmp/input.toml`.
+  `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool
+  put in the workspace).
 - `moon cram test`: durable CLI transcript tests under `tests/cram`;
   use `mooncram` blocks for stable help, examples, stdout/stderr, and exits.
   Example: `moon cram test tests/cram`.
@@ -831,7 +843,8 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
 
 - In `moon run`, the package path goes before `--`; program arguments go after
   `--`. Example file probe:
-  `moon run --target native cmd/tomljson -- /tmp/input.toml`.
+  `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool
+  put in the workspace).
 - Example stdin probe (no pipes — feed stdin directly):
   `@shell.Cmd("moon", ["run", "--target", "native", "cmd/tomljson", "--",
   "--stdin"], stdin=Text("a.b = 1\n"))`.

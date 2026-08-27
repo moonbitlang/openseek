@@ -57,7 +57,8 @@ fn review_system_prompt() -> String {
     #|`>`, `&&`, `$()`, and `*` receive no shell interpretation — so run dependent
     #|commands as ordinary MoonBit statements and branch on their exit codes. Bulky
     #|output goes to a file under `@fs.tmpdir(prefix="run-")` through
-    #|`stdout=ToFile(...)` (the label is required) and is read back in part.
+    #|`stdout=ToFile(...)` (the label is required; that directory is the one place a
+    #|snippet may write — `/tmp` itself is refused) and is read back in part.
     #|
     #|Shell utilities such as `ls`, `cat`, and `sh` are refused; each is a line of
     #|MoonBit here, which also works on Windows, where the binaries do not exist:
