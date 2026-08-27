@@ -73,7 +73,7 @@ fn show_system_notification(
   body : String,
   run_id : String,
 ) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     guard @interop.moonbit_bridge_root() is Some(root) &&
       @interop.js_prop(root, "notification") is Some(notification) &&
       @interop.js_prop(notification, "show") is Some(_) else {

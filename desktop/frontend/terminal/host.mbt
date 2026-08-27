@@ -290,7 +290,7 @@ fn hide_all() -> Unit {
 /// conversation switches, which produce no terminal message of their own.
 fn apply_shown(key : String?) -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _scheduler => {
+    _ => {
       match key {
         Some(key) => show_only(key)
         None => hide_all()
@@ -306,7 +306,7 @@ fn apply_shown(key : String?) -> @cmd.Cmd {
 /// command covers tabs that survive a later light/dark switch.
 fn apply_theme() -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _scheduler => {
+    _ => {
       let theme : @js.Value = terminal_style().get_with_string("theme")
       for _, entry in term_host.entries {
         let options : @js.Value = entry.term.get_with_string("options")
@@ -325,7 +325,7 @@ fn apply_theme() -> @cmd.Cmd {
 /// visible emulator updates both xterm's metrics and the PTY grid through the
 /// existing `onResize` callback.
 pub fn apply_font_family(font_family : String) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     for _, entry in term_host.entries {
       let options : @js.Value = entry.term.get_with_string("options")
       options.set_with_string("fontFamily", @js.Value::cast_from(font_family))
@@ -339,7 +339,7 @@ pub fn apply_font_family(font_family : String) -> @cmd.Cmd {
 /// same size from the root CSS token when they mount. Re-fitting reports the
 /// resulting grid through xterm's existing `onResize` callback.
 pub fn apply_font_size(font_size : Double) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     for _, entry in term_host.entries {
       let options : @js.Value = entry.term.get_with_string("options")
       options.set_with_string("fontSize", @js.Value::cast_from(font_size))
@@ -368,7 +368,7 @@ fn State::sync_host_routes(self : State) -> @cmd.Cmd {
       None => ()
     }
   }
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     term_host.owners = owners
     term_host.opening_channels = opening_channels
   })
@@ -472,7 +472,7 @@ fn TermHost::clear_pending(
   self : TermHost,
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     let retained : Map[String, (@interop.ChannelId, String)] = Map([])
     for id, owner in term_host.owners {
       if owner.0 != channel {
@@ -498,7 +498,7 @@ fn TermHost::clear_pending(
 ///|
 /// Dispose a closed tab's emulator and remove its element.
 fn dispose_tab(key : String) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     let retained : Map[String, (@interop.ChannelId, String)] = Map([])
     for id, owner in term_host.owners {
       if owner.1 != key {

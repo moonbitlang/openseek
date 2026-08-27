@@ -41,7 +41,7 @@ let terminal_resizer : TerminalResizer = {
 /// that finds the stable handle performs the installation.
 fn TerminalResizer::mount(self : TerminalResizer) -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _scheduler => {
+    _ => {
       if self.installed.val {
         return
       }

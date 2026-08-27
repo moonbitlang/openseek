@@ -33,7 +33,7 @@ fn set_git_graph_split(height : Int) -> Unit {
 ///|
 fn request_git_graph_resize_mount() -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _scheduler => {
+    _ => {
       if git_graph_resize_installed.val {
         return
       }

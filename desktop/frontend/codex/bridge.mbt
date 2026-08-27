@@ -192,7 +192,7 @@ fn State::close_draft(
   guard self.active_draft() is Some(draft) && draft.id == draft_id else {
     return @cmd.none
   }
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     @js.async_run(() => {
       ignore(
         try

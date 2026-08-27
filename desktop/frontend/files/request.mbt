@@ -248,7 +248,7 @@ pub fn Request::retire(self : Request) -> @cmd.Cmd {
   }
   let cache_key = self.cache_key(root)
   let lane_key = self.lane_key(cache_key)
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     @js.async_run(() => {
       @interop.in_ordered_lane(lane_key, () => {
         ignore(

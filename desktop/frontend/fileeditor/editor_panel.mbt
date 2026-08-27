@@ -490,7 +490,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 /// This deliberately leaves focus where it is so toolbar clicks do not change
 /// keyboard ownership beyond the editor's own cursor update.
 fn reveal_previous_review_diff_change() -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     if viewer_state.diff_editor is Some(diff_editor) {
       diff_editor.reveal_previous_change() |> ignore
     }
@@ -500,7 +500,7 @@ fn reveal_previous_review_diff_change() -> @cmd.Cmd {
 ///|
 /// Reveal the next change through DiffEditor's existing cyclic navigation.
 fn reveal_next_review_diff_change() -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     if viewer_state.diff_editor is Some(diff_editor) {
       diff_editor.reveal_next_change() |> ignore
     }
@@ -511,7 +511,7 @@ fn reveal_next_review_diff_change() -> @cmd.Cmd {
 /// Retain and apply the panel's side-by-side/inline preference without
 /// replacing the comparison models or either code kernel.
 fn apply_review_diff_layout(layout : ReviewDiffLayout) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     let editor_layout = match layout {
       ReviewSideBySide => @viewer.SideBySide
       ReviewInline => @viewer.Inline
@@ -551,7 +551,7 @@ fn refresh_diff_pane_options() -> Unit {
 /// Update every imperative presentation, including canvas overview markers
 /// and Markdown diagrams that cannot repaint from inherited CSS alone.
 pub fn apply_theme(theme : String) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     viewer_state.theme = theme
     if viewer_state.viewer is Some(viewer) {
       viewer.update_options(viewer.get_options().with_theme(theme))
@@ -570,7 +570,7 @@ pub fn apply_theme(theme : String) -> @cmd.Cmd {
 /// through its public options API. Updating options re-measures glyph widths
 /// and recomputes wrapping before the next render.
 pub fn apply_font_family(font_family : String) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     viewer_state.font_family = font_family
     if viewer_state.viewer is Some(viewer) {
       viewer.update_options(viewer.get_options().with_font_family(font_family))
@@ -584,7 +584,7 @@ pub fn apply_font_family(font_family : String) -> @cmd.Cmd {
 /// ViewerOptions owns the rebuild decision, including glyph measurement and
 /// wrapping changes caused by the new pixel size.
 pub fn apply_font_size(font_size : Double) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     viewer_state.font_size = font_size
     if viewer_state.viewer is Some(viewer) {
       viewer.update_options(viewer.get_options().with_font_size(font_size))
@@ -629,7 +629,7 @@ pub fn remove_editor_feedback(
   feedback_id : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _scheduler => {
+    _ => {
       guard viewer_state.services is Some(services) else { return }
       // The string is the `to_string()` of a URI this package minted, so the
       // re-parse cannot fail; a stray unparsable string has no bubble anyway.
@@ -796,7 +796,7 @@ fn show_history_diff_in_viewer(
   original_content : String,
   modified_content : String,
 ) -> @cmd.Cmd {
-  let show = @cmd.custom_cmd(_scheduler => {
+  let show = @cmd.custom_cmd(_ => {
     guard viewer_state.diff_editor is Some(diff_editor) &&
       viewer_state.services is Some(services) else {
       return
@@ -951,7 +951,7 @@ fn set_search_match_highlights(
 fn update_search_match_highlights(
   highlights : @grep_search.EditorHighlights?,
 ) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => set_search_match_highlights(highlights))
+  @cmd.custom_cmd(_ => set_search_match_highlights(highlights))
 }
 
 ///|
@@ -1026,7 +1026,7 @@ fn show_file_in_viewer(
   diff? : (String, String),
   search_highlights? : @grep_search.EditorHighlights,
 ) -> @cmd.Cmd {
-  let show = @cmd.custom_cmd(_scheduler => {
+  let show = @cmd.custom_cmd(_ => {
     // Reads are always batched behind a mount request whose after-render tick
     // runs before this async reply, so the viewer exists here (see
     // `ViewerHost::viewer`); the guard only drops a pathological stray.
@@ -1303,7 +1303,7 @@ fn should_restore_view_state(
 /// out of review mode uses this before starting a ranged read, so a failed read
 /// cannot leave the former HEAD gutter attached to an ordinary document.
 fn clear_quick_diff_baseline() -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     if viewer_state.viewer is Some(viewer) &&
       viewer_state.services is Some(services) &&
       viewer.get_model() is Some(model) {
@@ -1330,7 +1330,7 @@ fn should_auto_fold_top_level(text_model : @model.TextModel) -> Bool {
 /// model, so it would otherwise keep showing the previous document. A no-op
 /// until the viewer has been attached.
 fn clear_viewer() -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     viewer_state.view_states.clear()
     viewer_state.markdown_view_states.clear()
     if viewer_state.viewer is Some(viewer) {
@@ -1369,7 +1369,7 @@ fn clear_viewer() -> @cmd.Cmd {
 /// CSS, while the next complete comparison replaces it atomically. Its memory
 /// stays bounded to one pair and `clear_viewer` retires it at an owner boundary.
 fn clear_document() -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     if viewer_state.viewer is Some(viewer) {
       if viewer_state.point_range_highlight is Some(highlight) {
         highlight.clear()
@@ -1402,7 +1402,7 @@ fn clear_document() -> @cmd.Cmd {
 /// neighbor's `show_file_in_viewer` (which re-parks the outgoing document,
 /// closed tab included), so the closed tab's entry does not linger.
 fn forget_view_state(path : @pathx.Relative) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     viewer_state.view_states.remove(path.0)
     viewer_state.markdown_view_states.remove(path.0)
   })
@@ -1419,7 +1419,7 @@ fn apply_diagnostics(
   absolute : @common.Uri,
   diagnostics : Array[@protocol.LspDiagnostic],
 ) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     if @resource.belongs_to(absolute, channel) &&
       viewer_state.absolute is Some(current) &&
       current == absolute &&

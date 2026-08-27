@@ -91,7 +91,7 @@ fn cancel_file_search(
   owner : @interop.ConversationKey,
   request_id : String,
 ) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     @js.async_run(() => {
       ignore(
         @interop.bridge_request(
@@ -112,7 +112,7 @@ fn clear_file_cache(
   owner : @interop.ConversationKey,
   cache_key : String,
 ) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     @js.async_run(() => {
       ignore(
         @interop.bridge_request(

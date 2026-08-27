@@ -59,7 +59,7 @@ let tree_resizing : Ref[Bool] = Ref(false)
 /// `request_resize_handle_mount`. Idempotent — a no-op once installed.
 fn request_tree_resize_mount() -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _scheduler => {
+    _ => {
       if tree_resize_installed.val {
         return
       }
