@@ -698,11 +698,7 @@ priv struct RunState {
 /// The state a turn starts from. A conversation with no run open holds one
 /// too: every field means "nothing observed".
 fn RunState::empty() -> RunState {
-  {
-    streaming_response: None,
-    subruns: [],
-    usage_tokens: 0,
-  }
+  { streaming_response: None, subruns: [], usage_tokens: 0 }
 }
 
 ///|
@@ -3455,10 +3451,7 @@ fn Conversation::run_heartbeat(self : Conversation) -> @composer.RunHeartbeat? {
 
 ///|
 fn Conversation::clear_streams(self : Conversation) -> Conversation {
-  {
-    ..self,
-    turn: { ..self.turn, streaming_response: None },
-  }
+  { ..self, turn: { ..self.turn, streaming_response: None } }
 }
 
 ///|
