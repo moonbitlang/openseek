@@ -599,7 +599,7 @@ fn semantic_search_body(
 ) -> @html.Html {
   let children : Array[@html.Html] = []
   let busy = page.phase is Debouncing || page.phase is Loading
-  let summary = page.result_summary()
+  let result_summary = page.result_summary()
   let file_count = page.active_file_count()
   let summary = if busy {
     if page.semantic.hits.is_empty() {
@@ -607,12 +607,12 @@ fn semantic_search_body(
     } else {
       // The scan is still running; these counts are the partial stream, not
       // the final totals the reply will replace.
-      "\{page.match_count} matches in \{page.file_count} files so far…"
+      "\{result_summary.match_count} matches in \{file_count} files so far…"
     }
-  } else if summary.match_count == 1 {
+  } else if result_summary.match_count == 1 {
     "1 match in \{file_count} file"
   } else {
-    "\{summary.match_count} matches in \{file_count} files"
+    "\{result_summary.match_count} matches in \{file_count} files"
   }
   children.push(
     @html.div(
@@ -621,7 +621,7 @@ fn semantic_search_body(
       summary,
     ),
   )
-  if page.limit_hit {
+  if result_summary.limit_hit {
     children.push(
       @html.div(
         class="search-truncated",
