@@ -1,6 +1,6 @@
 // State-transition coverage for the quick pick. Commands are intentionally
-// opaque here; these tests assert that only the matching query/request UUID
-// can change the plain-data state, and that the Host cache session survives the
+// opaque here; these tests assert that only the matching request UUID can
+// change the plain-data state, and that the Host cache session survives the
 // failures it is designed to survive. What the palette *shows* is covered by
 // the black-box tests against its rendered markup.
 
@@ -140,11 +140,9 @@ test "a root that arrives after opening restarts both providers once" {
   assert_true(symbol_retrying.phase is Loading)
   // A reply minted against the previous root cannot settle the restarted run.
   let stale = symbol_first.step(
-    SymbolsLoaded(
-      query=symbol_pending.query(),
-      request_id=symbol_pending.request_id,
-      items=[test_symbol("stale", "src/old.mbt")],
-    ),
+    SymbolsLoaded(request_id=symbol_pending.request_id, items=[
+      test_symbol("stale", "src/old.mbt"),
+    ]),
     placed,
   )
   assert_true(stale == symbol_first)
@@ -171,11 +169,12 @@ test "file Quick Open populates a cache session before adopting ranked rows" {
   let populated = opened.step(FileCacheLoaded(cache_key~), input)
   assert_eq(populated.cache.active_key, Some(cache_key))
   assert_true(populated.cache.loading_key is None)
+  // Population settling issues the run's first query under its own UUID.
+  guard populated.open is Some(querying) else { fail("palette expected") }
+  assert_true(querying.request_id != loading.request_id)
   let indexed = populated.step(
     FilesLoaded(
-      cache_key~,
-      query="",
-      request_id=loading.request_id,
+      request_id=querying.request_id,
       files=[
         Relative("src/open.mbt"),
         Relative("src/other.mbt"),
@@ -253,8 +252,6 @@ test "file cache keeps the previous key until replacement succeeds" {
   assert_true(initial.phase is Loading)
   let cached = opened.step(
     FilesLoaded(
-      cache_key="old-cache",
-      query="",
       request_id=initial.request_id,
       files=[Relative("src/main.mbt"), Relative("README.md")],
       from_cache=true,
@@ -286,8 +283,6 @@ test "file cache keeps the previous key until replacement succeeds" {
   assert_eq(debouncing.items.map(item => item.detail()), ["src/main.mbt"])
   let stale = changed.step(
     FilesLoaded(
-      cache_key="old-cache",
-      query="",
       request_id=ready.request_id,
       files=[Relative("wrong.mbt")],
       from_cache=true,
@@ -298,16 +293,13 @@ test "file cache keeps the previous key until replacement succeeds" {
   guard stale.open is Some(still_debouncing) else { fail("palette expected") }
   assert_true(still_debouncing.phase is Debouncing)
   assert_eq(still_debouncing.items.map(item => item.detail()), ["src/main.mbt"])
-  let loading = stale.step(
-    FilesDue(query="src", request_id=debouncing.request_id),
-    input,
-  )
+  let loading = stale.step(FilesDue(request_id=debouncing.request_id), input)
   guard loading.open is Some(in_flight) else { fail("palette expected") }
   assert_true(in_flight.phase is Loading)
+  // The query spends a UUID of its own; the timer's token is never answered.
+  assert_true(in_flight.request_id != debouncing.request_id)
   let loaded = loading.step(
     FilesLoaded(
-      cache_key="old-cache",
-      query="src",
       request_id=in_flight.request_id,
       files=[Relative("src/current.mbt")],
       from_cache=true,
@@ -329,7 +321,7 @@ test "leading hash switches providers and fences stale symbol replies" {
   guard changed.open is Some(pending) else { fail("palette expected") }
   let item = test_symbol("parse_hover", "src/main.mbt")
   let stale = changed.step(
-    SymbolsLoaded(query="", request_id=initial.request_id, items=[item]),
+    SymbolsLoaded(request_id=initial.request_id, items=[item]),
     input,
   )
   guard stale.open is Some(still_pending) else {
@@ -341,9 +333,7 @@ test "leading hash switches providers and fences stale symbol replies" {
   guard files.open is Some(files_open) else { fail("palette expected") }
   assert_true(files_open.provider() is Files)
   let still_files = files.step(
-    SymbolsLoaded(query=pending.query(), request_id=pending.request_id, items=[
-      item,
-    ]),
+    SymbolsLoaded(request_id=pending.request_id, items=[item]),
     input,
   )
   guard still_files.open is Some(current) else { fail("palette expected") }
@@ -357,21 +347,18 @@ test "symbol Quick Open distinguishes failure from an empty result" {
   let opened = State::empty().begin(input, Symbols)
   let changed = opened.step(ValueChanged("#missing"), input)
   guard changed.open is Some(pending) else { fail("palette expected") }
-  let loading = changed.step(
-    SymbolsDue(query=pending.query(), request_id=pending.request_id),
-    input,
-  )
+  let loading = changed.step(SymbolsDue(request_id=pending.request_id), input)
   guard loading.open is Some(in_flight) else { fail("palette expected") }
   assert_true(in_flight.phase is Loading)
   let failed = loading.step(
-    SymbolsRequestFailed(query=pending.query(), request_id=pending.request_id),
+    SymbolsRequestFailed(request_id=pending.request_id),
     input,
   )
   guard failed.open is Some(failure) else { fail("palette expected") }
   assert_true(failure.phase is Failed)
   assert_eq(failure.items.length(), 0)
   let loaded = loading.step(
-    SymbolsLoaded(query=pending.query(), request_id=pending.request_id, items=[]),
+    SymbolsLoaded(request_id=pending.request_id, items=[]),
     input,
   )
   guard loaded.open is Some(empty) else { fail("palette expected") }
@@ -385,7 +372,7 @@ test "symbols without a source path are dropped from the rows" {
   let opened = State::empty().begin(input, Symbols)
   guard opened.open is Some(search) else { fail("palette expected") }
   let ready = opened.step(
-    SymbolsLoaded(query=search.query(), request_id=search.request_id, items=[
+    SymbolsLoaded(request_id=search.request_id, items=[
       test_symbol("placed", "src/main.mbt"),
       test_symbol("unplaced", ""),
     ]),

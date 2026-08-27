@@ -43,8 +43,10 @@ priv enum Phase {
 /// One open palette run. `value` is the exact text shown in the input,
 /// including the `#` provider prefix when symbols are active. `owner` and
 /// `root` are the conversation identity captured when the run started, so
-/// `reconcile` can tell a shell change from a no-op. `request_id` separates
-/// successive queries even when their text is identical.
+/// `reconcile` can tell a shell change from a no-op. `request_id` names the
+/// newest thing armed for the run — a debounce timer or one Host request —
+/// and every id reaches the Host at most once, so a reply identifies exactly
+/// the request it answers.
 priv struct Open {
   owner : @interop.ConversationKey
   root : @common.Uri?
@@ -135,25 +137,19 @@ pub(all) struct Accepted {
 ///|
 pub(all) enum Msg {
   ValueChanged(String)
-  FilesDue(query~ : String, request_id~ : String)
+  FilesDue(request_id~ : String)
   FileCacheLoaded(cache_key~ : String)
   FileCacheRequestFailed(cache_key~ : String)
   FilesLoaded(
-    cache_key~ : String,
-    query~ : String,
     request_id~ : String,
     files~ : Array[@pathx.Relative],
     from_cache~ : Bool,
     limit_hit~ : Bool
   )
-  FilesRequestFailed(cache_key~ : String, query~ : String, request_id~ : String)
-  SymbolsDue(query~ : String, request_id~ : String)
-  SymbolsLoaded(
-    query~ : String,
-    request_id~ : String,
-    items~ : Array[@symbols.Symbol]
-  )
-  SymbolsRequestFailed(query~ : String, request_id~ : String)
+  FilesRequestFailed(request_id~ : String)
+  SymbolsDue(request_id~ : String)
+  SymbolsLoaded(request_id~ : String, items~ : Array[@symbols.Symbol])
+  SymbolsRequestFailed(request_id~ : String)
   Move(Int)
   Select(Int)
   Pick(Int)

@@ -279,7 +279,6 @@ pub impl ToJson for CancelReply
 pub impl @json.FromJson for CancelReply
 
 pub(all) struct CancelSearchFilesPayload {
-  cache_key : String
   request_id : String
 } derive(Eq, @debug.Debug)
 pub fn CancelSearchFilesPayload::equal(Self, Self) -> Bool

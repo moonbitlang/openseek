@@ -452,23 +452,21 @@ pub impl ToJson for SearchFilesPayload with fn to_json(self) {
 }
 
 ///|
+/// Cancel one exact file-search request UUID, wherever it queued: the Host
+/// finds the query by id, so the cache session is not named again.
 pub(all) struct CancelSearchFilesPayload {
-  cache_key : String
   request_id : String
 } derive(Debug, Eq)
 
 ///|
 pub impl FromJson for CancelSearchFilesPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "file search cancellation")
-  {
-    cache_key: object.required_string("cache_key"),
-    request_id: object.required_string("request_id"),
-  }
+  { request_id: object.required_string("request_id") }
 }
 
 ///|
 pub impl ToJson for CancelSearchFilesPayload with fn to_json(self) {
-  { "cache_key": self.cache_key, "request_id": self.request_id }
+  { "request_id": self.request_id }
 }
 
 ///|

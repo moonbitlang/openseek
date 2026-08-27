@@ -529,12 +529,8 @@ test "file search payload and reply round-trip at the JSON boundary" {
   assert_false(reply.limit_hit)
   assert_false(reply.cancelled)
   @debug.assert_eq(reply.to_json(), raw_reply)
-  let raw_cancel : Json = {
-    "cache_key": "quick-open:request-7",
-    "request_id": "request-7",
-  }
+  let raw_cancel : Json = { "request_id": "request-7" }
   let cancel : @protocol.CancelSearchFilesPayload = @json.from_json(raw_cancel)
-  assert_eq(cancel.cache_key, "quick-open:request-7")
   assert_eq(cancel.request_id, "request-7")
   @debug.assert_eq(cancel.to_json(), raw_cancel)
   let raw_clear : Json = { "cache_key": "quick-open:request-7" }

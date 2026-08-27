@@ -172,7 +172,7 @@ priv enum FileSearchRequest {
     request_id~ : String,
     reply~ : @async.Queue[FileSearchResponse]
   )
-  Cancel(cache_key~ : String, request_id~ : String, reply~ : @async.Queue[Unit])
+  Cancel(request_id~ : String, reply~ : @async.Queue[Unit])
   Clear(cache_key~ : String, reply~ : @async.Queue[Unit])
   ScanFinished(
     cache_key~ : String,
@@ -238,11 +238,10 @@ async fn FileSearchService::search(
 ///|
 async fn FileSearchService::cancel(
   self : FileSearchService,
-  cache_key : String,
   request_id : String,
 ) -> Unit {
   let reply : @async.Queue[Unit] = Queue(kind=Blocking(1))
-  self.requests.put(Cancel(cache_key~, request_id~, reply~))
+  self.requests.put(Cancel(request_id~, reply~))
   reply.get()
 }
 
@@ -333,8 +332,28 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
     let running_scans : Map[String, RunningFileScan] = Map([])
     let running_ranks : Map[String, RunningFileRank] = Map([])
     // Cancellation is a second RPC and may overtake its search. Remember the
-    // exact request UUID until that search arrives or its cache is cleared.
-    let cancelled_requests : Map[String, String] = Map([])
+    // exact request UUID until that search arrives.
+    let cancellations = CancelledRequests()
+
+    // Settle the one waiter carrying `request_id` if it queued here, and
+    // return the waiters that remain; `None` when it queued elsewhere.
+    async fn cancel_waiter(
+      waiters : Array[PendingFileSearch],
+      request_id : String,
+    ) -> Array[PendingFileSearch]? {
+      guard waiters.iter().any(waiter => waiter.request_id == request_id) else {
+        return None
+      }
+      let kept : Array[PendingFileSearch] = []
+      for waiter in waiters {
+        if waiter.request_id == request_id {
+          waiter.reply.put(SearchCancelled)
+        } else {
+          kept.push(waiter)
+        }
+      }
+      Some(kept)
+    }
 
     async fn launch_rank(
       cache_key : String,
@@ -409,8 +428,8 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
             reply.put(SearchFailed("file search cache key is empty"))
             continue
           }
-          if cancelled_requests.get(request_id) == Some(cache_key) {
-            cancelled_requests.remove(request_id)
+          if cancellations.contains(request_id) {
+            cancellations.remove(request_id)
             reply.put(SearchCancelled)
             continue
           }
@@ -464,39 +483,23 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
             }
           }
         }
-        Cancel(cache_key~, request_id~, reply~) => {
+        Cancel(request_id~, reply~) => {
+          // A request queues as exactly one waiter, on the scan populating its
+          // cache or on one rank over that cache.
           let mut matched = false
-          if running_scans.get(cache_key) is Some(running) {
-            let kept : Array[PendingFileSearch] = []
-            for waiter in running.waiters {
-              if waiter.request_id == request_id {
-                matched = true
-                waiter.reply.put(SearchCancelled)
-              } else {
-                kept.push(waiter)
-              }
-            }
-            // A cache-populating scan deliberately survives cancellation of
-            // one query, matching VS Code's preventCancellation cache row.
-            running_scans[cache_key] = { ..running, waiters: kept, }
-          }
-          let affected : Array[String] = []
-          for id, running in running_ranks {
-            if running.cache_key == cache_key {
-              affected.push(id)
+          for entry in running_scans.to_array() {
+            let (cache_key, running) = entry
+            if cancel_waiter(running.waiters, request_id) is Some(kept) {
+              matched = true
+              // A cache-populating scan deliberately survives cancellation of
+              // one query, matching VS Code's preventCancellation cache row.
+              running_scans[cache_key] = { ..running, waiters: kept }
             }
           }
-          for id in affected {
-            if running_ranks.get(id) is Some(running) {
-              let kept : Array[PendingFileSearch] = []
-              for waiter in running.waiters {
-                if waiter.request_id == request_id {
-                  matched = true
-                  waiter.reply.put(SearchCancelled)
-                } else {
-                  kept.push(waiter)
-                }
-              }
+          for entry in running_ranks.to_array() {
+            let (id, running) = entry
+            if cancel_waiter(running.waiters, request_id) is Some(kept) {
+              matched = true
               if kept.is_empty() {
                 running.task.cancel()
                 running_ranks.remove(id)
@@ -506,21 +509,12 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
             }
           }
           if !matched {
-            cancelled_requests[request_id] = cache_key
+            cancellations.record(request_id)
           }
           reply.put(())
         }
         Clear(cache_key~, reply~) => {
           caches.remove(cache_key)
-          let cancelled_ids : Array[String] = []
-          for request_id, owner in cancelled_requests {
-            if owner == cache_key {
-              cancelled_ids.push(request_id)
-            }
-          }
-          for request_id in cancelled_ids {
-            cancelled_requests.remove(request_id)
-          }
           if running_scans.get(cache_key) is Some(running) {
             running.task.cancel()
             for waiter in running.waiters {
@@ -629,7 +623,7 @@ async fn cancel_search_files_op(
   service : FileSearchService,
   payload : CancelSearchFilesPayload,
 ) -> @protocol.EmptyReply {
-  service.cancel(payload.cache_key, payload.request_id)
+  service.cancel(payload.request_id)
   Acknowledged
 }
 
@@ -784,7 +778,7 @@ async test "cancel-before-search rejects only the exact request UUID" {
     })
     group.spawn_bg(() => service.run())
     let root = @pathx.Path("/workspace-cancel-before").resolve()
-    service.cancel("cache-a", "cancelled-request")
+    service.cancel("cancelled-request")
     let cancelled = service.search(
       root, "cache-a", "target", 200, "cancelled-request",
     )
@@ -814,7 +808,7 @@ async test "query cancellation keeps the cache-populating scan alive" {
       service.search(root, "cache-a", "", 0, "request-1")
     })
     @async.with_timeout(1000, () => starts.get())
-    service.cancel("cache-a", "request-1")
+    service.cancel("request-1")
     let cancelled = @async.with_timeout(1000, () => first.wait())
     assert_true(cancelled.cancelled)
     release.put(())

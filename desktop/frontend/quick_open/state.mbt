@@ -76,8 +76,8 @@ pub fn State::handle(
       let (cmd, next) = self.change_value(emit, input, value)
       (cmd, next, None)
     }
-    FilesDue(query~, request_id~) => {
-      let (cmd, next) = self.begin_file_request(emit, input, query, request_id)
+    FilesDue(request_id~) => {
+      let (cmd, next) = self.begin_file_request(emit, input, request_id)
       (cmd, next, None)
     }
     FileCacheLoaded(cache_key~) => {
@@ -90,31 +90,18 @@ pub fn State::handle(
     }
     // `from_cache` and `limit_hit` describe how the Host answered, not which
     // rows to show; the palette renders the same list either way.
-    FilesLoaded(
-      cache_key~,
-      query~,
-      request_id~,
-      files~,
-      from_cache=_,
-      limit_hit=_
-    ) =>
-      (
-        @cmd.none,
-        self.apply_file_result(input, cache_key, query, request_id, files),
-        None,
-      )
-    FilesRequestFailed(cache_key~, query~, request_id~) =>
-      (@cmd.none, self.fail_file_request(cache_key, query, request_id), None)
-    SymbolsDue(query~, request_id~) => {
-      let (cmd, next) = self.begin_symbol_request(
-        emit, input, query, request_id,
-      )
+    FilesLoaded(request_id~, files~, from_cache=_, limit_hit=_) =>
+      (@cmd.none, self.apply_file_result(input, request_id, files), None)
+    FilesRequestFailed(request_id~) =>
+      (@cmd.none, self.fail_file_request(request_id), None)
+    SymbolsDue(request_id~) => {
+      let (cmd, next) = self.begin_symbol_request(emit, input, request_id)
       (cmd, next, None)
     }
-    SymbolsLoaded(query~, request_id~, items~) =>
-      (@cmd.none, self.apply_symbol_result(query, request_id, items), None)
-    SymbolsRequestFailed(query~, request_id~) =>
-      (@cmd.none, self.fail_symbol_request(query, request_id), None)
+    SymbolsLoaded(request_id~, items~) =>
+      (@cmd.none, self.apply_symbol_result(request_id, items), None)
+    SymbolsRequestFailed(request_id~) =>
+      (@cmd.none, self.fail_symbol_request(request_id), None)
     Move(delta) => {
       let (cmd, next) = self.move_selection(delta)
       (cmd, next, None)
@@ -228,21 +215,17 @@ fn State::change_value(
         @cmd.batch([
           cancel,
           cache_cmd,
-          @cmd.delay(
-            emit(FilesDue(query=next_open.query(), request_id~)),
-            FileDebounceMs,
-          ),
+          @cmd.delay(emit(FilesDue(request_id~)), FileDebounceMs),
         ]),
         next,
       )
     }
     Symbols => {
-      let query = next_open.query()
-      let next = { ..started, open: Some({ ..next_open, phase: Debouncing, }), }
+      let next = { ..started, open: Some({ ..next_open, phase: Debouncing }) }
       (
         @cmd.batch([
           cancel,
-          @cmd.delay(emit(SymbolsDue(query~, request_id~)), SymbolDebounceMs),
+          @cmd.delay(emit(SymbolsDue(request_id~)), SymbolDebounceMs),
         ]),
         next,
       )
@@ -252,23 +235,23 @@ fn State::change_value(
 
 ///|
 /// Start a delayed Host file query only if no later keystroke, close, provider
-/// switch, or conversation switch has overtaken it.
+/// switch, or conversation switch has overtaken it. Without an active cache
+/// the run stays `Loading` until population completes and queries it.
 fn State::begin_file_request(
   self : State,
   emit : @cmd.Emit[Msg],
   input : Input,
-  query : String,
   request_id : String,
 ) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) &&
     open.provider() is Files &&
-    open.query() == query &&
     open.request_id == request_id &&
     open.phase is Debouncing else {
     return (@cmd.none, self)
   }
-  let next = { ..self, open: Some({ ..open, phase: Loading, }), }
-  (next.query_active_cache(emit, input, open), next)
+  { ..self, open: Some({ ..open, phase: Loading }) }.query_active_cache(
+    emit, input,
+  )
 }
 
 ///|
@@ -300,8 +283,12 @@ fn State::apply_cache_loaded(
     cache.owner == Some(open.owner) &&
     open.provider() is Files &&
     !(open.phase is Debouncing) {
-    next = { ..next, open: Some({ ..open, phase: Loading, }), }
-    cmds.push(next.query_active_cache(emit, input, open))
+    let (query_cmd, queried) = {
+      ..next,
+      open: Some({ ..open, phase: Loading }),
+    }.query_active_cache(emit, input)
+    next = queried
+    cmds.push(query_cmd)
   }
   (@cmd.batch(cmds), next)
 }
@@ -327,19 +314,17 @@ fn State::fail_cache_load(
 }
 
 ///|
-/// Adopt only the exact current query from the currently active cache key.
+/// Adopt only the exact outstanding query. Its UUID was minted for one Host
+/// request against the cache that was active at the time, so an answer from
+/// a replaced cache or an older query cannot carry the current id.
 fn State::apply_file_result(
   self : State,
   input : Input,
-  cache_key : String,
-  query : String,
   request_id : String,
   files : Array[@pathx.Relative],
 ) -> State {
   guard self.open is Some(open) &&
     open.provider() is Files &&
-    self.cache.active_key == Some(cache_key) &&
-    open.query() == query &&
     open.request_id == request_id else {
     return self
   }
@@ -347,16 +332,9 @@ fn State::apply_file_result(
 }
 
 ///|
-fn State::fail_file_request(
-  self : State,
-  cache_key : String,
-  query : String,
-  request_id : String,
-) -> State {
+fn State::fail_file_request(self : State, request_id : String) -> State {
   guard self.open is Some(open) &&
     open.provider() is Files &&
-    self.cache.active_key == Some(cache_key) &&
-    open.query() == query &&
     open.request_id == request_id else {
     return self
   }
@@ -365,23 +343,22 @@ fn State::fail_file_request(
 
 ///|
 /// Start a delayed symbol request only when no later keystroke, close, reopen,
-/// provider change, or conversation switch has overtaken it.
+/// provider change, or conversation switch has overtaken it. The timer's
+/// token has not reached the Host yet, so this one request may carry it.
 fn State::begin_symbol_request(
   self : State,
   emit : @cmd.Emit[Msg],
   input : Input,
-  query : String,
   request_id : String,
 ) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) &&
     open.provider() is Symbols &&
-    open.query() == query &&
     open.request_id == request_id &&
     open.phase is Debouncing else {
     return (@cmd.none, self)
   }
   (
-    symbol_request(emit, input.root, open.owner, query, request_id),
+    symbol_request(emit, input.root, open.owner, open.query(), request_id),
     { ..self, open: Some({ ..open, phase: Loading }) },
   )
 }
@@ -392,13 +369,11 @@ fn State::begin_symbol_request(
 /// there is nowhere useful to navigate.
 fn State::apply_symbol_result(
   self : State,
-  query : String,
   request_id : String,
   items : Array[@symbols.Symbol],
 ) -> State {
   guard self.open is Some(open) &&
     open.provider() is Symbols &&
-    open.query() == query &&
     open.request_id == request_id &&
     open.phase is Loading else {
     return self
@@ -413,7 +388,7 @@ fn State::apply_symbol_result(
     ..self,
     open: Some({
       ..open,
-      items: rank_symbols(query, openable).map(item => SymbolRow(item)),
+      items: rank_symbols(open.query(), openable).map(item => SymbolRow(item)),
       selected: 0,
       phase: Ready,
     }),
@@ -421,14 +396,9 @@ fn State::apply_symbol_result(
 }
 
 ///|
-fn State::fail_symbol_request(
-  self : State,
-  query : String,
-  request_id : String,
-) -> State {
+fn State::fail_symbol_request(self : State, request_id : String) -> State {
   guard self.open is Some(open) &&
     open.provider() is Symbols &&
-    open.query() == query &&
     open.request_id == request_id &&
     open.phase is Loading else {
     return self
@@ -552,7 +522,10 @@ fn State::ensure_cache(
     }
   }
   if cache.loading_key is None && (cache.active_key is None || replace_loaded) {
-    let cache_key = file_cache_key(open.request_id)
+    // Population is its own Host request: it keeps its id even while the
+    // run's queries come and go, and the cache session is named after it.
+    let populate_id = @uuid.mint()
+    let cache_key = file_cache_key(populate_id)
     cache = { ..cache, loading_key: Some(cache_key) }
     cmds.push(
       file_request(
@@ -561,41 +534,52 @@ fn State::ensure_cache(
         root=input.root,
         cache_key,
         "",
-        open.request_id,
+        populate_id,
         PopulateCache,
       ),
     )
   }
   let next = { ..self, cache, }
-  if query_now && cache.active_key is Some(_) {
-    cmds.push(next.query_active_cache(emit, input, open))
-  }
+  guard query_now else { return (@cmd.batch(cmds), next) }
+  let (query_cmd, next) = next.query_active_cache(emit, input)
+  cmds.push(query_cmd)
   (@cmd.batch(cmds), next)
 }
 
 ///|
+/// Query the active cache for the open run's current text under a fresh UUID,
+/// which becomes the reply the run waits for. No-op without an active cache.
 fn State::query_active_cache(
   self : State,
   emit : @cmd.Emit[Msg],
   input : Input,
-  open : Open,
-) -> @cmd.Cmd {
-  guard self.cache.active_key is Some(cache_key) else { return @cmd.none }
-  file_request(
-    emit,
-    open.owner,
-    root=input.root,
-    cache_key,
-    open.query(),
-    open.request_id,
-    QueryCache,
+) -> (@cmd.Cmd, State) {
+  guard self.open is Some(open) && self.cache.active_key is Some(cache_key) else {
+    return (@cmd.none, self)
+  }
+  let request_id = @uuid.mint()
+  (
+    file_request(
+      emit,
+      open.owner,
+      root=input.root,
+      cache_key,
+      open.query(),
+      request_id,
+      QueryCache,
+    ),
+    { ..self, open: Some({ ..open, request_id, }) },
   )
 }
 
 ///|
+/// Abandon the run's Host query, when one is out: `Loading` with an active
+/// cache means `request_id` was spent on a query of that cache.
 fn State::cancel_file_request(self : State, open : Open) -> @cmd.Cmd {
-  guard open.provider() is Files && self.cache.active_key is Some(cache_key) else {
+  guard open.provider() is Files &&
+    open.phase is Loading &&
+    self.cache.active_key is Some(_) else {
     return @cmd.none
   }
-  cancel_file_search(open.owner, cache_key, open.request_id)
+  cancel_file_search(open.owner, open.request_id)
 }

@@ -1,5 +1,6 @@
-// Text and semantic search share the same wire-level cancellation race: a
-// cancel can arrive before the request carrying the same globally unique id.
+// File, text and semantic search share the same wire-level cancellation
+// race: a cancel can arrive before the request carrying the same globally
+// unique id.
 
 ///|
 const MaxSearchCancellations : Int = 128

@@ -48,8 +48,7 @@ fn file_request(
             emit(
               match kind {
                 PopulateCache => FileCacheRequestFailed(cache_key~)
-                QueryCache =>
-                  FilesRequestFailed(cache_key~, query~, request_id~)
+                QueryCache => FilesRequestFailed(request_id~)
               },
             ),
           )
@@ -72,8 +71,6 @@ fn file_request(
           scheduler.add(
             emit(
               FilesLoaded(
-                cache_key~,
-                query~,
                 request_id~,
                 files~,
                 from_cache=reply.from_cache,
@@ -88,11 +85,10 @@ fn file_request(
 }
 
 ///|
-/// Abandon the in-flight query for one cache session. The Host answers the
-/// abandoned request with `cancelled`, which the reply path drops.
+/// Abandon one in-flight query. The Host answers the abandoned request with
+/// `cancelled`, which the reply path drops.
 fn cancel_file_search(
   owner : @interop.ConversationKey,
-  cache_key : String,
   request_id : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
@@ -101,7 +97,7 @@ fn cancel_file_search(
         @interop.bridge_request(
           owner.channel,
           @commands.fs_cancel_search_files,
-          { cache_key, request_id },
+          { request_id, },
         ),
       ) catch {
         _ => ()
@@ -147,7 +143,7 @@ fn symbol_request(
     owner,
     query,
     root~,
-    loaded=items => emit(SymbolsLoaded(query~, request_id~, items~)),
-    failed=emit(SymbolsRequestFailed(query~, request_id~)),
+    loaded=items => emit(SymbolsLoaded(request_id~, items~)),
+    failed=emit(SymbolsRequestFailed(request_id~)),
   )
 }

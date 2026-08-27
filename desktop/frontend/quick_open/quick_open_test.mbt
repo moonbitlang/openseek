@@ -50,7 +50,7 @@ fn symbol_run(name : String, path : String) -> @quick_open.State raise {
   }
   let (_, ready, _) = opened.handle(
     emit(),
-    @quick_open.SymbolsLoaded(query="", request_id~, items=[
+    @quick_open.SymbolsLoaded(request_id~, items=[
       {
         name,
         kind: Some(12),
