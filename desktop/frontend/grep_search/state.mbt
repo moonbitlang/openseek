@@ -222,11 +222,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
     }
     CollapseAll => {
       let collapsed : Map[String, Bool] = Map([])
-      let active = match page.mode {
-        Text => page.text.matches.map(result => result.path)
-        Semantic => page.semantic.hits.map(hit => hit.path)
-      }
-      for path in active {
+      for path in page.active_paths() {
         collapsed[path] = true
       }
       { ..self, page: { ..page, collapsed, }, }
@@ -396,10 +392,40 @@ pub fn State::editor_highlights(
   path : String,
 ) -> EditorHighlights? {
   guard self.page.phase is Ready else { return None }
+  self.page.active_highlights(path)
+}
+
+///|
+fn Page::active_result_count(self : Page) -> Int {
+  match self.mode {
+    Text => self.text.matches.length()
+    Semantic => self.semantic.hits.length()
+  }
+}
+
+///|
+fn Page::active_file_count(self : Page) -> Int {
+  let files : Map[String, Bool] = Map([])
+  for path in self.active_paths() {
+    files[path] = true
+  }
+  files.length()
+}
+
+///|
+fn Page::active_paths(self : Page) -> Array[String] {
+  match self.mode {
+    Text => self.text.matches.map(result => result.path)
+    Semantic => self.semantic.hits.map(hit => hit.path)
+  }
+}
+
+///|
+fn Page::active_highlights(self : Page, path : String) -> EditorHighlights? {
   let ranges : Array[@common.Range] = []
-  match self.page.mode {
+  match self.mode {
     Text =>
-      for result in self.page.text.matches {
+      for result in self.text.matches {
         if result.path == path {
           for range in result.ranges {
             ranges.push(
@@ -414,7 +440,7 @@ pub fn State::editor_highlights(
         }
       }
     Semantic =>
-      for hit in self.page.semantic.hits {
+      for hit in self.semantic.hits {
         if hit.path == path {
           ranges.push(
             @common.Range(
@@ -429,14 +455,6 @@ pub fn State::editor_highlights(
   }
   guard !ranges.is_empty() else { return None }
   Some({ ranges, })
-}
-
-///|
-fn Page::active_result_count(self : Page) -> Int {
-  match self.mode {
-    Text => self.text.matches.length()
-    Semantic => self.semantic.hits.length()
-  }
 }
 
 ///|
@@ -735,6 +753,66 @@ test "new semantic search clears partial results and cancellation clears them" {
   )
   assert_true(cancelled.page.semantic.hits.is_empty())
   assert_eq(cancelled.page.match_count, 0)
+}
+
+///|
+test "active result helpers share file grouping and highlight projection" {
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "active-results",
+  }
+  let root = @common.Uri::parse("file:///work")
+  let input : Input = { owner, root: Some(root) }
+  let state = State::empty().handle(QueryChanged("moon"), input)
+  let page = state.page
+  let first : @protocol.TextSearchMatch = {
+    path: "src/main.mbt",
+    line_number: 2,
+    preview: "moon moon",
+    preview_start_column: 1,
+    ranges: [
+      { start_column: 1, end_column: 5 },
+      { start_column: 6, end_column: 10 },
+    ],
+  }
+  let second : @protocol.TextSearchMatch = {
+    path: "src/main.mbt",
+    line_number: 4,
+    preview: "moon",
+    preview_start_column: 1,
+    ranges: [{ start_column: 1, end_column: 5 }],
+  }
+  let loaded = state.handle(
+    Loaded(
+      owner~,
+      root=root.path,
+      generation=page.generation,
+      reply={
+        root: root.path,
+        generation: page.generation,
+        matches: [first, second],
+        match_count: 2,
+        file_count: 1,
+        limit_hit: false,
+        cancelled: false,
+        error: None,
+      },
+    ),
+    input,
+  )
+  assert_eq(loaded.page.active_result_count(), 2)
+  assert_eq(loaded.page.active_file_count(), 1)
+  guard loaded.editor_highlights("src/main.mbt") is Some(highlights) else {
+    fail("expected text highlights")
+  }
+  assert_eq(
+    highlights.ranges(),
+    [
+      @common.Range(2, 1, 2, 5),
+      @common.Range(2, 6, 2, 10),
+      @common.Range(4, 1, 4, 5),
+    ],
+  )
 }
 
 ///|

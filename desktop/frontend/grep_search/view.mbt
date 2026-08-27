@@ -404,12 +404,13 @@ fn text_search_body(
   let children : Array[@html.Html] = []
   let busy = page.phase is Debouncing || page.phase is Loading
   let summary = page.result_summary()
+  let file_count = page.active_file_count()
   let summary_text = if busy {
     "Searching…"
   } else if summary.match_count == 1 {
-    "1 result in \{summary.file_count} file"
+    "1 result in \{file_count} file"
   } else {
-    "\{summary.match_count} results in \{summary.file_count} files"
+    "\{summary.match_count} results in \{file_count} files"
   }
   children.push(
     @html.div(
@@ -598,6 +599,8 @@ fn semantic_search_body(
 ) -> @html.Html {
   let children : Array[@html.Html] = []
   let busy = page.phase is Debouncing || page.phase is Loading
+  let summary = page.result_summary()
+  let file_count = page.active_file_count()
   let summary = if busy {
     if page.semantic.hits.is_empty() {
       "Searching…"
@@ -606,10 +609,10 @@ fn semantic_search_body(
       // the final totals the reply will replace.
       "\{page.match_count} matches in \{page.file_count} files so far…"
     }
-  } else if page.match_count == 1 {
-    "1 match in \{page.file_count} file"
+  } else if summary.match_count == 1 {
+    "1 match in \{file_count} file"
   } else {
-    "\{page.match_count} matches in \{page.file_count} files"
+    "\{summary.match_count} matches in \{file_count} files"
   }
   children.push(
     @html.div(
