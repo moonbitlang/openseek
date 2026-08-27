@@ -878,7 +878,6 @@ fn streaming_response_view(
 ///|
 fn transcript_view(
   input : Input,
-  live_reasoning? : String,
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
@@ -889,7 +888,6 @@ fn transcript_view(
 ) -> @html.Html {
   let renderer : TranscriptRenderer = {
     input,
-    live_reasoning,
     on_open,
     on_jump,
     on_open_session,
@@ -908,6 +906,7 @@ fn transcript_view(
       .data_set("transcript-source", input.source.wire())
       .data_set("transcript-channel", input.focused.uri_authority())
       .data_set("transcript-session", input.active_session)
+      .data_set("transcript-run", input.active_run_id.unwrap_or(""))
       .data_set(
         "transcript-root",
         input.root.map(uri => uri.to_string()).unwrap_or(""),

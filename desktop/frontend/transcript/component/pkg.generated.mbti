@@ -12,7 +12,7 @@ import {
 }
 
 // Values
-pub fn component(@rabbita.Val[Input], LiveReasoning, Actions) -> @rabbita.Val[@html.Html]
+pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
 
 // Errors
 
@@ -21,6 +21,8 @@ pub(all) struct Actions {
   open : @cmd.Emit[String]
   jump : @cmd.Emit[@mention_context.Target]
   open_session : @cmd.Emit[String]
+  focus_live_reasoning : (Input, Bool) -> @cmd.Cmd
+  live_reasoning_pinned : (Bool) -> Unit
 }
 
 type Input derive(Eq)
@@ -30,10 +32,13 @@ pub fn Input::not_equal(Self, Self) -> Bool
 
 type LiveReasoning
 pub fn LiveReasoning::LiveReasoning() -> Self
-pub fn LiveReasoning::delta(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?, content~ : String) -> @cmd.Cmd
-pub fn LiveReasoning::finish(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?) -> @cmd.Cmd
-pub fn LiveReasoning::finish_run(Self, channel~ : @interop.ChannelId, run_id~ : String) -> @cmd.Cmd
-pub fn LiveReasoning::reset_channel(Self, @interop.ChannelId) -> @cmd.Cmd
+pub fn LiveReasoning::connection_closed(Self, @interop.ChannelId, Int) -> Unit
+pub fn LiveReasoning::connection_opened(Self, @interop.ChannelId, Int) -> Unit
+pub fn LiveReasoning::delta(Self, channel~ : @interop.ChannelId, websocket_epoch~ : Int, session~ : String, run_id~ : String?, content~ : String) -> Unit
+pub fn LiveReasoning::finish(Self, channel~ : @interop.ChannelId, websocket_epoch~ : Int, session~ : String, run_id~ : String?) -> Unit
+pub fn LiveReasoning::finish_run(Self, channel~ : @interop.ChannelId, websocket_epoch~ : Int, run_id~ : String) -> Unit
+pub fn LiveReasoning::focus(Self, Input, Bool) -> @cmd.Cmd
+pub fn LiveReasoning::set_pinned(Self, Bool) -> Unit
 
 pub(all) enum Source {
   OpenSeek

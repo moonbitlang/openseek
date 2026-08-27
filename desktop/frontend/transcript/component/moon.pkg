@@ -23,6 +23,7 @@ import {
   "openseek_desktop/frontend/plan",
   "openseek_desktop/frontend/resource",
   "openseek_desktop/frontend/transcript",
+  "openseek_desktop/frontend/transcript/live_preview",
   "openseek_desktop/frontend/transcript_overview",
 }
 

@@ -115,63 +115,346 @@ fn LiveReasoningKey::matches_input(
 }
 
 ///|
+fn LiveReasoningKey::wire(self : LiveReasoningKey) -> String {
+  self.channel.uri_authority() +
+  "\u{0}" +
+  self.session +
+  "\u{0}" +
+  self.run_id.unwrap_or("")
+}
+
+///|
 priv struct LiveReasoningPreview {
   key : LiveReasoningKey
-  content : String
+  // Keep provider fragments separate. Appending is O(1); the full string is
+  // materialized only when a durable render or remount asks to hydrate the
+  // visible DOM widget.
+  chunks : @vector.Vector[String]
+} derive(Eq)
+
+///|
+fn LiveReasoningPreview::content(self : LiveReasoningPreview) -> String {
+  let out = StringBuilder()
+  for chunk in self.chunks {
+    out.write_string(chunk)
+  }
+  out.to_string()
+}
+
+///|
+/// The OpenSeek conversation currently allowed to use the one visible host.
+/// `step_label` is presentation data derived from durable transcript rows; it
+/// does not participate in routing provider fragments.
+priv struct LiveReasoningTarget {
+  key : LiveReasoningKey
+  step_label : String
+} derive(Eq)
+
+///|
+fn Input::live_reasoning_target(self : Input) -> LiveReasoningTarget? {
+  guard self.source is OpenSeek else { return None }
+  Some({
+    key: {
+      channel: self.focused,
+      session: self.active_session,
+      run_id: self.active_run_id,
+    },
+    step_label: "#\{durable_step_ordinals(self.items).length() + 1}",
+  })
+}
+
+///|
+/// Whether this component may still accept transient events from one concrete
+/// bridge connection. Keeping the last epoch after a close prevents callbacks
+/// already queued by that connection from recreating a cleared preview.
+priv enum LiveReasoningConnectionPhase {
+  Receiving
+  Closed
+} derive(Eq)
+
+///|
+/// The latest bridge connection observed for one device channel. Epochs are
+/// monotonic within a channel; a replacement connection therefore fences both
+/// late reasoning fragments and a late close callback from its predecessor.
+priv struct LiveReasoningConnection {
+  channel : @interop.ChannelId
+  websocket_epoch : Int
+  phase : LiveReasoningConnectionPhase
 } derive(Eq)
 
 ///|
 /// Component-owned previews for every concurrently running conversation.
-/// The persistent vector makes each update a new value, so a background run
-/// cannot mutate a state snapshot currently being rendered for the foreground.
-priv struct LiveReasoningState(
-  @vector.Vector[LiveReasoningPreview]
-) derive(Eq)
+/// Both vectors are persistent, so a background connection or run cannot
+/// mutate a state snapshot currently being rendered for the foreground.
+priv struct LiveReasoningState {
+  connections : @vector.Vector[LiveReasoningConnection]
+  previews : @vector.Vector[LiveReasoningPreview]
+  active : LiveReasoningTarget?
+} derive(Eq)
 
 ///|
 priv enum LiveReasoningMsg {
-  Delta(LiveReasoningKey, String)
-  Finished(LiveReasoningKey)
-  RunFinished(@interop.ChannelId, String)
-  ChannelReset(@interop.ChannelId)
+  Focused(LiveReasoningTarget?)
+  ConnectionOpened(@interop.ChannelId, websocket_epoch~ : Int)
+  Delta(LiveReasoningKey, websocket_epoch~ : Int, String)
+  Finished(LiveReasoningKey, websocket_epoch~ : Int)
+  RunFinished(@interop.ChannelId, websocket_epoch~ : Int, String)
+  ConnectionClosed(@interop.ChannelId, websocket_epoch~ : Int)
+}
+
+///|
+/// The only effects allowed out of the live state machine. They update one
+/// browser-owned text node and never produce a Rabbita `Val[Html]`.
+priv enum LiveReasoningEffect {
+  None
+  Sync(target~ : String, step_label~ : String, content~ : String)
+  Append(target~ : String, content~ : String)
+  Hide(target~ : String)
+  Reset
+} derive(Eq, Debug)
+
+///|
+fn LiveReasoningEffect::apply(
+  self : LiveReasoningEffect,
+  preview : @live_preview.LivePreview,
+) -> Unit {
+  match self {
+    None => ()
+    Sync(target~, step_label~, content~) =>
+      preview.sync(target, step_label, content)
+    Append(target~, content~) => preview.append(target, content)
+    Hide(target~) => preview.hide(target)
+    Reset => preview.reset()
+  }
+}
+
+///|
+fn LiveReasoningState::preview_for(
+  self : LiveReasoningState,
+  key : LiveReasoningKey,
+) -> LiveReasoningPreview? {
+  for preview in self.previews {
+    if preview.key == key {
+      return Some(preview)
+    }
+  }
+  None
+}
+
+///|
+fn LiveReasoningState::sync_effect(
+  self : LiveReasoningState,
+  target : LiveReasoningTarget?,
+) -> LiveReasoningEffect {
+  match target {
+    None => Reset
+    Some(target) =>
+      Sync(
+        target=target.key.wire(),
+        step_label=target.step_label,
+        content=self
+          .preview_for(target.key)
+          .map(preview => preview.content())
+          .unwrap_or(""),
+      )
+  }
+}
+
+///|
+fn LiveReasoningState::accepts(
+  self : LiveReasoningState,
+  channel : @interop.ChannelId,
+  websocket_epoch : Int,
+) -> Bool {
+  for connection in self.connections {
+    if connection.channel == channel {
+      return connection.websocket_epoch == websocket_epoch &&
+        connection.phase is Receiving
+    }
+  }
+  false
 }
 
 ///|
 fn LiveReasoningState::update(
   self : LiveReasoningState,
   msg : LiveReasoningMsg,
-) -> LiveReasoningState {
+) -> (LiveReasoningState, LiveReasoningEffect) {
   match msg {
-    Delta(key, content) => {
-      if content.is_empty() {
-        return self
-      }
-      for index in 0..<self.0.length() {
-        if self.0[index].key == key {
-          return LiveReasoningState(
-            self.0.set(index, {
-              key,
-              content: self.0[index].content + content,
+    Focused(target) => {
+      let next = { ..self, active: target }
+      // Always re-sync, even when the logical target is unchanged: the host
+      // may have been remounted while another application screen was visible.
+      (next, next.sync_effect(target))
+    }
+    ConnectionOpened(channel, websocket_epoch~) => {
+      for index in 0..<self.connections.length() {
+        let current = self.connections[index]
+        if current.channel == channel {
+          // A connection command can finish after its replacement was
+          // installed. Never move this component's fence backwards.
+          if websocket_epoch < current.websocket_epoch {
+            return (self, None)
+          }
+          let next = {
+            ..self,
+            connections: self.connections.set(index, {
+              channel,
+              websocket_epoch,
+              phase: Receiving,
             }),
+            // `agent.connected` can repeat without a WebSocket replacement
+            // when the engine pump restarts. Its transient fragments are no
+            // more replayable than fragments across a transport reconnect.
+            previews: self.previews.filter(preview => {
+              preview.key.channel != channel
+            }),
+          }
+          return (
+            next,
+            if self.active is Some(active) && active.key.channel == channel {
+              Hide(target=active.key.wire())
+            } else {
+              None
+            },
           )
         }
       }
-      LiveReasoningState(self.0.push({ key, content }))
+      let next = {
+        ..self,
+        connections: self.connections.push({
+          channel,
+          websocket_epoch,
+          phase: Receiving,
+        }),
+        previews: self.previews.filter(preview => preview.key.channel != channel),
+      }
+      (
+        next,
+        if self.active is Some(active) && active.key.channel == channel {
+          Hide(target=active.key.wire())
+        } else {
+          None
+        },
+      )
     }
-    Finished(key) =>
-      LiveReasoningState(self.0.filter(preview => preview.key != key))
-    RunFinished(channel, run_id) =>
-      LiveReasoningState(
-        self.0.filter(preview =>
-          preview.key.channel != channel ||
-          preview.key.run_id != Some(run_id)
-        ),
+    Delta(key, websocket_epoch~, content) => {
+      if !self.accepts(key.channel, websocket_epoch) || content.is_empty() {
+        return (self, None)
+      }
+      for index in 0..<self.previews.length() {
+        if self.previews[index].key == key {
+          let next = {
+            ..self,
+            previews: self.previews.set(index, {
+              key,
+              chunks: self.previews[index].chunks.push(content),
+            }),
+          }
+          return (
+            next,
+            if self.active is Some(active) && active.key == key {
+              Append(target=key.wire(), content~)
+            } else {
+              None
+            },
+          )
+        }
+      }
+      let next = {
+        ..self,
+        previews: self.previews.push({
+          key,
+          chunks: @vector.new().push(content),
+        }),
+      }
+      (
+        next,
+        if self.active is Some(active) && active.key == key {
+          Append(target=key.wire(), content~)
+        } else {
+          None
+        },
       )
-    ChannelReset(channel) =>
-      LiveReasoningState(
-        self.0.filter(preview => preview.key.channel != channel),
-      )
+    }
+    Finished(key, websocket_epoch~) =>
+      if self.accepts(key.channel, websocket_epoch) {
+        (
+          {
+            ..self,
+            previews: self.previews.filter(preview => preview.key != key),
+          },
+          if self.active is Some(active) && active.key == key {
+            Hide(target=key.wire())
+          } else {
+            None
+          },
+        )
+      } else {
+        (self, None)
+      }
+    RunFinished(channel, websocket_epoch~, run_id) =>
+      if self.accepts(channel, websocket_epoch) {
+        let next = {
+          ..self,
+          previews: self.previews.filter(preview => {
+            preview.key.channel != channel || preview.key.run_id != Some(run_id)
+          }),
+        }
+        (
+          next,
+          if self.active is Some(active) &&
+            active.key.channel == channel &&
+            active.key.run_id == Some(run_id) {
+            Hide(target=active.key.wire())
+          } else {
+            None
+          },
+        )
+      } else {
+        (self, None)
+      }
+    ConnectionClosed(channel, websocket_epoch~) => {
+      for index in 0..<self.connections.length() {
+        let current = self.connections[index]
+        if current.channel == channel &&
+          current.websocket_epoch == websocket_epoch {
+          if current.phase is Closed {
+            return (self, None)
+          }
+          let next = {
+            ..self,
+            connections: self.connections.set(index, {
+              ..current,
+              phase: Closed,
+            }),
+            previews: self.previews.filter(preview => {
+              preview.key.channel != channel
+            }),
+          }
+          return (
+            next,
+            if self.active is Some(active) && active.key.channel == channel {
+              Hide(target=active.key.wire())
+            } else {
+              None
+            },
+          )
+        }
+      }
+      (self, None)
+    }
   }
+}
+
+///|
+/// State-only projection used by reducer tests that are not inspecting the DOM
+/// effect of a transition.
+fn LiveReasoningState::transition(
+  self : LiveReasoningState,
+  msg : LiveReasoningMsg,
+) -> LiveReasoningState {
+  self.update(msg).0
 }
 
 ///|
@@ -179,30 +462,78 @@ fn LiveReasoningState::content_for(
   self : LiveReasoningState,
   input : Input,
 ) -> String? {
-  for preview in self.0 {
+  for preview in self.previews {
     if preview.key.matches_input(input) {
-      return Some(preview.content)
+      return Some(preview.content())
     }
   }
   None
 }
 
 ///|
-/// The transcript component's live-reasoning controller. It is constructed
-/// beside the root Rabbita state so bridge notifications can target this
-/// component without storing an emitter or callback in the application model.
+/// The transcript component's live-reasoning controller. It deliberately is
+/// not a Rabbita state: Rabbita flushes the root VDOM after every scheduled
+/// command, even when no rendered value depends on that state. Bridge callbacks
+/// mutate this controller directly so a delta cannot schedule a root diff.
 struct LiveReasoning {
-  state : @rabbita.Val[LiveReasoningState]
-  emit : @cmd.Emit[LiveReasoningMsg]
+  mut state : LiveReasoningState
+  preview : @live_preview.LivePreview
 }
 
 ///|
 pub fn LiveReasoning::LiveReasoning() -> LiveReasoning {
-  let (state, emit) = @rabbita.create_pure_state(
-    LiveReasoningState(@vector.new()),
-    update=(state, msg) => state.update(msg),
+  {
+    state: { connections: @vector.new(), previews: @vector.new(), active: None },
+    preview: @live_preview.LivePreview(),
+  }
+}
+
+///|
+/// Apply one bridge event synchronously on the browser main thread. WebSocket,
+/// Proton, and animation-frame callbacks are all serialized by that thread, so
+/// this mutable controller needs no second queue or Rabbita emitter.
+fn LiveReasoning::apply(self : LiveReasoning, msg : LiveReasoningMsg) -> Unit {
+  let (state, effect) = self.state.update(msg)
+  self.state = state
+  effect.apply(self.preview)
+}
+
+///|
+/// Select the conversation allowed to occupy the stable preview host. The
+/// command also rehydrates a newly mounted host from stored fragments and
+/// synchronizes the transcript's current scroll ownership before observing
+/// that content.
+pub fn LiveReasoning::focus(
+  self : LiveReasoning,
+  input : Input,
+  pinned : Bool,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => {
+      self.preview.set_pinned(pinned)
+      self.apply(Focused(input.live_reasoning_target()))
+    },
+    kind=@cmd.after_render,
   )
-  { state, emit }
+}
+
+///|
+/// Cache a real transcript scroll transition without scheduling a Rabbita
+/// render. This is called by the transcript's capture-phase scroll listener.
+pub fn LiveReasoning::set_pinned(self : LiveReasoning, pinned : Bool) -> Unit {
+  self.preview.set_pinned(pinned)
+}
+
+///|
+/// Start accepting transient events from this concrete bridge connection.
+/// Repeating the same epoch is also the engine-pump restart boundary, so its
+/// pre-restart preview is discarded before new fragments arrive.
+pub fn LiveReasoning::connection_opened(
+  self : LiveReasoning,
+  channel : @interop.ChannelId,
+  websocket_epoch : Int,
+) -> Unit {
+  self.apply(ConnectionOpened(channel, websocket_epoch~))
 }
 
 ///|
@@ -210,11 +541,12 @@ pub fn LiveReasoning::LiveReasoning() -> LiveReasoning {
 pub fn LiveReasoning::delta(
   self : LiveReasoning,
   channel~ : @interop.ChannelId,
+  websocket_epoch~ : Int,
   session~ : String,
   run_id~ : String?,
   content~ : String,
-) -> @cmd.Cmd {
-  (self.emit)(Delta({ channel, session, run_id }, content))
+) -> Unit {
+  self.apply(Delta({ channel, session, run_id }, websocket_epoch~, content))
 }
 
 ///|
@@ -223,10 +555,11 @@ pub fn LiveReasoning::delta(
 pub fn LiveReasoning::finish(
   self : LiveReasoning,
   channel~ : @interop.ChannelId,
+  websocket_epoch~ : Int,
   session~ : String,
   run_id~ : String?,
-) -> @cmd.Cmd {
-  (self.emit)(Finished({ channel, session, run_id }))
+) -> Unit {
+  self.apply(Finished({ channel, session, run_id }, websocket_epoch~))
 }
 
 ///|
@@ -234,19 +567,21 @@ pub fn LiveReasoning::finish(
 pub fn LiveReasoning::finish_run(
   self : LiveReasoning,
   channel~ : @interop.ChannelId,
+  websocket_epoch~ : Int,
   run_id~ : String,
-) -> @cmd.Cmd {
-  (self.emit)(RunFinished(channel, run_id))
+) -> Unit {
+  self.apply(RunFinished(channel, websocket_epoch~, run_id))
 }
 
 ///|
-/// A transport restart cannot replay live fragments, so discard that
-/// channel's previews and let durable session snapshots restore history.
-pub fn LiveReasoning::reset_channel(
+/// Stop accepting events from this exact connection and discard its previews.
+/// A stale close is ignored after a newer epoch has taken ownership.
+pub fn LiveReasoning::connection_closed(
   self : LiveReasoning,
   channel : @interop.ChannelId,
-) -> @cmd.Cmd {
-  (self.emit)(ChannelReset(channel))
+  websocket_epoch : Int,
+) -> Unit {
+  self.apply(ConnectionClosed(channel, websocket_epoch~))
 }
 
 ///|
@@ -258,6 +593,27 @@ pub(all) struct Actions {
   /// Open another session's transcript. Used by a sub-run tool card to reach
   /// the child transcript it names.
   open_session : @cmd.Emit[String]
+  // Reconcile the browser-owned preview only after the transcript reports its
+  // durable DOM. The callback computes a small target before creating a Cmd;
+  // the full `Input` is never stored in live state.
+  focus_live_reasoning : (Input, Bool) -> @cmd.Cmd
+  // Scroll events are already browser effects. Feed their settled state to
+  // the browser-owned preview directly so delta frames only append text.
+  live_reasoning_pinned : (Bool) -> Unit
+}
+
+///|
+/// Apply an explicit component pin transition after its Html has settled.
+/// Scroll events use the direct callback above; buttons and remounts use this
+/// command so Model::update remains pure.
+fn Actions::pin_live_reasoning_after_render(
+  self : Actions,
+  pinned : Bool,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => (self.live_reasoning_pinned)(pinned),
+    kind=@cmd.after_render,
+  )
 }
 
 ///|
@@ -289,6 +645,8 @@ fn Model::update(
   input : Input,
   msg : Msg,
   emit : @cmd.Emit[Msg],
+  focus_live_reasoning? : (Input, Bool) -> @cmd.Cmd = (_, _) => @cmd.none,
+  pin_live_reasoning? : (Bool) -> @cmd.Cmd = _ => @cmd.none,
 ) -> (Model, @cmd.Cmd) {
   // A conversation switch can reach the component through input before its
   // DOM mutation notification. Never project the previous owner's data URLs
@@ -305,6 +663,7 @@ fn Model::update(
       (
         { ..self, pinned: true, },
         @cmd.batch([
+          pin_live_reasoning(true),
           scroll_after_render(),
           report_visible_turn_after_render(emit, skip_unchanged=true),
         ]),
@@ -349,6 +708,12 @@ fn Model::update(
         report_visible_turn_after_render(emit, skip_unchanged=!navigated),
       )
       commands.push(self.images.apply_after_render())
+      if mounted {
+        // Durable rows, target identity, and host remounts all arrive through
+        // this one notification. Live DOM mutations are excluded from the
+        // observer below, so a reasoning delta cannot feed back into update.
+        commands.push(focus_live_reasoning(input, next.pinned))
+      }
       (next, @cmd.batch(commands))
     }
     ImageRequested(path) => {
@@ -370,7 +735,13 @@ fn Model::update(
         // The clicked tick is already under the pointer. Revealing it could
         // move the rail beneath the pointer and transfer hover to a neighbor.
         Clicked(key) =>
-          ({ ..next, pinned: false, }, scroll_turn_into_view(emit, key))
+          (
+            { ..next, pinned: false },
+            @cmd.batch([
+              pin_live_reasoning(false),
+              scroll_turn_into_view(emit, key),
+            ]),
+          )
         // A transcript scroll may activate a tick outside the rail's visible
         // window. Reveal only an actual active-turn change so rail scrolling
         // itself cannot feed back into another write.
@@ -390,7 +761,6 @@ fn Model::update(
 /// Build the transcript state and return its independently updating Html.
 pub fn component(
   input : @rabbita.Val[Input],
-  live_reasoning : LiveReasoning,
   actions : Actions,
 ) -> @rabbita.Val[@html.Html] {
   let (state, emit) = @rabbita.create_state_with_input(
@@ -411,13 +781,24 @@ pub fn component(
         @cmd.none,
       )
     },
-    update=(state, input, msg, emit) => state.update(input, msg, emit),
-    subscriptions=(_, _, emit) => transcript_subscription(emit),
+    update=(state, input, msg, emit) => {
+      state.update(
+        input,
+        msg,
+        emit,
+        focus_live_reasoning=actions.focus_live_reasoning,
+        pin_live_reasoning=pinned => {
+          actions.pin_live_reasoning_after_render(pinned)
+        },
+      )
+    },
+    subscriptions=(_, _, emit) => {
+      transcript_subscription(emit, actions.live_reasoning_pinned)
+    },
   )
-  state.view3(input, live_reasoning.state, (state, input, live_state) => {
+  state.view2(input, (state, input) => {
     transcript_view(
       input,
-      live_reasoning?=live_state.content_for(input),
       pinned=state.pinned,
       overview=state.overview,
       overview_emit=emit.map(msg => Overview(msg)),
@@ -568,18 +949,21 @@ fn report_visible_turn_after_render(
 
 ///|
 priv suberror TranscriptSubscription {
-  TranscriptSubscription(@cmd.Emit[Msg])
+  TranscriptSubscription(@cmd.Emit[Msg], (Bool) -> Unit)
 }
 
 ///|
 /// Scroll position and rendered-content growth are DOM signals owned by the
 /// transcript. Keeping both in this component means the application no longer
 /// forwards a synthetic "content changed" message into child state.
-fn transcript_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
+fn transcript_subscription(
+  emit : @cmd.Emit[Msg],
+  live_reasoning_pinned : (Bool) -> Unit,
+) -> @sub.Sub {
   @sub.custom_sub(
     "transcript-dom",
     @sub.Local,
-    TranscriptSubscription(emit),
+    TranscriptSubscription(emit, live_reasoning_pinned),
     transcript_sub_loader,
   )
 }
@@ -590,8 +974,9 @@ fn transcript_sub_loader(
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    TranscriptSubscription(emit) => {
+    TranscriptSubscription(emit, live_reasoning_pinned) => {
       let mut emit = emit
+      let mut live_reasoning_pinned = live_reasoning_pinned
       let target = @dom.document().as_event_target()
       let listener : @dom.Listener = event => {
         guard event.target().to_element() is Some(element) &&
@@ -603,6 +988,10 @@ fn transcript_sub_loader(
           element.get_scroll_top() -
           client_height <=
           4.0
+        // This callback updates only the browser-owned preview controller. It
+        // must run before any Rabbita message so a queued delta observes the
+        // user's latest decision to follow or read history.
+        live_reasoning_pinned(pinned)
         if pinned != transcript_pinned_watch.val {
           transcript_pinned_watch.val = pinned
           scheduler.add(emit(Pinned(pinned)))
@@ -629,8 +1018,11 @@ fn transcript_sub_loader(
           observers.disconnect()
         },
         update_tagger: payload => {
-          guard payload is TranscriptSubscription(next) else { return }
+          guard payload is TranscriptSubscription(next, next_pinned) else {
+            return
+          }
           emit = next
+          live_reasoning_pinned = next_pinned
         },
       })
     }
@@ -722,17 +1114,21 @@ fn TranscriptDomMount::observe_content(
   observer : @dom.MutationObserver,
 ) -> Unit {
   if self.element is Some(element) {
-    observer.observe(
-      element.as_node(),
-      attributes=true,
-      child_list=true,
-      character_data=true,
-      subtree=true,
-      attribute_filter=[
-        "data-transcript-source", "data-transcript-channel", "data-transcript-session",
-        "data-transcript-root", "data-transcript-submission",
-      ],
-    )
+    // Observe identity on the transcript root, but observe content only below
+    // the durable `#stream`. The sibling live-preview host is mutated for each
+    // delta and must never emit `ContentRendered` back into this component.
+    observer.observe(element.as_node(), attributes=true, attribute_filter=[
+      "data-transcript-source", "data-transcript-channel", "data-transcript-session",
+      "data-transcript-run", "data-transcript-root", "data-transcript-submission",
+    ])
+    if element.query_selector("#stream") is Some(stream) {
+      observer.observe(
+        stream.as_node(),
+        child_list=true,
+        character_data=true,
+        subtree=true,
+      )
+    }
   }
 }
 
@@ -742,7 +1138,14 @@ fn TranscriptDomMount::observe_resize(
   observer : @dom.ResizeObserver,
 ) -> Unit {
   if self.element is Some(element) {
-    observer.observe(element)
+    // The live-reasoning host is a sibling of `#stream`. Observing the whole
+    // transcript would turn each preview line wrap into `ContentRendered`,
+    // feeding transient DOM growth back through the component render loop.
+    // Durable rows, images, and diagrams all live under `#stream`, so it is
+    // the resize boundary this component actually owns.
+    if element.query_selector("#stream") is Some(stream) {
+      observer.observe(stream)
+    }
   }
 }
 
@@ -938,6 +1341,7 @@ test "a conversation switch clears component-owned overview state" {
 
 ///|
 test "live reasoning appends by owner and semantic finish deletes it" {
+  let epoch = 7
   let key : LiveReasoningKey = {
     channel: @interop.ChannelId::Local,
     session: "desktop-test",
@@ -954,27 +1358,52 @@ test "live reasoning appends by owner and semantic finish deletes it" {
     streaming_response=None,
     streaming_identity="r7",
   )
-  let empty = LiveReasoningState(@vector.new())
-  let first = empty.update(Delta(key, "think"))
-  let live = first.update(Delta(key, "ing"))
+  let empty = LiveReasoningState::{
+    connections: @vector.new(),
+    previews: @vector.new(),
+    active: None,
+  }
+  let connected = empty.transition(
+    ConnectionOpened(@interop.ChannelId::Local, websocket_epoch=epoch),
+  )
+  let target = input.live_reasoning_target()
+  let (focused, focus_effect) = connected.update(Focused(target))
+  assert_eq(focus_effect, Sync(target=key.wire(), step_label="#1", content=""))
+  let (first, first_effect) = focused.update(
+    Delta(key, websocket_epoch=epoch, "think"),
+  )
+  assert_eq(first_effect, Append(target=key.wire(), content="think"))
+  let (live, second_effect) = first.update(
+    Delta(key, websocket_epoch=epoch, "ing"),
+  )
+  assert_eq(second_effect, Append(target=key.wire(), content="ing"))
   assert_eq(live.content_for(input), Some("thinking"))
+  let (_, hydrate_effect) = live.update(Focused(target))
+  assert_eq(
+    hydrate_effect,
+    Sync(target=key.wire(), step_label="#1", content="thinking"),
+  )
 
   // The full reasoning event is a semantic boundary, not a durable commit.
   // Removing the preview here makes both commit-first and finish-first delivery
   // converge without comparing the reasoning text with transcript history.
-  let finished = live.update(Finished(key))
+  let (finished, finish_effect) = live.update(
+    Finished(key, websocket_epoch=epoch),
+  )
   assert_eq(finished.content_for(input), None)
+  assert_eq(finish_effect, Hide(target=key.wire()))
 
   // Updating the same immutable snapshot twice must produce the same result;
   // an emitter may replay a state transition while scheduling a render.
   assert_true(
-    empty.update(Delta(key, "think")) ==
-    empty.update(Delta(key, "think")),
+    focused.update(Delta(key, websocket_epoch=epoch, "think")) ==
+    focused.update(Delta(key, websocket_epoch=epoch, "think")),
   )
 }
 
 ///|
 test "live reasoning keeps concurrent conversations and runs isolated" {
+  let epoch = 7
   let local_r7 : LiveReasoningKey = {
     channel: @interop.ChannelId::Local,
     session: "shared",
@@ -990,10 +1419,23 @@ test "live reasoning keeps concurrent conversations and runs isolated" {
     session: "shared",
     run_id: Some("r7"),
   }
-  let state = LiveReasoningState(@vector.new())
-    .update(Delta(local_r7, "local-old"))
-    .update(Delta(local_r8, "local-current"))
-    .update(Delta(remote_r7, "remote"))
+  let state = LiveReasoningState::{
+      connections: @vector.new(),
+      previews: @vector.new(),
+      active: None,
+    }
+    .transition(
+      ConnectionOpened(@interop.ChannelId::Local, websocket_epoch=epoch),
+    )
+    .transition(
+      ConnectionOpened(
+        @interop.ChannelId::Remote("device-b"),
+        websocket_epoch=epoch,
+      ),
+    )
+    .transition(Delta(local_r7, websocket_epoch=epoch, "local-old"))
+    .transition(Delta(local_r8, websocket_epoch=epoch, "local-current"))
+    .transition(Delta(remote_r7, websocket_epoch=epoch, "remote"))
   let local_input = Input(
     source=OpenSeek,
     focused=@interop.ChannelId::Local,
@@ -1019,17 +1461,90 @@ test "live reasoning keeps concurrent conversations and runs isolated" {
   assert_eq(state.content_for(local_input), Some("local-current"))
   assert_eq(state.content_for(remote_input), Some("remote"))
 
-  let after_run = state.update(
-    RunFinished(@interop.ChannelId::Local, "r7"),
+  let (focused, focus_effect) = state.update(
+    Focused(local_input.live_reasoning_target()),
+  )
+  assert_eq(
+    focus_effect,
+    Sync(target=local_r8.wire(), step_label="#1", content="local-current"),
+  )
+  let (with_background, background_effect) = focused.update(
+    Delta(remote_r7, websocket_epoch=epoch, "-more"),
+  )
+  assert_eq(background_effect, None)
+  assert_eq(with_background.content_for(remote_input), Some("remote-more"))
+
+  let after_run = with_background.transition(
+    RunFinished(@interop.ChannelId::Local, websocket_epoch=epoch, "r7"),
   )
   assert_eq(after_run.content_for(local_input), Some("local-current"))
-  assert_eq(after_run.content_for(remote_input), Some("remote"))
+  assert_eq(after_run.content_for(remote_input), Some("remote-more"))
 
-  let after_channel = after_run.update(
-    ChannelReset(@interop.ChannelId::Remote("device-b")),
+  let after_channel = after_run.transition(
+    ConnectionClosed(
+      @interop.ChannelId::Remote("device-b"),
+      websocket_epoch=epoch,
+    ),
   )
   assert_eq(after_channel.content_for(local_input), Some("local-current"))
   assert_eq(after_channel.content_for(remote_input), None)
+}
+
+///|
+test "live reasoning rejects stale connection callbacks" {
+  let channel = @interop.ChannelId::Remote("device-b")
+  let key : LiveReasoningKey = {
+    channel,
+    session: "desktop-test",
+    run_id: Some("r7"),
+  }
+  let input = Input(
+    source=OpenSeek,
+    focused=channel,
+    active_session="desktop-test",
+    active_run_id="r7",
+    root=None,
+    submission_generation=0,
+    items=[],
+    streaming_response=None,
+    streaming_identity="r7",
+  )
+  let empty = LiveReasoningState::{
+    connections: @vector.new(),
+    previews: @vector.new(),
+    active: None,
+  }
+  let current = empty
+    .transition(ConnectionOpened(channel, websocket_epoch=1))
+    .transition(Delta(key, websocket_epoch=1, "old"))
+    .transition(ConnectionOpened(channel, websocket_epoch=2))
+    .transition(Delta(key, websocket_epoch=2, "current"))
+
+  // Both callbacks belong to the replaced socket. Neither may change the
+  // current preview, even if JavaScript queued them before the replacement.
+  let after_stale = current
+    .transition(ConnectionOpened(channel, websocket_epoch=1))
+    .transition(Delta(key, websocket_epoch=1, "-stale"))
+    .transition(ConnectionClosed(channel, websocket_epoch=1))
+  assert_eq(after_stale.content_for(input), Some("current"))
+
+  // The current close clears once and keeps the epoch fenced, so a delta
+  // already queued by the closed socket cannot recreate the preview.
+  let closed = after_stale
+    .transition(ConnectionClosed(channel, websocket_epoch=2))
+    .transition(Delta(key, websocket_epoch=2, "late"))
+  assert_eq(closed.content_for(input), None)
+  assert_true(
+    after_stale.transition(ConnectionClosed(channel, websocket_epoch=2)) ==
+    after_stale.transition(ConnectionClosed(channel, websocket_epoch=2)),
+  )
+
+  // `agent.connected` can reopen the engine pump without replacing the
+  // WebSocket. The same epoch becomes receiving again, starting from empty.
+  let reopened = closed
+    .transition(ConnectionOpened(channel, websocket_epoch=2))
+    .transition(Delta(key, websocket_epoch=2, "fresh"))
+  assert_eq(reopened.content_for(input), Some("fresh"))
 }
 
 ///|

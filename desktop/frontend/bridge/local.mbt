@@ -4,16 +4,16 @@
 
 ///|
 priv struct LocalBridgeSub {
-  mut dispatch : @cmd.Emit[Event]
+  mut events : EventHandler
   mut active : Bool
   unsubscribers : Array[@js.Value]
 }
 
 ///|
 fn LocalBridgeSub::LocalBridgeSub(
-  dispatch : @cmd.Emit[Event],
+  events : EventHandler,
 ) -> LocalBridgeSub {
-  { dispatch, active: true, unsubscribers: [], }
+  { events, active: true, unsubscribers: [], }
 }
 
 ///|
@@ -35,12 +35,11 @@ fn LocalBridgeSub::install(self : LocalBridgeSub, attempt : Int) -> @cmd.Cmd {
       @interop.js_prop(extension_events, "on") is Some(_) &&
       @interop.js_prop(application_events, "on") is Some(_) else {
       if attempt > 120 {
-        scheduler.add(
-          (self.dispatch)(
-            Unavailable(
-              channel=@interop.ChannelId::Local,
-              message="Bridge unavailable",
-            ),
+        self.events.enqueue(
+          scheduler,
+          Unavailable(
+            channel=@interop.ChannelId::Local,
+            message="Bridge unavailable",
           ),
         )
       } else {
@@ -69,12 +68,11 @@ fn LocalBridgeSub::open_host_connection(
     ).wait() catch {
       error => {
         guard self.active else { return }
-        scheduler.add(
-          (self.dispatch)(
-            Unavailable(
-              channel=@interop.ChannelId::Local,
-              message=@interop.bridge_error_text(error),
-            ),
+        self.events.enqueue(
+          scheduler,
+          Unavailable(
+            channel=@interop.ChannelId::Local,
+            message=@interop.bridge_error_text(error),
           ),
         )
         return
@@ -128,9 +126,12 @@ fn LocalBridgeSub::wire(
         is Some(notification) else {
         return
       }
-      scheduler.add(
-        (self.dispatch)(
-          Notification(channel=@interop.ChannelId::Local, notification~),
+      self.events.enqueue(
+        scheduler,
+        Notification(
+          channel=@interop.ChannelId::Local,
+          websocket_epoch=0,
+          notification~,
         ),
       )
     }
@@ -140,7 +141,7 @@ fn LocalBridgeSub::wire(
   // shared protocol notifications. The parent frontend owns their UI decode.
   self.subscribe(extension_events, "openseek.browser.event", event => {
     guard event_payload(event) is Some(payload) else { return }
-    scheduler.add((self.dispatch)(BrowserEvent(payload~)))
+    self.events.enqueue(scheduler, BrowserEvent(payload~))
   })
   // Application events use `__MoonBit__.app.on`; keep their command id typed
   // while leaving command policy to the parent frontend.
@@ -149,7 +150,7 @@ fn LocalBridgeSub::wire(
       payload.get("command_id") is Some(String(command_id)) else {
       return
     }
-    scheduler.add((self.dispatch)(MenuCommand(command_id~)))
+    self.events.enqueue(scheduler, MenuCommand(command_id~))
   })
   // The notification extension stamps the owning run id in `payload`.
   self.subscribe(extension_events, "notification.click", event => {
@@ -158,16 +159,16 @@ fn LocalBridgeSub::wire(
       !run_id.is_empty() else {
       return
     }
-    scheduler.add((self.dispatch)(NotificationClicked(run_id~)))
+    self.events.enqueue(scheduler, NotificationClicked(run_id~))
   })
 }
 
 ///|
-fn LocalBridgeSub::update_dispatch(
+fn LocalBridgeSub::update_events(
   self : LocalBridgeSub,
-  dispatch : @cmd.Emit[Event],
+  events : EventHandler,
 ) -> Unit {
-  self.dispatch = dispatch
+  self.events = events
 }
 
 ///|

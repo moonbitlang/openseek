@@ -1,12 +1,12 @@
 // Rabbita resource declarations for local Proton and remote WebSocket host
 // connections. The payload carries only transport identity and an Event
-// emitter, never parent-frontend model or message types.
+// handler, never parent-frontend model or message types.
 
 ///|
 priv suberror BridgeSubscription {
-  LocalBridge(dispatch~ : @cmd.Emit[Event])
+  LocalBridge(events~ : EventHandler)
   RemoteBridge(
-    dispatch~ : @cmd.Emit[Event],
+    events~ : EventHandler,
     device_id~ : String,
     websocket_epoch~ : Int
   )
@@ -14,11 +14,11 @@ priv suberror BridgeSubscription {
 
 ///|
 /// Declare the desktop window's injected Proton connection.
-pub fn local_connection(dispatch : @cmd.Emit[Event]) -> @sub.Sub {
+pub fn local_connection(events : EventHandler) -> @sub.Sub {
   @sub.custom_sub(
     LocalBridgeKey,
     @sub.Global,
-    LocalBridge(dispatch~),
+    LocalBridge(events~),
     bridge_sub_loader,
   )
 }
@@ -30,14 +30,14 @@ pub fn remote_connection(
   device_id~ : String,
   websocket_epoch~ : Int,
   reconnect_attempt~ : Int,
-  dispatch~ : @cmd.Emit[Event],
+  events~ : EventHandler,
 ) -> @sub.Sub {
   @sub.custom_sub(
     RemoteBridgeSub::subscription_key(
       device_id, websocket_epoch, reconnect_attempt,
     ),
     @sub.Global,
-    RemoteBridge(dispatch~, device_id~, websocket_epoch~),
+    RemoteBridge(events~, device_id~, websocket_epoch~),
     bridge_sub_loader,
   )
 }
@@ -48,27 +48,27 @@ fn bridge_sub_loader(
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    LocalBridge(dispatch~) => {
-      let running = LocalBridgeSub(dispatch)
+    LocalBridge(events~) => {
+      let running = LocalBridgeSub(events)
       scheduler.add(running.install(0))
       Some({
         unload: _ => running.unload(),
         update_tagger: payload => {
           match payload {
-            LocalBridge(dispatch=next) => running.update_dispatch(next)
+            LocalBridge(events=next) => running.update_events(next)
             _ => ()
           }
         },
       })
     }
-    RemoteBridge(dispatch~, device_id~, websocket_epoch~) => {
-      let running = RemoteBridgeSub(device_id, websocket_epoch, dispatch)
+    RemoteBridge(events~, device_id~, websocket_epoch~) => {
+      let running = RemoteBridgeSub(device_id, websocket_epoch, events)
       running.install(scheduler)
       Some({
         unload: _ => running.unload(),
         update_tagger: payload => {
           match payload {
-            RemoteBridge(dispatch=next, ..) => running.update_dispatch(next)
+            RemoteBridge(events=next, ..) => running.update_events(next)
             _ => ()
           }
         },

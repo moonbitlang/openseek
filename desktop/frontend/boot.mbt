@@ -65,55 +65,6 @@ fn app_shortcut_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
 }
 
 ///|
-/// Route high-frequency live reasoning directly to the transcript component.
-/// Every other message keeps the root application emitter. Step, run, and
-/// transport boundaries additionally clear the matching provisional state so
-/// an abnormal end cannot leave component-owned text behind.
-priv struct AppDispatcher {
-  root : @cmd.Emit[Msg]
-  live_reasoning : @transcript_component.LiveReasoning
-}
-
-///|
-fn AppDispatcher::emit(self : AppDispatcher, msg : Msg) -> @cmd.Cmd {
-  match msg {
-    FromDevice(
-      channel,
-      Engine(run_id, ReasoningDelta(content), session=Some(session)),
-    ) =>
-      self.live_reasoning.delta(channel~, session~, run_id~, content~)
-    FromDevice(
-      channel,
-      Engine(run_id, ReasoningMessage(_), session=Some(session)),
-    ) => self.live_reasoning.finish(channel~, session~, run_id~)
-    FromDevice(
-      channel,
-      Engine(run_id, AgentStep(_), session=Some(session)),
-    ) =>
-      @cmd.batch([
-        self.live_reasoning.finish(channel~, session~, run_id~),
-        (self.root)(msg),
-      ])
-    FromDevice(channel, Error(run_id=Some(run_id), ..))
-    | FromDevice(channel, Finished(run_id~, ..)) =>
-      @cmd.batch([
-        self.live_reasoning.finish_run(channel~, run_id~), (self.root)(msg),
-      ])
-    FromDevice(channel, BridgeReady)
-    | FromDevice(channel, ChannelDown(..)) =>
-      @cmd.batch([
-        self.live_reasoning.reset_channel(channel), (self.root)(msg),
-      ])
-    _ => (self.root)(msg)
-  }
-}
-
-///|
-fn AppDispatcher::as_emit(self : AppDispatcher) -> @cmd.Emit[Msg] {
-  @cmd.Emit(msg => self.emit(msg))
-}
-
-///|
 /// Browser platform label used to select Cmd on Apple systems and Ctrl
 /// elsewhere, leaving Ctrl chords available to terminal programs on Apple.
 fn app_shortcut_browser_platform() -> String {
@@ -400,11 +351,7 @@ pub fn boot() -> Unit {
       // `with_init(dispatch(Init))` did before the 0.13 migration.
       init=emit => (initial_model(), emit(Init)),
       update=(model, msg, emit) => {
-        let dispatch : @cmd.Emit[Msg] = AppDispatcher::{
-          root: emit,
-          live_reasoning,
-        }.as_emit()
-        let (cmd, next) = update(dispatch, msg, model)
+        let (cmd, next) = update(emit, msg, model)
         (next, cmd)
       },
       // The narrow-layout flag must track the window: rotating a phone or
@@ -420,7 +367,7 @@ pub fn boot() -> Unit {
           // Host event sources follow the device roster. Removing a device
           // therefore unloads its WebSocket immediately; advancing its retry
           // identity replaces only that device's connection.
-          model.bridge_subscriptions(emit),
+          model.bridge_subscriptions(emit, live_reasoning),
         ]
         // The project picker's Enter/Escape/paste surface, only while its
         // modal is open — same lifetime rule as the dismissal listeners.
@@ -551,21 +498,21 @@ pub fn boot() -> Unit {
       terminal_input, terminal_state, terminal_emit,
     )
     let transcript_input = state.map(model => model.transcript_input())
-    let transcript_html = @transcript_component.component(
-      transcript_input,
-      live_reasoning,
-      {
-        open: emit.map(path => OpenFile(path)),
-        jump: emit.map(target => {
-          JumpToLocation(
-            path=target.file,
-            range=target.range,
-            annotation=target.annotation,
-          )
-        }),
-        open_session: emit.map(session => OpenSessionHere(session)),
+    let transcript_html = @transcript_component.component(transcript_input, {
+      open: emit.map(path => OpenFile(path)),
+      jump: emit.map(target => {
+        JumpToLocation(
+          path=target.file,
+          range=target.range,
+          annotation=target.annotation,
+        )
+      }),
+      open_session: emit.map(session => OpenSessionHere(session)),
+      focus_live_reasoning: (input, pinned) => {
+        live_reasoning.focus(input, pinned)
       },
-    )
+      live_reasoning_pinned: pinned => live_reasoning.set_pinned(pinned),
+    })
     let composer_input = state.map(model => model.composer_input())
     let composer_html = @composer.component(
       composer_input,
