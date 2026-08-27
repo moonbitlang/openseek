@@ -4976,7 +4976,7 @@ test "a closed panel still re-roots when the conversation switches" {
       directories: [],
       recursive: false,
     }),
-    file_link_request_id: "00000000-0000-8000-8000-000000000041",
+    file_link_request_id: "file-link-before-owner-change",
   }
   // The new conversation has nothing open and the panel is closed.
   let other : Ctx = {
@@ -5051,7 +5051,7 @@ test "a resolved placement change reroots documents and fences old replies" {
     changes_head: Some("root-head"),
     changes_head_known: true,
     changes_request_id: "changes-2",
-    file_link_request_id: "00000000-0000-8000-8000-000000000042",
+    file_link_request_id: "file-link-before-placement-change",
     review_generation: 4,
     docs,
     children: Map([

@@ -80,14 +80,12 @@ pub fn State::handle(
       let (cmd, next) = self.begin_file_request(emit, input, query, request_id)
       (cmd, next, None)
     }
-    FileCacheLoaded(cache_key~, request_id~) => {
-      let (cmd, next) = self.apply_cache_loaded(
-        emit, input, cache_key, request_id,
-      )
+    FileCacheLoaded(cache_key~) => {
+      let (cmd, next) = self.apply_cache_loaded(emit, input, cache_key)
       (cmd, next, None)
     }
-    FileCacheRequestFailed(cache_key~, request_id~) => {
-      let (cmd, next) = self.fail_cache_load(cache_key, request_id)
+    FileCacheRequestFailed(cache_key~) => {
+      let (cmd, next) = self.fail_cache_load(cache_key)
       (cmd, next, None)
     }
     // `from_cache` and `limit_hit` describe how the Host answered, not which
@@ -282,7 +280,6 @@ fn State::apply_cache_loaded(
   emit : @cmd.Emit[Msg],
   input : Input,
   cache_key : String,
-  _request_id : String,
 ) -> (@cmd.Cmd, State) {
   let cache = self.cache
   guard cache.loading_key == Some(cache_key) else { return (@cmd.none, self) }
@@ -313,7 +310,6 @@ fn State::apply_cache_loaded(
 fn State::fail_cache_load(
   self : State,
   cache_key : String,
-  _request_id : String,
 ) -> (@cmd.Cmd, State) {
   let cache = self.cache
   guard cache.loading_key == Some(cache_key) && cache.owner is Some(owner) else {

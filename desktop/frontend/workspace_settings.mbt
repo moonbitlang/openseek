@@ -181,14 +181,22 @@ fn DeviceState::workspace_settings_row(
 }
 
 ///|
-/// Start or invalidate one workspace's settings request without disturbing a
-/// sibling workspace's in-flight request.
+/// Start one workspace's settings request without disturbing a sibling
+/// workspace's in-flight request.
 fn DeviceState::begin_workspace_settings_request(
   self : DeviceState,
   workspace : @common.Uri,
 ) -> (String, DeviceState) {
   let request_id = @uuid.mint()
-  (request_id, self.with_workspace_settings_request_id(workspace, request_id))
+  (
+    request_id,
+    {
+      ..self,
+      workspace_settings_request_ids: self.workspace_settings_request_ids.put(
+        workspace, request_id,
+      ),
+    },
+  )
 }
 
 ///|
@@ -198,11 +206,27 @@ fn DeviceState::with_workspace_settings_request_id(
   workspace : @common.Uri,
   request_id : String,
 ) -> DeviceState {
-  let request_ids = self.workspace_settings_request_ids.filter(entry => {
-    entry.0 != workspace
-  })
-  request_ids.push((workspace, request_id))
-  { ..self, workspace_settings_request_ids: request_ids }
+  {
+    ..self,
+    workspace_settings_request_ids: self.workspace_settings_request_ids.put(
+      workspace, request_id,
+    ),
+  }
+}
+
+///|
+/// Retire the accepted settings request for one workspace. No request is in
+/// flight after this point, so absence is the complete stale-reply fence.
+fn DeviceState::retire_workspace_settings_request(
+  self : DeviceState,
+  workspace : @common.Uri,
+) -> DeviceState {
+  {
+    ..self,
+    workspace_settings_request_ids: self.workspace_settings_request_ids.without(
+      workspace,
+    ),
+  }
 }
 
 ///|
@@ -210,12 +234,7 @@ fn DeviceState::workspace_settings_request_id(
   self : DeviceState,
   workspace : @common.Uri,
 ) -> String? {
-  for entry in self.workspace_settings_request_ids {
-    if entry.0 == workspace {
-      return Some(entry.1)
-    }
-  }
-  None
+  self.workspace_settings_request_ids.get(workspace)
 }
 
 ///|
@@ -335,7 +354,7 @@ test "a settings reply lands once and an older token cannot roll it back" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let sibling = @interop.ChannelId::Local.test_resource("/other")
-  let sibling_request_id = "00000000-0000-8000-8000-000000000018"
+  let sibling_request_id = "workspace-settings-sibling"
   let attached = test_model().with_dev(dev => {
     ..dev
     .with_workspace_settings_request_id(
@@ -357,6 +376,11 @@ test "a settings reply lands once and an older token cannot roll it back" {
     attached,
   )
   assert_true(loaded.default_worktree_mode(Local, workspace))
+  assert_true(loaded.dev().workspace_settings_request_id(workspace) is None)
+  assert_eq(
+    loaded.dev().workspace_settings_request_id(sibling),
+    Some(sibling_request_id),
+  )
   // An older reply for the same workspace is stale; one for a sibling
   // workspace still lands (the fence is per project).
   let (_, stale) = update_dev(
@@ -428,11 +452,7 @@ test "a settings commit broadcast supersedes list replies" {
     attached,
   )
   assert_true(changed.default_worktree_mode(Local, workspace))
-  let changed_request_id = changed
-    .dev()
-    .workspace_settings_request_id(workspace)
-    .unwrap()
-  assert_true(changed_request_id != TestWorkspaceSettingsRequestId)
+  assert_true(changed.dev().workspace_settings_request_id(workspace) is None)
   // A list reply issued before the commit answers on an older token.
   let (_, stale) = update_dev(
     dispatch,
@@ -478,8 +498,9 @@ test "the settings page select applies optimistically" {
     loaded,
   )
   assert_true(chosen.default_worktree_mode(Local, workspace))
-  // The optimistic write spent a fresh token, so a pre-edit reply still in
-  // flight cannot flip the select back under the user.
+  // The optimistic write retired the previous read, so its reply cannot flip
+  // the select back under the user.
+  assert_true(chosen.dev().workspace_settings_request_id(workspace) is None)
   let (_, raced) = update_dev(
     dispatch,
     WorkspaceSettingsLoaded(
@@ -605,7 +626,7 @@ test "a failed save pops a toast and re-reads under a fresh token" {
     WorkspaceDefaultModeChosen(Local, workspace, "worktree"),
     attached,
   )
-  let minted = chosen.dev().workspace_settings_request_id(workspace).unwrap()
+  assert_true(chosen.dev().workspace_settings_request_id(workspace) is None)
   let (_, failed) = update_dev(
     dispatch,
     WorkspaceSettingsSaveFailed(workspace~, message="disk full"),
@@ -617,7 +638,7 @@ test "a failed save pops a toast and re-reads under a fresh token" {
     .dev()
     .workspace_settings_request_id(workspace)
     .unwrap()
-  assert_true(refetch_id != minted)
+  assert_true(refetch_id != TestWorkspaceSettingsRequestId)
   // The refetch it issued may answer on the fresh token and correct the
   // optimistic value.
   let (_, corrected) = update_dev(

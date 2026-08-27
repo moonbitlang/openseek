@@ -63,7 +63,7 @@ priv struct OpenRequest {
   id : String
   /// The page connection that submitted this request. A later connect
   /// handshake invalidates it even if the pump has already dequeued it.
-  connection_id : String
+  connection_generation : Int
   argv : Array[String]
   /// The directory passed directly to the PTY process spawn.
   cwd : String
@@ -82,21 +82,18 @@ struct TerminalState {
   /// Once closed, this state cannot serve another connection. Page reconnects
   /// use `close_all_terminals` instead and leave the pump available.
   mut closed : Bool
-  /// Replaced by the connect handshake so opens from an older page cannot
+  /// Incremented by the connect handshake so opens from an older page cannot
   /// publish a session after that page has gone away.
-  mut connection_id : String
+  mut connection_generation : Int
 }
 
 ///|
-pub fn new_terminal_state() -> TerminalState raise TerminalError {
-  guard @uuid.mint() is Some(connection_id) else {
-    raise TerminalError("could not create a terminal connection id")
-  }
+pub fn new_terminal_state() -> TerminalState {
   {
     requests: Queue(kind=Unbounded),
     sessions: Map([]),
     closed: false,
-    connection_id,
+    connection_generation: 0,
   }
 }
 
@@ -122,7 +119,7 @@ pub async fn open_terminal(
   let reply : @async.Queue[Result[Unit, String]] = Queue(kind=Blocking(1))
   state.requests.put({
     id,
-    connection_id: state.connection_id,
+    connection_generation: state.connection_generation,
     argv,
     cwd,
     cols,
@@ -210,18 +207,10 @@ pub fn close_terminal(state : TerminalState, id~ : String) -> Unit {
 /// Retire every live session and invalidate every open requested by an older
 /// page. A freshly (re)loaded page cannot reclaim the old page's terminal
 /// tabs, including requests the pump has not published as sessions yet.
-pub fn close_all_terminals(state : TerminalState) -> Unit raise TerminalError {
-  // Replacing the identity before the live-session sweep also covers requests
-  // that the pump dequeued but whose PTY spawn has not completed.
-  guard @uuid.mint() is Some(connection_id) else {
-    raise TerminalError("could not create a terminal connection id")
-  }
-  state.connection_id = connection_id
-  retire_sessions(state)
-}
-
-///|
-fn retire_sessions(state : TerminalState) -> Unit {
+pub fn close_all_terminals(state : TerminalState) -> Unit {
+  // Incrementing before the live-session sweep also covers requests that the
+  // pump dequeued but whose PTY spawn has not completed.
+  state.connection_generation += 1
   // Materialized: teardown mutates the table as sessions unwind.
   for id in state.sessions.keys().to_array() {
     close_terminal(state, id~)
@@ -234,10 +223,8 @@ fn retire_sessions(state : TerminalState) -> Unit {
 /// pump remain parked. Repeated shutdown calls are harmless.
 pub fn TerminalState::shutdown(self : TerminalState) -> Unit {
   guard !self.closed else { return }
-  // `closed` alone invalidates every open the pump has not published yet, so
-  // shutdown needs no replacement connection identity.
   self.closed = true
-  retire_sessions(self)
+  close_all_terminals(self)
   // A request still in this queue has an opener blocked on its private reply.
   // Close that reply explicitly before removing the pump's only route to it.
   while (self.requests.try_get() catch { _ => None }) is Some(request) {

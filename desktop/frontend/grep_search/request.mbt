@@ -145,25 +145,27 @@ pub fn State::subscription(
   input : Input,
   emit : @cmd.Emit[Msg],
 ) -> @sub.Sub {
-  let page = self.page
-  guard (page.phase is Debouncing || page.phase is Loading) &&
+  let state = self
+  guard (state.phase is Debouncing || state.phase is Loading) &&
     input.root is Some(root) &&
     @resource.belongs_to(root, input.owner.channel) else {
     return @sub.none
   }
-  let request = match page.mode {
+  let request = match state.mode {
     Text =>
-      page
+      state
       .text_request_payload(input)
       .map(payload => SearchRequest::Text(payload))
     Semantic =>
-      page.semantic_request_payload(input).map(payload => Semantic(payload))
+      state
+      .semantic_request_payload(input)
+      .map(payload => SearchRequest::Semantic(payload))
   }
   guard request is Some(request) else { return @sub.none }
   @sub.custom_sub(
     "grep-search:\{request.request_id()}",
     Local,
-    SearchRequestSub::SearchRequest(input.owner, request, page.delay_ms, emit),
+    SearchRequestSub::SearchRequest(input.owner, request, state.delay_ms, emit),
     @sub.SubLoader(search_request_loader),
   )
 }

@@ -8,9 +8,6 @@ const MaxTextSearchResults : Int = 20000
 const MaxTextSearchFileSizeBytes : String = "17179869184"
 
 ///|
-const MaxTextSearchCancellations : Int = 128
-
-///|
 /// VS Code drains all stderr but retains at most one million characters for
 /// diagnostics. Bound by bytes here so invalid UTF-8 cannot evade the cap.
 const MaxTextSearchStderrBytes : Int = 1000000
@@ -52,51 +49,6 @@ priv struct RunningTextSearch {
   root : String
   reply : @async.Queue[SearchTextReply]
   task : @async.Task[Unit]
-}
-
-///|
-/// Cancellation can overtake its matching search at the transport boundary.
-/// Retain a bounded set of exact UUIDs so that race stays safe without a
-/// monotonic frontier or unbounded connection-lifetime growth.
-priv struct TextSearchCancellations {
-  values : Map[String, Bool]
-  order : Array[String]
-}
-
-///|
-fn TextSearchCancellations::TextSearchCancellations() -> TextSearchCancellations {
-  { values: Map([]), order: [], }
-}
-
-///|
-fn TextSearchCancellations::contains(
-  self : TextSearchCancellations,
-  request_id : String,
-) -> Bool {
-  self.values.contains(request_id)
-}
-
-///|
-fn TextSearchCancellations::record(
-  self : TextSearchCancellations,
-  request_id : String,
-) -> Unit {
-  self.values[request_id] = true
-  self.order.retain(id => id != request_id)
-  self.order.push(request_id)
-  if self.order.length() > MaxTextSearchCancellations {
-    let oldest = self.order.remove(0)
-    self.values.remove(oldest)
-  }
-}
-
-///|
-fn TextSearchCancellations::remove(
-  self : TextSearchCancellations,
-  request_id : String,
-) -> Unit {
-  self.values.remove(request_id)
-  self.order.retain(id => id != request_id)
 }
 
 ///|
@@ -179,7 +131,7 @@ async fn cancel_running_text_search(
 async fn TextSearchService::run(self : TextSearchService) -> Unit {
   @async.with_task_group(group => {
     let running : Map[String, RunningTextSearch] = Map([])
-    let cancellations = TextSearchCancellations()
+    let cancellations = CancelledRequests()
     for ;; {
       match self.requests.get() {
         Search(command~, root~, payload~, reply~) => {
@@ -219,11 +171,11 @@ async fn TextSearchService::run(self : TextSearchService) -> Unit {
           running[request_id] = { request_id, root: reply_root, reply, task }
         }
         Cancel(request_id~, reply~) => {
-          cancellations.record(request_id)
           if running.get(request_id) is Some(current) {
             cancel_running_text_search(current, current.root)
             running.remove(request_id)
-            cancellations.remove(request_id)
+          } else {
+            cancellations.record(request_id)
           }
           reply.put(())
         }
@@ -1511,18 +1463,4 @@ async test "cancel-before-search rejects the exact request UUID" {
     assert_eq(reply.root, resource_root)
     group.return_immediately(())
   })
-}
-
-///|
-test "cancellation UUIDs stay bounded across long-lived connections" {
-  let cancellations = TextSearchCancellations()
-  for index in 0..<(MaxTextSearchCancellations + 5) {
-    cancellations.record("request:\{index}")
-  }
-  assert_eq(cancellations.values.length(), MaxTextSearchCancellations)
-  assert_eq(cancellations.order.length(), MaxTextSearchCancellations)
-  assert_false(cancellations.contains("request:0"))
-  assert_true(
-    cancellations.contains("request:\{MaxTextSearchCancellations + 4}"),
-  )
 }

@@ -362,7 +362,7 @@ fn State::refresh_git(
     return (@cmd.none, self)
   }
   let thread_id = active.id
-  let generation = self.git_request_generation + 1
+  let request_id = @uuid.mint()
   (
     @cmd.custom_cmd(scheduler => {
       @js.async_run(() => {
@@ -375,14 +375,10 @@ fn State::refresh_git(
           // captured branch label when the live lookup is unavailable.
           _ => return
         }
-        scheduler.add(
-          dispatch(
-            GitLoaded(thread_id~, generation~, requested_cwd=cwd, reply~),
-          ),
-        )
+        scheduler.add(dispatch(GitLoaded(request_id~, reply~)))
       })
     }),
-    { ..self, git_request_generation: generation, },
+    { ..self, git_request_id: Some(request_id) },
   )
 }
 

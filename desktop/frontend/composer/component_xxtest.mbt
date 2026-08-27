@@ -12,7 +12,7 @@ fn Input::fixture(task : String) -> Input {
     slash_commands: [],
     root: Some(@common.Uri::file("/workspace")),
     installed_skills: [],
-    context_id: "00000000-0000-8000-8000-000000000001",
+    context_id: "composer-context-a",
     submission_sequence: 0,
     replacements: [],
     retirements: [],
@@ -268,7 +268,7 @@ test "a context switch drops a late symbols reply instead of reopening" {
     Msg::test_emit(),
     Action::test_emit(),
   )
-  let switched = { ..input, context_id: "00000000-0000-8000-8000-000000000002" }
+  let switched = { ..input, context_id: "composer-context-b" }
   let (after, _) = typing.update(
     switched,
     SymbolsLoaded(

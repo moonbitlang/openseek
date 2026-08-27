@@ -1158,6 +1158,58 @@ priv struct ArchiveOverride {
 } derive(Eq)
 
 ///|
+/// Per-workspace request ownership. Absence means no request is in flight;
+/// replacing or removing one row never disturbs a sibling workspace.
+priv struct WorkspaceRequestIds {
+  values : Array[(@common.Uri, String)]
+} derive(Eq)
+
+///|
+fn WorkspaceRequestIds::WorkspaceRequestIds(
+  values? : Array[(@common.Uri, String)] = [],
+) -> WorkspaceRequestIds {
+  { values, }
+}
+
+///|
+fn WorkspaceRequestIds::put(
+  self : WorkspaceRequestIds,
+  workspace : @common.Uri,
+  request_id : String,
+) -> WorkspaceRequestIds {
+  let values = self.values.filter(entry => entry.0 != workspace)
+  values.push((workspace, request_id))
+  { values, }
+}
+
+///|
+fn WorkspaceRequestIds::without(
+  self : WorkspaceRequestIds,
+  workspace : @common.Uri,
+) -> WorkspaceRequestIds {
+  { values: self.values.filter(entry => entry.0 != workspace) }
+}
+
+///|
+fn WorkspaceRequestIds::get(
+  self : WorkspaceRequestIds,
+  workspace : @common.Uri,
+) -> String? {
+  for entry in self.values {
+    if entry.0 == workspace {
+      return Some(entry.1)
+    }
+  }
+  None
+}
+
+///|
+fn WorkspaceRequestIds::retain_workspaces(
+  self : WorkspaceRequestIds,
+  workspaces : Array[@common.Uri],
+) -> WorkspaceRequestIds {
+  { values: self.values.filter(entry => workspaces.contains(entry.0)) }
+}
 
 ///|
 /// Everything that exists once per connected device channel. The app holds
@@ -1192,8 +1244,8 @@ priv struct DeviceState {
   projects_request_id : String
   // The exact request currently accepted for each workspace; sibling
   // workspaces never invalidate one another.
-  worktree_request_ids : Array[(@common.Uri, String)]
-  workspace_settings_request_ids : Array[(@common.Uri, String)]
+  worktree_request_ids : WorkspaceRequestIds
+  workspace_settings_request_ids : WorkspaceRequestIds
   // Durable sessions known to the engine's store, newest first, refreshed
   // when the bridge connects and when a run reaches the store. A new
   // conversation appears here once its first turn has been persisted.
@@ -1239,8 +1291,8 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     sessions_request_id: @uuid.mint(),
     archived_request_id: @uuid.mint(),
     projects_request_id: @uuid.mint(),
-    worktree_request_ids: [],
-    workspace_settings_request_ids: [],
+    worktree_request_ids: WorkspaceRequestIds(),
+    workspace_settings_request_ids: WorkspaceRequestIds(),
     sessions: [],
     archived: [],
     archive_overrides: [],
@@ -2499,17 +2551,6 @@ fn Model::replace_device(self : Model, dev : DeviceState) -> Model {
     }
   }
   { ..self, devices, }
-}
-
-///|
-/// The focused channel's connection generation — the fence root-scoped
-/// fetches (host settings, session snapshots) stamp on their requests. 0
-/// when the page holds no devices; no reply ever arrives to check it there.
-fn Model::focused_connection_id(self : Model) -> String {
-  match self.focused_device() {
-    Some(dev) => dev.connection_id
-    None => ""
-  }
 }
 
 ///|

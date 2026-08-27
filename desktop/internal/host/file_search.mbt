@@ -465,13 +465,13 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
           }
         }
         Cancel(cache_key~, request_id~, reply~) => {
-          cancelled_requests[request_id] = cache_key
+          let mut matched = false
           if running_scans.get(cache_key) is Some(running) {
             let kept : Array[PendingFileSearch] = []
             for waiter in running.waiters {
               if waiter.request_id == request_id {
+                matched = true
                 waiter.reply.put(SearchCancelled)
-                cancelled_requests.remove(request_id)
               } else {
                 kept.push(waiter)
               }
@@ -491,8 +491,8 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
               let kept : Array[PendingFileSearch] = []
               for waiter in running.waiters {
                 if waiter.request_id == request_id {
+                  matched = true
                   waiter.reply.put(SearchCancelled)
-                  cancelled_requests.remove(request_id)
                 } else {
                   kept.push(waiter)
                 }
@@ -504,6 +504,9 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
                 running_ranks[id] = { ..running, waiters: kept }
               }
             }
+          }
+          if !matched {
+            cancelled_requests[request_id] = cache_key
           }
           reply.put(())
         }

@@ -79,7 +79,7 @@ test "a listing for another request UUID is dropped" {
     @project_picker.Msg::Loaded(
       location=@project_picker.Location::Directory("/from-b"),
       entries=["wrong"],
-      request_id="00000000-0000-8000-8000-000000000099",
+      request_id="foreign-listing",
     ),
   )
   assert_true(outcome is None)
@@ -151,7 +151,7 @@ test "a failed navigation reports the failure and keeps the picker" {
     emit(),
     @project_picker.Msg::Failed(
       message="stale",
-      request_id="00000000-0000-8000-8000-000000000099",
+      request_id="stale-listing-failure",
     ),
   )
   guard stale is Some(state) else { fail("picker closed by a stale failure") }

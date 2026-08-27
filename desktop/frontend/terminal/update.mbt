@@ -210,26 +210,23 @@ fn update(
           tab.workspace.channel() == channel &&
           tab.status is TabOpening {
           let (cmds, state) = drop_tab(state, ctx, key)
-          cmds.push(drop_pending(channel, id))
+          cmds.push(drop_pending(id))
           (@cmd.batch(cmds), state)
         } else {
-          (drop_pending(channel, id), state)
+          (drop_pending(id), state)
         }
       } else if state.tab_by_key(key) is Some(tab) &&
         tab.workspace.channel() == channel &&
         tab.status is TabOpening {
         (
-          flush_pending(channel, key, id),
-          state.replace_tab({ ..tab, id: Some(id), status: TabRunning, }),
+          flush_pending(key, id),
+          state.replace_tab({ ..tab, id: Some(id), status: TabRunning }),
         )
       } else {
         // The tab was closed while the open was in flight; the session
         // belongs to nobody, so retire it on the host connection that opened
         // it, even if another device is focused now.
-        (
-          @cmd.batch([send_close(channel, id), drop_pending(channel, id)]),
-          state,
-        )
+        (@cmd.batch([send_close(channel, id), drop_pending(id)]), state)
       }
     }
     OpenFailed(key~, message~) =>
@@ -289,7 +286,7 @@ fn update(
             }) {
             let owner = (channel, id)
             (
-              drop_pending(channel, id),
+              drop_pending(id),
               if state.exited_before_open.contains(owner) {
                 state
               } else {
@@ -300,7 +297,7 @@ fn update(
               },
             )
           } else {
-            (drop_pending(channel, id), state)
+            (drop_pending(id), state)
           }
       }
   }

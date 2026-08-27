@@ -3,6 +3,11 @@
 // symbol lookup, keyboard handling, and mention chips stay inside @composer.
 
 ///|
+/// Codex owns one shared composer entry; the selected task's identity is
+/// already part of its input and determines when the component is replaced.
+const CodexComposerContextId : String = "codex-composer"
+
+///|
 priv struct CodexSkill {
   name : String
   description : String
@@ -372,7 +377,7 @@ pub fn State::composer_input(
     .active_placement(context.channel)
     .bind(placement => placement.checkout_root()),
     installed_skills: self.installed_codex_skills(),
-    context_id: "00000000-0000-8000-8000-000000000017",
+    context_id: CodexComposerContextId,
     submission_sequence: self.submission_sequence,
     replacements: [],
     retirements: [],

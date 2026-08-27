@@ -75,11 +75,8 @@ pub fn update(
           permission_picker: state.permission_picker.cancel_full_access(),
         },
       )
-    GitLoaded(thread_id~, generation~, requested_cwd~, reply~) =>
-      (
-        @cmd.none,
-        state.with_git_reply(thread_id, generation, requested_cwd, reply),
-      )
+    GitLoaded(request_id~, reply~) =>
+      (@cmd.none, state.with_git_reply(request_id, reply))
     WorktreeChanged(thread_id~, project_root~, name~, path~, present~) => {
       let applies = state.active_thread() is Some(active) &&
         active.id == thread_id
@@ -1015,7 +1012,6 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
     open_external,
   )
   assert_eq(sending_first.pending_steers.length(), 1)
-  assert_eq(sending_first.pending_steers[0].submission_id, 1)
   assert_true(sending_first.pending_steers[0].delivery is CodexSteerSending)
   assert_eq(sending_first.transcript_items().length(), 2)
 
@@ -1040,7 +1036,6 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
     open_external,
   )
   assert_eq(sending_second.pending_steers.length(), 2)
-  assert_eq(sending_second.pending_steers[1].submission_id, 2)
   assert_eq(sending_second.transcript_items().length(), 3)
 
   let (_, failed_second) = update(
@@ -1051,7 +1046,6 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
     open_external,
   )
   assert_eq(failed_second.pending_steers.length(), 1)
-  assert_eq(failed_second.pending_steers[0].submission_id, 1)
   assert_true(failed_second.pending_steers[0].delivery is CodexSteerAccepted)
   assert_eq(failed_second.draft_text(), "same text")
 
@@ -1084,7 +1078,6 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
   )
   assert_true(observed_first == observed_first_again)
   assert_eq(observed_first.pending_steers.length(), 1)
-  assert_eq(observed_first.pending_steers[0].submission_id, 2)
   assert_eq(observed_first.transcript_items().length(), 3)
 
   // `item/completed` repeats the same canonical id after `item/started`; it
@@ -1109,7 +1102,7 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
     open_external,
   )
   assert_eq(completed_first.pending_steers.length(), 1)
-  assert_eq(completed_first.pending_steers[0].submission_id, 2)
+  assert_true(completed_first.pending_steers[0].delivery is CodexSteerSending)
 
   let (_, observed_second) = update(
     dispatch,
@@ -1482,13 +1475,14 @@ test "Codex update handlers are pure and idempotent" {
       @interop.ChannelId::Local,
       _ => @cmd.none,
     )
-    // A refresh mints fresh catalog request UUIDs; everything else must
-    // replay identically.
+    // Refreshes mint fresh request UUIDs; everything else must replay
+    // identically. `WorktreeChanged` also refreshes Git for the new checkout.
     assert_true(
       {
         ..once,
         live_catalog_request_id: twice.live_catalog_request_id,
         archived_catalog_request_id: twice.archived_catalog_request_id,
+        git_request_id: twice.git_request_id,
       } ==
       twice,
     )
@@ -1522,7 +1516,9 @@ test "Codex worktree broadcasts bind every frontend with the task open" {
   let (_, twice) = update(dispatch, message, state, @interop.ChannelId::Local, _ => {
     @cmd.none
   })
-  assert_true(once == twice)
+  // Each replay starts a real Git read, so its request UUID is intentionally
+  // different even though the durable worktree state is identical.
+  assert_true({ ..once, git_request_id: twice.git_request_id } == twice)
   assert_true(once.placement is @composer.BoundWorktree("wt-1"))
   assert_eq(
     once
@@ -1631,7 +1627,7 @@ test "Codex Git replies stay with the latest checkout request" {
     dispatch,
     @interop.ChannelId::Local,
   )
-  assert_eq(main_pending.git_request_generation, 1)
+  let main_request_id = main_pending.git_request_id.unwrap()
 
   // Fresh-worktree creation retargets the same thread and starts a newer
   // lookup. Neither request is executed in this pure update test; their
@@ -1646,29 +1642,25 @@ test "Codex Git replies stay with the latest checkout request" {
     dispatch,
     @interop.ChannelId::Local,
   )
-  assert_eq(worktree_pending.git_request_generation, 2)
+  let worktree_request_id = worktree_pending.git_request_id.unwrap()
+  assert_true(worktree_request_id != main_request_id)
 
-  let worktree_reply = GitLoaded(
-    thread_id="thread-1",
-    generation=2,
-    requested_cwd=worktree_cwd,
-    reply={
-      pull_request: Some({
-        number: 759,
-        title: "Worktree pull request",
-        state: "open",
-        draft: false,
-        url: "https://github.com/moonbitlang/openseek/pull/759",
-        base: "main",
-        additions: 1,
-        deletions: 0,
-        changed_files: 1,
-        checks: None,
-      }),
-      compare_url: None,
-      branch: Some("openseek/wt-3"),
-    },
-  )
+  let worktree_reply = GitLoaded(request_id=worktree_request_id, reply={
+    pull_request: Some({
+      number: 759,
+      title: "Worktree pull request",
+      state: "open",
+      draft: false,
+      url: "https://github.com/moonbitlang/openseek/pull/759",
+      base: "main",
+      additions: 1,
+      deletions: 0,
+      changed_files: 1,
+      checks: None,
+    }),
+    compare_url: None,
+    branch: Some("openseek/wt-3"),
+  })
   let (_, applied) = update(
     dispatch,
     worktree_reply,
@@ -1687,27 +1679,22 @@ test "Codex Git replies stay with the latest checkout request" {
   assert_true(applied_again == applied)
   assert_eq(applied.git_status.unwrap().pull_request.unwrap().number, 759)
 
-  let main_reply = GitLoaded(
-    thread_id="thread-1",
-    generation=1,
-    requested_cwd=main_cwd,
-    reply={
-      pull_request: Some({
-        number: 1079,
-        title: "Main checkout pull request",
-        state: "open",
-        draft: false,
-        url: "https://github.com/moonbitlang/openseek/pull/1079",
-        base: "main",
-        additions: 2,
-        deletions: 0,
-        changed_files: 1,
-        checks: None,
-      }),
-      compare_url: None,
-      branch: Some("docs/desktop-ux-guidelines"),
-    },
-  )
+  let main_reply = GitLoaded(request_id=main_request_id, reply={
+    pull_request: Some({
+      number: 1079,
+      title: "Main checkout pull request",
+      state: "open",
+      draft: false,
+      url: "https://github.com/moonbitlang/openseek/pull/1079",
+      base: "main",
+      additions: 2,
+      deletions: 0,
+      changed_files: 1,
+      checks: None,
+    }),
+    compare_url: None,
+    branch: Some("docs/desktop-ux-guidelines"),
+  })
   let (_, stale) = update(
     dispatch,
     main_reply,
@@ -1719,25 +1706,6 @@ test "Codex Git replies stay with the latest checkout request" {
   // newer answer.
   assert_true(stale == applied)
   assert_eq(stale.git_status.unwrap().pull_request.unwrap().number, 759)
-
-  let wrong_cwd_reply = GitLoaded(
-    thread_id="thread-1",
-    generation=2,
-    requested_cwd=main_cwd,
-    reply={
-      pull_request: None,
-      compare_url: None,
-      branch: Some("wrong-checkout"),
-    },
-  )
-  let (_, wrong_cwd) = update(
-    dispatch,
-    wrong_cwd_reply,
-    worktree_pending,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
-  assert_true(wrong_cwd == worktree_pending)
 }
 
 ///|

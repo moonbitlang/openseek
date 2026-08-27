@@ -4,11 +4,11 @@ package "openseek_desktop/internal/terminal"
 // Values
 pub fn ack_terminal(TerminalState, id~ : String, sequence~ : Int) -> Unit
 
-pub fn close_all_terminals(TerminalState) -> Unit raise TerminalError
+pub fn close_all_terminals(TerminalState) -> Unit
 
 pub fn close_terminal(TerminalState, id~ : String) -> Unit
 
-pub fn new_terminal_state() -> TerminalState raise TerminalError
+pub fn new_terminal_state() -> TerminalState
 
 pub async fn open_terminal(TerminalState, cwd~ : String, cols~ : Int, rows~ : Int, command? : Array[String]) -> String
 

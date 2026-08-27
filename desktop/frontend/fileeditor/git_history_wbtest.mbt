@@ -73,7 +73,7 @@ test "historical model URIs encode revision side and path immutably" {
 
 ///|
 test "Git history replies are fenced by request UUID" {
-  let request_id = "00000000-0000-8000-8000-000000000052"
+  let request_id = "git-history-current"
   let state = {
     ..graph_fixture_state(),
     git_graph: GitGraphLoading,

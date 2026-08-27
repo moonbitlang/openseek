@@ -8,9 +8,6 @@
 const MaxSemanticSearchResults : Int = 20000
 
 ///|
-const MaxSemanticSearchCancellations : Int = 128
-
-///|
 const MaxSemanticSearchStderrBytes : Int = 1000000
 
 ///|
@@ -63,48 +60,6 @@ priv struct RunningSemanticSearch {
   root : String
   reply : @async.Queue[SearchSemanticReply]
   task : @async.Task[Unit]
-}
-
-///|
-priv struct SemanticSearchCancellations {
-  values : Map[String, Bool]
-  order : Array[String]
-}
-
-///|
-fn SemanticSearchCancellations::SemanticSearchCancellations() -> SemanticSearchCancellations {
-  { values: Map([]), order: [], }
-}
-
-///|
-fn SemanticSearchCancellations::contains(
-  self : SemanticSearchCancellations,
-  request_id : String,
-) -> Bool {
-  self.values.contains(request_id)
-}
-
-///|
-fn SemanticSearchCancellations::record(
-  self : SemanticSearchCancellations,
-  request_id : String,
-) -> Unit {
-  self.values[request_id] = true
-  self.order.retain(id => id != request_id)
-  self.order.push(request_id)
-  if self.order.length() > MaxSemanticSearchCancellations {
-    let oldest = self.order.remove(0)
-    self.values.remove(oldest)
-  }
-}
-
-///|
-fn SemanticSearchCancellations::remove(
-  self : SemanticSearchCancellations,
-  request_id : String,
-) -> Unit {
-  self.values.remove(request_id)
-  self.order.retain(id => id != request_id)
 }
 
 ///|
@@ -192,7 +147,7 @@ async fn SemanticSearchService::run(
 ) -> Unit {
   @async.with_task_group(group => {
     let running : Map[String, RunningSemanticSearch] = Map([])
-    let cancellations = SemanticSearchCancellations()
+    let cancellations = CancelledRequests()
     for ;; {
       match self.requests.get() {
         Search(command~, root~, payload~, reply~) => {
@@ -240,11 +195,11 @@ async fn SemanticSearchService::run(
           running[request_id] = { request_id, root: reply_root, reply, task }
         }
         Cancel(request_id~, reply~) => {
-          cancellations.record(request_id)
           if running.get(request_id) is Some(current) {
             cancel_running_semantic_search(current, current.root)
             running.remove(request_id)
-            cancellations.remove(request_id)
+          } else {
+            cancellations.record(request_id)
           }
           reply.put(())
         }

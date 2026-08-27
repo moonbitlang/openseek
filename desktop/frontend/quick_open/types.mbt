@@ -136,8 +136,8 @@ pub(all) struct Accepted {
 pub(all) enum Msg {
   ValueChanged(String)
   FilesDue(query~ : String, request_id~ : String)
-  FileCacheLoaded(cache_key~ : String, request_id~ : String)
-  FileCacheRequestFailed(cache_key~ : String, request_id~ : String)
+  FileCacheLoaded(cache_key~ : String)
+  FileCacheRequestFailed(cache_key~ : String)
   FilesLoaded(
     cache_key~ : String,
     query~ : String,

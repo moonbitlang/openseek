@@ -4,7 +4,6 @@ package "openseek_desktop/internal/extension"
 import {
   "moonbit-community/proton",
   "openseek_desktop/internal/api",
-  "openseek_desktop/internal/host",
 }
 
 // Values

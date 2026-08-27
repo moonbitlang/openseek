@@ -50,7 +50,7 @@ async fn run_session(
 ) -> Unit {
   let mut opened_pty : @pty.Pty? = None
   @async.with_task_group(group => {
-    if state.closed || request.connection_id != state.connection_id {
+    if request.connection_generation != state.connection_generation {
       let message = if state.closed {
         "terminal service is closed"
       } else {
@@ -93,7 +93,7 @@ async fn run_session(
     }
     // Spawning suspends, so a reconnect can invalidate the request while the
     // child is being created. Close it before publishing a stale session.
-    if state.closed || request.connection_id != state.connection_id {
+    if request.connection_generation != state.connection_generation {
       let message = if state.closed {
         "terminal service is closed"
       } else {

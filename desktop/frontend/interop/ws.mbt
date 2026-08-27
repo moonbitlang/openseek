@@ -1,6 +1,6 @@
 // The browser transport: JSON-RPC 2.0 over one WebSocket per device
 // channel (docs/remote-protocol.md). Requests are correlated by a
-// UUID against the connection's pending map; notifications go to
+// client-scoped id against the session's pending map; notifications go to
 // the handler installed with that connection. Sockets are JS objects, so
 // the registry lives here as module state rather than in the Elm model.
 
@@ -9,7 +9,8 @@
 priv struct RpcSession {
   socket : @js.Value
   // id → the promise/resolve/reject record of the awaiting request.
-  pending : Map[String, @js.Value]
+  pending : Map[Int, @js.Value]
+  mut next_id : Int
   mut open_ : Bool
 }
 
@@ -84,7 +85,12 @@ pub fn ws_connect(
   ws_close(channel)
   let ctor : @js.Value = @js.globalThis.get_with_string("WebSocket")
   let socket : @js.Value = ctor.new([url])
-  let session : RpcSession = { socket, pending: Map([]), open_: false }
+  let session : RpcSession = {
+    socket,
+    pending: Map([]),
+    next_id: 1,
+    open_: false,
+  }
   channels[channel] = session
   socket.set_with_string("onopen", (_event : @js.Value) => session.open_ = true)
   socket.set_with_string("onmessage", (event : @js.Value) => {
@@ -130,7 +136,8 @@ async fn ws_request(
   guard channels.get(channel) is Some(session) && session.open_ else {
     raise BridgeUnsent("SeekMoon connection is down")
   }
-  let id = @uuid.mint()
+  let id = session.next_id
+  session.next_id += 1
   let frame = @js.Object::new()
   frame["jsonrpc"] = "2.0"
   frame["id"] = id
@@ -182,7 +189,7 @@ fn ws_reply_failure(error : Error) -> Error {
 ///|
 fn remove_pending_if_same(
   session : RpcSession,
-  id : String,
+  id : Int,
   deferred : @js.Value,
 ) -> Unit {
   if session.pending.get(id) is Some(current) &&
@@ -222,7 +229,7 @@ fn handle_message(
     return
   }
   guard js_prop(envelope, "id") is Some(id_value) &&
-    (@js.Cast::into(id_value) : String?) is Some(id) else {
+    (@js.Cast::into(id_value) : Int?) is Some(id) else {
     return
   }
   // A reply for a request this session no longer tracks (settled twice, or
@@ -296,13 +303,14 @@ test "synchronous send cleanup removes only its own pending resolver" {
   let replacement = @js.Object::new().to_value()
   let session : RpcSession = {
     socket,
-    pending: { "request-7": original },
+    pending: { 7: original },
+    next_id: 8,
     open_: true,
   }
-  remove_pending_if_same(session, "request-7", replacement)
-  assert_true(session.pending.get("request-7") is Some(_))
-  remove_pending_if_same(session, "request-7", original)
-  assert_true(session.pending.get("request-7") is None)
+  remove_pending_if_same(session, 7, replacement)
+  assert_true(session.pending.get(7) is Some(_))
+  remove_pending_if_same(session, 7, original)
+  assert_true(session.pending.get(7) is None)
 }
 
 ///|

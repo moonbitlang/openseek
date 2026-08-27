@@ -52,13 +52,13 @@ fn FileCompletion::matches(
       owner=remote_owner,
       root=remote_root,
       query=remote_query,
-      checkout_id=remote_epoch,
+      checkout_id=remote_checkout_id,
       ..
     ) =>
       remote_owner == owner &&
       root == Some(remote_root) &&
       query == Some(remote_query) &&
-      remote_epoch == checkout_id
+      remote_checkout_id == checkout_id
     Local(..) => false
   }
 }

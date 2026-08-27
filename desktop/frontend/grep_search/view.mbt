@@ -59,7 +59,7 @@ fn grouped_matches(
 /// Preserve each file's complete occurrence count while taking only the
 /// matching lines currently admitted to the DOM. This is deliberately a view
 /// budget: Host search semantics and the 20,000-result ceiling remain intact.
-fn visible_file_groups(page : Page) -> Array[FileGroup] {
+fn visible_file_groups(page : State) -> Array[FileGroup] {
   let visible : Array[FileGroup] = []
   let mut remaining = page.visible_lines.max(0)
   for group in grouped_matches(page.text.matches) {
@@ -197,7 +197,7 @@ fn mode_control(mode : Mode, emit : @cmd.Emit[Msg]) -> @html.Html {
 
 ///|
 /// The mode-specific query options.
-fn mode_options(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
+fn mode_options(page : State, emit : @cmd.Emit[Msg]) -> @html.Html {
   if page.mode is Text {
     @html.div(class="search-mode-options", [
       toggle_button(
@@ -286,7 +286,7 @@ fn result_row(
 
 ///|
 fn file_group_view(
-  page : Page,
+  page : State,
   group : FileGroup,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
@@ -325,7 +325,7 @@ fn file_group_view(
 }
 
 ///|
-fn search_message(page : Page) -> @html.Html? {
+fn search_message(page : State) -> @html.Html? {
   match page.phase {
     Failed(code~, message~) => {
       let heading = match code {
@@ -385,7 +385,7 @@ fn search_message(page : Page) -> @html.Html? {
 /// Dispatch the results body to the armed Search engine: ripgrep text rows or
 /// moongrep structural hits, mirroring semgrep's mode split.
 fn search_body(
-  page : Page,
+  page : State,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -397,7 +397,7 @@ fn search_body(
 
 ///|
 fn text_search_body(
-  page : Page,
+  page : State,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -485,7 +485,7 @@ fn semantic_grouped_hits(
 }
 
 ///|
-fn visible_semantic_file_groups(page : Page) -> Array[SemanticFileGroup] {
+fn visible_semantic_file_groups(page : State) -> Array[SemanticFileGroup] {
   let visible : Array[SemanticFileGroup] = []
   let mut remaining = page.visible_lines.max(0)
   for group in semantic_grouped_hits(page.semantic.hits) {
@@ -553,7 +553,7 @@ fn semantic_hit_view(
 
 ///|
 fn semantic_file_group_view(
-  page : Page,
+  page : State,
   group : SemanticFileGroup,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
@@ -593,7 +593,7 @@ fn semantic_file_group_view(
 
 ///|
 fn semantic_search_body(
-  page : Page,
+  page : State,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -664,7 +664,7 @@ fn semantic_search_body(
 
 ///|
 fn page_view(
-  page : Page,
+  page : State,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -788,7 +788,7 @@ pub fn State::explorer_view(
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
   match input.root {
-    Some(_) => page_view(self.page, emit, open_match)
+    Some(_) => page_view(self, emit, open_match)
     None =>
       @html.div(class="workspace-search search-no-workspace", [
         @html.div(class="search-empty-title", "No checkout available"),

@@ -530,14 +530,20 @@ fn DeviceState::with_worktrees(
 }
 
 ///|
-/// Start or invalidate one workspace's list request without disturbing a
-/// sibling workspace's in-flight request.
+/// Start one workspace's list request without disturbing a sibling
+/// workspace's in-flight request.
 fn DeviceState::begin_worktree_request(
   self : DeviceState,
   workspace : @common.Uri,
 ) -> (String, DeviceState) {
   let request_id = @uuid.mint()
-  (request_id, self.with_worktree_request_id(workspace, request_id))
+  (
+    request_id,
+    {
+      ..self,
+      worktree_request_ids: self.worktree_request_ids.put(workspace, request_id),
+    },
+  )
 }
 
 ///|
@@ -547,11 +553,20 @@ fn DeviceState::with_worktree_request_id(
   workspace : @common.Uri,
   request_id : String,
 ) -> DeviceState {
-  let request_ids = self.worktree_request_ids.filter(entry => {
-    entry.0 != workspace
-  })
-  request_ids.push((workspace, request_id))
-  { ..self, worktree_request_ids: request_ids }
+  {
+    ..self,
+    worktree_request_ids: self.worktree_request_ids.put(workspace, request_id),
+  }
+}
+
+///|
+/// Retire the accepted request for one workspace. A delayed reply carrying
+/// its old UUID then fails the same exact-id check without minting a fake id.
+fn DeviceState::retire_worktree_request(
+  self : DeviceState,
+  workspace : @common.Uri,
+) -> DeviceState {
+  { ..self, worktree_request_ids: self.worktree_request_ids.without(workspace) }
 }
 
 ///|
@@ -559,12 +574,7 @@ fn DeviceState::worktree_request_id(
   self : DeviceState,
   workspace : @common.Uri,
 ) -> String? {
-  for entry in self.worktree_request_ids {
-    if entry.0 == workspace {
-      return Some(entry.1)
-    }
-  }
-  None
+  self.worktree_request_ids.get(workspace)
 }
 
 ///|
@@ -1205,6 +1215,7 @@ test "worktrees loaded respects the request UUID fence" {
   assert_true(
     worktree_name_for(applied.dev(), workspace, "desktop-wt") is Some("wt"),
   )
+  assert_true(applied.dev().worktree_request_id(workspace) is None)
   let (_, stale) = update_dev(
     dispatch,
     WorktreesLoaded([], workspace~, request_id=TestWorktreeRequestId),
@@ -1216,7 +1227,7 @@ test "worktrees loaded respects the request UUID fence" {
 }
 
 ///|
-test "a worktree list failure stays unresolved and ignores stale errors" {
+test "a worktree list failure retires its request and retries explicitly" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let unresolved = test_model()
@@ -1240,11 +1251,21 @@ test "a worktree list failure stays unresolved and ignores stale errors" {
   assert_true(failed.conversation_placement(failed.active()) is None)
   assert_eq(failed.notifications.length(), 1)
   assert_true(failed.notifications[0].message.contains("offline"))
-  let retry_request_id = failed.dev().worktree_request_id(workspace).unwrap()
+  assert_true(failed.dev().worktree_request_id(workspace) is None)
+  let (_, stale_loaded) = update_dev(
+    dispatch,
+    WorktreesLoaded([], workspace~, request_id=TestWorktreeRequestId),
+    failed,
+  )
+  assert_true(
+    stale_loaded.conversation_placement(stale_loaded.active()) is None,
+  )
+  let (_, retrying) = update(dispatch, RetryWorktreePlacement, failed)
+  let retry_request_id = retrying.dev().worktree_request_id(workspace).unwrap()
   let (_, loaded) = update_dev(
     dispatch,
     WorktreesLoaded([], workspace~, request_id=retry_request_id),
-    failed,
+    retrying,
   )
   let (_, stale_failure) = update_dev(
     dispatch,
@@ -1345,9 +1366,7 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
   let (_, repeated) = update_dev(dispatch, changed_msg, model)
   let (_, changed) = update_dev(dispatch, changed_msg, model)
   assert_true(changed.quick_open.is_open() == repeated.quick_open.is_open())
-  assert_true(
-    changed.dev().worktree_request_id(workspace) != Some(TestWorktreeRequestId),
-  )
+  assert_true(changed.dev().worktree_request_id(workspace) is None)
   assert_true(worktree_name_for(changed.dev(), workspace, "desktop-wt") is None)
   // The removed worktree's conversation is a plain workspace conversation
   // now — exactly what the host's registry prune did to the mapping — and
@@ -1503,10 +1522,8 @@ test "worktree broadcasts and reconnect snapshots update an open Codex task" {
   let broadcast = WorktreesChanged(rows, workspace~)
   let (_, once) = update_dev(dispatch, broadcast, model)
   let (_, twice) = update_dev(dispatch, broadcast, model)
-  assert_true(once.codex == twice.codex)
-  // Each accepted snapshot retires its request UUID with a freshly minted
-  // one, so compare the durable mirror rather than the intentionally unique
-  // request identity.
+  // Each accepted broadcast starts a real Git read with its own request UUID;
+  // compare the worktree projections below rather than that transient fence.
   assert_true(once.dev().worktrees == twice.dev().worktrees)
   assert_true(once.conversations == twice.conversations)
   assert_true(once.archive_confirm == twice.archive_confirm)
@@ -1530,7 +1547,8 @@ test "worktree broadcasts and reconnect snapshots update an open Codex task" {
   )
   let (_, reconnected_once) = update_dev(dispatch, reconnect, model)
   let (_, reconnected_twice) = update_dev(dispatch, reconnect, model)
-  assert_true(reconnected_once.codex == reconnected_twice.codex)
+  // The reconnect snapshot starts the same real Git read as the broadcast,
+  // again with a distinct transient UUID in each replay.
   assert_true(
     reconnected_once.dev().worktrees == reconnected_twice.dev().worktrees,
   )
@@ -1538,7 +1556,6 @@ test "worktree broadcasts and reconnect snapshots update an open Codex task" {
   assert_true(
     reconnected_once.archive_confirm == reconnected_twice.archive_confirm,
   )
-  assert_true(reconnected_once.codex == once.codex)
   assert_true(
     reconnected_once.codex.active_placement(@interop.ChannelId::Local)
     is Some(@interop.Worktree(name="wt-1", ..)),

@@ -36,23 +36,18 @@ fn CodexThread::has_item_id(
 
 ///|
 /// Create the receipt synchronously before the asynchronous steer command can
-/// emit either a reply or an item notification. `next_steer_submission_id` is
-/// local presentation identity only; it is never sent to app-server.
+/// emit either a reply or an item notification. Queue order is the only local
+/// identity required by the FIFO reconciliation rule below.
 fn State::with_pending_steer(self : State, turn_id : String) -> State {
   guard self.active_thread() is Some(active) else { return self }
   let pending_steers = self.pending_steers.copy()
   pending_steers.push({
-    submission_id: self.next_steer_submission_id,
     turn_id,
     submitted: { task: self.draft, mentions: self.mentions.copy(), },
     known_user_item_ids: active.user_item_ids(turn_id),
     delivery: CodexSteerSending,
   })
-  {
-    ..self,
-    pending_steers,
-    next_steer_submission_id: self.next_steer_submission_id + 1,
-  }
+  { ..self, pending_steers, }
 }
 
 ///|

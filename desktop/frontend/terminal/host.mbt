@@ -416,21 +416,21 @@ pub fn output(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     match term_host.owners.get(id) {
-      Some((owner_channel, key)) if owner_channel == channel =>
-        scheduler.add(term_host.write_to_tab(channel, key, id, sequence, data))
+      Some((owner_channel, key)) =>
+        scheduler.add(
+          term_host.write_to_tab(owner_channel, key, id, sequence, data),
+        )
       None =>
         if term_host.opening_channels.contains(channel) {
-          let chunks = match term_host.pending.get(id) {
-            Some((pending_channel, chunks)) if pending_channel == channel =>
-              chunks
-            _ => []
+          let (pending_channel, chunks) = match term_host.pending.get(id) {
+            Some(pending) => pending
+            None => (channel, [])
           }
           chunks.push((sequence, data))
-          term_host.pending[id] = (channel, chunks)
+          term_host.pending[id] = (pending_channel, chunks)
         } else {
           scheduler.add(TerminalAck::{ channel, id, sequence, }.send())
         }
-      Some(_) => scheduler.add(TerminalAck::{ channel, id, sequence }.send())
     }
   })
 }
@@ -439,16 +439,9 @@ pub fn output(
 /// Flush chunks buffered for `id` into the tab that just claimed it. Every
 /// flushed chunk goes through the normal write path, so each one is
 /// acknowledged as it renders.
-fn flush_pending(
-  channel : @interop.ChannelId,
-  key : String,
-  id : String,
-) -> @cmd.Cmd {
+fn flush_pending(key : String, id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    guard term_host.pending.get(id) is Some((pending_channel, chunks)) &&
-      pending_channel == channel else {
-      return
-    }
+    guard term_host.pending.get(id) is Some((channel, chunks)) else { return }
     term_host.pending.remove(id)
     for chunk in chunks {
       // The accepted Opened transition supplies the key directly; its route
@@ -461,12 +454,9 @@ fn flush_pending(
 ///|
 /// Drop any buffer for a session that ended unclaimed, acknowledging the
 /// bytes so the host's window is released before the session's teardown.
-fn drop_pending(channel : @interop.ChannelId, id : String) -> @cmd.Cmd {
+fn drop_pending(id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    guard term_host.pending.get(id) is Some((pending_channel, chunks)) &&
-      pending_channel == channel else {
-      return
-    }
+    guard term_host.pending.get(id) is Some((channel, chunks)) else { return }
     term_host.pending.remove(id)
     for chunk in chunks {
       scheduler.add(TerminalAck::{ channel, id, sequence: chunk.0, }.send())

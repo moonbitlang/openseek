@@ -37,8 +37,9 @@ pub(all) enum Msg {
   ToggleDetails
   IncludeChanged(String)
   ExcludeChanged(String)
-  RulesDirChanged(String)
-  ToggleBuiltinRules
+  PatternChanged(Int, String)
+  AddPattern
+  RemovePattern(Int)
   Submit
   Refresh
   ClearResults
@@ -50,8 +51,6 @@ pub(all) enum Msg {
   SemanticLoaded(request_id~ : String, reply~ : @protocol.SearchSemanticReply)
   RequestFailed(request_id~ : String, code~ : String, message~ : String)
 }
-
-type Page derive(Eq)
 
 type Phase derive(Eq, @debug.Debug)
 

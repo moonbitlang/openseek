@@ -47,7 +47,7 @@ fn file_request(
           scheduler.add(
             emit(
               match kind {
-                PopulateCache => FileCacheRequestFailed(cache_key~, request_id~)
+                PopulateCache => FileCacheRequestFailed(cache_key~)
                 QueryCache =>
                   FilesRequestFailed(cache_key~, query~, request_id~)
               },
@@ -60,8 +60,7 @@ fn file_request(
         return
       }
       match kind {
-        PopulateCache =>
-          scheduler.add(emit(FileCacheLoaded(cache_key~, request_id~)))
+        PopulateCache => scheduler.add(emit(FileCacheLoaded(cache_key~)))
         QueryCache => {
           let files = reply.files.filter_map(path => {
             if path.is_empty() {

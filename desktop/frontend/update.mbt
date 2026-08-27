@@ -5,14 +5,14 @@ const TranscriptReloadMaxAttempts : Int = 3
 const ArchivedPendingInputNotice : String = "This conversation was archived while a prompt was being sent. The input was restored here; check the archived transcript before resubmitting."
 
 ///|
-/// Stable UUIDs used by package-local reply fixtures.
-const TestWorktreeRequestId = "00000000-0000-8000-8000-000000000014"
+/// Stable readable ids used by package-local reply fixtures.
+const TestWorktreeRequestId = "worktree-request-current"
 
 ///|
-const TestWorkspaceSettingsRequestId = "00000000-0000-8000-8000-000000000015"
+const TestWorkspaceSettingsRequestId = "workspace-settings-request-current"
 
 ///|
-const TestTranscriptRequestId = "00000000-0000-8000-8000-000000000016"
+const TestTranscriptRequestId = "transcript-request-current"
 
 ///|
 /// Build one transcript snapshot request. Foreground loads may
@@ -391,12 +391,9 @@ fn adopt_projects(
   let workspace_settings = dev.workspace_settings.filter(row => {
     paths.contains(row.project)
   })
-  let worktree_request_ids = dev.worktree_request_ids.filter(entry => {
-    paths.contains(entry.0)
-  })
-  let workspace_settings_request_ids = dev.workspace_settings_request_ids.filter(entry => {
-      paths.contains(entry.0)
-    },
+  let worktree_request_ids = dev.worktree_request_ids.retain_workspaces(paths)
+  let workspace_settings_request_ids = dev.workspace_settings_request_ids.retain_workspaces(
+    paths,
   )
   // The old whole-session snapshot can outlive the workspace commit
   // broadcast. Prune it immediately so neither the sidebar nor fallback
@@ -1890,6 +1887,9 @@ fn update_msg(
       // belong to a different device behind the same origin — pushing it is
       // exactly the leak the host-side store removes — so it is purged.
       if model.is_desktop {
+        guard model.focused_device() is Some(dev) else {
+          return (@cmd.none, model)
+        }
         let patch = legacy_settings_patch(
           provider~,
           custom_url~,
@@ -1912,7 +1912,7 @@ fn update_msg(
             dispatch,
             model.focused,
             patch,
-            model.focused_connection_id(),
+            dev.connection_id,
             cleans_legacy=true,
           ),
           next,
@@ -2801,7 +2801,9 @@ fn update_msg(
       (@cmd.none, { ..model, setup_api_key: value, })
     }
     ProviderChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings_loaded() && model.focused_device() is Some(dev) else {
+        return (@cmd.none, model)
+      }
       let provider = ApiProvider::parse(value)
       // The update channel no longer derives from the chat provider (only
       // the hosted chat proxy was retired; self-update and the relay stay
@@ -2811,7 +2813,7 @@ fn update_msg(
         dispatch,
         model.focused,
         provider_settings_patch(provider),
-        model.focused_connection_id(),
+        dev.connection_id,
       )
       let next = {
         ..model,
@@ -2827,13 +2829,15 @@ fn update_msg(
       (push, next.settle_api_setup())
     }
     CustomApiUrlChanged(value) => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings_loaded() && model.focused_device() is Some(dev) else {
+        return (@cmd.none, model)
+      }
       (
         push_host_settings(
           dispatch,
           model.focused,
           custom_url_settings_patch(value),
-          model.focused_connection_id(),
+          dev.connection_id,
         ),
         {
           ..model,
@@ -3234,7 +3238,9 @@ fn update_msg(
       }
     }
     SaveApiKey => {
-      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      guard model.host_settings_loaded() && model.focused_device() is Some(dev) else {
+        return (@cmd.none, model)
+      }
       let api_key = model.setup_api_key.trim().to_owned()
       if api_key.is_empty() {
         (@cmd.none, model)
@@ -3262,7 +3268,7 @@ fn update_msg(
                 dispatch,
                 model.focused,
                 api_key_settings_patch(provider, api_key),
-                model.focused_connection_id(),
+                dev.connection_id,
               ),
               next.settle_api_setup(),
             )
@@ -3769,10 +3775,10 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let worktree_mode = value == "worktree"
-      // Apply optimistically under a fresh UUID, so a slower list reply
-      // cannot roll the page's select back; the commit broadcast lands on a
-      // newer token still. The failure path re-reads the disk state.
-      let (_, next_dev) = dev.begin_workspace_settings_request(workspace)
+      // Apply optimistically after retiring the in-flight read, so a slower
+      // reply cannot roll the page's select back. The failure path re-reads
+      // the disk state under a newly minted request UUID.
+      let next_dev = dev.retire_workspace_settings_request(workspace)
       (
         save_workspace_settings(dispatch, channel, workspace, worktree_mode~),
         model.replace_device(
@@ -3791,9 +3797,9 @@ fn update_msg(
         _ => return (@cmd.none, model)
       }
       // Preserve the workspace's launch mode locally and patch only the
-      // submodule field on disk. The request UUID has the same job as
-      // the launch-mode edit above: an older read cannot undo this choice.
-      let (_, next_dev) = dev.begin_workspace_settings_request(workspace)
+      // submodule field on disk. Retiring its current read prevents that
+      // older reply from undoing this choice.
+      let next_dev = dev.retire_workspace_settings_request(workspace)
       (
         save_workspace_settings(
           dispatch,
@@ -3823,8 +3829,8 @@ fn update_msg(
         _ => return (@cmd.none, model)
       }
       // Patch only the timeout and keep both neighboring workspace choices.
-      // A fresh request UUID prevents an older read undoing this select.
-      let (_, next_dev) = dev.begin_workspace_settings_request(workspace)
+      // No read is accepted until the save either broadcasts or re-fetches.
+      let next_dev = dev.retire_workspace_settings_request(workspace)
       (
         save_workspace_settings(
           dispatch,
@@ -5021,14 +5027,13 @@ fn update_device_msg(
         }
       })
       // A reply carries its request UUID rather than the bridge connection.
-      // Retire every UUID minted on the old connection before clearing the
+      // Remove every request owned by the old connection before clearing the
       // mirrors, so a late reply cannot repopulate either one during resync.
       let mut dev = dev
       for workspace in dev.projects {
-        let (_, next_dev) = dev.begin_worktree_request(workspace)
-        dev = next_dev
-        let (_, next_dev) = dev.begin_workspace_settings_request(workspace)
-        dev = next_dev
+        dev = dev
+          .retire_worktree_request(workspace)
+          .retire_workspace_settings_request(workspace)
       }
       let model = model.replace_device({
         ..dev,
@@ -5572,7 +5577,7 @@ fn update_device_msg(
         dev.workspace_settings_request_id(workspace) == Some(request_id) else {
         return (@cmd.none, model)
       }
-      let (_, next_dev) = dev.begin_workspace_settings_request(workspace)
+      let next_dev = dev.retire_workspace_settings_request(workspace)
       (
         @cmd.none,
         model.replace_device(
@@ -5595,9 +5600,10 @@ fn update_device_msg(
       // (the hub orders them per client, so an attach is always processed
       // before settings broadcasts that follow it).
       guard dev.projects.contains(workspace) else { return (@cmd.none, model) }
-      // Replace this workspace's accepted UUID before adopting the broadcast,
-      // so every older read reply becomes stale without touching siblings.
-      let (_, next_dev) = dev.begin_workspace_settings_request(workspace)
+      // A broadcast completes the workspace's current read frontier. Remove
+      // that accepted UUID so every older reply is stale without touching
+      // sibling workspaces.
+      let next_dev = dev.retire_workspace_settings_request(workspace)
       (
         @cmd.none,
         model.replace_device(
@@ -5635,7 +5641,7 @@ fn update_device_msg(
         dev.worktree_request_id(workspace) == Some(request_id) else {
         return (@cmd.none, model)
       }
-      let (_, next_dev) = dev.begin_worktree_request(workspace)
+      let next_dev = dev.retire_worktree_request(workspace)
       let next_dev = next_dev.with_worktrees(workspace, rows)
       let next = model.replace_device(next_dev)
       // A fresh list can be the first proof that a binding disappeared while
@@ -5671,7 +5677,7 @@ fn update_device_msg(
         dev.worktree_request_id(workspace) == Some(request_id) else {
         return (@cmd.none, model)
       }
-      let (_, next_dev) = dev.begin_worktree_request(workspace)
+      let next_dev = dev.retire_worktree_request(workspace)
       model
       .replace_device(next_dev)
       .notify_error(
@@ -5680,9 +5686,9 @@ fn update_device_msg(
       )
     }
     WorktreesChanged(rows, workspace~) => {
-      // Replace only this workspace's accepted UUID, then adopt the canonical
+      // Retire only this workspace's accepted UUID, then adopt the canonical
       // rows. Older list replies can no longer roll the broadcast back.
-      let (_, next_dev) = dev.begin_worktree_request(workspace)
+      let next_dev = dev.retire_worktree_request(workspace)
       let next_dev = next_dev.with_worktrees(workspace, rows)
       let next = model.replace_device(next_dev)
       // Only an actual registry-row removal unbinds its conversations. Archive
@@ -7422,8 +7428,8 @@ fn test_conversation() -> Conversation {
       "desktop-test",
       @interop.ChannelId::Local.test_project(),
     ),
-    branch_request_id: Some("00000000-0000-8000-8000-000000000001"),
-    pull_request_id: Some("00000000-0000-8000-8000-000000000002"),
+    branch_request_id: Some("branch-request-current"),
+    pull_request_id: Some("pull-request-current"),
   }
 }
 
@@ -7477,20 +7483,19 @@ fn test_model() -> Model {
       {
         ..empty_device_state(@interop.ChannelId::Local),
         bridge: Connected,
-        // Stable UUIDs let reply fixtures name the exact in-flight request.
-        // Tests that need a stale reply derive a different UUID explicitly.
-        sessions_request_id: "00000000-0000-8000-8000-000000000011",
-        archived_request_id: "00000000-0000-8000-8000-000000000012",
-        projects_request_id: "00000000-0000-8000-8000-000000000013",
-        worktree_request_ids: [
+        // Stable labels let reply fixtures name the exact in-flight request.
+        sessions_request_id: "sessions-request-current",
+        archived_request_id: "archived-request-current",
+        projects_request_id: "projects-request-current",
+        worktree_request_ids: WorkspaceRequestIds(values=[
           (@interop.ChannelId::Local.test_project(), TestWorktreeRequestId),
-        ],
-        workspace_settings_request_ids: [
+        ]),
+        workspace_settings_request_ids: WorkspaceRequestIds(values=[
           (
             @interop.ChannelId::Local.test_project(),
             TestWorkspaceSettingsRequestId,
           ),
-        ],
+        ]),
         projects: [@interop.ChannelId::Local.test_project()],
         worktrees: [@interop.ChannelId::Local.test_worktrees()],
       },
@@ -7565,7 +7570,7 @@ fn Model::with_listed(self : Model, ids : Array[String]) -> Model raise {
 ///|
 fn sessions_loaded(
   items : Array[@transcript.SessionListItem],
-  request_id? : String = "00000000-0000-8000-8000-000000000011",
+  request_id? : String = "sessions-request-current",
 ) -> Msg {
   on_home(SessionsLoaded(items, request_id~))
 }
@@ -7662,7 +7667,7 @@ test "the narrow drawer closes when navigation lands elsewhere" {
 ///|
 fn archived_loaded(
   items : Array[@transcript.SessionListItem],
-  request_id? : String = "00000000-0000-8000-8000-000000000012",
+  request_id? : String = "archived-request-current",
 ) -> Msg {
   on_home(
     ArchivedLoaded(
@@ -8959,7 +8964,7 @@ test "a background session list updates only its channel's same-id workspace" {
       {
         ..empty_device_state(remote),
         bridge: Connected,
-        sessions_request_id: "00000000-0000-8000-8000-000000000021",
+        sessions_request_id: "remote-sessions-current",
       },
     ],
     active_session: "shared",
@@ -8979,7 +8984,7 @@ test "a background session list updates only its channel's same-id workspace" {
             updated_at_ms: None,
           },
         ],
-        request_id="00000000-0000-8000-8000-000000000021",
+        request_id="remote-sessions-current",
       ),
     ),
     model,
@@ -9316,17 +9321,23 @@ test "a reconnect retires the file index watcher until placement returns" {
   assert_false(reconnected.file_panel.index is @fileeditor.IndexReady(..))
   // The registry answering does not by itself resurrect them: nothing is
   // watched again until a fresh index is built against the confirmed root.
+  // Bridge readiness first reloads the workspace registry. Only its accepted
+  // reply starts a real per-workspace worktree request; reconnect itself no
+  // longer fabricates request identities merely to invalidate old replies.
+  let root = @interop.ChannelId::Local.test_project()
+  let (_, rediscovered) = update_dev(
+    dispatch,
+    ProjectsLoaded([root], request_id=reconnected.dev().projects_request_id),
+    reconnected,
+  )
   let (_, placed) = update_dev(
     dispatch,
     WorktreesLoaded(
       [],
-      workspace=@interop.ChannelId::Local.test_project(),
-      request_id=reconnected
-        .dev()
-        .worktree_request_id(@interop.ChannelId::Local.test_project())
-        .unwrap(),
+      workspace=root,
+      request_id=rediscovered.dev().worktree_request_id(root).unwrap(),
     ),
-    reconnected,
+    rediscovered,
   )
   assert_true(placed.file_panel.watching is None)
   assert_eq(placed.dev().worktrees.length(), 1)
@@ -13321,7 +13332,7 @@ test "sidebar navigation leaves the settings page" {
 /// A `git.branch` reply for the test conversation.
 fn branch_reply(
   branch : String,
-  request_id? : String = "00000000-0000-8000-8000-000000000001",
+  request_id? : String = "branch-request-current",
   diffstat? : DiffStat,
   base_hint? : String,
 ) -> DeviceMsg {
@@ -13416,7 +13427,7 @@ test "a branch reply lands on its conversation and an empty one hides it" {
   // A reply for an unknown request UUID is dropped.
   let (_, ignored) = update_dev(
     dispatch,
-    branch_reply("main", request_id="00000000-0000-8000-8000-000000000099"),
+    branch_reply("main", request_id="unknown-branch-request"),
     test_model(),
   )
   assert_true(ignored.active().branch is None)
@@ -13487,7 +13498,7 @@ test "a pull-request reply only lands on the branch it was asked about" {
     dispatch,
     pull_request_reply(
       "feature/x",
-      request_id="00000000-0000-8000-8000-000000000099",
+      request_id="stale-pull-request",
       pull_request=answer,
     ),
     probing,
@@ -14374,7 +14385,7 @@ test "delete response tombstones a family before stale list replies" {
   let parent = archived_item("desktop-parent")
   let child = archived_item("desktop-parent-sr-1")
   let other = archived_item("desktop-other")
-  let response_id = "00000000-0000-8000-8000-000000000022"
+  let response_id = "archive-delete-current"
   let model = {
     ..test_model().with_dev(dev => {
       ..dev,
@@ -14442,7 +14453,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
   let dispatch = test_dispatch()
   let deleted_item = archived_item("desktop-recreated")
   let project = @interop.ChannelId::Local.test_resource("/project")
-  let response_id = "00000000-0000-8000-8000-000000000023"
+  let response_id = "archive-recreated-current"
   let model = test_model().with_dev(dev => {
     ..dev,
     archived_request_id: response_id,
@@ -14916,7 +14927,7 @@ test "a background archive removes only its channel's same-id conversation" {
       {
         ..empty_device_state(remote),
         bridge: Connected,
-        archived_request_id: "00000000-0000-8000-8000-000000000024",
+        archived_request_id: "remote-archived-current",
       },
     ],
     active_session: "shared",
@@ -14928,7 +14939,7 @@ test "a background archive removes only its channel's same-id conversation" {
       remote,
       ArchivedLoaded(
         [archived_item("shared", channel=remote)],
-        request_id="00000000-0000-8000-8000-000000000024",
+        request_id="remote-archived-current",
         fresh_session="remote-fresh",
       ),
     ),
@@ -15106,7 +15117,7 @@ test "an older same-connection live list cannot replace a newer reply" {
     updated_at_ms: None,
   }
   let current = { ..old, title: Some("current title") }
-  let current_request_id = "00000000-0000-8000-8000-000000000025"
+  let current_request_id = "sessions-list-current"
   let model = test_model().with_dev(dev => {
     ..dev,
     sessions_request_id: current_request_id,
@@ -15136,7 +15147,7 @@ test "an older same-connection archived list cannot replace a newer reply" {
     updated_at_ms: None,
   }
   let current = { ..old, title: Some("current title") }
-  let current_request_id = "00000000-0000-8000-8000-000000000026"
+  let current_request_id = "archived-list-current"
   let model = test_model().with_dev(dev => {
     ..dev,
     archived_request_id: current_request_id,
@@ -15603,7 +15614,7 @@ test "only synchronous file-open messages suppress panel reactivation" {
   assert_true(
     OpenFileAt(
       owner~,
-      request_id="00000000-0000-8000-8000-000000000043",
+      request_id="open-file-current",
       path="a.mbt",
       line=Some(1),
       column=None,
@@ -17414,7 +17425,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
       session="desktop-test",
       items=[{ kind: User, content: "stale request", ts: None, sequence: None }],
       watermark=9,
-      request_id="00000000-0000-8000-8000-000000000099",
+      request_id="transcript-request-stale",
     ),
     model,
   )

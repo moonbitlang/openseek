@@ -65,7 +65,7 @@ fn fetch_catalog(
 fn fetch_content(
   emit : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  request : Int,
+  request_id : String,
   target : PreviewTarget,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
@@ -89,8 +89,7 @@ fn fetch_content(
               scheduler.add(
                 emit(
                   PreviewFailed(
-                    request~,
-                    target~,
+                    request_id~,
                     message=@interop.bridge_error_text(error),
                   ),
                 ),
@@ -98,7 +97,7 @@ fn fetch_content(
               return
             }
           }
-          scheduler.add(emit(preview_reply(request, target, reply)))
+          scheduler.add(emit(preview_reply(request_id, reply)))
         }
         Installed(item) => {
           let reply = @interop.bridge_request(
@@ -110,8 +109,7 @@ fn fetch_content(
               scheduler.add(
                 emit(
                   PreviewFailed(
-                    request~,
-                    target~,
+                    request_id~,
                     message=@interop.bridge_error_text(error),
                   ),
                 ),
@@ -119,7 +117,7 @@ fn fetch_content(
               return
             }
           }
-          scheduler.add(emit(preview_reply(request, target, reply)))
+          scheduler.add(emit(preview_reply(request_id, reply)))
         }
       }
     })
@@ -127,15 +125,11 @@ fn fetch_content(
 }
 
 ///|
-fn preview_reply(
-  request : Int,
-  target : PreviewTarget,
-  reply : @protocol.ReadFileReply,
-) -> Msg {
+fn preview_reply(request_id : String, reply : @protocol.ReadFileReply) -> Msg {
   match reply {
     @protocol.ReadFileReply::Content(content~, ..) =>
-      PreviewLoaded(request~, target~, content~)
-    _ => PreviewFailed(request~, target~, message="SKILL.md is not readable")
+      PreviewLoaded(request_id~, content~)
+    _ => PreviewFailed(request_id~, message="SKILL.md is not readable")
   }
 }
 
@@ -143,10 +137,10 @@ fn preview_reply(
 fn fetch_installed_content(
   emit : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  request : Int,
+  request_id : String,
   item : InstalledItem,
 ) -> @cmd.Cmd {
-  fetch_content(emit, channel, request, Installed(item))
+  fetch_content(emit, channel, request_id, Installed(item))
 }
 
 ///|

@@ -31,9 +31,9 @@ struct State {
 ///|
 enum Preview {
   Closed
-  Loading(target~ : PreviewTarget, request~ : Int)
-  Ready(target~ : PreviewTarget, request~ : Int, content~ : String)
-  Failed(target~ : PreviewTarget, request~ : Int, message~ : String)
+  Loading(target~ : PreviewTarget, request_id~ : String)
+  Ready(target~ : PreviewTarget, content~ : String)
+  Failed(target~ : PreviewTarget, message~ : String)
 } derive(Eq)
 
 ///|
@@ -72,8 +72,8 @@ pub(all) enum Msg {
   ActionDone(channel~ : @interop.ChannelId, key~ : String, error~ : String)
   PreviewMarket(MarketItem)
   PreviewInstalled(InstalledItem)
-  PreviewLoaded(request~ : Int, target~ : PreviewTarget, content~ : String)
-  PreviewFailed(request~ : Int, target~ : PreviewTarget, message~ : String)
+  PreviewLoaded(request_id~ : String, content~ : String)
+  PreviewFailed(request_id~ : String, message~ : String)
   BackToList
   SkillsScrolled(Double)
 }
@@ -126,16 +126,12 @@ pub fn State::handle(
       let target = preview_target_for_market(input.installed, item)
       match self.preview_cache.get(preview_cache_key(target)) {
         Some(content) =>
-          (
-            @cmd.none,
-            { ..self, preview: Ready(target~, request=0, content~), },
-            None,
-          )
+          (@cmd.none, { ..self, preview: Ready(target~, content~) }, None)
         None => {
-          let request = preview_request_id(self.preview) + 1
+          let request_id = @uuid.mint()
           (
-            fetch_content(emit, input.channel, request, target),
-            { ..self, preview: Loading(target~, request~), },
+            fetch_content(emit, input.channel, request_id, target),
+            { ..self, preview: Loading(target~, request_id~) },
             None,
           )
         }
@@ -145,50 +141,36 @@ pub fn State::handle(
       let target = Installed(item)
       match self.preview_cache.get(preview_cache_key(target)) {
         Some(content) =>
-          (
-            @cmd.none,
-            { ..self, preview: Ready(target~, request=0, content~), },
-            None,
-          )
+          (@cmd.none, { ..self, preview: Ready(target~, content~) }, None)
         None => {
-          let request = preview_request_id(self.preview) + 1
+          let request_id = @uuid.mint()
           (
-            fetch_installed_content(emit, input.channel, request, item),
-            { ..self, preview: Loading(target~, request~), },
+            fetch_installed_content(emit, input.channel, request_id, item),
+            { ..self, preview: Loading(target~, request_id~) },
             None,
           )
         }
       }
     }
-    PreviewLoaded(request~, target~, content~) => {
-      guard self.preview is Loading(request=current, target=current_target) &&
-        current == request &&
-        current_target == target else {
+    PreviewLoaded(request_id~, content~) => {
+      guard self.preview is Loading(request_id=current, target~) &&
+        current == request_id else {
         return (@cmd.none, self, None)
       }
       let cache = self.preview_cache.copy()
       cache[preview_cache_key(target)] = content
       (
         @cmd.none,
-        {
-          ..self,
-          preview: Ready(target~, request~, content~),
-          preview_cache: cache,
-        },
+        { ..self, preview: Ready(target~, content~), preview_cache: cache },
         None,
       )
     }
-    PreviewFailed(request~, target~, message~) => {
-      guard self.preview is Loading(request=current, target=current_target) &&
-        current == request &&
-        current_target == target else {
+    PreviewFailed(request_id~, message~) => {
+      guard self.preview is Loading(request_id=current, target~) &&
+        current == request_id else {
         return (@cmd.none, self, None)
       }
-      (
-        @cmd.none,
-        { ..self, preview: Failed(target~, request~, message~), },
-        None,
-      )
+      (@cmd.none, { ..self, preview: Failed(target~, message~) }, None)
     }
     BackToList =>
       (
@@ -265,15 +247,6 @@ pub fn State::handle(
         (@cmd.none, { ..self, busy, notice: error, }, None)
       }
     }
-  }
-}
-
-///|
-fn preview_request_id(preview : Preview) -> Int {
-  match preview {
-    Closed => 0
-    Loading(request~, ..) | Ready(request~, ..) | Failed(request~, ..) =>
-      request
   }
 }
 

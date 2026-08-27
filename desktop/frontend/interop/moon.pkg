@@ -6,7 +6,6 @@ import {
   "moonbitlang/editor/base/common",
   "openseek_desktop/internal/commands",
   "openseek_desktop/internal/protocol",
-  "openseek_desktop/internal/uuid/browser" @uuid,
 }
 
 supported_targets = "js"

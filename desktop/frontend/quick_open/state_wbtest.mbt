@@ -168,10 +168,7 @@ test "file Quick Open populates a cache session before adopting ranked rows" {
   assert_eq(loading.items.map(item => item.detail()), [
     "src/active.mbt", "src/open.mbt",
   ])
-  let populated = opened.step(
-    FileCacheLoaded(cache_key~, request_id=loading.request_id),
-    input,
-  )
+  let populated = opened.step(FileCacheLoaded(cache_key~), input)
   assert_eq(populated.cache.active_key, Some(cache_key))
   assert_true(populated.cache.loading_key is None)
   let indexed = populated.step(
@@ -203,14 +200,11 @@ test "file Quick Open populates a cache session before adopting ranked rows" {
 test "an initial file cache failure is visible and retryable" {
   let input = test_input(root=test_uri("/work/proj"))
   let opened = State::empty().begin(input, Files)
-  guard opened.open is Some(initial) else { fail("palette expected") }
+  guard opened.open is Some(_) else { fail("palette expected") }
   guard opened.cache.loading_key is Some(cache_key) else {
     fail("cache load expected")
   }
-  let failed = opened.step(
-    FileCacheRequestFailed(cache_key~, request_id=initial.request_id),
-    input,
-  )
+  let failed = opened.step(FileCacheRequestFailed(cache_key~), input)
   guard failed.open is Some(failure) else { fail("palette expected") }
   assert_true(failure.phase is Failed)
   assert_true(failed.cache.active_key is None)
@@ -274,7 +268,7 @@ test "file cache keeps the previous key until replacement succeeds" {
     "src/main.mbt", "README.md",
   ])
   let refresh_failed = cached.step(
-    FileCacheRequestFailed(cache_key=replacement, request_id=ready.request_id),
+    FileCacheRequestFailed(cache_key=replacement),
     input,
   )
   guard refresh_failed.open is Some(still_ready) else {

@@ -10,13 +10,13 @@ test "a listing keeps its raw protocol path" {
   assert_true(
     reply_message(
       @protocol.Listing(path="/C:/project", parent=Some("/C:/"), entries=[]),
-      request_id="00000000-0000-8000-8000-000000000007",
+      request_id="listing-request",
       drives=true,
     )
     is Loaded(
       location=Directory("/C:/project"),
       entries=[],
-      request_id="00000000-0000-8000-8000-000000000007"
+      request_id="listing-request"
     ),
   )
 }
@@ -83,7 +83,7 @@ test "a listing for another request UUID is dropped" {
     Msg::Loaded(
       location=Location::Directory("/from-b"),
       entries=["wrong"],
-      request_id="00000000-0000-8000-8000-000000000099",
+      request_id="foreign-listing",
     ),
   )
   guard foreign is Some(picker) else {

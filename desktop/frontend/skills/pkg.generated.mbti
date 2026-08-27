@@ -59,8 +59,8 @@ pub(all) enum Msg {
   ActionDone(channel~ : @interop.ChannelId, key~ : String, error~ : String)
   PreviewMarket(MarketItem)
   PreviewInstalled(InstalledItem)
-  PreviewLoaded(request~ : Int, target~ : PreviewTarget, content~ : String)
-  PreviewFailed(request~ : Int, target~ : PreviewTarget, message~ : String)
+  PreviewLoaded(request_id~ : String, content~ : String)
+  PreviewFailed(request_id~ : String, message~ : String)
   BackToList
   SkillsScrolled(Double)
 }
@@ -72,12 +72,7 @@ pub fn Outcome::equal(Self, Self) -> Bool
 pub fn Outcome::not_equal(Self, Self) -> Bool
 
 type Preview derive(Eq)
-pub fn Preview::equal(Self, Self) -> Bool
-pub fn Preview::not_equal(Self, Self) -> Bool
-
 type PreviewTarget derive(Eq)
-pub fn PreviewTarget::equal(Self, Self) -> Bool
-pub fn PreviewTarget::not_equal(Self, Self) -> Bool
 
 type State derive(Eq)
 pub fn State::empty() -> Self

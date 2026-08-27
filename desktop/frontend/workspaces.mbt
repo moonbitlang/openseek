@@ -369,7 +369,7 @@ test "an older workspace reply cannot replace a newer same-connection reply" {
   let dispatch = test_dispatch()
   let current = @interop.ChannelId::Local.test_resource("/current")
   let old = @interop.ChannelId::Local.test_resource("/old")
-  let current_request_id = "00000000-0000-8000-8000-000000000031"
+  let current_request_id = "projects-current-reply"
   let model = test_model().with_dev(dev => {
     ..dev,
     projects_request_id: current_request_id,
@@ -399,7 +399,7 @@ test "a workspace commit broadcast supersedes list replies and refreshes session
   let dispatch = test_dispatch()
   let current = @interop.ChannelId::Local.test_resource("/current")
   let new_ = @interop.ChannelId::Local.test_resource("/new")
-  let current_request_id = "00000000-0000-8000-8000-000000000032"
+  let current_request_id = "projects-before-broadcast"
   let model = test_model().with_dev(dev => {
     ..dev,
     projects: [current],

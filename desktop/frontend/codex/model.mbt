@@ -273,7 +273,6 @@ priv struct CodexPendingRequest {
 /// canonical item is observed under the single-client FIFO rule documented in
 /// `State::with_observed_steer_item`.
 priv struct CodexSteerReceipt {
-  submission_id : Int
   turn_id : String
   submitted : @composer.Draft
   known_user_item_ids : Array[String]
@@ -378,12 +377,7 @@ enum Msg {
   ChoosePermission(@protocol.CodexPermissionMode)
   ConfirmFullAccess
   CancelFullAccess
-  GitLoaded(
-    thread_id~ : String,
-    generation~ : Int,
-    requested_cwd~ : String,
-    reply~ : @protocol.GitPullRequestReply
-  )
+  GitLoaded(request_id~ : String, reply~ : @protocol.GitPullRequestReply)
   // The native worktree registry has bound this exact task id to one checkout.
   // This is independent of app-server's settings stream: every frontend sees
   // the same host commit even though only the creator receives its RPC reply.
@@ -597,10 +591,10 @@ struct State {
   // the same id, so an older request can never replace a newer selection.
   requested_thread : String?
   git_status : CodexGitStatus?
-  // Every live Git lookup carries the number minted here. The counter belongs
-  // to the Codex page rather than a thread or checkout because either can be
-  // replaced while an older request is still in flight.
-  git_request_generation : Int
+  // The globally unique id of the accepted Git lookup. A checkout change
+  // replaces it, so a late reply needs no echoed thread or cwd to prove which
+  // selected task owns it.
+  git_request_id : String?
   git_details_open : Bool
   draft : String
   mentions : Array[@composer.Mention]
@@ -614,7 +608,6 @@ struct State {
   // turn items because app-server does not return the new user item id from
   // `turn/steer`.
   pending_steers : Array[CodexSteerReceipt]
-  next_steer_submission_id : Int
   // The shared component advances only after app-server accepts a submission.
   // Failed sends therefore keep the local draft.
   submission_sequence : Int
@@ -654,13 +647,12 @@ pub fn State::State(loading? : Bool = false) -> State {
     selection: CodexNoTask,
     requested_thread: None,
     git_status: None,
-    git_request_generation: 0,
+    git_request_id: None,
     git_details_open: false,
     draft: "",
     mentions: [],
     submitted_first_prompt: None,
     pending_steers: [],
-    next_steer_submission_id: 1,
     submission_sequence: 0,
     skills: CodexSkillsEmpty,
     placement: @composer.LocalCheckout,
@@ -1876,21 +1868,17 @@ fn State::with_worktree_change(
 /// answer falls back to app-server's creation-time label.
 fn State::with_git_reply(
   self : State,
-  thread_id : String,
-  generation : Int,
-  requested_cwd : String,
+  request_id : String,
   reply : @protocol.GitPullRequestReply,
 ) -> State {
   guard self.active_thread() is Some(active) &&
-    active.id == thread_id &&
-    generation == self.git_request_generation &&
-    active.cwd == Some(requested_cwd) else {
+    self.git_request_id == Some(request_id) else {
     return self
   }
   {
     ..self,
     git_status: Some({
-      thread_id,
+      thread_id: active.id,
       branch: match reply.branch {
         Some(branch) => Some(branch)
         None => active.branch
@@ -3166,15 +3154,16 @@ test "Codex Git status starts from app-server and accepts current checkout" {
     },
     CodexImportedSnapshot,
   )
+  let state = { ..state, git_request_id: Some("git-request-current") }
   assert_eq(state.new_thread_cwd(), "/workspace/project")
   assert_eq(state.git_status.unwrap().branch, Some("captured-branch"))
-  let refreshed = state.with_git_reply("thread-1", 0, "/worktrees/a/project", {
+  let refreshed = state.with_git_reply("git-request-current", {
     pull_request: None,
     compare_url: None,
     branch: Some("current-branch"),
   })
   assert_eq(refreshed.git_status.unwrap().branch, Some("current-branch"))
-  let empty = state.with_git_reply("thread-1", 0, "/worktrees/a/project", {
+  let empty = state.with_git_reply("git-request-current", {
     pull_request: None,
     compare_url: None,
     branch: None,
