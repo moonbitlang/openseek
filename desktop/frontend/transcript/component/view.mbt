@@ -21,7 +21,6 @@ fn activity_view(
   items : Array[@transcript.TranscriptItem],
   on_open : (String) -> @cmd.Cmd,
   live_reasoning? : String,
-  reasoning_complete? : Bool = false,
   step_label? : String = "",
   subrun? : SubrunLink,
 ) -> @html.Html {
@@ -110,31 +109,15 @@ fn activity_view(
     }
   }
   if live_reasoning is Some(content) {
-    let prose = if reasoning_complete {
-      // The semantic completion supplies one whole document, so Markdown is
-      // safe and cheap now. The durable item will take over the same card.
-      @html.div(
-        class="msg-content markdown activity-thinking",
-        @markdown.markdown_nodes(content, open_file=on_open),
-      )
-    } else {
-      // Do not parse an unfinished Markdown document on every provider token.
-      // Newlines are preserved by CSS while fragments are still arriving.
-      @html.div(
-        class="msg-content activity-thinking activity-thinking-live",
-        @html.text(content),
-      )
-    }
+    // Do not parse an unfinished Markdown document on every provider token.
+    // Newlines are preserved by CSS while fragments are still arriving. The
+    // semantic finish deletes this preview; only the durable row uses Markdown.
+    let prose = @html.div(
+      class="msg-content activity-thinking activity-thinking-live",
+      @html.text(content),
+    )
     rows.push(
-      thought_fold(
-        if reasoning_complete {
-          "Thought"
-        } else {
-          "Thinking…"
-        },
-        prose,
-        true,
-      ),
+      thought_fold("Thinking…", prose, true),
     )
   }
   @html.div(class="activity-row", rows)
@@ -895,6 +878,7 @@ fn streaming_response_view(
 ///|
 fn transcript_view(
   input : Input,
+  live_reasoning? : String,
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
@@ -905,6 +889,7 @@ fn transcript_view(
 ) -> @html.Html {
   let renderer : TranscriptRenderer = {
     input,
+    live_reasoning,
     on_open,
     on_jump,
     on_open_session,

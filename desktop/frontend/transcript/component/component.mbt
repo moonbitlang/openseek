@@ -47,12 +47,16 @@ pub fn VisibleRow::history(
 
 ///|
 /// The conversation data rendered by the component. The application computes
-/// durable chronology and active-run ownership; this package owns only the
-/// transcript subtree and its scroll behavior.
+/// durable chronology and active-run ownership; this package owns the live
+/// reasoning preview, transcript subtree, and scroll behavior.
 struct Input {
   source : Source
   focused : @interop.ChannelId
   active_session : String
+  // The open engine run whose live reasoning this transcript may render.
+  // Durable rows need no run id; this identity only keeps concurrent live
+  // previews on separate conversations from replacing one another.
+  active_run_id : String?
   // The concrete project or worktree root sent alongside relative Markdown
   // image paths so the owning host, rather than the frontend, resolves them.
   root : @common.Uri?
@@ -62,10 +66,6 @@ struct Input {
   // when nothing is streaming. It is deliberately not a `VisibleRow`: the
   // rows are the durable record and this is not durable yet.
   streaming_response : String?
-  // Live reasoning is likewise provisional. It is plain text until complete;
-  // the durable reasoning row replaces it and renders Markdown once.
-  streaming_reasoning : String?
-  reasoning_complete : Bool
   streaming_identity : String
 } derive(Eq)
 
@@ -74,26 +74,179 @@ pub fn Input::Input(
   source~ : Source,
   focused~ : @interop.ChannelId,
   active_session~ : String,
+  active_run_id? : String,
   root~ : @common.Uri?,
   submission_generation~ : Int,
   items~ : Array[VisibleRow],
   streaming_response~ : String?,
-  streaming_reasoning? : String,
-  reasoning_complete? : Bool = false,
   streaming_identity~ : String,
 ) -> Input {
   {
     source,
     focused,
     active_session,
+    active_run_id,
     root,
     submission_generation,
     items,
     streaming_response,
-    streaming_reasoning,
-    reasoning_complete,
     streaming_identity,
   }
+}
+
+///|
+/// One live reasoning stream's exact owner. Session ids are scoped by their
+/// device channel, and separate runs of one session must never share text.
+priv struct LiveReasoningKey {
+  channel : @interop.ChannelId
+  session : String
+  run_id : String?
+} derive(Eq)
+
+///|
+fn LiveReasoningKey::matches_input(
+  self : LiveReasoningKey,
+  input : Input,
+) -> Bool {
+  input.source is OpenSeek &&
+  self.channel == input.focused &&
+  self.session == input.active_session &&
+  self.run_id == input.active_run_id
+}
+
+///|
+priv struct LiveReasoningPreview {
+  key : LiveReasoningKey
+  content : String
+} derive(Eq)
+
+///|
+/// Component-owned previews for every concurrently running conversation.
+/// The persistent vector makes each update a new value, so a background run
+/// cannot mutate a state snapshot currently being rendered for the foreground.
+priv struct LiveReasoningState(
+  @vector.Vector[LiveReasoningPreview]
+) derive(Eq)
+
+///|
+priv enum LiveReasoningMsg {
+  Delta(LiveReasoningKey, String)
+  Finished(LiveReasoningKey)
+  RunFinished(@interop.ChannelId, String)
+  ChannelReset(@interop.ChannelId)
+}
+
+///|
+fn LiveReasoningState::update(
+  self : LiveReasoningState,
+  msg : LiveReasoningMsg,
+) -> LiveReasoningState {
+  match msg {
+    Delta(key, content) => {
+      if content.is_empty() {
+        return self
+      }
+      for index in 0..<self.0.length() {
+        if self.0[index].key == key {
+          return LiveReasoningState(
+            self.0.set(index, {
+              key,
+              content: self.0[index].content + content,
+            }),
+          )
+        }
+      }
+      LiveReasoningState(self.0.push({ key, content }))
+    }
+    Finished(key) =>
+      LiveReasoningState(self.0.filter(preview => preview.key != key))
+    RunFinished(channel, run_id) =>
+      LiveReasoningState(
+        self.0.filter(preview =>
+          preview.key.channel != channel ||
+          preview.key.run_id != Some(run_id)
+        ),
+      )
+    ChannelReset(channel) =>
+      LiveReasoningState(
+        self.0.filter(preview => preview.key.channel != channel),
+      )
+  }
+}
+
+///|
+fn LiveReasoningState::content_for(
+  self : LiveReasoningState,
+  input : Input,
+) -> String? {
+  for preview in self.0 {
+    if preview.key.matches_input(input) {
+      return Some(preview.content)
+    }
+  }
+  None
+}
+
+///|
+/// The transcript component's live-reasoning controller. It is constructed
+/// beside the root Rabbita state so bridge notifications can target this
+/// component without storing an emitter or callback in the application model.
+struct LiveReasoning {
+  state : @rabbita.Val[LiveReasoningState]
+  emit : @cmd.Emit[LiveReasoningMsg]
+}
+
+///|
+pub fn LiveReasoning::LiveReasoning() -> LiveReasoning {
+  let (state, emit) = @rabbita.create_pure_state(
+    LiveReasoningState(@vector.new()),
+    update=(state, msg) => state.update(msg),
+  )
+  { state, emit }
+}
+
+///|
+/// Append one ordered provider fragment to its conversation's preview.
+pub fn LiveReasoning::delta(
+  self : LiveReasoning,
+  channel~ : @interop.ChannelId,
+  session~ : String,
+  run_id~ : String?,
+  content~ : String,
+) -> @cmd.Cmd {
+  (self.emit)(Delta({ channel, session, run_id }, content))
+}
+
+///|
+/// The full semantic reasoning event closes the preview unconditionally.
+/// Its durable Assistant commit, whenever observed, is the only history row.
+pub fn LiveReasoning::finish(
+  self : LiveReasoning,
+  channel~ : @interop.ChannelId,
+  session~ : String,
+  run_id~ : String?,
+) -> @cmd.Cmd {
+  (self.emit)(Finished({ channel, session, run_id }))
+}
+
+///|
+/// Clear an abnormally closed run even when no semantic finish was emitted.
+pub fn LiveReasoning::finish_run(
+  self : LiveReasoning,
+  channel~ : @interop.ChannelId,
+  run_id~ : String,
+) -> @cmd.Cmd {
+  (self.emit)(RunFinished(channel, run_id))
+}
+
+///|
+/// A transport restart cannot replay live fragments, so discard that
+/// channel's previews and let durable session snapshots restore history.
+pub fn LiveReasoning::reset_channel(
+  self : LiveReasoning,
+  channel : @interop.ChannelId,
+) -> @cmd.Cmd {
+  (self.emit)(ChannelReset(channel))
 }
 
 ///|
@@ -237,6 +390,7 @@ fn Model::update(
 /// Build the transcript state and return its independently updating Html.
 pub fn component(
   input : @rabbita.Val[Input],
+  live_reasoning : LiveReasoning,
   actions : Actions,
 ) -> @rabbita.Val[@html.Html] {
   let (state, emit) = @rabbita.create_state_with_input(
@@ -260,9 +414,10 @@ pub fn component(
     update=(state, input, msg, emit) => state.update(input, msg, emit),
     subscriptions=(_, _, emit) => transcript_subscription(emit),
   )
-  state.view2(input, (state, input) => {
+  state.view3(input, live_reasoning.state, (state, input, live_state) => {
     transcript_view(
       input,
+      live_reasoning?=live_state.content_for(input),
       pinned=state.pinned,
       overview=state.overview,
       overview_emit=emit.map(msg => Overview(msg)),
@@ -779,6 +934,102 @@ test "a conversation switch clears component-owned overview state" {
   assert_true(remounted.pinned)
   @debug.assert_eq(remounted.overview.hover, None)
   @debug.assert_eq(remounted.overview.active, None)
+}
+
+///|
+test "live reasoning appends by owner and semantic finish deletes it" {
+  let key : LiveReasoningKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-test",
+    run_id: Some("r7"),
+  }
+  let input = Input(
+    source=OpenSeek,
+    focused=@interop.ChannelId::Local,
+    active_session="desktop-test",
+    active_run_id="r7",
+    root=None,
+    submission_generation=0,
+    items=[],
+    streaming_response=None,
+    streaming_identity="r7",
+  )
+  let empty = LiveReasoningState(@vector.new())
+  let first = empty.update(Delta(key, "think"))
+  let live = first.update(Delta(key, "ing"))
+  assert_eq(live.content_for(input), Some("thinking"))
+
+  // The full reasoning event is a semantic boundary, not a durable commit.
+  // Removing the preview here makes both commit-first and finish-first delivery
+  // converge without comparing the reasoning text with transcript history.
+  let finished = live.update(Finished(key))
+  assert_eq(finished.content_for(input), None)
+
+  // Updating the same immutable snapshot twice must produce the same result;
+  // an emitter may replay a state transition while scheduling a render.
+  assert_true(
+    empty.update(Delta(key, "think")) ==
+    empty.update(Delta(key, "think")),
+  )
+}
+
+///|
+test "live reasoning keeps concurrent conversations and runs isolated" {
+  let local_r7 : LiveReasoningKey = {
+    channel: @interop.ChannelId::Local,
+    session: "shared",
+    run_id: Some("r7"),
+  }
+  let local_r8 : LiveReasoningKey = {
+    channel: @interop.ChannelId::Local,
+    session: "shared",
+    run_id: Some("r8"),
+  }
+  let remote_r7 : LiveReasoningKey = {
+    channel: @interop.ChannelId::Remote("device-b"),
+    session: "shared",
+    run_id: Some("r7"),
+  }
+  let state = LiveReasoningState(@vector.new())
+    .update(Delta(local_r7, "local-old"))
+    .update(Delta(local_r8, "local-current"))
+    .update(Delta(remote_r7, "remote"))
+  let local_input = Input(
+    source=OpenSeek,
+    focused=@interop.ChannelId::Local,
+    active_session="shared",
+    active_run_id="r8",
+    root=None,
+    submission_generation=0,
+    items=[],
+    streaming_response=None,
+    streaming_identity="r8",
+  )
+  let remote_input = Input(
+    source=OpenSeek,
+    focused=@interop.ChannelId::Remote("device-b"),
+    active_session="shared",
+    active_run_id="r7",
+    root=None,
+    submission_generation=0,
+    items=[],
+    streaming_response=None,
+    streaming_identity="r7",
+  )
+  assert_eq(state.content_for(local_input), Some("local-current"))
+  assert_eq(state.content_for(remote_input), Some("remote"))
+
+  let after_run = state.update(
+    RunFinished(@interop.ChannelId::Local, "r7"),
+  )
+  assert_eq(after_run.content_for(local_input), Some("local-current"))
+  assert_eq(after_run.content_for(remote_input), Some("remote"))
+
+  let after_channel = after_run.update(
+    ChannelReset(@interop.ChannelId::Remote("device-b")),
+  )
+  assert_eq(after_channel.content_for(local_input), Some("local-current"))
+  assert_eq(after_channel.content_for(remote_input), None)
 }
 
 ///|

@@ -12,7 +12,7 @@ import {
 }
 
 // Values
-pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
+pub fn component(@rabbita.Val[Input], LiveReasoning, Actions) -> @rabbita.Val[@html.Html]
 
 // Errors
 
@@ -24,9 +24,16 @@ pub(all) struct Actions {
 }
 
 type Input derive(Eq)
-pub fn Input::Input(source~ : Source, focused~ : @interop.ChannelId, active_session~ : String, root~ : @common.Uri?, submission_generation~ : Int, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
+pub fn Input::Input(source~ : Source, focused~ : @interop.ChannelId, active_session~ : String, active_run_id? : String, root~ : @common.Uri?, submission_generation~ : Int, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_identity~ : String) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
+
+type LiveReasoning
+pub fn LiveReasoning::LiveReasoning() -> Self
+pub fn LiveReasoning::delta(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?, content~ : String) -> @cmd.Cmd
+pub fn LiveReasoning::finish(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?) -> @cmd.Cmd
+pub fn LiveReasoning::finish_run(Self, channel~ : @interop.ChannelId, run_id~ : String) -> @cmd.Cmd
+pub fn LiveReasoning::reset_channel(Self, @interop.ChannelId) -> @cmd.Cmd
 
 pub(all) enum Source {
   OpenSeek

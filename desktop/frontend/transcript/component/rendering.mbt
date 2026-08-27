@@ -102,6 +102,9 @@ fn TranscriptSectionKey::jump_latest() -> TranscriptSectionKey {
 /// a child by key while moving, inserting, or removing its siblings.
 priv struct TranscriptRenderer {
   input : Input
+  // Present only while the component-owned reasoning stream is open. A
+  // completed preview is deleted, so durable rows need no content matching.
+  live_reasoning : String?
   on_open : (String) -> @cmd.Cmd
   on_jump : (@mention_context.Target) -> @cmd.Cmd
   on_open_session : (String) -> @cmd.Cmd
@@ -176,7 +179,7 @@ fn TranscriptRenderer::stream_children(
   // grouping pass. Live semantic events never synthesize durable-looking
   // items here; their store commits populate the transcript.
   if visible.is_empty() &&
-    self.input.streaming_reasoning is None &&
+    self.live_reasoning is None &&
     self.input.streaming_response is None {
     items.set(
       TranscriptRenderKey::empty().wire(),
@@ -279,18 +282,17 @@ fn TranscriptRenderer::stream_children(
       left_boundary = Some(visible[index - 1].identity)
     }
   }
-  // Durable commits are untagged and cannot prove ownership of an in-flight
-  // preview. Keep ambiguous live reasoning visible as a provisional next step;
-  // `Conversation::reasoning_for_render` suppresses only an exact, completed
-  // duplicate after it has durably committed.
-  if self.input.streaming_reasoning is Some(reasoning) {
+  // The preview exists only while its ordered `reasoning_delta` stream is
+  // open. A commit may therefore make this temporarily duplicate a durable
+  // card, or a semantic finish may remove it briefly before the commit lands;
+  // either order converges to the durable transcript without correlation.
+  if self.live_reasoning is Some(reasoning) {
     items.set(
       TranscriptRenderKey::activity_after(left_boundary).wire(),
       activity_view(
         [],
         self.on_open,
         live_reasoning=reasoning,
-        reasoning_complete=self.input.reasoning_complete,
         step_label=if self.input.source is OpenSeek {
           "#\{step_ordinals.length() + 1}"
         } else {
