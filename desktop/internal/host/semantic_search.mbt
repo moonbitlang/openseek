@@ -318,14 +318,66 @@ fn semantic_search_args(
       args.append(["--pattern", pattern])
     }
   }
-  for entry in payload.exclude_glob.split(",") {
-    let dir = entry.trim().to_owned()
-    if !dir.is_empty() {
-      args.append(["--exclude-dir", dir])
-    }
-  }
   args.append(["--output-json"])
   args
+}
+
+///|
+fn semantic_glob_matches(pattern : String, path : String) -> Bool {
+  let pattern = pattern.to_array()
+  let path = path.to_array()
+  fn matches(
+    pattern : Array[Char],
+    path : Array[Char],
+    pi : Int,
+    si : Int,
+  ) -> Bool {
+    if pi == pattern.length() {
+      return si == path.length()
+    }
+    if pattern[pi] == '*' {
+      let double = pi + 1 < pattern.length() && pattern[pi + 1] == '*'
+      if double && matches(pattern, path, pi + 2, si) {
+        return true
+      }
+      if matches(pattern, path, pi + 1, si) {
+        return true
+      }
+      return si < path.length() &&
+        (double || path[si] != '/') &&
+        matches(pattern, path, pi, si + 1)
+    }
+    if si == path.length() {
+      return false
+    }
+    (pattern[pi] == '?' || pattern[pi] == path[si]) &&
+    matches(pattern, path, pi + 1, si + 1)
+  }
+  matches(pattern, path, 0, 0)
+}
+
+///|
+fn semantic_path_matches_globs(path : String, value : String) -> Bool {
+  for glob in expand_text_search_view_globs(value) {
+    for expanded in expand_text_search_braces(glob) {
+      if semantic_glob_matches(expanded, path) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
+fn semantic_path_is_included(
+  path : String,
+  payload : SearchSemanticPayload,
+) -> Bool {
+  (
+    payload.include_glob.is_empty() ||
+    semantic_path_matches_globs(path, payload.include_glob)
+  ) &&
+  !semantic_path_matches_globs(path, payload.exclude_glob)
 }
 
 ///|
@@ -628,6 +680,7 @@ async fn run_semantic_search(
         }
         continue
       }
+      guard semantic_path_is_included(parsed.path, payload) else { continue }
       if match_count >= max_results {
         limit_hit = true
         process.cancel()
@@ -733,13 +786,18 @@ test "semantic search builds moonx and bundled moongrep invocations" {
   let pattern : SearchSemanticPayload = {
     root: "/work",
     patterns: ["inspect($(x:arg))"],
+    include_glob: "",
     exclude_glob: "",
     session_key: "sem:one",
     generation: 1,
     max_results: 20000,
   }
   assert_eq(semantic_search_args("moonx", pattern), [
-    MoongrepPackageCoordinate, "--", "scan", "--pattern", "inspect($(x:arg))",
+    MoongrepPackageCoordinate,
+    "--",
+    "scan",
+    "--pattern",
+    "inspect($(x:arg))",
     "--output-json",
   ])
   let second_pattern : SearchSemanticPayload = {
@@ -749,6 +807,22 @@ test "semantic search builds moonx and bundled moongrep invocations" {
   assert_eq(semantic_search_args("/opt/bin/moongrep", second_pattern), [
     "scan", "--pattern", "match($x)", "--output-json",
   ])
+}
+
+///|
+test "semantic path globs filter include and exclude results" {
+  let payload : SearchSemanticPayload = {
+    root: "/work",
+    patterns: ["foo()"],
+    include_glob: "src/**",
+    exclude_glob: "src/generated/**",
+    session_key: "sem:glob",
+    generation: 1,
+    max_results: 20000,
+  }
+  assert_true(semantic_path_is_included("src/main.mbt", payload))
+  assert_false(semantic_path_is_included("tests/main.mbt", payload))
+  assert_false(semantic_path_is_included("src/generated/main.mbt", payload))
 }
 
 ///|
@@ -791,6 +865,7 @@ async test "semantic search argument validation requires a rule source" {
   let payload : SearchSemanticPayload = {
     root: resource_root,
     patterns: [],
+    include_glob: "",
     exclude_glob: "",
     session_key: "sem:none",
     generation: 1,
@@ -814,6 +889,7 @@ async test "cancel-before-semantic-search frontier rejects the stale generation"
     let payload : SearchSemanticPayload = {
       root: resource_root,
       patterns: ["foo()"],
+      include_glob: "",
       exclude_glob: "",
       session_key: "sem:stale",
       generation: 7,

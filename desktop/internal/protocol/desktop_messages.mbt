@@ -430,6 +430,7 @@ pub(all) struct CancelSearchTextPayload {
 pub(all) struct SearchSemanticPayload {
   root : String
   patterns : Array[String]
+  include_glob : String
   exclude_glob : String
   session_key : String
   generation : Int

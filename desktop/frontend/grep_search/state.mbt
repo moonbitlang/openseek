@@ -457,6 +457,7 @@ fn Page::semantic_request_payload(
   Some({
     root: root.path,
     patterns,
+    include_glob: self.include_glob,
     exclude_glob: self.exclude_glob,
     session_key: input.semantic_session_key(),
     generation: self.generation,

@@ -40,6 +40,7 @@ pub impl FromJson for SearchSemanticPayload with fn from_json(json, path) {
   {
     root: object.required_string("root"),
     patterns: object.required_string_array("patterns"),
+    include_glob: object.required_string("include_glob"),
     exclude_glob: object.required_string("exclude_glob"),
     session_key: object.required_string("session_key"),
     generation: require_text_search_non_negative(
@@ -60,6 +61,7 @@ pub impl ToJson for SearchSemanticPayload with fn to_json(self) {
   {
     "root": self.root,
     "patterns": self.patterns,
+    "include_glob": self.include_glob,
     "exclude_glob": self.exclude_glob,
     "session_key": self.session_key,
     "generation": self.generation,
