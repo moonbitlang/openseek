@@ -664,3 +664,69 @@ test "a home-relative draft is expanded by the host, not the listing" {
   assert_eq(backslash.path_destination(), Some("C:\\Users\\me"))
   assert_eq(backslash.visible_entries(), [])
 }
+
+///|
+test "an alias of the listed directory is resolved by the host again" {
+  // Windows: the reply canonicalizes `/c:/` to `/C:/`. Retyping the alias
+  // afterwards is not a known miss; the host resolves it once more.
+  let drives = opened(location=DriveList, entries=["C:", "D:"])
+  let asking = updated(updated(drives, EditPath), PathChanged("/c:/"))
+  assert_eq(asking.completion_parent, Some("/c:/"))
+  let listed = updated(
+    asking,
+    Loaded(
+      channel=@interop.ChannelId::Local,
+      location=Directory("/C:/"),
+      entries=["Users"],
+      generation=asking.generation,
+    ),
+  )
+  assert_eq(listed.path_draft, Some("/C:/"))
+  assert_eq(listed.completion_parent, None)
+  let retyped = updated(listed, PathChanged("/c:/"))
+  assert_true(retyped.loading)
+  assert_eq(retyped.completion_parent, Some("/c:/"))
+  assert_true(retyped.generation != listed.generation)
+  // POSIX: the host normalizes `..` the same way.
+  let picker = opened(location=Directory("/Users/dii"), entries=["git"])
+  let dotdot = updated(
+    updated(picker, EditPath),
+    PathChanged("/Users/dii/git/../"),
+  )
+  assert_true(dotdot.loading)
+  let normalized = updated(
+    dotdot,
+    Loaded(
+      channel=@interop.ChannelId::Local,
+      location=Directory("/Users/dii"),
+      entries=["git"],
+      generation=dotdot.generation,
+    ),
+  )
+  assert_eq(normalized.path_draft, Some("/Users/dii/"))
+  assert_eq(normalized.visible_entries(), ["git"])
+  let again = updated(normalized, PathChanged("/Users/dii/git/../"))
+  assert_true(again.loading)
+}
+
+///|
+test "only the home forms of `~` go to the host; other names stay children" {
+  let picker = opened(location=Directory("/Users/dii"), entries=[
+    "~archive", "git",
+  ])
+  let editing = updated(picker, EditPath)
+  let typed = updated(editing, PathChanged("~arch"))
+  assert_false(typed.loading)
+  assert_eq(typed.path_filter(), "~arch")
+  assert_eq(typed.visible_entries(), ["~archive"])
+  assert_eq(typed.selected_path_suggestion(), Some("~archive"))
+  let entered = updated(editing, PathChanged("~archive/"))
+  assert_true(entered.loading)
+  assert_eq(entered.completion_parent, Some("/Users/dii/~archive/"))
+  assert_eq(entered.path_draft, Some("/Users/dii/~archive/"))
+  // `~user` forms are not expanded by the host either; they are relative
+  // names like any other.
+  let other = updated(editing, PathChanged("~dii/git"))
+  assert_true(other.loading)
+  assert_eq(other.completion_parent, Some("/Users/dii/~dii/"))
+}

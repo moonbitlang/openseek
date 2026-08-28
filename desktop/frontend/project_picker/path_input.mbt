@@ -39,7 +39,11 @@ fn State::completion(self : State) -> (String, String)? {
   if !draft.is_empty() && self.already_loaded(draft) {
     return Some((draft, ""))
   }
-  let host_native = draft.has_prefix("/") || draft.has_prefix("~")
+  // Only the home forms the host expands (`~`, `~/…`) are its to resolve;
+  // any other `~`-led name is an ordinary child of the listed directory.
+  let host_native = draft.has_prefix("/") ||
+    draft == "~" ||
+    draft.has_prefix("~/")
   let absolute = if host_native { draft } else { location.base() + draft }
   match absolute.rev_find("/") {
     Some(index) =>
@@ -49,7 +53,7 @@ fn State::completion(self : State) -> (String, String)? {
           absolute.view(start_offset=index + 1).to_owned(),
         ),
       )
-    // Only a bare `~` form has no separator: the host expands it whole.
+    // Only a bare `~` has no separator: the host expands it whole.
     None => Some((absolute, ""))
   }
 }
