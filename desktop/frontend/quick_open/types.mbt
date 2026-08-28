@@ -81,7 +81,7 @@ pub struct State {
 pub fn State::empty() -> State {
   {
     open: None,
-    cache: { owner: None, root: None, active_key: None, loading_key: None },
+    cache: { owner: None, root: None, active_key: None, loading_key: None, },
   }
 }
 

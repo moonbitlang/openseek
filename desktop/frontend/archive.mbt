@@ -123,7 +123,7 @@ fn unarchive_session(
     dispatch,
     channel,
     @commands.session_unarchive,
-    { session, force: None },
+    { session, force: None, },
     sessions_request_id,
     archived_request_id,
   )

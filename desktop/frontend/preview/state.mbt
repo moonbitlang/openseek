@@ -43,7 +43,7 @@ pub(all) struct State {
 
 ///|
 pub fn State::empty() -> State {
-  { pages: Map([]) }
+  { pages: Map([]), }
 }
 
 ///|
@@ -97,7 +97,7 @@ fn PageState::commit_url(self : PageState, url : String) -> PageState {
 pub fn navigate(state : State, id : String, url : String) -> State {
   guard state.pages.get(id) is Some(previous) else { return state }
   let pages = state.pages.copy()
-  pages[id] = { ..previous.commit_url(url), loading: true }
+  pages[id] = { ..previous.commit_url(url), loading: true, }
   { pages, }
 }
 

@@ -105,9 +105,8 @@ fn State::schedule(self : State, input : Input, immediate~ : Bool) -> State {
 /// visibility changes intentionally do not call this: a search already issued
 /// from the Explorer may settle while another inventory or tab is visible.
 pub fn State::park(self : State) -> State {
-  let page = self
-  guard page.phase is Debouncing || page.phase is Loading else { return self }
-  { ..page, phase: Idle, request_id: @uuid.mint() }
+  guard self.phase is Debouncing || self.phase is Loading else { return self }
+  { ..self, phase: Idle, request_id: @uuid.mint(), }
 }
 
 ///|
@@ -129,21 +128,14 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         match_count: 0,
         file_count: 0,
         collapsed: Map([]),
-      }.schedule(
-        input,
-        immediate=false,
-      )
+      }.schedule(input, immediate=false)
     ToggleCaseSensitive =>
       {
         ..page,
         text: { ..page.text, case_sensitive: !page.text.case_sensitive, },
-      }.schedule(
-        input,
-        immediate=false,
-      )
+      }.schedule(input, immediate=false)
     ToggleWholeWord =>
-      { ..page, text: { ..page.text, whole_word: !page.text.whole_word, }, }
-      .schedule(
+      { ..page, text: { ..page.text, whole_word: !page.text.whole_word, }, }.schedule(
         input,
         immediate=false,
       )
@@ -152,8 +144,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         input,
         immediate=false,
       )
-    ToggleDetails =>
-      { ..page, details_open: !page.details_open, }
+    ToggleDetails => { ..page, details_open: !page.details_open, }
     IncludeChanged(include_glob) =>
       { ..page, include_glob, }.schedule(input, immediate=false)
     ExcludeChanged(exclude_glob) =>
@@ -171,10 +162,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
     AddPattern =>
       {
         ..page,
-        semantic: {
-          ..page.semantic,
-          patterns: page.semantic.patterns + [""],
-        },
+        semantic: { ..page.semantic, patterns: page.semantic.patterns + [""], },
       }
     RemovePattern(index) => {
       let patterns = page.semantic.patterns.copy()
@@ -216,7 +204,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
     }
     RequestStarted(request_id~) =>
       if page.request_id == request_id && page.phase is Debouncing {
-        { ..page, phase: Loading }
+        { ..page, phase: Loading, }
       } else {
         self
       }
@@ -227,7 +215,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         return self
       }
       if reply.cancelled {
-        return { ..page, phase: Idle }
+        return { ..self, phase: Idle, }
       }
       let phase = match reply.error {
         None => Ready
@@ -486,9 +474,7 @@ test "mode changes preserve each search input and shared details" {
     .handle(PatternChanged(1, "match($x)"), input)
   let switched_back = state.handle(ModeChanged(Text), input)
   assert_eq(switched_back.text.query, "text query")
-  assert_eq(switched_back.semantic.patterns, [
-    "inspect($(x:arg))", "match($x)",
-  ])
+  assert_eq(switched_back.semantic.patterns, ["inspect($(x:arg))", "match($x)"])
   assert_eq(switched_back.include_glob, "src/**")
   assert_eq(switched_back.exclude_glob, "generated/**")
   assert_false(switched_back.details_open)
@@ -516,10 +502,7 @@ test "query changes debounce and stale replies cannot replace the page" {
     cancelled: false,
     error: None,
   }
-  let unchanged = state.handle(
-    Loaded(reply=stale),
-    input,
-  )
+  let unchanged = state.handle(Loaded(reply=stale), input)
   assert_true(unchanged == state)
 }
 
@@ -597,7 +580,7 @@ test "semantic progress batches append only new hits" {
     matched_source: "inspect(x)",
     source_context: [{ line: 1, text: "inspect(x)", is_match: true, }],
   }
-  let second = { ..hit, start_line: 2, end_line: 2 }
+  let second = { ..hit, start_line: 2, end_line: 2, }
   let first = state.handle(
     SemanticProgress(
       request_id=page.request_id,
@@ -754,10 +737,7 @@ test "parking a checkout keeps its draft and fences the in-flight reply" {
     cancelled: false,
     error: None,
   }
-  let after_stale = suspended.handle(
-    Loaded(reply=stale),
-    input,
-  )
+  let after_stale = suspended.handle(Loaded(reply=stale), input)
   assert_true(after_stale == suspended)
 }
 

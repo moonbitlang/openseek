@@ -39,7 +39,7 @@ fn SearchRequest::cancel(
           @interop.bridge_request(
             owner.channel,
             @commands.fs_cancel_search_text,
-            { request_id: payload.request_id },
+            { request_id: payload.request_id, },
           ),
         ) catch {
           _ => ()
@@ -49,7 +49,7 @@ fn SearchRequest::cancel(
           @interop.bridge_request(
             owner.channel,
             @commands.fs_cancel_search_semantic,
-            { request_id: payload.request_id },
+            { request_id: payload.request_id, },
           ),
         ) catch {
           _ => ()

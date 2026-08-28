@@ -51,7 +51,7 @@ test "accepting a row closes the palette and hands back its editor target" {
   )
   let (_, accepted, target) = files.handle(emit(), @quick_open.Pick(0), input())
   assert_false(accepted.is_open())
-  assert_eq(target, Some({ path: "src/open.mbt", range: None }))
+  assert_eq(target, Some({ path: "src/open.mbt", range: None, }))
 }
 
 ///|

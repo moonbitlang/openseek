@@ -525,8 +525,8 @@ fn DeviceState::with_worktrees(
   rows : Array[WorktreeRow],
 ) -> DeviceState {
   let groups = self.worktrees.filter(group => group.project != project)
-  groups.push({ project, rows })
-  { ..self, worktrees: groups }
+  groups.push({ project, rows, })
+  { ..self, worktrees: groups, }
 }
 
 ///|
@@ -1149,7 +1149,7 @@ test "a worktree mode submit opens the run like any other" {
       worktree_mode: true,
       task: "go",
     })
-    .with_dev(dev => { ..dev, worktrees: [{ project: workspace, rows: [] }] })
+    .with_dev(dev => { ..dev, worktrees: [{ project: workspace, rows: [], }], })
   let (_, sent) = update(dispatch, Send, model)
   assert_true(sent.active().run is Starting(..))
   inspect(sent.active().task, content="")
@@ -1340,7 +1340,7 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
         TestWorktreeRequestId,
       ),
       projects: [workspace],
-      worktrees: [{ project: workspace, rows: test_worktree_rows() }],
+      worktrees: [{ project: workspace, rows: test_worktree_rows(), }],
     })
   // The durable worktree name has no registry row bound to this session, so
   // the conversation has no live checkout yet. Open Quick Open there, giving
@@ -1399,7 +1399,7 @@ test "a failed worktree setup is an actionable toast and keeps retry eligible" {
         TestWorktreeRequestId,
       ),
       projects: [workspace],
-      worktrees: [{ project: workspace, rows: [] }],
+      worktrees: [{ project: workspace, rows: [], }],
     })
   let worktrees_request_id = model
     .dev()
@@ -1465,7 +1465,7 @@ test "a remote removal closes this client's discard dialog" {
         TestWorktreeRequestId,
       ),
       projects: [workspace],
-      worktrees: [{ project: workspace, rows: test_worktree_rows() }],
+      worktrees: [{ project: workspace, rows: test_worktree_rows(), }],
     })
   let (_, staged) = update_dev(
     dispatch,
@@ -1507,7 +1507,7 @@ test "worktree broadcasts and reconnect snapshots update an open Codex task" {
       "turns": [],
     },
   })
-  let model = { ..test_model(), codex, screen: Codex }.with_dev(dev => {
+  let model = { ..test_model(), codex, screen: Codex, }.with_dev(dev => {
     ..dev,
     workspace_requests: dev.workspace_requests.put(
       WorktreeList,
@@ -1592,7 +1592,7 @@ test "a removed worktree's probes cannot repopulate the composer" {
         TestWorktreeRequestId,
       ),
       projects: [workspace],
-      worktrees: [{ project: workspace, rows: test_worktree_rows() }],
+      worktrees: [{ project: workspace, rows: test_worktree_rows(), }],
     })
   // A branch probe answers, which is also what starts the pull-request lookup:
   // both are now on record, and the second is still in flight.

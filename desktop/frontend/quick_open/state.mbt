@@ -39,7 +39,7 @@ pub fn State::open(
     phase: Loading,
     request_id,
   }
-  let started = { ..self, open: Some(open) }
+  let started = { ..self, open: Some(open), }
   match provider {
     Files => {
       let projected = with_file_candidates(input, open, [], Loading)
@@ -144,7 +144,7 @@ pub fn State::reconcile(
     phase: Loading,
     request_id,
   }
-  let next = { ..self, open: Some(restarted) }
+  let next = { ..self, open: Some(restarted), }
   match restarted.provider() {
     Files => {
       // Keep only currently open relative paths as provisional rows; Host
@@ -198,7 +198,7 @@ fn State::change_value(
     selected: 0,
     request_id,
   }
-  let started = { ..self, open: Some(next_open) }
+  let started = { ..self, open: Some(next_open), }
   match next_open.provider() {
     Files => {
       let projected = with_file_candidates(
@@ -221,7 +221,7 @@ fn State::change_value(
       )
     }
     Symbols => {
-      let next = { ..started, open: Some({ ..next_open, phase: Debouncing }) }
+      let next = { ..started, open: Some({ ..next_open, phase: Debouncing, }), }
       (
         @cmd.batch([
           cancel,
@@ -249,7 +249,7 @@ fn State::begin_file_request(
     open.phase is Debouncing else {
     return (@cmd.none, self)
   }
-  { ..self, open: Some({ ..open, phase: Loading }) }.query_active_cache(
+  { ..self, open: Some({ ..open, phase: Loading, }), }.query_active_cache(
     emit, input,
   )
 }
@@ -285,7 +285,7 @@ fn State::apply_cache_loaded(
     !(open.phase is Debouncing) {
     let (query_cmd, queried) = {
       ..next,
-      open: Some({ ..open, phase: Loading }),
+      open: Some({ ..open, phase: Loading, }),
     }.query_active_cache(emit, input)
     next = queried
     cmds.push(query_cmd)
@@ -359,7 +359,7 @@ fn State::begin_symbol_request(
   }
   (
     symbol_request(emit, input.root, open.owner, open.query(), request_id),
-    { ..self, open: Some({ ..open, phase: Loading }) },
+    { ..self, open: Some({ ..open, phase: Loading, }), },
   )
 }
 
@@ -526,7 +526,7 @@ fn State::ensure_cache(
     // run's queries come and go, and the cache session is named after it.
     let populate_id = @uuid.mint()
     let cache_key = file_cache_key(populate_id)
-    cache = { ..cache, loading_key: Some(cache_key) }
+    cache = { ..cache, loading_key: Some(cache_key), }
     cmds.push(
       file_request(
         emit,
@@ -568,7 +568,7 @@ fn State::query_active_cache(
       request_id,
       QueryCache,
     ),
-    { ..self, open: Some({ ..open, request_id, }) },
+    { ..self, open: Some({ ..open, request_id, }), },
   )
 }
 

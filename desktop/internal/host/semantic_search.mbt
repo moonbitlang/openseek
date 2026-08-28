@@ -192,7 +192,7 @@ async fn SemanticSearchService::run(
             }
             self.requests.put(Finished(request_id~, outcome~))
           })
-          running[request_id] = { request_id, root: reply_root, reply, task }
+          running[request_id] = { request_id, root: reply_root, reply, task, }
         }
         Cancel(request_id~, reply~) => {
           if running.get(request_id) is Some(current) {

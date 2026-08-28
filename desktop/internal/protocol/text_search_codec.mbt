@@ -54,7 +54,7 @@ pub impl FromJson for CancelSearchTextPayload with fn from_json(json, path) {
   let object = JsonObject::decode(
     json, path, "text-search cancellation payload",
   )
-  { request_id: object.required_string("request_id") }
+  { request_id: object.required_string("request_id"), }
 }
 
 ///|

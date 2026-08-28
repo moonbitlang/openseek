@@ -253,7 +253,7 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
 fn Model::dormant_composer_input(self : Model) -> @composer.Input {
   {
     identity: {
-      owner: { channel: self.focused, session: self.active_session },
+      owner: { channel: self.focused, session: self.active_session, },
       archive_cursor: self.composer_entry_retirements.length(),
     },
     draft: { task: "", mentions: [], },

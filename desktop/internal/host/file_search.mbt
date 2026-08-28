@@ -460,7 +460,7 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
               }
             None => {
               let id = request_id
-              caches[cache_key] = { root_key, snapshot: None, scan_id: id }
+              caches[cache_key] = { root_key, snapshot: None, scan_id: id, }
               let task = group.spawn(no_wait=true, allow_failure=true, () => {
                 let outcome = try {
                   scan_permit.acquire()
@@ -493,7 +493,7 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
               matched = true
               // A cache-populating scan deliberately survives cancellation of
               // one query, matching VS Code's preventCancellation cache row.
-              running_scans[cache_key] = { ..running, waiters: kept }
+              running_scans[cache_key] = { ..running, waiters: kept, }
             }
           }
           for entry in running_ranks.to_array() {
@@ -504,7 +504,7 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
                 running.task.cancel()
                 running_ranks.remove(id)
               } else {
-                running_ranks[id] = { ..running, waiters: kept }
+                running_ranks[id] = { ..running, waiters: kept, }
               }
             }
           }
@@ -774,7 +774,7 @@ async test "successive queries retain complete-snapshot recall" {
 async test "cancel-before-search rejects only the exact request UUID" {
   @async.with_task_group(group => {
     let service = FileSearchService::new_with_scan(fn(_) {
-      { files: ["target.mbt"] }
+      { files: ["target.mbt"], }
     })
     group.spawn_bg(() => service.run())
     let root = @pathx.Path("/workspace-cancel-before").resolve()

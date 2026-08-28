@@ -71,7 +71,7 @@ pub impl FromJson for CancelSearchSemanticPayload with fn from_json(json, path) 
   let object = JsonObject::decode(
     json, path, "semantic-search cancellation payload",
   )
-  { request_id: object.required_string("request_id") }
+  { request_id: object.required_string("request_id"), }
 }
 
 //|

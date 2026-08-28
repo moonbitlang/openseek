@@ -44,7 +44,7 @@ test "composer submission stays bound to its originating conversation" {
     conversations: [origin, visible],
   }
   let identity : @composer.Identity = {
-    owner: { channel: @interop.ChannelId::Local, session: origin.session_id },
+    owner: { channel: @interop.ChannelId::Local, session: origin.session_id, },
     archive_cursor: 0,
   }
   let (_, submitted) = update(
@@ -148,9 +148,12 @@ test "archive cursor separates transferred actions from a reopened id" {
     ..test_model(),
     conversations: [reopened, replacement],
     composer_entry_retirements: [archived],
-    composer_entry_replacements: [{ archived, fresh, archive_cursor: 1 }],
+    composer_entry_replacements: [{ archived, fresh, archive_cursor: 1, }],
   }
-  let old_identity : @composer.Identity = { owner: archived, archive_cursor: 0 }
+  let old_identity : @composer.Identity = {
+    owner: archived,
+    archive_cursor: 0,
+  }
   let reopened_identity : @composer.Identity = {
     owner: archived,
     archive_cursor: 1,
@@ -177,10 +180,11 @@ test "a background retirement expires old actions without poisoning a reopened i
     composer_entry_replacements: [],
   }
   assert_true(
-    model.conversation_for_composer_action({ owner, archive_cursor: 0 }) is None,
+    model.conversation_for_composer_action({ owner, archive_cursor: 0, })
+    is None,
   )
   assert_true(
-    model.conversation_for_composer_action({ owner, archive_cursor: 1 })
+    model.conversation_for_composer_action({ owner, archive_cursor: 1, })
     is Some(_),
   )
 }

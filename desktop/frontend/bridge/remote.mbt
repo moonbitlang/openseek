@@ -49,10 +49,7 @@ fn RemoteBridgeSub::install(
     on_down=() => {
       scheduler.add(
         (self.dispatch)(
-          ChannelDown(
-            channel=self.channel,
-            websocket_id=self.websocket_id,
-          ),
+          ChannelDown(channel=self.channel, websocket_id=self.websocket_id),
         ),
       )
     },

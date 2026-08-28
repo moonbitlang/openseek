@@ -684,7 +684,7 @@ test "local pinned transitions are pure" {
   )
   assert_false(received.pinned)
   let (submitted, _) = first.update(
-    { ..input, submission_sequence: 1 },
+    { ..input, submission_sequence: 1, },
     ContentRendered(mounted=true),
     emit,
   )

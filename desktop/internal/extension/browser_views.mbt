@@ -439,25 +439,25 @@ test "browser ops refuse to run without a window; close tolerates it" {
 
   let views = BrowserViews::BrowserViews()
   assert_true(
-    raises(() => views.open({ id: "browser-1", url: "http://x/", dark: true })),
+    raises(() => views.open({ id: "browser-1", url: "http://x/", dark: true, })),
   )
-  assert_true(raises(() => views.back({ id: "browser-1" })))
-  assert_true(raises(() => views.forward({ id: "browser-1" })))
-  assert_true(raises(() => views.reload({ id: "browser-1" })))
-  assert_true(raises(() => views.set_theme({ id: "browser-1", dark: true })))
+  assert_true(raises(() => views.back({ id: "browser-1", })))
+  assert_true(raises(() => views.forward({ id: "browser-1", })))
+  assert_true(raises(() => views.reload({ id: "browser-1", })))
+  assert_true(raises(() => views.set_theme({ id: "browser-1", dark: true, })))
   assert_true(raises(() => views.open_app_devtools()))
   assert_true(raises(() => views.toggle_app_maximized()))
   assert_true(
     raises(() => {
-      views.set_bounds({ id: "browser-1", x: 0, y: 0, width: 10, height: 10 })
+      views.set_bounds({ id: "browser-1", x: 0, y: 0, width: 10, height: 10, })
     }),
   )
   assert_true(
-    raises(() => views.set_visible({ id: "browser-1", visible: true })),
+    raises(() => views.set_visible({ id: "browser-1", visible: true, })),
   )
   // Closing with no window (or no view) is deliberately not an error:
   // the close raced a page reload's `close_all`.
-  assert_true(views.close({ id: "browser-1" }) is Acknowledged)
+  assert_true(views.close({ id: "browser-1", }) is Acknowledged)
 }
 
 ///|

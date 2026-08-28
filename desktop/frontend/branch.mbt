@@ -276,7 +276,7 @@ fn probe_branch(
     .map(pull_request => pull_request.base)
   (
     fetch_branch(dispatch, channel, session, cwd, request_id~, base_hint?),
-    model.replace_conversation({ ..conv, branch_request_id: Some(request_id) }),
+    model.replace_conversation({ ..conv, branch_request_id: Some(request_id), }),
   )
 }
 
@@ -432,7 +432,7 @@ fn probe_pull_request(
 /// accepted request UUID. Any reply already in flight carries a different,
 /// retired UUID and cannot match a later lookup.
 fn Conversation::forget_pull_request(self : Conversation) -> Conversation {
-  { ..self, pull_request: None, pull_request_id: None }
+  { ..self, pull_request: None, pull_request_id: None, }
 }
 
 ///|

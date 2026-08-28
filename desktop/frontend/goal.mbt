@@ -733,11 +733,11 @@ test "the frontier a goal is sent from counts what is already buffered" {
         {
           sequence: 7,
           ts: None,
-          item: @protocol.RuntimeNotice({ content: "[goal]\nship the feature" }),
+          item: @protocol.RuntimeNotice({ content: "[goal]\nship the feature", }),
         },
       ],
     ),
-    goal_edit: Some({ draft: "ship the feature" }),
+    goal_edit: Some({ draft: "ship the feature", }),
   }
   inspect(reloading.durable_frontier(), content="7")
   // A read that failed keeps its buffer, and `begin_transcript_reload` carries
@@ -809,7 +809,7 @@ test "a request in flight is reason enough to re-read the record" {
         ..test_conversation(),
         goal_pending: Some(test_goal_command(Setting("ship the feature"))),
         sync: test_reloading([]),
-      })
+      }),
     },
   )
   assert_true(empty.active().sync is Synced)

@@ -219,7 +219,7 @@ fn State::composer_identity(
   channel : @interop.ChannelId,
 ) -> @composer.Identity {
   {
-    owner: { channel, session: self.active_id().unwrap_or("codex.none") },
+    owner: { channel, session: self.active_id().unwrap_or("codex.none"), },
     archive_cursor: 0,
   }
 }

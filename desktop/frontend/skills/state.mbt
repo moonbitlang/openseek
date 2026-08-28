@@ -126,12 +126,12 @@ pub fn State::handle(
       let target = preview_target_for_market(input.installed, item)
       match self.preview_cache.get(preview_cache_key(target)) {
         Some(content) =>
-          (@cmd.none, { ..self, preview: Ready(target~, content~) }, None)
+          (@cmd.none, { ..self, preview: Ready(target~, content~), }, None)
         None => {
           let request_id = @uuid.mint()
           (
             fetch_content(emit, input.channel, request_id, target),
-            { ..self, preview: Loading(target~, request_id~) },
+            { ..self, preview: Loading(target~, request_id~), },
             None,
           )
         }
@@ -141,12 +141,12 @@ pub fn State::handle(
       let target = Installed(item)
       match self.preview_cache.get(preview_cache_key(target)) {
         Some(content) =>
-          (@cmd.none, { ..self, preview: Ready(target~, content~) }, None)
+          (@cmd.none, { ..self, preview: Ready(target~, content~), }, None)
         None => {
           let request_id = @uuid.mint()
           (
             fetch_installed_content(emit, input.channel, request_id, item),
-            { ..self, preview: Loading(target~, request_id~) },
+            { ..self, preview: Loading(target~, request_id~), },
             None,
           )
         }
@@ -161,7 +161,7 @@ pub fn State::handle(
       cache[preview_cache_key(target)] = content
       (
         @cmd.none,
-        { ..self, preview: Ready(target~, content~), preview_cache: cache },
+        { ..self, preview: Ready(target~, content~), preview_cache: cache, },
         None,
       )
     }
@@ -170,7 +170,7 @@ pub fn State::handle(
         current == request_id else {
         return (@cmd.none, self, None)
       }
-      (@cmd.none, { ..self, preview: Failed(target~, message~) }, None)
+      (@cmd.none, { ..self, preview: Failed(target~, message~), }, None)
     }
     BackToList =>
       (

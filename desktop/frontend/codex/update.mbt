@@ -1521,7 +1521,7 @@ test "Codex worktree broadcasts bind every frontend with the task open" {
   })
   // Each replay starts a real Git read, so its request UUID is intentionally
   // different even though the durable worktree state is identical.
-  assert_true({ ..once, git_request_id: twice.git_request_id } == twice)
+  assert_true({ ..once, git_request_id: twice.git_request_id, } == twice)
   assert_true(once.placement is @composer.BoundWorktree("wt-1"))
   assert_eq(
     once
@@ -2231,7 +2231,7 @@ test "Codex composer reverse-request actions keep their task identity" {
     ComposerAction(
       @composer.CodexRequestAnswerChanged(
         identity={
-          owner: { channel: @interop.ChannelId::Local, session: "thread-2" },
+          owner: { channel: @interop.ChannelId::Local, session: "thread-2", },
           archive_cursor: 0,
         },
         request_key=Json("request-1").stringify(),

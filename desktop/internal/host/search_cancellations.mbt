@@ -15,7 +15,7 @@ priv struct CancelledRequests {
 
 ///|
 fn CancelledRequests::CancelledRequests() -> CancelledRequests {
-  { values: Set([]) }
+  { values: Set([]), }
 }
 
 ///|

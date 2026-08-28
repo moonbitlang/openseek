@@ -1437,7 +1437,7 @@ fn with_watch(
       )
     }
     (
-      { ..state, watching: want, watch_id, watch_error: None },
+      { ..state, watching: want, watch_id, watch_error: None, },
       @cmd.batch(commands),
     )
   }
@@ -1454,7 +1454,7 @@ pub fn State::retire_watcher(
   guard self.watching is Some(current) else { return (self, @cmd.none) }
   let watch_id = @uuid.mint()
   (
-    { ..self, watching: None, watch_id, watch_error: None },
+    { ..self, watching: None, watch_id, watch_error: None, },
     watch_workspace(dispatch, channel=current.owner.channel, watch_id~, None),
   )
 }
@@ -2514,7 +2514,7 @@ pub fn update(
       } else if state.index is IndexEmpty || state.index is IndexFailed {
         (
           list_files(dispatch, ctx.owner, ctx.checkout_id, root=ctx.root()),
-          { ..state, index: IndexLoading(refresh_again=false) },
+          { ..state, index: IndexLoading(refresh_again=false), },
         )
       } else if state.index
         is IndexReady(files~, truncated~, refreshing=false, refresh_again=true) {
@@ -3742,7 +3742,7 @@ fn test_emit() -> @cmd.Emit[Msg] {
 ///|
 fn test_ctx() -> Ctx {
   {
-    owner: { channel: @interop.ChannelId::Local, session: "desktop-test" },
+    owner: { channel: @interop.ChannelId::Local, session: "desktop-test", },
     checkout_id: "checkout-0",
     placement: @resource.of_path(@interop.ChannelId::Local, "/work").map(root => {
       @interop.WorkspaceRoot(root~)
@@ -4855,7 +4855,7 @@ test "FileLoaded settles content into its document, active or not" {
   )
   // A stat issued before a placement/reroot boundary is stale even when the
   // same conversation is active again. It cannot invalidate a newer live doc.
-  let epoch_state = { ..state, checkout_id: "checkout-2" }
+  let epoch_state = { ..state, checkout_id: "checkout-2", }
   let (_, old_epoch) = update(
     emit,
     StatsLoaded(owner=test_ctx().owner, checkout_id="checkout-1", stats=[
@@ -5138,7 +5138,7 @@ test "a resolved placement change reroots documents and fences old replies" {
       annotation=None,
     ),
     moved,
-    { ..worktree_ctx, checkout_id: moved.checkout_id },
+    { ..worktree_ctx, checkout_id: moved.checkout_id, },
   )
   assert_true(after_old_reply == moved)
   let (_, after_old_changes) = update(
@@ -5151,7 +5151,7 @@ test "a resolved placement change reroots documents and fences old replies" {
       files=[test_modified_change(path)],
     ),
     moved,
-    { ..worktree_ctx, checkout_id: moved.checkout_id },
+    { ..worktree_ctx, checkout_id: moved.checkout_id, },
   )
   assert_true(after_old_changes == moved)
 
@@ -6193,7 +6193,7 @@ test "changed-file replies are owner-and-generation-fenced" {
     test_ctx(),
   )
   assert_true(stale_result == ready)
-  let idle = { ..owned_state(), changes_request_id: Some("changes-1") }
+  let idle = { ..owned_state(), changes_request_id: Some("changes-1"), }
   let (_, stale_idle_failure) = update(
     emit,
     ChangesFailed(
@@ -7550,7 +7550,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
       request_id="changes-4",
       message="git failed",
     ),
-    { ..loading, changes: ChangeListLoading(refresh_again=false) },
+    { ..loading, changes: ChangeListLoading(refresh_again=false), },
     hidden,
   )
   assert_true(failed_unlatched_load.changes_request_id == Some("changes-4"))
@@ -8633,7 +8633,7 @@ test "watcher failures are visible only in their owning conversation" {
 ///|
 test "a recursive watcher failure stops retries and refreshes its index" {
   let emit = test_emit()
-  let ctx = { ..test_ctx(), panel_open: false }
+  let ctx = { ..test_ctx(), panel_open: false, }
   let watch_id = "watch-5"
   let watched = {
     ..owned_state(),
@@ -8673,7 +8673,10 @@ test "a recursive watcher failure stops retries and refreshes its index" {
   assert_eq(stopped.watch_id, watch_id)
   assert_true(stopped.watch_error is Some("File watching stopped"))
   // A real policy change starts one fresh concrete watcher UUID.
-  let retry_ctx = { ..ctx, open_files: [Relative("node_modules/pkg/index.js")] }
+  let retry_ctx = {
+    ..ctx,
+    open_files: [Relative("node_modules/pkg/index.js")],
+  }
   let (retried, _) = sync(emit, stopped, retry_ctx)
   assert_true(
     retried.watching
@@ -8686,7 +8689,7 @@ test "a recursive watcher failure stops retries and refreshes its index" {
 ///|
 test "a settled run retries one failed watcher activation" {
   let emit = test_emit()
-  let ctx = { ..test_ctx(), panel_open: false }
+  let ctx = { ..test_ctx(), panel_open: false, }
   let watch_id = "watch-5"
   let watched = {
     ..owned_state(),

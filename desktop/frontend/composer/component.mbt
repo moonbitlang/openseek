@@ -108,7 +108,7 @@ fn Entry::Entry(input : Input) -> Entry {
 
 ///|
 fn Entry::identity(self : Entry) -> Identity {
-  { owner: self.owner, archive_cursor: self.action_cursor }
+  { owner: self.owner, archive_cursor: self.action_cursor, }
 }
 
 ///|

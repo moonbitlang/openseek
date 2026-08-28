@@ -5,8 +5,8 @@ fn Input::fixture(task : String) -> Input {
     session: "composer-test",
   }
   {
-    identity: { owner, archive_cursor: 0 },
-    draft: { task, mentions: [] },
+    identity: { owner, archive_cursor: 0, },
+    draft: { task, mentions: [], },
     run: None,
     goal: { draft: None, standing: None, pending: None, },
     slash_commands: [],
@@ -68,7 +68,10 @@ test "each conversation keeps an independent local draft" {
     channel: @interop.ChannelId::Local,
     session: "composer-second",
   }
-  let second = { ..first, identity: { owner: second_owner, archive_cursor: 0 } }
+  let second = {
+    ..first,
+    identity: { owner: second_owner, archive_cursor: 0, },
+  }
   let (with_first, _) = Model(first).update(
     first,
     TextChanged("first draft"),
@@ -123,10 +126,10 @@ test "queued archive replacements preserve every draft handoff" {
   }
   let rotated = {
     ..input,
-    identity: { owner: second_fresh, archive_cursor: 2 },
+    identity: { owner: second_fresh, archive_cursor: 2, },
     replacements: [
-      { archived: input.identity.owner, fresh: first_fresh, archive_cursor: 1 },
-      { archived: first_fresh, fresh: second_fresh, archive_cursor: 2 },
+      { archived: input.identity.owner, fresh: first_fresh, archive_cursor: 1, },
+      { archived: first_fresh, fresh: second_fresh, archive_cursor: 2, },
     ],
     retirements: [input.identity.owner, first_fresh],
   }
@@ -268,7 +271,7 @@ test "a context switch drops a late symbols reply instead of reopening" {
     Msg::test_emit(),
     Action::test_emit(),
   )
-  let switched = { ..input, context_id: "composer-context-b" }
+  let switched = { ..input, context_id: "composer-context-b", }
   let (after, _) = typing.update(
     switched,
     SymbolsLoaded(

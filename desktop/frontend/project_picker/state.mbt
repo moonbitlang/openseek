@@ -327,7 +327,7 @@ pub fn State::handle(
               name.trim().to_owned(),
               request_id~,
             ),
-            Some({ ..self, loading: true, request_id }),
+            Some({ ..self, loading: true, request_id, }),
             None,
           )
         }

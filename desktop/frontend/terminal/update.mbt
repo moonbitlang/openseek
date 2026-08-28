@@ -42,7 +42,7 @@ fn open_new_tab(
     workspace_path: ctx.placement.bind(placement => placement.project_root()),
     status: TabOpening,
   }
-  let state = { ..state, tabs: state.tabs + [tab], shown: Some(key) }
+  let state = { ..state, tabs: state.tabs + [tab], shown: Some(key), }
   (
     @cmd.batch([terminal_resizer.mount(), mount_tab(dispatch, key)]),
     state.remember_active(group, key),
@@ -220,7 +220,7 @@ fn update(
         tab.status is TabOpening {
         (
           flush_pending(key, id),
-          state.replace_tab({ ..tab, id: Some(id), status: TabRunning }),
+          state.replace_tab({ ..tab, id: Some(id), status: TabRunning, }),
         )
       } else {
         // The tab was closed while the open was in flight; the session

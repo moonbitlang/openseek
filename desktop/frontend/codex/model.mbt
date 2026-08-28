@@ -3155,7 +3155,7 @@ test "Codex Git status starts from app-server and accepts current checkout" {
     },
     CodexImportedSnapshot,
   )
-  let state = { ..state, git_request_id: Some("git-request-current") }
+  let state = { ..state, git_request_id: Some("git-request-current"), }
   assert_eq(state.new_thread_cwd(), "/workspace/project")
   assert_eq(state.git_status.unwrap().branch, Some("captured-branch"))
   let refreshed = state.with_git_reply("git-request-current", {

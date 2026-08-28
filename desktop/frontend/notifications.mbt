@@ -54,7 +54,7 @@ fn Model::notify_error(
   dispatch : @cmd.Emit[Msg],
   message : String,
 ) -> (@cmd.Cmd, Model) {
-  let toast : Notification = { id: @uuid.mint(), message }
+  let toast : Notification = { id: @uuid.mint(), message, }
   let notifications = self.notifications.copy()
   notifications.push(toast)
   (

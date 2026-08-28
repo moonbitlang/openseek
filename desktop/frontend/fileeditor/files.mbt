@@ -349,7 +349,7 @@ test "a cross-host file read settles through its UUID-fenced failure" {
   ignore(
     read_file(
       dispatch,
-      { channel: @interop.ChannelId::Remote("other"), session: "remote-test" },
+      { channel: @interop.ChannelId::Remote("other"), session: "remote-test", },
       "checkout-0",
       @pathx.Relative("src/main.mbt"),
       "main.mbt",
