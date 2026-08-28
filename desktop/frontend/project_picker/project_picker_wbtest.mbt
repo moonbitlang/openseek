@@ -187,12 +187,18 @@ test "path editing filters the loaded rows and ranks prefixes first" {
   assert_true(outcome is None)
   let unchanged = updated(filtered, BeginCreateFolder)
   assert_true(unchanged == filtered)
+  // A path under another directory is completed from that directory once
+  // the host lists it; until then the rows here would only mislead.
   let absolute = updated(filtered, PathChanged("/tmp/other/"))
-  assert_false(absolute.loading)
+  assert_true(absolute.loading)
+  assert_eq(absolute.completion_parent, Some("/tmp/other/"))
   assert_eq(absolute.path_filter(), "")
-  assert_eq(absolute.visible_entries(), picker.entries)
+  assert_eq(absolute.visible_entries(), [])
   assert_eq(absolute.path_destination(), Some("/tmp/other/"))
+  // Alternate casing is another directory until the host says otherwise.
   let different_case = updated(filtered, PathChanged("/HOME/u/be"))
+  assert_true(different_case.loading)
+  assert_eq(different_case.completion_parent, Some("/HOME/u/"))
   assert_eq(different_case.path_filter(), "")
   assert_eq(different_case.path_destination(), Some("/HOME/u/be"))
   let windows = opened(location=Directory("/C:/Code"), entries=["Project"])
@@ -268,7 +274,8 @@ test "typing a separator after an exact child navigates immediately" {
   let drives = opened(location=DriveList, entries=["C:", "D:"])
   let navigating_drive = updated(updated(drives, EditPath), PathChanged("/c:/"))
   assert_true(navigating_drive.loading)
-  assert_eq(navigating_drive.path_draft, Some("/C:/"))
+  // The host's reply supplies the canonical spelling.
+  assert_eq(navigating_drive.path_draft, Some("/c:/"))
   let drive = "/C:/"
   let loaded_drive = updated(
     navigating_drive,
@@ -296,7 +303,8 @@ test "typing a separator after an exact child navigates immediately" {
     updated(code, EditPath),
     PathChanged("/c:/CODE/src/"),
   )
-  assert_false(mixed_case_child.loading)
+  // Validated by the host rather than refused locally.
+  assert_true(mixed_case_child.loading)
 
   // A drive-shaped prefix is not proof that the host is Windows. These are
   // distinct legal POSIX paths, so the alternate spelling must be validated.
@@ -468,4 +476,144 @@ test "a failed folder create keeps its name editable" {
     outcome is Some(Failed(message)) &&
     message == "Cannot create folder: already exists",
   )
+}
+
+///|
+test "deleting back across a separator completes from the parent directory" {
+  let picker = opened(location=Directory("/Users/dii/git"), entries=["openseek"])
+  let editing = updated(picker, EditPath)
+  // Deleting into the listed directory's own name asks the host for its
+  // parent; the editor keeps the partial name and stays enabled meanwhile.
+  let deleting = updated(editing, PathChanged("/Users/dii/gi"))
+  assert_true(deleting.loading)
+  assert_eq(deleting.path_draft, Some("/Users/dii/gi"))
+  assert_eq(deleting.completion_parent, Some("/Users/dii/"))
+  assert_true(deleting.generation != editing.generation)
+  assert_false(deleting.listing_completes_draft())
+  assert_eq(deleting.visible_entries(), [])
+  // Typing on inside the pending parent does not repeat the request.
+  let typing = updated(deleting, PathChanged("/Users/dii/g"))
+  assert_eq(typing.generation, deleting.generation)
+  assert_true(typing.loading)
+  assert_eq(typing.path_draft, Some("/Users/dii/g"))
+  // The reply lists the parent and keeps what was typed after it.
+  let loaded = updated(
+    typing,
+    Loaded(
+      channel=@interop.ChannelId::Local,
+      location=Directory("/Users/dii"),
+      entries=["git", "go"],
+      generation=typing.generation,
+    ),
+  )
+  assert_false(loaded.loading)
+  assert_true(loaded.location == Some(Directory("/Users/dii")))
+  assert_eq(loaded.path_draft, Some("/Users/dii/g"))
+  assert_eq(loaded.path_filter(), "g")
+  assert_eq(loaded.visible_entries(), ["git", "go"])
+  assert_eq(loaded.selected_path_suggestion(), Some("git"))
+  // Each further separator deleted climbs one more level, one request each.
+  let climbing = updated(loaded, PathChanged("/Users/di"))
+  assert_true(climbing.loading)
+  assert_eq(climbing.completion_parent, Some("/Users/"))
+  assert_true(climbing.generation != loaded.generation)
+  // Windows: a drive's own separator is still that drive; deleting into the
+  // letter leads back to the drive list, whose rows complete it.
+  let drive = opened(location=Directory("/C:/"), entries=["Users"])
+  let drive_editing = updated(drive, EditPath)
+  let still_drive = updated(drive_editing, PathChanged("/C:"))
+  assert_false(still_drive.loading)
+  assert_eq(still_drive.visible_entries(), ["Users"])
+  let to_drives = updated(still_drive, PathChanged("/C"))
+  assert_true(to_drives.loading)
+  assert_eq(to_drives.completion_parent, Some("/"))
+  let drives = updated(
+    to_drives,
+    Loaded(
+      channel=@interop.ChannelId::Local,
+      location=DriveList,
+      entries=["C:", "D:"],
+      generation=to_drives.generation,
+    ),
+  )
+  assert_eq(drives.path_draft, Some("/C"))
+  assert_eq(drives.visible_entries(), ["C:"])
+}
+
+///|
+test "returning to the listed directory drops a pending parent browse" {
+  let picker = opened(location=Directory("/Users/dii/git"), entries=["openseek"])
+  let editing = updated(picker, EditPath)
+  let deleting = updated(editing, PathChanged("/Users/dii/gi"))
+  assert_true(deleting.loading)
+  let back = updated(deleting, PathChanged("/Users/dii/git"))
+  assert_false(back.loading)
+  assert_eq(back.completion_parent, None)
+  assert_true(back.generation != deleting.generation)
+  assert_eq(back.visible_entries(), ["openseek"])
+  // The parent's late reply must not move the picker.
+  let stale = updated(
+    back,
+    Loaded(
+      channel=@interop.ChannelId::Local,
+      location=Directory("/Users/dii"),
+      entries=["git", "go"],
+      generation=deleting.generation,
+    ),
+  )
+  assert_true(stale == back)
+  // Narrowing inside the listed directory needs no request either.
+  let narrowed = updated(back, PathChanged("/Users/dii/git/open"))
+  assert_false(narrowed.loading)
+  assert_eq(narrowed.generation, back.generation)
+  assert_eq(narrowed.visible_entries(), ["openseek"])
+}
+
+///|
+test "a directory the host cannot list fails quietly and is not asked again" {
+  let picker = opened(location=Directory("/home/u"), entries=["proj"])
+  let editing = updated(picker, EditPath)
+  let asking = updated(editing, PathChanged("/gone/"))
+  assert_true(asking.loading)
+  assert_eq(asking.completion_parent, Some("/gone/"))
+  let (_, failed, outcome) = State::handle(
+    asking,
+    emit(),
+    Failed(
+      channel=@interop.ChannelId::Local,
+      message="no such directory: /gone",
+      generation=asking.generation,
+    ),
+  )
+  guard failed is Some(failed) else { fail("quiet failure closed the picker") }
+  assert_true(outcome is None)
+  assert_false(failed.loading)
+  assert_true(failed.location == picker.location)
+  assert_false(failed.listing_completes_draft())
+  assert_eq(failed.visible_entries(), [])
+  // Typing inside the missing directory does not retry.
+  let typing = updated(failed, PathChanged("/gone/x"))
+  assert_false(typing.loading)
+  assert_eq(typing.generation, failed.generation)
+  // Enter still navigates, so the host's reason surfaces as a toast.
+  let submitted = updated(typing, SubmitPath)
+  assert_true(submitted.loading)
+  assert_eq(submitted.path_draft, None)
+  assert_eq(submitted.completion_parent, None)
+  let (_, _, toast) = State::handle(
+    submitted,
+    emit(),
+    Failed(
+      channel=@interop.ChannelId::Local,
+      message="no such directory: /gone/x",
+      generation=submitted.generation,
+    ),
+  )
+  assert_true(
+    toast is Some(Outcome::Failed(message)) &&
+    message == "Cannot open folder: no such directory: /gone/x",
+  )
+  // Leaving the editor forgets the miss.
+  let cancelled = updated(typing, CancelPathEdit)
+  assert_eq(cancelled.completion_parent, None)
 }

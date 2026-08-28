@@ -18,10 +18,11 @@ fn path_row_id(index : Int) -> String {
 }
 
 ///|
-/// Focus the path after rendering it. Opening the editor selects the whole
-/// value; resuming after a browse leaves the caret at the end.
-fn focus_path_after_render(select_all : Bool) -> @cmd.Cmd {
-  focus_after_render(PathInputId, select_all~)
+/// Focus the path after rendering it, selecting the whole value so typing
+/// replaces it. Completion browses leave the editor enabled, so it keeps
+/// focus and caret on its own while they run.
+fn focus_path_after_render() -> @cmd.Cmd {
+  focus_after_render(PathInputId, select_all=true)
 }
 
 ///|
@@ -215,7 +216,6 @@ fn path_editor(
     .aria_autocomplete("list")
     .aria_keyshortcuts("Meta+L Control+L")
     .data_set("focus-owner", "")
-    .disabled(picker.loading)
     .on_keydown(event => {
       if event.is_composing() {
         return @cmd.none
@@ -344,6 +344,10 @@ fn new_folder_row(
 fn empty_view(picker : State, filter_active : Bool) -> @html.Html {
   let (title, detail) = if picker.loading {
     ("Loading folders…", "This should only take a moment.")
+  } else if !picker.listing_completes_draft() {
+    (
+      "Cannot list this folder", "Check the path, or press Enter to open it and see why.",
+    )
   } else if filter_active {
     ("No matching folders", "Try a different name or enter a complete path.")
   } else {
