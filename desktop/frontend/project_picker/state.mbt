@@ -122,11 +122,33 @@ fn fresh_request_generation() -> Int {
 }
 
 ///|
-fn State::resume_path_edit_after_render(self : State) -> @cmd.Cmd {
+/// Re-focus whichever inline editor survives a host reply. Both are disabled
+/// while a request is in flight, which drops the browser's focus: the path
+/// editor resumes after a separator-committed browse, the new-folder
+/// composer after a failed create.
+fn State::resume_focus_after_render(self : State) -> @cmd.Cmd {
   if self.path_draft is Some(_) {
     focus_path_after_render(false)
+  } else if self.new_folder is Some(_) {
+    focus_new_folder_after_render()
   } else {
     @cmd.none
+  }
+}
+
+///|
+/// The directory that "New folder" and Confirm act on, when they may: the
+/// host listed a real directory, nothing is in flight, and no composer or
+/// path edit names somewhere else. A path edit that still names this
+/// directory does not block them; the action closes it.
+fn State::actionable_directory(self : State) -> String? {
+  if self.location is Some(Directory(path)) &&
+    !self.loading &&
+    self.new_folder is None &&
+    (self.path_draft is None || self.path_draft_names_location()) {
+    Some(path)
+  } else {
+    None
   }
 }
 
@@ -166,28 +188,25 @@ pub fn State::handle(
       // A listing for a picker the user already closed — or one answering
       // a navigation that has since been superseded — is dropped.
       if channel == self.channel && generation == self.generation {
-        (
-          self.resume_path_edit_after_render(),
-          Some({
-            ..self,
-            location: Some(location),
-            entries,
-            loading: false,
-            new_folder: None,
-            // A separator-committed browse keeps editing with the canonical
-            // path the host actually listed, avoiding a second request when
-            // the user immediately presses Enter.
-            path_draft: self.path_draft.map(_ => {
-              match location {
-                Directory(path) =>
-                  path + (if path.has_suffix("/") { "" } else { "/" })
-                DriveList => "/"
-              }
-            }),
-            path_selection: 0,
+        let next = {
+          ..self,
+          location: Some(location),
+          entries,
+          loading: false,
+          new_folder: None,
+          // A separator-committed browse keeps editing with the canonical
+          // path the host actually listed, avoiding a second request when
+          // the user immediately presses Enter.
+          path_draft: self.path_draft.map(_ => {
+            match location {
+              Directory(path) =>
+                path + (if path.has_suffix("/") { "" } else { "/" })
+              DriveList => "/"
+            }
           }),
-          None,
-        )
+          path_selection: 0,
+        }
+        (next.resume_focus_after_render(), Some(next), None)
       } else {
         (@cmd.none, Some(self), None)
       }
@@ -201,11 +220,8 @@ pub fn State::handle(
         } else {
           "Cannot open folder: \{message}"
         }
-        (
-          self.resume_path_edit_after_render(),
-          Some({ ..self, loading: false, }),
-          Some(Failed(message)),
-        )
+        let next = { ..self, loading: false, }
+        (next.resume_focus_after_render(), Some(next), Some(Failed(message)))
       } else {
         (@cmd.none, Some(self), None)
       }
@@ -265,21 +281,8 @@ pub fn State::handle(
       }
     SubmitPath =>
       match self.path_destination() {
-        Some(path) if !self.loading => {
-          let already_loaded = match self.location {
-            // A trailing separator does not change a directory. Everything
-            // else stays exact; the host decides whether alternate casing is
-            // equivalent on its platform.
-            Some(Directory(current)) =>
-              current == path ||
-              (
-                current != "/" &&
-                current.trim_end(chars="/") == path.trim_end(chars="/")
-              )
-            Some(DriveList) => path.trim() == "/"
-            None => false
-          }
-          if already_loaded {
+        Some(path) if !self.loading =>
+          if self.already_loaded(path) {
             (
               @cmd.none,
               Some({ ..self, path_draft: None, path_selection: 0, }),
@@ -288,7 +291,6 @@ pub fn State::handle(
           } else {
             self.navigate_to(emit, path)
           }
-        }
         _ => (@cmd.none, Some(self), None)
       }
     CancelPathEdit | Escape if self.path_draft is Some(_) => {
@@ -311,10 +313,20 @@ pub fn State::handle(
     CancelPathEdit => (@cmd.none, Some(self), None)
     Escape => (@cmd.none, None, None)
     BeginCreateFolder =>
-      if self.location is Some(Directory(_)) &&
-        !self.loading &&
-        self.path_draft is None {
-        (@cmd.none, Some({ ..self, new_folder: Some(""), }), None)
+      // The composer replaces a path edit that still names this directory.
+      // Its input is focused explicitly: the click leaves the button focused,
+      // so the browser ignores the input's `autofocus`.
+      if self.actionable_directory() is Some(_) {
+        (
+          focus_new_folder_after_render(),
+          Some({
+            ..self,
+            new_folder: Some(""),
+            path_draft: None,
+            path_selection: 0,
+          }),
+          None,
+        )
       } else {
         (@cmd.none, Some(self), None)
       }
@@ -354,12 +366,11 @@ pub fn State::handle(
       // confirmed exists — never raw pasted text; a paste navigates (and
       // validates) first. While a navigation is in flight the shown listing
       // is stale, so Enter must wait: confirming then would attach the
-      // previous directory, not the destination. The Windows drive list is
-      // not a directory and cannot be registered.
-      if self.location is Some(Directory(path)) &&
-        !self.loading &&
-        self.new_folder is None &&
-        self.path_draft is None {
+      // previous directory, not the destination. A path edit naming another
+      // directory must wait the same way; one still naming the listed
+      // directory is discarded. The Windows drive list is not a directory
+      // and cannot be registered.
+      if self.actionable_directory() is Some(path) {
         (@cmd.none, None, Some(Picked(self.channel, path)))
       } else {
         (@cmd.none, Some(self), None)

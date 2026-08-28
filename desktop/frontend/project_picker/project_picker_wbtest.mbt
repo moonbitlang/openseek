@@ -176,16 +176,17 @@ test "path editing filters the loaded rows and ranks prefixes first" {
   let editing = updated(picker, EditPath)
   assert_eq(editing.path_draft, Some("/home/u"))
   assert_eq(editing.visible_entries(), picker.entries)
-  let (_, held, outcome) = State::handle(editing, emit(), Confirm)
-  assert_true(held is Some(_))
-  assert_true(outcome is None)
-  let unchanged = updated(editing, BeginCreateFolder)
-  assert_true(unchanged == editing)
   let filtered = updated(editing, PathChanged("/home/u/be"))
   assert_eq(filtered.path_filter(), "be")
   assert_eq(filtered.visible_entries(), ["Beryl", "beta", "alphabet"])
   assert_eq(filtered.selected_path_suggestion(), Some("Beryl"))
   assert_eq(filtered.path_destination(), Some("/home/u/Beryl"))
+  // The draft now names a child, so the current-directory actions wait.
+  let (_, held, outcome) = State::handle(filtered, emit(), Confirm)
+  assert_true(held is Some(_))
+  assert_true(outcome is None)
+  let unchanged = updated(filtered, BeginCreateFolder)
+  assert_true(unchanged == filtered)
   let absolute = updated(filtered, PathChanged("/tmp/other/"))
   assert_false(absolute.loading)
   assert_eq(absolute.path_filter(), "")
@@ -315,6 +316,57 @@ test "typing a separator after an exact child navigates immediately" {
   assert_false(upper_submitted.loading)
   assert_eq(upper_submitted.generation, upper_editing.generation)
   assert_true(upper_submitted.location == upper.location)
+}
+
+///|
+test "a path edit still naming the listed directory yields to its actions" {
+  let picker = opened(location=Directory("/Users/dii"), entries=["git"])
+  // Opened and left untouched: the draft is the listed directory.
+  let editing = updated(picker, EditPath)
+  assert_true(editing.path_draft_names_location())
+  let composing = updated(editing, BeginCreateFolder)
+  assert_eq(composing.new_folder, Some(""))
+  assert_eq(composing.path_draft, None)
+  assert_true(composing.location == picker.location)
+  let (_, closed, outcome) = State::handle(editing, emit(), Confirm)
+  assert_true(closed is None)
+  assert_true(outcome is Some(Outcome::Picked(_, path)) && path == "/Users/dii")
+  // Resumed after a separator-committed browse: the draft is the canonical
+  // path the host listed, trailing separator included.
+  let navigating = updated(editing, PathChanged("git/"))
+  let loaded = updated(
+    navigating,
+    Loaded(
+      channel=@interop.ChannelId::Local,
+      location=Directory("/Users/dii/git"),
+      entries=[],
+      generation=navigating.generation,
+    ),
+  )
+  assert_eq(loaded.path_draft, Some("/Users/dii/git/"))
+  assert_true(loaded.path_draft_names_location())
+  let (_, closed, outcome) = State::handle(loaded, emit(), Confirm)
+  assert_true(closed is None)
+  assert_true(
+    outcome is Some(Outcome::Picked(_, path)) && path == "/Users/dii/git",
+  )
+  let composing_after_browse = updated(loaded, BeginCreateFolder)
+  assert_eq(composing_after_browse.new_folder, Some(""))
+  assert_eq(composing_after_browse.path_draft, None)
+  // A draft naming another directory — or a completion — still waits.
+  let elsewhere = updated(editing, PathChanged("/tmp/other"))
+  assert_false(elsewhere.path_draft_names_location())
+  assert_true(updated(elsewhere, BeginCreateFolder) == elsewhere)
+  let completing = updated(editing, PathChanged("/Users/dii/gi"))
+  assert_eq(completing.path_destination(), Some("/Users/dii/git"))
+  assert_false(completing.path_draft_names_location())
+  // The drive list is still not a directory.
+  let drives = updated(opened(location=DriveList, entries=["C:"]), EditPath)
+  assert_true(drives.path_draft_names_location())
+  assert_true(updated(drives, BeginCreateFolder) == drives)
+  let (_, held, outcome) = State::handle(drives, emit(), Confirm)
+  assert_true(held is Some(_))
+  assert_true(outcome is None)
 }
 
 ///|
