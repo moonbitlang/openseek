@@ -310,7 +310,12 @@ priv struct FsWatchFailedPayload {
   root : String
   message : String
   watch_id : String
-} derive(ToJson)
+}
+
+///|
+impl ToJson for FsWatchFailedPayload with fn to_json(self) {
+  { "root": self.root, "message": self.message, "watch_id": self.watch_id }
+}
 
 ///|
 test "filesystem watcher failures retain root and watch_id on the wire" {

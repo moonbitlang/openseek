@@ -431,11 +431,17 @@ pub(all) struct SearchFilesPayload {
 ///|
 pub impl FromJson for SearchFilesPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "file search payload")
+  let max_results = object.required_int("max_results")
+  if max_results < 0 {
+    raise JsonDecodeError(
+      (path.add_key("max_results"), "expected non-negative integer"),
+    )
+  }
   {
     path: object.required_string("path"),
     cache_key: object.required_string("cache_key"),
     query: object.required_string("query"),
-    max_results: object.required_int("max_results"),
+    max_results,
     request_id: object.required_string("request_id"),
   }
 }
@@ -551,7 +557,8 @@ pub(all) struct WatchWorkspacePayload {
   directories : Array[String]
   // Keep every non-ignored descendant observable while a workspace-wide file
   // index is live. Shallow mode remains sufficient for open files and the
-  // explorer's explicitly listed directories.
+  // explorer's explicitly listed directories. `None` is the legacy shallow
+  // form and is omitted from encoded requests rather than written as `null`.
   recursive : Bool?
   // Concrete watcher/failure identity. Clients change it for every desired
   // configuration so a replaced watcher's delayed failure is stale.
@@ -572,13 +579,16 @@ pub impl FromJson for WatchWorkspacePayload with fn from_json(json, path) {
 
 ///|
 pub impl ToJson for WatchWorkspacePayload with fn to_json(self) {
-  {
-    "path": self.path,
-    "files": self.files,
-    "directories": self.directories,
-    "recursive": self.recursive,
-    "watch_id": self.watch_id,
+  let fields : Map[String, Json] = {
+    "path": self.path.to_json(),
+    "files": self.files.to_json(),
+    "directories": self.directories.to_json(),
+    "watch_id": self.watch_id.to_json(),
   }
+  if self.recursive is Some(recursive) {
+    fields["recursive"] = recursive.to_json()
+  }
+  Json::object(fields)
 }
 
 ///|
@@ -640,6 +650,8 @@ pub(all) struct TerminalOpenPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// Terminal input is a wire union: text carries `data`, byte-oriented input
+/// carries `data_base64`, and the inactive field is absent rather than null.
 pub(all) struct TerminalInputPayload {
   id : String
   data : String?
@@ -649,16 +661,28 @@ pub(all) struct TerminalInputPayload {
 ///|
 pub impl FromJson for TerminalInputPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "terminal input payload")
-  {
-    id: object.required_string("id"),
-    data: object.optional_string("data"),
-    data_base64: object.optional_string("data_base64"),
+  let data = object.optional_string("data")
+  let data_base64 = object.optional_string("data_base64")
+  match (data, data_base64) {
+    (Some(_), None) | (None, Some(_)) => ()
+    _ =>
+      raise JsonDecodeError(
+        (path, "exactly one of data and data_base64 must be present"),
+      )
   }
+  { id: object.required_string("id"), data, data_base64 }
 }
 
 ///|
 pub impl ToJson for TerminalInputPayload with fn to_json(self) {
-  { "id": self.id, "data": self.data, "data_base64": self.data_base64 }
+  let fields : Map[String, Json] = { "id": self.id.to_json() }
+  if self.data is Some(data) {
+    fields["data"] = data.to_json()
+  }
+  if self.data_base64 is Some(data_base64) {
+    fields["data_base64"] = data_base64.to_json()
+  }
+  Json::object(fields)
 }
 
 ///|

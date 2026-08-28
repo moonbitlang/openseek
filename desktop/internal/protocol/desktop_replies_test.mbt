@@ -540,6 +540,103 @@ test "file search payload and reply round-trip at the JSON boundary" {
 }
 
 ///|
+test "file search rejects a negative result limit" {
+  let rejected = try {
+    let _ : @protocol.SearchFilesPayload = @json.from_json({
+      "path": "/work/project",
+      "cache_key": "quick-open:request-7",
+      "query": "src main",
+      "max_results": -1,
+      "request_id": "request-7",
+    })
+  } catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+  assert_true(rejected)
+}
+
+///|
+test "workspace watch omits an absent recursive flag" {
+  let shallow : @protocol.WatchWorkspacePayload = {
+    path: "/work/project",
+    files: ["src/main.mbt"],
+    directories: ["", "src"],
+    recursive: None,
+    watch_id: "watch-7",
+  }
+  @debug.assert_eq(shallow.to_json(), {
+    "path": "/work/project",
+    "files": ["src/main.mbt"],
+    "directories": ["", "src"],
+    "watch_id": "watch-7",
+  })
+  let nullable : @protocol.WatchWorkspacePayload = @json.from_json({
+    "path": "/work/project",
+    "files": [],
+    "directories": [],
+    "recursive": null,
+    "watch_id": "watch-8",
+  })
+  assert_eq(nullable.recursive, None)
+  let recursive : @protocol.WatchWorkspacePayload = {
+    ..shallow,
+    recursive: Some(false),
+  }
+  @debug.assert_eq(recursive.to_json(), {
+    "path": "/work/project",
+    "files": ["src/main.mbt"],
+    "directories": ["", "src"],
+    "recursive": false,
+    "watch_id": "watch-7",
+  })
+}
+
+///|
+test "terminal input encodes and decodes exactly one data field" {
+  let text : @protocol.TerminalInputPayload = {
+    id: "terminal-7",
+    data: Some("ls\n"),
+    data_base64: None,
+  }
+  @debug.assert_eq(text.to_json(), { "id": "terminal-7", "data": "ls\n" })
+  let decoded_text : @protocol.TerminalInputPayload = @json.from_json(
+    text.to_json(),
+  )
+  assert_eq(decoded_text, text)
+  let binary : @protocol.TerminalInputPayload = {
+    id: "terminal-8",
+    data: None,
+    data_base64: Some("AA=="),
+  }
+  @debug.assert_eq(binary.to_json(), {
+    "id": "terminal-8",
+    "data_base64": "AA==",
+  })
+  let decoded_binary : @protocol.TerminalInputPayload = @json.from_json(
+    binary.to_json(),
+  )
+  assert_eq(decoded_binary, binary)
+  for
+    invalid in (
+      [
+        { "id": "terminal-9" },
+        { "id": "terminal-9", "data": null, "data_base64": null },
+        { "id": "terminal-9", "data": "x", "data_base64": "eA==" },
+      ] : Array[Json]) {
+    let rejected = try {
+      let _ : @protocol.TerminalInputPayload = @json.from_json(invalid)
+    } catch {
+      _ => true
+    } noraise {
+      _ => false
+    }
+    assert_true(rejected)
+  }
+}
+
+///|
 test "text search payload and UTF-16 reply round-trip at the JSON boundary" {
   let raw_payload : Json = {
     "root": "/work/project",
