@@ -4,9 +4,8 @@
 const PatternRepairDumpMaxDiagnosticUnits : Int = 1000
 
 ///|
-fn pattern_repair_dump_args(pattern : String) -> Array[String] {
-  ["dump", "--expr", pattern]
-}
+/// Enable after moongrep's `dump --expr` accepts Pattern metavariables.
+const PatternRepairValidationEnabled : Bool = false
 
 ///|
 fn pattern_repair_provider_args(
@@ -20,7 +19,10 @@ fn pattern_repair_provider_args(
   } else {
     []
   }
-  args.append(pattern_repair_dump_args(pattern))
+  // Keep the future validation command here. The current moongrep release only
+  // parses ordinary MoonBit expressions in `dump --expr`, so executing it would
+  // reject valid patterns containing moongrep metavariables such as `$()`.
+  args.append(["dump", "--expr", pattern])
   args
 }
 
@@ -36,34 +38,38 @@ async fn validate_pattern_repair_candidate(
   root : @pathx.Absolute,
   pattern : String,
 ) -> PatternRepairValidation {
-  guard moongrep_command(state.executable) is Some(command) else {
-    return PatternRepairInvalid(
-      "moongrep_unavailable", "The semantic-search provider is unavailable.",
-    )
-  }
-  let (code, stdout, stderr) = @processx.collect_output_no_stdin(
-    command,
-    pattern_repair_provider_args(command, pattern),
-    cwd=root.0,
-  ) catch {
-    error =>
-      return PatternRepairInvalid(
-        "validation_failed",
-        "Cannot validate Pattern Repair candidate: \{error}",
-      )
-  }
-  if code == 0 {
+  if !PatternRepairValidationEnabled {
     PatternRepairValid
   } else {
-    let detail = if !stderr.text().trim().is_empty() {
-      stderr.text()
-    } else {
-      stdout.text()
+    guard moongrep_command(state.executable) is Some(command) else {
+      return PatternRepairInvalid(
+        "moongrep_unavailable", "The semantic-search provider is unavailable.",
+      )
     }
-    PatternRepairInvalid(
-      pattern_repair_validation_code(detail),
-      pattern_repair_diagnostic(detail),
-    )
+    let (code, stdout, stderr) = @processx.collect_output_no_stdin(
+      command,
+      pattern_repair_provider_args(command, pattern),
+      cwd=root.0,
+    ) catch {
+      error =>
+        return PatternRepairInvalid(
+          "validation_failed",
+          "Cannot validate Pattern Repair candidate: \{error}",
+        )
+    }
+    if code == 0 {
+      PatternRepairValid
+    } else {
+      let detail = if !stderr.text().trim().is_empty() {
+        stderr.text()
+      } else {
+        stdout.text()
+      }
+      PatternRepairInvalid(
+        pattern_repair_validation_code(detail),
+        pattern_repair_diagnostic(detail),
+      )
+    }
   }
 }
 
@@ -95,10 +101,7 @@ fn pattern_repair_validation_code(stderr : String) -> String {
 }
 
 ///|
-test "pattern repair validation builds host-owned dump command" {
-  assert_eq(pattern_repair_dump_args("inspect($(node:arg))"), [
-    "dump", "--expr", "inspect($(node:arg))",
-  ])
+test "pattern repair validation preserves the future dump command" {
   assert_eq(pattern_repair_provider_args("moonx", "foo()"), [
     MoongrepPackageCoordinate,
     "--",

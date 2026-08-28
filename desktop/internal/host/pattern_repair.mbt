@@ -109,7 +109,7 @@ async fn pattern_repair_op(
   }
   let root = WirePath::parse(payload.root).absolute
   let mut instruction = payload.instruction
-  for attempt in 0..<=3 {
+  for attempt in 0..<3 {
     guard request_pattern_repair_candidate(
         state,
         agent_env,
