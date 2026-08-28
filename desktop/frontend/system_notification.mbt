@@ -96,6 +96,68 @@ fn show_system_notification(
 }
 
 ///|
+/// The application badge is the number of local conversations that still need
+/// attention: either a permission decision or a background result the user has
+/// not opened. It is derived from replicated conversation state rather than
+/// incremented by events, so replay and reconnect converge to one value.
+fn Model::notification_badge_count(self : Model) -> Int {
+  let mut count = 0
+  for conv in self.conversations {
+    if conv.device is Local &&
+      (
+        conv.pending_approval is Some({ answered: false, .. }) ||
+        conv.unseen_finish
+      ) {
+      count += 1
+    }
+  }
+  count
+}
+
+///|
+/// Set the absolute native application badge count. Ordinary browsers do not
+/// expose the notification extension; unsupported platforms and rejected
+/// commands stay silent because the conversation cards remain authoritative.
+fn set_notification_badge_count(count : Int) -> @cmd.Cmd {
+  @cmd.custom_cmd(_scheduler => {
+    guard @interop.moonbit_bridge_root() is Some(root) &&
+      @interop.js_prop(root, "notification") is Some(notification) &&
+      @interop.js_prop(notification, "setBadge") is Some(_) else {
+      return
+    }
+    let payload = @js.Object::new()
+    payload["count"] = count
+    @js.async_run(() => {
+      let _ : @js.Value = @interop.js_method_promise(
+        notification,
+        "setBadge",
+        payload.to_value(),
+      ).wait() catch {
+        _ => return
+      }
+    })
+  })
+}
+
+///|
+/// Synchronize only transitions. `Init` clears any process-external badge
+/// left by an unclean shutdown before the first host snapshot restores the
+/// current absolute count.
+fn notification_badge_command(
+  previous : Model,
+  next : Model,
+  initialize : Bool,
+) -> @cmd.Cmd {
+  let previous_count = previous.notification_badge_count()
+  let next_count = next.notification_badge_count()
+  if initialize || previous_count != next_count {
+    set_notification_badge_count(next_count)
+  } else {
+    @cmd.none
+  }
+}
+
+///|
 fn FinishedSystemNotification::command(
   self : FinishedSystemNotification,
 ) -> @cmd.Cmd {

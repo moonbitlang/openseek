@@ -1616,6 +1616,11 @@ fn update(
 ) -> (@cmd.Cmd, Model) {
   let previous = model
   let (cmd, model) = update_msg(dispatch, msg, model)
+  let notification_badge_cmd = notification_badge_command(
+    previous,
+    model,
+    msg is Init,
+  )
   let composer_context_changed = model.active_session != previous.active_session ||
     model.focused != previous.focused ||
     model.screen != previous.screen
@@ -1739,7 +1744,8 @@ fn update(
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
-      cmd, quick_open_cmd, panel_visibility_cmd, panel_cmd, terminal_cmd, browser_cmd,
+      cmd, notification_badge_cmd, quick_open_cmd, panel_visibility_cmd, panel_cmd,
+      terminal_cmd, browser_cmd,
     ]),
     model,
   )

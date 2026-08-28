@@ -36,6 +36,10 @@ test "a permission question becomes the conversation's pending approval" {
   // It belongs to the run it was asked in, so a slow decision cannot settle a
   // question in a later one.
   assert_eq(pending.run_id, Some("r-test"))
+  assert_eq(
+    test_model().replace_conversation(conv).notification_badge_count(),
+    1,
+  )
 }
 
 ///|
@@ -109,6 +113,7 @@ test "answering is recorded once and does not retire the card" {
     fail("the card must stand until the engine settles it")
   }
   assert_true(pending.answered)
+  assert_eq(answered.notification_badge_count(), 0)
   // The second click is refused: the guard sees `answered` and returns before
   // building a command, so the opposite decision cannot follow the first one
   // out to the engine.
@@ -121,6 +126,69 @@ test "answering is recorded once and does not retire the card" {
     fail("expected the conversation")
   }
   assert_true(conv.pending_approval is Some({ answered: true, .. }))
+}
+
+///|
+test "notification badge counts local conversations needing attention" {
+  let pending : PendingApproval = {
+    id: "ap-local",
+    run_id: Some("r-local"),
+    tool_name: "mbtx",
+    detail: "escalate",
+    body: None,
+    answered: false,
+  }
+  let active = { ..running_conversation(), pending_approval: Some(pending), }
+  let background = {
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      "desktop-background",
+      @interop.ChannelId::Local.test_project(),
+    ),
+    run: Open(run_id="r-background", stage=Opened),
+    pending_approval: Some({
+      ..pending,
+      id: "ap-background",
+      run_id: Some("r-background"),
+    }),
+  }
+  let answered = {
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      "desktop-answered",
+      @interop.ChannelId::Local.test_project(),
+    ),
+    pending_approval: Some({ ..pending, id: "ap-answered", answered: true, }),
+  }
+  let finished = {
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      "desktop-finished",
+      @interop.ChannelId::Local.test_project(),
+    ),
+    unseen_finish: true,
+  }
+  let remote_channel = @interop.ChannelId::Remote("device-1")
+  let remote = {
+    ..empty_conversation(
+      remote_channel,
+      "desktop-remote",
+      remote_channel.test_project(),
+    ),
+    pending_approval: Some({ ..pending, id: "ap-remote", }),
+    unseen_finish: true,
+  }
+  let model = {
+    ..test_model(),
+    conversations: [active, background, answered, finished, remote],
+  }
+  assert_eq(model.notification_badge_count(), 3)
+  let seen = model.activate(
+    @interop.ChannelId::Local,
+    "desktop-finished",
+    @interop.ChannelId::Local.test_project(),
+  )
+  assert_eq(seen.notification_badge_count(), 2)
 }
 
 ///|
@@ -165,6 +233,7 @@ test "a rejoining page is handed the question it lost" {
   assert_eq(pending.id, "ap-1")
   assert_eq(pending.body, Some("fn main { println(1) }"))
   assert_false(pending.answered)
+  assert_eq(resynced.notification_badge_count(), 1)
 }
 
 ///|
@@ -273,6 +342,7 @@ test "a decision that never left the page restores the card" {
     fail("expected the conversation")
   }
   assert_true(sending.pending_approval is Some({ answered: true, .. }))
+  assert_eq(answered.notification_badge_count(), 0)
   let (_, restored) = update(
     test_dispatch(),
     ApprovalAnswerFailed(
@@ -289,6 +359,7 @@ test "a decision that never left the page restores the card" {
     fail("the card must survive a failed send")
   }
   assert_false(pending.answered)
+  assert_eq(restored.notification_badge_count(), 1)
   // And it is answerable again, for real: the guard that refuses a second
   // decision keys on the same flag.
   let (_, again) = update(
@@ -300,6 +371,7 @@ test "a decision that never left the page restores the card" {
     fail("expected the conversation")
   }
   assert_true(conv.pending_approval is Some({ answered: true, .. }))
+  assert_eq(again.notification_badge_count(), 0)
 }
 
 ///|
@@ -636,6 +708,7 @@ test "a finished run takes its unanswered question with it" {
     fail("expected the conversation")
   }
   assert_true(after.pending_approval is None)
+  assert_eq(ended.notification_badge_count(), 0)
 }
 
 ///|
@@ -664,4 +737,5 @@ test "a finished run leaves a question belonging to another run" {
     fail("expected the conversation")
   }
   assert_true(after.pending_approval is Some(_))
+  assert_eq(ended.notification_badge_count(), 1)
 }
