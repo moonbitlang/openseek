@@ -187,9 +187,12 @@ pub fn State::handle(
           new_folder: None,
           // A completion browse keeps editing with the canonical path the
           // host actually listed — avoiding a second request when the user
-          // presses Enter — and whatever was typed after its separator.
-          path_draft: self.path_draft.map(draft => {
-            location.base() + draft_segment(draft)
+          // presses Enter — and the segment the draft was completing.
+          path_draft: self
+          .completion()
+          .map(completion => {
+            let (_, segment) = completion
+            location.base() + segment
           }),
           path_selection: 0,
         }

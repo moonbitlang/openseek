@@ -617,3 +617,50 @@ test "a directory the host cannot list fails quietly and is not asked again" {
   let cancelled = updated(typing, CancelPathEdit)
   assert_eq(cancelled.completion_parent, None)
 }
+
+///|
+test "a home-relative draft is expanded by the host, not the listing" {
+  let picker = opened(location=Directory("/Users/dii/git"), entries=["openseek"])
+  let editing = updated(picker, EditPath)
+  // `~` is the host's to expand: its directory part goes there as typed, and
+  // the draft keeps its spelling until the reply supplies the expanded path.
+  let home = updated(editing, PathChanged("~/pro"))
+  assert_true(home.loading)
+  assert_eq(home.path_draft, Some("~/pro"))
+  assert_eq(home.completion_parent, Some("~/"))
+  assert_eq(home.path_destination(), Some("~/pro"))
+  let expanded = updated(
+    home,
+    Loaded(
+      channel=@interop.ChannelId::Local,
+      location=Directory("/Users/dii"),
+      entries=["git", "projects"],
+      generation=home.generation,
+    ),
+  )
+  assert_eq(expanded.path_draft, Some("/Users/dii/pro"))
+  assert_eq(expanded.visible_entries(), ["projects"])
+  // A bare `~` is a directory the host expands whole.
+  let bare = updated(editing, PathChanged("~"))
+  assert_true(bare.loading)
+  assert_eq(bare.path_draft, Some("~"))
+  assert_eq(bare.completion_parent, Some("~"))
+  let bare_expanded = updated(
+    bare,
+    Loaded(
+      channel=@interop.ChannelId::Local,
+      location=Directory("/Users/dii"),
+      entries=["git", "projects"],
+      generation=bare.generation,
+    ),
+  )
+  assert_eq(bare_expanded.path_draft, Some("/Users/dii/"))
+  assert_eq(bare_expanded.visible_entries(), ["git", "projects"])
+  // A host-native spelling without separators the picker knows (`C:\...`)
+  // is neither rewritten nor completed; Enter hands it to the host as is.
+  let backslash = updated(editing, PathChanged("C:\\Users\\me"))
+  assert_false(backslash.loading)
+  assert_eq(backslash.path_draft, Some("C:\\Users\\me"))
+  assert_eq(backslash.path_destination(), Some("C:\\Users\\me"))
+  assert_eq(backslash.visible_entries(), [])
+}

@@ -3,7 +3,8 @@
 // one, browses that directory while the editor stays open, issuing at most one
 // Host request per directory. Rows appear only once the listing is that
 // directory; the segment typed after its separator narrows them, prefix
-// matches first.
+// matches first. Host-native spellings the picker cannot resolve itself
+// (`~`) are browsed as typed and rewritten from the reply.
 
 ///|
 fn State::editable_path(self : State) -> String {
@@ -28,7 +29,9 @@ fn Location::base(self : Location) -> String {
 /// last separator, and the segment typed after that separator. A relative
 /// draft completes inside the listed location. A draft naming the listed
 /// location itself — opened and left untouched, or resumed after a browse —
-/// is that location with nothing to narrow.
+/// is that location with nothing to narrow. A home-relative draft is the
+/// host's to expand: its directory part goes to the host as typed, and the
+/// reply supplies the expanded path the way it supplies canonical casing.
 fn State::completion(self : State) -> (String, String)? {
   guard self.path_draft is Some(raw) else { return None }
   guard self.location is Some(location) else { return None }
@@ -36,29 +39,18 @@ fn State::completion(self : State) -> (String, String)? {
   if !draft.is_empty() && self.already_loaded(draft) {
     return Some((draft, ""))
   }
-  let absolute = if draft.has_prefix("/") {
-    draft
-  } else {
-    location.base() + draft
-  }
-  // `absolute` starts with a separator or the listed base, so one is found.
-  guard absolute.rev_find("/") is Some(index) else { return None }
-  Some(
-    (
-      absolute.view(end_offset=index + 1).to_owned(),
-      absolute.view(start_offset=index + 1).to_owned(),
-    ),
-  )
-}
-
-///|
-/// What the user typed after the draft's last separator, kept verbatim when a
-/// reply rewrites the directory part to the path the host listed.
-fn draft_segment(draft : String) -> String {
-  let draft = draft.trim().to_owned()
-  match draft.rev_find("/") {
-    Some(index) => draft.view(start_offset=index + 1).to_owned()
-    None => draft
+  let host_native = draft.has_prefix("/") || draft.has_prefix("~")
+  let absolute = if host_native { draft } else { location.base() + draft }
+  match absolute.rev_find("/") {
+    Some(index) =>
+      Some(
+        (
+          absolute.view(end_offset=index + 1).to_owned(),
+          absolute.view(start_offset=index + 1).to_owned(),
+        ),
+      )
+    // Only a bare `~` form has no separator: the host expands it whole.
+    None => Some((absolute, ""))
   }
 }
 
