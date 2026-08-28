@@ -1536,6 +1536,25 @@ pub fn OpenSeekThinking::wire(Self) -> String
 pub impl ToJson for OpenSeekThinking
 pub impl @json.FromJson for OpenSeekThinking
 
+pub(all) struct PatternRepairPayload {
+  root : String
+  pattern : String
+  instruction : String
+  generation : Int
+} derive(Eq, @debug.Debug)
+pub impl ToJson for PatternRepairPayload
+pub impl @json.FromJson for PatternRepairPayload
+
+pub(all) struct PatternRepairReply {
+  root : String
+  generation : Int
+  candidate_pattern : String
+  valid : Bool
+  message : String
+} derive(Eq, @debug.Debug)
+pub impl ToJson for PatternRepairReply
+pub impl @json.FromJson for PatternRepairReply
+
 pub(all) struct PendingApprovalPayload {
   id : String
   session : String

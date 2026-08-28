@@ -163,6 +163,8 @@ pub let moonide_definition : Command[@protocol.MoonIdeNavigationPayload, @protoc
 
 pub let moonide_references : Command[@protocol.MoonIdeNavigationPayload, @protocol.MoonIdeLocationsReply]
 
+pub let pattern_repair : Command[@protocol.PatternRepairPayload, @protocol.PatternRepairReply]
+
 pub let session_archive : Command[@protocol.SessionPayload, @protocol.ArchiveReply]
 
 pub let session_delete_archived : Command[@protocol.ArchivedSessionPayload, @protocol.SessionsReply]

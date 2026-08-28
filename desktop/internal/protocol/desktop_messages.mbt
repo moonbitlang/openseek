@@ -484,12 +484,13 @@ pub(all) struct CancelSearchSemanticPayload {
 } derive(Debug, Eq)
 
 ///|
-/// Request the first host-backed Pattern Repair prototype. The fake host does
-/// not invoke an Agent or moongrep yet; it only exercises the typed request and
-/// reply boundary.
+/// Request one host-backed Pattern Repair candidate. `instruction` is the
+/// user-facing repair intent kept separate from the current pattern so the
+/// future Agent operation can distinguish context from the requested change.
 pub(all) struct PatternRepairPayload {
   root : String
   pattern : String
+  instruction : String
   generation : Int
 } derive(Debug, Eq)
 

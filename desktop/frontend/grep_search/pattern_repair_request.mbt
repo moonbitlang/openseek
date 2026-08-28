@@ -34,12 +34,25 @@ fn pattern_repair_request_loader(
           @commands.pattern_repair,
           request,
         ) catch {
-          error => None
+          error => {
+            settled = true
+            guard active else { return }
+            scheduler.add(
+              emit(
+                PatternRepairFailed(
+                  root=request.root,
+                  generation=request.generation,
+                  message=@interop.bridge_error_text(error),
+                ),
+              ),
+            )
+            return
+          }
         }
         settled = true
         guard active else { return }
         match reply {
-          Some(reply) if reply.valid =>
+          reply if reply.valid =>
             scheduler.add(
               emit(
                 PatternRepairPreview(
@@ -50,23 +63,13 @@ fn pattern_repair_request_loader(
                 ),
               ),
             )
-          Some(reply) =>
+          reply =>
             scheduler.add(
               emit(
                 PatternRepairFailed(
                   root=request.root,
                   generation=request.generation,
                   message=reply.message,
-                ),
-              ),
-            )
-          None =>
-            scheduler.add(
-              emit(
-                PatternRepairFailed(
-                  root=request.root,
-                  generation=request.generation,
-                  message="Pattern repair request failed.",
                 ),
               ),
             )
@@ -108,6 +111,7 @@ fn Page::pattern_repair_request_payload(
   Some({
     root: root.path,
     pattern: self.semantic.patterns[0],
+    instruction: "Repair this structural pattern while preserving its intent.",
     generation: self.generation,
   })
 }

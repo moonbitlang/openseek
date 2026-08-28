@@ -10,13 +10,19 @@ pub impl FromJson for PatternRepairPayload with fn from_json(json, path) {
   {
     root: object.required_string("root"),
     pattern: object.required_string("pattern"),
+    instruction: object.required_string("instruction"),
     generation,
   }
 }
 
 ///|
 pub impl ToJson for PatternRepairPayload with fn to_json(self) {
-  { "root": self.root, "pattern": self.pattern, "generation": self.generation }
+  {
+    "root": self.root,
+    "pattern": self.pattern,
+    "instruction": self.instruction,
+    "generation": self.generation,
+  }
 }
 
 ///|
