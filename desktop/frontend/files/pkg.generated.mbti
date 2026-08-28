@@ -19,12 +19,15 @@ pub(all) struct Match {
   path : @pathx.Relative
   name : String
 } derive(Eq, @debug.Debug)
+pub fn Match::equal(Self, Self) -> Bool
+pub fn Match::not_equal(Self, Self) -> Bool
+pub fn Match::to_repr(Self) -> @debug.Repr
 
 type Request
 pub fn Request::Request(@interop.ChannelId, String, @common.Uri?) -> Self
 pub fn Request::retire(Self) -> @cmd.Cmd
 pub fn Request::run(Self, (Array[@pathx.Relative], Bool) -> @cmd.Cmd, () -> @cmd.Cmd) -> @cmd.Cmd
-pub fn Request::searching(Self, String, epoch~ : Int, loaded~ : (Array[@pathx.Relative], Bool) -> @cmd.Cmd, failed~ : () -> @cmd.Cmd) -> @sub.Sub
+pub fn Request::searching(Self, String, checkout_id~ : String, loaded~ : (Array[@pathx.Relative], Bool) -> @cmd.Cmd, failed~ : () -> @cmd.Cmd) -> @sub.Sub
 
 pub struct Search {
   candidates : Array[@pathx.Relative]
