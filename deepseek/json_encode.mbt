@@ -3,12 +3,15 @@
 ///
 /// GLM-5.3 models cannot disable thinking. Map OpenSeek's lowest setting to
 /// GLM's `low` effort and preserve complete reasoning across agent tool turns.
+///
+/// Providers are matched by name, never by wildcard, so adding a model
+/// variant fails exhaustiveness here until its thinking policy is chosen.
 fn thinking_json_fields(
   model : Model,
   thinking : ThinkingMode?,
 ) -> Array[(String, Json)] {
   match (model, thinking) {
-    (Kimi(_), _) | (_, None) => []
+    (Kimi(_), _) | (Deepseek(_) | Glm(_), None) => []
     (Glm(_), Some(mode)) => {
       let effort = match mode {
         No => "low"
@@ -16,21 +19,15 @@ fn thinking_json_fields(
         Max => "max"
       }
       [
-        ("thinking", ({ "type": "enabled", "clear_thinking": false } : Json)),
+        ("thinking", { "type": "enabled", "clear_thinking": false }),
         ("reasoning_effort", Json(effort)),
       ]
     }
-    (_, Some(No)) => [("thinking", ({ "type": "disabled" } : Json))]
-    (_, Some(High)) =>
-      [
-        ("thinking", ({ "type": "enabled" } : Json)),
-        ("reasoning_effort", Json("high")),
-      ]
-    (_, Some(Max)) =>
-      [
-        ("thinking", ({ "type": "enabled" } : Json)),
-        ("reasoning_effort", Json("max")),
-      ]
+    (Deepseek(_), Some(No)) => [("thinking", { "type": "disabled" })]
+    (Deepseek(_), Some(High)) =>
+      [("thinking", { "type": "enabled" }), ("reasoning_effort", "high")]
+    (Deepseek(_), Some(Max)) =>
+      [("thinking", { "type": "enabled" }), ("reasoning_effort", "max")]
   }
 }
 
