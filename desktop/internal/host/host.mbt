@@ -233,8 +233,8 @@ pub fn endpoints(
     ) {
       cancel_search_semantic_op(connection.semantic_search, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.pattern_repair, fn(payload) {
-      pattern_repair_op(payload)
+    @endpoint.Endpoint::remote(@commands.pattern_repair, async fn(payload) {
+      pattern_repair_op(state, payload)
     }),
     @endpoint.Endpoint::remote(@commands.fs_clear_file_search_cache, async fn(
       payload,

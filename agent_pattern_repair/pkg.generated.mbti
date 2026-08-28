@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/agent_pattern_repair"
+
+import {
+  "bobzhang/openseek/deepseek",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub async fn run(String, String, api_key~ : String, model~ : @deepseek.Model, max_steps~ : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, workspace_root? : String) -> PatternRepairReport?
+
+// Errors
+
+// Types and methods
+pub struct PatternRepairReport {
+  candidate_pattern : String
+  message : String
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,8 @@
+import {
+  "bobzhang/openseek/agent_subrun",
+  "bobzhang/openseek/agent_tool",
+  "bobzhang/openseek/deepseek",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "+native"

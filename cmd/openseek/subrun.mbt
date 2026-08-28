@@ -17,9 +17,13 @@
 /// report — printed only after that teardown — is the final line by
 /// construction.
 ///
-/// Kinds: `explore` (the read-only scout) and `echo` (a modelless probe
+/// Kinds: `explore` (the read-only scout), `pattern-repair` (a candidate-only
+/// structural pattern repair), and `echo` (a modelless probe
 /// that emits two canned events and echoes its input as the report — used
 /// by the parent-runner tests and the cram end-to-end doc).
+///
+/// `pattern-repair` reads one JSON object from stdin:
+/// `{ "pattern": "...", "instruction": "..." }`.
 async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
   let report : Ref[Json?] = { val: None, }
   with_jsonl_stdout(() => {
@@ -308,6 +312,37 @@ async fn dispatch_kind(
           None
         }
       }
+    }
+    "pattern-repair" => {
+      guard input
+        is {
+          "pattern": String(pattern),
+          "instruction": String(instruction),
+          ..
+        } &&
+        !pattern.is_blank() &&
+        !instruction.is_blank() else {
+        @emit.emit(
+          CommandError(
+            error="subrun pattern-repair requires pattern and instruction",
+          ),
+        )
+        return None
+      }
+      guard model.api_key(matches.values) is Some(api_key) else {
+        fail("an API key is required for \{model}: pass --api-key")
+      }
+      let report = @agent_pattern_repair.run(
+        pattern,
+        instruction,
+        api_key~,
+        model~,
+        max_steps=max_steps(matches).unwrap_or(8),
+        thinking~,
+        api_url?,
+        workspace_root~,
+      )
+      report.map(report => report.to_json())
     }
     "echo" => {
       // Modelless probe: two canned events plus the input echoed back —
