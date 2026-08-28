@@ -11,8 +11,8 @@ Concrete built-in tools live in subpackages:
 - `agent_tool/multi_edit`
 - `agent_tool/write`
 - `agent_tool/remove`
-- `agent_tool/run_moonbit` (the `mbtx` tool, with `agent_tool/job_output` and `agent_tool/job_stop`
-  for background jobs, and `agent_tool/bgjobs` as their shared runtime)
+- `agent_tool/mbtx` (with `agent_tool/job_output` and `agent_tool/job_stop` for
+  background jobs, and `agent_tool/bgjobs` as their shared runtime)
 - `agent_tool/plan`
 - `agent_tool/goal`
 - `agent_tool/finish`

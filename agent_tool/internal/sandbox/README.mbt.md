@@ -1,7 +1,7 @@
 # agent_tool/internal/sandbox
 
 The source-write sandbox as one prepared-command capability. `shell`,
-`run_moonbit`, `bgjobs`, and `shell_output` share one macOS `sandbox-exec`
+`mbtx`, `bgjobs`, and `shell_output` share one macOS `sandbox-exec`
 integration: describe command intent with the `Shell` or `Exec` variants of
 `Command`,
 prepare an opaque `SandboxedCommand`, run its program and arguments, then ask

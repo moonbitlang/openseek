@@ -107,7 +107,7 @@ pub async fn[X] build_tools(
       // it is passed straight through rather than tested and rebuilt. What the
       // tool package receives is the channel and nothing else: it can ask, and
       // knows nothing about who answers.
-      @run_moonbit.definition(
+      @mbtx.definition(
         workspace_root~,
         bg_runtime~,
         job_dir?=spill_dir,
@@ -261,7 +261,7 @@ async test "a foreground run past its deadline becomes a job instead of dying" {
     let scope = @agent_runtime.AgentTaskScope(group)
     let spill_dir = @fs.tmpdir(prefix="openseek-jobs-test-")
     let bg_runtime = @bgjobs.BgJobRuntime::new(scope, spill_dir~)
-    let mbtx = @run_moonbit.definition(
+    let mbtx = @mbtx.definition(
       workspace_root=".",
       bg_runtime~,
       job_dir=spill_dir,
@@ -334,7 +334,7 @@ async test "binary output does not escape the deadline" {
     let scope = @agent_runtime.AgentTaskScope(group)
     let spill_dir = @fs.tmpdir(prefix="openseek-jobs-binary-")
     let bg_runtime = @bgjobs.BgJobRuntime::new(scope, spill_dir~)
-    let mbtx = @run_moonbit.definition(
+    let mbtx = @mbtx.definition(
       workspace_root=".",
       bg_runtime~,
       job_dir=spill_dir,

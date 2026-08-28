@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/run_moonbit"
+package "bobzhang/openseek/agent_tool/mbtx"
 
 import {
   "bobzhang/openseek/agent_runtime",

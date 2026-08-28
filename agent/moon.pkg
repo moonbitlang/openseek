@@ -12,7 +12,7 @@ import {
   "bobzhang/openseek/agent_tool/goal",
   "bobzhang/openseek/agent_tool/multi_edit",
   "bobzhang/openseek/agent_tool/plan",
-  "bobzhang/openseek/agent_tool/run_moonbit",
+  "bobzhang/openseek/agent_tool/mbtx",
   "bobzhang/openseek/agent_tool/read",
   "bobzhang/openseek/agent_tool/remove",
   "bobzhang/openseek/agent_tool/write",

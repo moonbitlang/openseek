@@ -4,7 +4,7 @@ One function, `failure_message`, that takes MoonBit's rendering of a raised
 `fail(...)` and gives back just the message the code meant to say.
 
 Ten packages depend on it — `edit`, `goal`, `multi_edit`, `plan`, `read`,
-`remove`, `run_moonbit`, `shell`, `write`, and `goal/internal/decode` — because
+`remove`, `mbtx`, `shell`, `write`, and `goal/internal/decode` — because
 argument validation lives in internal decode packages that signal problems with
 `fail("arguments.path")`. The string a tool would otherwise hand back to the
 model looks like this:

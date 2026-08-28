@@ -1,4 +1,4 @@
-# run_moonbit/internal/decode
+# mbtx/internal/decode
 
 Argument decoding for the `mbtx` tool. `decode(Json) -> MbtxInput`
 reads the required `source` string (a `.mbtx` program) and the optional

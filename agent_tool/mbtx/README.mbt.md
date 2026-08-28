@@ -1,7 +1,5 @@
 # mbtx
 
-The `mbtx` tool lives in the `agent_tool/run_moonbit` package.
-
 Compile and run a **self-contained MoonBit program** and return its merged
 stdout/stderr and exit status. It is the agent's way to *script in MoonBit* —
 for automation (read and transform files, parse JSON, compute) and for probing
@@ -109,7 +107,7 @@ argument is unusable here and the snippet should be retried without it.
 ///|
 async test "mbtx escalation is refused without a grant" {
   let asked = []
-  let definition = @run_moonbit.definition(
+  let definition = @mbtx.definition(
     workspace_root=".",
     approval=ApprovalChannel(ask => {
       asked.push(ask.detail)
@@ -145,7 +143,7 @@ A quick language probe — no imports, pure core:
 ```mbt check
 ///|
 async test "mbtx runs a pure-core probe" {
-  let action = match @run_moonbit.definition(workspace_root=".").execute {
+  let action = match @mbtx.definition(workspace_root=".").execute {
     Async(execute) =>
       execute({ "source": "fn main { println([1, 2, 3].map(x => x * x)) }" })
     Sync(_) => fail("mbtx is async")
@@ -185,8 +183,7 @@ async test "mbtx reads a workspace file" {
       #|  let lines = [..text.split("\n")].filter(line => !line.is_empty())
       #|  @stdio.stdout.write("lines=\{lines.length()}\n")
       #|}
-    let action = match
-      @run_moonbit.definition(workspace_root=workspace).execute {
+    let action = match @mbtx.definition(workspace_root=workspace).execute {
       Async(execute) => execute({ "source": source })
       Sync(_) => fail("mbtx is async")
     }
@@ -211,7 +208,7 @@ Pure snippets can select another supported backend explicitly:
 ```mbt check
 ///|
 async test "mbtx accepts an explicit target" {
-  let action = match @run_moonbit.definition(workspace_root=".").execute {
+  let action = match @mbtx.definition(workspace_root=".").execute {
     Async(execute) =>
       execute({ "source": "fn main { println(6 * 7) }", "target": "js" })
     Sync(_) => fail("mbtx is async")
@@ -231,8 +228,7 @@ Warnings are quiet by default and can be restored for diagnostic probes:
 ///|
 async test "mbtx can show compiler warnings" {
   @vfs.with_tmpdir(prefix="mbtx-readme-warning-", workspace => {
-    let execute = match
-      @run_moonbit.definition(workspace_root=workspace).execute {
+    let execute = match @mbtx.definition(workspace_root=workspace).execute {
       Async(execute) => execute
       Sync(_) => fail("mbtx is async")
     }

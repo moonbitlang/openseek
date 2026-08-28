@@ -12,7 +12,7 @@ async fn run_in(
   workspace_root : String,
   arguments : Json,
 ) -> @agent_tool.ToolOutput {
-  let action = match @run_moonbit.definition(workspace_root~).execute {
+  let action = match @mbtx.definition(workspace_root~).execute {
     Async(execute) => execute(arguments)
     Sync(_) => fail("mbtx should be async")
   }
@@ -406,7 +406,7 @@ async test "read_only denies source writes with no scratch lab wired" {
       "fn main {  }\n",
       create_mode=CreateOrTruncate,
     )
-    let definition = @run_moonbit.definition(workspace_root=ws, read_only=true)
+    let definition = @mbtx.definition(workspace_root=ws, read_only=true)
     let action = match definition.execute {
       Async(execute) =>
         execute({
@@ -444,7 +444,7 @@ async test "a scratch lab is writable while workspace source stays denied" {
         "fn main {  }\n",
         create_mode=CreateOrTruncate,
       )
-      let definition = @run_moonbit.definition(
+      let definition = @mbtx.definition(
         workspace_root=ws,
         read_only=true,
         scratch_dir=lab,
@@ -508,7 +508,7 @@ async test "a worker's snippet writes neither its own tree nor a sibling's" {
       "fn theirs() -> Int { 2 }\n",
       create_mode=CreateOrTruncate,
     )
-    let definition = @run_moonbit.definition(
+    let definition = @mbtx.definition(
       workspace_root=worker,
       // The real geometry the subtask controller computes: the repository's
       // shared surfaces are denied wholesale and the worker's own tree is
@@ -557,7 +557,7 @@ async test "a worker's snippet writes neither its own tree nor a sibling's" {
 /// an error. (The wired half of this contract is asserted in the `agent`
 /// package, which builds a registry with a real runtime.)
 test "a definition without a job runtime does not advertise background runs" {
-  let definition = @run_moonbit.definition(workspace_root=".")
+  let definition = @mbtx.definition(workspace_root=".")
   assert_false(definition.description.contains("run_in_background"))
   let JsonSchema(schema) = definition.schema
   assert_false(schema.stringify().contains("run_in_background"))
@@ -567,7 +567,7 @@ test "a definition without a job runtime does not advertise background runs" {
 /// The command policy and its model-facing description are maintained
 /// separately, so pin the Proton entry at the public definition boundary too.
 test "the description advertises the Proton CLI command surface" {
-  let description = @run_moonbit.definition(workspace_root=".").description
+  let description = @mbtx.definition(workspace_root=".").description
   assert_true(description.contains("`proton_cli`"))
   assert_true(description.contains("doctor"))
   assert_true(description.contains("cef"))
@@ -582,7 +582,7 @@ test "the description advertises the Proton CLI command surface" {
 /// The schema is the model-facing argument contract, so pin its shape: the
 /// arguments the tool decodes are all present, and only `source` is required.
 test "the schema advertises every decoded argument" {
-  let JsonSchema(schema) = @run_moonbit.definition(workspace_root=".").schema
+  let JsonSchema(schema) = @mbtx.definition(workspace_root=".").schema
   guard schema is { "properties": Object(properties), "required": required, .. } else {
     fail("expected an object schema with properties and required")
   }
@@ -895,7 +895,7 @@ async fn run_escalating(
   asked~ : Array[@agent_runtime.ApprovalAsk],
 ) -> @agent_tool.ToolOutput {
   @vfs.with_tmpdir(prefix="mbtx-escalate-", ws => {
-    let definition = @run_moonbit.definition(
+    let definition = @mbtx.definition(
       workspace_root=ws,
       approval=ApprovalChannel(ask => {
         asked.push(ask)
@@ -916,14 +916,14 @@ async fn run_escalating(
 /// rule `run_in_background` follows, and it is what keeps a headless run from
 /// spending a call on a field whose every use is refused.
 test "the escalated argument is offered only with an approval channel" {
-  let plain = @run_moonbit.definition(workspace_root=".")
+  let plain = @mbtx.definition(workspace_root=".")
   let JsonSchema(plain_schema) = plain.schema
   guard plain_schema is { "properties": Object(plain_properties), .. } else {
     fail("expected an object schema")
   }
   assert_false(plain_properties.contains("escalated"))
   assert_false(plain.description.contains("escalated=true"))
-  let asking = @run_moonbit.definition(
+  let asking = @mbtx.definition(
     workspace_root=".",
     approval=ApprovalChannel(_ => Rejected),
   )
@@ -1021,7 +1021,7 @@ async test "each way of not being granted says a different thing" {
 async test "an ordinary call never asks for approval" {
   let asked : Array[@agent_runtime.ApprovalAsk] = []
   @vfs.with_tmpdir(prefix="mbtx-noask-", ws => {
-    let definition = @run_moonbit.definition(
+    let definition = @mbtx.definition(
       workspace_root=ws,
       approval=ApprovalChannel(ask => {
         asked.push(ask)
@@ -1052,7 +1052,7 @@ async test "a refusal names escalation when a channel is wired" {
     #|  @myshell.Cmd("chmod", ["644", "/tmp"]).output() |> ignore
     #|}
   let asking = @vfs.with_tmpdir(prefix="mbtx-hint-", ws => {
-    let definition = @run_moonbit.definition(
+    let definition = @mbtx.definition(
       workspace_root=ws,
       approval=ApprovalChannel(_ => Rejected),
     )
@@ -1084,9 +1084,9 @@ async test "a refusal names escalation when a channel is wired" {
 /// check`, the model read the justfile and quietly ran the three `moon`
 /// commands it expands to, never mentioning that asking was possible.
 test "the description offers asking as an answer where it exists" {
-  let plain = @run_moonbit.definition(workspace_root=".").description
+  let plain = @mbtx.definition(workspace_root=".").description
   assert_true(plain.contains("say so rather than working around it"))
-  let asking = @run_moonbit.definition(
+  let asking = @mbtx.definition(
       workspace_root=".",
       approval=ApprovalChannel(_ => Rejected),
     ).description
@@ -1105,7 +1105,7 @@ test "the description offers asking as an answer where it exists" {
 async test "escalation is refused on a target that carries no policy" {
   let asked : Array[@agent_runtime.ApprovalAsk] = []
   let out = @vfs.with_tmpdir(prefix="mbtx-target-", ws => {
-    let definition = @run_moonbit.definition(
+    let definition = @mbtx.definition(
       workspace_root=ws,
       approval=ApprovalChannel(ask => {
         asked.push(ask)
@@ -1139,7 +1139,7 @@ async test "escalation is refused on a target that carries no policy" {
 #cfg(not(platform="windows"))
 async test "an escalated run is not read as a policy refusal" {
   let out = @vfs.with_tmpdir(prefix="mbtx-escalated-scan-", ws => {
-    let definition = @run_moonbit.definition(
+    let definition = @mbtx.definition(
       workspace_root=ws,
       approval=ApprovalChannel(_ => AllowedOnce),
     )

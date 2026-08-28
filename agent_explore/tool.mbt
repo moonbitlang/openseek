@@ -228,7 +228,7 @@ pub async fn run_child(
     tools=captured => {
       @agent_tool.Tools([
         @read.definition(workspace_root~),
-        @run_moonbit.definition(workspace_root~, read_only=true, scratch_dir?),
+        @mbtx.definition(workspace_root~, read_only=true, scratch_dir?),
         submit_answer_tool(captured),
       ])
     },

@@ -138,7 +138,7 @@ pub async fn run_child(
     Ok(scope) => scope
     Err(reason) => return Err(reason)
   }
-  let worker_sandbox : @run_moonbit.WorkerSandbox = {
+  let worker_sandbox : @mbtx.WorkerSandbox = {
     deny_roots: input.deny_roots,
     worker_root: input.worker_root,
     worker_admin_dir: input.worker_admin_dir,
@@ -155,10 +155,7 @@ pub async fn run_child(
     tools=captured => {
       Tools([
         @read.definition(workspace_root=input.worker_root),
-        @run_moonbit.definition(
-          workspace_root=input.worker_root,
-          worker_sandbox~,
-        ),
+        @mbtx.definition(workspace_root=input.worker_root, worker_sandbox~),
         @edit.definition(
           workspace_root=input.worker_root,
           file_state~,
