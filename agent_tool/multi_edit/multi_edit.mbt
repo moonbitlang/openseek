@@ -873,7 +873,7 @@ fn validate_edit(
         message: "old_string and new_string are both empty",
       })
     }
-    let at = line_start_offset(content, item.start_line).clamp(
+    let at = @line_offset.line_start_offset(content, item.start_line).clamp(
       min=0,
       max=content.length(),
     )
@@ -986,42 +986,14 @@ fn select_edit_region(
   start_line : Int,
   end_line : Int?,
 ) -> EditRegion {
-  let start = line_start_offset(content, start_line)
+  let start = @line_offset.line_start_offset(content, start_line)
   let end = match end_line {
-    Some(line) => line_end_offset(content, line)
+    Some(line) => @line_offset.line_end_offset(content, line)
     None => content.length()
   }
   let start = start.clamp(min=0, max=content.length())
   let end = end.clamp(min=start, max=content.length())
   { body: content.unsafe_substring(start~, end~), start_offset: start, }
-}
-
-///|
-fn line_start_offset(content : String, line : Int) -> Int {
-  // Line `line` starts right after line `line - 1` ends (nobreak: both scans
-  // land on content.length() for a line past EOF).
-  if line <= 1 {
-    0
-  } else {
-    line_end_offset(content, line - 1)
-  }
-}
-
-///|
-fn line_end_offset(content : String, line : Int) -> Int {
-  let len = content.length()
-  for cursor in 0..<len; current_line = 1 {
-    if content[cursor] == '\n' {
-      if current_line == line {
-        break cursor + 1
-      }
-      continue current_line + 1
-    } else {
-      continue current_line
-    }
-  } nobreak {
-    len
-  }
 }
 
 ///|

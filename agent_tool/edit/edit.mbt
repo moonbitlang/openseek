@@ -204,7 +204,7 @@ async fn edit_file(
     // summary reports the actual inclusive line range the new content
     // occupies — real coordinates the model can anchor follow-up edits on,
     // not the (possibly clamped) requested line.
-    let at = line_start_offset(content, input.start_line).clamp(
+    let at = @line_offset.line_start_offset(content, input.start_line).clamp(
       min=0,
       max=content.length(),
     )
@@ -832,9 +832,9 @@ fn select_edit_region(
   input : @decode.EditInput,
 ) -> EditRegion {
   let start_line = input.start_line
-  let start = line_start_offset(content, start_line)
+  let start = @line_offset.line_start_offset(content, start_line)
   let end = match input.end_line {
-    Some(line) => line_end_offset(content, line)
+    Some(line) => @line_offset.line_end_offset(content, line)
     None => content.length()
   }
   // `decode` guarantees end_line >= start_line when both are present. These
@@ -845,34 +845,6 @@ fn select_edit_region(
     prefix: content.unsafe_substring(start=0, end=start),
     body: content.unsafe_substring(start~, end~),
     suffix: content.unsafe_substring(start=end, end=content.length()),
-  }
-}
-
-///|
-fn line_start_offset(content : String, line : Int) -> Int {
-  // Line `line` starts right after line `line - 1` ends (nobreak: both scans
-  // land on content.length() for a line past EOF).
-  if line <= 1 {
-    0
-  } else {
-    line_end_offset(content, line - 1)
-  }
-}
-
-///|
-fn line_end_offset(content : String, line : Int) -> Int {
-  let len = content.length()
-  for cursor in 0..<len; current_line = 1 {
-    if content[cursor] == '\n' {
-      if current_line == line {
-        break cursor + 1
-      }
-      continue current_line + 1
-    } else {
-      continue current_line
-    }
-  } nobreak {
-    len
   }
 }
 
@@ -933,8 +905,8 @@ fn old_string_context(
   )
   let lines : Array[String] = ["\n\nfile context:"]
   for line_no in first_line..<=last_line {
-    let ls = line_start_offset(content, line_no)
-    let le = line_end_offset(content, line_no)
+    let ls = @line_offset.line_start_offset(content, line_no)
+    let le = @line_offset.line_end_offset(content, line_no)
     let line_text = if le > ls && content[le - 1] == '\n' {
       content.unsafe_substring(start=ls, end=le - 1)
     } else {
@@ -949,7 +921,7 @@ fn old_string_context(
     lines.push("\{gutter} \{line_no} | \{line_text}")
   }
   // Compare old_string with the actual content at the anchor offset
-  let anchor_offset = line_start_offset(content, start_line)
+  let anchor_offset = @line_offset.line_start_offset(content, start_line)
   let compare_len = old_string.length().min(content.length() - anchor_offset)
   if compare_len > 0 {
     let actual = content.unsafe_substring(
