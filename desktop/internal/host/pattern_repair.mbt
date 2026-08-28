@@ -50,6 +50,42 @@ async fn run_pattern_repair_process(
 ///|
 /// Run the bundled OpenSeek executable as a one-shot Pattern Repair Agent.
 /// The child receives no workspace tools; it can only submit a candidate report.
+async fn request_pattern_repair_candidate(
+  state : HostState,
+  root : @pathx.Absolute,
+  pattern : String,
+  instruction : String,
+) -> (String, String)? {
+  let input = ({ "pattern": pattern, "instruction": instruction } : Json).stringify() +
+    "\n"
+  let (code, stdout, _) = run_pattern_repair_process(
+    state.engine,
+    [
+      "subrun", "pattern-repair", "--model", "deepseek-v4-pro", "--max-steps", "8",
+    ],
+    input,
+    root.0,
+  ) catch {
+    _ => return None
+  }
+  guard code == 0 else { return None }
+  for line in stdout.split("\n") {
+    let json = @json.parse(line.trim()) catch { _ => continue }
+    guard json is { "subrun_report": report, .. } else { continue }
+    guard report
+      is {
+        "candidate_pattern": String(candidate),
+        "message": String(message),
+        ..
+      } else {
+      return None
+    }
+    return Some((candidate, message))
+  }
+  None
+}
+
+///|
 async fn pattern_repair_op(
   state : HostState,
   payload : @protocol.PatternRepairPayload,
@@ -67,39 +103,16 @@ async fn pattern_repair_op(
     return failure("Pattern Repair Agent is unavailable.")
   }
   let root = WirePath::parse(payload.root).absolute
-  let input = (
-      { "pattern": payload.pattern, "instruction": payload.instruction } : Json).stringify() +
-    "\n"
-  let (code, stdout, stderr) = run_pattern_repair_process(
-    state.engine,
-    [
-      "subrun", "pattern-repair", "--model", "deepseek-v4-pro", "--max-steps", "8",
-    ],
-    input,
-    root.0,
-  ) catch {
-    error => return failure("Cannot start Pattern Repair Agent: \{error}")
-  }
-  guard code == 0 else {
-    let detail = stderr.trim().to_owned()
-    return failure(
-      if detail.is_empty() {
-        "Pattern Repair Agent failed."
-      } else {
-        detail
-      },
-    )
-  }
-  for line in stdout.split("\n") {
-    let json = @json.parse(line.trim()) catch { _ => continue }
-    guard json is { "subrun_report": report, .. } else { continue }
-    guard report
-      is {
-        "candidate_pattern": String(candidate),
-        "message": String(message),
-        ..
-      } else {
-      return failure("Pattern Repair Agent returned an invalid candidate.")
+  let mut instruction = payload.instruction
+  for attempt in 0..<=3 {
+    guard request_pattern_repair_candidate(
+        state,
+        root,
+        payload.pattern,
+        instruction,
+      )
+      is Some((candidate, message)) else {
+      return failure("Pattern Repair Agent returned no candidate.")
     }
     match validate_pattern_repair_candidate(state, root, candidate) {
       PatternRepairValid =>
@@ -110,9 +123,13 @@ async fn pattern_repair_op(
           valid: true,
           message,
         }
-      PatternRepairInvalid(code, diagnostic) =>
-        return failure("\{code}: \{diagnostic}")
+      PatternRepairInvalid(code, diagnostic) => {
+        if attempt == 2 {
+          return failure("\{code}: \{diagnostic}")
+        }
+        instruction = "\{payload.instruction}\n\nPrevious candidate validation failed (attempt \{attempt + 1}): \{diagnostic}\nReturn a corrected candidate."
+      }
     }
   }
-  failure("Pattern Repair Agent returned no candidate.")
+  failure("Pattern Repair Agent could not produce a valid candidate.")
 }
