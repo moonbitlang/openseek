@@ -166,7 +166,7 @@ pub(all) struct Input {
   slash_commands : Array[SlashCommand]
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]
-  context_generation : Int
+  context_id : String
   submission_sequence : Int
   replacements : Array[Replacement]
   retirements : Array[@interop.ConversationKey]
