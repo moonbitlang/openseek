@@ -123,6 +123,7 @@ async fn main {
   // at all. Remote browsers use the same method catalog over the relay
   // WebSocket instead (docs/remote-protocol.md).
   let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760)
+    .load_config()
     // Let the page palette paint the native titlebar area. The default macOS
     // titlebar follows the system appearance, so an explicit in-app dark theme
     // otherwise leaves a bright strip above the dark application shell.
