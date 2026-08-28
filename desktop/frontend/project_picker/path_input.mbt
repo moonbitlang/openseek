@@ -1,7 +1,9 @@
-// Path-input projection for the project picker. Ordinary typing narrows the
-// already loaded directory rows and ranks prefix matches first. A separator
-// after an exact loaded child commits that child immediately, avoiding a stale
-// parent listing while still issuing at most one Host request per directory.
+// Path-input projection for the project picker. The listing follows the
+// directory the draft names: typing past a separator, or deleting back across
+// one, browses that directory while the editor stays open, issuing at most one
+// Host request per directory. Rows appear only once the listing is that
+// directory; the segment typed after its separator narrows them, prefix
+// matches first.
 
 ///|
 fn State::editable_path(self : State) -> String {
@@ -13,52 +15,81 @@ fn State::editable_path(self : State) -> String {
 }
 
 ///|
-/// The part of the draft that can describe a child of the current listing.
-/// An absolute path under another parent remains directly submittable but does
-/// not pretend that the current directory's rows are its completions.
-fn State::path_filter(self : State) -> String {
-  guard self.path_draft is Some(raw) else { return "" }
-  let draft = raw.trim().to_owned()
-  match self.location {
-    Some(Directory(path)) => {
-      let base = if path.has_suffix("/") { path } else { path + "/" }
-      if draft == path || draft == base {
-        return ""
-      }
-      match draft.strip_prefix(base) {
-        Some(suffix) => {
-          let suffix = "\{suffix}".to_lower()
-          if suffix.contains("/") {
-            ""
-          } else {
-            suffix
-          }
-        }
-        None => if draft.contains("/") { "" } else { draft.to_lower() }
-      }
-    }
-    Some(DriveList) => {
-      let query = match draft.to_lower().strip_prefix("/") {
-        Some(suffix) => "\{suffix}"
-        None => draft.to_lower()
-      }
-      if query.contains("/") {
-        ""
-      } else {
-        query
-      }
-    }
-    None => ""
+/// A location as the prefix of its children's paths.
+fn Location::base(self : Location) -> String {
+  match self {
+    Directory(path) => if path.has_suffix("/") { path } else { path + "/" }
+    DriveList => "/"
   }
 }
 
 ///|
-/// Hide stale rows during a browse; otherwise preserve directory order inside
-/// prefix and looser-contains buckets.
+/// Where the draft's completions come from: the directory it names up to its
+/// last separator, and the segment typed after that separator. A relative
+/// draft completes inside the listed location. A draft naming the listed
+/// location itself — opened and left untouched, or resumed after a browse —
+/// is that location with nothing to narrow.
+fn State::completion(self : State) -> (String, String)? {
+  guard self.path_draft is Some(raw) else { return None }
+  guard self.location is Some(location) else { return None }
+  let draft = raw.trim().to_owned()
+  if !draft.is_empty() && self.already_loaded(draft) {
+    return Some((draft, ""))
+  }
+  let absolute = if draft.has_prefix("/") {
+    draft
+  } else {
+    location.base() + draft
+  }
+  // `absolute` starts with a separator or the listed base, so one is found.
+  guard absolute.rev_find("/") is Some(index) else { return None }
+  Some(
+    (
+      absolute.view(end_offset=index + 1).to_owned(),
+      absolute.view(start_offset=index + 1).to_owned(),
+    ),
+  )
+}
+
+///|
+/// What the user typed after the draft's last separator, kept verbatim when a
+/// reply rewrites the directory part to the path the host listed.
+fn draft_segment(draft : String) -> String {
+  let draft = draft.trim().to_owned()
+  match draft.rev_find("/") {
+    Some(index) => draft.view(start_offset=index + 1).to_owned()
+    None => draft
+  }
+}
+
+///|
+/// Whether the rows can complete the draft: the listing is the directory it
+/// names. Until that browse answers — or when the host could not list it —
+/// the rows of some other directory would only mislead, so none are shown.
+fn State::listing_completes_draft(self : State) -> Bool {
+  match self.completion() {
+    Some((parent, _)) => self.already_loaded(parent)
+    None => self.path_draft is None
+  }
+}
+
+///|
+/// The segment narrowing the listed rows, lowercased for matching.
+fn State::path_filter(self : State) -> String {
+  guard self.completion() is Some((parent, segment)) else { return "" }
+  guard self.already_loaded(parent) else { return "" }
+  segment.to_lower()
+}
+
+///|
+/// Hide stale rows during a browse and rows that cannot complete the draft;
+/// otherwise preserve directory order inside prefix and looser-contains
+/// buckets.
 fn State::visible_entries(self : State) -> Array[String] {
   if self.loading && self.new_folder is None {
     return []
   }
+  guard self.listing_completes_draft() else { return [] }
   let query = self.path_filter()
   if query.is_empty() {
     return self.entries
@@ -86,33 +117,6 @@ fn State::entry_target(self : State, name : String) -> String {
     Some(DriveList) => "/" + name + "/"
     None => name
   }
-}
-
-///|
-/// A trailing separator commits one child from the Host-validated listing.
-/// Other paths remain editable and require Enter.
-fn State::committed_child_path(self : State, raw : String) -> String? {
-  let draft = raw.trim().to_owned()
-  guard draft.has_suffix("/") else { return None }
-  // DriveList proves Windows semantics. A directory shaped like `/c:/...`
-  // may instead be a legal POSIX path, so its identity stays case-sensitive.
-  let case_insensitive = self.location is Some(DriveList)
-  let key = fn(path : String) -> String {
-    if case_insensitive {
-      path.to_lower()
-    } else {
-      path
-    }
-  }
-  let draft = key(draft)
-  for name in self.entries {
-    let target = self.entry_target(name)
-    let path = if target.has_suffix("/") { target } else { target + "/" }
-    if draft == key(path) || draft == key(name + "/") {
-      return Some(path)
-    }
-  }
-  None
 }
 
 ///|
