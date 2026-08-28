@@ -11,7 +11,6 @@ priv suberror SearchRequestSub {
 priv enum SearchRequest {
   Text(@protocol.SearchTextPayload)
   Semantic(@protocol.SearchSemanticPayload)
-  PatternRepair(@protocol.PatternRepairPayload)
 }
 
 ///|
@@ -28,12 +27,6 @@ fn SearchRequest::identity(self : SearchRequest) -> SearchRequestIdentity {
       { root: payload.root, generation: payload.generation, kind: "text", }
     Semantic(payload) =>
       { root: payload.root, generation: payload.generation, kind: "semantic", }
-    PatternRepair(payload) =>
-      {
-        root: payload.root,
-        generation: payload.generation,
-        kind: "pattern-repair",
-      }
   }
 }
 
@@ -46,7 +39,6 @@ fn SearchRequest::generation(self : SearchRequest) -> Int {
 priv enum LoadedReply {
   TextLoaded(@protocol.SearchTextReply)
   SemanticLoaded(@protocol.SearchSemanticReply)
-  PatternRepairLoaded(@protocol.PatternRepairReply)
   RequestFailed(String)
 }
 
@@ -83,7 +75,6 @@ fn SearchRequest::cancel(
         ) catch {
           _ => ()
         }
-      PatternRepair(_) => ()
     }
   })
 }
@@ -137,17 +128,6 @@ fn search_request_loader(
             ) catch {
               error => RequestFailed(@interop.bridge_error_text(error))
             }
-          PatternRepair(payload) =>
-            LoadedReply::PatternRepairLoaded(
-              @interop.bridge_request(
-                owner.channel,
-                @commands.pattern_repair,
-                payload,
-              ),
-            ) catch {
-              error =>
-                LoadedReply::RequestFailed(@interop.bridge_error_text(error))
-            }
         }
         settled = true
         if active {
@@ -186,25 +166,6 @@ fn search_request_loader(
                   ),
                 ),
               )
-            LoadedReply::PatternRepairLoaded(reply) =>
-              scheduler.add(
-                emit(
-                  if reply.valid {
-                    PatternRepairPreview(
-                      root=request_root,
-                      generation=request_generation,
-                      candidate_pattern=reply.candidate_pattern,
-                      message=reply.message,
-                    )
-                  } else {
-                    PatternRepairFailed(
-                      root=request_root,
-                      generation=request_generation,
-                      message=reply.message,
-                    )
-                  },
-                ),
-              )
           }
         }
       })
@@ -234,17 +195,13 @@ fn search_request_loader(
 /// tree, or opening a Browser tab may leave an issued search running. Query,
 /// mode, and checkout generations still replace the subscription and cancel
 /// its child.
-pub fn State::subscription(
+fn State::search_subscription(
   self : State,
   input : Input,
   emit : @cmd.Emit[Msg],
 ) -> @sub.Sub {
   let page = self.page
-  guard (
-      page.phase is Debouncing ||
-      page.phase is Loading ||
-      page.pattern_repair_phase is PatternRepairRequested
-    ) &&
+  guard (page.phase is Debouncing || page.phase is Loading) &&
     input.root is Some(root) &&
     @resource.belongs_to(root, input.owner.channel) else {
     return @sub.none
@@ -255,15 +212,9 @@ pub fn State::subscription(
       .text_request_payload(input)
       .map(payload => SearchRequest::Text(payload))
     Semantic =>
-      if page.pattern_repair_phase is PatternRepairRequested {
-        page
-        .pattern_repair_request_payload(input)
-        .map(payload => SearchRequest::PatternRepair(payload))
-      } else {
-        page
-        .semantic_request_payload(input)
-        .map(payload => SearchRequest::Semantic(payload))
-      }
+      page
+      .semantic_request_payload(input)
+      .map(payload => SearchRequest::Semantic(payload))
   }
   guard request is Some(request) else { return @sub.none }
   let identity = request.identity()
