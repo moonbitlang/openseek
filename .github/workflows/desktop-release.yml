@@ -3,10 +3,9 @@ name: Desktop release
 run-name: Desktop ${{ github.event_name == 'schedule' && 'stable' || inputs.channel }} v${{ github.event_name == 'schedule' && 'daily' || inputs.version }} by @${{ github.actor }}
 
 on:
-  # GitHub cron is UTC. These run every three hours at
-  # 00:00/03:00/06:00/09:00/12:00/15:00/18:00/21:00 in Asia/Shanghai.
+  # Runs once a day at 14:00 in Asia/Shanghai.
   schedule:
-    - cron: "0 1,4,7,10,13,16,19,22 * * *"
+    - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       channel:
