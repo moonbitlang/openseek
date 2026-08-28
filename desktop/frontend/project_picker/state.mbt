@@ -35,9 +35,11 @@ struct State {
   // by the segment typed after that separator.
   path_draft : String?
   path_selection : Int
-  // The directory most recently browsed for the draft, whether that listing
-  // is still on its way, arrived, or failed: retyping inside it never repeats
-  // the request. Cleared with the draft.
+  // The directory most recently browsed for the draft that the host has not
+  // listed — the browse is in flight, or it failed — so retyping inside it
+  // never repeats the request. A listing clears it: the host may have
+  // canonicalized the spelling, and an alias typed again is its to resolve.
+  // Cleared with the draft.
   completion_parent : String?
   generation : Int
 } derive(Eq)
@@ -185,6 +187,7 @@ pub fn State::handle(
           entries,
           loading: false,
           new_folder: None,
+          completion_parent: None,
           // A completion browse keeps editing with the canonical path the
           // host actually listed — avoiding a second request when the user
           // presses Enter — and the segment the draft was completing.
