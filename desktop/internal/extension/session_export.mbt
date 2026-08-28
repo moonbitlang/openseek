@@ -12,42 +12,19 @@ fn SessionExportDialog::SessionExportDialog(
 }
 
 ///|
-/// Wait for Proton's asynchronous native save dialog without blocking the app
-/// event loop. Closing the dialog returns `None` and creates no file.
+/// Open Proton's window-scoped save dialog. Closing it returns `None` and
+/// creates no file.
 async fn SessionExportDialog::destination(
   self : SessionExportDialog,
   context : @proton.CommandContext,
 ) -> String? {
-  let window = @native.WindowRef::unsafe_from_handle(context.window())
-  let dialog = window.begin_save_file_dialog(
-    Some("Export conversation"),
-    Some("\{self.session}.html"),
-  ) catch {
-    error =>
-      raise @host.HostError(
-        "could not open the save dialog: \{error.message()}",
-      )
+  guard context.window() is Some(window) else {
+    raise @host.HostError(
+      "could not open the save dialog: window is unavailable",
+    )
   }
-  for ;; {
-    let revision = context.wake_revision()
-    let result = window.poll_dialog_result(dialog) catch {
-      error =>
-        raise @host.HostError(
-          "could not read the save dialog: \{error.message()}",
-        )
-    }
-    match result {
-      Ready(path) => {
-        if path.is_empty() {
-          return None
-        }
-        // Preserve the exact destination confirmed by the native dialog. The
-        // suggested name already carries `.html`; changing the returned path
-        // here would bypass the dialog's overwrite confirmation for that path.
-        return Some(path)
-      }
-      Pending => context.wait_for_wake(revision)
-    }
+  window.save_file(Some("Export conversation"), Some("\{self.session}.html")) catch {
+    error => raise @host.HostError("could not open the save dialog: \{error}")
   }
 }
 

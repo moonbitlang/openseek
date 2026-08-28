@@ -82,6 +82,7 @@ pub fn view_event_json(id : Int, event : @proton.ViewEvent) -> Json {
         "code": error_code.to_json(),
         "text": error_text.to_json(),
       }
+    Closed => { "id": id.to_json(), "kind": "closed" }
   }
 }
 

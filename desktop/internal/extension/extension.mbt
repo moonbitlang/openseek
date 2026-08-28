@@ -303,11 +303,11 @@ pub async fn DesktopBridgeActor::notify_browser_event(
 }
 
 ///|
-pub fn openseek_extension(
+pub fn openseek_capability(
   state : @api.ApiState,
   bridge : DesktopBridgeActor,
   views : BrowserViews,
-) -> @proton_extension.Extension {
+) -> @proton_extension.RendererCapability {
   let endpoints = @api.endpoints(state, bridge.host_connection)
   endpoints.push(
     @endpoint.Endpoint::window(@commands.host_connect, async fn(context, _) {
@@ -336,14 +336,16 @@ pub fn openseek_extension(
   for endpoint in window_endpoints(views) {
     endpoints.push(endpoint)
   }
-  @proton_extension.typed(
-    @commands.extension_contract,
-    endpoints.map(endpoint => endpoint.route()),
-    registrar => {
-      for endpoint in endpoints {
-        endpoint.bind(registrar)
-      }
-    },
+  @proton_extension.capability(
+    @proton_extension.typed(
+      @commands.extension_contract,
+      endpoints.map(endpoint => endpoint.route()),
+      registrar => {
+        for endpoint in endpoints {
+          endpoint.bind(registrar)
+        }
+      },
+    ),
   )
 }
 

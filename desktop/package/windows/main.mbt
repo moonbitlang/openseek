@@ -223,6 +223,10 @@ async fn stage_proton_runtime(ws : @packaging.Workspace) -> Unit {
     }
   }
   @packaging.copy_tree(dist + "/Resources", ws.at(BundleDir + "/Resources"))
+  @packaging.copy_file(
+    @packaging.proton_helper_path(ws),
+    ws.at(BundleDir + "/cef_process.exe"),
+  )
 }
 
 ///|

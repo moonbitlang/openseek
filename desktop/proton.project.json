@@ -1,25 +1,14 @@
 {
-  "product_name": "SeekMoon",
   "identifier": "community.moonbit.proton.openseek-desktop",
-  "window": {
-    "title": "SeekMoon",
-    "width": 1120,
-    "height": 760,
-    "size_hint": "none"
-  },
-  "entry": {
-    "kind": "asset",
-    "value": "target/proton-package-input/assets/index.html"
-  },
-  "debug": true,
   "backend": {
     "path": ".",
-    "package": "openseek_desktop"
+    "package": "."
   },
-  "bundle": {
-    "active": true,
-    "targets": ["app", "zip"],
-    "icon": ["package/macos/AppIcon.icns"],
+  "package": {
+    "product_name": "SeekMoon",
+    "version": "0.1.5",
+    "formats": ["app", "zip"],
+    "icons": ["package/macos/AppIcon.icns"],
     "resources": ["target/proton-package-input/**"],
     "sign": {
       "binaries": [

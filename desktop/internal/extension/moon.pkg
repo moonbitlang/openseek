@@ -1,7 +1,6 @@
 import {
   "moonbit-community/proton",
   "moonbit-community/proton/extension" @proton_extension,
-  "moonbit-community/proton/native",
   "moonbit-community/proton_contract",
   "openseek_desktop/internal/api",
   "openseek_desktop/internal/commands",

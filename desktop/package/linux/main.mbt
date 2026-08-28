@@ -121,6 +121,10 @@ async fn copy_bundle_files(
     @packaging.proton_runtime_dist(ws).0,
     ws.at(UsrBinPath + "/proton"),
   )
+  @packaging.copy_file(
+    @packaging.proton_helper_path(ws),
+    ws.at(UsrBinPath + "/cef_process"),
+  )
 }
 
 ///|
@@ -136,6 +140,8 @@ fn apprun_source() -> String {
     #|
     #|APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
     #|export PATH="$APP_DIR/usr/bin:$PATH"
+    #|export PROTON_RUNTIME_ROOT="$APP_DIR/usr/bin/proton"
+    #|export PROTON_HELPER_PATH="$APP_DIR/usr/bin/cef_process"
     #|export LD_LIBRARY_PATH="$APP_DIR/usr/bin/proton/lib:$APP_DIR/usr/bin/proton:${LD_LIBRARY_PATH:-}"
     #|exec "$APP_DIR/usr/bin/openseek-desktop-bin" "$@"
     #|

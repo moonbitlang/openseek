@@ -222,15 +222,10 @@ The launcher detects the desktop workspace, builds the frontend, engine, and
 native host with Moon's normal incremental build, prepares the Proton/CEF
 runtime, and launches the bare host. Setup runs `proton_cli` through `moonx`,
 which fetches the published CLI into the registry cache rather than installing
-anything, and assembles the runtime from the resolved Proton package's platform
-prebuilt plus a CEF distribution. That first setup may download a large
-archive; later development and platform-package runs reuse the validated
-assembled runtime and skip the CLI entirely.
-
-`cef setup` runs at the *monorepo root*, not in `desktop/`: the root is where
-Moon resolves `.mooncakes`, so it is both where the CLI finds the Proton
-prebuilt and where Proton's link config looks for the `.proton/runtime.json`
-it writes.
+anything, and installs the matching CEF runtime and subprocess helper into
+Proton's user-level immutable store. That first setup may download a large
+archive; later development and platform-package runs reuse the validated store
+entries.
 
 The executable implementation lives in `package/dev`; it accepts no path or
 build-mode arguments.
