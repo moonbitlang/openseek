@@ -1043,9 +1043,6 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     #|scripting surface: there is no shell tool, so commands, IO, and computation
     #|happen inside the submitted MoonBit program.
     #|
-    #|This tool was previously named `run_moonbit` — a resumed session's older
-    #|history may still call it that.
-    #|
     #|`source` is the whole program. Diagnostics are rewritten to `source:LINE:COL`
     #|about your input; `target` defaults to wasm, the sandboxed backend.
     #|

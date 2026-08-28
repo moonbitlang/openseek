@@ -600,7 +600,6 @@ test "a tool group's summary recognizes every cmd/openseek built-in" {
       tool_item("shell"),
       tool_item("moon_cmd"),
       tool_item("mbtx"),
-      tool_item("run_moonbit"),
       tool_item("shell_output"),
       tool_item("shell_stop"),
       tool_item("plan"),
@@ -609,7 +608,7 @@ test "a tool group's summary recognizes every cmd/openseek built-in" {
       tool_item("moon_check compiling"),
       tool_item("mystery"),
     ]),
-    content="Read 2 files, wrote 1 file, edited 2 files, removed 1 file, ran 4 commands, checked 1 background job, stopped 1 background job, 1 plan update, 1 goal update, finished, 1 check update, 1 tool call",
+    content="Read 2 files, wrote 1 file, edited 2 files, removed 1 file, ran 3 commands, checked 1 background job, stopped 1 background job, 1 plan update, 1 goal update, finished, 1 check update, 1 tool call",
   )
   inspect(
     tool_group_summary([

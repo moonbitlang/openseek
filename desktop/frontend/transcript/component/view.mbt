@@ -4,8 +4,8 @@
 /// command". Every built-in `cmd/openseek` tool has a category; unknown and
 /// dynamically registered tools remain generic tool calls. Only the name's
 /// first token matters, so a runtime-update title like "moon_check compiling"
-/// counts as a check update. The retired `moon_cmd` spelling and the retired
-/// `run_moonbit` tool name remain readable when replaying an older session.
+/// counts as a check update. The retired `moon_cmd` spelling remains readable
+/// when replaying an older session.
 fn tool_group_summary(items : Array[@transcript.TranscriptItem]) -> String {
   let mut reads = 0
   let mut writes = 0
@@ -30,7 +30,7 @@ fn tool_group_summary(items : Array[@transcript.TranscriptItem]) -> String {
       "write" => writes = writes + 1
       "edit" | "multi_edit" => edits = edits + 1
       "remove" => removes = removes + 1
-      "shell" | "moon_cmd" | "run_moonbit" | "mbtx" => runs = runs + 1
+      "shell" | "moon_cmd" | "mbtx" => runs = runs + 1
       "job_output" | "shell_output" => background_reads = background_reads + 1
       "job_stop" | "shell_stop" => background_stops = background_stops + 1
       "plan" => plans = plans + 1
