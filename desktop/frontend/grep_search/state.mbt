@@ -25,6 +25,8 @@ fn fresh_page() -> Page {
     collapsed: Map([]),
     visible_lines: InitialVisibleSearchLines,
     phase: Idle,
+    pattern_repair_phase: PatternRepairIdle,
+    pattern_repair_message: None,
     generation: 0,
     delay_ms: SearchDebounceMs,
   }
@@ -148,6 +150,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           details_open: page.details_open,
           text: { ..page.text, matches: [], },
           semantic: { ..page.semantic, hits: [], partial: false, },
+          pattern_repair_phase: PatternRepairIdle,
+          pattern_repair_message: None,
           match_count: 0,
           file_count: 0,
           collapsed: Map([]),
@@ -178,6 +182,56 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       )
     ToggleDetails =>
       { ..self, page: { ..page, details_open: !page.details_open, }, }
+    FixPattern =>
+      {
+        ..self,
+        page: {
+          ..page,
+          pattern_repair_phase: match page.pattern_repair_phase {
+            PatternRepairIdle => PatternRepairRequested
+            PatternRepairRequested => PatternRepairIdle
+            PatternRepairSucceeded | PatternRepairFailed =>
+              PatternRepairRequested
+          },
+          pattern_repair_message: None,
+        },
+      }
+    PatternRepairSucceeded(root~, generation~, pattern~, message~) =>
+      if page.mode is Semantic &&
+        input.root_text() == root &&
+        page.generation == generation &&
+        page.pattern_repair_phase is PatternRepairRequested {
+        {
+          ..self,
+          page: {
+            ..page,
+            semantic: {
+              ..page.semantic,
+              patterns: [pattern, ..page.semantic.patterns[1:]],
+            },
+            pattern_repair_phase: PatternRepairSucceeded,
+            pattern_repair_message: Some(message),
+          },
+        }
+      } else {
+        self
+      }
+    PatternRepairFailed(root~, generation~, message~) =>
+      if page.mode is Semantic &&
+        input.root_text() == root &&
+        page.generation == generation &&
+        page.pattern_repair_phase is PatternRepairRequested {
+        {
+          ..self,
+          page: {
+            ..page,
+            pattern_repair_phase: PatternRepairFailed,
+            pattern_repair_message: Some(message),
+          },
+        }
+      } else {
+        self
+      }
     IncludeChanged(include_glob) =>
       self.schedule({ ..page, include_glob, }, input, immediate=false)
     ExcludeChanged(exclude_glob) =>
@@ -188,7 +242,12 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         patterns[index] = value
       }
       self.schedule(
-        { ..page, semantic: { ..page.semantic, patterns, }, },
+        {
+          ..page,
+          semantic: { ..page.semantic, patterns, },
+          pattern_repair_phase: PatternRepairIdle,
+          pattern_repair_message: None,
+        },
         input,
         immediate=false,
       )
@@ -202,6 +261,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
             ..page.semantic,
             patterns: page.semantic.patterns + [""],
           },
+          pattern_repair_phase: PatternRepairIdle,
+          pattern_repair_message: None,
         },
       }
     RemovePattern(index) => {
@@ -470,6 +531,8 @@ fn Page::clear_results(self : Page) -> Page {
     file_count: 0,
     limit_hit: false,
     visible_lines: InitialVisibleSearchLines,
+    pattern_repair_phase: PatternRepairIdle,
+    pattern_repair_message: None,
   }
 }
 

@@ -416,6 +416,12 @@ pub let fs_cancel_search_semantic : Command[
 ] = Command("fs.cancel_search_semantic")
 
 ///|
+pub let pattern_repair : Command[
+  @protocol.PatternRepairPayload,
+  @protocol.PatternRepairReply,
+] = Command("pattern.repair")
+
+///|
 pub let fs_clear_file_search_cache : Command[
   @protocol.ClearFileSearchCachePayload,
   @protocol.EmptyReply,

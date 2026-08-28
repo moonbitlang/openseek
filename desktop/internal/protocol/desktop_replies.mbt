@@ -1333,6 +1333,17 @@ pub impl ToJson for ReadFileReply with fn to_json(self) {
 }
 
 ///|
+/// Result of the host-backed Pattern Repair prototype. `pattern` is returned
+/// even on failure so the frontend can keep the request/result contract simple.
+pub(all) struct PatternRepairReply {
+  root : String
+  generation : Int
+  pattern : String
+  success : Bool
+  message : String
+} derive(Debug, Eq)
+
+///|
 pub impl FromJson for ReadFileReply with fn from_json(json, path) {
   guard json is Object(fields) && fields.get("kind") is Some(String(kind_)) else {
     raise JsonDecodeError((path, "expected file reply"))

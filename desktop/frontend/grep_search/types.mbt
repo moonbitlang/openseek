@@ -31,6 +31,14 @@ enum Mode {
 } derive(Eq, Debug)
 
 ///|
+enum PatternRepairPhase {
+  PatternRepairIdle
+  PatternRepairRequested
+  PatternRepairSucceeded
+  PatternRepairFailed
+} derive(Eq, Debug)
+
+///|
 struct TextSearchState {
   query : String
   regex : Bool
@@ -67,6 +75,8 @@ struct Page {
   collapsed : Map[String, Bool]
   visible_lines : Int
   phase : Phase
+  pattern_repair_phase : PatternRepairPhase
+  pattern_repair_message : String?
   generation : Int
   delay_ms : Int
 } derive(Eq)
@@ -118,6 +128,14 @@ pub(all) enum Msg {
   ToggleWholeWord
   ToggleRegex
   ToggleDetails
+  FixPattern
+  PatternRepairSucceeded(
+    root~ : String,
+    generation~ : Int,
+    pattern~ : String,
+    message~ : String
+  )
+  PatternRepairFailed(root~ : String, generation~ : Int, message~ : String)
   IncludeChanged(String)
   ExcludeChanged(String)
   // Semantic-mode settings, mirroring the text-mode toggles.
@@ -201,6 +219,12 @@ pub extend SearchResultSummary with Eq::{equal, not_equal}
 #deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
 #doc(hidden)
 pub extend SemanticSearchState with Eq::{equal, not_equal}
+
+///|
+pub extend PatternRepairPhase with Debug::{to_repr}
+
+///|
+pub extend PatternRepairPhase with Eq::{equal, not_equal}
 
 ///|
 pub extend State with Eq::{equal, not_equal}

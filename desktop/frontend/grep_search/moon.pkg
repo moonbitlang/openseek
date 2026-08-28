@@ -9,6 +9,7 @@ import {
   "openseek_desktop/internal/commands",
   "openseek_desktop/internal/protocol",
   "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/resource",
 }
 

@@ -484,6 +484,16 @@ pub(all) struct CancelSearchSemanticPayload {
 } derive(Debug, Eq)
 
 ///|
+/// Request the first host-backed Pattern Repair prototype. The fake host does
+/// not invoke an Agent or moongrep yet; it only exercises the typed request and
+/// reply boundary.
+pub(all) struct PatternRepairPayload {
+  root : String
+  pattern : String
+  generation : Int
+} derive(Debug, Eq)
+
+///|
 /// One batch of an in-flight semantic search, pushed as a connection
 /// notification so the client can render hits before the final reply arrives.
 /// The reply remains authoritative: `matches` are the Host's partial

@@ -224,6 +224,59 @@ fn mode_options(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
 }
 
 ///|
+fn pattern_repair_control(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
+  let requested = page.pattern_repair_phase is PatternRepairRequested
+  let completed = page.pattern_repair_phase is PatternRepairSucceeded
+  let failed = page.pattern_repair_phase is PatternRepairFailed
+  @html.button(
+    class=if requested {
+      "search-option pressed pattern-repair-button"
+    } else if completed {
+      "search-option pressed pattern-repair-button"
+    } else if failed {
+      "search-option pressed pattern-repair-button"
+    } else {
+      "search-option pattern-repair-button"
+    },
+    title=if requested { "Cancel Pattern Repair" } else { "Fix Pattern" },
+    attrs=@html.Attrs::build()
+      .aria_label(
+        if requested {
+          "Cancel Pattern Repair"
+        } else {
+          "Fix Pattern"
+        },
+      )
+      .aria_pressed(requested.to_string())
+      .on_click(_ => emit(FixPattern)),
+    @icons.icon(if requested { @icons.icon_close } else { @icons.icon_sparkle }),
+  )
+}
+
+///|
+fn pattern_repair_notice(page : Page) -> @html.Html {
+  if page.pattern_repair_phase is PatternRepairRequested {
+    @html.div(
+      class="search-empty",
+      attrs=@html.Attrs::build().role("status").aria_live("polite"),
+      "Pattern repair is not connected yet.",
+    )
+  } else if page.pattern_repair_message is Some(message) {
+    @html.div(
+      class=if page.pattern_repair_phase is PatternRepairFailed {
+        "search-empty error"
+      } else {
+        "search-empty"
+      },
+      attrs=@html.Attrs::build().role("status").aria_live("polite"),
+      message,
+    )
+  } else {
+    @html.nothing
+  }
+}
+
+///|
 fn highlighted_preview(result : @protocol.TextSearchMatch) -> Array[@html.Html] {
   let children : Array[@html.Html] = []
   let preview_start = result.preview_start_column - 1
@@ -721,6 +774,11 @@ fn page_view(
             .data_set("focus-owner", ""),
         )
       },
+      if page.mode is Semantic {
+        pattern_repair_control(page, emit)
+      } else {
+        @html.nothing
+      },
       mode_options(page, emit),
       @html.button(
         class=if page.details_open {
@@ -757,6 +815,11 @@ fn page_view(
       }
       patterns.push(@html.button(on_click=emit(AddPattern), "+ Add pattern"))
       @html.div(class="search-code-patterns", patterns)
+    } else {
+      @html.nothing
+    },
+    if page.mode is Semantic {
+      pattern_repair_notice(page)
     } else {
       @html.nothing
     },
