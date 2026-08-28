@@ -33,6 +33,7 @@ enum Mode {
 ///|
 enum PatternRepairPhase {
   PatternRepairIdle
+  PatternRepairComposer
   PatternRepairRequested
   PatternRepairPreview
   PatternRepairFailed
@@ -78,6 +79,7 @@ struct Page {
   pattern_repair_phase : PatternRepairPhase
   pattern_repair_message : String?
   pattern_repair_candidate : String?
+  pattern_repair_instruction : String
   generation : Int
   delay_ms : Int
 } derive(Eq)
@@ -130,6 +132,9 @@ pub(all) enum Msg {
   ToggleRegex
   ToggleDetails
   FixPattern
+  OpenPatternRepair(String)
+  PatternRepairInstructionChanged(String)
+  SubmitPatternRepair
   PatternRepairPreview(
     root~ : String,
     generation~ : Int,

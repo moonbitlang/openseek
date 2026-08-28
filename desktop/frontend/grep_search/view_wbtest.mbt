@@ -34,8 +34,14 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
   let semantic = State::empty().handle(ModeChanged(Semantic), input)
   let requested = semantic.handle(FixPattern, input)
   let requested_html = render_search(requested, input)
-  assert_true(requested_html.contains("Pattern repair is not connected yet."))
-  assert_true(requested_html.contains("aria-label=\"Cancel Pattern Repair\""))
+  assert_true(requested_html.contains("PATTERN REPAIR"))
+  assert_true(requested_html.contains("Pattern repair instruction"))
+  assert_true(requested_html.contains("Submit pattern repair"))
+  let submitted = requested
+    .handle(PatternRepairInstructionChanged("allow labelled arguments"), input)
+    .handle(SubmitPatternRepair, input)
+  let thinking_html = render_search(submitted, input)
+  assert_true(thinking_html.contains("Thinking"))
   let previewed = requested.handle(
     PatternRepairPreview(
       root=root.path,
@@ -54,6 +60,8 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
   assert_true(discarded.page.semantic.patterns[0] != "inspect($_)")
   let failed = semantic
     .handle(FixPattern, input)
+    .handle(PatternRepairInstructionChanged("repair it"), input)
+    .handle(SubmitPatternRepair, input)
     .handle(
       PatternRepairFailed(
         root=root.path,
@@ -64,9 +72,9 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
     )
   let failed_html = render_search(failed, input)
   assert_true(failed_html.contains("Fake repair failed."))
-  let cancelled = requested.handle(FixPattern, input)
+  let cancelled = requested.handle(RejectPatternRepair, input)
   let cancelled_html = render_search(cancelled, input)
-  assert_false(cancelled_html.contains("Pattern repair is not connected yet."))
+  assert_false(cancelled_html.contains("PATTERN REPAIR"))
   assert_true(cancelled_html.contains("aria-label=\"Fix Pattern\""))
 }
 

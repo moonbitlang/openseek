@@ -238,33 +238,74 @@ fn pattern_repair_control(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
     } else {
       "search-option pattern-repair-button"
     },
-    title=if requested { "Cancel Pattern Repair" } else { "Fix Pattern" },
+    title=if requested { "Pattern Repair in progress" } else { "Fix Pattern" },
     attrs=@html.Attrs::build()
       .aria_label(
         if requested {
-          "Cancel Pattern Repair"
+          "Pattern Repair in progress"
         } else {
           "Fix Pattern"
         },
       )
       .aria_pressed(requested.to_string())
-      .on_click(_ => emit(FixPattern)),
-    @icons.icon(if requested { @icons.icon_close } else { @icons.icon_sparkle }),
+      .on_click(_ => if requested { @cmd.none } else { emit(FixPattern) }),
+    @icons.icon(
+      if requested {
+        @icons.icon_sparkle
+      } else {
+        @icons.icon_sparkle
+      },
+    ),
   )
 }
 
 ///|
 fn pattern_repair_notice(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
-  if page.pattern_repair_phase is PatternRepairRequested {
+  if page.pattern_repair_phase is PatternRepairComposer {
+    @html.div(class="search-pattern-repair-composer", [
+      @html.div(class="search-pattern-repair-composer-header", [
+        @html.span(class="search-pattern-repair-kicker", "PATTERN REPAIR"),
+        @html.span(
+          class="search-pattern-repair-caption",
+          "One request, no history",
+        ),
+      ]),
+      @html.div(class="search-pattern-repair-composer-row", [
+        @html.textarea(
+          value=page.pattern_repair_instruction,
+          placeholder="What should this pattern match? e.g. allow labelled arguments",
+          on_input=emit.map(value => PatternRepairInstructionChanged(value)),
+          attrs=@html.Attrs::build().aria_label("Pattern repair instruction"),
+          "",
+        ),
+        @html.button(
+          class="search-pattern-repair-submit",
+          attrs=@html.Attrs::build().aria_label("Submit pattern repair"),
+          on_click=emit(SubmitPatternRepair),
+          "Submit",
+        ),
+      ]),
+    ])
+  } else if page.pattern_repair_phase is PatternRepairRequested {
     @html.div(
-      class="search-empty",
+      class="search-pattern-repair-thinking",
       attrs=@html.Attrs::build().role("status").aria_live("polite"),
-      "Pattern repair is not connected yet.",
+      [
+        @html.span(class="search-pattern-repair-orbit", "✦"),
+        @html.span("Thinking"),
+        @html.span(class="search-pattern-repair-dots", "···"),
+      ],
     )
   } else if page.pattern_repair_phase is PatternRepairPreview &&
     page.pattern_repair_candidate is Some(candidate) {
     @html.div(class="search-pattern-repair-preview", [
-      @html.div(class="search-pattern-repair-title", "Suggested Pattern"),
+      @html.div(class="search-pattern-repair-title", [
+        @html.span(class="search-pattern-repair-kicker", "SUGGESTED PATTERN"),
+        @html.span(
+          class="search-pattern-repair-caption",
+          "Review before applying",
+        ),
+      ]),
       @html.pre(class="search-pattern-repair-candidate", candidate),
       if page.pattern_repair_message is Some(message) {
         @html.div(class="search-pattern-repair-message", message)
@@ -272,8 +313,16 @@ fn pattern_repair_notice(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
         @html.nothing
       },
       @html.div(class="search-pattern-repair-actions", [
-        @html.button(on_click=emit(AcceptPatternRepair), "Accept"),
-        @html.button(on_click=emit(RejectPatternRepair), "Discard"),
+        @html.button(
+          class="search-pattern-repair-accept",
+          on_click=emit(AcceptPatternRepair),
+          "Use pattern",
+        ),
+        @html.button(
+          class="search-pattern-repair-discard",
+          on_click=emit(RejectPatternRepair),
+          "Discard",
+        ),
       ]),
     ])
   } else if page.pattern_repair_message is Some(message) {
@@ -393,7 +442,7 @@ fn file_group_view(
 }
 
 ///|
-fn search_message(page : Page) -> @html.Html? {
+fn search_message(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html? {
   match page.phase {
     Failed(code~, message~) => {
       let heading = match code {
@@ -412,7 +461,22 @@ fn search_message(page : Page) -> @html.Html? {
           attrs=@html.Attrs::build().role("alert"),
           [
             @html.div(class="search-empty-title", heading),
-            @html.div(class="search-empty-detail", message),
+            @html.div(class="search-empty-detail", [
+              @html.span(message),
+              if code == "invalid_pattern" && page.mode is Semantic {
+                @html.button(
+                  class="search-fix-pattern-link",
+                  on_click=emit(
+                    OpenPatternRepair(
+                      "The current pattern is invalid. Fix it using this diagnostic: \{message}",
+                    ),
+                  ),
+                  "Fix Pattern",
+                )
+              } else {
+                @html.nothing
+              },
+            ]),
           ],
         ),
       )
@@ -496,7 +560,7 @@ fn text_search_body(
       ),
     )
   }
-  if search_message(page) is Some(message) {
+  if search_message(page, emit) is Some(message) {
     children.push(message)
   } else {
     for group in visible_file_groups(page) {
@@ -707,7 +771,7 @@ fn semantic_search_body(
       ),
     )
   }
-  if search_message(page) is Some(message) {
+  if search_message(page, emit) is Some(message) {
     children.push(message)
   }
   for group in visible_semantic_file_groups(page) {

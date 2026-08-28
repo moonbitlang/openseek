@@ -111,7 +111,7 @@ fn Page::pattern_repair_request_payload(
   Some({
     root: root.path,
     pattern: self.semantic.patterns[0],
-    instruction: "Repair this structural pattern while preserving its intent.",
+    instruction: self.pattern_repair_instruction,
     generation: self.generation,
   })
 }
