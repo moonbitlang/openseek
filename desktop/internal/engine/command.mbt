@@ -9,7 +9,7 @@ async fn local_engine_path(framework_command : String) -> String? {
     Some("Windows_NT") => ["openseek.exe", "openseek"]
     _ => ["openseek", "openseek.exe"]
   }
-  // Proton preserves bundle.resources below Contents/Resources. Probe that
+  // Proton preserves package.resources below Contents/Resources. Probe that
   // packaged layout before the executable-adjacent layout used on Windows and
   // Linux.
   for candidate in candidates {

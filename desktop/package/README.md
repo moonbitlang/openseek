@@ -73,7 +73,7 @@ notices as well. Shipping only the executable is not license-complete.
 
 ### macOS code and signing
 
-`bundle.resources` copies files into the app, but executable code additionally
+`package.resources` copies files into the app, but executable code additionally
 needs signing coverage. Add every Mach-O executable and nested dynamic library
 to the Proton signing input expected by the current package configuration.
 Check whether the command needs entitlements; do not copy the Host's

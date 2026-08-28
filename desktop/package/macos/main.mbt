@@ -164,10 +164,7 @@ async fn @packaging.Workspace::build_package_inputs(
   self : @packaging.Workspace,
   release~ : Bool,
 ) -> (@xterm_assets.Assets, @ripgrep_assets.Assets) {
-  let build_env = {
-    "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
-    "PROTON_PACKAGE_RPATH": "@executable_path/../Resources/proton/lib",
-  }
+  let build_env = { "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion }
   @packaging.ensure_cef_runtime(self, extra_env={
     "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
   })
@@ -188,7 +185,7 @@ async fn @packaging.Workspace::build_package_inputs(
 }
 
 ///|
-/// Rebuild the declarative resource tree consumed by `bundle.resources`.
+/// Rebuild the declarative resource tree consumed by `package.resources`.
 /// Proton preserves this project-relative tree below `Contents/Resources`;
 /// runtime lookup code deliberately knows this one stable prefix.
 async fn @packaging.Workspace::stage_package_inputs(
@@ -329,14 +326,28 @@ test "macOS packaging accepts release builds" {
 async test "macOS packaging passes the selected mode to Proton" {
   let workspace = @packaging.locate_workspace()
   let debug_args = PackageOptions::parse(argv=[]).proton_args(workspace)
-  assert_true(debug_args.contains("--format"))
-  assert_false(debug_args.contains("--target"))
-  assert_false(debug_args.contains("--no-build"))
-  assert_false(debug_args.contains("--release"))
+  assert_eq(debug_args, [
+    "-C",
+    workspace.dir(),
+    "package",
+    "--config",
+    "proton.project.json",
+    "--format",
+    "app",
+  ])
   let release_args = PackageOptions::parse(argv=["--release"]).proton_args(
     workspace,
   )
-  assert_true(release_args.contains("--release"))
+  assert_eq(release_args, [
+    "-C",
+    workspace.dir(),
+    "package",
+    "--config",
+    "proton.project.json",
+    "--format",
+    "app",
+    "--release",
+  ])
 }
 
 ///|

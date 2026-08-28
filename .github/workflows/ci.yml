@@ -117,7 +117,7 @@ jobs:
 
       # The stable/native main job is the sole Linux writer. PR jobs remain
       # restore-only, and no second channel races to reserve the same key.
-      - name: Save CEF distribution
+      - name: Save Proton runtime
         if: >-
           github.event_name == 'push' &&
           matrix.moonbit-channel == 'stable' &&

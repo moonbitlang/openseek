@@ -53,6 +53,21 @@ fn ArtifactPlan::parse(values : ArrayView[String]) -> ArtifactPlan raise {
 }
 
 ///|
+fn ArtifactPlan::manifest_targets(self : ArtifactPlan) -> Array[String] {
+  let targets = []
+  if self.zip {
+    targets.push("zip")
+  }
+  if self.installer {
+    targets.push("nsis")
+  }
+  if targets.is_empty() {
+    targets.push("app")
+  }
+  targets
+}
+
+///|
 fn package_command() -> @argparse.Command {
   Command(
     "package/windows",
@@ -212,8 +227,8 @@ async fn copy_bundle_files(
 /// (with `locales\`) under the same root — so flattening `bin\` into the
 /// bundle root keeps those defaults working too.
 async fn stage_proton_runtime(ws : @packaging.Workspace) -> Unit {
-  let dist = @packaging.proton_runtime_dist(ws).0
-  let bin = dist + "/bin"
+  let runtime_root = @packaging.proton_runtime_root().0
+  let bin = runtime_root + "/bin"
   for entry in @asyncfs.readdir(bin, sort=true) {
     let source = "\{bin}/\{entry}"
     if @asyncfs.kind(source) is Directory {
@@ -222,9 +237,12 @@ async fn stage_proton_runtime(ws : @packaging.Workspace) -> Unit {
       @packaging.copy_file(source, ws.at(BundleDir + "/" + entry))
     }
   }
-  @packaging.copy_tree(dist + "/Resources", ws.at(BundleDir + "/Resources"))
+  @packaging.copy_tree(
+    runtime_root + "/Resources",
+    ws.at(BundleDir + "/Resources"),
+  )
   @packaging.copy_file(
-    @packaging.proton_helper_path(ws),
+    @packaging.proton_helper_path(),
     ws.at(BundleDir + "/cef_process.exe"),
   )
 }
@@ -307,6 +325,11 @@ async fn main {
   println("built openseek engine: \{ws.engine_binary(release~)}")
   reset_bundle_dirs(ws)
   copy_bundle_files(ws, terminal_assets, ripgrep_assets, release~)
+  ws.write_proton_package_manifest(
+    BundleDir + "/proton-package.json",
+    "windows-portable",
+    artifacts.manifest_targets(),
+  )
   if artifacts.zip {
     zip_bundle(ws)
     println("generated \{ws.at(ZipPath)}")
@@ -323,6 +346,7 @@ test "windows package args default to zip and installer" {
   let matches = package_command().parse(argv=[])
   let artifacts = ArtifactPlan::from_matches(matches)
   assert_eq(artifacts, { zip: true, installer: true, })
+  assert_eq(artifacts.manifest_targets(), ["zip", "nsis"])
   assert_false(matches.flags.get("release").unwrap_or(false))
 }
 
@@ -331,6 +355,7 @@ test "windows package args accept release" {
   let matches = package_command().parse(argv=["--release", "--target", "app"])
   let artifacts = ArtifactPlan::from_matches(matches)
   assert_eq(artifacts, { zip: false, installer: false, })
+  assert_eq(artifacts.manifest_targets(), ["app"])
   assert_true(matches.flags.get("release").unwrap_or(false))
 }
 

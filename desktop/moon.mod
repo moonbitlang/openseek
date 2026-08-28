@@ -20,6 +20,7 @@ import {
   "moonbit-community/proton_contract@0.2.3",
   "bobzhang/openseek@0.2.2",
   "moonbit-community/proton_cefsetup@0.2.3",
+  "moonbit-community/proton_config@0.2.3",
 }
 
 readme = "README.md"

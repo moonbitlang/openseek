@@ -36,9 +36,9 @@ pub async fn ensure_dir(String) -> Unit
 
 pub async fn locate_workspace() -> Workspace
 
-pub async fn proton_helper_path(Workspace) -> String
+pub async fn proton_helper_path() -> String
 
-pub async fn proton_runtime_dist(Workspace) -> @pathx.Absolute
+pub async fn proton_runtime_root() -> @pathx.Absolute
 
 pub async fn remove_path_if_exists(String) -> Unit
 
@@ -72,6 +72,7 @@ pub fn Workspace::repo_at(Self, String) -> String
 pub async fn Workspace::stage_viz_assets(Self, String, release~ : Bool) -> Unit
 pub fn Workspace::viz_bundle(Self, release~ : Bool) -> String
 pub fn Workspace::viz_shell(Self) -> String
+pub async fn Workspace::write_proton_package_manifest(Self, String, String, Array[String]) -> Unit
 
 // Type aliases
 

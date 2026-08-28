@@ -329,7 +329,7 @@ From the repository root, assemble the Proton/CEF runtime the native host
 links against:
 
 ```powershell
-moonx moonbit-community/proton_cli@<version> -C . cef setup
+moonx moonbit-community/proton_cli@<version> cef setup
 ```
 
 `<version>` is whatever `moon.mod` pins `moonbit-community/proton` to; the

@@ -11,6 +11,16 @@ const UsrBinPath : String = AppDirPath + "/usr/bin"
 const AppAssetDir : String = UsrBinPath + "/assets"
 
 ///|
+const UsrResourcesPath : String = AppDirPath + "/usr/Resources"
+
+///|
+const ProtonRuntimePath : String = UsrResourcesPath + "/proton"
+
+///|
+const ProtonPackageManifestPath : String = UsrResourcesPath +
+  "/proton-package.json"
+
+///|
 const RipgrepLicenseDir : String = AppDirPath + "/usr/share/licenses/ripgrep"
 
 ///|
@@ -47,6 +57,7 @@ async fn reset_bundle_dirs(ws : @packaging.Workspace) -> Unit {
   @packaging.remove_path_if_exists(ws.at(AppImagePath))
   @packaging.ensure_dir(ws.at(UsrBinPath))
   @packaging.ensure_dir(ws.at(AppAssetDir))
+  @packaging.ensure_dir(ws.at(UsrResourcesPath))
   @packaging.ensure_dir(ws.at(RipgrepLicenseDir))
   @packaging.ensure_dir(ws.at("dist/tools"))
 }
@@ -114,15 +125,14 @@ async fn copy_bundle_files(
     target,
     UsrBinPath + "/" + target.seed_relative_dir(),
   )
-  // Best-effort: ship the assembled CEF runtime (lib/libproton.so, the CEF
-  // shared library, bin/cef_process, resources). AppRun adds its lib dir to
-  // LD_LIBRARY_PATH. The exact layout/rpath needs validation on Linux.
+  // Ship Proton's immutable runtime without changing its `bin` and `Resources`
+  // layout. AppRun points both CEF and its subprocess helper at this copy.
   @packaging.copy_tree(
-    @packaging.proton_runtime_dist(ws).0,
-    ws.at(UsrBinPath + "/proton"),
+    @packaging.proton_runtime_root().0,
+    ws.at(ProtonRuntimePath),
   )
   @packaging.copy_file(
-    @packaging.proton_helper_path(ws),
+    @packaging.proton_helper_path(),
     ws.at(UsrBinPath + "/cef_process"),
   )
 }
@@ -139,10 +149,13 @@ fn apprun_source() -> String {
     #|set -eu
     #|
     #|APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+    #|PROTON_ROOT="$APP_DIR/usr/Resources/proton"
+    #|CEF_LIBRARY="$PROTON_ROOT/bin/libcef.so"
     #|export PATH="$APP_DIR/usr/bin:$PATH"
-    #|export PROTON_RUNTIME_ROOT="$APP_DIR/usr/bin/proton"
+    #|export PROTON_RUNTIME_ROOT="$PROTON_ROOT"
     #|export PROTON_HELPER_PATH="$APP_DIR/usr/bin/cef_process"
-    #|export LD_LIBRARY_PATH="$APP_DIR/usr/bin/proton/lib:$APP_DIR/usr/bin/proton:${LD_LIBRARY_PATH:-}"
+    #|export LD_LIBRARY_PATH="$PROTON_ROOT/bin${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    #|export LD_PRELOAD="$CEF_LIBRARY${LD_PRELOAD:+:$LD_PRELOAD}"
     #|exec "$APP_DIR/usr/bin/openseek-desktop-bin" "$@"
     #|
   source
@@ -163,7 +176,23 @@ fn desktop_entry_source() -> String {
 }
 
 ///|
+fn executable_bundle_paths() -> Array[String] {
+  [
+    AppDirPath + "/AppRun",
+    UsrBinPath + "/openseek-desktop-bin",
+    UsrBinPath + "/openseek",
+    UsrBinPath + "/rg",
+    UsrBinPath + "/cef_process",
+  ]
+}
+
+///|
 async fn write_bundle_metadata(ws : @packaging.Workspace) -> Unit {
+  ws.write_proton_package_manifest(
+    ProtonPackageManifestPath,
+    "linux-appimage",
+    ["appimage"],
+  )
   @packaging.write_text(ws.at(AppDirPath + "/AppRun"), apprun_source())
   @packaging.write_text(
     ws.at(AppDirPath + "/openseek-desktop.desktop"),
@@ -183,15 +212,32 @@ async fn write_bundle_metadata(ws : @packaging.Workspace) -> Unit {
   )
   @packaging.run_checked(
     "chmod",
-    [
-      "+x",
-      AppDirPath + "/AppRun",
-      UsrBinPath + "/openseek-desktop-bin",
-      UsrBinPath + "/openseek",
-      UsrBinPath + "/rg",
-    ],
+    ["+x", ..executable_bundle_paths()],
     dir=ws.dir(),
   )
+}
+
+///|
+test "Linux AppRun follows the Proton 0.2 runtime layout" {
+  let expected =
+    #|#!/bin/sh
+    #|set -eu
+    #|
+    #|APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+    #|PROTON_ROOT="$APP_DIR/usr/Resources/proton"
+    #|CEF_LIBRARY="$PROTON_ROOT/bin/libcef.so"
+    #|export PATH="$APP_DIR/usr/bin:$PATH"
+    #|export PROTON_RUNTIME_ROOT="$PROTON_ROOT"
+    #|export PROTON_HELPER_PATH="$APP_DIR/usr/bin/cef_process"
+    #|export LD_LIBRARY_PATH="$PROTON_ROOT/bin${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    #|export LD_PRELOAD="$CEF_LIBRARY${LD_PRELOAD:+:$LD_PRELOAD}"
+    #|exec "$APP_DIR/usr/bin/openseek-desktop-bin" "$@"
+    #|
+  assert_eq(apprun_source(), expected)
+  assert_eq(executable_bundle_paths(), [
+    "dist/SeekMoon.AppDir/AppRun", "dist/SeekMoon.AppDir/usr/bin/openseek-desktop-bin",
+    "dist/SeekMoon.AppDir/usr/bin/openseek", "dist/SeekMoon.AppDir/usr/bin/rg", "dist/SeekMoon.AppDir/usr/bin/cef_process",
+  ])
 }
 
 ///|

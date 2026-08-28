@@ -86,15 +86,15 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v5
 
-      # Proton is a registry dependency, so the CEF distribution it selects
-      # follows the version pinned in desktop/moon.mod. Keying the cache on
-      # that file keeps a Proton bump from reusing the previous CEF build.
-      # `cef setup` reads and populates Proton's shared user-level cache.
-      - name: Cache CEF distribution
+      # Proton 0.2 installs its immutable runtime and versioned helper in the
+      # shared user-level store selected by the dependency in desktop/moon.mod.
+      - name: Cache Proton runtime
         uses: actions/cache@v4
         with:
-          path: ~/.proton/cache/cef
-          key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/moon.mod') }}
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/moon.mod') }}
 
       # The packager stages the seed toolchain pinned by
       # `desktop/.moonbit-version` from archives downloaded into this directory.
@@ -146,8 +146,8 @@ jobs:
           echo "RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
           echo "version=$release_version" >> "$GITHUB_OUTPUT"
 
-      # Stamp only this runner's checkout. Proton reads the version from
-      # moon.mod and writes it into Info.plist and proton-package.json.
+      # Stamp only this runner's checkout. OpenSeek's platform packagers use
+      # moon.mod, while Proton 0.2 reads package.version from the project config.
       - name: Stamp release version
         shell: bash
         run: |
@@ -155,8 +155,14 @@ jobs:
           RELEASE_VERSION="$RELEASE_VERSION" perl -0pi -e '
             s/^version = "[^"]+"/version = "$ENV{RELEASE_VERSION}"/m
           ' desktop/moon.mod
+          config_tmp="$RUNNER_TEMP/proton.project.json"
+          jq --arg version "$RELEASE_VERSION" '.package.version = $version' \
+            desktop/proton.project.json > "$config_tmp"
+          mv "$config_tmp" desktop/proton.project.json
           expected="version = \"$RELEASE_VERSION\""
           grep -Fx "$expected" desktop/moon.mod
+          jq -e --arg version "$RELEASE_VERSION" \
+            '.package.version == $version' desktop/proton.project.json
 
       # Stable, matching CI. This is the toolchain that BUILDS the app, not
       # the seed it ships (that one is pinned by `desktop/.moonbit-version`), but
@@ -244,6 +250,16 @@ jobs:
             --target zip \
             --sign "$MACOS_SIGNING_IDENTITY" \
             --notarize "$NOTARY_PROFILE"
+
+      - name: Verify packaged application version
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(plutil -extract CFBundleShortVersionString raw \
+            desktop/dist/SeekMoon.app/Contents/Info.plist)" = "$RELEASE_VERSION"
+          jq -e --arg version "$RELEASE_VERSION" \
+            '.version == $version and .bundle_version == $version' \
+            desktop/dist/SeekMoon.app/Contents/Resources/proton-package.json
 
       # Keep one compressed Browser archive beside the Desktop artifacts. OSS
       # stores it as an immutable release artifact; the API receives the same

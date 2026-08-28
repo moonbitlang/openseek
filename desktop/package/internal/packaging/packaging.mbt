@@ -259,6 +259,50 @@ pub async fn Workspace::module_version(self : Workspace) -> String {
 }
 
 ///|
+/// Write the sanitized application metadata consumed by Proton at runtime.
+/// Linux and Windows use OpenSeek's custom packagers, so they must reproduce
+/// the manifest that `proton_cli package` writes for managed applications.
+pub async fn Workspace::write_proton_package_manifest(
+  self : Workspace,
+  destination : String,
+  kind : String,
+  targets : Array[String],
+) -> Unit {
+  let project = @proton_config.load_project_config_from_file(
+    self.at("proton.project.json"),
+  )
+  guard project.package_config() is Some(package_config) else {
+    raise PackageError("proton.project.json has no package configuration")
+  }
+  let module_version = self.module_version()
+  guard package_config.version() == module_version else {
+    raise PackageError(
+      "desktop version mismatch: moon.mod has \{module_version}, proton.project.json has \{package_config.version()}",
+    )
+  }
+  let manifest : Json = {
+    "schema_version": 1,
+    "kind": kind,
+    "product_name": package_config.product_name,
+    "identifier": project.identifier(),
+    "version": package_config.version(),
+    "bundle_version": package_config.version(),
+    "targets": targets,
+    "url_schemes": package_config.url_schemes(),
+    "document_types": package_config
+    .document_types()
+    .map(fn(document_type) -> Json {
+      {
+        "name": document_type.name,
+        "extensions": document_type.extensions(),
+        "role": document_type.role,
+      }
+    }),
+  }
+  write_text(self.at(destination), manifest.stringify() + "\n")
+}
+
+///|
 /// Return the openseek engine package path relative to the monorepo root.
 pub fn engine_package() -> String {
   EnginePackage
@@ -328,15 +372,13 @@ pub async fn ensure_cef_runtime(
 
 ///|
 /// Resolve the immutable CEF runtime selected by this Proton release.
-pub async fn proton_runtime_dist(ws : Workspace) -> @pathx.Absolute {
-  ignore(ws)
+pub async fn proton_runtime_root() -> @pathx.Absolute {
   @pathx.Path(@cef_store.resolve_default().runtime_root()).resolve()
 }
 
 ///|
 /// Resolve the subprocess helper installed for this Proton release.
-pub async fn proton_helper_path(ws : Workspace) -> String {
-  ignore(ws)
+pub async fn proton_helper_path() -> String {
   @cef_store.resolve_default_helper()
 }
 
@@ -689,6 +731,26 @@ test "package build paths select debug or release" {
 async test "workspace module version reads moon.mod" {
   let ws = locate_workspace()
   assert_eq(ws.module_version(), "0.1.5")
+}
+
+///|
+async test "custom packages write the complete Proton manifest" {
+  let ws = locate_workspace()
+  let destination = "target/test-proton-package.json"
+  ws.write_proton_package_manifest(destination, "linux-appimage", ["appimage"])
+  defer remove_path_if_exists(ws.at(destination))
+  let manifest = @json.parse(@asyncfs.read_file(ws.at(destination)).text())
+  json_inspect(manifest, content={
+    "schema_version": 1,
+    "kind": "linux-appimage",
+    "product_name": "SeekMoon",
+    "identifier": "community.moonbit.proton.openseek-desktop",
+    "version": "0.1.5",
+    "bundle_version": "0.1.5",
+    "targets": ["appimage"],
+    "url_schemes": [],
+    "document_types": [],
+  })
 }
 
 ///|
