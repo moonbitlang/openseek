@@ -200,6 +200,7 @@ pub fn HostConnection::close_terminals(self : HostConnection) -> Unit {
 pub fn endpoints(
   state : HostState,
   connection : HostConnection,
+  manager : @engine.EngineManager,
   on_skills_changed : () -> Unit,
 ) -> Array[@endpoint.Endpoint] {
   [
@@ -234,7 +235,10 @@ pub fn endpoints(
       cancel_search_semantic_op(connection.semantic_search, payload)
     }),
     @endpoint.Endpoint::remote(@commands.pattern_repair, async fn(payload) {
-      pattern_repair_op(state, payload)
+      let env = @engine.pattern_repair_environment(manager) catch {
+        _ => raise HostError("Pattern Repair settings are unavailable")
+      }
+      pattern_repair_op(state, env, payload)
     }),
     @endpoint.Endpoint::remote(@commands.fs_clear_file_search_cache, async fn(
       payload,

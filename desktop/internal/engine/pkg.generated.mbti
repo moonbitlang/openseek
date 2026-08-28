@@ -43,6 +43,8 @@ pub async fn migrate_global_store() -> Int
 
 pub fn new_engine_actor(String, runtime_dir? : @pathx.Path) -> EngineActor
 
+pub async fn pattern_repair_environment(EngineManager) -> Map[String, String] raise EngineError
+
 pub async fn remote_server_base(EngineManager) -> String?
 
 pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload

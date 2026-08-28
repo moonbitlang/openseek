@@ -1,5 +1,6 @@
 import {
   "openseek_desktop/internal/commands",
+  "openseek_desktop/internal/engine",
   "openseek_desktop/internal/development",
   "openseek_desktop/internal/work_dir",
   "openseek_desktop/internal/endpoint",

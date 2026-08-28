@@ -5,6 +5,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/core/debug",
   "openseek_desktop/internal/endpoint",
+  "openseek_desktop/internal/engine",
   "openseek_desktop/internal/pathx",
   "openseek_desktop/internal/protocol",
 }
@@ -12,7 +13,7 @@ import {
 // Values
 pub fn app_bundle_path(String) -> String?
 
-pub fn endpoints(HostState, HostConnection, () -> Unit) -> Array[@endpoint.Endpoint]
+pub fn endpoints(HostState, HostConnection, @engine.EngineManager, () -> Unit) -> Array[@endpoint.Endpoint]
 
 pub async fn ensure_codex_config(@pathx.Path?) -> String
 

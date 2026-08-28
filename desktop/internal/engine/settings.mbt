@@ -359,6 +359,27 @@ fn resolved_endpoint(
 }
 
 ///|
+/// Resolve the credential and endpoint environment for a short-lived host
+/// operation. Credentials stay in the child environment and never enter argv.
+pub async fn pattern_repair_environment(
+  manager : EngineManager,
+) -> Map[String, String] raise EngineError {
+  let (settings, _) = manager.settings_snapshot() catch {
+    error => raise EngineError("could not read engine settings: \{error}")
+  }
+  let endpoint = resolved_endpoint(settings)
+  let env = @sys.get_env_vars()
+  env["DEEPSEEK"] = endpoint.api_key
+  match endpoint.api_url {
+    Some(url) => env["OPENSEEK_API_URL"] = url
+    None => env.remove("OPENSEEK_API_URL")
+  }
+  env["OPENSEEK_MODEL"] = "deepseek-v4-pro"
+  env["OPENSEEK_THINKING"] = "max"
+  env
+}
+
+///|
 /// The SeekMoon relay origin remote access signs in to. The relay is a
 /// SeekMoon-hosted service on the same origin as the update manifest, and
 /// it no longer depends on the chat provider — only the chat proxy was

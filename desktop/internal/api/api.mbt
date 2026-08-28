@@ -662,7 +662,7 @@ pub fn endpoints(
     }),
   ]
   for
-    endpoint in @host.endpoints(state.host, connection, () => {
+    endpoint in @host.endpoints(state.host, connection, state.manager, () => {
       state.publish(SkillsChanged)
     }) {
     endpoints.push(endpoint)
