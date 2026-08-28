@@ -15,7 +15,7 @@ fn fresh_page() -> Page {
       whole_word: false,
       matches: [],
     },
-    semantic: { patterns: [""], hits: [], partial: false },
+    semantic: { patterns: [""], hits: [], partial: false, },
     details_open: false,
     include_glob: "",
     exclude_glob: "",
@@ -43,7 +43,7 @@ pub fn State::reset_checkout(self : State) -> State {
       generation,
       mode: self.page.mode,
       text: fresh_page().text,
-      semantic: { ..self.page.semantic, hits: [], partial: false },
+      semantic: { ..self.page.semantic, hits: [], partial: false, },
     },
     generation,
   }
@@ -78,8 +78,8 @@ fn State::schedule(
   let page = if !has_query || input.root is None {
     {
       ..page,
-      text: { ..page.text, matches: [] },
-      semantic: { ..page.semantic, hits: [], partial: false },
+      text: { ..page.text, matches: [], },
+      semantic: { ..page.semantic, hits: [], partial: false, },
       match_count: 0,
       file_count: 0,
       limit_hit: false,
@@ -91,7 +91,7 @@ fn State::schedule(
     {
       ..page,
       text: page.text,
-      semantic: { ..page.semantic, hits: [], partial: false },
+      semantic: { ..page.semantic, hits: [], partial: false, },
       match_count: if page.mode is Semantic {
         0
       } else {
@@ -136,7 +136,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
   match msg {
     QueryChanged(query) =>
       self.schedule(
-        { ..page, text: { ..page.text, query, } },
+        { ..page, text: { ..page.text, query, }, },
         input,
         immediate=false,
       )
@@ -146,8 +146,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           ..page,
           mode,
           details_open: page.details_open,
-          text: { ..page.text, matches: [] },
-          semantic: { ..page.semantic, hits: [], partial: false },
+          text: { ..page.text, matches: [], },
+          semantic: { ..page.semantic, hits: [], partial: false, },
           match_count: 0,
           file_count: 0,
           collapsed: Map([]),
@@ -159,20 +159,20 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       self.schedule(
         {
           ..page,
-          text: { ..page.text, case_sensitive: !page.text.case_sensitive },
+          text: { ..page.text, case_sensitive: !page.text.case_sensitive, },
         },
         input,
         immediate=false,
       )
     ToggleWholeWord =>
       self.schedule(
-        { ..page, text: { ..page.text, whole_word: !page.text.whole_word } },
+        { ..page, text: { ..page.text, whole_word: !page.text.whole_word, }, },
         input,
         immediate=false,
       )
     ToggleRegex =>
       self.schedule(
-        { ..page, text: { ..page.text, regex: !page.text.regex } },
+        { ..page, text: { ..page.text, regex: !page.text.regex, }, },
         input,
         immediate=false,
       )
@@ -188,7 +188,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         patterns[index] = value
       }
       self.schedule(
-        { ..page, semantic: { ..page.semantic, patterns, } },
+        { ..page, semantic: { ..page.semantic, patterns, }, },
         input,
         immediate=false,
       )
@@ -198,7 +198,10 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         ..self,
         page: {
           ..page,
-          semantic: { ..page.semantic, patterns: page.semantic.patterns + [""] },
+          semantic: {
+            ..page.semantic,
+            patterns: page.semantic.patterns + [""],
+          },
         },
       }
     RemovePattern(index) => {
@@ -207,7 +210,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         let _ = patterns.remove(index)
       }
       self.schedule(
-        { ..page, semantic: { ..page.semantic, patterns, } },
+        { ..page, semantic: { ..page.semantic, patterns, }, },
         input,
         immediate=false,
       )
@@ -275,7 +278,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         ..self,
         page: {
           ..page.clear_results(),
-          text: { ..page.text, matches: reply.matches },
+          text: { ..page.text, matches: reply.matches, },
           match_count: reply.match_count,
           file_count: reply.file_count,
           limit_hit: reply.limit_hit,
@@ -298,7 +301,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           ..self,
           page: {
             ..page,
-            semantic: { ..page.semantic, hits: [], partial: false },
+            semantic: { ..page.semantic, hits: [], partial: false, },
             match_count: 0,
             file_count: 0,
             phase: Idle,
@@ -367,8 +370,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           ..self,
           page: {
             ..page,
-            text: { ..page.text, matches: [] },
-            semantic: { ..page.semantic, hits: [], partial: false },
+            text: { ..page.text, matches: [], },
+            semantic: { ..page.semantic, hits: [], partial: false, },
             match_count: 0,
             file_count: 0,
             limit_hit: false,
@@ -461,8 +464,8 @@ fn Page::active_highlights(self : Page, path : String) -> EditorHighlights? {
 fn Page::clear_results(self : Page) -> Page {
   {
     ..self,
-    text: { ..self.text, matches: [] },
-    semantic: { ..self.semantic, hits: [], partial: false },
+    text: { ..self.text, matches: [], },
+    semantic: { ..self.semantic, hits: [], partial: false, },
     match_count: 0,
     file_count: 0,
     limit_hit: false,
@@ -762,7 +765,7 @@ test "active result helpers share file grouping and highlight projection" {
     session: "active-results",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root) }
+  let input : Input = { owner, root: Some(root), }
   let state = State::empty().handle(QueryChanged("moon"), input)
   let page = state.page
   let first : @protocol.TextSearchMatch = {
@@ -771,8 +774,8 @@ test "active result helpers share file grouping and highlight projection" {
     preview: "moon moon",
     preview_start_column: 1,
     ranges: [
-      { start_column: 1, end_column: 5 },
-      { start_column: 6, end_column: 10 },
+      { start_column: 1, end_column: 5, },
+      { start_column: 6, end_column: 10, },
     ],
   }
   let second : @protocol.TextSearchMatch = {
@@ -780,24 +783,19 @@ test "active result helpers share file grouping and highlight projection" {
     line_number: 4,
     preview: "moon",
     preview_start_column: 1,
-    ranges: [{ start_column: 1, end_column: 5 }],
+    ranges: [{ start_column: 1, end_column: 5, }],
   }
   let loaded = state.handle(
-    Loaded(
-      owner~,
-      root=root.path,
-      generation=page.generation,
-      reply={
-        root: root.path,
-        generation: page.generation,
-        matches: [first, second],
-        match_count: 2,
-        file_count: 1,
-        limit_hit: false,
-        cancelled: false,
-        error: None,
-      },
-    ),
+    Loaded(owner~, root=root.path, generation=page.generation, reply={
+      root: root.path,
+      generation: page.generation,
+      matches: [first, second],
+      match_count: 2,
+      file_count: 1,
+      limit_hit: false,
+      cancelled: false,
+      error: None,
+    }),
     input,
   )
   assert_eq(loaded.page.active_result_count(), 2)
@@ -805,14 +803,11 @@ test "active result helpers share file grouping and highlight projection" {
   guard loaded.editor_highlights("src/main.mbt") is Some(highlights) else {
     fail("expected text highlights")
   }
-  assert_eq(
-    highlights.ranges(),
-    [
-      @common.Range(2, 1, 2, 5),
-      @common.Range(2, 6, 2, 10),
-      @common.Range(4, 1, 4, 5),
-    ],
-  )
+  assert_eq(highlights.ranges(), [
+    @common.Range(2, 1, 2, 5),
+    @common.Range(2, 6, 2, 10),
+    @common.Range(4, 1, 4, 5),
+  ])
 }
 
 ///|

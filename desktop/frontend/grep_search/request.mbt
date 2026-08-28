@@ -23,12 +23,10 @@ struct SearchRequestIdentity {
 ///|
 fn SearchRequest::identity(self : SearchRequest) -> SearchRequestIdentity {
   match self {
-    Text(payload) => { root: payload.root, generation: payload.generation, kind: "text" }
-    Semantic(payload) => {
-      root: payload.root,
-      generation: payload.generation,
-      kind: "semantic",
-    }
+    Text(payload) =>
+      { root: payload.root, generation: payload.generation, kind: "text", }
+    Semantic(payload) =>
+      { root: payload.root, generation: payload.generation, kind: "semantic", }
   }
 }
 
@@ -45,7 +43,10 @@ priv enum LoadedReply {
 }
 
 ///|
-fn SearchRequest::cancel(self : SearchRequest, owner : @interop.ConversationKey) -> Unit {
+fn SearchRequest::cancel(
+  self : SearchRequest,
+  owner : @interop.ConversationKey,
+) -> Unit {
   @js.async_run(() => {
     match self {
       Text(payload) =>
@@ -90,8 +91,8 @@ fn search_request_loader(
   let mut emit = emit
   let mut active = true
   let mut settled = false
-   let identity = request.identity()
-   let request_root = identity.root
+  let identity = request.identity()
+  let request_root = identity.root
   let request_generation = request.generation()
   let timer = @dom.window().set_timeout(
     () => {
@@ -217,7 +218,7 @@ pub fn State::subscription(
   let identity = request.identity()
   let request_root = identity.root
   @sub.custom_sub(
-     "grep-search:\{input.owner.channel.uri_authority()}:\{input.owner.session}:\{request_root}:\{identity.generation}:\{identity.kind}",
+    "grep-search:\{input.owner.channel.uri_authority()}:\{input.owner.session}:\{request_root}:\{identity.generation}:\{identity.kind}",
     Local,
     SearchRequestSub::SearchRequest(input.owner, request, page.delay_ms, emit),
     @sub.SubLoader(search_request_loader),
