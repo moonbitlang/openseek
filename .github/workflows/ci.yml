@@ -56,15 +56,16 @@ jobs:
 
       # Pull requests may restore the default branch's cache, but their own
       # merge-ref caches are private to that PR and cannot warm other branches.
-      - name: Restore CEF distribution
-        if: matrix.target == 'native'
+      # Proton 0.2 stores the immutable runtime and versioned helper here. The
+      # module prebuild resolves this store for both native and JS tests.
+      - name: Restore Proton runtime
         id: cef-cache
         uses: actions/cache/restore@v4
         with:
-          # Proton shares downloaded CEF distributions between projects here,
-          # then copies the selected version into the project-local runtime.
-          path: ~/.proton/cache/cef
-          key: cef-${{ runner.os }}-${{ runner.arch }}-proton-${{ steps.proton.outputs.version }}
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
 
       - name: Check formatting
         # Run the repository's one canonical formatter once on stable/native.
@@ -96,27 +97,23 @@ jobs:
             exit 1
           fi
 
-      # Only now: `cef setup` reads the Proton package's platform prebuilt out
-      # of .mooncakes, and nothing before the check steps above materializes
-      # it — `moon update` only refreshes the registry index. The checks
-      # themselves need no runtime because they never link. Setup runs at the
-      # repository root, which is both where Moon resolves .mooncakes and
-      # where Proton's link config looks for the .proton/runtime.json it
-      # writes; `moonx` runs the published CLI straight from the registry
-      # cache, so there is nothing to install.
-      #
-      # The test binaries below do link libproton.so, whose DT_NEEDED names
-      # libcef.so, libgtk-3.so.0 and libX11.so.6 — the loader resolves all
-      # three before main runs, so even a test that never opens a window
-      # cannot start without them. GTK and X11 are already on the runner
-      # image; libcef.so is the one the Proton package does not ship, and is
-      # what this step assembles beside libproton.so.
-      - name: Assemble Proton CEF runtime
-        if: matrix.target == 'native'
+      # Proton's Linux prebuild queries GTK and X11 while producing its native
+      # link configuration. The shared libraries are on the runner image, but
+      # their pkg-config metadata and headers come from the development packages.
+      - name: Install Proton Linux dependencies
         run: |
-          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}" \
-            -C "$PWD" cef setup
-          test -f .proton/runtime.json
+          sudo apt-get update
+          sudo apt-get install --yes libgtk-3-dev libx11-dev
+
+      # `cef setup` installs the release-selected runtime and subprocess helper
+      # into Proton's user-level immutable store. Moon invokes Proton's module
+      # prebuild for both test targets, so both matrix rows need the store even
+      # though JS tests never open a native window. Setup is idempotent after a
+      # cache hit.
+      - name: Assemble Proton CEF runtime
+        run: >-
+          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
+          cef setup
 
       # The stable/native main job is the sole Linux writer. PR jobs remain
       # restore-only, and no second channel races to reserve the same key.
@@ -128,7 +125,9 @@ jobs:
           steps.cef-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: ~/.proton/cache/cef
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
           key: ${{ steps.cef-cache.outputs.cache-primary-key }}
 
       - name: Test native target
