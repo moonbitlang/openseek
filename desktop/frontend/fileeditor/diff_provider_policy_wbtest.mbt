@@ -13,7 +13,7 @@ test "diff provider forces Core outside .mbt without overwriting preference" {
 }
 
 ///|
-test "desktop diff provider preferences and fallback status are host state" {
+test "selecting a Moon diff algorithm enters Diff view and retains policy" {
   let initial = State::empty()
   assert_true(initial.review_diff_mode is ReviewDiffCore)
   assert_true(initial.review_diff_ignore_comments)
@@ -28,11 +28,11 @@ test "desktop diff provider preferences and fallback status are host state" {
       generation: 1,
       working_generation: 1,
       baseline: ReviewContent("old source"),
-      view_mode: ReviewDiff,
+      view_mode: ReviewSource,
       selected,
     }),
   }
-  let state = { ..owned_state(), docs, }
+  let state = { ..owned_state(), docs, review_view_mode: ReviewSource, }
   let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
   let (_, tree) = update(
     test_emit(),
@@ -41,6 +41,11 @@ test "desktop diff provider preferences and fallback status are host state" {
     ctx,
   )
   assert_true(tree.review_diff_mode is ReviewDiffTree)
+  assert_true(tree.review_view_mode is ReviewDiff)
+  assert_true(
+    tree.docs.get(path)
+    is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. }),
+  )
   assert_eq(tree.review_diff_status, None)
   let (_, include_comments) = update(
     test_emit(),

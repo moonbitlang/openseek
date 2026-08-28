@@ -1670,40 +1670,62 @@ fn crumb_link(
 }
 
 ///|
-/// The breadcrumb row under the tab bar: the active file's path as
+/// The breadcrumb under the tab bar: the active file's path as
 /// `dir › dir › file` (the file segment emphasized) behind a leading
 /// "Workspace" crumb. Every crumb but the last opens a VS Code-style picker
 /// of that directory's immediate children, without moving or hiding the
 /// source viewer behind it.
-/// The tree-pane toggle rides this row's right edge, directly under the tab
-/// bar's panel toggle. With no file open the whole row hides (via CSS — it
-/// stays in the DOM so the editor's child order, and thus the viewer host,
-/// is never re-keyed) and the tree shows unconditionally in its place.
+/// Reviews add a second, wrapping command row so the path, file navigation,
+/// and completion action never compete with comparison settings. With no file
+/// open the whole breadcrumb hides; it stays in the DOM so the editor's child
+/// order, and thus the viewer host, is never re-keyed.
 pub fn breadcrumb_view(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
 ) -> @html.Html {
   if ctx.active_history_diff is Some(diff) {
-    return @html.div(class="viewer-breadcrumb history-breadcrumb", [
-      @html.div(class="crumb-path", [
-        @html.span(
-          class="crumb history-commit-crumb",
-          short_commit(diff.commit),
-        ),
-        @html.span(class="crumb-sep", "›"),
-        @html.span(class="crumb crumb-file", diff.path.0),
-      ]),
-      review_diff_mode_toolbar(dispatch, state, ctx),
-      review_diff_navigation(dispatch, state, ctx),
-      review_diff_layout_toggle(dispatch, state, ctx),
-      @html.button(
-        class="panel-toggle",
-        title=if state.tree_open { "Hide file tree" } else { "Show file tree" },
-        on_click=dispatch(ToggleTree),
-        icon(icon_folder),
-      ),
-    ])
+    return @html.div(
+      class="viewer-breadcrumb review-toolbar history-breadcrumb",
+      [
+        @html.div(class="viewer-breadcrumb-row", [
+          @html.div(class="crumb-path", [
+            @html.span(
+              class="crumb history-commit-crumb",
+              short_commit(diff.commit),
+            ),
+            @html.span(class="crumb-sep", "›"),
+            @html.span(class="crumb crumb-file", diff.path.0),
+          ]),
+          @html.button(
+            class="panel-toggle",
+            title=if state.tree_open {
+              "Hide file tree"
+            } else {
+              "Show file tree"
+            },
+            on_click=dispatch(ToggleTree),
+            icon(icon_folder),
+          ),
+        ]),
+        @html.div(class="review-command-row", [
+          review_diff_mode_toolbar(dispatch, state, ctx),
+          @html.span(
+            class=if moon_diff_available(state, ctx) {
+              "review-control-divider"
+            } else {
+              "review-control-divider hidden"
+            },
+            attrs=@html.Attrs::build().aria_hidden("true"),
+            "",
+          ),
+          review_diff_layout_toggle(dispatch, state, ctx),
+          review_comments_control(dispatch, state, ctx),
+          review_diff_status(state, ctx),
+          review_diff_navigation(dispatch, state, ctx),
+        ]),
+      ],
+    )
   }
   let crumbs : Array[@html.Html] = []
   match ctx.active_file {
@@ -1735,32 +1757,71 @@ pub fn breadcrumb_view(
     }
     None => crumbs.push(@html.span(class="crumb crumb-file", "Workspace"))
   }
-  let children : Array[@html.Html] = [
+  let review = full_diff_available(state, ctx)
+  let path_row : Array[@html.Html] = [
     @html.div(class="crumb-path", crumbs),
     review_navigation(dispatch, state, ctx),
-    review_badge(dispatch, state, ctx),
-    review_diff_mode_toolbar(dispatch, state, ctx),
-    review_diff_navigation(dispatch, state, ctx),
-    review_diff_layout_toggle(dispatch, state, ctx),
-    review_progress(dispatch, state, ctx),
+  ]
+  if review {
+    path_row.push(review_progress(dispatch, state, ctx))
+  } else {
+    path_row.push(review_badge(dispatch, state, ctx))
+    path_row.push(review_progress(dispatch, state, ctx))
+  }
+  path_row.push(
     @html.button(
       class="panel-toggle",
       title=if state.tree_open { "Hide file tree" } else { "Show file tree" },
       on_click=dispatch(ToggleTree),
       icon(icon_folder),
     ),
-  ]
-  if state.highlighted is Some(directory) {
-    children.push(breadcrumb_picker(dispatch, state, ctx, directory))
-  }
-  @html.div(
-    class=if ctx.active_file is None {
-      "viewer-breadcrumb hidden"
-    } else {
-      "viewer-breadcrumb"
-    },
-    children,
   )
+  if review {
+    let children : Array[@html.Html] = [
+      @html.div(class="viewer-breadcrumb-row", path_row),
+      @html.div(class="review-command-row", [
+        review_mode_toolbar(dispatch, state, ctx),
+        @html.span(
+          class="review-control-divider",
+          attrs=@html.Attrs::build().aria_hidden("true"),
+          "",
+        ),
+        review_diff_layout_toggle(dispatch, state, ctx),
+        review_comments_control(dispatch, state, ctx),
+        review_diff_status(state, ctx),
+        review_diff_navigation(dispatch, state, ctx),
+      ]),
+    ]
+    if state.highlighted is Some(directory) {
+      children.push(breadcrumb_picker(dispatch, state, ctx, directory))
+    }
+    @html.div(class="viewer-breadcrumb review-toolbar", children)
+  } else {
+    if state.highlighted is Some(directory) {
+      path_row.push(breadcrumb_picker(dispatch, state, ctx, directory))
+    }
+    @html.div(
+      class=if ctx.active_file is None {
+        "viewer-breadcrumb hidden"
+      } else {
+        "viewer-breadcrumb"
+      },
+      path_row,
+    )
+  }
+}
+
+///|
+fn full_diff_available(state : State, ctx : Ctx) -> Bool {
+  let review_available = ctx.active_file is Some(path) &&
+    state.docs.get(path) is Some(doc) &&
+    doc.review is Some(_) &&
+    doc.diff_content() is Some(_)
+  let history_available = ctx.active_history_diff is Some(diff) &&
+    state.history_docs.get(history_diff_key(diff)) is Some(history) &&
+    history.original.text() is Some(_) &&
+    history.modified.text() is Some(_)
+  review_available || history_available
 }
 
 ///|
@@ -1777,24 +1838,29 @@ fn full_diff_ready(state : State, ctx : Ctx) -> Bool {
 }
 
 ///|
-fn moon_diff_ready(state : State, ctx : Ctx) -> Bool {
-  let review_ready = ctx.active_file is Some(path) &&
-    path.0.to_lower().has_suffix(".mbt") &&
+fn moon_diff_available(state : State, ctx : Ctx) -> Bool {
+  let review_available = ctx.active_file is Some(path) &&
+    supports_moon_diff(path.0) &&
     state.docs.get(path) is Some(doc) &&
-    doc.review is Some({ view_mode: ReviewDiff, .. }) &&
+    doc.review is Some(_) &&
     doc.diff_content() is Some(_)
-  let history_ready = ctx.active_history_diff is Some(diff) &&
-    diff.path.0.to_lower().has_suffix(".mbt") &&
+  let history_available = ctx.active_history_diff is Some(diff) &&
+    supports_moon_diff(diff.path.0) &&
     state.history_docs.get(history_diff_key(diff)) is Some(history) &&
     history.original.text() is Some(_) &&
     history.modified.text() is Some(_)
-  review_ready || history_ready
+  review_available || history_available
+}
+
+///|
+fn moon_diff_ready(state : State, ctx : Ctx) -> Bool {
+  moon_diff_available(state, ctx) && full_diff_ready(state, ctx)
 }
 
 ///|
 fn ReviewDiffMode::label(self : ReviewDiffMode) -> String {
   match self {
-    ReviewDiffCore => "Core"
+    ReviewDiffCore => "Line"
     ReviewDiffToken => "Token"
     ReviewDiffTree => "Tree"
   }
@@ -1811,25 +1877,130 @@ fn ReviewDiffMode::attribute(self : ReviewDiffMode) -> String {
 
 ///|
 fn review_diff_mode_button(
-  dispatch : @cmd.Emit[Msg],
-  selected : ReviewDiffMode,
   mode : ReviewDiffMode,
+  active : Bool,
+  on_click : @cmd.Cmd,
 ) -> @html.Html {
-  let active = selected == mode
   @html.button(
     type_="button",
     class=if active {
-      "review-badge review-badge-action active"
+      "review-mode-button active"
     } else {
-      "review-badge review-badge-action"
+      "review-mode-button"
     },
     title="Use " + mode.label() + " diff",
-    on_click=dispatch(ReviewDiffModeSelected(mode)),
+    on_click~,
     attrs=@html.Attrs::build()
       .data_set("diff-mode", mode.attribute())
       .aria_label(mode.label() + " diff")
       .aria_pressed(active.to_string()),
     mode.label(),
+  )
+}
+
+///|
+fn review_mode_toolbar(
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+  ctx : Ctx,
+) -> @html.Html {
+  guard ctx.active_file is Some(path) &&
+    state.docs.get(path) is Some(doc) &&
+    doc.review is Some(review) &&
+    doc.diff_content() is Some(_) else {
+    return @html.span(class="review-mode-toolbar hidden", "")
+  }
+  let diff = review.view_mode == ReviewDiff
+  let moon = supports_moon_diff(path.0)
+  let children : Array[@html.Html] = [
+    @html.button(
+      type_="button",
+      class=if diff {
+        "review-mode-button"
+      } else {
+        "review-mode-button active"
+      },
+      title="Show file",
+      on_click=if diff { dispatch(ToggleReviewDiff) } else { @cmd.none },
+      attrs=@html.Attrs::build()
+        .data_set("review-mode", "file")
+        .aria_label("File view")
+        .aria_pressed((!diff).to_string()),
+      "File",
+    ),
+    @html.span(
+      class="review-mode-divider",
+      attrs=@html.Attrs::build().aria_hidden("true"),
+      "",
+    ),
+    review_diff_mode_button(
+      ReviewDiffCore,
+      diff && (!moon || state.review_diff_mode == ReviewDiffCore),
+      if moon {
+        dispatch(ReviewDiffModeSelected(ReviewDiffCore))
+      } else if diff {
+        @cmd.none
+      } else {
+        dispatch(ToggleReviewDiff)
+      },
+    ),
+  ]
+  if moon {
+    children.push(
+      review_diff_mode_button(
+        ReviewDiffToken,
+        diff && state.review_diff_mode == ReviewDiffToken,
+        dispatch(ReviewDiffModeSelected(ReviewDiffToken)),
+      ),
+    )
+    children.push(
+      review_diff_mode_button(
+        ReviewDiffTree,
+        diff && state.review_diff_mode == ReviewDiffTree,
+        dispatch(ReviewDiffModeSelected(ReviewDiffTree)),
+      ),
+    )
+  }
+  @html.div(
+    class="review-mode-toolbar",
+    attrs=@html.Attrs::build().role("toolbar").aria_label("Review mode"),
+    children,
+  )
+}
+
+///|
+/// Historical comparisons have no File surface, but retain the same explicit
+/// MoonBit comparison algorithms as changed-file reviews.
+fn review_diff_mode_toolbar(
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+  ctx : Ctx,
+) -> @html.Html {
+  guard moon_diff_ready(state, ctx) else {
+    return @html.span(class="review-mode-toolbar hidden", "")
+  }
+  @html.div(
+    class="review-mode-toolbar review-history-mode-toolbar",
+    attrs=@html.Attrs::build()
+      .role("toolbar")
+      .aria_label("Comparison algorithm"),
+    [
+      review_diff_mode_button(
+        ReviewDiffCore,
+        state.review_diff_mode == ReviewDiffCore,
+        dispatch(ReviewDiffModeSelected(ReviewDiffCore)),
+      ),
+      review_diff_mode_button(
+        ReviewDiffToken,
+        state.review_diff_mode == ReviewDiffToken,
+        dispatch(ReviewDiffModeSelected(ReviewDiffToken)),
+      ),
+      review_diff_mode_button(
+        ReviewDiffTree,
+        state.review_diff_mode == ReviewDiffTree,
+        dispatch(ReviewDiffModeSelected(ReviewDiffTree)),
+      ),
+    ],
   )
 }
 
@@ -1847,58 +2018,60 @@ fn review_diff_fallback_text(state : State) -> String {
 }
 
 ///|
-/// MoonBit-aware comparison policy belongs to the desktop review chrome.
-/// Other file types omit these controls and the imperative provider forces
-/// Core without overwriting the retained Token/Tree preference.
-fn review_diff_mode_toolbar(
+fn review_diff_status(state : State, ctx : Ctx) -> @html.Html {
+  let fallback = if full_diff_ready(state, ctx) {
+    review_diff_fallback_text(state)
+  } else {
+    ""
+  }
+  @html.span(
+    class=if fallback.is_empty() {
+      "review-diff-mode-status hidden"
+    } else {
+      "review-diff-mode-status"
+    },
+    attrs=@html.Attrs::build().role("status").aria_live("polite"),
+    fallback,
+  )
+}
+
+///|
+fn review_comments_control(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
 ) -> @html.Html {
-  guard moon_diff_ready(state, ctx) else {
-    return @html.span(class="review-diff-mode-toolbar hidden", "")
+  guard moon_diff_available(state, ctx) else {
+    return @html.span(class="review-comments-control hidden", "")
   }
-  let fallback = review_diff_fallback_text(state)
-  @html.div(
-    class="review-diff-mode-toolbar",
+  let enabled = full_diff_ready(state, ctx) &&
+    state.review_diff_mode != ReviewDiffCore
+  @html.button(
+    type_="button",
+    class=if enabled && state.review_diff_ignore_comments {
+      "review-comments-control active"
+    } else {
+      "review-comments-control"
+    },
+    title=if !full_diff_ready(state, ctx) {
+      "Available in diff view"
+    } else if state.review_diff_mode == ReviewDiffCore {
+      "Available in Token and Tree diff"
+    } else if state.review_diff_ignore_comments {
+      "Include comments in the comparison"
+    } else {
+      "Ignore comment-only changes"
+    },
+    disabled=!enabled,
+    on_click=dispatch(ToggleReviewDiffIgnoreComments),
     attrs=@html.Attrs::build()
-      .role("toolbar")
-      .aria_label("Comparison algorithm"),
-    [
-      review_diff_mode_button(dispatch, state.review_diff_mode, ReviewDiffCore),
-      review_diff_mode_button(dispatch, state.review_diff_mode, ReviewDiffToken),
-      review_diff_mode_button(dispatch, state.review_diff_mode, ReviewDiffTree),
-      @html.button(
-        type_="button",
-        class=if state.review_diff_ignore_comments {
-          "review-badge review-badge-action active"
-        } else {
-          "review-badge review-badge-action"
-        },
-        title=if state.review_diff_mode == ReviewDiffCore {
-          "Available in Token and Tree diff"
-        } else if state.review_diff_ignore_comments {
-          "Include comments in the comparison"
-        } else {
-          "Ignore comment-only changes"
-        },
-        disabled=state.review_diff_mode == ReviewDiffCore,
-        on_click=dispatch(ToggleReviewDiffIgnoreComments),
-        attrs=@html.Attrs::build()
-          .aria_label("Ignore comments")
-          .aria_pressed(state.review_diff_ignore_comments.to_string()),
-        "Ignore comments",
-      ),
-      @html.span(
-        class=if fallback.is_empty() {
-          "review-diff-mode-status hidden"
-        } else {
-          "review-diff-mode-status"
-        },
-        attrs=@html.Attrs::build().role("status").aria_live("polite"),
-        fallback,
-      ),
-    ],
+      .aria_label("Ignore comments")
+      .aria_pressed((enabled && state.review_diff_ignore_comments).to_string()),
+    if state.review_diff_ignore_comments {
+      "Comments: ignored"
+    } else {
+      "Comments: included"
+    },
   )
 }
 
@@ -1911,9 +2084,11 @@ fn review_diff_navigation(
   state : State,
   ctx : Ctx,
 ) -> @html.Html {
-  guard full_diff_ready(state, ctx) else {
+  guard full_diff_available(state, ctx) else {
     return @html.span(class="review-diff-navigation hidden", "")
   }
+  let enabled = full_diff_ready(state, ctx) &&
+    state.review_diff_navigation_available
   @html.div(
     class="review-diff-navigation",
     attrs=@html.Attrs::build()
@@ -1924,7 +2099,7 @@ fn review_diff_navigation(
         type_="button",
         class="review-nav-button",
         title="Previous change (Shift+F7)",
-        disabled=!state.review_diff_navigation_available,
+        disabled=!enabled,
         on_click=dispatch(RevealPreviousReviewDiffChange),
         attrs=@html.Attrs::build()
           .data_set("action", "previous-diff-change")
@@ -1936,7 +2111,7 @@ fn review_diff_navigation(
         type_="button",
         class="review-nav-button",
         title="Next change (F7)",
-        disabled=!state.review_diff_navigation_available,
+        disabled=!enabled,
         on_click=dispatch(RevealNextReviewDiffChange),
         attrs=@html.Attrs::build()
           .data_set("action", "next-diff-change")
@@ -1949,39 +2124,68 @@ fn review_diff_navigation(
 }
 
 ///|
-/// The full comparison keeps its two models mounted while this compact control
-/// changes only their layout. Source mode hides the control but preserves the
-/// panel preference for the next full-diff reveal.
+/// The full comparison keeps its two models mounted while this explicit pair
+/// changes only their layout. File mode preserves the preference but disables
+/// both choices so it cannot imply that a source file is split or unified.
 fn review_diff_layout_toggle(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
 ) -> @html.Html {
-  guard full_diff_ready(state, ctx) else {
-    return @html.span(class="review-badge hidden", "")
+  guard full_diff_available(state, ctx) else {
+    return @html.span(class="review-layout-control hidden", "")
   }
+  let ready = full_diff_ready(state, ctx)
   let inline = state.review_diff_layout == ReviewInline
-  @html.button(
-    type_="button",
-    class="review-badge review-badge-action review-layout-toggle",
-    title=if inline {
-      "Use side-by-side diff layout"
+  @html.div(
+    class=if ready {
+      "review-layout-control"
     } else {
-      "Use inline diff layout"
+      "review-layout-control disabled"
     },
-    on_click=dispatch(ToggleReviewDiffLayout),
-    attrs=@html.Attrs::build()
-      .data_set("layout", if inline { "inline" } else { "side-by-side" })
-      .aria_label("Inline diff layout")
-      .aria_pressed(inline.to_string()),
-    @html.span(
-      class=if inline {
-        "review-layout-icon inline"
-      } else {
-        "review-layout-icon split"
-      },
-      "",
-    ),
+    attrs=@html.Attrs::build().role("group").aria_label("Diff layout"),
+    [
+      @html.button(
+        type_="button",
+        class=if ready && !inline {
+          "review-layout-button active"
+        } else {
+          "review-layout-button"
+        },
+        title="Use side-by-side diff layout",
+        disabled=!ready,
+        on_click=if ready && inline {
+          dispatch(ToggleReviewDiffLayout)
+        } else {
+          @cmd.none
+        },
+        attrs=@html.Attrs::build()
+          .data_set("layout", "side-by-side")
+          .aria_label("Split diff layout")
+          .aria_pressed((ready && !inline).to_string()),
+        "Split",
+      ),
+      @html.button(
+        type_="button",
+        class=if ready && inline {
+          "review-layout-button active"
+        } else {
+          "review-layout-button"
+        },
+        title="Use unified diff layout",
+        disabled=!ready,
+        on_click=if ready && !inline {
+          dispatch(ToggleReviewDiffLayout)
+        } else {
+          @cmd.none
+        },
+        attrs=@html.Attrs::build()
+          .data_set("layout", "inline")
+          .aria_label("Unified diff layout")
+          .aria_pressed((ready && inline).to_string()),
+        "Unified",
+      ),
+    ],
   )
 }
 

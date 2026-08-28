@@ -5,6 +5,27 @@ fn render_review_html(node : @html.Html) -> String {
 }
 
 ///|
+/// Keep toolbar snapshots structural: one tag per line, with icon presence
+/// visible but path geometry owned by the icon tests.
+fn render_review_snapshot(node : @html.Html) -> String {
+  let rendered = render_review_html(node).replace_all(old="><", new=">\n<")
+  let lines : Array[String] = []
+  let mut inside_svg = false
+  for view in rendered.split("\n") {
+    let line = "\{view}"
+    if line.has_prefix("<svg ") {
+      lines.push("<svg>…</svg>")
+      inside_svg = true
+    } else if line == "</svg>" {
+      inside_svg = false
+    } else if !inside_svg {
+      lines.push(line)
+    }
+  }
+  lines.join("\n")
+}
+
+///|
 test "desktop review keeps sibling hosts stable across source and diff modes" {
   let path = @pathx.Relative("src/main.mbt")
   let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
@@ -46,21 +67,67 @@ test "desktop review keeps sibling hosts stable across source and diff modes" {
       "id=\"diff-editor-host\" class=\"viewer-host editor-shell moonbit-viewer-surface-hidden\"",
     ),
   )
-  let source_breadcrumb = render_review_html(
+  let source_breadcrumb = render_review_snapshot(
     breadcrumb_view(test_emit(), source_state, ctx),
   )
-  assert_true(source_breadcrumb.contains("aria-label=\"Full diff\""))
-  assert_true(source_breadcrumb.contains("aria-pressed=\"false\""))
-  assert_true(source_breadcrumb.contains(">View full diff</button>"))
-  assert_false(source_breadcrumb.contains("aria-label=\"Inline diff layout\""))
-  assert_false(
-    source_breadcrumb.contains("aria-label=\"Diff change navigation\""),
+  inspect(
+    source_breadcrumb,
+    content=(
+      #|<div class="viewer-breadcrumb review-toolbar">
+      #|<div class="viewer-breadcrumb-row">
+      #|<div class="crumb-path">
+      #|<button aria-controls="breadcrumb-directory-picker" aria-expanded="false" title="Show files in Workspace" type="button" class="crumb crumb-directory">Workspace</button>
+      #|<span class="crumb-sep">›</span>
+      #|<button aria-controls="breadcrumb-directory-picker" aria-expanded="false" title="Show files in src" type="button" class="crumb crumb-directory">src</button>
+      #|<span class="crumb-sep">›</span>
+      #|<span class="crumb crumb-file">main.mbt</span>
+      #|</div>
+      #|<div role="group" aria-label="Changed file navigation" class="review-navigation">
+      #|<button aria-label="Previous changed file" title="Previous changed file" type="button" class="review-nav-button" disabled>‹</button>
+      #|<span aria-live="polite" class="review-nav-position">1 of 1</span>
+      #|<button aria-label="Next changed file" title="Next changed file" type="button" class="review-nav-button" disabled>›</button>
+      #|</div>
+      #|<button aria-label="Mark file reviewed" aria-pressed="false" title="Mark this changed file as reviewed" type="button" class="review-badge review-progress">Mark reviewed</button>
+      #|<button title="Hide file tree" class="panel-toggle">
+      #|<span aria-hidden="true" class="icon">
+      #|<svg>…</svg>
+      #|</span>
+      #|</button>
+      #|</div>
+      #|<div class="review-command-row">
+      #|<div role="toolbar" aria-label="Review mode" class="review-mode-toolbar">
+      #|<button data-review-mode="file" aria-label="File view" aria-pressed="true" title="Show file" type="button" class="review-mode-button active">File</button>
+      #|<span aria-hidden="true" class="review-mode-divider">
+      #|</span>
+      #|<button data-diff-mode="core" aria-label="Line diff" aria-pressed="false" title="Use Line diff" type="button" class="review-mode-button">Line</button>
+      #|<button data-diff-mode="token" aria-label="Token diff" aria-pressed="false" title="Use Token diff" type="button" class="review-mode-button">Token</button>
+      #|<button data-diff-mode="tree" aria-label="Tree diff" aria-pressed="false" title="Use Tree diff" type="button" class="review-mode-button">Tree</button>
+      #|</div>
+      #|<span aria-hidden="true" class="review-control-divider">
+      #|</span>
+      #|<div role="group" aria-label="Diff layout" class="review-layout-control disabled">
+      #|<button data-layout="side-by-side" aria-label="Split diff layout" aria-pressed="false" title="Use side-by-side diff layout" type="button" class="review-layout-button" disabled>Split</button>
+      #|<button data-layout="inline" aria-label="Unified diff layout" aria-pressed="false" title="Use unified diff layout" type="button" class="review-layout-button" disabled>Unified</button>
+      #|</div>
+      #|<button aria-label="Ignore comments" aria-pressed="false" title="Available in diff view" type="button" class="review-comments-control" disabled>Comments: ignored</button>
+      #|<span role="status" aria-live="polite" class="review-diff-mode-status hidden">
+      #|</span>
+      #|<div role="group" aria-label="Diff change navigation" class="review-diff-navigation">
+      #|<button data-action="previous-diff-change" aria-label="Previous change" aria-keyshortcuts="Shift+F7" title="Previous change (Shift+F7)" type="button" class="review-nav-button" disabled>
+      #|<span aria-hidden="true" class="icon">
+      #|<svg>…</svg>
+      #|</span>
+      #|</button>
+      #|<button data-action="next-diff-change" aria-label="Next change" aria-keyshortcuts="F7" title="Next change (F7)" type="button" class="review-nav-button" disabled>
+      #|<span aria-hidden="true" class="icon">
+      #|<svg>…</svg>
+      #|</span>
+      #|</button>
+      #|</div>
+      #|</div>
+      #|</div>
+    ),
   )
-  assert_true(source_breadcrumb.contains(">Mark reviewed</button>"))
-  assert_true(
-    source_breadcrumb.contains("aria-label=\"Changed file navigation\""),
-  )
-  assert_true(source_breadcrumb.contains(">1 of 1</span>"))
 
   let diff_doc = {
     ..source_doc,
@@ -83,100 +150,157 @@ test "desktop review keeps sibling hosts stable across source and diff modes" {
   assert_true(
     diff.contains("id=\"diff-editor-host\" class=\"viewer-host editor-shell\""),
   )
-  let diff_breadcrumb = render_review_html(
+  let diff_breadcrumb = render_review_snapshot(
     breadcrumb_view(test_emit(), diff_state, ctx),
   )
-  assert_true(diff_breadcrumb.contains("aria-label=\"Full diff\""))
-  assert_true(diff_breadcrumb.contains("aria-pressed=\"true\""))
-  assert_true(diff_breadcrumb.contains(">View file</button>"))
-  assert_true(diff_breadcrumb.contains("aria-label=\"Inline diff layout\""))
-  assert_true(diff_breadcrumb.contains("aria-pressed=\"false\""))
-  assert_true(diff_breadcrumb.contains("data-layout=\"side-by-side\""))
-  assert_true(diff_breadcrumb.contains("review-layout-icon split"))
-  assert_true(diff_breadcrumb.contains("aria-label=\"Diff change navigation\""))
-  assert_true(diff_breadcrumb.contains("title=\"Previous change (Shift+F7)\""))
-  assert_true(diff_breadcrumb.contains("aria-label=\"Previous change\""))
-  assert_true(diff_breadcrumb.contains("aria-keyshortcuts=\"Shift+F7\""))
-  assert_true(diff_breadcrumb.contains("data-action=\"previous-diff-change\""))
-  assert_true(diff_breadcrumb.contains("title=\"Next change (F7)\""))
-  assert_true(diff_breadcrumb.contains("aria-label=\"Next change\""))
-  assert_true(diff_breadcrumb.contains("aria-keyshortcuts=\"F7\""))
-  assert_true(diff_breadcrumb.contains("data-action=\"next-diff-change\""))
-  assert_true(diff_breadcrumb.contains("class=\"icon\""))
-  assert_true(diff_breadcrumb.contains("disabled"))
-  let enabled_navigation = render_review_html(
+  inspect(
+    diff_breadcrumb,
+    content=(
+      #|<div class="viewer-breadcrumb review-toolbar">
+      #|<div class="viewer-breadcrumb-row">
+      #|<div class="crumb-path">
+      #|<button aria-controls="breadcrumb-directory-picker" aria-expanded="false" title="Show files in Workspace" type="button" class="crumb crumb-directory">Workspace</button>
+      #|<span class="crumb-sep">›</span>
+      #|<button aria-controls="breadcrumb-directory-picker" aria-expanded="false" title="Show files in src" type="button" class="crumb crumb-directory">src</button>
+      #|<span class="crumb-sep">›</span>
+      #|<span class="crumb crumb-file">main.mbt</span>
+      #|</div>
+      #|<div role="group" aria-label="Changed file navigation" class="review-navigation">
+      #|<button aria-label="Previous changed file" title="Previous changed file" type="button" class="review-nav-button" disabled>‹</button>
+      #|<span aria-live="polite" class="review-nav-position">1 of 1</span>
+      #|<button aria-label="Next changed file" title="Next changed file" type="button" class="review-nav-button" disabled>›</button>
+      #|</div>
+      #|<button aria-label="Mark file reviewed" aria-pressed="false" title="Mark this changed file as reviewed" type="button" class="review-badge review-progress">Mark reviewed</button>
+      #|<button title="Hide file tree" class="panel-toggle">
+      #|<span aria-hidden="true" class="icon">
+      #|<svg>…</svg>
+      #|</span>
+      #|</button>
+      #|</div>
+      #|<div class="review-command-row">
+      #|<div role="toolbar" aria-label="Review mode" class="review-mode-toolbar">
+      #|<button data-review-mode="file" aria-label="File view" aria-pressed="false" title="Show file" type="button" class="review-mode-button">File</button>
+      #|<span aria-hidden="true" class="review-mode-divider">
+      #|</span>
+      #|<button data-diff-mode="core" aria-label="Line diff" aria-pressed="true" title="Use Line diff" type="button" class="review-mode-button active">Line</button>
+      #|<button data-diff-mode="token" aria-label="Token diff" aria-pressed="false" title="Use Token diff" type="button" class="review-mode-button">Token</button>
+      #|<button data-diff-mode="tree" aria-label="Tree diff" aria-pressed="false" title="Use Tree diff" type="button" class="review-mode-button">Tree</button>
+      #|</div>
+      #|<span aria-hidden="true" class="review-control-divider">
+      #|</span>
+      #|<div role="group" aria-label="Diff layout" class="review-layout-control">
+      #|<button data-layout="side-by-side" aria-label="Split diff layout" aria-pressed="true" title="Use side-by-side diff layout" type="button" class="review-layout-button active">Split</button>
+      #|<button data-layout="inline" aria-label="Unified diff layout" aria-pressed="false" title="Use unified diff layout" type="button" class="review-layout-button">Unified</button>
+      #|</div>
+      #|<button aria-label="Ignore comments" aria-pressed="false" title="Available in Token and Tree diff" type="button" class="review-comments-control" disabled>Comments: ignored</button>
+      #|<span role="status" aria-live="polite" class="review-diff-mode-status hidden">
+      #|</span>
+      #|<div role="group" aria-label="Diff change navigation" class="review-diff-navigation">
+      #|<button data-action="previous-diff-change" aria-label="Previous change" aria-keyshortcuts="Shift+F7" title="Previous change (Shift+F7)" type="button" class="review-nav-button" disabled>
+      #|<span aria-hidden="true" class="icon">
+      #|<svg>…</svg>
+      #|</span>
+      #|</button>
+      #|<button data-action="next-diff-change" aria-label="Next change" aria-keyshortcuts="F7" title="Next change (F7)" type="button" class="review-nav-button" disabled>
+      #|<span aria-hidden="true" class="icon">
+      #|<svg>…</svg>
+      #|</span>
+      #|</button>
+      #|</div>
+      #|</div>
+      #|</div>
+    ),
+  )
+  let enabled_navigation = render_review_snapshot(
     review_diff_navigation(
       test_emit(),
       { ..diff_state, review_diff_navigation_available: true, },
       ctx,
     ),
   )
-  assert_true(
-    enabled_navigation.contains("aria-label=\"Diff change navigation\""),
-  )
-  assert_false(enabled_navigation.contains("disabled"))
-  assert_true(diff_breadcrumb.contains("aria-label=\"Comparison algorithm\""))
-  assert_true(diff_breadcrumb.contains("data-diff-mode=\"core\""))
-  assert_true(diff_breadcrumb.contains("data-diff-mode=\"token\""))
-  assert_true(diff_breadcrumb.contains("data-diff-mode=\"tree\""))
-  assert_true(diff_breadcrumb.contains("aria-label=\"Ignore comments\""))
-
-  let fallback_breadcrumb = render_review_html(
-    breadcrumb_view(
-      test_emit(),
-      {
-        ..diff_state,
-        review_diff_mode: ReviewDiffTree,
-        review_diff_status: Some({
-          requested: ReviewDiffTree,
-          effective: ReviewDiffToken,
-          fell_back: true,
-        }),
-      },
-      ctx,
+  inspect(
+    enabled_navigation,
+    content=(
+      #|<div role="group" aria-label="Diff change navigation" class="review-diff-navigation">
+      #|<button data-action="previous-diff-change" aria-label="Previous change" aria-keyshortcuts="Shift+F7" title="Previous change (Shift+F7)" type="button" class="review-nav-button">
+      #|<span aria-hidden="true" class="icon">
+      #|<svg>…</svg>
+      #|</span>
+      #|</button>
+      #|<button data-action="next-diff-change" aria-label="Next change" aria-keyshortcuts="F7" title="Next change (F7)" type="button" class="review-nav-button">
+      #|<span aria-hidden="true" class="icon">
+      #|<svg>…</svg>
+      #|</span>
+      #|</button>
+      #|</div>
     ),
   )
-  assert_true(
-    fallback_breadcrumb.contains("Tree unavailable — showing Token diff"),
-  )
-  assert_true(fallback_breadcrumb.contains("aria-live=\"polite\""))
 
-  let core_fallback_breadcrumb = render_review_html(
-    breadcrumb_view(
-      test_emit(),
-      {
-        ..diff_state,
-        review_diff_mode: ReviewDiffToken,
-        review_diff_status: Some({
-          requested: ReviewDiffToken,
-          effective: ReviewDiffCore,
-          fell_back: true,
-        }),
-      },
-      ctx,
+  let fallback_state = {
+    ..diff_state,
+    review_diff_mode: ReviewDiffTree,
+    review_diff_status: Some({
+      requested: ReviewDiffTree,
+      effective: ReviewDiffToken,
+      fell_back: true,
+    }),
+  }
+  let fallback_status = render_review_snapshot(
+    review_diff_status(fallback_state, ctx),
+  )
+  inspect(
+    fallback_status,
+    content=(
+      #|<span role="status" aria-live="polite" class="review-diff-mode-status">Tree unavailable — showing Token diff</span>
     ),
   )
-  assert_true(
-    core_fallback_breadcrumb.contains("Token unavailable — showing Core diff"),
+
+  let core_fallback_state = {
+    ..diff_state,
+    review_diff_mode: ReviewDiffToken,
+    review_diff_status: Some({
+      requested: ReviewDiffToken,
+      effective: ReviewDiffCore,
+      fell_back: true,
+    }),
+  }
+  let core_fallback_status = render_review_snapshot(
+    review_diff_status(core_fallback_state, ctx),
+  )
+  inspect(
+    core_fallback_status,
+    content=(
+      #|<span role="status" aria-live="polite" class="review-diff-mode-status">Token unavailable — showing Line diff</span>
+    ),
   )
 
-  let inline_breadcrumb = render_review_html(
-    breadcrumb_view(
+  let inline_layout = render_review_snapshot(
+    review_diff_layout_toggle(
       test_emit(),
       { ..diff_state, review_diff_layout: ReviewInline, },
       ctx,
     ),
   )
-  assert_true(inline_breadcrumb.contains("aria-label=\"Inline diff layout\""))
-  assert_true(inline_breadcrumb.contains("aria-pressed=\"true\""))
-  assert_true(inline_breadcrumb.contains("data-layout=\"inline\""))
-  assert_true(inline_breadcrumb.contains("review-layout-icon inline"))
+  inspect(
+    inline_layout,
+    content=(
+      #|<div role="group" aria-label="Diff layout" class="review-layout-control">
+      #|<button data-layout="side-by-side" aria-label="Split diff layout" aria-pressed="false" title="Use side-by-side diff layout" type="button" class="review-layout-button">Split</button>
+      #|<button data-layout="inline" aria-label="Unified diff layout" aria-pressed="true" title="Use unified diff layout" type="button" class="review-layout-button active">Unified</button>
+      #|</div>
+    ),
+  )
 
   let reviewed_state = { ..diff_state, reviewed_changes: [selected], }
-  let reviewed_breadcrumb = render_review_html(
-    breadcrumb_view(test_emit(), reviewed_state, ctx),
+  let reviewed_progress = render_review_snapshot(
+    review_progress(test_emit(), reviewed_state, ctx),
   )
-  assert_true(reviewed_breadcrumb.contains(">✓ Reviewed</button>"))
+  inspect(
+    reviewed_progress,
+    content=(
+      #|<button aria-label="Mark file reviewed" aria-pressed="true" title="Return this changed file to the review queue" type="button" class="review-badge review-progress reviewed">✓ Reviewed</button>
+    ),
+  )
   let reviewed_tree = render_review_html(
     tree_pane(test_emit(), reviewed_state, ctx),
   )
@@ -240,7 +364,7 @@ test "desktop explicitly routes Markdown source while DiffEditor stays code-only
 }
 
 ///|
-test "non-MoonBit full diff omits specialized provider controls" {
+test "non-MoonBit review keeps File and Line without specialized controls" {
   let path = @pathx.Relative("README.md")
   let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
   let selected = test_modified_change(path)
@@ -255,17 +379,66 @@ test "non-MoonBit full diff omits specialized provider controls" {
       selected,
     }),
   }
-  let breadcrumb = render_review_html(
+  let breadcrumb = render_review_snapshot(
     breadcrumb_view(
       test_emit(),
       { ..owned_state(), docs, review_diff_mode: ReviewDiffTree, },
       ctx,
     ),
   )
-  assert_false(breadcrumb.contains("aria-label=\"Comparison algorithm\""))
-  assert_true(breadcrumb.contains("aria-label=\"Diff change navigation\""))
-  assert_true(breadcrumb.contains("data-action=\"previous-diff-change\""))
-  assert_true(breadcrumb.contains("data-action=\"next-diff-change\""))
+  inspect(
+    breadcrumb,
+    content=(
+      #|<div class="viewer-breadcrumb review-toolbar">
+      #|<div class="viewer-breadcrumb-row">
+      #|<div class="crumb-path">
+      #|<button aria-controls="breadcrumb-directory-picker" aria-expanded="false" title="Show files in Workspace" type="button" class="crumb crumb-directory">Workspace</button>
+      #|<span class="crumb-sep">›</span>
+      #|<span class="crumb crumb-file">README.md</span>
+      #|</div>
+      #|<span class="review-navigation hidden">
+      #|</span>
+      #|<span class="review-badge hidden">
+      #|</span>
+      #|<button title="Hide file tree" class="panel-toggle">
+      #|<span aria-hidden="true" class="icon">
+      #|<svg>…</svg>
+      #|</span>
+      #|</button>
+      #|</div>
+      #|<div class="review-command-row">
+      #|<div role="toolbar" aria-label="Review mode" class="review-mode-toolbar">
+      #|<button data-review-mode="file" aria-label="File view" aria-pressed="false" title="Show file" type="button" class="review-mode-button">File</button>
+      #|<span aria-hidden="true" class="review-mode-divider">
+      #|</span>
+      #|<button data-diff-mode="core" aria-label="Line diff" aria-pressed="true" title="Use Line diff" type="button" class="review-mode-button active">Line</button>
+      #|</div>
+      #|<span aria-hidden="true" class="review-control-divider">
+      #|</span>
+      #|<div role="group" aria-label="Diff layout" class="review-layout-control">
+      #|<button data-layout="side-by-side" aria-label="Split diff layout" aria-pressed="true" title="Use side-by-side diff layout" type="button" class="review-layout-button active">Split</button>
+      #|<button data-layout="inline" aria-label="Unified diff layout" aria-pressed="false" title="Use unified diff layout" type="button" class="review-layout-button">Unified</button>
+      #|</div>
+      #|<span class="review-comments-control hidden">
+      #|</span>
+      #|<span role="status" aria-live="polite" class="review-diff-mode-status hidden">
+      #|</span>
+      #|<div role="group" aria-label="Diff change navigation" class="review-diff-navigation">
+      #|<button data-action="previous-diff-change" aria-label="Previous change" aria-keyshortcuts="Shift+F7" title="Previous change (Shift+F7)" type="button" class="review-nav-button" disabled>
+      #|<span aria-hidden="true" class="icon">
+      #|<svg>…</svg>
+      #|</span>
+      #|</button>
+      #|<button data-action="next-diff-change" aria-label="Next change" aria-keyshortcuts="F7" title="Next change (F7)" type="button" class="review-nav-button" disabled>
+      #|<span aria-hidden="true" class="icon">
+      #|<svg>…</svg>
+      #|</span>
+      #|</button>
+      #|</div>
+      #|</div>
+      #|</div>
+    ),
+  )
 }
 
 ///|

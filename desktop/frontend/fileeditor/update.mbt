@@ -2162,6 +2162,52 @@ pub fn sync(
 }
 
 ///|
+/// Select one review surface while keeping every parked changed-file tab
+/// aligned with the panel preference. Algorithm buttons use this same
+/// transition when they open a diff directly from File view.
+fn select_review_view_mode(
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+  ctx : Ctx,
+  view_mode : ReviewViewMode,
+) -> (@cmd.Cmd, State) {
+  guard ctx.active_file is Some(path) &&
+    state.docs.get(path) is Some(doc) &&
+    doc.review is Some(_) &&
+    doc.diff_content() is Some(_) else {
+    return (@cmd.none, state)
+  }
+  let docs = state.docs.copy()
+  // Reopening an older tab must not resurrect a stale per-document surface.
+  for review_path, review_doc in state.docs {
+    match review_doc.review {
+      Some(parked) =>
+        docs[review_path] = {
+          ..review_doc,
+          review: Some({ ..parked, view_mode, }),
+        }
+      None => ()
+    }
+  }
+  let next_doc = docs.get(path).unwrap()
+  let show = show_pending_review(
+    dispatch,
+    ctx,
+    state.editor_search_highlights(path),
+    path,
+    next_doc,
+  )
+  let command = match view_mode {
+    // A window/tree resize can measure the display:none source host at the
+    // Viewer's 5px minimum while the diff is visible. Measure again only after
+    // File mode has restored the source host's real box.
+    ReviewSource => @cmd.batch([show, request_viewer_remeasure()])
+    ReviewDiff => show
+  }
+  (command, { ..state, docs, review_view_mode: view_mode, })
+}
+
+///|
 pub fn update(
   dispatch : @cmd.Emit[Msg],
   msg : Msg,
@@ -2204,46 +2250,11 @@ pub fn update(
         (@cmd.none, state)
       }
     ToggleReviewDiff => {
-      guard ctx.active_file is Some(path) &&
-        state.docs.get(path) is Some(doc) &&
-        doc.review is Some(_) &&
-        doc.diff_content() is Some(_) else {
-        return (@cmd.none, state)
-      }
       let view_mode = match state.review_view_mode {
         ReviewSource => ReviewDiff
         ReviewDiff => ReviewSource
       }
-      let docs = state.docs.copy()
-      // Keep every parked review aligned with the panel preference. Otherwise
-      // revisiting an older tab could resurrect its stale per-document mode
-      // and make the next file forget what the reviewer currently sees.
-      for review_path, review_doc in state.docs {
-        match review_doc.review {
-          Some(parked) =>
-            docs[review_path] = {
-              ..review_doc,
-              review: Some({ ..parked, view_mode, }),
-            }
-          None => ()
-        }
-      }
-      let next_doc = docs.get(path).unwrap()
-      let show = show_pending_review(
-        dispatch,
-        ctx,
-        state.editor_search_highlights(path),
-        path,
-        next_doc,
-      )
-      let command = match view_mode {
-        // A window/tree resize can measure the display:none source host at the
-        // Viewer's 5px minimum while the diff is visible. Measure again only
-        // after source mode has restored the host's real box.
-        ReviewSource => @cmd.batch([show, request_viewer_remeasure()])
-        ReviewDiff => show
-      }
-      (command, { ..state, docs, review_view_mode: view_mode, })
+      select_review_view_mode(dispatch, state, ctx, view_mode)
     }
     ToggleReviewDiffLayout => {
       let review_ready = ctx.active_file is Some(path) &&
@@ -2265,11 +2276,29 @@ pub fn update(
       )
     }
     ReviewDiffModeSelected(mode) => {
-      guard moon_diff_ready(state, ctx) else { return (@cmd.none, state) }
-      (
-        apply_review_diff_provider(mode, state.review_diff_ignore_comments),
-        { ..state, review_diff_mode: mode, review_diff_status: None, },
+      guard moon_diff_available(state, ctx) else { return (@cmd.none, state) }
+      let provider = apply_review_diff_provider(
+        mode,
+        state.review_diff_ignore_comments,
       )
+      let selected = {
+        ..state,
+        review_diff_mode: mode,
+        review_diff_status: None,
+      }
+      if ctx.active_file is Some(path) &&
+        state.docs.get(path)
+        is Some({ review: Some({ view_mode: ReviewSource, .. }), .. }) {
+        let (show, diff) = select_review_view_mode(
+          dispatch,
+          selected,
+          ctx,
+          ReviewDiff,
+        )
+        (@cmd.batch([provider, show]), diff)
+      } else {
+        (provider, selected)
+      }
     }
     ToggleReviewDiffIgnoreComments => {
       guard moon_diff_ready(state, ctx) &&

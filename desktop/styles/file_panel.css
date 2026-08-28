@@ -1782,6 +1782,36 @@ button.git-history-file:focus-visible {
   background: var(--color-bg-surface);
 }
 
+/* A review keeps path/navigation and comparison settings on separate rows.
+   Control groups wrap as units, so a narrow editor may grow vertically but
+   never clips an unlabeled option or the change-navigation arrows. */
+.viewer-breadcrumb.review-toolbar {
+  display: block;
+  height: auto;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.viewer-breadcrumb-row,
+.review-command-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 18px 0 12px;
+}
+
+.viewer-breadcrumb-row {
+  border-bottom: 1px solid var(--color-separator);
+}
+
+.review-command-row {
+  flex-wrap: wrap;
+  padding-block: 4px;
+  background: var(--color-bg-subtle);
+}
+
 /* The path crumbs grow and ellipsize. */
 .crumb-path {
   display: flex;
@@ -2044,78 +2074,122 @@ button.git-history-file:focus-visible {
   background: var(--color-bg-subtle);
 }
 
-.review-diff-mode-toolbar {
+.review-mode-toolbar,
+.review-layout-control {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-control-surface);
 }
 
-.review-diff-mode-toolbar.hidden,
+.review-mode-toolbar.hidden,
+.review-layout-control.hidden,
+.review-comments-control.hidden,
+.review-control-divider.hidden,
 .review-diff-mode-status.hidden {
   display: none;
 }
 
-.review-diff-mode-toolbar .review-badge {
-  max-width: none;
-  padding-inline: 5px;
+.review-mode-button,
+.review-layout-button {
+  appearance: none;
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  color: var(--color-text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: var(--font-size-xs);
+  line-height: 16px;
+  cursor: pointer;
 }
 
-.review-diff-mode-toolbar .review-badge.active {
-  border-color: transparent;
+.review-mode-button:hover,
+.review-layout-button:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-bg-subtle);
+}
+
+.review-mode-button.active,
+.review-layout-button.active {
+  color: var(--color-accent-strong);
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+  font-weight: 600;
+}
+
+.review-mode-divider,
+.review-control-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 18px;
+  background: var(--color-border);
+}
+
+.review-mode-divider {
+  margin: 0 3px;
+}
+
+.review-control-divider {
+  margin: 0 2px;
+}
+
+.review-layout-control.disabled {
+  color: var(--color-text-muted);
+  opacity: 0.5;
+}
+
+.review-layout-button:disabled {
+  color: inherit;
+  cursor: default;
+}
+
+.review-comments-control {
+  appearance: none;
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  background: var(--color-control-surface);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.review-comments-control:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface);
+}
+
+.review-comments-control.active {
   color: var(--color-accent-strong);
   background: color-mix(in srgb, var(--color-accent) 20%, transparent);
 }
 
-.review-diff-mode-toolbar .review-badge:disabled {
+.review-comments-control:disabled {
+  color: var(--color-text-muted);
   cursor: default;
   opacity: 0.5;
 }
 
+.review-command-row .review-diff-navigation {
+  margin-left: auto;
+}
+
 .review-diff-mode-status {
+  flex: 1 1 120px;
+  min-width: 0;
   max-width: 220px;
   overflow: hidden;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   text-overflow: ellipsis;
-}
-
-.review-layout-toggle {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  min-width: 24px;
-  max-width: none;
-  height: 22px;
-  padding: 0;
-}
-
-.review-layout-icon {
-  position: relative;
-  display: block;
-  box-sizing: border-box;
-  width: 12px;
-  height: 10px;
-  border: 1px solid currentColor;
-  border-radius: 1px;
-}
-
-.review-layout-icon.split::after {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 50%;
-  border-left: 1px solid currentColor;
-}
-
-.review-layout-icon.inline::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  left: 2px;
-  height: 1px;
-  background: currentColor;
-  box-shadow: 0 2px 0 currentColor, 0 4px 0 currentColor;
 }
 
 .review-progress {
