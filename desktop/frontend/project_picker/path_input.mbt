@@ -162,3 +162,29 @@ fn State::path_destination(self : State) -> String? {
       }
   }
 }
+
+///|
+/// Whether `path` names the location the host last listed. A trailing
+/// separator does not change a directory. Everything else stays exact; the
+/// host decides whether alternate casing is equivalent on its platform.
+fn State::already_loaded(self : State, path : String) -> Bool {
+  match self.location {
+    Some(Directory(current)) =>
+      current == path ||
+      (
+        current != "/" &&
+        current.trim_end(chars="/") == path.trim_end(chars="/")
+      )
+    Some(DriveList) => path.trim() == "/"
+    None => false
+  }
+}
+
+///|
+/// Whether the open path editor still names the listed location: opened and
+/// left untouched, or resumed after a separator-committed browse. Submitting
+/// such a draft would only close the editor, so actions on the current
+/// directory may close it themselves instead of waiting.
+fn State::path_draft_names_location(self : State) -> Bool {
+  self.path_destination() is Some(path) && self.already_loaded(path)
+}
