@@ -7,8 +7,8 @@ fn pattern_repair_op(
   {
     root: payload.root,
     generation: payload.generation,
-    pattern: payload.pattern,
-    success: true,
-    message: "Pattern repair host prototype accepted the pattern.",
+    candidate_pattern: payload.pattern,
+    valid: true,
+    message: "Candidate Pattern is ready for review.",
   }
 }

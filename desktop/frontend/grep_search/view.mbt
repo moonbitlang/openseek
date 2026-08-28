@@ -226,7 +226,7 @@ fn mode_options(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
 ///|
 fn pattern_repair_control(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
   let requested = page.pattern_repair_phase is PatternRepairRequested
-  let completed = page.pattern_repair_phase is PatternRepairSucceeded
+  let completed = page.pattern_repair_phase is PatternRepairPreview
   let failed = page.pattern_repair_phase is PatternRepairFailed
   @html.button(
     class=if requested {
@@ -254,13 +254,28 @@ fn pattern_repair_control(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
 }
 
 ///|
-fn pattern_repair_notice(page : Page) -> @html.Html {
+fn pattern_repair_notice(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
   if page.pattern_repair_phase is PatternRepairRequested {
     @html.div(
       class="search-empty",
       attrs=@html.Attrs::build().role("status").aria_live("polite"),
       "Pattern repair is not connected yet.",
     )
+  } else if page.pattern_repair_phase is PatternRepairPreview &&
+    page.pattern_repair_candidate is Some(candidate) {
+    @html.div(class="search-pattern-repair-preview", [
+      @html.div(class="search-pattern-repair-title", "Suggested Pattern"),
+      @html.pre(class="search-pattern-repair-candidate", candidate),
+      if page.pattern_repair_message is Some(message) {
+        @html.div(class="search-pattern-repair-message", message)
+      } else {
+        @html.nothing
+      },
+      @html.div(class="search-pattern-repair-actions", [
+        @html.button(on_click=emit(AcceptPatternRepair), "Accept"),
+        @html.button(on_click=emit(RejectPatternRepair), "Discard"),
+      ]),
+    ])
   } else if page.pattern_repair_message is Some(message) {
     @html.div(
       class=if page.pattern_repair_phase is PatternRepairFailed {
@@ -819,7 +834,7 @@ fn page_view(
       @html.nothing
     },
     if page.mode is Semantic {
-      pattern_repair_notice(page)
+      pattern_repair_notice(page, emit)
     } else {
       @html.nothing
     },

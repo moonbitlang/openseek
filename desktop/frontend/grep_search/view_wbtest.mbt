@@ -36,20 +36,22 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
   let requested_html = render_search(requested, input)
   assert_true(requested_html.contains("Pattern repair is not connected yet."))
   assert_true(requested_html.contains("aria-label=\"Cancel Pattern Repair\""))
-  let succeeded = requested.handle(
-    PatternRepairSucceeded(
+  let previewed = requested.handle(
+    PatternRepairPreview(
       root=root.path,
       generation=requested.page.generation,
-      pattern="inspect($_)",
-      message="Pattern repaired by the local prototype.",
+      candidate_pattern="inspect($_)",
+      message="Candidate Pattern is ready for review.",
     ),
     input,
   )
-  let succeeded_html = render_search(succeeded, input)
-  assert_true(succeeded.page.semantic.patterns[0] == "inspect($_)")
-  assert_true(
-    succeeded_html.contains("Pattern repaired by the local prototype."),
-  )
+  let preview_html = render_search(previewed, input)
+  assert_true(previewed.page.semantic.patterns[0] != "inspect($_)")
+  assert_true(preview_html.contains("Suggested Pattern"))
+  let accepted = previewed.handle(AcceptPatternRepair, input)
+  assert_true(accepted.page.semantic.patterns[0] == "inspect($_)")
+  let discarded = previewed.handle(RejectPatternRepair, input)
+  assert_true(discarded.page.semantic.patterns[0] != "inspect($_)")
   let failed = semantic
     .handle(FixPattern, input)
     .handle(

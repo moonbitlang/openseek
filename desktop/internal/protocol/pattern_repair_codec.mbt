@@ -31,8 +31,8 @@ pub impl FromJson for PatternRepairReply with fn from_json(json, path) {
   {
     root: object.required_string("root"),
     generation,
-    pattern: object.required_string("pattern"),
-    success: object.required_bool("success"),
+    candidate_pattern: object.required_string("candidate_pattern"),
+    valid: object.required_bool("valid"),
     message: object.required_string("message"),
   }
 }
@@ -42,8 +42,8 @@ pub impl ToJson for PatternRepairReply with fn to_json(self) {
   {
     "root": self.root,
     "generation": self.generation,
-    "pattern": self.pattern,
-    "success": self.success,
+    "candidate_pattern": self.candidate_pattern,
+    "valid": self.valid,
     "message": self.message,
   }
 }

@@ -34,7 +34,7 @@ enum Mode {
 enum PatternRepairPhase {
   PatternRepairIdle
   PatternRepairRequested
-  PatternRepairSucceeded
+  PatternRepairPreview
   PatternRepairFailed
 } derive(Eq, Debug)
 
@@ -77,6 +77,7 @@ struct Page {
   phase : Phase
   pattern_repair_phase : PatternRepairPhase
   pattern_repair_message : String?
+  pattern_repair_candidate : String?
   generation : Int
   delay_ms : Int
 } derive(Eq)
@@ -129,13 +130,15 @@ pub(all) enum Msg {
   ToggleRegex
   ToggleDetails
   FixPattern
-  PatternRepairSucceeded(
+  PatternRepairPreview(
     root~ : String,
     generation~ : Int,
-    pattern~ : String,
+    candidate_pattern~ : String,
     message~ : String
   )
   PatternRepairFailed(root~ : String, generation~ : Int, message~ : String)
+  AcceptPatternRepair
+  RejectPatternRepair
   IncludeChanged(String)
   ExcludeChanged(String)
   // Semantic-mode settings, mirroring the text-mode toggles.

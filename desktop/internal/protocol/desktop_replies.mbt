@@ -1333,13 +1333,13 @@ pub impl ToJson for ReadFileReply with fn to_json(self) {
 }
 
 ///|
-/// Result of the host-backed Pattern Repair prototype. `pattern` is returned
-/// even on failure so the frontend can keep the request/result contract simple.
+/// Candidate produced by one Pattern Repair request. It is not applied to the
+/// active search until the user explicitly accepts it.
 pub(all) struct PatternRepairReply {
   root : String
   generation : Int
-  pattern : String
-  success : Bool
+  candidate_pattern : String
+  valid : Bool
   message : String
 } derive(Debug, Eq)
 

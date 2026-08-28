@@ -27,6 +27,7 @@ fn fresh_page() -> Page {
     phase: Idle,
     pattern_repair_phase: PatternRepairIdle,
     pattern_repair_message: None,
+    pattern_repair_candidate: None,
     generation: 0,
     delay_ms: SearchDebounceMs,
   }
@@ -190,13 +191,13 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           pattern_repair_phase: match page.pattern_repair_phase {
             PatternRepairIdle => PatternRepairRequested
             PatternRepairRequested => PatternRepairIdle
-            PatternRepairSucceeded | PatternRepairFailed =>
-              PatternRepairRequested
+            PatternRepairPreview | PatternRepairFailed => PatternRepairRequested
           },
           pattern_repair_message: None,
+          pattern_repair_candidate: None,
         },
       }
-    PatternRepairSucceeded(root~, generation~, pattern~, message~) =>
+    PatternRepairPreview(root~, generation~, candidate_pattern~, message~) =>
       if page.mode is Semantic &&
         input.root_text() == root &&
         page.generation == generation &&
@@ -205,16 +206,29 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           ..self,
           page: {
             ..page,
-            semantic: {
-              ..page.semantic,
-              patterns: [pattern, ..page.semantic.patterns[1:]],
-            },
-            pattern_repair_phase: PatternRepairSucceeded,
+            pattern_repair_phase: PatternRepairPreview,
             pattern_repair_message: Some(message),
+            pattern_repair_candidate: Some(candidate_pattern),
           },
         }
       } else {
         self
+      }
+    AcceptPatternRepair =>
+      match page.pattern_repair_candidate {
+        Some(pattern) if page.mode is Semantic =>
+          self.handle(PatternChanged(0, pattern), input)
+        _ => self
+      }
+    RejectPatternRepair =>
+      {
+        ..self,
+        page: {
+          ..page,
+          pattern_repair_phase: PatternRepairIdle,
+          pattern_repair_message: None,
+          pattern_repair_candidate: None,
+        },
       }
     PatternRepairFailed(root~, generation~, message~) =>
       if page.mode is Semantic &&
@@ -247,6 +261,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           semantic: { ..page.semantic, patterns, },
           pattern_repair_phase: PatternRepairIdle,
           pattern_repair_message: None,
+          pattern_repair_candidate: None,
         },
         input,
         immediate=false,
@@ -263,6 +278,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           },
           pattern_repair_phase: PatternRepairIdle,
           pattern_repair_message: None,
+          pattern_repair_candidate: None,
         },
       }
     RemovePattern(index) => {
@@ -271,7 +287,13 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         let _ = patterns.remove(index)
       }
       self.schedule(
-        { ..page, semantic: { ..page.semantic, patterns, }, },
+        {
+          ..page,
+          semantic: { ..page.semantic, patterns, },
+          pattern_repair_phase: PatternRepairIdle,
+          pattern_repair_message: None,
+          pattern_repair_candidate: None,
+        },
         input,
         immediate=false,
       )
@@ -533,6 +555,7 @@ fn Page::clear_results(self : Page) -> Page {
     visible_lines: InitialVisibleSearchLines,
     pattern_repair_phase: PatternRepairIdle,
     pattern_repair_message: None,
+    pattern_repair_candidate: None,
   }
 }
 

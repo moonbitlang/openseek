@@ -189,11 +189,11 @@ fn search_request_loader(
             LoadedReply::PatternRepairLoaded(reply) =>
               scheduler.add(
                 emit(
-                  if reply.success {
-                    PatternRepairSucceeded(
+                  if reply.valid {
+                    PatternRepairPreview(
                       root=request_root,
                       generation=request_generation,
-                      pattern=reply.pattern,
+                      candidate_pattern=reply.candidate_pattern,
                       message=reply.message,
                     )
                   } else {
