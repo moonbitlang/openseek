@@ -32,7 +32,8 @@ model is `deepseek-v4-pro`, and `thinking=No` is sent unless a different mode is
 provided. Kimi K2.7 Code models default to
 `https://api.moonshot.cn/v1/chat/completions` and omit DeepSeek-specific
 thinking fields when the request body is encoded.
-Z.AI GLM models default to `https://api.z.ai/api/paas/v4/chat/completions`.
+Z.AI GLM models default to `https://api.z.ai/api/paas/v4/chat/completions`;
+GLM 5.3 always reasons, so `thinking=No` maps to `reasoning_effort=low`.
 
 Retries cover transient failures: transport errors, HTTP 429, and HTTP 5xx.
 Other HTTP 4xx responses fail immediately. `retry_attempts` counts total tries;

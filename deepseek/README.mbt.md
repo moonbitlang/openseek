@@ -22,8 +22,8 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
   and what to say about it, is left to each command main. This is the one place
   in the package that reads parsed CLI options, and it lives here because the
   model tag is what decides which provider a key belongs to.
-- `ThinkingMode`: typed control for DeepSeek V4 thinking (`No`, `High`, or
-  `Max`).
+- `ThinkingMode`: typed thinking control (`No`, `High`, or `Max`), translated
+  to each provider's supported request policy.
 - `Role`: `System`, `User`, `Assistant`, and `Tool(tool_call_id)`, with `Show`
   for wire strings and `Debug` for inspection.
 - `ChatMessage(role, content=..., tool_calls?, reasoning_content?)`: one typed
@@ -36,7 +36,8 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
   model?=Deepseek(V4Pro)) <| messages`: builds the full DeepSeek chat completions request
   body. Streaming requests include usage-bearing stream options. Kimi K2.7 Code
   requests omit DeepSeek-specific thinking fields and preserve assistant
-  `reasoning_content`. The per-value
+  `reasoning_content`. GLM requests keep reasoning across tool turns and map
+  `No` to GLM's supported `low` effort. The per-value
   encoders for messages, tool definitions, and tool calls are package-private
   implementation details.
 - `ToolDefinition(name, description, parameters, strict?)`: a native DeepSeek

@@ -202,6 +202,69 @@ test "kimi highspeed uses the same code-model request policy" {
 }
 
 ///|
+test "glm maps no to low effort and preserves tool-turn reasoning" {
+  let call = @deepseek.ToolCall(
+    id="call_53",
+    name="shell",
+    arguments="{\"cmd\":\"moon test\"}",
+  )
+  let body = @deepseek.encode_chat_request(
+    model=Glm(G53),
+    thinking=No,
+    stream=true,
+  ) <| [
+    ChatMessage(User, content="run tests"),
+    ChatMessage(
+      Assistant,
+      content="",
+      tool_calls=[call],
+      reasoning_content="validate before finishing",
+    ),
+    ChatMessage(Tool("call_53"), content="exit=0\nok"),
+  ]
+  json_inspect(body, content={
+    "model": "glm-5.3",
+    "messages": [
+      { "role": "user", "content": "run tests" },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_53",
+            "type": "function",
+            "function": {
+              "name": "shell",
+              "arguments": "{\"cmd\":\"moon test\"}",
+            },
+          },
+        ],
+        "reasoning_content": "validate before finishing",
+      },
+      { "role": "tool", "content": "exit=0\nok", "tool_call_id": "call_53" },
+    ],
+    "stream": true,
+    "stream_options": { "include_usage": true },
+    "thinking": { "type": "enabled", "clear_thinking": false },
+    "reasoning_effort": "low",
+  })
+}
+
+///|
+test "glm flash enables preserved thinking at max effort" {
+  let body = @deepseek.encode_chat_request(model=Glm(G53Flash), thinking=Max) <| [
+    ChatMessage(User, content="solve"),
+  ]
+  json_inspect(body, content={
+    "model": "glm-5.3-flash",
+    "messages": [{ "role": "user", "content": "solve" }],
+    "stream": false,
+    "thinking": { "type": "enabled", "clear_thinking": false },
+    "reasoning_effort": "max",
+  })
+}
+
+///|
 test "deepseek tool-enabled reasoning and tool result round-trip" {
   let tool = @deepseek.ToolDefinition("shell", "Run a shell command.", {
     "type": "object",
