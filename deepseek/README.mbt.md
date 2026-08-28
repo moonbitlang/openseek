@@ -2,20 +2,22 @@
 
 This pure package provides strongly typed DeepSeek chat data and JSON
 encoding/decoding. Use it when constructing requests, parsing responses, or
-testing DeepSeek chat behavior without network access. The typed model list
-also covers Kimi K2.7 Code models where their request policy differs from
-DeepSeek's.
+testing compatible chat behavior without network access. The typed model list
+also covers Kimi K2.7 Code and Z.AI GLM 5.3 models where their request policies
+differ from DeepSeek's.
 
 The HTTP client lives in `bobzhang/openseek/deepseek/client`.
 
 ## API Shape
 
-- `Model`: provider-tagged chat models, e.g. `Deepseek(V4Pro)` and
-  `Kimi(K27Code)`, with `Show` for wire strings and `Debug` for inspection.
+- `Model`: provider-tagged chat models, e.g. `Deepseek(V4Pro)`,
+  `Kimi(K27Code)`, and `Glm(G53)`, with `Show` for wire strings and `Debug` for
+  inspection.
 - `Model::api_key(matches)`: resolves the key a command main should send for
   this model — an explicit `--api-key` first, then the provider-specific
-  option (`--deepseek-api-key` / `--kimi-api-key`, which the command tables
-  back with `DEEPSEEK` / `KIMI`), and `None` when neither is set. It is the
+  option (`--deepseek-api-key` / `--kimi-api-key` / `--glm-api-key`, which the
+  command tables back with `DEEPSEEK` / `KIMI` / `GLM`), and `None` when
+  neither is set. It is the
   shared answer to *where a key may come from*; whether a missing one is fatal,
   and what to say about it, is left to each command main. This is the one place
   in the package that reads parsed CLI options, and it lives here because the
@@ -55,7 +57,7 @@ flowchart LR
   app["agent / tests"] --> root["deepseek\nmodels, messages, tools, JSON"]
   session["agent_session\nchat projection"] --> root
   client["deepseek/client\nHTTP, retries, SSE"] --> root
-  client --> api["DeepSeek / Kimi chat API"]
+  client --> api["DeepSeek / Kimi / Z.AI GLM chat API"]
 ```
 
 The core API is a set of public data types around chat request and response
@@ -70,6 +72,7 @@ classDiagram
     <<tagged union>>
     Deepseek(DsVariant)
     Kimi(KimiVariant)
+    Glm(GlmVariant)
     +parse(String) Model
   }
 
@@ -84,6 +87,16 @@ classDiagram
     K27Code
     K27CodeHighSpeed
   }
+
+  class GlmVariant {
+    <<enumeration>>
+    G53
+    G53Flash
+  }
+
+  Model --> DsVariant
+  Model --> KimiVariant
+  Model --> GlmVariant
 
   class ThinkingMode {
     <<enumeration>>
@@ -204,7 +217,7 @@ The usual sequence is:
 sequenceDiagram
   participant Caller
   participant Encoder as encode_chat_request
-  participant API as DeepSeek / Kimi API
+  participant API as chat-completions provider
   participant Tool as local tool
 
   Caller->>Encoder: messages + ToolDefinition[]

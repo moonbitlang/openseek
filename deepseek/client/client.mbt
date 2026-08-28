@@ -5,12 +5,16 @@ const DeepSeekDefaultApiUrl : String = "https://api.deepseek.com/chat/completion
 const KimiDefaultApiUrl : String = "https://api.moonshot.cn/v1/chat/completions"
 
 ///|
+const GlmDefaultApiUrl : String = "https://api.z.ai/api/paas/v4/chat/completions"
+
+///|
 let default_model : @deepseek.Model = Deepseek(V4Pro)
 
 ///|
 fn default_api_url_for_model(model : @deepseek.Model) -> String {
   match model {
     Kimi(_) => KimiDefaultApiUrl
+    Glm(_) => GlmDefaultApiUrl
     Deepseek(_) => DeepSeekDefaultApiUrl
   }
 }

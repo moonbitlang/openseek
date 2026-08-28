@@ -13,10 +13,18 @@ pub(all) enum KimiVariant {
 } derive(Eq, Debug)
 
 ///|
+/// Z.AI GLM chat model variants.
+pub(all) enum GlmVariant {
+  G53
+  G53Flash
+} derive(Eq, Debug)
+
+///|
 /// Supported chat models grouped by provider.
 pub(all) enum Model {
   Deepseek(DsVariant)
   Kimi(KimiVariant)
+  Glm(GlmVariant)
 } derive(Eq, Debug)
 
 ///|
@@ -38,11 +46,21 @@ impl Show for KimiVariant with fn to_string(self : KimiVariant) -> String {
 }
 
 ///|
+/// Returns the wire name for a Z.AI GLM chat model variant.
+impl Show for GlmVariant with fn to_string(self : GlmVariant) -> String {
+  match self {
+    G53 => "glm-5.3"
+    G53Flash => "glm-5.3-flash"
+  }
+}
+
+///|
 /// Returns the wire name for a chat model.
 pub impl Show for Model with fn to_string(self : Model) -> String {
   match self {
     Deepseek(variant) => "\{variant}"
     Kimi(variant) => "\{variant}"
+    Glm(variant) => "\{variant}"
   }
 }
 
@@ -54,6 +72,8 @@ pub fn Model::parse(input : String) -> Model raise {
     "deepseek-v4-pro" => Deepseek(V4Pro)
     "kimi-k2.7-code" => Kimi(K27Code)
     "kimi-k2.7-code-highspeed" => Kimi(K27CodeHighSpeed)
+    "glm-5.3" => Glm(G53)
+    "glm-5.3-flash" => Glm(G53Flash)
     other => fail("unknown model: \{other}")
   }
 }
@@ -71,6 +91,7 @@ pub fn Model::context_window(self : Model) -> Int {
   match self {
     Deepseek(V4Flash | V4Pro) => 1_000_000
     Kimi(K27Code | K27CodeHighSpeed) => 262_144
+    Glm(G53 | G53Flash) => 1_000_000
   }
 }
 
@@ -234,6 +255,12 @@ pub extend KimiVariant with Debug::{to_repr}
 
 ///|
 pub extend KimiVariant with Eq::{equal, not_equal}
+
+///|
+pub extend GlmVariant with Debug::{to_repr}
+
+///|
+pub extend GlmVariant with Eq::{equal, not_equal}
 
 ///|
 pub extend Model with Debug::{to_repr}

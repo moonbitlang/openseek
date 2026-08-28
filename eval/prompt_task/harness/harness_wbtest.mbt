@@ -19,12 +19,19 @@ test "trial environment configures model and isolated skills" {
   let env = trial_extra_env(config, "/tmp/workspace")
   assert_true(env.get("DEEPSEEK") == Some("key"))
   assert_true(env.get("KIMI") is None)
+  assert_true(env.get("GLM") is None)
   let kimi_env = trial_extra_env(
     { ..config, model: Kimi(K27CodeHighSpeed), },
     "/tmp/workspace",
   )
   assert_true(kimi_env.get("KIMI") == Some("key"))
   assert_true(kimi_env.get("DEEPSEEK") is None)
+  let glm_env = trial_extra_env(
+    { ..config, model: Glm(G53), },
+    "/tmp/workspace",
+  )
+  assert_true(glm_env.get("GLM") == Some("key"))
+  assert_true(glm_env.get("DEEPSEEK") is None)
   guard env.get("OPENSEEK_GLOBAL_SKILLS_DIR") is Some(skills_dir) else {
     fail("expected OPENSEEK_GLOBAL_SKILLS_DIR")
   }
@@ -34,7 +41,7 @@ test "trial environment configures model and isolated skills" {
 ///|
 test "empty api key leaves provider keys to the inherited environment" {
   // A cross-provider suite runs with an empty key so each trial inherits its
-  // own DEEPSEEK/KIMI from the parent env; the harness must not pin either
+  // own DEEPSEEK/KIMI/GLM from the parent env; the harness must not pin a
   // variable to an empty string, which would shadow the inherited key.
   let config = Config(
     api_key="",

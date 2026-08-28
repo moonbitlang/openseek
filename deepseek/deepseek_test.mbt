@@ -21,6 +21,8 @@ test "model parsing" {
   assert_true(
     @deepseek.Model::parse("kimi-k2.7-code-highspeed") is Kimi(K27CodeHighSpeed),
   )
+  assert_true(@deepseek.Model::parse("glm-5.3") is Glm(G53))
+  assert_true(@deepseek.Model::parse("glm-5.3-flash") is Glm(G53Flash))
   assert_eq(
     @deepseek.Model::parse("deepseek-v4-flash").to_string(),
     "deepseek-v4-flash",
@@ -37,6 +39,11 @@ test "model parsing" {
     @deepseek.Model::parse("kimi-k2.7-code-highspeed").to_string(),
     "kimi-k2.7-code-highspeed",
   )
+  assert_eq(@deepseek.Model::parse("glm-5.3").to_string(), "glm-5.3")
+  assert_eq(
+    @deepseek.Model::parse("glm-5.3-flash").to_string(),
+    "glm-5.3-flash",
+  )
 }
 
 ///|
@@ -48,6 +55,8 @@ test "context windows per model" {
     (Kimi(K27CodeHighSpeed) : @deepseek.Model).context_window(),
     262_144,
   )
+  assert_eq((Glm(G53) : @deepseek.Model).context_window(), 1_000_000)
+  assert_eq((Glm(G53Flash) : @deepseek.Model).context_window(), 1_000_000)
 }
 
 ///|

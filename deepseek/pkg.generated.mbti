@@ -39,6 +39,14 @@ pub fn DsVariant::equal(Self, Self) -> Bool
 pub fn DsVariant::not_equal(Self, Self) -> Bool
 pub fn DsVariant::to_repr(Self) -> @debug.Repr
 
+pub(all) enum GlmVariant {
+  G53
+  G53Flash
+} derive(Eq, @debug.Debug)
+pub fn GlmVariant::equal(Self, Self) -> Bool
+pub fn GlmVariant::not_equal(Self, Self) -> Bool
+pub fn GlmVariant::to_repr(Self) -> @debug.Repr
+
 pub(all) enum KimiVariant {
   K27Code
   K27CodeHighSpeed
@@ -50,6 +58,7 @@ pub fn KimiVariant::to_repr(Self) -> @debug.Repr
 pub(all) enum Model {
   Deepseek(DsVariant)
   Kimi(KimiVariant)
+  Glm(GlmVariant)
 } derive(Eq, @debug.Debug)
 pub fn Model::api_key(Self, Map[String, Array[String]]) -> String?
 pub fn Model::context_window(Self) -> Int

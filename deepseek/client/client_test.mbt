@@ -10,6 +10,8 @@ test "client defaults" {
 test "client endpoint defaults follow selected model" {
   let kimi = @client.Client(api_key="test-key", model=Kimi(K27Code))
   assert_eq(kimi.api_url, "https://api.moonshot.cn/v1/chat/completions")
+  let glm = @client.Client(api_key="test-key", model=Glm(G53))
+  assert_eq(glm.api_url, "https://api.z.ai/api/paas/v4/chat/completions")
   let proxied = @client.Client(
     api_key="test-key",
     model=Kimi(K27CodeHighSpeed),

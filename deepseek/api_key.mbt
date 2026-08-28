@@ -36,6 +36,8 @@ pub fn Model::api_key(
       Some(k.trim().to_owned())
     (Kimi(_), { "kimi-api-key": [k, ..], .. }) if !k.is_blank() =>
       Some(k.trim().to_owned())
+    (Glm(_), { "glm-api-key": [k, ..], .. }) if !k.is_blank() =>
+      Some(k.trim().to_owned())
     _ => None
   }
 }

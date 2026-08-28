@@ -116,9 +116,9 @@ fn trial_extra_env(
   // An explicit `api_key` overrides this model's provider key for every trial.
   // An empty one means "let the engine inherit its provider key from the
   // parent environment" — the only way one suite can span providers, since
-  // DeepSeek reads DEEPSEEK and Kimi reads KIMI and a single shared key cannot
-  // authenticate both. Overriding unconditionally would clobber the inherited
-  // KIMI (or DEEPSEEK) of the other provider's trials with the wrong key.
+  // DeepSeek reads DEEPSEEK, Kimi reads KIMI, and GLM reads GLM; a single
+  // shared key cannot authenticate all providers. Overriding unconditionally
+  // would clobber another provider's inherited key with the wrong key.
   if config.api_key != "" {
     env[api_key_env_for_model(config.model)] = config.api_key
   }
@@ -129,6 +129,7 @@ fn trial_extra_env(
 fn api_key_env_for_model(model : @deepseek.Model) -> String {
   match model {
     Kimi(_) => "KIMI"
+    Glm(_) => "GLM"
     Deepseek(_) => "DEEPSEEK"
   }
 }

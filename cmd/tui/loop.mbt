@@ -157,6 +157,7 @@ fn engine_extra_env(config : AppConfig) -> Map[String, String] {
   }
   let api_key_env = match config.model {
     Kimi(_) => "KIMI"
+    Glm(_) => "GLM"
     Deepseek(_) => "DEEPSEEK"
   }
   env[api_key_env] = config.api_key
@@ -1027,6 +1028,9 @@ test "engine configuration puts supported placement in argv" {
   let kimi_env = engine_extra_env({ ..config, model: Kimi(K27CodeHighSpeed), })
   assert_true(kimi_env.get("KIMI") == Some(config.api_key))
   assert_true(kimi_env.get("DEEPSEEK") is None)
+  let glm_env = engine_extra_env({ ..config, model: Glm(G53), })
+  assert_true(glm_env.get("GLM") == Some(config.api_key))
+  assert_true(glm_env.get("DEEPSEEK") is None)
   @debug.assert_eq(config.engine_command_args("run", ["--", "task"]), [
     "run", "--session=test", "--session-root=.openseek", "--dir=.", "--", "task",
   ])
