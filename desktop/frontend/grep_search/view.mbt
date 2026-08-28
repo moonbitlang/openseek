@@ -892,7 +892,6 @@ fn page_view(
           )
         }
       }
-      patterns.push(@html.button(on_click=emit(AddPattern), "+ Add pattern"))
       @html.div(class="search-code-patterns", patterns)
     } else {
       @html.nothing
