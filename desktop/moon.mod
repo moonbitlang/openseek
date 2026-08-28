@@ -32,7 +32,6 @@ description = "SeekMoon — a Proton + Rabbita desktop client for the OpenSeek a
 warnings = "+implicit_impl_as_method"
 
 options(
-  "--moonbit-unstable-prebuild": "native_link_config.mjs",
   preferred_target: "native",
   supported_targets: "native+js",
 )

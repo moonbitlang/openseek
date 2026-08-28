@@ -15,12 +15,16 @@
 #include <dwmapi.h>
 #include <shellapi.h>
 
-#if defined(_MSC_VER)
+#if !defined(_MSC_VER)
+#error "SeekMoon's Windows desktop host requires an MSVC-compatible compiler"
+#endif
+
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "user32.lib")
-#endif
+#pragma comment(linker, "/SUBSYSTEM:WINDOWS")
+#pragma comment(linker, "/ENTRY:mainCRTStartup")
 
 #define OPENSEEK_DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #define OPENSEEK_DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 19
