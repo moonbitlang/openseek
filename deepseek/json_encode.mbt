@@ -1,4 +1,29 @@
 ///|
+/// Provider-specific thinking fields for a chat-completions request.
+///
+/// Kimi K2.7 Code documentation says not to pass `thinking`.
+/// https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model#using-the-kimi-k2-7-code-model
+fn thinking_json_fields(
+  model : Model,
+  thinking : ThinkingMode?,
+) -> Array[(String, Json)] {
+  match (model, thinking) {
+    (Kimi(_), _) | (_, None) => []
+    (_, Some(No)) => [("thinking", ({ "type": "disabled" } : Json))]
+    (_, Some(High)) =>
+      [
+        ("thinking", ({ "type": "enabled" } : Json)),
+        ("reasoning_effort", Json("high")),
+      ]
+    (_, Some(Max)) =>
+      [
+        ("thinking", ({ "type": "enabled" } : Json)),
+        ("reasoning_effort", Json("max")),
+      ]
+  }
+}
+
+///|
 /// Encodes a `ChatMessage` as a chat-completions `messages[]` entry.
 ///
 /// Assistant messages whose `content` is empty but carry tool calls are
@@ -93,23 +118,7 @@ pub fn encode_chat_request(
         ..if tools.length() > 0 {
           [("tools", ([ for tool in tools => tool ] : Json))]
         },
-        // Kimi K2.7 Code documentation says not to pass `thinking`.
-        // https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model#using-the-kimi-k2-7-code-model
-        ..if !(model is Kimi(_)) && thinking is Some(mode) {
-          match mode {
-            No => [("thinking", ({ "type": "disabled" } : Json))]
-            High =>
-              [
-                ("thinking", ({ "type": "enabled" } : Json)),
-                ("reasoning_effort", Json("high")),
-              ]
-            Max =>
-              [
-                ("thinking", ({ "type": "enabled" } : Json)),
-                ("reasoning_effort", Json("max")),
-              ]
-          }
-        },
+        ..thinking_json_fields(model, thinking),
       ],
     ),
   )
