@@ -154,6 +154,11 @@ pub async fn frontend_entry_path(framework_command : String) -> String {
 }
 
 ///|
+/// The pinned mooncakes coordinate used when the host resolves moongrep through
+/// `moonx`. Search and Pattern Repair must validate with the same provider.
+const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.2.2"
+
+///|
 /// Locate the packaged ripgrep beside the installed Host. macOS stores data
 /// below Contents/Resources; Linux and Windows keep the executable beside the
 /// Host. Only a recognized Moon `_build` executable (or an embedding without

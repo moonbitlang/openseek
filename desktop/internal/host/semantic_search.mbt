@@ -29,9 +29,6 @@ const SemanticSearchProgressBatch : Int = 50
 /// provider through `moonx <coordinate> --`; pinning the version keeps the
 /// search deterministic instead of silently running whatever the local
 /// registry index knows as "latest".
-const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.2.2"
-
-///|
 priv struct ParsedSemanticContextLine {
   line : Int
   text : String

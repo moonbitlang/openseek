@@ -101,12 +101,17 @@ async fn pattern_repair_op(
       } else {
       return failure("Pattern Repair Agent returned an invalid candidate.")
     }
-    return {
-      root: payload.root,
-      generation: payload.generation,
-      candidate_pattern: candidate,
-      valid: true,
-      message,
+    match validate_pattern_repair_candidate(state, root, candidate) {
+      PatternRepairValid =>
+        return {
+          root: payload.root,
+          generation: payload.generation,
+          candidate_pattern: candidate,
+          valid: true,
+          message,
+        }
+      PatternRepairInvalid(code, diagnostic) =>
+        return failure("\{code}: \{diagnostic}")
     }
   }
   failure("Pattern Repair Agent returned no candidate.")
