@@ -14,6 +14,7 @@ fn HostSettings::from_status(
     provider: payload.provider,
     custom_api_url: payload.custom_api_url.unwrap_or(""),
     has_deepseek_key: payload.has_deepseek_key,
+    has_glm_key: payload.has_glm_key,
     has_custom_key: payload.has_custom_key,
   }
 }
@@ -101,6 +102,7 @@ fn provider_settings_patch(
     provider: Some(provider.wire()),
     custom_api_url: None,
     deepseek_api_key: None,
+    glm_api_key: None,
     custom_api_key: None,
     legacy_migration: None,
   }
@@ -114,6 +116,7 @@ fn custom_url_settings_patch(url : String) -> @protocol.SettingsSetPayload {
     provider: None,
     custom_api_url: Some(url),
     deepseek_api_key: None,
+    glm_api_key: None,
     custom_api_key: None,
     legacy_migration: None,
   }
@@ -128,6 +131,11 @@ fn api_key_settings_patch(
     provider: None,
     custom_api_url: None,
     deepseek_api_key: if provider is Deepseek {
+      Some(key)
+    } else {
+      None
+    },
+    glm_api_key: if provider is Glm {
       Some(key)
     } else {
       None
@@ -174,6 +182,8 @@ fn legacy_settings_patch(
     } else {
       Some(api_key)
     },
+    // No legacy page ever stored a GLM key; the import has nothing to carry.
+    glm_api_key: None,
     custom_api_key: if custom_api_key.is_empty() {
       None
     } else {

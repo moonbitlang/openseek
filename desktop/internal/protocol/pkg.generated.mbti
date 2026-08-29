@@ -2008,26 +2008,32 @@ pub(all) struct SettingsSetPayload {
   provider : String?
   custom_api_url : String?
   deepseek_api_key : String?
+  glm_api_key : String?
   custom_api_key : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn SettingsSetPayload::equal(Self, Self) -> Bool
 pub fn SettingsSetPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SettingsSetPayload::not_equal(Self, Self) -> Bool
 pub fn SettingsSetPayload::to_json(Self) -> Json
 pub fn SettingsSetPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SettingsSetPayload
+pub impl @json.FromJson for SettingsSetPayload
 
 pub(all) struct SettingsStatusPayload {
   revision : Int
   provider : String
   custom_api_url : String?
   has_deepseek_key : Bool
+  has_glm_key : Bool
   has_custom_key : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn SettingsStatusPayload::equal(Self, Self) -> Bool
 pub fn SettingsStatusPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SettingsStatusPayload::not_equal(Self, Self) -> Bool
 pub fn SettingsStatusPayload::to_json(Self) -> Json
 pub fn SettingsStatusPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SettingsStatusPayload
+pub impl @json.FromJson for SettingsStatusPayload
 
 pub(all) struct SkillsCatalogReply {
   skills : Array[MarketSkill]

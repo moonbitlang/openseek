@@ -20,6 +20,7 @@ fn SettingsSetPayload::to_patch(
     provider: self.provider,
     custom_api_url: self.custom_api_url,
     deepseek_api_key: self.deepseek_api_key,
+    glm_api_key: self.glm_api_key,
     custom_api_key: self.custom_api_key,
   }
 }

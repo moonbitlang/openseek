@@ -75,6 +75,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   if self.api_setup_banner_visible() {
     let text = if self.settings_status() is SetupRequired {
       "No endpoint URL configured — Send is disabled."
+    } else if self.api_provider is Glm {
+      "No GLM API key configured — Send is disabled."
     } else {
       "No DeepSeek API key configured — Send is disabled."
     }

@@ -18,8 +18,11 @@ const PlaceholderApiKey = "unused"
 priv struct RunConfig {
   task : String
   api_key : String
+  // The environment variable that carries `api_key` to the engine; see
+  // `key_env_for`.
+  key_env : String
   // Custom chat-completions endpoint; None means the engine's built-in
-  // default (the official DeepSeek endpoint).
+  // default for the model's provider.
   api_url : String?
   model : String
   thinking : @protocol.OpenSeekThinking
@@ -53,7 +56,8 @@ fn RunConfig::configured_thinking(
 fn configured_api_key(
   stored_key? : String,
   api_url? : String,
-  deepseek_env? : String,
+  env_key? : String,
+  missing? : String = "an API key is required; add it in Settings",
 ) -> String raise EngineError {
   if stored_key is Some(value) {
     return value
@@ -61,12 +65,68 @@ fn configured_api_key(
   if api_url is Some(_) {
     return PlaceholderApiKey
   }
-  if deepseek_env is Some(value) {
+  if env_key is Some(value) {
     return value
   }
-  raise EngineError(
-    "DeepSeek API key is required; add it in Settings or set DEEPSEEK",
-  )
+  raise EngineError(missing)
+}
+
+///|
+/// The model runs fall back to when neither the request nor `OPENSEEK_MODEL`
+/// names one: each official provider's flagship, and DeepSeek's for a custom
+/// endpoint (any wire name works there, but the engine still needs one).
+fn ApiProvider::default_model(self : ApiProvider) -> String {
+  match self {
+    Glm => "glm-5.3"
+    Deepseek | Custom => DefaultModel
+  }
+}
+
+///|
+/// The environment variable the engine resolves for one model wire name.
+fn model_key_env(model : String) -> String {
+  if model.has_prefix("glm-") {
+    "GLM"
+  } else if model.has_prefix("kimi-") {
+    "KIMI"
+  } else {
+    "DEEPSEEK"
+  }
+}
+
+///|
+/// The environment variable that carries the run's API key to the engine.
+/// The engine resolves its chat key from a provider-specific variable chosen
+/// by the model (`Model::api_key`): `DEEPSEEK`, `KIMI`, or `GLM`. Official
+/// providers reject a model from another provider before a child process can
+/// inherit that model's ambient credential. A custom endpoint's key instead
+/// follows the model's variable, or the engine would never find it; the
+/// desktop stores the model as an opaque string, so that routing mirrors the
+/// engine's wire-name prefixes.
+fn key_env_for(
+  provider : ApiProvider,
+  model : String,
+) -> String raise EngineError {
+  let model_key = model_key_env(model)
+  match provider {
+    Deepseek => {
+      guard model_key == "DEEPSEEK" else {
+        raise EngineError(
+          "model \{model} does not belong to the configured DeepSeek provider",
+        )
+      }
+      "DEEPSEEK"
+    }
+    Glm => {
+      guard model_key == "GLM" else {
+        raise EngineError(
+          "model \{model} does not belong to the configured GLM provider",
+        )
+      }
+      "GLM"
+    }
+    Custom => model_key
+  }
 }
 
 ///|
@@ -208,17 +268,20 @@ async fn serve_config(
       "this conversation has no workspace; attach a project first",
     )
   }
+  let model = match model {
+    Some(model) => model
+    // The engine takes its model from OPENSEEK_MODEL (DEEPSEEK_MODEL is
+    // deliberately ignored — see `serve_engine_env`), so the host's
+    // fallback must read the same variable.
+    None =>
+      @env.get("OPENSEEK_MODEL").unwrap_or(settings.provider.default_model())
+  }
   {
     task,
     api_key: endpoint.api_key,
+    key_env: key_env_for(settings.provider, model),
     api_url: endpoint.api_url,
-    model: match model {
-      Some(model) => model
-      // The engine takes its model from OPENSEEK_MODEL (DEEPSEEK_MODEL is
-      // deliberately ignored — see `serve_engine_env`), so the host's
-      // fallback must read the same variable.
-      None => @env.get("OPENSEEK_MODEL").unwrap_or(DefaultModel)
-    },
+    model,
     thinking: RunConfig::configured_thinking(thinking),
     max_steps: configured_max_steps(max_steps),
     engine,
@@ -241,6 +304,9 @@ fn engine_fingerprint(config : RunConfig) -> String {
   [
     config.engine,
     config.api_key,
+    // The variable the key travels in is provider identity: the same key
+    // under a different variable is a different endpoint configuration.
+    config.key_env,
     config.api_url.unwrap_or(""),
     config.model,
     config.thinking.wire(),
@@ -256,6 +322,7 @@ test "a different endpoint cannot reuse a live engine process" {
   let base : RunConfig = {
     task: "t",
     api_key: "k",
+    key_env: "DEEPSEEK",
     api_url: None,
     model: "deepseek-v4-pro",
     thinking: ThinkingMax,
@@ -291,7 +358,7 @@ test "configured endpoint uses its stored key or the placeholder" {
   assert_eq(
     configured_api_key(
       api_url="https://proxy.example/chat/completions",
-      deepseek_env="official-key",
+      env_key="official-key",
     ),
     PlaceholderApiKey,
   )
@@ -299,16 +366,16 @@ test "configured endpoint uses its stored key or the placeholder" {
     configured_api_key(
       stored_key="custom-key",
       api_url="https://proxy.example/chat/completions",
-      deepseek_env="official-key",
+      env_key="official-key",
     ),
     "custom-key",
   )
 }
 
 ///|
-test "DeepSeek endpoint still uses DEEPSEEK env fallback" {
-  assert_eq(configured_api_key(deepseek_env="official-key"), "official-key")
-  let _ = configured_api_key() catch {
+test "official endpoints still use their env fallback" {
+  assert_eq(configured_api_key(env_key="official-key"), "official-key")
+  let _ = configured_api_key(missing="DeepSeek API key is required") catch {
     EngineError(message) => {
       assert_true(message.contains("DeepSeek API key is required"))
       return
@@ -344,6 +411,7 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
     provider: Some("deepseek"),
     custom_api_url: None,
     deepseek_api_key: Some("sk-official"),
+    glm_api_key: None,
     custom_api_key: None,
   })
   let config = run_config(manager, {

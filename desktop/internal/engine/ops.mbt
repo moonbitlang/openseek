@@ -856,6 +856,7 @@ async test "start echoes the client submission id in Started" {
       provider: Some("custom"),
       custom_api_url: Some("https://example.invalid/chat/completions"),
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: None,
     }),
   )
@@ -935,6 +936,7 @@ async test "a goal is delivered only once its command is on the wire" {
       provider: Some("custom"),
       custom_api_url: Some("https://example.invalid/chat/completions"),
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: None,
     }),
   )
@@ -1060,6 +1062,7 @@ async test "setup failure retires the writer before an immediate next start" {
       provider: Some("custom"),
       custom_api_url: Some("https://example.invalid/chat/completions"),
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: None,
     }),
   )
@@ -1172,6 +1175,7 @@ async test "a prompt bigger than the pipe still settles exactly once" {
       provider: Some("custom"),
       custom_api_url: Some("https://example.invalid/chat/completions"),
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: None,
     }),
   )
@@ -1268,6 +1272,7 @@ async test "named session retries after its first prompt creates no record" {
       provider: Some("custom"),
       custom_api_url: Some("https://example.invalid/chat/completions"),
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: None,
     }),
   )
@@ -1501,6 +1506,7 @@ async test "workspace detach refuses a running conversation without hiding it" {
       provider: Some("custom"),
       custom_api_url: Some("https://example.invalid/chat/completions"),
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: None,
     }),
   )
@@ -1587,6 +1593,7 @@ async test "workspace detach drains an idle writer and its follower first" {
       provider: Some("custom"),
       custom_api_url: Some("https://example.invalid/chat/completions"),
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: None,
     }),
   )

@@ -533,6 +533,7 @@ test "a revoked page device is retired without connecting a survivor" {
       provider: "deepseek",
       custom_api_url: "",
       has_deepseek_key: true,
+      has_glm_key: false,
       has_custom_key: false,
     }),
     legacy_cleanup_pending: true,

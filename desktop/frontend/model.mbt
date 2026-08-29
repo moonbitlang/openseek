@@ -1,12 +1,15 @@
 ///|
 /// Which model a conversation's turns run with. The composer's shared selector
-/// offers the two service tiers; `Other` retains a wire name this build does
-/// not know — a run started with `OPENSEEK_MODEL` set, or a newer engine's
-/// model echoed back by `agent.started` — so the chip reports what the engine
-/// actually ran instead of a tier it never used.
+/// offers the DeepSeek service tiers or the GLM models, following the
+/// configured provider; `Other` retains a wire name this build does not know —
+/// a run started with `OPENSEEK_MODEL` set, or a newer engine's model echoed
+/// back by `agent.started` — so the chip reports what the engine actually ran
+/// instead of a tier it never used.
 priv enum EngineModel {
   High
   Low
+  Glm53
+  Glm53Flash
   Other(String)
 } derive(Eq, Debug)
 
@@ -15,6 +18,8 @@ fn EngineModel::wire(self : EngineModel) -> String {
   match self {
     High => "deepseek-v4-pro"
     Low => "deepseek-v4-flash"
+    Glm53 => "glm-5.3"
+    Glm53Flash => "glm-5.3-flash"
     Other(name) => name
   }
 }
@@ -27,6 +32,8 @@ fn EngineModel::parse(value : String) -> EngineModel? {
   match value.trim().to_owned() {
     "deepseek-v4-pro" => Some(High)
     "deepseek-v4-flash" => Some(Low)
+    "glm-5.3" => Some(Glm53)
+    "glm-5.3-flash" => Some(Glm53Flash)
     "" => None
     name => Some(Other(name))
   }
@@ -39,18 +46,22 @@ fn EngineModel::label(self : EngineModel) -> String {
   match self {
     High => "High"
     Low => "Low"
+    Glm53 => "GLM 5.3"
+    Glm53Flash => "GLM 5.3 Flash"
     Other(name) => name
   }
 }
 
 ///|
-/// Whether this Desktop model is one of OpenSeek's DeepSeek models, whose
-/// request format accepts the `no`/`high`/`max` reasoning setting. Unknown
-/// models include providers such as Kimi, where sending this setting would
-/// claim a capability the model does not expose.
+/// Whether this Desktop model is one whose request format accepts the
+/// `no`/`high`/`max` reasoning setting: the DeepSeek models, and the GLM
+/// models (the engine maps `no` to GLM's lowest supported effort, because
+/// GLM 5.3 always reasons). Unknown models include providers such as Kimi,
+/// where sending this setting would claim a capability the model does not
+/// expose.
 fn EngineModel::supports_reasoning(self : EngineModel) -> Bool {
   match self {
-    High | Low => true
+    High | Low | Glm53 | Glm53Flash => true
     Other(_) => false
   }
 }
@@ -104,6 +115,20 @@ fn OpenSeekReasoning::label(self : OpenSeekReasoning) -> String {
     ReasoningOff => "Off"
     ReasoningHigh => "High"
     ReasoningMax => "Max"
+  }
+}
+
+///|
+/// GLM cannot turn thinking off: the shared lowest wire choice becomes its
+/// `low` effort, so the chip must not promise an unavailable Off state.
+fn OpenSeekReasoning::label_for_model(
+  self : OpenSeekReasoning,
+  model : EngineModel,
+) -> String {
+  if model is (Glm53 | Glm53Flash) && self is ReasoningOff {
+    "Low"
+  } else {
+    self.label()
   }
 }
 
@@ -237,6 +262,12 @@ const CodexReasoningEffortStorageKey : String = "openseek.codex_reasoning_effort
 /// request. It is page-local like the model choice and separate from Codex's
 /// catalog-backed setting because their supported wire values differ.
 const OpenSeekReasoningStorageKey : String = "openseek.reasoning_effort"
+
+///|
+/// GLM has forced thinking, so its lightweight default and later choices are
+/// kept apart from DeepSeek's reasoning preference. A user who wants Max for
+/// DeepSeek should not inherit it merely by switching the endpoint to GLM.
+const GlmReasoningStorageKey : String = "openseek.glm_reasoning_effort"
 
 ///|
 /// Every conversation whose tier the user has chosen, so reopening one
@@ -401,6 +432,7 @@ fn AppFontSize::pixels(self : AppFontSize) -> Double {
 /// reported.
 priv enum ApiProvider {
   Deepseek
+  Glm
   Custom
 } derive(Eq)
 
@@ -408,6 +440,7 @@ priv enum ApiProvider {
 fn ApiProvider::wire(self : ApiProvider) -> String {
   match self {
     Deepseek => "deepseek"
+    Glm => "glm"
     Custom => "custom"
   }
 }
@@ -419,8 +452,34 @@ fn ApiProvider::wire(self : ApiProvider) -> String {
 fn ApiProvider::parse(value : String) -> ApiProvider {
   match value.trim().to_owned() {
     "openseek" | "openseek-staging" | "deepseek" => Deepseek
+    "glm" => Glm
     "custom" => Custom
     _ => Deepseek
+  }
+}
+
+///|
+/// The model a fresh conversation starts from when the selected provider and
+/// the page's last model choice belong to different known model families.
+fn ApiProvider::default_model(self : ApiProvider) -> EngineModel {
+  match self {
+    Deepseek | Custom => High
+    Glm => Glm53
+  }
+}
+
+///|
+/// Whether a known model belongs to the official provider. Custom endpoints
+/// deliberately accept every model, and an unknown wire name stays pinned so
+/// a newer engine's model is never silently replaced by an older frontend.
+fn EngineModel::matches_provider(
+  self : EngineModel,
+  provider : ApiProvider,
+) -> Bool {
+  match (provider, self) {
+    (Custom, _) | (_, Other(_)) => true
+    (Deepseek, High | Low) | (Glm, Glm53 | Glm53Flash) => true
+    _ => false
   }
 }
 
@@ -1247,16 +1306,18 @@ priv struct Model {
   // default an unrelated chat has moved to since. Reopening recovers from
   // here; `default_model` is only for conversations this list has never held.
   conversation_models : Array[StoredConversationModel]
-  // The reasoning choice sent on the next OpenSeek operation. The host puts
-  // it in the engine-process environment and fingerprints it, so changing the
-  // chip cannot silently reuse an idle process configured for an older value.
+  // The DeepSeek (and non-GLM custom-model) reasoning choice sent on the next
+  // OpenSeek operation. GLM keeps a separate preference below because its
+  // forced-thinking low mode is the useful default for ordinary tasks.
   openseek_reasoning : OpenSeekReasoning
+  glm_reasoning : OpenSeekReasoning
   max_steps : String
   // Whether the host has a key stored for each keyed provider. The key text
   // itself never reaches a client — the Settings page only needs presence
   // (placeholder wording, the ready gate); a new key is staged in
   // `setup_api_key` until saved through `settings.set`.
   deepseek_key_saved : Bool
+  glm_key_saved : Bool
   custom_key_saved : Bool
   setup_api_key : String
   // Which endpoint the engine talks to; `custom_api_url` only matters when
@@ -1530,6 +1591,7 @@ priv struct HostSettings {
   provider : String
   custom_api_url : String
   has_deepseek_key : Bool
+  has_glm_key : Bool
   has_custom_key : Bool
 } derive(Eq)
 
@@ -1553,7 +1615,8 @@ priv enum Msg {
     agent~ : String,
     codex_model~ : String,
     codex_effort~ : String,
-    openseek_effort~ : String
+    openseek_effort~ : String,
+    glm_effort~ : String
   )
   // The legacy localStorage engine settings, read at bridge time. The
   // desktop window migrates them up to the host once; a browser page only
@@ -2382,8 +2445,10 @@ fn initial_model() -> Model {
     default_agent: OpenSeekAgent,
     conversation_models: [],
     openseek_reasoning: ReasoningMax,
+    glm_reasoning: ReasoningOff,
     max_steps: DefaultMaxSteps,
     deepseek_key_saved: false,
+    glm_key_saved: false,
     custom_key_saved: false,
     setup_api_key: "",
     api_provider: Deepseek,
@@ -2576,6 +2641,7 @@ fn Model::clear_host_settings(self : Model) -> Model {
     api_provider: Deepseek,
     custom_api_url: "",
     deepseek_key_saved: false,
+    glm_key_saved: false,
     custom_key_saved: false,
     setup_api_key: "",
     settings_saves: 0,
@@ -2592,14 +2658,50 @@ fn Model::clear_host_settings(self : Model) -> Model {
 /// mirrors the store, so a payload applied from a deferred flush can never
 /// yank the screen around on its own.
 fn Model::apply_host_settings(self : Model, settings : HostSettings) -> Model {
-  {
+  let next = {
     ..self,
     host_settings_revision: settings.revision,
     deferred_host_settings: None,
     api_provider: ApiProvider::parse(settings.provider),
     custom_api_url: settings.custom_api_url,
     deepseek_key_saved: settings.has_deepseek_key,
+    glm_key_saved: settings.has_glm_key,
     custom_key_saved: settings.has_custom_key,
+  }
+  next.align_fresh_conversation_with_provider()
+}
+
+///|
+/// Keep a never-started chat aligned with the host endpoint. Stored and
+/// already-running conversations remain pinned: changing their model behind
+/// the user's back would rewrite conversation semantics, while a fresh chat
+/// has no history to preserve and otherwise begins with a known-bad
+/// provider/model mismatch.
+fn Model::align_fresh_conversation_with_provider(self : Model) -> Model {
+  let default_model = if self.default_model.matches_provider(self.api_provider) {
+    self.default_model
+  } else {
+    self.api_provider.default_model()
+  }
+  let next = { ..self, default_model, }
+  guard next.composing_new_chat() &&
+    next.active_conversation() is Some(conv) &&
+    !conv.engine_model.matches_provider(next.api_provider) else {
+    return next
+  }
+  next.replace_conversation({ ..conv, engine_model: default_model, })
+}
+
+///|
+/// The reasoning preference for one model family. GLM's `ReasoningOff` wire
+/// value is translated by the engine to its lowest supported effort (`low`).
+fn Model::reasoning_for(
+  self : Model,
+  engine_model : EngineModel,
+) -> OpenSeekReasoning {
+  match engine_model {
+    Glm53 | Glm53Flash => self.glm_reasoning
+    High | Low | Other(_) => self.openseek_reasoning
   }
 }
 
@@ -2680,6 +2782,7 @@ fn Model::settle_api_setup(self : Model) -> Model {
 fn Model::api_ready(self : Model) -> Bool {
   match self.api_provider {
     Deepseek => self.deepseek_key_saved
+    Glm => self.glm_key_saved
     Custom => plausible_endpoint_url(self.custom_api_url)
   }
 }
@@ -2700,7 +2803,7 @@ fn plausible_endpoint_url(url : String) -> Bool {
 fn Model::settings_status(self : Model) -> Status {
   if self.api_ready() {
     Ready
-  } else if self.api_provider is Deepseek {
+  } else if self.api_provider is (Deepseek | Glm) {
     ApiKeyRequired
   } else {
     SetupRequired

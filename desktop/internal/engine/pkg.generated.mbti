@@ -85,6 +85,7 @@ pub(all) struct SettingsPatch {
   provider : String?
   custom_api_url : String?
   deepseek_api_key : String?
+  glm_api_key : String?
   custom_api_key : String?
 }
 

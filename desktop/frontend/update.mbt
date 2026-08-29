@@ -962,7 +962,7 @@ fn run_slash_command(
             model.focused,
             session=conv.session_id,
             model=conv.engine_model,
-            reasoning=model.openseek_reasoning,
+            reasoning=model.reasoning_for(conv.engine_model),
             max_steps=model.max_steps,
             workspace=conv.project(),
           ),
@@ -1019,7 +1019,7 @@ fn send_goal(
       conv.session_id,
       workspace,
       conv.engine_model,
-      model.openseek_reasoning,
+      model.reasoning_for(conv.engine_model),
       model.max_steps,
       command,
       text,
@@ -1030,7 +1030,7 @@ fn send_goal(
     conv.device,
     session=conv.session_id,
     model=conv.engine_model,
-    reasoning=model.openseek_reasoning,
+    reasoning=model.reasoning_for(conv.engine_model),
     max_steps=model.max_steps,
     workspace=conv.project(),
     command,
@@ -1813,7 +1813,8 @@ fn update_msg(
       agent~,
       codex_model~,
       codex_effort~,
-      openseek_effort~
+      openseek_effort~,
+      glm_effort~
     ) => {
       let theme = Theme::parse(theme, model.theme)
       let app_font = AppFont::parse(font, model.app_font)
@@ -1829,6 +1830,9 @@ fn update_msg(
       )
       let openseek_reasoning = OpenSeekReasoning::parse(openseek_effort).unwrap_or(
         model.openseek_reasoning,
+      )
+      let glm_reasoning = OpenSeekReasoning::parse(glm_effort).unwrap_or(
+        model.glm_reasoning,
       )
       // The stored Codex pick seeds Codex's own selection state. When the
       // catalog arrives, `with_models` keeps this id if it is still listed
@@ -1856,6 +1860,28 @@ fn update_msg(
           url => open_external_link(dispatch, url),
         )
       }
+      let next = {
+        ..model,
+        notification_corner: NotificationCorner::parse(notification_corner),
+        tree_layout: @fileeditor.TreeLayout::parse(tree_layout),
+        theme,
+        app_font,
+        app_font_size,
+        default_model,
+        default_agent,
+        conversation_models: parse_conversation_models(remembered),
+        openseek_reasoning,
+        glm_reasoning,
+        codex,
+      }
+      // The localStorage read and the host settings request start together.
+      // If the host won that race, reconcile the just-loaded model preference
+      // now; otherwise `HostSettingsLoaded` performs the same fold later.
+      let next = if next.host_settings_loaded() {
+        next.align_fresh_conversation_with_provider()
+      } else {
+        next
+      }
       (
         @cmd.batch([
           theme.apply(model.system_dark),
@@ -1864,19 +1890,7 @@ fn update_msg(
           codex_cmd,
           codex_effort_cmd,
         ]),
-        {
-          ..model,
-          notification_corner: NotificationCorner::parse(notification_corner),
-          tree_layout: @fileeditor.TreeLayout::parse(tree_layout),
-          theme,
-          app_font,
-          app_font_size,
-          default_model,
-          default_agent,
-          conversation_models: parse_conversation_models(remembered),
-          openseek_reasoning,
-          codex,
-        },
+        next,
       )
     }
     // The host's settings, from the bridge-time `settings.get` or a peer's
@@ -2745,10 +2759,20 @@ fn update_msg(
       guard OpenSeekReasoning::parse(value) is Some(reasoning) else {
         return (@cmd.none, model)
       }
-      (
-        reasoning.save(),
-        { ..model, openseek_reasoning: reasoning, select_menu: None, },
-      )
+      guard model.active_conversation() is Some(conv) else {
+        return (@cmd.none, model)
+      }
+      if conv.engine_model is (Glm53 | Glm53Flash) {
+        (
+          reasoning.save_for_glm(),
+          { ..model, glm_reasoning: reasoning, select_menu: None, },
+        )
+      } else {
+        (
+          reasoning.save(),
+          { ..model, openseek_reasoning: reasoning, select_menu: None, },
+        )
+      }
     }
     MaxStepsChanged(value) => (@cmd.none, { ..model, max_steps: value, })
     SetupApiKeyChanged(value) => {
@@ -2774,7 +2798,7 @@ fn update_msg(
         setup_api_key: "",
         settings_saves: model.settings_saves + 1,
         select_menu: None,
-      }
+      }.align_fresh_conversation_with_provider()
       // The switch can move the endpoint between usable and not. Inside the
       // setup modal the form simply re-renders for the new provider; a
       // switch that breaks a usable endpoint away from the Settings page
@@ -3202,11 +3226,12 @@ fn update_msg(
           // modal optimistically; one that leaves it incomplete (Custom
           // with no URL yet) keeps the modal up mid-setup. A failed save
           // comes back as a toast.
-          Deepseek | Custom as provider => {
+          Deepseek | Glm | Custom as provider => {
             let next = {
               ..model,
               deepseek_key_saved: model.deepseek_key_saved ||
               provider is Deepseek,
+              glm_key_saved: model.glm_key_saved || provider is Glm,
               custom_key_saved: model.custom_key_saved || provider is Custom,
               setup_api_key: "",
               settings_saves: model.settings_saves + 1,
@@ -3362,7 +3387,7 @@ fn update_msg(
             task,
             submission_id,
             conv.engine_model,
-            model.openseek_reasoning,
+            model.reasoning_for(conv.engine_model),
             model.max_steps,
             conv.session_id,
             workspace,
@@ -3374,7 +3399,7 @@ fn update_msg(
             task,
             submission_id,
             conv.engine_model,
-            model.openseek_reasoning,
+            model.reasoning_for(conv.engine_model),
             model.max_steps,
             conv.session_id,
             workspace=conv.project(),
@@ -12013,6 +12038,7 @@ test "loaded UI preferences parse their wire names" {
       codex_model="gpt-5.4-codex",
       codex_effort="xhigh",
       openseek_effort="high",
+      glm_effort="max",
     ),
     test_model(),
   )
@@ -12040,6 +12066,7 @@ test "loaded UI preferences parse their wire names" {
       codex_model="",
       codex_effort="",
       openseek_effort="broken",
+      glm_effort="broken",
     ),
     test_model(),
   )
@@ -12457,6 +12484,7 @@ fn host_settings(
   provider~ : String,
   revision? : Int = 0,
   has_deepseek_key? : Bool = false,
+  has_glm_key? : Bool = false,
   custom_api_url? : String = "",
 ) -> HostSettings {
   {
@@ -12464,6 +12492,7 @@ fn host_settings(
     provider,
     custom_api_url,
     has_deepseek_key,
+    has_glm_key,
     has_custom_key: false,
   }
 }

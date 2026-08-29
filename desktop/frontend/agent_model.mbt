@@ -120,23 +120,31 @@ test "agent choices round-trip their wire names" {
 }
 
 ///|
-/// The OpenSeek group always offers the two service tiers; a conversation
-/// running an unknown wire name keeps it visible, same as the old selector.
-fn openseek_model_group(selected : EngineModel) -> @composer.ModelGroup {
-  let options : Array[@composer.ModelOption] = [
-    {
-      value: ModelChoice::OpenSeekModel(High).wire(),
-      label: EngineModel::High.label(),
-    },
-    {
-      value: ModelChoice::OpenSeekModel(Low).wire(),
-      label: EngineModel::Low.label(),
-    },
-  ]
-  if selected is Other(name) {
+/// The OpenSeek group offers the configured provider's models: the DeepSeek
+/// service tiers, the GLM models, or — for a custom endpoint, where the key
+/// follows whichever model is named — every model this build knows. A
+/// conversation running a model outside that list keeps it visible, same as
+/// the old selector.
+fn openseek_model_group(
+  provider : ApiProvider,
+  selected : EngineModel,
+) -> @composer.ModelGroup {
+  let listed : Array[EngineModel] = match provider {
+    Deepseek => [High, Low]
+    Glm => [Glm53, Glm53Flash]
+    Custom => [High, Low, Glm53, Glm53Flash]
+  }
+  let options : Array[@composer.ModelOption] = []
+  for model in listed {
+    options.push({
+      value: ModelChoice::OpenSeekModel(model).wire(),
+      label: model.label(),
+    })
+  }
+  if !listed.contains(selected) {
     options.push({
       value: ModelChoice::OpenSeekModel(selected).wire(),
-      label: name,
+      label: selected.label(),
     })
   }
   { label: "OpenSeek", options, }
@@ -175,7 +183,7 @@ fn Model::openseek_model_chip(
   conv : Conversation,
 ) -> @composer.ModelSelect {
   let groups : Array[@composer.ModelGroup] = [
-    openseek_model_group(conv.engine_model),
+    openseek_model_group(self.api_provider, conv.engine_model),
   ]
   if self.composing_new_chat() {
     groups.push(self.codex_model_group())
@@ -192,26 +200,32 @@ fn Model::openseek_model_chip(
 
 ///|
 /// OpenSeek's reasoning chip shares the same control as Codex but offers only
-/// the values its DeepSeek request format defines. An unknown model may be a
+/// the values its request format defines. An unknown model may be a
 /// provider such as Kimi, so hiding the chip there is safer than sending a
-/// setting that provider deliberately ignores.
+/// setting that provider deliberately ignores. GLM 5.3 cannot disable
+/// thinking — the engine maps `no` to GLM's lowest supported effort — so its
+/// first option says "Low" rather than promising "Off".
 fn Model::openseek_reasoning_chip(
   self : Model,
   conv : Conversation,
 ) -> @composer.ReasoningSelect? {
   guard conv.engine_model.supports_reasoning() else { return None }
+  let reasoning = self.reasoning_for(conv.engine_model)
   let options : Array[@composer.ModelOption] = [
-    { value: ReasoningOff.wire(), label: "Off", },
+    {
+      value: ReasoningOff.wire(),
+      label: ReasoningOff.label_for_model(conv.engine_model),
+    },
     { value: ReasoningHigh.wire(), label: "High", },
     { value: ReasoningMax.wire(), label: "Max", },
   ]
   Some({
     id: "openseek-reasoning-picker",
     options,
-    selected: self.openseek_reasoning.wire(),
+    selected: reasoning.wire(),
     disabled: false,
     open: self.select_menu == Some(OpenSeekReasoningMenu),
-    title: "Reasoning effort: \{self.openseek_reasoning.label()}",
+    title: "Reasoning effort: \{reasoning.label_for_model(conv.engine_model)}",
   })
 }
 
@@ -222,7 +236,7 @@ fn Model::openseek_reasoning_chip(
 fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
   let groups : Array[@composer.ModelGroup] = []
   if self.codex.composing_draft() {
-    groups.push(openseek_model_group(self.default_model))
+    groups.push(openseek_model_group(self.api_provider, self.default_model))
   }
   groups.push(self.codex_model_group())
   let selected = match self.codex.model_listing() {

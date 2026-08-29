@@ -40,13 +40,15 @@ const RelayServerOrigin : String = "https://openseek-api.moonbitlang.cn"
 ///|
 /// The chat endpoint selection: where runs send their requests. SeekMoon
 /// runs only on bring-your-own-key providers. `Deepseek` is the official
-/// DeepSeek endpoint with the user's own key; `Custom` is any other
-/// OpenAI-compatible endpoint, whose key is optional. The retired hosted
-/// proxy names (`openseek` / `openseek-staging`) still parse as `Deepseek`
-/// so old settings files and old clients degrade to the BYOK default
-/// instead of wedging.
+/// DeepSeek endpoint with the user's own key; `Glm` is the official Z.AI
+/// GLM endpoint with its own key; `Custom` is any other OpenAI-compatible
+/// endpoint, whose key is optional. The retired hosted proxy names
+/// (`openseek` / `openseek-staging`) still parse as `Deepseek` so old
+/// settings files and old clients degrade to the BYOK default instead of
+/// wedging.
 priv enum ApiProvider {
   Deepseek
+  Glm
   Custom
 }
 
@@ -54,6 +56,7 @@ priv enum ApiProvider {
 fn ApiProvider::wire(self : ApiProvider) -> String {
   match self {
     Deepseek => "deepseek"
+    Glm => "glm"
     Custom => "custom"
   }
 }
@@ -68,6 +71,7 @@ fn ApiProvider::wire(self : ApiProvider) -> String {
 fn ApiProvider::parse(value : String) -> ApiProvider? {
   match value {
     "openseek" | "openseek-staging" | "deepseek" => Some(Deepseek)
+    "glm" => Some(Glm)
     "custom" => Some(Custom)
     _ => None
   }
@@ -82,6 +86,7 @@ priv struct EngineSettings {
   provider : ApiProvider
   custom_api_url : String?
   deepseek_api_key : String?
+  glm_api_key : String?
   custom_api_key : String?
 }
 
@@ -133,6 +138,7 @@ fn decode_settings(raw : Map[String, Json]) -> EngineSettings {
     .unwrap_or(Deepseek),
     custom_api_url: settings_text(raw, "custom_api_url"),
     deepseek_api_key: settings_text(raw, "deepseek_api_key"),
+    glm_api_key: settings_text(raw, "glm_api_key"),
     custom_api_key: settings_text(raw, "custom_api_key"),
   }
 }
@@ -145,6 +151,7 @@ pub(all) struct SettingsPatch {
   provider : String?
   custom_api_url : String?
   deepseek_api_key : String?
+  glm_api_key : String?
   custom_api_key : String?
 }
 
@@ -159,11 +166,12 @@ fn settings_status_payload(
     revision,
     provider: settings.provider.wire(),
     custom_api_url: settings.custom_api_url,
-    // Presence ORs in the DEEPSEEK environment fallback exactly as the run
+    // Presence ORs in the provider's environment fallback exactly as the run
     // config resolves it (`configured_api_key`): an env-configured install
     // is runnable, and the frontend gates Send on this bit.
     has_deepseek_key: settings.deepseek_api_key is Some(_) ||
     @env.get("DEEPSEEK") is Some(_),
+    has_glm_key: settings.glm_api_key is Some(_) || @env.get("GLM") is Some(_),
     has_custom_key: settings.custom_api_key is Some(_),
   }
 }
@@ -219,6 +227,7 @@ pub async fn update_settings(
     raw.get("provider") is Some(_) ||
     raw.get("custom_api_url") is Some(_) ||
     raw.get("deepseek_api_key") is Some(_) ||
+    raw.get("glm_api_key") is Some(_) ||
     raw.get("custom_api_key") is Some(_)
   if legacy_migration && store_claimed {
     return settings_status_payload(current, manager.settings_revision)
@@ -231,6 +240,7 @@ pub async fn update_settings(
   }
   apply_text_patch(raw, "custom_api_url", patch.custom_api_url)
   apply_text_patch(raw, "deepseek_api_key", patch.deepseek_api_key)
+  apply_text_patch(raw, "glm_api_key", patch.glm_api_key)
   apply_text_patch(raw, "custom_api_key", patch.custom_api_key)
   // Version 2 retired the WSL engine mode. A settings write also removes the
   // old group so the durable file no longer advertises an ignored capability.
@@ -322,7 +332,16 @@ fn resolved_endpoint(
     Deepseek => {
       let key = configured_api_key(
         stored_key?=settings.deepseek_api_key,
-        deepseek_env?=@env.get("DEEPSEEK"),
+        env_key?=@env.get("DEEPSEEK"),
+        missing="DeepSeek API key is required; add it in Settings or set DEEPSEEK",
+      )
+      { api_key: key, api_url: None, }
+    }
+    Glm => {
+      let key = configured_api_key(
+        stored_key?=settings.glm_api_key,
+        env_key?=@env.get("GLM"),
+        missing="GLM API key is required; add it in Settings or set GLM",
       )
       { api_key: key, api_url: None, }
     }
@@ -367,18 +386,21 @@ pub async fn remote_server_base(manager : EngineManager) -> String? {
 async fn with_settings_dir(
   body : async (@pathx.Path, EngineManager) -> Unit,
 ) -> Unit {
-  // The status payload reads the DEEPSEEK fallback from the process
-  // environment; hold it steady so the expectations here cannot depend on
-  // the developer's shell. That variable is process-global while async tests
-  // run concurrently, so the package's ambient-environment lock has to cover
-  // the whole fixture: unsetting it here is worthless if a sibling test sets
-  // its own key while a body is mid-assertion. Callers must therefore not
-  // hold the lock themselves — it is not reentrant — and should do their own
-  // ambient-environment work inside `body` instead.
+  // The status payload reads the DEEPSEEK/GLM fallbacks from the process
+  // environment; hold them steady so the expectations here cannot depend on
+  // the developer's shell. Those variables are process-global while async
+  // tests run concurrently, so the package's ambient-environment lock has to
+  // cover the whole fixture: unsetting them here is worthless if a sibling
+  // test sets its own key while a body is mid-assertion. Callers must
+  // therefore not hold the lock themselves — it is not reentrant — and
+  // should do their own ambient-environment work inside `body` instead.
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let previous_key = @sys.get_env_var("DEEPSEEK")
   @sys.unset_env_var("DEEPSEEK")
+  let previous_glm_key = @sys.get_env_var("GLM")
+  @sys.unset_env_var("GLM")
+  defer (if previous_glm_key is Some(value) { @sys.set_env_var("GLM", value) })
   defer (if previous_key is Some(value) { @sys.set_env_var("DEEPSEEK", value) })
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-settings-"))
   defer (@fs.rmdir(dir.to_string(), recursive=true) catch { _ => () })
@@ -395,6 +417,7 @@ async test "missing settings read as the BYOK defaults" {
       "revision": 0,
       "provider": "deepseek",
       "has_deepseek_key": false,
+      "has_glm_key": false,
       "has_custom_key": false,
     })
   })
@@ -411,6 +434,7 @@ async test "the DEEPSEEK env fallback reads as a usable key" {
       "revision": 0,
       "provider": "deepseek",
       "has_deepseek_key": true,
+      "has_glm_key": false,
       "has_custom_key": false,
     })
   })
@@ -423,12 +447,14 @@ async test "a saved key round-trips as presence, never as text" {
       provider: Some("deepseek"),
       custom_api_url: None,
       deepseek_api_key: Some("  sk-secret  "),
+      glm_api_key: None,
       custom_api_key: None,
     })
     json_inspect(status, content={
       "revision": 1,
       "provider": "deepseek",
       "has_deepseek_key": true,
+      "has_glm_key": false,
       "has_custom_key": false,
     })
     // The status never carries the key; the file carries it trimmed.
@@ -455,12 +481,14 @@ async test "retired hosted providers converge on the DeepSeek default" {
       provider: Some("openseek-staging"),
       custom_api_url: None,
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: None,
     })
     json_inspect(status, content={
       "revision": 1,
       "provider": "deepseek",
       "has_deepseek_key": false,
+      "has_glm_key": false,
       "has_custom_key": false,
     })
     let text = @fsx.read_text(settings_file(dir))
@@ -481,18 +509,21 @@ async test "a present-but-blank field clears the stored value" {
       provider: Some("custom"),
       custom_api_url: Some("https://proxy.example/chat/completions"),
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: Some("sk-custom"),
     })
     let status = update_settings(manager, {
       provider: None,
       custom_api_url: Some("   "),
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: Some(""),
     })
     json_inspect(status, content={
       "revision": 2,
       "provider": "custom",
       "has_deepseek_key": false,
+      "has_glm_key": false,
       "has_custom_key": false,
     })
   })
@@ -509,6 +540,7 @@ async test "a save removes the retired WSL settings group" {
       provider: None,
       custom_api_url: None,
       deepseek_api_key: Some("sk-kept"),
+      glm_api_key: None,
       custom_api_key: None,
     })
     guard @json.parse(@fsx.read_text(settings_file(dir))) is Object(fields) else {
@@ -531,6 +563,7 @@ async test "legacy migration cannot replay over a newer settings write" {
         provider: Some("deepseek"),
         custom_api_url: None,
         deepseek_api_key: Some("sk-old"),
+        glm_api_key: None,
         custom_api_key: None,
       },
       legacy_migration=true,
@@ -540,6 +573,7 @@ async test "legacy migration cannot replay over a newer settings write" {
       provider: Some("custom"),
       custom_api_url: Some("https://new.example/chat"),
       deepseek_api_key: Some(""),
+      glm_api_key: None,
       custom_api_key: Some("sk-new"),
     })
     assert_eq(modern.revision, 2)
@@ -552,6 +586,7 @@ async test "legacy migration cannot replay over a newer settings write" {
         provider: Some("deepseek"),
         custom_api_url: None,
         deepseek_api_key: Some("sk-old"),
+        glm_api_key: None,
         custom_api_key: None,
       },
       legacy_migration=true,
@@ -582,6 +617,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
             provider: Some("deepseek"),
             custom_api_url: None,
             deepseek_api_key: Some("sk-concurrent"),
+            glm_api_key: None,
             custom_api_key: None,
           },
           on_committed=fn(status) { committed.push(status.revision) },
@@ -595,6 +631,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
             provider: None,
             custom_api_url: Some("https://custom.example/chat"),
             deepseek_api_key: None,
+            glm_api_key: None,
             custom_api_key: Some("sk-custom"),
           },
           on_committed=fn(status) { committed.push(status.revision) },
@@ -638,6 +675,7 @@ async test "saves preserve fields a newer build added" {
       provider: None,
       custom_api_url: None,
       deepseek_api_key: Some("sk-new"),
+      glm_api_key: None,
       custom_api_key: None,
     })
     let text = @fsx.read_text(settings_file(dir))
@@ -667,6 +705,7 @@ async test "a newer-version file is read best-effort but never rewritten" {
         provider: Some("openseek"),
         custom_api_url: None,
         deepseek_api_key: None,
+        glm_api_key: None,
         custom_api_key: None,
       })
     catch {
@@ -689,6 +728,7 @@ async test "an unknown provider is refused on write, defaulted on read" {
         provider: Some("acme"),
         custom_api_url: None,
         deepseek_api_key: None,
+        glm_api_key: None,
         custom_api_key: None,
       })
     catch {
@@ -731,6 +771,7 @@ async test "run config resolves the endpoint from the stored provider" {
       provider: Some("deepseek"),
       custom_api_url: None,
       deepseek_api_key: Some("sk-stored"),
+      glm_api_key: None,
       custom_api_key: None,
     })
     let config = run_config(manager, {
@@ -749,6 +790,7 @@ async test "run config resolves the endpoint from the stored provider" {
       provider: Some("custom"),
       custom_api_url: Some("https://proxy.example/chat/completions"),
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: None,
     })
     let custom = run_config(manager, {
@@ -776,6 +818,7 @@ async test "a custom provider without a URL refuses to start" {
       provider: Some("custom"),
       custom_api_url: None,
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: None,
     })
     let refused = try

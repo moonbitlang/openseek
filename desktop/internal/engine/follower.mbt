@@ -664,6 +664,7 @@ fn follower_test_config(
   {
     task: "test",
     api_key: "test",
+    key_env: "DEEPSEEK",
     api_url: None,
     model: "test",
     thinking: ThinkingMax,

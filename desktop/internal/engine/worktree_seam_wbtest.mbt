@@ -286,6 +286,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
       provider: Some("custom"),
       custom_api_url: Some("https://example.invalid/chat/completions"),
       deepseek_api_key: None,
+      glm_api_key: None,
       custom_api_key: None,
     }),
   )

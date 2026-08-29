@@ -31,6 +31,7 @@ fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           codex_model=load_setting(CodexModelStorageKey),
           codex_effort=load_setting(CodexReasoningEffortStorageKey),
           openseek_effort=load_setting(OpenSeekReasoningStorageKey),
+          glm_effort=load_setting(GlmReasoningStorageKey),
         ),
       ),
     )
@@ -75,6 +76,14 @@ fn save_codex_reasoning_effort(effort : String) -> @cmd.Cmd {
 /// Persist OpenSeek's typed reasoning choice for its next engine operation.
 fn OpenSeekReasoning::save(self : OpenSeekReasoning) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(OpenSeekReasoningStorageKey, self.wire()))
+}
+
+///|
+/// Persist GLM's reasoning choice independently from DeepSeek's. In
+/// particular, a stored DeepSeek Max must not turn a fresh GLM chat into a
+/// long forced-thinking run.
+fn OpenSeekReasoning::save_for_glm(self : OpenSeekReasoning) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => save_setting(GlmReasoningStorageKey, self.wire()))
 }
 
 ///|

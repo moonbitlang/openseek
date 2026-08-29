@@ -193,8 +193,46 @@ pub(all) struct SettingsSetPayload {
   provider : String?
   custom_api_url : String?
   deepseek_api_key : String?
+  glm_api_key : String?
   custom_api_key : String?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "settings patch payload")
+  {
+    legacy_migration: object.optional_bool("legacy_migration"),
+    provider: object.optional_string("provider"),
+    custom_api_url: object.optional_string("custom_api_url"),
+    deepseek_api_key: object.optional_string("deepseek_api_key"),
+    glm_api_key: object.optional_string("glm_api_key"),
+    custom_api_key: object.optional_string("custom_api_key"),
+  }
+}
+
+///|
+pub impl ToJson for SettingsSetPayload with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  if self.legacy_migration is Some(value) {
+    fields["legacy_migration"] = value.to_json()
+  }
+  if self.provider is Some(value) {
+    fields["provider"] = value.to_json()
+  }
+  if self.custom_api_url is Some(value) {
+    fields["custom_api_url"] = value.to_json()
+  }
+  if self.deepseek_api_key is Some(value) {
+    fields["deepseek_api_key"] = value.to_json()
+  }
+  if self.glm_api_key is Some(value) {
+    fields["glm_api_key"] = value.to_json()
+  }
+  if self.custom_api_key is Some(value) {
+    fields["custom_api_key"] = value.to_json()
+  }
+  Json(fields)
+}
 
 ///|
 pub(all) struct WorkspacePayload {
@@ -991,8 +1029,37 @@ pub(all) struct SettingsStatusPayload {
   provider : String
   custom_api_url : String?
   has_deepseek_key : Bool
+  has_glm_key : Bool
   has_custom_key : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for SettingsStatusPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "settings status payload")
+  {
+    revision: object.required_int("revision"),
+    provider: object.required_string("provider"),
+    custom_api_url: object.optional_string("custom_api_url"),
+    has_deepseek_key: object.required_bool("has_deepseek_key"),
+    has_glm_key: object.required_bool("has_glm_key"),
+    has_custom_key: object.required_bool("has_custom_key"),
+  }
+}
+
+///|
+pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "revision": self.revision.to_json(),
+    "provider": self.provider.to_json(),
+    "has_deepseek_key": self.has_deepseek_key.to_json(),
+    "has_glm_key": self.has_glm_key.to_json(),
+    "has_custom_key": self.has_custom_key.to_json(),
+  }
+  if self.custom_api_url is Some(value) {
+    fields["custom_api_url"] = value.to_json()
+  }
+  Json(fields)
+}
 
 ///|
 /// Immutable identity of the installed desktop package. The native host reads
