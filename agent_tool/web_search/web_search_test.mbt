@@ -164,11 +164,13 @@ async test "web_search rejects blank and oversized queries locally" {
 ///
 ///     Sources:
 ///     - [docs.moonbitlang.com](https://docs.moonbitlang.com/zh-cn/stable/_downloads/78d8998d78e60fd7b1b2f4c9bb2819fb/summary.md)
+///     - [docs.moonbitlang.com](https://docs.moonbitlang.com/en/stable/_downloads/78d8998d78e60fd7b1b2f4c9bb2819fb/summary.md)
 ///     - [MoonBit - 计算机编程语言](https://baike.baidu.com/item/MoonBit/64190586?fr=ge_ala#1)
 ///     - [MoonBit Language](https://docs.moonbitlang.com/en/stable/language/index.html)
 ///     - [MoonBit: Explore the Design of an AI-Friendly Programming Language](https://llm4code.github.io/assets/pdf/papers/7.pdf#1#1)
 ///     - [About us | MoonBit](https://www.moonbitlang.com/about-us)
-///     - ...
+///     - [MoonBit](https://baike.baidu.com/item/MoonBit)
+///     - [docs.moonbitlang.cn](https://docs.moonbitlang.cn/_sources/tutorial/for-go-programmers/index.md)
 ///
 ///     (Showing the first 8 sources. Refine the query for more.)
 ///
@@ -176,8 +178,8 @@ async test "web_search rejects blank and oversized queries locally" {
 ///
 /// Only the SHAPE is stable, not the contents: which URLs surface, whether
 /// titles are present (a title-less source falls back to its hostname label,
-/// as the first line above shows), whether citation snippets and dates are
-/// joined in, and whether the result cap actually truncates — all drift
+/// as the first two lines above show), whether citation snippets and dates
+/// are joined in, and whether the result cap actually truncates — all drift
 /// between runs.
 async test "realworld web_search performs a native search against DeepSeek" {
   guard @env.get_env_var("DEEPSEEK") is Some(api_key) && api_key != "" else {
