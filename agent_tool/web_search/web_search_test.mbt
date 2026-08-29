@@ -151,3 +151,52 @@ async test "web_search rejects blank and oversized queries locally" {
   assert_true(oversized.is_error)
   assert_true(oversized.content.contains("exceeds"))
 }
+
+///|
+/// Live check against the real DeepSeek Anthropic-compatible endpoint. Opt-in
+/// like `deepseek/client/client_realworld_test.mbt`: runs only when the
+/// `DEEPSEEK` key is exported, prints a skip notice otherwise. The real
+/// endpoint is exercised end to end — the tool must come back with at least
+/// one citeable source rendered as a markdown link, plus a success brief.
+async test "realworld web_search performs a native search against DeepSeek" {
+  guard @env.get_env_var("DEEPSEEK") is Some(api_key) && api_key != "" else {
+    println(
+      "DEEPSEEK environment variable is not set or is empty; skipping realworld web_search test",
+    )
+    return
+  }
+  let tool = @web_search.definition(api_key~)
+  guard tool.execute is Async(execute) else { fail("expected async executor") }
+  let action = execute({ "query": "MoonBit programming language" })
+  guard action is Respond(output) else { fail("expected Respond") }
+  assert_false(output.is_error)
+  assert_true(output.content.contains("Sources:"))
+  // A real search must return at least one citeable source with a markdown
+  // link; the URL itself is provider-chosen, only the shape is stable.
+  assert_true(output.content.contains("](https://"))
+  guard output.brief is Some(brief) else { fail("expected a brief") }
+  assert_true(brief.contains("web_search"))
+  assert_true(brief.contains("source(s)"))
+}
+
+///|
+/// Live auth-failure check: a bad key against the real endpoint must surface
+/// as a recoverable tool error carrying the provider's message — never a
+/// crash. Guarded on `DEEPSEEK` like the success test, so the offline suite
+/// stays network-free.
+async test "realworld web_search surfaces an auth failure from the live endpoint" {
+  guard @env.get_env_var("DEEPSEEK") is Some(api_key) && api_key != "" else {
+    println(
+      "DEEPSEEK environment variable is not set or is empty; skipping realworld web_search auth test",
+    )
+    return
+  }
+  let tool = @web_search.definition(api_key="sk-invalid-key-for-realworld-test")
+  guard tool.execute is Async(execute) else { fail("expected async executor") }
+  let action = execute({ "query": "MoonBit" })
+  guard action is Respond(output) else { fail("expected Respond") }
+  assert_true(output.is_error)
+  assert_true(output.content.contains("error: web_search failed"))
+  guard output.brief is Some(brief) else { fail("expected a brief") }
+  assert_true(brief.contains("(failed)"))
+}

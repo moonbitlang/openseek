@@ -10,6 +10,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/async/socket",
+  "moonbitlang/core/env",
   "moonbitlang/core/json",
 } for "test"
 
