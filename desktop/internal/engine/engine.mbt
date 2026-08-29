@@ -2736,6 +2736,14 @@ async test "native engine env has one authoritative bundled moon path" {
   }
   let env = engine_process_env(config, Some(runtime))
   assert_eq(env["OPENSEEK_THINKING"], "high")
+  assert_eq(env["DEEPSEEK"], "k")
+  // A GLM run's key travels in GLM, and the resolved variable — not a
+  // hardcoded DEEPSEEK — is what the process env honors.
+  let glm_env = engine_process_env(
+    { ..config, key_env: "GLM", model: "glm-5.3", },
+    Some(runtime),
+  )
+  assert_eq(glm_env["GLM"], "k")
   @debug.assert_eq(engine_process_args(config), [
     "serve", "--session=s-env", "--dir", ".", "--approval", "ask",
   ])

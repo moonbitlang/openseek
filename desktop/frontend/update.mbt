@@ -12011,6 +12011,16 @@ test "the official endpoint requires a key, a custom endpoint a URL" {
   assert_false(official.api_ready())
   assert_true(official.display_status() is ApiKeyRequired)
   assert_true({ ..official, deepseek_key_saved: true, }.api_ready())
+  // The GLM provider is gated on its own key, never DeepSeek's.
+  let glm = {
+    ..test_model(),
+    api_provider: Glm,
+    deepseek_key_saved: true,
+    glm_key_saved: false,
+  }
+  assert_false(glm.api_ready())
+  assert_true(glm.display_status() is ApiKeyRequired)
+  assert_true({ ..glm, glm_key_saved: true, }.api_ready())
   let custom = { ..test_model(), api_provider: Custom, custom_api_url: "", }
   assert_false(custom.api_ready())
   assert_true(custom.display_status() is SetupRequired)
@@ -12049,6 +12059,7 @@ test "loaded UI preferences parse their wire names" {
   assert_true(restored.default_model is Low)
   assert_true(restored.default_agent is CodexAgent)
   assert_true(restored.openseek_reasoning is ReasoningHigh)
+  assert_true(restored.glm_reasoning is ReasoningMax)
   // The stored conversation outranks the stored default for its own chat.
   assert_true(restored.active().engine_model is High)
   // Unknown stored values fall back to the defaults.
@@ -12076,6 +12087,7 @@ test "loaded UI preferences parse their wire names" {
   assert_true(unknown.app_font_size is Medium)
   assert_true(unknown.default_model is High)
   assert_true(unknown.openseek_reasoning is ReasoningMax)
+  assert_true(unknown.glm_reasoning is ReasoningOff)
   assert_true(unknown.default_agent is OpenSeekAgent)
   // A store that will not parse remembers nothing rather than wedging.
   assert_eq(unknown.conversation_models.length(), 0)
@@ -12679,6 +12691,63 @@ test "switching to a provider missing its key or URL opens the setup modal" {
 }
 
 ///|
+test "the GLM provider aligns only a fresh chat to its model family" {
+  let dispatch = test_dispatch()
+  let (_, glm) = update(dispatch, ProviderChanged("glm"), {
+    ..test_model(),
+    glm_key_saved: true,
+  })
+  assert_true(glm.api_provider is Glm)
+  assert_true(glm.default_model is Glm53)
+  assert_true(glm.active().engine_model is Glm53)
+  // GLM's forced-thinking default is the shared low wire value, independent
+  // from the Max preference DeepSeek keeps.
+  assert_true(glm.reasoning_for(glm.active().engine_model) is ReasoningOff)
+  assert_true(glm.openseek_reasoning is ReasoningMax)
+  // A host snapshot on a later launch performs the same alignment even
+  // though the page-local model preference loads before host settings do.
+  let (_, restored) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="glm", has_glm_key=true),
+      connection_generation=None,
+    ),
+    test_model(),
+  )
+  assert_true(restored.default_model is Glm53)
+  assert_true(restored.active().engine_model is Glm53)
+  // Startup is order-independent: if the host's GLM snapshot arrives before
+  // localStorage, the later DeepSeek model preference cannot reintroduce a
+  // mismatched fresh chat.
+  let (_, preferences_after_host) = update(
+    dispatch,
+    SettingsLoaded(
+      notification_corner="",
+      tree_layout="",
+      theme="",
+      font="",
+      font_size="",
+      model="deepseek-v4-pro",
+      conversation_models="",
+      agent="",
+      codex_model="",
+      codex_effort="",
+      openseek_effort="",
+      glm_effort="",
+    ),
+    restored,
+  )
+  assert_true(preferences_after_host.default_model is Glm53)
+  assert_true(preferences_after_host.active().engine_model is Glm53)
+  // Once a conversation has begun, its pinned model remains explicit and
+  // visible for the user to change rather than being rewritten by Settings.
+  let (_, running) = update(dispatch, ProviderChanged("glm"), running_model())
+  assert_true(running.api_provider is Glm)
+  assert_true(running.default_model is Glm53)
+  assert_true(running.active().engine_model is High)
+}
+
+///|
 test "a dismissal survives the mirror reset a reconnect performs" {
   let dispatch = test_dispatch()
   let (_, keyless) = update_dev(
@@ -13200,6 +13269,20 @@ test "saving a key marks the active provider credential only" {
   assert_false(saved_custom.deepseek_key_saved)
   assert_true(saved_custom.custom_key_saved)
   assert_true(saved_custom.screen is Settings)
+  // A GLM key lands in the GLM slot alone.
+  let glm = {
+    ..test_model(),
+    api_provider: Glm,
+    deepseek_key_saved: false,
+    glm_key_saved: false,
+    setup_api_key: "  glm-new  ",
+    screen: Settings,
+  }
+  let (_, saved_glm) = update(dispatch, SaveApiKey, glm)
+  assert_true(saved_glm.glm_key_saved)
+  assert_false(saved_glm.deepseek_key_saved)
+  assert_false(saved_glm.custom_key_saved)
+  assert_true(saved_glm.screen is Settings)
 }
 
 ///|
@@ -13694,6 +13777,31 @@ test "custom select menus switch and dismiss deterministically" {
     open_before_switch,
   )
   assert_true(context_switched.select_menu is None)
+}
+
+///|
+test "GLM and DeepSeek remember independent reasoning choices" {
+  let dispatch = test_dispatch()
+  let glm = test_model().replace_conversation({
+    ..test_conversation(),
+    engine_model: Glm53,
+  })
+  guard glm.openseek_reasoning_chip(glm.active()) is Some(control) else {
+    fail("GLM reasoning control was hidden")
+  }
+  assert_eq(control.selected, "no")
+  assert_eq(control.options[0].label, "Low")
+  assert_eq(control.title, "Reasoning effort: Low")
+  let (_, glm_high) = update(dispatch, OpenSeekEffortPicked("high"), glm)
+  assert_true(glm_high.glm_reasoning is ReasoningHigh)
+  assert_true(glm_high.openseek_reasoning is ReasoningMax)
+  let deepseek = glm_high.replace_conversation({
+    ..glm_high.active(),
+    engine_model: High,
+  })
+  let (_, deepseek_off) = update(dispatch, OpenSeekEffortPicked("no"), deepseek)
+  assert_true(deepseek_off.openseek_reasoning is ReasoningOff)
+  assert_true(deepseek_off.glm_reasoning is ReasoningHigh)
 }
 
 ///|

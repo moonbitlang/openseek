@@ -384,7 +384,8 @@ at config time, so a change replaces the conversation's engine process on
 its next start.
 
 `provider` is the chat endpoint selection: `deepseek` (the official
-endpoint with the user's key) or `custom` (any OpenAI-compatible
+endpoint with the user's key), `glm` (the official Z.AI GLM endpoint
+with its own key), or `custom` (any OpenAI-compatible
 chat-completions URL; key optional). SeekMoon runs are
 bring-your-own-key only — the hosted proxy is retired, and the retired
 names `openseek` / `openseek-staging` are accepted aliases that resolve
@@ -396,16 +397,17 @@ still signs out a session whose issuer no longer matches the origin.
 | method | params | result |
 |---|---|---|
 | `settings.get` | `{}` | the status shape below |
-| `settings.set` | `{provider?, custom_api_url?, deepseek_api_key?, custom_api_key?, legacy_migration?}` — absent fields stay unchanged; a present string field is trimmed and, when empty, **clears** the stored value; an unknown `provider` is refused. `legacy_migration:true` is reserved for the bundled desktop's one-time import: once any settings write has claimed the durable store, a replay is acknowledged without changing it. | the status shape below, post-write |
+| `settings.set` | `{provider?, custom_api_url?, deepseek_api_key?, glm_api_key?, custom_api_key?, legacy_migration?}` — absent fields stay unchanged; a present string field is trimmed and, when empty, **clears** the stored value; an unknown `provider` is refused. `legacy_migration:true` is reserved for the bundled desktop's one-time import: once any settings write has claimed the durable store, a replay is acknowledged without changing it. | the status shape below, post-write |
 
 The status shape, also the params of every `settings.changed` notification:
 
 ```jsonc
 {
   "revision": 7,                    // host-process monotonic revision
-  "provider": "deepseek" | "custom",
+  "provider": "deepseek" | "glm" | "custom",
   "custom_api_url": "https://…",   // absent when unset
   "has_deepseek_key": false,       // presence only — the key text never leaves the host
+  "has_glm_key": false,
   "has_custom_key": false
 }
 ```

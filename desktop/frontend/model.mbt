@@ -174,6 +174,13 @@ test "engine models round-trip their wire names" {
     EngineModel::parse("deepseek-v4-flash").unwrap().label(),
     content="Low",
   )
+  inspect(EngineModel::parse("glm-5.3").unwrap().label(), content="GLM 5.3")
+  inspect(
+    EngineModel::parse("glm-5.3-flash").unwrap().wire(),
+    content="glm-5.3-flash",
+  )
+  assert_true(EngineModel::parse("glm-5.3") is Some(Glm53))
+  assert_true(EngineModel::Glm53Flash.supports_reasoning())
   inspect(
     EngineModel::parse(" custom-model ").unwrap().wire(),
     content="custom-model",

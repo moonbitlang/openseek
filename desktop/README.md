@@ -121,8 +121,10 @@ SeekMoon is bring-your-own-key: there is no hosted chat proxy, so requests
 go straight from the machine running the host to the configured provider,
 billed to that account. The default, **DeepSeek official**, sends requests
 to `api.deepseek.com` with your own key; the engine also falls back to the
-`DEEPSEEK` environment variable when no key is stored. **Custom URL**
-accepts any DeepSeek-compatible chat-completions endpoint, with the key
+`DEEPSEEK` environment variable when no key is stored. **Z.AI GLM** sends
+requests to `api.z.ai` with its own key (env fallback `GLM`) and offers the
+GLM 5.3 models on the composer's model chip. **Custom URL**
+accepts any OpenAI-compatible chat-completions endpoint, with the key
 optional — whether one is needed is the endpoint's business. The provider
 choice, the custom URL, and the keys live in the host's settings store
 (`engine-settings.json` in the runtime dir), shared by the desktop window

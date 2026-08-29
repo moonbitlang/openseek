@@ -786,6 +786,35 @@ async test "run config resolves the endpoint from the stored provider" {
     // The official endpoint is the engine default: no URL override.
     assert_true(config.api_url is None)
     assert_eq(config.api_key, "sk-stored")
+    assert_eq(config.key_env, "DEEPSEEK")
+    // The GLM provider resolves its own stored key into the GLM variable and
+    // defaults the run to a GLM model, still on the engine's built-in
+    // endpoint for it.
+    let previous_model = @sys.get_env_var("OPENSEEK_MODEL")
+    @sys.unset_env_var("OPENSEEK_MODEL")
+    defer (if previous_model is Some(value) {
+      @sys.set_env_var("OPENSEEK_MODEL", value)
+    })
+    let _ = update_settings(manager, {
+      provider: Some("glm"),
+      custom_api_url: None,
+      deepseek_api_key: None,
+      glm_api_key: Some("glm-stored"),
+      custom_api_key: None,
+    })
+    let glm = run_config(manager, {
+      task: "hello",
+      submission_id: None,
+      model: None,
+      thinking: None,
+      max_steps: None,
+      session: "s-settings-glm",
+      workspace: Some(workspace),
+    })
+    assert_true(glm.api_url is None)
+    assert_eq(glm.api_key, "glm-stored")
+    assert_eq(glm.key_env, "GLM")
+    assert_eq(glm.model, "glm-5.3")
     let _ = update_settings(manager, {
       provider: Some("custom"),
       custom_api_url: Some("https://proxy.example/chat/completions"),
@@ -808,6 +837,51 @@ async test "run config resolves the endpoint from the stored provider" {
     // A custom endpoint without a key gets the placeholder, never the
     // stored DeepSeek key.
     assert_eq(custom.api_key, PlaceholderApiKey)
+    assert_eq(custom.key_env, "DEEPSEEK")
+  })
+}
+
+///|
+async test "the GLM provider stores its own key and reports presence" {
+  with_settings_dir(async fn(_dir, manager) {
+    let status = update_settings(manager, {
+      provider: Some("glm"),
+      custom_api_url: None,
+      deepseek_api_key: None,
+      glm_api_key: Some("  glm-secret  "),
+      custom_api_key: None,
+    })
+    json_inspect(status, content={
+      "revision": 1,
+      "provider": "glm",
+      "has_deepseek_key": false,
+      "has_glm_key": true,
+      "has_custom_key": false,
+    })
+    // The status never carries the key; the store carries it trimmed, in its
+    // own slot rather than DeepSeek's.
+    assert_false(status.to_json().stringify().contains("glm-secret"))
+    let reloaded = load_engine_settings(manager.runtime_dir)
+    assert_true(reloaded.provider is Glm)
+    assert_true(reloaded.glm_api_key is Some("glm-secret"))
+    assert_true(reloaded.deepseek_api_key is None)
+  })
+}
+
+///|
+async test "the GLM env fallback reads as a usable key" {
+  with_settings_dir(async fn(_dir, manager) {
+    // The engine resolves GLM when no key is stored; the status must agree,
+    // or the frontend blocks Send on an endpoint that runs fine.
+    @sys.set_env_var("GLM", "glm-env")
+    defer @sys.unset_env_var("GLM")
+    json_inspect(settings_status(manager), content={
+      "revision": 0,
+      "provider": "deepseek",
+      "has_deepseek_key": false,
+      "has_glm_key": true,
+      "has_custom_key": false,
+    })
   })
 }
 
