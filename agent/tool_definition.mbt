@@ -193,7 +193,9 @@ async test "a background run that fails to compile reports the error inline" {
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_false(output.content.contains("started background job"))
-    assert_true(output.content.contains("did not compile"))
+    assert_true(output.content.contains("compile-time error"))
+    assert_true(output.content.contains("program was not run"))
+    assert_eq(output.brief, Some("mbtx (compile error)"))
     // The diagnostic points at the model's own input.
     assert_true(output.content.contains("source:"))
     assert_false(output.content.contains("openseek-jobs-"))
@@ -318,7 +320,8 @@ async test "binary output waits for the real exit instead of abandoning it" {
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     // The real exit code, not the -1 an abandoned execution would report.
-    assert_true(output.content.contains("exited 3"))
+    assert_true(output.content.contains("exit code 3"))
+    assert_true(output.content.contains("runtime error"))
     assert_true(output.content.contains("non-UTF-8"))
   })
 }

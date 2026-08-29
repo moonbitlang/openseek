@@ -399,6 +399,16 @@
     .card.assistant { border-left-color: var(--assistant); }
     .card.tool { border-left-color: var(--tool); }
     .card.tool.error { border-left-color: var(--error); background: var(--notice-error-bg); }
+    /* MBTX has a real compile boundary. Compiler diagnostics use the warning
+       palette; failures after the program starts keep the runtime/error palette. */
+    .card.tool.error.mbtx-compile-error {
+      border-left-color: var(--tool);
+      background: var(--notice-warn-bg);
+    }
+    .card.tool.error.mbtx-runtime-error {
+      border-left-color: var(--error);
+      background: var(--notice-error-bg);
+    }
     .card.runtime { border-left-color: var(--runtime); }
     /* plan checklists — shared by `plan` tool calls and plan-cadence reminders:
        icon + numbered title rows, statuses as classes, delta chips for what
@@ -639,6 +649,43 @@
     .tool-flag {
       color: var(--error); font-weight: 700; margin-right: 8px;
       text-transform: none; letter-spacing: 0;
+    }
+    .mbtx-phase-badge {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 1px 7px;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .4px;
+      text-transform: uppercase;
+    }
+    .mbtx-phase-badge.compile-time {
+      color: var(--tool);
+      background: var(--notice-warn-bg);
+    }
+    .mbtx-phase-badge.runtime {
+      color: var(--error);
+      background: var(--notice-error-bg);
+    }
+    .mbtx-output-label {
+      margin: 2px 0 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .6px;
+      text-transform: uppercase;
+    }
+    .content.mbtx-compiler-diagnostics {
+      padding-left: 10px;
+      border-left: 3px solid var(--tool);
+      background: var(--notice-warn-bg);
+    }
+    .content.mbtx-runtime-output {
+      padding-left: 10px;
+      border-left: 3px solid var(--error);
+      background: var(--notice-error-bg);
     }
 
     /* badges */

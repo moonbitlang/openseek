@@ -10,15 +10,23 @@ wasm backend (planned) makes it the natural sandboxed automation surface.
 ## How it works
 
 The `source` is a `.mbtx` **single-file script** — MoonBit's own one-file
-program format. The tool does nothing clever: it writes `source` to a throwaway
-temp file and runs `moon run <file>.mbtx --target <target> --target-dir <temp>`
-**with your workspace as the working directory**, returns what moon prints,
-removes the temp dir, and enforces a 60s bound. Because the working directory is
-the workspace, relative paths like `@fs.read_file("data.json")` reach workspace
-files and anything the program writes lands in the workspace — while all build
-artifacts stay in the temp dir, so your `_build` is never touched. moon's
-single-file runner handles the inline import block; moon's own compiler
-diagnostics are the error message when something does not build.
+program format. The tool writes `source` to a throwaway temp file and runs one
+`moon run <file>.mbtx --output-json`. Moon's structured compiler diagnostics
+are separated from ordinary program output: an error diagnostic is reported as
+a **compile-time error** with an explicit “program was not run” status, while a
+non-zero exit without one is a **runtime error**. The desktop transcript labels
+and styles the two failures separately. An explicit background launch is the
+exception: it uses `--build-only` first so invalid source is rejected before a
+job id is returned.
+
+The command uses `--target <target> --target-dir <temp>` **with your workspace
+as the working directory**. The tool returns what moon prints, removes the temp
+dir, and bounds execution. Because the working directory is the workspace,
+relative paths like `@fs.read_file("data.json")` reach workspace files and
+anything the program writes lands in the workspace — while all build artifacts
+stay in the temp dir, so your `_build` is never touched. Moon's single-file
+runner handles the inline import block, and requested compiler warnings are
+kept separate from the program's own output.
 
 ## Arguments
 

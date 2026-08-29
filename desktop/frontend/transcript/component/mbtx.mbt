@@ -11,9 +11,9 @@
 // only what it can state plainly — an argument it cannot chip (a nested value,
 // which this tool's schema has none of) is left to the original.
 //
-// Unlike the `plan` card this is not gated on the result: a snippet that
-// compiled and then failed is exactly when its source matters, and for this
-// tool `is_error` means the run failed, not that the arguments were refused.
+// Unlike the `plan` card this is not gated on the result: source matters most
+// when compilation or execution failed, and for this tool `is_error` normally
+// describes that program lifecycle rather than refused arguments.
 
 ///|
 /// A recorded `mbtx` call, decoded for display.
@@ -22,6 +22,74 @@ priv struct MbtxCall {
   source : String
   /// The call's other scalar arguments, as `key: value` chip text.
   chips : Array[String]
+}
+
+///|
+/// The display treatment for a phase-aware MBTX failure. The tool's `brief`
+/// is display-only metadata persisted with the result, so it is the stable
+/// place to carry this distinction without scraping compiler prose or a panic
+/// stack. Legacy background-build briefs are recognized too, so an existing
+/// transcript gets the compile-time treatment after an app upgrade.
+priv struct MbtxResultPresentation {
+  summary : String
+  output_label : String
+  phase_label : String
+  phase_class : String
+  output_class : String
+}
+
+///|
+/// Read the phase-aware MBTX result briefs introduced by structured compiler
+/// diagnostics. `None` deliberately preserves the generic treatment for older
+/// foreground `mbtx (exit=N)` results: those records never established which
+/// phase failed, and the UI must not guess.
+fn mbtx_result_presentation(brief : String?) -> MbtxResultPresentation? {
+  guard brief is Some(brief) else { return None }
+  if brief is ("mbtx (compile error)" | "mbtx (build failed)") {
+    return Some({
+      summary: "Compile-time error · mbtx",
+      output_label: "Compiler diagnostics",
+      phase_label: "compile time",
+      phase_class: "compile-time",
+      output_class: "mbtx-compiler-diagnostics",
+    })
+  }
+  if brief is ("mbtx (compile timeout)" | "mbtx (build timeout)") {
+    return Some({
+      summary: "Compilation timed out · mbtx",
+      output_label: "Compiler diagnostics",
+      phase_label: "compile time",
+      phase_class: "compile-time",
+      output_class: "mbtx-compiler-diagnostics",
+    })
+  }
+  let runtime_summary = if brief.has_prefix("mbtx (runtime error,") {
+    Some("Runtime error · mbtx")
+  } else {
+    match brief {
+      "mbtx (runtime timeout)" => Some("Runtime timed out · mbtx")
+      "mbtx (runtime output limit)" => Some("Runtime stopped · mbtx")
+      "mbtx (runtime sandbox denied)" => Some("Runtime blocked · mbtx")
+      _ => None
+    }
+  }
+  runtime_summary.map(summary => {
+    summary,
+    output_label: "Runtime output",
+    phase_label: "runtime",
+    phase_class: "runtime",
+    output_class: "mbtx-runtime-output",
+  })
+}
+
+///|
+/// The literal phase badge shown beside a failed MBTX result. Its text carries
+/// the distinction without depending on the compile/runtime colors.
+fn mbtx_phase_badge(presentation : MbtxResultPresentation) -> @html.Html {
+  @html.span(
+    class="mbtx-phase-badge \{presentation.phase_class}",
+    presentation.phase_label,
+  )
 }
 
 ///|

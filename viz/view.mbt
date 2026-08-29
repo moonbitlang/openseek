@@ -1127,6 +1127,83 @@ fn is_blank_args(args : String) -> Bool {
 }
 
 ///|
+/// The phase-aware treatment for a failed MBTX result. The brief is durable,
+/// tool-owned display metadata, so it can carry the compile/runtime boundary
+/// without guessing from compiler prose or panic output. Older background
+/// build briefs are recognized as compile-time failures too.
+priv struct MbtxResultPresentation {
+  summary : String
+  output_label : String
+  phase_label : String
+  phase_class : String
+  card_class : String
+  output_class : String
+}
+
+///|
+/// Read the MBTX lifecycle phase from a result that explicitly recorded it.
+/// Legacy foreground `mbtx (exit=N)` briefs deliberately remain generic: they
+/// did not establish whether compilation completed, so the viewer must not
+/// invent a phase after the fact.
+fn mbtx_result_presentation(
+  result : @agent_session.ToolResult?,
+) -> MbtxResultPresentation? {
+  guard result is Some(result) &&
+    result.tool_name() == "mbtx" &&
+    result.brief() is Some(brief) else {
+    return None
+  }
+  if brief is ("mbtx (compile error)" | "mbtx (build failed)") {
+    return Some({
+      summary: "Compile-time error · mbtx",
+      output_label: "Compiler diagnostics",
+      phase_label: "compile time",
+      phase_class: "compile-time",
+      card_class: "mbtx-compile-error",
+      output_class: "mbtx-compiler-diagnostics",
+    })
+  }
+  if brief is ("mbtx (compile timeout)" | "mbtx (build timeout)") {
+    return Some({
+      summary: "Compilation timed out · mbtx",
+      output_label: "Compiler diagnostics",
+      phase_label: "compile time",
+      phase_class: "compile-time",
+      card_class: "mbtx-compile-error",
+      output_class: "mbtx-compiler-diagnostics",
+    })
+  }
+  let runtime_summary = if brief.has_prefix("mbtx (runtime error,") {
+    Some("Runtime error · mbtx")
+  } else {
+    match brief {
+      "mbtx (runtime timeout)" => Some("Runtime timed out · mbtx")
+      "mbtx (runtime output limit)" => Some("Runtime stopped · mbtx")
+      "mbtx (runtime sandbox denied)" => Some("Runtime blocked · mbtx")
+      _ => None
+    }
+  }
+  runtime_summary.map(summary => {
+    summary,
+    output_label: "Runtime output",
+    phase_label: "runtime",
+    phase_class: "runtime",
+    card_class: "mbtx-runtime-error",
+    output_class: "mbtx-runtime-output",
+  })
+}
+
+///|
+/// Literal phase text for a failed MBTX result. Color reinforces the phase,
+/// but the distinction remains readable without it.
+fn mbtx_phase_badge(presentation : MbtxResultPresentation) -> @html.Html {
+  @html.span(
+    class="mbtx-phase-badge \{presentation.phase_class}",
+    presentation.phase_label,
+  )
+}
+
+///|
 /// Tool output is noisy, so fold it behind the label by default. The summary
 /// keeps the tool name and, on failure, a red flag — both visible while the card
 /// is collapsed — so a failed tool stands out without expanding it.
@@ -1140,16 +1217,25 @@ fn tool_card(
 ) -> @html.Html {
   let is_error = result.is_error()
   let is_escalated = escalated.contains(result.tool_call_id())
-  let kind = match (is_error, is_escalated) {
+  let base_kind = match (is_error, is_escalated) {
     (false, false) => "tool"
     (true, false) => "tool error"
     (false, true) => "tool escalated"
     (true, true) => "tool error escalated"
   }
-  let label = if is_error {
-    "Tool error · \{result.tool_name()}"
-  } else {
-    "Tool result · \{result.tool_name()}"
+  let presentation = mbtx_result_presentation(Some(result))
+  let kind = match presentation {
+    Some(presentation) => "\{base_kind} \{presentation.card_class}"
+    None => base_kind
+  }
+  let label = match presentation {
+    Some(presentation) => presentation.summary
+    None =>
+      if is_error {
+        "Tool error · \{result.tool_name()}"
+      } else {
+        "Tool result · \{result.tool_name()}"
+      }
   }
   let flag = failed_flag(is_error)
   // Pair this result back to the call that produced it (same `call N` tag).
@@ -1163,6 +1249,9 @@ fn tool_card(
     None => seq_anchor(seq)
   }
   let summary = card_head(label, seq, time~, flag~, link~)
+  if presentation is Some(presentation) {
+    summary.push(mbtx_phase_badge(presentation))
+  }
   let body : Array[@html.Html] = [
     tool_result_content(Some(result), result.content()),
   ]
@@ -1962,16 +2051,25 @@ fn model_tool_card(
     Tool(id) => escalated.contains(id)
     _ => false
   }
-  let kind = match (is_error, is_escalated) {
+  let base_kind = match (is_error, is_escalated) {
     (false, false) => "tool"
     (true, false) => "tool error"
     (false, true) => "tool escalated"
     (true, true) => "tool error escalated"
   }
-  let label = match (is_error, name.is_empty()) {
-    (_, true) => "Tool result"
-    (true, false) => "Tool error · \{name}"
-    (false, false) => "Tool result · \{name}"
+  let presentation = mbtx_result_presentation(shown)
+  let kind = match presentation {
+    Some(presentation) => "\{base_kind} \{presentation.card_class}"
+    None => base_kind
+  }
+  let label = match presentation {
+    Some(presentation) => presentation.summary
+    None =>
+      match (is_error, name.is_empty()) {
+        (_, true) => "Tool result"
+        (true, false) => "Tool error · \{name}"
+        (false, false) => "Tool result · \{name}"
+      }
   }
   // The pair tag comes from the message's own id (structural), independent of
   // whether `model_shown_result` trusts the durable result for enrichment.
@@ -1987,6 +2085,9 @@ fn model_tool_card(
     None => anchor
   }
   let summary = model_card_head(label, time~, flag=failed_flag(is_error), link~)
+  if presentation is Some(presentation) {
+    summary.push(mbtx_phase_badge(presentation))
+  }
   // Chip only, no nested transcript: the model view shows what the model
   // was fed, and the child's transcript never was.
   if shown is Some(result) &&
@@ -2122,7 +2223,17 @@ fn tool_result_content(
   result : @agent_session.ToolResult?,
   content : String,
 ) -> @html.Html {
-  if result is Some(result) &&
+  if mbtx_result_presentation(result) is Some(presentation) {
+    let output = if content.is_blank() {
+      @html.span(class="empty") <| "(empty)"
+    } else {
+      @html.pre(class="content \{presentation.output_class}") <| content
+    }
+    @html.div(class="mbtx-result-output") <| [
+      @html.div(class="mbtx-output-label") <| presentation.output_label,
+      output,
+    ]
+  } else if result is Some(result) &&
     result.tool_name() == "read" &&
     result.brief() is Some(brief) &&
     @read_html.moonbit_output_for_brief(brief, content) is Some(rendered) {

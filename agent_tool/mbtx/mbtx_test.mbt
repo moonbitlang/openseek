@@ -31,9 +31,33 @@ async test "runs a pure-core program and returns its output" {
 async test "surfaces a compile error via moon's own diagnostics" {
   let out = run("fn main { let _x : Int = \"nope\" }")
   assert_true(out.is_error)
+  assert_eq(out.brief, Some("mbtx (compile error)"))
+  assert_true(out.content.contains("compile-time error"))
+  assert_true(out.content.contains("program was not run"))
+  // Classification uses JSON internally, but the model still gets readable
+  // source diagnostics rather than moon's wire representation.
+  assert_false(out.content.contains("\"$message_type\""))
   assert_true(
     out.content.to_lower().contains("type") || out.content.contains("String"),
   )
+}
+
+///|
+/// Some failures happen in moon's `.mbtx` package discovery before moonc can
+/// emit a structured diagnostic. The absent runnable artifact still proves the
+/// program never started, so these must not fall through to the runtime badge.
+async test "a package-discovery failure remains a compile-time error" {
+  let out = run(
+    (
+      #|import { "moonbitlang/core/definitely_not_a_package" }
+      #|
+      #|fn main {  }
+    ),
+  )
+  assert_true(out.is_error)
+  assert_eq(out.brief, Some("mbtx (compile error)"))
+  assert_true(out.content.contains("program was not run"))
+  assert_true(out.content.contains("could not be resolved"))
 }
 
 ///|
@@ -651,6 +675,7 @@ async test "warnings are suppressed by default and shown with warning=on" {
     assert_false(loud.is_error)
     assert_true(loud.content.contains("Warning"))
     assert_true(loud.content.contains("Unused variable"))
+    assert_false(loud.content.contains("\"$message_type\""))
     // warning diagnostics get the same source:LINE:COL rewrite as errors
     assert_true(loud.content.contains("source:"))
   })
@@ -883,7 +908,49 @@ async test "a non-zero exit shows the exit code in the content, not just the bri
   let out = run("fn main { println(\"before\"); panic() }")
   assert_true(out.is_error)
   assert_true(out.content.contains("before"))
-  assert_true(out.content.contains("exited"))
+  assert_true(out.content.contains("runtime error"))
+  assert_true(out.content.contains("exit code"))
+  guard out.brief is Some(brief) else { fail("expected a runtime brief") }
+  assert_true(brief.has_prefix("mbtx (runtime error,"))
+}
+
+///|
+/// `--output-json` shares stdout with the program. Classification therefore
+/// accepts only diagnostic records naming this call's unpredictable private
+/// directory; compiler-looking JSON printed by user code remains runtime
+/// output and cannot claim the program was never started.
+async test "compiler-looking program output remains a runtime error" {
+  let out = run(
+    (
+      #|fn main {
+      #|  println("{\"$message_type\":\"diagnostic\",\"level\":\"error\",\"error_code\":4014,\"path\":\"source\",\"loc\":\"1:1-1:2\",\"message\":\"fake compiler error\"}")
+      #|  panic()
+      #|}
+    ),
+  )
+  assert_true(out.is_error)
+  guard out.brief is Some(brief) else { fail("expected a runtime brief") }
+  assert_true(brief.has_prefix("mbtx (runtime error,"))
+  assert_true(out.content.contains("fake compiler error"))
+  assert_false(out.content.contains("program was not run"))
+}
+
+///|
+/// Moon itself also uses 255 for some pre-runtime failures, so status codes
+/// cannot classify the phase. A built artifact proves this 255 came from the
+/// program and keeps the result on the runtime path.
+async test "a program exit 255 remains a runtime error" {
+  let out = run(
+    (
+      #|import { "moonbitlang/x/sys" }
+      #|
+      #|fn main { @sys.exit(255) }
+    ),
+  )
+  assert_true(out.is_error)
+  guard out.brief is Some(brief) else { fail("expected a runtime brief") }
+  assert_true(brief.has_prefix("mbtx (runtime error,"))
+  assert_true(out.content.contains("runtime exited 255"))
 }
 
 ///|

@@ -392,12 +392,21 @@ fn tool_result_view(
     is Tool(call_id~, name~, arguments~, has_result~, is_error~, brief~) else {
     return @html.nothing
   }
-  let label = match (arguments, brief, has_result) {
-    (None, Some(brief), _) if !brief.is_blank() => capitalize(brief)
-    (None, _, _) => capitalize(name)
-    (_, _, false) => "Tool output · \{name}"
-    _ if is_error => "Tool error · \{name}"
-    _ => "Tool result · \{name}"
+  let mbtx_presentation = if name == "mbtx" {
+    mbtx_result_presentation(brief)
+  } else {
+    None
+  }
+  let label = match mbtx_presentation {
+    Some(presentation) => presentation.summary
+    None =>
+      match (arguments, brief, has_result) {
+        (None, Some(brief), _) if !brief.is_blank() => capitalize(brief)
+        (None, _, _) => capitalize(name)
+        (_, _, false) => "Tool output · \{name}"
+        _ if is_error => "Tool error · \{name}"
+        _ => "Tool result · \{name}"
+      }
   }
   let error_class = if is_error { " error" } else { "" }
   let pending_class = if has_result { "" } else { " pending" }
@@ -405,6 +414,9 @@ fn tool_result_view(
     @html.span(class="tool-flow", "←"),
     @html.span(class="tool-result-text", capitalize(label)),
   ]
+  if mbtx_presentation is Some(presentation) {
+    line.push(mbtx_phase_badge(presentation))
+  }
   if is_error {
     line.push(@html.span(class="tool-call-failed", "failed"))
   }
@@ -423,7 +435,7 @@ fn tool_result_view(
   }
   if !item.content.is_blank() {
     let key = tool_call_tabs_key(call_id, item.sequence)
-    let output = tool_output_tabs(name, arguments, item.content)
+    let output = tool_output_tabs(name, arguments, brief, item.content)
     if output is [tab] {
       body.push(
         @html.div(class="tool-call-section", [

@@ -119,12 +119,25 @@ fn tool_arguments_tabbed_view(
 fn tool_output_tabs(
   name : String,
   arguments : String?,
+  brief : String?,
   output : String,
 ) -> Array[ToolCallTab] {
   if output.is_blank() {
     return []
   }
   match (name, arguments) {
+    ("mbtx", _) => {
+      let presentation = mbtx_result_presentation(brief)
+      let label = match presentation {
+        Some(presentation) => presentation.output_label
+        None => "Output"
+      }
+      let output_class = match presentation {
+        Some(presentation) => "tool-call-output \{presentation.output_class}"
+        None => "tool-call-output"
+      }
+      [{ label, body: @html.pre(class=output_class, truncate_output(output)), }]
+    }
     ("read", Some(arguments)) =>
       match @read_html.moonbit_output(arguments, output) {
         Some(rendered) =>

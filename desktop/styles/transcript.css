@@ -920,6 +920,30 @@
   font-size: var(--font-size-xs);
 }
 
+/* MBTX crosses a real compile boundary before the program starts. Keep that
+   phase visible as text beside a failed result: color reinforces the split,
+   but never carries it alone. Compile-time failures use the diagnostic gold;
+   failures after `main` starts retain the runtime danger treatment. */
+.mbtx-phase-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+.mbtx-phase-badge.compile-time {
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 9%, transparent);
+}
+.mbtx-phase-badge.runtime {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
 /* Arguments and output grow the page instead of scrolling in place: the
    transcript stays the only scroll area, so the wheel is never trapped by a
    nested scrollbar. Long result dumps are clamped in the renderer. */
@@ -975,6 +999,20 @@
 }
 .tool-result.error .tool-call-output {
   background: var(--color-danger-soft);
+}
+/* Compiler diagnostics are not program output. Their gold edge and softer
+   diagnostic wash match the compile-time badge, while runtime output keeps
+   the danger wash and a red edge. */
+.tool-result.error .tool-call-output.mbtx-compiler-diagnostics {
+  border-left: 3px solid var(--color-warning);
+  background: color-mix(
+    in srgb,
+    var(--color-warning) 9%,
+    var(--color-bg-subtle)
+  );
+}
+.tool-result.error .tool-call-output.mbtx-runtime-output {
+  border-left: 3px solid var(--color-danger);
 }
 
 /* Alternate views of one request or one result share a compact radio-backed

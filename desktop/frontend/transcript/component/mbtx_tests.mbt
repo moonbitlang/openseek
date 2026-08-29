@@ -104,9 +104,9 @@ test "a failed mbtx row still reads as a program, not escaped JSON" {
       // source matters — the card is not gated on the result the way `plan`'s
       // is, where an error means the arguments were refused.
       is_error=true,
-      brief=Some("mbtx (exit=1)"),
+      brief=Some("mbtx (runtime error, exit=1)"),
     ),
-    content: "boom",
+    content: "[mbtx: runtime error; exit code 1]\nboom",
     ts: None,
     sequence: None,
   })
@@ -135,8 +135,44 @@ test "a failed mbtx row still reads as a program, not escaped JSON" {
   assert_true(markup.contains("\\n"))
   // The run's own output stays present in the result row.
   assert_true(markup.contains("boom"))
-  assert_true(markup.contains("tool-call-section-label\">Output"))
+  assert_true(markup.contains("Runtime error · mbtx"))
+  assert_true(markup.contains("mbtx-phase-badge runtime"))
+  assert_true(markup.contains(">runtime</span>"))
+  assert_true(markup.contains("tool-call-section-label\">Runtime output"))
+  assert_true(markup.contains("mbtx-runtime-output"))
   assert_true(markup.contains("class=\"tool-result error\""))
+}
+
+///|
+/// A compile failure gets its own phase, label, and diagnostics treatment; it
+/// must never be dressed as output from a program that did not start.
+#warnings("-alert_unstable")
+test "an mbtx compile error is visualized as compiler diagnostics" {
+  let arguments =
+    #|{"source":"fn main {\n  let x : Int = \"nope\"\n}"}
+  let rendered = tool_call_view({
+    kind: Tool(
+      call_id="c-compile",
+      name="mbtx",
+      arguments=Some(arguments),
+      has_result=true,
+      is_error=true,
+      brief=Some("mbtx (compile error)"),
+    ),
+    content: (
+      #|[mbtx: compile-time error; compiler exit code 1; program was not run]
+      #|source:2:17: Type mismatch
+    ),
+    ts: None,
+    sequence: None,
+  })
+  let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
+  assert_true(markup.contains("Compile-time error · mbtx"))
+  assert_true(markup.contains("mbtx-phase-badge compile-time"))
+  assert_true(markup.contains(">compile time</span>"))
+  assert_true(markup.contains("tool-call-section-label\">Compiler diagnostics"))
+  assert_true(markup.contains("mbtx-compiler-diagnostics"))
+  assert_false(markup.contains("tool-call-section-label\">Runtime output"))
 }
 
 ///|

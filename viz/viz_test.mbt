@@ -130,6 +130,42 @@ fn error_tool_session() -> @agent_session.Session {
 }
 
 ///|
+/// One failed MBTX call/result pair whose brief records the lifecycle phase.
+/// Keeping the call makes the same fixture valid for both the raw log and the
+/// model projection, which correlates the projected tool message back to its
+/// durable result for display metadata.
+fn mbtx_error_session(
+  brief : String,
+  content : String,
+) -> @agent_session.Session {
+  @agent_session.Session(SessionId("mbtx-error"), system_prompt="")
+  .append(
+    Assistant(
+      AssistantMessage("", tool_calls=[
+        ToolCall(
+          id="mbtx-1",
+          name="mbtx",
+          arguments=(
+            #|{"source":"fn main { abort(\"boom\") }","target":"js"}
+          ),
+        ),
+      ]),
+    ),
+  )
+  .append(
+    Tool(
+      ToolResult(
+        tool_call_id="mbtx-1",
+        tool_name="mbtx",
+        content~,
+        is_error=true,
+        brief~,
+      ),
+    ),
+  )
+}
+
+///|
 fn multi_step_session() -> @agent_session.Session {
   @agent_session.Session(SessionId("steps"), system_prompt="system")
   .append(User(UserMessage("start")))
@@ -499,6 +535,53 @@ test "model view recovers the error flag the projection drops" {
   )
   assert_true(model.contains("class=\"tool-flag\">🚩 failed"))
   assert_true(model.contains("Tool error · shell"))
+}
+
+///|
+test "mbtx compile errors render as compiler diagnostics in both views" {
+  let session = mbtx_error_session(
+    "mbtx (compile error)",
+    (
+      #|[mbtx: compile-time error; compiler exit code 1; program was not run]
+      #|source:1:11: Unknown identifier: abort
+    ),
+  )
+  for mode in [@viz.RawLog, ModelView] {
+    let html = render(@viz.render_session(session, mode))
+    assert_true(html.contains("card tool error mbtx-compile-error"))
+    assert_true(html.contains("Compile-time error · mbtx"))
+    assert_true(html.contains("mbtx-phase-badge compile-time"))
+    assert_true(html.contains(">compile time</span>"))
+    assert_true(html.contains("mbtx-output-label\">Compiler diagnostics"))
+    assert_true(html.contains("content mbtx-compiler-diagnostics"))
+    assert_false(html.contains("mbtx-output-label\">Runtime output"))
+  }
+}
+
+///|
+test "mbtx runtime errors render as runtime output in both views" {
+  let session = mbtx_error_session(
+    "mbtx (runtime error, exit=1)", "[mbtx: runtime error; exit code 1]\nboom",
+  )
+  for mode in [@viz.RawLog, ModelView] {
+    let html = render(@viz.render_session(session, mode))
+    assert_true(html.contains("card tool error mbtx-runtime-error"))
+    assert_true(html.contains("Runtime error · mbtx"))
+    assert_true(html.contains("mbtx-phase-badge runtime"))
+    assert_true(html.contains(">runtime</span>"))
+    assert_true(html.contains("mbtx-output-label\">Runtime output"))
+    assert_true(html.contains("content mbtx-runtime-output"))
+    assert_false(html.contains("mbtx-output-label\">Compiler diagnostics"))
+  }
+}
+
+///|
+test "legacy mbtx exit briefs stay generic instead of guessing a phase" {
+  let session = mbtx_error_session("mbtx (exit=1)", "old result")
+  let html = render(@viz.render_session(session, RawLog))
+  assert_true(html.contains("Tool error · mbtx"))
+  assert_false(html.contains("mbtx-phase-badge"))
+  assert_false(html.contains("mbtx-output-label"))
 }
 
 ///|

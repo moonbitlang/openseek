@@ -45,6 +45,14 @@ fn native_escape(source : String) -> String? {
 /// Tool definition for `mbtx`: compile and run a self-contained MoonBit
 /// program and return its merged stdout/stderr and exit status.
 ///
+/// Foreground execution asks moon for JSON diagnostics and separates those
+/// compiler records from the program's ordinary output after one `moon run`.
+/// That gives compile-time and runtime failures distinct output headers and
+/// display briefs without compiling a successful snippet twice. An explicit
+/// background launch still builds first: it must reject invalid source before
+/// returning a job id, when there is not yet a completed output stream to
+/// classify.
+///
 /// The program is a `.mbtx` single-file script — it may open with an inline
 /// `import { "pkg", … }` block (comma-separated module paths) naming the
 /// standard packages it uses, followed by the program including its own
@@ -167,6 +175,350 @@ fn escalation_brief(outcome : @agent_runtime.ApprovalOutcome) -> String {
     Cancelled => "withdrawn"
     Unavailable => "unavailable"
   }
+}
+
+///|
+/// The explicit background compiler preflight's outcome. A successful build
+/// retains any compiler output (normally only requested warnings) so the job
+/// launch response can keep it separate from later program output.
+priv enum CompileOutcome {
+  Compiled(String)
+  CompileFailed(exit_code~ : Int, String)
+  CompileTimedOut(String)
+}
+
+///|
+/// Remove `moon run --build-only`'s success protocol from the compiler stream.
+/// It prints a one-line JSON object containing `artifacts_path`; that is an
+/// internal temp artifact location, not a warning or diagnostic. Everything
+/// else remains verbatim, including requested compiler warnings.
+fn visible_compiler_output(output : String) -> String {
+  let lines : Array[String] = []
+  for line in output.split("\n") {
+    let is_artifact_manifest = try @json.parse(line.trim()) catch {
+      _ => false
+    } noraise {
+      { "artifacts_path": Array(_), .. } => true
+      _ => false
+    }
+    if !is_artifact_manifest {
+      lines.push(line.to_owned())
+    }
+  }
+  lines.join("\n")
+}
+
+///|
+/// The compiler records and program output recovered from one
+/// `moon run --output-json`. `has_error_diagnostic` is set only by an error
+/// diagnostic that names this call's private build directory. Matching that
+/// unpredictable path matters: a program remains free to print JSON (including
+/// something that resembles a moon diagnostic) without turning its own
+/// non-zero exit into a compile-time failure.
+priv struct ParsedRunOutput {
+  compiler_output : String
+  program_output : String
+  has_error_diagnostic : Bool
+}
+
+///|
+/// Whether a structured diagnostic belongs to this snippet rather than being
+/// arbitrary JSON printed by the program. `bases` contains both the lexical
+/// and canonical spelling of the private directory for symlinked temp roots.
+fn is_snippet_diagnostic_path(path : String, bases : Array[String]) -> Bool {
+  for base in bases {
+    for sep in ["/", "\\"] {
+      if path.has_prefix("\{base}\{sep}") {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
+/// Whether this fresh target directory contains the runnable artifact moon
+/// produces only after compilation/linking succeeds. This closes the one gap
+/// in `--output-json`: front-matter/package-discovery failures and compiler
+/// crashes can exit without a diagnostic record. Conversely, a program may
+/// deliberately exit with any code (including moon's own 1 or 255), but its
+/// artifact proves execution made it past compilation.
+async fn compiled_artifact_exists(dir : String, target : String) -> Bool {
+  let stem = "\{dir}/\{target}/debug/build/single/single"
+  let candidates = match target {
+    "js" => ["\{stem}.js"]
+    "wasm" | "wasm-gc" => ["\{stem}.wasm"]
+    // LLVM's executable suffix is platform-dependent.
+    "llvm" => [stem, "\{stem}.exe"]
+    _ => []
+  }
+  for candidate in candidates {
+    if @fs.exists(candidate) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Render one JSON diagnostic back into compact human-readable compiler
+/// output. The structured protocol is for classification; users should still
+/// see a source location, message, and the compiler's context excerpt rather
+/// than a serialized object.
+fn render_run_diagnostic(
+  path : String,
+  loc : String,
+  message : String,
+  context : String,
+  diagnostic_bases : Array[String],
+) -> String {
+  let source_path = rewrite_temp_paths(path, diagnostic_bases)
+  let where_ = if source_path.is_blank() && (loc.is_blank() || loc == "0:0-0:0") {
+    ""
+  } else if source_path.is_blank() {
+    loc
+  } else if loc.is_blank() {
+    source_path
+  } else {
+    "\{source_path}:\{loc}"
+  }
+  let summary = if where_.is_blank() {
+    message
+  } else if message.is_blank() {
+    where_
+  } else {
+    "\{where_}: \{message}"
+  }
+  if context.is_blank() {
+    summary
+  } else {
+    "\{summary}\n\{context.trim_end()}"
+  }
+}
+
+///|
+/// Split moon's JSON-lines compiler protocol out of a completed foreground
+/// run. Lines not recognized as diagnostics for this private snippet remain
+/// byte-for-byte program/runner output (modulo the existing line join), so the
+/// parser fails toward runtime rather than claiming code never ran.
+fn parse_run_output(
+  output : String,
+  diagnostic_bases : Array[String],
+) -> ParsedRunOutput {
+  let compiler_lines : Array[String] = []
+  let program_lines : Array[String] = []
+  let mut has_error_diagnostic = false
+  for raw in output.split("\n") {
+    let diagnostic = if raw.contains("\"$message_type\"") &&
+      raw.contains("\"level\"") {
+      @json.parse(raw.to_owned()) catch {
+        _ => Json::null()
+      }
+    } else {
+      Json::null()
+    }
+    match diagnostic {
+      {
+        "$message_type": String("diagnostic"),
+        "level": String(level),
+        "error_code": Number(_, ..),
+        "path": String(path),
+        "loc"? : Some(String(loc))
+        | (_ with loc = ""),
+        "message"? : Some(String(message))
+        | (_ with message = ""),
+        "context"? : Some(String(context))
+        | (_ with context = ""),
+        ..
+      } if is_snippet_diagnostic_path(path, diagnostic_bases) ||
+        (path.is_blank() && level == "warning") => {
+        compiler_lines.push(
+          render_run_diagnostic(path, loc, message, context, diagnostic_bases),
+        )
+        if level == "error" {
+          has_error_diagnostic = true
+        }
+      }
+      _ => program_lines.push(raw.to_owned())
+    }
+  }
+  {
+    compiler_output: compiler_lines.join("\n"),
+    program_output: program_lines.join("\n"),
+    has_error_diagnostic,
+  }
+}
+
+///|
+/// Compile a background snippet without starting it. Foreground calls can
+/// classify a completed structured diagnostic stream, but a detached call has
+/// to decide whether it may return a job id before that stream exists.
+async fn compile_snippet(
+  program : String,
+  argv : Array[String],
+  cwd : String,
+  empty_stdin : String,
+  build_log : String,
+  diagnostic_bases : Array[String],
+  timeout_ms : Int,
+) -> CompileOutcome {
+  @fs.write_file(build_log, "", create_mode=CreateOrTruncate)
+  let build_argv = [..argv]
+  build_argv.push("--build-only")
+  let result = @async.with_timeout_opt(timeout_ms, () => {
+    @process.run(
+      program,
+      build_argv,
+      cwd~,
+      inherit_env=true,
+      stdin=@process.redirect_from_file(empty_stdin),
+      stdout=@process.redirect_to_file(build_log, append=true),
+      stderr=@process.redirect_to_file(build_log, append=true),
+      no_console_window=true,
+    )
+  })
+  let output = visible_compiler_output(
+    rewrite_temp_paths(read_capped(build_log), diagnostic_bases),
+  )
+  match result {
+    Some(0) => Compiled(output)
+    Some(exit_code) => CompileFailed(exit_code~, output)
+    None => CompileTimedOut(output)
+  }
+}
+
+///|
+/// A display-ready report for the part of MBTX after compilation succeeded.
+priv struct RuntimeReport {
+  content : String
+  is_error : Bool
+  brief : String
+}
+
+///|
+/// Format the structured compile-failure branch shared by retained and direct
+/// foreground execution. Any non-diagnostic moon output belongs here too:
+/// once an error diagnostic exists the compiler did not start the program.
+fn compile_failure_report(
+  parsed : ParsedRunOutput,
+  exit_code : Int,
+  diagnostic_bases : Array[String],
+) -> RuntimeReport {
+  let output = if parsed.program_output.is_blank() {
+    parsed.compiler_output
+  } else if parsed.compiler_output.is_blank() {
+    rewrite_temp_paths(parsed.program_output, diagnostic_bases)
+  } else {
+    "\{parsed.compiler_output}\n\{rewrite_temp_paths(parsed.program_output, diagnostic_bases)}"
+  }
+  let head = "[mbtx: compile-time error; compiler exit code \{exit_code}; program was not run]"
+  {
+    content: if output.is_blank() {
+      head
+    } else {
+      "\{head}\n\{output}"
+    },
+    is_error: true,
+    brief: "mbtx (compile error)",
+  }
+}
+
+///|
+/// Keep requested compiler warnings visibly separate from the program's own
+/// stdout/stderr. Most calls have no compiler output and retain their compact
+/// historical result unchanged.
+fn phase_output(compiler_output : String, runtime_output : String) -> String {
+  if compiler_output.is_blank() {
+    runtime_output
+  } else if runtime_output.is_blank() {
+    "[mbtx: compiler output]\n\{compiler_output}"
+  } else {
+    "[mbtx: compiler output]\n\{compiler_output}\n[mbtx: runtime output]\n\{runtime_output}"
+  }
+}
+
+///|
+/// Format a completed runtime attempt. The status header and display brief
+/// both name the runtime phase, so neither the model nor the transcript has to
+/// infer it from a panic stack or compiler-like text printed by the program.
+fn runtime_report(
+  compiler_output : String,
+  runtime_output : String,
+  exit_code : Int,
+  output_limit_reached? : Bool = false,
+  saw_binary? : Bool = false,
+  sandbox_denied? : String,
+) -> RuntimeReport {
+  let output = phase_output(compiler_output, runtime_output)
+  let is_error = exit_code != 0 ||
+    sandbox_denied is Some(_) ||
+    output_limit_reached
+  let (initial_content, brief) = if output_limit_reached {
+    let head = "[mbtx: runtime stopped after exceeding the output limit; observed exit \{exit_code}]"
+    let content = if output.is_blank() { head } else { "\{head}\n\{output}" }
+    (
+      "\{content}\n[mbtx: output passed \{OutputCapBytes} bytes, so the program was STOPPED and this is only what it printed first. Redirect bulky output with `stdout=ToFile(path)` and read the file instead.]",
+      "mbtx (runtime output limit)",
+    )
+  } else if sandbox_denied is Some(_) {
+    let head = "[mbtx: runtime error; sandbox access was denied]"
+    (
+      if output.is_blank() {
+        head
+      } else {
+        "\{head}\n\{output}"
+      },
+      "mbtx (runtime sandbox denied)",
+    )
+  } else if exit_code != 0 {
+    (
+      if output.is_blank() {
+        "mbtx: runtime exited \{exit_code} with no output"
+      } else {
+        "[mbtx: runtime error; exit code \{exit_code}]\n\{output}"
+      },
+      "mbtx (runtime error, exit=\{exit_code})",
+    )
+  } else {
+    (
+      if output.is_blank() {
+        "mbtx: runtime exited 0 with no output"
+      } else {
+        output
+      },
+      "mbtx (exit=0)",
+    )
+  }
+  let mut content = initial_content
+  if saw_binary {
+    content = "\{content}\n[mbtx: the program emitted non-UTF-8 bytes; the text above is a lossy rendering.]"
+  }
+  if sandbox_denied is Some(guidance) {
+    content = "\{content}\n\n\{guidance}"
+  }
+  { content, is_error, brief, }
+}
+
+///|
+/// Format a single `moon run` that did not reach a phase-bearing completion.
+/// Without a completed diagnostic stream it may still be compiling or it may
+/// be inside the program, so the timeout is deliberately not mislabeled as
+/// either phase.
+fn execution_timeout_report(
+  partial_output : String,
+  timeout_ms : Int,
+  sandbox_denied? : String,
+) -> RuntimeReport {
+  let head = "mbtx: compile/run did not finish within \{timeout_ms / 1000}s and was cancelled."
+  let mut content = if partial_output.is_blank() {
+    head
+  } else {
+    "\{head}\n[partial output before the timeout]\n\{partial_output}"
+  }
+  if sandbox_denied is Some(guidance) {
+    content = "\{content}\n\n\{guidance}"
+  }
+  { content, is_error: true, brief: "mbtx (execution timeout)", }
 }
 
 ///|
@@ -474,48 +826,46 @@ async fn execute(
     None => ("moon", moon_argv)
   }
   if background && bg_runtime is Some(runtime) {
-    // Compile in the FOREGROUND first. A detached run would otherwise report
-    // a syntax or type error only through job_output, and with the throwaway
-    // temp path instead of `source:LINE:COL` — the two things that make a
-    // compile error readable. `--build-only` is the single-file equivalent of
-    // a check: `moon check`/`moon build` do not accept a `.mbtx` script (the
-    // first reports "no work to do", the second demands a Moon project).
-    // TODO(upstream): teach `moon check` to accept a `.mbtx` script, and use
-    // it here — building is more work than this preflight needs.
-    let build_argv = [..argv]
-    build_argv.push("--build-only")
+    // A detached call has no result stream to inspect before returning, so it
+    // retains the build-only boundary. This is the uncommon path where the
+    // small extra invocation buys an important contract: a returned job id
+    // always names a program that compiled.
     let build_log = "\{dir}/build.log"
-    @fs.write_file(build_log, "", create_mode=CreateOrTruncate)
-    // Bounded like every other run here: a first build downloads and compiles
-    // dependencies, and a wedged fetch would otherwise hold the turn open —
-    // exactly what asking for a background job was meant to avoid.
-    let build_exit = @async.with_timeout_opt(run_timeout_ms, () => {
-      @process.run(
+    let compiler_output = match
+      compile_snippet(
         prog,
-        build_argv,
-        cwd=run_cwd.unwrap_or("."),
-        inherit_env=true,
-        stdin=@process.redirect_from_file(empty_stdin),
-        stdout=@process.redirect_to_file(build_log, append=true),
-        stderr=@process.redirect_to_file(build_log, append=true),
-        no_console_window=true,
-      )
-    })
-    guard build_exit is Some(build_exit) else {
-      let text = rewrite_temp_paths(read_capped(build_log), [real, dir])
-      return @agent_tool.ToolAction::respond(
-        "mbtx: the build did not finish within \{run_timeout_ms / 1000}s, so no background job was started.\n\{text}",
-        is_error=true,
-        brief="mbtx (build timeout)",
-      )
-    }
-    if build_exit != 0 {
-      let text = rewrite_temp_paths(read_capped(build_log), [real, dir])
-      return @agent_tool.ToolAction::respond(
-        "[mbtx: the program did not compile, so no background job was started]\n\{text}",
-        is_error=true,
-        brief="mbtx (build failed)",
-      )
+        argv,
+        run_cwd.unwrap_or("."),
+        empty_stdin,
+        build_log,
+        [real, dir],
+        run_timeout_ms,
+      ) {
+      Compiled(output) => output
+      CompileFailed(exit_code~, output) => {
+        let head = "[mbtx: compile-time error; compiler exit code \{exit_code}; program was not run]"
+        return @agent_tool.ToolAction::respond(
+          if output.is_blank() {
+            head
+          } else {
+            "\{head}\n\{output}"
+          },
+          is_error=true,
+          brief="mbtx (compile error)",
+        )
+      }
+      CompileTimedOut(output) => {
+        let head = "mbtx: compilation did not finish within \{run_timeout_ms / 1000}s, so the program was not run."
+        return @agent_tool.ToolAction::respond(
+          if output.is_blank() {
+            head
+          } else {
+            "\{head}\n\{output}"
+          },
+          is_error=true,
+          brief="mbtx (compile timeout)",
+        )
+      }
     }
     let id = runtime.start(
       program=prog,
@@ -529,11 +879,22 @@ async fn execute(
       stdin=@process.redirect_from_file(empty_stdin),
     )
     job_owns_dir.val = true
+    let compiler_note = if compiler_output.is_blank() {
+      ""
+    } else {
+      "\n\n[mbtx: compiler output]\n\{compiler_output}"
+    }
     return @agent_tool.ToolAction::respond(
-      "started background job \{id} (the program compiled). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\").",
+      "started background job \{id} (the program compiled). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\").\{compiler_note}",
       brief="mbtx → bg \{id}",
     )
   }
+  // Foreground calls use moon's machine-readable compiler protocol in the SAME
+  // invocation that runs the program. Appending here (after a possible
+  // sandbox-exec wrapper was prepared) leaves explicit background runs on the
+  // human output contract used by `job_output`.
+  let foreground_argv = [..argv]
+  foreground_argv.push("--output-json")
   // With a job runtime wired the foreground run happens ON it, so the
   // deadline can DETACH the still-running program as a background job rather
   // than killing it: a long `moon test` that outlives the bound is then still
@@ -543,7 +904,7 @@ async fn execute(
   if bg_runtime is Some(runtime) {
     let exec = runtime.spawn_foreground_retained(
       prog,
-      argv,
+      foreground_argv,
       run_cwd,
       OutputCapBytes,
       // Same EOF-on-stdin contract as every other path here: never hand the
@@ -593,41 +954,38 @@ async fn execute(
       escalated~,
     )
     exec.discard()
-    let text = rewrite_temp_paths(raw, [real, dir])
-    let body = if text.is_blank() {
-      "mbtx: program exited \{exit_code} with no output"
-    } else if exit_code != 0 {
-      "[mbtx: exited \{exit_code}]\n\{text}"
-    } else {
-      text
+    let parsed = parse_run_output(raw, [real, dir])
+    if exit_code != 0 &&
+      (
+        parsed.has_error_diagnostic ||
+        !compiled_artifact_exists(dir, input.target)
+      ) {
+      let report = compile_failure_report(parsed, exit_code, [real, dir])
+      return @agent_tool.ToolAction::respond(
+        report.content,
+        is_error=report.is_error,
+        brief=report.brief,
+      )
     }
-    let body = if output_limit_reached {
-      "\{body}\n[mbtx: output passed \{OutputCapBytes} bytes, so the program was STOPPED and this is only what it printed first. Redirect bulky output with `stdout=ToFile(path)` and read the file instead.]"
-    } else {
-      body
-    }
-    let body = if saw_binary {
-      "\{body}\n[mbtx: the program emitted non-UTF-8 bytes; the text above is a lossy rendering.]"
-    } else {
-      body
-    }
-    let body = if sandbox_denied is Some(guidance) {
-      "\{body}\n\n\{guidance}"
-    } else {
-      body
-    }
+    let text = rewrite_temp_paths(parsed.program_output, [real, dir])
+    let report = runtime_report(
+      parsed.compiler_output,
+      text,
+      exit_code,
+      output_limit_reached~,
+      saw_binary~,
+      sandbox_denied?,
+    )
     return @agent_tool.ToolAction::respond(
-      body,
-      is_error=exit_code != 0 ||
-        sandbox_denied is Some(_) ||
-        output_limit_reached,
-      brief="mbtx (exit=\{exit_code})",
+      report.content,
+      is_error=report.is_error,
+      brief=report.brief,
     )
   }
   let result = @async.with_timeout_opt(run_timeout_ms, () => {
     let exit_code = @process.run(
       prog,
-      argv,
+      foreground_argv,
       cwd=run_cwd.unwrap_or("."),
       inherit_env=true,
       stdin=@process.redirect_from_file(empty_stdin),
@@ -653,26 +1011,30 @@ async fn execute(
     Some((exit_code, raw)) => {
       // Rewrite the throwaway temp path to `source` so the model reads
       // `source:LINE:COL` about its own input, not a random temp path.
-      let text = rewrite_temp_paths(raw, [real, dir])
-      // PREPEND the exit status so it survives the agent loop's outer 60k
-      // result clamp (which cuts the tail); the output cap is below 60k so
-      // both the status line and the body are retained.
-      let body = if text.is_blank() {
-        "mbtx: program exited \{exit_code} with no output"
-      } else if exit_code != 0 {
-        "[mbtx: exited \{exit_code}]\n\{text}"
-      } else {
-        text
+      let parsed = parse_run_output(raw, [real, dir])
+      if exit_code != 0 &&
+        (
+          parsed.has_error_diagnostic ||
+          !compiled_artifact_exists(dir, input.target)
+        ) {
+        let report = compile_failure_report(parsed, exit_code, [real, dir])
+        return @agent_tool.ToolAction::respond(
+          report.content,
+          is_error=report.is_error,
+          brief=report.brief,
+        )
       }
-      let body = if sandbox_denied is Some(guidance) {
-        "\{body}\n\n\{guidance}"
-      } else {
-        body
-      }
+      let text = rewrite_temp_paths(parsed.program_output, [real, dir])
+      let report = runtime_report(
+        parsed.compiler_output,
+        text,
+        exit_code,
+        sandbox_denied?,
+      )
       @agent_tool.ToolAction::respond(
-        body,
-        is_error=exit_code != 0 || sandbox_denied is Some(_),
-        brief="mbtx (exit=\{exit_code})",
+        report.content,
+        is_error=report.is_error,
+        brief=report.brief,
       )
     }
     None => {
@@ -681,21 +1043,15 @@ async fn execute(
       // instead of discarding it behind a generic timeout message. The status
       // line stays first so it survives the outer result clamp.
       let partial = rewrite_temp_paths(read_capped(log), [real, dir])
-      let head = "mbtx: timed out after \{run_timeout_ms / 1000}s and was cancelled — the program did not finish (an infinite loop, or a build that never completed)."
-      let body = if partial.is_blank() {
-        head
-      } else {
-        "\{head}\n[partial output before the timeout]\n\{partial}"
-      }
-      let body = if sandbox_denied is Some(guidance) {
-        "\{body}\n\n\{guidance}"
-      } else {
-        body
-      }
+      let report = execution_timeout_report(
+        partial,
+        run_timeout_ms,
+        sandbox_denied?,
+      )
       @agent_tool.ToolAction::respond(
-        body,
-        is_error=true,
-        brief="mbtx (timeout)",
+        report.content,
+        is_error=report.is_error,
+        brief=report.brief,
       )
     }
   }
