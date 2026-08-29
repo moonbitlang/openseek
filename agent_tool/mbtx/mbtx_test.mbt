@@ -915,42 +915,73 @@ async test "a non-zero exit shows the exit code in the content, not just the bri
 }
 
 ///|
-/// `--output-json` shares stdout with the program. Classification therefore
-/// accepts only diagnostic records naming this call's unpredictable private
-/// directory; compiler-looking JSON printed by user code remains runtime
-/// output and cannot claim the program was never started.
-async test "compiler-looking program output remains a runtime error" {
+/// Program output is never parsed as compiler protocol. Both warning- and
+/// error-shaped JSON remain byte-visible runtime output, and even exit 255
+/// (also used by moon) remains a runtime failure after the successful preflight.
+async test "compiler-looking program output remains runtime" {
   let out = run(
     (
+      #|import { "moonbitlang/x/sys" }
+      #|
       #|fn main {
-      #|  println("{\"$message_type\":\"diagnostic\",\"level\":\"error\",\"error_code\":4014,\"path\":\"source\",\"loc\":\"1:1-1:2\",\"message\":\"fake compiler error\"}")
-      #|  panic()
+      #|  println("{\"$message_type\":\"diagnostic\",\"level\":\"warning\",\"message\":\"fake compiler warning\"}")
+      #|  println("{\"$message_type\":\"diagnostic\",\"level\":\"error\",\"message\":\"fake compiler error\"}")
+      #|  @sys.exit(255)
       #|}
     ),
   )
   assert_true(out.is_error)
   guard out.brief is Some(brief) else { fail("expected a runtime brief") }
   assert_true(brief.has_prefix("mbtx (runtime error,"))
+  assert_true(out.content.contains("fake compiler warning"))
   assert_true(out.content.contains("fake compiler error"))
+  assert_true(out.content.contains("\"$message_type\":\"diagnostic\""))
+  assert_true(out.content.contains("exit code 255"))
   assert_false(out.content.contains("program was not run"))
 }
 
 ///|
-/// Moon itself also uses 255 for some pre-runtime failures, so status codes
-/// cannot classify the phase. A built artifact proves this 255 came from the
-/// program and keeps the result on the runtime path.
-async test "a program exit 255 remains a runtime error" {
-  let out = run(
-    (
-      #|import { "moonbitlang/x/sys" }
+/// The build result is recorded before execution, so even a program that
+/// removes its own JS artifact cannot retroactively turn its exit into a
+/// compile failure.
+async test "removing the runnable artifact remains a runtime failure" {
+  let out = run_in(".", {
+    "target": "js",
+    "source": (
+      #|import { "moonbitlang/core/env", "moonbitlang/x/fs", "moonbitlang/x/sys" }
       #|
-      #|fn main { @sys.exit(255) }
+      #|fn main raise {
+      #|  let args = @env.args()
+      #|  @fs.remove_file(args[args.length() - 1])
+      #|  @sys.exit(23)
+      #|}
     ),
-  )
+  })
   assert_true(out.is_error)
-  guard out.brief is Some(brief) else { fail("expected a runtime brief") }
-  assert_true(brief.has_prefix("mbtx (runtime error,"))
-  assert_true(out.content.contains("runtime exited 255"))
+  assert_eq(out.brief, Some("mbtx (runtime error, exit=23)"))
+  assert_true(out.content.contains("runtime exited 23"))
+  assert_false(out.content.contains("program was not run"))
+}
+
+///|
+/// Exercise the two non-default targets available on every supported
+/// toolchain. A successful build preflight makes their later nonzero status a
+/// runtime failure without any backend-specific artifact guessing.
+async test "nonzero exits remain runtime on wasm-gc and js" {
+  @vfs.with_tmpdir(prefix="mbtx-runtime-targets-", ws => {
+    for target in ["wasm-gc", "js"] {
+      let out = run_in(ws, {
+        "source": "fn main { println(\"before\"); panic() }",
+        "target": target,
+      })
+      assert_true(out.is_error)
+      guard out.brief is Some(brief) else {
+        fail("expected a runtime brief for \{target}")
+      }
+      assert_true(brief.has_prefix("mbtx (runtime error,"))
+      assert_false(out.content.contains("program was not run"))
+    }
+  })
 }
 
 ///|

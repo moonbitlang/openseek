@@ -10,14 +10,14 @@ wasm backend (planned) makes it the natural sandboxed automation surface.
 ## How it works
 
 The `source` is a `.mbtx` **single-file script** — MoonBit's own one-file
-program format. The tool writes `source` to a throwaway temp file and runs one
-`moon run <file>.mbtx --output-json`. Moon's structured compiler diagnostics
-are separated from ordinary program output: an error diagnostic is reported as
-a **compile-time error** with an explicit “program was not run” status, while a
-non-zero exit without one is a **runtime error**. The desktop transcript labels
-and styles the two failures separately. An explicit background launch is the
-exception: it uses `--build-only` first so invalid source is rejected before a
-job id is returned.
+program format. The tool writes `source` to a throwaway temp file, runs
+`moon run <file>.mbtx --build-only`, and only starts the program after that
+succeeds. The following `moon run` reuses the same target cache, so this is an
+extra lightweight invocation rather than a second compilation. A failed build
+is reported as a **compile-time error** with an explicit “program was not run”
+status; a non-zero exit after the successful build is a **runtime error**. The
+desktop transcript labels and styles the two failures separately. Background
+launches use the same boundary, so an invalid source never returns a job id.
 
 The command uses `--target <target> --target-dir <temp>` **with your workspace
 as the working directory**. The tool returns what moon prints, removes the temp
