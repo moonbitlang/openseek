@@ -559,13 +559,13 @@ async test "a worker's snippet writes neither its own tree nor a sibling's" {
 }
 
 ///|
-/// Without a job runtime the tool cannot execute a background run, so neither
-/// the description nor the schema may advertise one — the model would only get
-/// an error. (The wired half of this contract is asserted in the `agent`
-/// package, which builds a registry with a real runtime.)
-test "a definition without a job runtime does not advertise background runs" {
+/// Without a job runtime the description names the longer cancelling timeout;
+/// the schema never asks the model to choose foreground versus background.
+test "a definition without a job runtime describes its hard timeout" {
   let definition = @mbtx.definition(workspace_root=".")
   assert_false(definition.description.contains("run_in_background"))
+  assert_true(definition.description.contains("no background-job runtime"))
+  assert_true(definition.description.contains("up to 300s"))
   let JsonSchema(schema) = definition.schema
   assert_false(schema.stringify().contains("run_in_background"))
 }
@@ -948,9 +948,8 @@ async fn run_escalating(
 }
 
 ///|
-/// The argument exists only where something can answer it. This is the same
-/// rule `run_in_background` follows, and it is what keeps a headless run from
-/// spending a call on a field whose every use is refused.
+/// The argument exists only where something can answer it, keeping a headless
+/// run from spending a call on a field whose every use is refused.
 test "the escalated argument is offered only with an approval channel" {
   let plain = @mbtx.definition(workspace_root=".")
   let JsonSchema(plain_schema) = plain.schema

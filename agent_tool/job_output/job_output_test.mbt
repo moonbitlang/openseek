@@ -193,6 +193,71 @@ async test "a non-numeric wait_ms is a tool error, not silently ignored" {
 }
 
 ///|
+#cfg(not(platform="windows"))
+async test "job_output applies display rewrites supplied by the launcher" {
+  @async.with_task_group(group => {
+    let bg = @bgjobs.BgJobRuntime::BgJobRuntime(AgentTaskScope(group))
+    let id = bg.start(
+      program="sh",
+      args=["-c", "printf '/tmp/mbtx/snippet.mbtx:1:2: error\\n'"],
+      command="compiler",
+      output_rewrites=[("/tmp/mbtx/snippet.mbtx", "source")],
+    )
+    poll_bg_terminal(bg, id)
+    let output = run_job_output(bg, { "job_id": id })
+    assert_true(output.content.contains("source:1:2: error"))
+    assert_false(output.content.contains("/tmp/mbtx"))
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "a job with policy disabled does not invent a policy refusal" {
+  @async.with_task_group(group => {
+    let bg = @bgjobs.BgJobRuntime::BgJobRuntime(AgentTaskScope(group))
+    let id = bg.start(
+      program="sh",
+      args=["-c", "printf 'Sandbox policy blocked file write: example\\n'"],
+      command="unconfined",
+      moonrun_policy_active=false,
+    )
+    poll_bg_terminal(bg, id)
+    let output = run_job_output(bg, { "job_id": id })
+    assert_false(output.is_error)
+    assert_true(output.content.contains("Sandbox policy blocked"))
+    assert_false(output.content.contains("mbtx sandbox:"))
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "a terminal job finds a policy refusal before the displayed tail" {
+  @async.with_task_group(group => {
+    let dir = @fs.tmpdir(prefix="openseek-job-policy-")
+    let bg = @bgjobs.BgJobRuntime::BgJobRuntime(
+      AgentTaskScope(group),
+      spill_dir=dir,
+    )
+    let id = bg.start(
+      program="sh",
+      args=[
+        "-c", "printf 'Sandbox policy blocked file write: example\\n'; seq 1 10000",
+      ],
+      command="policy then output",
+      moonrun_policy_active=true,
+    )
+    poll_bg_terminal(bg, id)
+    let output = run_job_output(bg, { "job_id": id })
+    assert_true(output.is_error)
+    assert_false(output.content.contains("Sandbox policy blocked"))
+    assert_true(output.content.contains("mbtx sandbox:"))
+    @fs.rmdir(dir, recursive=true) catch {
+      _ => ()
+    }
+  })
+}
+
+///|
 /// Mark the platform-gated test imports as used: this binding is `_`-prefixed
 /// (never warned about) and its body is never evaluated.
 let _unused_test_imports : Unit = {

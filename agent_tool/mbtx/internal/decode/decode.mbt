@@ -10,9 +10,6 @@ pub struct MbtxInput {
   /// Whether compiler warnings appear in the run output — decoded from the
   /// `"on"`/`"off"` tool argument, defaulting to `"off"` (suppressed).
   warning : Bool
-  /// Whether to detach the run as a background job instead of waiting for it.
-  /// Only meaningful when the tool was built with a job runtime.
-  run_in_background : Bool
   /// Whether the snippet asked to run with no sandbox policy — no spawn
   /// allowlist and no write-root bound. Decoded here whatever the tool was
   /// built with: a build that offers no approval channel does not advertise
@@ -42,6 +39,14 @@ fn valid_target(target : String) -> Bool {
 /// optional working directory for the program (defaults to the workspace
 /// root). Failures name the offending field.
 pub fn decode(arguments : Json) -> MbtxInput raise {
+  // The local dispatcher does not enforce JSON Schema. Reject the removed
+  // field explicitly so a stale caller cannot silently get the runtime-less
+  // 300s foreground behavior while believing it requested a job.
+  if arguments is { "run_in_background": _, .. } {
+    fail(
+      "arguments.run_in_background was removed; background handoff is automatic when a job runtime is available",
+    )
+  }
   match arguments {
     { "source": String(source), .. } => {
       let target = match arguments {
@@ -67,21 +72,13 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
           fail("arguments.warning to be \"on\" or \"off\"")
         _ => false
       }
-      let run_in_background = match arguments {
-        { "run_in_background": True, .. } => true
-        { "run_in_background": False, .. }
-        | { "run_in_background": Null, .. } => false
-        { "run_in_background": _, .. } =>
-          fail("arguments.run_in_background to be a boolean")
-        _ => false
-      }
       let escalated = match arguments {
         { "escalated": True, .. } => true
         { "escalated": False, .. } | { "escalated": Null, .. } => false
         { "escalated": _, .. } => fail("arguments.escalated to be a boolean")
         _ => false
       }
-      { source, target, cwd, warning, run_in_background, escalated, }
+      { source, target, cwd, warning, escalated, }
     }
     Object(_) => fail("arguments.source")
     _ => fail("object arguments")
@@ -93,6 +90,18 @@ test "decode reads source with the default wasm target" {
   let input = decode({ "source": "fn main { println(1) }" })
   assert_eq(input.source, "fn main { println(1) }")
   assert_eq(input.target, "wasm")
+}
+
+///|
+test "decode rejects the removed background flag with migration guidance" {
+  let message = try {
+    decode({ "source": "x", "run_in_background": true }) |> ignore
+    "accepted"
+  } catch {
+    error => "\{error}"
+  }
+  assert_true(message.contains("was removed"))
+  assert_true(message.contains("automatic"))
 }
 
 ///|
