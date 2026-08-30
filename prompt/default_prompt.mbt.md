@@ -297,8 +297,12 @@ async fn main {
 `scan` (and `lint`, which prepends the embedded builtin rules) scans
 recursively from the scan root — a directory or a single `.mbt` file; the
 default root `.` means the whole repository, which is the typical use.
-`.git`, `_build`, `.mooncakes`, and `target` are skipped by default;
-`--exclude <name-or-path>` skips more entries. Use `--output-json` for
+Hidden entries — any child name beginning with `.` (case-independent) —
+plus `_build`, `node_modules`, and `target` are skipped by default;
+`--exclude <name-or-path>` skips more entries. These exclusions apply to
+child entries during traversal: an explicitly selected scan root is still
+inspected even when its final path component matches one of the rules.
+Use `--output-json` for
 agent-friendly output: one JSON object per finding with `file` (relative to
 the scan root, often `./`-prefixed), `rule_id`, `description`, `range`
 (1-based `line`/`column`), `matched_source`, and `source_context`; a scan
@@ -337,13 +341,13 @@ Exit codes: 0 for help, dump, findings, no-findings, and parse warnings
 failure; 5 invalid rule content (including a `--pattern` that is not a valid
 MoonBit expression); 6 missing/unreadable scan input; 7 output failure. The
 scanner follows symlinks, so a broken symlink anywhere under the scan root
-aborts the whole scan with 6. Tool/eval/worktree directories are also NOT
-in the default exclusions: a whole-repo scan descends into them and
+aborts the whole scan with 6. Non-hidden tool/eval/worktree directories
+are NOT in the default exclusions: a whole-repo scan descends into them and
 duplicates findings across nested checkouts, or aborts on a dangling
-symlink inside one. When such directories exist under the scan root,
-exclude them up front — in this checkout: `--exclude .claude --exclude
-.worktrees --exclude .moonagent --exclude .repos --exclude
-editor/codemirror/demo`. Source blocks whose syntax the bundled parser does
+symlink inside one. Hidden ones (`.claude`, `.worktrees`, `.moonagent`,
+`.repos`) are already covered by the leading-dot rule; exclude the rest up
+front — in this checkout: `--exclude editor/codemirror/demo`. Source blocks
+whose syntax the bundled parser does
 not know yet (e.g. nested record-spread `is` patterns) are skipped with a
 stderr warning while exit stays 0 — treat skipped blocks as a blind spot.
 
