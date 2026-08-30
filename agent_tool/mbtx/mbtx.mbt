@@ -24,24 +24,6 @@ const OutputCapBytes : Int = 48_000
 const WarnOffList : String = "-a+partial_match@partial_match+multiline_string_escape@multiline_string_escape+invalid_inline_wasm@invalid_inline_wasm+unannotated_ffi@unannotated_ffi"
 
 ///|
-/// Best-effort refusal of native FFI (`extern`, which can bind libc `system`
-/// and sidesteps every guard above it). Spawning processes is no longer an
-/// escape — it is what this tool is for — but FFI still is. A substring scan is
-/// NOT a real boundary; HARD containment is deferred to the planned wasm
-/// backend (safe by construction). Returns the reason to report, or None.
-fn native_escape(source : String) -> String? {
-  // Match the FFI syntax (`extern "c" fn …`), not the bare word. Scanning for
-  // `extern` alone refused a snippet whose only offence was a commit message
-  // mentioning it — the word appears in prose and string literals, the quote
-  // that follows it does not.
-  if source.contains("extern \"") {
-    Some("uses native FFI (extern), which the wasm sandbox will contain later")
-  } else {
-    None
-  }
-}
-
-///|
 /// Tool definition for `mbtx`: compile and run a self-contained MoonBit
 /// program and return its merged stdout/stderr and exit status.
 ///
@@ -191,9 +173,18 @@ async fn execute(
         is_error=true,
       )
   }
-  if native_escape(input.source) is Some(reason) {
+  // Refuse FFI (`extern`), the one construct no mbtx target runs sandboxed.
+  // The wasm family needs no scan — the compiler refuses `extern "c"` and
+  // `extern "js"` on those backends outright — but the js target's host is
+  // bare node, where `extern "js"` reaches host globals, and llvm is
+  // unsandboxed native codegen. Match the FFI syntax (`extern "c"`/`extern
+  // "js"`), not the bare word: `extern` alone appears in prose and string
+  // literals (a snippet quoting a commit message was refused once), the quote
+  // that follows it does not. A substring scan is NOT a real boundary; it is
+  // what keeps the non-wasm targets' "compute-only" promise true.
+  if input.source.contains("extern \"") {
     return @agent_tool.ToolAction::respond(
-      "mbtx refuses this program: it \{reason}. mbtx is the compute/IO surface; deeper containment arrives with the wasm backend.",
+      "mbtx refuses this program: it uses native FFI (extern), which no mbtx target can run sandboxed — the wasm family refuses to compile it, and the js/llvm targets have no policy to contain it.",
       is_error=true,
     )
   }
