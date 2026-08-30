@@ -30,6 +30,17 @@ const OutputCapBytes : Int = 48_000
 const WarnOffList : String = "-a+partial_match@partial_match+multiline_string_escape@multiline_string_escape+invalid_inline_wasm@invalid_inline_wasm+unannotated_ffi@unannotated_ffi"
 
 ///|
+/// Render an injected millisecond bound without losing sub-second precision in
+/// model-facing text or tool results.
+fn duration_label(milliseconds : Int) -> String {
+  if milliseconds % 1000 == 0 {
+    "\{milliseconds / 1000}s"
+  } else {
+    "\{milliseconds}ms"
+  }
+}
+
+///|
 /// Tool definition for `mbtx`: compile and run a self-contained MoonBit
 /// program and return its merged stdout/stderr and exit status.
 ///
@@ -100,6 +111,8 @@ pub fn definition(
     description=description(
       background=bg_runtime is Some(_),
       escalation=approval is Some(_),
+      auto_background_after_ms~,
+      foreground_timeout_ms~,
     ),
     schema=JsonSchema(schema(escalation=approval is Some(_))),
     execute=Async(arguments => {
@@ -266,9 +279,18 @@ async fn execute(
   } else {
     false
   }
+  // One source of truth for whether moonrun's policy actually governs this
+  // execution. The launch argv, adopted-job metadata, and foreground refusal
+  // classifier must not drift: ordinary output from a non-wasm or escalated run
+  // is never evidence of a policy that was not active.
+  let policy_active = input.target == "wasm" && !escalated
+  let handoff_dir_has_owner = job_dir is Some(_) || scratch_dir is Some(_)
   // A directory that an automatic handoff may give to a job must outlive this
-  // call, so it is numbered inside the caller's job dir. The job reclaims it at
-  // terminal status; the session directory remains the teardown fallback.
+  // call, so it is numbered inside a caller-owned job dir or scratch lab when
+  // one exists. Such a job keeps the whole directory until teardown: its `tmp`
+  // subtree is the snippet's writable result area, and deleting it at terminal
+  // status would make paths in completion output unreadable before the model can
+  // act on them.
   let dir = if job_dir is Some(scratch) {
     let dir = "\{scratch}/snippet-\{next_background.val}"
     next_background.val += 1
@@ -312,8 +334,10 @@ async fn execute(
   // artifacts, and output log). `cleanup` runs on every exit path, so the flag
   // decides whether reclaiming the directory is still ours.
   //
-  // Handing it over is sound because the adopted job installs its own terminal
-  // cleanup below. The session-owned job directory is a final teardown fallback.
+  // Handing it over is sound when either caller-owned root is wired: the
+  // standard registry's `job_dir` has a task-group teardown, and a scratch lab
+  // has its own lifecycle. A non-standard caller that wires neither root has no
+  // owner, so its fallback directory is reclaimed by the job at terminal status.
   let mut job_owns_dir = false
   async fn cleanup() -> Unit {
     if job_owns_dir {
@@ -380,7 +404,7 @@ async fn execute(
     // no wildcard, and "any program" has no spelling in `process.allow` short
     // of enumerating one — so "no policy" is both the honest description of
     // what was approved and the only one the runtime can express.
-    ..if input.target == "wasm" && !escalated {
+    ..if policy_active {
       ["--wasm-policy", policy_path]
     },
     ..if !input.warning {
@@ -487,24 +511,29 @@ async fn execute(
     let saw_binary = exec.had_invalid_utf8()
     if finished is None {
       let _ = exec.background()
+      let terminal_cleanup : (async () -> Unit)? = if handoff_dir_has_owner {
+        None
+      } else {
+        Some(() => {
+          @async.protect_from_cancel(() => {
+            @fs.rmdir(dir, recursive=true) catch {
+              _ => ()
+            }
+          })
+        })
+      }
       let id = runtime.adopt(
         exec,
         command="mbtx: \{@agent_tool.brief_line(input.source, limit=64)}",
         cwd?=run_cwd,
         sandboxed_command?,
         output_rewrites=temp_path_rewrites([real, dir]),
-        moonrun_policy_active=input.target == "wasm" && !escalated,
-        on_terminal=() => {
-          @async.protect_from_cancel(() => {
-            @fs.rmdir(dir, recursive=true) catch {
-              _ => ()
-            }
-          })
-        },
+        moonrun_policy_active=policy_active,
+        on_terminal?=terminal_cleanup,
       )
       job_owns_dir = true
       return @agent_tool.respond(
-        "mbtx: still running after \{auto_background_after_ms / 1000}s, so it moved to the background as job \{id} (nothing was lost). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\").",
+        "mbtx: still running after \{duration_label(auto_background_after_ms)}, so it moved to the background as job \{id} (nothing was lost). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\").",
         brief="mbtx → bg \{id}",
       )
     }
@@ -523,7 +552,7 @@ async fn execute(
       denial_scan_source,
       raw,
       escalation=approval is Some(_),
-      escalated~,
+      policy_active~,
     )
     exec.discard()
     let text = rewrite_temp_paths(raw, [real, dir])
@@ -535,7 +564,7 @@ async fn execute(
       text
     }
     let body = if output_limit_reached {
-      "\{body}\n[mbtx: output passed \{OutputCapBytes} bytes, so the program was STOPPED and this is only what it printed first. Redirect bulky output with `stdout=ToFile(path)` and read the file instead.]"
+      "\{body}\n[mbtx: output passed the fixed \{OutputCapBytes}-byte inline limit, so the program was STOPPED and this is only what it printed first. Retrying the same call will hit the same limit. Redirect bulky child output with `stdout=ToFile(path)` where `path` is under `@fs.tmpdir()`, then have that same snippet read the file and print only the needed excerpt before it exits.]"
     } else {
       body
     }
@@ -580,7 +609,7 @@ async fn execute(
     Some(log),
     "",
     escalation=approval is Some(_),
-    escalated~,
+    policy_active~,
   )
   let action = match result {
     Some((exit_code, raw)) => {
@@ -614,7 +643,7 @@ async fn execute(
       // instead of discarding it behind a generic timeout message. The status
       // line stays first so it survives the outer result clamp.
       let partial = rewrite_temp_paths(read_capped(log), [real, dir])
-      let head = "mbtx: timed out after \{foreground_timeout_ms / 1000}s and was cancelled — the program did not finish (an infinite loop, or a build that never completed)."
+      let head = "mbtx: timed out after \{duration_label(foreground_timeout_ms)} and was cancelled — the program did not finish (an infinite loop, or a build that never completed)."
       let body = if partial.is_blank() {
         head
       } else {
@@ -650,7 +679,7 @@ async fn refusal_guidance(
   log_path : String?,
   head : String,
   escalation~ : Bool,
-  escalated~ : Bool,
+  policy_active~ : Bool,
 ) -> String? {
   async fn shows(reports : (String) -> Bool) -> Bool {
     match log_path {
@@ -659,12 +688,10 @@ async fn refusal_guidance(
     }
   }
 
-  // An escalated run was given no policy, so nothing it prints can be this
-  // tool's policy refusing something. The spawn marker is only the guest's own
-  // `EPERM` text, which an unsandboxed child can produce for its own reasons —
-  // scanning for it here would report a successful run as an error and tell
-  // the model to ask for the escalation it was already granted.
-  if !escalated && shows(@sandbox.output_reports_policy_refusal) {
+  // A non-wasm or escalated run was given no moonrun policy, so nothing it
+  // prints can be that policy refusing something. The marker is ordinary guest
+  // text in that case; classifying it would turn a successful run into an error.
+  if policy_active && shows(@sandbox.output_reports_policy_refusal) {
     // The escalating variant only where a channel exists AND this is a
     // foreground report: its wording assumes nothing ran, which is true here
     // and false of `job_output`, whose job worked before it was refused.
@@ -927,7 +954,12 @@ fn schema(escalation~ : Bool) -> Json {
 /// around a refusal, and where escalation IS available that advice would be
 /// wrong — there is a sanctioned way to ask. The paragraph that says so must
 /// appear exactly where the way exists.
-fn description(background~ : Bool, escalation~ : Bool) -> String {
+fn description(
+  background~ : Bool,
+  escalation~ : Bool,
+  auto_background_after_ms~ : Int,
+  foreground_timeout_ms~ : Int,
+) -> String {
   // The one sentence here that depends on what this build can actually do.
   //
   // Without an approval channel a refusal really is the end of the road, and
@@ -1036,6 +1068,8 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
       $|the task needs, and the reason evident in the code itself.
     )
   }
+  let foreground_bound = duration_label(foreground_timeout_ms)
+  let handoff_bound = duration_label(auto_background_after_ms)
   if !background {
     return (
       $|\{base}
@@ -1043,7 +1077,7 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
       $|## Execution time
       $|
       $|This context has no background-job runtime. A run may stay in the foreground
-      $|for up to 300s; at that deadline it is cancelled and reported as a timeout.
+      $|for up to \{foreground_bound}; at that deadline it is cancelled and reported as a timeout.
     )
   }
   // The blank `$|` line is the paragraph break: without it the section heading
@@ -1053,7 +1087,7 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     $|
     $|## Long-running work
     $|
-    $|Every call stays inline for up to 5s. If it is still running, it AUTOMATICALLY
+    $|Every call stays inline for up to \{handoff_bound}. If it is still running, it AUTOMATICALLY
     $|moves to a background job and returns the job id; no background flag or duration
     $|guess is needed. A completion notice arrives when it finishes, so never wait with
     $|sleep loops or repeated polling: keep working and act on the notice. Read recent

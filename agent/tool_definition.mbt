@@ -190,7 +190,7 @@ async test "a compile error reached inside the grace reports inline" {
       workspace_root=".",
       bg_runtime~,
       job_dir=spill_dir,
-      auto_background_after_ms=10_000,
+      auto_background_after_ms=60_000,
     )
     let action = match mbtx.execute {
       Async(execute) =>
@@ -243,15 +243,52 @@ async test "a compile error after handoff keeps source diagnostics" {
     assert_true(result.is_error)
     assert_true(result.content.contains("source:"))
     assert_false(result.content.contains("openseek-compile-job-"))
-    // The retained output file remains in the runtime root, but the snippet and
-    // target directory are reclaimed as soon as the adopted process is terminal.
-    for _ in 0..<200 {
-      if !@fs.exists("\{spill_dir}/snippet-0") {
-        break
-      }
-      @async.sleep(5)
+    // The session owns this directory after handoff. It remains available until
+    // teardown so any result files named by terminal output remain readable.
+    assert_true(@fs.exists("\{spill_dir}/snippet-0"))
+    @fs.rmdir(spill_dir, recursive=true) catch {
+      _ => ()
     }
-    assert_false(@fs.exists("\{spill_dir}/snippet-0"))
+  })
+}
+
+///|
+/// A handed-off snippet may put a bulky result in its policy-owned temp area
+/// and print the path. Terminal status must not delete that result before the
+/// completion notice can be acted on; the session teardown owns reclamation.
+async test "a handed-off job keeps result files until session teardown" {
+  @async.with_task_group(group => {
+    let spill_dir = @fs.tmpdir(prefix="openseek-job-result-")
+    let bg_runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir~)
+    let mbtx = @mbtx.definition(
+      workspace_root=".",
+      bg_runtime~,
+      job_dir=spill_dir,
+      auto_background_after_ms=1,
+    )
+    let result_path = "\{spill_dir}/snippet-0/tmp/report.txt"
+    let source = (
+      #|import { "moonbitlang/async", "moonbitlang/async/fs" }
+      #|
+      #|async fn main {
+      #|  @fs.write_file("RESULT_PATH", "kept", create_mode=CreateOrTruncate)
+      #|  println("RESULT_PATH")
+      #|}
+    ).replace_all(old="RESULT_PATH", new=result_path)
+    let action = match mbtx.execute {
+      Async(execute) => execute({ "source": source })
+      Sync(_) => fail("mbtx should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_true(output.content.contains("moved to the background"))
+    guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
+    let read = match @job_output.definition(bg_runtime).execute {
+      Async(execute) => execute({ "job_id": job.id, "wait_ms": 120_000 })
+      Sync(_) => fail("job_output should be async")
+    }
+    guard read is Respond(result) else { fail("expected Respond") }
+    assert_false(result.is_error)
+    assert_eq(@fs.read_file(result_path).text(), "kept")
     @fs.rmdir(spill_dir, recursive=true) catch {
       _ => ()
     }
@@ -347,6 +384,40 @@ async test "a non-wasm handed-off job does not invent a policy refusal" {
 }
 
 ///|
+/// The same policy-active gate applies before handoff. Whether an ordinary
+/// non-wasm run crosses the grace period must not change how its output is
+/// classified.
+async test "a non-wasm inline run does not invent a policy refusal" {
+  @async.with_task_group(group => {
+    let spill_dir = @fs.tmpdir(prefix="openseek-js-inline-")
+    let bg_runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir~)
+    let mbtx = @mbtx.definition(
+      workspace_root=".",
+      bg_runtime~,
+      job_dir=spill_dir,
+      auto_background_after_ms=60_000,
+    )
+    assert_true(mbtx.description.contains("up to 60s"))
+    let action = match mbtx.execute {
+      Async(execute) =>
+        execute({
+          "source": "fn main { println(\"Sandbox policy blocked file write: example\") }",
+          "target": "js",
+        })
+      Sync(_) => fail("mbtx should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_false(output.is_error)
+    assert_false(output.content.contains("moved to the background"))
+    assert_true(output.content.contains("Sandbox policy blocked"))
+    assert_false(output.content.contains("mbtx sandbox:"))
+    @fs.rmdir(spill_dir, recursive=true) catch {
+      _ => ()
+    }
+  })
+}
+
+///|
 /// An automatically handed-off snippet must not inherit the engine's fd 0:
 /// under `serve` that descriptor carries JSONL commands. It gets immediate EOF
 /// before continuing as a job.
@@ -380,6 +451,18 @@ async test "an automatically handed-off snippet reads EOF on stdin" {
     assert_true(output.content.contains("moved to the background"))
     // The job read EOF rather than blocking on (or stealing from) fd 0.
     guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
+    let mut saw_eof = false
+    // Handoff can happen while a cold dependency build is still running. Wait
+    // for the first program output instead of racing the compiler.
+    for _ in 0..<2400 {
+      let recent = bg_runtime.read_output_tail(job.id, 12000).unwrap_or("")
+      if recent.contains("got=false") {
+        saw_eof = true
+        break
+      }
+      @async.sleep(25)
+    }
+    assert_true(saw_eof)
     let read = match @job_output.definition(bg_runtime).execute {
       Async(execute) => execute({ "job_id": job.id })
       Sync(_) => fail("job_output should be async")
@@ -441,8 +524,16 @@ async test "a foreground run past its deadline becomes a job instead of dying" {
 /// tool waits out the real exit and says the rendering was lossy.
 async test "binary output waits for the real exit instead of abandoning it" {
   @async.with_task_group(group => {
-    let tools = build_tools(AgentRuntime(), AgentTaskScope(group))
-    guard tools.find("mbtx") is Some(mbtx) else { fail("mbtx tool missing") }
+    let spill_dir = @fs.tmpdir(prefix="openseek-binary-inline-")
+    let bg_runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir~)
+    // This test is about waiting for the real exit, not the production 5s
+    // handoff threshold. Keep cold dependency builds safely inside its premise.
+    let mbtx = @mbtx.definition(
+      workspace_root=".",
+      bg_runtime~,
+      job_dir=spill_dir,
+      auto_background_after_ms=60_000,
+    )
     // Emit an invalid UTF-8 byte, then keep working briefly before exiting 3.
     let source =
       #|import { "moonbitlang/async", "moonbitlang/async/stdio", "moonbitlang/x/sys" }
@@ -462,6 +553,43 @@ async test "binary output waits for the real exit instead of abandoning it" {
     // The real exit code, not the -1 an abandoned execution would report.
     assert_true(output.content.contains("exited 3"))
     assert_true(output.content.contains("non-UTF-8"))
+    @fs.rmdir(spill_dir, recursive=true) catch {
+      _ => ()
+    }
+  })
+}
+
+///|
+/// The foreground output cap is fixed, so the failure must prevent a useless
+/// identical retry and point directly at the file-redirection escape hatch.
+/// Inline cleanup removes the snippet temp dir before the next tool call, so
+/// the recovery must also say to read the reduced result inside that snippet.
+async test "the inline output cap gives actionable retry guidance" {
+  @async.with_task_group(group => {
+    let spill_dir = @fs.tmpdir(prefix="openseek-inline-cap-")
+    let bg_runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir~)
+    let mbtx = @mbtx.definition(
+      workspace_root=".",
+      bg_runtime~,
+      job_dir=spill_dir,
+      auto_background_after_ms=60_000,
+    )
+    let action = match mbtx.execute {
+      Async(execute) =>
+        execute({
+          "source": "fn main { for _ in 0..<50_000 { println(\"x\") } }",
+        })
+      Sync(_) => fail("mbtx should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    assert_true(output.content.contains("fixed 48000-byte inline limit"))
+    assert_true(output.content.contains("Retrying the same call"))
+    assert_true(output.content.contains("stdout=ToFile(path)"))
+    assert_true(output.content.contains("same snippet read the file"))
+    @fs.rmdir(spill_dir, recursive=true) catch {
+      _ => ()
+    }
   })
 }
 
@@ -510,26 +638,18 @@ async test "a finished background job queues a notice and wakes the controller" 
   @async.with_task_group(group => {
     let runtime = @agent_runtime.AgentRuntime()
     let mut woke = false
-    let spill_dir = @fs.tmpdir(prefix="openseek-jobs-notice-")
-    let bg_runtime = @bgjobs.BgJobRuntime::BgJobRuntime(
-      AgentTaskScope(group),
-      spill_dir~,
-      on_job_exit=snapshot => {
-        runtime.queue_steer(Notice(background_notice_text(snapshot)))
-        woke = true
-      },
-    )
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
-      auto_background_after_ms=500,
-    )
+    // Exercise the production registry wiring itself. Reproducing its
+    // queue-steer + wake callback here would let that wiring regress while the
+    // test continued to pass against its copy.
+    let tools = build_tools(runtime, AgentTaskScope(group), on_background_wake=() => {
+      woke = true
+    })
+    guard tools.find("mbtx") is Some(mbtx) else { fail("mbtx tool missing") }
     let source =
       #|import { "moonbitlang/async" }
       #|
       #|async fn main {
-      #|  @async.sleep(800)
+      #|  @async.sleep(5_500)
       #|  println(1)
       #|}
     let action = match mbtx.execute {
@@ -554,9 +674,6 @@ async test "a finished background job queues a notice and wakes the controller" 
     assert_true(woke)
     let steers = runtime.drain_steers()
     assert_true(steers.any(s => s is Notice(_)))
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
 }
 

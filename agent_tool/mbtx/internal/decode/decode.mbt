@@ -44,7 +44,7 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
   // 300s foreground behavior while believing it requested a job.
   if arguments is { "run_in_background": _, .. } {
     fail(
-      "arguments.run_in_background was removed; background handoff is automatic when a job runtime is available",
+      "arguments without run_in_background; that field was removed and background handoff is automatic when a job runtime is available",
     )
   }
   match arguments {

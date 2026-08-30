@@ -566,6 +566,11 @@ test "a definition without a job runtime describes its hard timeout" {
   assert_false(definition.description.contains("run_in_background"))
   assert_true(definition.description.contains("no background-job runtime"))
   assert_true(definition.description.contains("up to 300s"))
+  let injected = @mbtx.definition(
+    workspace_root=".",
+    foreground_timeout_ms=12_345,
+  )
+  assert_true(injected.description.contains("up to 12345ms"))
   let JsonSchema(schema) = definition.schema
   assert_false(schema.stringify().contains("run_in_background"))
 }
@@ -602,6 +607,18 @@ test "the schema advertises every decoded argument" {
     assert_true(names.contains(name))
   }
   assert_eq(required, (["source"] : Json))
+}
+
+///|
+/// The removed argument is rejected below JSON Schema enforcement, and its
+/// migration guidance must still read correctly through execute's shared
+/// "mbtx requires ..." decode-error wrapper.
+async test "the removed background field has grammatical migration guidance" {
+  let out = run_in(".", { "source": "fn main {  }", "run_in_background": true })
+  assert_true(out.is_error)
+  assert_true(out.content.contains("mbtx requires arguments without"))
+  assert_true(out.content.contains("field was removed"))
+  assert_true(out.content.contains("handoff is automatic"))
 }
 
 // The EDSL guidance the description carries — how a snippet is shaped, the
@@ -867,6 +884,19 @@ async test "refuses native FFI (extern can bind libc system)" {
 }
 
 ///|
+/// A compute-only backend has no moonrun policy. Text resembling its refusal
+/// marker is ordinary program output even in a runtime-less definition.
+async test "a runtime-less non-wasm run does not invent a policy refusal" {
+  let out = run_in(".", {
+    "source": "fn main { println(\"Sandbox policy blocked file write: example\") }",
+    "target": "js",
+  })
+  assert_false(out.is_error)
+  assert_true(out.content.contains("Sandbox policy blocked"))
+  assert_false(out.content.contains("mbtx sandbox:"))
+}
+
+///|
 async test "snippet stdin is an empty file (EOF), not the engine's inherited fd 0" {
   // A snippet that reads stdin must get immediate EOF, not block on (or steal
   // from) the parent's fd 0 — which under serve/TUI is the control channel.
@@ -902,7 +932,7 @@ async test "a runtime-less run uses its foreground timeout, not the handoff grac
     let definition = @mbtx.definition(
       workspace_root=ws,
       auto_background_after_ms=1,
-      foreground_timeout_ms=10_000,
+      foreground_timeout_ms=300_000,
     )
     let source =
       #|import { "moonbitlang/async" }
