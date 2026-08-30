@@ -100,7 +100,9 @@ these programs can be started:
   (`-c`, `-C`, `--git-dir`, `--work-tree`) is refused.
 - `gh` — pr, issue, run, `repo view`, api, `auth status`.
 - `rg` and `diff`.
-- `moonx` — runs other MoonBit binaries in wasm/sandbox mode.
+- `moonx` — runs other MoonBit binaries in wasm/sandbox mode; see
+  [Structural search with `moongrep`](#structural-search-with-moongrep) below
+  for AST-based code search.
 
 Anything else is refused, including the obvious ones such as `ls`, `cat`, and
 `sh`. Each of those is a line of MoonBit here, which also works on Windows,
@@ -258,6 +260,74 @@ tools that rewrite source as their job (`moon fmt`, `moon info`,
 - `moon bench`: run benchmarks, e.g. `moon bench lib/parser`.
 - `moon coverage analyze`: inspect test coverage when coverage matters.
   Example: `moon coverage analyze --package user/project/parser`.
+
+### Structural search with `moongrep`
+
+`moonx` also runs `moongrep`, a structural (AST-based) search and lint tool
+for MoonBit — use it when a text grep cannot express the shape you need
+("all `inspect` calls whose `content` is a literal", "every `match` over
+`Some`/`None`", "every call of one function nested inside another"). No `--`
+separator is needed: the arguments after the coordinate are moongrep's own.
+
+```mbtx
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/shell",
+}
+
+///|
+async fn main {
+  let out = @shell.Cmd("moonx", [
+    "moonbit-community/moongrep", "scan",
+    "--pattern",
+    "match $(value:exp) { Some($(some:id)) => $(some_body:exp); None => $(none_body:exp) }",
+    "--output-json",
+  ]).output()
+  println("exit=\{out.exit_code()}")
+  // Whole-repo scans can match many nodes; keep the printed excerpt bounded.
+  let stdout = out.stdout()
+  let n = if stdout.length() > 2000 { 2000 } else { stdout.length() }
+  println(stdout[:n])
+}
+```
+
+`scan` (and `lint`, which prepends the embedded builtin rules) scans
+recursively from the scan root — a directory or a single `.mbt` file; the
+default root `.` means the whole repository, which is the typical use.
+`.git`, `_build`, `.mooncakes`, and `target` are skipped by default;
+`--exclude <name-or-path>` skips more entries. Use `--output-json` for
+agent-friendly output: one JSON object per finding with `file` (relative to
+the scan root, often `./`-prefixed), `rule_id`, `description`, `range`
+(1-based `line`/`column`), `matched_source`, and `source_context`; a scan
+with zero findings writes nothing and still exits 0. A whole-repo scan can
+match many nodes, so bound what you print (as above) or redirect stdout
+with `stdout=ToFile(...)` under `@fs.tmpdir(prefix="run-")`. `--rules <dir>`
+and `--rule <file>` load YAML rule files, `--disable <rule-id>` drops a
+loaded rule, and `--verbose` traces traversal on stderr.
+
+A `--pattern` is a MoonBit *expression* containing `$(name:kind)`
+metavariables — `exp`, `id`, `const`, `arg`, `pat`, `type` — plus `$_` to
+match anything without capturing. Matching is on the untyped CST: whitespace
+and comments do not matter, but syntax shape does (`Some(1)` does not match
+`Some($(some:id))`; `Ok`/`Err` branches do not match a `Some`/`None`
+pattern). A metavariable used twice must capture equal structure. `--guard
+'{$name: "regex"}'` filters `id` and `const` captures (substring match
+unless anchored with `^...$`). When a pattern surprises you,
+`moongrep dump --expr '...'` or `dump --impl 'fn f { ... }'` prints the CST
+of a snippet, and `moongrep docs RuleSpec` / `docs CLISpec` print the full
+specs.
+
+Exit codes: 0 for help, dump, findings, no-findings, and parse warnings
+(no-match is NOT grep's 1); 2 usage; 3 invalid dump input; 4 rule-source
+failure; 5 invalid rule content (including a `--pattern` that is not a valid
+MoonBit expression); 6 missing/unreadable scan input; 7 output failure. The
+scanner follows symlinks, so a broken symlink anywhere under the scan root
+aborts the whole scan with 6 — some workspaces contain dangling symlinks
+(this one does, under `editor/codemirror/demo/`, `.worktrees/`, and
+`.moonagent/`), so scope scans to the subdirectory you care about (pass it
+as the scan root) or `--exclude` those paths instead of scanning `.` from
+the root.
 
 ## Tool Protocol
 
