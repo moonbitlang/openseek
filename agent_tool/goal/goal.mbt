@@ -71,10 +71,10 @@ fn execute(arguments : Json) -> @agent_tool.ToolAction {
   try @decode.decode(arguments) catch {
     error => {
       let message = @tool_error.failure_message("\{error}")
-      @agent_tool.ToolAction::respond("error: \{message}", is_error=true)
+      @agent_tool.respond("error: \{message}", is_error=true)
     }
   } noraise {
-    _ => @agent_tool.ToolAction::respond("goal status recorded")
+    _ => @agent_tool.respond("goal status recorded")
   }
 }
 

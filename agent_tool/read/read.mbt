@@ -71,7 +71,7 @@ async fn execute(
   let input = @decode.decode(arguments) catch {
     error => {
       let message = @tool_error.failure_message("\{error}")
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: read requires \{message}",
         is_error=true,
       )
@@ -90,7 +90,7 @@ async fn read_file(
     _ => false
   }
   if is_directory {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error reading \{path}: path is a directory; use the shell tool with `ls` or `tree` to inspect directories, then read specific files.",
       is_error=true,
       brief~,
@@ -102,7 +102,7 @@ async fn read_file(
   // containing only a newline is not empty (it has blank lines) and renders
   // normally.
   if content == "" {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "<system>start_line=\{input.start_line} shown_lines=0 total_lines=0 truncated=false note=empty file</system>",
       is_error=false,
       brief~,
@@ -177,7 +177,7 @@ async fn read_file(
   // model sees `truncated=true` in the footer, so treating it as a tool error
   // would only teach the loop to retry a read that worked. The brief carries
   // the marker so a human scanning the transcript sees the cut too.
-  @agent_tool.ToolAction::respond(
+  @agent_tool.respond(
     output.to_string(),
     is_error=false,
     brief=if truncated { "\{brief} (truncated)" } else { brief },

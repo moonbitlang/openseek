@@ -46,7 +46,7 @@ pub fn[T] capture_tool(
     execute=Sync(args => {
       match parse(args) {
         Err(problems) =>
-          @agent_tool.ToolAction::respond(
+          @agent_tool.respond(
             "\{name} rejected: \{problems.join("; ")}",
             is_error=true,
             brief=name,

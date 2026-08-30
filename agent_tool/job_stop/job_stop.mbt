@@ -24,15 +24,15 @@ async fn execute(
   arguments : Json,
 ) -> @agent_tool.ToolAction {
   guard arguments is { "job_id": String(job_id), .. } else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: job_stop requires a string job_id",
       is_error=true,
     )
   }
   if bg_runtime.stop(job_id) {
-    @agent_tool.ToolAction::respond("stopped background job \{job_id}")
+    @agent_tool.respond("stopped background job \{job_id}")
   } else {
-    @agent_tool.ToolAction::respond(
+    @agent_tool.respond(
       "error: no background job with id \{job_id}",
       is_error=true,
     )

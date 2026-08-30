@@ -177,7 +177,7 @@ async test "a finish tool call mid-batch closes the batch before the check" {
         schema=JsonSchema({ "type": "object" }),
         execute=Sync(_args => {
           probe_ran = true
-          @agent_tool.ToolAction::respond("probe-result")
+          @agent_tool.respond("probe-result")
         }),
       ),
     ])

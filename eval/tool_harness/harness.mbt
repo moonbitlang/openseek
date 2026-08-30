@@ -278,7 +278,7 @@ async fn dispatch(
   )
   let call = @agent_tool.AgentToolCall(native_call) catch {
     error =>
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: invalid harness call: \{error}",
         is_error=true,
       )

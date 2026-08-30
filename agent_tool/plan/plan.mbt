@@ -116,7 +116,7 @@ fn execute(arguments : Json) -> @agent_tool.ToolAction {
   let input = @steps.decode(arguments) catch {
     error => {
       let message = @tool_error.failure_message("\{error}")
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: plan requires \{message}",
         is_error=true,
       )
@@ -147,10 +147,7 @@ fn is_verification_title(title : String) -> Bool {
 fn render(input : @steps.PlanInput) -> @agent_tool.ToolAction {
   let total = input.steps.length()
   if total == 0 {
-    return @agent_tool.ToolAction::respond(
-      "Plan cleared.",
-      brief="plan cleared",
-    )
+    return @agent_tool.respond("Plan cleared.", brief="plan cleared")
   }
   let completed = input.steps.count_if(step => step.status is Completed)
   // The decoder rejects plans with more than one in_progress step, so the
@@ -185,7 +182,7 @@ fn render(input : @steps.PlanInput) -> @agent_tool.ToolAction {
         "plan \{completed}/\{total}"
       }
   }
-  @agent_tool.ToolAction::respond(content, brief~)
+  @agent_tool.respond(content, brief~)
 }
 
 ///|

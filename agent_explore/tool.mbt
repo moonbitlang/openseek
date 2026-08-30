@@ -97,13 +97,13 @@ async fn execute(
   arguments : Json,
 ) -> @agent_tool.ToolAction {
   guard arguments is { "query": String(query), .. } && !query.is_blank() else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: explore requires a non-empty string `query`",
       is_error=true,
     )
   }
   guard query.length() <= max_query_chars else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: explore query exceeds \{max_query_chars} chars — ask one self-contained question",
       is_error=true,
     )
@@ -113,7 +113,7 @@ async fn execute(
     _ => None
   }
   guard !(hints is Some(h) && h.length() > max_hints_chars) else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: explore hints exceed \{max_hints_chars} chars",
       is_error=true,
     )
@@ -121,7 +121,7 @@ async fn execute(
   // Reserve BEFORE launch: the allowance gates the launch slot; a granted
   // child always runs at the full explore ceiling.
   guard budget.reserve(default_explore_max_steps) is Some(granted_steps) else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "explore budget exhausted for this turn — answer from what you already know, or read the files directly.",
       is_error=true,
       brief="explore (budget exhausted)",
@@ -164,12 +164,12 @@ async fn execute(
   // sees briefs.
   match result.value() {
     Some(report) =>
-      @agent_tool.ToolAction::respond(
+      @agent_tool.respond(
         render_report(report),
         brief="explore \{result.subrun_id()} (\{report.citations.length()} citation(s), \{result.steps_used()} step(s))",
       )
     None =>
-      @agent_tool.ToolAction::respond(
+      @agent_tool.respond(
         "explore produced no report (\{Repr(result.terminal())}) — fall back to reading directly.",
         is_error=true,
         brief="explore \{result.subrun_id()} (no report)",

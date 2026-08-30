@@ -241,7 +241,7 @@ async test "a replacement goal cancels the pending review before launch" {
             runtime.queue_steer(
               Notice("\{@agent_session.GoalPrefix}\na brand new objective"),
             )
-            @agent_tool.ToolAction::respond("queued")
+            @agent_tool.respond("queued")
           }),
         ),
       ]),

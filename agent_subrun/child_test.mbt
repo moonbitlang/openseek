@@ -137,7 +137,7 @@ async fn run_answer_kind(
           name="probe",
           description="Probe tool.",
           schema=JsonSchema({ "type": "object" }),
-          execute=Sync(_args => @agent_tool.ToolAction::respond("result-1")),
+          execute=Sync(_args => @agent_tool.respond("result-1")),
         ),
       ])
     },

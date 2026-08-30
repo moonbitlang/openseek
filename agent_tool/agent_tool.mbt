@@ -164,12 +164,23 @@ pub enum ToolAction {
 /// Builds a normal tool response action. `brief` is an optional one-line summary
 /// surfaced in the visualizer (see `ToolOutput::brief`); it never reaches the
 /// model.
-pub fn ToolAction::respond(
+pub fn respond(
   content : String,
   is_error? : Bool = false,
   brief? : String,
 ) -> ToolAction {
   Respond(ToolOutput(content, is_error~, brief?))
+}
+
+///|
+/// Deprecated method form of `respond`; call the top-level function instead.
+#deprecated("use respond instead")
+pub fn ToolAction::respond(
+  content : String,
+  is_error? : Bool = false,
+  brief? : String,
+) -> ToolAction {
+  respond(content, is_error~, brief?)
 }
 
 ///|
@@ -307,15 +318,14 @@ pub async fn execute_tool_call(
                 Some("\{call.name} \{brief_basename(path)}")
               _ => None
             }
-            ToolAction::respond(
+            respond(
               "error: \{call.name} failed: \{error}",
               is_error=true,
               brief?,
             )
           }
       }
-    None =>
-      ToolAction::respond("error: unknown tool \{call.name}", is_error=true)
+    None => respond("error: unknown tool \{call.name}", is_error=true)
   }
 }
 
@@ -344,11 +354,11 @@ test "reject invalid native tool call arguments" {
 
 ///|
 test "ToolAction helpers build structured actions" {
-  let response = ToolAction::respond("ok")
+  let response = respond("ok")
   guard response is Respond(output) else { fail("expected Respond") }
   assert_eq(output.content, "ok")
   assert_false(output.is_error)
-  let error_response = ToolAction::respond("bad", is_error=true)
+  let error_response = respond("bad", is_error=true)
   guard error_response is Respond(error_output) else {
     fail("expected error Respond")
   }
@@ -369,7 +379,7 @@ test "Tools::function_tools converts the registry to deepseek tool definitions" 
       name: "echo",
       description: "Echo the input.",
       schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => ToolAction::respond("ok")),
+      execute: Sync(_args => respond("ok")),
       control: false,
       concurrent_safe: false,
     },
@@ -386,7 +396,7 @@ test "Tools::find returns the registered definition by name" {
       name: "echo",
       description: "Echo.",
       schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => ToolAction::respond("ok")),
+      execute: Sync(_args => respond("ok")),
       control: false,
       concurrent_safe: false,
     },
@@ -403,7 +413,7 @@ test "Tools::Tools raises on duplicate tool names" {
       name: "echo",
       description: "First.",
       schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => ToolAction::respond("first")),
+      execute: Sync(_args => respond("first")),
       control: false,
       concurrent_safe: false,
     },
@@ -411,7 +421,7 @@ test "Tools::Tools raises on duplicate tool names" {
       name: "echo",
       description: "Second.",
       schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => ToolAction::respond("second")),
+      execute: Sync(_args => respond("second")),
       control: false,
       concurrent_safe: false,
     },
@@ -444,8 +454,8 @@ async test "execute_tool_call dispatches to registered executor" {
       schema: JsonSchema({ "type": "object" }),
       execute: Sync(args => {
         match args {
-          { "value": String(v), .. } => ToolAction::respond(v)
-          _ => ToolAction::respond("no value", is_error=true)
+          { "value": String(v), .. } => respond(v)
+          _ => respond("no value", is_error=true)
         }
       }),
       control: false,
@@ -465,8 +475,8 @@ async test "execute_tool_call dispatches to registered executor" {
 async fn async_echo(args : Json) -> ToolAction {
   @async.pause()
   match args {
-    { "value": String(v), .. } => ToolAction::respond(v)
-    _ => ToolAction::respond("no value", is_error=true)
+    { "value": String(v), .. } => respond(v)
+    _ => respond("no value", is_error=true)
   }
 }
 
@@ -529,7 +539,7 @@ test "Tools::function_tools preserves description and schema" {
         "type": "object",
         "properties": Json::empty_object(),
       }),
-      execute: Sync(_args => ToolAction::respond("ok")),
+      execute: Sync(_args => respond("ok")),
       control: false,
       concurrent_safe: false,
     },
@@ -556,7 +566,7 @@ test "Tools::function_tools yields one entry per definition" {
       name: "first",
       description: "First.",
       schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => ToolAction::respond("1")),
+      execute: Sync(_args => respond("1")),
       control: false,
       concurrent_safe: false,
     },
@@ -564,7 +574,7 @@ test "Tools::function_tools yields one entry per definition" {
       name: "second",
       description: "Second.",
       schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => ToolAction::respond("2")),
+      execute: Sync(_args => respond("2")),
       control: false,
       concurrent_safe: false,
     },
@@ -572,7 +582,7 @@ test "Tools::function_tools yields one entry per definition" {
       name: "third",
       description: "Third.",
       schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => ToolAction::respond("3")),
+      execute: Sync(_args => respond("3")),
       control: false,
       concurrent_safe: false,
     },

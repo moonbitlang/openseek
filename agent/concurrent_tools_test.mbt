@@ -33,7 +33,7 @@ fn probe_tool(
       journal.push("start-\{tag}")
       @async.sleep(60)
       journal.push("end-\{tag}")
-      @agent_tool.ToolAction::respond("ok-\{tag}")
+      @agent_tool.respond("ok-\{tag}")
     }),
   )
 }

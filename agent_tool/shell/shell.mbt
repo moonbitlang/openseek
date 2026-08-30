@@ -181,7 +181,7 @@ async fn execute_with_workspace(
   let input = @decode.decode(arguments) catch {
     error => {
       let message = @tool_error.failure_message("\{error}")
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: shell requires \{message}",
         is_error=true,
       )
@@ -200,7 +200,7 @@ async fn execute_with_workspace(
       worker_root=scope.worker_root,
     )
     is Some(reason) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "blocked in worker mode: \{reason}; your writes are confined to \{scope.worker_root}",
       is_error=true,
     )
@@ -219,7 +219,7 @@ async fn execute_with_workspace(
       ),
       scratch_dir~,
     ) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "blocked in read-only review mode: `\{input.cmd}` runs a source-mutating moon command (fmt/info/test --update) outside your scratch lab; a review reports rather than rewrites the tree. Use plain `moon check`/`moon test` (no --update), `git`, `read` — or run the experiment inside your scratch lab.",
       is_error=true,
     )
@@ -229,7 +229,7 @@ async fn execute_with_workspace(
       parsed_command,
     )
     is Some(message) {
-    return @agent_tool.ToolAction::respond(message, is_error=true)
+    return @agent_tool.respond(message, is_error=true)
   }
   let cwd = @workspace_path.resolve_cwd(workspace_root, input.cwd)
   shell(
@@ -243,11 +243,7 @@ async fn execute_with_workspace(
     scratch_dir?,
     worker_sandbox?,
   ) catch {
-    error =>
-      @agent_tool.ToolAction::respond(
-        "error running shell: \{error}",
-        is_error=true,
-      )
+    error => @agent_tool.respond("error running shell: \{error}", is_error=true)
   }
 }
 
@@ -295,20 +291,20 @@ async fn shell(
   // An explicit wait request above the ceiling is an error, not a silent
   // clamp — the caller asked for wait semantics this tool will not provide.
   if input.timeout_ms is Some(explicit) && explicit > HardMaxForegroundTimeoutMs {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: timeout_ms \{explicit} exceeds the maximum \{HardMaxForegroundTimeoutMs}ms; run longer work with run_in_background and poll it with shell_output",
       is_error=true,
     )
   }
   if cwd is Some(cwd) {
     guard @fs.exists(cwd) else {
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: cwd does not exist: \{cwd}",
         is_error=true,
       )
     }
     guard @fs.kind(cwd) is Directory else {
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: cwd is not a directory: \{cwd}",
         is_error=true,
       )
@@ -319,7 +315,7 @@ async fn shell(
       scratch_dir,
     )
     is Some(target) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       direct_source_blocked_content("source file write redirect", target),
       is_error=true,
       brief=shell_brief(input.cmd, None),
@@ -409,7 +405,7 @@ async fn shell(
   let agent_output = match result {
     ShellExecuted(output) => output
     ShellPreblockedSourceTree(target) =>
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         direct_source_blocked_content("source tree operation", target),
         is_error=true,
         brief=shell_brief(input.cmd, None),
@@ -420,7 +416,7 @@ async fn shell(
       } else {
         " (default foreground budget; pass timeout_ms up to \{HardMaxForegroundTimeoutMs}ms for longer waits)"
       }
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: shell command timed out after \{effective_timeout_ms}ms\{budget}",
         is_error=true,
       )
@@ -431,7 +427,7 @@ async fn shell(
       } else {
         " (default foreground budget)"
       }
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "command still running after \{effective_timeout_ms}ms\{budget}; moved to the background as job \{id}. Read its output with shell_output (job_id=\"\{id}\") and stop it with shell_stop (job_id=\"\{id}\").",
         brief="\{@agent_tool.brief_line(input.cmd, limit=48)} → bg \{id}",
       )
@@ -453,7 +449,7 @@ async fn shell(
     input.timeout_ms,
     input.max_output_chars,
   )
-  @agent_tool.ToolAction::respond(
+  @agent_tool.respond(
     content,
     is_error=response.is_error || sandbox_denied,
     brief=shell_brief(input.cmd, output.exit_code),
@@ -626,13 +622,13 @@ async fn start_background(
   bg_runtime? : @bgjobs.BgJobRuntime,
 ) -> @agent_tool.ToolAction {
   guard bg_runtime is Some(runtime) else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: run_in_background is not available in this context",
       is_error=true,
     )
   }
   if input.timeout_ms is Some(_) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: timeout_ms is not supported with run_in_background; a background job runs until it finishes or is stopped with shell_stop",
       is_error=true,
     )
@@ -647,7 +643,7 @@ async fn start_background(
       scratch_dir,
     )
     is Some(target) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       direct_source_blocked_content("source tree operation", target),
       is_error=true,
       brief=shell_brief(input.cmd, None),
@@ -670,7 +666,7 @@ async fn start_background(
     sandboxed_command?=launch.sandboxed_command,
     read_only_review~,
   )
-  @agent_tool.ToolAction::respond(
+  @agent_tool.respond(
     "started background job \{id}: `\{input.cmd}`. Read its output with shell_output (job_id=\"\{id}\") and stop it with shell_stop (job_id=\"\{id}\").",
     brief="\{@agent_tool.brief_line(input.cmd, limit=48)} → bg \{id}",
   )

@@ -134,7 +134,7 @@ async fn execute_with_workspace(
   let input = @decode.decode(arguments) catch {
     error => {
       let message = @tool_error.failure_message("\{error}")
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: edit requires \{message}",
         is_error=true,
       )
@@ -147,7 +147,7 @@ async fn execute_with_workspace(
   if !input.replace_all_preview &&
     write_scope is Some(scope) &&
     scope.deny_reason(path) is Some(reason) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error editing \{path}: write blocked: \{reason}",
       is_error=true,
       brief="edit \{@agent_tool.brief_basename(path)}",
@@ -167,7 +167,7 @@ async fn edit_file(
   // `→ edit · edit <file> 🚩` on the folded call line.
   let fail_brief = "edit \{@agent_tool.brief_basename(path)}"
   fn err(message : String) -> @agent_tool.ToolAction {
-    @agent_tool.ToolAction::respond(
+    @agent_tool.respond(
       "error editing \{path}: \{message}",
       is_error=true,
       brief=fail_brief,
@@ -510,7 +510,7 @@ async fn preview_replace_all(
   report.write_string(
     "\nreview guidance: text matches cannot see types — for typed-code renames prefer the compiler loop (add the new name, deprecate the old, fix what moon check flags), and if this list is code-heavy or type-ambiguous, switch to it instead of applying. Preview-select-apply is for what the compiler cannot check (comments, docs, .mbt.md prose, string literals); multi_edit re-verifies the applied batch (parse gate + moon check auto-revert).\n",
   )
-  @agent_tool.ToolAction::respond(
+  @agent_tool.respond(
     report.to_string(),
     brief="edit preview \{@agent_tool.brief_basename(path)} (\{sites.length()} site(s))",
   )
@@ -654,7 +654,7 @@ async fn commit_edit(
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
   if @manifest_error.write_error(path, new_content) is Some(message) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error editing \{path}: \{message}",
       is_error=true,
       brief=fail_brief,
@@ -673,7 +673,7 @@ async fn commit_edit(
   // filesystem state that awaits ago may have changed (a path component
   // re-linked underneath the tool).
   if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error editing \{path}: write blocked: \{reason}",
       is_error=true,
       brief=fail_brief,
@@ -690,7 +690,7 @@ async fn commit_edit(
     @agent_tool.content_digest(new_content),
   )
   let response = @auto_check.append_summary(path, summary)
-  @agent_tool.ToolAction::respond(response, brief=ok_brief)
+  @agent_tool.respond(response, brief=ok_brief)
 }
 
 ///|
@@ -765,7 +765,7 @@ async fn parse_gate_rejection(
     }
     let bound = if gate.truncated { "≥" } else { "" }
     return Some(
-      @agent_tool.ToolAction::respond(
+      @agent_tool.respond(
         edit_reject_report(path, new_content, gate, introduced~, before_count~),
         is_error=true,
         brief="edit rejected (\{bound}\{introduced} parse error(s))",

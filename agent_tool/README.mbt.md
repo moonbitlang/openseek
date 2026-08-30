@@ -95,12 +95,12 @@ step to decide what to do.
 ```moonbit check
 ///|
 test "tool action helpers" {
-  let response = @agent_tool.ToolAction::respond("ok")
+  let response = @agent_tool.respond("ok")
   guard response is Respond(output) else { fail("expected Respond") }
   assert_eq(output.content, "ok")
   assert_false(output.is_error)
 
-  let failed = @agent_tool.ToolAction::respond("bad", is_error=true)
+  let failed = @agent_tool.respond("bad", is_error=true)
   guard failed is Respond(error_output) else { fail("expected Respond") }
   assert_eq(error_output.content, "bad")
   assert_true(error_output.is_error)

@@ -41,13 +41,13 @@ async fn execute(
   arguments : Json,
 ) -> @agent_tool.ToolAction {
   guard arguments is { "job_id": String(job_id), .. } else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: job_output requires a string job_id",
       is_error=true,
     )
   }
   guard bg_runtime.snapshot(job_id) is Some(_) else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: no background job with id \{job_id}",
       is_error=true,
     )
@@ -62,8 +62,7 @@ async fn execute(
       let _ = bg_runtime.wait_exit(job_id, wait)
     }
     Ok(None) => ()
-    Err(message) =>
-      return @agent_tool.ToolAction::respond(message, is_error=true)
+    Err(message) => return @agent_tool.respond(message, is_error=true)
   }
   // Recent output, bounded to a window so a poll cannot flood the conversation
   // with a large job's full log. For output over the window, show the *tail*
@@ -75,7 +74,7 @@ async fn execute(
   // footer must reflect that post-read state, not a stale pre-read one — else a
   // tail could be presented as complete or with an out-of-date status.
   guard bg_runtime.snapshot(job_id) is Some(snapshot) else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: no background job with id \{job_id}",
       is_error=true,
     )
@@ -154,7 +153,7 @@ async fn execute(
   }
   content.write_string(footer)
   let content = content.to_string()
-  @agent_tool.ToolAction::respond(content, is_error~)
+  @agent_tool.respond(content, is_error~)
 }
 
 ///|

@@ -68,14 +68,14 @@ async fn execute_review(
     (Some(focus), None) => focus
     (None, Some(goal)) => goal
     (None, None) =>
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: no standing goal exists — pass `focus` with the criteria to audit against",
         is_error=true,
       )
   }
   guard budget.reserve(@agent_review.default_audit_max_steps)
     is Some(granted_steps) else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "review budget exhausted for this turn — validate directly (run the checks yourself).",
       is_error=true,
       brief="review (budget exhausted)",
@@ -114,13 +114,13 @@ async fn execute_review(
   // Display-only: the model never sees briefs.
   match result.value() {
     Some(report) =>
-      @agent_tool.ToolAction::respond(
+      @agent_tool.respond(
         report.digest(),
         is_error=report.findings.any(f => f.severity == "blocker"),
         brief="review \{result.subrun_id()} (\{report.findings.length()} finding(s), \{result.steps_used()} step(s))",
       )
     None =>
-      @agent_tool.ToolAction::respond(
+      @agent_tool.respond(
         "review produced no report (\{@agent_tool.brief_line("\{Repr(result.terminal())}", limit=200)}) — validate directly instead.",
         is_error=true,
         brief="review \{result.subrun_id()} (no report)",

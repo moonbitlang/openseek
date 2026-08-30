@@ -157,7 +157,7 @@ async fn subtask_execute(
   match arguments {
     { "slices": Array(entries), .. } => {
       guard !entries.is_empty() else {
-        return @agent_tool.ToolAction::respond(
+        return @agent_tool.respond(
           "error: subtask `slices` must not be empty",
           is_error=true,
         )
@@ -166,7 +166,7 @@ async fn subtask_execute(
       // try_acquire, so entries past the cap would fail as "slots full"
       // while the call still looked accepted.
       guard entries.length() <= max_active_workers else {
-        return @agent_tool.ToolAction::respond(
+        return @agent_tool.respond(
           "error: subtask `slices` accepts at most \{max_active_workers} slices per call (got \{entries.length()}) — send the rest in a follow-up call once these integrate",
           is_error=true,
         )
@@ -175,10 +175,7 @@ async fn subtask_execute(
         match decode_launch(entry) {
           Ok(spec) => specs.push(spec)
           Err(reason) =>
-            return @agent_tool.ToolAction::respond(
-              "error: \{reason}",
-              is_error=true,
-            )
+            return @agent_tool.respond("error: \{reason}", is_error=true)
         }
       }
     }
@@ -186,10 +183,7 @@ async fn subtask_execute(
       match decode_launch(arguments) {
         Ok(spec) => specs.push(spec)
         Err(reason) =>
-          return @agent_tool.ToolAction::respond(
-            "error: \{reason}",
-            is_error=true,
-          )
+          return @agent_tool.respond("error: \{reason}", is_error=true)
       }
   }
   subtask_launch_many(env, specs)
@@ -204,7 +198,7 @@ async fn subtask_lifecycle(
   let geometry = match @subtask.resolve_geometry(workspace_root) {
     Ok(geometry) => geometry
     Err(reason) =>
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: subtask \{action}: \{reason}",
         is_error=true,
       )
@@ -212,7 +206,7 @@ async fn subtask_lifecycle(
   let (entries, _) = @subtask.load_entries(geometry.common_git_dir)
   guard entries.filter(e => e.name == name && !e.state.is_terminal()).last()
     is Some(entry) else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: no active subtask named \{name}",
       is_error=true,
       brief="subtask \{action} \{name}",
@@ -222,12 +216,12 @@ async fn subtask_lifecycle(
     "discard" =>
       match @subtask.discard(geometry, entry) {
         Ok(_) =>
-          @agent_tool.ToolAction::respond(
+          @agent_tool.respond(
             "subtask \{name} discarded: worktree and branch removed, paths freed.",
             brief="subtask discarded \{name}",
           )
         Err(reason) =>
-          @agent_tool.ToolAction::respond(
+          @agent_tool.respond(
             "error: subtask discard: \{reason}",
             is_error=true,
             brief="subtask discard \{name}",
@@ -240,7 +234,7 @@ async fn subtask_lifecycle(
         _ => @subtask.integrate_abort(geometry, entry)
       }
       let content = "subtask \{name} \{action}: \{outcome.result}\n\{outcome.detail.join("\n")}"
-      @agent_tool.ToolAction::respond(
+      @agent_tool.respond(
         content,
         is_error=outcome.result == "refused",
         brief="subtask \{action} \{name} (\{outcome.result})",
@@ -340,7 +334,7 @@ async fn subtask_launch_many(
   out <+
     "\{specs.length()} slice(s) launched concurrently:\n\{summary.to_string()}\n"
   out <+ "\{detail.to_string()}"
-  @agent_tool.ToolAction::respond(
+  @agent_tool.respond(
     out.to_string(),
     is_error=any_error,
     brief="subtask \{specs.length()} slices (\{briefs.join(", ")})",
@@ -369,7 +363,7 @@ async fn subtask_launch_one(
   // later failure path has exactly one transaction to roll back.
   guard worker_slots.try_acquire() else {
     return {
-      action: @agent_tool.ToolAction::respond(
+      action: @agent_tool.respond(
         "subtask worker slots are full (max \{max_active_workers} active) — integrate or await the running slices first.",
         is_error=true,
         brief="subtask (slots full)",
@@ -385,7 +379,7 @@ async fn subtask_launch_one(
   guard env.budget.reserve(@agent_worker.default_worker_max_steps)
     is Some(granted_steps) else {
     return {
-      action: @agent_tool.ToolAction::respond(
+      action: @agent_tool.respond(
         "subtask budget exhausted for this turn — do the remaining slices yourself or continue next turn.",
         is_error=true,
         brief="subtask (budget exhausted)",
@@ -405,7 +399,7 @@ async fn subtask_launch_one(
     Ok(provisioned) => provisioned
     Err(reason) =>
       return {
-        action: @agent_tool.ToolAction::respond(
+        action: @agent_tool.respond(
           "error: subtask provision: \{reason}",
           is_error=true,
           brief="subtask \{name} (provision refused)",
@@ -519,7 +513,7 @@ async fn run_worker_slice(
   let mergeable = captured.entry.state is Committed
   let is_error = !mergeable && !(captured.entry.state is NoChanges)
   {
-    action: @agent_tool.ToolAction::respond(
+    action: @agent_tool.respond(
       out.to_string(),
       is_error~,
       brief="subtask \{result.subrun_id()} \{name} (\{Repr(captured.entry.state)}, \{result.steps_used()} step(s))",
@@ -541,14 +535,14 @@ async fn subtask_continue(
   name : String,
 ) -> @agent_tool.ToolAction {
   guard arguments is { "task": String(task), .. } && !task.is_blank() else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: subtask continue=\{name} requires a `task` — the remainder work order for the fresh worker",
       is_error=true,
       brief="subtask continue \{name}",
     )
   }
   guard task.length() <= max_task_chars else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: subtask task for \{name} exceeds \{max_task_chars} chars",
       is_error=true,
       brief="subtask continue \{name}",
@@ -559,7 +553,7 @@ async fn subtask_continue(
     _ => None
   }
   guard !(parent_context is Some(c) && c.length() > max_context_chars) else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: subtask context for \{name} exceeds \{max_context_chars} chars",
       is_error=true,
       brief="subtask continue \{name}",
@@ -568,14 +562,14 @@ async fn subtask_continue(
   let geometry = match @subtask.resolve_geometry(env.workspace_root) {
     Ok(geometry) => geometry
     Err(reason) =>
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: subtask continue: \{reason}",
         is_error=true,
         brief="subtask continue \{name}",
       )
   }
   guard worker_slots.try_acquire() else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "subtask worker slots are full (max \{max_active_workers} active) — integrate or await the running slices first.",
       is_error=true,
       brief="subtask continue (slots full)",
@@ -584,7 +578,7 @@ async fn subtask_continue(
   defer worker_slots.release()
   guard env.budget.reserve(@agent_worker.default_worker_max_steps)
     is Some(granted_steps) else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "subtask budget exhausted for this turn — do the remaining work yourself or continue next turn.",
       is_error=true,
       brief="subtask continue (budget exhausted)",
@@ -593,7 +587,7 @@ async fn subtask_continue(
   let entry = match @subtask.resume_running(geometry, name) {
     Ok(entry) => entry
     Err(reason) =>
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: subtask continue: \{reason}",
         is_error=true,
         brief="subtask continue \{name}",

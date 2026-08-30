@@ -168,7 +168,7 @@ async fn execute(
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
     error =>
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: mbtx requires \{@tool_error.failure_message("\{error}")}",
         is_error=true,
       )
@@ -183,7 +183,7 @@ async fn execute(
   // that follows it does not. A substring scan is NOT a real boundary; it is
   // what keeps the non-wasm targets' "compute-only" promise true.
   if input.source.contains("extern \"") {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "mbtx refuses this program: it uses native FFI (extern), which no mbtx target can run sandboxed — the wasm family refuses to compile it, and the js/llvm targets have no policy to contain it.",
       is_error=true,
     )
@@ -194,13 +194,13 @@ async fn execute(
   let run_cwd = @workspace_path.resolve_cwd(workspace_root, input.cwd)
   if run_cwd is Some(c) {
     guard @fs.exists(c) else {
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: mbtx cwd does not exist: \{c}",
         is_error=true,
       )
     }
     guard @fs.kind(c) is Directory else {
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: mbtx cwd is not a directory: \{c}",
         is_error=true,
       )
@@ -216,7 +216,7 @@ async fn execute(
   // wraps only the process body; output is redirected to a file (not buffered in
   // memory) and read back capped, so a flood cannot exhaust memory.
   if input.run_in_background && bg_runtime is None {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: run_in_background is not available in this context",
       is_error=true,
     )
@@ -226,7 +226,7 @@ async fn execute(
   // cannot spawn or touch files at all — so asking here would spend a person's
   // attention on a grant that changes nothing about the run.
   if input.escalated && input.target != "wasm" {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "mbtx: `escalated` applies to the wasm target, which is the one the sandbox policy binds; `\{input.target}` runs no policy to lift and cannot spawn or touch files anyway. Drop `escalated`, or drop `target` to use wasm.",
       is_error=true,
     )
@@ -256,7 +256,7 @@ async fn execute(
       None => Unavailable
     }
     guard outcome is AllowedOnce else {
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         escalation_refused(outcome),
         is_error=true,
         brief="mbtx (escalation \{escalation_brief(outcome)})",
@@ -279,7 +279,7 @@ async fn execute(
     @fs.mkdir(dir, recursive=true) catch {
       error if @async.is_being_cancelled() => raise error
       _ =>
-        return @agent_tool.ToolAction::respond(
+        return @agent_tool.respond(
           "mbtx: could not create a working directory for the background job.",
           is_error=true,
         )
@@ -294,7 +294,7 @@ async fn execute(
     @fs.mkdir(dir, recursive=true) catch {
       error if @async.is_being_cancelled() => raise error
       _ =>
-        return @agent_tool.ToolAction::respond(
+        return @agent_tool.respond(
           "mbtx: could not create a working directory in the scratch lab.",
           is_error=true,
         )
@@ -306,7 +306,7 @@ async fn execute(
       // swallowing it into an ordinary tool error.
       error if @async.is_being_cancelled() => raise error
       _ =>
-        return @agent_tool.ToolAction::respond(
+        return @agent_tool.respond(
           "mbtx: could not create a temporary working directory.",
           is_error=true,
         )
@@ -494,7 +494,7 @@ async fn execute(
     })
     guard build_exit is Some(build_exit) else {
       let text = rewrite_temp_paths(read_capped(build_log), [real, dir])
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "mbtx: the build did not finish within \{run_timeout_ms / 1000}s, so no background job was started.\n\{text}",
         is_error=true,
         brief="mbtx (build timeout)",
@@ -502,7 +502,7 @@ async fn execute(
     }
     if build_exit != 0 {
       let text = rewrite_temp_paths(read_capped(build_log), [real, dir])
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "[mbtx: the program did not compile, so no background job was started]\n\{text}",
         is_error=true,
         brief="mbtx (build failed)",
@@ -520,7 +520,7 @@ async fn execute(
       stdin=@process.redirect_from_file(empty_stdin),
     )
     job_owns_dir.val = true
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "started background job \{id} (the program compiled). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\").",
       brief="mbtx → bg \{id}",
     )
@@ -561,7 +561,7 @@ async fn execute(
         sandboxed_command?,
       )
       job_owns_dir.val = true
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "mbtx: still running after \{run_timeout_ms / 1000}s, so it moved to the background as job \{id} (nothing was lost). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\").",
         brief="mbtx → bg \{id}",
       )
@@ -607,7 +607,7 @@ async fn execute(
     } else {
       body
     }
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       body,
       is_error=exit_code != 0 ||
         sandbox_denied is Some(_) ||
@@ -660,7 +660,7 @@ async fn execute(
       } else {
         body
       }
-      @agent_tool.ToolAction::respond(
+      @agent_tool.respond(
         body,
         is_error=exit_code != 0 || sandbox_denied is Some(_),
         brief="mbtx (exit=\{exit_code})",
@@ -683,11 +683,7 @@ async fn execute(
       } else {
         body
       }
-      @agent_tool.ToolAction::respond(
-        body,
-        is_error=true,
-        brief="mbtx (timeout)",
-      )
+      @agent_tool.respond(body, is_error=true, brief="mbtx (timeout)")
     }
   }
   action

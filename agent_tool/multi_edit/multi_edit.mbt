@@ -130,7 +130,7 @@ async fn execute_with_workspace(
 ) -> @agent_tool.ToolAction {
   let args = @decode.decode_args(arguments) catch {
     error =>
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: multi_edit requires \{@tool_error.failure_message("\{error}")}",
         is_error=true,
       )
@@ -144,7 +144,7 @@ async fn execute_with_workspace(
     }
   }
   if edits.is_empty() {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: multi_edit requires edits and/or edits_file (no edits were provided)",
       is_error=true,
     )
@@ -173,7 +173,7 @@ async fn load_edits_file(
     error if @async.is_being_cancelled() => raise error
     error =>
       return Err(
-        @agent_tool.ToolAction::respond(
+        @agent_tool.respond(
           "error: multi_edit could not read edits file \{path}: \{error}",
           is_error=true,
           brief~,
@@ -183,7 +183,7 @@ async fn load_edits_file(
   let json = @json.parse(text) catch {
     error =>
       return Err(
-        @agent_tool.ToolAction::respond(
+        @agent_tool.respond(
           "error: multi_edit edits file \{path} is not valid JSON: \{error}",
           is_error=true,
           brief~,
@@ -193,7 +193,7 @@ async fn load_edits_file(
   let edits = @decode.decode_edits_json(json) catch {
     error =>
       return Err(
-        @agent_tool.ToolAction::respond(
+        @agent_tool.respond(
           "error: multi_edit requires \{@tool_error.failure_message("\{error}")} in edits file \{path}",
           is_error=true,
           brief~,
@@ -268,7 +268,7 @@ async fn multi_edit_files(
   // A file's edits must form one contiguous block so each file is read,
   // validated, and written exactly once.
   if check_contiguity(resolved) is Some(message) {
-    return @agent_tool.ToolAction::respond(message, is_error=true, brief~)
+    return @agent_tool.respond(message, is_error=true, brief~)
   }
   let groups = group_contiguous(resolved)
   let failures : Array[EditFailure] = []
@@ -297,11 +297,7 @@ async fn multi_edit_files(
     prepared.push({ file: group.file, path: group.path, content, plans, })
   }
   if failures.length() > 0 {
-    return @agent_tool.ToolAction::respond(
-      failure_report(failures),
-      is_error=true,
-      brief~,
-    )
+    return @agent_tool.respond(failure_report(failures), is_error=true, brief~)
   }
   // Render each file and run the write guard before touching disk, so a guarded
   // path aborts the whole batch instead of leaving earlier files written. The
@@ -340,11 +336,7 @@ async fn multi_edit_files(
     }
   }
   if failures.length() > 0 {
-    return @agent_tool.ToolAction::respond(
-      failure_report(failures),
-      is_error=true,
-      brief~,
-    )
+    return @agent_tool.respond(failure_report(failures), is_error=true, brief~)
   }
   // Pre-write syntax gate over the rendered batch (see parse_gate.mbt): if
   // any edited `.mbt` file would gain new lex/parse errors, reject the whole
@@ -360,7 +352,7 @@ async fn multi_edit_files(
     // decided on filesystem state that awaits ago may have changed.
     if write_scope is Some(scope) &&
       scope.deny_reason(write.path) is Some(reason) {
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error multi_editing \{write.path}: write blocked: \{reason}; earlier files in the batch may already be written",
         is_error=true,
         brief~,
@@ -369,7 +361,7 @@ async fn multi_edit_files(
     @fs.write_file(write.path, write.new_content, create_mode=CreateOrTruncate) catch {
       error if @async.is_being_cancelled() => raise error
       error =>
-        return @agent_tool.ToolAction::respond(
+        return @agent_tool.respond(
           "error multi_editing \{write.path}: error writing file: \{error}; earlier files in the batch may already be written",
           is_error=true,
           brief~,
@@ -392,10 +384,7 @@ async fn multi_edit_files(
         write_scope?,
       )
     [] =>
-      @agent_tool.ToolAction::respond(
-        success_summary(writes),
-        brief=success_brief(writes),
-      )
+      @agent_tool.respond(success_summary(writes), brief=success_brief(writes))
   }
   // Record each file's provenance and content digest AFTER the auto-revert guard
   // above, which may have rewritten some files back to their pre-batch content —
@@ -513,7 +502,7 @@ async fn parse_gate_batch_rejection(
   let any_truncated = rejections.any(rejection => rejection.truncated)
   let bound = if any_truncated { "≥" } else { "" }
   Some(
-    @agent_tool.ToolAction::respond(
+    @agent_tool.respond(
       batch_reject_report(rejections, total~, any_truncated~),
       is_error=true,
       brief="multi_edit rejected (\{bound}\{total} parse error(s))",
@@ -580,16 +569,13 @@ async fn revert_guarded_response(
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
   let summary = success_summary(writes)
-  let kept = @agent_tool.ToolAction::respond(
-    summary,
-    brief=success_brief(writes),
-  )
+  let kept = @agent_tool.respond(summary, brief=success_brief(writes))
   let after = count_errors_or_none(check_path)
   // Not a MoonBit project, or the check could not run: keep the batch exactly
   // as applied, just as before this guardrail existed.
   guard after is Some(after) else { return kept }
   if after.error_count <= threshold {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       keep_response(summary, after, threshold),
       brief=success_brief(writes),
     )
@@ -607,7 +593,7 @@ async fn revert_guarded_response(
   let introduced = after.error_count - before_count
   if introduced > threshold {
     // Real breakage. Stay reverted (the originals are already back on disk).
-    @agent_tool.ToolAction::respond(
+    @agent_tool.respond(
       revert_report(writes, after, introduced~, threshold~, restore_failures~),
       is_error=true,
       brief="multi_edit reverted (\{introduced} new error(s))",
@@ -627,7 +613,7 @@ async fn revert_guarded_response(
     if reapply_failures.length() > 0 {
       // Final contents are uncertain: these files may still hold their
       // pre-batch text.
-      @agent_tool.ToolAction::respond(
+      @agent_tool.respond(
         "error multi_editing: the batch was kept, but re-applying it did not fully succeed — these files may not hold the batch content: \{reapply_failures.join(", ")}; re-read them before further edits",
         is_error=true,
         brief="multi_edit partially re-applied",
@@ -636,13 +622,13 @@ async fn revert_guarded_response(
       // Every final write landed, so the tree holds the batch — but the
       // baseline this keep decision compared against was measured with these
       // files unrestored, so the decision itself deserves the caveat.
-      @agent_tool.ToolAction::respond(
+      @agent_tool.respond(
         keep_response(summary, after, threshold, introduced~) +
         "\nnote: the pre-batch baseline was measured with \{restore_failures.length()} file(s) unrestored (\{restore_failures.join(", ")}), so the introduced-error count may be understated",
         brief=success_brief(writes),
       )
     } else {
-      @agent_tool.ToolAction::respond(
+      @agent_tool.respond(
         keep_response(summary, after, threshold, introduced~),
         brief=success_brief(writes),
       )

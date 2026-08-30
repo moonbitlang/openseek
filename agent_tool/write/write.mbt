@@ -97,7 +97,7 @@ async fn execute_with_workspace(
   let input = @decode.decode(arguments) catch {
     error => {
       let message = @tool_error.failure_message("\{error}")
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: write requires \{message}",
         is_error=true,
       )
@@ -107,7 +107,7 @@ async fn execute_with_workspace(
   // Containment gate for confined (worker) registries; re-checked below
   // immediately before the file is written.
   if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error writing \{path}: write blocked: \{reason}",
       is_error=true,
       brief="write \{@agent_tool.brief_basename(path)}",
@@ -124,7 +124,7 @@ async fn write_file(
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
   if @manifest_error.write_error(path, input.content) is Some(message) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error writing \{path}: \{message}",
       is_error=true,
       brief="write \{@agent_tool.brief_basename(path)}",
@@ -147,7 +147,7 @@ async fn write_file(
   // stops a link named `x.txt` pointing at `lib.mbt` from slipping past the
   // suffix check and truncating the source through CreateOrTruncate below.
   if @fs.exists(path) && (is_mbt_source(path) || is_mbt_source(target)) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error writing \{path}: existing source file — use edit or multi_edit to change it (an empty old_string inserts new code); write is for creating new files",
       is_error=true,
       brief="write \{@agent_tool.brief_basename(path)}",
@@ -171,7 +171,7 @@ async fn write_file(
       }
       if gate is Some(gate) && gate.errors.length() > 0 {
         let bound = if gate.truncated { "≥" } else { "" }
-        return @agent_tool.ToolAction::respond(
+        return @agent_tool.respond(
           write_reject_report(path, input.content, gate),
           is_error=true,
           brief="write rejected (\{bound}\{gate.errors.length()} parse error(s))",
@@ -183,7 +183,7 @@ async fn write_file(
   // are created for the target): the early gate decided on filesystem state
   // that awaits ago may have changed underneath the tool.
   if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error writing \{path}: write blocked: \{reason}",
       is_error=true,
       brief="write \{@agent_tool.brief_basename(path)}",
@@ -254,7 +254,7 @@ async fn write_file(
     },
   )
   let content = @auto_check.append_summary(path, summary)
-  @agent_tool.ToolAction::respond(content, brief=ok_brief)
+  @agent_tool.respond(content, brief=ok_brief)
 }
 
 ///|

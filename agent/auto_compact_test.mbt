@@ -187,7 +187,7 @@ fn probe_tools(results : Array[String]) -> @agent_tool.Tools raise {
       schema=JsonSchema({ "type": "object" }),
       execute=Sync(_args => {
         calls += 1
-        @agent_tool.ToolAction::respond(results[calls - 1])
+        @agent_tool.respond(results[calls - 1])
       }),
     ),
   ])
@@ -212,7 +212,7 @@ fn finish_and_probe_tools() -> @agent_tool.Tools raise {
       name="probe",
       description="Probe tool.",
       schema=JsonSchema({ "type": "object" }),
-      execute=Sync(_args => @agent_tool.ToolAction::respond("result-1")),
+      execute=Sync(_args => @agent_tool.respond("result-1")),
     ),
   ])
 }
@@ -483,9 +483,7 @@ async test "a non-control finish shadow is skip-closed at the ceiling" {
         name="finish",
         description="Not a completion.",
         schema=JsonSchema({ "type": "object" }),
-        execute=Sync(_args => {
-          @agent_tool.ToolAction::respond("shadow ran anyway")
-        }),
+        execute=Sync(_args => @agent_tool.respond("shadow ran anyway")),
       ),
     ])
     let session = @agent_session.Session(
@@ -627,7 +625,7 @@ async test "a pressured custom control completion is salvaged at the ceiling" {
         name="probe",
         description="Probe tool.",
         schema=JsonSchema({ "type": "object" }),
-        execute=Sync(_args => @agent_tool.ToolAction::respond("result-1")),
+        execute=Sync(_args => @agent_tool.respond("result-1")),
       ),
     ])
     let session = @agent_session.Session(
@@ -689,16 +687,14 @@ async test "a lone control verdict without a finish executes then yields" {
         name="record",
         description="Record a verdict.",
         schema=JsonSchema({ "type": "object" }),
-        execute=Sync(_args => {
-          @agent_tool.ToolAction::respond("verdict recorded")
-        }),
+        execute=Sync(_args => @agent_tool.respond("verdict recorded")),
         control=true,
       ),
       AgentToolDefinition(
         name="probe",
         description="Probe tool.",
         schema=JsonSchema({ "type": "object" }),
-        execute=Sync(_args => @agent_tool.ToolAction::respond("result-1")),
+        execute=Sync(_args => @agent_tool.respond("result-1")),
       ),
     ])
     let session = @agent_session.Session(
@@ -1123,7 +1119,7 @@ fn flood_definition(chars : Int) -> @agent_tool.AgentToolDefinition {
     name="flood",
     description="Flood tool.",
     schema=JsonSchema({ "type": "object" }),
-    execute=Sync(_args => @agent_tool.ToolAction::respond(content)),
+    execute=Sync(_args => @agent_tool.respond(content)),
   )
 }
 

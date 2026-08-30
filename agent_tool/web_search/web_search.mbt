@@ -142,13 +142,13 @@ async fn execute(
   arguments : Json,
 ) -> @agent_tool.ToolAction {
   guard arguments is { "query": String(query), .. } && !query.is_blank() else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: web_search requires a non-empty string `query`",
       is_error=true,
     )
   }
   guard query.length() <= MaxQueryChars else {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error: web_search query exceeds \{MaxQueryChars} chars — ask one focused question",
       is_error=true,
     )
@@ -166,13 +166,13 @@ async fn execute(
     error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
       raise error
     error =>
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: web_search failed: \{error}",
         is_error=true,
         brief=failure_brief(query),
       )
   }
-  @agent_tool.ToolAction::respond(
+  @agent_tool.respond(
     format_output(outcome),
     brief=success_brief(query, outcome.sources.length()),
   )

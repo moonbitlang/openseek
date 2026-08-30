@@ -304,7 +304,7 @@ async fn call_tool(
         "MCP tool `\{tool}` call failed: \{error}",
         MaxToolOutputChars,
       )
-      return @agent_tool.ToolAction::respond(message, is_error=true)
+      return @agent_tool.respond(message, is_error=true)
     }
   }
   guard outcome is Some(result) else {
@@ -312,7 +312,7 @@ async fn call_tool(
       "MCP tool `\{tool}` timed out after \{CallTimeoutMs / 1000}s",
       MaxToolOutputChars,
     )
-    return @agent_tool.ToolAction::respond(message, is_error=true)
+    return @agent_tool.respond(message, is_error=true)
   }
   let (content, truncated) = cap_chars(result.render_text(), MaxToolOutputChars)
   let text = if truncated {
@@ -320,7 +320,7 @@ async fn call_tool(
   } else {
     content
   }
-  @agent_tool.ToolAction::respond(
+  @agent_tool.respond(
     text,
     is_error=result.is_error,
     brief=@agent_tool.brief_line(text),

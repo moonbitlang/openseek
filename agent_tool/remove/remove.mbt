@@ -92,7 +92,7 @@ async fn execute_with_workspace(
   let input = @decode.decode(arguments) catch {
     error => {
       let message = @tool_error.failure_message("\{error}")
-      return @agent_tool.ToolAction::respond(
+      return @agent_tool.respond(
         "error: remove requires \{message}",
         is_error=true,
       )
@@ -102,7 +102,7 @@ async fn execute_with_workspace(
   // Containment gate for confined (worker) registries: deletion is a
   // write-class operation. Re-checked immediately before the delete.
   if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
-    return @agent_tool.ToolAction::respond(
+    return @agent_tool.respond(
       "error removing \{path}: write blocked: \{reason}",
       is_error=true,
       brief="remove \{@agent_tool.brief_basename(path)}",
@@ -120,7 +120,7 @@ async fn remove_file(
 ) -> @agent_tool.ToolAction {
   let fail_brief = "remove \{@agent_tool.brief_basename(path)}"
   fn err(message : String) -> @agent_tool.ToolAction {
-    @agent_tool.ToolAction::respond(
+    @agent_tool.respond(
       "error removing \{path}: \{message}",
       is_error=true,
       brief=fail_brief,
@@ -180,7 +180,7 @@ async fn remove_file(
   // the build just as an edit can.
   let summary = "ok: removed \{path} (reason: \{input.reason})"
   let content = @auto_check.append_summary(path, summary)
-  @agent_tool.ToolAction::respond(
+  @agent_tool.respond(
     content,
     brief=@agent_tool.brief_line("removed \{input.path}"),
   )

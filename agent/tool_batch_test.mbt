@@ -62,7 +62,7 @@ async test "agent executes each normal tool call in a response batch" {
         schema=JsonSchema({ "type": "object" }),
         execute=Sync(_args => {
           first_called = true
-          @agent_tool.ToolAction::respond("first-result")
+          @agent_tool.respond("first-result")
         }),
       ),
       AgentToolDefinition(
@@ -71,7 +71,7 @@ async test "agent executes each normal tool call in a response batch" {
         schema=JsonSchema({ "type": "object" }),
         execute=Sync(_args => {
           second_called = true
-          @agent_tool.ToolAction::respond("second-result")
+          @agent_tool.respond("second-result")
         }),
       ),
     ])
@@ -165,7 +165,7 @@ async test "max-step exhaustion preserves continued session state" {
         name="continue_test",
         description="Force the agent loop to continue.",
         schema=JsonSchema({ "type": "object" }),
-        execute=Sync(_args => @agent_tool.ToolAction::respond("continue-result")),
+        execute=Sync(_args => @agent_tool.respond("continue-result")),
       ),
     ])
     let result = @agent.run_turn_in_scope(
@@ -247,7 +247,7 @@ async test "agent failure terminal uses the latest persisted session" {
         name="ok_test",
         description="Produce a normal response after the assistant tool call.",
         schema=JsonSchema({ "type": "object" }),
-        execute=Sync(_args => @agent_tool.ToolAction::respond("ok-result")),
+        execute=Sync(_args => @agent_tool.respond("ok-result")),
       ),
     ])
     let _ = @agent.run_turn_in_scope(

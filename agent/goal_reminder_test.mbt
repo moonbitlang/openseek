@@ -47,7 +47,7 @@ fn goal_probe_tools() -> @agent_tool.Tools raise {
       name="probe",
       description="Probe tool.",
       schema=JsonSchema({ "type": "object" }),
-      execute=Sync(_args => @agent_tool.ToolAction::respond("probe-result")),
+      execute=Sync(_args => @agent_tool.respond("probe-result")),
     ),
   ])
 }
