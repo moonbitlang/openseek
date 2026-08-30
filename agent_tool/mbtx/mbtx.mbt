@@ -322,9 +322,9 @@ async fn execute(
   // `@fs.tmpdir` branch above has no such owner, but it is only taken when the
   // caller wired no job dir — which happens only if the session's own tmpdir
   // call failed, in which case the one above fails too and returns first.
-  let job_owns_dir = Ref(false)
+  let mut job_owns_dir = false
   async fn cleanup() -> Unit {
-    if job_owns_dir.val {
+    if job_owns_dir {
       return
     }
     @async.protect_from_cancel(() => {
@@ -519,7 +519,7 @@ async fn execute(
       // JSONL commands.
       stdin=@process.redirect_from_file(empty_stdin),
     )
-    job_owns_dir.val = true
+    job_owns_dir = true
     return @agent_tool.respond(
       "started background job \{id} (the program compiled). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\").",
       brief="mbtx → bg \{id}",
@@ -560,7 +560,7 @@ async fn execute(
         cwd?=run_cwd,
         sandboxed_command?,
       )
-      job_owns_dir.val = true
+      job_owns_dir = true
       return @agent_tool.respond(
         "mbtx: still running after \{run_timeout_ms / 1000}s, so it moved to the background as job \{id} (nothing was lost). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\").",
         brief="mbtx → bg \{id}",
