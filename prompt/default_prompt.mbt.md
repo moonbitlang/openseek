@@ -300,11 +300,16 @@ default root `.` means the whole repository, which is the typical use.
 agent-friendly output: one JSON object per finding with `file` (relative to
 the scan root, often `./`-prefixed), `rule_id`, `description`, `range`
 (1-based `line`/`column`), `matched_source`, and `source_context`; a scan
-with zero findings writes nothing and still exits 0. A whole-repo scan can
-match many nodes, so bound what you print (as above) or redirect stdout
-with `stdout=ToFile(...)` under `@fs.tmpdir(prefix="run-")`. `--rules <dir>`
-and `--rule <file>` load YAML rule files, `--disable <rule-id>` drops a
-loaded rule, and `--verbose` traces traversal on stderr.
+with zero findings writes nothing and still exits 0. When parsing records
+with `@json.parse`, integer fields such as `range.start.line` pattern-match
+as the `Number` variant (a `Double`; call `.to_int()` on it), not `Int`. A
+whole-repo scan can match many nodes — `@shell.Cmd(...).output()` raises
+`OutputLimitExceeded` on large captures — so stream with `.each_line()`
+(one record per callback line, as in the `moon check` example above) to
+count or aggregate findings, and redirect stderr with `stderr=ToFile(...)`
+so skip warnings do not flood the merged output. `--rules <dir>` and
+`--rule <file>` load YAML rule files, `--disable <rule-id>` drops a loaded
+rule, and `--verbose` traces traversal on stderr.
 
 A `--pattern` is a MoonBit *expression* containing `$(name:kind)`
 metavariables — `exp`, `id`, `const`, `arg`, `pat`, `type` — plus `$_` to
@@ -318,16 +323,26 @@ unless anchored with `^...$`). When a pattern surprises you,
 of a snippet, and `moongrep docs RuleSpec` / `docs CLISpec` print the full
 specs.
 
+The builtin `lint` rules are advisory style checks — `catch_all`, for
+instance, flags deliberate `catch { _ => () }` swallows. Treat rule counts
+as signal, not a bug list, and read `matched_source` before acting on a
+finding.
+
 Exit codes: 0 for help, dump, findings, no-findings, and parse warnings
 (no-match is NOT grep's 1); 2 usage; 3 invalid dump input; 4 rule-source
 failure; 5 invalid rule content (including a `--pattern` that is not a valid
 MoonBit expression); 6 missing/unreadable scan input; 7 output failure. The
 scanner follows symlinks, so a broken symlink anywhere under the scan root
-aborts the whole scan with 6 — some workspaces contain dangling symlinks
-(this one does, under `editor/codemirror/demo/`, `.worktrees/`, and
-`.moonagent/`), so scope scans to the subdirectory you care about (pass it
-as the scan root) or `--exclude` those paths instead of scanning `.` from
-the root.
+aborts the whole scan with 6 — this repo's `editor/codemirror/demo/` holds
+dangling symlinks, and tool/eval directories are NOT in the default
+exclusions, so a whole-repo scan from this root also descends into
+`.claude/`, `.worktrees/`, `.moonagent/`, and `.repos/` and doubles every
+finding across the nested checkouts. Exclude them:
+`--exclude .claude --exclude .worktrees --exclude .moonagent --exclude
+.repos --exclude editor/codemirror/demo`. Source blocks whose syntax the
+bundled parser does not know yet (e.g. nested record-spread `is` patterns)
+are skipped with a stderr warning while exit stays 0 — treat skipped blocks
+as a blind spot.
 
 ## Tool Protocol
 
