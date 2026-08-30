@@ -124,6 +124,10 @@ async fn run_task_command(matches : @argparse.Matches) -> Unit {
     // announced `session_started` and only then refused, which is a failure
     // the caller pays for in artifacts on disk.
     approval_policy(matches, interactive=false) |> ignore
+    // Validate this before fleet mode materializes sibling workspaces. The
+    // fleet path currently has no review subruns, but an invalid run option
+    // must still be rejected instead of being silently accepted there.
+    let review_deadline_ms = review_deadline_ms(matches)
     // Best-of-N fleet mode owns its own workspace materialization and session
     // creation, so it branches before prepare_workspace_root (which would
     // create a single --dir).
@@ -176,6 +180,7 @@ async fn run_task_command(matches : @argparse.Matches) -> Unit {
           thinking~,
           api_url?,
           workspace_root~,
+          review_deadline_ms~,
         )
       }
       Some(id) => {
@@ -208,6 +213,7 @@ async fn run_task_command(matches : @argparse.Matches) -> Unit {
           thinking~,
           api_url?,
           workspace_root~,
+          review_deadline_ms~,
           child_session=ChildSession(
             root=store.root(),
             parent=id.value(),
@@ -265,9 +271,9 @@ async fn run_task_turn(
   thinking~ : @deepseek.ThinkingMode,
   api_url? : String,
   workspace_root~ : String,
+  review_deadline_ms~ : Int?,
   child_session? : @agent_subrun.ChildSession,
 ) -> Unit {
-  let review_deadline_ms = review_deadline_ms(matches)
   @async.with_task_group() <| group => {
     // `run` reads no commands, so there is nobody to ask: `--approval ask` is
     // refused at parse time (see parse_approval_policy) and the surviving
@@ -301,6 +307,7 @@ async fn run_task_turn(
       workspace_root~,
       budget=subrun_budget,
       review_context~,
+      review_deadline_ms~,
       api_url?,
       child_session?,
     )
@@ -2147,4 +2154,29 @@ test "cli rejects invalid review deadline" {
     }
   }
   fail("invalid review deadline parsed")
+}
+
+///|
+async test "invalid review deadline is rejected before fleet workspaces are created" {
+  @vfs.with_tmpdir(prefix="openseek-review-deadline-fleet-", root => {
+    let source = "\{root}/project"
+    @fs.mkdir(source, recursive=true)
+    let parsed = run_matches(
+      argv=[
+        "--review-deadline", "0", "--concurrency", "1", "--dir", source, "write",
+        "MoonBit",
+      ],
+      env={ "DEEPSEEK": "test-key" },
+    )
+    let _ = run_task_command(parsed) catch {
+      error => {
+        assert_true(
+          "\{error}".contains("--review-deadline must be a positive integer"),
+        )
+        assert_false(@fs.exists("\{root}/project_run_1"))
+        return
+      }
+    }
+    fail("invalid review deadline started a fleet run")
+  })
 }
