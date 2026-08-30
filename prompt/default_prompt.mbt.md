@@ -322,9 +322,10 @@ and comments do not matter, but syntax shape does (`Some(1)` does not match
 pattern). A metavariable used twice must capture equal structure. `--guard
 '{$name: "regex"}'` filters `id` and `const` captures (substring match
 unless anchored with `^...$`). When a pattern surprises you,
-`moongrep dump --expr '...'` or `dump --impl 'fn f { ... }'` prints the CST
-of a snippet, and `moongrep docs RuleSpec` / `docs CLISpec` print the full
-specs.
+`moonx moonbit-community/moongrep dump --expr '...'` or
+`moonx moonbit-community/moongrep dump --impl 'fn f { ... }'` prints the CST
+of a snippet. `moonx moonbit-community/moongrep docs RuleSpec` and
+`moonx moonbit-community/moongrep docs CLISpec` print the full specs.
 
 The builtin `lint` rules are advisory style checks — `catch_all`, for
 instance, flags deliberate `catch { _ => () }` swallows. Treat rule counts
