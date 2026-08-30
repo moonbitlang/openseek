@@ -24,7 +24,7 @@ impl @syntax.LineTokenizer for BlockCommentToy with fn tokenize_line(
   let tokens : Array[@syntax.LineToken] = []
   let in_comment = for at = 0, view = line_text[:], in_comment = state ==
                          toy_comment; view.length() > 0; {
-    lexscan view with longest {
+    lexmatch view with longest {
       (re"^(?:/\*|\*/|[^*/]+|.)" as lexeme, after~) => {
         let next = line_text.length() - after.length()
         if in_comment || lexeme is "/*" {

@@ -85,7 +85,7 @@ priv enum StepOp {
 /// arms need the current mode because `}` closes an interpolation in b'i'
 /// but is a plain delimiter elsewhere.
 fn normal_step(view : StringView, top : Byte) -> (StepOp, StringView) {
-  lexscan view with longest {
+  lexmatch view with longest {
     (re"^[ \t]+", after=rest) => (Blank, rest)
     (re"^///.*", after=rest) => (Emit(CommentDoc), rest)
     (re"^//.*", after=rest) => (Emit(Comment), rest)
@@ -129,7 +129,7 @@ fn normal_step(view : StringView, top : Byte) -> (StepOp, StringView) {
 /// and the closing quote. An unterminated string falls to the `.` arm
 /// one character at a time and the line-end reset recovers the mode.
 fn string_step(view : StringView) -> (StepOp, StringView) {
-  lexscan view with longest {
+  lexmatch view with longest {
     (re"^\\u[{][0-9a-fA-F]+[}]", after=rest) => (Emit(StringEscape), rest)
     (re"^\\[{]", after=rest) => (Push(StringEscape, b'i'), rest)
     (re"^\\.", after=rest) => (Emit(StringEscape), rest)
@@ -145,7 +145,7 @@ fn string_step(view : StringView) -> (StepOp, StringView) {
 /// escape and interpolation forms as `"` strings, terminated only by the
 /// line end.
 fn dollar_step(view : StringView) -> (StepOp, StringView) {
-  lexscan view with longest {
+  lexmatch view with longest {
     (re"^\\[{]", after=rest) => (Push(StringEscape, b'i'), rest)
     (re"^\\.", after=rest) => (Emit(StringEscape), rest)
     (re"^[^\\]+", after=rest) => (Emit(String), rest)

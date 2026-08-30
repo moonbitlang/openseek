@@ -317,7 +317,7 @@ fn loc_line_span(loc : String) -> (Int, Int)? {
   // An end that does not open with digits (or is missing) falls back to the
   // start line, matching the compiler's lenient loc forms; parse failures on
   // validated digit runs can only be overflow, which is malformed too.
-  lexscan loc {
+  lexmatch loc {
     (re"^[0-9]+" as start) +
     re"(:[^\-]*)?-" +
     (re"[0-9]+" as end_) +

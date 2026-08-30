@@ -83,7 +83,7 @@ fn scan_sed_args_for_in_place(args : Array[String], start : Int) -> Bool {
 /// scanner must skip that operand): a `-e`/`-f` cluster whose `e`/`f` is the last
 /// character, or `--expression`/`--file` without an attached `=value`.
 fn sed_option_consumes_next(arg : String) -> Bool {
-  lexscan arg {
+  lexmatch arg {
     re"^--(expression|file)$" => true
     // A short cluster whose first `e`/`f`/`i` is an `e` or `f` in final
     // position: that flag consumes the NEXT word as its value. An `i` first,
@@ -98,7 +98,7 @@ fn sed_option_consumes_next(arg : String) -> Bool {
 /// (`/usr/bin/sed`, `./sed`) compares equal to `sed`. Handles both separators.
 fn command_basename(name : String) -> String {
   let normalized = name.replace_all(old="\\", new="/")
-  lexscan normalized {
+  lexmatch normalized {
     // Greedy `.*` runs to the LAST slash; the remainder is the basename.
     (re"^.*/", after=base) => base.to_owned()
     _ => name
@@ -111,7 +111,7 @@ fn command_basename(name : String) -> String {
 /// `-Ei`). `-e`/`-f` consume the rest of the token as their value, so an `i`
 /// inside a script like `-e's/i/x/'` is not mistaken for `-i`.
 fn is_sed_in_place_flag(arg : String) -> Bool {
-  lexscan arg {
+  lexmatch arg {
     re"^--in-place(=.*)?$" => true
     // A short cluster whose first `e`/`f`/`i` is an `i` (any position — the
     // rest of the token is its in-place suffix, e.g. `-i.bak`). Start-anchored
