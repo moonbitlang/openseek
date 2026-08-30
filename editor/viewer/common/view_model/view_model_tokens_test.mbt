@@ -182,7 +182,7 @@ test "windowed view-line reads stay passive while covering stored defaults" {
     let mut joined = ""
     let tokens = line.tokens
     for i in 0..<tokens.get_count() {
-      joined = joined + tokens.get_token_text(i)
+      joined += tokens.get_token_text(i)
     }
     assert_eq(joined, line.content)
   }

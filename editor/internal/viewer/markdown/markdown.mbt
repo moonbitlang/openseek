@@ -111,7 +111,7 @@ fn markdown_cmark_input(markdown : String) -> String {
     if @common.is_high_surrogate(unit) {
       if i + 1 < markdown.length() &&
         @common.is_low_surrogate(markdown[i + 1].to_int()) {
-        i = i + 2
+        i += 2
       } else {
         needs_cleaning = true
         break
@@ -120,7 +120,7 @@ fn markdown_cmark_input(markdown : String) -> String {
       needs_cleaning = true
       break
     } else {
-      i = i + 1
+      i += 1
     }
   }
   guard needs_cleaning else { return markdown }
@@ -133,13 +133,13 @@ fn markdown_cmark_input(markdown : String) -> String {
       @common.is_low_surrogate(markdown[i + 1].to_int()) {
       cleaned.write_char(Int::unsafe_to_char(unit))
       cleaned.write_char(Int::unsafe_to_char(markdown[i + 1].to_int()))
-      i = i + 2
+      i += 2
     } else if @common.is_high_surrogate(unit) || @common.is_low_surrogate(unit) {
       cleaned.write_char(Int::unsafe_to_char(0xFFFD))
-      i = i + 1
+      i += 1
     } else {
       cleaned.write_char(Int::unsafe_to_char(unit))
-      i = i + 1
+      i += 1
     }
   }
   cleaned.to_string()

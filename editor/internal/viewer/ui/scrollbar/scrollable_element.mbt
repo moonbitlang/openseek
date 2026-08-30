@@ -574,8 +574,8 @@ pub fn mouse_wheel_scroll_deltas(
   }
   if alt_key {
     // fastScrolling
-    delta_x = delta_x * fast_scroll_sensitivity
-    delta_y = delta_y * fast_scroll_sensitivity
+    delta_x *= fast_scroll_sensitivity
+    delta_y *= fast_scroll_sensitivity
   }
   (
     -away_from_zero(scroll_wheel_sensitivity * delta_x),

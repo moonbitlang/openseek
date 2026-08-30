@@ -105,7 +105,7 @@ fn open_active_document_cmd(
   view_state : DocumentViewState,
 ) -> @rabbita.Cmd {
   @cmd.custom_cmd(_ => {
-    active_document_generation.val = active_document_generation.val + 1
+    active_document_generation.val += 1
     let generation = active_document_generation.val
     close_active_document_source()
     active_document_uri.val = Some(uri)

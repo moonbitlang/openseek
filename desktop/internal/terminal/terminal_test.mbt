@@ -17,7 +17,7 @@ async fn wait_for_output(
   let mut seen = ""
   for ;; {
     if pushes.get() is Output(data~, ..) {
-      seen = seen + @utf8.decode_lossy(data)
+      seen += @utf8.decode_lossy(data)
       if seen.contains(needle) {
         break
       }

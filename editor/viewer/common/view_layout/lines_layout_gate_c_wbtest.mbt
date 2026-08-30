@@ -283,7 +283,7 @@ test "LinesLayout mixed bulk commit resolves conflicts, stably sorts, and resets
 
   let mut running_height = 0.0
   for i, height in expected_heights {
-    running_height = running_height + height.to_double()
+    running_height += height.to_double()
     assert_eq(layout.get_whitespaces_accumulated_height(i), running_height)
     assert_eq(layout.arr[i].prefix_sum, running_height)
   }

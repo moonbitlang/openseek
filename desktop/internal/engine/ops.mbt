@@ -1124,7 +1124,7 @@ async test "setup failure retires the writer before an immediate next start" {
     let mut first_finishes = 0
     for event in emitted {
       if event is Finished(payload) && payload.run_id == first {
-        first_finishes = first_finishes + 1
+        first_finishes += 1
       }
     }
     assert_eq(first_finishes, 1)
@@ -1221,7 +1221,7 @@ async test "a prompt bigger than the pipe still settles exactly once" {
     let mut finishes = 0
     for event in emitted {
       if event is Finished(payload) && payload.run_id == run_id {
-        finishes = finishes + 1
+        finishes += 1
       }
     }
     assert_eq(finishes, 1)

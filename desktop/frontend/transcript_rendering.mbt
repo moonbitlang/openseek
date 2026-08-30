@@ -72,7 +72,7 @@ fn Conversation::reasoning_for_render(self : Conversation) -> (String?, Bool) {
   if live.complete && !candidate.is_empty() {
     let mut index = self.messages.length()
     while index > 0 {
-      index = index - 1
+      index -= 1
       if self.messages[index].kind is Reasoning {
         if self.messages[index].sequence is Some(sequence) &&
           sequence > self.turn.reasoning_frontier &&

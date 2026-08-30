@@ -56,7 +56,7 @@ fn emit_render_event(
   payload = "\{payload}\"lineCount\":\{line_count.to_string()}"
   payload = "\{payload},\"tokenCount\":\{token_count.to_string()}"
   payload = "\{payload},\"diagnosticCount\":"
-  payload = payload + diagnostic_count.to_string()
+  payload += diagnostic_count.to_string()
   payload = "\{payload},\"revision\":\{json_string(revision)}"
   payload = "\{payload},\"tokenizeMs\":\{tokenize_ms.to_string()}"
   payload = "\{payload},\"buildMs\":\{build_ms.to_string()}"

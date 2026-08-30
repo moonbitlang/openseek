@@ -59,7 +59,7 @@ fn projection_assert_token_ends(
   assert_true(data.tokens.get_count() > 0)
   let mut token_text = ""
   for i in 0..<data.tokens.get_count() {
-    token_text = token_text + data.tokens.get_token_text(i)
+    token_text += data.tokens.get_token_text(i)
   }
   assert_eq(spaces(data.min_column - 1) + token_text, data.content)
   assert_eq(

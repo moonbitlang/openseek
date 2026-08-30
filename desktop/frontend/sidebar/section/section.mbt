@@ -136,7 +136,7 @@ fn Actions::placeholder_component(
   input.map(row => {
     let mut class = "conversation-row placeholder"
     if row.nested {
-      class = class + " nested"
+      class += " nested"
     }
     if !row.class_name.is_empty() {
       class = class + " " + row.class_name
@@ -261,7 +261,7 @@ pub fn component(
       "sidebar-heading section-heading collapsible"
     }
     if input.activation is Some(_) {
-      class = class + " active"
+      class += " active"
     }
     let heading : Array[@html.Html] = [
       @html.span(class="sidebar-label", input.label),

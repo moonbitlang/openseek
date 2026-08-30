@@ -1114,7 +1114,7 @@ fn protocol_error_update(
 fn document_to_text_model(
   document : @workspace.DocumentSnapshot,
 ) -> @model.TextModel {
-  workbench_model_version.val = workbench_model_version.val + 1
+  workbench_model_version.val += 1
   TextModel(
     document.uri,
     document.display_name,

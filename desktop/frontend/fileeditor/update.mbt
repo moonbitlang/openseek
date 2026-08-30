@@ -887,7 +887,7 @@ fn reconcile_reviews_after_changes(
           }
           continue
         }
-        review_generation = review_generation + 1
+        review_generation += 1
         let generation = review_generation
         let has_working_file = change.has_working_tree_file()
         let missing_rename_source = change.kind
@@ -1649,7 +1649,7 @@ fn refresh_unknown_head_reviews(
     } else {
       path
     }
-    review_generation = review_generation + 1
+    review_generation += 1
     let generation = review_generation
     docs[path] = { ..doc, review: Some({ ..review, generation, }), }
     background_review_requests[path] = generation
@@ -1965,7 +1965,7 @@ pub fn sync(
         }
         // Git baseline replies do not carry the filesystem epoch. Advance
         // every review token so a background legacy refresh is fenced too.
-        review_generation = review_generation + 1
+        review_generation += 1
         docs[path] = {
           ..doc,
           review: Some({ ..review, generation: review_generation, }),
@@ -3373,7 +3373,7 @@ pub fn update(
                     // that was already in flight. Advance its token so an
                     // older successful read cannot resurrect deleted working
                     // text.
-                    review_generation = review_generation + 1
+                    review_generation += 1
                     Some({ ..review, working_generation: review_generation, })
                   }
                   _ => doc.review
@@ -3425,7 +3425,7 @@ pub fn update(
                     // Like a deletion, the failure is newer than any tagged
                     // read still in flight: an older success must not settle
                     // text the host can no longer vouch for.
-                    review_generation = review_generation + 1
+                    review_generation += 1
                     Some({ ..review, working_generation: review_generation, })
                   }
                   _ => doc.review
@@ -3482,7 +3482,7 @@ pub fn update(
               active_reloading = true
               let working_generation = match doc.review {
                 Some(review) => {
-                  review_generation = review_generation + 1
+                  review_generation += 1
                   // A tagged review read can be fenced out if its Git row
                   // disappears first. Preserve a stale marker so leaving review
                   // mode hands the active tab to a replacement ordinary read.

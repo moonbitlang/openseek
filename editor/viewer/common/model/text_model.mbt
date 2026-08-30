@@ -623,7 +623,7 @@ pub fn TextModel::get_version_id(self : TextModel) -> Int {
 /// `_increaseVersionId` (`textModel.ts:782-785`). The
 /// `_alternativeVersionId` mirror is N-A (undo/redo not ported).
 fn TextModel::increase_version_id(self : TextModel) -> Unit {
-  self.version_id = self.version_id + 1
+  self.version_id += 1
 }
 
 ///|

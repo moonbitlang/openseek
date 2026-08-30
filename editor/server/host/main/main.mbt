@@ -40,36 +40,36 @@ fn parse_args(args : ArrayView[String]) -> DevServerConfig {
       "--root" =>
         if i + 1 < args.length() {
           root = args[i + 1]
-          i = i + 1
+          i += 1
         }
       "--port" =>
         if i + 1 < args.length() {
           port = parse_port(args[i + 1], port)
-          i = i + 1
+          i += 1
         }
       "--host" =>
         if i + 1 < args.length() {
           host = args[i + 1]
-          i = i + 1
+          i += 1
         }
       "--asset-dir" =>
         if i + 1 < args.length() {
           asset_dir = args[i + 1]
-          i = i + 1
+          i += 1
         }
       "--moon-command" =>
         if i + 1 < args.length() {
           moon_command = args[i + 1]
-          i = i + 1
+          i += 1
         }
       "--browse-root" =>
         if i + 1 < args.length() {
           browse_root = args[i + 1]
-          i = i + 1
+          i += 1
         }
       _ => ()
     }
-    i = i + 1
+    i += 1
   }
   { root, host, port, asset_dir, moon_command, browse_root, }
 }

@@ -291,7 +291,7 @@ fn CountingViewEventHandler::force_should_render(
   self : CountingViewEventHandler,
 ) -> Unit {
   self.dirty = true
-  self.force_count = self.force_count + 1
+  self.force_count += 1
 }
 
 ///|

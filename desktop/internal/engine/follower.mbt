@@ -471,7 +471,7 @@ async fn stop_follower_instance(
     // slip behind the drain request, and ensure_follower can never mistake
     // this generation for an active reusable actor.
     follower.stopping = true
-    follower.stop_generation = follower.stop_generation + 1
+    follower.stop_generation += 1
     let generation = follower.stop_generation
     let queued = follower.inbox.try_put(
       Stop(final_scan~, writer_exited~, generation~),
@@ -486,9 +486,9 @@ async fn stop_follower_instance(
     }
     generation
   }
-  follower.stop_observers = follower.stop_observers + 1
+  follower.stop_observers += 1
   defer {
-    follower.stop_observers = follower.stop_observers - 1
+    follower.stop_observers -= 1
     // Keep a failed generation closed while any of its callers still need
     // to observe the result. The last observer reactivates the actor, after
     // which a later lifecycle operation may start a fresh retry generation.
@@ -1027,7 +1027,7 @@ async test "abrupt EOF leaves a failed drain for a later caller to retry" {
     let mut finishes = 0
     for event in emitted {
       if event is Finished(payload) && payload.run_id == "r-abrupt-eof" {
-        finishes = finishes + 1
+        finishes += 1
       }
     }
     assert_eq(finishes, 1)

@@ -184,7 +184,7 @@ fn markdown_rendered_element_indices(doc : @cmark.Doc) -> Array[(Int, Int)] {
   let add = fn(block : @cmark.Block) {
     if markdown_block_renders_one_root_element(block) {
       result.push((block.meta().id, rendered_element_index))
-      rendered_element_index = rendered_element_index + 1
+      rendered_element_index += 1
     }
   }
   match doc.block {

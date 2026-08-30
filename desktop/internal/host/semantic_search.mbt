@@ -529,7 +529,7 @@ fn first_semantic_diagnostic(detail : String) -> String {
     if !line.is_empty() && !line.has_prefix("  ") && !line.has_prefix("\t") {
       return line
     }
-    i = i - 1
+    i -= 1
   }
   // Fallback: last non-empty line.
   i = lines.length() - 1
@@ -538,7 +538,7 @@ fn first_semantic_diagnostic(detail : String) -> String {
     if !line.is_empty() {
       return line
     }
-    i = i - 1
+    i -= 1
   }
   "moongrep could not complete the search."
 }

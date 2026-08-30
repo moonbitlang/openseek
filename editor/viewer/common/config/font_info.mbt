@@ -127,7 +127,7 @@ pub fn BareFontInfo::create(
     line_height = golden_line_height_ratio * font_size
   } else if line_height < minimum_line_height.to_double() {
     // Values too small to be line heights in pixels are in ems.
-    line_height = line_height * font_size
+    line_height *= font_size
   }
   // Enforce integer, minimum constraints (`Math.round` of a non-negative
   // ratio is `floor(x + 0.5)`).

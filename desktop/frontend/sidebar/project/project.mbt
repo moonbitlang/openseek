@@ -150,9 +150,9 @@ fn State::next_preview_limit(self : State, input : Input) -> Int {
   let mut revealed = 0
   while limit < input.conversations.length() && revealed < PreviewStep {
     if !input.conversations[limit].active {
-      revealed = revealed + 1
+      revealed += 1
     }
-    limit = limit + 1
+    limit += 1
   }
   limit
 }
@@ -278,10 +278,10 @@ pub fn component(
       "workspace-row collapsible"
     }
     if input.activation is Some(_) {
-      class = class + " active"
+      class += " active"
     }
     if state.menu_open {
-      class = class + " menu-open"
+      class += " menu-open"
     }
     let row_children : Array[@html.Html] = [
       @html.button(

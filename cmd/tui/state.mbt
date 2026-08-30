@@ -166,7 +166,7 @@ fn State::new(config : AppConfig) -> State {
 /// agent running. Returns the new run id so the caller can tag the spawned task's
 /// messages with it.
 fn State::start_run(self : State, started_ms : Int64) -> Int {
-  self.run_id = self.run_id + 1
+  self.run_id += 1
   self.run = Running(started_ms)
   self.step_response = None
   self.streaming_preview = None

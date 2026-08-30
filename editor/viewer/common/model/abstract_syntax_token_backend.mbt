@@ -245,7 +245,7 @@ fn AttachedViewHandler::handle_state_change(
 ///|
 /// Cancels the current one-shot and invalidates stale callbacks.
 fn AttachedViewHandler::cancel_pending(self : AttachedViewHandler) -> Unit {
-  self.generation.val = self.generation.val + 1
+  self.generation.val += 1
   match self.pending {
     Some(handle) => handle.dispose()
     None => ()

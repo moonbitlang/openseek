@@ -241,7 +241,7 @@ async test "list_tools follows nextCursor pagination" {
     let reply = fn(request : Json) -> Json? {
       match method_of(request) {
         "tools/list" => {
-          calls.val = calls.val + 1
+          calls.val += 1
           if calls.val == 1 {
             Some(
               success(request, {

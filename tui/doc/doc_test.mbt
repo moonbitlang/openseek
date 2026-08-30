@@ -71,7 +71,7 @@ test "split_lines splits CRLF and CR so no stray carriage return remains" {
   inspect(blocks.length(), content="2")
   let mut total_rows = 0
   for block in blocks {
-    total_rows = total_rows + @doc.Doc::Doc([block]).layout(width=40).length()
+    total_rows += @doc.Doc::Doc([block]).layout(width=40).length()
   }
   inspect(total_rows, content="2")
 }

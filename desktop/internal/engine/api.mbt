@@ -36,7 +36,7 @@ fn normalize_submission_id(submission_id : String?) -> String? {
     } else {
       4
     }
-    byte_length = byte_length + width
+    byte_length += width
     if byte_length > SubmissionIdMaxBytes {
       return None
     }

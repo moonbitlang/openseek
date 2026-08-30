@@ -125,7 +125,7 @@ pub async fn Client::request(
 ) -> Json {
   guard !self.closed else { raise Closed }
   let id = self.next_id
-  self.next_id = self.next_id + 1
+  self.next_id += 1
   let inbox : @async.Queue[Result[Json, ResponseError]] = Queue(kind=Unbounded)
   self.pending.set(id, inbox)
   defer self.pending.remove(id)

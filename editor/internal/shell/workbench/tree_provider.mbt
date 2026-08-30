@@ -105,7 +105,7 @@ async fn first_moonbit_file(
   if budget.val <= 0 || depth > auto_open_max_depth {
     return None
   }
-  budget.val = budget.val - 1
+  budget.val -= 1
   match workspace_tree_provider.resolve(uri) {
     WorkspaceResolved(stat) =>
       match stat.children {

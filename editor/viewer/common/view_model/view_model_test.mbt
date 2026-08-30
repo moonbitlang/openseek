@@ -277,7 +277,7 @@ test "projected long moonbit lines retain source text across segments" {
   assert_true(view_model.line_count() > 1)
   let mut joined = ""
   for line_number in 1..<=view_model.line_count() {
-    joined = joined + view_model.lines().get_view_line_content(line_number)
+    joined += view_model.lines().get_view_line_content(line_number)
   }
   assert_eq(joined, text)
 }

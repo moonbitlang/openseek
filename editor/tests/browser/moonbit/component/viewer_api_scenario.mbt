@@ -105,7 +105,7 @@ fn run_viewer_api_test() -> Unit {
       )
       let scroll_event_count = Ref(0)
       viewer.on_did_scroll_change(event => {
-        scroll_event_count.val = scroll_event_count.val + 1
+        scroll_event_count.val += 1
         host.set_attribute(
           "data-scroll-events",
           scroll_event_count.val.to_string(),
@@ -115,7 +115,7 @@ fn run_viewer_api_test() -> Unit {
       |> ignore
       @viewer_testing.on_did_render_model(viewer.get_id(), event => {
         if event.fresh {
-          rendered_count.val = rendered_count.val + 1
+          rendered_count.val += 1
           view_line_count.val = event.line_count
           rendered_line_count.val = event.rendered_lines
         }

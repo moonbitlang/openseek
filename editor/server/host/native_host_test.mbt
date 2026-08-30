@@ -164,7 +164,7 @@ async fn wait_for_events(
   let mut remaining = 50
   while events.length() < count && remaining > 0 {
     @async.sleep(20)
-    remaining = remaining - 1
+    remaining -= 1
   }
   if events.length() < count {
     fail("timed out waiting for native watch event")

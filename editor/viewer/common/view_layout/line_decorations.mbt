@@ -86,12 +86,12 @@ pub fn LineDecorationsNormalizer::normalize(
     if start_column > 1 &&
       start_column - 2 < line_length &&
       @base_common.is_high_surrogate(line_content[start_column - 2].to_int()) {
-      start_column = start_column - 1
+      start_column -= 1
     }
     if end_column > 1 &&
       end_column - 2 < line_length &&
       @base_common.is_high_surrogate(line_content[end_column - 2].to_int()) {
-      end_column = end_column - 1
+      end_column -= 1
     }
     let start_offset = (start_column - 1).clamp(min=0, max=line_length)
     let max_end_offset = if line_length == 0 {
@@ -149,7 +149,7 @@ fn DecorationSegmentStack::consume_lower_than(
     let mut stop_index = 0
     while stop_index + 1 < self.count &&
           self.stop_offsets[stop_index] == self.stop_offsets[stop_index + 1] {
-      stop_index = stop_index + 1
+      stop_index += 1
     }
     result.push({
       start_offset: offset,
@@ -198,10 +198,10 @@ fn DecorationSegmentStack::insert(
         self.metadata.insert(index, metadata)
         inserted = true
       }
-      index = index + 1
+      index += 1
     }
   }
-  self.count = self.count + 1
+  self.count += 1
 }
 
 ///|

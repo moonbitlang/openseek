@@ -17,7 +17,7 @@ async fn flaky_server(
     server.run_forever(
       (_request, body, conn) => {
         let _ = body.read_all()
-        hits.val = hits.val + 1
+        hits.val += 1
         if hits.val <= failures {
           conn.send_response(status, "Error", extra_headers={
             "Content-Type": "text/plain",
@@ -174,7 +174,7 @@ async test "streaming chat retries a pre-delta stream drop" {
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
-          hits.val = hits.val + 1
+          hits.val += 1
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "text/event-stream",
           })
@@ -221,7 +221,7 @@ async test "streaming chat never retries after the first delta" {
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
-          hits.val = hits.val + 1
+          hits.val += 1
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "text/event-stream",
           })
@@ -272,7 +272,7 @@ async test "streaming chat never retries after a tool-call-only delta" {
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
-          hits.val = hits.val + 1
+          hits.val += 1
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "text/event-stream",
           })

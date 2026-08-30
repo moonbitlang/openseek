@@ -764,23 +764,23 @@ fn as_formatted(uri : Uri, skip_encoding : Bool) -> String {
       authority = js_slice(authority, idx + 1)
       idx = last_index_of_char(userinfo, char_colon)
       if idx == -1 {
-        res = res + encoder(userinfo, false, false)
+        res += encoder(userinfo, false, false)
       } else {
         // <user>:<pass>@<auth>
-        res = res + encoder(js_slice(userinfo, 0, end=idx), false, false)
+        res += encoder(js_slice(userinfo, 0, end=idx), false, false)
         res = "\{res}:"
-        res = res + encoder(js_slice(userinfo, idx + 1), false, true)
+        res += encoder(js_slice(userinfo, idx + 1), false, true)
       }
       res = "\{res}@"
     }
     authority = to_lower_js(authority)
     idx = last_index_of_char(authority, char_colon)
     if idx == -1 {
-      res = res + encoder(authority, false, true)
+      res += encoder(authority, false, true)
     } else {
       // <auth>:<port>
-      res = res + encoder(js_slice(authority, 0, end=idx), false, true)
-      res = res + js_slice(authority, idx)
+      res += encoder(js_slice(authority, 0, end=idx), false, true)
+      res += js_slice(authority, idx)
     }
   }
   if path != "" {
@@ -799,7 +799,7 @@ fn as_formatted(uri : Uri, skip_encoding : Bool) -> String {
       }
     }
     // encode the rest of the path
-    res = res + encoder(path, true, false)
+    res += encoder(path, true, false)
   }
   if query != "" {
     res = "\{res}?\{encoder(query, false, false)}"

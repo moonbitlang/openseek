@@ -159,7 +159,7 @@ pub async fn[X] build_grouped(
         @emit.emit(McpToolRenamed(from=tool.name, to=name))
       }
       seen[name] = ()
-      total = total + 1
+      total += 1
       mine.push(
         @agent_tool.AgentToolDefinition(
           name~,

@@ -100,7 +100,7 @@ fn activity_view(
       let tools : Array[@transcript.TranscriptItem] = []
       while index < items.length() && items[index].kind is Tool(..) {
         tools.push(items[index])
-        index = index + 1
+        index += 1
       }
       rows.push(
         @html.div(class="activity-work", tool_run_views(tools, subrun?)),
@@ -118,7 +118,7 @@ fn activity_view(
           false,
         ),
       )
-      index = index + 1
+      index += 1
     }
   }
   if live_reasoning is Some(content) {

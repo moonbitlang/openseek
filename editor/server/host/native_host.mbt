@@ -264,7 +264,7 @@ fn ProtocolSessions::attach(
   self : ProtocolSessions,
   outbox : @aqueue.Queue[String],
 ) -> Int {
-  self.next_session_id.val = self.next_session_id.val + 1
+  self.next_session_id.val += 1
   self.outboxes.set(self.next_session_id.val, outbox)
   self.next_session_id.val
 }

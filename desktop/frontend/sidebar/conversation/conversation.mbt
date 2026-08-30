@@ -160,16 +160,16 @@ pub fn component(
   state.map3(input, child_rows, (state, input, child_rows) => {
     let mut class = "conversation-row"
     if input.nested {
-      class = class + " nested"
+      class += " nested"
     }
     if input.subrun {
-      class = class + " subrun"
+      class += " subrun"
     }
     if input.active {
-      class = class + " active"
+      class += " active"
     }
     if input.running {
-      class = class + " running"
+      class += " running"
     }
     let children : Array[@html.Html] = []
     if input.children.is_empty() {

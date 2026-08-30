@@ -81,7 +81,6 @@ pub fn render_view_line(
       // Empty line carrying inline (before/after) decorations.
       html.write_string("<span class=\"view-line-content\">")
       let mut before_count = 0
-      let mut after_count = 0
       let mut contains_foreign : ForeignElementType = None
       for decoration in input.line_decorations {
         if decoration.decoration_type == Before ||
@@ -90,11 +89,10 @@ pub fn render_view_line(
             $|<span class="\{decoration.class_name}"></span>
           if decoration.decoration_type == Before {
             contains_foreign = add_foreign_element(contains_foreign, Before)
-            before_count = before_count + 1
+            before_count += 1
           }
           if decoration.decoration_type == After {
             contains_foreign = add_foreign_element(contains_foreign, After)
-            after_count = after_count + 1
           }
         }
       }
@@ -438,7 +436,7 @@ fn extract_control_characters(
           contains_rtl: false,
         })
       }
-      char_offset = char_offset + 1
+      char_offset += 1
     }
     if char_offset > last_end_index {
       last_end_index = token_end_index
@@ -502,7 +500,7 @@ fn apply_render_whitespace(
     while has_selections &&
           current_selection_index < selections.length() &&
           selections[current_selection_index].end_exclusive <= char_index {
-      current_selection_index = current_selection_index + 1
+      current_selection_index += 1
     }
     let mut is_in_whitespace = if char_index < first_non_whitespace_index ||
       char_index > last_non_whitespace_index {
@@ -578,13 +576,13 @@ fn apply_render_whitespace(
     if ch_code == cc_tab {
       tmp_indent = tab_size
     } else if @base_common.is_full_width_character(ch_code) {
-      tmp_indent = tmp_indent + 2
+      tmp_indent += 2
     } else {
-      tmp_indent = tmp_indent + 1
+      tmp_indent += 1
     }
     was_in_whitespace = is_in_whitespace
     while char_index == token_end_index {
-      token_index = token_index + 1
+      token_index += 1
       if token_index < tokens_length {
         token_type = tokens[token_index].class_name
         token_contains_rtl = tokens[token_index].contains_rtl
@@ -680,7 +678,7 @@ fn apply_inline_decorations(
           metadata: token_metadata | decoration.metadata,
           contains_rtl: token_contains_rtl,
         })
-        decoration_index = decoration_index + 1
+        decoration_index += 1
       } else {
         last_result_end_index = token_end_index
         result.push({
@@ -714,7 +712,7 @@ fn apply_inline_decorations(
         metadata: decoration.metadata,
         contains_rtl: false,
       })
-      decoration_index = decoration_index + 1
+      decoration_index += 1
     }
   }
   result
@@ -781,11 +779,11 @@ fn render_line(
         } else {
           1
         }
-        part_width = part_width + char_width
+        part_width += char_width
         if probe_index >= faux_indent_length {
-          probe_visible = probe_visible + char_width
+          probe_visible += char_width
         }
-        probe_index = probe_index + 1
+        probe_index += 1
       }
       if part_renders_whitespace_with_width {
         html.write_string(" style=\"width:")
@@ -821,12 +819,12 @@ fn render_line(
           append_code(html, render_space_char_code)
           append_code(html, ch_zwnj)
         }
-        char_offset_in_part = char_offset_in_part + produced_characters
-        char_horizontal_offset = char_horizontal_offset + char_width
+        char_offset_in_part += produced_characters
+        char_horizontal_offset += char_width
         if char_index >= faux_indent_length {
-          visible_column = visible_column + char_width
+          visible_column += char_width
         }
-        char_index = char_index + 1
+        char_index += 1
       }
     } else {
       html.write_char('>')
@@ -883,7 +881,7 @@ fn render_line(
           run_start = char_index + 1
         } else {
           if @base_common.is_full_width_character(charcode) {
-            char_width = char_width + 1
+            char_width += 1
           }
           if render_control_characters && charcode < 32 {
             flush_run(html, line_content, run_start, char_index)
@@ -902,17 +900,17 @@ fn render_line(
           }
           // else: normal char, kept in the pending run
         }
-        char_offset_in_part = char_offset_in_part + produced_characters
-        char_horizontal_offset = char_horizontal_offset + char_width
+        char_offset_in_part += produced_characters
+        char_horizontal_offset += char_width
         if char_index >= faux_indent_length {
-          visible_column = visible_column + char_width
+          visible_column += char_width
         }
-        char_index = char_index + 1
+        char_index += 1
       }
       flush_run(html, line_content, run_start, part_end_index)
     }
     if part_is_empty_and_has_pseudo_after {
-      part_displacement = part_displacement + 1
+      part_displacement += 1
     } else {
       part_displacement = 0
     }

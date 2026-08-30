@@ -26,7 +26,7 @@ let repo_picker_generation : Ref[Int] = Ref(0)
 
 ///|
 fn next_repo_picker_generation() -> Int {
-  repo_picker_generation.val = repo_picker_generation.val + 1
+  repo_picker_generation.val += 1
   repo_picker_generation.val
 }
 

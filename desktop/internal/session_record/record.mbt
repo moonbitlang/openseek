@@ -272,7 +272,7 @@ async fn Tail::read_forward(self : Tail) -> Array[@protocol.SessionEvent] {
       error if @async.is_being_cancelled() => raise error
       error => raise Unreadable("cannot read the session record: \{error}")
     }
-    self.offset = self.offset + take
+    self.offset += take
     self.anchor = anchor_of(chunk)
     let mut line_start = 0
     for index in 0..<chunk.length() {

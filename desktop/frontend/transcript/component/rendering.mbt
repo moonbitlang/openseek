@@ -60,7 +60,7 @@ fn durable_step_ordinals(rows : Array[VisibleRow]) -> Map[Int, Int] {
     }
     if evidence && ordinals.get(sequence) is None {
       ordinals.set(sequence, next)
-      next = next + 1
+      next += 1
     }
   }
   ordinals
@@ -218,7 +218,7 @@ fn TranscriptRenderer::stream_children(
           if visible[index].item.kind is (Tool(..) | Reasoning) {
             activity.push(visible[index].item)
           }
-          index = index + 1
+          index += 1
         }
         if !activity.is_empty() {
           items.set(
@@ -256,7 +256,7 @@ fn TranscriptRenderer::stream_children(
         let row = visible[index]
         self.insert_row(items, row, index)
         left_boundary = Some(row.identity)
-        index = index + 1
+        index += 1
         continue
       }
       let run : Array[@transcript.TranscriptItem] = []
@@ -270,7 +270,7 @@ fn TranscriptRenderer::stream_children(
           break
         }
         run.push(visible[index].item)
-        index = index + 1
+        index += 1
       }
       items.set(
         TranscriptRenderKey::activity_after(left_boundary).wire(),

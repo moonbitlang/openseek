@@ -78,7 +78,7 @@ test "root-element ordinals ignore omitted blocks and nested anchors" {
   for anchor in rendered.projection.block_anchors {
     match anchor.rendered_element_index {
       Some(index) => ordinals.push(index)
-      None => nested_anchor_count = nested_anchor_count + 1
+      None => nested_anchor_count += 1
     }
   }
   assert_eq(ordinals, [0, 1, 2, 3])

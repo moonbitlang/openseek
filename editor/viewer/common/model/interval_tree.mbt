@@ -538,8 +538,8 @@ fn normalize_delta(t : IntervalTree) -> Unit {
     }
 
     // handle current node
-    node.start = delta + node.start
-    node.end = delta + node.end
+    node.start += delta
+    node.end += delta
     node.delta = 0
     recompute_max_end(node)
     set_node_is_visited(node, true)

@@ -52,13 +52,13 @@ fn js_slice(s : String, start : Int, end? : Int) -> String {
   let mut start = start
   let mut end = end.unwrap_or(len)
   if start < 0 {
-    start = len + start
+    start += len
     if start < 0 {
       start = 0
     }
   }
   if end < 0 {
-    end = len + end
+    end += len
     if end < 0 {
       end = 0
     }
@@ -694,7 +694,7 @@ fn Win32::relative_impl(from : String, to : String) -> String {
   let mut i2 = from_start + last_common_sep + 1
   while i2 <= from_end {
     if i2 == from_end || char_code_at(from, i2) == char_backward_slash {
-      out = out + (if out is "" { ".." } else { "\\.." })
+      out += if out is "" { ".." } else { "\\.." }
     }
     i2 += 1
   }
@@ -1151,7 +1151,7 @@ fn Posix::relative_impl(from : String, to : String) -> String {
   let mut i2 = from_start + last_common_sep + 1
   while i2 <= from_end {
     if i2 == from_end || char_code_at(from, i2) == char_forward_slash {
-      out = out + (if out is "" { ".." } else { "/.." })
+      out += if out is "" { ".." } else { "/.." }
     }
     i2 += 1
   }

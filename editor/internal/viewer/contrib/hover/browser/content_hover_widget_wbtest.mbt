@@ -77,21 +77,15 @@ test "hover render lifetimes dispose on replacement hide and teardown" {
   let second_count = Ref(0)
   let third_count = Ref(0)
   let lifetimes : Array[@base_common.Disposable] = []
-  lifetimes.push(
-    @base_common.Disposable::from(() => first_count.val = first_count.val + 1),
-  )
-  lifetimes.push(
-    @base_common.Disposable::from(() => second_count.val = second_count.val + 1),
-  )
+  lifetimes.push(@base_common.Disposable::from(() => first_count.val += 1))
+  lifetimes.push(@base_common.Disposable::from(() => second_count.val += 1))
 
   // `_setRenderedHover` begins a replacement with the same clear operation.
   dispose_hover_render_disposables(lifetimes)
   assert_eq(first_count.val, 1)
   assert_eq(second_count.val, 1)
 
-  lifetimes.push(
-    @base_common.Disposable::from(() => third_count.val = third_count.val + 1),
-  )
+  lifetimes.push(@base_common.Disposable::from(() => third_count.val += 1))
   // `hide` and retained-widget `dispose` both converge on this operation.
   dispose_hover_render_disposables(lifetimes)
   dispose_hover_render_disposables(lifetimes)
@@ -104,9 +98,7 @@ test "opaque hover rows lifetime drains retained resources exactly once" {
   let count = Ref(0)
   let rows : HoverRowsRender = {
     fragment: @rdom.document().create_document_fragment(),
-    disposables: [
-      @base_common.Disposable::from(() => count.val = count.val + 1),
-    ],
+    disposables: [@base_common.Disposable::from(() => count.val += 1)],
     transferred: false,
     disposed: false,
   }

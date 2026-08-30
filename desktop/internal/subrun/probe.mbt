@@ -112,7 +112,7 @@ async fn SubrunProbeState::poll(self : SubrunProbeState) -> Bool {
   let chunk = file.read_exactly_at(take.to_int(), position=self.offset) catch {
     _ => return false
   }
-  self.offset = self.offset + take
+  self.offset += take
   self.anchor = anchor_of(chunk)
   let pending = self.carry + chunk
   let mut changed = false
@@ -160,7 +160,7 @@ fn SubrunProbeState::consume(self : SubrunProbeState, line : BytesView) -> Bool 
   guard item.get("kind") is Some(String(kind)) else { return false }
   match kind {
     "assistant" => {
-      self.steps = self.steps + 1
+      self.steps += 1
       // The child records its assistant item BEFORE running the calls in it,
       // so this is the only account of what a slow tool is doing while it
       // runs — waiting for the `tool_result` would leave the lane showing

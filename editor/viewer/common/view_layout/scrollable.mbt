@@ -941,7 +941,7 @@ fn truncate_double(value : Double) -> Double {
     return 0.0
   }
   if wrapped < 0.0 {
-    wrapped = wrapped + modulus
+    wrapped += modulus
   }
   if wrapped >= signed_boundary {
     wrapped - modulus

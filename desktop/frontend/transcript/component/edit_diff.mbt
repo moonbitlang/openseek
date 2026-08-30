@@ -59,7 +59,7 @@ fn multi_edit_card(arguments : String) -> @html.Html? {
       decode_edit(entry_fields, path_key="file") is Some(edit) else {
       continue
     }
-    shown = shown + 1
+    shown += 1
     rendered.push(
       @html.div(class="edit-entry", [
         chip_row(edit.chips),

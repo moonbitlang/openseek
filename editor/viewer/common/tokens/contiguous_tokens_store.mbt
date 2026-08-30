@@ -165,7 +165,7 @@ fn ContiguousTokensStore::ensure_line(
 ) -> Unit {
   while line_index >= self.len {
     self.line_tokens.push(Missing)
-    self.len = self.len + 1
+    self.len += 1
   }
 }
 

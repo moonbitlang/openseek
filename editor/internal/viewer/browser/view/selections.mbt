@@ -101,9 +101,8 @@ fn render_selection_lines(
       continue
     }
     let (corner_html, selection_html) = render_styled_line_html(line, styled)
-    inner_corners[line_index] = inner_corners[line_index] + corner_html
-    rest_of_selection[line_index] = rest_of_selection[line_index] +
-      selection_html
+    inner_corners[line_index] += corner_html
+    rest_of_selection[line_index] += selection_html
   }
   // `output.map(([innerCorners, rest]) => innerCorners + rest)`.
   let result : Array[String] = []

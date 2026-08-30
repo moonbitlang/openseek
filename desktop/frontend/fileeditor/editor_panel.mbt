@@ -877,7 +877,7 @@ fn show_history_diff_in_viewer(
       services.feedback.clear_feedback(previous.original.uri)
       services.feedback.clear_feedback(previous.modified.uri)
     }
-    viewer_state.version = viewer_state.version + 1
+    viewer_state.version += 1
     let version = viewer_state.version
     let name = basename(diff.path)
     let language = language_id(name)
@@ -1149,7 +1149,7 @@ fn show_file_in_viewer(
           viewer_state.markdown_view_states[prev.0] = view_state
         }
       }
-      viewer_state.version = viewer_state.version + 1
+      viewer_state.version += 1
       let version = viewer_state.version
       let text_model = @model.TextModel(
         uri,

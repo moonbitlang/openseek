@@ -46,7 +46,7 @@ pub fn register_viewer(
   set_hidden_areas~ : (Array[@base_common.Range], String?, Bool) -> Unit,
 ) -> @base_common.Disposable {
   unregister_viewer(viewer_id)
-  next_registration_id.val = next_registration_id.val + 1
+  next_registration_id.val += 1
   let registration_id = next_registration_id.val
   viewer_entries[viewer_id] = {
     registration_id,

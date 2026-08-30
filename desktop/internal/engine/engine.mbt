@@ -786,7 +786,7 @@ fn EngineManager::begin_record_read(
       "this conversation is moving between live and archived stores",
     )
   }
-  state.readers = state.readers + 1
+  state.readers += 1
   state
 }
 
@@ -796,7 +796,7 @@ fn EngineManager::end_record_read(
   session : String,
   state : SessionRecordGuard,
 ) -> Unit {
-  state.readers = state.readers - 1
+  state.readers -= 1
   self.prune_record_guard(session, state)
 }
 
@@ -816,7 +816,7 @@ fn EngineManager::begin_record_op(
       },
     )
   }
-  state.active_ops = state.active_ops + 1
+  state.active_ops += 1
   state
 }
 
@@ -826,7 +826,7 @@ fn EngineManager::end_record_op(
   session : String,
   state : SessionRecordGuard,
 ) -> Unit {
-  state.active_ops = state.active_ops - 1
+  state.active_ops -= 1
   self.prune_record_guard(session, state)
 }
 

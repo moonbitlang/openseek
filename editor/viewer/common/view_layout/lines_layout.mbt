@@ -140,7 +140,7 @@ fn javascript_to_int32(value : Double) -> Int {
     return 0
   }
   if wrapped < 0.0 {
-    wrapped = wrapped + modulus
+    wrapped += modulus
   }
   if wrapped >= signed_boundary {
     (wrapped - modulus).to_int()
@@ -172,7 +172,7 @@ pub fn WhitespaceChangeAccessor::insert_whitespace(
   // Keep public number carriers raw until this exact LinesLayout boundary.
   let height_in_px = javascript_to_int32(height_in_px)
   let min_width = javascript_to_int32(min_width)
-  self.layout.last_whitespace_id = self.layout.last_whitespace_id + 1
+  self.layout.last_whitespace_id += 1
   let id = "\{self.layout.instance_id}\{self.layout.last_whitespace_id}"
   self.layout.pending_changes.insert(
     EditorWhitespace(id, after_line_number, ordinal, height_in_px, min_width),
@@ -237,7 +237,7 @@ pub fn LinesLayout::LinesLayout(
   padding_top : Int,
   padding_bottom : Int,
 ) -> LinesLayout {
-  lines_layout_instance_count.val = lines_layout_instance_count.val + 1
+  lines_layout_instance_count.val += 1
   {
     instance_id: @base_common.single_letter_hash(
       lines_layout_instance_count.val,
@@ -515,7 +515,7 @@ pub fn LinesLayout::on_lines_deleted(
   from_line_number : Int,
   to_line_number : Int,
 ) -> Unit {
-  self.line_count = self.line_count - (to_line_number - from_line_number + 1)
+  self.line_count -= to_line_number - from_line_number + 1
   for i in 0..<self.arr.length() {
     let after_line_number = self.arr[i].after_line_number
     if from_line_number <= after_line_number &&
@@ -526,8 +526,7 @@ pub fn LinesLayout::on_lines_deleted(
     } else if after_line_number > to_line_number {
       // The line this whitespace was after has been moved up
       //  => move whitespace up
-      self.arr[i].after_line_number = self.arr[i].after_line_number -
-        (to_line_number - from_line_number + 1)
+      self.arr[i].after_line_number -= to_line_number - from_line_number + 1
     }
   }
 }
@@ -539,12 +538,11 @@ pub fn LinesLayout::on_lines_inserted(
   from_line_number : Int,
   to_line_number : Int,
 ) -> Unit {
-  self.line_count = self.line_count + (to_line_number - from_line_number + 1)
+  self.line_count += to_line_number - from_line_number + 1
   for i in 0..<self.arr.length() {
     let after_line_number = self.arr[i].after_line_number
     if from_line_number <= after_line_number {
-      self.arr[i].after_line_number = self.arr[i].after_line_number +
-        (to_line_number - from_line_number + 1)
+      self.arr[i].after_line_number += to_line_number - from_line_number + 1
     }
   }
 }
@@ -567,7 +565,7 @@ pub fn LinesLayout::get_whitespaces_accumulated_height(
   let mut start_index = (0).max(self.prefix_sum_valid_index + 1)
   if start_index == 0 {
     self.arr[0].prefix_sum = self.arr[0].height.to_double()
-    start_index = start_index + 1
+    start_index += 1
   }
   for i in start_index..<=index {
     self.arr[i].prefix_sum = self.arr[i - 1].prefix_sum +
@@ -845,8 +843,7 @@ pub fn LinesLayout::get_lines_viewport_data(
     big_numbers_delta = big_numbers_delta /
       self.default_line_height *
       self.default_line_height
-    current_line_relative_offset = current_line_relative_offset -
-      big_numbers_delta.to_double()
+    current_line_relative_offset -= big_numbers_delta.to_double()
   }
   let lines_offsets : Array[Double] = []
   let vertical_center = vertical_offset1.to_double() +
@@ -871,21 +868,18 @@ pub fn LinesLayout::get_lines_viewport_data(
     }
 
     // Count current line height in the vertical offsets.
-    current_vertical_offset = current_vertical_offset + line_height.to_double()
+    current_vertical_offset += line_height.to_double()
     lines_offsets.push(current_line_relative_offset)
 
     // Next line starts immediately after this one.
-    current_line_relative_offset = current_line_relative_offset +
-      line_height.to_double()
+    current_line_relative_offset += line_height.to_double()
     while current_whitespace_after_line_number == Some(line_number) {
       // Push down next line with the height of the current whitespace.
-      current_line_relative_offset = current_line_relative_offset +
-        current_whitespace_height.to_double()
+      current_line_relative_offset += current_whitespace_height.to_double()
 
       // Count current whitespace in the vertical offsets.
-      current_vertical_offset = current_vertical_offset +
-        current_whitespace_height.to_double()
-      whitespace_index = whitespace_index + 1
+      current_vertical_offset += current_whitespace_height.to_double()
+      whitespace_index += 1
       if whitespace_index >= whitespace_count {
         current_whitespace_after_line_number = None
       } else {
@@ -905,7 +899,7 @@ pub fn LinesLayout::get_lines_viewport_data(
     if line_number == end_line_number {
       break
     }
-    line_number = line_number + 1
+    line_number += 1
   }
   if centered_line_number == -1 {
     centered_line_number = end_line_number
@@ -917,16 +911,14 @@ pub fn LinesLayout::get_lines_viewport_data(
   let mut completely_visible_end_line_number = end_line_number
   if completely_visible_start_line_number < completely_visible_end_line_number {
     if start_line_number_vertical_offset < vertical_offset1 {
-      completely_visible_start_line_number = completely_visible_start_line_number +
-        1
+      completely_visible_start_line_number += 1
     }
   }
   if completely_visible_start_line_number < completely_visible_end_line_number {
     let end_line_height = self.get_line_height_for_line_number(end_line_number)
     if end_line_number_vertical_offset.to_double() + end_line_height.to_double() >
       vertical_offset2.to_double() {
-      completely_visible_end_line_number = completely_visible_end_line_number -
-        1
+      completely_visible_end_line_number -= 1
     }
   }
   {

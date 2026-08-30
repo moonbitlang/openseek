@@ -3,7 +3,7 @@ fn join_token_text(line : @view_model.ViewLineData) -> String {
   let mut out = ""
   let tokens = line.tokens
   for i in 0..<tokens.get_count() {
-    out = out + tokens.get_token_text(i)
+    out += tokens.get_token_text(i)
   }
   out
 }

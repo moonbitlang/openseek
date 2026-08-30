@@ -134,7 +134,7 @@ async test "streaming chat retries an idle stall before any event" {
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
-          hits.val = hits.val + 1
+          hits.val += 1
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "text/event-stream",
           })
@@ -189,7 +189,7 @@ async test "streaming chat fails an idle stall after a delta without retrying" {
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
-          hits.val = hits.val + 1
+          hits.val += 1
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "text/event-stream",
           })
@@ -246,7 +246,7 @@ async test "streaming chat does not retry an idle stall after an unterminated da
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
-          hits.val = hits.val + 1
+          hits.val += 1
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "text/event-stream",
           })

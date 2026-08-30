@@ -426,7 +426,7 @@ let embed_model_version : Ref[Int] = Ref(0)
 
 ///|
 fn next_embed_model_version() -> Int {
-  embed_model_version.val = embed_model_version.val + 1
+  embed_model_version.val += 1
   embed_model_version.val
 }
 

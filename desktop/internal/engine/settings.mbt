@@ -252,7 +252,7 @@ pub async fn update_settings(
   // still holding the same lock, so two clients can never observe revision 2
   // before revision 1. The API shields this finite commit+broadcast section
   // from requester cancellation.
-  manager.settings_revision = manager.settings_revision + 1
+  manager.settings_revision += 1
   let status = settings_status_payload(
     decode_settings(raw),
     manager.settings_revision,

@@ -169,7 +169,7 @@ fn is_equal_or_parent(
     return js_slice(base, sep_offset, end=sep_offset + 1) == separator
   }
   if js_slice(parent_candidate, parent_candidate.length() - 1) != separator {
-    parent_candidate = parent_candidate + separator
+    parent_candidate += separator
   }
   base.has_prefix(parent_candidate)
 }

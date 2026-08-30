@@ -36,7 +36,7 @@ fn send_protocol_packet(packet : @remote_protocol.ClientPacket) -> Unit {
 
 ///|
 fn next_request_id(prefix : String) -> String {
-  request_counter.val = request_counter.val + 1
+  request_counter.val += 1
   "\{prefix}-\{request_counter.val.to_string()}"
 }
 

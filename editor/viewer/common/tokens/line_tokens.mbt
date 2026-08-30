@@ -187,19 +187,21 @@ pub fn LineTokens::with_inserted(
         insert_tokens[next_insert_token_idx].offset
       ) {
       // original token ends before the next insert token
-      text = text +
-        substr(self.text, original_end_offset, next_original_token_end_offset)
+      text += substr(
+        self.text,
+        original_end_offset,
+        next_original_token_end_offset,
+      )
       let metadata = self.tokens[(next_original_token_idx << 1) + 1]
       new_tokens.push(text.length().reinterpret_as_uint())
       new_tokens.push(metadata)
-      next_original_token_idx = next_original_token_idx + 1
+      next_original_token_idx += 1
       original_end_offset = next_original_token_end_offset
     } else if has_insert {
       let next_insert_token = insert_tokens[next_insert_token_idx]
       if next_insert_token.offset > original_end_offset {
         // insert token is in the middle of the next token
-        text = text +
-          substr(self.text, original_end_offset, next_insert_token.offset)
+        text += substr(self.text, original_end_offset, next_insert_token.offset)
         let metadata = if next_original_token_idx < self.tokens_count {
           self.tokens[(next_original_token_idx << 1) + 1]
         } else {
@@ -209,10 +211,10 @@ pub fn LineTokens::with_inserted(
         new_tokens.push(metadata)
         original_end_offset = next_insert_token.offset
       }
-      text = text + next_insert_token.text
+      text += next_insert_token.text
       new_tokens.push(text.length().reinterpret_as_uint())
       new_tokens.push(next_insert_token.token_metadata.to_uint())
-      next_insert_token_idx = next_insert_token_idx + 1
+      next_insert_token_idx += 1
     } else {
       break
     }

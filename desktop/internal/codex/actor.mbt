@@ -141,7 +141,7 @@ fn ReverseRequestRegistry::ReverseRequestRegistry() -> ReverseRequestRegistry {
 ///|
 fn ReverseRequestRegistry::reset(self : ReverseRequestRegistry) -> Unit {
   self.requests = Map([])
-  self.generation = self.generation + 1
+  self.generation += 1
 }
 
 ///|
@@ -159,7 +159,7 @@ fn ReverseRequestRegistry::insert(
   request : @jsonrpc.PeerRequest,
 ) -> Unit {
   self.requests[key] = request
-  self.generation = self.generation + 1
+  self.generation += 1
 }
 
 ///|
@@ -169,7 +169,7 @@ fn ReverseRequestRegistry::take(
 ) -> @jsonrpc.PeerRequest? {
   guard self.requests.get(key) is Some(request) else { return None }
   self.requests.remove(key)
-  self.generation = self.generation + 1
+  self.generation += 1
   Some(request)
 }
 

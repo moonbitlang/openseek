@@ -499,12 +499,12 @@ fn ReferencesPeekTestLog::callbacks(
   self : ReferencesPeekTestLog,
 ) -> ReferencesPeekWidgetCallbacks {
   {
-    on_close: () => self.close_count.val = self.close_count.val + 1,
+    on_close: () => self.close_count.val += 1,
     on_select: item => self.selected.push(item.flat_index),
     on_confirm: item => self.confirmed.push(item.flat_index),
     on_open_side: item => self.opened_side.push(item.flat_index),
-    on_next: () => self.next_count.val = self.next_count.val + 1,
-    on_previous: () => self.previous_count.val = self.previous_count.val + 1,
+    on_next: () => self.next_count.val += 1,
+    on_previous: () => self.previous_count.val += 1,
     on_expand_group: group => self.expanded.push(group.group_index),
   }
 }

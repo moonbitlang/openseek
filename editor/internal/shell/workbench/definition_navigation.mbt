@@ -77,11 +77,11 @@ async fn resolve_preview_model(
           return Some(acquire_preview_reference(state, model))
         Some(_) => {
           state.model = None
-          state.in_flight = state.in_flight + 1
+          state.in_flight += 1
           state
         }
         None => {
-          state.in_flight = state.in_flight + 1
+          state.in_flight += 1
           state
         }
       }
@@ -109,7 +109,7 @@ async fn resolve_preview_model(
       )
   }
   if state.in_flight > 0 {
-    state.in_flight = state.in_flight - 1
+    state.in_flight -= 1
   }
   if preview_resources_shutdown.val {
     begin_preview_resource_shutdown(state)
@@ -147,10 +147,10 @@ fn acquire_preview_reference(
   state : PreviewResourceState,
   model : @model.TextModel,
 ) -> @navigation_api.TextModelReference {
-  state.leases = state.leases + 1
+  state.leases += 1
   TextModelReference(model, release=() => {
     if state.leases > 0 {
-      state.leases = state.leases - 1
+      state.leases -= 1
     }
     retire_preview_resource_if_unused(state)
   })

@@ -162,7 +162,7 @@ async test "run_turn_with_append closes failed persisted turns" {
     session=initial,
     task="hello",
     append_item=(session, item) => {
-      calls = calls + 1
+      calls += 1
       if calls == 2 {
         fail("persist terminal failed")
       }

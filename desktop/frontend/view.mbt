@@ -2013,10 +2013,10 @@ fn view(
     "content"
   }
   if file_panel_visible && model.right_panel_expanded {
-    content_class = content_class + " panel-expanded"
+    content_class += " panel-expanded"
   }
   if terminal_panel_visible {
-    content_class = content_class + " terminal-open"
+    content_class += " terminal-open"
   }
   let children : Array[@html.Html] = [
     sidebar_html,

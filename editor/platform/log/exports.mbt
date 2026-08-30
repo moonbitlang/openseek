@@ -46,7 +46,7 @@ pub impl Logger for MemoryLogger with fn log(self, entry) {
 ///|
 /// Records a flush boundary in memory.
 pub impl Logger for MemoryLogger with fn flush(self) {
-  self.flush_count.val = self.flush_count.val + 1
+  self.flush_count.val += 1
 }
 
 ///|

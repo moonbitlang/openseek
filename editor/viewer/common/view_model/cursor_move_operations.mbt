@@ -296,10 +296,12 @@ fn cursor_right_position(
   let mut line_number = line_number
   let mut column = column
   if column < model.get_line_max_column(line_number) {
-    column = column +
-      cursor_next_char_length(model.get_line_content(line_number), column - 1)
+    column += cursor_next_char_length(
+      model.get_line_content(line_number),
+      column - 1,
+    )
   } else if line_number < model.get_line_count() {
-    line_number = line_number + 1
+    line_number += 1
     column = model.get_line_min_column(line_number)
   }
   Position(line_number, column)
@@ -411,8 +413,7 @@ fn cursor_vertical(
         Position(line_number, column),
         affinity,
       )
-      leftover_visible_columns = leftover_visible_columns +
-        (column - new_position.column)
+      leftover_visible_columns += column - new_position.column
       line_number = new_position.line_number
       column = new_position.column
     }

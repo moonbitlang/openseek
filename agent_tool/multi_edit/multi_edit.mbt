@@ -1016,7 +1016,7 @@ fn line_end_offset(content : String, line : Int) -> Int {
       if current_line == line {
         break cursor + 1
       }
-      current_line = current_line + 1
+      current_line += 1
     }
   } nobreak {
     len

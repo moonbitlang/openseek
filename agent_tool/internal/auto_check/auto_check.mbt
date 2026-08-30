@@ -119,12 +119,12 @@ fn tally_diagnostics(text : String, truncated~ : Bool) -> CheckErrors {
         | (_ with message = ""),
         ..
       } => {
-        error_count = error_count + 1
+        error_count += 1
         if first_errors.length() < RevertErrorDisplayLimit {
           first_errors.push(format_diagnostic_line(path, loc, message))
         }
       }
-      { "level": String("warning"), .. } => warning_count = warning_count + 1
+      { "level": String("warning"), .. } => warning_count += 1
       _ => ()
     }
   }

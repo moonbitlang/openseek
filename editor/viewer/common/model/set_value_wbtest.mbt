@@ -107,9 +107,7 @@ test "set_value re-seeds visible token state without a full reset event" {
 test "no content event is emitted while disposing" {
   let model = wb_model("alpha")
   let mut content_events = 0
-  let _sub = model.on_did_change_content(_ => {
-    content_events = content_events + 1
-  })
+  let _sub = model.on_did_change_content(_ => content_events += 1)
   let _will = model.on_will_dispose(() => model.set_value("ghost"))
   model.dispose()
   // the swap and version bump still happened; only the events are

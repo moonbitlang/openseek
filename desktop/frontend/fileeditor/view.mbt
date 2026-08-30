@@ -270,10 +270,10 @@ pub fn editor_classes(state : State, ctx : Ctx) -> String {
     (ctx.active_file is None && ctx.active_history_diff is None)
   let mut classes = "editor"
   if tree_visible {
-    classes = classes + " tree-open"
+    classes += " tree-open"
   }
   if ctx.tree_layout is RightSidebar {
-    classes = classes + " tree-right"
+    classes += " tree-right"
   }
   classes
 }
@@ -900,7 +900,7 @@ fn graph_row_width(row : GraphRow) -> Int {
 fn find_last_graph_lane(lanes : Array[GraphLane], id : String) -> Int? {
   let mut index = lanes.length()
   while index > 0 {
-    index = index - 1
+    index -= 1
     if lanes[index].id == id {
       return Some(index)
     }
@@ -983,7 +983,7 @@ fn git_graph_cell(
           ),
         )
       } else {
-        output_swimlane_index = output_swimlane_index + 1
+        output_swimlane_index += 1
       }
     } else if output_swimlane_index < row.output_swimlanes.length() &&
       node.id == row.output_swimlanes[output_swimlane_index].id {
@@ -1001,7 +1001,7 @@ fn git_graph_cell(
           attrs=@svg.Attrs::build().stroke_linecap("round"),
         ),
       )
-      output_swimlane_index = output_swimlane_index + 1
+      output_swimlane_index += 1
     }
   }
 
@@ -1162,10 +1162,10 @@ fn git_commit_row(
   }
   let mut row_class = "git-commit-row"
   if head {
-    row_class = row_class + " current"
+    row_class += " current"
   }
   if expanded {
-    row_class = row_class + " selected"
+    row_class += " selected"
   }
   let children : Array[@html.Html] = [
     @html.button(
@@ -1440,10 +1440,10 @@ fn changed_file_row(
   let reviewed = state.reviewed_changes.contains(change)
   let mut class = if selected { "change-row selected" } else { "change-row" }
   if reviewed {
-    class = class + " reviewed"
+    class += " reviewed"
   }
   if !change.selectable() {
-    class = class + " disabled"
+    class += " disabled"
   }
   let children = [
     @html.span(class="change-path", change.path.0),

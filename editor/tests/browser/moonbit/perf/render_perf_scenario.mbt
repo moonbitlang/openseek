@@ -119,7 +119,7 @@ fn record_sample(
   if sample_index.val >= 0 {
     samples.push(elapsed)
   }
-  sample_index.val = sample_index.val + 1
+  sample_index.val += 1
   if sample_index.val >= 3 {
     finish_perf_report(ctx, done, samples)
   } else {

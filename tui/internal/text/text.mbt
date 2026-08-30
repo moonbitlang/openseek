@@ -81,10 +81,10 @@ fn sanitize_line(line : @displaytext.DisplayText) -> String {
     if unit == "\t" {
       let spaces = TabWidth - col % TabWidth
       builder <+ "\{String::make(spaces, ' ')}"
-      col = col + spaces
+      col += spaces
     } else if !is_control_unit(unit) {
       builder <+ "\{unit}"
-      col = col + unit_width(line, start~, end~)
+      col += unit_width(line, start~, end~)
     }
     start = end
   }

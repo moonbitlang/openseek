@@ -90,7 +90,7 @@ test "preview shutdown waits for real leases and in-flight reads" {
   assert_true(preview_resources.contains(pending_uri.to_string()))
 
   // Simulates the late resolver continuation decrementing its own request.
-  pending_state.in_flight = pending_state.in_flight - 1
+  pending_state.in_flight -= 1
   retire_preview_resource_if_unused(pending_state)
   assert_true(pending_state.lifecycle == PreviewResourceDisposed)
   assert_false(preview_resources.contains(pending_uri.to_string()))
@@ -195,7 +195,7 @@ async test "remote definition provider preserves ordered locations and cancellat
   protocol_send.val = Some(packet => {
     match packet {
       OpenDocument(request) => {
-        preview_open_count.val = preview_open_count.val + 1
+        preview_open_count.val += 1
         resolve_pending_response(
           DocumentLoaded({
             id: request.id,
@@ -210,7 +210,7 @@ async test "remote definition provider preserves ordered locations and cancellat
         )
         |> ignore
       }
-      CloseDocument(_) => preview_close_count.val = preview_close_count.val + 1
+      CloseDocument(_) => preview_close_count.val += 1
       _ => unexpected_packet.val = true
     }
   })
@@ -259,7 +259,7 @@ async test "remote definition provider preserves ordered locations and cancellat
   protocol_send.val = Some(packet => {
     match packet {
       OpenDocument(request) => {
-        shutdown_open_count.val = shutdown_open_count.val + 1
+        shutdown_open_count.val += 1
         match preview_resources.get(request.uri.to_string()) {
           Some(state) =>
             shutdown_saw_real_in_flight.val = state.in_flight == 1 &&
@@ -283,8 +283,7 @@ async test "remote definition provider preserves ordered locations and cancellat
         )
         |> ignore
       }
-      CloseDocument(_) =>
-        shutdown_close_count.val = shutdown_close_count.val + 1
+      CloseDocument(_) => shutdown_close_count.val += 1
       _ => unexpected_packet.val = true
     }
   })

@@ -12,7 +12,7 @@ fn display_prefix(text : String, units : Int) -> String {
     match line.next(end) {
       Some(next) => {
         end = next
-        remaining = remaining - 1
+        remaining -= 1
       }
       None => remaining = 0
     }

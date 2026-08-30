@@ -213,10 +213,10 @@ pub fn tabs_bar(
   for chip in chips {
     let mut classes = "editor-tab"
     if state.active == Some(chip.tab) {
-      classes = classes + " active"
+      classes += " active"
     }
     if chip.missing {
-      classes = classes + " deleted"
+      classes += " deleted"
     }
     let tab = chip.tab
     tabs.push(

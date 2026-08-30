@@ -48,7 +48,7 @@ fn ViewEventDispatcher::ViewEventDispatcher(
 
 ///|
 fn ViewEventDispatcher::begin(self : ViewEventDispatcher) -> ViewEventCollector {
-  self.collector_depth = self.collector_depth + 1
+  self.collector_depth += 1
   match self.collector {
     Some(collector) => collector
     None => {
@@ -64,7 +64,7 @@ fn ViewEventDispatcher::end(self : ViewEventDispatcher) -> Unit {
   if self.collector_depth <= 0 {
     abort("ViewEventDispatcher.end without matching begin")
   }
-  self.collector_depth = self.collector_depth - 1
+  self.collector_depth -= 1
   if self.collector_depth > 0 {
     return
   }

@@ -53,7 +53,7 @@ pub fn EditorDecorationsCollection::append(
   new_decorations : Array[@model.ModelDeltaDecoration],
 ) -> Array[String] {
   let appended = self.viewer.delta_decorations([], new_decorations)
-  self.decoration_ids = self.decoration_ids + appended
+  self.decoration_ids += appended
   appended
 }
 

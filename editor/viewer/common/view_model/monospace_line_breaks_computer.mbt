@@ -263,10 +263,10 @@ fn create_line_breaks(
   if @base_common.is_high_surrogate(prev_char_code) {
     // A surrogate pair must always be considered as a single unit, so it is
     // never to be broken.
-    visible_column = visible_column + 1.0
+    visible_column += 1.0
     prev_char_code = line_text[1].to_int()
     prev_char_code_class = classifier.get(prev_char_code)
-    start_offset = start_offset + 1
+    start_offset += 1
   }
   let mut i = start_offset
   while i < len {
@@ -277,7 +277,7 @@ fn create_line_breaks(
     if @base_common.is_high_surrogate(char_code) {
       // A surrogate pair must always be considered as a single unit, so it
       // is never to be broken.
-      i = i + 1
+      i += 1
       char_code_class = CHARACTER_CLASS_NONE
       char_width = 2.0
     } else {
@@ -292,7 +292,7 @@ fn create_line_breaks(
       break_offset = char_start_offset
       break_offset_visible_column = visible_column
     }
-    visible_column = visible_column + char_width
+    visible_column += char_width
     // Check if adding character at `i` will go over the breaking column.
     if visible_column > breaking_column {
       // We need to break at least before character at `i`:
@@ -309,7 +309,7 @@ fn create_line_breaks(
     }
     prev_char_code = char_code
     prev_char_code_class = char_code_class
-    i = i + 1
+    i += 1
   }
   if breaking_offsets.length() == 0 && !has_injections {
     return None
@@ -463,7 +463,7 @@ fn compute_wrapped_text_indent_length(
         } else {
           1
         }
-        wrapped_text_indent_length = wrapped_text_indent_length + char_width
+        wrapped_text_indent_length += char_width
       }
       // Increase indent of continuation lines, if desired.
       let number_of_additional_tabs = match wrapping_indent {
@@ -472,8 +472,9 @@ fn compute_wrapped_text_indent_length(
         _ => 0
       }
       for _ in 0..<number_of_additional_tabs {
-        wrapped_text_indent_length = wrapped_text_indent_length +
-          tab_character_width(wrapped_text_indent_length, tab_size)
+        wrapped_text_indent_length += tab_character_width(
+          wrapped_text_indent_length, tab_size,
+        )
       }
       // Force sticking to beginning of line if no character would fit except
       // for the indentation.

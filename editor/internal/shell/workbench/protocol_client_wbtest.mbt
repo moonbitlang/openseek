@@ -100,9 +100,7 @@ test "cancelling an in-flight request resumes once and consumes its late respons
       }
     },
     cancellation_subscription: Some(
-      @base_common.Disposable::from(() => {
-        subscription_disposals.val = subscription_disposals.val + 1
-      }),
+      @base_common.Disposable::from(() => subscription_disposals.val += 1),
     ),
     sent: true,
   }
@@ -154,9 +152,7 @@ test "send failure resumes every pending request without waiting for Closed" {
       }
     },
     cancellation_subscription: Some(
-      @base_common.Disposable::from(() => {
-        subscription_disposals.val = subscription_disposals.val + 1
-      }),
+      @base_common.Disposable::from(() => subscription_disposals.val += 1),
     ),
     sent: true,
   }

@@ -498,7 +498,7 @@ async fn SseLineReader::next_line(self : SseLineReader) -> String? {
       self.buf[j] = self.buf[self.start + j]
     }
     self.buf.truncate(remaining)
-    self.scan = self.scan - self.start
+    self.scan -= self.start
     self.start = 0
   }
   for ;; {
@@ -521,7 +521,7 @@ async fn SseLineReader::next_line(self : SseLineReader) -> String? {
         // deciding, then resume from this position.
         break
       }
-      i = i + 1
+      i += 1
     }
     self.scan = i
     if self.eof {
