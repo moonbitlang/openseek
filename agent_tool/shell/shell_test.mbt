@@ -490,7 +490,11 @@ async test "shell stops oversized output while the command is still running on U
   let output = run_shell({
     "cmd": "printf %s 'abcdef'; sleep 2",
     "max_output_chars": 3,
-    "timeout_ms": 1000,
+    // The deadline must only be generous enough to outlive the sandbox-profile
+    // workspace scan that every command launch pays; the assertion is about the
+    // output limit triggering, never about this timeout (a tight 1s budget
+    // raced the scan and flaked under parallel load).
+    "timeout_ms": 10000,
   })
   assert_true(output.is_error)
   assert_true(
@@ -522,7 +526,10 @@ async test "shell does not cut multi-byte utf8 output mid-character on Unix" {
   let output = run_shell({
     "cmd": "printf %s '中中中'; sleep 2",
     "max_output_chars": 2,
-    "timeout_ms": 1000,
+    // Generous deadline: the assertion is the output limit, not the timeout
+    // (a tight 1s budget raced the sandbox-profile workspace scan and flaked
+    // under parallel load).
+    "timeout_ms": 10000,
   })
   assert_true(output.is_error)
   assert_true(
@@ -554,7 +561,10 @@ async test "shell does not split four-byte utf8 characters on Unix" {
   let output = run_shell({
     "cmd": "printf %s '😀😀'; sleep 2",
     "max_output_chars": 1,
-    "timeout_ms": 1000,
+    // Generous deadline: the assertion is the output limit, not the timeout
+    // (a tight 1s budget raced the sandbox-profile workspace scan and flaked
+    // under parallel load).
+    "timeout_ms": 10000,
   })
   assert_true(output.is_error)
   assert_true(
@@ -603,7 +613,10 @@ async test "shell output limit wins over an unbounded producer on Unix" {
   let output = run_shell({
     "cmd": "while :; do printf %s 'yyyyyyyyyy'; done",
     "max_output_chars": 5,
-    "timeout_ms": 1000,
+    // Generous deadline: the assertion is the output limit, not the timeout
+    // (a tight 1s budget raced the sandbox-profile workspace scan and flaked
+    // under parallel load).
+    "timeout_ms": 10000,
   })
   assert_true(output.is_error)
   assert_true(
