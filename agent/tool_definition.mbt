@@ -265,7 +265,7 @@ async test "a foreground run past its deadline becomes a job instead of dying" {
       workspace_root=".",
       bg_runtime~,
       job_dir=spill_dir,
-      run_timeout_ms=1500,
+      auto_background_after_ms=1500,
     )
     let source =
       #|import { "moonbitlang/async" }
@@ -338,7 +338,7 @@ async test "binary output does not escape the deadline" {
       workspace_root=".",
       bg_runtime~,
       job_dir=spill_dir,
-      run_timeout_ms=1500,
+      auto_background_after_ms=1500,
     )
     let source =
       #|import { "moonbitlang/async", "moonbitlang/async/stdio" }

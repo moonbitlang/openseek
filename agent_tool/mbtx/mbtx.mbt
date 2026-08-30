@@ -1,10 +1,18 @@
 ///|
-/// A snippet is bounded to this wall-clock so a runaway loop or a build that
-/// never finishes cannot block the whole turn. On expiry the run is cancelled
-/// (which tears down the moon subprocess) and reported as a timeout. Sized for
-/// commands, not just compute: a snippet runs whole `moon test` cycles, and a
-/// fresh workspace's first build downloads and compiles its dependencies.
-const RunTimeoutMs : Int = 300_000
+/// How long a runtime-backed run stays inline before it is adopted as a job.
+/// Kept at the historical five-minute value in the timeout-policy refactor;
+/// callers and the model-facing contract can shorten it independently without
+/// shortening foreground-only subruns.
+const AutoBackgroundAfterMs : Int = 300_000
+
+///|
+/// Non-detachable foreground work is bounded to this wall-clock so a runaway
+/// loop or build cannot block the whole turn. This covers both a runtime-less
+/// snippet and the compile preflight before an explicitly backgrounded run. On
+/// expiry the work is cancelled and reported as a timeout. Sized for commands,
+/// not just compute: a snippet runs whole `moon test` cycles, and a fresh
+/// workspace's first build downloads and compiles its dependencies.
+const ForegroundTimeoutMs : Int = 300_000
 
 ///|
 /// Output is streamed to a file on disk, not buffered in memory, so a snippet
@@ -74,6 +82,9 @@ const WarnOffList : String = "-a+partial_match@partial_match+multiline_string_es
 /// is what advertises the `escalated` argument at all — the same rule
 /// `bg_runtime` follows for `run_in_background`: a build with nobody to ask
 /// does not offer an argument whose every use would come back refused.
+///
+/// `run_timeout_ms` is the compatibility fallback for callers of the former
+/// single-timeout API. Either new bound can override it independently.
 pub fn definition(
   workspace_root~ : String,
   read_only? : Bool = false,
@@ -81,9 +92,17 @@ pub fn definition(
   job_dir? : String,
   scratch_dir? : String,
   worker_sandbox? : WorkerSandbox,
-  run_timeout_ms? : Int = RunTimeoutMs,
+  run_timeout_ms? : Int,
+  auto_background_after_ms? : Int,
+  foreground_timeout_ms? : Int,
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.AgentToolDefinition {
+  let auto_background_after_ms = auto_background_after_ms.unwrap_or(
+    run_timeout_ms.unwrap_or(AutoBackgroundAfterMs),
+  )
+  let foreground_timeout_ms = foreground_timeout_ms.unwrap_or(
+    run_timeout_ms.unwrap_or(ForegroundTimeoutMs),
+  )
   // Background snippet directories are numbered inside the caller's scratch
   // dir rather than created as fresh system temp dirs: a detached job outlives
   // this call, so its snippet, build artifacts, and output log cannot be
@@ -107,7 +126,8 @@ pub fn definition(
         job_dir?,
         scratch_dir?,
         worker_sandbox?,
-        run_timeout_ms~,
+        auto_background_after_ms~,
+        foreground_timeout_ms~,
         next_background~,
         approval?,
       )
@@ -160,9 +180,10 @@ async fn execute(
   job_dir? : String,
   scratch_dir? : String,
   worker_sandbox? : WorkerSandbox,
-  // The wall-clock bound, injectable so a test can exercise the deadline
-  // without waiting out the real one.
-  run_timeout_ms~ : Int,
+  // Independent injectable bounds: a runtime-backed run hands off at the first;
+  // a runtime-less run is cancelled at the second.
+  auto_background_after_ms~ : Int,
+  foreground_timeout_ms~ : Int,
   next_background~ : Ref[Int],
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
@@ -480,7 +501,7 @@ async fn execute(
     // Bounded like every other run here: a first build downloads and compiles
     // dependencies, and a wedged fetch would otherwise hold the turn open —
     // exactly what asking for a background job was meant to avoid.
-    let build_exit = @async.with_timeout_opt(run_timeout_ms, () => {
+    let build_exit = @async.with_timeout_opt(foreground_timeout_ms, () => {
       @process.run(
         prog,
         build_argv,
@@ -495,7 +516,7 @@ async fn execute(
     guard build_exit is Some(build_exit) else {
       let text = rewrite_temp_paths(read_capped(build_log), [real, dir])
       return @agent_tool.respond(
-        "mbtx: the build did not finish within \{run_timeout_ms / 1000}s, so no background job was started.\n\{text}",
+        "mbtx: the build did not finish within \{foreground_timeout_ms / 1000}s, so no background job was started.\n\{text}",
         is_error=true,
         brief="mbtx (build timeout)",
       )
@@ -550,7 +571,9 @@ async fn execute(
     // code below would be invented. The exit is what this waits for either way,
     // so asking for the early wake only put the rest of the wait outside the
     // deadline. Expiry needs nothing special: it detaches like any other long run.
-    let finished = @async.with_timeout_opt(run_timeout_ms, () => exec.wait())
+    let finished = @async.with_timeout_opt(auto_background_after_ms, () => {
+      exec.wait()
+    })
     let saw_binary = exec.had_invalid_utf8()
     if finished is None {
       let _ = exec.background()
@@ -562,7 +585,7 @@ async fn execute(
       )
       job_owns_dir = true
       return @agent_tool.respond(
-        "mbtx: still running after \{run_timeout_ms / 1000}s, so it moved to the background as job \{id} (nothing was lost). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\").",
+        "mbtx: still running after \{auto_background_after_ms / 1000}s, so it moved to the background as job \{id} (nothing was lost). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\").",
         brief="mbtx → bg \{id}",
       )
     }
@@ -615,7 +638,7 @@ async fn execute(
       brief="mbtx (exit=\{exit_code})",
     )
   }
-  let result = @async.with_timeout_opt(run_timeout_ms, () => {
+  let result = @async.with_timeout_opt(foreground_timeout_ms, () => {
     let exit_code = @process.run(
       prog,
       argv,
@@ -672,7 +695,7 @@ async fn execute(
       // instead of discarding it behind a generic timeout message. The status
       // line stays first so it survives the outer result clamp.
       let partial = rewrite_temp_paths(read_capped(log), [real, dir])
-      let head = "mbtx: timed out after \{run_timeout_ms / 1000}s and was cancelled — the program did not finish (an infinite loop, or a build that never completed)."
+      let head = "mbtx: timed out after \{foreground_timeout_ms / 1000}s and was cancelled — the program did not finish (an infinite loop, or a build that never completed)."
       let body = if partial.is_blank() {
         head
       } else {
