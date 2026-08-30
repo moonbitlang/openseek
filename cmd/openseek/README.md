@@ -55,6 +55,9 @@ with `OPENSEEK_SYSTEM_PROMPT_FILE` and
 `OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE`. `--session` explicitly creates or
 resumes that session under `--session-root` (default `.openseek`). Relative
 session roots are resolved under `--dir`.
+`--review-deadline` bounds one review audit (the model-callable `review` tool or
+the `--review-gate` audit) to that many milliseconds; the default is 900000
+(15 minutes).
 
 Every run records a durable session: without `--session`, a generated
 `cli-YYYYMMDD-HHMMSS-mmm` id is used and announced by a `session_started` event

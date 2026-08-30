@@ -24,6 +24,7 @@ async fn[X] build_extra_tools(
   api_url? : String,
   child_session? : @agent_subrun.ChildSession,
 ) -> Array[@agent_tool.AgentToolDefinition] {
+  let review_deadline_ms = review_deadline_ms(matches)
   let extra_tools = resolve_mcp_tools(matches, scope, workspace_root~) +
     [
       @agent_explore.definition(
@@ -38,6 +39,7 @@ async fn[X] build_extra_tools(
         self_exe~,
         model~,
         workspace_root~,
+        review_deadline_ms?,
         budget~,
         context=review_context,
         api_url?,

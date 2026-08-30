@@ -11,6 +11,7 @@ fn review_tool_definition(
   self_exe~ : String,
   model~ : @deepseek.Model,
   workspace_root~ : String,
+  review_deadline_ms? : Int = GateDeadlineMs,
   budget~ : @agent_subrun.SubrunBudget,
   context~ : () -> (String?, @agent_session.GoalBaseline?),
   api_url? : String,
@@ -40,8 +41,15 @@ fn review_tool_definition(
     }),
     execute=Async(arguments => {
       execute_review(
-        self_exe, model, workspace_root, budget, context, api_url, child_session,
+        self_exe,
+        model,
+        workspace_root,
+        budget,
+        context,
+        api_url,
+        child_session,
         arguments,
+        review_deadline_ms~,
       )
     }),
   )
@@ -57,6 +65,7 @@ async fn execute_review(
   api_url : String?,
   child_session : @agent_subrun.ChildSession?,
   arguments : Json,
+  review_deadline_ms~ : Int,
 ) -> @agent_tool.ToolAction {
   let focus : String? = match arguments {
     { "focus": String(focus), .. } if !focus.is_blank() => Some(focus)
@@ -103,7 +112,7 @@ async fn execute_review(
     args~,
     input~,
     parse_report=parse_audit_report,
-    wall_deadline_ms=GateDeadlineMs,
+    wall_deadline_ms=review_deadline_ms,
     kind="review",
     label=@agent_tool.brief_line(criteria, limit=48),
     cwd=workspace_root,

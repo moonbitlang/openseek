@@ -267,6 +267,7 @@ async fn run_task_turn(
   workspace_root~ : String,
   child_session? : @agent_subrun.ChildSession,
 ) -> Unit {
+  let review_deadline_ms = review_deadline_ms(matches)
   @async.with_task_group() <| group => {
     // `run` reads no commands, so there is nobody to ask: `--approval ask` is
     // refused at parse time (see parse_approval_policy) and the surviving
@@ -311,6 +312,7 @@ async fn run_task_turn(
           model~,
           api_url~,
           workspace_root~,
+          review_deadline_ms?,
           child_session?,
         ),
       )
@@ -672,6 +674,7 @@ fn root_command() -> @argparse.Command {
         about="Run one task headlessly; stream JSONL events on stdout.",
         options=[
           ..agent_options(),
+          review_deadline_option(),
           // Only `run` and `serve` build an approval channel. On the shared
           // bundle this also reached `mcp`, `review` and `subrun`, where it
           // parses and then does nothing — and where an exported
@@ -704,7 +707,7 @@ fn root_command() -> @argparse.Command {
       Command(
         "serve",
         about="Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.",
-        options=[..agent_options(), approval_option()],
+        options=[..agent_options(), review_deadline_option(), approval_option()],
         flags=[
           FlagArg(
             "no-session",
@@ -2110,4 +2113,38 @@ test "cli rejects invalid max steps" {
     }
   }
   fail("invalid max steps parsed")
+}
+
+///|
+test "cli parses review deadline option" {
+  let parsed = run_matches(
+    argv=["--review-deadline", "60000", "write", "MoonBit"],
+    env={ "DEEPSEEK": "test-key" },
+  )
+  assert_true(review_deadline_ms(parsed) is Some(60000))
+}
+
+///|
+test "cli defaults review deadline to none" {
+  let parsed = run_matches(argv=["write", "MoonBit"], env={
+    "DEEPSEEK": "test-key",
+  })
+  assert_true(review_deadline_ms(parsed) is None)
+}
+
+///|
+test "cli rejects invalid review deadline" {
+  let parsed = run_matches(
+    argv=["--review-deadline", "0", "write", "MoonBit"],
+    env={ "DEEPSEEK": "test-key" },
+  )
+  let _ = review_deadline_ms(parsed) catch {
+    error => {
+      assert_true(
+        "\{error}".contains("--review-deadline must be a positive integer"),
+      )
+      return
+    }
+  }
+  fail("invalid review deadline parsed")
 }

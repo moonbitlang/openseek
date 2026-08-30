@@ -594,6 +594,7 @@ async fn run_serve(
     fail("an API key is required for \{model}: pass --api-key")
   }
   let max_steps = max_steps(matches)
+  let review_deadline_ms = review_deadline_ms(matches)
   let session_id = match matches {
     {
       values: {
@@ -713,6 +714,7 @@ async fn run_serve(
           model~,
           api_url~,
           workspace_root~,
+          review_deadline_ms?,
           child_session?,
         ),
       )

@@ -51,6 +51,7 @@ fn build_goal_met_gate(
   model~ : @deepseek.Model,
   api_url~ : String?,
   workspace_root~ : String,
+  review_deadline_ms? : Int = GateDeadlineMs,
   child_session? : @agent_subrun.ChildSession,
 ) -> async (String, @agent_session.GoalBaseline?) -> String? {
   (goal, baseline) => {
@@ -76,7 +77,7 @@ fn build_goal_met_gate(
       args~,
       input~,
       parse_report=parse_audit_report,
-      wall_deadline_ms=GateDeadlineMs,
+      wall_deadline_ms=review_deadline_ms,
       kind="review",
       label=@agent_tool.brief_line(goal, limit=48),
       cwd=workspace_root,
@@ -100,4 +101,27 @@ fn review_gate_flag() -> @argparse.FlagArg {
     long="review-gate",
     about="On goal(met), audit the worktree against the goal with a review subagent and inject the findings as an advisory notice.",
   )
+}
+
+///|
+/// The `--review-deadline` option (milliseconds), shared by `run` and `serve`
+/// like `--review-gate`: the wall clock one review audit (the model-callable
+/// review tool or the `--review-gate` audit) may take before it is treated as
+/// stuck. Absent, the audit falls back to `GateDeadlineMs`.
+fn review_deadline_option() -> @argparse.OptionArg {
+  OptionArg(
+    "review-deadline",
+    long="review-deadline",
+    about="Wall-clock deadline in milliseconds for one review audit (the review tool or --review-gate); default 900000 (15 minutes).",
+  )
+}
+
+///|
+/// `None` — no flag — means the `GateDeadlineMs` default.
+fn review_deadline_ms(matches : @argparse.Matches) -> Int? raise {
+  match matches {
+    { values: { "review-deadline": [input, ..], .. }, .. } =>
+      Some(@cli.parse_positive_int(input, "--review-deadline"))
+    _ => None
+  }
 }
