@@ -897,13 +897,14 @@ fn inserted_line_span(new_string : String) -> Int {
 ///|
 fn line_number_at_offset(content : String, offset : Int) -> Int {
   let bounded_offset = offset.clamp(min=0, max=content.length())
-  let mut line = 1
-  for cursor in 0..<bounded_offset {
+  for cursor in 0..<bounded_offset; line = 1 {
     if content[cursor] == '\n' {
-      line += 1
+      continue line + 1
     }
+    continue line
+  } nobreak {
+    line
   }
-  line
 }
 
 ///|

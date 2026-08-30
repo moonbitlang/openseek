@@ -1010,13 +1010,14 @@ fn line_start_offset(content : String, line : Int) -> Int {
 ///|
 fn line_end_offset(content : String, line : Int) -> Int {
   let len = content.length()
-  let mut current_line = 1
-  for cursor in 0..<len {
+  for cursor in 0..<len; current_line = 1 {
     if content[cursor] == '\n' {
       if current_line == line {
         break cursor + 1
       }
-      current_line += 1
+      continue current_line + 1
+    } else {
+      continue current_line
     }
   } nobreak {
     len
