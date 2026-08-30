@@ -17,14 +17,15 @@ pub struct BgJobRuntime {
   // private fields
 }
 pub fn[X] BgJobRuntime::BgJobRuntime(@agent_runtime.AgentTaskScope[X], spill_dir? : String, hard_output_cap? : Int, hard_timeout_ms? : Int, on_job_exit? : (BgJobSnapshot) -> Unit) -> Self
-pub fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, cwd? : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool) -> String
+pub fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, cwd? : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit) -> String
 pub fn BgJobRuntime::list(Self) -> Array[BgJobSnapshot]
 pub async fn BgJobRuntime::read_output(Self, String) -> String?
 pub async fn BgJobRuntime::read_output_tail(Self, String, Int) -> String?
 pub fn BgJobRuntime::snapshot(Self, String) -> BgJobSnapshot?
 pub async fn BgJobRuntime::spawn_foreground_retained(Self, String, Array[String], String?, Int, stdin? : &@process.ProcessInput) -> @shell_exec.ShellExecution
-pub async fn BgJobRuntime::start(Self, program~ : String, args~ : Array[String], command~ : String, cwd? : String, max_output_chars? : Int, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, stdin? : &@process.ProcessInput) -> String
+pub async fn BgJobRuntime::start(Self, program~ : String, args~ : Array[String], command~ : String, cwd? : String, max_output_chars? : Int, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, stdin? : &@process.ProcessInput) -> String
 pub async fn BgJobRuntime::stop(Self, String) -> Bool
+pub async fn BgJobRuntime::terminal_denial_feedback(Self, String) -> String?
 pub async fn BgJobRuntime::wait_exit(Self, String, Int) -> Bool
 
 pub struct BgJobSnapshot {
@@ -41,6 +42,8 @@ pub struct BgJobSnapshot {
   had_invalid_utf8 : Bool
   sandboxed_command : @sandbox.SandboxedCommand?
   read_only_review : Bool
+  output_rewrites : Array[(String, String)]
+  moonrun_policy_active : Bool
   killed_by_output_limit : Bool
   killed_by_time_limit : Bool
 }

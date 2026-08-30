@@ -1,17 +1,15 @@
 ///|
 /// How long a runtime-backed run stays inline before it is adopted as a job.
-/// Kept at the historical five-minute value in the timeout-policy refactor;
-/// callers and the model-facing contract can shorten it independently without
-/// shortening foreground-only subruns.
-const AutoBackgroundAfterMs : Int = 300_000
+/// Five seconds keeps quick probes inline while moving builds, suites, and
+/// watchers out of the turn without asking the model to predict their duration.
+const AutoBackgroundAfterMs : Int = 5_000
 
 ///|
-/// Non-detachable foreground work is bounded to this wall-clock so a runaway
-/// loop or build cannot block the whole turn. This covers both a runtime-less
-/// snippet and the compile preflight before an explicitly backgrounded run. On
-/// expiry the work is cancelled and reported as a timeout. Sized for commands,
-/// not just compute: a snippet runs whole `moon test` cycles, and a fresh
-/// workspace's first build downloads and compiles its dependencies.
+/// Runtime-less foreground work is bounded to this wall-clock so a runaway loop
+/// or build cannot block the whole turn. On expiry it is cancelled and reported
+/// as a timeout. Sized for commands, not just compute: a snippet runs whole
+/// `moon test` cycles, and a fresh workspace's first build downloads and
+/// compiles its dependencies.
 const ForegroundTimeoutMs : Int = 300_000
 
 ///|
@@ -79,12 +77,8 @@ const WarnOffList : String = "-a+partial_match@partial_match+multiline_string_es
 /// it, so `read_only=true` puts "may not write source" in the kernel.
 ///
 /// `approval` is where a request to run OUTSIDE the sandbox goes. Its presence
-/// is what advertises the `escalated` argument at all — the same rule
-/// `bg_runtime` follows for `run_in_background`: a build with nobody to ask
-/// does not offer an argument whose every use would come back refused.
-///
-/// `run_timeout_ms` is the compatibility fallback for callers of the former
-/// single-timeout API. Either new bound can override it independently.
+/// is what advertises the `escalated` argument at all: a build with nobody to
+/// ask does not offer an argument whose every use would come back refused.
 pub fn definition(
   workspace_root~ : String,
   read_only? : Bool = false,
@@ -92,17 +86,10 @@ pub fn definition(
   job_dir? : String,
   scratch_dir? : String,
   worker_sandbox? : WorkerSandbox,
-  run_timeout_ms? : Int,
-  auto_background_after_ms? : Int,
-  foreground_timeout_ms? : Int,
+  auto_background_after_ms? : Int = AutoBackgroundAfterMs,
+  foreground_timeout_ms? : Int = ForegroundTimeoutMs,
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.AgentToolDefinition {
-  let auto_background_after_ms = auto_background_after_ms.unwrap_or(
-    run_timeout_ms.unwrap_or(AutoBackgroundAfterMs),
-  )
-  let foreground_timeout_ms = foreground_timeout_ms.unwrap_or(
-    run_timeout_ms.unwrap_or(ForegroundTimeoutMs),
-  )
   // Background snippet directories are numbered inside the caller's scratch
   // dir rather than created as fresh system temp dirs: a detached job outlives
   // this call, so its snippet, build artifacts, and output log cannot be
@@ -114,9 +101,7 @@ pub fn definition(
       background=bg_runtime is Some(_),
       escalation=approval is Some(_),
     ),
-    schema=JsonSchema(
-      schema(background=bg_runtime is Some(_), escalation=approval is Some(_)),
-    ),
+    schema=JsonSchema(schema(escalation=approval is Some(_))),
     execute=Async(arguments => {
       execute(
         workspace_root,
@@ -236,12 +221,6 @@ async fn execute(
   // a possibly-large output log when a turn is cancelled mid-run. The timeout
   // wraps only the process body; output is redirected to a file (not buffered in
   // memory) and read back capped, so a flood cannot exhaust memory.
-  if input.run_in_background && bg_runtime is None {
-    return @agent_tool.respond(
-      "error: run_in_background is not available in this context",
-      is_error=true,
-    )
-  }
   // Escalation only means something on the backend the policy binds. The other
   // targets never had `--wasm-policy` passed to them in the first place — they
   // cannot spawn or touch files at all — so asking here would spend a person's
@@ -287,13 +266,9 @@ async fn execute(
   } else {
     false
   }
-  // A directory a job may take over must outlive this call, so it is numbered
-  // inside the caller's job dir — reclaimed when the session's scope ends —
-  // rather than a system temp dir that only this function ever revisits. That
-  // covers BOTH ways a job takes over: an explicit `run_in_background`, and a
-  // foreground run detached at its deadline, which is why this does not test
-  // `run_in_background`.
-  let background = input.run_in_background
+  // A directory that an automatic handoff may give to a job must outlive this
+  // call, so it is numbered inside the caller's job dir. The job reclaims it at
+  // terminal status; the session directory remains the teardown fallback.
   let dir = if job_dir is Some(scratch) {
     let dir = "\{scratch}/snippet-\{next_background.val}"
     next_background.val += 1
@@ -333,16 +308,12 @@ async fn execute(
         )
     }
   }
-  // Set once a background job takes over the directory (snippet, artifacts,
-  // output log): either an explicit `run_in_background`, or a foreground run
-  // detached at its deadline. `cleanup` runs on every exit path, so the flag —
-  // not the request — decides whether reclaiming the directory is still ours.
+  // Set once an automatically handed-off job takes over the directory (snippet,
+  // artifacts, and output log). `cleanup` runs on every exit path, so the flag
+  // decides whether reclaiming the directory is still ours.
   //
-  // Handing it over is sound because a job only ever runs with a `job_dir`
-  // wired, and that directory is reclaimed with the session's scope. The
-  // `@fs.tmpdir` branch above has no such owner, but it is only taken when the
-  // caller wired no job dir — which happens only if the session's own tmpdir
-  // call failed, in which case the one above fails too and returns first.
+  // Handing it over is sound because the adopted job installs its own terminal
+  // cleanup below. The session-owned job directory is a final teardown fallback.
   let mut job_owns_dir = false
   async fn cleanup() -> Unit {
     if job_owns_dir {
@@ -485,67 +456,6 @@ async fn execute(
     Some(command) => (command.program(), command.args())
     None => ("moon", moon_argv)
   }
-  if background && bg_runtime is Some(runtime) {
-    // Compile in the FOREGROUND first. A detached run would otherwise report
-    // a syntax or type error only through job_output, and with the throwaway
-    // temp path instead of `source:LINE:COL` — the two things that make a
-    // compile error readable. `--build-only` is the single-file equivalent of
-    // a check: `moon check`/`moon build` do not accept a `.mbtx` script (the
-    // first reports "no work to do", the second demands a Moon project).
-    // TODO(upstream): teach `moon check` to accept a `.mbtx` script, and use
-    // it here — building is more work than this preflight needs.
-    let build_argv = [..argv]
-    build_argv.push("--build-only")
-    let build_log = "\{dir}/build.log"
-    @fs.write_file(build_log, "", create_mode=CreateOrTruncate)
-    // Bounded like every other run here: a first build downloads and compiles
-    // dependencies, and a wedged fetch would otherwise hold the turn open —
-    // exactly what asking for a background job was meant to avoid.
-    let build_exit = @async.with_timeout_opt(foreground_timeout_ms, () => {
-      @process.run(
-        prog,
-        build_argv,
-        cwd=run_cwd.unwrap_or("."),
-        inherit_env=true,
-        stdin=@process.redirect_from_file(empty_stdin),
-        stdout=@process.redirect_to_file(build_log, append=true),
-        stderr=@process.redirect_to_file(build_log, append=true),
-        no_console_window=true,
-      )
-    })
-    guard build_exit is Some(build_exit) else {
-      let text = rewrite_temp_paths(read_capped(build_log), [real, dir])
-      return @agent_tool.respond(
-        "mbtx: the build did not finish within \{foreground_timeout_ms / 1000}s, so no background job was started.\n\{text}",
-        is_error=true,
-        brief="mbtx (build timeout)",
-      )
-    }
-    if build_exit != 0 {
-      let text = rewrite_temp_paths(read_capped(build_log), [real, dir])
-      return @agent_tool.respond(
-        "[mbtx: the program did not compile, so no background job was started]\n\{text}",
-        is_error=true,
-        brief="mbtx (build failed)",
-      )
-    }
-    let id = runtime.start(
-      program=prog,
-      args=argv,
-      command="mbtx: \{@agent_tool.brief_line(input.source, limit=64)}",
-      cwd?=run_cwd,
-      sandboxed_command?,
-      // Same EOF-on-stdin contract as a foreground run: a detached snippet
-      // must not inherit the engine's fd 0, which under `serve` carries the
-      // JSONL commands.
-      stdin=@process.redirect_from_file(empty_stdin),
-    )
-    job_owns_dir = true
-    return @agent_tool.respond(
-      "started background job \{id} (the program compiled). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\").",
-      brief="mbtx → bg \{id}",
-    )
-  }
   // With a job runtime wired the foreground run happens ON it, so the
   // deadline can DETACH the still-running program as a background job rather
   // than killing it: a long `moon test` that outlives the bound is then still
@@ -582,6 +492,15 @@ async fn execute(
         command="mbtx: \{@agent_tool.brief_line(input.source, limit=64)}",
         cwd?=run_cwd,
         sandboxed_command?,
+        output_rewrites=temp_path_rewrites([real, dir]),
+        moonrun_policy_active=input.target == "wasm" && !escalated,
+        on_terminal=() => {
+          @async.protect_from_cancel(() => {
+            @fs.rmdir(dir, recursive=true) catch {
+              _ => ()
+            }
+          })
+        },
       )
       job_owns_dir = true
       return @agent_tool.respond(
@@ -769,18 +688,27 @@ async fn refusal_guidance(
 /// both `/` and `\` separators — moon reports the canonical native path (with
 /// backslashes on Windows), so `source:LINE:COL` shows on every host rather than
 /// a random `_build` path leaking through.
-fn rewrite_temp_paths(text : String, bases : Array[String]) -> String {
-  let mut out = text
+fn temp_path_rewrites(bases : Array[String]) -> Array[(String, String)] {
+  let rewrites : Array[(String, String)] = []
   for base in bases {
     for sep in ["/", "\\"] {
       // `.mbtx` first: replacing `snippet.mbt` before it would leave a stray
       // `x` (`sourcex`). `snippet.mbt` is the generated file at the top of the
       // target-dir; `_build/snippet.mbt` covers the older build layout.
-      out = out
-        .replace_all(old="\{base}\{sep}snippet.mbtx", new="source")
-        .replace_all(old="\{base}\{sep}_build\{sep}snippet.mbt", new="source")
-        .replace_all(old="\{base}\{sep}snippet.mbt", new="source")
+      rewrites.push(("\{base}\{sep}snippet.mbtx", "source"))
+      rewrites.push(("\{base}\{sep}_build\{sep}snippet.mbt", "source"))
+      rewrites.push(("\{base}\{sep}snippet.mbt", "source"))
     }
+  }
+  rewrites
+}
+
+///|
+fn rewrite_temp_paths(text : String, bases : Array[String]) -> String {
+  let mut out = text
+  for rewrite in temp_path_rewrites(bases) {
+    let (old, replacement) = rewrite
+    out = out.replace_all(old~, new=replacement)
   }
   out
 }
@@ -915,13 +843,10 @@ async fn read_capped(path : String) -> String {
 }
 
 ///|
-/// The `mbtx` argument schema. `background` adds `run_in_background`,
-/// which a definition without a job runtime must not advertise — the model
-/// would only get an error from a call it cannot execute. `escalation` adds
-/// `escalated` on the same rule: with no approval channel wired, every use of
-/// it would come back refused, and the cheapest way to not waste a turn on
-/// that is for the argument not to exist.
-fn schema(background~ : Bool, escalation~ : Bool) -> Json {
+/// The `mbtx` argument schema. `escalation` adds `escalated` only when an
+/// approval channel is wired; otherwise every use would come back refused, and
+/// the cheapest way not to waste a turn is for the argument not to exist.
+fn schema(escalation~ : Bool) -> Json {
   {
     "type": "object",
     "properties": Json(
@@ -955,22 +880,6 @@ fn schema(background~ : Bool, escalation~ : Bool) -> Json {
               ),
             },
           ),
-          ..if background {
-            [
-              (
-                "run_in_background",
-                Json({
-                  "type": "boolean",
-                  "description": (
-                    #|Run as a background job: returns a job id immediately and a completion
-                    #|notice arrives when it exits. Use for long-running work (full test
-                    #|suites, long builds, watchers) instead of blocking on the 300s
-                    #|foreground bound, which moves the run to a job when it expires.
-                  ),
-                }),
-              ),
-            ]
-          },
           ..if escalation {
             [
               (
@@ -1011,9 +920,9 @@ fn schema(background~ : Bool, escalation~ : Bool) -> Json {
 /// The spawn list is prose about `spawnable_commands`, kept by hand so the
 /// groupings survive; adding an entry there means editing this text too.
 ///
-/// `background` is conditional because without a job runtime the tool must not
-/// advertise `run_in_background`: the model would only get an error.
-/// `escalation` is conditional for the same reason, and matters more: the
+/// `background` selects the execution-time contract the caller actually wired:
+/// automatic handoff with a job runtime, or a longer cancelling timeout without
+/// one. `escalation` is conditional too, and matters more: the
 /// refused-command paragraph above tells the model to say so rather than work
 /// around a refusal, and where escalation IS available that advice would be
 /// wrong — there is a sanctioned way to ask. The paragraph that says so must
@@ -1095,9 +1004,9 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     #|  These network rules do not constrain an allowed child process.
     #|- Compiler warnings for the snippet are suppressed; pass `warning: "on"` to
     #|  see them.
-    #|- Bounded to 300s. For independent commands or probes, emit SEVERAL
-    #|  `mbtx` calls in the SAME assistant turn — they run and come back
-    #|  together, saving a model round-trip each.
+    #|- For independent commands or probes, emit SEVERAL `mbtx` calls in the SAME
+    #|  assistant turn — they run and come back together, saving a model round-trip
+    #|  each.
   // Three raw pieces joined at the seam, rather than one interpolating block:
   // the tail carries `\{@fs.tmpdir()}` inside a code sample, which a `$|` block
   // would try to evaluate.
@@ -1128,7 +1037,14 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     )
   }
   if !background {
-    return base
+    return (
+      $|\{base}
+      $|
+      $|## Execution time
+      $|
+      $|This context has no background-job runtime. A run may stay in the foreground
+      $|for up to 300s; at that deadline it is cancelled and reported as a timeout.
+    )
   }
   // The blank `$|` line is the paragraph break: without it the section heading
   // runs onto the base text's last line and stops reading as a heading.
@@ -1137,12 +1053,11 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     $|
     $|## Long-running work
     $|
-    $|For full test suites, long builds and watchers, set run_in_background=true: the
-    $|call returns a job id immediately and a notice arrives automatically when the job
-    $|finishes — so never block on time (no sleep loops, no polling); keep working and
-    $|act on the completion notice. Read a job's recent output with job_output and
-    $|cancel it with job_stop. A foreground run is bounded to 300s; at that deadline it
-    $|MOVES to a background job rather than dying, so nothing is lost either way —
-    $|asking for a job up front just skips the wait.
+    $|Every call stays inline for up to 5s. If it is still running, it AUTOMATICALLY
+    $|moves to a background job and returns the job id; no background flag or duration
+    $|guess is needed. A completion notice arrives when it finishes, so never wait with
+    $|sleep loops or repeated polling: keep working and act on the notice. Read recent
+    $|output with job_output (use one bounded wait_ms call only when the result is needed
+    $|now), and cancel it with job_stop.
   )
 }

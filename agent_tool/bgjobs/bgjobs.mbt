@@ -100,6 +100,20 @@ priv struct BgJob {
   // Preserve the shell policy context that decides whether a standalone
   // trusted writer is a valid recovery from a sandbox denial.
   read_only_review : Bool
+  // Display-only rewrites carried by the launching tool (for example, mapping
+  // a throwaway compiler path back to the submitted source name).
+  output_rewrites : Array[(String, String)]
+  // True only when the launching tool enabled moonrun's policy, so ordinary
+  // job output resembling a refusal cannot be misclassified as one.
+  moonrun_policy_active : Bool
+  // Optional launcher-owned resources to reclaim once the process is terminal.
+  // Cleared before invocation so cleanup is exactly once even if more terminal
+  // observers are added later.
+  mut on_terminal : (async () -> Unit)?
+  // A terminal denial scan may read a large retained log. Cache its
+  // classification so repeated job_output calls do not repeat that allocation.
+  mut denial_scanned : Bool
+  mut denial_feedback : String?
 }
 
 ///|
@@ -122,6 +136,8 @@ pub struct BgJobSnapshot {
   had_invalid_utf8 : Bool
   sandboxed_command : @sandbox.SandboxedCommand?
   read_only_review : Bool
+  output_rewrites : Array[(String, String)]
+  moonrun_policy_active : Bool
   // The job was killed by the output-limit watchdog (flooded past the hard cap),
   // not stopped on request — surfaced so the kill is never silent.
   killed_by_output_limit : Bool
@@ -242,6 +258,8 @@ pub async fn BgJobRuntime::start(
   max_output_chars? : Int = default_max_output_chars,
   sandboxed_command? : @sandbox.SandboxedCommand,
   read_only_review? : Bool = false,
+  output_rewrites? : Array[(String, String)] = [],
+  moonrun_policy_active? : Bool = false,
   stdin? : &@process.ProcessInput,
 ) -> String {
   // Reserve one id and use it for both the spill file and the registry entry, so
@@ -251,7 +269,17 @@ pub async fn BgJobRuntime::start(
   let exec = (self.spawn_exec)(
     program, args, cwd, max_output_chars, spill_path, stdin,
   )
-  self.register(id, exec, command~, cwd?, sandboxed_command?, read_only_review~)
+  self.register(
+    id,
+    exec,
+    command~,
+    cwd?,
+    sandboxed_command?,
+    read_only_review~,
+    output_rewrites~,
+    moonrun_policy_active~,
+    on_terminal=None,
+  )
   id
 }
 
@@ -267,9 +295,22 @@ pub fn BgJobRuntime::adopt(
   cwd? : String,
   sandboxed_command? : @sandbox.SandboxedCommand,
   read_only_review? : Bool = false,
+  output_rewrites? : Array[(String, String)] = [],
+  moonrun_policy_active? : Bool = false,
+  on_terminal? : async () -> Unit,
 ) -> String {
   let id = self.next_id()
-  self.register(id, exec, command~, cwd?, sandboxed_command?, read_only_review~)
+  self.register(
+    id,
+    exec,
+    command~,
+    cwd?,
+    sandboxed_command?,
+    read_only_review~,
+    output_rewrites~,
+    moonrun_policy_active~,
+    on_terminal~,
+  )
   id
 }
 
@@ -283,6 +324,9 @@ fn BgJobRuntime::register(
   cwd? : String,
   sandboxed_command? : @sandbox.SandboxedCommand,
   read_only_review~ : Bool,
+  output_rewrites~ : Array[(String, String)],
+  moonrun_policy_active~ : Bool,
+  on_terminal~ : (async () -> Unit)?,
 ) -> Unit {
   self.jobs[id] = {
     id,
@@ -291,6 +335,11 @@ fn BgJobRuntime::register(
     exec,
     sandboxed_command,
     read_only_review,
+    output_rewrites: output_rewrites.copy(),
+    moonrun_policy_active,
+    on_terminal,
+    denial_scanned: false,
+    denial_feedback: None,
   }
   // Watch for the job ending on its own and fire `on_job_exit` once: a natural
   // exit, or the output-limit watchdog killing a flooding job — both must be
@@ -301,6 +350,13 @@ fn BgJobRuntime::register(
   // `snapshot(id)` always resolves.
   (self.spawn_watcher)(() => {
     exec.wait()
+    // The output spill belongs to the runtime, but a launcher may also have
+    // handed the job a separate build directory. Reclaim that directory for
+    // natural exit, watchdog kills, and requested stops alike.
+    if self.jobs.get(id) is Some(job) && job.on_terminal is Some(cleanup) {
+      job.on_terminal = None
+      cleanup()
+    }
     guard self.on_job_exit is Some(callback) else { return }
     guard self.snapshot(id) is Some(snapshot) else { return }
     guard snapshot.status is Exited(_) ||
@@ -351,9 +407,40 @@ fn BgJob::to_snapshot(self : BgJob) -> BgJobSnapshot {
     had_invalid_utf8: self.exec.had_invalid_utf8(),
     sandboxed_command: self.sandboxed_command,
     read_only_review: self.read_only_review,
+    output_rewrites: self.output_rewrites.copy(),
+    moonrun_policy_active: self.moonrun_policy_active,
     killed_by_output_limit: self.exec.killed_by_output_limit(),
     killed_by_time_limit: self.exec.killed_by_time_limit(),
   }
+}
+
+///|
+/// Classify a terminal job's complete retained output once. Running jobs return
+/// `None`; their recent tail can still be checked cheaply by the caller. The
+/// cached result avoids decoding a log of up to the hard cap on every later
+/// `job_output` call.
+pub async fn BgJobRuntime::terminal_denial_feedback(
+  self : BgJobRuntime,
+  id : String,
+) -> String? {
+  guard self.jobs.get(id) is Some(job) else { return None }
+  guard !(bg_status(job.exec.status()) is Running) else { return None }
+  if job.denial_scanned {
+    return job.denial_feedback
+  }
+  let output = job.exec.read_all()
+  let feedback = if job.moonrun_policy_active &&
+    @sandbox.output_reports_policy_refusal(output) {
+    Some(@sandbox.policy_refusal_feedback)
+  } else if job.sandboxed_command is Some(command) &&
+    command.output_reports_denial(output) {
+    Some(command.denial_feedback())
+  } else {
+    None
+  }
+  job.denial_feedback = feedback
+  job.denial_scanned = true
+  feedback
 }
 
 ///|
@@ -533,6 +620,49 @@ async test "adopt registers an already-running execution as a job" {
     assert_true(rt.snapshot(id).unwrap().read_only_review)
     assert_true(rt.stop(id))
     assert_true(rt.snapshot(id).unwrap().status is Stopped)
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "an adopted job runs terminal cleanup once when stopped" {
+  @async.with_task_group(group => {
+    let scope : @agent_runtime.AgentTaskScope[Unit] = AgentTaskScope(group)
+    let rt = BgJobRuntime::BgJobRuntime(scope)
+    let exec = @shell_exec.ShellExecution::start(scope, program="sleep", args=[
+      "30",
+    ])
+    let mut cleanups = 0
+    let id = rt.adopt(exec, command="sleep 30", on_terminal=() => cleanups += 1)
+    assert_true(rt.stop(id))
+    for _ in 0..<200 {
+      if cleanups == 1 {
+        break
+      }
+      @async.sleep(5)
+    }
+    assert_eq(cleanups, 1)
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "job snapshots do not alias launcher rewrite arrays" {
+  @async.with_task_group(group => {
+    let rt = BgJobRuntime::BgJobRuntime(AgentTaskScope(group))
+    let rewrites = [("temporary", "source")]
+    let id = rt.start(
+      program="sh",
+      args=["-c", "printf done"],
+      command="printf done",
+      output_rewrites=rewrites,
+    )
+    rewrites.push(("later", "mutation"))
+    let first = rt.snapshot(id).unwrap()
+    assert_eq(first.output_rewrites, [("temporary", "source")])
+    first.output_rewrites.push(("snapshot", "mutation"))
+    let second = rt.snapshot(id).unwrap()
+    assert_eq(second.output_rewrites, [("temporary", "source")])
   })
 }
 

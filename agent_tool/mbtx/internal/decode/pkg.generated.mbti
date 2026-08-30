@@ -16,7 +16,6 @@ pub struct MbtxInput {
   target : String
   cwd : String?
   warning : Bool
-  run_in_background : Bool
   escalated : Bool
 } derive(@debug.Debug)
 

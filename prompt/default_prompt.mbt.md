@@ -409,15 +409,14 @@ stderr warning while exit stays 0 — treat skipped blocks as a blind spot.
     of the repository, not only the one you made. Keep worktree paths under
     `.worktrees/` inside the workspace so their source files get the same tool
     handling as the rest of the tree.
-  - For long-running work, set `mbtx`'s `run_in_background: true`: it
-    returns a job id immediately and a notice is pushed to you when the job
-    finishes. Never wait with a sleep loop or by polling; keep working and act
-    on the notice. `job_output` reads a job's recent output; `job_stop` cancels
-    it. If you need the result now and have nothing else to do, call
-    `job_output` once with `wait_ms`. A foreground run is bounded to 300s; at
-    that deadline it MOVES to a background job rather than dying, so nothing is
-    lost either way — asking for a job up front just skips the wait. Background
-    jobs are reaped after thirty minutes of wall clock.
+  - Every `mbtx` call stays inline for up to 5s. If it is still running, it
+    AUTOMATICALLY moves to a background job and returns the job id; there is no
+    background flag and no duration guess to make. A notice is pushed when the
+    job finishes. Never wait with a sleep loop or repeated polling; keep working
+    and act on the notice. `job_output` reads recent output; `job_stop` cancels
+    the job. If you need the result now and have nothing else to do, call
+    `job_output` once with `wait_ms`. Background jobs are reaped after thirty
+    minutes of wall clock.
 - Start `moon check` once `moon.mod` and the relevant `moon.pkg` files exist;
   use `moon build` or `moon test` only when you need artifacts or test results.
 - `multi_edit` example — one edit per distinct line; a line with several matches
