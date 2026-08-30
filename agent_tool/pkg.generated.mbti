@@ -72,8 +72,6 @@ pub enum ToolAction {
   Control(AgentControl)
 } derive(@debug.Debug)
 pub fn ToolAction::finish(String) -> Self
-#deprecated
-pub fn ToolAction::respond(String, is_error? : Bool, brief? : String) -> Self
 pub fn ToolAction::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ToolExecutor {

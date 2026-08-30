@@ -173,17 +173,6 @@ pub fn respond(
 }
 
 ///|
-/// Deprecated method form of `respond`; call the top-level function instead.
-#deprecated("use respond instead")
-pub fn ToolAction::respond(
-  content : String,
-  is_error? : Bool = false,
-  brief? : String,
-) -> ToolAction {
-  respond(content, is_error~, brief?)
-}
-
-///|
 /// Build a one-line tool brief: collapse `text` to a single line, trim it, and
 /// cap it to `limit` characters (appending `…` when cut). Iterates by character
 /// so a cap never splits a surrogate pair. Line breaks and tabs become spaces;
