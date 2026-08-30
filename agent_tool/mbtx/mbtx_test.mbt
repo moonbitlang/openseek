@@ -894,6 +894,35 @@ async test "a non-zero exit shows the exit code in the content, not just the bri
 }
 
 ///|
+/// The short handoff grace belongs only to a runtime-backed definition. A
+/// foreground-only subrun has no job owner, so it keeps its independent hard
+/// timeout instead of being cancelled at the handoff boundary.
+async test "a runtime-less run uses its foreground timeout, not the handoff grace" {
+  @vfs.with_tmpdir(prefix="mbtx-foreground-timeout-", ws => {
+    let definition = @mbtx.definition(
+      workspace_root=ws,
+      auto_background_after_ms=1,
+      foreground_timeout_ms=10_000,
+    )
+    let source =
+      #|import { "moonbitlang/async" }
+      #|
+      #|async fn main {
+      #|  @async.sleep(100)
+      #|  println("finished inline")
+      #|}
+    let action = match definition.execute {
+      Async(execute) => execute({ "source": source })
+      Sync(_) => fail("mbtx should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_false(output.is_error)
+    assert_true(output.content.contains("finished inline"))
+    assert_false(output.content.contains("moved to the background"))
+  })
+}
+
+///|
 /// Run with an approval channel wired, so the `escalated` argument exists and
 /// `answer` decides what it resolves to.
 async fn run_escalating(
