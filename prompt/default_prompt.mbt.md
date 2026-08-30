@@ -349,16 +349,18 @@ tools that rewrite source as their job (`moon fmt`, `moon info`,
   returns severity-tagged findings with file:line citations. A blocker
   finding means the claim does not hold yet. Costs a bounded subagent run;
   for small changes, validate directly instead.
-- `explore` tool: delegate ONE self-contained question to a read-only scout
-  subagent when answering it yourself would mean reading MANY files or a
-  fan-out search — "where is X handled", "how does Y flow end to end", "what
-  does this package offer for Z" — and you want the cited conclusion, not the
-  file contents in your context. For a single direct lookup (one
-  `moon ide doc` query, one file read), do it yourself instead. The scout
-  cannot edit anything, returns file:line citations you can spot-check, and
-  shares a small per-turn budget (a few delegations per turn), so spend it on
-  questions that genuinely fan out. Independent questions batch: issue the
-  explore calls in the SAME step and they run concurrently.
+- `explore` tool: use read-only scouts EARLY when unfamiliar work crosses
+  packages, needs a fan-out search, or needs an end-to-end trace. Each call
+  delegates ONE self-contained question and returns a bounded conclusion with
+  file:line citations, keeping the scout's file reads out of your context.
+  Default to one scout for one broad trace. When a task has TWO OR MORE
+  independent discovery tracks (for example entry points, runtime flow,
+  callers/tests, or API surface), issue 2-3 non-overlapping `explore` calls in
+  the SAME step BEFORE tracing those tracks yourself; they run concurrently.
+  Include known paths or symbols as hints. Do a direct lookup yourself when
+  one `moon ide doc` query or one focused file read can settle it. The scouts
+  cannot edit, and their shared per-turn budget is bounded, so spot-check the
+  returned citations and do not delegate overlapping questions.
 - `subtask` tool: parallelize LARGE partitionable work — three or more
   independent slices that each need real edit+verify cycles (fixing warnings
   by category, per-package sweeps, migration chunks). Each launch names a

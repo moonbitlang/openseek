@@ -54,15 +54,14 @@ pub fn definition(
     concurrent_safe=true,
     description=(
       #|Delegate ONE self-contained question to a read-only scout subagent and get a
-      #|bounded, cited answer. Use it when answering would mean reading MANY files or
-      #|discovering MoonBit APIs you are not sure about — (a) workspace questions ("where
-      #|is X handled, how does Y flow") where you want the conclusion, not the file dumps;
-      #|(b) MoonBit stdlib/dependency API discovery (what a package offers, exact
-      #|signatures) — prefer this over guessing APIs from memory. For a single direct
-      #|lookup you can do in one step (one `moon ide doc` query, one file read), do it
-      #|yourself instead. The scout cannot edit anything and returns file:line citations
-      #|you can verify. Independent questions? Issue SEVERAL explore calls in the same
-      #|step — they run concurrently.
+      #|bounded, cited answer. Use it EARLY for unfamiliar cross-package work, fan-out
+      #|searches, end-to-end traces, or MoonBit APIs you are not sure about. When a task
+      #|has 2-3 independent discovery tracks, issue one non-overlapping explore call per
+      #|track in the SAME step BEFORE tracing them yourself; the calls run concurrently.
+      #|Good questions include where X is handled, how Y flows, who calls Z, which tests
+      #|cover it, or what API a package offers. Include known paths or symbols as hints.
+      #|For one direct lookup (one `moon ide doc` query or one focused file read), do it
+      #|yourself. The scout cannot edit and returns file:line citations you can verify.
     ),
     schema=JsonSchema({
       "type": "object",
