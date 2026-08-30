@@ -19,7 +19,6 @@ pub struct MbtxInput {
   run_in_background : Bool
   escalated : Bool
 } derive(@debug.Debug)
-pub fn MbtxInput::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

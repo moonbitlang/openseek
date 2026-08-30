@@ -186,4 +186,9 @@ test "decode rejects non-object arguments" {
 }
 
 ///|
+/// Re-export the derived `Debug` representation as a trait extension so the
+/// method stays callable. Deliberately not promoted into a method on
+/// `MbtxInput` — the derived `Debug` impl is the real API.
+#deprecated("the derived Debug impl is the API; use @debug.repr or the trait directly")
+#doc(hidden)
 pub extend MbtxInput with Debug::{to_repr}
