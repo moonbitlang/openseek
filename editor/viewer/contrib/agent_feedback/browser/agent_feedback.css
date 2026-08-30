@@ -130,7 +130,8 @@
   cursor: pointer;
 }
 
-.agent-feedback-input-widget .agent-feedback-input-action-cancel {
+.agent-feedback-input-widget .agent-feedback-input-action-cancel,
+.agent-feedback-input-widget .agent-feedback-input-action-secondary {
   color: var(--vscode-button-secondaryForeground);
   background: var(--vscode-button-secondaryBackground);
 }
@@ -141,7 +142,9 @@
 }
 
 .agent-feedback-input-widget
-  .agent-feedback-input-action-cancel:hover:not([disabled]) {
+  .agent-feedback-input-action-cancel:hover:not([disabled]),
+.agent-feedback-input-widget
+  .agent-feedback-input-action-secondary:hover:not([disabled]) {
   background: var(--vscode-button-secondaryHoverBackground);
 }
 

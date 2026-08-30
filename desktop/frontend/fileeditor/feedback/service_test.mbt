@@ -26,6 +26,11 @@ test "Desktop feedback backing connects host controls to the Viewer handle" {
 test "Desktop feedback backing implements every stateful handle mutation" {
   let service = @feedback.DesktopFeedbackService()
   let resource = @common.Uri::parse("file:///workspace/lib.mbt")
+  let submitted_ids : Ref[Array[String]] = Ref([])
+  service.on_did_submit_feedback(event => {
+    submitted_ids.val = event.items.map(item => item.id)
+  })
+  |> ignore
   let handle = service.agent_feedback_handle()
   let item = handle.add_feedback(
     resource,
@@ -41,6 +46,7 @@ test "Desktop feedback backing implements every stateful handle mutation" {
   assert_eq(stored.map(item => item.text), Some("reworded"))
   assert_eq(stored.map(item => item.replies), Some(["done"]))
   assert_eq(stored.map(item => item.state), Some(@agent_feedback_api.Submitted))
+  assert_eq(submitted_ids.val, [item.id])
   let navigation_id = "agentFeedback:" + item.id
   handle.set_navigation_anchor(resource, Some(navigation_id))
   let bearing = handle.get_navigation_bearing(resource, [navigation_id])

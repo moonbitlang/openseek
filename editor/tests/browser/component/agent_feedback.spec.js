@@ -6,7 +6,7 @@ import {
 
 // End-to-end coverage for the agent-feedback contrib: collapsed bubbles from
 // seeded service items, expand/collapse with the one-expanded rule, the
-// hover "+" glyph → inline input → Enter add flow, reply and remove
+// hover "+" glyph → inline input → add/apply flows, reply and remove
 // mutations (observed through the service events mirrored on
 // #feedback-events), and the bubbles tracking editor scrolls.
 
@@ -124,13 +124,19 @@ test('agent feedback: bubbles, glyph add flow, reply, remove, scroll', async ({ 
     '.agent-feedback-input-action-cancel',
   );
   const addFeedback = page.locator(
-    '.agent-feedback-input-action-primary',
+    '.agent-feedback-input-action-add',
+  );
+  const applyAllFeedback = page.locator(
+    '.agent-feedback-input-action-apply',
   );
   await expect(cancelFeedback).toHaveText('Cancel');
   await expect(addFeedback).toHaveText('Add feedback');
+  await expect(applyAllFeedback).toHaveText('Apply all feedback');
   await expect(addFeedback).toBeDisabled();
+  await expect(applyAllFeedback).toBeDisabled();
   await input.fill('Needs a guard clause');
   await expect(addFeedback).toBeEnabled();
+  await expect(applyAllFeedback).toBeEnabled();
   const singleLineHeight = (await boxOf(input)).height;
   await input.press('Shift+Enter');
   await expect(input).toHaveValue('Needs a guard clause\n');
@@ -153,6 +159,24 @@ test('agent feedback: bubbles, glyph add flow, reply, remove, scroll', async ({ 
     );
   await expect(page.locator('.agent-feedback-input-widget')).not.toBeVisible();
   await expect(widgets).toHaveCount(3);
+
+  // A second item can apply the complete accepted batch immediately. The
+  // explicit button is always visible; Alt+Enter remains its keyboard path.
+  const nextQuietLine = page
+    .locator('.view-line', { hasText: 'filler line 4' })
+    .first();
+  await nextQuietLine.hover();
+  const nextGlyphBox = await boxOf(glyph);
+  await page.mouse.click(
+    nextGlyphBox.x + nextGlyphBox.width / 2,
+    nextGlyphBox.y + nextGlyphBox.height / 2,
+  );
+  await expect(input).toBeFocused();
+  await input.fill('Apply this batch now');
+  await applyAllFeedback.click();
+  await expect.poll(async () => (await eventCounts(page)).added).toBe(2);
+  await expect.poll(async () => (await eventCounts(page)).submitted).toBe(5);
+  await expect(page.locator('.agent-feedback-input-widget')).not.toBeVisible();
 
   // Remove: the hover action bar's remove button drops the item; the far
   // bubble (one comment) disappears with it.

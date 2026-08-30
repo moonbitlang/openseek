@@ -22,6 +22,7 @@ pub fn DesktopFeedbackService::add_feedback(Self, @common.Uri, @common.Range, St
 pub fn DesktopFeedbackService::agent_feedback_handle(Self) -> @agent_feedback_api.AgentFeedbackHandle
 pub fn DesktopFeedbackService::clear_feedback(Self, @common.Uri) -> Unit
 pub fn DesktopFeedbackService::on_did_add_feedback(Self, (AgentFeedbackAddedEvent) -> Unit) -> @common.Disposable
+pub fn DesktopFeedbackService::on_did_submit_feedback(Self, (@agent_feedback_api.AgentFeedbackSubmittedEvent) -> Unit) -> @common.Disposable
 pub fn DesktopFeedbackService::remove_feedback(Self, @common.Uri, String) -> Unit
 pub fn DesktopFeedbackService::set_feedback_enabled(Self, @common.Uri, Bool) -> Unit
 

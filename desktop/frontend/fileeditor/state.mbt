@@ -992,6 +992,11 @@ pub(all) enum Msg {
     comment~ : String,
     feedback_id~ : String
   )
+  // The inline input's Apply all feedback action follows its synchronous
+  // comment-added event. The application root intercepts this after attaching
+  // the new annotation chip and submits the main-window composer through its
+  // ordinary prompt/steer queue.
+  ApplyAllFeedback
   // The user submitted a comment from a full-diff surface. Both line domains
   // cross the package boundary: additions/context use the modified number,
   // while an original-pane selection remains identifiable to the composer

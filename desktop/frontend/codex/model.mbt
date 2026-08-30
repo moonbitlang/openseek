@@ -1214,12 +1214,15 @@ pub fn State::draft_text(self : State) -> String {
 /// Add an editor comment as the same annotation chip OpenSeek renders. The
 /// textarea remains the user's typed draft; selected source and comment travel
 /// as structured context and are deduplicated like ordinary file mentions.
+/// Original-revision comments retain their source line but deliberately have no
+/// working-document navigation range.
 pub fn State::with_editor_comment(
   self : State,
   file : String,
   range : @common.Range,
   comment : String,
   quote : String,
+  side? : @mention_context.AnnotationSide = @mention_context.WorkingRevision,
 ) -> State {
   let mentions = self.mentions.copy()
   let annotation : @composer.Mention = {
@@ -1229,9 +1232,13 @@ pub fn State::with_editor_comment(
       end_line=range.end_line_number,
       quote~,
       comment~,
-      side=@mention_context.WorkingRevision,
+      side~,
     ),
-    range: Some(range),
+    range: if side is @mention_context.OriginalRevision {
+      None
+    } else {
+      Some(range)
+    },
   }
   if !mentions.contains(annotation) {
     mentions.push(annotation)
@@ -3239,6 +3246,26 @@ test "Codex editor annotations stay in chips and preserve model context" {
       side=@mention_context.WorkingRevision,
     ),
   ])
+  let original = twice.with_editor_comment(
+    "src/main.mbt",
+    @common.Range::Range(3, 1, 3, 11),
+    "keep this removal",
+    "obsolete()",
+    side=@mention_context.OriginalRevision,
+  )
+  assert_eq(original.mentions.length(), 2)
+  assert_true(
+    original.mentions[1].ref_
+    is @mention_context.Annotation(
+      file="src/main.mbt",
+      start_line=3,
+      end_line=3,
+      quote="obsolete()",
+      comment="keep this removal",
+      side=@mention_context.OriginalRevision
+    ),
+  )
+  assert_eq(original.mentions[1].range, None)
 }
 
 ///|

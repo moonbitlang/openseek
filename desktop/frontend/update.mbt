@@ -2382,6 +2382,28 @@ fn update_msg(
         model.replace_conversation({ ..conv, mentions, }),
       )
     }
+    // The feedback service queues this after the comment-added message above,
+    // so the new annotation is already in the visible composer batch. Reuse
+    // each agent's normal submit path: an idle task starts, while a running
+    // task receives the batch through its existing steer/message queue.
+    FileEditor(@fileeditor.ApplyAllFeedback) =>
+      match model.screen {
+        Chat => update_msg(dispatch, Send, model)
+        Codex => {
+          let input = model.codex_composer_input()
+          update_msg(
+            dispatch,
+            CodexComposerAction(
+              @composer.DraftSubmitted(
+                identity=input.identity,
+                draft=input.draft,
+              ),
+            ),
+            model,
+          )
+        }
+        Skills | Settings | WorkspaceSettings(..) => (@cmd.none, model)
+      }
     // Full-diff comments carry both line domains because a deletion has no
     // working-document position. Prefer the modified line for additions and
     // context; retain the original line for an original-only deletion. Only a
@@ -2418,6 +2440,25 @@ fn update_msg(
               (line_number, None, @mention_context.OriginalRevision)
             _ => return (clear_feedback, model)
           }
+      }
+      if model.screen is Codex {
+        let end_column = if quote.is_empty() { 1 } else { quote.length() + 1 }
+        let comment_range = range.unwrap_or(
+          @common.Range::Range(line_number, 1, line_number, end_column),
+        )
+        return (
+          clear_feedback,
+          {
+            ..model,
+            codex: model.codex.with_editor_comment(
+              file.0,
+              comment_range,
+              comment,
+              quote,
+              side~,
+            ),
+          },
+        )
       }
       guard model.active_conversation() is Some(conv) else {
         return (clear_feedback, model)
@@ -16062,6 +16103,40 @@ test "EditorCommentAdded attaches a deduplicated annotation chip" {
 }
 
 ///|
+test "ApplyAllFeedback queues the attached annotation on a running task" {
+  let dispatch = test_dispatch()
+  let model = running_model()
+  let (_, batched) = update(
+    dispatch,
+    FileEditor(
+      EditorCommentAdded(
+        resource=@fileeditor.ModelUri::of(
+          @interop.ChannelId::Local.test_resource("/work/project/src/main.mbt"),
+        ),
+        file=Relative("src/main.mbt"),
+        range=@common.Range::Range(5, 1, 6, 3),
+        quote="fn parse_hover() {",
+        comment="rename this",
+        feedback_id="viewer-feedback-immediate",
+      ),
+    ),
+    model,
+  )
+  assert_eq(batched.active().mentions.length(), 1)
+  let (_, applied) = update(
+    dispatch,
+    FileEditor(@fileeditor.ApplyAllFeedback),
+    batched,
+  )
+  assert_true(applied.active().mentions.is_empty())
+  assert_eq(applied.active().pending_steers.length(), 1)
+  let steer = applied.active().pending_steers[0]
+  assert_eq(steer.mentions.length(), 1)
+  assert_true(steer.content.contains("<user_mentions>"))
+  assert_true(steer.content.contains("rename this"))
+}
+
+///|
 test "DiffCommentAdded preserves modified and original-only line identity" {
   let dispatch = test_dispatch()
   let file = @pathx.Relative("src/main.mbt")
@@ -16120,6 +16195,61 @@ test "DiffCommentAdded preserves modified and original-only line identity" {
 }
 
 ///|
+test "Codex original-side diff feedback queues in the Codex draft" {
+  let dispatch = test_dispatch()
+  let codex = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "codex-thread-original-feedback",
+      "cwd": "/work/project",
+      "preview": "Review",
+      "turns": [
+        { "id": "codex-turn-original", "status": "inProgress", "items": [] },
+      ],
+    },
+  })
+  let model = { ..test_model(), codex, screen: Codex, }
+  let (_, batched) = update(
+    dispatch,
+    FileEditor(
+      DiffCommentAdded(
+        file=Relative("src/main.mbt"),
+        original_line_number=Some(3),
+        modified_line_number=None,
+        quote="obsolete()",
+        comment="keep this removal",
+        resource=None,
+        feedback_id=None,
+      ),
+    ),
+    model,
+  )
+  assert_true(batched.active().mentions.is_empty())
+  let draft = batched.codex_composer_input().draft
+  assert_eq(draft.mentions.length(), 1)
+  assert_true(
+    draft.mentions[0].ref_
+    is Annotation(
+      file="src/main.mbt",
+      start_line=3,
+      end_line=3,
+      quote="obsolete()",
+      comment="keep this removal",
+      side=@mention_context.OriginalRevision
+    ),
+  )
+  assert_eq(draft.mentions[0].range, None)
+  let (_, applied) = update(
+    dispatch,
+    FileEditor(@fileeditor.ApplyAllFeedback),
+    batched,
+  )
+  let queued = applied.codex.transcript_items()
+  assert_eq(queued.length(), 1)
+  assert_true(queued[0].content.contains("side=\"original\""))
+  assert_true(queued[0].content.contains("keep this removal"))
+}
+
+///|
 test "original-revision diff comment chip does not navigate into the working file" {
   let dispatch = test_dispatch()
   let original_comment : Mention = {
@@ -16174,6 +16304,50 @@ test "Codex editor comments use annotation context, not textarea text or OpenSee
   // The textarea stays untouched. Codex owns the annotation chip and sends
   // its file/range/comment/quote through the shared mention envelope.
   assert_eq(once.codex.draft_text(), "")
+}
+
+///|
+test "Codex ApplyAllFeedback steers the running task through its composer" {
+  let dispatch = test_dispatch()
+  let codex = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "codex-thread-feedback",
+      "cwd": "/work/project",
+      "preview": "Review",
+      "turns": [
+        { "id": "codex-turn-feedback", "status": "inProgress", "items": [] },
+      ],
+    },
+  })
+  let model = { ..test_model(), codex, screen: Codex, }
+  let (_, batched) = update(
+    dispatch,
+    FileEditor(
+      EditorCommentAdded(
+        resource=@fileeditor.ModelUri::of(
+          @interop.ChannelId::Local.test_resource("/work/project/src/main.mbt"),
+        ),
+        file=Relative("src/main.mbt"),
+        range=@common.Range::Range(5, 1, 6, 3),
+        quote="fn parse_hover() {",
+        comment="rename this",
+        feedback_id="viewer-feedback-codex-immediate",
+      ),
+    ),
+    model,
+  )
+  let before = batched.codex_composer_input()
+  assert_eq(before.draft.mentions.length(), 1)
+  let (_, applied) = update(
+    dispatch,
+    FileEditor(@fileeditor.ApplyAllFeedback),
+    batched,
+  )
+  let queued = applied.codex.transcript_items()
+  assert_eq(queued.length(), 1)
+  assert_true(queued[0].kind is @transcript.User)
+  assert_true(queued[0].content.contains("<user_mentions>"))
+  assert_true(queued[0].content.contains("rename this"))
 }
 
 ///|

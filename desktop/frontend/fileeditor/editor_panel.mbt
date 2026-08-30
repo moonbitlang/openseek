@@ -466,6 +466,15 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           )
         })
         |> ignore
+        services.feedback.on_did_submit_feedback(event => {
+          // `add_feedback` fires first, so the scheduler receives the comment
+          // chip before this apply action. Ignore batches without user review
+          // items; only the inline user's explicit action should send a prompt.
+          if event.user_count > 0 {
+            scheduler.add(dispatch(ApplyAllFeedback))
+          }
+        })
+        |> ignore
       }
       if viewer_state.markdown_viewer is None &&
         viewer_state.services is Some(services) &&
@@ -661,18 +670,23 @@ fn diff_comment_message(
 /// Clear one comment bubble from the editor once its text has become a
 /// composer chip — the chip is the comment's carrier from then on. Routed by
 /// the same model URI the feedback was filed under. Public for the main
-/// package's `EditorCommentAdded` handler, which owns the chip flow.
+/// package's `EditorCommentAdded` handler, which owns the chip flow. Removal
+/// waits until after render so Add-and-Apply can synchronously mark the still
+/// accepted item submitted and publish its host event first.
 pub fn remove_editor_feedback(
   resource : ModelUri,
   feedback_id : String,
 ) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
-    guard viewer_state.services is Some(services) else { return }
-    // The string is the `to_string()` of a URI this package minted, so the
-    // re-parse cannot fail; a stray unparsable string has no bubble anyway.
-    let uri = @common.Uri::parse(resource.0) catch { _ => return }
-    services.feedback.remove_feedback(uri, feedback_id)
-  })
+  @cmd.custom_cmd(
+    _scheduler => {
+      guard viewer_state.services is Some(services) else { return }
+      // The string is the `to_string()` of a URI this package minted, so the
+      // re-parse cannot fail; a stray unparsable string has no bubble anyway.
+      let uri = @common.Uri::parse(resource.0) catch { _ => return }
+      services.feedback.remove_feedback(uri, feedback_id)
+    },
+    kind=@cmd.after_render,
+  )
 }
 
 ///|

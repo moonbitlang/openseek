@@ -1,11 +1,10 @@
 // The inline "Add Feedback" input, porting `AgentFeedbackInputWidget`
 // (`vscode/src/vs/sessions/contrib/agentFeedback/browser/
 // agentFeedbackEditorInputContribution.ts:44-242`): a floating overlay node
-// with an auto-growing textarea and review-style Cancel/Add actions. The
-// primary action swaps Add ↔ Add-and-Submit while Alt is held
-// (upstream's `ModifierKeyEmitter` swap, driven here from the textarea's own
-// keydown/keyup since the widget owns the focus while typing). The widget is
-// a null-position overlay widget: the glue positions it by writing
+// with an auto-growing textarea and explicit Cancel/Add/Apply actions. Add
+// keeps the feedback in the host's main-window batch; Apply submits that
+// batch through the host's ordinary message queue. The widget is a
+// null-position overlay widget: the glue positions it by writing
 // `top`/`left` (`setPosition` → `layoutOverlayWidget` upstream). Keyboard is
 // handled on the textarea directly (Shift+Enter inserts a newline, Enter adds,
 // Alt+Enter adds and submits, Escape cancels). The editor-keydown steal and
@@ -39,7 +38,7 @@ let input_max_height_px : Double = 180.0
 pub(all) struct AgentFeedbackInputWidgetHost {
   /// Enter — `onDidTriggerAdd`.
   on_add : () -> Unit
-  /// Alt+Enter — `onDidTriggerAddAndSubmit`.
+  /// Alt+Enter or Apply all feedback — `onDidTriggerAddAndSubmit`.
   on_add_and_submit : () -> Unit
   /// Escape inside the textarea — the contribution hides and refocuses.
   on_cancel : () -> Unit
@@ -58,8 +57,8 @@ struct AgentFeedbackInputWidget {
   root : @rdom.Element
   textarea : @rdom.Element
   cancel : @rdom.Element
-  action : @rdom.Element
-  mut showing_alt : Bool
+  add : @rdom.Element
+  apply : @rdom.Element
 }
 
 ///|
@@ -85,21 +84,37 @@ pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
   )
   cancel.set_attribute("title", "Cancel feedback (Escape)")
   cancel.set_inner_html("Cancel")
-  let action = document.create_element("button")
-  action.set_attribute("type", "button")
-  action.set_attribute("data-agent-feedback-action", "add")
+  let add = document.create_element("button")
+  add.set_attribute("type", "button")
+  add.set_attribute(
+    "class", "agent-feedback-input-action agent-feedback-input-action-secondary agent-feedback-input-action-add",
+  )
+  add.set_attribute("data-agent-feedback-action", "add")
+  add.set_attribute("title", "Add feedback to the batch (Enter)")
+  add.set_attribute("aria-label", "Add feedback")
+  add.set_inner_html("Add feedback")
+  let apply = document.create_element("button")
+  apply.set_attribute("type", "button")
+  apply.set_attribute(
+    "class", "agent-feedback-input-action agent-feedback-input-action-primary agent-feedback-input-action-apply",
+  )
+  apply.set_attribute("data-agent-feedback-action", "apply")
+  apply.set_attribute("title", "Apply all feedback (Alt+Enter)")
+  apply.set_attribute("aria-label", "Apply all feedback")
+  apply.set_inner_html("Apply all feedback")
   actions.append_child(cancel.as_node())
-  actions.append_child(action.as_node())
+  actions.append_child(add.as_node())
+  actions.append_child(apply.as_node())
   root.append_child(actions.as_node())
   let widget : AgentFeedbackInputWidget = {
     host,
     root,
     textarea,
     cancel,
-    action,
-    showing_alt: false,
+    add,
+    apply,
   }
-  widget.render_action()
+  widget.update_actions_enabled()
   widget.hook_events()
   widget
 }
@@ -109,30 +124,6 @@ pub fn AgentFeedbackInputWidget::get_dom_node(
   self : AgentFeedbackInputWidget,
 ) -> @rdom.Element {
   self.root
-}
-
-///|
-/// `_updateActionForAlt`: the primary button's label/title swap between Add
-/// and Add-and-Submit with the Alt key.
-fn AgentFeedbackInputWidget::render_action(
-  self : AgentFeedbackInputWidget,
-) -> Unit {
-  if self.showing_alt {
-    self.action.set_attribute(
-      "class", "agent-feedback-input-action agent-feedback-input-action-primary agent-feedback-input-action-send",
-    )
-    self.action.set_attribute("title", "Add Feedback and Submit (Alt+Enter)")
-    self.action.set_attribute("aria-label", "Add feedback and submit")
-    self.action.set_inner_html("Add &amp; submit")
-  } else {
-    self.action.set_attribute(
-      "class", "agent-feedback-input-action agent-feedback-input-action-primary agent-feedback-input-action-add",
-    )
-    self.action.set_attribute("title", "Add Feedback (Enter)")
-    self.action.set_attribute("aria-label", "Add feedback")
-    self.action.set_inner_html("Add feedback")
-  }
-  self.update_action_enabled()
 }
 
 ///|
@@ -149,7 +140,8 @@ fn AgentFeedbackInputWidget::hook_events(
   self.root.add_event_listener("mousedown", event => {
     event.stop_propagation()
     if !input_event_targets(event, self.textarea) &&
-      !input_event_targets(event, self.action) &&
+      !input_event_targets(event, self.add) &&
+      !input_event_targets(event, self.apply) &&
       !input_event_targets(event, self.cancel) {
       event.prevent_default()
       @base_browser.focus_prevent_scroll(self.textarea)
@@ -160,15 +152,18 @@ fn AgentFeedbackInputWidget::hook_events(
     event.stop_propagation()
     (self.host.on_cancel)()
   })
-  self.action.add_event_listener("click", event => {
+  self.add.add_event_listener("click", event => {
     event.prevent_default()
     event.stop_propagation()
     if self.has_text() {
-      if self.showing_alt {
-        (self.host.on_add_and_submit)()
-      } else {
-        (self.host.on_add)()
-      }
+      (self.host.on_add)()
+    }
+  })
+  self.apply.add_event_listener("click", event => {
+    event.prevent_default()
+    event.stop_propagation()
+    if self.has_text() {
+      (self.host.on_add_and_submit)()
     }
   })
   self.textarea.add_event_listener("keydown", event => {
@@ -178,20 +173,9 @@ fn AgentFeedbackInputWidget::hook_events(
     }
     event.stop_propagation()
   })
-  self.textarea.add_event_listener("keyup", event => {
-    match event.to_keyboard_event() {
-      Some(keyboard) =>
-        if self.showing_alt && !keyboard.alt_key() {
-          self.showing_alt = false
-          self.render_action()
-        }
-      None => ()
-    }
-    event.stop_propagation()
-  })
   self.textarea.add_event_listener("input", _ => {
     self.auto_size()
-    self.update_action_enabled()
+    self.update_actions_enabled()
     (self.host.on_layout)()
   })
   self.textarea.add_event_listener("blur", _ => {
@@ -207,10 +191,6 @@ fn AgentFeedbackInputWidget::handle_keydown(
   event : @rdom.Event,
   keyboard : @rdom.KeyboardEvent,
 ) -> Unit {
-  if keyboard.alt_key() != self.showing_alt {
-    self.showing_alt = keyboard.alt_key()
-    self.render_action()
-  }
   match keyboard.key() {
     "Escape" => {
       event.prevent_default()
@@ -263,7 +243,7 @@ pub fn AgentFeedbackInputWidget::clear_input(
   self : AgentFeedbackInputWidget,
 ) -> Unit {
   input_set_textarea_value(self.textarea, "")
-  self.update_action_enabled()
+  self.update_actions_enabled()
   self.auto_size()
 }
 
@@ -326,13 +306,15 @@ pub fn AgentFeedbackInputWidget::measured_width(
 }
 
 ///|
-fn AgentFeedbackInputWidget::update_action_enabled(
+fn AgentFeedbackInputWidget::update_actions_enabled(
   self : AgentFeedbackInputWidget,
 ) -> Unit {
   if self.has_text() {
-    self.action.remove_attribute("disabled")
+    self.add.remove_attribute("disabled")
+    self.apply.remove_attribute("disabled")
   } else {
-    self.action.set_attribute("disabled", "true")
+    self.add.set_attribute("disabled", "true")
+    self.apply.set_attribute("disabled", "true")
   }
 }
 

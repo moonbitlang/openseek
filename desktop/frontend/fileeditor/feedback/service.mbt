@@ -24,6 +24,9 @@ struct DesktopFeedbackService {
   ]
   did_change_navigation : @common.Emitter[@common.Uri]
   did_add_feedback : @common.Emitter[AgentFeedbackAddedEvent]
+  did_submit_feedback : @common.Emitter[
+    @agent_feedback_api.AgentFeedbackSubmittedEvent,
+  ]
   items_by_resource : Map[String, Array[@agent_feedback_api.AgentFeedback]]
   navigation_anchor_by_resource : Map[String, String]
   enabled_resources : Map[String, Bool]
@@ -36,6 +39,7 @@ pub fn DesktopFeedbackService::DesktopFeedbackService() -> DesktopFeedbackServic
     did_change_feedback: @common.Emitter(),
     did_change_navigation: @common.Emitter(),
     did_add_feedback: @common.Emitter(),
+    did_submit_feedback: Emitter(),
     items_by_resource: Map([]),
     navigation_anchor_by_resource: Map([]),
     enabled_resources: Map([]),
@@ -89,6 +93,17 @@ pub fn DesktopFeedbackService::on_did_add_feedback(
   listener : (AgentFeedbackAddedEvent) -> Unit,
 ) -> @common.Disposable {
   self.did_add_feedback.event(listener)
+}
+
+///|
+/// Subscribes to the Viewer's explicit apply action. Desktop keeps this
+/// host-only so the shared Viewer handle remains a mutation capability, while
+/// the application decides how submitted feedback enters its message queue.
+pub fn DesktopFeedbackService::on_did_submit_feedback(
+  self : DesktopFeedbackService,
+  listener : (@agent_feedback_api.AgentFeedbackSubmittedEvent) -> Unit,
+) -> @common.Disposable {
+  self.did_submit_feedback.event(listener)
 }
 
 ///|
@@ -287,22 +302,40 @@ fn DesktopFeedbackService::add_reply(
 
 ///|
 /// Moves every accepted item to submitted after the Viewer completes its local
-/// submission flow.
+/// submission flow, then reports the exact batch to the Desktop host.
 fn DesktopFeedbackService::mark_feedback_submitted(
   self : DesktopFeedbackService,
   resource : @common.Uri,
 ) -> Unit {
   let items = self.items_for(resource)
-  let mut changed = false
-  for index, item in items {
-    if item.state == @agent_feedback_api.Accepted {
-      items[index] = { ..item, state: @agent_feedback_api.Submitted, }
-      changed = true
+  let submitted : Array[@agent_feedback_api.AgentFeedback] = []
+  let mut user_count = 0
+  let mut agent_review_count = 0
+  let mut reply_count = 0
+  for index in 0..<items.length() {
+    let item = items[index]
+    guard item.state == Accepted else { continue }
+    match item.kind {
+      UserReview => user_count += 1
+      AgentReview => agent_review_count += 1
     }
+    reply_count += item.replies.length()
+    let updated : @agent_feedback_api.AgentFeedback = {
+      ..item,
+      state: Submitted,
+    }
+    items[index] = updated
+    submitted.push(updated)
   }
-  if changed {
-    self.handle_items_changed(resource)
-  }
+  guard !submitted.is_empty() else { return }
+  self.handle_items_changed(resource)
+  self.did_submit_feedback.fire({
+    resource,
+    items: submitted,
+    user_count,
+    agent_review_count,
+    reply_count,
+  })
 }
 
 ///|
