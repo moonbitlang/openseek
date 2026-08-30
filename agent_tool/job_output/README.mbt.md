@@ -1,8 +1,8 @@
 # Job Output Tool
 
 `job_output` reads a background job's recent output and status by its
-`job_id` — the id `mbtx` returns when called with
-`run_in_background=true`.
+`job_id` — the id `mbtx` returns when a run is still active after its
+five-second foreground grace period and moves to the background automatically.
 
 The primary consumption path for job results is the **pushed completion
 notice** (a job announces itself when it finishes); `job_output` is for
@@ -42,7 +42,8 @@ Two invariants drove the implementation:
    that appends or exits while the read yields cannot produce a stale footer.
 2. **Foreground error-semantics parity.** A background job read later behaves
    exactly like the same snippet run in the foreground: binary (non-UTF-8)
-   output is a tool error even at exit 0 (`binary_output=true`), and a
-   sandboxed source-write denial is detected by scanning the *full* retained
-   output (the denial line can be earlier than the displayed tail) with the
-   same guidance appended, footer still last.
+   output is a tool error even at exit 0 (`binary_output=true`). While the job
+   is running, denial detection checks only the bounded recent tail; once the
+   job is terminal, the *full* retained output is scanned once and that
+   classification is cached. This catches a denial line earlier than the final
+   displayed tail, with the same guidance appended and the footer still last.

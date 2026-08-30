@@ -1,15 +1,15 @@
 ///|
-/// Capability eval: does the agent *choose* background jobs when they are
-/// merely the smart strategy? Unlike `eval/bgjobs_e2e` (which instructs the
-/// model to use `run_in_background` and validates the plumbing), these prompts
-/// never mention background jobs, `job_output`, or notices — the scorecard
-/// measures the model's own judgment:
+/// Capability eval for automatic background handoff. These prompts never
+/// mention background jobs, `job_output`, or notices: the engine must move a
+/// slow `mbtx` call after its foreground grace, while the model must use the
+/// resulting time and job lifecycle sensibly:
 ///
 /// - S1 "overlap": a ~20s command plus quick questions, with an efficiency
-///   hint. Smart play: background the slow command, answer the quick questions
-///   while it runs, fold the result in when it lands.
+///   hint. Expected play: the slow command hands off automatically; answer the
+///   quick questions while it runs, then fold in its result.
 /// - S2 "fire and forget": a ~45s command the user explicitly does not want to
-///   wait for. Smart play: background it and end the turn well under 45s.
+///   wait for. Expected play: let automatic handoff return the job id and end
+///   the turn well under 45s.
 ///
 /// The scorecard is informational (behavior varies run to run); the eval exits
 /// non-zero only when the engine itself misbehaves. Run manually:
@@ -31,7 +31,8 @@ async fn main {
 
 ///|
 /// S1: the model is never told how — only that time matters. Judgment under
-/// measurement: does it background the slow command and overlap the quick work?
+/// measurement: does automatic handoff occur, and does the model overlap the
+/// quick work instead of waiting on the job immediately?
 async fn scenario_overlap(engine : Engine) -> Unit {
   println("== S1 overlap: slow command + quick questions, efficiency hint ==")
   let started_ms = @env.now().reinterpret_as_int64()
@@ -52,7 +53,7 @@ async fn scenario_overlap(engine : Engine) -> Unit {
   let wall_s = (@env.now().reinterpret_as_int64() - started_ms) / 1000
   let backgrounded = seen.search_by(event => {
     event is { "event": String("tool_result"), "content": String(content), .. } &&
-    content.contains("started background job")
+    content.contains("moved to the background")
   })
   // The marker inside a plain `mbtx` result means the slow program ran
   // (and blocked) in the foreground.
@@ -67,7 +68,7 @@ async fn scenario_overlap(engine : Engine) -> Unit {
         ..
       } &&
       content.contains("INTEG-OK-31337") &&
-      !content.contains("started background job")
+      !content.contains("moved to the background")
     })
   // Any tool activity strictly between the job start and the marker retrieval
   // shows the wait was actually used for work.
@@ -97,7 +98,7 @@ async fn scenario_overlap(engine : Engine) -> Unit {
       answer
     _ => ""
   }
-  report("S1 used background job (the core judgment)", backgrounded is Some(_))
+  report("S1 automatically handed off the slow run", backgrounded is Some(_))
   report("S1 did not block the turn on the slow command", !blocked_foreground)
   report("S1 overlapped quick work with the running job", overlapped)
   report(
@@ -135,9 +136,9 @@ async fn scenario_fire_and_forget(engine : Engine) -> Unit {
     .any(event => {
       event
       is { "event": String("tool_result"), "content": String(content), .. } &&
-      content.contains("started background job")
+      content.contains("moved to the background")
     })
-  report("S2 used background job", backgrounded)
+  report("S2 automatically handed off the slow run", backgrounded)
   report(
     "S2 finished well before the 45s job (did not block)",
     finished is Some(_) && wall_s < 35,

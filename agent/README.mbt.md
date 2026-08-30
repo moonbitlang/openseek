@@ -106,7 +106,9 @@ calls `@agent.run`, but that decision lives outside the `agent` package.
 - `mbtx`: compile and run a self-contained MoonBit program — both the
   scripting surface (transform files, parse JSON, compute, probe the language)
   and the command runner, since processes are spawned from the program through
-  the shell-free `moonbitlang/async/shell` API. Supports `run_in_background`;
+  the shell-free `moonbitlang/async/shell` API. Calls return inline for up to
+  five seconds, then automatically hand the same execution to the background
+  runtime;
 - `job_output` / `job_stop`: read or stop a background job;
 - `read`: read a text file;
 - `edit`: replace exact text in a file;

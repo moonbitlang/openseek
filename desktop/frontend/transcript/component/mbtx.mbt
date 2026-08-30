@@ -43,7 +43,9 @@ fn decode_mbtx_call(arguments : String) -> MbtxCall? {
   }
   let chips = scalar_chips(
     fields,
-    // The order the tool's README introduces them in.
+    // The order the tool's README introduces current arguments in. Keep the
+    // removed `run_in_background` last so transcripts recorded by older
+    // versions remain readable; new calls never emit it.
     known=["target", "cwd", "escalated", "warning", "run_in_background"],
     dramatized=["source"],
   )
