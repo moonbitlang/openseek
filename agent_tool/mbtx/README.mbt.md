@@ -4,21 +4,26 @@ Compile and run a **self-contained MoonBit program** and return its merged
 stdout/stderr and exit status. It is the agent's way to *script in MoonBit* —
 for automation (read and transform files, parse JSON, compute) and for probing
 how a language feature behaves — instead of reaching for shell `python`/`node`.
-The more the agent scripts in MoonBit, the more fluent it gets, and the safe
-wasm backend (planned) makes it the natural sandboxed automation surface.
+The default wasm backend runs under moonrun's policy, making it the natural
+sandboxed automation surface.
 
 ## How it works
 
 The `source` is a `.mbtx` **single-file script** — MoonBit's own one-file
-program format. The tool does nothing clever: it writes `source` to a throwaway
-temp file and runs `moon run <file>.mbtx --target <target> --target-dir <temp>`
-**with your workspace as the working directory**, returns what moon prints,
-removes the temp dir, and enforces a 60s bound. Because the working directory is
-the workspace, relative paths like `@fs.read_file("data.json")` reach workspace
-files and anything the program writes lands in the workspace — while all build
-artifacts stay in the temp dir, so your `_build` is never touched. moon's
-single-file runner handles the inline import block; moon's own compiler
-diagnostics are the error message when something does not build.
+program format. The tool writes it into a throwaway directory and runs
+`moon run <file>.mbtx --target <target> --target-dir <temp>` with the workspace
+(or explicit `cwd`) as the program's working directory. Relative reads therefore
+reach workspace files, while snippet build artifacts stay out of your `_build`.
+Moon's single-file runner handles the inline import block, and compiler
+diagnostics are rewritten to stable `source:LINE:COL` locations.
+
+With the agent's background runtime, every call waits inline for up to five
+seconds. A still-running compile or program is then adopted as the same
+background execution: the call returns its job id, completion is pushed later,
+and the snippet directory is reclaimed when the job becomes terminal. There is
+no foreground/background argument to choose. A standalone definition without a
+job runtime stays in the foreground for up to 300 seconds and is cancelled at
+that deadline.
 
 ## Arguments
 
@@ -26,9 +31,11 @@ diagnostics are the error message when something does not build.
   inline `import { "pkg", "pkg", … }` block (comma-separated module paths),
   then the program including its own `main`. Use `async fn main` for
   filesystem/stdio work.
-- `target` (string, optional, default `native`): the backend — one of
-  `native`, `wasm`, `wasm-gc`, `js`, `llvm`. The async IO packages
-  (`@fs`, `@stdio`, `@process`) require `native`.
+- `target` (string, optional, default `wasm`): one of `wasm`, `wasm-gc`, `js`,
+  or `llvm`. The default wasm backend is the policy-bound command/IO surface;
+  the other targets are intended for pure compute, reject explicit native FFI,
+  and run without that policy. `native` is deliberately unavailable because
+  moonrun cannot apply the policy to it.
 - `cwd` (string, optional, default workspace root): the working directory the
   program runs in. A relative `cwd` resolves against the workspace root, like
   the `shell` tool.
@@ -52,14 +59,21 @@ the workspace, not mbtx. Use it for self-contained scripts; to exercise
 your working-tree code, add a `*_test.mbt` to that package and run `moon test`
 via shell.
 
-## Source-file protection
+## Sandbox policy and source-file protection
 
-Because the program runs in your workspace, on **macOS** the run is wrapped in
-`sandbox-exec` with a profile that **denies direct writes to protected source
-files** (`*.mbt`, `*.mbti`, `*.mbt.md`, `moon.mod`/`moon.pkg`/`moon.work`)
-anywhere except the throwaway build dir — the same profile the `shell` tool
-uses. A snippet can still read anything and write non-source outputs (e.g.
-`people.json`).
+The default wasm run carries a moonrun policy on every platform. The snippet
+may read anywhere but may write only inside its own `@fs.tmpdir()` and any
+caller-provided scratch lab; changing other workspace files belongs to the file
+tools. Process spawning is checked against the implementation's allowlist; the
+live tool description summarizes the command surface the model should use.
+Allowed commands such as `moon fmt` or `git checkout` run as child processes
+and are not subject to the guest filesystem rule.
+
+Read-only review/explore roles add a best-effort macOS `sandbox-exec` profile
+around the runner to deny writes to protected MoonBit source and manifest
+files, including writes attempted by allowed child commands. Worker roles use a
+separate profile that permits their own worktree and denies sibling/shared
+roots. The moonrun policy remains the cross-platform boundary.
 
 A denied write surfaces inside the program as a bare OS error (e.g.
 `OSError("@fs.open(): \"keep.mbt\": Operation not permitted")`), which on its
@@ -69,13 +83,10 @@ sandbox denied the write by design, the snippet should not try to work around
 it, and source changes belong to the `edit` tool. The run is reported as an
 error even if the snippet caught the failure and exited 0, matching `shell`.
 
-This is **best-effort, not a hard boundary**: `shell` also statically preflights
-its command text to catch directory-rename tricks, which is impossible for an
-arbitrary snippet — so a determined program can still smuggle sources in or out
-via directory renames. Treat it as a guard against accidental source clobbering,
-not a security boundary; full containment is the planned wasm backend's job. On
-non-macOS hosts (or inside a nested sandbox that cannot enforce) the run is
-unsandboxed.
+The extra kernel profile is **best-effort** and may be unavailable inside a
+nested sandbox; it is defense in depth, not the cross-platform policy. A denied
+write is surfaced as a tool error with guidance instead of being mistaken for a
+filesystem fault.
 
 ## Escalation
 

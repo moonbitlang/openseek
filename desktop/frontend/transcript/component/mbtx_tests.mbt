@@ -20,7 +20,7 @@ test "an mbtx call decodes to its program and its arguments" {
 /// The chip row is built from a fixed key order rather than the recorded
 /// JSON's, which is whatever the model emitted and is not preserved by the
 /// parsed map — otherwise two identical calls could chip in different orders.
-test "mbtx chips read in a fixed order, whatever the payload's is" {
+test "mbtx chips keep fixed order and render the historical background flag" {
   let arguments =
     #|{"zzz":1,"run_in_background":true,"cwd":null,"source":"fn main {  }","warning":"on","target":"wasm","aaa":"x","extra":{"k":1}}
   guard decode_mbtx_call(arguments) is Some(call) else {
@@ -28,7 +28,8 @@ test "mbtx chips read in a fixed order, whatever the payload's is" {
   }
   // A null is the tool's own spelling of "unset", and a nested value cannot be
   // stated in one line: neither gets a chip, and the Original JSON view is
-  // what carries them.
+  // what carries them. `run_in_background` is no longer accepted by the live
+  // tool, but must remain visible in already-recorded transcripts.
   assert_eq(call.chips, [
     "target: wasm", "warning: on", "run_in_background: true", "aaa: x", "zzz: 1",
   ])
