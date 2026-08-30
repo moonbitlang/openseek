@@ -1051,6 +1051,8 @@ fn description(background~ : Bool, escalation~ : Bool) -> String {
     #|  `stash list|show`. Not `config`. A global option BEFORE the subcommand
     #|  (`-c`, `-C`, `--git-dir`, `--work-tree`) is refused.
     #|- `gh` — pr, issue, run, `repo view`, api, `auth status`.
+    #|- `codex` — review (read-only review of the current branch/diff; not
+    #|  `exec`, `install`, or a bare `codex`).
     #|- `rg` and `diff`.
   let base_tail =
     #|## Isolation and limits

@@ -75,3 +75,22 @@ test "the spawn policy admits Proton subcommands but not global cwd options" {
 // prose is NOT pinned by a test: asserting a prompt contains particular words
 // only breaks on rewrites. Keeping the list and the prompts in step is a
 // review-time job, not a test-time one.
+
+///|
+/// Codex CLI is admitted one verb only: the read-only `review`. There is no
+/// bare rule and no verb that runs or installs an agent (`exec`, `install`),
+/// so the prefix gating keeps the agentic binary's surface to review.
+test "the spawn policy admits only the codex review verb" {
+  let codex_prefixes : Array[Array[String]] = []
+  for entry in spawnable_commands {
+    let (program, args_prefix) = entry
+    if program == "codex" {
+      codex_prefixes.push(args_prefix)
+    }
+  }
+  assert_eq(codex_prefixes.length(), 1)
+  assert_eq(codex_prefixes[0], ["review"])
+  assert_false(codex_prefixes.contains([]))
+  assert_false(codex_prefixes.contains(["exec"]))
+  assert_false(codex_prefixes.contains(["install"]))
+}

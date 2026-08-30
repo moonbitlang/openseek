@@ -327,6 +327,7 @@ async test "the spawn allowlist discriminates between subcommands" {
       #|  println("moon-publish: \{probe("moon", ["publish"])}")
       #|  println("just: \{probe("just", ["--version"])}")
       #|  println("curl: \{probe("curl", ["--version"])}")
+      #|  println("codex-exec: \{probe("codex", ["exec", "run ls"])}")
       #|}
     ),
   )
@@ -355,6 +356,12 @@ async test "the spawn allowlist discriminates between subcommands" {
   assert_true(out.content.contains("moon-publish: refused"))
   assert_true(out.content.contains("just: refused"))
   assert_true(out.content.contains("curl: refused"))
+  // The same prefix gating admits exactly one verb of the Codex CLI: the
+  // read-only `review`. The policy refusal fires before the binary resolves,
+  // so `exec` is refused whether or not codex is installed; asserting that
+  // `review` runs would depend on the machine having it, so only the negative
+  // side is portable.
+  assert_true(out.content.contains("codex-exec: refused"))
 }
 
 ///|

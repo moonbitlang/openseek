@@ -183,6 +183,14 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("gh", ["repo", "view"]),
   ("gh", ["api"]),
   ("gh", ["auth", "status"]),
+  // The Codex CLI, one verb only: `review` reads the current branch/diff and
+  // reports findings — the review shape a shipping turn wants — while the
+  // other verbs stay out: a bare `codex` opens an interactive agent, and
+  // `exec`/`install` run or set one up. An admitted verb can still spawn
+  // children of its own (the reviewer is an LLM agent, not a plain reader),
+  // which is the already-accepted `moon run` shape; what the prefix buys is
+  // that only the review FORM of this program exists in a turn's vocabulary.
+  ("codex", ["review"]),
   // The only two read-only utilities without a MoonBit equivalent worth using:
   // `rg` searches a whole tree faster than a snippet can walk it, and `diff`
   // produces a structured comparison. Their mutating counterparts (`rm`, `mv`,
