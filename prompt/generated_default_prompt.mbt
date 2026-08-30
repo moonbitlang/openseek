@@ -307,12 +307,13 @@ fn default_prompt() -> String {
     #|(1-based `line`/`column`), `matched_source`, and `source_context`; a scan
     #|with zero findings writes nothing and still exits 0. When parsing records
     #|with `@json.parse`, integer fields such as `range.start.line` pattern-match
-    #|as the `Number` variant (a `Double`; call `.to_int()` on it), not `Int`. A
-    #|whole-repo scan can match many nodes — `@shell.Cmd(...).output()` raises
-    #|`OutputLimitExceeded` on large captures — so stream with `.each_line()`
-    #|(one record per callback line, as in the `moon check` example above) to
-    #|count or aggregate findings, and redirect stderr with `stderr=ToFile(...)`
-    #|so skip warnings do not flood the merged output. `--rules <dir>` and
+    #|as `Number(value)` (a `Double`; call `.to_int()` on it), not `Int`. A
+    #|whole-repo scan can match many nodes — `@shell.Cmd(...).output()` cannot
+    #|capture unbounded output, so a large scan hits the shell's output-limit
+    #|error — stream with `.each_line()` (one record per callback line, as in the
+    #|`moon check` example above) to count or aggregate findings, and redirect
+    #|stderr with `stderr=ToFile(...)` so skip warnings do not flood the merged
+    #|output. `--rules <dir>` and
     #|`--rule <file>` load YAML rule files, `--disable <rule-id>` drops a loaded
     #|rule, and `--verbose` traces traversal on stderr.
     #|
@@ -338,16 +339,15 @@ fn default_prompt() -> String {
     #|failure; 5 invalid rule content (including a `--pattern` that is not a valid
     #|MoonBit expression); 6 missing/unreadable scan input; 7 output failure. The
     #|scanner follows symlinks, so a broken symlink anywhere under the scan root
-    #|aborts the whole scan with 6 — this repo's `editor/codemirror/demo/` holds
-    #|dangling symlinks, and tool/eval directories are NOT in the default
-    #|exclusions, so a whole-repo scan from this root also descends into
-    #|`.claude/`, `.worktrees/`, `.moonagent/`, and `.repos/` and doubles every
-    #|finding across the nested checkouts. Exclude them:
-    #|`--exclude .claude --exclude .worktrees --exclude .moonagent --exclude
-    #|.repos --exclude editor/codemirror/demo`. Source blocks whose syntax the
-    #|bundled parser does not know yet (e.g. nested record-spread `is` patterns)
-    #|are skipped with a stderr warning while exit stays 0 — treat skipped blocks
-    #|as a blind spot.
+    #|aborts the whole scan with 6. Tool/eval/worktree directories are also NOT
+    #|in the default exclusions: a whole-repo scan descends into them and
+    #|duplicates findings across nested checkouts, or aborts on a dangling
+    #|symlink inside one. When such directories exist under the scan root,
+    #|exclude them up front — in this checkout: `--exclude .claude --exclude
+    #|.worktrees --exclude .moonagent --exclude .repos --exclude
+    #|editor/codemirror/demo`. Source blocks whose syntax the bundled parser does
+    #|not know yet (e.g. nested record-spread `is` patterns) are skipped with a
+    #|stderr warning while exit stays 0 — treat skipped blocks as a blind spot.
     #|
     #|## Tool Protocol
     #|
