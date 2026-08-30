@@ -428,6 +428,14 @@ pub async fn BgJobRuntime::terminal_denial_feedback(
   if job.denial_scanned {
     return job.denial_feedback
   }
+  // Most non-wasm and escalated jobs have no active denial classifier. Do not
+  // materialize their complete retained log merely to prove there is nothing
+  // to classify; a handed-off job may hold up to the 20MB hard cap while
+  // job_output itself renders only a bounded tail.
+  if !job.moonrun_policy_active && job.sandboxed_command is None {
+    job.denial_scanned = true
+    return None
+  }
   let output = job.exec.read_all()
   let feedback = if job.moonrun_policy_active &&
     @sandbox.output_reports_policy_refusal(output) {
