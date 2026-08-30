@@ -247,16 +247,17 @@ fn parse_checks(rollup : Json?) -> GitChecks? {
   guard rollup is Some(Array(entries)) && !entries.is_empty() else {
     return None
   }
-  let mut passed = 0
-  let mut failed = 0
-  let mut pending = 0
-  for entry in entries {
-    guard entry is Object(fields) else { continue }
+  let (passed, failed, pending) = for
+    entry in entries
+    passed = 0, failed = 0, pending = 0 {
+    guard entry is Object(fields) else { continue passed, failed, pending }
     match check_state(fields) {
-      Passed => passed += 1
-      Failed => failed += 1
-      Pending => pending += 1
+      Passed => continue passed + 1, failed, pending
+      Failed => continue passed, failed + 1, pending
+      Pending => continue passed, failed, pending + 1
     }
+  } nobreak {
+    (passed, failed, pending)
   }
   Some({ passed, failed, pending, })
 }

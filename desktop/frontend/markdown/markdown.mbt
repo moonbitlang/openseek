@@ -354,14 +354,16 @@ fn trim_unmatched_closer(
   suffix : String,
 ) -> String {
   guard url.has_suffix(suffix) else { return url }
-  let mut opens = 0
-  let mut closes = 0
-  for ch in url {
+  let (opens, closes) = for ch in url; opens = 0, closes = 0 {
     if ch == opener {
-      opens += 1
+      continue opens + 1, closes
     } else if ch == closer {
-      closes += 1
+      continue opens, closes + 1
+    } else {
+      continue opens, closes
     }
+  } nobreak {
+    (opens, closes)
   }
   if closes > opens {
     url.view(end_offset=url.length() - 1).to_owned()

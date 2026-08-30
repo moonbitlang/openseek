@@ -1024,11 +1024,13 @@ async test "abrupt EOF leaves a failed drain for a later caller to retry" {
     // `run` returning is retirement: the dead handle left its slot, and its
     // run was closed without a record position it could not read.
     assert_true(slot.engine is None)
-    let mut finishes = 0
-    for event in emitted {
+    let finishes = for event in emitted; finishes = 0 {
       if event is Finished(payload) && payload.run_id == "r-abrupt-eof" {
-        finishes += 1
+        continue finishes + 1
       }
+      continue finishes
+    } nobreak {
+      finishes
     }
     assert_eq(finishes, 1)
     // The follower outlived the engine precisely so a later caller can drain

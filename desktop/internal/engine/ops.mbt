@@ -1121,11 +1121,13 @@ async test "setup failure retires the writer before an immediate next start" {
       is Some(_),
     )
     assert_eq(@fs.read_file(count.to_string()).text(), "2")
-    let mut first_finishes = 0
-    for event in emitted {
+    let first_finishes = for event in emitted; first_finishes = 0 {
       if event is Finished(payload) && payload.run_id == first {
-        first_finishes += 1
+        continue first_finishes + 1
       }
+      continue first_finishes
+    } nobreak {
+      first_finishes
     }
     assert_eq(first_finishes, 1)
     group.return_immediately(())
@@ -1218,11 +1220,13 @@ async test "a prompt bigger than the pipe still settles exactly once" {
     )
     // Both the writer's failed write and the consumer's EOF want to settle
     // this run; they share the engine's phase, so only one of them does.
-    let mut finishes = 0
-    for event in emitted {
+    let finishes = for event in emitted; finishes = 0 {
       if event is Finished(payload) && payload.run_id == run_id {
-        finishes += 1
+        continue finishes + 1
       }
+      continue finishes
+    } nobreak {
+      finishes
     }
     assert_eq(finishes, 1)
     assert_true(open_run_engine(manager, run_id~) is None)

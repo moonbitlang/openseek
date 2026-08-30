@@ -782,11 +782,10 @@ fn suite_report_row(
 
 ///|
 fn suite_success_summary(report : SuiteReport) -> String {
-  let mut successes = 0
-  let mut runs = 0
-  for combo in report.reports {
-    successes += combo.successes
-    runs += combo.runs
+  let (successes, runs) = for combo in report.reports; successes = 0, runs = 0 {
+    continue successes + combo.successes, runs + combo.runs
+  } nobreak {
+    (successes, runs)
   }
   "\{successes}/\{runs} successful trials"
 }
