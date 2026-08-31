@@ -162,20 +162,19 @@ fn skill_document_view(source : String) -> @html.Html {
   let document = parse_skill_document(source)
   let nodes : Array[@html.Html] = []
   if !document.metadata.is_empty() {
-    let rows : Array[@html.Html] = []
+    let rows : Array[@html.Html] = [
+      @html.tr([@html.th("Field"), @html.th("Value")]),
+    ]
     for entry in document.metadata {
       let (key, value) = entry
-      rows.push(
-        @html.div(class="skill-metadata-row", [
-          @html.span(class="skill-metadata-key", key),
-          @html.span(class="skill-metadata-value", value),
-        ]),
-      )
+      rows.push(@html.tr([@html.th(key), @html.td(value)]))
     }
     nodes.push(
       @html.div(class="skill-metadata", [
         @html.div(class="skill-metadata-title", "Metadata"),
-        @html.div(class="skill-metadata-rows", rows),
+        @html.div(class="skill-metadata-scroll", [
+          @html.table(class="skill-metadata-table", rows),
+        ]),
       ]),
     )
   }

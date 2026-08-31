@@ -530,42 +530,64 @@ h2 {
 }
 
 .skill-metadata {
-  margin-bottom: 20px;
-  padding: 12px 14px;
+  margin-bottom: 24px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
+  overflow: hidden;
 }
 
 .skill-metadata-title {
-  margin-bottom: 8px;
+  padding: 12px 14px 10px;
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   font-weight: 600;
 }
 
-.skill-metadata-rows {
-  display: grid;
-  gap: 5px;
+.skill-metadata-scroll {
+  overflow-x: auto;
 }
 
-.skill-metadata-row {
-  display: grid;
-  grid-template-columns: minmax(110px, 0.35fr) 1fr;
-  gap: 14px;
+.skill-metadata-table {
+  width: 100%;
+  min-width: 460px;
+  margin: 0;
+  border: 0;
+  border-collapse: collapse;
+  background: var(--color-bg-surface);
+  font-size: var(--font-size-sm);
+}
+
+.skill-metadata-table th,
+.skill-metadata-table td {
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
   line-height: var(--line-height-normal);
+  text-align: left;
+  vertical-align: top;
 }
 
-.skill-metadata-key {
-  color: var(--color-text-muted);
+.skill-metadata-table thead th {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.skill-metadata-table tbody th {
+  width: 28%;
+  min-width: 130px;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
   overflow-wrap: anywhere;
 }
 
-.skill-metadata-value {
+.skill-metadata-table tbody td {
   color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
