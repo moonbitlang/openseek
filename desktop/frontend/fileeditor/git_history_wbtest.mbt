@@ -161,7 +161,7 @@ test "historical model URIs encode revision side and path immutably" {
 }
 
 ///|
-test "historical tabs use only the inert diff surface and history breadcrumb" {
+test "historical tabs use only the inert diff surface and history controls" {
   let diff : @dock.GitHistoryDiff = {
     commit: "1111111111111111111111111111111111111111",
     parent: Some("0000000000000000000000000000000000000000"),
@@ -193,61 +193,33 @@ test "historical tabs use only the inert diff surface and history breadcrumb" {
   assert_true(
     body.contains("id=\"diff-editor-host\" class=\"viewer-host editor-shell\""),
   )
-  let breadcrumb = render_review_snapshot(
-    breadcrumb_view(test_emit(), state, ctx),
-  )
   inspect(
-    breadcrumb,
+    render_review_control(review_diff_mode_toolbar(test_emit(), state, ctx)),
     content=(
-      #|<div class="viewer-breadcrumb review-toolbar history-breadcrumb">
-      #|<div class="viewer-breadcrumb-row">
-      #|<div class="crumb-path">
-      #|<span class="crumb history-commit-crumb">11111111</span>
-      #|<span class="crumb-sep">›</span>
-      #|<span class="crumb crumb-file">src/main.mbt</span>
-      #|</div>
-      #|<button title="Hide file tree" class="panel-toggle">
-      #|<span aria-hidden="true" class="icon">
-      #|<svg>…</svg>
-      #|</span>
-      #|</button>
-      #|</div>
-      #|<div class="review-command-row">
       #|<div role="toolbar" aria-label="Comparison algorithm" class="review-mode-toolbar review-history-mode-toolbar">
       #|<button data-diff-mode="core" aria-label="Line diff" aria-pressed="true" title="Use Line diff" type="button" class="review-mode-button active">Line</button>
       #|<button data-diff-mode="token" aria-label="Token diff" aria-pressed="false" title="Use Token diff" type="button" class="review-mode-button">Token</button>
       #|<button data-diff-mode="tree" aria-label="Tree diff" aria-pressed="false" title="Use Tree diff" type="button" class="review-mode-button">Tree</button>
       #|</div>
-      #|<span aria-hidden="true" class="review-control-divider">
-      #|</span>
+    ),
+  )
+  inspect(
+    render_review_control(review_diff_layout_toggle(test_emit(), state, ctx)),
+    content=(
       #|<div role="group" aria-label="Diff layout" class="review-layout-control">
       #|<button data-layout="side-by-side" aria-label="Split diff layout" aria-pressed="true" title="Use side-by-side diff layout" type="button" class="review-layout-button active">Split</button>
       #|<button data-layout="inline" aria-label="Unified diff layout" aria-pressed="false" title="Use unified diff layout" type="button" class="review-layout-button">Unified</button>
       #|</div>
-      #|<button aria-label="Ignore comments" aria-pressed="false" title="Available in Token and Tree diff" type="button" class="review-comments-control" disabled>Comments: ignored</button>
-      #|<span role="status" aria-live="polite" class="review-diff-mode-status hidden">
-      #|</span>
-      #|<div role="group" aria-label="Diff change navigation" class="review-diff-navigation">
-      #|<button data-action="previous-diff-change" aria-label="Previous change" aria-keyshortcuts="Shift+F7" title="Previous change (Shift+F7)" type="button" class="review-nav-button" disabled>
-      #|<span aria-hidden="true" class="icon">
-      #|<svg>…</svg>
-      #|</span>
-      #|</button>
-      #|<button data-action="next-diff-change" aria-label="Next change" aria-keyshortcuts="F7" title="Next change (F7)" type="button" class="review-nav-button" disabled>
-      #|<span aria-hidden="true" class="icon">
-      #|<svg>…</svg>
-      #|</span>
-      #|</button>
-      #|</div>
-      #|</div>
-      #|</div>
     ),
   )
-  let disabled_navigation = render_review_snapshot(
-    review_diff_navigation(test_emit(), state, ctx),
+  inspect(
+    render_review_control(review_comments_control(test_emit(), state, ctx)),
+    content=(
+      #|<button aria-label="Ignore comments" aria-pressed="false" title="Available in Token and Tree diff" type="button" class="review-comments-control" disabled>Comments: ignored</button>
+    ),
   )
   inspect(
-    disabled_navigation,
+    render_review_control(review_diff_navigation(test_emit(), state, ctx)),
     content=(
       #|<div role="group" aria-label="Diff change navigation" class="review-diff-navigation">
       #|<button data-action="previous-diff-change" aria-label="Previous change" aria-keyshortcuts="Shift+F7" title="Previous change (Shift+F7)" type="button" class="review-nav-button" disabled>
@@ -263,15 +235,14 @@ test "historical tabs use only the inert diff surface and history breadcrumb" {
       #|</div>
     ),
   )
-  let enabled_navigation = render_review_snapshot(
-    review_diff_navigation(
-      test_emit(),
-      { ..state, review_diff_navigation_available: true, },
-      ctx,
-    ),
-  )
   inspect(
-    enabled_navigation,
+    render_review_control(
+      review_diff_navigation(
+        test_emit(),
+        { ..state, review_diff_navigation_available: true, },
+        ctx,
+      ),
+    ),
     content=(
       #|<div role="group" aria-label="Diff change navigation" class="review-diff-navigation">
       #|<button data-action="previous-diff-change" aria-label="Previous change" aria-keyshortcuts="Shift+F7" title="Previous change (Shift+F7)" type="button" class="review-nav-button">
@@ -285,6 +256,37 @@ test "historical tabs use only the inert diff surface and history breadcrumb" {
       #|</span>
       #|</button>
       #|</div>
+    ),
+  )
+
+  let text_diff = { ..diff, path: @pathx.Relative("README.md"), }
+  let text_history_docs : Map[String, HistoryDiffDoc] = Map([])
+  text_history_docs[history_diff_key(text_diff)] = {
+    diff: text_diff,
+    generation: 1,
+    original: HistoryBlobContent("old"),
+    modified: HistoryBlobContent("new"),
+  }
+  let text_state = {
+    ..state,
+    history_docs: text_history_docs,
+    review_diff_mode: ReviewDiffTree,
+    review_diff_status: Some({
+      requested: ReviewDiffTree,
+      effective: ReviewDiffToken,
+      fell_back: true,
+    }),
+  }
+  let text_ctx = {
+    ..ctx,
+    open_history_diffs: [text_diff],
+    active_history_diff: Some(text_diff),
+  }
+  inspect(
+    render_review_control(review_diff_status(text_state, text_ctx)),
+    content=(
+      #|<span role="status" aria-live="polite" class="review-diff-mode-status hidden">
+      #|</span>
     ),
   )
 }

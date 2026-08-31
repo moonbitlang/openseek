@@ -2019,7 +2019,9 @@ fn review_diff_fallback_text(state : State) -> String {
 
 ///|
 fn review_diff_status(state : State, ctx : Ctx) -> @html.Html {
-  let fallback = if full_diff_ready(state, ctx) {
+  // Provider status may outlive the comparison that produced it. Only a
+  // Moon-aware active diff can interpret that retained status.
+  let fallback = if moon_diff_ready(state, ctx) {
     review_diff_fallback_text(state)
   } else {
     ""
