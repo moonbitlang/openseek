@@ -1,7 +1,7 @@
 ///|
 /// One named measurement, already rendered to display text — the shared cell
 /// format for report summaries and per-row metric columns.
-pub struct Metric {
+struct Metric {
   name : String
   value : String
 }
@@ -19,14 +19,14 @@ pub fn Metric::Metric(name~ : String, value~ : String) -> Metric {
 /// non-fatal `warnings`, its `metrics` cells, and the path of its full
 /// transcript log when one was kept.
 pub struct ReportRow {
-  index : Int
-  name : String
+  priv index : Int
+  priv name : String
   success : Bool
-  reason : String
-  warnings : String
-  metrics : Array[Metric]
-  details : Array[Metric]
-  log_path : String
+  priv reason : String
+  priv warnings : String
+  priv metrics : Array[Metric]
+  priv details : Array[Metric]
+  priv log_path : String
 }
 
 ///|
@@ -50,9 +50,9 @@ pub fn ReportRow::ReportRow(
 /// ordered `metric_columns` every row renders under, and one `ReportRow` per
 /// trial. Renders to markdown for humans and JSON for tooling.
 pub struct Report {
-  title : String
-  summary : Array[Metric]
-  metric_columns : Array[String]
+  priv title : String
+  priv summary : Array[Metric]
+  priv metric_columns : Array[String]
   rows : Array[ReportRow]
 }
 
