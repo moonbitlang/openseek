@@ -192,10 +192,7 @@ async fn provision_locked(
 ///|
 /// Undo a partial provision: worktree directory, bookkeeping, branch, and
 /// registry entry, in that order, each best-effort.
-pub async fn rollback_provision(
-  geometry : Geometry,
-  entry : SubtaskEntry,
-) -> Unit {
+async fn rollback_provision(geometry : Geometry, entry : SubtaskEntry) -> Unit {
   @fs.rmdir(entry.worker_root, recursive=true) catch {
     error if @async.is_being_cancelled() => raise error
     _ => ()

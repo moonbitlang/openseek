@@ -8,14 +8,14 @@
 ///|
 /// One changed path with how it changed. Renames yield TWO records (source
 /// and target) — both sides must be in scope for the change to merge.
-pub struct Change {
+struct Change {
   path : String
   kind : String
 } derive(Debug, Eq)
 
 ///|
 /// Parse `git status --porcelain=v1 -z --untracked-files=all` output.
-pub fn parse_status_z(output : String) -> Array[Change] {
+fn parse_status_z(output : String) -> Array[Change] {
   let changes : Array[Change] = []
   let fields = output.split("\u{0}").map(f => f.to_owned()).collect()
   let mut index = 0
@@ -42,7 +42,7 @@ pub fn parse_status_z(output : String) -> Array[Change] {
 
 ///|
 /// Parse `git diff --name-status -z` output.
-pub fn parse_diff_name_status_z(output : String) -> Array[Change] {
+fn parse_diff_name_status_z(output : String) -> Array[Change] {
   let changes : Array[Change] = []
   let fields = output.split("\u{0}").map(f => f.to_owned()).collect()
   let mut index = 0
@@ -71,7 +71,7 @@ pub fn parse_diff_name_status_z(output : String) -> Array[Change] {
 ///|
 /// Every change must fall under one of the allowed component-wise prefixes.
 /// Returns the violating paths (empty = in scope).
-pub fn scope_violations(
+fn scope_violations(
   changes : Array[Change],
   allowed_paths : Array[String],
 ) -> Array[String] {
@@ -102,7 +102,7 @@ pub fn scope_violations(
 /// embedded repository swallowed as a pointer, whether added over nothing
 /// (`:000000 160000 ... A`) or replacing a regular file (`:100644 160000
 /// ... T`). Pre-existing gitlinks (source already 160000) pass.
-pub fn gitlink_introductions_in_raw_z(output : String) -> Array[String] {
+fn gitlink_introductions_in_raw_z(output : String) -> Array[String] {
   let links : Array[String] = []
   let fields = output.split("\u{0}").map(f => f.to_owned()).collect()
   let mut index = 0

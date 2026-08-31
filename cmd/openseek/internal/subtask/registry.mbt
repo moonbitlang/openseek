@@ -9,7 +9,7 @@
 /// Writes go through temp-file + rename: atomic against torn reads, NOT a
 /// cross-process lock — two engines driving one repository can still race
 /// silently (documented residual; the single-engine-per-repo assumption).
-pub(all) enum SubtaskState {
+pub enum SubtaskState {
   Provisioning
   Running
   Captured
@@ -29,19 +29,19 @@ pub fn SubtaskState::is_terminal(self : SubtaskState) -> Bool {
 ///|
 /// One subtask's durable lifecycle record; see the file comment.
 pub struct SubtaskEntry {
-  schema_version : Int
+  priv schema_version : Int
   name : String
-  nonce : String
+  priv nonce : String
   branch : String
   state : SubtaskState
   base_oid : String
   worker_root : String
   worker_admin_dir : String
   allowed_paths : Array[String]
-  parent_session : String?
+  priv parent_session : String?
   commit_oid : String?
-  origin_head_before : String?
-  conflict_paths : Array[String]
+  priv origin_head_before : String?
+  priv conflict_paths : Array[String]
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
@@ -49,7 +49,7 @@ let registry_schema_version : Int = 1
 
 ///|
 /// Where entries live under the canonical common git dir.
-pub fn registry_dir(common_git_dir : String) -> String {
+fn registry_dir(common_git_dir : String) -> String {
   "\{common_git_dir}/openseek/subtasks"
 }
 
@@ -60,7 +60,7 @@ fn entry_path(common_git_dir : String, entry : SubtaskEntry) -> String {
 
 ///|
 /// Persist `entry` atomically (temp + rename in the registry directory).
-pub async fn save_entry(
+async fn save_entry(
   common_git_dir : String,
   entry : SubtaskEntry,
 ) -> Result[Unit, String] {
@@ -139,7 +139,7 @@ pub async fn load_entries(
 ///|
 /// Component-wise prefix overlap between two allowed-path sets: `src`
 /// overlaps `src/lexer` and `src`, never `src2`.
-pub fn paths_overlap(a : Array[String], b : Array[String]) -> Bool {
+fn paths_overlap(a : Array[String], b : Array[String]) -> Bool {
   fn components(prefix : String) -> Array[String] {
     prefix.split("/").map(part => part.to_owned()).collect()
   }

@@ -13,10 +13,6 @@ pub async fn discard(Geometry, SubtaskEntry) -> Result[Unit, String]
 
 pub async fn git_require(Array[String], cwd~ : String, timeout_ms? : Int) -> Result[String, String]
 
-pub async fn git_run(Array[String], cwd~ : String, timeout_ms? : Int) -> GitOutcome
-
-pub fn gitlink_introductions_in_raw_z(String) -> Array[String]
-
 pub async fn integrate(Geometry, SubtaskEntry) -> IntegrateOutcome
 
 pub async fn integrate_abort(Geometry, SubtaskEntry) -> IntegrateOutcome
@@ -25,25 +21,11 @@ pub async fn integrate_continue(Geometry, SubtaskEntry) -> IntegrateOutcome
 
 pub async fn load_entries(String) -> (Array[SubtaskEntry], Array[String])
 
-pub fn parse_diff_name_status_z(String) -> Array[Change]
-
-pub fn parse_status_z(String) -> Array[Change]
-
-pub fn paths_overlap(Array[String], Array[String]) -> Bool
-
 pub async fn provision(String, name~ : String, allowed_paths~ : Array[String], nonce~ : String, parent_session? : String) -> Result[Provisioned, String]
-
-pub fn registry_dir(String) -> String
 
 pub async fn resolve_geometry(String) -> Result[Geometry, String]
 
 pub async fn resume_running(Geometry, String) -> Result[SubtaskEntry, String]
-
-pub async fn rollback_provision(Geometry, SubtaskEntry) -> Unit
-
-pub async fn save_entry(String, SubtaskEntry) -> Result[Unit, String]
-
-pub fn scope_violations(Array[Change], Array[String]) -> Array[String]
 
 // Errors
 
@@ -54,10 +36,7 @@ pub struct CaptureOutcome {
   defects : Array[String]
 }
 
-pub struct Change {
-  path : String
-  kind : String
-} derive(Eq, @debug.Debug)
+type Change derive(Eq, @debug.Debug)
 pub fn Change::equal(Self, Self) -> Bool
 pub fn Change::not_equal(Self, Self) -> Bool
 pub fn Change::to_repr(Self) -> @debug.Repr
@@ -65,14 +44,9 @@ pub fn Change::to_repr(Self) -> @debug.Repr
 pub struct Geometry {
   origin_root : String
   common_git_dir : String
-  worktree_roots : Array[String]
+  // private fields
 }
 pub fn Geometry::worker_deny_roots(Self) -> Array[String]
-
-pub struct GitOutcome {
-  exit_code : Int
-  output : String
-}
 
 pub struct IntegrateOutcome {
   entry : SubtaskEntry
@@ -86,19 +60,15 @@ pub struct Provisioned {
 }
 
 pub struct SubtaskEntry {
-  schema_version : Int
   name : String
-  nonce : String
   branch : String
   state : SubtaskState
   base_oid : String
   worker_root : String
   worker_admin_dir : String
   allowed_paths : Array[String]
-  parent_session : String?
   commit_oid : String?
-  origin_head_before : String?
-  conflict_paths : Array[String]
+  // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn SubtaskEntry::equal(Self, Self) -> Bool
 pub fn SubtaskEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -106,7 +76,7 @@ pub fn SubtaskEntry::not_equal(Self, Self) -> Bool
 pub fn SubtaskEntry::to_json(Self) -> Json
 pub fn SubtaskEntry::to_repr(Self) -> @debug.Repr
 
-pub(all) enum SubtaskState {
+pub enum SubtaskState {
   Provisioning
   Running
   Captured

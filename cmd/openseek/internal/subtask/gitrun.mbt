@@ -7,7 +7,7 @@
 /// merely unusual parent environment might carry are simply not inherited.
 /// Only `PATH` (to find git) and `HOME` (commit identity, global config)
 /// pass through.
-pub struct GitOutcome {
+priv struct GitOutcome {
   exit_code : Int
   output : String
 }
@@ -17,7 +17,7 @@ pub struct GitOutcome {
 /// the child and reports exit -1 with a synthetic diagnostic — callers
 /// treat any nonzero exit as the phase failing and inspect postconditions
 /// rather than trusting the code alone.
-pub async fn git_run(
+async fn git_run(
   args : Array[String],
   cwd~ : String,
   timeout_ms? : Int = 30_000,

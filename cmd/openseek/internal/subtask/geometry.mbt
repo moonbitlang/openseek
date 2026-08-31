@@ -10,7 +10,7 @@ pub struct Geometry {
   /// Canonical common git dir (shared objects/refs/config).
   common_git_dir : String
   /// Every registered worktree root, canonicalized, origin included.
-  worktree_roots : Array[String]
+  priv worktree_roots : Array[String]
 }
 
 ///|
