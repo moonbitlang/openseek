@@ -26,13 +26,8 @@ pub suberror ReviewError {
 
 // Types and methods
 pub struct Finding {
-  file : String
-  line : Int?
   severity : String
-  category : String
-  title : String
-  detail : String
-  suggestion : String?
+  // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn Finding::equal(Self, Self) -> Bool
 pub fn Finding::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -41,11 +36,8 @@ pub fn Finding::to_json(Self) -> Json
 pub fn Finding::to_repr(Self) -> @debug.Repr
 
 pub struct ReviewReport {
-  schema_version : Int
-  scope : ReviewScope
   findings : Array[Finding]
-  summary : String
-  stats : ReviewStats
+  // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ReviewReport::digest(Self) -> String
 pub fn ReviewReport::equal(Self, Self) -> Bool
@@ -57,23 +49,14 @@ pub fn ReviewReport::to_json_string(Self) -> String
 pub fn ReviewReport::to_repr(Self) -> @debug.Repr
 pub fn ReviewReport::validate(Self) -> Array[String]
 
-pub struct ReviewScope {
-  base : String
-  head : String
-  files : Array[String]
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+type ReviewScope derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ReviewScope::equal(Self, Self) -> Bool
 pub fn ReviewScope::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ReviewScope::not_equal(Self, Self) -> Bool
 pub fn ReviewScope::to_json(Self) -> Json
 pub fn ReviewScope::to_repr(Self) -> @debug.Repr
 
-pub struct ReviewStats {
-  files_reviewed : Int
-  findings : Int
-  build : String
-  tests : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+type ReviewStats derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ReviewStats::equal(Self, Self) -> Bool
 pub fn ReviewStats::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ReviewStats::not_equal(Self, Self) -> Bool

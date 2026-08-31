@@ -7,18 +7,18 @@
 ///|
 /// A single review finding at an optional source location.
 pub struct Finding {
-  file : String
-  line : Int?
+  priv file : String
+  priv line : Int?
   severity : String
-  category : String
-  title : String
-  detail : String
-  suggestion : String?
+  priv category : String
+  priv title : String
+  priv detail : String
+  priv suggestion : String?
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
 /// The change set the review covered.
-pub struct ReviewScope {
+struct ReviewScope {
   base : String
   head : String
   files : Array[String]
@@ -27,7 +27,7 @@ pub struct ReviewScope {
 ///|
 /// Deterministic preflight signals that ground the review in the compiler/tests
 /// rather than model opinion.
-pub struct ReviewStats {
+struct ReviewStats {
   files_reviewed : Int
   findings : Int
   build : String
@@ -37,11 +37,11 @@ pub struct ReviewStats {
 ///|
 /// The full review report.
 pub struct ReviewReport {
-  schema_version : Int
-  scope : ReviewScope
+  priv schema_version : Int
+  priv scope : ReviewScope
   findings : Array[Finding]
-  summary : String
-  stats : ReviewStats
+  priv summary : String
+  priv stats : ReviewStats
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
