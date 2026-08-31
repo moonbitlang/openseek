@@ -145,16 +145,7 @@ fn detail_page(
         emit,
       )
     Ready(target~, content~, ..) =>
-      detail_shell(
-        target,
-        @html.div(
-          class="skill-preview-markdown msg-content markdown",
-          @markdown.markdown_nodes(content),
-        ),
-        input,
-        state,
-        emit,
-      )
+      detail_shell(target, skill_document_view(content), input, state, emit)
     Failed(target~, message~, ..) =>
       detail_shell(
         target,
@@ -164,6 +155,37 @@ fn detail_page(
         emit,
       )
   }
+}
+
+///|
+fn skill_document_view(source : String) -> @html.Html {
+  let document = parse_skill_document(source)
+  let nodes : Array[@html.Html] = []
+  if !document.metadata.is_empty() {
+    let rows : Array[@html.Html] = []
+    for entry in document.metadata {
+      let (key, value) = entry
+      rows.push(
+        @html.div(class="skill-metadata-row", [
+          @html.span(class="skill-metadata-key", key),
+          @html.span(class="skill-metadata-value", value),
+        ]),
+      )
+    }
+    nodes.push(
+      @html.div(class="skill-metadata", [
+        @html.div(class="skill-metadata-title", "Metadata"),
+        @html.div(class="skill-metadata-rows", rows),
+      ]),
+    )
+  }
+  nodes.push(
+    @html.div(
+      class="skill-preview-markdown msg-content markdown",
+      @markdown.markdown_nodes(document.body),
+    ),
+  )
+  @html.div(nodes)
 }
 
 ///|

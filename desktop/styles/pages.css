@@ -529,6 +529,47 @@ h2 {
   line-height: var(--line-height-relaxed);
 }
 
+.skill-metadata {
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-subtle);
+}
+
+.skill-metadata-title {
+  margin-bottom: 8px;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.skill-metadata-rows {
+  display: grid;
+  gap: 5px;
+}
+
+.skill-metadata-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.35fr) 1fr;
+  gap: 14px;
+  line-height: var(--line-height-normal);
+}
+
+.skill-metadata-key {
+  color: var(--color-text-muted);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.skill-metadata-value {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .skill-detail-page {
   max-width: 840px;
 }
