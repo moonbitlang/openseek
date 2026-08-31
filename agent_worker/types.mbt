@@ -24,7 +24,7 @@ let max_verification_chars : Int = 2_000
 /// names the commands the worker ran and their outcomes — a claim without
 /// verification is a guess.
 pub struct WorkerReport {
-  schema_version : Int
+  priv schema_version : Int
   status : String
   summary : String
   verification : String

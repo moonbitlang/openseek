@@ -19,13 +19,8 @@ pub async fn run_child(Json, api_key~ : String, model~ : @deepseek.Model, max_st
 
 // Types and methods
 pub struct WorkerInput {
-  task : String
-  context : String?
-  worker_root : String
-  worker_admin_dir : String
-  deny_roots : Array[String]
   allowed_paths : Array[String]
-  base_oid : String
+  // private fields
 } derive(Eq, @debug.Debug)
 pub fn WorkerInput::equal(Self, Self) -> Bool
 pub fn WorkerInput::not_equal(Self, Self) -> Bool
@@ -33,10 +28,10 @@ pub fn WorkerInput::parse(Json) -> Result[Self, String]
 pub fn WorkerInput::to_repr(Self) -> @debug.Repr
 
 pub struct WorkerReport {
-  schema_version : Int
   status : String
   summary : String
   verification : String
+  // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn WorkerReport::equal(Self, Self) -> Bool
 pub fn WorkerReport::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

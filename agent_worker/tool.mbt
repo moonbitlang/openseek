@@ -26,13 +26,13 @@ pub let default_worker_deadline_ms : Int = 2_700_000
 /// canonical (the controller realpaths at provision time) — the child does
 /// not re-derive geometry, it enforces with what it was handed.
 pub struct WorkerInput {
-  task : String
-  context : String?
-  worker_root : String
-  worker_admin_dir : String
-  deny_roots : Array[String]
+  priv task : String
+  priv context : String?
+  priv worker_root : String
+  priv worker_admin_dir : String
+  priv deny_roots : Array[String]
   allowed_paths : Array[String]
-  base_oid : String
+  priv base_oid : String
 } derive(Debug, Eq)
 
 ///|
