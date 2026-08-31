@@ -6,11 +6,7 @@ package "bobzhang/openseek/agent_tool/write_scope"
 // Errors
 
 // Types and methods
-pub struct WriteScope {
-  root : String
-  allowed : Array[Array[String]]
-  allowed_display : String
-}
+type WriteScope
 pub async fn WriteScope::create(root~ : String, allowed_paths? : Array[String]) -> Result[Self, String]
 pub async fn WriteScope::deny_reason(Self, String) -> String?
 pub fn WriteScope::root(Self) -> String

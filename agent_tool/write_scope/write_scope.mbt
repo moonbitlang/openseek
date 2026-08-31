@@ -16,7 +16,7 @@
 /// Creating parent directories for an admitted target needs no separate gate:
 /// ancestors of an allowed path are implied, and a symlinked ancestor is
 /// already caught by the resolved-location check on the target itself.
-pub struct WriteScope {
+struct WriteScope {
   /// Canonical (realpath'd) absolute root every write must stay under.
   root : String
   /// Component-wise relative prefixes; empty means root-only confinement.
