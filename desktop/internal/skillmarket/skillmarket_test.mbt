@@ -108,13 +108,20 @@ const SkillsPrefix = "/api/v0/skills/"
 const DownloadPrefix = "/download/"
 
 ///|
+const BlobPrefix = "/blob/"
+
+///|
 const ZipSuffix = "/skills.zip"
+
+///|
+/// The one fake entry whose download redirects to itself forever.
+const LoopEntry = "acme/loop@1.0.0"
 
 ///|
 /// A local mooncakes.io stand-in. Returns its base URL, or None when the
 /// sandbox forbids binding a local TCP port. `acme/widget` publishes real
-/// archives (v1 flat, v2 wrapped in a directory); the other entries cover
-/// each way an install must fail; everything else is not a skill.
+/// archives; the other entries cover each way an install must fail;
+/// everything else is not a skill.
 async fn fake_registry(
   group : @async.TaskGroup[Unit],
   probe? : RegistryProbe,
@@ -131,7 +138,8 @@ async fn fake_registry(
     ("SKILL.md", skill_body),
     ("reference/usage.md", reference_body),
   ])
-  let widget_v2 = zip_of([("widget/SKILL.md", skill_body_v2)])
+  let widget_v2 = zip_of([("SKILL.md", skill_body_v2)])
+  let wrapped = zip_of([("widget/SKILL.md", skill_body)])
   let no_md = zip_of([("README.md", b"no instructions here\n")])
   let slip = zip_of([("SKILL.md", skill_body), ("../evil.md", b"escape\n")])
   let not_text = zip_of([("SKILL.md", b"\xff\xfe\xfd")])
@@ -150,10 +158,18 @@ async fn fake_registry(
       digest: "sha256:deadbeef",
     },
     "acme/nomd@1.0.0": { archive: Some(no_md), digest: digest_of(no_md), },
+    "acme/wrapped@1.0.0": {
+      archive: Some(wrapped),
+      digest: digest_of(wrapped),
+    },
     "acme/slip@1.0.0": { archive: Some(slip), digest: digest_of(slip), },
     "acme/binary@1.0.0": {
       archive: Some(not_text),
       digest: digest_of(not_text),
+    },
+    "acme/loop@1.0.0": {
+      archive: Some(widget_v1),
+      digest: digest_of(widget_v1),
     },
   }
   let widget_digest = digest_of(widget_v1)
@@ -179,6 +195,21 @@ async fn fake_registry(
           )
         } else if path.strip_prefix(DownloadPrefix) is Some(download) &&
           download.strip_suffix(ZipSuffix) is Some(entry) &&
+          skills.get(entry.to_owned()) is Some(skill) &&
+          skill.archive is Some(_) {
+          // The real registry's download host hands the archive to its
+          // object store through a redirect; mirror that, including one
+          // entry that loops forever.
+          let entry = entry.to_owned()
+          let location = if entry == LoopEntry {
+            path
+          } else {
+            "\{BlobPrefix}\{entry}\{ZipSuffix}"
+          }
+          let redirect_headers : @http.Headers = { "Location": location }
+          conn.send_response(302, "Found", extra_headers=redirect_headers)
+        } else if path.strip_prefix(BlobPrefix) is Some(blob) &&
+          blob.strip_suffix(ZipSuffix) is Some(entry) &&
           skills.get(entry.to_owned()) is Some(skill) &&
           skill.archive is Some(archive) {
           conn.send_response(200, "OK")
@@ -281,23 +312,24 @@ async test "install verifies the archive and writes every file it holds" {
 }
 
 ///|
-async test "an archive wrapped in a single directory installs at the root" {
+async test "an archive that wraps its files in a directory is refused" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     let lib = @fs.tmpdir(prefix="skillmarket-")
-    let installed = @skillmarket.install_skill(
-      module_name="acme/widget",
-      version="2.0.0",
-      package_path="",
-      registry=base,
-      library_dir=lib,
-    )
-    assert_eq(installed.description, "Build widgets better.")
-    assert_eq(
-      @fs.read_file("\{lib}/acme-widget/SKILL.md").binary(),
-      skill_body_v2,
-    )
-    assert_false(@fs.exists("\{lib}/acme-widget/widget"))
+    let message = install_failure(base, lib, "acme/wrapped")
+    assert_true(message.contains("does not contain a SKILL.md"))
+    assert_false(@fs.exists("\{lib}/acme-wrapped"))
+  }
+}
+
+///|
+async test "a redirect loop on the archive download is refused" {
+  @async.with_task_group() <| group => {
+    guard fake_registry(group) is Some(base) else { return }
+    let lib = @fs.tmpdir(prefix="skillmarket-")
+    let message = install_failure(base, lib, "acme/loop")
+    assert_true(message.contains("redirected too many times"))
+    assert_false(@fs.exists("\{lib}/acme-loop"))
   }
 }
 

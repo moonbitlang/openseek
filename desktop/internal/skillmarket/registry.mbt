@@ -47,15 +47,55 @@ pub struct MarketSkill {
 } derive(ToJson)
 
 ///|
-/// GET `url`, returning the status code and body. Transport failures (DNS,
-/// TLS, a refused connection) become a `SkillMarketError`; non-200 codes are
-/// returned for the caller to judge with context of its own.
+/// Redirect hops one fetch will follow. The registry's download host hands
+/// archives to its object store through a redirect; the cap keeps a
+/// misconfigured server from looping forever.
+const MaxRedirects = 5
+
+///|
+/// GET `url`, following redirects, and return the final status code and
+/// body. Transport failures (DNS, TLS, a refused connection) become a
+/// `SkillMarketError`; non-200 final codes are returned for the caller to
+/// judge with context of its own. A hop onto plain http is accepted:
+/// integrity never rests on the transport, since archives are verified
+/// against the registry's declared digest after download.
 async fn fetch_response(url : String) -> (Int, &@io.Data) {
-  let (response, data) = @http.get(url) catch {
-    error if @async.is_being_cancelled() => raise error
-    error => raise SkillMarketError("cannot reach the skill registry: \{error}")
+  let mut current = url
+  for _ in 0..<MaxRedirects {
+    let (response, data) = @http.get(current) catch {
+      error if @async.is_being_cancelled() => raise error
+      error =>
+        raise SkillMarketError("cannot reach the skill registry: \{error}")
+    }
+    guard response.code is (301 | 302 | 303 | 307 | 308) &&
+      response.headers.get("Location") is Some(location) else {
+      return (response.code, data)
+    }
+    current = redirect_target(current, location)
   }
-  (response.code, data)
+  raise SkillMarketError("the skill registry redirected too many times")
+}
+
+///|
+/// The absolute URL a redirect points at. `Location` may be absolute or
+/// host-relative — the only forms real registries emit; anything else is
+/// refused rather than guessed at.
+fn redirect_target(
+  current : String,
+  location : String,
+) -> String raise SkillMarketError {
+  if location.has_prefix("http://") || location.has_prefix("https://") {
+    return location
+  }
+  if location.has_prefix("/") && current.find("://") is Some(scheme_end) {
+    let host_start = scheme_end + 3
+    let origin_end = match current[host_start:].to_owned().find("/") {
+      Some(offset) => host_start + offset
+      None => current.length()
+    }
+    return "\{current[0:origin_end].to_owned()}\{location}"
+  }
+  raise SkillMarketError("the skill registry sent an unsupported redirect")
 }
 
 ///|
@@ -342,6 +382,34 @@ test "a wrapped catalog response decodes like a bare one" {
     fail("expected one entry from the wrapped catalog")
   }
   assert_eq(skill.name, "alice/alpha")
+}
+
+///|
+test "redirect targets resolve absolute and host-relative locations" {
+  assert_eq(
+    redirect_target(
+      "https://download.example/skills/a.zip", "http://store.example:9002/blob/a.zip",
+    ),
+    "http://store.example:9002/blob/a.zip",
+  )
+  assert_eq(
+    redirect_target("https://download.example/skills/a.zip", "/blob/a.zip"),
+    "https://download.example/blob/a.zip",
+  )
+  assert_eq(
+    redirect_target("https://download.example", "/blob/a.zip"),
+    "https://download.example/blob/a.zip",
+  )
+  // A relative or garbage location is refused, not guessed at.
+  try {
+    let _ = redirect_target(
+      "https://download.example/skills/a.zip", "blob/a.zip",
+    )
+    fail("a relative redirect must be refused")
+  } catch {
+    SkillMarketError(_) => ()
+    error => raise error
+  }
 }
 
 ///|
