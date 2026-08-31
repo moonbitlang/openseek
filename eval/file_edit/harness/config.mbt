@@ -13,8 +13,8 @@ pub struct Config {
   concurrency : Int
   min_successes : Int
   max_steps : Int
-  out_dir : String
-  repo_root : String
+  priv out_dir : String
+  priv repo_root : String
   prompt_label : String
   system_prompt_file : String
   system_prompt_addendum_file : String

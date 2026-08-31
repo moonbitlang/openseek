@@ -6,7 +6,7 @@
 /// its work across shell, edit, write, …), and the case's two
 /// gates — the workspace matched the expected files (`validation_passed`)
 /// and the required marker text was produced (`marker_present`).
-pub struct TrialResult {
+priv struct TrialResult {
   index : Int
   case_id : String
   prompt_label : String
@@ -36,7 +36,7 @@ pub struct TrialResult {
 /// One file-edit eval run's outcome: the configuration that defined it, the
 /// success tally against `min_successes`, where artifacts were written, and
 /// every trial's result.
-pub struct EvalReport {
+struct EvalReport {
   model : String
   prompt_label : String
   runs : Int
