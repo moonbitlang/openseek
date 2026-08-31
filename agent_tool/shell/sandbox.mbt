@@ -5479,24 +5479,3 @@ fn agent_output_has_shell_sandbox_denial(
   agent_output.sandboxed_command is Some(command) &&
   command.output_reports_denial(agent_output.output.text)
 }
-
-///|
-/// The generic guidance appended for a sandboxed source-write denial.
-pub fn source_write_denial_feedback() -> String {
-  SandboxSourceWriteFeedback
-}
-
-///|
-/// Contextual guidance exposed so `shell_output` gives background jobs the same
-/// recovery advice as foreground commands.
-pub fn contextual_source_write_denial_feedback(
-  command : @sandbox.SandboxedCommand,
-  output : String,
-  read_only_review? : Bool = false,
-) -> String {
-  shell_sandbox_denial_feedback(
-    command.allows_standalone_trusted_writer(),
-    read_only_review,
-    output,
-  )
-}

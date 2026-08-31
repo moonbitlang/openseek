@@ -4,17 +4,12 @@ package "bobzhang/openseek/agent_tool/shell"
 import {
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/agent_tool/bgjobs",
-  "bobzhang/openseek/agent_tool/internal/sandbox",
 }
 
 // Values
 pub async fn collect_shell_output(String, cwd? : String, max_output_chars? : Int) -> ShellOutput
 
-pub fn contextual_source_write_denial_feedback(@sandbox.SandboxedCommand, String, read_only_review? : Bool) -> String
-
 pub fn definition(workspace_root? : String, read_only? : Bool, bg_runtime? : @bgjobs.BgJobRuntime, default_timeout_ms? : Int, scratch_dir? : String, worker_sandbox? : WorkerSandbox) -> @agent_tool.AgentToolDefinition
-
-pub fn source_write_denial_feedback() -> String
 
 // Errors
 
