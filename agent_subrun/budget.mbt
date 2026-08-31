@@ -27,7 +27,7 @@ let min_useful_subrun_steps : Int = 8
 /// The owner is the CLI layer: it creates one budget per session, passes
 /// it to every subrun tool definition, and calls `reset_turn` at each turn
 /// start. Enforcement is reserve-BEFORE-launch.
-pub struct SubrunBudget {
+struct SubrunBudget {
   max_calls_per_turn : Int
   mut used_calls : Int
 }

@@ -25,28 +25,17 @@ pub fn[T] validated(Result[T, String], (T) -> Array[String]) -> Result[T, Array[
 
 // Types and methods
 pub struct ChildSession {
-  root : String
   parent : String
-  first_free : Int
+  // private fields
 }
 pub fn ChildSession::ChildSession(root~ : String, parent~ : String, first_free? : Int) -> Self
 
-pub struct SubrunBudget {
-  max_calls_per_turn : Int
-  mut used_calls : Int
-}
+type SubrunBudget
 pub fn SubrunBudget::SubrunBudget(max_calls_per_turn? : Int) -> Self
 pub fn SubrunBudget::reserve(Self, Int) -> Int?
 pub fn SubrunBudget::reset_turn(Self) -> Unit
 
-pub struct SubrunResult[T] {
-  value : T?
-  terminal : SubrunTerminal
-  steps_used : Int
-  prompt_tokens : Int
-  completion_tokens : Int
-  subrun_id : String
-} derive(@debug.Debug)
+type SubrunResult[T] derive(@debug.Debug)
 pub fn[T] SubrunResult::completion_tokens(Self[T]) -> Int
 pub fn[T] SubrunResult::prompt_tokens(Self[T]) -> Int
 pub fn[T] SubrunResult::steps_used(Self[T]) -> Int

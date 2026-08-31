@@ -33,7 +33,7 @@ pub enum SubrunTerminal {
 /// cost the child actually spent — observed from the child's own event
 /// stream (`usage` summed, `agent_step` maxed), so it is exact for the
 /// requests the child made.
-pub struct SubrunResult[T] {
+struct SubrunResult[T] {
   value : T?
   terminal : SubrunTerminal
   steps_used : Int
@@ -363,9 +363,9 @@ pub async fn[T] run_subrun(
 /// session would reuse `sr-1` — and the fresh child session would die on
 /// its first append against the old child's file (stale-snapshot check).
 pub struct ChildSession {
-  root : String
+  priv root : String
   parent : String
-  first_free : Int
+  priv first_free : Int
 }
 
 ///|
