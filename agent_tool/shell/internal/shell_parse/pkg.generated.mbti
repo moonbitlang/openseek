@@ -43,7 +43,7 @@ pub struct SimpleCommand {
   env : Array[EnvAssignment]
   redirects : Array[Redirect]
   separator_before : String?
-  source : String
+  // private fields
 } derive(Eq, @debug.Debug)
 pub fn SimpleCommand::command_index(Self) -> Int?
 pub fn SimpleCommand::command_name(Self) -> String?

@@ -26,7 +26,7 @@ pub struct SimpleCommand {
   env : Array[EnvAssignment]
   redirects : Array[Redirect]
   separator_before : String?
-  source : String
+  priv source : String
 } derive(Debug, Eq)
 
 ///|
