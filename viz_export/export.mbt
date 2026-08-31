@@ -3,7 +3,9 @@
 ///
 /// The fields mirror the two HTTP responses consumed by `cmd/viz_app`: the
 /// session-list row and the raw JSONL envelope for that row.
-pub struct Session {
+/// The fields mirror the two HTTP responses consumed by `cmd/viz_app`: the
+/// session-list row and the raw JSONL envelope for that row.
+struct Session {
   key : String
   id : String
   root : String
@@ -59,7 +61,7 @@ fn Session::envelope_json(self : Session) -> Json {
 
 ///|
 /// The static shell and compiled `viz_app` bundle used to build an export.
-pub struct StandaloneExport {
+struct StandaloneExport {
   shell_html : String
   bundle_js : String
 }

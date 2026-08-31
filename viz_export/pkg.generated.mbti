@@ -6,22 +6,10 @@ package "bobzhang/openseek/viz_export"
 // Errors
 
 // Types and methods
-pub struct Session {
-  key : String
-  id : String
-  root : String
-  root_label : String
-  is_marker : Bool
-  last_active : Double?
-  first_prompt : String
-  events : String
-}
+type Session
 pub fn Session::Session(key~ : String, id~ : String, root~ : String, root_label~ : String, is_marker~ : Bool, last_active~ : Double?, first_prompt~ : String, events~ : String) -> Self
 
-pub struct StandaloneExport {
-  shell_html : String
-  bundle_js : String
-}
+type StandaloneExport
 pub fn StandaloneExport::StandaloneExport(String, String) -> Self
 pub fn StandaloneExport::render(Self, Array[Session]) -> String raise
 
