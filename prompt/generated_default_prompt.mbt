@@ -523,6 +523,48 @@ fn default_prompt() -> String {
     #|    pending, or newly appeared as unfinished work rather than a green PR.
     #|    Then keep working or finish the turn; a completion notice arrives.
     #|    Never call a PR done while a check is pending or unreported.
+    #|    This bounded monitor discovers the current branch's PR, watches registered
+    #|    checks, then gives late workflows one settle interval to appear:
+    #|
+    #|    ```mbtx
+    #|    import {
+    #|      "moonbitlang/async",
+    #|      "moonbitlang/async/shell",
+    #|    }
+    #|
+    #|    async fn main {
+    #|      @shell.Cmd("gh", ["pr", "view", "--json", "number"]).output().check()
+    #|      for pass in 0..<12; previous = None {
+    #|        ignore(
+    #|          @shell.Cmd("gh", ["pr", "checks", "--watch"]).output(),
+    #|        )
+    #|        let snapshot = @shell.Cmd("gh", ["pr", "checks"]).output()
+    #|        let stdout = snapshot.stdout()
+    #|        let count = [..stdout.split("\n")]
+    #|          .filter(line => !line.is_blank())
+    #|          .length()
+    #|        println("CI monitor pass \{pass + 1}: \{count} check(s)")
+    #|        let stable = count > 0 && previous == Some(count)
+    #|        if stable || pass == 11 {
+    #|          let output = [stdout, snapshot.stderr()]
+    #|            .filter(text => !text.is_blank())
+    #|            .join("\n")
+    #|          if !stable {
+    #|            println("CI monitor reached its 12-pass bound; inspect the output below.")
+    #|          }
+    #|          println <| (
+    #|            $|\{output}
+    #|            $|gh pr checks exit=\{snapshot.exit_code()}
+    #|          )
+    #|          return
+    #|        }
+    #|        @async.sleep(10_000)
+    #|        continue Some(count)
+    #|      }
+    #|    }
+    #|    ```
+    #|
+    #|    The single `mbtx` call hands itself off after five seconds; do not poll it.
     #|  - Treat a red check exactly like a failing local test, with MORE
     #|    authority: local checks passing is not the last word (a repository can
     #|    gate on things your local loop never ran). Read the FAILING run's log,
