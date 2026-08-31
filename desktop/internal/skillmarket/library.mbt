@@ -1,9 +1,10 @@
-// The local skills library: installing a registry skill into the engine's
-// global skills directory, listing what is there, and removing what this
-// app installed. The directory layout and frontmatter rules deliberately
+// The local skills library: installing a registry skill archive into the
+// engine's global skills directory, listing what is there, and removing what
+// this app installed. The directory layout and frontmatter rules deliberately
 // mirror the engine's `agent_skill` discovery (`<name>.md` flat files and
-// `<name>/SKILL.md` directories), so the panel lists exactly what the
-// engine advertises to the model.
+// `<name>/SKILL.md` directories, here with the archive's supporting files
+// beside the SKILL.md), so the panel lists exactly what the engine
+// advertises to the model.
 
 ///|
 /// The provenance marker written next to an installed SKILL.md. The engine's
@@ -90,9 +91,9 @@ fn slugify(name : String) -> String {
 }
 
 ///|
-/// The `sha256:`-prefixed hex digest of `content`, recorded in an install's
-/// provenance sidecar. The registry's per-skill API exposes no SKILL.md digest
-/// to verify against, so this is our own record of what we wrote, not a check.
+/// The `sha256:`-prefixed hex digest of `content`: how a downloaded skill
+/// archive is checked against the digest the registry declares, and what an
+/// install's provenance sidecar records.
 fn content_digest(content : Bytes) -> String {
   "sha256:\{@crypto.bytes_to_hex_string(@crypto.sha256(content))}"
 }
@@ -151,14 +152,15 @@ fn decode_sidecar(text : String) -> String {
 }
 
 ///|
-/// Download one registry skill and install it as `<library>/<slug>/SKILL.md`.
-/// The per-skill API confirms `entry` is a skill; the slug is derived from the
-/// skill's `owner/name` identity (so the registry's own name can never
-/// path-escape the library), and the SKILL.md is fetched from the skill's
-/// assets. A same-named entry the user wrote by hand (no sidecar) is never
-/// overwritten; one we installed is — that is a reinstall or an upgrade.
-/// `on_committed` runs after the complete staged directory becomes live, while
-/// the library lock and cancellation shield are still held.
+/// Download one skill archive and install it as `<library>/<slug>/` — its
+/// SKILL.md plus any supporting files. The per-skill API locates the archive
+/// and its digest; the download is verified against that digest before any
+/// entry is unpacked. The slug is derived from the skill's `owner/name`
+/// identity, so registry data can never path-escape the library. A same-named
+/// entry the user wrote by hand (no sidecar) is never overwritten; one we
+/// installed is — that is a reinstall or an upgrade. `on_committed` runs after
+/// the complete staged directory becomes live, while the library lock and
+/// cancellation shield are still held.
 pub async fn install_skill(
   module_name~ : String,
   version~ : String,
@@ -168,7 +170,7 @@ pub async fn install_skill(
   on_committed? : () -> Unit,
 ) -> InstalledSkill {
   let entry = entry_path(module_name, version, package_path)
-  let download_url = skill_md_url(registry, entry)
+  let source = fetch_archive_source(registry, entry)
   let identity = if package_path.is_empty() {
     module_name
   } else {
@@ -186,15 +188,13 @@ pub async fn install_skill(
       "a skill named \{slug} already exists in your library; not overwriting it",
     )
   }
-  let (code, data) = fetch_response(download_url)
-  if code == 404 {
-    raise SkillMarketError("\{entry} does not publish a SKILL.md")
+  let skill = skill_files(fetch_archive(entry, source), entry)
+  let text = @utf8.decode(skill.skill_md) catch {
+    _ =>
+      raise SkillMarketError(
+        "the archive for \{entry} holds an unreadable SKILL.md",
+      )
   }
-  guard code == 200 else {
-    raise SkillMarketError("SKILL.md download returned HTTP \{code}")
-  }
-  let content = data.binary()
-  let text = data.text() catch { _ => "" }
   let (name, description) = parse_frontmatter(text, slug)
   let installed = {
     id: slug,
@@ -206,7 +206,7 @@ pub async fn install_skill(
     "module": module_name,
     "version": version,
     "package": package_path,
-    "digest": content_digest(content),
+    "digest": source.digest,
   }
   library_lock.acquire()
   defer library_lock.release()
@@ -219,7 +219,7 @@ pub async fn install_skill(
       "a skill named \{slug} already exists in your library; not overwriting it",
     )
   }
-  library.stage(slug, content, provenance.stringify())
+  library.stage(slug, skill.files, provenance.stringify())
   library.activate(slug, on_committed?)
   installed
 }

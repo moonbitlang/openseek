@@ -122,13 +122,14 @@ async fn SkillLibrary::recover(self : SkillLibrary) -> Unit {
 }
 
 ///|
-/// Write one complete candidate without changing the live entry. Cancellation
-/// or an I/O error may leave an incomplete staging directory; `recover`
-/// removes it before any later read or mutation.
+/// Write one complete candidate without changing the live entry: every
+/// archive file below one staged directory, then the provenance sidecar.
+/// Cancellation or an I/O error may leave an incomplete staging directory;
+/// `recover` removes it before any later read or mutation.
 async fn SkillLibrary::stage(
   self : SkillLibrary,
   id : String,
-  content : Bytes,
+  files : Map[String, Bytes],
   provenance : String,
 ) -> Unit {
   let staging = self.staging(id)
@@ -137,7 +138,11 @@ async fn SkillLibrary::stage(
     @fsx.rmdir(staging, recursive=true)
   }
   @fsx.ensure_dir(staging)
-  @fsx.write_bytes(staging.join("SKILL.md"), content)
+  for path, content in files {
+    let target = staging.join(path)
+    @fsx.ensure_dir(target.dirname())
+    @fsx.write_bytes(target, content)
+  }
   @fsx.write_text(staging.join(SidecarFile), provenance)
 }
 
