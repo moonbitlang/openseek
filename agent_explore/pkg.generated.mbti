@@ -20,11 +20,7 @@ pub async fn run_child(Json, api_key~ : String, model~ : @deepseek.Model, max_st
 // Errors
 
 // Types and methods
-pub struct Citation {
-  file : String
-  line : Int?
-  note : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+type Citation derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn Citation::equal(Self, Self) -> Bool
 pub fn Citation::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn Citation::not_equal(Self, Self) -> Bool
@@ -32,10 +28,9 @@ pub fn Citation::to_json(Self) -> Json
 pub fn Citation::to_repr(Self) -> @debug.Repr
 
 pub struct ExploreReport {
-  schema_version : Int
   answer : String
   citations : Array[Citation]
-  unresolved : String?
+  // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ExploreReport::equal(Self, Self) -> Bool
 pub fn ExploreReport::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
