@@ -42,10 +42,10 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
     .handle(SubmitPatternRepair, input)
   let thinking_html = render_search(submitted, input)
   assert_true(thinking_html.contains("Thinking"))
-  let previewed = requested.handle(
+  let previewed = submitted.handle(
     PatternRepairPreview(
       root=root.path,
-      generation=requested.page.generation,
+      generation=submitted.page.generation,
       candidate_pattern="inspect($_)",
       message="Candidate Pattern is ready for review.",
     ),
@@ -53,7 +53,7 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
   )
   let preview_html = render_search(previewed, input)
   assert_true(previewed.page.semantic.patterns[0] != "inspect($_)")
-  assert_true(preview_html.contains("Suggested Pattern"))
+  assert_true(preview_html.contains("SUGGESTED PATTERN"))
   let accepted = previewed.handle(AcceptPatternRepair, input)
   assert_true(accepted.page.semantic.patterns[0] == "inspect($_)")
   let discarded = previewed.handle(RejectPatternRepair, input)
