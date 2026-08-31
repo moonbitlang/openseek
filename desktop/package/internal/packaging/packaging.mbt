@@ -631,6 +631,13 @@ pub async fn copy_tree(source : String, destination : String) -> Unit {
       copy_tree(entry_source, entry_destination)
     } else {
       copy_file(entry_source, entry_destination)
+      // `cp -R` preserved the executable bit, and bundled helpers such as
+      // the CEF runtime's `bin/cef_process` rely on it. Windows has no
+      // executable bit and `@asyncfs.chmod` raises there.
+      if !(@platform.win32 || @platform.win64) &&
+        @asyncfs.can_execute(entry_source) {
+        @asyncfs.chmod(entry_destination, 0o755)
+      }
     }
   }
 }
