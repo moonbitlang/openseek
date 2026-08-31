@@ -69,13 +69,15 @@ fn pattern_repair_task(pattern : String, instruction : String) -> String {
 ///|
 test "pattern repair prompt teaches typed CST repair" {
   let prompt = pattern_repair_system_prompt()
-  assert_true(prompt.contains("untyped CST structure"))
+  assert_true(prompt.contains("untyped CST"))
+  assert_true(prompt.contains("structure. It is not a regular expression"))
   assert_true(prompt.contains("$(name:kind)"))
   assert_true(prompt.contains("exp"))
   assert_true(prompt.contains("arg"))
   assert_true(prompt.contains("$$$(items:kind)"))
   assert_true(prompt.contains("dump --expr"))
-  assert_true(prompt.contains("exact structural/name equality"))
+  assert_true(prompt.contains("exact"))
+  assert_true(prompt.contains("structural/name equality"))
 }
 
 ///|
