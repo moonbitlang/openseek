@@ -1340,6 +1340,7 @@ pub(all) struct PatternRepairReply {
   generation : Int
   candidate_pattern : String
   valid : Bool
+  validation_status : String
   message : String
 } derive(Debug, Eq)
 

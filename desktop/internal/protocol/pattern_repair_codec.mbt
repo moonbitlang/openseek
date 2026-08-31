@@ -39,6 +39,7 @@ pub impl FromJson for PatternRepairReply with fn from_json(json, path) {
     generation,
     candidate_pattern: object.required_string("candidate_pattern"),
     valid: object.required_bool("valid"),
+    validation_status: object.required_string("validation_status"),
     message: object.required_string("message"),
   }
 }
@@ -50,6 +51,7 @@ pub impl ToJson for PatternRepairReply with fn to_json(self) {
     "generation": self.generation,
     "candidate_pattern": self.candidate_pattern,
     "valid": self.valid,
+    "validation_status": self.validation_status,
     "message": self.message,
   }
 }

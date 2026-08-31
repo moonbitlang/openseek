@@ -47,6 +47,7 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
       root=root.path,
       generation=submitted.page.generation,
       candidate_pattern="inspect($_)",
+      validation_status="unavailable",
       message="Candidate Pattern is ready for review.",
     ),
     input,
@@ -54,6 +55,7 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
   let preview_html = render_search(previewed, input)
   assert_true(previewed.page.semantic.patterns[0] != "inspect($_)")
   assert_true(preview_html.contains("SUGGESTED PATTERN"))
+  assert_true(preview_html.contains("Validation unavailable"))
   let accepted = previewed.handle(AcceptPatternRepair, input)
   assert_true(accepted.page.semantic.patterns[0] == "inspect($_)")
   let discarded = previewed.handle(RejectPatternRepair, input)
@@ -66,12 +68,16 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
       PatternRepairFailed(
         root=root.path,
         generation=semantic.page.generation,
+        candidate_pattern="match $_ { $$$cases }",
+        validation_status="failed",
         message="Fake repair failed.",
       ),
       input,
     )
   let failed_html = render_search(failed, input)
   assert_true(failed_html.contains("Fake repair failed."))
+  assert_true(failed_html.contains("Validation failed"))
+  assert_true(failed_html.contains("match $_ { $$$cases }"))
   let cancelled = requested.handle(RejectPatternRepair, input)
   let cancelled_html = render_search(cancelled, input)
   assert_false(cancelled_html.contains("PATTERN REPAIR"))

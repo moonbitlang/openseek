@@ -96,47 +96,62 @@ async fn pattern_repair_op(
   agent_env : Map[String, String],
   payload : @protocol.PatternRepairPayload,
 ) -> @protocol.PatternRepairReply {
-  let failure = fn(message : String) -> @protocol.PatternRepairReply {
+  let failure = fn(
+    candidate_pattern : String,
+    validation_status : String,
+    message : String,
+  ) -> @protocol.PatternRepairReply {
     {
       root: payload.root,
       generation: payload.generation,
-      candidate_pattern: payload.pattern,
+      candidate_pattern,
       valid: false,
+      validation_status,
       message,
     }
   }
   guard state.engine != "" else {
-    return failure("Pattern Repair Agent is unavailable.")
+    return failure(
+      payload.pattern,
+      "unavailable",
+      "Pattern Repair Agent is unavailable.",
+    )
   }
   let root = WirePath::parse(payload.root).absolute
-  let mut instruction = payload.instruction
-  for attempt in 0..<3 {
-    guard request_pattern_repair_candidate(
-        state,
-        agent_env,
-        root,
-        payload.pattern,
-        instruction,
-      )
-      is Some((candidate, message)) else {
-      return failure("Pattern Repair Agent returned no candidate.")
-    }
-    match validate_pattern_repair_candidate(state, root, candidate) {
-      PatternRepairValid =>
-        return {
-          root: payload.root,
-          generation: payload.generation,
-          candidate_pattern: candidate,
-          valid: true,
-          message,
-        }
-      PatternRepairInvalid(code, diagnostic) => {
-        if attempt == 2 {
-          return failure("\{code}: \{diagnostic}")
-        }
-        instruction = "\{payload.instruction}\n\nPrevious candidate validation failed (attempt \{attempt + 1}): \{diagnostic}\nReturn a corrected candidate."
-      }
-    }
+  guard request_pattern_repair_candidate(
+      state,
+      agent_env,
+      root,
+      payload.pattern,
+      payload.instruction,
+    )
+    is Some((candidate, message)) else {
+    return failure(
+      payload.pattern,
+      "unavailable",
+      "Pattern Repair Agent returned no candidate.",
+    )
   }
-  failure("Pattern Repair Agent could not produce a valid candidate.")
+  match validate_pattern_repair_candidate(state, root, candidate) {
+    PatternRepairValid =>
+      {
+        root: payload.root,
+        generation: payload.generation,
+        candidate_pattern: candidate,
+        valid: true,
+        validation_status: "passed",
+        message,
+      }
+    PatternRepairUnavailable =>
+      {
+        root: payload.root,
+        generation: payload.generation,
+        candidate_pattern: candidate,
+        valid: true,
+        validation_status: "unavailable",
+        message,
+      }
+    PatternRepairInvalid(code, diagnostic) =>
+      failure(candidate, "failed", "\{code}: \{diagnostic}")
+  }
 }

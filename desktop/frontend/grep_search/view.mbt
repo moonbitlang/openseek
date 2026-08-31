@@ -296,35 +296,58 @@ fn pattern_repair_notice(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
         @html.span(class="search-pattern-repair-dots", "···"),
       ],
     )
-  } else if page.pattern_repair_phase is PatternRepairPreview &&
+  } else if (
+      page.pattern_repair_phase is PatternRepairPreview ||
+      page.pattern_repair_phase is PatternRepairFailed
+    ) &&
     page.pattern_repair_candidate is Some(candidate) {
-    @html.div(class="search-pattern-repair-preview", [
-      @html.div(class="search-pattern-repair-title", [
-        @html.span(class="search-pattern-repair-kicker", "SUGGESTED PATTERN"),
-        @html.span(
-          class="search-pattern-repair-caption",
-          "Review before applying",
-        ),
-      ]),
-      @html.pre(class="search-pattern-repair-candidate", candidate),
-      if page.pattern_repair_message is Some(message) {
-        @html.div(class="search-pattern-repair-message", message)
+    let failed = page.pattern_repair_phase is PatternRepairFailed
+    let validation = match page.pattern_repair_validation_status {
+      Some("passed") => "Validation passed"
+      Some("unavailable") => "Validation unavailable"
+      Some("failed") => "Validation failed"
+      _ => "Validation status unknown"
+    }
+    @html.div(
+      class=if failed {
+        "search-pattern-repair-preview error"
       } else {
-        @html.nothing
+        "search-pattern-repair-preview"
       },
-      @html.div(class="search-pattern-repair-actions", [
-        @html.button(
-          class="search-pattern-repair-accept",
-          on_click=emit(AcceptPatternRepair),
-          "Use pattern",
-        ),
-        @html.button(
-          class="search-pattern-repair-discard",
-          on_click=emit(RejectPatternRepair),
-          "Discard",
-        ),
-      ]),
-    ])
+      [
+        @html.div(class="search-pattern-repair-title", [
+          @html.span(class="search-pattern-repair-kicker", "SUGGESTED PATTERN"),
+          @html.span(class="search-pattern-repair-caption", validation),
+        ]),
+        @html.pre(class="search-pattern-repair-candidate", candidate),
+        if page.pattern_repair_message is Some(message) {
+          @html.div(class="search-pattern-repair-message", message)
+        } else {
+          @html.nothing
+        },
+        if failed {
+          @html.div(
+            class="search-pattern-repair-message",
+            "This candidate cannot be applied until validation passes.",
+          )
+        } else {
+          @html.nothing
+        },
+        @html.div(class="search-pattern-repair-actions", [
+          @html.button(
+            class="search-pattern-repair-accept",
+            attrs=@html.Attrs::build().disabled(failed),
+            on_click=emit(AcceptPatternRepair),
+            "Use pattern",
+          ),
+          @html.button(
+            class="search-pattern-repair-discard",
+            on_click=emit(RejectPatternRepair),
+            "Discard",
+          ),
+        ]),
+      ],
+    )
   } else if page.pattern_repair_message is Some(message) {
     @html.div(
       class=if page.pattern_repair_phase is PatternRepairFailed {

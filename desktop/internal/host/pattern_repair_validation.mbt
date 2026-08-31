@@ -29,6 +29,7 @@ fn pattern_repair_provider_args(
 ///|
 priv enum PatternRepairValidation {
   PatternRepairValid
+  PatternRepairUnavailable
   PatternRepairInvalid(String, String)
 }
 
@@ -39,7 +40,7 @@ async fn validate_pattern_repair_candidate(
   pattern : String,
 ) -> PatternRepairValidation {
   if !PatternRepairValidationEnabled {
-    PatternRepairValid
+    PatternRepairUnavailable
   } else {
     guard moongrep_command(state.executable) is Some(command) else {
       return PatternRepairInvalid(

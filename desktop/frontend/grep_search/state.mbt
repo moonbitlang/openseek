@@ -28,6 +28,7 @@ fn fresh_page() -> Page {
     pattern_repair_phase: PatternRepairIdle,
     pattern_repair_message: None,
     pattern_repair_candidate: None,
+    pattern_repair_validation_status: None,
     pattern_repair_instruction: "",
     generation: 0,
     delay_ms: SearchDebounceMs,
@@ -222,7 +223,13 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       } else {
         self
       }
-    PatternRepairPreview(root~, generation~, candidate_pattern~, message~) =>
+    PatternRepairPreview(
+      root~,
+      generation~,
+      candidate_pattern~,
+      validation_status~,
+      message~
+    ) =>
       if page.mode is Semantic &&
         input.root_text() == root &&
         page.generation == generation &&
@@ -234,6 +241,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
             pattern_repair_phase: PatternRepairPreview,
             pattern_repair_message: Some(message),
             pattern_repair_candidate: Some(candidate_pattern),
+            pattern_repair_validation_status: Some(validation_status),
           },
         }
       } else {
@@ -256,7 +264,13 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           pattern_repair_instruction: "",
         },
       }
-    PatternRepairFailed(root~, generation~, message~) =>
+    PatternRepairFailed(
+      root~,
+      generation~,
+      candidate_pattern~,
+      validation_status~,
+      message~
+    ) =>
       if page.mode is Semantic &&
         input.root_text() == root &&
         page.generation == generation &&
@@ -267,6 +281,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
             ..page,
             pattern_repair_phase: PatternRepairFailed,
             pattern_repair_message: Some(message),
+            pattern_repair_candidate: Some(candidate_pattern),
+            pattern_repair_validation_status: Some(validation_status),
           },
         }
       } else {

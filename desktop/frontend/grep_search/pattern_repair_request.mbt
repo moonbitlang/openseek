@@ -42,6 +42,8 @@ fn pattern_repair_request_loader(
                 PatternRepairFailed(
                   root=request.root,
                   generation=request.generation,
+                  candidate_pattern=request.pattern,
+                  validation_status="unavailable",
                   message=@interop.bridge_error_text(error),
                 ),
               ),
@@ -59,6 +61,7 @@ fn pattern_repair_request_loader(
                   root=request.root,
                   generation=request.generation,
                   candidate_pattern=reply.candidate_pattern,
+                  validation_status=reply.validation_status,
                   message=reply.message,
                 ),
               ),
@@ -69,6 +72,8 @@ fn pattern_repair_request_loader(
                 PatternRepairFailed(
                   root=request.root,
                   generation=request.generation,
+                  candidate_pattern=reply.candidate_pattern,
+                  validation_status=reply.validation_status,
                   message=reply.message,
                 ),
               ),
