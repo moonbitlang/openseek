@@ -6,7 +6,7 @@ let manifest_file_name : String = "run_manifest.json"
 /// executes from the trial workspace. Optional `stdin` is supplied through a
 /// temporary file, optional `write_file`/`write_content` creates an input file
 /// before the command runs, and expectations are checked after process exit.
-pub struct ValidationProbeSpec {
+struct ValidationProbeSpec {
   name : String
   command : Array[String]
   stdin : String
@@ -51,7 +51,7 @@ fn ValidationProbeSpec::ValidationProbeSpec(
 /// Durable artifact record for one prompt-task trial. The runner writes these
 /// fields once; analyzers can replay report generation from them without
 /// rerunning the agent.
-pub struct TrialArtifact {
+priv struct TrialArtifact {
   index : Int
   workspace : String
   log_path : String
@@ -76,17 +76,17 @@ fn TrialArtifact::TrialArtifact(
 ///|
 /// Manifest for one prompt-task experiment run.
 pub struct RunManifest {
-  model : String
-  problem_id : String
-  prompt_label : String
-  task_file : String
-  runs : Int
-  concurrency : Int
-  min_successes : Int
-  max_steps : Int
+  priv model : String
+  priv problem_id : String
+  priv prompt_label : String
+  priv task_file : String
+  priv runs : Int
+  priv concurrency : Int
+  priv min_successes : Int
+  priv max_steps : Int
   out_dir : String
-  validation_probes : Array[ValidationProbeSpec]
-  trials : Array[TrialArtifact]
+  priv validation_probes : Array[ValidationProbeSpec]
+  priv trials : Array[TrialArtifact]
 }
 
 ///|

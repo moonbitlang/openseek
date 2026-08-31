@@ -12,19 +12,19 @@
 pub struct Config {
   api_key : String
   model : @deepseek.Model
-  problem_id : String
+  priv problem_id : String
   runs : Int
   concurrency : Int
   min_successes : Int
   max_steps : Int
-  out_dir : String
-  repo_root : String
-  engine : String
+  priv out_dir : String
+  priv repo_root : String
+  priv engine : String
   prompt_label : String
   task_file : String
-  validation_probes : Array[ValidationProbeSpec]
+  priv validation_probes : Array[ValidationProbeSpec]
   system_prompt_file : String
-  system_prompt_addendum_file : String
+  priv system_prompt_addendum_file : String
 }
 
 ///|

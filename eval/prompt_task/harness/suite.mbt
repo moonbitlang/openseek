@@ -3,7 +3,7 @@ let suite_manifest_file_name : String = "suite_manifest.json"
 
 ///|
 /// One benchmark problem in a prompt-task suite.
-pub struct ProblemSpec {
+priv struct ProblemSpec {
   id : String
   prompt_label : String
   task_file : String
@@ -33,7 +33,7 @@ fn ProblemSpec::ProblemSpec(
 ///|
 /// Configuration for running many prompt-task experiments with one global
 /// concurrency limit.
-pub struct SuiteConfig {
+struct SuiteConfig {
   api_key : String
   name : String
   models : Array[@deepseek.Model]
@@ -85,7 +85,7 @@ fn SuiteConfig::SuiteConfig(
 
 ///|
 /// One completed model/problem combo inside a suite manifest.
-pub struct ComboRun {
+priv struct ComboRun {
   model : String
   problem_id : String
   prompt_label : String
@@ -111,15 +111,15 @@ fn ComboRun::ComboRun(
 /// Durable manifest for a completed suite run. It points at normal per-combo
 /// run manifests so analysis can be replayed without rerunning agents.
 pub struct SuiteManifest {
-  name : String
+  priv name : String
   out_dir : String
-  runs_per_combo : Int
-  concurrency : Int
-  min_successes : Int
-  max_steps : Int
-  models : Array[String]
-  problems : Array[ProblemSpec]
-  combos : Array[ComboRun]
+  priv runs_per_combo : Int
+  priv concurrency : Int
+  priv min_successes : Int
+  priv max_steps : Int
+  priv models : Array[String]
+  priv problems : Array[ProblemSpec]
+  priv combos : Array[ComboRun]
 }
 
 ///|
@@ -166,7 +166,7 @@ priv struct SuiteTrialArtifact {
 ///|
 /// Analyze a suite run by replaying each combo's normal run manifest, then
 /// write a combined suite report under the suite output directory.
-pub struct SuiteReport {
+struct SuiteReport {
   name : String
   out_dir : String
   runs_per_combo : Int

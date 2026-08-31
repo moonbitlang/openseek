@@ -27,187 +27,43 @@ pub fn suite_manifest_path(String) -> String
 // Errors
 
 // Types and methods
-pub struct ComboRun {
-  model : String
-  problem_id : String
-  prompt_label : String
-  task_file : String
-  out_dir : String
-  manifest_path : String
-}
-
 pub struct Config {
   api_key : String
   model : @deepseek.Model
-  problem_id : String
   runs : Int
   concurrency : Int
   min_successes : Int
   max_steps : Int
-  out_dir : String
-  repo_root : String
-  engine : String
   prompt_label : String
   task_file : String
-  validation_probes : Array[ValidationProbeSpec]
   system_prompt_file : String
-  system_prompt_addendum_file : String
+  // private fields
 }
 pub fn Config::Config(api_key~ : String, model~ : @deepseek.Model, problem_id~ : String, runs~ : Int, concurrency~ : Int, min_successes~ : Int, max_steps~ : Int, out_dir~ : String, repo_root~ : String, engine? : String, prompt_label~ : String, task_file~ : String, validation_probes~ : Array[ValidationProbeSpec], system_prompt_file~ : String, system_prompt_addendum_file~ : String) -> Self
 
-pub struct EvalReport {
-  model : String
-  prompt_label : String
-  task_file : String
-  runs : Int
-  concurrency : Int
-  min_successes : Int
-  successes : Int
-  out_dir : String
-  results : Array[EvalResult]
-}
+type EvalReport
 pub fn EvalReport::failure_message(Self) -> String
 pub fn EvalReport::markdown(Self) -> String
 pub fn EvalReport::passed(Self) -> Bool
 
-pub struct EvalResult {
-  index : Int
-  prompt_label : String
-  success : Bool
-  reason : String
-  workspace : String
-  log_path : String
-  session_id : String
-  events_path : String
-  exit_code : Int
-  steps : Int
-  tool_results : Int
-  tool_errors : Int
-  shell_uses : Int
-  shell_failures : Int
-  runtime_notices : Int
-  finished : Bool
-  finish_message : String
-  terminal_status : String
-  terminal_message : String
-  validation : ValidationResult
-  parse_errors : Int
-  partial_tail : Bool
-  moon_check_uses : Int
-  moon_test_uses : Int
-  moon_run_e_mentions : Int
-  moon_run_c_mentions : Int
-  bad_run_e_mentions : Int
-  from_str_mentions : Int
-  parse_int_mentions : Int
-  argparse_mentions : Int
-  old_argparse_mentions : Int
-  c_ffi_mentions : Int
-  env_args_mentions : Int
-  result_style_mentions : Int
-  try_mentions : Int
-  warnings : String
-}
-
-pub struct ProbeResult {
-  name : String
-  passed : Bool
-  reason : String
-}
-
-pub struct ProblemSpec {
-  id : String
-  prompt_label : String
-  task_file : String
-  validation_probes : Array[ValidationProbeSpec]
-}
-
 pub struct RunManifest {
-  model : String
-  problem_id : String
-  prompt_label : String
-  task_file : String
-  runs : Int
-  concurrency : Int
-  min_successes : Int
-  max_steps : Int
   out_dir : String
-  validation_probes : Array[ValidationProbeSpec]
-  trials : Array[TrialArtifact]
+  // private fields
 }
 
-pub struct SuiteConfig {
-  api_key : String
-  name : String
-  models : Array[@deepseek.Model]
-  runs_per_combo : Int
-  concurrency : Int
-  min_successes : Int
-  max_steps : Int
-  out_dir : String
-  repo_root : String
-  engine : String
-  system_prompt_file : String
-  system_prompt_addendum_file : String
-  problems : Array[ProblemSpec]
-}
+type SuiteConfig
 
 pub struct SuiteManifest {
-  name : String
   out_dir : String
-  runs_per_combo : Int
-  concurrency : Int
-  min_successes : Int
-  max_steps : Int
-  models : Array[String]
-  problems : Array[ProblemSpec]
-  combos : Array[ComboRun]
+  // private fields
 }
 
-pub struct SuiteReport {
-  name : String
-  out_dir : String
-  runs_per_combo : Int
-  concurrency : Int
-  reports : Array[EvalReport]
-}
+type SuiteReport
 pub fn SuiteReport::failure_message(Self) -> String
 pub fn SuiteReport::markdown(Self) -> String
 pub fn SuiteReport::passed(Self) -> Bool
 
-pub struct TrialArtifact {
-  index : Int
-  workspace : String
-  log_path : String
-  session_id : String
-  events_path : String
-  exit_code : Int
-}
-
-pub struct ValidationProbeSpec {
-  name : String
-  command : Array[String]
-  stdin : String
-  write_file : String
-  write_content : String
-  expect_exit : Int
-  output_contains : String
-  stdout_contains : String
-  stderr_contains : String
-  stdout_json : Bool
-}
-
-pub struct ValidationResult {
-  ran : Bool
-  passed : Bool
-  reason : String
-  moon_check : Bool
-  moon_test : Bool
-  file_probe : Bool
-  stdin_probe : Bool
-  duplicate_probe : Bool
-  probes : Array[ProbeResult]
-}
+type ValidationProbeSpec
 
 // Type aliases
 

@@ -1,7 +1,7 @@
 ///|
 /// Verdict of one behavioral probe run against a trial's workspace, with the
 /// `reason` it failed ("ok" when it passed).
-pub struct ProbeResult {
+priv struct ProbeResult {
   name : String
   passed : Bool
   reason : String
@@ -19,7 +19,7 @@ fn ProbeResult::ProbeResult(
 
 ///|
 /// Validation verdict for one trial's finished workspace.
-pub struct ValidationResult {
+priv struct ValidationResult {
   ran : Bool
   passed : Bool
   reason : String
@@ -82,7 +82,7 @@ pub fn default_toml_validation_probes() -> Array[ValidationProbeSpec] {
 /// Everything recorded about one analyzed agent session. Harness metadata and
 /// workspace validation are attached when the session came from a prompt-task
 /// trial.
-pub struct EvalResult {
+priv struct EvalResult {
   index : Int
   prompt_label : String
   success : Bool
@@ -123,7 +123,7 @@ pub struct EvalResult {
 
 ///|
 /// One prompt-task eval analysis report.
-pub struct EvalReport {
+struct EvalReport {
   model : String
   prompt_label : String
   task_file : String
