@@ -206,7 +206,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         },
       }
     PatternRepairInstructionChanged(instruction) =>
-      { ..self, page: { ..page, pattern_repair_instruction: instruction } }
+      { ..self, page: { ..page, pattern_repair_instruction: instruction, }, }
     SubmitPatternRepair =>
       if page.pattern_repair_phase is PatternRepairComposer &&
         !page.pattern_repair_instruction.trim().to_owned().is_empty() {
