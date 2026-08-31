@@ -17,7 +17,7 @@ fn parse_skill_document(source : String) -> SkillDocument {
   }
   let first = first.trim()
   let first = if first.has_prefix("\u{feff}") {
-    first[3:].trim()
+    first[1:].trim()
   } else {
     first
   }
