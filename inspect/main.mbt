@@ -153,7 +153,7 @@ async fn main {
   }
   println("openseek viz: shell from '\{shell[0]}'")
   print_open_urls(config.host, config.port)
-  let server = @http.Server(addr)
+  let server = @http.Server(addr, reuse_addr=true)
   server.run_forever((request, _body, conn) => {
     handle(request, conn, catalog, shell, bundle_paths)
   })
