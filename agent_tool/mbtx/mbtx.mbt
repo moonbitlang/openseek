@@ -627,7 +627,6 @@ async fn execute(
         } else {
           "mbtx: \{@agent_tool.brief_line(input.source, limit=64)}"
         },
-        cwd?=run_cwd,
         sandboxed_command?,
         output_rewrites=temp_path_rewrites([real, build_dir]),
         moonrun_policy_active=policy_active,

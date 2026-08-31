@@ -380,7 +380,6 @@ async fn shell(
         runtime.adopt(
           exec,
           command=input.cmd,
-          cwd?,
           sandboxed_command?=launch.sandboxed_command,
           read_only_review=read_only,
         )

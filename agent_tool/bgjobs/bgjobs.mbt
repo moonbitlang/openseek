@@ -92,7 +92,6 @@ pub struct BgJobRuntime {
 priv struct BgJob {
   id : String
   command : String
-  cwd : String?
   exec : @shell_exec.ShellExecution
   // The opaque prepared command is carried from launch so a reader can apply
   // the same source-write-denial detection the foreground path does.
@@ -123,19 +122,17 @@ priv struct BgJob {
 pub struct BgJobSnapshot {
   id : String
   command : String
-  cwd : String?
   status : BgJobStatus
-  output : String
+  priv output : String
   output_truncated : Bool
-  over_inline_cap : Bool
+  priv over_inline_cap : Bool
   size : Int
-  seq : Int
-  exit_code : Int?
+  priv exit_code : Int?
   // Preserved so a reader can match the foreground path's error semantics: mark
   // binary output as an error, and detect a sandboxed source-write denial.
   had_invalid_utf8 : Bool
   sandboxed_command : @sandbox.SandboxedCommand?
-  read_only_review : Bool
+  priv read_only_review : Bool
   output_rewrites : Array[(String, String)]
   moonrun_policy_active : Bool
   // The job was killed by the output-limit watchdog (flooded past the hard cap),
@@ -273,7 +270,6 @@ pub async fn BgJobRuntime::start(
     id,
     exec,
     command~,
-    cwd?,
     sandboxed_command?,
     read_only_review~,
     output_rewrites~,
@@ -292,7 +288,6 @@ pub fn BgJobRuntime::adopt(
   self : BgJobRuntime,
   exec : @shell_exec.ShellExecution,
   command~ : String,
-  cwd? : String,
   sandboxed_command? : @sandbox.SandboxedCommand,
   read_only_review? : Bool = false,
   output_rewrites? : Array[(String, String)] = [],
@@ -304,7 +299,6 @@ pub fn BgJobRuntime::adopt(
     id,
     exec,
     command~,
-    cwd?,
     sandboxed_command?,
     read_only_review~,
     output_rewrites~,
@@ -321,7 +315,6 @@ fn BgJobRuntime::register(
   id : String,
   exec : @shell_exec.ShellExecution,
   command~ : String,
-  cwd? : String,
   sandboxed_command? : @sandbox.SandboxedCommand,
   read_only_review~ : Bool,
   output_rewrites~ : Array[(String, String)],
@@ -331,7 +324,6 @@ fn BgJobRuntime::register(
   self.jobs[id] = {
     id,
     command,
-    cwd,
     exec,
     sandboxed_command,
     read_only_review,
@@ -396,13 +388,11 @@ fn BgJob::to_snapshot(self : BgJob) -> BgJobSnapshot {
   {
     id: self.id,
     command: self.command,
-    cwd: self.cwd,
     status: bg_status(self.exec.status()),
     output: self.exec.head(),
     output_truncated: self.exec.output_truncated(),
     over_inline_cap: self.exec.over_inline_cap(),
     size: self.exec.size(),
-    seq: self.exec.seq(),
     exit_code: self.exec.exit_code(),
     had_invalid_utf8: self.exec.had_invalid_utf8(),
     sandboxed_command: self.sandboxed_command,

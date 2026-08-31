@@ -17,7 +17,7 @@ pub struct BgJobRuntime {
   // private fields
 }
 pub fn[X] BgJobRuntime::BgJobRuntime(@agent_runtime.AgentTaskScope[X], spill_dir? : String, hard_output_cap? : Int, hard_timeout_ms? : Int, on_job_exit? : (BgJobSnapshot) -> Unit) -> Self
-pub fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, cwd? : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit) -> String
+pub fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit) -> String
 pub fn BgJobRuntime::list(Self) -> Array[BgJobSnapshot]
 pub async fn BgJobRuntime::read_output(Self, String) -> String?
 pub async fn BgJobRuntime::read_output_tail(Self, String, Int) -> String?
@@ -31,21 +31,16 @@ pub async fn BgJobRuntime::wait_exit(Self, String, Int) -> Bool
 pub struct BgJobSnapshot {
   id : String
   command : String
-  cwd : String?
   status : BgJobStatus
-  output : String
   output_truncated : Bool
-  over_inline_cap : Bool
   size : Int
-  seq : Int
-  exit_code : Int?
   had_invalid_utf8 : Bool
   sandboxed_command : @sandbox.SandboxedCommand?
-  read_only_review : Bool
   output_rewrites : Array[(String, String)]
   moonrun_policy_active : Bool
   killed_by_output_limit : Bool
   killed_by_time_limit : Bool
+  // private fields
 }
 
 pub enum BgJobStatus {
