@@ -66,7 +66,7 @@ pub struct AgentToolDefinition {
   /// serializing. Like `control`, this is a BUILT-IN-ONLY privilege:
   /// never set it on a definition built from dynamic input (MCP listings,
   /// config-supplied tools).
-  concurrent_safe : Bool
+  priv concurrent_safe : Bool
 } derive(Debug(ignore=ToolExecutor))
 
 ///|
