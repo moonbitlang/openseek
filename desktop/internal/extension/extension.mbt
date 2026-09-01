@@ -257,6 +257,10 @@ async fn PageEventTarget::emit(
 priv enum BridgeInput {
   Control(BridgeControl)
   Deliver(PageNotification)
+  // The process-wide hub evicted this subscriber after its bounded queue
+  // filled. At least one notification is missing, so only a fresh subscription
+  // followed by the ordinary BridgeReady resync can restore truthful state.
+  SubscriptionDropped
 }
 
 ///|
@@ -382,6 +386,16 @@ pub async fn DesktopBridgeActor::window_closed(
 }
 
 ///|
+async fn next_hub_input(
+  notifications : @async.Queue[@protocol.Notification],
+) -> BridgeInput {
+  Deliver(Hub(notifications.get())) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => SubscriptionDropped
+  }
+}
+
+///|
 /// Prefer pending lifecycle/control work over another notification. Once neither
 /// lane is ready, race their blocking reads; `any` cancels the losing read.
 async fn DesktopBridgeActor::next_input(
@@ -394,10 +408,29 @@ async fn DesktopBridgeActor::next_input(
   }
   @async.any([
     () => Control(self.controls.get()),
-    () => Deliver(Hub(notifications.get())),
+    () => next_hub_input(notifications),
     () => Deliver(Hub(host_notifications.get())),
     () => Deliver(BrowserEvent(self.browser_events.get())),
   ])
+}
+
+///|
+async fn deliver_to_page(
+  connected : Bool,
+  target : PageEventTarget?,
+  pending : Array[PageNotification],
+  notification : PageNotification,
+) -> Unit {
+  if connected {
+    if target is Some(target) {
+      target.emit(notification)
+    } else {
+      if pending.length() == PendingNotificationCapacity {
+        ignore(pending.remove(0))
+      }
+      pending.push(notification)
+    }
+  }
 }
 
 ///|
@@ -406,8 +439,14 @@ async fn DesktopBridgeActor::next_input(
 /// through its request-scoped sender; later notifications use the window-owned
 /// sender installed by Proton's lifecycle hook.
 pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
-  let notifications = self.state.subscribe()
-  defer self.state.unsubscribe(notifications)
+  // Retain every generation for final cleanup. Replaced subscriptions are
+  // unsubscribed immediately; keeping their handles makes cancellation safe
+  // without depending on how a defer captures the mutable current handle.
+  let subscriptions = [self.state.subscribe()]
+  defer (for notifications in subscriptions {
+    self.state.unsubscribe(notifications)
+  })
+  let mut notifications = subscriptions[0]
   let host_notifications : @async.Queue[@protocol.Notification] = Queue(
     kind=Blocking(64),
   )
@@ -456,17 +495,33 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
             }
           }
         Deliver(notification) =>
-          if connected {
-            if target is Some(target) {
-              target.emit(notification)
-            } else {
-              if pending.length() == PendingNotificationCapacity {
-                ignore(pending.remove(0))
-              }
-              pending.push(notification)
-            }
-          }
+          deliver_to_page(connected, target, pending, notification)
+        SubscriptionDropped => {
+          // Remote clients reconnect their socket when the hub closes a slow
+          // subscription. The desktop bridge is process-local and has no
+          // socket supervisor, so renew it here instead of silently ending its
+          // app-lifetime actor. Subscribe before publishing readiness: any
+          // concurrent notification then queues behind this resync boundary.
+          self.state.unsubscribe(notifications)
+          notifications = self.state.subscribe()
+          subscriptions.push(notifications)
+          deliver_to_page(
+            connected,
+            target,
+            pending,
+            Hub(AgentConnected({ stage: Accepted, })),
+          )
+        }
       }
     }
   })
+}
+
+///|
+async test "a closed hub subscription becomes a reconnect boundary" {
+  let notifications : @async.Queue[@protocol.Notification] = Queue(
+    kind=Blocking(1),
+  )
+  notifications.close(clear=true)
+  assert_true(next_hub_input(notifications) is SubscriptionDropped)
 }

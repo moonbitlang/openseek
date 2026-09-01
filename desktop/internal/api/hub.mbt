@@ -140,10 +140,22 @@ fn Hub::publish(self : Hub, notification : @protocol.Notification) -> Unit {
       wedged.push(index)
     }
   }
+  if wedged.length() > 0 {
+    @xlog.warn(category="transport") <?
+      {
+        "event": "hub_subscriber_evicted",
+        "count": wedged.length(),
+        "notification": notification.wire_name(),
+        "queue_capacity": SubscriberQueueCapacity,
+      }
+  }
   // Back to front, so the collected indices stay valid while removing.
   for cursor in wedged.rev_iter() {
     let queue = self.subscribers.remove(cursor)
-    queue.close()
+    // The failed put already made this stream incomplete. Drop its buffered
+    // prefix as well so the consumer reaches the reconnect/resync boundary
+    // immediately instead of rendering stale notifications first.
+    queue.close(clear=true)
   }
 }
 
@@ -365,6 +377,54 @@ test "an agent error does not retire a run before its finished boundary" {
   guard hub.runs().runs is [] else {
     fail("agent.finished did not retire the run")
   }
+}
+
+///|
+test "a kicked subscriber drops its stale backlog but keeps the finish replayable" {
+  let hub = Hub::Hub()
+  let subscriber = hub.subscribe()
+  hub.publish(
+    AgentStarted(
+      @json.from_json({
+        "run_id": "r-overflow",
+        "session": "s-overflow",
+        "submission_id": "sub-overflow",
+      }),
+    ),
+  )
+  // Fill the subscriber without draining it. The terminal notification is
+  // the first frame that cannot fit, reproducing a renderer that fell behind
+  // during a long, high-volume turn.
+  for _ in 1..<SubscriberQueueCapacity {
+    hub.publish(AgentConnected({ stage: Serving, }))
+  }
+  hub.publish(
+    AgentFinished(
+      @json.from_json({
+        "run_id": "r-overflow",
+        "status": "finished",
+        "exit_code": 0,
+      }),
+    ),
+  )
+  assert_eq(hub.subscribers.length(), 0)
+  // Once one frame is missing, none of the queued frames is a complete
+  // stream any more. A reconnect must start from agent.connected + resync,
+  // not spend time rendering a stale prefix first.
+  let retained = subscriber.try_get() catch { _ => None }
+  assert_eq(retained, None)
+  guard hub.runs(known=[
+      {
+        session: "s-overflow",
+        run_id: Some("r-overflow"),
+        submission_id: Some("sub-overflow"),
+      },
+    ]).settled
+    is [settlement] else {
+    fail("the dropped finish was not retained for lifecycle resync")
+  }
+  assert_eq(settlement.status, "finished")
+  assert_eq(settlement.exit_code, Some(0))
 }
 
 ///|
