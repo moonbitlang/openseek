@@ -226,9 +226,8 @@ async test "close_all_terminals cancels queued opens from an older page" {
 }
 
 ///|
-/// A bridge timeout can make the webview retry an acknowledgement whose first
-/// request already reached the host. Repeating that sequence must not release
-/// any other chunks or wake the paused reader prematurely.
+/// A later successful acknowledgement must cover earlier output requests that
+/// did not reach the host and wake a reader stopped at the bounded window.
 ///
 /// Skipped: this deadlocks on the Linux CI runners often enough to red-line
 /// unrelated pull requests — 8 of the 40 main runs before 2026-08-08, on both
@@ -252,7 +251,7 @@ async test "close_all_terminals cancels queued opens from an older page" {
 /// 0.3.2 upgrade in #692, so that is not the trigger.
 #skip("deadlocks intermittently on Linux CI; see the note above")
 #cfg(not(platform="windows"))
-async test "duplicate acknowledgements release an output chunk only once" {
+async test "a cumulative acknowledgement resumes terminal output" {
   @async.with_task_group(group => {
     let state = @terminal.new_terminal_state()
     defer state.shutdown()
@@ -266,7 +265,7 @@ async test "duplicate acknowledgements release an output chunk only once" {
     let chunks : Array[(Int, Int)] = []
     let mut received = 0
     // Match the host's high watermark. Once this much output has arrived, the
-    // reader is parked until unique acknowledgements drain below its low mark.
+    // reader is parked until an acknowledgement makes window capacity.
     while received < 262144 {
       match pushes.get() {
         Output(id=output_id, sequence~, data~) =>
@@ -280,17 +279,10 @@ async test "duplicate acknowledgements release an output chunk only once" {
           )
       }
     }
-    guard chunks.get(0) is Some(first) else {
+    guard chunks.last() is Some(last) else {
       fail("terminal produced no output chunks")
     }
-    for _ in 0..<32 {
-      @terminal.ack_terminal(state, id~, sequence=first.0)
-    }
-    let prematurely_resumed = @async.with_timeout_opt(500, () => pushes.get())
-    assert_true(prematurely_resumed is None)
-    for chunk in chunks {
-      @terminal.ack_terminal(state, id~, sequence=chunk.0)
-    }
+    @terminal.ack_terminal(state, id~, sequence=last.0)
     let resumed = @async.with_timeout_opt(5000, () => pushes.get())
     assert_true(resumed is Some(Output(id=output_id, ..)) && output_id == id)
     @terminal.close_terminal(state, id~)

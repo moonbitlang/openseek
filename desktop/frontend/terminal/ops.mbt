@@ -102,9 +102,10 @@ fn send_resize(
 }
 
 ///|
-/// One output acknowledgement, sent after xterm has rendered the chunk. A
-/// failed bridge no longer owns a PTY or flow-control window to release, so
-/// the acknowledgement is not retried.
+/// One output acknowledgement, sent after xterm has rendered the chunk. The
+/// host treats `sequence` cumulatively, so a later successful acknowledgement
+/// also covers this one if the request does not reach the host; no retry timer
+/// is needed.
 priv struct TerminalAck {
   channel : @interop.ChannelId
   id : String

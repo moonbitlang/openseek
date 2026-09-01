@@ -540,10 +540,13 @@ their old ids and open replacements after `BridgeReady`.
 PTY bytes stay byte-transparent over JSON. Output is always base64. Text input
 uses `data`; byte-oriented xterm input uses `data_base64`, and exactly one of
 the two fields must be present. Each output chunk occupies the host's bounded
-flow-control window until the client acknowledges its `sequence`; retrying the
-same acknowledgement within that connection is safe. An acknowledgement from
-a dead connection must not be replayed after reconnect because the new
-connection has an independent terminal-id namespace.
+flow-control window until the client acknowledges it. An acknowledgement for
+`sequence` also acknowledges every earlier outstanding sequence for that
+terminal, so a later acknowledgement covers an earlier request that did not
+reach the host. Duplicate acknowledgements and sequences older than the
+already-applied frontier are safe no-ops. An acknowledgement from a dead
+connection must not be replayed after reconnect because the new connection
+has an independent terminal-id namespace.
 
 | method | params | result |
 |---|---|---|

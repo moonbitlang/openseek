@@ -105,8 +105,7 @@ async fn run_session(
     }
     let session : TerminalSession = {
       pty,
-      unacked: 0,
-      unacked_chunks: Map([]),
+      output: { unacked: 0, chunks: Map([]), },
       next_output_sequence: 1,
       cond: Cond(),
       close_requested: Queue(kind=Blocking(1)),
@@ -144,10 +143,9 @@ async fn run_session(
         session.next_output_sequence = sequence + 1
         // Record the debt before emitting: the webview can acknowledge as soon
         // as it receives the event, including before this task resumes.
-        session.unacked_chunks[sequence] = n
-        session.unacked += n
+        session.output.record(sequence, n)
         emit(Output(id=request.id, sequence~, data=Bytes::from_array(buf[:n])))
-        while session.unacked >= HighWatermark && !session.closing {
+        while session.output.unacked >= HighWatermark && !session.closing {
           session.cond.wait()
         }
       }
