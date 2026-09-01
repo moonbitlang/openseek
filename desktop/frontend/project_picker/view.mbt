@@ -304,12 +304,12 @@ fn new_folder_row(
           }
           match event.key() {
             "Enter" => {
+              // Deciding validity here would read the name captured at the
+              // last paint, missing keystrokes still inside the same frame —
+              // typing a name and pressing Enter at once created nothing.
+              // `CreateFolder` checks the current name itself.
               event.prevent_default()
-              if valid {
-                emit(CreateFolder)
-              } else {
-                @cmd.none
-              }
+              emit(CreateFolder)
             }
             "Escape" => {
               event.prevent_default()
