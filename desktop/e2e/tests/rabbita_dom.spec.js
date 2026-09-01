@@ -72,6 +72,52 @@ test('workspace search mounts its real tablist, focus target, and option control
   expect(app.pageErrors).toEqual([]);
 });
 
+test('workspace search groups UTF-16 matches and reveals a large reply incrementally', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.textSearchMatches = Array.from({ length: 501 }, (_, index) => ({
+    path: 'src/main.mbt',
+    line_number: index + 1,
+    preview: index === 0 ? '😀 moon' : `moon result ${index + 1}`,
+    preview_start_column: 1,
+    // Search columns are one-based UTF-16 offsets. The emoji occupies two
+    // code units, so "moon" starts at column four rather than three.
+    ranges: [{ start_column: index === 0 ? 4 : 1, end_column: index === 0 ? 8 : 5 }],
+  }));
+  app.textSearchLimitHit = true;
+  await app.install();
+  await app.goto();
+
+  const shortcut = await page.evaluate(() =>
+    navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');
+  await page.keyboard.press(shortcut);
+  const query = page.getByRole('textbox', { name: 'Search' });
+  await query.fill('moon');
+  await query.press('Enter');
+
+  await expect.poll(() => app.requests.find(request => request.method === 'fs.search_text'))
+    .toMatchObject({
+      params: {
+        root: '/workspace',
+        query: 'moon',
+      },
+    });
+  const results = page.locator('.search-results');
+  await expect(results.locator('.search-summary')).toHaveText('501 results in 1 files');
+  await expect(results.locator('.search-file-name')).toHaveText('main.mbt');
+  await expect(results.locator('.search-file-parent')).toHaveText('src');
+  await expect(results.locator('.search-match-highlight').first()).toHaveText('moon');
+  await expect(results.getByRole('status')).toContainText('first 20,000 matches');
+  await expect(results.locator('.search-result-row')).toHaveCount(500);
+  await expect(results.locator('.search-show-more-detail')).toHaveText(
+    '500 of 501 matching lines rendered',
+  );
+
+  await results.getByRole('button', { name: 'Show 1 more matching lines' }).click();
+  await expect(results.locator('.search-result-row')).toHaveCount(501);
+  await expect(results.locator('.search-show-more')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('Review loads changed files and preserves its interactive diff workflow', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -521,6 +567,50 @@ test('project picker and quick open use browser focus and keyboard events', asyn
   expect(app.pageErrors).toEqual([]);
 });
 
+test('file breadcrumbs browse cached directories with keyboard navigation', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.directoryEntries['/workspace/src'] = [
+    { name: 'docs', is_dir: true },
+    { name: 'main.mbt', is_dir: false },
+  ];
+  app.directoryEntries['/workspace/src/docs'] = [];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openQuickOpen();
+  await page.locator('#quick-open-input').fill('main');
+  await page.getByRole('option', { name: /main\.mbt/ }).click();
+
+  const breadcrumb = page.locator('.viewer-breadcrumb');
+  const sourceDirectory = breadcrumb.getByTitle('Show files in src');
+  await sourceDirectory.click();
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'fs.read_directory' && request.params?.path === '/workspace/src'))
+    .toBeTruthy();
+  const menu = page.getByRole('menu', { name: 'Files in src' });
+  await expect(menu.getByRole('menuitem')).toHaveCount(2);
+  await expect(menu.getByRole('menuitem').first()).toHaveAttribute(
+    'data-path',
+    'src/docs',
+  );
+  await expect(menu.getByRole('menuitem').last()).toHaveClass(/selected/);
+  await expect(menu.getByRole('menuitem').last()).toHaveAttribute('aria-current', 'page');
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('menuitem').last()).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'fs.read_directory' &&
+    request.params?.path === '/workspace/src/docs'))
+    .toBeTruthy();
+  const nested = page.getByRole('menu', { name: 'Files in docs' });
+  await expect(nested).toContainText('This folder is empty.');
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('transcript mounts markdown, plan, goal, and MoonBit tool DOM', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -541,6 +631,243 @@ test('transcript mounts markdown, plan, goal, and MoonBit tool DOM', async ({ pa
   const mbtxResult = transcript.locator('.tool-result').filter({ hasText: '42' });
   await mbtxResult.locator('.tool-result-summary').click();
   await expect(mbtxResult.locator('.tool-call-output')).toContainText('42');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('transcript renders edit and bounded multi_edit changes beside their results', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const longEdits = Array.from({ length: 53 }, (_, index) => ({
+    file: `src/file_${index}.mbt`,
+    start_line: index + 1,
+    old_string: `old ${index}`,
+    new_string: `new ${index}`,
+  }));
+  app.sessionEvents = [
+    {
+      sequence: 1,
+      item: {
+        kind: 'user',
+        payload: { content: 'Show the browser fixture edit transcript' },
+      },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: '',
+          tool_calls: [
+            {
+              id: 'edit-one',
+              name: 'edit',
+              arguments: JSON.stringify({
+                path: 'lib/parser.mbt',
+                start_line: 12,
+                old_string: 'args.length()',
+                new_string: 'args.len()',
+              }),
+            },
+            {
+              id: 'edit-many',
+              name: 'multi_edit',
+              arguments: JSON.stringify({
+                edits: longEdits,
+                revert_when_errors_above: 0,
+              }),
+            },
+            {
+              id: 'edit-partial',
+              name: 'multi_edit',
+              arguments: JSON.stringify({
+                edits: [
+                  {
+                    file: 'src/readable.mbt',
+                    old_string: 'before',
+                    new_string: 'after',
+                  },
+                  { note: 'not an edit' },
+                ],
+              }),
+            },
+          ],
+        },
+      },
+    },
+    {
+      sequence: 3,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'edit-one',
+          tool_name: 'edit',
+          content: 'edited 1 occurrence',
+          is_error: false,
+          brief: 'edit parser',
+        },
+      },
+    },
+    {
+      sequence: 4,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'edit-many',
+          tool_name: 'multi_edit',
+          content: 'applied 53 edits',
+          is_error: false,
+          brief: 'multi_edit 53 edits',
+        },
+      },
+    },
+    {
+      sequence: 5,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'edit-partial',
+          tool_name: 'multi_edit',
+          content: 'applied readable edit',
+          is_error: false,
+          brief: 'multi_edit partial',
+        },
+      },
+    },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+
+  const transcript = page.locator('.transcript');
+  const edit = transcript.locator('.tool-call').filter({ hasText: 'edit parser' });
+  await edit.locator('.tool-call-summary').click();
+  await expect(edit.locator('.tool-call-tab-label')).toHaveText(['Change', 'Original JSON']);
+  await expect(edit.locator('.tool-card-chip')).toHaveText([
+    'path: lib/parser.mbt',
+    'start_line: 12',
+  ]);
+  await expect(edit.locator('.diff-del')).toHaveText('- args.length()');
+  await expect(edit.locator('.diff-add')).toHaveText('+ args.len()');
+
+  const longBatch = transcript.locator('.tool-call').filter({ hasText: 'multi_edit 53 edits' });
+  await longBatch.locator('.tool-call-summary').click();
+  await expect(longBatch.locator('.tool-call-tab-label')).toHaveText([
+    'Changes',
+    'Original JSON',
+  ]);
+  await expect(longBatch.locator('.edit-entry')).toHaveCount(50);
+  await expect(longBatch.locator('.edit-omitted')).toHaveText(
+    '⋯ 3 more edits, in the original ⋯',
+  );
+  await expect(longBatch.locator('.tool-card-chip').first()).toHaveText(
+    'revert_when_errors_above: 0',
+  );
+  await expect(longBatch.locator('.tool-card-chip').filter({
+    hasText: 'file: src/file_50.mbt',
+  })).toHaveCount(0);
+
+  const partial = transcript.locator('.tool-call').filter({ hasText: 'multi_edit partial' });
+  await partial.locator('.tool-call-summary').click();
+  await expect(partial.locator('.edit-entry')).toHaveCount(1);
+  await expect(partial.locator('.tool-card-chip')).toContainText('file: src/readable.mbt');
+  await expect(partial.locator('.edit-omitted')).toHaveText(
+    '⋯ 1 more edits, in the original ⋯',
+  );
+  await expect(transcript.locator('.tool-result')).toHaveCount(3);
+  await expect(transcript.locator('.tool-result').filter({
+    hasText: 'applied 53 edits',
+  })).toHaveCount(1);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('transcript overview previews failed turns and jumps among mounted messages', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const events = [
+    {
+      sequence: 1,
+      ts: 1_781_144_351_123,
+      item: {
+        kind: 'user',
+        payload: { content: 'Show the browser fixture: first question' },
+      },
+    },
+    {
+      sequence: 2,
+      ts: 1_781_144_352_123,
+      item: {
+        kind: 'assistant',
+        payload: { content: 'First answer recovered after the tool failed.' },
+      },
+    },
+    {
+      sequence: 3,
+      ts: 1_781_144_353_123,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'failed-after-answer',
+          tool_name: 'shell',
+          content: 'fixture failure',
+          is_error: true,
+          brief: 'failed after answer',
+        },
+      },
+    },
+  ];
+  let sequence = 4;
+  for (let turn = 2; turn <= 100; turn += 1) {
+    events.push({
+      sequence,
+      ts: 1_781_144_350_123 + sequence * 1_000,
+      item: {
+        kind: 'user',
+        payload: { content: `Question ${turn} keeps the overview rail scrollable` },
+      },
+    });
+    sequence += 1;
+    events.push({
+      sequence,
+      ts: 1_781_144_350_123 + sequence * 1_000,
+      item: {
+        kind: 'assistant',
+        payload: { content: `Answer ${turn}` },
+      },
+    });
+    sequence += 1;
+  }
+  app.sessionEvents = events;
+  await app.install();
+  await app.goto();
+  await app.openSession();
+
+  const overview = page.getByRole('navigation', { name: 'Conversation overview' });
+  const ticks = overview.locator('.overview-tick-button');
+  await expect(ticks).toHaveCount(100);
+  const failed = ticks.first();
+  await expect(failed).toBeVisible();
+  await expect(failed).toHaveAccessibleName(
+    'Show the browser fixture: first question (had errors)',
+  );
+  await failed.hover();
+  const preview = overview.getByRole('tooltip');
+  await expect(preview.locator('.overview-preview-prompt')).toContainText('first question');
+  await expect(preview.locator('.overview-preview-reply')).toContainText('First answer');
+  await expect(preview.locator('.overview-preview-failed')).toHaveText('had errors');
+  const transcript = page.locator('#transcript');
+  const scrollTopBeforeJump = await transcript.evaluate(node => node.scrollTop);
+  await failed.click();
+  await expect.poll(() => transcript.evaluate(node => node.scrollTop))
+    .toBeLessThan(scrollTopBeforeJump);
+  await expect.poll(async () => {
+    const transcriptBox = await transcript.boundingBox();
+    const firstTurnBox = await page.locator('#turn-s1').boundingBox();
+    return firstTurnBox.y - transcriptBox.y;
+  }).toBeLessThan(24);
+
+  await overview.dispatchEvent('mouseleave');
+  await expect(overview.getByRole('tooltip')).toHaveCount(0);
+  await ticks.last().hover();
+  await expect(overview.getByRole('tooltip')).toContainText('Question 100');
+  await expect(overview.locator('.overview-preview')).toHaveClass(/flip/);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -581,6 +908,92 @@ test('transcript preserves link boundaries, structured arguments, MoonBit reads,
     'title',
     'Open this subagent\'s own transcript (session-1-sr-2)',
   );
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('transcript Markdown keeps links safe and loads local raster bytes through the host', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.binaryFiles['diagram.png'] = {
+    data_base64: 'iVBORw0KGgo=',
+    media_type: 'image/png',
+  };
+  app.sessionEvents = [
+    {
+      sequence: 1,
+      item: {
+        kind: 'user',
+        payload: { content: 'Show the browser fixture Markdown policy' },
+      },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: [
+            '[External docs](https://example.test/docs)',
+            '[Source](src/main.mbt:12)',
+            '[Local URI](file:///Users/me/My%20Project/main.mbt#L7)',
+            '[Unsafe](javascript:alert(1))',
+            '![Fixture image](diagram.png)',
+            '```uml',
+            '@startuml',
+            'participant Alice',
+            'Alice -> Bob : hello',
+            '@enduml',
+            '```',
+            '```uml',
+            '@startuml',
+            '@enduml',
+            '```',
+            '```mermaid',
+            'A --> B',
+            '```',
+          ].join('\n\n'),
+        },
+      },
+    },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+
+  const markdown = page.locator('.transcript .msg-content.markdown');
+  const diagram = markdown.locator('[data-diagram-language="uml"]');
+  await expect(diagram).toHaveCount(1);
+  await expect(diagram).toHaveAttribute(
+    'data-diagram-language',
+    'uml',
+  );
+  await expect(diagram).toHaveClass(/moonbit-viewer-markdown-diagram-viewport/);
+  await expect(diagram.locator('svg')).toBeVisible();
+  await expect(markdown.locator('code.language-uml')).toHaveCount(1);
+  await expect(markdown.locator('code.language-mermaid')).toHaveCount(1);
+  await expect(markdown.locator('a[href^="javascript:"]')).toHaveCount(0);
+  await expect(markdown.getByText('Unsafe', { exact: true })).toBeVisible();
+
+  const image = markdown.locator('img[alt="Fixture image"]');
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'fs.read_file' && request.params?.path === 'diagram.png'))
+    .toMatchObject({ params: { root: '/workspace' } });
+  await expect(image).toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgo=');
+  await expect(image).not.toHaveClass(/pending/);
+  await expect(image).not.toHaveAttribute('data-transcript-image', 'diagram.png');
+
+  const external = markdown.getByRole('link', { name: 'External docs' });
+  await expect(external).toHaveAttribute('target', '_blank');
+  await expect(external).toHaveAttribute('rel', 'noopener noreferrer');
+  await markdown.getByTitle('Open src/main.mbt:12').click();
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'host.open_path' && request.params?.path === 'src/main.mbt:12'))
+    .toBeTruthy();
+  const localUri = markdown.getByTitle('Open /Users/me/My Project/main.mbt#L7');
+  await expect(localUri).toBeVisible();
+  await localUri.click();
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'host.open_path' &&
+    request.params?.path === '/Users/me/My Project/main.mbt#L7'))
+    .toBeTruthy();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -675,6 +1088,68 @@ test('transcript keeps every line of a long mbtx program in the mounted card', a
   await expect(call.locator('.moonbit-gutter')).toHaveCount(120);
   await expect(call.locator('.moonbit-gutter').last()).toHaveText('120');
   await expect(call).not.toContainText('skipped');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('transcript elides only the middle of enormous numbered MoonBit source', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const source = [
+    'let greeting = "<hello>"',
+    ...Array.from({ length: 599 }, (_, index) => `let x${index + 2} = ${index + 2}`),
+  ].join('\n');
+  app.sessionEvents = [
+    {
+      sequence: 1,
+      item: {
+        kind: 'user',
+        payload: { content: 'Show the browser fixture enormous source' },
+      },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: '',
+          tool_calls: [{
+            id: 'mbtx-enormous',
+            name: 'mbtx',
+            arguments: JSON.stringify({ source, target: 'js' }),
+          }],
+        },
+      },
+    },
+    {
+      sequence: 3,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'mbtx-enormous',
+          tool_name: 'mbtx',
+          content: 'ok',
+          is_error: false,
+          brief: 'mbtx enormous source',
+        },
+      },
+    },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+
+  const call = page.locator('.tool-call').filter({ hasText: 'mbtx enormous source' });
+  await call.locator('.tool-call-summary').click();
+  const rows = call.locator('.moonbit-line');
+  const gutters = call.locator('.moonbit-gutter');
+  await expect(rows).toHaveCount(501);
+  await expect(call.locator('.moonbit-skip')).toContainText('⋯ 100 lines skipped ⋯');
+  expect(await gutters.nth(399).textContent()).toBe('400');
+  expect(await gutters.nth(400).textContent()).toBe('   ');
+  expect(await gutters.nth(401).textContent()).toBe('501');
+  expect(await gutters.last().textContent()).toBe('600');
+  await expect(gutters.filter({ hasText: /^401$/ })).toHaveCount(0);
+  await expect(call.locator('.mtk5').filter({ hasText: '"<hello>"' })).toHaveCount(1);
+  await expect(call.locator('hello')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 

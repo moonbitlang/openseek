@@ -80,6 +80,391 @@ test('viewer renders plan evolution, goal markers, tool links, sub-runs, and Moo
   expect(viewer.pageErrors).toEqual([]);
 });
 
+test('tool pairing links only unique calls and heals a dangling call only in model view', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  viewer.events = viewer.eventLog([
+    {
+      sequence: 1,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: '',
+          tool_calls: [
+            { id: 'unique', name: 'read', arguments: '{"path":"unique.txt"}' },
+            { id: '', name: 'noop', arguments: '{}' },
+            { id: 'dup', name: 'duplicate-a', arguments: '{}' },
+            { id: 'dup', name: 'duplicate-b', arguments: '{}' },
+            { id: 'ambiguous', name: 'read', arguments: '{"path":"ambiguous.txt"}' },
+          ],
+        },
+      },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'unique',
+          tool_name: 'read',
+          content: 'unique result',
+          is_error: false,
+        },
+      },
+    },
+    {
+      sequence: 3,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'orphan',
+          tool_name: 'ghost',
+          content: 'orphan result',
+          is_error: false,
+        },
+      },
+    },
+    {
+      sequence: 4,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'ambiguous',
+          tool_name: 'read',
+          content: 'ambiguous result one',
+          is_error: false,
+        },
+      },
+    },
+    {
+      sequence: 5,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'ambiguous',
+          tool_name: 'read',
+          content: 'ambiguous result two',
+          is_error: false,
+        },
+      },
+    },
+  ]);
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+
+  await expect(page.locator('#tool-call-1 .tool-link')).toHaveAttribute(
+    'href',
+    '#tool-result-1',
+  );
+  await expect(page.locator('#tool-result-1 .tool-link')).toHaveAttribute(
+    'href',
+    '#tool-call-1',
+  );
+  await expect(page.locator('.tool-link')).toHaveCount(2);
+  await expect(page.locator('[id^="tool-call-"]')).toHaveCount(1);
+  await expect(page.locator('[id^="tool-result-"]')).toHaveCount(1);
+  await expect(page.locator('.card.tool').filter({ hasText: 'orphan result' })
+    .locator('.tool-link')).toHaveCount(0);
+  await expect(page.locator('.card.tool').filter({ hasText: 'ambiguous result one' })
+    .locator('.tool-link')).toHaveCount(0);
+
+  // Reload a minimal dangling call. Raw has no result to link to, while the
+  // model projection repairs the interrupted exchange with a synthetic row.
+  viewer.events = viewer.eventLog([
+    {
+      sequence: 1,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: '',
+          tool_calls: [{
+            id: 'dangling',
+            name: 'read',
+            arguments: '{"path":"dangling.txt"}',
+          }],
+        },
+      },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'terminal',
+        payload: { kind: 'aborted', message: 'stopped' },
+      },
+    },
+  ]);
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+  await expect(page.locator('.tool-link')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Model view' }).click();
+  await expect(page.locator('#tool-call-1 .tool-link')).toHaveAttribute(
+    'href',
+    '#tool-result-1',
+  );
+  await expect(page.locator('#tool-result-1 .tool-link')).toHaveAttribute(
+    'href',
+    '#tool-call-1',
+  );
+  expect(viewer.pageErrors).toEqual([]);
+});
+
+test('plan history skips rejected baselines and names reopened and paused steps', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  const planA = JSON.stringify({
+    steps: [
+      { title: 'step a', status: 'in_progress' },
+      { title: 'step b', status: 'pending' },
+    ],
+  });
+  const rejected = JSON.stringify({
+    steps: [
+      { title: 'step a', status: 'in_progress' },
+      { title: 'phantom step', status: 'in_progress' },
+      { title: 'step b', status: 'pending' },
+    ],
+  });
+  const planC = JSON.stringify({
+    steps: [
+      { title: 'step a', status: 'completed' },
+      { title: 'step b', status: 'in_progress' },
+    ],
+  });
+  const planD = JSON.stringify({
+    steps: [
+      { title: 'step a', status: 'in_progress' },
+      { title: 'step b', status: 'pending' },
+    ],
+  });
+  const events = [];
+  let sequence = 1;
+  for (const [id, arguments_, result] of [
+    ['p1', planA, { content: 'accepted a', is_error: false }],
+    ['p2', rejected, { content: 'rejected phantom', is_error: true }],
+    ['p3', planC, { content: 'accepted c', is_error: false }],
+    ['p4', planD, { content: 'accepted d', is_error: false }],
+  ]) {
+    events.push({
+      sequence,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: '',
+          tool_calls: [{ id, name: 'plan', arguments: arguments_ }],
+        },
+      },
+    });
+    sequence += 1;
+    events.push({
+      sequence,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: id,
+          tool_name: 'plan',
+          content: result.content,
+          is_error: result.is_error,
+        },
+      },
+    });
+    sequence += 1;
+  }
+  events.push({
+    sequence,
+    item: {
+      kind: 'assistant',
+      payload: {
+        content: '',
+        tool_calls: [{
+          id: 'malformed',
+          name: 'plan',
+          arguments: JSON.stringify({
+            steps: 'not an array',
+            marker: 'malformed-browser-plan',
+          }),
+        }],
+      },
+    },
+  });
+  sequence += 1;
+  events.push({
+    sequence,
+    item: {
+      kind: 'assistant',
+      payload: {
+        content: '',
+        tool_calls: [
+          {
+            id: 'duplicate-plan',
+            name: 'plan',
+            arguments: JSON.stringify({
+              steps: [{ title: 'duplicate baseline', status: 'in_progress' }],
+            }),
+          },
+          {
+            id: 'duplicate-plan',
+            name: 'plan',
+            arguments: JSON.stringify({
+              steps: [{ title: 'duplicate baseline', status: 'completed' }],
+            }),
+          },
+        ],
+      },
+    },
+  });
+  viewer.events = viewer.eventLog(events);
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+
+  await expect(page.locator('.step-delta-done')).toHaveCount(1);
+  await expect(page.locator('.step-delta-started')).toHaveCount(1);
+  await expect(page.locator('.step-delta-reopened')).toHaveText('reopened');
+  await expect(page.locator('.step-delta-paused')).toHaveText('paused');
+  await expect(page.locator('.step-delta-dropped')).toHaveCount(0);
+  const rejectedCall = page.locator('.tool-call').filter({ hasText: 'phantom step' });
+  await expect(rejectedCall.locator('.plan-args')).toHaveCount(0);
+  await rejectedCall.locator('summary').click();
+  await expect(rejectedCall.locator('.arg-key').first()).toHaveText('steps');
+  const malformed = page.locator('.tool-call').filter({ hasText: 'malformed-browser-plan' });
+  await malformed.locator('summary').click();
+  await expect(malformed.locator('.arg-key')).toHaveText(['steps', 'marker']);
+  const duplicatePlans = page.locator('.tool-call').filter({ hasText: 'duplicate baseline' });
+  await expect(duplicatePlans).toHaveCount(2);
+  await expect(duplicatePlans.locator('.step-delta')).toHaveCount(0);
+  expect(viewer.pageErrors).toEqual([]);
+});
+
+test('viewer prefetches and namespaces a persisted subrun transcript', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  viewer.events = viewer.eventLog([
+    {
+      sequence: 1,
+      item: { kind: 'user', payload: { content: 'Inspect the session viewer' } },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: '',
+          tool_calls: [{
+            id: 'explore-parent',
+            name: 'explore',
+            arguments: '{"query":"find the renderer"}',
+          }],
+        },
+      },
+    },
+    {
+      sequence: 3,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'explore-parent',
+          tool_name: 'explore',
+          content: 'Answer: use the child transcript.',
+          is_error: false,
+          brief: 'explore sr-2 (1 citation(s), 7 step(s))',
+        },
+      },
+    },
+    {
+      sequence: 4,
+      item: { kind: 'terminal', payload: { kind: 'finished', message: 'done' } },
+    },
+  ]);
+  const childId = 'viz-1-sr-2';
+  viewer.extraSessionRows = [{
+    key: childId,
+    id: childId,
+    root_label: '/workspace/.openseek',
+    is_marker: true,
+    last_active: 2,
+    first_prompt: 'Child renderer inspection',
+  }];
+  viewer.childEvents.set(childId, viewer.eventLog([
+    {
+      sequence: 1,
+      item: { kind: 'user', payload: { content: 'Child question' } },
+    },
+    {
+      sequence: 2,
+      item: { kind: 'assistant', payload: { content: 'Child answer' } },
+    },
+    {
+      sequence: 3,
+      item: { kind: 'terminal', payload: { kind: 'finished', message: 'submitted' } },
+    },
+  ], { id: childId, systemPrompt: 'You are the child fixture.' }));
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+
+  await expect.poll(() => viewer.apiRequests.some(url =>
+    new URL(url).pathname === `/api/sessions/${childId}`)).toBe(true);
+  await expect(page.locator('.subrun-link')).toHaveAttribute('href', '#s=viz-1-sr-2');
+  const nested = page.locator('.subrun-transcript');
+  await expect(nested).toHaveCount(1);
+  await expect(nested.locator('.subrun-transcript-label')).toContainText(
+    'Subagent transcript · viz-1-sr-2',
+  );
+  await expect(page.locator('#viz-1-sr-2--seq-1')).toContainText('Child question');
+  await expect(page.locator('#seq-1')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Model view' }).click();
+  await expect(page.locator('.subrun-transcript')).toHaveCount(0);
+  await expect(page.locator('.subrun-link')).toHaveAttribute('href', '#s=viz-1-sr-2');
+  expect(viewer.pageErrors).toEqual([]);
+});
+
+test('raw log shows total-second offsets and omits chips for unstamped events', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  viewer.events = viewer.eventLog([
+    {
+      sequence: 1,
+      ts: 1_000,
+      item: { kind: 'user', payload: { content: 'Inspect the session viewer' } },
+    },
+    {
+      sequence: 2,
+      ts: 2_250,
+      item: { kind: 'runtime_notice', payload: { content: 'working' } },
+    },
+    {
+      sequence: 3,
+      ts: 126_500,
+      item: { kind: 'terminal', payload: { kind: 'finished', message: 'done' } },
+    },
+  ]);
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+
+  await expect(page.locator('.card-ts')).toHaveText(['+0.0s', '+1.2s', '+125.5s']);
+  await expect(page.locator('.turn-summary')).toContainText('· 125.5s');
+
+  viewer.events = viewer.eventLog([
+    {
+      sequence: 1,
+      item: { kind: 'user', payload: { content: 'Inspect the session viewer' } },
+    },
+    {
+      sequence: 2,
+      item: { kind: 'terminal', payload: { kind: 'finished', message: 'done' } },
+    },
+  ]);
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+  await expect(page.locator('.card-ts')).toHaveCount(0);
+  await expect(page.locator('.turn-summary')).not.toContainText('· 125.5s');
+  expect(viewer.pageErrors).toEqual([]);
+});
+
 test('viewer classifies mbtx failure stages and filters to build diagnostics', async ({ page }) => {
   const viewer = new VizBrowserHarness(page);
   await viewer.install();

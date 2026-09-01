@@ -5,6 +5,10 @@ export class VizBrowserHarness {
     this.page = page;
     this.pageErrors = [];
     this.apiRequests = [];
+    this.extraSessionRows = [];
+    // Child logs stay separate from the parent envelope so the app must find
+    // them through the listing and issue its normal subrun prefetch request.
+    this.childEvents = new Map();
     this.events = [
       JSON.stringify({
         version: 1,
@@ -293,14 +297,32 @@ export class VizBrowserHarness {
         last_active: 1,
         first_prompt: 'Inspect the session viewer',
       },
+      ...this.extraSessionRows,
     ];
   }
 
-  sessionEnvelope() {
+  eventLog(items, { id = 'viz-1', systemPrompt = 'You are a browser fixture.' } = {}) {
+    // Build the same newline-delimited file the server streams. Keeping this
+    // on the harness makes custom edge cases readable without inventing a
+    // second parser or a test-only model representation.
+    return [
+      JSON.stringify({ version: 1, id, system_prompt: systemPrompt }),
+      // The durable wire always carries `ts`; zero is its legacy spelling for
+      // an unstamped event. Make omission in a test case mean that exact wire
+      // value instead of producing an invalid JSONL line.
+      ...items.map(item => JSON.stringify({ ts: 0, ...item })),
+    ].join('\n') + '\n';
+  }
+
+  sessionEnvelope(id = 'viz-1') {
+    const events = id === 'viz-1' ? this.events : this.childEvents.get(id);
+    if (events === undefined) {
+      return { found: false, events: '', events_bytes: 0 };
+    }
     return {
       found: true,
-      events: this.events,
-      events_bytes: this.events.length,
+      events,
+      events_bytes: events.length,
     };
   }
 
@@ -337,9 +359,10 @@ export class VizBrowserHarness {
           body: JSON.stringify(this.sessionRows()),
         });
       }
+      const id = decodeURIComponent(url.pathname.slice('/api/sessions/'.length));
       return route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify(this.sessionEnvelope()),
+        body: JSON.stringify(this.sessionEnvelope(id)),
       });
     });
   }

@@ -8,6 +8,10 @@ export class DesktopBrowserHarness {
     // failed, and retry states without replacing its Rabbita update logic.
     this.rpcErrors = new Map();
     this.rpcDelays = new Map();
+    this.textSearchMatches = [];
+    this.textSearchMatchCount = undefined;
+    this.textSearchLimitHit = false;
+    this.directoryEntries = {};
     // Requests mutate the same fixture snapshots a real Desktop host would
     // return on the next list/read. That lets browser tests verify complete
     // UI -> RPC -> refreshed-DOM flows instead of stopping at button clicks.
@@ -75,6 +79,10 @@ export class DesktopBrowserHarness {
         '',
       ].join('\n'),
     };
+    // Transcript images use the same fs.read_file RPC as text files, but the
+    // real host returns bytes plus a verified media type. Tests opt into that
+    // response per path instead of bypassing the product image loader.
+    this.binaryFiles = {};
     this.gitFilesByRevision = {
       [this.gitBaseline]: {
         'src/main.mbt': [
@@ -476,7 +484,7 @@ export class DesktopBrowserHarness {
             id: 'session-1',
             events: this.sessionEvents,
           },
-          watermark: 17,
+          watermark: this.sessionEvents.at(-1)?.sequence || 0,
         };
       case 'agent.runs':
         return { runs: [], settled: [], approvals: [] };
@@ -724,7 +732,7 @@ export class DesktopBrowserHarness {
       case 'git.original_file':
         return this.gitOriginalFile(request.params || {});
       case 'fs.read_directory':
-        return { entries: [] };
+        return { entries: this.directoryEntries[request.params?.path] || [] };
       case 'fs.read_file':
         return this.readWorkingFile(request.params || {});
       case 'fs.browse':
@@ -738,6 +746,16 @@ export class DesktopBrowserHarness {
           files: ['src/main.mbt', 'README.md'],
           from_cache: false,
           limit_hit: false,
+          cancelled: false,
+        };
+      case 'fs.search_text':
+        return {
+          root: request.params?.root,
+          generation: request.params?.generation,
+          matches: this.textSearchMatches,
+          match_count: this.textSearchMatchCount ?? this.textSearchMatches.length,
+          file_count: new Set(this.textSearchMatches.map(match => match.path)).size,
+          limit_hit: this.textSearchLimitHit,
           cancelled: false,
         };
       case 'agent.approval':
@@ -784,6 +802,14 @@ export class DesktopBrowserHarness {
     const absolute = params.path;
     const prefix = '/workspace/';
     const path = absolute?.startsWith(prefix) ? absolute.slice(prefix.length) : absolute;
+    const binary = this.binaryFiles[path];
+    if (binary !== undefined) {
+      return {
+        kind: 'binary_content',
+        data_base64: binary.data_base64,
+        media_type: binary.media_type,
+      };
+    }
     const content = this.workingFiles[path];
     if (content === undefined) {
       return { kind: 'binary' };
