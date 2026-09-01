@@ -34,6 +34,34 @@ async test "surfaces a compile error via moon's own diagnostics" {
   assert_true(
     out.content.to_lower().contains("type") || out.content.contains("String"),
   )
+  // ...and CLASSIFIED as one: moon exits 1 for a rejected build and a trapped
+  // program alike, so the report itself must say the program never ran.
+  assert_true(out.content.contains("COMPILE error"))
+  assert_true(out.content.contains("never ran"))
+  assert_true(out.brief is Some("mbtx (compile error)"))
+}
+
+///|
+/// The classifier is structural (the build artifact probe), so program OUTPUT
+/// cannot sway it: compiler-diagnostic-shaped text is routinely a snippet's
+/// legitimate output — a child `moon check` run prints exactly that — and must
+/// not turn a runtime trap into a "compile error" or taint a clean exit.
+async test "a runtime trap is classified as runtime, whatever the output says" {
+  let out = run(
+    "fn main { println(\"Error: [4014] fake diagnostic\"); panic() }",
+  )
+  assert_true(out.is_error)
+  assert_true(out.content.contains("at RUNTIME"))
+  assert_true(out.content.contains("compiled and ran"))
+  assert_false(out.content.contains("COMPILE error"))
+}
+
+///|
+async test "diagnostic-shaped output with a clean exit stays unclassified" {
+  let out = run("fn main { println(\"Error: [4014] fake diagnostic\") }")
+  assert_false(out.is_error)
+  assert_false(out.content.contains("COMPILE error"))
+  assert_false(out.content.contains("at RUNTIME"))
 }
 
 ///|
@@ -949,6 +977,30 @@ async test "a runtime-less run uses its foreground timeout, not the handoff grac
     assert_false(output.is_error)
     assert_true(output.content.contains("finished inline"))
     assert_false(output.content.contains("moved to the background"))
+  })
+}
+
+///|
+/// A timeout during the BUILD is named as such: with a bound far below what
+/// any compile takes, the artifact probe finds nothing, and the report blames
+/// the build instead of hinting at an infinite loop in a program that never
+/// existed. (The compiled-side timeout wording is pinned by the `timeout_head`
+/// whitebox test; reaching it live would cost a full foreground timeout.)
+async test "a timeout before the build completes blames the build" {
+  @vfs.with_tmpdir(prefix="mbtx-timeout-build-", ws => {
+    let definition = @mbtx.definition(
+      workspace_root=ws,
+      foreground_timeout_ms=50,
+    )
+    let action = match definition.execute {
+      Async(execute) => execute({ "source": "fn main { println(1) }" })
+      Sync(_) => fail("mbtx should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    assert_true(output.content.contains("timed out"))
+    assert_true(output.content.contains("BUILD never completed"))
+    assert_true(output.content.contains("never ran"))
   })
 }
 

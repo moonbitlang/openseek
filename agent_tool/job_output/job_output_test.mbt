@@ -123,6 +123,35 @@ async test "job_output marks binary background output as a tool error" {
 }
 
 ///|
+/// The launcher's exit classification (mbtx separating a compile error from a
+/// runtime failure) is a line of its own between the output and the footer.
+#cfg(not(platform="windows"))
+async test "job_output surfaces the launcher's exit note for a finished job" {
+  @async.with_task_group(group => {
+    let scope : @agent_runtime.AgentTaskScope[Unit] = AgentTaskScope(group)
+    let bg = @bgjobs.BgJobRuntime(scope)
+    let exec = @shell_exec.ShellExecution::start(scope, program="sh", args=[
+      "-c", "printf trace; exit 3",
+    ])
+    let id = bg.adopt(exec, command="job", exit_note=code => {
+      match code {
+        Some(code) if code != 0 => Some("launcher: exit \{code} classified.")
+        _ => None
+      }
+    })
+    poll_bg_terminal(bg, id)
+    let output = run_job_output(bg, { "job_id": id })
+    assert_true(output.is_error)
+    // Output first, then the note, then the metadata footer.
+    assert_true(
+      output.content.contains(
+        "trace\nlauncher: exit 3 classified.\n<system>job=",
+      ),
+    )
+  })
+}
+
+///|
 #cfg(not(platform="windows"))
 async test "job_output errors on an unknown job id" {
   @async.with_task_group(group => {

@@ -17,6 +17,18 @@ reach workspace files, while snippet build artifacts stay out of your `_build`.
 Moon's single-file runner handles the inline import block, and compiler
 diagnostics are rewritten to stable `source:LINE:COL` locations.
 
+A failed run says **which stage failed**. `moon run` exits 1 for a rejected
+build and for a trapped program alike, so the tool probes the throwaway target
+dir for the runnable artifact moon links only after a successful build
+(`single/single.wasm`/`.js`/`.exe`): absence means a **compile error** (the
+program never ran), presence means the program **compiled, ran, and failed at
+runtime** — and a foreground timeout likewise says whether the build or the
+program is what never finished. The probe is structural on purpose: a snippet
+legitimately runs `moon check` as a child process, so compiler-diagnostic text
+in the output proves nothing about the snippet itself. For a run that was
+handed off, the same classification is computed when the job exits (before its
+build dir is reclaimed) and rides the completion notice and `job_output`.
+
 With the agent's background runtime, every call waits inline for up to five
 seconds. A still-running compile or program is then adopted as the same
 background execution: the call returns its job id, completion is pushed later,

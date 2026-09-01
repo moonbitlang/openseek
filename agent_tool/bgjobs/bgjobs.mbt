@@ -110,6 +110,16 @@ priv struct BgJob {
   // Cleared before invocation so cleanup is exactly once even if more terminal
   // observers are added later.
   mut on_terminal : (async () -> Unit)?
+  // Optional launcher-supplied classification of a terminal exit (mbtx uses it
+  // to separate "the snippet never compiled" from "the program ran and
+  // failed"). Called with the exit code (`None` for a killed job) once the
+  // process is terminal — BEFORE `on_terminal`, because the classifier's
+  // evidence is often exactly what that cleanup deletes. Deliberately NOT
+  // cleared after use: a concurrent first computation must find the same
+  // closure and cache the same answer, never a spurious `None`.
+  exit_note_fn : (async (Int?) -> String?)?
+  mut exit_note_cached : Bool
+  mut exit_note : String?
   // A terminal denial scan may read a large retained log. Cache its
   // classification so repeated job_output calls do not repeat that allocation.
   mut denial_scanned : Bool
@@ -144,6 +154,10 @@ pub struct BgJobSnapshot {
   // The job was killed by the wall-clock reaper (outlived hard_timeout_ms),
   // not stopped on request — surfaced for the same reason.
   killed_by_time_limit : Bool
+  // The launcher's cached classification of a terminal exit, `None` until the
+  // exit watcher computes it (or when there is nothing to say). Readers that
+  // must not race that computation use `BgJobRuntime::exit_note` instead.
+  exit_note : String?
 }
 
 ///|
@@ -279,6 +293,7 @@ pub async fn BgJobRuntime::start(
     output_rewrites~,
     moonrun_policy_active~,
     on_terminal=None,
+    exit_note_fn=None,
   )
   id
 }
@@ -288,6 +303,12 @@ pub async fn BgJobRuntime::start(
 /// its id. Used by detach-on-timeout: a foreground command that outlived its
 /// timeout is `background()`-ed and adopted here, so `shell_output`/`shell_stop`
 /// and the completion notice see it like any explicit background job.
+///
+/// `exit_note` lets the launcher classify the exit for readers of the finished
+/// job (the completion notice, `job_output`): it is called with the exit code
+/// (`None` for a killed job) once the process is terminal, before `on_terminal`
+/// reclaims launcher resources — so it may still read evidence that cleanup is
+/// about to delete — and its answer is cached on the job.
 pub fn BgJobRuntime::adopt(
   self : BgJobRuntime,
   exec : @shell_exec.ShellExecution,
@@ -298,6 +319,7 @@ pub fn BgJobRuntime::adopt(
   output_rewrites? : Array[(String, String)] = [],
   moonrun_policy_active? : Bool = false,
   on_terminal? : async () -> Unit,
+  exit_note? : async (Int?) -> String?,
 ) -> String {
   let id = self.next_id()
   self.register(
@@ -310,6 +332,7 @@ pub fn BgJobRuntime::adopt(
     output_rewrites~,
     moonrun_policy_active~,
     on_terminal~,
+    exit_note_fn=exit_note,
   )
   id
 }
@@ -327,6 +350,7 @@ fn BgJobRuntime::register(
   output_rewrites~ : Array[(String, String)],
   moonrun_policy_active~ : Bool,
   on_terminal~ : (async () -> Unit)?,
+  exit_note_fn~ : (async (Int?) -> String?)?,
 ) -> Unit {
   self.jobs[id] = {
     id,
@@ -338,6 +362,9 @@ fn BgJobRuntime::register(
     output_rewrites: output_rewrites.copy(),
     moonrun_policy_active,
     on_terminal,
+    exit_note_fn,
+    exit_note_cached: false,
+    exit_note: None,
     denial_scanned: false,
     denial_feedback: None,
   }
@@ -350,6 +377,12 @@ fn BgJobRuntime::register(
   // `snapshot(id)` always resolves.
   (self.spawn_watcher)(() => {
     exec.wait()
+    // Compute (and cache) the launcher's exit note FIRST: its evidence — an
+    // mbtx build artifact, say — is often exactly what the terminal cleanup
+    // below deletes. Advisory, so a failed or cancelled classification must
+    // not skip that cleanup.
+    let _ = self.exit_note(id) catch { _ => None }
+
     // The output spill belongs to the runtime, but a launcher may also have
     // handed the job a separate build directory. Reclaim that directory for
     // natural exit, watchdog kills, and requested stops alike.
@@ -411,7 +444,38 @@ fn BgJob::to_snapshot(self : BgJob) -> BgJobSnapshot {
     moonrun_policy_active: self.moonrun_policy_active,
     killed_by_output_limit: self.exec.killed_by_output_limit(),
     killed_by_time_limit: self.exec.killed_by_time_limit(),
+    exit_note: self.exit_note,
   }
+}
+
+///|
+/// The launcher's classification of a terminal job's exit — `None` while the
+/// job still runs, when the launcher supplied no classifier, or when it had
+/// nothing to say. Computed once and cached: the exit watcher calls this
+/// before `on_terminal`, so the classifier may read launcher resources that
+/// cleanup is about to reclaim, and every later reader hits the cache. A
+/// caller racing that first computation recomputes from the same still-intact
+/// evidence and caches the same answer, so the race is benign.
+pub async fn BgJobRuntime::exit_note(
+  self : BgJobRuntime,
+  id : String,
+) -> String? {
+  guard self.jobs.get(id) is Some(job) else { return None }
+  guard !(bg_status(job.exec.status()) is Running) else { return None }
+  if job.exit_note_cached {
+    return job.exit_note
+  }
+  let note = match job.exit_note_fn {
+    Some(classify) =>
+      classify(job.exec.exit_code()) catch {
+        error if @async.is_being_cancelled() => raise error
+        _ => None
+      }
+    None => None
+  }
+  job.exit_note = note
+  job.exit_note_cached = true
+  note
 }
 
 ///|
@@ -628,6 +692,72 @@ async test "adopt registers an already-running execution as a job" {
     assert_true(rt.snapshot(id).unwrap().read_only_review)
     assert_true(rt.stop(id))
     assert_true(rt.snapshot(id).unwrap().status is Stopped)
+  })
+}
+
+///|
+/// The exit note must be computed while the launcher's evidence still exists:
+/// the classifier here observes the cleanup flag that `on_terminal` flips, and
+/// a note computed after cleanup would misclassify every launcher whose
+/// evidence lives in the directory that cleanup reclaims (mbtx's build
+/// artifact probe is exactly that).
+#cfg(not(platform="windows"))
+async test "the exit note is computed before terminal cleanup" {
+  @async.with_task_group(group => {
+    let scope : @agent_runtime.AgentTaskScope[Unit] = AgentTaskScope(group)
+    let rt = BgJobRuntime::BgJobRuntime(scope)
+    let exec = @shell_exec.ShellExecution::start(scope, program="sh", args=[
+      "-c", "exit 3",
+    ])
+    let received : Array[Int?] = []
+    let mut cleaned = false
+    let id = rt.adopt(
+      exec,
+      command="exit 3",
+      exit_note=code => {
+        received.push(code)
+        Some("cleaned=\{cleaned}")
+      },
+      on_terminal=() => cleaned = true,
+    )
+    for _ in 0..<200 {
+      if cleaned {
+        break
+      }
+      @async.sleep(5)
+    }
+    assert_true(cleaned)
+    assert_true(rt.exit_note(id) is Some("cleaned=false"))
+    // The classifier saw the real exit code, exactly once.
+    assert_true(received is [Some(3)])
+    // The cached note is also on the snapshot for sync readers (the notice).
+    assert_true(rt.snapshot(id).unwrap().exit_note is Some("cleaned=false"))
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "exit_note is None while running and a kill carries no exit code" {
+  @async.with_task_group(group => {
+    let scope : @agent_runtime.AgentTaskScope[Unit] = AgentTaskScope(group)
+    let rt = BgJobRuntime::BgJobRuntime(scope)
+    let exec = @shell_exec.ShellExecution::start(scope, program="sleep", args=[
+      "30",
+    ])
+    let id = rt.adopt(exec, command="sleep 30", exit_note=code => {
+      Some("code=\{Repr(code)}")
+    })
+    @async.sleep(50)
+    // No classification before the job is terminal.
+    assert_true(rt.exit_note(id) is None)
+    assert_true(rt.stop(id))
+    // A killed job has no exit code of its own to classify.
+    assert_true(rt.exit_note(id) is Some("code=None"))
+    // A job whose launcher supplied no classifier stays unclassified.
+    let plain = rt.start(program="sh", args=["-c", "exit 2"], command="exit 2")
+    let _ = poll_until_terminal(rt, plain)
+    assert_true(rt.exit_note(plain) is None)
+    assert_true(rt.exit_note("nope") is None)
   })
 }
 

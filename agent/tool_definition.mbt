@@ -15,7 +15,15 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
       }
     Running => "running"
   }
-  "background job \{snapshot.id} finished (\{status}): `\{snapshot.command}` — read its output with job_output (job_id=\"\{snapshot.id}\")."
+  // The launcher's exit classification rides along (e.g. mbtx naming a failed
+  // job a compile error vs a runtime failure): the notice is where the model
+  // first learns the outcome, and the snapshot's cached note is reliable here
+  // because on_job_exit fires only after the exit watcher computed it.
+  let note = match snapshot.exit_note {
+    Some(note) => " \{note}"
+    None => ""
+  }
+  "background job \{snapshot.id} finished (\{status}): `\{snapshot.command}` — read its output with job_output (job_id=\"\{snapshot.id}\").\{note}"
 }
 
 ///|
@@ -687,6 +695,50 @@ async test "a finished background job queues a notice and wakes the controller" 
     assert_true(woke)
     let steers = runtime.drain_steers()
     assert_true(steers.any(s => s is Notice(_)))
+  })
+}
+
+///|
+/// A compile error that only surfaces AFTER the handoff is still classified:
+/// the adopted job's exit note is computed at terminal time (before the build
+/// dir is reclaimed) and rides the completion notice, so the model learns the
+/// snippet never built without spending another tool call.
+async test "a handed-off compile error is classified in its completion notice" {
+  @async.with_task_group(group => {
+    let scope = @agent_runtime.AgentTaskScope(group)
+    let notices : Array[String] = []
+    let spill_dir = @fs.tmpdir(prefix="openseek-jobs-note-")
+    let bg_runtime = @bgjobs.BgJobRuntime(scope, spill_dir~, on_job_exit=snapshot => {
+      notices.push(background_notice_text(snapshot))
+    })
+    let mbtx = @mbtx.definition(
+      workspace_root=".",
+      bg_runtime~,
+      job_dir=spill_dir,
+      // Hand off before the compiler can possibly finish, so the failure is
+      // only discoverable at the job's terminal transition.
+      auto_background_after_ms=1,
+    )
+    let action = match mbtx.execute {
+      Async(execute) =>
+        execute({ "source": "fn main { let _x : Int = 1 + \"nope\" }" })
+      Sync(_) => fail("mbtx should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_true(output.content.contains("moved to the background"))
+    // Generous budget: the job still runs the whole (failing) build.
+    for _ in 0..<2400 {
+      if notices.length() > 0 {
+        break
+      }
+      @async.sleep(25)
+    }
+    guard notices is [notice, ..] else { fail("no completion notice arrived") }
+    assert_true(notice.contains("COMPILE error"))
+    assert_true(notice.contains("never ran"))
+    @fs.rmdir(spill_dir, recursive=true) catch {
+      _ => ()
+    }
   })
 }
 

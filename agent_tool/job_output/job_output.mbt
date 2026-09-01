@@ -112,6 +112,11 @@ async fn execute(
   } else {
     bg_runtime.terminal_denial_feedback(job_id)
   }
+  // The launcher's classification of a terminal exit (mbtx separating a
+  // compile error from a runtime failure). The async accessor, not the
+  // snapshot field: a read racing the exit must compute the note itself
+  // rather than silently show none.
+  let exit_note = bg_runtime.exit_note(job_id)
   let is_error = exit_error ||
     snapshot.had_invalid_utf8 ||
     sandbox_denied is Some(_)
@@ -136,14 +141,20 @@ async fn execute(
     ""
   }
   let footer = "<system>job=\{job_id} \{status_label}\{truncation}\{binary}</system>"
-  // Assemble: output, then the source-write denial guidance (like the foreground
-  // path), then the `<system>` footer LAST so it stays the trailing metadata line.
+  // Assemble: output, then the launcher's exit classification (it frames the
+  // output just shown), then the source-write denial guidance (like the
+  // foreground path), then the `<system>` footer LAST so it stays the trailing
+  // metadata line.
   let content = StringBuilder()
   if output != "" {
     content.write_string(output)
     if !output.has_suffix("\n") {
       content.write_string("\n")
     }
+  }
+  if exit_note is Some(note) {
+    content.write_string(note)
+    content.write_string("\n")
   }
   if sandbox_denied is Some(guidance) {
     content.write_string(guidance)
