@@ -111,18 +111,39 @@ priv struct BgJob {
   // observers are added later.
   mut on_terminal : (async () -> Unit)?
   // Optional launcher-supplied classification of a terminal exit (mbtx uses it
-  // to separate "the snippet never built" from "the program ran and failed").
-  // Called with the exit code (`None` for a killed job) once the process is
-  // terminal — BEFORE `on_terminal`, because the classifier's evidence is
-  // often exactly what that cleanup deletes. It must settle promptly: a
-  // waiter (the exit watcher included, so cleanup too) blocks on an in-flight
-  // computation.
-  exit_note_fn : (async (Int?) -> String?)?
+  // to separate "the snippet never built" from "the failure came from the
+  // run"). Called with the job's `BgJobExit` once the process is terminal —
+  // BEFORE `on_terminal`, because the classifier's evidence is often exactly
+  // what that cleanup deletes. It must settle promptly: a waiter (the exit
+  // watcher included, so cleanup too) blocks on an in-flight computation.
+  exit_note_fn : (async (BgJobExit) -> String?)?
   mut exit_note_state : ExitNoteState
   // A terminal denial scan may read a large retained log. Cache its
   // classification so repeated job_output calls do not repeat that allocation.
   mut denial_scanned : Bool
   mut denial_feedback : String?
+}
+
+///|
+/// What a launcher's exit classifier is given: the exit code (`None` when the
+/// process was killed rather than exiting) plus which watchdog, if any, did
+/// the killing — so a classifier can still name the failed stage for a job
+/// the reaper or the output cap terminated, while staying silent for a
+/// requested stop.
+pub struct BgJobExit {
+  exit_code : Int?
+  killed_by_output_limit : Bool
+  killed_by_time_limit : Bool
+}
+
+///|
+/// A launcher's exit classification as readers receive it: the note itself,
+/// or the fact that classification FAILED — a distinct variant, because a
+/// failure folded into an ordinary note string could never be told apart
+/// from a launcher that legitimately had something to say.
+pub enum BgJobExitNote {
+  Note(String)
+  ClassificationFailed(String)
 }
 
 ///|
@@ -134,7 +155,7 @@ priv struct BgJob {
 priv enum ExitNoteState {
   NotComputed
   Computing
-  Cached(String?)
+  Cached(BgJobExitNote?)
 }
 
 ///|
@@ -168,7 +189,7 @@ pub struct BgJobSnapshot {
   // The launcher's cached classification of a terminal exit, `None` until the
   // exit watcher computes it (or when there is nothing to say). Readers that
   // must not race that computation use `BgJobRuntime::exit_note` instead.
-  exit_note : String?
+  exit_note : BgJobExitNote?
 }
 
 ///|
@@ -316,10 +337,11 @@ pub async fn BgJobRuntime::start(
 /// and the completion notice see it like any explicit background job.
 ///
 /// `exit_note` lets the launcher classify the exit for readers of the finished
-/// job (the completion notice, `job_output`): it is called with the exit code
-/// (`None` for a killed job) once the process is terminal, before `on_terminal`
-/// reclaims launcher resources — so it may still read evidence that cleanup is
-/// about to delete — and its answer is cached on the job.
+/// job (the completion notice, `job_output`): it is called with the job's
+/// `BgJobExit` (exit code plus watchdog-kill flags, so a reaped or flooding
+/// job can still be classified) once the process is terminal, before
+/// `on_terminal` reclaims launcher resources — so it may still read evidence
+/// that cleanup is about to delete — and its answer is cached on the job.
 pub fn BgJobRuntime::adopt(
   self : BgJobRuntime,
   exec : @shell_exec.ShellExecution,
@@ -330,7 +352,7 @@ pub fn BgJobRuntime::adopt(
   output_rewrites? : Array[(String, String)] = [],
   moonrun_policy_active? : Bool = false,
   on_terminal? : async () -> Unit,
-  exit_note? : async (Int?) -> String?,
+  exit_note? : async (BgJobExit) -> String?,
 ) -> String {
   let id = self.next_id()
   self.register(
@@ -361,7 +383,7 @@ fn BgJobRuntime::register(
   output_rewrites~ : Array[(String, String)],
   moonrun_policy_active~ : Bool,
   on_terminal~ : (async () -> Unit)?,
-  exit_note_fn~ : (async (Int?) -> String?)?,
+  exit_note_fn~ : (async (BgJobExit) -> String?)?,
 ) -> Unit {
   self.jobs[id] = {
     id,
@@ -474,7 +496,7 @@ fn BgJob::to_snapshot(self : BgJob) -> BgJobSnapshot {
 pub async fn BgJobRuntime::exit_note(
   self : BgJobRuntime,
   id : String,
-) -> String? {
+) -> BgJobExitNote? {
   guard self.jobs.get(id) is Some(job) else { return None }
   guard !(bg_status(job.exec.status()) is Running) else { return None }
   for ;; {
@@ -490,7 +512,12 @@ pub async fn BgJobRuntime::exit_note(
           return None
         }
         job.exit_note_state = Computing
-        let note = classify(job.exec.exit_code()) catch {
+        let exit : BgJobExit = {
+          exit_code: job.exec.exit_code(),
+          killed_by_output_limit: job.exec.killed_by_output_limit(),
+          killed_by_time_limit: job.exec.killed_by_time_limit(),
+        }
+        let note = classify(exit).map(text => BgJobExitNote::Note(text)) catch {
           error if @async.is_being_cancelled() => {
             // A cancelled computation decided nothing: release the flight so
             // the next caller (usually the exit watcher) computes, instead of
@@ -498,10 +525,10 @@ pub async fn BgJobRuntime::exit_note(
             job.exit_note_state = NotComputed
             raise error
           }
-          // A real classifier failure is an answer of its own — caching it as
-          // "nothing to say" would silently erase the failure stage from the
-          // notice and job_output.
-          error => Some("exit-stage classification failed (\{error}).")
+          // A real classifier failure is an answer of its own, and a TYPED
+          // one: folded into an ordinary note string it could never be told
+          // apart from a launcher that had something to say.
+          error => Some(ClassificationFailed("\{error}"))
         }
         job.exit_note_state = Cached(note)
         return note
@@ -746,8 +773,8 @@ async test "the exit note is computed before terminal cleanup" {
     let id = rt.adopt(
       exec,
       command="exit 3",
-      exit_note=code => {
-        received.push(code)
+      exit_note=exit => {
+        received.push(exit.exit_code)
         Some("cleaned=\{cleaned}")
       },
       on_terminal=() => cleaned = true,
@@ -759,11 +786,13 @@ async test "the exit note is computed before terminal cleanup" {
       @async.sleep(5)
     }
     assert_true(cleaned)
-    assert_true(rt.exit_note(id) is Some("cleaned=false"))
+    assert_true(rt.exit_note(id) is Some(Note("cleaned=false")))
     // The classifier saw the real exit code, exactly once.
     assert_true(received is [Some(3)])
     // The cached note is also on the snapshot for sync readers (the notice).
-    assert_true(rt.snapshot(id).unwrap().exit_note is Some("cleaned=false"))
+    assert_true(
+      rt.snapshot(id).unwrap().exit_note is Some(Note("cleaned=false")),
+    )
   })
 }
 
@@ -802,8 +831,8 @@ async test "a reader racing the exit watcher joins its flight, never recomputes"
       }
       @async.sleep(5)
     }
-    assert_true(rt.exit_note(id) is Some("present"))
-    assert_true(rt.snapshot(id).unwrap().exit_note is Some("present"))
+    assert_true(rt.exit_note(id) is Some(Note("present")))
+    assert_true(rt.snapshot(id).unwrap().exit_note is Some(Note("present")))
     assert_eq(calls, 1)
   })
 }
@@ -824,11 +853,33 @@ async test "a failing classifier is reported, not silently dropped" {
       fail("probe exploded")
     })
     let _ = rt.wait_exit(id, 30_000)
-    guard rt.exit_note(id) is Some(note) else {
-      fail("expected a tagged failure note")
+    // The failure arrives as its own VARIANT, never mistakable for a note the
+    // launcher chose to write.
+    guard rt.exit_note(id) is Some(ClassificationFailed(reason)) else {
+      fail("expected a typed classification failure")
     }
-    assert_true(note.contains("classification failed"))
-    assert_true(note.contains("probe exploded"))
+    assert_true(reason.contains("probe exploded"))
+  })
+}
+
+///|
+/// A watchdog kill still reaches the classifier, with the flag that lets it
+/// name the failed stage — a job reaped mid-build and one reaped mid-run look
+/// identical in the kill status alone.
+#cfg(not(platform="windows"))
+async test "a watchdog kill is classified with its flag set" {
+  @async.with_task_group(group => {
+    let scope : @agent_runtime.AgentTaskScope[Unit] = AgentTaskScope(group)
+    let rt = BgJobRuntime::BgJobRuntime(scope, hard_timeout_ms=80)
+    let exec = @shell_exec.ShellExecution::start(scope, program="sleep", args=[
+      "30",
+    ])
+    let id = rt.adopt(exec, command="sleep 30", exit_note=exit => {
+      Some("time_capped=\{exit.killed_by_time_limit}")
+    })
+    let snapshot = poll_until_terminal(rt, id)
+    assert_true(snapshot.killed_by_time_limit)
+    assert_true(rt.exit_note(id) is Some(Note("time_capped=true")))
   })
 }
 
@@ -841,15 +892,19 @@ async test "exit_note is None while running and a kill carries no exit code" {
     let exec = @shell_exec.ShellExecution::start(scope, program="sleep", args=[
       "30",
     ])
-    let id = rt.adopt(exec, command="sleep 30", exit_note=code => {
-      Some("code=\{Repr(code)}")
+    let id = rt.adopt(exec, command="sleep 30", exit_note=exit => {
+      Some(
+        "code=\{Repr(exit.exit_code)} watchdog=\{exit.killed_by_output_limit || exit.killed_by_time_limit}",
+      )
     })
     @async.sleep(50)
     // No classification before the job is terminal.
     assert_true(rt.exit_note(id) is None)
     assert_true(rt.stop(id))
-    // A killed job has no exit code of its own to classify.
-    assert_true(rt.exit_note(id) is Some("code=None"))
+    // A killed job has no exit code of its own to classify, and a REQUESTED
+    // stop raises neither watchdog flag — the metadata a launcher needs to
+    // stay silent here while still classifying reaped or flooding jobs.
+    assert_true(rt.exit_note(id) is Some(Note("code=None watchdog=false")))
     // A job whose launcher supplied no classifier stays unclassified.
     let plain = rt.start(program="sh", args=["-c", "exit 2"], command="exit 2")
     let _ = poll_until_terminal(rt, plain)

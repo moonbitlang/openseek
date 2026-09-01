@@ -113,9 +113,9 @@ async fn execute(
     bg_runtime.terminal_denial_feedback(job_id)
   }
   // The launcher's classification of a terminal exit (mbtx separating a
-  // compile error from a runtime failure). The async accessor, not the
-  // snapshot field: a read racing the exit must compute the note itself
-  // rather than silently show none.
+  // build failure from a runtime one). The async accessor, not the snapshot
+  // field: a read racing the exit must join the in-flight computation rather
+  // than silently show none.
   let exit_note = bg_runtime.exit_note(job_id)
   let is_error = exit_error ||
     snapshot.had_invalid_utf8 ||
@@ -152,9 +152,20 @@ async fn execute(
       content.write_string("\n")
     }
   }
-  if exit_note is Some(note) {
-    content.write_string(note)
-    content.write_string("\n")
+  match exit_note {
+    Some(Note(note)) => {
+      content.write_string(note)
+      content.write_string("\n")
+    }
+    // A failed classification is reported AS a failure, never disguised as a
+    // note the launcher chose to write. It does not flip `is_error`: the
+    // job's own outcome above is intact, and erroring the read would send
+    // the model chasing a job that may have exited 0.
+    Some(ClassificationFailed(reason)) => {
+      content.write_string("[exit-stage classification failed: \{reason}]")
+      content.write_string("\n")
+    }
+    None => ()
   }
   if sandbox_denied is Some(guidance) {
     content.write_string(guidance)

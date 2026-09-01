@@ -548,8 +548,8 @@ async fn execute(
         // Classify the exit for whoever reads the finished job (the completion
         // notice, job_output). The runtime calls this before `terminal_cleanup`
         // reclaims the build subtree, while the artifact is still on disk.
-        exit_note=exit_code => {
-          match exit_code {
+        exit_note=exit => {
+          match exit.exit_code {
             Some(code) if code != 0 =>
               match snippet_compiled(build_dir, input.target) {
                 Some(true) =>
@@ -563,9 +563,29 @@ async fn execute(
                 // The probe itself failed: claim nothing rather than guess.
                 None => None
               }
-            // A success needs no classifying, and a killed job's stop reason is
-            // already named by the reader.
-            Some(_) | None => None
+            // A success needs no classifying.
+            Some(_) => None
+            // A watchdog kill (the wall-clock reaper, the output cap) still
+            // deserves a stage: a build stalled for the whole cap and a
+            // program that hung after a clean build are different problems
+            // hiding behind the same kill status. A REQUESTED stop says
+            // nothing about the work and is left unclassified.
+            None =>
+              if exit.killed_by_output_limit || exit.killed_by_time_limit {
+                match snippet_compiled(build_dir, input.target) {
+                  Some(true) =>
+                    Some(
+                      "mbtx: the BUILD had completed — the kill landed on the run.",
+                    )
+                  Some(false) =>
+                    Some(
+                      "mbtx: the job was killed while still BUILDING — the build never completed, so the program never ran.",
+                    )
+                  None => None
+                }
+              } else {
+                None
+              }
           }
         },
         on_terminal=terminal_cleanup,
@@ -763,15 +783,16 @@ fn finished_body(text : String, exit_code : Int, compiled~ : Bool?) -> String {
     }
   }
   match compiled {
-    // The build's own exit code (always 1) adds nothing over its diagnostics.
+    // The exit code is moon's here, and it is kept: it is NOT always 1 (a
+    // dependency-cache fault exits 255), and distinct codes are diagnostic.
     // "BUILD failed", not "compile error": no artifact proves the program
     // never ran, while the output below is what says whether the compiler
     // rejected `source` or the toolchain/dependencies faulted.
     Some(false) =>
       if text.is_blank() {
-        "mbtx: the BUILD failed with no output — the program never ran"
+        "mbtx: the BUILD failed (exit \{exit_code}) with no output — the program never ran"
       } else {
-        "[mbtx: BUILD failed — the program never ran; the output below is the build's]\n\{text}"
+        "[mbtx: BUILD failed (exit \{exit_code}) — the program never ran; the output below is the build's]\n\{text}"
       }
     // "From the run, not the build" is all presence proves: the run step
     // includes launching the runner, so a missing `node` lands here too —
@@ -794,7 +815,7 @@ fn finished_body(text : String, exit_code : Int, compiled~ : Bool?) -> String {
 ///|
 fn finished_brief(exit_code : Int, compiled~ : Bool?) -> String {
   if exit_code != 0 && compiled is Some(false) {
-    "mbtx (build failed)"
+    "mbtx (build failed, exit=\{exit_code})"
   } else {
     "mbtx (exit=\{exit_code})"
   }

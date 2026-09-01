@@ -16,11 +16,14 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
     Running => "running"
   }
   // The launcher's exit classification rides along (e.g. mbtx naming a failed
-  // job a compile error vs a runtime failure): the notice is where the model
+  // job a build failure vs a runtime one): the notice is where the model
   // first learns the outcome, and the snapshot's cached note is reliable here
-  // because on_job_exit fires only after the exit watcher computed it.
+  // because on_job_exit fires only after the exit watcher computed it. A
+  // failed classification is named as such rather than shown as a note.
   let note = match snapshot.exit_note {
-    Some(note) => " \{note}"
+    Some(Note(note)) => " \{note}"
+    Some(ClassificationFailed(reason)) =>
+      " (exit-stage classification failed: \{reason})"
     None => ""
   }
   "background job \{snapshot.id} finished (\{status}): `\{snapshot.command}` — read its output with job_output (job_id=\"\{snapshot.id}\").\{note}"

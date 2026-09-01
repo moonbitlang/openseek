@@ -30,9 +30,11 @@ build or the run is what never finished. A probe fault claims neither stage and 
 report. The probe is structural on purpose: a snippet legitimately runs
 `moon check` as a child process, so compiler-diagnostic text in the output
 proves nothing about the snippet itself. For a run that was handed off, the
-same classification is computed when the job exits (before its build dir is
-reclaimed, and single-flight so a racing `job_output` read can never cache a
-stale answer) and rides the completion notice and `job_output`.
+same classification is computed when the job becomes terminal (before its
+build dir is reclaimed, and single-flight so a racing `job_output` read can
+never cache a stale answer) and rides the completion notice and `job_output` —
+including for a watchdog-killed job, where it says whether the kill landed on
+a still-running build or on the run; only a requested stop goes unclassified.
 
 With the agent's background runtime, every call waits inline for up to five
 seconds. A still-running compile or program is then adopted as the same

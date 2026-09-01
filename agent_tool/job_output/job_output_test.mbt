@@ -133,8 +133,8 @@ async test "job_output surfaces the launcher's exit note for a finished job" {
     let exec = @shell_exec.ShellExecution::start(scope, program="sh", args=[
       "-c", "printf trace; exit 3",
     ])
-    let id = bg.adopt(exec, command="job", exit_note=code => {
-      match code {
+    let id = bg.adopt(exec, command="job", exit_note=exit => {
+      match exit.exit_code {
         Some(code) if code != 0 => Some("launcher: exit \{code} classified.")
         _ => None
       }

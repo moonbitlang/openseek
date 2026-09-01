@@ -39,7 +39,7 @@ async test "surfaces a compile error via moon's own diagnostics" {
   // program never ran.
   assert_true(out.content.contains("BUILD failed"))
   assert_true(out.content.contains("never ran"))
-  assert_true(out.brief is Some("mbtx (build failed)"))
+  assert_true(out.brief is Some("mbtx (build failed, exit=1)"))
 }
 
 ///|

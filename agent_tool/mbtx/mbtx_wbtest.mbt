@@ -92,10 +92,17 @@ test "finished_body and finished_brief name the failure stage" {
       "exited 0 with no output",
     ),
   )
+  // The build's exit status is preserved: moon is NOT always 1 here (a
+  // dependency-cache fault exits 255), and distinct codes are diagnostic.
   let build_failed = finished_body("diagnostics", 1, compiled=Some(false))
-  assert_true(build_failed.contains("BUILD failed"))
+  assert_true(build_failed.contains("BUILD failed (exit 1)"))
   assert_true(build_failed.contains("never ran"))
   assert_true(build_failed.contains("diagnostics"))
+  assert_true(
+    finished_body("lock fault", 255, compiled=Some(false)).contains(
+      "BUILD failed (exit 255)",
+    ),
+  )
   // The run-side wording claims exactly what presence proves: the build
   // completed — not that the program itself launched (a missing runner also
   // lands here, and is likewise not a `source` problem).
@@ -113,7 +120,14 @@ test "finished_body and finished_brief name the failure stage" {
   assert_true(unknown.contains("exited 3"))
   assert_false(unknown.contains("BUILD failed"))
   assert_false(unknown.contains("RUNTIME"))
-  assert_eq(finished_brief(1, compiled=Some(false)), "mbtx (build failed)")
+  assert_eq(
+    finished_brief(1, compiled=Some(false)),
+    "mbtx (build failed, exit=1)",
+  )
+  assert_eq(
+    finished_brief(255, compiled=Some(false)),
+    "mbtx (build failed, exit=255)",
+  )
   assert_eq(finished_brief(3, compiled=Some(true)), "mbtx (exit=3)")
   assert_eq(finished_brief(3, compiled=None), "mbtx (exit=3)")
   assert_eq(finished_brief(0, compiled=Some(true)), "mbtx (exit=0)")
