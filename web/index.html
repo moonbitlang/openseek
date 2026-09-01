@@ -703,10 +703,13 @@
     // viewer's s/v/seq position state, which a bare `#tool-result-N` assignment
     // would wipe (the scrollspy re-records seq= right after the jump scrolls).
     // Delegated on document, so it survives the app's virtual-DOM re-renders.
-    // Missing targets fall through to native navigation.
+    // Rabbita captures ordinary links and prevents their browser default before
+    // the event reaches document. This handler therefore identifies its own
+    // `.tool-link` first instead of treating `defaultPrevented` as a veto.
+    // Missing targets fall through to Rabbita's link handling.
     document.addEventListener("click", function (e) {
       // Leave modified / non-primary clicks to the browser (open-in-new-tab etc.).
-      if (e.defaultPrevented || e.button !== 0) return;
+      if (e.button !== 0) return;
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       if (!(e.target instanceof Element)) return;
       var link = e.target.closest("a.tool-link");

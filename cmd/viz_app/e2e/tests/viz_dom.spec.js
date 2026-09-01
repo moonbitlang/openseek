@@ -118,6 +118,57 @@ test('keyboard shortcuts navigate between failures', async ({ page }) => {
   expect(viewer.pageErrors).toEqual([]);
 });
 
+test('a tool pairing link brings its distant result into view', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  viewer.events = viewer.eventLog([
+    {
+      sequence: 1,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: '',
+          tool_calls: [{
+            id: 'long-call',
+            name: 'shell',
+            arguments: '{"cmd":"moon test"}',
+          }],
+        },
+      },
+    },
+    ...Array.from({ length: 36 }, (_, index) => ({
+      sequence: index + 2,
+      item: {
+        kind: 'runtime_notice',
+        payload: { content: `Progress update ${index + 1}` },
+      },
+    })),
+    {
+      sequence: 38,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'long-call',
+          tool_name: 'shell',
+          content: 'done',
+          is_error: false,
+        },
+      },
+    },
+  ]);
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+
+  const pairingLinks = page.getByRole('link', { name: 'call 1' });
+  await expect(pairingLinks).toHaveCount(2);
+  await expect(pairingLinks.first()).toBeInViewport();
+  await expect(pairingLinks.last()).not.toBeInViewport();
+  await pairingLinks.first().click();
+  await expect(pairingLinks.last()).toBeInViewport({ ratio: 1 });
+  expect(viewer.pageErrors).toEqual([]);
+});
+
 test('keyboard shortcut unfolds the nearest card', async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 900 });
   const viewer = new VizBrowserHarness(page);
