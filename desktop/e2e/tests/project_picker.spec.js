@@ -360,6 +360,33 @@ test('the Windows drive list lists drives and refuses Add project', async ({ pag
   expect(app.pageErrors).toEqual([]);
 });
 
+test('a child named like a drive letter completes locally on POSIX', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const tree = posixTree();
+  tree['/Users/test'] = { path: '/Users/test', parent: '/Users', entries: ['C:', 'git'] };
+  tree[''] = tree['/Users/test'];
+  tree['/Users/test/C:'] = {
+    path: '/Users/test/C:',
+    parent: '/Users/test',
+    entries: ['inner'],
+  };
+  app.browseTree = tree;
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Add a project' }).click();
+  const picker = page.getByRole('dialog', { name: 'Add a project' });
+  await expect(picker.getByLabel('Open folder C:')).toBeVisible();
+
+  // Without Windows semantics on display, `C:` is an ordinary directory
+  // name; the drive-letter spelling completes under the listed directory.
+  const input = await editPath(page, picker);
+  await page.keyboard.type('C:/');
+  await expect(picker.getByLabel('Open folder inner')).toBeVisible();
+  await expect(input).toHaveValue('/Users/test/C:/');
+  expect(browses(app, '/Users/test/C:/')).toHaveLength(1);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('New folder focuses its input, creates on Enter, and enters the directory', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.browseTree = posixTree();
