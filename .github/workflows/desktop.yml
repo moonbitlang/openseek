@@ -38,8 +38,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Keep MoonBit and browser checks in one job so they share Proton, GTK, and
-  # dependency setup while retaining separate failure steps in the log.
+  # Keep the existing job name so repositories that require the `desktop`
+  # check continue to recognize the MoonBit gate after E2E is split out.
   desktop:
     name: desktop
     runs-on: ubuntu-latest
@@ -54,15 +54,6 @@ jobs:
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            desktop/package-lock.json
-            desktop/e2e/package-lock.json
 
       - name: Update MoonBit dependencies
         run: moon update
@@ -134,6 +125,62 @@ jobs:
             internal/file_search_policy internal/file_search_score \
             internal/filekind internal/jsonx internal/protocol internal/uri \
             --target js --target-dir ../_build
+
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            desktop/package-lock.json
+            desktop/e2e/package-lock.json
+
+      - name: Update MoonBit dependencies
+        working-directory: desktop
+        run: moon update
+
+      - name: Resolve pinned Proton version
+        id: proton
+        run: |
+          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/moon.mod)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Proton runtime
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
+
+      # Building the browser target still runs Proton's module prebuild, which
+      # queries Linux native link metadata before MoonBit compiles the JS code.
+      - name: Install Proton build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgtk-3-dev libx11-dev
+
+      - name: Assemble Proton CEF runtime
+        working-directory: desktop
+        run: >-
+          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
+          cef setup
 
       - name: Install E2E dependencies
         working-directory: desktop/e2e
