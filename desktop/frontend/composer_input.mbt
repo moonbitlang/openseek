@@ -30,7 +30,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     @composer.Running(
       steer_available=root_ready &&
         conv.run is Open(stage~, ..) &&
-        !(stage is Cancelling),
+        !(stage is Cancelling(..)),
       can_stop=can_stop(conv),
     )
   } else {

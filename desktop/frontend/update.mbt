@@ -1058,7 +1058,7 @@ fn apply_engine_event(
         // stage stays Cancelling (steering a dying turn is refused, so the
         // display must not flip the gate back open), and a stray step for a
         // closed run changes nothing.
-        if conv.run is Open(run_id~, stage~) && !(stage is Cancelling) {
+        if conv.run is Open(run_id~, stage~) && !(stage is Cancelling(..)) {
           { ..conv, run: Open(run_id~, stage=AtStep(step)), }
         } else {
           conv
@@ -3352,7 +3352,7 @@ fn update_msg(
         // cannot be steered — the steer could outlive the dying turn in the
         // engine's queue and contaminate a later prompt — so the text stays
         // in the composer.
-        if conv.run is Open(run_id~, stage~) && !(stage is Cancelling) {
+        if conv.run is Open(run_id~, stage~) && !(stage is Cancelling(..)) {
           let (model, submission_id) = model.allocate_submission_id()
           let conv = conv.enqueue_steer(
             submission_id,
@@ -3459,12 +3459,13 @@ fn update_msg(
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
       }
-      if conv.run is Open(run_id~, ..) {
+      if conv.run is Open(run_id~, stage~) && !(stage is Cancelling(..)) {
+        let (model, attempt_id) = model.allocate_submission_id()
         (
-          cancel_openseek(dispatch, model.focused, run_id),
+          cancel_openseek(dispatch, model.focused, run_id, attempt_id),
           model.replace_conversation({
             ..conv,
-            run: Open(run_id~, stage=Cancelling),
+            run: Open(run_id~, stage=Cancelling(attempt_id~)),
           }),
         )
       } else {
@@ -5372,8 +5373,12 @@ fn update_device_msg(
       } else {
         (@cmd.none, model)
       }
-    CancelNotOpen(run_id~) => {
-      guard model.conversation_by_run(channel, run_id) is Some(conv) else {
+    CancelNotOpen(run_id~, attempt_id~) => {
+      guard model.conversation_by_run(channel, run_id) is Some(conv) &&
+        conv.run
+        is Open(run_id=current, stage=Cancelling(attempt_id=current_attempt)) &&
+        current == run_id &&
+        current_attempt == attempt_id else {
         return (@cmd.none, model)
       }
       // The id-addressed reply is authoritative: this exact run is no longer
@@ -5404,19 +5409,49 @@ fn update_device_msg(
         updated,
       )
     }
-    CancelFailed(run_id~, message~) => {
+    CancelRejected(run_id~, attempt_id~, message~) => {
       guard model.conversation_by_run(channel, run_id) is Some(conv) &&
-        conv.run is Open(run_id=current, stage=Cancelling) &&
-        current == run_id else {
+        conv.run
+        is Open(run_id=current, stage=Cancelling(attempt_id=current_attempt)) &&
+        current == run_id &&
+        current_attempt == attempt_id else {
         return (@cmd.none, model)
       }
-      // Stop was optimistic. If delivery failed, hand the control back while
-      // a runs snapshot determines whether the engine is in fact still live.
+      // This attempt definitively did not reach the host. Hand Stop and steer
+      // back while a snapshot determines whether the run independently ended.
       let retryable = model.replace_conversation({
         ..conv,
         run: Open(run_id~, stage=AtStep(None)),
       })
       let (notice, notified) = retryable.notify_error(dispatch, message)
+      (
+        @cmd.batch([
+          notice,
+          fetch_runs(
+            dispatch,
+            channel,
+            notified.run_snapshot_frontier(channel),
+            dev.connection_generation,
+          ),
+        ]),
+        notified,
+      )
+    }
+    CancelUndelivered(run_id~, attempt_id~, message~) => {
+      guard model.conversation_by_run(channel, run_id) is Some(conv) &&
+        conv.run
+        is Open(run_id=current, stage=Cancelling(attempt_id=current_attempt)) &&
+        current == run_id &&
+        current_attempt == attempt_id else {
+        return (@cmd.none, model)
+      }
+      // The host may have queued this cancel before the response path failed.
+      // A live runs snapshot only says Finished has not arrived yet; it cannot
+      // prove non-delivery, so keep the run non-steerable and non-retryable.
+      let (notice, notified) = model.notify_error(
+        dispatch,
+        message + " — delivery is unknown; waiting for the run to stop",
+      )
       (
         @cmd.batch([
           notice,
@@ -7361,10 +7396,15 @@ fn update_device_msg(
     Finished(run_id~, status~, answer~) =>
       if (if model.conversation_by_run(channel, run_id) is Some(conv) {
           Some(conv)
-        } else {
+        } else if model.conversation_by_last_run(channel, run_id) is Some(conv) &&
+          conv.run is NoRun(..) {
           // RunsSettled may have closed the phase first; Finished is still the
-          // authoritative outcome for the conversation that last owned it.
-          model.conversation_by_last_run(channel, run_id)
+          // authoritative outcome for the idle conversation that last owned
+          // it. A Starting/Open successor is newer lifecycle ownership: a
+          // predecessor's delayed Finished must not erase it.
+          Some(conv)
+        } else {
+          None
         })
         is Some(conv) {
         let first_finish = !(conv.run is NoRun(ended=Some(RunFinished(_))) &&
@@ -8393,7 +8433,7 @@ test "the run heartbeat projects the phase it is derived from" {
   assert_eq(
     stage_of({
       ..running_conversation(),
-      run: Open(run_id="r7", stage=Cancelling),
+      run: Open(run_id="r7", stage=Cancelling(attempt_id="cancel-1")),
     }),
     Some(Stopping),
   )
@@ -11601,7 +11641,7 @@ test "a cancelling turn cannot be steered; the text stays in the composer" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
-    run: Open(run_id="r7", stage=Cancelling),
+    run: Open(run_id="r7", stage=Cancelling(attempt_id="cancel-1")),
     task: "too late",
   })
   let (_, next) = update(dispatch, Send, model)
@@ -11614,23 +11654,31 @@ test "a Stop reply for an already-ended run retires Stopping" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
-    run: Open(run_id="r7", stage=Cancelling),
+    run: Open(run_id="r7", stage=Cancelling(attempt_id="cancel-1")),
   })
-  let (_, next) = update_dev(dispatch, CancelNotOpen(run_id="r7"), model)
+  let (_, next) = update_dev(
+    dispatch,
+    CancelNotOpen(run_id="r7", attempt_id="cancel-1"),
+    model,
+  )
   assert_true(next.active().run is NoRun(ended=None))
   assert_eq(next.active().last_run_id, Some("r7"))
 }
 
 ///|
-test "a failed Stop becomes retryable instead of staying Stopping" {
+test "a definitively rejected Stop becomes retryable" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
-    run: Open(run_id="r7", stage=Cancelling),
+    run: Open(run_id="r7", stage=Cancelling(attempt_id="cancel-1")),
   })
   let (_, next) = update_dev(
     dispatch,
-    CancelFailed(run_id="r7", message="cancel transport failed"),
+    CancelRejected(
+      run_id="r7",
+      attempt_id="cancel-1",
+      message="cancel transport failed",
+    ),
     model,
   )
   assert_true(next.active().run is Open(run_id="r7", stage=AtStep(None)))
@@ -11642,14 +11690,104 @@ test "a failed Stop becomes retryable instead of staying Stopping" {
 }
 
 ///|
+test "an ambiguously delivered Stop stays non-steerable until Finished" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling(attempt_id="cancel-1")),
+    task: "must not steer behind cancel",
+  })
+  let (_, uncertain) = update_dev(
+    dispatch,
+    CancelUndelivered(
+      run_id="r7",
+      attempt_id="cancel-1",
+      message="reply was lost",
+    ),
+    model,
+  )
+  assert_true(
+    uncertain.active().run
+    is Open(run_id="r7", stage=Cancelling(attempt_id="cancel-1")),
+  )
+  let (_, not_steered) = update(dispatch, Send, uncertain)
+  inspect(not_steered.active().task, content="must not steer behind cancel")
+  inspect(not_steered.active().pending_steers.length(), content="0")
+  let sequence = not_steered.submission_sequence
+  let (_, not_retried) = update(dispatch, Stop, not_steered)
+  assert_eq(not_retried.submission_sequence, sequence)
+  assert_true(
+    not_retried.active().run
+    is Open(run_id="r7", stage=Cancelling(attempt_id="cancel-1")),
+  )
+}
+
+///|
+test "a stale cancel attempt cannot overwrite the current attempt" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling(attempt_id="cancel-2")),
+  })
+  let (_, next) = update_dev(
+    dispatch,
+    CancelRejected(
+      run_id="r7",
+      attempt_id="cancel-1",
+      message="old attempt failed",
+    ),
+    model,
+  )
+  assert_true(
+    next.active().run
+    is Open(run_id="r7", stage=Cancelling(attempt_id="cancel-2")),
+  )
+  inspect(next.notifications.length(), content="0")
+}
+
+///|
 test "an old empty cancel reply cannot close a successor" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
     run: Open(run_id="r8", stage=Opened),
   })
-  let (_, next) = update_dev(dispatch, CancelNotOpen(run_id="r7"), model)
+  let (_, next) = update_dev(
+    dispatch,
+    CancelNotOpen(run_id="r7", attempt_id="cancel-old"),
+    model,
+  )
   assert_true(next.active().run is Open(run_id="r8", stage=Opened))
+}
+
+///|
+test "a predecessor Finished cannot erase a successor Starting phase" {
+  let dispatch = test_dispatch()
+  let stopping = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling(attempt_id="cancel-1")),
+  })
+  let (_, idle) = update_dev(
+    dispatch,
+    CancelNotOpen(run_id="r7", attempt_id="cancel-1"),
+    stopping,
+  )
+  let drafted = idle.replace_conversation({ ..idle.active(), task: "next run", })
+  let (_, starting) = update(dispatch, Send, drafted)
+  guard starting.active().run is Starting(submission_id~) else {
+    fail("the successor did not enter Starting")
+  }
+  assert_eq(starting.active().last_run_id, Some("r7"))
+  let (_, after_old_finish) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="finished", answer=Some("old answer")),
+    starting,
+  )
+  assert_true(
+    after_old_finish.active().run is Starting(submission_id=current) &&
+    current == submission_id,
+  )
+  assert_true(after_old_finish.active().has_initial_submission(submission_id))
 }
 
 ///|

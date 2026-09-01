@@ -1395,15 +1395,17 @@ async fn request_agent_goal(
 }
 
 ///|
-/// Ask the host to cancel `run_id`. A matching reply leaves the run in
-/// Cancelling until its `agent.finished`. An empty reply means the turn had
-/// already ended; report that boundary explicitly because the Finished push
-/// may be the very notification this page missed. Failures are likewise tied
-/// to the exact run so the optimistic Cancelling phase can be made retryable.
+/// Ask the host to cancel `run_id`. Every result carries the page-local attempt
+/// id, so a delayed older request cannot mutate a later control attempt. A
+/// matching reply leaves the run in Cancelling until its `agent.finished`; the
+/// canonical empty reply proves the run was already absent. Only a refusal or
+/// unsent request is retryable. Once delivery is unknown, the cancel may be in
+/// the engine queue and the run must remain non-steerable until it terminates.
 fn cancel_openseek(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   run_id : String,
+  attempt_id : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -1413,23 +1415,20 @@ fn cancel_openseek(
         { run_id: Some(run_id), },
       ) catch {
         error => {
-          scheduler.add(
-            dispatch(
-              FromDevice(
-                channel,
-                CancelFailed(
-                  run_id~,
-                  message="Failed to cancel the run: " +
-                    @interop.bridge_error_text(error),
-                ),
-              ),
-            ),
-          )
+          let message = "Failed to cancel the run: " +
+            @interop.bridge_error_text(error)
+          let result = match @interop.bridge_failure(error) {
+            Refused | Unsent => CancelRejected(run_id~, attempt_id~, message~)
+            Unknown => CancelUndelivered(run_id~, attempt_id~, message~)
+          }
+          scheduler.add(dispatch(FromDevice(channel, result)))
           return
         }
       }
       if reply.run_id is None {
-        scheduler.add(dispatch(FromDevice(channel, CancelNotOpen(run_id~))))
+        scheduler.add(
+          dispatch(FromDevice(channel, CancelNotOpen(run_id~, attempt_id~))),
+        )
       }
     })
   })

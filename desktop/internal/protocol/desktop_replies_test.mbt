@@ -1317,36 +1317,35 @@ test "a cancel reply spells \"nothing was open\" by omission" {
   let unmatched : @protocol.CancelReply = { run_id: None, }
   @debug.assert_eq(unmatched.to_json(), Json::empty_object())
 
-  // Nothing here is worth failing a Stop over: every shape that is not a run
-  // id decodes as "no run was cancelled", and a newer host's extra keys are
-  // ignored rather than refused.
-  for
-    absent in (
-      [
-        Json::empty_object(),
-        { "run_id": Json::null() },
-        { "run_id": 7 },
-        { "run_id": ["r1"] },
-        { "cancelled": true, "withdrew_pending_prompt": false },
-      ] : Array[Json]) {
-    let decoded : @protocol.CancelReply = @json.from_json(absent)
-    assert_eq(decoded.run_id, None)
-  }
+  let decoded : @protocol.CancelReply = @json.from_json(Json::empty_object())
+  assert_eq(decoded.run_id, None)
   let decoded : @protocol.CancelReply = @json.from_json({
     "run_id": "r1",
     "cancelled": true,
   })
   assert_eq(decoded.run_id, Some("r1"))
 
-  // A reply that is not an object at all is a different host speaking a
-  // different protocol, and that is worth refusing.
-  let refused = try {
-    let _ : @protocol.CancelReply = @json.from_json(Json("r1"))
-    false
-  } catch {
-    _ => true
+  // Malformed and legacy nonempty replies are not authoritative absence. The
+  // host may have acted before returning one, so every such shape must take
+  // the delivery-unknown failure path in the controller.
+  for
+    malformed in (
+      [
+        { "run_id": Json::null() },
+        { "run_id": 7 },
+        { "run_id": ["r1"] },
+        { "run_id": "" },
+        { "cancelled": true, "withdrew_pending_prompt": false },
+        Json("r1"),
+      ] : Array[Json]) {
+    let refused = try {
+      let _ : @protocol.CancelReply = @json.from_json(malformed)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(refused)
   }
-  assert_true(refused)
 }
 
 ///|

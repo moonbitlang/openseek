@@ -31,6 +31,18 @@ test "the composer is handed the turn's facts, not a rendered row" {
 }
 
 ///|
+test "a cancelling run exposes neither steer nor a duplicate Stop action" {
+  let cancelling = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling(attempt_id="cancel-1")),
+  })
+  assert_true(
+    cancelling.composer_input().presentation.primary_action
+    is @composer.Running(steer_available=false, can_stop=false),
+  )
+}
+
+///|
 test "composer submission stays bound to its originating conversation" {
   let origin = test_conversation()
   let visible = empty_conversation(
