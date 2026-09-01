@@ -441,9 +441,21 @@ async fn deliver_to_page(
   if connected {
     if target is Some(target) {
       target.emit(notification)
+    } else if notification is NotificationGap {
+      // Everything already buffered belongs to the now-incomplete prefix.
+      // Keep the boundary first so WindowReady resyncs before any frame from
+      // the replacement subscription.
+      pending.clear()
+      pending.push(notification)
     } else {
       if pending.length() == PendingNotificationCapacity {
-        ignore(pending.remove(0))
+        // A gap is control state, not a disposable data frame. Keep it at
+        // the front while bounding the post-gap startup backlog.
+        if pending[0] is NotificationGap {
+          ignore(pending.remove(1))
+        } else {
+          ignore(pending.remove(0))
+        }
       }
       pending.push(notification)
     }
@@ -535,6 +547,27 @@ async test "a closed hub subscription becomes a reconnect boundary" {
   )
   notifications.close(clear=true)
   assert_true(next_hub_input(notifications) is SubscriptionDropped)
+}
+
+///|
+async test "the pre-window backlog cannot evict its notification gap" {
+  let pending : Array[PageNotification] = []
+  for _ in 0..<8 {
+    deliver_to_page(
+      true,
+      None,
+      pending,
+      Hub(AgentConnected({ stage: Serving, })),
+    )
+  }
+  deliver_to_page(true, None, pending, NotificationGap)
+  // The incomplete pre-gap prefix is gone and the marker stays first even
+  // after more than one full startup backlog arrives behind it.
+  for _ in 0..<(PendingNotificationCapacity * 2) {
+    deliver_to_page(true, None, pending, Hub(SkillsChanged))
+  }
+  assert_eq(pending.length(), PendingNotificationCapacity)
+  assert_true(pending[0] is NotificationGap)
 }
 
 ///|

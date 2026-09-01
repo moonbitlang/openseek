@@ -5039,8 +5039,8 @@ fn update_device_msg(
         // device is refreshed when focus moves to it.
         (@cmd.none, model)
       }
-    BridgeReady | NotificationGap => {
-      let request_transport_survived = msg is NotificationGap
+    BridgeReady | EngineReady | NotificationGap => {
+      let request_transport_survived = msg is (EngineReady | NotificationGap)
       let connection_generation = dev.connection_generation + 1
       let sessions_request_generation = dev.sessions_request_generation + 1
       let archived_request_generation = dev.archived_request_generation + 1
@@ -5048,7 +5048,10 @@ fn update_device_msg(
       // Capture the exact per-session lifecycle frontier before issuing the
       // unversioned runs snapshot. A live Started or Finished received before
       // its reply then wins over both stale positive rows and stale absence.
-      let run_frontier = model.run_snapshot_frontier(channel)
+      let run_frontier = model.run_snapshot_frontier(
+        channel,
+        request_transport_survived~,
+      )
       let commands = [
         fetch_sessions(
           dispatch, channel, connection_generation, sessions_request_generation,
@@ -5097,10 +5100,10 @@ fn update_device_msg(
       // local queued/requested/in-flight marker is released here so a missed
       // terminal event cannot disable Send forever. A full transport reconnect
       // also makes outstanding request replies unobtainable, so their entries
-      // end there. A hub-only gap preserves them: Proton promises remain live,
-      // and a later definite refusal still needs the entry to restore its exact
-      // draft. If the host still compacts, its next prompt rejection is a
-      // transient, visible local failure.
+      // end there. A hub-only gap or engine-generation restart preserves them:
+      // Request promises remain live, and a later definite refusal still needs
+      // the entry to restore its exact draft. If the host still compacts, its
+      // next prompt rejection is a transient, visible local failure.
       let conversations = model.conversations.map(conv => {
         if conv.device == channel {
           let conv = if request_transport_survived {
@@ -5151,14 +5154,15 @@ fn update_device_msg(
       // always reloads). An in-flight user load keeps right of way.
       let model = if channel == model.focused {
         match model.find_conversation(channel, model.active_session) {
-          Some(conv) if (
-              model.can_reload_transcript(conv) || conv.sync is Reloading(..)
-            ) &&
+          Some(conv) if conv.sync is Reloading(..) => {
+            // A read already in flight may have taken its cut before this
+            // boundary. This includes a foreground `session.load`: it keeps
+            // right of way, but must schedule one post-boundary generation.
+            let (model, _) = model.ensure_transcript_reload_after_current(conv)
+            model
+          }
+          Some(conv) if model.can_reload_transcript(conv) &&
             model.loading_conversation is None => {
-            // A real engine pump can restart while the transport remains
-            // open. If an older read is already in flight, it may carry a
-            // pre-ready cut, so require one follow-up generation rather than
-            // treating the old single-flight request as sufficient.
             let (model, generation) = model.ensure_transcript_reload_after_current(
               conv,
             )
@@ -6699,6 +6703,19 @@ fn update_device_msg(
       // Started row is rendered, and a later BridgeReady invalidates both its
       // positive rows and its negative frontier together.
       let commands : Array[@cmd.Cmd] = []
+      // A snapshot may prove that a run started, ended, or was replaced, but
+      // it cannot answer an input RPC that is still live on this page's local
+      // transport. Preserve exactly the entries that remain pending now; any
+      // receipt delivered after the request-time frontier has already removed
+      // its own entry from `model` and is therefore not resurrected here.
+      let surviving_pending_steers : Map[String, Array[PendingSteer]] = Map([])
+      for captured in frontier {
+        if captured.request_transport_survived &&
+          model.find_conversation(channel, captured.session) is Some(conv) &&
+          !conv.pending_steers.is_empty() {
+          surviving_pending_steers[captured.session] = conv.pending_steers.copy()
+        }
+      }
       let mut next = model
       let accepted_settlements : Array[RecoveredSettlement] = []
       let settled_sessions : Array[String] = []
@@ -6888,6 +6905,18 @@ fn update_device_msg(
           })
         }
       }
+      // Re-attach only still-live RPC ownership after the lifecycle snapshot
+      // has converged. Positive settlements and replacement Started rows may
+      // legitimately change the run phase, but they do not settle these
+      // request promises; their eventual exact replies do.
+      for session, pending_steers in surviving_pending_steers {
+        if seeded.find_conversation(channel, session) is Some(conv) {
+          seeded = seeded.replace_conversation({
+            ..conv,
+            pending_steers: pending_steers.copy(),
+          })
+        }
+      }
       (@cmd.batch(commands), seeded)
     }
     RunsSettled(live~, frontier~) => {
@@ -6908,24 +6937,35 @@ fn update_device_msg(
             return match captured.state {
               SnapshotOpen(run_id~) if conv.run is Open(run_id=current, ..) &&
                 current == run_id &&
-                !live.contains(run_id) =>
-                // The runs reply proves this run is over. Its submissions can
-                // no longer acquire a receipt, so they end with it; the
-                // transcript, not a local notice, says what the run recorded.
+                !live.contains(run_id) => {
+                // The runs reply proves this run is over. A reconnect also
+                // ended its request paths, so those submissions end with it;
+                // a local gap keeps its exact RPC replies alive instead.
+                let settled = if captured.request_transport_survived {
+                  conv.clear_streams()
+                } else {
+                  conv.clear_streams().forget_steers_for_run(run_id)
+                }
                 {
-                  ..conv.clear_streams().forget_steers_for_run(run_id),
+                  ..settled,
                   run: NoRun(ended=None),
                   last_run_id: Some(run_id),
                 }
+              }
               SnapshotIdle(last_run_id=Some(run_id)) if conv.run is NoRun(..) &&
                 conv.last_run_id is Some(current) &&
                 current == run_id =>
                 // The run this conversation last owned is idle at the host,
                 // so nothing it carried is still in flight.
-                conv.forget_steers_for_run(run_id)
+                if captured.request_transport_survived {
+                  conv
+                } else {
+                  conv.forget_steers_for_run(run_id)
+                }
               SnapshotStarting(submission_id~) if conv.run
                 is Starting(submission_id=current) &&
-                current == submission_id => {
+                current == submission_id &&
+                !captured.request_transport_survived => {
                 // The host has no record of this start, so the prompt never
                 // opened a run. Close the local lifecycle and let the entry
                 // go with it.
@@ -11037,12 +11077,14 @@ test "runs settled closes runs the host no longer has, sparing live and starting
       {
         session: "desktop-test",
         state: SnapshotOpen(run_id="r7"),
+        request_transport_survived: false,
         initial_ids: [],
         pending_approval_id: None,
       },
       {
         session: "desktop-stale",
         state: SnapshotOpen(run_id="r9"),
+        request_transport_survived: false,
         initial_ids: [],
         pending_approval_id: None,
       },
@@ -11126,6 +11168,18 @@ test "a notification gap recovers a Finished notification dropped behind a slow 
 }
 
 ///|
+test "agent readiness distinguishes transport attach from engine restart" {
+  assert_true(
+    device_msg(@interop.ChannelId::Local, AgentConnected({ stage: Accepted, }))
+    is Some(BridgeReady),
+  )
+  assert_true(
+    device_msg(@interop.ChannelId::Local, AgentConnected({ stage: Serving, }))
+    is Some(EngineReady),
+  )
+}
+
+///|
 test "a notification gap preserves an in-flight prompt until its RPC rejects" {
   let dispatch = test_dispatch()
   let conv = with_pending_prompt(
@@ -11139,6 +11193,21 @@ test "a notification gap preserves an in-flight prompt until its RPC rejects" {
     test_model().replace_conversation(conv),
   )
   assert_true(resyncing.active().has_initial_submission("still-live"))
+  let (_, before_reply) = update_dev(
+    dispatch,
+    RunsSettled(
+      live=[],
+      frontier=resyncing.run_snapshot_frontier(
+        @interop.ChannelId::Local,
+        request_transport_survived=true,
+      ),
+    ),
+    resyncing,
+  )
+  // An empty snapshot can overtake the suspended start request. It says
+  // nothing about a promise that is still able to reject definitively.
+  assert_true(before_reply.active().run is Starting(..))
+  assert_true(before_reply.active().has_initial_submission("still-live"))
   let (_, rejected) = update_dev(
     dispatch,
     StartRejected(
@@ -11146,7 +11215,7 @@ test "a notification gap preserves an in-flight prompt until its RPC rejects" {
       submission_id="still-live",
       message="host refused",
     ),
-    resyncing,
+    before_reply,
   )
   inspect(rejected.active().task, content="restore this exact draft")
   assert_true(rejected.active().run is NoRun(ended=Some(RunFailed)))
@@ -11163,6 +11232,30 @@ test "a notification gap preserves an in-flight steer until its RPC rejects" {
   )
   inspect(resyncing.active().pending_steers.length(), content="1")
   let pending = resyncing.active().pending_steers[0]
+  let (_, before_reply) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          submission_id: None,
+          status: "finished",
+        },
+      ],
+      approvals=[],
+      live=[],
+      frontier=resyncing.run_snapshot_frontier(
+        @interop.ChannelId::Local,
+        request_transport_survived=true,
+      ),
+      connection_generation=resyncing.dev().connection_generation,
+    ),
+    resyncing,
+  )
+  assert_true(before_reply.active().run is NoRun(..))
+  inspect(before_reply.active().pending_steers.length(), content="1")
   let (_, rejected) = update_dev(
     dispatch,
     SteerRejected(
@@ -11170,10 +11263,77 @@ test "a notification gap preserves an in-flight steer until its RPC rejects" {
       submission_id=pending.submission_id,
       run_id="r7",
     ),
-    resyncing,
+    before_reply,
   )
   inspect(rejected.active().task, content="turn left")
   inspect(rejected.active().pending_steers.length(), content="0")
+}
+
+///|
+test "an engine restart preserves a worktree start until setup rejects" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_prompt(
+    { ..test_conversation(), run: Starting(submission_id="worktree-live"), },
+    "worktree-live",
+    "restore worktree draft",
+  )
+  let (_, resyncing) = update_dev(
+    dispatch,
+    EngineReady,
+    test_model().replace_conversation(conv),
+  )
+  let (_, before_reply) = update_dev(
+    dispatch,
+    RunsSettled(
+      live=[],
+      frontier=resyncing.run_snapshot_frontier(
+        @interop.ChannelId::Local,
+        request_transport_survived=true,
+      ),
+    ),
+    resyncing,
+  )
+  let (_, rejected) = update_dev(
+    dispatch,
+    WorktreeSetupFailed(
+      session="desktop-test",
+      submission_id="worktree-live",
+      message="create failed",
+    ),
+    before_reply,
+  )
+  inspect(rejected.active().task, content="restore worktree draft")
+  assert_true(rejected.active().run is NoRun(ended=Some(RunFailed)))
+}
+
+///|
+test "a notification gap follows an in-flight foreground transcript read" {
+  let dispatch = test_dispatch()
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-test",
+  }
+  let model = {
+    ..test_model().replace_conversation({
+      ..test_conversation(),
+      messages: [{ kind: User, content: "old", ts: None, sequence: None, }],
+      watermark: 1,
+      sync: Reloading(
+        generation=1,
+        attempt=1,
+        buffered=[],
+        reload_after_current=false,
+      ),
+    }),
+    loading_conversation: Some(owner),
+    transcript_request_generation: 1,
+  }
+  let (_, next) = update_dev(dispatch, NotificationGap, model)
+  guard next.active().sync
+    is Reloading(generation=1, reload_after_current=true, ..) else {
+    fail("the pre-gap foreground read was treated as sufficient")
+  }
+  assert_eq(next.loading_conversation, Some(owner))
 }
 
 ///|

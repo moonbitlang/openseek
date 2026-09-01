@@ -609,6 +609,11 @@ priv enum RunSnapshotState {
 priv struct RunSnapshotFrontier {
   session : String
   state : RunSnapshotState
+  // A notification-only gap or engine-generation restart leaves this page's
+  // request transport alive. Negative host state may settle lifecycle,
+  // but it must not consume inputs whose exact RPC replies can still restore
+  // their drafts.
+  request_transport_survived : Bool
   // Initial prompts whose start transport failed before a run id came back.
   // Their submission id is still an exact owner and must survive the
   // lifecycle's transition to SnapshotIdle for reconnect settlement lookup.
@@ -1181,9 +1186,9 @@ priv struct DeviceState {
   // Drives the reconnect backoff and the BridgeLost threshold; always 0 for
   // the proton channel, whose bridge never reconnects.
   reconnect_failures : Int
-  // Incremented at every BridgeReady. Session-list replies carry the value
-  // captured when their request was issued, so a reply from a dead connection
-  // cannot overwrite the lists rebuilt after reconnect.
+  // Incremented at every transport, engine-generation, or notification-gap
+  // resync boundary. Session-list replies carry the value captured when their
+  // request was issued, so an older cut cannot overwrite the rebuilt mirrors.
   connection_generation : Int
   // Page-lifetime request tokens for the independently fetched sidebar
   // collections. Connection generation rejects dead sockets; these reject an
@@ -1203,8 +1208,8 @@ priv struct DeviceState {
   // same entry shape as the live list.
   archived : Array[@transcript.SessionListItem]
   // Per-session archive facts newer than an unversioned whole-list reply.
-  // Cleared only at BridgeReady, immediately before fresh live and archived
-  // lists are requested for the new connection.
+  // Cleared only at a full host-mirror resync, immediately before fresh live
+  // and archived lists are requested.
   archive_overrides : Array[ArchiveOverride]
   // Registered project directories: the host registry's absolute paths in
   // registration order. The sidebar shows one section per entry.
@@ -1986,6 +1991,10 @@ priv enum Msg {
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
   BridgeReady
+  // The engine pump began a new generation without replacing the page's
+  // request transport. Host mirrors need a full resync, while request promises
+  // issued by the still-live page retain ownership of their inputs.
+  EngineReady
   // Only the host notification subscription was replaced. Durable mirrors
   // need the same resync as a reconnect, but request promises are still live
   // and retain ownership of their pending prompt/steer entries.
@@ -2867,6 +2876,7 @@ fn Model::find_conversation(
 fn Model::run_snapshot_frontier(
   self : Model,
   channel : @interop.ChannelId,
+  request_transport_survived? : Bool = false,
 ) -> Array[RunSnapshotFrontier] {
   self.conversations
   .filter(conv => conv.device == channel)
@@ -2883,6 +2893,7 @@ fn Model::run_snapshot_frontier(
     {
       session: conv.session_id,
       state,
+      request_transport_survived,
       initial_ids,
       pending_approval_id: conv.pending_approval.map(pending => pending.id),
     }

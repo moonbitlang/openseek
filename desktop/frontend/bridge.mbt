@@ -170,18 +170,17 @@ fn notification_msg(
 }
 
 ///|
-/// A device-scoped notification's decoder. `agent.connected` is the
-/// readiness/resync signal on both transports: it re-fires on every
-/// reconnect (and engine-pump restart), and the refetches BridgeReady
-/// triggers — including `agent.runs` — rebuild whatever was missed.
+/// A device-scoped notification's decoder. The accepted stage belongs to a
+/// newly attached transport, whose old request promises cannot answer. The
+/// serving stage belongs to a new engine-pump generation on the same
+/// transport, so its resync must preserve those still-live promises.
 fn device_msg(
   channel : @interop.ChannelId,
   notification : @protocol.Notification,
 ) -> DeviceMsg? {
   match notification {
-    // The payload's stage says how much of the host is up; every stage asks
-    // this client for the same resync, so the signal alone is the message.
-    AgentConnected(_) => Some(BridgeReady)
+    AgentConnected({ stage: Serving, }) => Some(EngineReady)
+    AgentConnected({ stage: Accepted, }) => Some(BridgeReady)
     AgentStarted(payload) => started_msg(channel, payload)
     AgentEvent(payload) => engine_msg(payload)
     AgentError(payload) => error_msg(payload)

@@ -229,13 +229,16 @@ frame-by-frame: when a connection's outbound queue overflows, the host
 closes it, and the client reconnects into the resync path above.
 
 The in-process bridge does not use WebSocket reconnect or capability
-negotiation. It can still be recreated across a host restart: each
-`BridgeReady` transition makes the desktop rebuild host-derived state, so that
-readiness resync follows the same idempotent, race-tolerant rules. If only its
-bounded hub subscription overflows, the bridge replaces that subscription and
-emits a distinct `notification.gap` boundary. The desktop performs the same
-durable state reads but preserves pending prompt and steer ownership because
-the in-process request promises did not disconnect and can still settle.
+negotiation. A newly attached page receives the accepted readiness stage; that
+is a real transport boundary, so no request promise from the previous page can
+still answer. The serving stage instead marks a new engine-pump generation on
+the same page transport. Both stages rebuild host-derived state, but the latter
+preserves pending prompt and steer ownership until their still-live request
+promises settle. If only the bounded hub subscription overflows, the bridge
+replaces that subscription and emits a distinct `notification.gap` boundary
+with the same promise-preserving rule. Its marker is retained ahead of every
+post-gap startup notification, and both lifecycle and transcript snapshots are
+required to take a post-boundary cut before the resync is considered complete.
 
 ## Method catalog
 
