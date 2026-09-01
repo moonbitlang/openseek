@@ -66,6 +66,18 @@ test "strip_artifact_report keeps only the human-facing build output" {
 }
 
 ///|
+/// Build notes are bounded so the prepend cannot spend the margin between the
+/// run's 48KB output cap and the agent loop's 60k tail-cutting clamp — the
+/// margin that keeps the trailing stop/retry and sandbox guidance readable.
+test "cap_build_notes bounds a warning flood and marks the cut" {
+  assert_eq(cap_build_notes("short"), "short")
+  let flood = String::make(20_000, 'w')
+  let capped = cap_build_notes(flood)
+  assert_true(capped.length() < 9_000)
+  assert_true(capped.contains("build warnings truncated"))
+}
+
+///|
 /// The run-phase framing: on the staged wasm path a failure is from the run
 /// by construction and says so; single-shot targets keep the plain wording
 /// that claims neither stage.

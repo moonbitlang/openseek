@@ -13,6 +13,15 @@ const AutoBackgroundAfterMs : Int = 5_000
 const ForegroundTimeoutMs : Int = 300_000
 
 ///|
+/// Ceiling on the build notes carried into a report, in characters. Warnings
+/// are for reading, not archiving: the run's own body may already reach the
+/// 48KB `OutputCapBytes`, which is sized to keep the whole result under the
+/// agent loop's outer 60k clamp — a clamp that cuts the TAIL, exactly where
+/// the stop/retry and sandbox guidance live. An uncapped prepend would spend
+/// that margin; this cap preserves it.
+const BuildNotesCapChars : Int = 8_000
+
+///|
 /// Wall-clock bound for the synchronous BUILD phase of a wasm run. The build
 /// runs inline on purpose — its duration does not count against the program's
 /// own foreground allowance — so it needs a bound of its own: a hung
@@ -881,7 +890,16 @@ async fn build_snippet(
       ),
     )
   }
-  Built(artifact~, notes=strip_artifact_report(text))
+  Built(artifact~, notes=cap_build_notes(strip_artifact_report(text)))
+}
+
+///|
+fn cap_build_notes(notes : String) -> String {
+  if notes.length() <= BuildNotesCapChars {
+    notes
+  } else {
+    "\{notes.clamped_view(end=BuildNotesCapChars)}\n[mbtx: build warnings truncated at \{BuildNotesCapChars} characters]"
+  }
 }
 
 ///|
@@ -893,8 +911,12 @@ async fn build_snippet(
 /// absent one, not surfaced as a fault: both degrade to the single-file
 /// layout fallback, and the existence check that follows validates WHICHEVER
 /// path was chosen — a wrong guess surfaces as a named build fault, never as
-/// a silent misrun. Failing the call on a report the fallback would have
-/// covered would only make the tool more brittle.
+/// a silent misrun. That holds even if the layout fallback is itself stale:
+/// the guard then reports a missing artifact, still a correctly-classified
+/// build-stage fault — only the diagnostic detail differs, and naming the
+/// parse failure instead would matter only on a moon that broke its report
+/// line AND its layout at once. Failing the call on a report the fallback
+/// would have covered would only make the tool more brittle.
 fn parse_artifacts_path(output : String) -> String? {
   let mut found : String? = None
   for line in output.split("\n") {
