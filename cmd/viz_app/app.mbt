@@ -1421,15 +1421,22 @@ fn session_pane(
     session,
     model.view_mode,
   )
+  let mbtx_present = @viz.session_has_mbtx_activity(session)
   @html.div(class=session_view_class(model)) <| [
     header_strip(model, id, root_label),
     // Pin the view/args toggles and the error bar to the top of the
     // scroll area so they stay reachable while reading a long log.
     @html.div(class="sticky-toolbar") <| [
       mode_row(emit, model, parsed, @viz.step_scrubber(session)),
-      error_bar(emit, model, error_count),
-      escalated_bar(emit, model, escalated_count),
-      build_error_bar(emit, model, build_error_count),
+      // One shared row for every filter bar: stacking them as separate rows
+      // grew the sticky toolbar past the fixed scroll offsets the anchor
+      // navigation accounts for, which parked jump targets beneath it. Side
+      // by side, the common one-or-two-bar case keeps today's height.
+      @html.div(class="filter-bars") <| [
+        error_bar(emit, model, error_count),
+        escalated_bar(emit, model, escalated_count),
+        build_error_bar(emit, model, build_error_count, present=mbtx_present),
+      ],
     ],
     @viz.render_notices(parsed),
     session_log_view(
@@ -1754,14 +1761,19 @@ fn escalated_bar(
 /// Build-error counterpart of `escalated_bar`: a count of mbtx BUILD-stage
 /// failures (the staged engine's `mbtx (build …)` briefs), a filter toggle,
 /// and viewport-relative prev/next jumps — the way to find compile errors in
-/// a long log without reading it. Stays visible at zero while active so the
-/// filter can always be switched back off.
+/// a long log without reading it. Unlike its siblings it shows whenever the
+/// session has ANY mbtx activity (`present`), not only at nonzero count:
+/// hidden-at-zero chrome made the control undiscoverable on exactly the
+/// sessions a user would reach for it in. It still stays visible at zero
+/// while active so the filter can always be switched back off, and a session
+/// with no mbtx at all keeps a clean toolbar.
 fn build_error_bar(
   emit : @cmd.Emit[Msg],
   model : Model,
   count : Int,
+  present~ : Bool,
 ) -> @html.Html {
-  if count == 0 && !model.build_errors_only {
+  if !present && count == 0 && !model.build_errors_only {
     return @html.nothing
   }
   let toggle_class = class_with(
@@ -2463,19 +2475,30 @@ test "escalated toolbar mirrors errors-only controls" {
 ///|
 test "build-error toolbar mirrors the other filter controls" {
   let model = init_model()
-  let html = render_html(build_error_bar(stub_emit(), model, 2))
+  let html = render_html(build_error_bar(stub_emit(), model, 2, present=true))
   assert_true(html.contains("2 build errors"))
   assert_true(html.contains("Build errors only"))
   assert_true(html.contains("↑ prev"))
   assert_true(html.contains("↓ next"))
-  // Hidden entirely for a clean view with the filter off; kept visible at
-  // zero while active so it can always be switched back off.
-  assert_false(
-    render_html(build_error_bar(stub_emit(), model, 0)).contains("Build errors"),
+  // DISCOVERABLE: the toggle shows whenever the session has mbtx activity,
+  // even at zero failures — hidden-at-zero chrome made the control invisible
+  // on exactly the sessions a user would reach for it in. Only a session
+  // with no mbtx at all keeps a clean toolbar.
+  let clean_with_mbtx = render_html(
+    build_error_bar(stub_emit(), model, 0, present=true),
   )
+  assert_true(clean_with_mbtx.contains("Build errors only"))
+  assert_false(clean_with_mbtx.contains("build error<"))
+  assert_false(clean_with_mbtx.contains("↑ prev"))
+  assert_false(
+    render_html(build_error_bar(stub_emit(), model, 0, present=false)).contains(
+      "Build errors",
+    ),
+  )
+  // Kept visible while active so the filter can always be switched back off.
   let active = { ..init_model(), build_errors_only: true, }
   assert_true(
-    render_html(build_error_bar(stub_emit(), active, 0)).contains(
+    render_html(build_error_bar(stub_emit(), active, 0, present=false)).contains(
       "Build errors only: on",
     ),
   )
