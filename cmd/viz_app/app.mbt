@@ -287,23 +287,43 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
     UrlRequested(request) =>
       match request {
         Internal(url) =>
-          if url.fragment is Some(fragment) &&
-            HashSessionKey::from_fragment(fragment) is Some(_) {
-            (@nav.push_url(url.to_string()), model)
+          if url.fragment is Some(fragment) {
+            try HashSessionKey::from_fragment(fragment) catch {
+              MalformedHashSessionKey =>
+                (
+                  @cmd.none,
+                  {
+                    ..model,
+                    status: "invalid session link: malformed s= value",
+                  },
+                )
+            } noraise {
+              Some(_) => (@nav.push_url(url.to_string()), model)
+              None => (@cmd.none, model)
+            }
           } else {
             (@cmd.none, model)
           }
         External(_) => (@cmd.none, model)
       }
     UrlChanged(url) =>
-      if url.fragment is Some(fragment) &&
-        HashSessionKey::from_fragment(fragment) is Some(key) {
-        // Resolve like startup restoration; unknown anchors do not clear the
-        // current session.
-        match resolve_session_key(model.sessions, key.0) {
-          Some(key) if model.selected != Some(key) =>
-            update(emit, Select(key), model)
-          _ => (@cmd.none, model)
+      if url.fragment is Some(fragment) {
+        try HashSessionKey::from_fragment(fragment) catch {
+          MalformedHashSessionKey =>
+            (
+              @cmd.none,
+              { ..model, status: "invalid session link: malformed s= value", },
+            )
+        } noraise {
+          Some(key) =>
+            // Resolve like startup restoration; unknown anchors do not clear
+            // the current session.
+            match resolve_session_key(model.sessions, key.0) {
+              Some(key) if model.selected != Some(key) =>
+                update(emit, Select(key), model)
+              _ => (@cmd.none, model)
+            }
+          None => (@cmd.none, model)
         }
       } else {
         (@cmd.none, model)
@@ -995,35 +1015,46 @@ fn subrun_child_refs(
 priv struct HashSessionKey(String)
 
 ///|
+/// A present `s=` parameter whose percent escapes or decoded UTF-8 are invalid.
+/// Absence remains `None`; callers catch this error to report malformed links.
+priv suberror MalformedHashSessionKey
+
+///|
 /// Read the first `s=` parameter from a URL fragment. Subrun links percent-
 /// encode UTF-8 bytes, and `+` follows URLSearchParams' spelling for a space.
-fn HashSessionKey::from_fragment(fragment : StringView) -> HashSessionKey? {
+fn HashSessionKey::from_fragment(
+  fragment : StringView,
+) -> HashSessionKey? raise MalformedHashSessionKey {
   for parameter in fragment.split("&") {
     if parameter is [.. "s=", .. encoded] {
-      return HashSessionKey::decode(encoded)
+      return Some(HashSessionKey::decode(encoded))
     }
   }
   None
 }
 
 ///|
-fn HashSessionKey::decode(encoded : StringView) -> HashSessionKey? {
+fn HashSessionKey::decode(
+  encoded : StringView,
+) -> HashSessionKey raise MalformedHashSessionKey {
   let bytes = Buffer(size_hint=encoded.length())
   for remaining = encoded {
     match remaining {
       [] => {
-        let value = @utf8.decode(bytes.to_bytes()) catch { _ => break None }
-        break Some(HashSessionKey(value))
+        let value = @utf8.decode(bytes.to_bytes()) catch {
+          _ => raise MalformedHashSessionKey
+        }
+        break HashSessionKey(value)
       }
       ['%', high, low, .. rest] => {
         guard HashSessionKey::hex_value(high) is Some(high) &&
           HashSessionKey::hex_value(low) is Some(low) else {
-          break None
+          raise MalformedHashSessionKey
         }
         bytes.write_byte((high * 16 + low).to_byte())
         continue rest
       }
-      ['%', ..] => break None
+      ['%', ..] => raise MalformedHashSessionKey
       ['+', .. rest] => {
         bytes.write_byte(b' ')
         continue rest
