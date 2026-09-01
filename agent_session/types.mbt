@@ -653,97 +653,161 @@ pub fn Session::compact(
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend AssistantMessage with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend AssistantMessage with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend AssistantMessage with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend AssistantMessage with ToJson::{to_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend RuntimeNotice with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend RuntimeNotice with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend RuntimeNotice with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend RuntimeNotice with ToJson::{to_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend Session with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend Session with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionEvent with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionEvent with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionEvent with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionEvent with ToJson::{to_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionId with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionId with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionItem with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionItem with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionSummary with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionSummary with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionSummary with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionSummary with ToJson::{to_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ToolResult with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ToolResult with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ToolResult with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ToolResult with ToJson::{to_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend TurnTerminal with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend TurnTerminal with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend UserMessage with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend UserMessage with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend UserMessage with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend UserMessage with ToJson::{to_json}

@@ -495,7 +495,7 @@ async test "store rejects a session file without a header record" {
   // lost — must fail loudly rather than load with a fabricated identity.
   @fs.write_file(
     session_file(store, "s1"),
-    "\{event.to_json().stringify()}\n",
+    ToJson::to_json(event).stringify() + "\n",
     create_mode=CreateOrTruncate,
   )
   try store.load(SessionId("s1")) catch {
@@ -575,7 +575,7 @@ async test "load keeps a complete final record that lost only its newline" {
   // The append was torn exactly at the newline boundary: the record is whole.
   @fs.write_file(
     session_file(store, "s1"),
-    event.to_json().stringify(),
+    ToJson::to_json(event).stringify(),
     create_mode=OpenOrCreate,
     append=true,
   )
@@ -623,7 +623,7 @@ async test "append repairs and keeps a complete unterminated final event" {
   store.create(session)
   @fs.write_file(
     session_file(store, "s1"),
-    event.to_json().stringify(),
+    ToJson::to_json(event).stringify(),
     create_mode=OpenOrCreate,
     append=true,
   )
@@ -653,7 +653,7 @@ async test "append rejects a stale snapshot against an unterminated durable even
   // path that discards that writer's data.
   @fs.write_file(
     session_file(store, "s1"),
-    event.to_json().stringify(),
+    ToJson::to_json(event).stringify(),
     create_mode=OpenOrCreate,
     append=true,
   )
@@ -804,7 +804,7 @@ async test "load still fails on corruption that is not a torn tail" {
       let (_, event) = session.append_event(Runtime(RuntimeNotice("later")))
       @fs.write_file(
         session_file(store, "s1"),
-        "\{event.to_json().stringify()}\n",
+        ToJson::to_json(event).stringify() + "\n",
         create_mode=OpenOrCreate,
         append=true,
       )

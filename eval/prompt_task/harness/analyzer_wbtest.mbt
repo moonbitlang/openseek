@@ -2,7 +2,7 @@
 fn session_events(session : @agent_session.Session) -> String {
   let out = StringBuilder()
   for event in session.events() {
-    out.write_string(event.to_json().stringify())
+    out.write_string(ToJson::to_json(event).stringify())
     out.write_char('\n')
   }
   out.to_string()

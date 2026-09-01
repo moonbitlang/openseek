@@ -15,5 +15,4 @@ using @icons {
   icon_sparkle,
   icon_sync,
   icon_terminal,
-  icon_worktree,
 }

@@ -5,6 +5,9 @@
    run its scrollbar at the sidebar's true edge instead of trapping it
    inside a shared padding box. */
 aside {
+  /* How far in from the aside's edges the sessions list and the footer sit.
+     The header keeps its own, wider inset for the icon buttons. */
+  --sidebar-inset: 12px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 14px;
@@ -66,9 +69,13 @@ html.is-resizing .sidebar-resize-handle {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  /* The scroll box spans to the sidebar's edge. Its stable 12px gutter matches
-     the sections' left inset whether or not the bar shows. */
-  padding-right: 0;
+  /* The scroll box spans to the sidebar's edge, and the rows inside it stop
+     `--sidebar-inset` short of it however the platform draws its scrollbar. A
+     classic bar (Windows, Linux) fills the stable gutter and holds the rows
+     off the edge on its own; an overlay bar (macOS) floats above the content
+     and reserves nothing, so there the whole inset has to be real padding.
+     `--scrollbar-lane` is the measured width of the gutter the bar claims. */
+  padding-right: max(0px, var(--sidebar-inset) - var(--scrollbar-lane));
   scrollbar-gutter: stable;
 }
 
@@ -76,10 +83,10 @@ html.is-resizing .sidebar-resize-handle {
   display: grid;
   gap: 4px;
   min-width: 0;
-  /* The outer scroll lane already reserves the 12px right inset through its
-     stable scrollbar gutter. Keep only the matching left inset here so nested
-     sections do not double the empty space on the right. */
-  padding: 0 0 0 12px;
+  /* The outer scroll lane owns the right inset — its gutter and padding add
+     up to `--sidebar-inset` between them. Keep only the matching left inset
+     here so nested sections do not double the empty space on the right. */
+  padding: 0 0 0 var(--sidebar-inset);
 }
 
 .sidebar-heading {
@@ -1088,7 +1095,7 @@ button.row-twisty:hover {
   display: grid;
   gap: 8px;
   min-width: 0;
-  padding: 0 12px;
+  padding: 0 var(--sidebar-inset);
 }
 
 .sidebar-button {

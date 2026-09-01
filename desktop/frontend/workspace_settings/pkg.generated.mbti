@@ -1,0 +1,48 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/workspace_settings"
+
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/interop",
+}
+
+// Values
+pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
+
+// Errors
+
+// Types and methods
+pub(all) struct Actions {
+  choose_default_mode : (@interop.ChannelId, @common.Uri, String) -> @cmd.Cmd
+  choose_submodules : (@interop.ChannelId, @common.Uri, String) -> @cmd.Cmd
+  choose_submodule_timeout : (@interop.ChannelId, @common.Uri, String) -> @cmd.Cmd
+}
+
+pub(all) struct Input {
+  page : WorkspacePage
+  settings : SettingsSnapshot
+} derive(Eq)
+pub fn Input::equal(Self, Self) -> Bool
+pub fn Input::inactive() -> Self
+pub fn Input::not_equal(Self, Self) -> Bool
+
+pub(all) enum SettingsSnapshot {
+  Unloaded
+  Loaded(worktree_mode~ : Bool, checkout_submodules~ : Bool, submodule_checkout_timeout_seconds~ : Int)
+} derive(Eq)
+pub fn SettingsSnapshot::equal(Self, Self) -> Bool
+pub fn SettingsSnapshot::not_equal(Self, Self) -> Bool
+
+pub(all) enum WorkspacePage {
+  Active(channel~ : @interop.ChannelId, workspace~ : @common.Uri)
+  Inactive
+} derive(Eq)
+pub fn WorkspacePage::equal(Self, Self) -> Bool
+pub fn WorkspacePage::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

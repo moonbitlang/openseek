@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/settings"
+
+import {
+  "moonbit-community/rabbita/html",
+}
+
+// Values
+pub fn group(() -> @html.Html, String, Array[@html.Html]) -> @html.Html
+
+pub fn row(String, Array[@html.Html], desc? : String, stack? : Bool) -> @html.Html
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

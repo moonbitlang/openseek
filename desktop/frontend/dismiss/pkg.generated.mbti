@@ -1,14 +1,13 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "openseek_desktop/frontend"
+package "openseek_desktop/frontend/dismiss"
 
 import {
   "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/sub",
 }
 
 // Values
-pub fn boot() -> Unit
-
-pub fn request_sidebar_resize_mount() -> @cmd.Cmd
+pub fn on_outside_click(String, trigger~ : String, @cmd.Emit[Unit]) -> @sub.Sub
 
 // Errors
 

@@ -1801,6 +1801,7 @@ fn update_msg(
               clear_legacy_engine_settings(),
               watch_color_scheme(dispatch),
               request_sidebar_resize_mount(),
+              measure_scrollbar_lane(),
             ]),
             model,
           )
@@ -1811,6 +1812,7 @@ fn update_msg(
               watch_color_scheme(dispatch),
               rotate_session(dispatch, model.focused),
               request_sidebar_resize_mount(),
+              measure_scrollbar_lane(),
             ]),
             model,
           )
@@ -3826,7 +3828,6 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let worktree_mode = value == "worktree"
-      let model = { ..model, select_menu: None, }
       // Apply optimistically under a fresh token, so a slower list reply
       // cannot roll the page's select back; the commit broadcast lands on a
       // newer token still. The failure path re-reads the disk state.
@@ -3853,7 +3854,6 @@ fn update_msg(
         "skip" => false
         _ => return (@cmd.none, model)
       }
-      let model = { ..model, select_menu: None, }
       // Preserve the workspace's launch mode locally and patch only the
       // submodule field on disk. The generation fence has the same job as
       // the launch-mode edit above: an older read cannot undo this choice.
@@ -3888,7 +3888,6 @@ fn update_msg(
         "60" => 60
         _ => return (@cmd.none, model)
       }
-      let model = { ..model, select_menu: None, }
       // Patch only the timeout and keep both neighboring workspace choices.
       // A fresh generation prevents an older read from undoing this select.
       let request_generation = dev.workspace_settings_request_generation + 1
@@ -5435,6 +5434,64 @@ fn update_device_msg(
       } else {
         (@cmd.none, model)
       }
+    CancelNotOpen(run_id~) => {
+      guard model.conversation_by_run(channel, run_id) is Some(conv) else {
+        return (@cmd.none, model)
+      }
+      // The id-addressed reply is authoritative: this exact run is no longer
+      // open at the host. Close the optimistic Cancelling phase immediately,
+      // then ask for the saved settlement so the ordinary Finished path can
+      // recover its outcome and refresh the transcript. A successor that won
+      // the race has another id and is left untouched by the guard above.
+      let closed = conv.clear_streams().forget_steers_for_run(run_id)
+      let closed = if closed.pending_approval
+        is Some({ run_id: Some(owner), .. }) &&
+        owner == run_id {
+        { ..closed, pending_approval: None, }
+      } else {
+        closed
+      }
+      let updated = model.replace_conversation({
+        ..closed,
+        run: NoRun(ended=None),
+        last_run_id: Some(run_id),
+      })
+      (
+        fetch_runs(
+          dispatch,
+          channel,
+          updated.run_snapshot_frontier(channel),
+          dev.connection_generation,
+        ),
+        updated,
+      )
+    }
+    CancelFailed(run_id~, message~) => {
+      guard model.conversation_by_run(channel, run_id) is Some(conv) &&
+        conv.run is Open(run_id=current, stage=Cancelling) &&
+        current == run_id else {
+        return (@cmd.none, model)
+      }
+      // Stop was optimistic. If delivery failed, hand the control back while
+      // a runs snapshot determines whether the engine is in fact still live.
+      let retryable = model.replace_conversation({
+        ..conv,
+        run: Open(run_id~, stage=AtStep(None)),
+      })
+      let (notice, notified) = retryable.notify_error(dispatch, message)
+      (
+        @cmd.batch([
+          notice,
+          fetch_runs(
+            dispatch,
+            channel,
+            notified.run_snapshot_frontier(channel),
+            dev.connection_generation,
+          ),
+        ]),
+        notified,
+      )
+    }
     SessionsLoaded(items, connection_generation~, request_generation~) => {
       guard connection_generation == dev.connection_generation &&
         request_generation == dev.sessions_request_generation else {
@@ -12534,6 +12591,49 @@ test "a cancelling turn cannot be steered; the text stays in the composer" {
   let (_, next) = update(dispatch, Send, model)
   inspect(next.active().task, content="too late")
   inspect(next.active().pending_steers.length(), content="0")
+}
+
+///|
+test "a Stop reply for an already-ended run retires Stopping" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling),
+  })
+  let (_, next) = update_dev(dispatch, CancelNotOpen(run_id="r7"), model)
+  assert_true(next.active().run is NoRun(ended=None))
+  assert_eq(next.active().last_run_id, Some("r7"))
+}
+
+///|
+test "a failed Stop becomes retryable instead of staying Stopping" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling),
+  })
+  let (_, next) = update_dev(
+    dispatch,
+    CancelFailed(run_id="r7", message="cancel transport failed"),
+    model,
+  )
+  assert_true(next.active().run is Open(run_id="r7", stage=AtStep(None)))
+  assert_true(
+    next.notifications
+    .iter()
+    .any(item => item.message.contains("cancel transport failed")),
+  )
+}
+
+///|
+test "an old empty cancel reply cannot close a successor" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r8", stage=Opened),
+  })
+  let (_, next) = update_dev(dispatch, CancelNotOpen(run_id="r7"), model)
+  assert_true(next.active().run is Open(run_id="r8", stage=Opened))
 }
 
 ///|

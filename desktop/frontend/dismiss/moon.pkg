@@ -1,0 +1,7 @@
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dom",
+  "moonbit-community/rabbita/sub",
+}
+
+supported_targets = "js"

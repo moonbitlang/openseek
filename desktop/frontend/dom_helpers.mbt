@@ -123,3 +123,56 @@ fn watch_color_scheme(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
     })
   })
 }
+
+///|
+/// Write a custom property on the document element, where the stylesheets read
+/// it. Going through CSSOM rather than the `style` attribute preserves the
+/// properties other writers own (the sidebar's dragged width, the editor's).
+fn set_root_custom_property(name : String, value : String) -> Unit {
+  guard @dom.document().get_document_element() is Some(root) else { return }
+  let style : @js.Value = @js.Value::cast_from(root).get_with_string("style")
+  let _ : @js.Value = style.apply_with_string("setProperty", [
+    @js.Value::cast_from(name),
+    @js.Value::cast_from(value),
+  ])
+}
+
+///|
+/// The property `styles/sidebar.css` subtracts from its right inset.
+const ScrollbarLaneProperty = "--scrollbar-lane"
+
+///|
+/// Side of the throwaway scroller the lane is measured with. Arbitrary — only
+/// its difference from the client width is read.
+const ScrollbarProbeSide = 100
+
+///|
+/// Measure how much width a scrolling pane loses to its scrollbar and publish
+/// it as `--scrollbar-lane`. macOS draws overlay scrollbars, which float above
+/// the content and reserve nothing — `scrollbar-gutter: stable` leaves such a
+/// pane's edge flush; Windows and Linux draw classic ones, which take a lane
+/// out of the box. Nothing in CSS tells the two apart, and neither does the
+/// platform: macOS switches to classic bars under System Settings › Appearance
+/// › "Show scroll bars: Always". So measure a throwaway scroller and hand CSS
+/// the number. Read once at startup, which is also when a change to that
+/// system preference is picked up.
+fn measure_scrollbar_lane() -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    guard @dom.document().get_body() is Some(body) else { return }
+    let probe = @dom.document().create_element("div")
+    // Inline styles, so no stylesheet can reshape the probe. `overflow-y:
+    // scroll` rather than `auto` puts a classic bar there even though the
+    // probe has nothing to scroll; the scrollbar's own styling is inherited
+    // from the document, so the probe sees whatever the real panes see.
+    probe.set_attribute(
+      "style",
+      "position:absolute;top:-9999px;left:-9999px;border:0;padding:0;" +
+      "width:\{ScrollbarProbeSide}px;height:\{ScrollbarProbeSide}px;overflow-y:scroll",
+    )
+    let node = probe.as_node()
+    body.append_child(node)
+    let lane = (ScrollbarProbeSide.to_double() - probe.get_client_width()).to_int()
+    body.remove_child(node)
+    set_root_custom_property(ScrollbarLaneProperty, "\{lane}px")
+  })
+}

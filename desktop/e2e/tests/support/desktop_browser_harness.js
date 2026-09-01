@@ -13,6 +13,18 @@ export class DesktopBrowserHarness {
     this.textSearchLimitHit = false;
     this.directoryEntries = {};
     this.workspaces = ['/workspace'];
+    // Per-workspace settings the Workspace Settings page reads and patches,
+    // mirroring the host's `.openseek/settings.json` store. Keyed by
+    // workspace path so a second project can never inherit another's
+    // snapshot or overwrite its identity.
+    this.workspaceSettings = {
+      '/workspace': {
+        workspace: '/workspace',
+        worktree_mode: false,
+        checkout_submodules: false,
+        submodule_checkout_timeout_seconds: 30,
+      },
+    };
     // Requests mutate the same fixture snapshots a real Desktop host would
     // return on the next list/read. That lets browser tests verify complete
     // UI -> RPC -> refreshed-DOM flows instead of stopping at button clicks.
@@ -641,12 +653,22 @@ export class DesktopBrowserHarness {
       case 'worktree.list':
         return { worktrees: [] };
       case 'workspace.settings_get':
-        return {
-          workspace: request.params?.workspace,
-          worktree_mode: false,
-          checkout_submodules: false,
-          submodule_checkout_timeout_seconds: 30,
-        };
+        return { ...this.workspaceSettingsFor(request.params?.workspace) };
+      case 'workspace.settings_set': {
+        const patch = request.params || {};
+        const snapshot = this.workspaceSettingsFor(patch.workspace);
+        for (const key of [
+          'worktree_mode',
+          'checkout_submodules',
+          'submodule_checkout_timeout_seconds',
+        ]) {
+          if (patch[key] !== undefined) {
+            snapshot[key] = patch[key];
+          }
+        }
+        this.workspaceSettings[patch.workspace] = snapshot;
+        return { ...snapshot };
+      }
       case 'git.branch':
         return {};
       case 'git.changes':
@@ -837,6 +859,15 @@ export class DesktopBrowserHarness {
       return { kind: 'missing' };
     }
     return { kind: 'content', content };
+  }
+
+  workspaceSettingsFor(path = '/workspace') {
+    return this.workspaceSettings[path] ?? {
+      workspace: path,
+      worktree_mode: false,
+      checkout_submodules: false,
+      submodule_checkout_timeout_seconds: 30,
+    };
   }
 
   notify(method, params) {

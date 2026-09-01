@@ -9,42 +9,6 @@ fn token_label(tokens : Int) -> String {
 }
 
 ///|
-/// One settings row: name and optional description on the left, the control
-/// on the right. `stack=true` drops the control below the text at full
-/// width instead, for free-form fields (URLs, keys) that a narrow right
-/// column would squeeze.
-fn setting_row(
-  name : String,
-  controls : Array[@html.Html],
-  desc? : String,
-  stack? : Bool = false,
-) -> @html.Html {
-  let text : Array[@html.Html] = [@html.div(class="setting-name", name)]
-  if desc is Some(desc) && !desc.is_empty() {
-    text.push(@html.div(class="setting-desc", desc))
-  }
-  @html.div(class=if stack { "setting-row stack" } else { "setting-row" }, [
-    @html.div(class="setting-text", text),
-    @html.div(class="setting-control", controls),
-  ])
-}
-
-///|
-/// A titled card of rows: an accent-tinted icon and heading above a bordered
-/// surface, the design system's settings section. Shared with the Skills
-/// page so the two pages read as siblings.
-fn settings_group(
-  icon_image : () -> @html.Html,
-  title : String,
-  rows : Array[@html.Html],
-) -> @html.Html {
-  @html.div(class="settings-group", [
-    @html.div(class="settings-group-head", [icon(icon_image), @html.h2(title)]),
-    @html.div(class="settings-group-card", rows),
-  ])
-}
-
-///|
 /// Build one full-width settings select from the shared custom control. Menu
 /// identity and open state stay in the root model, while the component owns
 /// the DOM, keyboard behavior, and focus restoration used everywhere.
@@ -661,7 +625,7 @@ fn codex_account_rows(
   let codex = model.codex
   let channel = model.focused
   let rows : Array[@html.Html] = [
-    setting_row(
+    @settings.row(
       "Status",
       [],
       desc="\{codex.connection_label()} · \{codex.account_label()}",
@@ -669,7 +633,7 @@ fn codex_account_rows(
   ]
   if codex.signed_in() {
     rows.push(
-      setting_row(
+      @settings.row(
         "Account",
         [
           @html.button(
@@ -684,7 +648,7 @@ fn codex_account_rows(
     )
   } else if codex.sign_in_required() {
     rows.push(
-      setting_row(
+      @settings.row(
         "Sign in",
         [
           @html.button(
@@ -700,7 +664,7 @@ fn codex_account_rows(
   }
   if codex.pending_auth_url() is Some(url) {
     rows.push(
-      setting_row(
+      @settings.row(
         "Sign-in page",
         [
           // The shared external-link listener keeps the desktop webview in
@@ -724,7 +688,7 @@ fn codex_account_rows(
     )
   }
   rows.push(
-    setting_row(
+    @settings.row(
       "Configuration",
       [
         @html.button(
@@ -750,11 +714,11 @@ fn remote_access_rows(
   let rows : Array[@html.Html] = []
   match model.remote_access {
     None =>
-      rows.push(setting_row("Remote control", [], desc="Checking sign-in…"))
+      rows.push(@settings.row("Remote control", [], desc="Checking sign-in…"))
     Some(status) =>
       if status.managed_by_env {
         rows.push(
-          setting_row(
+          @settings.row(
             "Remote control",
             [],
             desc="Configured through the environment (OPENSEEK_RELAY_URL); sign-in is disabled.",
@@ -767,7 +731,7 @@ fn remote_access_rows(
           "connecting to the relay…"
         }
         rows.push(
-          setting_row(
+          @settings.row(
             "Signed in as",
             [
               @html.button(
@@ -782,7 +746,7 @@ fn remote_access_rows(
         if status.device_url is Some(url) {
           let name = status.device_name.unwrap_or("this machine")
           rows.push(
-            setting_row(
+            @settings.row(
               "Device page",
               [
                 // The shared external-link listener keeps the desktop webview
@@ -829,11 +793,11 @@ fn remote_access_rows(
             ),
           )
         }
-        rows.push(setting_row("Sign in", controls, desc=target))
+        rows.push(@settings.row("Sign in", controls, desc=target))
       }
   }
   if model.remote_error is Some(message) {
-    rows.push(setting_row("Problem", [], desc=message))
+    rows.push(@settings.row("Problem", [], desc=message))
   }
   rows
 }
@@ -1007,7 +971,7 @@ fn api_settings_rows(
     ..if !ready {
       [byok_setup_guide(model.api_provider)]
     },
-    setting_row(
+    @settings.row(
       "API endpoint",
       [
         ApiProviderMenu.setting_control(
@@ -1030,7 +994,7 @@ fn api_settings_rows(
   ]
   if model.api_provider is Custom {
     rows.push(
-      setting_row(
+      @settings.row(
         "Endpoint URL",
         [
           @html.input(
@@ -1057,7 +1021,7 @@ fn api_settings_rows(
       Custom => model.custom_key_saved
     }
     rows.push(
-      setting_row(
+      @settings.row(
         match model.api_provider {
           Deepseek => "DeepSeek API key"
           Glm => "GLM API key"
@@ -1108,7 +1072,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // The model is not here: it belongs to a conversation, not to the app, and
   // is picked on the composer's chip.
   let engine_rows : Array[@html.Html] = [
-    setting_row(
+    @settings.row(
       "Max steps",
       [
         @html.input(
@@ -1126,15 +1090,15 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   ]
   let api_rows : Array[@html.Html] = api_settings_rows(dispatch, model)
   let groups : Array[@html.Html] = [
-    settings_group(icon_sparkle, "Engine", engine_rows),
-    settings_group(icon_key, "API", api_rows),
-    settings_group(
+    @settings.group(icon_sparkle, "Engine", engine_rows),
+    @settings.group(icon_key, "API", api_rows),
+    @settings.group(
       icon_extensions,
       "Codex",
       codex_account_rows(dispatch, model),
     ),
-    settings_group(icon_layout, "Interface", [
-      setting_row(
+    @settings.group(icon_layout, "Interface", [
+      @settings.row(
         "Theme",
         [
           ThemeMenu.setting_control(
@@ -1153,7 +1117,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ],
         desc="Used by the app, editor, and terminal. System follows the OS appearance.",
       ),
-      setting_row(
+      @settings.row(
         "Monospace font",
         [
           FontMenu.setting_control(
@@ -1172,7 +1136,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ],
         desc="Used by code, the editor, and the terminal.",
       ),
-      setting_row(
+      @settings.row(
         "Font size",
         [
           FontSizeMenu.setting_control(
@@ -1195,7 +1159,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ],
         desc="Scales app text; code uses a visually matched monospace size.",
       ),
-      setting_row(
+      @settings.row(
         "Notification corner",
         [
           NotificationCornerMenu.setting_control(
@@ -1215,7 +1179,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ],
         desc="Where error notifications pop up.",
       ),
-      setting_row(
+      @settings.row(
         "File tree layout",
         [
           TreeLayoutMenu.setting_control(
@@ -1240,15 +1204,15 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // sections could only break things for whoever is at the machine.
   if model.is_desktop {
     groups.push(
-      settings_group(
+      @settings.group(
         icon_link_external,
         "Remote access",
         remote_access_rows(dispatch, model),
       ),
     )
     groups.push(
-      settings_group(icon_sync, "Updates", [
-        setting_row(
+      @settings.group(icon_sync, "Updates", [
+        @settings.row(
           "Check for updates",
           update_check_controls(dispatch, model),
           desc="Current version: \{model.app_version}.",
@@ -1277,117 +1241,6 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ),
       ]),
       @html.div(class="settings", groups),
-    ]),
-  ])
-}
-
-///|
-/// One workspace's settings page, shown in the main area like Settings and
-/// reached from the project row's "…" menu. These settings affect future
-/// worktree lifecycle operations; the composer's chip remains a per-chat
-/// launch-mode override and never writes back here.
-fn workspace_settings_page(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-  channel : @interop.ChannelId,
-  workspace : @common.Uri,
-) -> @html.Html {
-  // The settings mirror for this workspace; absent until the first
-  // authoritative read on this connection lands. Until then, the controls
-  // stay disabled rather than pretending a choice would stick.
-  let row = match model.device_state(channel) {
-    Some(dev) => dev.workspace_settings_row(workspace)
-    None => None
-  }
-  let worktree_mode = row is Some(row) && row.worktree_mode
-  // Missing is the historical behavior, but the disabled control makes it
-  // clear that no authoritative workspace snapshot has landed yet.
-  let checkout_submodules = row is None ||
-    (row is Some(row) && row.checkout_submodules)
-  let submodule_checkout_timeout_seconds = match row {
-    Some(row) => row.submodule_checkout_timeout_seconds
-    None => DefaultWorkspaceSubmoduleCheckoutTimeoutSeconds
-  }
-  let conversation_rows : Array[@html.Html] = [
-    setting_row(
-      "New chats",
-      [
-        WorkspaceDefaultModeMenu.setting_control(
-          dispatch,
-          model,
-          id="workspace-default-mode-select",
-          options=[
-            { value: "local", label: "Local", },
-            { value: "worktree", label: "Worktree", },
-          ],
-          selected=if worktree_mode { "worktree" } else { "local" },
-          aria_label="New chats",
-          change=dispatch.map(value => {
-            WorkspaceDefaultModeChosen(channel, workspace, value)
-          }),
-          disabled=row is None,
-        ),
-      ],
-      desc="Where a new chat starts: the workspace itself, or a fresh git worktree bound to that chat. The composer's chip still changes a single chat.",
-    ),
-  ]
-  let worktree_rows : Array[@html.Html] = [
-    setting_row(
-      "Submodules",
-      [
-        WorkspaceSubmodulesMenu.setting_control(
-          dispatch,
-          model,
-          id="workspace-submodules-select",
-          options=[
-            { value: "checkout", label: "Initialize", },
-            { value: "skip", label: "Leave uninitialized", },
-          ],
-          selected=if checkout_submodules { "checkout" } else { "skip" },
-          aria_label="Submodules in worktrees",
-          change=dispatch.map(value => {
-            WorkspaceSubmodulesChosen(channel, workspace, value)
-          }),
-          disabled=row is None,
-        ),
-      ],
-      desc="For new or repaired worktrees in this workspace, mirror the top-level submodules already initialized in its main checkout.",
-    ),
-    setting_row(
-      "Checkout timeout",
-      [
-        WorkspaceSubmoduleTimeoutMenu.setting_control(
-          dispatch,
-          model,
-          id="workspace-submodule-timeout-select",
-          options=[
-            { value: "5", label: "5 seconds", },
-            { value: "10", label: "10 seconds", },
-            { value: "30", label: "30 seconds", },
-            { value: "60", label: "60 seconds", },
-          ],
-          selected=submodule_checkout_timeout_seconds.to_string(),
-          aria_label="Submodule checkout timeout",
-          change=dispatch.map(value => {
-            WorkspaceSubmoduleTimeoutChosen(channel, workspace, value)
-          }),
-          disabled=row is None,
-        ),
-      ],
-      desc="Stop initializing submodules if Git has not finished within this time.",
-    ),
-  ]
-  @html.section(class="settings-page", [
-    @html.div(class="settings-page-inner", [
-      @html.div(class="settings-header", [
-        @html.div(class="page-eyebrow", "Workspace"),
-        @html.h1(@resource.label(workspace)),
-        @html.div(class="settings-subtitle", workspace.path),
-      ]),
-      @html.div(class="settings", [
-        settings_group(icon_worktree, "Conversations", conversation_rows),
-        settings_group(icon_worktree, "Worktrees", worktree_rows),
-      ]),
     ]),
   ])
 }
@@ -1760,8 +1613,9 @@ fn view(
   codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
   quick_open_html : @html.Html,
-  skills_html : @html.Html,
+  skills_and_workspace_settings : (@html.Html, @html.Html),
 ) -> @html.Html {
+  let (skills_html, workspace_settings_html) = skills_and_workspace_settings
   // A browser page is gated on both its relay session and its required
   // query-selected device. Until both exist, the console frame — sidebar,
   // composer, overlays — stays unbuilt and inert Local cannot receive UI work.
@@ -1843,12 +1697,8 @@ fn view(
     Skills => page_with_toggle(dispatch, model, skills_html)
     Settings =>
       page_with_toggle(dispatch, model, settings_page(dispatch, model))
-    WorkspaceSettings(channel~, workspace~) =>
-      page_with_toggle(
-        dispatch,
-        model,
-        workspace_settings_page(dispatch, model, channel, workspace),
-      )
+    WorkspaceSettings(..) =>
+      page_with_toggle(dispatch, model, workspace_settings_html)
   }
   // The app is `sidebar | content`; `content` itself splits into the
   // conversation (left) and the editor (right) as two independent parts, so

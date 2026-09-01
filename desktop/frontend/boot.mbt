@@ -388,7 +388,7 @@ pub fn boot() -> Unit {
             emit.map((_ : Unit) => CloseGitDetails)
           }
           subs.push(
-            dismiss_subscription(
+            @dismiss.on_outside_click(
               "composer-git-dismiss",
               trigger=".composer-git-button",
               close,
@@ -397,7 +397,7 @@ pub fn boot() -> Unit {
         }
         if model.select_menu is Some(_) {
           subs.push(
-            dismiss_subscription(
+            @dismiss.on_outside_click(
               "custom-select-dismiss",
               trigger=".custom-select-button",
               emit.map((_ : Unit) => CloseSelectMenu),
@@ -406,7 +406,7 @@ pub fn boot() -> Unit {
         }
         if model.right_panel_menu_open {
           subs.push(
-            dismiss_subscription(
+            @dismiss.on_outside_click(
               "right-panel-menu-dismiss",
               trigger=".tab-add",
               emit.map((_ : Unit) => CloseRightPanelMenu),
@@ -446,7 +446,7 @@ pub fn boot() -> Unit {
         }
         if model.file_panel.highlighted is Some(directory) {
           subs.push(
-            dismiss_subscription(
+            @dismiss.on_outside_click(
               "breadcrumb-picker-dismiss",
               // Directory crumbs toggle the picker, and the picker itself
               // supports nested folder navigation. Every other click closes
@@ -532,6 +532,30 @@ pub fn boot() -> Unit {
       state.map(model => model.skills),
       emit.map(msg => Skills(msg)),
     )
+    let workspace_settings_input = state.map(model => {
+      model.workspace_settings_input()
+    })
+    let workspace_settings_html = @workspace_settings.component(
+      workspace_settings_input,
+      {
+        choose_default_mode: (channel, workspace, value) => {
+          emit(WorkspaceDefaultModeChosen(channel, workspace, value))
+        },
+        choose_submodules: (channel, workspace, value) => {
+          emit(WorkspaceSubmodulesChosen(channel, workspace, value))
+        },
+        choose_submodule_timeout: (channel, workspace, value) => {
+          emit(WorkspaceSubmoduleTimeoutChosen(channel, workspace, value))
+        },
+      },
+    )
+    // `Val::view9` is rabbita's widest composition; the two settings pages
+    // share one slot as a pair.
+    let skills_and_workspace_settings = @rabbita.Val::map2(
+      skills_html,
+      workspace_settings_html,
+      (skills, workspace_settings) => (skills, workspace_settings),
+    )
     state.view9(
       terminal_html,
       transcript_html,
@@ -540,7 +564,7 @@ pub fn boot() -> Unit {
       codex_composer_html,
       sidebar_html,
       quick_open_html,
-      skills_html,
+      skills_and_workspace_settings,
       (
         model,
         terminal_html,
@@ -550,7 +574,7 @@ pub fn boot() -> Unit {
         codex_composer_html,
         sidebar_html,
         quick_open_html,
-        skills_html,
+        skills_and_workspace_settings,
       ) => {
         view(
           emit,
@@ -564,7 +588,7 @@ pub fn boot() -> Unit {
           codex_composer_html,
           sidebar_html,
           quick_open_html,
-          skills_html,
+          skills_and_workspace_settings,
         )
       },
     )

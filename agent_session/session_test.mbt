@@ -34,7 +34,7 @@ test "event timestamps round trip through JSON" {
     User(UserMessage("hello")),
     unix_ms=1781144351123L,
   )
-  let line = stamped.events()[0].to_json().stringify()
+  let line = ToJson::to_json(stamped.events()[0]).stringify()
   assert_eq(
     line,
     (
@@ -55,7 +55,7 @@ test "event timestamps round trip through JSON" {
 test "assistant checkpoint replay provenance is durable and sparse" {
   let ordinary = @agent_session.AssistantMessage("answer")
   assert_false(ordinary.is_replay())
-  assert_false(ordinary.to_json().stringify().contains("is_replay"))
+  assert_false(ToJson::to_json(ordinary).stringify().contains("is_replay"))
   let replay = @agent_session.AssistantMessage(
     "answer",
     reasoning_content="thought",
@@ -63,7 +63,7 @@ test "assistant checkpoint replay provenance is durable and sparse" {
   )
   assert_true(replay.is_replay())
   let decoded : @agent_session.AssistantMessage = @json.from_json(
-    replay.to_json(),
+    ToJson::to_json(replay),
   )
   assert_true(decoded.is_replay())
   assert_eq(decoded.reasoning_content(), Some("thought"))
@@ -78,7 +78,7 @@ test "ToolResult brief round-trips when present" {
     brief="ran ls → 2 files",
   )
   let decoded : @agent_session.ToolResult = @json.from_json(
-    with_brief.to_json(),
+    ToJson::to_json(with_brief),
   )
   guard decoded.brief() is Some(text) else { fail("brief should round-trip") }
   assert_eq(text, "ran ls → 2 files")

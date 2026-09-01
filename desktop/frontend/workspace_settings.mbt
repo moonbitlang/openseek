@@ -226,6 +226,87 @@ fn Model::default_worktree_mode(
   }
 }
 
+///|
+/// The component input projected from the root model. While the Workspace
+/// Settings screen is active it carries the workspace identity and its
+/// settings mirror row; otherwise it is inactive and the component renders
+/// nothing.
+fn Model::workspace_settings_input(self : Model) -> @workspace_settings.Input {
+  match self.screen {
+    WorkspaceSettings(channel~, workspace~) => {
+      // While the page's device is absent from the roster there is nothing
+      // authoritative to show, so the input is inactive and the page
+      // renders nothing until the device is back.
+      guard self.device_state(channel) is Some(dev) else {
+        return @workspace_settings.Input::inactive()
+      }
+      let row = dev.workspace_settings_row(workspace)
+      {
+        page: Active(channel~, workspace~),
+        settings: match row {
+          Some(row) =>
+            Loaded(
+              worktree_mode=row.worktree_mode,
+              checkout_submodules=row.checkout_submodules,
+              submodule_checkout_timeout_seconds=row.submodule_checkout_timeout_seconds,
+            )
+          None => Unloaded
+        },
+      }
+    }
+    _ => @workspace_settings.Input::inactive()
+  }
+}
+
+///|
+test "workspace settings input projects the mirror row and falls back inert" {
+  let workspace = @interop.ChannelId::Local.test_resource("/proj")
+  let model = test_model().with_dev(dev => { ..dev, projects: [workspace], })
+  // Off the Workspace Settings screen the projected input is inactive and
+  // the component renders nothing.
+  assert_true(model.workspace_settings_input().page is Inactive)
+  let (_, loaded) = update_dev(
+    test_dispatch(),
+    WorkspaceSettingsLoaded(
+      workspace~,
+      worktree_mode=true,
+      checkout_submodules=false,
+      submodule_checkout_timeout_seconds=30,
+      connection_generation=0,
+      request_generation=1,
+    ),
+    model,
+  )
+  let page = { ..loaded, screen: WorkspaceSettings(channel=Local, workspace~), }
+  let input = page.workspace_settings_input()
+  assert_true(input.page is Active(..))
+  guard input.settings
+    is Loaded(
+      worktree_mode~,
+      checkout_submodules~,
+      submodule_checkout_timeout_seconds~
+    ) else {
+    fail("expected a loaded snapshot")
+  }
+  assert_true(worktree_mode)
+  assert_false(checkout_submodules)
+  assert_eq(submodule_checkout_timeout_seconds, 30)
+  // A workspace whose mirror has not landed still projects an active page,
+  // with an unloaded snapshot the component renders disabled.
+  let empty = { ..model, screen: WorkspaceSettings(channel=Local, workspace~), }
+  let unloaded = empty.workspace_settings_input()
+  assert_true(unloaded.page is Active(..))
+  assert_true(unloaded.settings is Unloaded)
+  // A screen whose device is absent from the roster projects nothing: the
+  // device identity cannot anchor the page, and a later re-add must mint a
+  // fresh key instead of matching component state from before the drop.
+  let gone = {
+    ..model,
+    screen: WorkspaceSettings(channel=Remote("roster-ghost"), workspace~),
+  }
+  assert_true(gone.workspace_settings_input().page is Inactive)
+}
+
 // Tests below cover the settings mirror's staleness fences, the page's
 // optimistic write, and the "…" menu and settings-page navigation that
 // ride on the mirror.
@@ -363,10 +444,9 @@ test "the settings page select applies optimistically" {
   let (_, chosen) = update(
     dispatch,
     WorkspaceDefaultModeChosen(Local, workspace, "worktree"),
-    { ..loaded, select_menu: Some(WorkspaceDefaultModeMenu), },
+    loaded,
   )
   assert_true(chosen.default_worktree_mode(Local, workspace))
-  assert_true(chosen.select_menu is None)
   // The optimistic write spent a fresh token, so a pre-edit reply still in
   // flight cannot flip the select back under the user.
   let (_, raced) = update_dev(
@@ -410,14 +490,13 @@ test "the workspace submodule select preserves its launch mode" {
   let (_, chosen) = update(
     dispatch,
     WorkspaceSubmodulesChosen(Local, workspace, "skip"),
-    { ..loaded, select_menu: Some(WorkspaceSubmodulesMenu), },
+    loaded,
   )
   guard chosen.dev().workspace_settings_row(workspace) is Some(row) else {
     fail("expected the workspace settings row")
   }
   assert_true(row.worktree_mode)
   assert_false(row.checkout_submodules)
-  assert_true(chosen.select_menu is None)
   // Unknown select values are ignored and cannot mutate either field.
   let (_, unknown) = update(
     dispatch,
@@ -451,7 +530,7 @@ test "the workspace submodule timeout select preserves neighboring settings" {
   let (_, chosen) = update(
     dispatch,
     WorkspaceSubmoduleTimeoutChosen(Local, workspace, "30"),
-    { ..loaded, select_menu: Some(WorkspaceSubmoduleTimeoutMenu), },
+    loaded,
   )
   guard chosen.dev().workspace_settings_row(workspace) is Some(row) else {
     fail("expected the workspace settings row")
@@ -459,7 +538,6 @@ test "the workspace submodule timeout select preserves neighboring settings" {
   assert_true(row.worktree_mode)
   assert_false(row.checkout_submodules)
   assert_eq(row.submodule_checkout_timeout_seconds, 30)
-  assert_true(chosen.select_menu is None)
   let (_, unknown) = update(
     dispatch,
     WorkspaceSubmoduleTimeoutChosen(Local, workspace, "600"),
