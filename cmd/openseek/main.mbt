@@ -690,7 +690,6 @@ fn root_command() -> @argparse.Command {
           OptionArg(
             "concurrency",
             long="concurrency",
-            env="OPENSEEK_CONCURRENCY",
             default_values=["1"],
             about="Run the task in N sibling copies of --dir concurrently (best-of-N). Any explicit value, including 1, copies --dir into <dir>_run_<i> and never writes to --dir itself; omit the flag for a single in-place run.",
           ),
@@ -819,10 +818,10 @@ fn fleet_mode(matches : @argparse.Matches, concurrency : Int) -> Bool {
 }
 
 ///|
-/// Whether the user supplied `name` on the command line or via its
-/// environment variable, rather than the built-in default filling it in.
+/// Whether the user supplied `name` on the command line rather than the
+/// built-in default filling it in.
 fn explicitly_provided(matches : @argparse.Matches, name : String) -> Bool {
-  matches.sources.get(name) is (Some(Argv) | Some(Env))
+  matches.sources.get(name) is Some(Argv)
 }
 
 ///|
@@ -1458,9 +1457,6 @@ test "explicit --concurrency selects fleet mode even at 1" {
     env=Map([]),
   )
   assert_true(fleet_mode(explicit_one, 1))
-  // The env var counts as explicit too.
-  let via_env = run_matches(argv=["task"], env={ "OPENSEEK_CONCURRENCY": "1" })
-  assert_true(fleet_mode(via_env, 1))
   // Only the flagless default runs in place.
   let default_run = run_matches(argv=["task"], env=Map([]))
   assert_false(fleet_mode(default_run, 1))

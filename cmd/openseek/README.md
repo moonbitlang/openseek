@@ -152,8 +152,7 @@ original repo. Each run's session lives under its run directory.
 moon run cmd/openseek -- run --concurrency 3 --dir myproject "fix the failing test"
 ```
 
-`run --concurrency` (env `OPENSEEK_CONCURRENCY`, default `1`) cannot be combined
-with `--session` or `--no-session`.
+`run --concurrency` cannot be combined with `--session` or `--no-session`.
 
 ## Package Boundary
 
