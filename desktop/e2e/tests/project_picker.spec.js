@@ -344,6 +344,19 @@ test('the Windows drive list lists drives and refuses Add project', async ({ pag
   await page.keyboard.type('C');
   await expect(picker.getByText('1 match')).toBeVisible();
   await expect(input).toHaveValue('/C');
+  // A native drive-letter spelling is the host's to resolve, never a child
+  // of the listed directory.
+  app.browseTree['C:'] = { path: '/C:/', entries: ['Users'] };
+  app.browseTree['C:/Users'] = { path: '/C:/Users', parent: '/C:/', entries: ['test'] };
+  await selectAll(page);
+  app.hold('fs.browse');
+  await page.keyboard.type('C:/Users/');
+  await expect.poll(() => app.heldCount('fs.browse')).toBe(2);
+  app.releaseHeld('fs.browse');
+  await expect(input).toHaveValue('/C:/Users/');
+  await expect(picker.getByLabel('Open folder test')).toBeVisible();
+  expect(browses(app, 'C:/')).toHaveLength(1);
+  expect(browses(app, 'C:/Users/')).toHaveLength(1);
   expect(app.pageErrors).toEqual([]);
 });
 

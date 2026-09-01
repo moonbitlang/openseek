@@ -39,11 +39,15 @@ fn State::completion(self : State) -> (String, String)? {
   if !draft.is_empty() && self.already_loaded(draft) {
     return Some((draft, ""))
   }
-  // Only the home forms the host expands (`~`, `~/…`) are its to resolve;
-  // any other `~`-led name is an ordinary child of the listed directory.
+  // Only the home forms the host expands (`~`, `~/…`) are its to resolve —
+  // any other `~`-led name is an ordinary child of the listed directory —
+  // and a drive-letter spelling such as `C:/Users` is the Windows host's
+  // own absolute form. Splitting either under the listed directory would
+  // browse nonsense and rewrite the draft.
   let host_native = draft.has_prefix("/") ||
     draft == "~" ||
-    draft.has_prefix("~/")
+    draft.has_prefix("~/") ||
+    drive_rooted(draft)
   let absolute = if host_native { draft } else { location.base() + draft }
   match absolute.rev_find("/") {
     Some(index) =>
@@ -55,6 +59,18 @@ fn State::completion(self : State) -> (String, String)? {
       )
     // Only a bare `~` has no separator: the host expands it whole.
     None => Some((absolute, ""))
+  }
+}
+
+///|
+/// A forward-slash drive-letter spelling (`C:/…`): the Windows host's own
+/// absolute form, accepted as typed. Backslash spellings never reach the
+/// splitter — the listed base's separator outranks theirs — and stay
+/// Enter-only.
+fn drive_rooted(draft : String) -> Bool {
+  match draft.iter().take(3).collect() {
+    [letter, ':', '/'] => letter.is_ascii_alphabetic()
+    _ => false
   }
 }
 
