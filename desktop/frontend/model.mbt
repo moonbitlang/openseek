@@ -614,6 +614,10 @@ priv struct RunSnapshotFrontier {
   // the time this request returns; these exact ids remain independent replay
   // selectors so predecessor terminal side effects are not lost.
   unreconciled_run_ids : Array[String]
+  // Runs whose terminal side effects this page has already reduced. They stay
+  // in the lifecycle snapshot for stale-reply fencing, but must never be sent
+  // back to the host as completion selectors or admitted from a replay.
+  reconciled_run_ids : Array[String]
   // Initial prompts whose start transport failed before a run id came back.
   // Their submission id is still an exact owner and must survive the
   // lifecycle's transition to SnapshotIdle for reconnect settlement lookup.
@@ -1222,6 +1226,12 @@ priv struct DeviceState {
   // Cleared only at BridgeReady, immediately before fresh live and archived
   // lists are requested for the new connection.
   archive_overrides : Array[ArchiveOverride]
+  // Run ids whose conversation was removed by archive/delete after the id had
+  // already reached a terminal fence. Notification and RPC queues are ordered
+  // independently, so a delayed Started can outlive the conversation that used
+  // to carry the fence. Host run ids are random and process-unique; retaining
+  // them for this device generation cannot alias another store's session id.
+  retired_run_fences : Array[String]
   // Registered project directories: the host registry's absolute paths in
   // registration order. The sidebar shows one section per entry.
   projects : Array[@common.Uri]
@@ -1259,6 +1269,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     sessions: [],
     archived: [],
     archive_overrides: [],
+    retired_run_fences: [],
     projects: [],
     worktrees: [],
     workspace_settings: [],
@@ -2909,6 +2920,7 @@ fn Model::run_snapshot_frontier(
       unreconciled_run_ids: conv.retired_run_ids.filter(run_id => {
         !conv.reconciled_run_ids.contains(run_id)
       }),
+      reconciled_run_ids: conv.reconciled_run_ids.copy(),
       initial_ids,
       pending_approval_id: conv.pending_approval.map(pending => pending.id),
     }
@@ -2957,6 +2969,12 @@ fn Model::matched_settlement_frontier(
   settlement : RecoveredSettlement,
 ) -> SettlementFrontierMatch? {
   guard self.find_conversation(channel, settlement.session) is Some(conv) else {
+    return None
+  }
+  // A replay can be selected by an older client frontier even after a live
+  // Finished has already driven this page's one-time terminal work. Reject it
+  // before current/last-run matching so reconnect cannot re-badge or re-probe.
+  if conv.reconciled_run_ids.contains(settlement.run_id) {
     return None
   }
   for captured in frontier {
@@ -3105,9 +3123,23 @@ fn Model::with_archive_override(
   // expires stale composer actions for this owner.
   let newly_retired = !(disposition is ArchiveLive) &&
     dev.archive_override(key) is (None | Some(ArchiveLive))
+  let retired_run_fences = dev.retired_run_fences.copy()
+  if newly_retired &&
+    self.find_conversation(channel, key.session) is Some(conv) &&
+    conv.project() == key.workspace {
+    for run_id in conv.retired_run_ids {
+      if !retired_run_fences.contains(run_id) {
+        retired_run_fences.push(run_id)
+      }
+    }
+  }
   let overrides = dev.archive_overrides.filter(item => item.key != key)
   overrides.push({ key, disposition, })
-  let model = self.replace_device({ ..dev, archive_overrides: overrides, })
+  let model = self.replace_device({
+    ..dev,
+    archive_overrides: overrides,
+    retired_run_fences,
+  })
   if !newly_retired {
     return model
   }

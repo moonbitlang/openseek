@@ -656,6 +656,7 @@ test "a question survives a run handoff inside one snapshot" {
             session: asked.session_id,
             state: SnapshotOpen(run_id~),
             unreconciled_run_ids: [],
+            reconciled_run_ids: [],
             initial_ids: [],
             pending_approval_id: Some("ap-1"),
           },
