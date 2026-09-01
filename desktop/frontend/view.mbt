@@ -1282,117 +1282,6 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-/// One workspace's settings page, shown in the main area like Settings and
-/// reached from the project row's "…" menu. These settings affect future
-/// worktree lifecycle operations; the composer's chip remains a per-chat
-/// launch-mode override and never writes back here.
-fn workspace_settings_page(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-  channel : @interop.ChannelId,
-  workspace : @common.Uri,
-) -> @html.Html {
-  // The settings mirror for this workspace; absent until the first
-  // authoritative read on this connection lands. Until then, the controls
-  // stay disabled rather than pretending a choice would stick.
-  let row = match model.device_state(channel) {
-    Some(dev) => dev.workspace_settings_row(workspace)
-    None => None
-  }
-  let worktree_mode = row is Some(row) && row.worktree_mode
-  // Missing is the historical behavior, but the disabled control makes it
-  // clear that no authoritative workspace snapshot has landed yet.
-  let checkout_submodules = row is None ||
-    (row is Some(row) && row.checkout_submodules)
-  let submodule_checkout_timeout_seconds = match row {
-    Some(row) => row.submodule_checkout_timeout_seconds
-    None => DefaultWorkspaceSubmoduleCheckoutTimeoutSeconds
-  }
-  let conversation_rows : Array[@html.Html] = [
-    setting_row(
-      "New chats",
-      [
-        WorkspaceDefaultModeMenu.setting_control(
-          dispatch,
-          model,
-          id="workspace-default-mode-select",
-          options=[
-            { value: "local", label: "Local", },
-            { value: "worktree", label: "Worktree", },
-          ],
-          selected=if worktree_mode { "worktree" } else { "local" },
-          aria_label="New chats",
-          change=dispatch.map(value => {
-            WorkspaceDefaultModeChosen(channel, workspace, value)
-          }),
-          disabled=row is None,
-        ),
-      ],
-      desc="Where a new chat starts: the workspace itself, or a fresh git worktree bound to that chat. The composer's chip still changes a single chat.",
-    ),
-  ]
-  let worktree_rows : Array[@html.Html] = [
-    setting_row(
-      "Submodules",
-      [
-        WorkspaceSubmodulesMenu.setting_control(
-          dispatch,
-          model,
-          id="workspace-submodules-select",
-          options=[
-            { value: "checkout", label: "Initialize", },
-            { value: "skip", label: "Leave uninitialized", },
-          ],
-          selected=if checkout_submodules { "checkout" } else { "skip" },
-          aria_label="Submodules in worktrees",
-          change=dispatch.map(value => {
-            WorkspaceSubmodulesChosen(channel, workspace, value)
-          }),
-          disabled=row is None,
-        ),
-      ],
-      desc="For new or repaired worktrees in this workspace, mirror the top-level submodules already initialized in its main checkout.",
-    ),
-    setting_row(
-      "Checkout timeout",
-      [
-        WorkspaceSubmoduleTimeoutMenu.setting_control(
-          dispatch,
-          model,
-          id="workspace-submodule-timeout-select",
-          options=[
-            { value: "5", label: "5 seconds", },
-            { value: "10", label: "10 seconds", },
-            { value: "30", label: "30 seconds", },
-            { value: "60", label: "60 seconds", },
-          ],
-          selected=submodule_checkout_timeout_seconds.to_string(),
-          aria_label="Submodule checkout timeout",
-          change=dispatch.map(value => {
-            WorkspaceSubmoduleTimeoutChosen(channel, workspace, value)
-          }),
-          disabled=row is None,
-        ),
-      ],
-      desc="Stop initializing submodules if Git has not finished within this time.",
-    ),
-  ]
-  @html.section(class="settings-page", [
-    @html.div(class="settings-page-inner", [
-      @html.div(class="settings-header", [
-        @html.div(class="page-eyebrow", "Workspace"),
-        @html.h1(@resource.label(workspace)),
-        @html.div(class="settings-subtitle", workspace.path),
-      ]),
-      @html.div(class="settings", [
-        settings_group(icon_worktree, "Conversations", conversation_rows),
-        settings_group(icon_worktree, "Worktrees", worktree_rows),
-      ]),
-    ]),
-  ])
-}
-
-///|
 fn run_indicator(model : Model, conv : Conversation) -> @html.Html {
   let status = model.display_status()
   let label = status.label()
@@ -1760,8 +1649,9 @@ fn view(
   codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
   quick_open_html : @html.Html,
-  skills_html : @html.Html,
+  skills_and_workspace_settings : (@html.Html, @html.Html),
 ) -> @html.Html {
+  let (skills_html, workspace_settings_html) = skills_and_workspace_settings
   // A browser page is gated on both its relay session and its required
   // query-selected device. Until both exist, the console frame — sidebar,
   // composer, overlays — stays unbuilt and inert Local cannot receive UI work.
@@ -1843,12 +1733,8 @@ fn view(
     Skills => page_with_toggle(dispatch, model, skills_html)
     Settings =>
       page_with_toggle(dispatch, model, settings_page(dispatch, model))
-    WorkspaceSettings(channel~, workspace~) =>
-      page_with_toggle(
-        dispatch,
-        model,
-        workspace_settings_page(dispatch, model, channel, workspace),
-      )
+    WorkspaceSettings(..) =>
+      page_with_toggle(dispatch, model, workspace_settings_html)
   }
   // The app is `sidebar | content`; `content` itself splits into the
   // conversation (left) and the editor (right) as two independent parts, so

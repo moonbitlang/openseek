@@ -1,0 +1,413 @@
+// The Workspace Settings page as a self-contained rabbita component. The
+// root model keeps the authoritative settings mirror — the composer chip,
+// new-chat launch mode, and worktree creation all read the same rows — so
+// this component owns only page-local UI state: which of the three select
+// menus is open. It renders from a projected `Input` and re-emits the
+// page's persistence choices through `Actions`.
+
+///|
+/// The workspace settings values the page renders. `Unloaded` means the
+/// first authoritative read for this workspace has not landed yet; the
+/// controls render disabled with display-only placeholder values until a
+/// `Loaded` snapshot arrives.
+pub(all) enum SettingsSnapshot {
+  Unloaded
+  Loaded(
+    worktree_mode~ : Bool,
+    checkout_submodules~ : Bool,
+    submodule_checkout_timeout_seconds~ : Int
+  )
+} derive(Eq)
+
+///|
+/// The workspace identity the page renders for. `Inactive` carries no
+/// workspace at all, so an inactive input can never be mistaken for a real
+/// workspace page: the component is mounted for the app's lifetime, and
+/// while another screen is active the view renders nothing. Each page open
+/// gets a fresh `generation`, and the device's WebSocket epoch is part of
+/// the identity too — so component-local state left over from a previous
+/// open, a detach, or a roster drop-and-restore (all message-less from the
+/// component's view) can never match the new page's key.
+pub(all) enum WorkspacePage {
+  Active(
+    channel~ : @interop.ChannelId,
+    workspace~ : @common.Uri,
+    generation~ : Int,
+    device_epoch~ : Int
+  )
+  Inactive
+} derive(Eq)
+
+///|
+/// What the component needs to render one workspace's settings page. The
+/// value is projected from the root model once per app frame; it changes
+/// whenever the mirror row, the focused workspace, or the active screen
+/// does.
+pub(all) struct Input {
+  page : WorkspacePage
+  settings : SettingsSnapshot
+} derive(Eq)
+
+///|
+/// The inert input the root projects while another screen is active: it
+/// carries no workspace identity, and the view renders nothing for it.
+pub fn Input::inactive() -> Input {
+  { page: Inactive, settings: Unloaded, }
+}
+
+///|
+/// Parent-owned persistence messages this component re-emits. Captured at
+/// construction and never stored in the component Model, so a workspace
+/// switch under a mounted component cannot leak an old identity.
+pub(all) struct Actions {
+  choose_default_mode : (@interop.ChannelId, @common.Uri, String) -> @cmd.Cmd
+  choose_submodules : (@interop.ChannelId, @common.Uri, String) -> @cmd.Cmd
+  choose_submodule_timeout : (@interop.ChannelId, @common.Uri, String) -> @cmd.Cmd
+}
+
+///|
+/// The page's three select menus. Identity is local to the component: the
+/// root model's `select_menu` keeps the composer and Settings-page menus,
+/// this one keeps the Workspace Settings menus.
+priv enum Menu {
+  DefaultMode
+  Submodules
+  Timeout
+} derive(Eq)
+
+///|
+priv struct Model {
+  /// The page identity the menu state belongs to. Any change — leaving the
+  /// page, re-entering it, or opening another workspace's settings —
+  /// dismisses the menu, matching the root model's screen-change
+  /// dismissal.
+  key : WorkspacePage
+  menu : Menu?
+} derive(Eq)
+
+///|
+priv enum Msg {
+  ToggleMenu(Menu)
+  CloseMenu
+}
+
+///|
+fn Model::update(
+  self : Model,
+  input : Input,
+  msg : Msg,
+  _emit : @cmd.Emit[Msg],
+) -> (Model, @cmd.Cmd) {
+  let key = input.page
+  let self = if self.key == key { self } else { { key, menu: None, } }
+  match msg {
+    ToggleMenu(menu) =>
+      (
+        {
+          ..self,
+          menu: if self.menu == Some(menu) {
+            None
+          } else {
+            Some(menu)
+          },
+        },
+        @cmd.none,
+      )
+    CloseMenu => ({ ..self, menu: None, }, @cmd.none)
+  }
+}
+
+///|
+/// Click-away dismissal for this page's select menus, active only while one
+/// is open. Same capture-phase document listener shape as the root app's
+/// menus, but component-local: the trigger selector matches the shared
+/// custom-select button, and everything else closes the menu.
+priv suberror MenuDismissSubscription {
+  MenuDismissSubscription(@cmd.Emit[Unit])
+}
+
+///|
+fn menu_dismiss_subscription(emit : @cmd.Emit[Unit]) -> @sub.Sub {
+  @sub.custom_sub(
+    "workspace-settings-select-dismiss",
+    @sub.Scope::Global,
+    MenuDismissSubscription(emit),
+    menu_dismiss_loader,
+  )
+}
+
+///|
+fn menu_dismiss_loader(
+  payload : Error,
+  scheduler : &@cmd.Scheduler,
+) -> @sub.RunningSub? {
+  match payload {
+    MenuDismissSubscription(emit) => {
+      let mut emit = emit
+      let target = @dom.document().as_event_target()
+      let listener : @dom.Listener = event => {
+        // Event targets can be non-elements. Those cannot be the trigger,
+        // so they dismiss just like a click anywhere else in the document.
+        if event.target().to_element() is Some(element) &&
+          element.closest(".custom-select-button") is Some(_) {
+          return
+        }
+        scheduler.add(emit(()))
+      }
+      target.add_event_listener_with_options("click", listener, capture=true)
+      Some({
+        unload: _ => {
+          target.remove_event_listener_with_options(
+            "click",
+            listener,
+            capture=true,
+          )
+        },
+        update_tagger: payload => {
+          guard payload is MenuDismissSubscription(next) else { return }
+          emit = next
+        },
+      })
+    }
+    _ => None
+  }
+}
+
+///|
+/// One settings row: name and optional description on the left, the control
+/// on the right. Mirrors the root Settings page's row layout so the two
+/// pages read as siblings.
+fn setting_row(
+  name : String,
+  controls : Array[@html.Html],
+  desc? : String,
+) -> @html.Html {
+  let text : Array[@html.Html] = [@html.div(class="setting-name", name)]
+  if desc is Some(desc) && !desc.is_empty() {
+    text.push(@html.div(class="setting-desc", desc))
+  }
+  @html.div(class="setting-row", [
+    @html.div(class="setting-text", text),
+    @html.div(class="setting-control", controls),
+  ])
+}
+
+///|
+/// A titled card of rows: an accent-tinted icon and heading above a
+/// bordered surface — the design system's settings section, shared with the
+/// Settings page so the two pages read as siblings.
+fn settings_group(
+  icon_image : () -> @html.Html,
+  title : String,
+  rows : Array[@html.Html],
+) -> @html.Html {
+  @html.div(class="settings-group", [
+    @html.div(class="settings-group-head", [icon(icon_image), @html.h2(title)]),
+    @html.div(class="settings-group-card", rows),
+  ])
+}
+
+///|
+/// An icon in a fixed-size span. Icons are functions, not shared constants,
+/// so each render site gets its own virtual-DOM value.
+fn icon(image : () -> @html.Html) -> @html.Html {
+  @html.span(class="icon", attrs=@html.Attrs::build().aria_hidden("true"), [
+    image(),
+  ])
+}
+
+///|
+/// Build one full-width settings select from the shared custom control,
+/// bound to this component's local menu state. Choosing a value closes the
+/// menu immediately and hands the choice to the root-owned action, which
+/// applies the optimistic mirror update and persists it.
+fn setting_select(
+  menu : Menu,
+  input : Input,
+  state : Model,
+  emit : @cmd.Emit[Msg],
+  id~ : String,
+  options~ : Array[@select_control.Option],
+  selected~ : String,
+  aria_label~ : String,
+  change~ : (@interop.ChannelId, @common.Uri, String) -> @cmd.Cmd,
+) -> @select_control.Control {
+  // The change command names the workspace it came from. `Inactive` never
+  // renders, so the fallback arm is unreachable in practice.
+  let change = match input.page {
+    Active(channel~, workspace~, ..) =>
+      (value : String) => {
+        @cmd.batch([emit(CloseMenu), change(channel, workspace, value)])
+      }
+    Inactive => (_ : String) => @cmd.none
+  }
+  @select_control.Control::{
+    id,
+    groups: [{ label: aria_label, options, }],
+    selected,
+    disabled: input.settings is Unloaded,
+    // The menu only renders open under the page identity it was opened
+    // for: an input change that never delivers a component message (for
+    // example a workspace detach redirecting to Chat) must not leave a
+    // stale menu open on re-entry.
+    open: state.menu == Some(menu) && state.key == input.page,
+    toggle: emit(ToggleMenu(menu)),
+    dismiss: emit(CloseMenu),
+    change,
+    title: aria_label,
+    aria_label,
+    presentation: Setting,
+  }
+}
+
+///|
+fn page_view(
+  input : Input,
+  state : Model,
+  emit : @cmd.Emit[Msg],
+  actions : Actions,
+) -> @html.Html {
+  match input.page {
+    Inactive => @html.nothing
+    Active(workspace~, channel~, generation~, device_epoch~) => {
+      let _ = channel
+      let _ = generation
+      let _ = device_epoch
+      // Unloaded pages render with display-only placeholders; the controls
+      // stay disabled so these values are never acted on.
+      let (
+        worktree_mode,
+        checkout_submodules,
+        submodule_checkout_timeout_seconds,
+      ) = match input.settings {
+        Loaded(
+          worktree_mode~,
+          checkout_submodules~,
+          submodule_checkout_timeout_seconds~
+        ) =>
+          (
+            worktree_mode, checkout_submodules, submodule_checkout_timeout_seconds,
+          )
+        Unloaded => (false, true, 10)
+      }
+      let conversation_rows : Array[@html.Html] = [
+        setting_row(
+          "New chats",
+          [
+            setting_select(
+              DefaultMode,
+              input,
+              state,
+              emit,
+              id="workspace-default-mode-select",
+              options=[
+                { value: "local", label: "Local", },
+                { value: "worktree", label: "Worktree", },
+              ],
+              selected=if worktree_mode { "worktree" } else { "local" },
+              aria_label="New chats",
+              change=actions.choose_default_mode,
+            ).render(),
+          ],
+          desc="Where a new chat starts: the workspace itself, or a fresh git worktree bound to that chat. The composer's chip still changes a single chat.",
+        ),
+      ]
+      let worktree_rows : Array[@html.Html] = [
+        setting_row(
+          "Submodules",
+          [
+            setting_select(
+              Submodules,
+              input,
+              state,
+              emit,
+              id="workspace-submodules-select",
+              options=[
+                { value: "checkout", label: "Initialize", },
+                { value: "skip", label: "Leave uninitialized", },
+              ],
+              selected=if checkout_submodules { "checkout" } else { "skip" },
+              aria_label="Submodules in worktrees",
+              change=actions.choose_submodules,
+            ).render(),
+          ],
+          desc="For new or repaired worktrees in this workspace, mirror the top-level submodules already initialized in its main checkout.",
+        ),
+        setting_row(
+          "Checkout timeout",
+          [
+            setting_select(
+              Timeout,
+              input,
+              state,
+              emit,
+              id="workspace-submodule-timeout-select",
+              options=[
+                { value: "5", label: "5 seconds", },
+                { value: "10", label: "10 seconds", },
+                { value: "30", label: "30 seconds", },
+                { value: "60", label: "60 seconds", },
+              ],
+              selected=submodule_checkout_timeout_seconds.to_string(),
+              aria_label="Submodule checkout timeout",
+              change=actions.choose_submodule_timeout,
+            ).render(),
+          ],
+          desc="Stop initializing submodules if Git has not finished within this time.",
+        ),
+      ]
+      @html.section(class="settings-page", [
+        @html.div(class="settings-page-inner", [
+          @html.div(class="settings-header", [
+            @html.div(class="page-eyebrow", "Workspace"),
+            @html.h1(@resource.label(workspace)),
+            @html.div(class="settings-subtitle", workspace.path),
+          ]),
+          @html.div(class="settings", [
+            settings_group(
+              @icons.icon_worktree, "Conversations", conversation_rows,
+            ),
+            settings_group(@icons.icon_worktree, "Worktrees", worktree_rows),
+          ]),
+        ]),
+      ])
+    }
+  }
+}
+
+///|
+/// Build the workspace-settings page state and return its independently
+/// updating Html. Mounted once for the app's lifetime; while another screen
+/// is active the projected input is inactive and the view renders nothing.
+pub fn component(
+  input : @rabbita.Val[Input],
+  actions : Actions,
+) -> @rabbita.Val[@html.Html] {
+  let (state, emit) = @rabbita.create_state_with_input(
+    input~,
+    init=(_, input) => ({ key: input.page, menu: None, }, @cmd.none),
+    update=(state, input, msg, emit) => state.update(input, msg, emit),
+    subscriptions=(state, input, emit) => {
+      // Gated on the page identity too: an input change without a message
+      // (workspace detach, screen switch) unloads the click-away listener
+      // even though the menu state itself resets on the next update.
+      if state.menu is Some(_) && state.key == input.page {
+        menu_dismiss_subscription(emit.map(_ => CloseMenu))
+      } else {
+        @sub.none
+      }
+    },
+  )
+  state.view2(input, (state, input) => page_view(input, state, emit, actions))
+}
+
+///|
+/// The component's exported `Eq` methods are promoted explicitly, keeping
+/// the package's public interface stable across toolchain upgrades.
+pub extend Input with Eq::{equal, not_equal}
+
+///|
+pub extend SettingsSnapshot with Eq::{equal, not_equal}
+
+///|
+pub extend WorkspacePage with Eq::{equal, not_equal}

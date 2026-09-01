@@ -1277,9 +1277,6 @@ priv enum SelectMenu {
   FontSizeMenu
   NotificationCornerMenu
   TreeLayoutMenu
-  WorkspaceDefaultModeMenu
-  WorkspaceSubmodulesMenu
-  WorkspaceSubmoduleTimeoutMenu
 } derive(Eq)
 
 ///|
@@ -1451,6 +1448,11 @@ priv struct Model {
   // Transient presentation for the visible custom select. It closes on
   // context changes, selection, and click-away dismissal.
   select_menu : SelectMenu?
+  // Every Workspace Settings page open mints a fresh token. The component's
+  // local menu state is keyed by it, so a stale menu left behind by a
+  // message-less transition (a detach redirect, for example) can never
+  // render open on a later open of the same workspace.
+  workspace_settings_page_generation : Int
   // Every archive rotation appends its identity handoff. Component-local draft
   // text remains in the component; this ordered page-lifetime log keeps two
   // rotations between subscription ticks from overwriting each other.
@@ -2508,6 +2510,7 @@ fn initial_model() -> Model {
     skills: @skills.State::empty(),
     installed_skills: [],
     composer_context_generation: 0,
+    workspace_settings_page_generation: 0,
     select_menu: None,
     composer_entry_replacements: [],
     composer_entry_retirements: [],

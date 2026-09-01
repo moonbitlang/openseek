@@ -532,6 +532,30 @@ pub fn boot() -> Unit {
       state.map(model => model.skills),
       emit.map(msg => Skills(msg)),
     )
+    let workspace_settings_input = state.map(model => {
+      model.workspace_settings_input()
+    })
+    let workspace_settings_html = @workspace_settings.component(
+      workspace_settings_input,
+      {
+        choose_default_mode: (channel, workspace, value) => {
+          emit(WorkspaceDefaultModeChosen(channel, workspace, value))
+        },
+        choose_submodules: (channel, workspace, value) => {
+          emit(WorkspaceSubmodulesChosen(channel, workspace, value))
+        },
+        choose_submodule_timeout: (channel, workspace, value) => {
+          emit(WorkspaceSubmoduleTimeoutChosen(channel, workspace, value))
+        },
+      },
+    )
+    // `Val::view9` is rabbita's widest composition; the two settings pages
+    // share one slot as a pair.
+    let skills_and_workspace_settings = @rabbita.Val::map2(
+      skills_html,
+      workspace_settings_html,
+      (skills, workspace_settings) => (skills, workspace_settings),
+    )
     state.view9(
       terminal_html,
       transcript_html,
@@ -540,7 +564,7 @@ pub fn boot() -> Unit {
       codex_composer_html,
       sidebar_html,
       quick_open_html,
-      skills_html,
+      skills_and_workspace_settings,
       (
         model,
         terminal_html,
@@ -550,7 +574,7 @@ pub fn boot() -> Unit {
         codex_composer_html,
         sidebar_html,
         quick_open_html,
-        skills_html,
+        skills_and_workspace_settings,
       ) => {
         view(
           emit,
@@ -564,7 +588,7 @@ pub fn boot() -> Unit {
           codex_composer_html,
           sidebar_html,
           quick_open_html,
-          skills_html,
+          skills_and_workspace_settings,
         )
       },
     )

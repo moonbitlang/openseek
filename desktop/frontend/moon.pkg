@@ -42,6 +42,7 @@ import {
   "openseek_desktop/frontend/right_panel",
   "openseek_desktop/frontend/transcript",
   "openseek_desktop/frontend/transcript/component" @transcript_component,
+  "openseek_desktop/frontend/workspace_settings",
   "openseek_desktop/frontend/crash_page",
   "openseek_desktop/frontend/composer",
 }
