@@ -5268,7 +5268,16 @@ fn update_device_msg(
           dispatch(FromDevice(channel, ReconnectDue(websocket_epoch~))),
           reconnect_delay(failures),
         ),
-        model.replace_device({ ..dev, bridge, reconnect_failures: failures, }),
+        model.replace_device({
+          ..dev,
+          bridge,
+          reconnect_failures: failures,
+          // The replacement socket can become writable before its BridgeReady
+          // notification is reduced. Fence Send at the first observed loss so
+          // no H2 request can carry H1's cached ledger identity.
+          steer_ledger_ready: false,
+          steer_ledger_id: None,
+        }),
       )
     }
     ReconnectDue(websocket_epoch~) => {
@@ -5443,7 +5452,15 @@ fn update_device_msg(
       // then ask for the saved settlement so the ordinary Finished path can
       // recover its outcome and refresh the transcript. A successor that won
       // the race has another id and is left untouched by the guard above.
-      let closed = conv.clear_streams().forget_steers_for_run(run_id)
+      // Preserve exact steer owners through the recovery request. A retained
+      // dropped row must restore its draft; applied/unknown rows must retire it
+      // without resubmission. Clearing before capturing the selector loses all
+      // three outcomes and can silently discard known-rejected input.
+      let frontier = model.run_snapshot_frontier(
+        channel,
+        lifecycle_absence_is_definitive=true,
+      )
+      let closed = conv.clear_streams()
       let closed = if closed.pending_approval
         is Some({ run_id: Some(owner), .. }) &&
         owner == run_id {
@@ -5457,12 +5474,7 @@ fn update_device_msg(
         last_run_id: Some(run_id),
       })
       (
-        fetch_runs(
-          dispatch,
-          channel,
-          updated.run_snapshot_frontier(channel),
-          dev.connection_generation,
-        ),
+        fetch_runs(dispatch, channel, frontier, dev.connection_generation),
         updated,
       )
     }
@@ -9789,7 +9801,14 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
   let channel : @interop.ChannelId = Remote("d1")
   let model = {
     ..initial_model(),
-    devices: [{ ..empty_device_state(channel), bridge: Connected, }],
+    devices: [
+      {
+        ..empty_device_state(channel),
+        bridge: Connected,
+        steer_ledger_ready: true,
+        steer_ledger_id: Some("departed-host"),
+      },
+    ],
     focused: channel,
   }
   let (_, one) = update(
@@ -9797,6 +9816,8 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
     FromDevice(channel, ChannelDown(websocket_epoch=0)),
     model,
   )
+  assert_false(one.dev().steer_ledger_ready)
+  assert_eq(one.dev().steer_ledger_id, None)
   let (_, due) = update(
     dispatch,
     FromDevice(channel, ReconnectDue(websocket_epoch=0)),
@@ -12603,6 +12624,59 @@ test "a Stop reply for an already-ended run retires Stopping" {
   let (_, next) = update_dev(dispatch, CancelNotOpen(run_id="r7"), model)
   assert_true(next.active().run is NoRun(ended=None))
   assert_eq(next.active().last_run_id, Some("r7"))
+}
+
+///|
+test "CancelNotOpen preserves a dropped steer until recovery restores its draft" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(
+    { ..running_conversation(), run: Open(run_id="r7", stage=Cancelling), },
+    ["definitely rejected"],
+  )
+  let pending = queued.pending_steers[0]
+  let accepted = queued.accept_steer(
+    pending.submission_id,
+    Some("r7"),
+    Some("test-ledger"),
+  )
+  let model = running_model()
+    .replace_conversation(accepted)
+    .with_dev(dev => {
+      ..dev,
+      steer_ledger_ready: true,
+      steer_ledger_id: Some("test-ledger"),
+    })
+  let (_, closed) = update_dev(dispatch, CancelNotOpen(run_id="r7"), model)
+  assert_true(closed.active().run is NoRun(ended=None))
+  inspect(closed.active().pending_steers.length(), content="1")
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=true,
+  )
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[
+        {
+          session: "desktop-test",
+          run_id: "r7",
+          submission_id: pending.submission_id,
+          status: RecoveredSteerDropped,
+        },
+      ],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=closed.dev().connection_generation,
+    ),
+    closed,
+  )
+  inspect(recovered.active().pending_steers.length(), content="0")
+  inspect(recovered.active().task, content="definitely rejected")
 }
 
 ///|

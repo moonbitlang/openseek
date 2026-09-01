@@ -3726,22 +3726,6 @@ fn Conversation::acknowledge_steer(
 }
 
 ///|
-/// Retire every unresolved steer owned by an exact run after the host proves
-/// that run is closed. Other runs' submissions remain independently owned.
-fn Conversation::forget_steers_for_run(
-  self : Conversation,
-  run_id : String,
-) -> Conversation {
-  let pending_steers = self.pending_steers.filter(input => {
-    !(input.run_id is Some(owner) && owner == run_id)
-  })
-  if pending_steers.length() == self.pending_steers.length() {
-    return self
-  }
-  { ..self, pending_steers, }
-}
-
-///|
 /// Restore a definitively refused submission without overwriting a draft the
 /// user typed while the request was in flight. Recovered text is placed first,
 /// followed by the newer draft; mention chips retain both submissions' order.

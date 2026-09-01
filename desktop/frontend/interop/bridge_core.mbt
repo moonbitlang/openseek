@@ -334,8 +334,9 @@ pub fn bridge_failure(error : Error) -> BridgeFailure {
 
 ///|
 /// Whether a failed bridge call is a definitive host refusal — the two-state
-/// view of `bridge_failure`, kept for the start and steer paths, whose
-/// unconfirmed handling already does the conservative thing with `Unsent`.
+/// view of `bridge_failure`, kept for paths where an unsent call uses the same
+/// conservative recovery as an ambiguous one. Operations that can safely
+/// restore known-unsent intent use the full three-state classification.
 pub fn bridge_error_is_definite(error : Error) -> Bool {
   bridge_failure(error) is Refused
 }

@@ -36,11 +36,12 @@ priv struct Hub {
   // submitting client to ask whether its input is pending, applied, or
   // dropped. Submission ids are page-unique ownership keys.
   steer_settlements : Map[String, SteerSettlement]
-  // Process-lifetime identity for the ledger above. A reconnect to the same
-  // host sees the same value; a host restart sees a new one and therefore
-  // cannot mistake an empty new ledger for negative evidence about old work.
-  // None deliberately disables negative evidence if OS entropy is unavailable.
-  steer_ledger_id : String?
+  // Recovery-epoch identity for the ledger above. A reconnect sees the same
+  // value until capacity reclamation removes evidence; that removal rotates
+  // the epoch so an empty row can never masquerade as negative evidence from
+  // the older complete ledger. A host restart also begins a fresh epoch. None
+  // deliberately disables negative evidence if OS entropy is unavailable.
+  mut steer_ledger_id : String?
   // The permission question each session's engine is currently blocked on,
   // keyed by SESSION, because one engine can only be blocked on one at a time:
   // the asking tool is not `concurrent_safe`, so nothing runs beside it. That
@@ -160,6 +161,9 @@ fn Hub::record_finished(
 /// Make room without ever discarding a steer the engine still owes a receipt.
 /// Terminal replay is best-effort after its owner has gone away; retaining it
 /// forever must not turn one lost ACK into a process-lifetime steer outage.
+/// Reclaiming any terminal row rotates the recovery epoch first: clients that
+/// still own that row then classify its absence as ambiguous, never as proof
+/// that the host refused input which may already be durable.
 fn Hub::ensure_steer_capacity(self : Hub) -> Bool {
   if self.steer_settlements.length() < SteerSettlementCapacity {
     return true
@@ -172,6 +176,16 @@ fn Hub::ensure_steer_capacity(self : Hub) -> Bool {
     }
   }
   guard reclaim is Some(submission_id) else { return false }
+  let previous_ledger_id = self.steer_ledger_id
+  let replacement = @entropy.random_hex(16)
+  // A 128-bit collision is already negligible. Still make the fence absolute:
+  // losing negative evidence is safe if entropy repeats, while reusing the old
+  // id would turn the reclaimed row into false rejection evidence.
+  self.steer_ledger_id = if replacement == previous_ledger_id {
+    None
+  } else {
+    replacement
+  }
   self.steer_settlements.remove(submission_id)
   true
 }
@@ -670,7 +684,7 @@ test "agent.runs replays exact steer state across a subscriber gap" {
 }
 
 ///|
-test "steer ledger normalizes ids, acknowledges rows, and reclaims terminal capacity" {
+test "steer ledger normalizes ids, acknowledges rows, and fences terminal reclamation" {
   let hub = Hub::Hub()
   hub.publish(
     AgentStarted(
@@ -729,6 +743,7 @@ test "steer ledger normalizes ids, acknowledges rows, and reclaims terminal capa
       status: "applied",
     }
   }
+  let complete_ledger_id = hub.steer_ledger_id
   assert_true(
     hub.admits_steer({
       text: "reclaim oldest terminal",
@@ -738,6 +753,7 @@ test "steer ledger normalizes ids, acknowledges rows, and reclaims terminal capa
   )
   assert_true(hub.steer_settlements.get("held-0") is None)
   assert_eq(hub.steer_settlements.length(), SteerSettlementCapacity - 1)
+  assert_true(hub.steer_ledger_id != complete_ledger_id)
 
   hub.steer_settlements.clear()
   for index = 0; index < SteerSettlementCapacity; index = index + 1 {

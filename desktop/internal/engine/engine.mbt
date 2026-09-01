@@ -447,19 +447,13 @@ priv struct TrackedSteer {
 ///|
 priv struct SteerRunTracker {
   mut next_sequence : Int
-  mut settling_run : String?
   open_steers : Array[TrackedSteer]
   settling_steers : Array[TrackedSteer]
 }
 
 ///|
 fn SteerRunTracker::SteerRunTracker() -> SteerRunTracker {
-  {
-    next_sequence: 0,
-    settling_run: None,
-    open_steers: [],
-    settling_steers: [],
-  }
+  { next_sequence: 0, open_steers: [], settling_steers: [], }
 }
 
 ///|
@@ -514,9 +508,6 @@ fn SteerRunTracker::take_sequence(
   for index, entry in self.settling_steers {
     if entry.sequence == sequence {
       let removed = self.settling_steers.remove(index)
-      if self.settling_steers.is_empty() {
-        self.settling_run = None
-      }
       return Some(removed)
     }
   }
@@ -529,7 +520,6 @@ fn SteerRunTracker::take_stale_settling(
 ) -> Array[TrackedSteer] {
   let stale = self.settling_steers.copy()
   self.settling_steers.clear()
-  self.settling_run = None
   stale
 }
 
@@ -541,7 +531,6 @@ fn SteerRunTracker::take_all(self : SteerRunTracker) -> Array[TrackedSteer] {
   }
   self.settling_steers.clear()
   self.open_steers.clear()
-  self.settling_run = None
   unresolved
 }
 
@@ -610,14 +599,11 @@ fn SteerRunTracker::record_terminal(
   self : SteerRunTracker,
   run_id : String,
 ) -> Unit {
-  self.settling_steers.clear()
-  if self.open_steers.length() > 0 {
-    self.settling_run = Some(run_id)
-    for text in self.open_steers {
-      self.settling_steers.push(text)
-    }
-  } else {
-    self.settling_run = None
+  // A successor can fail before producing its first AgentStep. Keep older
+  // terminal owners beside this run's owners until an exact receipt, a step
+  // boundary, or EOF settles them; clearing here would strand their hub rows.
+  for entry in self.open_steers {
+    self.settling_steers.push({ ..entry, run_id, })
   }
   self.open_steers.clear()
 }
@@ -637,7 +623,6 @@ fn SteerRunTracker::route_event(
     // AgentStep is therefore the explicit boundary after which an absent old
     // receipt must not steal an equal-text steer from the new run.
     Some(AgentStep) => {
-      self.settling_run = None
       self.settling_steers.clear()
       (latest_run, None)
     }
@@ -655,13 +640,7 @@ fn SteerRunTracker::route_receipt(
   latest_run : String?,
 ) -> (String?, String?) {
   if take_first_tracked_steer(self.settling_steers, content) is Some(entry) {
-    let run_id = self.settling_run
-    if self.settling_steers.is_empty() {
-      self.settling_run = None
-    }
-    if run_id is Some(_) {
-      return (run_id, entry.submission_id)
-    }
+    return (Some(entry.run_id), entry.submission_id)
   }
   if take_first_tracked_steer(self.open_steers, content) is Some(entry) {
     return (latest_run, entry.submission_id)
@@ -2872,6 +2851,27 @@ test "background events do not clear trailing steer receipts" {
   assert_eq(
     tracker.route_event(Some(SteerDropped("second")), false, Some("r-new")),
     (Some("r-old"), Some("submission-second")),
+  )
+}
+
+///|
+test "a successor terminal preserves unresolved predecessor steer ownership" {
+  let tracker = SteerRunTracker::SteerRunTracker()
+  tracker.begin_run()
+  ignore(tracker.record_sent("predecessor", Some("submission-old")))
+  tracker.record_terminal("r-old")
+  tracker.begin_run()
+  ignore(tracker.record_sent("successor", Some("submission-new")))
+  // The successor can fail during setup, before an AgentStep has drained the
+  // predecessor's receipt window. Its terminal cut must append, not erase.
+  tracker.record_terminal("r-new")
+  assert_eq(
+    tracker.route_event(Some(SteerApplied("predecessor")), true, Some("r-new")),
+    (Some("r-old"), Some("submission-old")),
+  )
+  assert_eq(
+    tracker.route_event(Some(SteerDropped("successor")), false, Some("r-new")),
+    (Some("r-new"), Some("submission-new")),
   )
 }
 

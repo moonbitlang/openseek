@@ -1263,10 +1263,42 @@ fn SessionExport::command(
 }
 
 ///|
+fn steer_failure_msg(
+  failure : @interop.BridgeFailure,
+  session : String,
+  submission_id : String,
+  text : String,
+  run_id : String,
+) -> DeviceMsg {
+  match failure {
+    Refused | Unsent => SteerRejected(session~, submission_id~, run_id~)
+    Unknown => SteerUndelivered(session~, submission_id~, text~, run_id~)
+  }
+}
+
+///|
+test "steering restores known-unsent input but preserves ambiguous ownership" {
+  assert_true(
+    steer_failure_msg(Unsent, "s1", "sub1", "draft", "r1")
+    is SteerRejected(session="s1", submission_id="sub1", run_id="r1"),
+  )
+  assert_true(
+    steer_failure_msg(Unknown, "s1", "sub1", "draft", "r1")
+    is SteerUndelivered(
+      session="s1",
+      submission_id="sub1",
+      text="draft",
+      run_id="r1"
+    ),
+  )
+}
+
+///|
 /// Inject steering input into the running turn. Delivery is acknowledged by
 /// the engine's own `steer_applied`/`steer_dropped` events; this command only
-/// distinguishes a definitive host refusal from an indeterminate transport
-/// failure: only the latter may still be followed by an exact engine receipt.
+/// distinguishes known non-delivery (host refusal or a request that never left)
+/// from an indeterminate transport failure: only the latter may still be
+/// followed by an exact engine receipt.
 fn steer_openseek(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -1282,11 +1314,13 @@ fn steer_openseek(
         error => {
           scheduler.add(
             dispatch(
-              if @interop.bridge_error_is_definite(error) {
-                SteerRejected(session~, submission_id~, run_id~)
-              } else {
-                SteerUndelivered(session~, submission_id~, text~, run_id~)
-              },
+              steer_failure_msg(
+                @interop.bridge_failure(error),
+                session,
+                submission_id,
+                text,
+                run_id,
+              ),
             ),
           )
           return
