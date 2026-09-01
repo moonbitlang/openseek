@@ -554,6 +554,7 @@ h2 {
   margin: 0;
   border: 0;
   border-collapse: collapse;
+  table-layout: auto;
   background: var(--color-bg-surface);
   font-size: var(--font-size-sm);
 }
@@ -567,23 +568,14 @@ h2 {
   vertical-align: top;
 }
 
-.skill-metadata-table thead th {
-  background: var(--color-bg-subtle);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.skill-metadata-table tbody th {
-  width: 28%;
-  min-width: 130px;
-  background: var(--color-bg-subtle);
-  color: var(--color-text-primary);
+.skill-metadata-table th {
+  width: 1%;
+  color: var(--color-text-muted);
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .skill-metadata-table tbody td {

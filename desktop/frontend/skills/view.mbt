@@ -162,9 +162,7 @@ fn skill_document_view(source : String) -> @html.Html {
   let document = parse_skill_document(source)
   let nodes : Array[@html.Html] = []
   if !document.metadata.is_empty() {
-    let rows : Array[@html.Html] = [
-      @html.tr([@html.th("Field"), @html.th("Value")]),
-    ]
+    let rows : Array[@html.Html] = []
     for entry in document.metadata {
       let (key, value) = entry
       rows.push(@html.tr([@html.th(key), @html.td(value)]))
