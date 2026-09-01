@@ -63,6 +63,14 @@ jobs:
       - name: Update MoonBit dependencies
         run: moon update
 
+      # package/browser is a native compatibility entrypoint even though its
+      # output is JS. Moon therefore runs Proton's native module prebuild,
+      # which resolves the GTK and X11 link flags through pkg-config.
+      - name: Install Proton build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgtk-3-dev libx11-dev
+
       - name: Install E2E dependencies
         working-directory: desktop/e2e
         run: npm ci
