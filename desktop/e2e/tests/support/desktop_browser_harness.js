@@ -781,7 +781,7 @@ export class DesktopBrowserHarness {
       case 'fs.search_text':
         return {
           root: request.params?.root,
-          generation: request.params?.generation,
+          request_id: request.params?.request_id,
           matches: this.textSearchMatches,
           match_count: this.textSearchMatchCount ?? this.textSearchMatches.length,
           file_count: new Set(this.textSearchMatches.map(match => match.path)).size,
