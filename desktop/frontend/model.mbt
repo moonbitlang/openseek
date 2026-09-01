@@ -624,6 +624,11 @@ priv enum RunSnapshotState {
 ///|
 priv struct RunSnapshotFrontier {
   session : String
+  // Session ids are store-local. A reply captured for another workspace or
+  // for the live/archived twin must never reduce the conversation that now
+  // occupies the page's `(device, session)` slot.
+  workspace : @common.Uri
+  record : ConversationRecord
   state : RunSnapshotState
   // True only when this request follows loss of the lifecycle RPC transport.
   // Input authority is deliberately not channel-wide: each steer owner below
@@ -1242,10 +1247,15 @@ priv struct DeviceState {
   // survives engine-pump and notification-gap resyncs within one bridge, but a
   // fresh BridgeReady clears it until the new host answers.
   steer_ledger_id : String?
-  // Page-lifetime request tokens for the independently fetched sidebar
-  // collections. Connection generation rejects dead sockets; these reject an
-  // older reply from the same connection after a newer request was issued.
+  // Page-lifetime request tokens for independently fetched collections.
+  // Connection generation rejects dead sockets. Runs replies additionally
+  // merge through exact frontiers; this counter orders only host-ledger
+  // metadata, while the remaining collection counters reject older replies.
   runs_request_generation : Int
+  // Highest successful reply whose host-ledger metadata was adopted. Lifecycle
+  // rows remain governed by their exact frontier, so an older authoritative
+  // cut may still reduce after this; it simply cannot roll the ledger back.
+  runs_applied_generation : Int?
   sessions_request_generation : Int
   archived_request_generation : Int
   projects_request_generation : Int
@@ -1296,6 +1306,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     steer_ledger_ready: false,
     steer_ledger_id: None,
     runs_request_generation: 0,
+    runs_applied_generation: None,
     sessions_request_generation: 0,
     archived_request_generation: 0,
     projects_request_generation: 0,
@@ -2331,6 +2342,14 @@ priv enum DeviceMsg {
     connection_generation~ : Int,
     request_generation~ : Int
   )
+  // A runs request produced no snapshot. The captured frontier remains the
+  // retry authority: recomputing it would discard exact negative authority for
+  // a failed start, cancel, or steer while leaving the UI stuck indefinitely.
+  RunsFailed(
+    frontier~ : Array[RunSnapshotFrontier],
+    connection_generation~ : Int,
+    request_generation~ : Int
+  )
   // The complete in-flight run set, from an `agent.runs` resync. Any
   // conversation still showing an open run this set lacks ended while the
   // client was away — its terminal event is gone for good (reconnect =
@@ -2977,6 +2996,8 @@ fn Model::run_snapshot_frontier(
     }
     {
       session: conv.session_id,
+      workspace: conv.project(),
+      record: conv.record,
       state,
       lifecycle_absence_is_definitive: captured_lifecycle_absence,
       initial_ids,
@@ -2984,6 +3005,16 @@ fn Model::run_snapshot_frontier(
       pending_approval_id: conv.pending_approval.map(pending => pending.id),
     }
   })
+}
+
+///|
+fn RunSnapshotFrontier::owns(
+  self : RunSnapshotFrontier,
+  conv : Conversation,
+) -> Bool {
+  self.session == conv.session_id &&
+  self.workspace == conv.project() &&
+  self.record == conv.record
 }
 
 ///|
@@ -3001,6 +3032,7 @@ fn Model::matches_run_snapshot_frontier(
       guard self.find_conversation(channel, session) is Some(conv) else {
         return false
       }
+      guard captured.owns(conv) else { return false }
       return match captured.state {
         SnapshotIdle(last_run_id~) =>
           conv.run is NoRun(..) && conv.last_run_id == last_run_id
@@ -3031,6 +3063,7 @@ fn Model::matched_settlement_frontier(
   }
   for captured in frontier {
     if captured.session == settlement.session {
+      guard captured.owns(conv) else { return None }
       return match captured.state {
         SnapshotStarting(submission_id~) if conv.run
           is Starting(submission_id=current) &&
@@ -3060,7 +3093,7 @@ fn Model::matched_settlement_frontier(
           conv.last_run_id is Some(current) &&
           current == run_id &&
           settlement.run_id == run_id => Some(SettlementByRun)
-        SnapshotIdle(last_run_id=Some(run_id)) if conv.run is NoRun(..) &&
+        SnapshotIdle(last_run_id=Some(run_id)) if conv.run is NoRun(ended=None) &&
           conv.last_run_id is Some(current) &&
           current == run_id &&
           settlement.run_id == run_id => Some(SettlementByRun)

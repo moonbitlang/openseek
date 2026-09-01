@@ -541,8 +541,9 @@ fn reconnect_delay(failures : Int) -> Int {
 /// steer it. The reply is the complete in-flight set, so it also settles the
 /// other direction — `RunsSettled` follows with every live id, and any run
 /// this client still shows that the host no longer has ended while the
-/// client was away. Nothing is dispatched when the op fails: a missing
-/// answer says nothing about the runs.
+/// client was away. A failure returns the exact captured frontier to update;
+/// it says nothing about the runs, but update can retry without losing the
+/// owner-specific authority that caused this request.
 fn fetch_runs(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -557,7 +558,14 @@ fn fetch_runs(
       let reply = @interop.bridge_request(
         channel, @commands.agent_runs, payload,
       ) catch {
-        _ => return
+        _ => {
+          scheduler.add(
+            dispatch(
+              RunsFailed(frontier~, connection_generation~, request_generation~),
+            ),
+          )
+          return
+        }
       }
       let live : Array[String] = []
       let recovered : Array[RecoveredRun] = []
