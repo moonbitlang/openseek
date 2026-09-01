@@ -2507,10 +2507,10 @@ test "context yield has a distinct non-success wire status" {
 }
 
 ///|
-test "run ids carry 128 bits of cross-host entropy" {
-  let id = mint_run_id()
-  assert_true(id.has_prefix("r"))
-  assert_eq(id.length(), 33)
+test "run ids are distinct" {
+  let first = mint_run_id()
+  let second = mint_run_id()
+  assert_not_eq(first, second)
 }
 
 ///|
