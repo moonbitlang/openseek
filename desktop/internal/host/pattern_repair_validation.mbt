@@ -5,7 +5,7 @@ const PatternRepairDumpMaxDiagnosticUnits : Int = 1000
 
 ///|
 /// Enable after moongrep's `dump --expr` accepts Pattern metavariables.
-const PatternRepairValidationEnabled : Bool = false
+const PatternRepairValidationEnabled : Bool = true
 
 ///|
 fn pattern_repair_provider_args(
@@ -22,7 +22,7 @@ fn pattern_repair_provider_args(
   // Keep the future validation command here. The current moongrep release only
   // parses ordinary MoonBit expressions in `dump --expr`, so executing it would
   // reject valid patterns containing moongrep metavariables such as `$()`.
-  args.append(["dump", "--expr", pattern])
+  args.append(["dump", "--expr", pattern, "--exit-code"])
   args
 }
 
