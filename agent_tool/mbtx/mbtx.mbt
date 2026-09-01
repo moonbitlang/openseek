@@ -13,6 +13,16 @@ const AutoBackgroundAfterMs : Int = 5_000
 const ForegroundTimeoutMs : Int = 300_000
 
 ///|
+/// Wall-clock bound for the synchronous BUILD phase of a wasm run. The build
+/// runs inline on purpose — its duration does not count against the program's
+/// own foreground allowance — so it needs a bound of its own: a hung
+/// dependency download must not hold the turn. Generous by an order of
+/// magnitude: a trivial wasm build measures ~100ms and one pulling several
+/// registry modules well under a second on a warm cache, and a timed-out
+/// build's retry is faster still (moon caches downloaded modules).
+const BuildTimeoutMs : Int = 10_000
+
+///|
 /// Output is streamed to a file on disk, not buffered in memory, so a snippet
 /// that floods stdout (e.g. `while true { println(…) }`) cannot exhaust the
 /// agent's memory before the timeout fires. A FOREGROUND run is STOPPED once it
@@ -99,6 +109,7 @@ pub fn definition(
   worker_sandbox? : WorkerSandbox,
   auto_background_after_ms? : Int = AutoBackgroundAfterMs,
   foreground_timeout_ms? : Int = ForegroundTimeoutMs,
+  build_timeout_ms? : Int = BuildTimeoutMs,
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.AgentToolDefinition {
   // Background snippet directories are numbered inside the caller's scratch
@@ -113,6 +124,7 @@ pub fn definition(
       escalation=approval is Some(_),
       auto_background_after_ms~,
       foreground_timeout_ms~,
+      build_timeout_ms~,
     ),
     schema=JsonSchema(schema(escalation=approval is Some(_))),
     execute=Async(arguments => {
@@ -126,6 +138,7 @@ pub fn definition(
         worker_sandbox?,
         auto_background_after_ms~,
         foreground_timeout_ms~,
+        build_timeout_ms~,
         next_background~,
         approval?,
       )
@@ -178,10 +191,12 @@ async fn execute(
   job_dir? : String,
   scratch_dir? : String,
   worker_sandbox? : WorkerSandbox,
-  // Independent injectable bounds: a runtime-backed run hands off at the first;
-  // a runtime-less run is cancelled at the second.
+  // Independent injectable bounds: a runtime-backed run hands off at the
+  // first; a runtime-less run is cancelled at the second; a wasm target's
+  // synchronous build phase is cancelled at the third.
   auto_background_after_ms~ : Int,
   foreground_timeout_ms~ : Int,
+  build_timeout_ms~ : Int,
   next_background~ : Ref[Int],
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
@@ -402,35 +417,16 @@ async fn execute(
     extra_roots=[..scratch_dir.map(l => [l]).unwrap_or([])],
   )
   @fs.write_file(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
-  let moon_argv = [
-    "run",
-    "\{build_dir}/snippet.mbtx",
-    "--target",
-    input.target,
-    "--target-dir",
-    build_dir,
-    // An approved escalation is exactly this: the policy file is still
-    // written, and simply not passed. Widening the document instead was not
-    // available — its `fs.write` roots are canonicalized existing paths with
-    // no wildcard, and "any program" has no spelling in `process.allow` short
-    // of enumerating one — so "no policy" is both the honest description of
-    // what was approved and the only one the runtime can express.
-    ..if policy_active {
-      ["--wasm-policy", policy_path]
-    },
-    ..if !input.warning {
-      ["--warn-list", WarnOffList]
-    },
-  ]
-  // Wrap `moon run` in sandbox-exec for the roles that need a rule the wasm
-  // policy cannot state: "may not write source". The policy's `fs` rules bind
-  // the snippet and stop at the process boundary, so a spawned `moon fmt` is
-  // beyond them, and a role defined by holding no editing tool needs that
-  // covered in the kernel. The main agent is not such a role and takes no
-  // profile — see below. Off macOS, or in a nested sandbox where a profile
-  // cannot be applied, every role runs with the policy as its only bound.
-  // The prepared command carries what it needs to classify its own denials, so
-  // one showing up in the program's output can be recognized and explained.
+  // Wrap each phase's command in sandbox-exec for the roles that need a rule
+  // the wasm policy cannot state: "may not write source". The policy's `fs`
+  // rules bind the snippet and stop at the process boundary, so a spawned
+  // `moon fmt` is beyond them, and a role defined by holding no editing tool
+  // needs that covered in the kernel. The main agent is not such a role and
+  // takes no profile — see below. Off macOS, or in a nested sandbox where a
+  // profile cannot be applied, every role runs with the policy as its only
+  // bound. The prepared command carries what it needs to classify its own
+  // denials, so one showing up in the program's output can be recognized and
+  // explained.
   // The throwaway snippet container is the writable subtree: if it falls INSIDE
   // the workspace root (e.g. `workspace_root=/tmp`, where `@fs.tmpdir` lands
   // under it) the shared deny would otherwise block moon's own generated
@@ -444,53 +440,126 @@ async fn execute(
     Some(lab) if dir.has_prefix(lab) => lab
     _ => dir
   }
-  let sandboxed_command = match worker_sandbox {
-    // Worker mode replaces the workspace source-write profile rather than
-    // adding to it: a worker is supposed to write source, just only its own,
-    // so the kernel denies its siblings' trees and the shared git dir instead
-    // of denying source writes as such.
-    Some(scope) =>
-      @sandbox.SandboxedCommand::create_worker_if_available(
-        Exec("moon", moon_argv),
-        deny_roots=scope.deny_roots,
-        worker_root=scope.worker_root,
-        worker_admin_dir=scope.worker_admin_dir,
-      )
-    // The read-only roles (explore/review/audit) hold no editing tool, so "may
-    // not write source" is the guarantee that defines them and it stays
-    // kernel-enforced. The profile suits them for a second reason — it is
-    // `(allow default)` minus source, so `moon check` can still write its
-    // target dir inside the workspace, which a boundary profile denying the
-    // workspace would take away.
-    //
-    // Read-only is its own parameter rather than being read off `scratch_dir`:
-    // a caller that forgets the lab should lose the lab, not the sandbox.
-    None if read_only =>
-      @sandbox.SandboxedCommand::create_if_available(
-        workspace_root,
-        Exec("moon", moon_argv),
-        writable_subtree~,
-      )
-    // The main agent runs with no kernel profile at all. Forbidding source
-    // writes here would break the very commands it needs — `moon fmt`,
-    // `moon info`, `git checkout` all rewrite source by definition — and the
-    // other shape, denying writes globally and re-allowing an enumerated set,
-    // was tried and withdrawn: every root it missed (`/dev` for git's
-    // `/dev/null`, `/tmp` for `@fs.tmpdir`, the toolchain root, gh's cache)
-    // surfaced as a bare EPERM in a live turn rather than in a test, and the
-    // list only ever protected macOS.
-    //
-    // What is left bounding a child is the allowlist, which works everywhere:
-    // it admits no shell, no interpreter and no ad-hoc rewriter, and it refuses
-    // the git options that would point a command at another repository. That is
-    // a bound on which commands exist, not on where they may write — the file
-    // tools are not path-confined for this role either, so a profile here would
-    // have been the only such rule in the tool set.
-    None => None
+  async fn confine(
+    program : String,
+    command_argv : Array[String],
+  ) -> @sandbox.SandboxedCommand? {
+    match worker_sandbox {
+      // Worker mode replaces the workspace source-write profile rather than
+      // adding to it: a worker is supposed to write source, just only its own,
+      // so the kernel denies its siblings' trees and the shared git dir instead
+      // of denying source writes as such.
+      Some(scope) =>
+        @sandbox.SandboxedCommand::create_worker_if_available(
+          Exec(program, command_argv),
+          deny_roots=scope.deny_roots,
+          worker_root=scope.worker_root,
+          worker_admin_dir=scope.worker_admin_dir,
+        )
+      // The read-only roles (explore/review/audit) hold no editing tool, so
+      // "may not write source" is the guarantee that defines them and it stays
+      // kernel-enforced. The profile suits them for a second reason — it is
+      // `(allow default)` minus source, so `moon check` can still write its
+      // target dir inside the workspace, which a boundary profile denying the
+      // workspace would take away.
+      //
+      // Read-only is its own parameter rather than being read off
+      // `scratch_dir`: a caller that forgets the lab should lose the lab, not
+      // the sandbox.
+      None if read_only =>
+        @sandbox.SandboxedCommand::create_if_available(
+          workspace_root,
+          Exec(program, command_argv),
+          writable_subtree~,
+        )
+      // The main agent runs with no kernel profile at all. Forbidding source
+      // writes here would break the very commands it needs — `moon fmt`,
+      // `moon info`, `git checkout` all rewrite source by definition — and the
+      // other shape, denying writes globally and re-allowing an enumerated
+      // set, was tried and withdrawn: every root it missed (`/dev` for git's
+      // `/dev/null`, `/tmp` for `@fs.tmpdir`, the toolchain root, gh's cache)
+      // surfaced as a bare EPERM in a live turn rather than in a test, and the
+      // list only ever protected macOS.
+      //
+      // What is left bounding a child is the allowlist, which works
+      // everywhere: it admits no shell, no interpreter and no ad-hoc rewriter,
+      // and it refuses the git options that would point a command at another
+      // repository. That is a bound on which commands exist, not on where they
+      // may write — the file tools are not path-confined for this role either,
+      // so a profile here would have been the only such rule in the tool set.
+      None => None
+    }
   }
+
+  // The wasm target runs in TWO phases. The BUILD runs first, synchronously,
+  // on its own bound: build time deliberately does not count against the
+  // program's foreground allowance, a failed build returns immediately and is
+  // a build failure BY CONSTRUCTION (the run phase never starts — no exit
+  // code or output archaeology can confuse the two stages), and what the
+  // background runtime may later adopt is exactly the running program. The
+  // RUN phase then execs `moonrun` directly on the artifact the build
+  // reported — the same process `moon run` would exec, with `--policy` being
+  // moonrun's spelling of `--wasm-policy` (confirmed against moon's own
+  // `--dry-run` plan).
+  //
+  // The other targets keep the single-shot `moon run`: they are compute-only
+  // (no policy to stage around), their runners are not moonrun, and they are
+  // rare enough that a second execution shape is not worth carrying.
+  let staged_run = if input.target == "wasm" {
+    match
+      build_snippet(
+        build_dir~,
+        run_cwd~,
+        warning=input.warning,
+        build_timeout_ms~,
+        empty_stdin~,
+        rewrite_bases=[real, build_dir],
+        confine~,
+      ) {
+      NotBuilt(action) => return action
+      Built(artifact~, notes~) => {
+        // An approved escalation is exactly this: the policy file is still
+        // written, and simply not passed. Widening the document instead was
+        // not available — its `fs.write` roots are canonicalized existing
+        // paths with no wildcard, and "any program" has no spelling in
+        // `process.allow` short of enumerating one — so "no policy" is both
+        // the honest description of what was approved and the only one the
+        // runtime can express.
+        let run_argv : Array[String] = [
+          ..if policy_active {
+            ["--policy", policy_path]
+          },
+          artifact,
+          "--",
+        ]
+        Some(("moonrun", run_argv, notes))
+      }
+    }
+  } else {
+    None
+  }
+  let (spawn_program, spawn_argv, build_notes) = staged_run.unwrap_or(
+    (
+      "moon",
+      [
+        "run",
+        "\{build_dir}/snippet.mbtx",
+        "--target",
+        input.target,
+        "--target-dir",
+        build_dir,
+        ..if !input.warning {
+          ["--warn-list", WarnOffList]
+        },
+      ],
+      "",
+    ),
+  )
+  let staged = staged_run is Some(_)
+  let sandboxed_command = confine(spawn_program, spawn_argv)
   let (prog, argv) = match sandboxed_command {
     Some(command) => (command.program(), command.args())
-    None => ("moon", moon_argv)
+    None => (spawn_program, spawn_argv)
   }
   // With a job runtime wired the foreground run happens ON it, so the
   // deadline can DETACH the still-running program as a background job rather
@@ -572,13 +641,10 @@ async fn execute(
     )
     exec.discard()
     let text = rewrite_temp_paths(raw, [real, build_dir])
-    let body = if text.is_blank() {
-      "mbtx: program exited \{exit_code} with no output"
-    } else if exit_code != 0 {
-      "[mbtx: exited \{exit_code}]\n\{text}"
-    } else {
-      text
-    }
+    let body = with_build_notes(
+      build_notes,
+      finished_body(text, exit_code, staged~),
+    )
     let body = if output_limit_reached {
       "\{body}\n[mbtx: output passed the fixed \{OutputCapBytes}-byte inline limit, so the program was STOPPED and this is only what it printed first. Retrying the same call will hit the same limit. Redirect bulky child output with `stdout=ToFile(path)` where `path` is under `@fs.tmpdir()`, then have that same snippet read the file and print only the needed excerpt before it exits.]"
     } else {
@@ -635,13 +701,10 @@ async fn execute(
       // PREPEND the exit status so it survives the agent loop's outer 60k
       // result clamp (which cuts the tail); the output cap is below 60k so
       // both the status line and the body are retained.
-      let body = if text.is_blank() {
-        "mbtx: program exited \{exit_code} with no output"
-      } else if exit_code != 0 {
-        "[mbtx: exited \{exit_code}]\n\{text}"
-      } else {
-        text
-      }
+      let body = with_build_notes(
+        build_notes,
+        finished_body(text, exit_code, staged~),
+      )
       let body = if sandbox_denied is Some(guidance) {
         "\{body}\n\n\{guidance}"
       } else {
@@ -659,7 +722,7 @@ async fn execute(
       // instead of discarding it behind a generic timeout message. The status
       // line stays first so it survives the outer result clamp.
       let partial = rewrite_temp_paths(read_capped(log), [real, build_dir])
-      let head = "mbtx: timed out after \{duration_label(foreground_timeout_ms)} and was cancelled — the program did not finish (an infinite loop, or a build that never completed)."
+      let head = timeout_head(foreground_timeout_ms, staged~)
       let body = if partial.is_blank() {
         head
       } else {
@@ -674,6 +737,199 @@ async fn execute(
     }
   }
   action
+}
+
+///|
+/// Result of the synchronous wasm BUILD phase: the runnable artifact plus any
+/// build output worth carrying into the final report (compiler warnings under
+/// `warning: "on"`), or a ready-to-return report for a build that failed,
+/// timed out, or produced no artifact.
+priv enum BuildOutcome {
+  Built(artifact~ : String, notes~ : String)
+  NotBuilt(@agent_tool.ToolAction)
+}
+
+///|
+/// PHASE 1 of a wasm run: build the snippet with `moon run --build-only`,
+/// synchronously, on its own wall-clock bound. A nonzero exit here is a BUILD
+/// failure by construction — the run phase never starts — which is what makes
+/// the stage labels trustworthy without probing artifacts or parsing output:
+/// `moon run` alone exits 1 for a rejected build and a trapped program alike,
+/// and diagnostics in a merged stream prove nothing (a snippet legitimately
+/// runs `moon check` as a child process).
+///
+/// On success moon prints `{"artifacts_path":[…]}` naming the runnable; that
+/// line is consumed here — moon's own statement of the layout, so the tool
+/// assumes none — with the single-file layout as a fallback for a moon
+/// without the report line.
+async fn build_snippet(
+  build_dir~ : String,
+  run_cwd~ : String?,
+  warning~ : Bool,
+  build_timeout_ms~ : Int,
+  empty_stdin~ : String,
+  rewrite_bases~ : Array[String],
+  confine~ : async (String, Array[String]) -> @sandbox.SandboxedCommand?,
+) -> BuildOutcome {
+  let build_argv = [
+    "run",
+    "\{build_dir}/snippet.mbtx",
+    "--build-only",
+    "--target",
+    "wasm",
+    "--target-dir",
+    build_dir,
+    ..if !warning {
+      ["--warn-list", WarnOffList]
+    },
+  ]
+  let (prog, argv) = match confine("moon", build_argv) {
+    Some(command) => (command.program(), command.args())
+    None => ("moon", build_argv)
+  }
+  // Its own log file, so build diagnostics and program output never share a
+  // stream: warnings stay attributable to the build, and the run phase's
+  // policy-refusal scan never reads build chatter.
+  let build_log = "\{build_dir}/build.log"
+  @fs.write_file(build_log, "", create_mode=CreateOrTruncate)
+  let result = @async.with_timeout_opt(build_timeout_ms, () => {
+    let exit_code = @process.run(
+      prog,
+      argv,
+      cwd=run_cwd.unwrap_or("."),
+      inherit_env=true,
+      stdin=@process.redirect_from_file(empty_stdin),
+      stdout=@process.redirect_to_file(build_log, append=true),
+      stderr=@process.redirect_to_file(build_log, append=true),
+      no_console_window=true,
+    )
+    (exit_code, read_capped(build_log))
+  })
+  guard result is Some((exit_code, raw)) else {
+    return NotBuilt(
+      @agent_tool.respond(
+        "mbtx: the BUILD did not finish within \{duration_label(build_timeout_ms)} and was cancelled — the program never ran. Compilation or a dependency download stalled; retrying is faster than it looks (downloaded modules are cached).",
+        is_error=true,
+        brief="mbtx (build timeout)",
+      ),
+    )
+  }
+  let text = rewrite_temp_paths(raw, rewrite_bases)
+  if exit_code != 0 {
+    // The exit code is moon's and it is kept: build-stage faults are not all
+    // exit 1 (a dependency-resolution fault exits 255), and distinct codes
+    // are diagnostic. The output below says whether the compiler rejected
+    // `source` or the toolchain faulted.
+    return NotBuilt(
+      @agent_tool.respond(
+        if text.is_blank() {
+          "mbtx: the BUILD failed (exit \{exit_code}) with no output — the program never ran"
+        } else {
+          "[mbtx: BUILD failed (exit \{exit_code}) — the program never ran; the output below is the build's]\n\{text}"
+        },
+        is_error=true,
+        brief="mbtx (build failed, exit=\{exit_code})",
+      ),
+    )
+  }
+  let artifact = parse_artifacts_path(raw).unwrap_or(
+    "\{build_dir}/wasm/debug/build/single/single.wasm",
+  )
+  let artifact_present = @fs.exists(artifact) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => false
+  }
+  guard artifact_present else {
+    return NotBuilt(
+      @agent_tool.respond(
+        "mbtx: the build reported success but its artifact is missing (\{artifact}) — a toolchain fault, not a problem in `source`; retry, and report it if it persists.",
+        is_error=true,
+        brief="mbtx (build fault)",
+      ),
+    )
+  }
+  Built(artifact~, notes=strip_artifact_report(text))
+}
+
+///|
+/// The artifact path `moon run --build-only` reports on success, read from
+/// the last `{"artifacts_path":[…]}` line of its output. `None` for a moon
+/// that does not print one.
+fn parse_artifacts_path(output : String) -> String? {
+  let mut found : String? = None
+  for line in output.split("\n") {
+    let line = line.trim()
+    guard line.has_prefix("{\"artifacts_path\"") else { continue }
+    let parsed = @json.parse(line.to_owned()) catch { _ => continue }
+    if parsed is { "artifacts_path": [String(path), ..], .. } {
+      found = Some(path)
+    }
+  }
+  found
+}
+
+///|
+/// A successful build's output with moon's machine-facing artifact report
+/// removed: what remains — compiler warnings under `warning: "on"`, usually
+/// nothing — is for the model to read.
+fn strip_artifact_report(text : String) -> String {
+  [..text.split("\n")]
+  .filter(line => !line.trim().has_prefix("{\"artifacts_path\""))
+  .join("\n")
+  .trim()
+  .to_owned()
+}
+
+///|
+/// The status framing for a finished run. `staged` is the wasm two-phase
+/// path, where the build already succeeded synchronously before this process
+/// started — so a failure here is from the RUN by construction, and saying so
+/// is what keeps the model from re-reading a runtime trap as a compile error.
+/// The single-shot targets keep the plain framing: their one exit code covers
+/// both stages and claims neither.
+fn finished_body(text : String, exit_code : Int, staged~ : Bool) -> String {
+  if exit_code == 0 {
+    return if text.is_blank() {
+      "mbtx: program exited 0 with no output"
+    } else {
+      text
+    }
+  }
+  if staged {
+    if text.is_blank() {
+      "mbtx: the build succeeded, then the run exited \{exit_code} with no output"
+    } else {
+      "[mbtx: exited \{exit_code} at RUNTIME — the build succeeded; this failure is from the run, not the build]\n\{text}"
+    }
+  } else if text.is_blank() {
+    "mbtx: program exited \{exit_code} with no output"
+  } else {
+    "[mbtx: exited \{exit_code}]\n\{text}"
+  }
+}
+
+///|
+/// The first line of a foreground timeout report. On the staged wasm path the
+/// build had already succeeded, so only the program can be what never
+/// finished; a single-shot target keeps the two-sided hedge.
+fn timeout_head(foreground_timeout_ms : Int, staged~ : Bool) -> String {
+  let bound = duration_label(foreground_timeout_ms)
+  if staged {
+    "mbtx: timed out after \{bound} and was cancelled — the build had already succeeded, so it is the PROGRAM that did not finish (an infinite loop, or waiting on something that never arrived)."
+  } else {
+    "mbtx: timed out after \{bound} and was cancelled — the program did not finish (an infinite loop, or a build that never completed)."
+  }
+}
+
+///|
+/// Prepend the build phase's surviving output (warnings) to the run's report,
+/// so `warning: "on"` still shows the compiler's voice ahead of the program's.
+fn with_build_notes(notes : String, body : String) -> String {
+  if notes.is_blank() {
+    body
+  } else {
+    "\{notes}\n\{body}"
+  }
 }
 
 ///|
@@ -975,6 +1231,7 @@ fn description(
   escalation~ : Bool,
   auto_background_after_ms~ : Int,
   foreground_timeout_ms~ : Int,
+  build_timeout_ms~ : Int,
 ) -> String {
   // The one sentence here that depends on what this build can actually do.
   //
@@ -1086,11 +1343,22 @@ fn description(
   }
   let foreground_bound = duration_label(foreground_timeout_ms)
   let handoff_bound = duration_label(auto_background_after_ms)
+  let build_bound = duration_label(build_timeout_ms)
+  // The staged-execution paragraph is shared by both execution-time variants:
+  // the build/run split and its failure labels hold with or without a job
+  // runtime; only what happens to a long RUN differs.
+  let staging =
+    $|On the default wasm target the snippet is BUILT first, synchronously (up to
+    $|\{build_bound}): a failed build returns immediately, labeled `BUILD failed`, and the
+    $|program never starts — so a failure labeled `at RUNTIME` really is from the
+    $|run. Build time does not count against the run's own allowance below.
   if !background {
     return (
       $|\{base}
       $|
       $|## Execution time
+      $|
+      $|\{staging}
       $|
       $|This context has no background-job runtime. A run may stay in the foreground
       $|for up to \{foreground_bound}; at that deadline it is cancelled and reported as a timeout.
@@ -1103,7 +1371,9 @@ fn description(
     $|
     $|## Long-running work
     $|
-    $|Every call stays inline for up to \{handoff_bound}. If it is still running, it AUTOMATICALLY
+    $|\{staging}
+    $|
+    $|Every call's RUN stays inline for up to \{handoff_bound}. If it is still running, it AUTOMATICALLY
     $|moves to a background job and returns the job id; no background flag or duration
     $|guess is needed. A completion notice arrives when it finishes, so never wait with
     $|sleep loops or repeated polling: keep working and act on the notice. Read recent

@@ -40,6 +40,59 @@ async test "denial scan is bounded to the log's head and tail" {
 }
 
 ///|
+/// The build phase's artifact report is moon's own `{"artifacts_path":[…]}`
+/// line: the tool takes the LAST well-formed one (a child moon invocation
+/// cannot print into the build phase's dedicated log, so lines here are the
+/// outer build's) and assumes no target-dir layout when it is present.
+test "parse_artifacts_path reads moon's report line" {
+  assert_true(
+    parse_artifacts_path(
+      "Downloading x@1.0\n{\"artifacts_path\":[\"/tmp/b/wasm/debug/build/single/single.wasm\"]}\n",
+    )
+    is Some("/tmp/b/wasm/debug/build/single/single.wasm"),
+  )
+  // The last report wins; malformed candidates are skipped, not fatal.
+  let two = "{\"artifacts_path\":[\"/old\"]}\n{\"artifacts_path\":\"garbage\"\n{\"artifacts_path\":[\"/new\"]}"
+  assert_true(parse_artifacts_path(two) is Some("/new"))
+  assert_true(parse_artifacts_path("no report here\n") is None)
+  assert_true(parse_artifacts_path("{\"artifacts_path\":[]}") is None)
+}
+
+///|
+test "strip_artifact_report keeps only the human-facing build output" {
+  let mixed = "Warning: [0002] unused\n{\"artifacts_path\":[\"/x\"]}\n"
+  assert_eq(strip_artifact_report(mixed), "Warning: [0002] unused")
+  assert_eq(strip_artifact_report("{\"artifacts_path\":[\"/x\"]}\n"), "")
+}
+
+///|
+/// The run-phase framing: on the staged wasm path a failure is from the run
+/// by construction and says so; single-shot targets keep the plain wording
+/// that claims neither stage.
+test "finished_body and timeout_head are stage-aware only when staged" {
+  assert_eq(finished_body("out\n", 0, staged=true), "out\n")
+  let staged_failure = finished_body("trace", 3, staged=true)
+  assert_true(staged_failure.contains("exited 3 at RUNTIME"))
+  assert_true(staged_failure.contains("from the run, not the build"))
+  assert_true(
+    finished_body("", 3, staged=true).contains(
+      "the build succeeded, then the run exited 3",
+    ),
+  )
+  let plain_failure = finished_body("trace", 3, staged=false)
+  assert_true(plain_failure.contains("exited 3"))
+  assert_false(plain_failure.contains("RUNTIME"))
+  assert_true(
+    timeout_head(5_000, staged=true).contains("the PROGRAM that did not finish"),
+  )
+  assert_true(
+    timeout_head(5_000, staged=false).contains("a build that never completed"),
+  )
+  assert_eq(with_build_notes("", "body"), "body")
+  assert_eq(with_build_notes("warn", "body"), "warn\nbody")
+}
+
+///|
 /// Proton CLI is admitted one subcommand at a time. In particular, there is no
 /// bare rule and no global working-directory prefix: callers set the child
 /// process cwd instead of letting the command redirect itself elsewhere.

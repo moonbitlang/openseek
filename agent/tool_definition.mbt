@@ -210,10 +210,13 @@ async test "a compile error reached inside the grace reports inline" {
 }
 
 ///|
-/// If compilation itself crosses the grace, the same process becomes a job.
-/// Its later diagnostic must still name the submitted `source`, not the
-/// session-owned throwaway directory.
-async test "a compile error after handoff keeps source diagnostics" {
+/// Compilation can no longer cross the grace: the wasm build phase runs
+/// synchronously by design — its time does not count against the run's
+/// inline allowance — so even under the smallest possible handoff bound a
+/// compile error is reported INLINE, labeled as the build's, naming the
+/// submitted `source`, and no job is ever created for it. What the runtime
+/// adopts is always a running program.
+async test "a compile error never becomes a job, whatever the grace" {
   @async.with_task_group(group => {
     let spill_dir = @fs.tmpdir(prefix="openseek-compile-job-")
     let bg_runtime = @bgjobs.BgJobRuntime::BgJobRuntime(
@@ -232,20 +235,13 @@ async test "a compile error after handoff keeps source diagnostics" {
       Sync(_) => fail("mbtx should be async")
     }
     guard action is Respond(output) else { fail("expected Respond") }
-    assert_false(output.is_error)
-    assert_true(output.content.contains("moved to the background"))
-    guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
-    let read = match @job_output.definition(bg_runtime).execute {
-      Async(execute) => execute({ "job_id": job.id, "wait_ms": 30_000 })
-      Sync(_) => fail("job_output should be async")
-    }
-    guard read is Respond(result) else { fail("expected Respond") }
-    assert_true(result.is_error)
-    assert_true(result.content.contains("source:"))
-    assert_false(result.content.contains("openseek-compile-job-"))
-    // The session-owned result container remains until teardown even though the
-    // disposable build subtree is reclaimed at terminal status.
-    assert_true(@fs.exists("\{spill_dir}/snippet-0"))
+    assert_true(output.is_error)
+    assert_false(output.content.contains("moved to the background"))
+    assert_true(output.content.contains("BUILD failed"))
+    // The diagnostic points at the model's own input, not the throwaway dir.
+    assert_true(output.content.contains("source:"))
+    assert_false(output.content.contains("openseek-compile-job-"))
+    assert_true(bg_runtime.list() is [])
     @fs.rmdir(spill_dir, recursive=true) catch {
       _ => ()
     }

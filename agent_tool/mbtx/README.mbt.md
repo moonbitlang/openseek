@@ -10,22 +10,38 @@ sandboxed automation surface.
 ## How it works
 
 The `source` is a `.mbtx` **single-file script** — MoonBit's own one-file
-program format. The tool writes it into a throwaway directory and runs
-`moon run <file>.mbtx --target <target> --target-dir <temp>` with the workspace
-(or explicit `cwd`) as the program's working directory. Relative reads therefore
-reach workspace files, while snippet build artifacts stay out of your `_build`.
-Moon's single-file runner handles the inline import block, and compiler
-diagnostics are rewritten to stable `source:LINE:COL` locations.
+program format. The tool writes it into a throwaway directory and, for the
+default wasm target, runs it in **two phases**. The BUILD runs first,
+synchronously: `moon run <file>.mbtx --build-only --target wasm --target-dir
+<temp>`, bounded by its own wall clock (10s by default) so a hung dependency
+download cannot hold the turn. A nonzero exit here is reported immediately as
+`BUILD failed (exit N)` — a build failure **by construction**, since the run
+phase never starts; no exit-code or output archaeology is needed to tell the
+stages apart, which matters because `moon run` alone exits 1 for a rejected
+build and a trapped program alike, and diagnostics in a merged stream prove
+nothing (a snippet legitimately runs `moon check` as a child process). On
+success the RUN phase execs `moonrun` directly on the artifact moon reported
+in its `{"artifacts_path":[…]}` line — the same process `moon run` would have
+exec'd — with the workspace (or explicit `cwd`) as the program's working
+directory, so relative reads reach workspace files while build artifacts stay
+out of your `_build`. A failure there is labeled `at RUNTIME — … from the
+run, not the build`. Compiler diagnostics are rewritten to stable
+`source:LINE:COL` locations, and build output (warnings under
+`warning: "on"`) is kept apart from program output by construction. The
+non-wasm targets keep the single-shot `moon run` and their reports claim no
+stage.
 
-With the agent's background runtime, every call waits inline for up to five
-seconds. A still-running compile or program is then adopted as the same
-background execution: the call returns its job id, completion is pushed later,
-and its compiler inputs and build artifacts are reclaimed when the job becomes
-terminal. Files the snippet writes under its temporary result directory remain
-readable until session teardown, so paths printed in completion output stay
-valid. There is no foreground/background argument to choose. A standalone
-definition without a job runtime stays in the foreground for up to 300 seconds
-and is cancelled at that deadline.
+With the agent's background runtime, every call's RUN waits inline for up to
+five seconds — build time deliberately does not count against that allowance.
+A still-running program is then adopted as the same background execution: the
+call returns its job id, completion is pushed later, and its compiler inputs
+and build artifacts are reclaimed when the job becomes terminal. An adopted
+job is therefore always a running program, never a build. Files the snippet
+writes under its temporary result directory remain readable until session
+teardown, so paths printed in completion output stay valid. There is no
+foreground/background argument to choose. A standalone definition without a
+job runtime stays in the foreground for up to 300 seconds of run time and is
+cancelled at that deadline.
 
 ## Arguments
 

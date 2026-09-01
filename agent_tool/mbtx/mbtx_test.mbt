@@ -34,6 +34,70 @@ async test "surfaces a compile error via moon's own diagnostics" {
   assert_true(
     out.content.to_lower().contains("type") || out.content.contains("String"),
   )
+  // ...and labeled as the BUILD phase failing: the synchronous build phase
+  // returned nonzero, so the program never started — by construction, not by
+  // probing artifacts or parsing diagnostics.
+  assert_true(out.content.contains("BUILD failed"))
+  assert_true(out.content.contains("never ran"))
+  assert_true(out.brief is Some("mbtx (build failed, exit=1)"))
+}
+
+///|
+/// The stage labels are structural (which phase's process failed), so program
+/// OUTPUT cannot sway them: compiler-diagnostic-shaped text is routinely a
+/// snippet's legitimate output — a child `moon check` run prints exactly that
+/// — and must not turn a runtime trap into a build failure or taint a clean
+/// exit.
+async test "a runtime trap is labeled as the run, whatever the output says" {
+  let out = run(
+    "fn main { println(\"Error: [4014] fake diagnostic\"); panic() }",
+  )
+  assert_true(out.is_error)
+  assert_true(out.content.contains("at RUNTIME"))
+  assert_true(out.content.contains("from the run, not the build"))
+  assert_false(out.content.contains("BUILD failed"))
+}
+
+///|
+async test "diagnostic-shaped output with a clean exit stays unlabeled" {
+  let out = run("fn main { println(\"Error: [4014] fake diagnostic\") }")
+  assert_false(out.is_error)
+  assert_false(out.content.contains("BUILD failed"))
+  assert_false(out.content.contains("at RUNTIME"))
+}
+
+///|
+/// The build phase has its own bound, and hitting it is reported as the build
+/// never finishing — the program is never blamed, because it never existed.
+/// The 1ms bound is a physical impossibility, not a latency guess: `moon`
+/// cannot even be spawned and waited on within it.
+async test "a build that outlives its bound is reported as the build's" {
+  @vfs.with_tmpdir(prefix="mbtx-build-bound-", ws => {
+    let definition = @mbtx.definition(workspace_root=ws, build_timeout_ms=1)
+    let action = match definition.execute {
+      Async(execute) => execute({ "source": "fn main { println(1) }" })
+      Sync(_) => fail("mbtx should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    assert_true(output.content.contains("BUILD did not finish"))
+    assert_true(output.content.contains("never ran"))
+    assert_true(output.brief is Some("mbtx (build timeout)"))
+  })
+}
+
+///|
+/// Only the wasm target is staged; a single-shot target's one exit code
+/// covers both phases and its report deliberately claims neither.
+async test "a non-wasm failure carries no stage label" {
+  let out = run_in(".", {
+    "source": "fn main { println(\"before\"); panic() }",
+    "target": "js",
+  })
+  assert_true(out.is_error)
+  assert_true(out.content.contains("exited"))
+  assert_false(out.content.contains("at RUNTIME"))
+  assert_false(out.content.contains("BUILD failed"))
 }
 
 ///|
@@ -573,6 +637,11 @@ test "a definition without a job runtime describes its hard timeout" {
   assert_true(injected.description.contains("up to 12345ms"))
   let JsonSchema(schema) = definition.schema
   assert_false(schema.stringify().contains("run_in_background"))
+  // Both execution-time variants teach the staged wasm contract: the build
+  // runs first, synchronously, on its own bound.
+  assert_true(definition.description.contains("BUILT first, synchronously"))
+  let staged_bound = @mbtx.definition(workspace_root=".", build_timeout_ms=777)
+  assert_true(staged_bound.description.contains("777ms"))
 }
 
 ///|
