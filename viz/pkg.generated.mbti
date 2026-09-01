@@ -23,6 +23,8 @@ pub fn rendered_escalated_count(@agent_session.Session, ViewMode) -> Int
 
 pub fn session_from_parse(@log.ParsedLog, id~ : String, system_prompt~ : String) -> @agent_session.Session
 
+pub fn session_has_mbtx_activity(@agent_session.Session) -> Bool
+
 pub fn step_scrubber(@agent_session.Session) -> @html.Html
 
 pub fn subrun_child_ids(@agent_session.Session, String) -> Array[String]

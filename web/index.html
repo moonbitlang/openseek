@@ -379,6 +379,9 @@
     /* mbtx failure-stage words: a build error is a source problem (amber),
        a runtime error keeps the failure red. */
     .tool-stage-build { color: var(--warn); font-weight: 600; }
+    /* A build-failed call row says its stage through its own brief ("build
+       failed" is in the label), tinted amber — no appended word repeats it. */
+    .tool-call-build-failed .tool-call-brief { color: var(--warn); font-weight: 600; }
     .tool-stage-run { color: var(--error); font-weight: 600; }
     .tool-flag.tool-stage-build { color: var(--warn); }
 

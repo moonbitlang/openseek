@@ -910,8 +910,12 @@ fn tool_call_view(
     (true, true) => "tool-call tool-call-failed tool-call-escalated"
   }
   // A failed mbtx call names its STAGE — a build error is fixed in the
-  // source, a runtime error in the program's behavior — as a visible word
-  // beside the brief and as a class the build-errors-only filter keys on.
+  // source, a runtime error in the program's behavior. A build-failed row
+  // says it through its own brief, which already reads "build failed" /
+  // "build timeout": appending a word there repeated the brief verbatim
+  // ("· mbtx (build failed, exit=1) build error"), so the stage rides the
+  // class alone and the stylesheet turns the brief amber. The runtime word
+  // stays — "exit=1" never names the stage.
   let build_failed = tool_call_is_build_failed(call, briefs, failed, tags)
   let run_failed = !build_failed &&
     tool_call_is_run_failed(call, briefs, failed, tags)
@@ -922,11 +926,7 @@ fn tool_call_view(
   } else {
     cls
   }
-  if build_failed {
-    name_row.push(
-      @html.span(class="tool-stage tool-stage-build") <| " build error",
-    )
-  } else if run_failed {
+  if run_failed {
     name_row.push(
       @html.span(class="tool-stage tool-stage-run") <| " runtime error",
     )
@@ -2080,6 +2080,26 @@ pub fn rendered_build_error_count(
       })
     }
   }
+}
+
+///|
+/// Whether the session used `mbtx` at all — a call by that name, or a durable
+/// result naming it. This is what makes the build-errors-only control
+/// DISCOVERABLE: hidden-at-zero chrome told a user nothing when a session had
+/// mbtx work but no build failures, so the toolbar shows whenever mbtx was in
+/// play, and only a session with no mbtx activity stays chrome-free.
+pub fn session_has_mbtx_activity(session : @agent_session.Session) -> Bool {
+  for event in session.events() {
+    match event.item() {
+      Assistant(message) =>
+        if message.tool_calls().any(call => call.name == "mbtx") {
+          return true
+        }
+      Tool(result) => if result.tool_name() == "mbtx" { return true }
+      _ => ()
+    }
+  }
+  false
 }
 
 ///|

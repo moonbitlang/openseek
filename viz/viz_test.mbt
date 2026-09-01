@@ -540,7 +540,10 @@ fn mbtx_stage_session() -> @agent_session.Session {
 test "mbtx rows name their failure stage and tag the filter hooks" {
   let raw = render(@viz.render_session(mbtx_stage_session(), RawLog))
   assert_true(raw.contains("tool-call-build-failed"))
-  assert_true(raw.contains("build error"))
+  // The build-failed CALL row appends no stage word: its own brief already
+  // reads "build failed", so a word there repeated the label verbatim. The
+  // stage word lives on the RESULT flag, whose label carries no brief.
+  assert_false(raw.contains("tool-stage tool-stage-build"))
   assert_true(raw.contains("card tool error build-failed"))
   assert_true(raw.contains("🚩 build error"))
   assert_true(raw.contains("tool-call-run-failed"))
@@ -557,6 +560,20 @@ test "mbtx rows name their failure stage and tag the filter hooks" {
   let clean = render(@viz.render_session(clean_sample_session(), RawLog))
   assert_false(clean.contains("tool-call-build-failed"))
   assert_false(clean.contains("tool-call-run-failed"))
+}
+
+///|
+/// Presence, not failure, is what makes the build-errors toolbar appear: a
+/// session that used mbtx cleanly still advertises the control, and one that
+/// never touched mbtx stays chrome-free.
+test "session_has_mbtx_activity reads calls and orphan results" {
+  assert_true(@viz.session_has_mbtx_activity(mbtx_stage_session()))
+  assert_false(@viz.session_has_mbtx_activity(clean_sample_session()))
+  let orphan_only = @agent_session.Session(
+    SessionId("orphan-only"),
+    system_prompt="",
+  ).append(Tool(ToolResult(tool_call_id="g", tool_name="mbtx", content="ok")))
+  assert_true(@viz.session_has_mbtx_activity(orphan_only))
 }
 
 ///|
