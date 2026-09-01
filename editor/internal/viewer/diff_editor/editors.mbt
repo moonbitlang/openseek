@@ -213,6 +213,37 @@ fn DiffEditorEditors::layout(
 }
 
 ///|
+/// During a continuous outer resize, lay out one pane per animation frame.
+/// Both pane hosts already have their live CSS widths; alternating the costly
+/// code rewrap keeps either pane at most one frame behind that boundary.
+fn DiffEditorEditors::layout_continuous_pane(
+  self : DiffEditorEditors,
+  original : Bool,
+) -> Unit {
+  if !self.disposed {
+    if original {
+      self.original.layout()
+    } else {
+      self.modified.layout()
+    }
+  }
+}
+
+///|
+/// Apply one continuous-width-resize policy to both code-editor kernels. In
+/// SideBySide both may own rich comments; in Inline the disabled original is a
+/// no-op while both panes continue rendering code at the live width.
+fn DiffEditorEditors::set_continuous_width_resize(
+  self : DiffEditorEditors,
+  active : Bool,
+) -> Unit {
+  if !self.disposed {
+    self.original.set_continuous_width_resize(active)
+    self.modified.set_continuous_width_resize(active)
+  }
+}
+
+///|
 fn DiffEditorEditors::focus(self : DiffEditorEditors) -> Unit {
   if !self.disposed {
     self.modified.focus()

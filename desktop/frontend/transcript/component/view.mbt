@@ -6,9 +6,11 @@
 /// hiding them. Only reasoning stays behind a fold: a step that opens with a
 /// thought carries the ordinal and commit instant on that fold's summary
 /// ("#2 14:32:10 · Thought"), and a step that goes straight to tools puts
-/// the same columns on a plain heading line instead. The open state of every
-/// disclosure is the browser's (`<details>`), so a reader's toggle survives
-/// re-renders and the run growing while live.
+/// the same columns on a plain heading line instead. When the transcript
+/// component supplies disclosure state, a closed reasoning fold omits its
+/// body DOM entirely; stable activity keys preserve the body while the run
+/// grows. Focused rendering tests may omit that state and retain native
+/// `<details>` behavior.
 ///
 /// Failures need no badge up here: a failed call's own row is visible and
 /// carries its own literal `failed` marker. Its potentially large arguments
@@ -21,9 +23,10 @@ fn activity_view(
   items : Array[@transcript.TranscriptItem],
   on_open : (String) -> @cmd.Cmd,
   live_reasoning? : String,
-  reasoning_complete? : Bool = false,
   step_label? : String = "",
   subrun? : SubrunLink,
+  expanded? : Bool,
+  on_toggle? : @cmd.Cmd,
 ) -> @html.Html {
   // The step ordinal is its own span so it can carry the accent and a fixed
   // numeral column, then the instant in a second fixed column: the run reads
@@ -74,12 +77,27 @@ fn activity_view(
     } else {
       text.push(@html.text(label))
     }
-    @html.details(class="activity", open=unfolded, [
-      @html.summary(class="activity-summary", [
+    let controlled = expanded is Some(_)
+    let open = unfolded || expanded.unwrap_or(false)
+    let summary_attrs = match (controlled, on_toggle) {
+      (true, Some(toggle)) =>
+        @html.Attrs::build()
+        .class("activity-summary")
+        .on_click(event => {
+          event.prevent_default()
+          toggle
+        })
+      _ => @html.Attrs::build().class("activity-summary")
+    }
+    let children : Array[@html.Html] = [
+      @html.summary(attrs=summary_attrs, [
         @html.span(class="activity-text", text),
       ]),
-      @html.div(class="activity-body", [prose]),
-    ])
+    ]
+    if !controlled || open {
+      children.push(@html.div(class="activity-body", [prose]))
+    }
+    @html.details(class="activity", open~, children)
   }
 
   let mut index = 0
@@ -110,32 +128,14 @@ fn activity_view(
     }
   }
   if live_reasoning is Some(content) {
-    let prose = if reasoning_complete {
-      // The semantic completion supplies one whole document, so Markdown is
-      // safe and cheap now. The durable item will take over the same card.
-      @html.div(
-        class="msg-content markdown activity-thinking",
-        @markdown.markdown_nodes(content, open_file=on_open),
-      )
-    } else {
-      // Do not parse an unfinished Markdown document on every provider token.
-      // Newlines are preserved by CSS while fragments are still arriving.
-      @html.div(
-        class="msg-content activity-thinking activity-thinking-live",
-        @html.text(content),
-      )
-    }
-    rows.push(
-      thought_fold(
-        if reasoning_complete {
-          "Thought"
-        } else {
-          "Thinking…"
-        },
-        prose,
-        true,
-      ),
+    // Do not parse an unfinished Markdown document on every provider token.
+    // Newlines are preserved by CSS while fragments are still arriving. The
+    // semantic finish deletes this preview; only the durable row uses Markdown.
+    let prose = @html.div(
+      class="msg-content activity-thinking activity-thinking-live",
+      @html.text(content),
     )
+    rows.push(thought_fold("Thinking…", prose, true))
   }
   @html.div(class="activity-row", rows)
 }
@@ -898,6 +898,8 @@ fn transcript_view(
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
+  expanded_activity_keys? : @vector.Vector[String] = @vector.new(),
+  on_toggle_activity? : (String) -> @cmd.Cmd = _ => @cmd.none,
   on_open : (String) -> @cmd.Cmd,
   on_jump : (@mention_context.Target) -> @cmd.Cmd,
   on_open_session : (String) -> @cmd.Cmd,
@@ -910,7 +912,8 @@ fn transcript_view(
     on_open_session,
   }
   let children = renderer.section_children(
-    pinned, overview, overview_emit, on_jump_latest,
+    pinned, overview, overview_emit, expanded_activity_keys, on_toggle_activity,
+    on_jump_latest,
   )
   // These identity attributes make conversation and root changes observable
   // even when the rendered children stay identical. The component subscription
@@ -923,6 +926,7 @@ fn transcript_view(
       .data_set("transcript-source", input.source.wire())
       .data_set("transcript-channel", input.focused.uri_authority())
       .data_set("transcript-session", input.active_session)
+      .data_set("transcript-run", input.active_run_id.unwrap_or(""))
       .data_set(
         "transcript-root",
         input.root.map(uri => uri.to_string()).unwrap_or(""),

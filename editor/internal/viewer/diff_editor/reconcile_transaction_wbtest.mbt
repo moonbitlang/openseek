@@ -64,3 +64,29 @@ test "owned-zone-excluded geometry does not self-trigger another reconcile" {
     ),
   )
 }
+
+///|
+test "viewport width alone does not invalidate vertical alignment" {
+  let narrow = PaneGeometrySnapshot(
+    3,
+    18.0,
+    foreign_zone_heights=[{ after_line_number: 2, height_in_px: 9.0, }],
+    line_max_columns=[2, 2, 2],
+    viewport_width=320.0,
+  )
+  let wide = PaneGeometrySnapshot(
+    3,
+    18.0,
+    foreign_zone_heights=[{ after_line_number: 2, height_in_px: 9.0, }],
+    line_max_columns=[2, 2, 2],
+    viewport_width=640.0,
+  )
+  assert_false(
+    alignment_geometry_pair_changed(
+      Some(wide),
+      Some(wide),
+      Some(narrow),
+      Some(narrow),
+    ),
+  )
+}

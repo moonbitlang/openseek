@@ -27,6 +27,19 @@
   margin: 0 auto;
 }
 
+/* Rabbita owns this stable, childless host; the live-reasoning command package
+   owns the one activity row beneath it. Match `.stream` explicitly because the
+   host is its sibling, kept outside durable transcript reconciliation. */
+.live-reasoning-host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 820px;
+  margin: 20px auto 0;
+}
+.live-reasoning-host:empty {
+  display: none;
+}
+
 /* Floating "jump to latest" over the transcript's bottom edge, shown
    only while auto-follow is unpinned. Sticky inside the scroller; zero
    height so it never adds scroll length, the transform lifts the button

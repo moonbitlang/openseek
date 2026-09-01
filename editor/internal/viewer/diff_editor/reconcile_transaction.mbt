@@ -46,8 +46,10 @@ fn same_alignment_geometry(
   left : PaneGeometrySnapshot,
   right : PaneGeometrySnapshot,
 ) -> Bool {
+  // Viewport width is an observation source, not an alignment input. Wrapped
+  // line heights and foreign-zone heights already carry every width-dependent
+  // geometry change that can alter the paired vertical axis.
   left.line_height == right.line_height &&
-  left.viewport_width == right.viewport_width &&
   left.line_heights == right.line_heights &&
   left.line_max_columns == right.line_max_columns &&
   left.foreign_zone_heights == right.foreign_zone_heights &&

@@ -9,6 +9,7 @@ import {
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",
   "moonbitlang/core/debug",
+  "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
   "moonbitlang/editor/viewer/html" @syntax_html,
@@ -22,6 +23,7 @@ import {
   "openseek_desktop/frontend/plan",
   "openseek_desktop/frontend/resource",
   "openseek_desktop/frontend/transcript",
+  "openseek_desktop/frontend/transcript/live_preview",
   "openseek_desktop/frontend/transcript_overview",
 }
 

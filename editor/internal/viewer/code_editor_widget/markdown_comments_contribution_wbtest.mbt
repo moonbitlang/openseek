@@ -3,6 +3,48 @@
 // the retained Playwright Markdown-comment suite.
 
 ///|
+test "Markdown comment width measurements wait for the settled viewport" {
+  let callbacks : Array[() -> Unit] = []
+  let delays : Array[Int] = []
+  let canceled = Ref(0)
+  let scheduler = @base_browser.RunOnceScheduler::new_with_timer(
+    MarkdownCommentWidthSettleMs,
+    (callback, delay_ms) => {
+      delays.push(delay_ms)
+      callbacks.push(callback)
+      let active = Ref(true)
+      @base_common.Disposable::from(() => {
+        if active.val {
+          active.val = false
+          canceled.val += 1
+        }
+      })
+    },
+  )
+  let state = MarkdownCommentContributionState(
+    viewport_measure_scheduler=scheduler,
+  )
+  state.schedule_all_measures()
+  state.schedule_all_measures()
+  assert_eq(callbacks.length(), 2)
+  assert_eq(delays, [MarkdownCommentWidthSettleMs, MarkdownCommentWidthSettleMs])
+  assert_eq(canceled.val, 1)
+  assert_true(state.viewport_measure_scheduler.is_scheduled())
+  guard callbacks.get(1) is Some(settled) else {
+    fail("expected the replacement settle callback")
+  }
+  settled()
+  assert_false(state.viewport_measure_scheduler.is_scheduled())
+
+  state.set_viewport_measure_deferred(true)
+  state.schedule_all_measures()
+  assert_eq(callbacks.length(), 2)
+  assert_false(state.viewport_measure_scheduler.is_scheduled())
+  state.set_viewport_measure_deferred(false)
+  assert_false(state.viewport_measure_scheduler.is_scheduled())
+}
+
+///|
 test "Markdown comments mark only exact mermaid fences and keep safe fallback source" {
   let exact = @markdown_core.render_markdown(
     (

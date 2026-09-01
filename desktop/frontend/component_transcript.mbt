@@ -36,19 +36,21 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
             streaming_identity="",
           )
         Some(conversation) => {
-          let (streaming_reasoning, reasoning_complete) = conversation.reasoning_for_render()
+          let active_run_id = match conversation.run {
+            Open(run_id~, ..) => Some(run_id)
+            _ => None
+          }
           @transcript_component.Input(
             source=@transcript_component.OpenSeek,
             focused=self.focused,
             active_session=self.active_session,
+            active_run_id?,
             root=self
               .conversation_placement(conversation)
               .bind(value => value.checkout_root()),
             submission_generation=self.submission_sequence,
             items=conversation.visible_transcript_rows(),
             streaming_response=conversation.turn.streaming_response,
-            streaming_reasoning?,
-            reasoning_complete~,
             streaming_identity=conversation.streaming_render_identity(),
           )
         }

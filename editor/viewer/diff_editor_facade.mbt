@@ -273,6 +273,16 @@ pub fn DiffEditor::layout(self : DiffEditor) -> Unit {
 }
 
 ///|
+/// Keep code panes live during a continuous host-width resize while deferring
+/// derived diff, Markdown, and overview work until the host passes `false`.
+pub fn DiffEditor::set_continuous_width_resize(
+  self : DiffEditor,
+  active : Bool,
+) -> Unit {
+  self.widget.set_continuous_width_resize(active)
+}
+
+///|
 pub fn DiffEditor::focus(self : DiffEditor) -> Unit {
   self.widget.focus()
 }

@@ -97,6 +97,11 @@ fn TranscriptSectionKey::jump_latest() -> TranscriptSectionKey {
 }
 
 ///|
+fn TranscriptSectionKey::live_reasoning() -> TranscriptSectionKey {
+  { value: "live-reasoning", }
+}
+
+///|
 /// Pure rendering context for one transcript component. Its child-building
 /// methods return `Map[String, Html]`, which is the Rabbita API that preserves
 /// a child by key while moving, inserting, or removing its siblings.
@@ -118,6 +123,15 @@ priv struct TranscriptRenderer {
 fn TranscriptRenderer::subrun_link(self : TranscriptRenderer) -> SubrunLink? {
   guard self.input.source is OpenSeek else { return None }
   Some({ parent: self.input.active_session, open: self.on_open_session, })
+}
+
+///|
+/// Scope component-owned disclosure state to the stream as well as the row.
+fn TranscriptRenderer::activity_state_key(
+  self : TranscriptRenderer,
+  render_key : String,
+) -> String {
+  TranscriptSectionKey::stream(self.input).wire() + "\u{0}" + render_key
 }
 
 ///|
@@ -163,6 +177,8 @@ fn TranscriptRenderer::insert_row(
 /// order determines visual order; the strings only determine node identity.
 fn TranscriptRenderer::stream_children(
   self : TranscriptRenderer,
+  expanded_activity_keys? : @vector.Vector[String],
+  on_toggle_activity? : (String) -> @cmd.Cmd,
 ) -> Map[String, @html.Html] {
   let visible = self.input.items
   let items : Map[String, @html.Html] = Map([])
@@ -175,9 +191,7 @@ fn TranscriptRenderer::stream_children(
   // The durable transcript plus client-local notices, rendered through one
   // grouping pass. Live semantic events never synthesize durable-looking
   // items here; their store commits populate the transcript.
-  if visible.is_empty() &&
-    self.input.streaming_reasoning is None &&
-    self.input.streaming_response is None {
+  if visible.is_empty() && self.input.streaming_response is None {
     items.set(
       TranscriptRenderKey::empty().wire(),
       @html.div(class="empty", [
@@ -221,13 +235,19 @@ fn TranscriptRenderer::stream_children(
           index += 1
         }
         if !activity.is_empty() {
+          let render_key = TranscriptRenderKey::activity_after(left_boundary).wire()
+          let state_key = self.activity_state_key(render_key)
           items.set(
-            TranscriptRenderKey::activity_after(left_boundary).wire(),
+            render_key,
             activity_view(
               activity,
               self.on_open,
               step_label="#\{step_number}",
               subrun?=self.subrun_link(),
+              expanded?=expanded_activity_keys.map(keys => {
+                keys.contains(state_key)
+              }),
+              on_toggle?=on_toggle_activity.map(toggle => toggle(state_key)),
             ),
           )
         }
@@ -272,32 +292,20 @@ fn TranscriptRenderer::stream_children(
         run.push(visible[index].item)
         index += 1
       }
+      let render_key = TranscriptRenderKey::activity_after(left_boundary).wire()
+      let state_key = self.activity_state_key(render_key)
       items.set(
-        TranscriptRenderKey::activity_after(left_boundary).wire(),
-        activity_view(run, self.on_open, subrun?=self.subrun_link()),
+        render_key,
+        activity_view(
+          run,
+          self.on_open,
+          subrun?=self.subrun_link(),
+          expanded?=expanded_activity_keys.map(keys => keys.contains(state_key)),
+          on_toggle?=on_toggle_activity.map(toggle => toggle(state_key)),
+        ),
       )
       left_boundary = Some(visible[index - 1].identity)
     }
-  }
-  // Durable commits are untagged and cannot prove ownership of an in-flight
-  // preview. Keep ambiguous live reasoning visible as a provisional next step;
-  // `Conversation::reasoning_for_render` suppresses only an exact, completed
-  // duplicate after it has durably committed.
-  if self.input.streaming_reasoning is Some(reasoning) {
-    items.set(
-      TranscriptRenderKey::activity_after(left_boundary).wire(),
-      activity_view(
-        [],
-        self.on_open,
-        live_reasoning=reasoning,
-        reasoning_complete=self.input.reasoning_complete,
-        step_label=if self.input.source is OpenSeek {
-          "#\{step_ordinals.length() + 1}"
-        } else {
-          ""
-        },
-      ),
-    )
   }
   if self.input.streaming_response is Some(streaming) {
     items.set(
@@ -324,6 +332,8 @@ fn TranscriptRenderer::section_children(
   pinned : Bool,
   overview : @transcript_overview.State,
   overview_emit : @cmd.Emit[@transcript_overview.Msg],
+  expanded_activity_keys : @vector.Vector[String],
+  on_toggle_activity : (String) -> @cmd.Cmd,
   on_jump_latest : @cmd.Cmd,
 ) -> Map[String, @html.Html] {
   let visible_items = self.input.items.map(row => row.item)
@@ -347,7 +357,22 @@ fn TranscriptRenderer::section_children(
   )
   children.set(
     TranscriptSectionKey::stream(self.input).wire(),
-    @html.div(id="stream", class="stream", self.stream_children()),
+    @html.div(
+      id="stream",
+      class="stream",
+      self.stream_children(expanded_activity_keys~, on_toggle_activity~),
+    ),
+  )
+  // Rabbita owns this stable node but deliberately owns no descendants. The
+  // live-preview package writes a small activity card beneath it, so frequent
+  // reasoning fragments cannot invalidate transcript or application Html.
+  children.set(
+    TranscriptSectionKey::live_reasoning().wire(),
+    @html.div(
+      id="live-reasoning-host",
+      class="live-reasoning-host",
+      ([] : Array[@html.Html]),
+    ),
   )
   // Reading history unpins auto-follow (see `watch_transcript_scroll`); the
   // floating button is the way back to the live tail. Sticky inside the

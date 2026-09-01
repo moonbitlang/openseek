@@ -90,6 +90,7 @@ fn start_tree_resize(event : @dom.Event) -> Unit {
   }
   event.prevent_default()
   tree_resizing.val = true
+  viewer_state.set_continuous_width_resize(true)
   set_root_class(
     if tree_docked_right() {
       ColResizingClass

@@ -145,6 +145,7 @@ pub struct DiffEditorWidget {
   mut resize_observer_disposed : Bool
   mut overview_ruler_disposed : Bool
   mut disposed : Bool
+  // private fields
 }
 pub fn DiffEditorWidget::create(@dom.Element, services? : @code_editor_widget.CodeEditorServices, editor_options? : @code_editor_widget.CodeEditorOptions, options? : DiffEditorOptions, &@diff.DocumentDiffProvider) -> Self
 pub fn DiffEditorWidget::dispose(Self) -> Unit
@@ -159,6 +160,7 @@ pub fn DiffEditorWidget::on_did_update_diff(Self, () -> Unit) -> @common.Disposa
 pub fn DiffEditorWidget::reveal_first_diff(Self) -> Unit
 pub fn DiffEditorWidget::reveal_next_change(Self) -> Bool
 pub fn DiffEditorWidget::reveal_previous_change(Self) -> Bool
+pub fn DiffEditorWidget::set_continuous_width_resize(Self, Bool) -> Unit
 pub fn DiffEditorWidget::set_diff_provider(Self, &@diff.DocumentDiffProvider) -> Unit
 pub fn DiffEditorWidget::set_model(Self, DiffEditorModelData?) -> DiffEditorModelData?
 pub fn DiffEditorWidget::update_options(Self, @code_editor_widget.CodeEditorOptions, DiffEditorOptions) -> Unit

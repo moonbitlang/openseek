@@ -407,8 +407,10 @@ html {
 }
 
 /* Open: the conversation and the editor share the content area. The
-   editor's width is `--editor-width`, set as the user drags the handle on
-   its left edge (see editor_resize.mbt); it defaults to half and is
+   editor's completed width is stored in `--editor-width`; while the pointer
+   is down, editor_resize.mbt writes this grid template directly so changing
+   an inherited variable does not invalidate the transcript on every move.
+   It defaults to half and is
    clamped against the content area (`100%`, sidebar excluded) so the
    editor floors at 360px while the conversation keeps at least 240px. The
    clamp also re-fits the panel on window resize without any script. */

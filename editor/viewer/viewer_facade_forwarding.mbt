@@ -35,6 +35,16 @@ pub fn Viewer::layout(self : Viewer) -> Unit {
 }
 
 ///|
+/// Keep code layout live during a continuous host-width resize while deferring
+/// derived Markdown and overview work until the host passes `false`.
+pub fn Viewer::set_continuous_width_resize(
+  self : Viewer,
+  active : Bool,
+) -> Unit {
+  self.widget.set_continuous_width_resize(active)
+}
+
+///|
 pub fn Viewer::focus(self : Viewer) -> Unit {
   self.widget.focus()
 }

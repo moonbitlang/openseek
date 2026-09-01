@@ -101,6 +101,7 @@ pub struct CodeEditorOverviewRuler {
   mut bands : Array[CodeEditorOverviewRulerBand]
   mut generation : Int
   mut disposed : Bool
+  // private fields
 }
 pub fn CodeEditorOverviewRuler::clear(Self, Int) -> Unit
 pub fn CodeEditorOverviewRuler::dispose(Self) -> Unit
@@ -273,6 +274,7 @@ pub fn CodeEditorWidget::reveal_range_in_center_if_outside_viewport(Self, @commo
 pub fn CodeEditorWidget::reveal_range_near_top(Self, @common.Range) -> Unit
 pub fn CodeEditorWidget::reveal_range_near_top_if_outside_viewport(Self, @common.Range) -> Unit
 pub fn CodeEditorWidget::save_view_state(Self) -> CodeEditorViewState?
+pub fn CodeEditorWidget::set_continuous_width_resize(Self, Bool) -> Unit
 pub fn CodeEditorWidget::set_hidden_areas(Self, Array[@common.Range], source? : String, force_update? : Bool) -> Unit
 pub fn CodeEditorWidget::set_markdown_comment_presentation_enabled(Self, Bool) -> Unit
 pub fn CodeEditorWidget::set_model(Self, @model.TextModel?) -> Unit

@@ -345,6 +345,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
 pub fn boot() -> Unit {
   @crash_page.install()
   let app = @rabbita.new(() => {
+    let live_reasoning = @transcript_component.LiveReasoning()
     let (state, emit) = @rabbita.create_state_with_init(
       // Init flows through `update` like any other message, as
       // `with_init(dispatch(Init))` did before the 0.13 migration.
@@ -366,7 +367,7 @@ pub fn boot() -> Unit {
           // Host event sources follow the device roster. Removing a device
           // therefore unloads its WebSocket immediately; advancing its retry
           // identity replaces only that device's connection.
-          model.bridge_subscriptions(emit),
+          model.bridge_subscriptions(emit, live_reasoning),
         ]
         // The project picker's Enter/Escape/paste surface, only while its
         // modal is open — same lifetime rule as the dismissal listeners.
@@ -507,6 +508,10 @@ pub fn boot() -> Unit {
         )
       }),
       open_session: emit.map(session => OpenSessionHere(session)),
+      focus_live_reasoning: (input, pinned) => {
+        live_reasoning.focus(input, pinned)
+      },
+      live_reasoning_pinned: pinned => live_reasoning.set_pinned(pinned),
     })
     let composer_input = state.map(model => model.composer_input())
     let composer_html = @composer.component(

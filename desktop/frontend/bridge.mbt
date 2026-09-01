@@ -261,45 +261,106 @@ fn session_changed_msg(
 // root messages and direct terminal commands.
 
 ///|
-/// Turn one event emitted by a local or remote bridge subscription into a
-/// command understood by the root application. Raw terminal output bypasses
-/// application dispatch to avoid an unrelated redraw; other notifications are
-/// decoded into root messages here alongside connection and window events.
-fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
+/// Turn one event emitted by a local or remote bridge subscription into an
+/// optional root command. Raw terminal output bypasses application dispatch;
+/// live reasoning updates its transcript-owned preview directly and returns
+/// `None`, so neither path redraws unrelated application UI.
+fn bridge_event(
+  dispatch : @cmd.Emit[Msg],
+  live_reasoning : @transcript_component.LiveReasoning,
+  event : @bridge.Event,
+) -> @cmd.Cmd? {
   match event {
-    @bridge.Event::Notification(channel~, notification~) =>
+    @bridge.Event::Notification(channel~, websocket_epoch~, notification~) =>
       match notification {
         TerminalOutput(payload) =>
-          @terminal.output(channel, payload.id, payload.sequence, payload.data)
+          Some(
+            @terminal.output(
+              channel,
+              payload.id,
+              payload.sequence,
+              payload.data,
+            ),
+          )
         TerminalExit(payload) =>
-          @terminal.SessionExited(channel~, id=payload.id, code=payload.code)
-          |> Terminal
-          |> dispatch
-        _ =>
-          if notification_msg(channel, notification) is Some(msg) {
-            dispatch(msg)
-          } else {
-            @cmd.none
+          Some(
+            @terminal.SessionExited(channel~, id=payload.id, code=payload.code)
+            |> Terminal
+            |> dispatch,
+          )
+        AgentConnected(_) => {
+          live_reasoning.connection_opened(channel, websocket_epoch)
+          notification_msg(channel, notification).map(msg => dispatch(msg))
+        }
+        AgentEvent(payload) =>
+          match engine_msg(payload) {
+            Some(Engine(run_id, ReasoningDelta(content), session=Some(session))) => {
+              live_reasoning.delta(
+                channel~,
+                websocket_epoch~,
+                session~,
+                run_id~,
+                content~,
+              )
+              None
+            }
+            Some(Engine(run_id, ReasoningMessage(_), session=Some(session))) => {
+              live_reasoning.finish(
+                channel~,
+                websocket_epoch~,
+                session~,
+                run_id~,
+              )
+              None
+            }
+            Some(Engine(run_id, AgentStep(_), session=Some(session)) as msg) => {
+              live_reasoning.finish(
+                channel~,
+                websocket_epoch~,
+                session~,
+                run_id~,
+              )
+              Some(dispatch(FromDevice(channel, msg)))
+            }
+            Some(msg) => Some(dispatch(FromDevice(channel, msg)))
+            None => None
           }
+        AgentError(payload) =>
+          match error_msg(payload) {
+            Some(Error(run_id=Some(run_id), ..) as msg) => {
+              live_reasoning.finish_run(channel~, websocket_epoch~, run_id~)
+              Some(dispatch(FromDevice(channel, msg)))
+            }
+            Some(msg) => Some(dispatch(FromDevice(channel, msg)))
+            None => None
+          }
+        AgentFinished(payload) =>
+          match finished_msg(payload) {
+            Some(Finished(run_id~, ..) as msg) => {
+              live_reasoning.finish_run(channel~, websocket_epoch~, run_id~)
+              Some(dispatch(FromDevice(channel, msg)))
+            }
+            Some(msg) => Some(dispatch(FromDevice(channel, msg)))
+            None => None
+          }
+        _ => notification_msg(channel, notification).map(msg => dispatch(msg))
       }
     @bridge.Event::Unavailable(channel~, message~) =>
-      dispatch(FromDevice(channel, BridgeUnavailable(message)))
-    @bridge.Event::ChannelDown(channel~, websocket_epoch~) =>
-      dispatch(FromDevice(channel, ChannelDown(websocket_epoch~)))
+      Some(dispatch(FromDevice(channel, BridgeUnavailable(message))))
+    @bridge.Event::ChannelDown(channel~, websocket_epoch~) => {
+      live_reasoning.connection_closed(channel, websocket_epoch)
+      Some(dispatch(FromDevice(channel, ChannelDown(websocket_epoch~))))
+    }
     @bridge.Event::BrowserEvent(payload~) =>
-      if browser_event_msg(payload) is Some(msg) {
-        dispatch(msg)
-      } else {
-        @cmd.none
-      }
+      browser_event_msg(payload).map(msg => dispatch(msg))
     @bridge.Event::MenuCommand(command_id~) =>
       if command_id == @commands.app_open_devtools.name() {
-        dispatch(AppDeveloperToolsRequested)
+        Some(dispatch(AppDeveloperToolsRequested))
       } else {
-        @cmd.none
+        None
       }
     @bridge.Event::NotificationClicked(run_id~) =>
-      dispatch(NotificationClicked(run_id~))
+      Some(dispatch(NotificationClicked(run_id~)))
   }
 }
 
@@ -307,18 +368,19 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
 fn DeviceState::bridge_subscription(
   self : DeviceState,
   dispatch : @cmd.Emit[Msg],
+  live_reasoning : @transcript_component.LiveReasoning,
 ) -> @sub.Sub {
-  let bridge_dispatch : @cmd.Emit[@bridge.Event] = event => {
-    bridge_event(dispatch, event)
-  }
+  let events = @bridge.EventHandler::new(event => {
+    bridge_event(dispatch, live_reasoning, event)
+  })
   match self.channel {
-    Local => @bridge.local_connection(bridge_dispatch)
+    Local => @bridge.local_connection(events)
     Remote(device) =>
       @bridge.remote_connection(
         device_id=device,
         websocket_epoch=self.websocket_epoch,
         reconnect_attempt=self.reconnect_attempt,
-        dispatch=bridge_dispatch,
+        events~,
       )
   }
 }
@@ -330,8 +392,11 @@ fn DeviceState::bridge_subscription(
 fn Model::bridge_subscriptions(
   self : Model,
   dispatch : @cmd.Emit[Msg],
+  live_reasoning : @transcript_component.LiveReasoning,
 ) -> @sub.Sub {
-  @sub.batch(self.devices.map(dev => dev.bridge_subscription(dispatch)))
+  @sub.batch(
+    self.devices.map(dev => dev.bridge_subscription(dispatch, live_reasoning)),
+  )
 }
 
 ///|

@@ -10,23 +10,40 @@ let markdown_comment_contribution_id : String = "editor.contrib.markdownComments
 let markdown_comment_hidden_source : String = "markdown-comments"
 
 ///|
+/// Hidden comments keep their last measured height during a continuous width
+/// drag. Their complete geometry is refreshed once the viewport width settles;
+/// visible comments still update immediately through their own ResizeObserver.
+const MarkdownCommentWidthSettleMs = 120
+
+///|
 priv struct MarkdownCommentContributionState {
   mut presentation_enabled : Bool
+  // A host can resize continuously for many frames. While it does, retain the
+  // last offscreen heights and let visible comments keep using their ordinary
+  // ResizeObservers; one explicit release refreshes every hidden comment.
+  mut viewport_measure_deferred : Bool
   mut generation : Int
   rendered : Map[String, RenderedMarkdownComment]
   listeners : Array[@base_common.Disposable]
   mut viewport_observer : @markdown_comments_browser.MarkdownCommentViewportObserver?
+  viewport_measure_scheduler : @base_browser.RunOnceScheduler
   mut geometry_lease : @base_common.Disposable?
 }
 
 ///|
-fn MarkdownCommentContributionState::MarkdownCommentContributionState() -> MarkdownCommentContributionState {
+fn MarkdownCommentContributionState::MarkdownCommentContributionState(
+  viewport_measure_scheduler? : @base_browser.RunOnceScheduler = RunOnceScheduler(
+    MarkdownCommentWidthSettleMs,
+  ),
+) -> MarkdownCommentContributionState {
   {
     presentation_enabled: true,
+    viewport_measure_deferred: false,
     generation: 0,
     rendered: Map([]),
     listeners: [],
     viewport_observer: None,
+    viewport_measure_scheduler,
     geometry_lease: None,
   }
 }
@@ -110,6 +127,35 @@ fn MarkdownCommentContributionState::request_all_measures(
 }
 
 ///|
+fn MarkdownCommentContributionState::schedule_all_measures(
+  self : MarkdownCommentContributionState,
+) -> Unit {
+  if self.viewport_measure_deferred {
+    return
+  }
+  self.viewport_measure_scheduler.schedule(() => self.request_all_measures())
+}
+
+///|
+/// Hold expensive offscreen measurements across a continuous host-width
+/// change. Releasing the hold measures every retained comment exactly once at
+/// the final width, even when the last ResizeObserver notification was dropped.
+fn MarkdownCommentContributionState::set_viewport_measure_deferred(
+  self : MarkdownCommentContributionState,
+  deferred : Bool,
+) -> Unit {
+  if self.viewport_measure_deferred == deferred {
+    return
+  }
+  self.viewport_measure_deferred = deferred
+  if deferred {
+    self.viewport_measure_scheduler.cancel()
+  } else {
+    self.request_all_measures()
+  }
+}
+
+///|
 fn CodeEditorWidget::sync_markdown_comment_fold_lane_width(
   self : CodeEditorWidget,
 ) -> Unit {
@@ -127,7 +173,7 @@ fn MarkdownCommentContributionState::ensure_viewport_observer(
 ) -> Unit {
   if self.viewport_observer is None {
     self.viewport_observer = Some(
-      dom.observe_viewport_width(() => self.request_all_measures()),
+      dom.observe_viewport_width(() => self.schedule_all_measures()),
     )
   }
 }
@@ -136,6 +182,7 @@ fn MarkdownCommentContributionState::ensure_viewport_observer(
 fn MarkdownCommentContributionState::dispose_viewport_observer(
   self : MarkdownCommentContributionState,
 ) -> Unit {
+  self.viewport_measure_scheduler.cancel()
   match self.viewport_observer {
     Some(observer) => observer.dispose()
     None => ()
@@ -731,6 +778,24 @@ pub fn CodeEditorWidget::set_markdown_comment_presentation_enabled(
 }
 
 ///|
+/// Mark a continuous host-width resize. Code lines keep laying out at every
+/// observed width, while offscreen Markdown measurements and overview-ruler
+/// projection wait for the final width.
+pub fn CodeEditorWidget::set_continuous_width_resize(
+  self : CodeEditorWidget,
+  active : Bool,
+) -> Unit {
+  guard !self.disposed else { return }
+  match self.markdown_comment_contribution() {
+    Some(state) => state.set_viewport_measure_deferred(active)
+    None => ()
+  }
+  for ruler in self.overview_rulers {
+    ruler.set_continuous_width_resize(active)
+  }
+}
+
+///|
 fn CodeEditorWidget::markdown_comments_on_theme_changed(
   self : CodeEditorWidget,
   viewer_theme : String,
@@ -822,6 +887,7 @@ fn MarkdownCommentContributionState::dispose(
   viewer : CodeEditorWidget,
 ) -> Unit {
   viewer.clear_markdown_comment_model_state()
+  self.viewport_measure_scheduler.dispose()
   for listener in self.listeners {
     listener.dispose()
   }
