@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/openpath"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub const MaxEditorFileBytes : Int = 1048576
+
+// Errors
+
+// Types and methods
+pub(all) struct Reference(String) derive(Eq, @debug.Debug)
+pub fn Reference::equal(Self, Self) -> Bool
+pub fn Reference::not_equal(Self, Self) -> Bool
+pub async fn Reference::resolve(Self) -> Resolution
+pub fn Reference::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Resolution {
+  EditorPath(path~ : String, line~ : Int?, column~ : Int?)
+  SystemPath(String)
+  MissingPath(String)
+} derive(Eq, @debug.Debug)
+pub fn Resolution::equal(Self, Self) -> Bool
+pub fn Resolution::not_equal(Self, Self) -> Bool
+pub fn Resolution::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

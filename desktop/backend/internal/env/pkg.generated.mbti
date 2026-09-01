@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/env"
+
+// Values
+pub fn get(String) -> String?
+
+pub let path_sep : String
+
+pub fn prepend_path_entry(Map[String, String], String) -> String
+
+pub fn prepend_to_path_env(String, String?) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

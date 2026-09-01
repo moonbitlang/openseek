@@ -7,8 +7,8 @@ import {
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/frontend/resource",
-  "openseek_desktop/internal/commands",
-  "openseek_desktop/internal/file_search_score",
+  "openseek_desktop/commands",
+  "openseek_desktop/file_search_score",
 }
 
 supported_targets = "js"

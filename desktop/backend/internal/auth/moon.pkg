@@ -1,0 +1,21 @@
+import {
+  "openseek_desktop/backend/internal/entropy",
+  "openseek_desktop/backend/internal/fsx",
+  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/backend/internal/platform",
+  "openseek_desktop/protocol",
+  "openseek_desktop/uri",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+  "moonbitlang/x/crypto",
+  "tonyfettes/xlog",
+}
+
+warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"

@@ -18,6 +18,8 @@ pub fn icon_arrow_down() -> @html.Html
 
 pub fn icon_arrow_up() -> @html.Html
 
+pub fn icon_chat_export() -> @html.Html
+
 pub fn icon_chevron_down() -> @html.Html
 
 pub fn icon_close() -> @html.Html

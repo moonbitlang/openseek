@@ -250,7 +250,8 @@ regress.
   `Ctx` carries the projection); root update wires `Dock(...)`, intercepts
   `FileSelected`, and syncs dock-then-fileeditor; root view assembles
   `div.editor` from dock strip + fileeditor breadcrumb/body (child order
-  unchanged). `moon -C desktop check --deny-warn` clean on js and native;
+  unchanged). The backend native and frontend JS checks are clean with
+  `--deny-warn`;
   js suite 743/743 (dock 8, fileeditor 36, root 302 included); interface
   diffs match the API diff below. Not yet committed.
 - **M1.5 — transport unification (unlocks M2's iframes).** The user chose
@@ -555,10 +556,10 @@ and per-row launcher shortcuts.
   conversation-switch park/restore path.
 - M1 exit criterion: no user-visible behavior change (file tabs, tree,
   resize, narrow layout, conversation switch all as today).
-- Run `moon -C desktop check --target native --deny-warn` and
-  `moon -C desktop check --target js --deny-warn`; focused package tests,
+- Run `moon -C desktop/backend check --target native --deny-warn` and
+  `moon -C desktop/frontend check --target js --deny-warn`; focused package tests,
   then the full desktop test suite.
-- Run `moon -C desktop fmt` and default-target `moon -C desktop info`; review
+- Run workspace-root `moon fmt` and default-target `moon info`; review
   generated interface diffs against the API diff above.
 - User-run E2E on the packaged app: open files, switch conversations, open a
   localhost preview from a transcript link, verify no reload on switch-back,

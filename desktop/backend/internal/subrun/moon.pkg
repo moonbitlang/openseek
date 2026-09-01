@@ -1,0 +1,17 @@
+import {
+  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/protocol",
+  "openseek_desktop/backend/internal/session_record",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
+}
+
+import {
+  "openseek_desktop/backend/internal/fsx",
+} for "wbtest"
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"

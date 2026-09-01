@@ -6,4 +6,6 @@ members = [
   "./editor",
   "./editor/server",
   "./desktop",
+  "./desktop/backend",
+  "./desktop/frontend",
 ]

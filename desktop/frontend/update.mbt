@@ -4915,12 +4915,12 @@ fn Model::apply_codex_worktree_snapshot(
 /// Catch up the transcript of a sub-run child the reader is looking at.
 ///
 /// A child's record is written by a process the host manages no writer for, so
-/// no follower broadcasts its commits (`internal/engine/follower` runs one per
+/// no follower broadcasts its commits (`backend/internal/engine/follower` runs one per
 /// host-managed writer) and `session.load` answered it with a one-shot read.
 /// Every signal that the child moved therefore has to drive its own catch-up,
 /// and there are exactly two: the probe's progress push while it runs, and the
 /// finish. Both matter — the host cancels the probe at `subrun_finished`
-/// without a final poll (`internal/engine/engine.mbt`), and the probe sleeps
+/// without a final poll (`backend/internal/engine/engine.mbt`), and the probe sleeps
 /// before it reads, so the child's last writes — its report among them — reach
 /// a reader through the finish or not at all.
 ///

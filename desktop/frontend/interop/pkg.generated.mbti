@@ -7,8 +7,8 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
-  "openseek_desktop/internal/commands",
-  "openseek_desktop/internal/protocol",
+  "openseek_desktop/commands",
+  "openseek_desktop/protocol",
 }
 
 // Values
@@ -23,6 +23,8 @@ pub fn bridge_failure(Error) -> BridgeFailure
 pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request(ChannelId, @commands.Command[Payload, Reply], Payload) -> Reply
 
 pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(ChannelId, @commands.Command[Payload, Reply], Payload, lane? : String) -> Reply
+
+pub async fn[Payload : ToJson, Reply : @json.FromJson] codex_request(ChannelId, @commands.Command[Payload, @protocol.CodexCommandReply[Reply]], Payload) -> Reply
 
 pub async fn[T] in_ordered_lane(String, async () -> T) -> T
 
@@ -63,7 +65,12 @@ pub(all) enum ChannelId {
   Local
   Remote(String)
 } derive(Eq, Hash, @debug.Debug)
+pub fn ChannelId::equal(Self, Self) -> Bool
 pub fn ChannelId::from_uri_authority(String) -> Self?
+pub fn ChannelId::hash(Self) -> Int
+pub fn ChannelId::hash_combine(Self, Hasher) -> Unit
+pub fn ChannelId::not_equal(Self, Self) -> Bool
+pub fn ChannelId::to_repr(Self) -> @debug.Repr
 pub fn ChannelId::uri_authority(Self) -> String
 
 pub(all) enum CheckoutPlacement {
@@ -73,15 +80,23 @@ pub(all) enum CheckoutPlacement {
   MissingWorktree(project~ : @common.Uri, name~ : String)
 } derive(Eq, @debug.Debug)
 pub fn CheckoutPlacement::checkout_root(Self) -> @common.Uri?
+pub fn CheckoutPlacement::equal(Self, Self) -> Bool
 pub fn CheckoutPlacement::is_ready(Self) -> Bool
+pub fn CheckoutPlacement::not_equal(Self, Self) -> Bool
 pub fn CheckoutPlacement::project_root(Self) -> @common.Uri?
 pub fn CheckoutPlacement::same_identity(Self, Self) -> Bool
+pub fn CheckoutPlacement::to_repr(Self) -> @debug.Repr
 pub fn CheckoutPlacement::worktree_name(Self) -> String?
 
 pub(all) struct ConversationKey {
   channel : ChannelId
   session : String
 } derive(Eq, Hash, @debug.Debug)
+pub fn ConversationKey::equal(Self, Self) -> Bool
+pub fn ConversationKey::hash(Self) -> Int
+pub fn ConversationKey::hash_combine(Self, Hasher) -> Unit
+pub fn ConversationKey::not_equal(Self, Self) -> Bool
+pub fn ConversationKey::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

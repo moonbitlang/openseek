@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/moonbit"
+
+import {
+  "openseek_desktop/backend/internal/pathx",
+}
+
+// Values
+pub async fn resolve_toolchain(String, runtime_dir? : @pathx.Path) -> ResolvedToolchain
+
+// Errors
+pub suberror ToolchainUnavailable
+pub fn ToolchainUnavailable::output(Self, &Logger) -> Unit
+pub fn ToolchainUnavailable::to_string(Self) -> String
+pub impl Show for ToolchainUnavailable
+
+// Types and methods
+pub struct ResolvedToolchain {
+  bin_dir : @pathx.Absolute
+  moon : @pathx.Absolute
+}
+pub fn ResolvedToolchain::apply_to_env(Self, Map[String, String]) -> Unit
+pub fn ResolvedToolchain::tool_env(Self) -> Map[String, String]
+
+// Type aliases
+
+// Traits

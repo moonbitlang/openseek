@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/remote"
+
+import {
+  "openseek_desktop/backend/internal/api",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type RelayActor
+pub fn RelayActor::RelayActor(@api.ApiState, announce~ : (String) -> Unit) -> Self
+pub async fn RelayActor::run(Self) -> Unit
+
+// Type aliases
+
+// Traits

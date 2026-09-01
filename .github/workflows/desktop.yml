@@ -62,11 +62,11 @@ jobs:
         run: moon update
 
       # The browser packager is a native MoonBit command, so Proton's module
-      # prebuild still needs the runtime selected by desktop/moon.mod.
+      # prebuild still needs the runtime selected by desktop/backend/moon.mod.
       - name: Resolve pinned Proton version
         id: proton
         run: |
-          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/moon.mod)"
+          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/backend/moon.mod)"
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -99,7 +99,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Build Desktop browser application
-        working-directory: desktop
+        working-directory: desktop/backend
         run: moon run package/browser --target native
 
       - name: Run Desktop E2E tests

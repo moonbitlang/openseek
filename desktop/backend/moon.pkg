@@ -1,0 +1,34 @@
+import {
+  "moonbitlang/async",
+  "moonbit-community/proton",
+  "moonbit-community/proton_ext/notification",
+  "openseek_desktop/backend/internal/api",
+  "openseek_desktop/backend/internal/auth",
+  "openseek_desktop/commands",
+  "openseek_desktop/backend/internal/codex",
+  "openseek_desktop/backend/internal/engine",
+  "openseek_desktop/backend/internal/env" @envx,
+  "openseek_desktop/backend/internal/extension",
+  "openseek_desktop/backend/internal/host",
+  "openseek_desktop/protocol",
+  "openseek_desktop/backend/internal/remote",
+  "openseek_desktop/backend/internal/shellenv",
+  "openseek_desktop/backend/internal/update",
+  "openseek_desktop/backend/internal/workspaces",
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/env",
+  "tonyfettes/platform",
+  "tonyfettes/xlog",
+}
+
+warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "native"
+
+pkgtype(kind: "executable")
+
+options(
+  targets: { "main.mbt": [ "native" ] },
+)

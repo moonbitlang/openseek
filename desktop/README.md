@@ -6,19 +6,27 @@ Frontend changes must follow the durable interaction principles in
 [`UX_GUIDELINES.md`](UX_GUIDELINES.md) and the visual and component conventions
 in [`DESIGN.md`](DESIGN.md).
 
-- `main.mbt` — entry point: wires the window manifest, the IPC extensions, the per-user runtime directory, and the launch log.
-- `internal/engine/` — the native host: keeps one persistent `openseek serve` engine per conversation, streams its JSONL events to the webview, and owns where conversations live on disk (per-session workspace directories, the durable session store root, and archiving).
-- `internal/extension/` — the IPC bridge registration: the `connect` / `start` / `steer` / `cancel` / `list_sessions` / `load_session` handlers, the `skills_*` / `skill_*` ops backing the Skills panel, and bundled frontend asset lookup.
-- `internal/skillmarket/` — the mooncakes.io skill registry client and the local skills-library manager: catalog browsing, digest-verified installs into the engine's global skills directory, and uninstall of what the app itself installed.
-- `internal/env/` — process-environment reads (blank means unset).
-- `internal/home/` — the user's home directory and `~` expansion.
-- `internal/userdirs/` — the user's Documents folder, answered by each platform's authority: the Windows known folder, the XDG user-dirs override, or `~/Documents`.
-- `internal/event/` — engine event decoding.
-- `internal/menu/` — the macOS main menu (App/Edit/Window): macOS dispatches ⌘ key equivalents through the main menu and the webview library never creates one, so without it the editing shortcuts (⌘A/⌘C/⌘V, undo, quit) are silently dropped. No-op on other platforms.
-- `frontend/` — the JS (Rabbita) UI core: the Elm-style model/update/view plus the command files talking to the host bridge. Two thin shells bundle it: `frontend/desktop/` (the app's `frontend.js`) and `frontend/browser/` (the `browser.js` console bundle openseek-api serves).
+- `backend/main.mbt` — native entry point: wires the window manifest, IPC
+  extensions, per-user runtime directory, and launch log.
+- `backend/internal/engine/` — the native host: owns persistent engines,
+  streaming, conversation storage, and workspace directories.
+- `backend/internal/extension/` — the IPC command registration and bundled frontend asset lookup.
+- `backend/internal/skillmarket/` — the mooncakes.io skill registry client and local skills-library manager.
+- `backend/internal/env/` — process-environment reads (blank means unset).
+- `backend/internal/home/` — the user's home directory and `~` expansion.
+- `backend/internal/userdirs/` — the user's Documents folder, answered by each platform's authority.
+- `backend/internal/event/` — engine event decoding.
+- `frontend/` — the standalone JS (Rabbita) UI module: the Elm-style model/update/view. Two thin shells bundle it: `frontend/desktop/` (the app's `frontend.js`) and `frontend/browser/` (the `browser.js` console bundle openseek-api serves).
+- `protocol/`, `commands/`, `uri/`, and `file_search_*` — target-neutral
+  packages owned directly by the root `desktop` module.
 - `frontend/transcript/` — pure decoders from the engine's wire data to display items: engine events, session-list and session-replay replies, runtime updates.
 - `frontend/markdown/` — markdown rendering for transcript content (cmark to Rabbita nodes, panic-guarded).
 - `frontend/interop/` — the typed `@js` helpers shared by the frontend; no frontend package embeds raw JavaScript.
+
+The native `backend` and JS `frontend` modules both depend on the root
+`desktop` module. They do not depend on each other; backend packaging builds
+the frontend workspace member separately and consumes its generated JavaScript
+bundle.
 
 ## Sessions and streaming
 
@@ -174,8 +182,8 @@ git clone <this-repo>
 ```
 
 Proton is an ordinary registry dependency (`moonbit-community/proton` in
-`moon.mod`), so a plain clone is complete — `moon` resolves it like any other
-package.
+`backend/moon.mod`), so a plain clone is complete — `moon` resolves it like
+any other package.
 
 The desktop frontend imports the `moonbitlang/editor` workspace member from
 `../editor`. Packaging reads its reusable CSS and codicon font from that same
@@ -200,13 +208,13 @@ What still needs preparing, beyond the MoonBit packages:
 Build the frontend bundle and the native binary:
 
 ```sh
-moon build frontend/desktop --target js
-cp ../_build/js/debug/build/openseek_desktop/frontend/desktop/desktop.js frontend.js
-moon build . --target native         # build the native binary
+moon -C desktop/frontend build desktop --target js
+cp _build/js/debug/build/openseek_desktop/frontend/desktop/desktop.js desktop/frontend.js
+moon -C desktop/backend build . --target native
 ```
 
 The native binary is written to
-`_build/native/debug/build/openseek_desktop/openseek_desktop.exe`. Add
+`_build/native/debug/build/openseek_desktop/backend/backend.exe`. Add
 `--release` to each build command for optimized output; those artifacts use the
 corresponding `_build/*/release/` directories.
 
@@ -215,7 +223,7 @@ corresponding `_build/*/release/` directories.
 From the monorepo root, run:
 
 ```sh
-moon run ./desktop/package/dev
+moon run ./desktop/backend/package/dev
 ```
 
 The launcher detects the desktop workspace, builds the frontend, engine, and
@@ -227,8 +235,8 @@ Proton's user-level immutable store. That first setup may download a large
 archive; later development and platform-package runs reuse the validated store
 entries.
 
-The executable implementation lives in `package/dev`; it accepts no path or
-build-mode arguments.
+The executable implementation lives in `backend/package/dev`; it accepts no
+path or build-mode arguments.
 
 Development does not use Moon's `data_dir` and does not assemble a package
 asset directory. `desktop-dev.html` is served with the repository as its asset
@@ -244,8 +252,9 @@ versions change.
 Desktop CSS conventions, including token scope and the single-owner form focus
 contract, live in [`styles/README.md`](styles/README.md).
 
-The host recognizes its `_build/native/<profile>/build/openseek_desktop`
-location and derives the checkout HTML, matching engine, and worktree-local
+The host recognizes its
+`_build/native/<profile>/build/openseek_desktop/backend` location and derives
+the checkout HTML, matching engine, and worktree-local
 `desktop/target/dev-state` from it. Packaged layouts are checked first. The
 engine then finds the local MoonBit toolchain through the same deterministic
 resolver as production: a bundled seed when one exists, otherwise `moon` on
@@ -301,7 +310,7 @@ protocol, approval, and packaging contract.
 The scripted Windows path is:
 
 ```powershell
-moon -C desktop run --target native package/windows
+moon -C desktop/backend run --target native package/windows
 ```
 
 It prepares the Proton/CEF runtime if needed, builds the frontend and native
@@ -321,7 +330,7 @@ The app bundle is always built; selecting `app` alone skips both distribution
 archives. For example, build only the bundle and portable zip with:
 
 ```powershell
-moon -C desktop run --target native package/windows -- --target zip
+moon -C desktop/backend run --target native package/windows -- --target zip
 ```
 
 This still builds the bundle directory and portable zip, but does not require
@@ -351,15 +360,16 @@ links against:
 moonx moonbit-community/proton_cli@<version> cef setup
 ```
 
-`<version>` is whatever `moon.mod` pins `moonbit-community/proton` to; the
-packagers read it from there rather than repeating it.
+`<version>` is whatever `backend/moon.mod` pins
+`moonbit-community/proton` to; the packagers read it from there rather than
+repeating it.
 
 Build the frontend bundle, copy it to `frontend.js`, and build the native host:
 
 ```powershell
-moon build frontend/desktop --target js --release
-Copy-Item ..\_build\js\release\build\openseek_desktop\frontend\desktop\desktop.js frontend.js
-moon build . --target native --release
+moon -C desktop/frontend build desktop --target js --release
+Copy-Item _build\js\release\build\openseek_desktop\frontend\desktop\desktop.js desktop\frontend.js
+moon -C desktop/backend build . --target native --release
 ```
 
 On Windows, the platform native stub embeds the MSVC linker directives that
@@ -370,9 +380,7 @@ Clang are not supported.
 Build the `openseek` engine from the monorepo root:
 
 ```powershell
-cd ..
 moon build cmd/openseek --target native --release
-cd desktop
 ```
 
 For a runnable development bundle, place these files together:
@@ -389,8 +397,8 @@ dist/windows-x64/SeekMoon/
 The files come from:
 
 ```text
-openseek-desktop.exe <- desktop/_build/native/release/build/openseek_desktop/openseek_desktop.exe
-openseek.exe         <- _build/native/release/build/cmd/openseek/openseek.exe
+openseek-desktop.exe <- _build/native/release/build/openseek_desktop/backend/backend.exe
+openseek.exe         <- _build/native/release/build/bobzhang/openseek/cmd/openseek/openseek.exe
 assets/index.html    <- desktop/index.html
 assets/app.css       <- desktop/app.generated.css (assembled from desktop/app.css imports)
 assets/frontend.js   <- desktop/frontend.js
@@ -398,7 +406,8 @@ assets/frontend.js   <- desktop/frontend.js
 
 ## Package (macOS)
 
-`package/macos` runs all of the above (including the runtime preparation),
+`backend/package/macos` runs all of the above (including the runtime
+preparation),
 builds the `openseek` engine from the monorepo's `cmd/openseek` source, and
 prepares the frontend and MoonBit toolchain inputs. It then delegates the App
 layout, CEF runtime, helper bundles, package metadata, signing, ZIP, and DMG to
@@ -406,9 +415,7 @@ layout, CEF runtime, helper bundles, package metadata, signing, ZIP, and DMG to
 default, and the command produces `dist/SeekMoon.app`:
 
 ```sh
-moon run --target native package/macos
-# or, from the monorepo root:
-moon -C desktop run --target native package/macos
+moon -C desktop/backend run --target native package/macos
 ```
 
 The app-only output is ad-hoc signed by Proton for local use. Scripts may pass
@@ -419,8 +426,8 @@ Codex is not part of the application bundle or its signing list.
 To build a distribution artifact, select `dmg` or `zip`:
 
 ```sh
-moon run --target native package/macos -- --release --target dmg
-moon run --target native package/macos -- --release --target zip
+moon -C desktop/backend run --target native package/macos -- --release --target dmg
+moon -C desktop/backend run --target native package/macos -- --release --target zip
 ```
 
 - `dist/SeekMoon.dmg` is for first-time installation. It
@@ -450,7 +457,7 @@ timestamp are applied automatically) and notarize:
 ```sh
 # one-time: xcrun notarytool store-credentials openseek \
 #   --apple-id you@example.com --team-id TEAMID --password <app-specific-pw>
-moon run --target native package/macos -- \
+moon -C desktop/backend run --target native package/macos -- \
   --release \
   --target dmg \
   --target zip \
@@ -465,21 +472,19 @@ ad-hoc signed. Such outputs are not intended for distribution.
 
 ## Package (Linux)
 
-`package/linux` runs the same build steps (including the runtime
+`backend/package/linux` runs the same build steps (including the runtime
 preparation), builds the `openseek` engine from the monorepo's `cmd/openseek`
 source, and produces `dist/SeekMoon-linux-x86_64.AppImage`. It builds debug
 MoonBit artifacts by default:
 
 ```sh
-moon run --target native package/linux
-# or, from the monorepo root:
-moon -C desktop run --target native package/linux
+moon -C desktop/backend run --target native package/linux
 ```
 
 For an optimized AppImage, pass the package flag after Moon's `--` separator:
 
 ```sh
-moon run --target native package/linux -- --release
+moon -C desktop/backend run --target native package/linux -- --release
 ```
 
 Build requirements: `pkg-config` plus the GTK3 and WebKitGTK dev packages
