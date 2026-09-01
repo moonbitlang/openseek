@@ -36,7 +36,6 @@ class Build {
     this.desktop = fileURLToPath(new URL("../", import.meta.url));
     this.repo = resolve(this.desktop, "..");
     this.host = Hosts[process.platform];
-    this.npm = process.platform === "win32" ? "npm.cmd" : "npm";
   }
 
   commandRun(program, args, { cwd = this.desktop, env = {} } = {}) {
@@ -46,6 +45,17 @@ class Build {
     });
     if (result.error) throw result.error;
     if (result.status !== 0) throw new Error(`${program} exited with ${result.status ?? result.signal}`);
+  }
+
+  npmRun(args) {
+    // npm is installed as a .cmd launcher on Windows, which Node cannot spawn
+    // directly without a command interpreter. Keep commandRun shell-free and
+    // route only these two trusted npm commands through the system cmd.exe.
+    if (process.platform === "win32") {
+      return this.commandRun(process.env.ComSpec || "cmd.exe",
+        ["/d", "/s", "/c", "npm.cmd", ...args]);
+    }
+    return this.commandRun("npm", args);
   }
 
   commandOutput(program, args) {
@@ -125,8 +135,8 @@ class Build {
   async web(profile, browser = false, ci = false) {
     // Local installs preserve node_modules for quick repeat builds. CI requests
     // a clean, lockfile-only install explicitly through the shared CLI.
-    await this.commandRun(this.npm, [ci ? "ci" : "install"]);
-    await this.commandRun(this.npm, ["run", "build"]);
+    await this.npmRun([ci ? "ci" : "install"]);
+    await this.npmRun(["run", "build"]);
     const release = profile === "release" ? ["--release"] : [];
     if (browser) {
       await this.commandRun("moon", ["build", "frontend/browser", "--target", "js", ...release]);
