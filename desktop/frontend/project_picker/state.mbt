@@ -10,7 +10,8 @@
 /// the rows inside it — a directory's subdirectories, or the Windows drive
 /// list's drives. `loading` marks a browse or folder creation in flight; a
 /// failed navigation or create pops a toast while the previous listing stays
-/// usable, and a failed completion browse only empties the rows.
+/// usable, and a failed completion browse shows the host's reason where the
+/// rows were.
 /// `channel` owns every browse and the eventual project mutation;
 /// `generation` numbers that picker's latest request. Both ride on replies,
 /// so neither a superseded navigation nor a closed picker from another
@@ -35,17 +36,37 @@ struct State {
   // by the segment typed after that separator.
   path_draft : String?
   path_selection : Int
-  // The directory most recently browsed for the draft that the host has not
-  // listed — the browse is in flight, or it failed — so retyping inside it
-  // never repeats the request. A listing clears it: the host may have
-  // canonicalized the spelling, and an alias typed again is its to resolve.
-  // Cleared with the draft.
-  completion_parent : String?
+  // The draft's most recent completion browse and how it stands — the host
+  // is still answering, or refused with its reason — so retyping inside the
+  // same directory never repeats the request, and the refusal explains the
+  // empty rows in place. A listing clears it: the host may have canonicalized
+  // the spelling, and an alias typed again is its to resolve. Cleared with
+  // the draft.
+  completion_browse : CompletionBrowse?
   generation : Int
 } derive(Eq)
 
 ///|
 pub extend State with Eq::{equal, not_equal}
+
+///|
+/// One completion browse from the draft's point of view: the directory it
+/// asked the host to list, still unanswered or refused with the host's
+/// reason.
+enum CompletionBrowse {
+  Asking(String)
+  Refused(String, message~ : String)
+} derive(Eq)
+
+///|
+pub extend CompletionBrowse with Eq::{equal, not_equal}
+
+///|
+fn CompletionBrowse::parent(self : CompletionBrowse) -> String {
+  match self {
+    Asking(parent) | Refused(parent, ..) => parent
+  }
+}
 
 ///|
 /// The fence expected by the current host reply. Exposed with the otherwise
@@ -160,7 +181,7 @@ pub fn State::open(
     new_folder: None,
     path_draft: None,
     path_selection: 0,
-    completion_parent: None,
+    completion_browse: None,
     generation,
   }
   (browse(emit, channel, "", generation~), picker)
@@ -187,7 +208,7 @@ pub fn State::handle(
           entries,
           loading: false,
           new_folder: None,
-          completion_parent: None,
+          completion_browse: None,
           // A completion browse keeps editing with the canonical path the
           // host actually listed — avoiding a second request when the user
           // presses Enter — and the segment the draft was completing.
@@ -219,10 +240,16 @@ pub fn State::handle(
           )
         } else if self.path_draft is Some(_) {
           // A completion browse could not list the directory the draft
-          // names. The rows say so in place; a toast would nag on every
-          // keystroke inside a path still being typed. Enter navigates
-          // there and surfaces the reason.
-          (@cmd.none, Some(next), None)
+          // names. The rows show the host's reason in place — permissions,
+          // a missing directory, and a non-directory path read differently —
+          // while a toast would nag on every keystroke inside a path still
+          // being typed.
+          let completion_browse = match self.completion_browse {
+            Some(Asking(parent) | Refused(parent, ..)) =>
+              Some(Refused(parent, message~))
+            None => None
+          }
+          (@cmd.none, Some({ ..next, completion_browse, }), None)
         } else {
           (
             @cmd.none,
@@ -267,7 +294,7 @@ pub fn State::handle(
                 Some({
                   ..changed,
                   loading: false,
-                  completion_parent: None,
+                  completion_browse: None,
                   generation: fresh_request_generation(),
                 }),
                 None,
@@ -275,8 +302,8 @@ pub fn State::handle(
             } else {
               (@cmd.none, Some(changed), None)
             }
-          Some((parent, _)) if changed.completion_parent is Some(asked) &&
-            asked == parent =>
+          Some((parent, _)) if changed.completion_browse is Some(asked) &&
+            asked.parent() == parent =>
             // Already asked: its listing is on the way, or the host could
             // not provide one.
             (@cmd.none, Some(changed), None)
@@ -325,7 +352,7 @@ pub fn State::handle(
                 ..self,
                 path_draft: None,
                 path_selection: 0,
-                completion_parent: None,
+                completion_browse: None,
               }),
               None,
             )
@@ -346,7 +373,7 @@ pub fn State::handle(
           loading: false,
           path_draft: None,
           path_selection: 0,
-          completion_parent: None,
+          completion_browse: None,
           generation,
         }),
         None,
@@ -366,7 +393,7 @@ pub fn State::handle(
             new_folder: Some(""),
             path_draft: None,
             path_selection: 0,
-            completion_parent: None,
+            completion_browse: None,
           }),
           None,
         )
@@ -440,7 +467,7 @@ fn State::navigate_to(
       new_folder: None,
       path_draft: None,
       path_selection: 0,
-      completion_parent: None,
+      completion_browse: None,
       generation,
     }),
     None,
@@ -465,7 +492,7 @@ fn State::complete_from(
       loading: true,
       path_draft: Some(parent + segment),
       path_selection: 0,
-      completion_parent: Some(parent),
+      completion_browse: Some(Asking(parent)),
       generation,
     }),
     None,

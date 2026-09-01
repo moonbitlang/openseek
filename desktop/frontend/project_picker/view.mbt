@@ -345,9 +345,13 @@ fn empty_view(picker : State, filter_active : Bool) -> @html.Html {
   let (title, detail) = if picker.loading {
     ("Loading folders…", "This should only take a moment.")
   } else if !picker.listing_completes_draft() {
-    (
-      "Cannot list this folder", "Check the path, or press Enter to open it and see why.",
-    )
+    // The host's own refusal, so permissions, a missing directory, and a
+    // non-directory path read differently in place.
+    let reason = match picker.completion_browse {
+      Some(Refused(_, message~)) => message
+      _ => "Check the path, or press Enter to open it and see why."
+    }
+    ("Cannot list this folder", reason)
   } else if filter_active {
     ("No matching folders", "Try a different name or enter a complete path.")
   } else {
