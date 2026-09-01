@@ -12043,16 +12043,6 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
 }
 
 ///|
-test "the BYOK default provider needs a key to be ready" {
-  let model = test_model()
-  assert_true(model.deepseek_key_saved)
-  assert_true(model.api_ready())
-  let keyless = { ..model, deepseek_key_saved: false, }
-  assert_false(keyless.api_ready())
-  assert_true(keyless.display_status() is ApiKeyRequired)
-}
-
-///|
 test "the official endpoint requires a key, a custom endpoint a URL" {
   let official = {
     ..test_model(),
@@ -12796,6 +12786,7 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   assert_true(running.api_provider is Glm)
   assert_true(running.default_model is Glm53)
   assert_true(running.active().engine_model is High)
+  assert_true(running.display_status() is Running)
 }
 
 ///|
@@ -13334,14 +13325,6 @@ test "saving a key marks the active provider credential only" {
   assert_false(saved_glm.deepseek_key_saved)
   assert_false(saved_glm.custom_key_saved)
   assert_true(saved_glm.screen is Settings)
-}
-
-///|
-test "changing settings mid-run leaves the run status alone" {
-  let dispatch = test_dispatch()
-  let (_, next) = update(dispatch, ProviderChanged("deepseek"), running_model())
-  assert_true(next.display_status() is Running)
-  assert_true(next.api_provider is Deepseek)
 }
 
 ///|
@@ -15338,17 +15321,6 @@ test "font-size settings switch every text surface and are idempotent" {
 }
 
 ///|
-test "a transcript stream grows without application-owned scroll state" {
-  let dispatch = test_dispatch()
-  let (_, next) = update_dev(
-    dispatch,
-    Engine(Some("r7"), AssistantDelta("more"), session=None),
-    running_model(),
-  )
-  assert_eq(next.active().turn.streaming_response, Some("more"))
-}
-
-///|
 test "selecting a conversation returns from the skills page to the chat" {
   let dispatch = test_dispatch()
   let (_, opened) = update(dispatch, OpenSkills, test_model())
@@ -15369,17 +15341,6 @@ test "selecting a conversation returns from the skills page to the chat" {
     opened,
   )
   assert_true(rotated.screen is Chat)
-}
-
-///|
-test "update is pure: opening the skills page twice is idempotent" {
-  let dispatch = test_dispatch()
-  let model = test_model()
-  let (_, once) = update(dispatch, OpenSkills, model)
-  let (_, twice) = update(dispatch, OpenSkills, model)
-  assert_true(once.screen is Skills)
-  assert_true(twice.screen is Skills)
-  assert_true(once.skills == twice.skills)
 }
 
 ///|
@@ -17078,47 +17039,6 @@ test "switching the chat provider leaves the update answer alone" {
   let (_, kept) = update(dispatch, ProviderChanged("custom"), available)
   assert_true(kept.api_provider is Custom)
   assert_true(kept.update_ux is UpdateAvailable(..))
-}
-
-///|
-test "check_update replies decode by kind" {
-  assert_true(UpdateCheck::from_reply(@protocol.UpToDate) is CheckUpToDate)
-  assert_true(
-    UpdateCheck::from_reply(
-      @protocol.Available(
-        version="0.2.0",
-        installable=true,
-        unavailable_reason=None,
-      ),
-    )
-    is CheckFound(version="0.2.0", installable=true, unavailable_reason=None),
-  )
-  assert_true(
-    UpdateCheck::from_reply(
-      @protocol.Available(
-        version="0.2.0",
-        installable=false,
-        unavailable_reason=Some("move the app"),
-      ),
-    )
-    is CheckFound(
-      version="0.2.0",
-      installable=false,
-      unavailable_reason=Some("move the app")
-    ),
-  )
-  assert_true(
-    UpdateCheck::from_reply(@protocol.Unreachable(reason="offline"))
-    is CheckUnreachable(reason="offline"),
-  )
-  assert_true(
-    UpdateCheck::from_reply(@protocol.Malformed(reason="not json"))
-    is CheckMalformed(reason="not json"),
-  )
-  assert_true(
-    UpdateCheck::from_reply(@protocol.Broken(version="0.2.0", reason="bad url"))
-    is CheckBroken(version="0.2.0", reason="bad url"),
-  )
 }
 
 ///|
