@@ -1359,8 +1359,8 @@ fn topbar_view(
     ]),
   )
   items.push(run_indicator(model, conv))
-  if conv.turn.usage_tokens > 0 {
-    items.push(@html.span(class="pill", token_label(conv.turn.usage_tokens)))
+  if conv.turn.usage_tokens is Some(tokens) {
+    items.push(@html.span(class="pill", token_label(tokens)))
   }
   // Export is a native-window operation and the visualizer consumes durable
   // OpenSeek JSONL. Remote-device conversations and fresh drafts therefore do

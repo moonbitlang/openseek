@@ -1221,7 +1221,7 @@ fn apply_engine_event(
           ..conv,
           turn: {
             ..conv.turn,
-            usage_tokens: prompt_tokens + completion_tokens,
+            usage_tokens: Some(prompt_tokens + completion_tokens),
           },
         },
       )
@@ -8846,11 +8846,11 @@ test "the run heartbeat carries only the facts the page actually has" {
   let full = {
     ..running_conversation(),
     run_started_ms: Some(1_000.0),
-    turn: { ..running_conversation().turn, usage_tokens: 12_345, },
+    turn: { ..running_conversation().turn, usage_tokens: Some(12_345), },
   }
   assert_eq(
     full.run_heartbeat(),
-    Some({ stage: Thinking, started_ms: Some(1_000.0), tokens: 12_345, }),
+    Some({ stage: Thinking, started_ms: Some(1_000.0), tokens: Some(12_345), }),
   )
   // A run adopted from a reconnect has no start this page witnessed. The
   // composer omits the span rather than dating it from when we noticed.
@@ -9181,7 +9181,7 @@ test "session rotation activates a fresh conversation, keeping the old one" {
   )
   inspect(next.active_session, content="desktop-fresh")
   inspect(next.active().messages.length(), content="0")
-  inspect(next.active().turn.usage_tokens, content="0")
+  assert_eq(next.active().turn.usage_tokens, None)
   assert_true(next.display_status() is Ready)
   // The previous conversation keeps running in the background.
   guard next.find_conversation(@interop.ChannelId::Local, "desktop-test")
@@ -10801,7 +10801,7 @@ test "session loaded swaps the active conversation onto the stored session" {
       messages: [{ kind: User("old chat"), ts: None, sequence: None, }],
       turn: {
         ..test_conversation().turn,
-        usage_tokens: 42,
+        usage_tokens: Some(42),
         streaming_response: Some("leftover"),
       },
     })
@@ -10866,7 +10866,7 @@ test "session loaded swaps the active conversation onto the stored session" {
   inspect(once.active().messages.length(), content="2")
   assert_eq(once.active().messages[0].text(), Some("stored question"))
   assert_eq(once.active().turn.streaming_response, None)
-  inspect(once.active().turn.usage_tokens, content="0")
+  assert_eq(once.active().turn.usage_tokens, None)
   assert_eq(
     once.active().workspace,
     Project(root=@interop.ChannelId::Local.test_project()),
@@ -11142,7 +11142,7 @@ test "a run boundary discards the previous turn's live state whole" {
       live_reasoning: None,
       reasoning_frontier: 0,
       subruns: [lane],
-      usage_tokens: 4200,
+      usage_tokens: Some(4200),
     },
   }
   let (_, next) = update_dev(
@@ -11164,7 +11164,7 @@ test "a run boundary discards the previous turn's live state whole" {
   }
   assert_eq(next.active().turn.streaming_response, None)
   inspect(next.active().turn.subruns.length(), content="0")
-  inspect(next.active().turn.usage_tokens, content="0")
+  assert_eq(next.active().turn.usage_tokens, None)
 }
 
 ///|

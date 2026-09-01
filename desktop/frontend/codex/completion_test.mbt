@@ -38,7 +38,7 @@ test "Codex composer reports selected task run status" {
   }
   assert_true(turn_run.stage is @composer.Working)
   assert_eq(turn_run.started_ms, Some(1_000_000.0))
-  assert_eq(turn_run.tokens, 0)
+  assert_eq(turn_run.tokens, None)
   assert_true(
     turn_input.presentation.primary_action
     is @composer.Running(can_stop=true, ..),
@@ -58,6 +58,7 @@ test "Codex composer reports selected task run status" {
     fail("an active Codex task should produce a composer heartbeat")
   }
   assert_true(task_run.stage is @composer.Working)
+  assert_eq(task_run.tokens, None)
   guard task_input.presentation.primary_action
     is @composer.Running(steer_available~, can_stop~, ..) else {
     fail("an active Codex task without a turn id must keep running controls")
@@ -102,7 +103,7 @@ test "Codex composer reports selected task run status" {
   }
   assert_true(live_run.stage is @composer.Working)
   assert_eq(live_run.started_ms, Some(2_000_000.0))
-  assert_eq(live_run.tokens, 0)
+  assert_eq(live_run.tokens, None)
 
   let usage = @codex.Msg::notification(
     "thread/tokenUsage/updated",
@@ -135,7 +136,7 @@ test "Codex composer reports selected task run status" {
   guard with_usage.composer_input(context).run is Some(usage_run) else {
     fail("Codex token usage should update the active composer heartbeat")
   }
-  assert_eq(usage_run.tokens, 12345)
+  assert_eq(usage_run.tokens, Some(12345))
 
   let (_, replaced_usage) = @codex.update(
     emit,
@@ -145,8 +146,8 @@ test "Codex composer reports selected task run status" {
         "threadId": "thread-idle",
         "turnId": "turn-2",
         "tokenUsage": {
-          "total": { "totalTokens": 50321 },
-          "last": { "totalTokens": 321 },
+          "total": { "totalTokens": 50000 },
+          "last": { "totalTokens": 0 },
           "modelContextWindow": 200000,
         },
       },
@@ -159,7 +160,7 @@ test "Codex composer reports selected task run status" {
   guard replaced_usage.composer_input(context).run is Some(replaced_run) else {
     fail("replacement token usage should keep the composer heartbeat")
   }
-  assert_eq(replaced_run.tokens, 321)
+  assert_eq(replaced_run.tokens, Some(0))
 
   let (_, completed) = @codex.update(
     emit,

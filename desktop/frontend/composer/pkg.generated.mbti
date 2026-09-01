@@ -264,7 +264,7 @@ pub fn Replacement::to_repr(Self) -> @debug.Repr
 pub(all) struct RunHeartbeat {
   stage : RunStage
   started_ms : Double?
-  tokens : Int
+  tokens : Int?
 } derive(Eq, @debug.Debug)
 pub fn RunHeartbeat::equal(Self, Self) -> Bool
 pub fn RunHeartbeat::not_equal(Self, Self) -> Bool

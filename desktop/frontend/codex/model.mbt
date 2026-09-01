@@ -203,8 +203,9 @@ priv struct CodexTurn {
   started_at : Int?
   completed_at : Int?
   // The latest upstream model response, not this turn's cumulative usage.
-  // `thread/tokenUsage/updated` replaces it by exact turn id.
-  latest_usage_tokens : Int
+  // `None` means app-server has not reported it; an explicit zero remains a
+  // real report. `thread/tokenUsage/updated` replaces it by exact turn id.
+  latest_usage_tokens : Int?
   items : Array[CodexItem]
   // App-server's own statement of how complete `items` is: "full" is the
   // whole history, while "summary" (a `turn/completed` envelope drops the
@@ -1334,7 +1335,7 @@ fn CodexTurn::decode(value : Json) -> CodexTurn? {
     status: @jsonx.json_text(fields, "status").unwrap_or("completed"),
     started_at: @jsonx.json_int(fields, "startedAt"),
     completed_at: @jsonx.json_int(fields, "completedAt"),
-    latest_usage_tokens: 0,
+    latest_usage_tokens: None,
     items,
     items_view: @jsonx.json_text(fields, "itemsView"),
     error,
@@ -2301,7 +2302,7 @@ fn CodexThread::with_latest_usage(
     ..self,
     turns: self.turns.map(turn => {
       if turn.id == turn_id {
-        { ..turn, latest_usage_tokens: tokens, }
+        { ..turn, latest_usage_tokens: Some(tokens), }
       } else {
         turn
       }
@@ -2425,7 +2426,7 @@ fn CodexThread::with_item(
       status: "inProgress",
       started_at: None,
       completed_at: None,
-      latest_usage_tokens: 0,
+      latest_usage_tokens: None,
       items: [item],
       // Locally minted to hold an early item; the server never stated an
       // items view for it.
@@ -2493,7 +2494,7 @@ fn CodexThread::with_plan_update(
       status: "inProgress",
       started_at: None,
       completed_at: None,
-      latest_usage_tokens: 0,
+      latest_usage_tokens: None,
       items: [item],
       items_view: None,
       error: None,
@@ -3786,7 +3787,7 @@ test "Codex completed items replace streamed presentation state" {
     status: "inProgress",
     started_at: None,
     completed_at: None,
-    latest_usage_tokens: 0,
+    latest_usage_tokens: None,
     items: [started],
     items_view: None,
     error: None,

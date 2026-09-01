@@ -193,10 +193,12 @@ pub(all) enum RunStage {
 /// `started_ms` is `None` whenever that moment is not the page's to know — a
 /// run adopted from a reconnect began before anyone here was watching, and
 /// dating it from the moment it was noticed always reports too short a wait.
+/// `tokens` is likewise `None` until the engine reports usage; `Some(0)` is an
+/// explicit zero-token report rather than another spelling of absence.
 pub(all) struct RunHeartbeat {
   stage : RunStage
   started_ms : Double?
-  tokens : Int
+  tokens : Int?
 } derive(Eq, @debug.Debug)
 
 ///|

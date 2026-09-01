@@ -381,7 +381,7 @@ test "the heartbeat reports only the detail it actually has" {
   let full : RunHeartbeat = {
     stage: Thinking,
     started_ms: Some(clock_ms - 134_000.0),
-    tokens: 12_345,
+    tokens: Some(12_345),
   }
   assert_eq(full.label(clock_ms~), "Thinking… (2m 14s · 12.3k tokens)")
   // A run adopted from a reconnect has no start this page witnessed. Its age
@@ -391,10 +391,16 @@ test "the heartbeat reports only the detail it actually has" {
     "Thinking… (12.3k tokens)",
   )
   // Before the first usage event there is no count to report.
-  assert_eq({ ..full, tokens: 0, }.label(clock_ms~), "Thinking… (2m 14s)")
+  assert_eq({ ..full, tokens: None, }.label(clock_ms~), "Thinking… (2m 14s)")
+  // Zero is data when the engine explicitly reports it, not the sentinel for
+  // the absent branch above.
+  assert_eq(
+    { ..full, tokens: Some(0), }.label(clock_ms~),
+    "Thinking… (2m 14s · 0 tokens)",
+  )
   // Neither known: the bare stage is still the one thing worth saying.
   assert_eq(
-    { ..full, started_ms: None, tokens: 0, }.label(clock_ms~),
+    { ..full, started_ms: None, tokens: None, }.label(clock_ms~),
     "Thinking…",
   )
   // A clock that has not advanced past the start — the first render after a
@@ -404,7 +410,7 @@ test "the heartbeat reports only the detail it actually has" {
     "Thinking… (12.3k tokens)",
   )
   let bare = (stage : RunStage) => {
-    ({ stage, started_ms: None, tokens: 0, } : RunHeartbeat).label(clock_ms~)
+    ({ stage, started_ms: None, tokens: None, } : RunHeartbeat).label(clock_ms~)
   }
   assert_eq(bare(Starting), "Starting…")
   assert_eq(bare(AtStep(3)), "Working · step 3")
@@ -431,7 +437,7 @@ test "an idle tick changes nothing, a running one advances the clock" {
   assert_true(after_idle == mounted)
   let running = {
     ..idle,
-    run: Some({ stage: Thinking, started_ms: None, tokens: 0, }),
+    run: Some({ stage: Thinking, started_ms: None, tokens: None, }),
   }
   let stale = { ..mounted, clock_ms: 0.0, }
   let (after_running, _) = stale.update(

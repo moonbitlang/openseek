@@ -285,7 +285,7 @@ fn CodexPermissionPicker::confirmation_dialog(
 /// while the turn fallback covers an item observed before its lifecycle event.
 fn State::composer_run(self : State) -> @composer.RunHeartbeat? {
   if self.waiting_for_first_user_item() {
-    return Some({ stage: @composer.Starting, started_ms: None, tokens: 0, })
+    return Some({ stage: @composer.Starting, started_ms: None, tokens: None, })
   }
   let active_turn = self.active_turn()
   guard self.is_running() else { return None }
@@ -294,7 +294,7 @@ fn State::composer_run(self : State) -> @composer.RunHeartbeat? {
     started_ms: active_turn
     .bind(turn => turn.started_at)
     .map(seconds => seconds.to_double() * 1000.0),
-    tokens: active_turn.map(turn => turn.latest_usage_tokens).unwrap_or(0),
+    tokens: active_turn.bind(turn => turn.latest_usage_tokens),
   })
 }
 

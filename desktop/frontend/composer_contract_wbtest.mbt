@@ -23,7 +23,7 @@ test "the composer is handed the turn's facts, not a rendered row" {
   // to the component, so a span that changes every second costs one
   // component's render instead of reprojecting every component's input.
   guard running.composer_input().run
-    is Some({ stage: Thinking, started_ms: None, tokens: 0, }) else {
+    is Some({ stage: Thinking, started_ms: None, tokens: None, }) else {
     fail("expected the open turn's heartbeat facts")
   }
   let idle = running.replace_conversation({ ..conv, run: NoRun(ended=None), })

@@ -732,7 +732,9 @@ priv struct RunState {
   // nothing persists a sub-run's progress, so a reload mid-turn shows the
   // tool call pending with no lane under it.
   subruns : Array[@subrun.Lane]
-  usage_tokens : Int
+  // No Usage event means no count. Preserve an explicit zero separately so
+  // every renderer can distinguish a real report from absent metadata.
+  usage_tokens : Int?
 } derive(Eq)
 
 ///|
@@ -744,7 +746,7 @@ fn RunState::empty() -> RunState {
     live_reasoning: None,
     reasoning_frontier: 0,
     subruns: [],
-    usage_tokens: 0,
+    usage_tokens: None,
   }
 }
 
