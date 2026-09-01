@@ -878,5 +878,25 @@ test('workspace settings open and persist per-workspace choices', async ({ page 
     checkout_submodules: false,
     submodule_checkout_timeout_seconds: 30,
   });
+
+  // A detach takes the page away with no click anywhere, so nothing
+  // click-away dismisses the open menu. Removing its trigger blurs it
+  // instead, and the shared select dismisses on blur, so the round trip
+  // leaves nothing open: re-entering renders closed, and the first click on
+  // the trigger opens the menu rather than closing one nobody can see.
+  const reentered = page.getByRole('button', { name: 'New chats' });
+  await reentered.click();
+  await expect(reentered).toHaveAttribute('aria-expanded', 'true');
+  app.notify('workspace.changed', { workspaces: [] });
+  await expect(page.getByRole('button', { name: 'New chats' })).toHaveCount(0);
+  app.notify('workspace.changed', { workspaces: ['/workspace'] });
+  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
+  await page.getByTitle('More actions').click();
+  await page.getByRole('button', { name: 'Workspace settings' }).click();
+  const reopened = page.getByRole('button', { name: 'New chats' });
+  await expect(reopened).toHaveAttribute('aria-expanded', 'false');
+  await reopened.click();
+  await expect(reopened).toHaveAttribute('aria-expanded', 'true');
+
   expect(app.pageErrors).toEqual([]);
 });
