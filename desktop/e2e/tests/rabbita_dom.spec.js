@@ -798,3 +798,85 @@ test('desktop shell and modal stay inside a narrow browser viewport', async ({ p
     document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('workspace settings open and persist per-workspace choices', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+
+  // The project row's "…" menu is the way into a workspace's settings page.
+  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
+  await page.getByTitle('More actions').click();
+  await page.getByRole('button', { name: 'Workspace settings' }).click();
+  await expect(page.getByRole('heading', { name: 'workspace' })).toBeVisible();
+  await expect(page.locator('.settings-subtitle')).toHaveText('/workspace');
+
+  // The page reads the host's authoritative snapshot before enabling the
+  // selects.
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'workspace.settings_get')).toMatchObject({
+    params: { workspace: '/workspace' },
+  });
+
+  const launchMode = page.getByRole('button', { name: 'New chats' });
+  await expect(launchMode).toBeEnabled();
+  await launchMode.click();
+  await page.getByRole('option', { name: 'Worktree' }).click();
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'workspace.settings_set' &&
+    request.params?.worktree_mode === true)).toBeTruthy();
+  // Wait for the harness store to settle before replaying the commit
+  // broadcast, so the optimistic mirror is never rolled back by a
+  // pre-mutation payload.
+  await expect.poll(() => app.workspaceSettingsFor('/workspace').worktree_mode).toBe(true);
+  app.notify(
+    'workspace.settings_changed',
+    { ...app.workspaceSettingsFor('/workspace') },
+  );
+  await expect(launchMode).toHaveText('Worktree');
+
+  const submodules = page.getByRole('button', { name: 'Submodules in worktrees' });
+  await submodules.click();
+  await page.getByRole('option', { name: 'Initialize', exact: true }).click();
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'workspace.settings_set' &&
+    request.params?.checkout_submodules === true)).toBeTruthy();
+  await expect.poll(() => app.workspaceSettingsFor('/workspace').checkout_submodules).toBe(true);
+  app.notify(
+    'workspace.settings_changed',
+    { ...app.workspaceSettingsFor('/workspace') },
+  );
+
+  const timeout = page.getByRole('button', { name: 'Submodule checkout timeout' });
+  await timeout.click();
+  await page.getByRole('option', { name: '60 seconds' }).click();
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'workspace.settings_set' &&
+    request.params?.submodule_checkout_timeout_seconds === 60)).toBeTruthy();
+  await expect.poll(() =>
+    app.workspaceSettingsFor('/workspace').submodule_checkout_timeout_seconds,
+  ).toBe(60);
+  app.notify(
+    'workspace.settings_changed',
+    { ...app.workspaceSettingsFor('/workspace') },
+  );
+
+  // Leave and re-enter: the page keeps the committed values.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
+  await page.getByTitle('More actions').click();
+  await page.getByRole('button', { name: 'Workspace settings' }).click();
+  await expect(page.getByRole('button', { name: 'New chats' })).toHaveText('Worktree');
+  await expect(page.getByRole('button', { name: 'Submodules in worktrees' })).toHaveText('Initialize');
+  await expect(page.getByRole('button', { name: 'Submodule checkout timeout' })).toHaveText('60 seconds');
+  // Settings are stored per workspace: a sibling project keeps its own
+  // defaults, never inheriting this workspace's committed values.
+  expect(app.workspaceSettingsFor('/other')).toEqual({
+    workspace: '/other',
+    worktree_mode: false,
+    checkout_submodules: false,
+    submodule_checkout_timeout_seconds: 30,
+  });
+  expect(app.pageErrors).toEqual([]);
+});
