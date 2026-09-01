@@ -216,11 +216,14 @@ test('a directory the host cannot list stays quiet until Enter', async ({ page }
   const input = await editPath(page, picker);
   await page.keyboard.type('/gone/');
   await expect(picker.getByText('Cannot list this folder')).toBeVisible();
+  // The host's own reason shows in place, not a generic hint.
+  await expect(picker.getByText('no such directory: /gone')).toBeVisible();
   await expect(page.getByText('Cannot open folder', { exact: false })).toBeHidden();
   // Typing inside the refused directory does not ask again.
   await page.keyboard.type('x');
   expect(browses(app, '/gone/')).toHaveLength(1);
   await expect(picker.getByText('Cannot list this folder')).toBeVisible();
+  await expect(picker.getByText('no such directory: /gone')).toBeVisible();
   // Enter navigates for real and surfaces the host's reason as a toast.
   await input.press('Enter');
   await expect(
