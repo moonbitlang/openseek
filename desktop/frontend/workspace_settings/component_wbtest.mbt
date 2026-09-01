@@ -175,54 +175,36 @@ test "toggling opens one menu and a second toggle closes it" {
 }
 
 ///|
-test "leaving the page or switching workspaces dismisses the menu" {
+test "a changed page identity resets the menu before the next action" {
   let input = loaded_input()
   let state = initial_model(input)
   let emit = test_emit()
   let (opened, _) = state.update(input, ToggleMenu(DefaultMode), emit)
   assert_true(opened.menu == Some(DefaultMode))
-  // Navigating to another screen closes it.
-  let (hidden, _) = opened.update({ ..input, page: Inactive, }, CloseMenu, emit)
-  assert_true(hidden.menu == None)
-  // Re-entering, and opening another workspace's page, both start closed.
-  let (reentered, _) = hidden.update(input, ToggleMenu(Timeout), emit)
-  assert_true(reentered.menu == Some(Timeout))
-  let (switched, _) = reentered.update(
-    {
-      ..input,
-      page: Active(
-        channel=@interop.ChannelId::Local,
-        workspace=@common.Uri::file("/other"),
-        generation=1,
-        device_epoch=7,
-      ),
-    },
-    CloseMenu,
-    emit,
-  )
-  assert_true(switched.menu == None)
-}
-
-///|
-test "a changed screen identity resets the menu before the next action" {
-  let input = loaded_input()
-  let state = initial_model(input)
-  let emit = test_emit()
-  let (opened, _) = state.update(input, ToggleMenu(Submodules), emit)
-  assert_true(opened.menu == Some(Submodules))
-  // Leaving the page resets the menu state before the arriving message
-  // applies, so a stale menu can never resurface on re-entry.
-  let (left, _) = opened.update(
-    { ..input, page: Inactive, },
-    ToggleMenu(Timeout),
-    emit,
-  )
-  assert_true(left.menu == Some(Timeout))
-  // Re-entering starts closed: the key changed again.
-  let (back, _) = left.update(input, CloseMenu, emit)
-  assert_true(back.menu == None)
-  let (reopened, _) = back.update(input, ToggleMenu(DefaultMode), emit)
-  assert_true(reopened.menu == Some(DefaultMode))
+  // Leaving and re-entering the page delivers no message, so the reopened
+  // page arrives with the old menu still in state. The next message has to
+  // find it reset: the toggle below would otherwise read as a second click
+  // on a menu the user cannot see, and close it instead of opening it.
+  let reopened = loaded_input(generation=2)
+  let (back, _) = opened.update(reopened, ToggleMenu(DefaultMode), emit)
+  assert_true(back.menu == Some(DefaultMode))
+  assert_true(back.key == reopened.page)
+  // Another workspace's page resets the same way.
+  let other : Input = {
+    ..input,
+    page: Active(
+      channel=@interop.ChannelId::Local,
+      workspace=@common.Uri::file("/other"),
+      generation=1,
+      device_epoch=7,
+    ),
+  }
+  let (switched, _) = back.update(other, ToggleMenu(DefaultMode), emit)
+  assert_true(switched.menu == Some(DefaultMode))
+  // Under an unchanged identity the toggle keeps its usual meaning, so the
+  // reset above is the only thing that could have produced those opens.
+  let (closed, _) = switched.update(other, ToggleMenu(DefaultMode), emit)
+  assert_true(closed.menu == None)
 }
 
 ///|
