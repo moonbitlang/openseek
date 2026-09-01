@@ -31,10 +31,13 @@ priv enum Item {
 ///|
 /// File and symbol queries wait briefly while the user types. `Ready`
 /// deliberately includes an empty result; `Failed` is reserved for
-/// bridge/request failure.
+/// bridge/request failure. The two waiting arms carry the UUID of the one
+/// thing armed for the run — a debounce timer, or one Host request — and
+/// every id is armed at most once, so a reply identifies exactly the request
+/// it answers and leaving the arm is itself the fence.
 priv enum Phase {
-  Debouncing
-  Loading
+  Debouncing(request_id~ : String)
+  Loading(request_id~ : String)
   Ready
   Failed
 } derive(Eq)
@@ -43,10 +46,8 @@ priv enum Phase {
 /// One open palette run. `value` is the exact text shown in the input,
 /// including the `#` provider prefix when symbols are active. `owner` and
 /// `root` are the conversation identity captured when the run started, so
-/// `reconcile` can tell a shell change from a no-op. `request_id` names the
-/// newest thing armed for the run — a debounce timer or one Host request —
-/// and every id reaches the Host at most once, so a reply identifies exactly
-/// the request it answers.
+/// `reconcile` can tell a shell change from a no-op. `phase` carries whatever
+/// the run is waiting for.
 priv struct Open {
   owner : @interop.ConversationKey
   root : @common.Uri?
@@ -54,7 +55,6 @@ priv struct Open {
   items : Array[Item]
   selected : Int
   phase : Phase
-  request_id : String
 } derive(Eq)
 
 ///|
@@ -132,12 +132,7 @@ pub(all) enum Msg {
   FilesDue(request_id~ : String)
   FileCacheLoaded(cache_key~ : String)
   FileCacheRequestFailed(cache_key~ : String)
-  FilesLoaded(
-    request_id~ : String,
-    files~ : Array[@pathx.Relative],
-    from_cache~ : Bool,
-    limit_hit~ : Bool
-  )
+  FilesLoaded(request_id~ : String, files~ : Array[@pathx.Relative])
   FilesRequestFailed(request_id~ : String)
   SymbolsDue(request_id~ : String)
   SymbolsLoaded(request_id~ : String, items~ : Array[@symbols.Symbol])

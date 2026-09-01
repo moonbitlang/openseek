@@ -118,7 +118,7 @@ fn key_attrs(emit : @cmd.Emit[Msg], selected : Int?) -> @html.Attrs {
 fn empty_view(open : Open) -> @html.Html {
   let provider = open.provider()
   let (class, message) = match open.phase {
-    Debouncing | Loading =>
+    Debouncing(..) | Loading(..) =>
       (
         "quick-open-empty",
         if provider is Files {
@@ -235,7 +235,7 @@ fn dialog_view(emit : @cmd.Emit[Msg], open : Open) -> @html.Html {
   }
   let list_children = if rows.is_empty() { [empty_view(open)] } else { rows }
   let list_busy = match open.phase {
-    Debouncing | Loading => "true"
+    Debouncing(..) | Loading(..) => "true"
     _ => "false"
   }
   @html.div(class="quick-open-backdrop", on_click=emit(Dismiss), [

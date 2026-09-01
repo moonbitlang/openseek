@@ -31,7 +31,7 @@ pub(all) enum Msg {
   FilesDue(request_id~ : String)
   FileCacheLoaded(cache_key~ : String)
   FileCacheRequestFailed(cache_key~ : String)
-  FilesLoaded(request_id~ : String, files~ : Array[@pathx.Relative], from_cache~ : Bool, limit_hit~ : Bool)
+  FilesLoaded(request_id~ : String, files~ : Array[@pathx.Relative])
   FilesRequestFailed(request_id~ : String)
   SymbolsDue(request_id~ : String)
   SymbolsLoaded(request_id~ : String, items~ : Array[@symbols.Symbol])

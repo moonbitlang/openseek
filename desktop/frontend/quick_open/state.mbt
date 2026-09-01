@@ -36,13 +36,17 @@ pub fn State::open(
     value: provider.prefix(),
     items: [],
     selected: 0,
-    phase: Loading,
-    request_id,
+    phase: Loading(request_id~),
   }
   let started = { ..self, open: Some(open), }
   match provider {
     Files => {
-      let projected = with_file_candidates(input, open, [], Loading)
+      let projected = with_file_candidates(
+        input,
+        open,
+        [],
+        Loading(request_id~),
+      )
       let next = { ..started, open: Some(projected), }
       let (cache_cmd, next) = next.ensure_cache(
         emit, input, projected, true, true,
@@ -88,9 +92,7 @@ pub fn State::handle(
       let (cmd, next) = self.fail_cache_load(cache_key)
       (cmd, next, None)
     }
-    // `from_cache` and `limit_hit` describe how the Host answered, not which
-    // rows to show; the palette renders the same list either way.
-    FilesLoaded(request_id~, files~, from_cache=_, limit_hit=_) =>
+    FilesLoaded(request_id~, files~) =>
       (@cmd.none, self.apply_file_result(input, request_id, files), None)
     FilesRequestFailed(request_id~) =>
       (@cmd.none, self.fail_file_request(request_id), None)
@@ -141,15 +143,19 @@ pub fn State::reconcile(
     root: input.root,
     items: [],
     selected: 0,
-    phase: Loading,
-    request_id,
+    phase: Loading(request_id~),
   }
   let next = { ..self, open: Some(restarted), }
   match restarted.provider() {
     Files => {
       // Keep only currently open relative paths as provisional rows; Host
       // results from the previous root must disappear immediately.
-      let projected = with_file_candidates(input, restarted, [], Loading)
+      let projected = with_file_candidates(
+        input,
+        restarted,
+        [],
+        Loading(request_id~),
+      )
       let next = { ..next, open: Some(projected), }
       let (cache_cmd, next) = next.ensure_cache(
         emit, input, projected, true, true,
@@ -196,7 +202,7 @@ fn State::change_value(
       []
     },
     selected: 0,
-    request_id,
+    phase: Debouncing(request_id~),
   }
   let started = { ..self, open: Some(next_open), }
   match next_open.provider() {
@@ -205,7 +211,7 @@ fn State::change_value(
         input,
         next_open,
         next_open.result_files(),
-        Debouncing,
+        Debouncing(request_id~),
       )
       let next = { ..started, open: Some(projected), }
       let (cache_cmd, next) = next.ensure_cache(
@@ -221,7 +227,7 @@ fn State::change_value(
       )
     }
     Symbols => {
-      let next = { ..started, open: Some({ ..next_open, phase: Debouncing, }), }
+      let next = { ..started, open: Some(next_open), }
       (
         @cmd.batch([
           cancel,
@@ -245,11 +251,13 @@ fn State::begin_file_request(
 ) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) &&
     open.provider() is Files &&
-    open.request_id == request_id &&
-    open.phase is Debouncing else {
+    open.phase is Debouncing(request_id=armed) &&
+    armed == request_id else {
     return (@cmd.none, self)
   }
-  { ..self, open: Some({ ..open, phase: Loading, }), }.query_active_cache(
+  // Without an active cache nothing is issued yet; the run stays `Loading` on
+  // the timer's token until population completes and queries under its own.
+  { ..self, open: Some({ ..open, phase: Loading(request_id~), }), }.query_active_cache(
     emit, input,
   )
 }
@@ -282,11 +290,8 @@ fn State::apply_cache_loaded(
   if next.open is Some(open) &&
     cache.owner == Some(open.owner) &&
     open.provider() is Files &&
-    !(open.phase is Debouncing) {
-    let (query_cmd, queried) = {
-      ..next,
-      open: Some({ ..open, phase: Loading, }),
-    }.query_active_cache(emit, input)
+    !(open.phase is Debouncing(..)) {
+    let (query_cmd, queried) = next.query_active_cache(emit, input)
     next = queried
     cmds.push(query_cmd)
   }
@@ -316,7 +321,7 @@ fn State::fail_cache_load(
 ///|
 /// Adopt only the exact outstanding query. Its UUID was minted for one Host
 /// request against the cache that was active at the time, so an answer from
-/// a replaced cache or an older query cannot carry the current id.
+/// a replaced cache or an older query cannot carry the armed id.
 fn State::apply_file_result(
   self : State,
   input : Input,
@@ -325,7 +330,8 @@ fn State::apply_file_result(
 ) -> State {
   guard self.open is Some(open) &&
     open.provider() is Files &&
-    open.request_id == request_id else {
+    open.phase is Loading(request_id=armed) &&
+    armed == request_id else {
     return self
   }
   { ..self, open: Some(with_file_candidates(input, open, files, Ready)), }
@@ -335,7 +341,8 @@ fn State::apply_file_result(
 fn State::fail_file_request(self : State, request_id : String) -> State {
   guard self.open is Some(open) &&
     open.provider() is Files &&
-    open.request_id == request_id else {
+    open.phase is Loading(request_id=armed) &&
+    armed == request_id else {
     return self
   }
   { ..self, open: Some({ ..open, phase: Failed, }), }
@@ -353,13 +360,13 @@ fn State::begin_symbol_request(
 ) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) &&
     open.provider() is Symbols &&
-    open.request_id == request_id &&
-    open.phase is Debouncing else {
+    open.phase is Debouncing(request_id=armed) &&
+    armed == request_id else {
     return (@cmd.none, self)
   }
   (
     symbol_request(emit, input.root, open.owner, open.query(), request_id),
-    { ..self, open: Some({ ..open, phase: Loading, }), },
+    { ..self, open: Some({ ..open, phase: Loading(request_id~), }), },
   )
 }
 
@@ -374,8 +381,8 @@ fn State::apply_symbol_result(
 ) -> State {
   guard self.open is Some(open) &&
     open.provider() is Symbols &&
-    open.request_id == request_id &&
-    open.phase is Loading else {
+    open.phase is Loading(request_id=armed) &&
+    armed == request_id else {
     return self
   }
   let openable : Array[@symbols.Symbol] = []
@@ -399,8 +406,8 @@ fn State::apply_symbol_result(
 fn State::fail_symbol_request(self : State, request_id : String) -> State {
   guard self.open is Some(open) &&
     open.provider() is Symbols &&
-    open.request_id == request_id &&
-    open.phase is Loading else {
+    open.phase is Loading(request_id=armed) &&
+    armed == request_id else {
     return self
   }
   { ..self, open: Some({ ..open, items: [], selected: 0, phase: Failed, }), }
@@ -568,18 +575,18 @@ fn State::query_active_cache(
       request_id,
       QueryCache,
     ),
-    { ..self, open: Some({ ..open, request_id, }), },
+    { ..self, open: Some({ ..open, phase: Loading(request_id~), }), },
   )
 }
 
 ///|
 /// Abandon the run's Host query, when one is out: `Loading` with an active
-/// cache means `request_id` was spent on a query of that cache.
+/// cache means the armed UUID was spent on a query of that cache.
 fn State::cancel_file_request(self : State, open : Open) -> @cmd.Cmd {
   guard open.provider() is Files &&
-    open.phase is Loading &&
+    open.phase is Loading(request_id~) &&
     self.cache.active_key is Some(_) else {
     return @cmd.none
   }
-  cancel_file_search(open.owner, open.request_id)
+  cancel_file_search(open.owner, request_id)
 }

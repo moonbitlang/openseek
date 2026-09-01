@@ -44,6 +44,15 @@ fn test_symbol(name : String, path : String) -> @symbols.Symbol {
 }
 
 ///|
+/// The UUID one palette run is currently waiting for.
+fn Open::armed(self : Open) -> String raise {
+  match self.phase {
+    Debouncing(request_id~) | Loading(request_id~) => request_id
+    Ready | Failed => fail("expected an armed palette request")
+  }
+}
+
+///|
 /// Open the palette and keep only the state: these tests assert on plain data.
 fn State::begin(self : State, input : Input, provider : Provider) -> State {
   let (_, next) = self.open(test_emit(), input, provider)
@@ -85,13 +94,13 @@ test "opening picks a provider and re-entering rewrites only its prefix" {
   }
   assert_eq(symbols.value, "#parse")
   assert_eq(symbols.query(), "parse")
-  assert_true(symbols.phase is Debouncing)
-  let request_id = symbols.request_id
+  assert_true(symbols.phase is Debouncing(..))
+  let request_id = symbols.armed()
   // Invoking the provider that is already selected only restores focus.
   let refocused = symbols_state.begin(input, Symbols)
   guard refocused.open is Some(same) else { fail("palette expected") }
   assert_eq(same.value, "#parse")
-  assert_eq(same.request_id, request_id)
+  assert_eq(same.armed(), request_id)
   let back = refocused.begin(input, Files)
   guard back.open is Some(back) else { fail("palette expected") }
   assert_eq(back.value, "parse")
@@ -101,7 +110,7 @@ test "opening picks a provider and re-entering rewrites only its prefix" {
   let fresh_symbols = State::empty().begin(input, Symbols)
   guard fresh_symbols.open is Some(fresh) else { fail("palette expected") }
   assert_eq(fresh.value, "#")
-  assert_true(fresh.phase is Loading)
+  assert_true(fresh.phase is Loading(..))
 }
 
 ///|
@@ -125,8 +134,8 @@ test "a root that arrives after opening restarts both providers once" {
   guard first.open is Some(retrying) else {
     fail("the arriving root should leave the picker open")
   }
-  assert_true(retrying.request_id != pending.request_id)
-  assert_true(retrying.phase is Loading)
+  assert_true(retrying.armed() != pending.armed())
+  assert_true(retrying.phase is Loading(..))
   let symbol_waiting = State::empty().begin(rootless, Symbols)
   guard symbol_waiting.open is Some(symbol_pending) else {
     fail("rootless symbol Quick Open should remain open")
@@ -135,12 +144,12 @@ test "a root that arrives after opening restarts both providers once" {
   guard symbol_first.open is Some(symbol_retrying) else {
     fail("the arriving root should leave the symbol picker open")
   }
-  assert_true(symbol_retrying.request_id != symbol_pending.request_id)
+  assert_true(symbol_retrying.armed() != symbol_pending.armed())
   assert_eq(symbol_retrying.query(), symbol_pending.query())
-  assert_true(symbol_retrying.phase is Loading)
+  assert_true(symbol_retrying.phase is Loading(..))
   // A reply minted against the previous root cannot settle the restarted run.
   let stale = symbol_first.step(
-    SymbolsLoaded(request_id=symbol_pending.request_id, items=[
+    SymbolsLoaded(request_id=symbol_pending.armed(), items=[
       test_symbol("stale", "src/old.mbt"),
     ]),
     placed,
@@ -161,7 +170,7 @@ test "file Quick Open populates a cache session before adopting ranked rows" {
     fail("opening should populate a cache")
   }
   assert_true(opened.cache.active_key is None)
-  assert_true(loading.phase is Loading)
+  assert_true(loading.phase is Loading(..))
   // Open tabs are immediately useful rows while the Host index warms.
   assert_eq(loading.items.map(item => item.detail()), [
     "src/active.mbt", "src/open.mbt",
@@ -171,18 +180,13 @@ test "file Quick Open populates a cache session before adopting ranked rows" {
   assert_true(populated.cache.loading_key is None)
   // Population settling issues the run's first query under its own UUID.
   guard populated.open is Some(querying) else { fail("palette expected") }
-  assert_true(querying.request_id != loading.request_id)
+  assert_true(querying.armed() != loading.armed())
   let indexed = populated.step(
-    FilesLoaded(
-      request_id=querying.request_id,
-      files=[
-        Relative("src/open.mbt"),
-        Relative("src/other.mbt"),
-        Relative("src/active.mbt"),
-      ],
-      from_cache=true,
-      limit_hit=false,
-    ),
+    FilesLoaded(request_id=querying.armed(), files=[
+      Relative("src/open.mbt"),
+      Relative("src/other.mbt"),
+      Relative("src/active.mbt"),
+    ]),
     input,
   )
   guard indexed.open is Some(ready) else { fail("palette expected") }
@@ -210,7 +214,7 @@ test "an initial file cache failure is visible and retryable" {
   assert_true(failed.cache.loading_key is None)
   let retrying = failed.step(ValueChanged("src"), input)
   guard retrying.open is Some(pending) else { fail("palette expected") }
-  assert_true(pending.phase is Debouncing)
+  assert_true(pending.phase is Debouncing(..))
   assert_true(retrying.cache.loading_key is Some(_))
 }
 
@@ -226,7 +230,7 @@ test "reopening while cache population is running does not start another load" {
   assert_false(dismissed.is_open())
   let reopened = dismissed.begin(input, Files)
   guard reopened.open is Some(second) else { fail("palette expected") }
-  assert_true(second.request_id != first.request_id)
+  assert_true(second.armed() != first.armed())
   assert_eq(reopened.cache.loading_key, Some(first_key))
   assert_true(reopened.cache.active_key is None)
 }
@@ -249,14 +253,12 @@ test "file cache keeps the previous key until replacement succeeds" {
     fail("a replacement cache should warm on each picker run")
   }
   assert_eq(opened.cache.active_key, Some("old-cache"))
-  assert_true(initial.phase is Loading)
+  assert_true(initial.phase is Loading(..))
   let cached = opened.step(
-    FilesLoaded(
-      request_id=initial.request_id,
-      files=[Relative("src/main.mbt"), Relative("README.md")],
-      from_cache=true,
-      limit_hit=false,
-    ),
+    FilesLoaded(request_id=initial.armed(), files=[
+      Relative("src/main.mbt"),
+      Relative("README.md"),
+    ]),
     input,
   )
   guard cached.open is Some(ready) else { fail("palette expected") }
@@ -279,32 +281,26 @@ test "file cache keeps the previous key until replacement succeeds" {
   assert_true(refresh_failed.cache.loading_key is None)
   let changed = refresh_failed.step(ValueChanged("src"), input)
   guard changed.open is Some(debouncing) else { fail("palette expected") }
-  assert_true(debouncing.phase is Debouncing)
+  assert_true(debouncing.phase is Debouncing(..))
   assert_eq(debouncing.items.map(item => item.detail()), ["src/main.mbt"])
+  // The query that already settled is no longer armed; its reply cannot come
+  // back and replace the rows the keystroke projected.
   let stale = changed.step(
-    FilesLoaded(
-      request_id=ready.request_id,
-      files=[Relative("wrong.mbt")],
-      from_cache=true,
-      limit_hit=false,
-    ),
+    FilesLoaded(request_id=initial.armed(), files=[Relative("wrong.mbt")]),
     input,
   )
   guard stale.open is Some(still_debouncing) else { fail("palette expected") }
-  assert_true(still_debouncing.phase is Debouncing)
+  assert_true(still_debouncing.phase is Debouncing(..))
   assert_eq(still_debouncing.items.map(item => item.detail()), ["src/main.mbt"])
-  let loading = stale.step(FilesDue(request_id=debouncing.request_id), input)
+  let loading = stale.step(FilesDue(request_id=debouncing.armed()), input)
   guard loading.open is Some(in_flight) else { fail("palette expected") }
-  assert_true(in_flight.phase is Loading)
+  assert_true(in_flight.phase is Loading(..))
   // The query spends a UUID of its own; the timer's token is never answered.
-  assert_true(in_flight.request_id != debouncing.request_id)
+  assert_true(in_flight.armed() != debouncing.armed())
   let loaded = loading.step(
-    FilesLoaded(
-      request_id=in_flight.request_id,
-      files=[Relative("src/current.mbt")],
-      from_cache=true,
-      limit_hit=false,
-    ),
+    FilesLoaded(request_id=in_flight.armed(), files=[
+      Relative("src/current.mbt"),
+    ]),
     input,
   )
   guard loaded.open is Some(current) else { fail("palette expected") }
@@ -321,19 +317,19 @@ test "leading hash switches providers and fences stale symbol replies" {
   guard changed.open is Some(pending) else { fail("palette expected") }
   let item = test_symbol("parse_hover", "src/main.mbt")
   let stale = changed.step(
-    SymbolsLoaded(request_id=initial.request_id, items=[item]),
+    SymbolsLoaded(request_id=initial.armed(), items=[item]),
     input,
   )
   guard stale.open is Some(still_pending) else {
     fail("a stale reply must not close the palette")
   }
-  assert_true(still_pending.phase is Debouncing)
+  assert_true(still_pending.phase is Debouncing(..))
   assert_eq(still_pending.items.length(), 0)
   let files = stale.step(ValueChanged("parse"), input)
   guard files.open is Some(files_open) else { fail("palette expected") }
   assert_true(files_open.provider() is Files)
   let still_files = files.step(
-    SymbolsLoaded(request_id=pending.request_id, items=[item]),
+    SymbolsLoaded(request_id=pending.armed(), items=[item]),
     input,
   )
   guard still_files.open is Some(current) else { fail("palette expected") }
@@ -347,18 +343,18 @@ test "symbol Quick Open distinguishes failure from an empty result" {
   let opened = State::empty().begin(input, Symbols)
   let changed = opened.step(ValueChanged("#missing"), input)
   guard changed.open is Some(pending) else { fail("palette expected") }
-  let loading = changed.step(SymbolsDue(request_id=pending.request_id), input)
+  let loading = changed.step(SymbolsDue(request_id=pending.armed()), input)
   guard loading.open is Some(in_flight) else { fail("palette expected") }
-  assert_true(in_flight.phase is Loading)
+  assert_true(in_flight.phase is Loading(..))
   let failed = loading.step(
-    SymbolsRequestFailed(request_id=pending.request_id),
+    SymbolsRequestFailed(request_id=pending.armed()),
     input,
   )
   guard failed.open is Some(failure) else { fail("palette expected") }
   assert_true(failure.phase is Failed)
   assert_eq(failure.items.length(), 0)
   let loaded = loading.step(
-    SymbolsLoaded(request_id=pending.request_id, items=[]),
+    SymbolsLoaded(request_id=pending.armed(), items=[]),
     input,
   )
   guard loaded.open is Some(empty) else { fail("palette expected") }
@@ -372,7 +368,7 @@ test "symbols without a source path are dropped from the rows" {
   let opened = State::empty().begin(input, Symbols)
   guard opened.open is Some(search) else { fail("palette expected") }
   let ready = opened.step(
-    SymbolsLoaded(request_id=search.request_id, items=[
+    SymbolsLoaded(request_id=search.armed(), items=[
       test_symbol("placed", "src/main.mbt"),
       test_symbol("unplaced", ""),
     ]),
@@ -390,7 +386,7 @@ fn symbol_run(name : String, path : String) -> State raise {
   let opened = State::empty().begin(input, Symbols)
   guard opened.open is Some(search) else { fail("palette expected") }
   opened.step(
-    SymbolsLoaded(request_id=search.request_id, items=[test_symbol(name, path)]),
+    SymbolsLoaded(request_id=search.armed(), items=[test_symbol(name, path)]),
     input,
   )
 }

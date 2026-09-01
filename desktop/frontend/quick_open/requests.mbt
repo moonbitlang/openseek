@@ -68,16 +68,7 @@ fn file_request(
               Some(@pathx.Relative(path))
             }
           })
-          scheduler.add(
-            emit(
-              FilesLoaded(
-                request_id~,
-                files~,
-                from_cache=reply.from_cache,
-                limit_hit=reply.limit_hit,
-              ),
-            ),
-          )
+          scheduler.add(emit(FilesLoaded(request_id~, files~)))
         }
       }
     })
