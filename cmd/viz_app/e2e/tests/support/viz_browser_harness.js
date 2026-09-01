@@ -5,10 +5,6 @@ export class VizBrowserHarness {
     this.page = page;
     this.pageErrors = [];
     this.apiRequests = [];
-    this.extraSessionRows = [];
-    // Child logs stay separate from the parent envelope so the app must find
-    // them through the listing and issue its normal subrun prefetch request.
-    this.childEvents = new Map();
     this.events = [
       JSON.stringify({
         version: 1,
@@ -63,137 +59,6 @@ export class VizBrowserHarness {
             content: '',
             tool_calls: [
               {
-                id: 'plan-1',
-                name: 'plan',
-                arguments: JSON.stringify({
-                  steps: [
-                    { title: 'Inspect DOM', status: 'in_progress' },
-                    { title: 'Run browser tests', status: 'pending' },
-                  ],
-                }),
-              },
-            ],
-          },
-        },
-      }),
-      JSON.stringify({
-        sequence: 5,
-        ts: 5_000,
-        item: {
-          kind: 'tool_result',
-          payload: {
-            tool_call_id: 'plan-1',
-            tool_name: 'plan',
-            content: 'Plan accepted.',
-            is_error: false,
-          },
-        },
-      }),
-      JSON.stringify({
-        sequence: 6,
-        ts: 6_000,
-        item: {
-          kind: 'assistant',
-          payload: {
-            content: '',
-            tool_calls: [
-              {
-                id: 'plan-2',
-                name: 'plan',
-                arguments: JSON.stringify({
-                  steps: [
-                    { title: 'Inspect DOM', status: 'completed' },
-                    { title: 'Run browser tests', status: 'in_progress' },
-                    { title: 'Review layout', status: 'pending' },
-                  ],
-                }),
-              },
-            ],
-          },
-        },
-      }),
-      JSON.stringify({
-        sequence: 7,
-        ts: 7_000,
-        item: {
-          kind: 'tool_result',
-          payload: {
-            tool_call_id: 'plan-2',
-            tool_name: 'plan',
-            content: 'Plan updated.',
-            is_error: false,
-          },
-        },
-      }),
-      JSON.stringify({
-        sequence: 8,
-        ts: 8_000,
-        item: {
-          kind: 'runtime_notice',
-          payload: { content: '[goal]\nShip the Playwright migration' },
-        },
-      }),
-      JSON.stringify({
-        sequence: 9,
-        ts: 9_000,
-        item: {
-          kind: 'runtime_notice',
-          payload: { content: '[goal blocked]\nwaiting for fixture data' },
-        },
-      }),
-      JSON.stringify({
-        sequence: 10,
-        ts: 10_000,
-        item: {
-          kind: 'runtime_notice',
-          payload: { content: '[goal cleared]' },
-        },
-      }),
-      JSON.stringify({
-        sequence: 11,
-        ts: 11_000,
-        item: {
-          kind: 'assistant',
-          payload: {
-            content: '',
-            tool_calls: [
-              {
-                id: 'explore-1',
-                name: 'explore',
-                arguments: JSON.stringify({ query: 'find the renderer' }),
-              },
-            ],
-          },
-        },
-      }),
-      JSON.stringify({
-        sequence: 12,
-        ts: 12_000,
-        item: {
-          kind: 'tool_result',
-          payload: {
-            tool_call_id: 'explore-1',
-            tool_name: 'explore',
-            content: 'Answer: render it in Chromium.',
-            is_error: false,
-            brief: 'explore sr-2 (1 citation(s), 7 step(s))',
-          },
-        },
-      }),
-      JSON.stringify({
-        sequence: 13,
-        ts: 13_000,
-        item: {
-          kind: 'assistant',
-          payload: {
-            content: '',
-            tool_calls: [
-              {
-                id: 'read-1',
-                name: 'read',
-                arguments: JSON.stringify({ path: 'src/main.mbt' }),
-              },
-              {
                 id: 'mbtx-build',
                 name: 'mbtx',
                 arguments: JSON.stringify({ source: 'fn main { compile_error }' }),
@@ -203,40 +68,13 @@ export class VizBrowserHarness {
                 name: 'mbtx',
                 arguments: JSON.stringify({ source: 'fn main { abort("runtime") }' }),
               },
-              {
-                id: 'mbtx-js',
-                name: 'mbtx',
-                arguments: JSON.stringify({
-                  source: 'fn main { abort("single shot") }',
-                  target: 'js',
-                }),
-              },
             ],
           },
         },
       }),
       JSON.stringify({
-        sequence: 14,
-        ts: 14_000,
-        item: {
-          kind: 'tool_result',
-          payload: {
-            tool_call_id: 'read-1',
-            tool_name: 'read',
-            content: [
-              ' 9 |fn main {',
-              '10 |  println("hi")',
-              '11 |}',
-              '<system>start_line=9 shown_lines=3 total_lines=20 truncated=false</system>',
-            ].join('\n'),
-            is_error: false,
-            brief: 'read main.mbt (truncated)',
-          },
-        },
-      }),
-      JSON.stringify({
-        sequence: 15,
-        ts: 15_000,
+        sequence: 5,
+        ts: 5_000,
         item: {
           kind: 'tool_result',
           payload: {
@@ -249,8 +87,8 @@ export class VizBrowserHarness {
         },
       }),
       JSON.stringify({
-        sequence: 16,
-        ts: 16_000,
+        sequence: 6,
+        ts: 6_000,
         item: {
           kind: 'tool_result',
           payload: {
@@ -263,22 +101,8 @@ export class VizBrowserHarness {
         },
       }),
       JSON.stringify({
-        sequence: 17,
-        ts: 17_000,
-        item: {
-          kind: 'tool_result',
-          payload: {
-            tool_call_id: 'mbtx-js',
-            tool_name: 'mbtx',
-            content: 'single-shot diagnostic',
-            is_error: true,
-            brief: 'mbtx (exit=1)',
-          },
-        },
-      }),
-      JSON.stringify({
-        sequence: 18,
-        ts: 18_000,
+        sequence: 7,
+        ts: 7_000,
         item: {
           kind: 'terminal',
           payload: { kind: 'failed', message: 'Browser fixture completed.' },
@@ -297,7 +121,6 @@ export class VizBrowserHarness {
         last_active: 1,
         first_prompt: 'Inspect the session viewer',
       },
-      ...this.extraSessionRows,
     ];
   }
 
@@ -315,14 +138,13 @@ export class VizBrowserHarness {
   }
 
   sessionEnvelope(id = 'viz-1') {
-    const events = id === 'viz-1' ? this.events : this.childEvents.get(id);
-    if (events === undefined) {
+    if (id !== 'viz-1') {
       return { found: false, events: '', events_bytes: 0 };
     }
     return {
       found: true,
-      events,
-      events_bytes: events.length,
+      events: this.events,
+      events_bytes: this.events.length,
     };
   }
 

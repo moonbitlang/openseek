@@ -256,6 +256,17 @@ Platform package commands remain the release-layout test. They build debug
 MoonBit artifacts by default; pass `--release` after `--` when you need
 optimized artifacts.
 
+## Test policy
+
+Only add or change Desktop tests when the user explicitly asks. First warn that
+agent-written tests can be useless or freeze the current implementation, and
+ask which user-visible behavior, external contract, safety property, or prior
+regression must be protected; stop if none is specified.
+
+Assert actions against observable UI or host-boundary outcomes, not private
+DOM/CSS, `data-*` attributes, timing or ordering constants, or copied fixture
+text unless the user names it as part of the contract.
+
 `just test-browser` from `desktop/` builds the browser-console bundle and
 mounts the Desktop Rabbita application in Playwright Chromium. It checks
 rendered DOM, keyboard and focus behavior, composer send/stop, conversation

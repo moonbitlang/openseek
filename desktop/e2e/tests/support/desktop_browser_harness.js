@@ -12,6 +12,7 @@ export class DesktopBrowserHarness {
     this.textSearchMatchCount = undefined;
     this.textSearchLimitHit = false;
     this.directoryEntries = {};
+    this.workspaces = ['/workspace'];
     // Requests mutate the same fixture snapshots a real Desktop host would
     // return on the next list/read. That lets browser tests verify complete
     // UI -> RPC -> refreshed-DOM flows instead of stopping at button clicks.
@@ -489,7 +490,14 @@ export class DesktopBrowserHarness {
       case 'agent.runs':
         return { runs: [], settled: [], approvals: [] };
       case 'workspace.list':
-        return { workspaces: ['/workspace'] };
+        return { workspaces: [...this.workspaces] };
+      case 'workspace.add': {
+        const path = request.params?.path;
+        if (path && !this.workspaces.includes(path)) {
+          this.workspaces.push(path);
+        }
+        return { workspaces: [...this.workspaces] };
+      }
       case 'settings.get':
         return this.hostSettings;
       case 'settings.set': {
@@ -634,7 +642,7 @@ export class DesktopBrowserHarness {
         return { worktrees: [] };
       case 'workspace.settings_get':
         return {
-          workspace: '/workspace',
+          workspace: request.params?.workspace,
           worktree_mode: false,
           checkout_submodules: false,
           submodule_checkout_timeout_seconds: 30,
