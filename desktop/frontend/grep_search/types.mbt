@@ -13,13 +13,24 @@ const InitialVisibleSearchLines : Int = 500
 const VisibleSearchLineStep : Int = 500
 
 ///|
+/// The inventory's lifecycle. `Debouncing` and `Loading` carry the UUID of
+/// the one Host request the page waits for, so leaving either arm is itself
+/// the staleness fence: a reply naming a retired UUID finds no arm to settle.
 enum Phase {
   Idle
-  Debouncing
-  Loading
+  Debouncing(request_id~ : String)
+  Loading(request_id~ : String)
   Ready
   Failed(code~ : String, message~ : String)
 } derive(Eq, Debug)
+
+///|
+fn Phase::request_id(self : Phase) -> String? {
+  match self {
+    Debouncing(request_id~) | Loading(request_id~) => Some(request_id)
+    Idle | Ready | Failed(..) => None
+  }
+}
 
 ///|
 /// One of the two Search engines, modeled on semgrep's search modes: plain
@@ -67,8 +78,6 @@ struct State {
   collapsed : Map[String, Bool]
   visible_lines : Int
   phase : Phase
-  request_id : String
-  delay_ms : Int
 } derive(Eq)
 
 ///|
@@ -87,14 +96,34 @@ pub fn EditorHighlights::ranges(
 
 ///|
 pub fn State::empty() -> State {
-  State::fresh(@uuid.mint())
+  {
+    mode: Text,
+    text: {
+      query: "",
+      regex: false,
+      case_sensitive: false,
+      whole_word: false,
+      matches: [],
+    },
+    semantic: { patterns: [""], hits: [], partial: false, },
+    details_open: false,
+    include_glob: "",
+    exclude_glob: "",
+    match_count: 0,
+    file_count: 0,
+    limit_hit: false,
+    collapsed: Map([]),
+    visible_lines: InitialVisibleSearchLines,
+    phase: Idle,
+  }
 }
 
 ///|
-/// Expose the current request UUID to the owning file-editor package. Replies
-/// use this UUID directly, without echoing the conversation or checkout root.
-pub fn State::request_id(self : State) -> String {
-  self.request_id
+/// The UUID this page is waiting for, or `None` when nothing is armed.
+/// Exposed so the owning file-editor package can drive the inventory through
+/// its public messages.
+pub fn State::pending_request_id(self : State) -> String? {
+  self.phase.request_id()
 }
 
 ///|

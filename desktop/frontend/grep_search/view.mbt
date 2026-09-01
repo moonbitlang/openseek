@@ -402,7 +402,7 @@ fn text_search_body(
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
   let children : Array[@html.Html] = []
-  let busy = page.phase is Debouncing || page.phase is Loading
+  let busy = page.phase.request_id() is Some(_)
   let summary = page.result_summary()
   let file_count = page.active_file_count()
   let summary_text = if busy {
@@ -598,7 +598,7 @@ fn semantic_search_body(
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
   let children : Array[@html.Html] = []
-  let busy = page.phase is Debouncing || page.phase is Loading
+  let busy = page.phase.request_id() is Some(_)
   let result_summary = page.result_summary()
   let file_count = page.active_file_count()
   let summary = if busy {

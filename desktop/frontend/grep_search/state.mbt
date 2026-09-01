@@ -5,94 +5,62 @@ const SearchDebounceMs : Int = 250
 const MaxSearchResults : Int = 20000
 
 ///|
-fn State::fresh(request_id : String) -> State {
-  {
-    mode: Text,
-    text: {
-      query: "",
-      regex: false,
-      case_sensitive: false,
-      whole_word: false,
-      matches: [],
-    },
-    semantic: { patterns: [""], hits: [], partial: false, },
-    details_open: false,
-    include_glob: "",
-    exclude_glob: "",
-    match_count: 0,
-    file_count: 0,
-    limit_hit: false,
-    collapsed: Map([]),
-    visible_lines: InitialVisibleSearchLines,
-    phase: Idle,
-    request_id,
-    delay_ms: SearchDebounceMs,
-  }
-}
-
-///|
-/// Retire every query/result derived from the outgoing checkout. A fresh UUID
-/// keeps an A -> B -> A transition from making an old reply current again,
-/// while the armed Search mode and semantic settings survive the switch.
+/// Retire every query/result derived from the outgoing checkout. Returning to
+/// `Idle` drops the armed UUID, so an A -> B -> A transition cannot make an
+/// old reply current again, while the armed Search mode and semantic settings
+/// survive the switch.
 pub fn State::reset_checkout(self : State) -> State {
   {
-    ..State::fresh(@uuid.mint()),
+    ..State::empty(),
     mode: self.mode,
     semantic: { ..self.semantic, hits: [], partial: false, },
   }
 }
 
 ///|
+/// Arm the next request for the current inputs. Nothing to search for means
+/// `Idle`, which by itself retires whatever was armed before.
 fn State::schedule(self : State, input : Input, immediate~ : Bool) -> State {
-  let page = self
-  let request_id = @uuid.mint()
-  let has_query = match page.mode {
-    Text => !page.text.query.is_empty()
+  let has_query = match self.mode {
+    Text => !self.text.query.is_empty()
     Semantic =>
-      page.semantic.patterns.any(pattern => !pattern.trim().is_empty())
+      self.semantic.patterns.any(pattern => !pattern.trim().is_empty())
   }
-  let page = if !has_query || input.root is None {
-    {
-      ..page,
-      text: { ..page.text, matches: [], },
-      semantic: { ..page.semantic, hits: [], partial: false, },
+  guard has_query && input.root is Some(_) else {
+    return {
+      ..self,
+      text: { ..self.text, matches: [], },
+      semantic: { ..self.semantic, hits: [], partial: false, },
       match_count: 0,
       file_count: 0,
       limit_hit: false,
       visible_lines: InitialVisibleSearchLines,
       phase: Idle,
-      request_id,
-    }
-  } else {
-    {
-      ..page,
-      text: page.text,
-      semantic: { ..page.semantic, hits: [], partial: false, },
-      match_count: if page.mode is Semantic {
-        0
-      } else {
-        page.match_count
-      },
-      file_count: if page.mode is Semantic {
-        0
-      } else {
-        page.file_count
-      },
-      visible_lines: InitialVisibleSearchLines,
-      phase: if immediate {
-        Loading
-      } else {
-        Debouncing
-      },
-      request_id,
-      delay_ms: if immediate {
-        0
-      } else {
-        SearchDebounceMs
-      },
     }
   }
-  page
+  let request_id = @uuid.mint()
+  {
+    ..self,
+    semantic: { ..self.semantic, hits: [], partial: false, },
+    match_count: if self.mode is Semantic {
+      0
+    } else {
+      self.match_count
+    },
+    file_count: if self.mode is Semantic {
+      0
+    } else {
+      self.file_count
+    },
+    visible_lines: InitialVisibleSearchLines,
+    // `immediate` skips the debounce, so the request is already the one in
+    // flight; the subscription reads the wait from this arm.
+    phase: if immediate {
+      Loading(request_id~)
+    } else {
+      Debouncing(request_id~)
+    },
+  }
 }
 
 ///|
@@ -100,114 +68,111 @@ fn State::schedule(self : State, input : Input, immediate~ : Bool) -> State {
 /// visibility changes intentionally do not call this: a search already issued
 /// from the Explorer may settle while another inventory or tab is visible.
 pub fn State::park(self : State) -> State {
-  guard self.phase is Debouncing || self.phase is Loading else { return self }
-  { ..self, phase: Idle, request_id: @uuid.mint(), }
+  guard self.phase.request_id() is Some(_) else { return self }
+  { ..self, phase: Idle, }
 }
 
 ///|
 pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
-  let page = self
   match msg {
     QueryChanged(query) =>
-      { ..page, text: { ..page.text, query, }, }.schedule(
+      { ..self, text: { ..self.text, query, }, }.schedule(
         input,
         immediate=false,
       )
     ModeChanged(mode) =>
       {
-        ..page,
+        ..self,
         mode,
-        details_open: page.details_open,
-        text: { ..page.text, matches: [], },
-        semantic: { ..page.semantic, hits: [], partial: false, },
+        text: { ..self.text, matches: [], },
+        semantic: { ..self.semantic, hits: [], partial: false, },
         match_count: 0,
         file_count: 0,
         collapsed: Map([]),
       }.schedule(input, immediate=false)
     ToggleCaseSensitive =>
       {
-        ..page,
-        text: { ..page.text, case_sensitive: !page.text.case_sensitive, },
+        ..self,
+        text: { ..self.text, case_sensitive: !self.text.case_sensitive, },
       }.schedule(input, immediate=false)
     ToggleWholeWord =>
-      { ..page, text: { ..page.text, whole_word: !page.text.whole_word, }, }.schedule(
+      { ..self, text: { ..self.text, whole_word: !self.text.whole_word, }, }.schedule(
         input,
         immediate=false,
       )
     ToggleRegex =>
-      { ..page, text: { ..page.text, regex: !page.text.regex, }, }.schedule(
+      { ..self, text: { ..self.text, regex: !self.text.regex, }, }.schedule(
         input,
         immediate=false,
       )
-    ToggleDetails => { ..page, details_open: !page.details_open, }
+    ToggleDetails => { ..self, details_open: !self.details_open, }
     IncludeChanged(include_glob) =>
-      { ..page, include_glob, }.schedule(input, immediate=false)
+      { ..self, include_glob, }.schedule(input, immediate=false)
     ExcludeChanged(exclude_glob) =>
-      { ..page, exclude_glob, }.schedule(input, immediate=false)
+      { ..self, exclude_glob, }.schedule(input, immediate=false)
     PatternChanged(index, value) => {
-      let patterns = page.semantic.patterns.copy()
+      let patterns = self.semantic.patterns.copy()
       if index < patterns.length() {
         patterns[index] = value
       }
-      { ..page, semantic: { ..page.semantic, patterns, }, }.schedule(
+      { ..self, semantic: { ..self.semantic, patterns, }, }.schedule(
         input,
         immediate=false,
       )
     }
     AddPattern =>
       {
-        ..page,
-        semantic: { ..page.semantic, patterns: page.semantic.patterns + [""], },
+        ..self,
+        semantic: { ..self.semantic, patterns: self.semantic.patterns + [""], },
       }
     RemovePattern(index) => {
-      let patterns = page.semantic.patterns.copy()
+      let patterns = self.semantic.patterns.copy()
       if index < patterns.length() && patterns.length() > 1 {
         let _ = patterns.remove(index)
       }
-      { ..page, semantic: { ..page.semantic, patterns, }, }.schedule(
+      { ..self, semantic: { ..self.semantic, patterns, }, }.schedule(
         input,
         immediate=false,
       )
     }
-    Submit | Refresh => page.schedule(input, immediate=true)
-    ClearResults => {
-      let request_id = @uuid.mint()
-      { ..page.clear_results(), phase: Idle, request_id, }
-    }
+    Submit | Refresh => self.schedule(input, immediate=true)
+    ClearResults => { ..self.clear_results(), phase: Idle, }
     CollapseAll => {
       let collapsed : Map[String, Bool] = Map([])
-      for path in page.active_paths() {
+      for path in self.active_paths() {
         collapsed[path] = true
       }
-      { ..page, collapsed, }
+      { ..self, collapsed, }
     }
     ShowMore =>
       {
-        ..page,
-        visible_lines: (page.visible_lines + VisibleSearchLineStep).min(
-          page.active_result_count(),
+        ..self,
+        visible_lines: (self.visible_lines + VisibleSearchLineStep).min(
+          self.active_result_count(),
         ),
       }
     ToggleFile(path) => {
-      let collapsed = page.collapsed.copy()
+      let collapsed = self.collapsed.copy()
       if collapsed.get(path).unwrap_or(false) {
         collapsed.remove(path)
       } else {
         collapsed[path] = true
       }
-      { ..page, collapsed, }
+      { ..self, collapsed, }
     }
     RequestStarted(request_id~) =>
-      if page.request_id == request_id && page.phase is Debouncing {
-        { ..page, phase: Loading, }
+      if self.phase is Debouncing(request_id=armed) && armed == request_id {
+        { ..self, phase: Loading(request_id~), }
       } else {
         self
       }
     Loaded(reply~) => {
-      // The request UUID is the whole staleness fence: every root or mode
-      // change re-mints it, so an id match implies the reply answers the
-      // current checkout's current query.
-      guard page.request_id == reply.request_id && page.mode is Text else {
+      // The armed UUID is the whole staleness fence: every root, mode, or
+      // query change leaves the arm that holds it, so a match implies the
+      // reply answers the current checkout's current query.
+      guard self.phase.request_id() is Some(armed) &&
+        armed == reply.request_id &&
+        self.mode is Text else {
         return self
       }
       if reply.cancelled {
@@ -218,8 +183,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         Some(error) => Failed(code=error.code, message=error.message)
       }
       {
-        ..page.clear_results(),
-        text: { ..page.text, matches: reply.matches, },
+        ..self.clear_results(),
+        text: { ..self.text, matches: reply.matches, },
         match_count: reply.match_count,
         file_count: reply.file_count,
         limit_hit: reply.limit_hit,
@@ -228,13 +193,15 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       }
     }
     SemanticLoaded(reply~) => {
-      guard page.request_id == reply.request_id && page.mode is Semantic else {
+      guard self.phase.request_id() is Some(armed) &&
+        armed == reply.request_id &&
+        self.mode is Semantic else {
         return self
       }
       if reply.cancelled {
         return {
-          ..page,
-          semantic: { ..page.semantic, hits: [], partial: false, },
+          ..self,
+          semantic: { ..self.semantic, hits: [], partial: false, },
           match_count: 0,
           file_count: 0,
           phase: Idle,
@@ -245,9 +212,9 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         Some(error) => Failed(code=error.code, message=error.message)
       }
       {
-        ..page,
+        ..self,
         semantic: {
-          ..page.semantic,
+          ..self.semantic,
           hits: reply.matches,
           partial: reply.partial,
         },
@@ -263,16 +230,16 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       // in flight: once the final reply landed (Ready/Failed) or a newer
       // request started, late progress is stale and must not touch the
       // authoritative result set.
-      guard page.request_id == request_id &&
-        page.mode is Semantic &&
-        page.phase is Loading else {
+      guard self.phase is Loading(request_id=armed) &&
+        armed == request_id &&
+        self.mode is Semantic else {
         return self
       }
       {
-        ..page,
+        ..self,
         semantic: {
-          ..page.semantic,
-          hits: page.semantic.hits + matches,
+          ..self.semantic,
+          hits: self.semantic.hits + matches,
           partial: true,
         },
         match_count,
@@ -280,11 +247,11 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       }
     }
     RequestFailed(request_id~, code~, message~) =>
-      if page.request_id == request_id {
+      if self.phase.request_id() == Some(request_id) {
         {
-          ..page,
-          text: { ..page.text, matches: [], },
-          semantic: { ..page.semantic, hits: [], partial: false, },
+          ..self,
+          text: { ..self.text, matches: [], },
+          semantic: { ..self.semantic, hits: [], partial: false, },
           match_count: 0,
           file_count: 0,
           limit_hit: false,
@@ -398,6 +365,7 @@ fn State::result_summary(self : State) -> SearchResultSummary {
 fn State::text_request_payload(
   self : State,
   input : Input,
+  request_id~ : String,
 ) -> @protocol.SearchTextPayload? {
   guard self.mode is Text else { return None }
   guard input.root is Some(root) && !self.text.query.is_empty() else {
@@ -411,7 +379,7 @@ fn State::text_request_payload(
     whole_word: self.text.whole_word,
     include_glob: self.include_glob,
     exclude_glob: self.exclude_glob,
-    request_id: self.request_id,
+    request_id,
     max_results: MaxSearchResults,
   })
 }
@@ -420,6 +388,7 @@ fn State::text_request_payload(
 fn State::semantic_request_payload(
   self : State,
   input : Input,
+  request_id~ : String,
 ) -> @protocol.SearchSemanticPayload? {
   guard self.mode is Semantic else { return None }
   guard input.root is Some(root) else { return None }
@@ -432,24 +401,24 @@ fn State::semantic_request_payload(
     patterns,
     include_glob: self.include_glob,
     exclude_glob: self.exclude_glob,
-    request_id: self.request_id,
+    request_id,
     max_results: MaxSearchResults,
   })
 }
 
 ///|
-test "checkout reset clears results while preserving the request UUID fence" {
+test "checkout reset clears results and disarms the request UUID fence" {
   let input : Input = {
     owner: { channel: @interop.ChannelId::Local, session: "first", },
     root: Some(@common.Uri::parse("file:///work/a")),
   }
   let state = State::empty().handle(QueryChanged("moon"), input)
-  let old_request_id = state.request_id
+  assert_true(state.pending_request_id() is Some(_))
   let reset = state.reset_checkout()
   assert_eq(reset.text.query, "")
   assert_true(reset.text.matches.is_empty())
   assert_true(reset.phase is Idle)
-  assert_true(reset.request_id != old_request_id)
+  assert_true(reset.pending_request_id() is None)
 }
 
 ///|
@@ -483,9 +452,7 @@ test "query changes debounce and stale replies cannot replace the page" {
   let root = @common.Uri::parse("file:///work")
   let input : Input = { owner, root: Some(root), }
   let state = State::empty().handle(QueryChanged("moon"), input)
-  let page = state
-  assert_true(page.phase is Debouncing)
-  assert_eq(page.delay_ms, 250)
+  assert_true(state.phase is Debouncing(..))
   let stale : @protocol.SearchTextReply = {
     root: root.path,
     request_id: "stale-request",
@@ -512,8 +479,8 @@ test "semantic progress streams partial hits and late progress is fenced" {
     .handle(ModeChanged(Semantic), input)
     .handle(PatternChanged(0, "inspect($(x:arg))"), input)
     .handle(Submit, input)
-  let page = state
-  assert_true(page.phase is Loading)
+  assert_true(state.phase is Loading(..))
+  let request_id = state.pending_request_id().unwrap()
   let hit : @protocol.SemanticSearchHit = {
     path: "src/main.mbt",
     rule_id: "inspect",
@@ -526,12 +493,7 @@ test "semantic progress streams partial hits and late progress is fenced" {
     source_context: [{ line: 1, text: "inspect(x)", is_match: true, }],
   }
   let streamed = state.handle(
-    SemanticProgress(
-      request_id=page.request_id,
-      matches=[hit],
-      match_count=1,
-      file_count=1,
-    ),
+    SemanticProgress(request_id~, matches=[hit], match_count=1, file_count=1),
     input,
   )
   assert_eq(streamed.semantic.hits, [hit])
@@ -562,7 +524,7 @@ test "semantic progress batches append only new hits" {
     .handle(ModeChanged(Semantic), input)
     .handle(PatternChanged(0, "inspect($(x:arg))"), input)
     .handle(Submit, input)
-  let page = state
+  let request_id = state.pending_request_id().unwrap()
   let hit : @protocol.SemanticSearchHit = {
     path: "src/main.mbt",
     rule_id: "inspect",
@@ -576,21 +538,11 @@ test "semantic progress batches append only new hits" {
   }
   let second = { ..hit, start_line: 2, end_line: 2, }
   let first = state.handle(
-    SemanticProgress(
-      request_id=page.request_id,
-      matches=[hit],
-      match_count=1,
-      file_count=1,
-    ),
+    SemanticProgress(request_id~, matches=[hit], match_count=1, file_count=1),
     input,
   )
   let streamed = first.handle(
-    SemanticProgress(
-      request_id=page.request_id,
-      matches=[second],
-      match_count=2,
-      file_count=1,
-    ),
+    SemanticProgress(request_id~, matches=[second], match_count=2, file_count=1),
     input,
   )
   assert_eq(streamed.semantic.hits, [hit, second])
@@ -608,7 +560,7 @@ test "new semantic search clears partial results and cancellation clears them" {
     .handle(ModeChanged(Semantic), input)
     .handle(PatternChanged(0, "inspect($(x:arg))"), input)
     .handle(Submit, input)
-  let page = state
+  let request_id = state.pending_request_id().unwrap()
   let hit : @protocol.SemanticSearchHit = {
     path: "src/main.mbt",
     rule_id: "inspect",
@@ -621,12 +573,7 @@ test "new semantic search clears partial results and cancellation clears them" {
     source_context: [{ line: 1, text: "inspect(x)", is_match: true, }],
   }
   let streamed = state.handle(
-    SemanticProgress(
-      request_id=page.request_id,
-      matches=[hit],
-      match_count=1,
-      file_count=1,
-    ),
+    SemanticProgress(request_id~, matches=[hit], match_count=1, file_count=1),
     input,
   )
   let next = streamed.handle(PatternChanged(0, "match($x)"), input)
@@ -635,7 +582,7 @@ test "new semantic search clears partial results and cancellation clears them" {
   let cancelled = streamed.handle(
     SemanticLoaded(reply={
       root: root.path,
-      request_id: page.request_id,
+      request_id,
       matches: [],
       match_count: 0,
       file_count: 0,
@@ -659,7 +606,7 @@ test "active result helpers share file grouping and highlight projection" {
   let root = @common.Uri::parse("file:///work")
   let input : Input = { owner, root: Some(root), }
   let state = State::empty().handle(QueryChanged("moon"), input)
-  let page = state
+  let request_id = state.pending_request_id().unwrap()
   let first : @protocol.TextSearchMatch = {
     path: "src/main.mbt",
     line_number: 2,
@@ -680,7 +627,7 @@ test "active result helpers share file grouping and highlight projection" {
   let loaded = state.handle(
     Loaded(reply={
       root: root.path,
-      request_id: page.request_id,
+      request_id,
       matches: [first, second],
       match_count: 2,
       file_count: 1,
@@ -713,14 +660,12 @@ test "parking a checkout keeps its draft and fences the in-flight reply" {
   let running = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Submit, input)
-  let page = running
-  let old_request_id = page.request_id
-  assert_true(page.phase is Loading)
+  assert_true(running.phase is Loading(..))
+  let old_request_id = running.pending_request_id().unwrap()
   let suspended = running.park()
-  let page = suspended
-  assert_true(page.phase is Idle)
-  assert_eq(page.text.query, "moon")
-  assert_true(page.request_id != old_request_id)
+  assert_true(suspended.phase is Idle)
+  assert_eq(suspended.text.query, "moon")
+  assert_true(suspended.pending_request_id() is None)
   let stale : @protocol.SearchTextReply = {
     root: root.path,
     request_id: old_request_id,
@@ -746,9 +691,8 @@ test "refresh is immediate and loaded file groups can collapse and clear" {
   let state = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Refresh, input)
-  let loading = state
-  assert_true(loading.phase is Loading)
-  assert_eq(loading.delay_ms, 0)
+  assert_true(state.phase is Loading(..))
+  let request_id = state.pending_request_id().unwrap()
   let result : @protocol.TextSearchMatch = {
     path: "src/main.mbt",
     line_number: 2,
@@ -761,7 +705,7 @@ test "refresh is immediate and loaded file groups can collapse and clear" {
   }
   let reply : @protocol.SearchTextReply = {
     root: root.path,
-    request_id: loading.request_id,
+    request_id,
     matches: [result],
     match_count: 2,
     file_count: 1,
@@ -770,20 +714,16 @@ test "refresh is immediate and loaded file groups can collapse and clear" {
     error: None,
   }
   let ready = state.handle(Loaded(reply~), input)
-  let page = ready
-  assert_true(page.phase is Ready)
-  assert_eq(page.match_count, 2)
+  assert_true(ready.phase is Ready)
+  assert_eq(ready.match_count, 2)
   let collapsed = ready.handle(CollapseAll, input)
-  let page = collapsed
-  assert_true(page.collapsed.get("src/main.mbt").unwrap_or(false))
+  assert_true(collapsed.collapsed.get("src/main.mbt").unwrap_or(false))
   let expanded = collapsed.handle(ToggleFile("src/main.mbt"), input)
-  let page = expanded
-  assert_false(page.collapsed.get("src/main.mbt").unwrap_or(false))
+  assert_false(expanded.collapsed.get("src/main.mbt").unwrap_or(false))
   let cleared = expanded.handle(ClearResults, input)
-  let page = cleared
-  assert_eq(page.text.query, "moon")
-  assert_true(page.text.matches.is_empty())
-  assert_true(page.phase is Idle)
+  assert_eq(cleared.text.query, "moon")
+  assert_true(cleared.text.matches.is_empty())
+  assert_true(cleared.phase is Idle)
 }
 
 ///|
@@ -797,10 +737,9 @@ test "editor highlights include every retained match for the file" {
   let state = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Submit, input)
-  let page = state
   let reply : @protocol.SearchTextReply = {
     root: root.path,
-    request_id: page.request_id,
+    request_id: state.pending_request_id().unwrap(),
     matches: [
       {
         path: "src/main.mbt",
@@ -863,10 +802,9 @@ test "invalid regex replies retain their actionable Host error" {
     .handle(QueryChanged("("), input)
     .handle(ToggleRegex, input)
     .handle(Submit, input)
-  let page = state
   let reply : @protocol.SearchTextReply = {
     root: root.path,
-    request_id: page.request_id,
+    request_id: state.pending_request_id().unwrap(),
     matches: [],
     match_count: 0,
     file_count: 0,

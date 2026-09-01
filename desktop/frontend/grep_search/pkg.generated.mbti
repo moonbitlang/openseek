@@ -62,7 +62,7 @@ pub fn State::empty() -> Self
 pub fn State::explorer_view(Self, Input, @cmd.Emit[Msg], (String, @common.Range) -> @cmd.Cmd) -> @html.Html
 pub fn State::handle(Self, Msg, Input) -> Self
 pub fn State::park(Self) -> Self
-pub fn State::request_id(Self) -> String
+pub fn State::pending_request_id(Self) -> String?
 pub fn State::reset_checkout(Self) -> Self
 pub fn State::subscription(Self, Input, @cmd.Emit[Msg]) -> @sub.Sub
 

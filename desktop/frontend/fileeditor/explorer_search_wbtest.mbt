@@ -3,8 +3,13 @@ test "editor Search highlights follow the Search inventory visibility boundary" 
   let ctx = test_ctx()
   guard ctx.root() is Some(root) else { fail("test checkout root expected") }
   let path = @pathx.Relative("src/main.mbt")
-  let search = @grep_search.State::empty()
-  let request_id = search.request_id()
+  let search = @grep_search.State::empty().handle(
+    @grep_search.QueryChanged("needle"),
+    ctx.search_input(),
+  )
+  guard search.pending_request_id() is Some(request_id) else {
+    fail("a query should arm a Host request")
+  }
   let reply : @protocol.SearchTextReply = {
     root: root.path,
     request_id,

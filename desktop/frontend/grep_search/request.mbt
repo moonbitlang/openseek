@@ -145,26 +145,33 @@ pub fn State::subscription(
   input : Input,
   emit : @cmd.Emit[Msg],
 ) -> @sub.Sub {
-  guard (self.phase is Debouncing || self.phase is Loading) &&
-    input.root is Some(root) &&
+  // The armed phase is both the request identity and the wait before it is
+  // issued: `Loading` is the immediate Submit/Refresh path, `Debouncing` the
+  // keystroke path.
+  let (request_id, delay_ms) = match self.phase {
+    Debouncing(request_id~) => (request_id, SearchDebounceMs)
+    Loading(request_id~) => (request_id, 0)
+    Idle | Ready | Failed(..) => return @sub.none
+  }
+  guard input.root is Some(root) &&
     @resource.belongs_to(root, input.owner.channel) else {
     return @sub.none
   }
   let request = match self.mode {
     Text =>
       self
-      .text_request_payload(input)
+      .text_request_payload(input, request_id~)
       .map(payload => SearchRequest::Text(payload))
     Semantic =>
       self
-      .semantic_request_payload(input)
+      .semantic_request_payload(input, request_id~)
       .map(payload => SearchRequest::Semantic(payload))
   }
   guard request is Some(request) else { return @sub.none }
   @sub.custom_sub(
-    "grep-search:\{request.request_id()}",
+    "grep-search:\{request_id}",
     Local,
-    SearchRequestSub::SearchRequest(input.owner, request, self.delay_ms, emit),
+    SearchRequestSub::SearchRequest(input.owner, request, delay_ms, emit),
     @sub.SubLoader(search_request_loader),
   )
 }
