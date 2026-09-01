@@ -50,6 +50,9 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("moon", ["update"]),
   ("moon", ["install"]),
   ("moon", ["tree"]),
+  // Registry keyword search: read-only, and the natural first step before
+  // `moon add` when the module name is not known yet.
+  ("moon", ["search"]),
   ("moon", ["clean"]),
   ("moon", ["new"]),
   ("moon", ["ide"]),

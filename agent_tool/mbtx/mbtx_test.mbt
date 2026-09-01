@@ -416,6 +416,7 @@ async test "the spawn allowlist discriminates between subcommands" {
       #|  println("reconfigured: \{probe("git", ["-c", "core.pager=cat", "status"])}")
       #|  println("moon-version-flag: \{probe("moon", ["--version"])}")
       #|  println("moon-package: \{probe("moon", ["package"])}")
+      #|  println("moon-search: \{probe("moon", ["search", "--help"])}")
       #|  println("moon-bench: \{probe("moon", ["bench"])}")
       #|  println("moon-publish-dry-run: \{probe("moon", ["publish", "--dry-run"])}")
       #|  println("moon-publish: \{probe("moon", ["publish"])}")
@@ -445,6 +446,9 @@ async test "the spawn allowlist discriminates between subcommands" {
   // `package` and the non-publishing validation form may start, while plain
   // `publish` still matches no prefix. `just` has likewise left the surface.
   assert_true(out.content.contains("moon-package: ran"))
+  // Registry search is admitted; `--help` keeps the probe off the network,
+  // since only starting the process is under test.
+  assert_true(out.content.contains("moon-search: ran"))
   assert_true(out.content.contains("moon-bench: ran"))
   assert_true(out.content.contains("moon-publish-dry-run: ran"))
   assert_true(out.content.contains("moon-publish: refused"))

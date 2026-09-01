@@ -1336,8 +1336,8 @@ fn description(
     #|These, and nothing else:
     #|
     #|- `moon` — check, test, build, bench, run, fmt, info, add, remove, update,
-    #|  install, tree, clean, new, ide, doc, explain, coverage, cram, package,
-    #|  version, plus `publish --dry-run`. (Not plain `publish`, `login` or `register`.)
+    #|  install, tree, search, clean, new, ide, doc, explain, coverage, cram,
+    #|  package, version, plus `publish --dry-run`. (Not plain `publish`, `login` or `register`.)
     #|- `proton_cli` — `--version`, `--help`, new, dev, build, package, doctor,
     #|  cef, and updater. Set `Cmd.cwd` for the project directory; the global
     #|  `-C`/`--cwd` options before the subcommand are refused.

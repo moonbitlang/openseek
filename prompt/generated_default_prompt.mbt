@@ -90,9 +90,9 @@ fn default_prompt() -> String {
     #|these programs can be started:
     #|
     #|- `moon` — check, test, build, bench, run, fmt, info, add, remove, update,
-    #|  install, tree, clean, new, ide, doc, explain, coverage, cram, package,
-    #|  version, plus `publish --dry-run`. (Not plain `publish`, `login` or
-    #|  `register`.)
+    #|  install, tree, search, clean, new, ide, doc, explain, coverage, cram,
+    #|  package, version, plus `publish --dry-run`. (Not plain `publish`, `login`
+    #|  or `register`.)
     #|- `proton_cli` — `--version`, `--help`, new, dev, build, package, doctor,
     #|  cef, and updater. Set `Cmd.cwd` for the project directory; the global
     #|  `-C`/`--cwd` options before the subcommand are refused.
@@ -262,6 +262,11 @@ fn default_prompt() -> String {
     #|  dependencies and package registry/dependency inspection. Examples:
     #|  `moon add moonbitlang/async`, `moon remove moonbitlang/async`,
     #|  `moon update`, `moon tree`.
+    #|- `moon search`: search the package registry for modules by keyword when
+    #|  the exact module name is not known yet; then add the chosen module with
+    #|  `moon add`. Examples: `moon search base64`,
+    #|  `moon search json --limit 5 --json` (`--json` prints one result set as
+    #|  JSON for parsing).
     #|- `moon clean`: clear `_build` when stale build output is suspected.
     #|  Example: `moon clean`.
     #|- `moon bench`: run benchmarks, e.g. `moon bench lib/parser`.
