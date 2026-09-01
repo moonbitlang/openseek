@@ -1428,9 +1428,15 @@ fn session_pane(
     // scroll area so they stay reachable while reading a long log.
     @html.div(class="sticky-toolbar") <| [
       mode_row(emit, model, parsed, @viz.step_scrubber(session)),
-      error_bar(emit, model, error_count),
-      escalated_bar(emit, model, escalated_count),
-      build_error_bar(emit, model, build_error_count, present=mbtx_present),
+      // One shared row for every filter bar: stacking them as separate rows
+      // grew the sticky toolbar past the fixed scroll offsets the anchor
+      // navigation accounts for, which parked jump targets beneath it. Side
+      // by side, the common one-or-two-bar case keeps today's height.
+      @html.div(class="filter-bars") <| [
+        error_bar(emit, model, error_count),
+        escalated_bar(emit, model, escalated_count),
+        build_error_bar(emit, model, build_error_count, present=mbtx_present),
+      ],
     ],
     @viz.render_notices(parsed),
     session_log_view(

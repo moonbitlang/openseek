@@ -259,9 +259,14 @@
       border-bottom: 1px solid var(--border);
     }
     .sticky-toolbar .mode-row { margin-bottom: 0; }
-    .sticky-toolbar .error-bar,
-    .sticky-toolbar .escalated-bar,
-    .sticky-toolbar .build-error-bar { margin: 10px 0 0; }
+    .sticky-toolbar .filter-bars { margin: 10px 0 0; }
+    /* All filter bars share one wrapping row so the sticky toolbar keeps the
+       height the anchor offsets account for; the bars' standalone margins
+       are the container's job here. */
+    .filter-bars { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+    .filter-bars .error-bar,
+    .filter-bars .escalated-bar,
+    .filter-bars .build-error-bar { margin: 0; }
     .mode-row {
       display: flex;
       align-items: center;
