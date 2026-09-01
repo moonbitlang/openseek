@@ -5158,6 +5158,25 @@ fn update_device_msg(
       }
     BridgeReady | EngineReady | NotificationGap => {
       let lifecycle_absence_is_definitive = msg is BridgeReady
+      // A replacement bridge ends both the outstanding response and the only
+      // notification stream which could still carry an exact steer receipt.
+      // Persist that boundary before capturing the recovery cut: an
+      // EngineReady/NotificationGap may supersede this first request before
+      // its reply, and the next cut must retain the same owner authority.
+      let recovery_model = if msg is BridgeReady {
+        {
+          ..model,
+          conversations: model.conversations.map(conv => {
+            if conv.device == channel {
+              conv.lose_steer_receipt_paths()
+            } else {
+              conv
+            }
+          }),
+        }
+      } else {
+        model
+      }
       let connection_generation = dev.connection_generation + 1
       let sessions_request_generation = dev.sessions_request_generation + 1
       let archived_request_generation = dev.archived_request_generation + 1
@@ -5166,7 +5185,7 @@ fn update_device_msg(
       // Capture the exact per-session lifecycle frontier before issuing the
       // unversioned runs snapshot. A live Started or Finished received before
       // its reply then wins over both stale positive rows and stale absence.
-      let run_frontier = model.run_snapshot_frontier(
+      let run_frontier = recovery_model.run_snapshot_frontier(
         channel,
         lifecycle_absence_is_definitive~,
       )
@@ -5224,7 +5243,7 @@ fn update_device_msg(
       // hub-only gap or engine restart leaves their promises live. If the host
       // still compacts, its next prompt rejection is a transient, visible
       // local failure.
-      let conversations = model.conversations.map(conv => {
+      let conversations = recovery_model.conversations.map(conv => {
         if conv.device == channel {
           // Recovery owns the exact pending inputs until the atomic runs
           // reply classifies them. Deleting them here would make the reply's
@@ -5235,7 +5254,7 @@ fn update_device_msg(
           conv
         }
       })
-      let model = model.replace_device({
+      let model = recovery_model.replace_device({
         ..dev,
         bridge: Connected,
         reconnect_failures: 0,
@@ -5515,6 +5534,11 @@ fn update_device_msg(
         .any(input => input.matches_receipt(submission_id, Some(run_id))) else {
         return (@cmd.none, model)
       }
+      // Keep the dead-response fact on the owner, not just this one frontier.
+      // A newer resync boundary can invalidate the request before it replies.
+      let model = model.replace_conversation(
+        conv.lose_steer_response(submission_id, Some(run_id)),
+      )
       let frontier = model.run_snapshot_frontier(
         channel,
         definitive_steer_id=submission_id,
@@ -6972,6 +6996,7 @@ fn update_device_msg(
       // dead (or whose accepted reply proved a row had to exist); it says
       // nothing about a different live request that this snapshot may have
       // overtaken. Entries born after the frontier are deliberately untouched.
+      let mut recovered_unconfirmed_steer = false
       for captured in frontier {
         for owner in captured.steers {
           guard next.find_conversation(channel, captured.session) is Some(conv) &&
@@ -7044,9 +7069,21 @@ fn update_device_msg(
               )
               conv
             }
-            // An older host cannot distinguish "not accepted" from "this
-            // protocol has no ledger". Keep ownership for the exact live RPC;
-            // its later reply/receipt can still settle or restore the draft.
+            // An older host cannot replay steer ownership at all. Keep it only
+            // while its exact receipt path is live. Once a full bridge
+            // replacement ended that path, retire the indefinite pending row,
+            // restore the draft, and report its ambiguity below.
+            None if !steer_recovery_supported && owner.receipt_path_lost => {
+              let (conv, recovered) = conv.recover_unconfirmed_steer(
+                owner.submission_id,
+                Some(owner.run_id),
+              )
+              recovered_unconfirmed_steer = recovered_unconfirmed_steer ||
+                recovered
+              conv
+            }
+            // Its response or notification can still arrive on this bridge,
+            // so absence of an unsupported wire field proves nothing yet.
             None if !steer_recovery_supported => conv
             // Both sides named a ledger and they differ: the request belonged
             // to a host process that no longer exists. Its outcome is
@@ -7074,6 +7111,14 @@ fn update_device_msg(
           }
           next = next.replace_conversation(conv)
         }
+      }
+      if recovered_unconfirmed_steer {
+        let (notice, notified) = next.notify_error(
+          dispatch,
+          SteerUnconfirmedRecoveryNotice,
+        )
+        commands.push(notice)
+        next = notified
       }
       // Snapshot lifecycle reducers may clear the run they describe. Preserve
       // every exact steer that remains after reconciliation: captured pending
@@ -12288,6 +12333,54 @@ test "an ambiguous steer failure lends negative authority only to its id" {
 }
 
 ///|
+test "a lost steer response survives a superseding engine resync" {
+  let dispatch = test_dispatch()
+  for boundary in [EngineReady, NotificationGap] {
+    let queued = with_pending_steers(running_conversation(), ["recover me"])
+    let submission_id = queued.pending_steers[0].submission_id
+    let model = running_model().replace_conversation(queued)
+    let (_, undelivered) = update_dev(
+      dispatch,
+      SteerUndelivered(
+        session="desktop-test",
+        submission_id~,
+        text="recover me",
+        run_id="r7",
+      ),
+      model,
+    )
+    guard undelivered.active().pending_steers is [lost] else {
+      fail("lost steer owner disappeared")
+    }
+    assert_true(lost.delivery is SteerResponseLost)
+    let (_, superseded) = update_dev(dispatch, boundary, undelivered)
+    let frontier = superseded.run_snapshot_frontier(@interop.ChannelId::Local)
+    guard frontier is [{ steers: [owner], .. }] else {
+      fail("replacement resync did not capture the steer")
+    }
+    assert_true(owner.absence_is_definitive)
+    let (_, recovered) = update_dev(
+      dispatch,
+      RunsLoaded(
+        runs=[],
+        settled=[],
+        steers=[],
+        steer_recovery_supported=true,
+        steer_ledger_id=Some("test-ledger"),
+        approvals=[],
+        live=["r7"],
+        frontier~,
+        connection_generation=superseded.dev().connection_generation,
+        request_generation=superseded.dev().runs_request_generation,
+      ),
+      superseded,
+    )
+    inspect(recovered.active().pending_steers.length(), content="0")
+    inspect(recovered.active().task, content="recover me")
+  }
+}
+
+///|
 test "a host without steer recovery preserves live ownership for its reply" {
   let dispatch = test_dispatch()
   let queued = with_pending_steers(running_conversation(), ["maybe durable"])
@@ -12320,6 +12413,45 @@ test "a host without steer recovery preserves live ownership for its reply" {
   )
   inspect(rejected.active().pending_steers.length(), content="0")
   inspect(rejected.active().task, content="maybe durable")
+}
+
+///|
+test "a dead bridge makes an old-host steer finite and recoverable" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(running_conversation(), [
+    "check before retry",
+  ])
+  let model = running_model().replace_conversation(queued)
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, model)
+  guard reconnected.active().pending_steers is [lost] else {
+    fail("bridge replacement discarded the steer owner too early")
+  }
+  assert_true(lost.delivery is SteerResponseLost)
+  assert_true(lost.receipt_path_lost)
+  let frontier = reconnected.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=false,
+      steer_ledger_id=None,
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=reconnected.dev().connection_generation,
+      request_generation=reconnected.dev().runs_request_generation,
+    ),
+    reconnected,
+  )
+  inspect(recovered.active().pending_steers.length(), content="0")
+  inspect(recovered.active().task, content="check before retry")
+  inspect(recovered.notifications.length(), content="1")
+  assert_true(
+    recovered.notifications[0].message.contains("could not be confirmed"),
+  )
+  assert_true(recovered.notifications[0].message.contains("before resending"))
 }
 
 ///|

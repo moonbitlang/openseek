@@ -436,11 +436,11 @@ pub fn endpoints(
       @engine.cancel_run(state.manager, payload)
     }),
     @endpoint.Endpoint::remote(@commands.agent_steer, fn(payload) {
-      guard state.hub.admits_steer(payload) else {
+      guard state.hub.reserve_steer(payload) is Some(reservation) else {
         return { steered: false, run_id: payload.run_id, }
       }
       let reply = @engine.steer_run(state.manager, payload)
-      state.hub.record_steer_accepted(payload, reply)
+      state.hub.record_steer_accepted(payload, reply, reservation)
       reply
     }),
     @endpoint.Endpoint::remote_sync(@commands.agent_steer_ack, payload => {

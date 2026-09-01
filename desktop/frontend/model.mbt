@@ -207,6 +207,12 @@ const TranscriptRefreshFailedNotice : String = "Transcript refresh failed repeat
 const SteerDroppedNotice : String = "Input was not delivered (the task ended as you sent it) — it is back in the composer."
 
 ///|
+/// A pre-ledger host cannot distinguish accepted input from input lost with a
+/// dead bridge. Return the exact draft, but make the ambiguity explicit so a
+/// retry is a user decision after checking the transcript.
+const SteerUnconfirmedRecoveryNotice : String = "Input delivery could not be confirmed after reconnect — it is back in the composer. Check the transcript before resending."
+
+///|
 /// Legacy localStorage keys from when the page stored the engine endpoint
 /// settings itself. Those now live on the host (`settings.get`/`set`); the
 /// keys remain only so the desktop window can migrate stored values up once
@@ -662,6 +668,11 @@ priv struct SteerSnapshotOwner {
   // or accepted-request absence is proof only if the reply names this same
   // ledger. None is conservative: positive rows still settle, absence does not.
   steer_ledger_id : String?
+  // The notification path that could still carry this steer's exact receipt
+  // belonged to a bridge generation which has ended. Older hosts have no
+  // ledger rows to classify, so this is the finite boundary at which their
+  // ambiguous owner must become recoverable instead of staying pending.
+  receipt_path_lost : Bool
 }
 
 ///|
@@ -1029,6 +1040,10 @@ fn GoalRequest::settled_by(
 /// it to the composer without exposing the serialized mention envelope.
 priv enum SteerDelivery {
   SteerSending
+  // The request left this page but its reply did not return. Keep this fact
+  // on the owner: a later resync can invalidate the first exact snapshot, and
+  // the replacement cut must retain the same negative-ledger authority.
+  SteerResponseLost
   SteerAccepted
 } derive(Eq)
 
@@ -1042,6 +1057,9 @@ priv struct PendingSteer {
   // Host-process ledger current when this request was sent. It fences negative
   // recovery across a host restart; exact positive receipts remain portable.
   steer_ledger_id : String?
+  // A full bridge replacement ended the only live notification path which
+  // could still carry this request's id-bearing engine receipt.
+  receipt_path_lost : Bool
   content : String
   draft : String
   mentions : Array[Mention]
@@ -2988,9 +3006,11 @@ fn Model::run_snapshot_frontier(
           submission_id: pending.submission_id,
           run_id,
           absence_is_definitive: pending.delivery is SteerAccepted ||
+          pending.delivery is SteerResponseLost ||
           captured_lifecycle_absence ||
           definitive_steer_id == Some(pending.submission_id),
           steer_ledger_id: pending.steer_ledger_id,
+          receipt_path_lost: pending.receipt_path_lost,
         })
       }
     }
@@ -3684,9 +3704,47 @@ fn Conversation::enqueue_steer(
     run_id,
     delivery: SteerSending,
     steer_ledger_id,
+    receipt_path_lost: false,
     content,
     draft,
     mentions: mentions.copy(),
+  })
+  { ..self, pending_steers, }
+}
+
+///|
+/// Remember that this exact steer request no longer has a reply. The host may
+/// still have accepted it and an id-bearing receipt may still arrive, so this
+/// changes recovery authority without settling or restoring the draft.
+fn Conversation::lose_steer_response(
+  self : Conversation,
+  submission_id : String,
+  run_id : String?,
+) -> Conversation {
+  let pending_steers = self.pending_steers.map(input => {
+    if input.matches_receipt(submission_id, run_id) &&
+      input.delivery is SteerSending {
+      { ..input, delivery: SteerResponseLost, }
+    } else {
+      input
+    }
+  })
+  { ..self, pending_steers, }
+}
+
+///|
+/// End every receipt path owned by the bridge generation being replaced.
+/// Accepted input stays accepted; a request whose reply was still outstanding
+/// also becomes response-lost so subsequent resync cuts preserve that fact.
+fn Conversation::lose_steer_receipt_paths(self : Conversation) -> Conversation {
+  let pending_steers = self.pending_steers.map(input => {
+    ..input,
+    delivery: if input.delivery is SteerSending {
+      SteerResponseLost
+    } else {
+      input.delivery
+    },
+    receipt_path_lost: true,
   })
   { ..self, pending_steers, }
 }
@@ -3885,6 +3943,27 @@ fn ArchiveSalvage::has_content(self : ArchiveSalvage) -> Bool {
 /// ever carry it, so it is a toast, and the text is back in the composer where
 /// the user can act on it.
 fn Conversation::reject_steer(
+  self : Conversation,
+  submission_id : String,
+  run_id : String?,
+) -> (Conversation, Bool) {
+  for index, input in self.pending_steers {
+    if input.matches_receipt(submission_id, run_id) {
+      let pending_steers = self.pending_steers.copy()
+      let _ = pending_steers.remove(index)
+      let next = { ..self, pending_steers, }
+      return (next.restore_submission(input.draft, input.mentions), true)
+    }
+  }
+  (self, false)
+}
+
+///|
+/// Retire a steer whose outcome an older host cannot replay after its receipt
+/// transport ended. Unlike a refusal, this is ambiguous: restore the exact
+/// draft so the user can recover it, while the caller warns them to inspect
+/// the transcript before choosing whether to resend.
+fn Conversation::recover_unconfirmed_steer(
   self : Conversation,
   submission_id : String,
   run_id : String?,

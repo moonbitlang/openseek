@@ -97,6 +97,17 @@ priv struct SteerSettlement {
 }
 
 ///|
+/// A non-mutating capacity reservation made immediately before a synchronous
+/// steer submission. Reclamation is committed only if the engine accepts the
+/// input, so an exact refusal cannot rotate away the ledger identity which
+/// proves that the absent row was never written.
+priv enum SteerReservation {
+  UntrackedSteer
+  FreeSteerSlot
+  ReclaimTerminalSteer(String)
+}
+
+///|
 fn SteerSettlement::wire_payload(
   self : SteerSettlement,
 ) -> @protocol.SteerSettlementPayload {
@@ -158,21 +169,49 @@ fn Hub::record_finished(
 }
 
 ///|
-/// Make room without ever discarding a steer the engine still owes a receipt.
-/// Terminal replay is best-effort after its owner has gone away; retaining it
-/// forever must not turn one lost ACK into a process-lifetime steer outage.
-/// Reclaiming any terminal row rotates the recovery epoch first: clients that
-/// still own that row then classify its absence as ambiguous, never as proof
-/// that the host refused input which may already be durable.
-fn Hub::ensure_steer_capacity(self : Hub) -> Bool {
+/// Identify capacity without mutating the ledger. The endpoint calls this
+/// immediately before the synchronous engine submission, with no suspension
+/// where another request could consume the reservation.
+fn Hub::reserve_steer_capacity(self : Hub) -> SteerReservation? {
+  if self.steer_settlements.length() < SteerSettlementCapacity {
+    return Some(FreeSteerSlot)
+  }
+  for submission_id, settlement in self.steer_settlements {
+    if settlement.status != "pending" {
+      return Some(ReclaimTerminalSteer(submission_id))
+    }
+  }
+  None
+}
+
+///|
+/// Commit a previously reserved slot after acceptance. A terminal row is
+/// best-effort replay after its owner disappeared, but pending evidence is
+/// never reclaimed. Removing terminal evidence rotates the epoch before the
+/// new row is inserted, so its former owner reads absence as ambiguous.
+fn Hub::commit_steer_capacity(
+  self : Hub,
+  reservation : SteerReservation,
+) -> Bool {
   if self.steer_settlements.length() < SteerSettlementCapacity {
     return true
   }
-  let mut reclaim : String? = None
-  for submission_id, settlement in self.steer_settlements {
-    if settlement.status != "pending" {
-      reclaim = Some(submission_id)
-      break
+  let mut reclaim = match reservation {
+    ReclaimTerminalSteer(submission_id) => Some(submission_id)
+    FreeSteerSlot | UntrackedSteer => None
+  }
+  if reclaim is Some(submission_id) {
+    match self.steer_settlements.get(submission_id) {
+      Some(settlement) if settlement.status != "pending" => ()
+      _ => reclaim = None
+    }
+  }
+  if reclaim is None {
+    for submission_id, settlement in self.steer_settlements {
+      if settlement.status != "pending" {
+        reclaim = Some(submission_id)
+        break
+      }
     }
   }
   guard reclaim is Some(submission_id) else { return false }
@@ -192,17 +231,20 @@ fn Hub::ensure_steer_capacity(self : Hub) -> Bool {
 
 ///|
 /// Reserve bounded recovery capacity before an id-bearing steer reaches the
-/// engine. This check and the synchronous engine submission have no suspension
-/// between them, so another request cannot consume the admitted slot first.
-fn Hub::admits_steer(self : Hub, payload : @protocol.SteerPayload) -> Bool {
+/// engine without changing the ledger. This and the synchronous engine call
+/// have no suspension between them, so the returned reservation stays valid.
+fn Hub::reserve_steer(
+  self : Hub,
+  payload : @protocol.SteerPayload,
+) -> SteerReservation? {
   guard @engine.normalize_submission_id(payload.submission_id)
     is Some(submission_id) else {
     // Legacy and malformed ids remain untracked; the engine applies the same
     // normalization before echoing a receipt, so the two layers cannot drift.
-    return true
+    return Some(UntrackedSteer)
   }
-  self.steer_settlements.get(submission_id) is None &&
-  self.ensure_steer_capacity()
+  guard self.steer_settlements.get(submission_id) is None else { return None }
+  self.reserve_steer_capacity()
 }
 
 ///|
@@ -213,6 +255,7 @@ fn Hub::record_steer_accepted(
   self : Hub,
   payload : @protocol.SteerPayload,
   reply : @protocol.SteerReply,
+  reservation : SteerReservation,
 ) -> Unit {
   guard reply.steered &&
     reply.run_id is Some(run_id) &&
@@ -227,6 +270,11 @@ fn Hub::record_steer_accepted(
     if existing.session == started.session && existing.run_id == run_id {
       return
     }
+    return
+  }
+  guard self.commit_steer_capacity(reservation) else {
+    // The reservation and submission are synchronous, so only a violated hub
+    // invariant can reach this branch. Never discard a pending row to recover.
     return
   }
   self.steer_settlements[submission_id] = {
@@ -277,7 +325,8 @@ fn Hub::track_steer(self : Hub, payload : @protocol.AgentEventPayload) -> Unit {
     }
     return
   }
-  guard self.ensure_steer_capacity() else {
+  guard self.reserve_steer_capacity() is Some(reservation) &&
+    self.commit_steer_capacity(reservation) else {
     // Every retained row is pending. Reaching this branch means an
     // unsolicited/malformed receipt, which must not evict live evidence.
     return
@@ -622,7 +671,14 @@ test "agent.runs replays exact steer state across a subscriber gap" {
     run_id: Some("r-steer"),
     submission_id: Some("steer-1"),
   }
-  hub.record_steer_accepted(payload, { steered: true, run_id: Some("r-steer"), })
+  guard hub.reserve_steer(payload) is Some(reservation) else {
+    fail("first steer was not admitted")
+  }
+  hub.record_steer_accepted(
+    payload,
+    { steered: true, run_id: Some("r-steer"), },
+    reservation,
+  )
   let selector : KnownRunPayload = {
     session: "s-steer",
     run_id: Some("r-steer"),
@@ -649,10 +705,14 @@ test "agent.runs replays exact steer state across a subscriber gap" {
     run_id: Some("r-steer"),
     submission_id: Some("steer-2"),
   }
-  hub.record_steer_accepted(uncertain, {
-    steered: true,
-    run_id: Some("r-steer"),
-  })
+  guard hub.reserve_steer(uncertain) is Some(reservation) else {
+    fail("second steer was not admitted")
+  }
+  hub.record_steer_accepted(
+    uncertain,
+    { steered: true, run_id: Some("r-steer"), },
+    reservation,
+  )
   hub.publish(
     AgentEvent({
       run_id: Some("r-steer"),
@@ -697,11 +757,14 @@ test "steer ledger normalizes ids, acknowledges rows, and fences terminal reclam
     run_id: Some("r-ledger"),
     submission_id: Some(overlong),
   }
-  assert_true(hub.admits_steer(malformed))
-  hub.record_steer_accepted(malformed, {
-    steered: true,
-    run_id: Some("r-ledger"),
-  })
+  guard hub.reserve_steer(malformed) is Some(malformed_reservation) else {
+    fail("legacy steer was not admitted")
+  }
+  hub.record_steer_accepted(
+    malformed,
+    { steered: true, run_id: Some("r-ledger"), },
+    malformed_reservation,
+  )
   assert_eq(hub.steer_settlements.length(), 0)
 
   let payload : @protocol.SteerPayload = {
@@ -709,11 +772,14 @@ test "steer ledger normalizes ids, acknowledges rows, and fences terminal reclam
     run_id: Some("r-ledger"),
     submission_id: Some("steer-ledger"),
   }
-  assert_true(hub.admits_steer(payload))
-  hub.record_steer_accepted(payload, {
-    steered: true,
-    run_id: Some("r-ledger"),
-  })
+  guard hub.reserve_steer(payload) is Some(payload_reservation) else {
+    fail("tracked steer was not admitted")
+  }
+  hub.record_steer_accepted(
+    payload,
+    { steered: true, run_id: Some("r-ledger"), },
+    payload_reservation,
+  )
   let ack : @protocol.SteerSettlementAckPayload = {
     session: "s-ledger",
     run_id: "r-ledger",
@@ -744,15 +810,41 @@ test "steer ledger normalizes ids, acknowledges rows, and fences terminal reclam
     }
   }
   let complete_ledger_id = hub.steer_ledger_id
-  assert_true(
-    hub.admits_steer({
-      text: "reclaim oldest terminal",
-      run_id: Some("r-ledger"),
-      submission_id: Some("overflow"),
-    }),
+  let overflow : @protocol.SteerPayload = {
+    text: "reclaim oldest terminal",
+    run_id: Some("r-ledger"),
+    submission_id: Some("overflow"),
+  }
+  guard hub.reserve_steer(overflow) is Some(refused_reservation) else {
+    fail("terminal capacity was not reservable")
+  }
+  // Reservation is read-only. An exact engine refusal leaves both the
+  // terminal evidence and its negative-proof epoch intact.
+  assert_true(hub.steer_settlements.get("held-0") is Some(_))
+  assert_eq(hub.steer_settlements.length(), SteerSettlementCapacity)
+  assert_eq(hub.steer_ledger_id, complete_ledger_id)
+  hub.record_steer_accepted(
+    overflow,
+    { steered: false, run_id: Some("r-ledger"), },
+    refused_reservation,
+  )
+  assert_true(hub.steer_settlements.get("held-0") is Some(_))
+  assert_eq(hub.steer_settlements.length(), SteerSettlementCapacity)
+  assert_eq(hub.steer_ledger_id, complete_ledger_id)
+
+  guard hub.reserve_steer(overflow) is Some(accepted_reservation) else {
+    fail("accepted overflow was not reservable")
+  }
+  hub.record_steer_accepted(
+    overflow,
+    { steered: true, run_id: Some("r-ledger"), },
+    accepted_reservation,
   )
   assert_true(hub.steer_settlements.get("held-0") is None)
-  assert_eq(hub.steer_settlements.length(), SteerSettlementCapacity - 1)
+  assert_true(
+    hub.steer_settlements.get("overflow") is Some({ status: "pending", .. }),
+  )
+  assert_eq(hub.steer_settlements.length(), SteerSettlementCapacity)
   assert_true(hub.steer_ledger_id != complete_ledger_id)
 
   hub.steer_settlements.clear()
@@ -765,12 +857,13 @@ test "steer ledger normalizes ids, acknowledges rows, and fences terminal reclam
       status: "pending",
     }
   }
-  assert_false(
-    hub.admits_steer({
+  assert_true(
+    hub.reserve_steer({
       text: "must preserve pending evidence",
       run_id: Some("r-ledger"),
       submission_id: Some("pending-overflow"),
-    }),
+    })
+    is None,
   )
 }
 
@@ -780,13 +873,18 @@ test "a new engine pump leaves written steers unknown rather than dropped" {
   hub.publish(
     AgentStarted(@json.from_json({ "run_id": "r-old", "session": "s-old" })),
   )
+  let payload : @protocol.SteerPayload = {
+    text: "old input",
+    run_id: Some("r-old"),
+    submission_id: Some("steer-old"),
+  }
+  guard hub.reserve_steer(payload) is Some(reservation) else {
+    fail("old steer was not admitted")
+  }
   hub.record_steer_accepted(
-    {
-      text: "old input",
-      run_id: Some("r-old"),
-      submission_id: Some("steer-old"),
-    },
+    payload,
     { steered: true, run_id: Some("r-old"), },
+    reservation,
   )
   // Finished removes the active run before a trailing steer receipt. If that
   // receipt dies with the old pump, Connected must still terminalize the row.
