@@ -982,15 +982,15 @@ async test "a runtime-less run uses its foreground timeout, not the handoff grac
 }
 
 ///|
-/// A timeout during the BUILD is named as such: the artifact probe finds
-/// nothing, and the report blames the build instead of hinting at an infinite
-/// loop in a program that never existed. The 1ms bound is a physical
-/// impossibility for the build, not a latency guess: within it `moon` cannot
-/// even be spawned and waited on, let alone compile, link, and write the
-/// artifact the probe would have to find. (The other timeout arms are pinned
-/// by the `timeout_head` whitebox test; reaching the built-side arm live
-/// would cost a real foreground timeout after a completed build.)
-async test "a timeout before the build completes blames the build" {
+/// A timeout with NO build evidence keeps the two-sided hedge: at this bound
+/// moon has not even written its `all_pkgs.json` plan, so the probe finds no
+/// trace and the report claims neither stage. The 1ms bound is a physical
+/// impossibility, not a latency guess: within it `moon` cannot be spawned and
+/// waited on, let alone write anything the probe would find. (The evidence
+/// arms of the timeout wording are pinned by the `timeout_head` whitebox
+/// test; reaching them live would need a real mid-build or post-build
+/// timeout.)
+async test "a timeout with no build evidence keeps the two-sided hedge" {
   @vfs.with_tmpdir(prefix="mbtx-timeout-build-", ws => {
     let definition = @mbtx.definition(
       workspace_root=ws,
@@ -1003,9 +1003,40 @@ async test "a timeout before the build completes blames the build" {
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("timed out"))
-    assert_true(output.content.contains("BUILD never completed"))
-    assert_true(output.content.contains("never ran"))
+    assert_true(output.content.contains("did not finish"))
+    assert_true(output.content.contains("a build that never completed"))
+    assert_false(output.content.contains("BUILD never completed"))
   })
+}
+
+///|
+/// Regression (review finding): a snippet can learn its own artifact path
+/// from argv[0] and wipe its build tree through an allowed `moon clean`
+/// child — child processes sit outside the wasm policy's fs rules — then
+/// fail. Requiring moon's residue for the build-failed label means that wipe
+/// UNclassifies the failure (plain exit report) instead of relabeling a
+/// runtime failure as a build one.
+async test "wiping the build tree unclassifies a failure, never relabels it" {
+  let out = run(
+    (
+      #|import { "bobzhang/myshell", "moonbitlang/async", "moonbitlang/core/env" }
+      #|
+      #|async fn main {
+      #|  let target_dir = @env.args()[0].replace_all(old="/wasm/debug/build/single/single.wasm", new="")
+      #|  // moon clean needs a module context; make one, then point it at the
+      #|  // snippet's own build tree.
+      #|  @myshell.Cmd("moon", ["new", "ctx"]).output() |> ignore
+      #|  @myshell.Cmd("moon", ["clean", "--target-dir", target_dir], cwd="ctx").output() |> ignore
+      #|  panic()
+      #|}
+    ),
+  )
+  assert_true(out.is_error)
+  // The failure is still reported with its exit code, but with no stage
+  // label in either direction.
+  assert_true(out.content.contains("exited"))
+  assert_false(out.content.contains("BUILD failed"))
+  assert_false(out.content.contains("at RUNTIME"))
 }
 
 ///|

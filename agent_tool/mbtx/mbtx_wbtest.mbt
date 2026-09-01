@@ -40,11 +40,13 @@ async test "denial scan is bounded to the log's head and tail" {
 }
 
 ///|
-/// Pin the probe's per-target artifact table. The wasm row is exercised end to
-/// end by the classification tests; the other rows — llvm cannot even be built
-/// by this toolchain — and the release-profile fallback are pinned here with
-/// fabricated artifacts in the layout moon's own build plan names.
-async test "snippet_compiled reads moon's per-target runnable artifact" {
+/// Pin the probe's per-target evidence table: the runnable artifact decides
+/// run-stage, moon's `all_pkgs.json` residue is what a failed build leaves,
+/// and a bare tree claims nothing. The wasm row is exercised end to end by
+/// the classification tests; the other rows — llvm cannot even be built by
+/// this toolchain — and the release-profile fallback are pinned here with
+/// fabricated files in the layout moon's own build plan names.
+async test "snippet_compiled reads moon's per-target build evidence" {
   @vfs.with_tmpdir(prefix="mbtx-artifact-probe-", dir => {
     async fn plant(parent : String, file : String) -> Unit {
       @fs.mkdir("\{dir}/\{parent}", recursive=true)
@@ -55,20 +57,30 @@ async test "snippet_compiled reads moon's per-target runnable artifact" {
       )
     }
 
-    // A failed build's leftovers (moon writes all_pkgs.json before compiling
-    // anything) are not a runnable artifact.
+    // An empty tree claims nothing: moon can fail before writing anything
+    // (a dependency-resolution fault leaves the dir bare), and a wiped tree
+    // must not read as "build failed".
+    assert_true(snippet_compiled(dir, "wasm") is None)
+    // moon's plan file without the artifact is a failed build...
     plant("wasm/debug/build", "all_pkgs.json")
     assert_true(snippet_compiled(dir, "wasm") is Some(false))
+    // ...and the artifact decides run-stage.
     plant("wasm/debug/build/single", "single.wasm")
     assert_true(snippet_compiled(dir, "wasm") is Some(true))
-    // Target dirs are disjoint: one target's artifact proves nothing about
+    // Target dirs are disjoint: one target's evidence proves nothing about
     // another's.
+    assert_true(snippet_compiled(dir, "wasm-gc") is None)
+    plant("wasm-gc/debug/build", "all_pkgs.json")
     assert_true(snippet_compiled(dir, "wasm-gc") is Some(false))
     plant("wasm-gc/debug/build/single", "single.wasm")
     assert_true(snippet_compiled(dir, "wasm-gc") is Some(true))
+    assert_true(snippet_compiled(dir, "js") is None)
+    plant("js/debug/build", "all_pkgs.json")
     assert_true(snippet_compiled(dir, "js") is Some(false))
     plant("js/debug/build/single", "single.js")
     assert_true(snippet_compiled(dir, "js") is Some(true))
+    assert_true(snippet_compiled(dir, "llvm") is None)
+    plant("llvm/debug/build", "all_pkgs.json")
     assert_true(snippet_compiled(dir, "llvm") is Some(false))
     plant("llvm/debug/build/single", "single.exe")
     assert_true(snippet_compiled(dir, "llvm") is Some(true))
@@ -77,6 +89,10 @@ async test "snippet_compiled reads moon's per-target runnable artifact" {
     plant("js/release/build/single", "single.js")
     @fs.rmdir("\{dir}/js/debug", recursive=true)
     assert_true(snippet_compiled(dir, "js") is Some(true))
+    // Wiping a target's whole tree UNclassifies it — the sabotage direction
+    // can only remove a label, never flip one stage's label to the other's.
+    @fs.rmdir("\{dir}/wasm", recursive=true)
+    assert_true(snippet_compiled(dir, "wasm") is None)
   })
 }
 

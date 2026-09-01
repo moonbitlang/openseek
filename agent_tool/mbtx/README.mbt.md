@@ -18,18 +18,22 @@ Moon's single-file runner handles the inline import block, and compiler
 diagnostics are rewritten to stable `source:LINE:COL` locations.
 
 A failed run says **which stage failed**. `moon run` exits 1 for a rejected
-build and for a trapped program alike, so the tool probes the throwaway target
-dir for the runnable artifact moon links only after a successful build
-(`single/single.wasm`/`.js`/`.exe`): absence means the **build failed and the
-program never ran** (most often compiler diagnostics about `source`, though
-the output itself says whether it was that or a toolchain/dependency fault),
-presence means the **build completed and the failure came from the run** —
-the program failing at runtime, or its runner failing to launch; either way
-not a compile problem — and a foreground timeout likewise says whether the
-build or the run is what never finished. A probe fault claims neither stage and keeps the plain exit
-report. The probe is structural on purpose: a snippet legitimately runs
-`moon check` as a child process, so compiler-diagnostic text in the output
-proves nothing about the snippet itself. For a run that was handed off, the
+build and for a trapped program alike, so the tool reads the throwaway target
+dir for evidence. The runnable artifact moon links only after a successful
+build (`single/single.wasm`/`.js`/`.exe`) means the **build completed and the
+failure came from the run** — the program failing at runtime, or its runner
+failing to launch; either way not a compile problem. No artifact but moon's
+own `all_pkgs.json` plan file means the **build failed and the program never
+ran** (most often compiler diagnostics about `source`, though the output
+itself says whether it was that or a toolchain fault). A foreground timeout
+likewise says whether the build or the run is what never finished. A bare
+tree — moon failing before it wrote anything, a probe fault, or a snippet
+that wiped its own build tree through an allowed child process — claims
+**neither stage** and keeps the plain exit report: the label is diagnostic,
+and sabotage can only unclassify a failure, never relabel it. The evidence is
+structural on purpose: a snippet legitimately runs `moon check` as a child
+process, so compiler-diagnostic text in the output proves nothing about the
+snippet itself. For a run that was handed off, the
 same classification is computed when the job becomes terminal (before its
 build dir is reclaimed, and single-flight so a racing `job_output` read can
 never cache a stale answer) and rides the completion notice and `job_output` —

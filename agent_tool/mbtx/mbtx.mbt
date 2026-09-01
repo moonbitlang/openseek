@@ -723,23 +723,35 @@ async fn execute(
 }
 
 ///|
-/// Whether the snippet's runnable artifact exists under the throwaway
-/// `--target-dir` — the structural line between the BUILD stage and the run.
-/// moon's single-file mode builds the snippet as package `single` and writes
-/// `single/single.<ext>` only once it compiled AND linked, and the directory
-/// is fresh for every call, so `Some(true)` proves the build completed and a
-/// failure then belongs to the run step (the program failing, or its runner
-/// failing to launch — either way not a `source` compile problem), while
-/// `Some(false)` after a failed run means the failure came from the build —
-/// most often the compiler rejecting `source`, but the diagnostics themselves
-/// say whether it was that or a toolchain/dependency fault; each side's
-/// framing claims exactly that much and no more. `None` means the probe
-/// itself failed and the stage is unknown.
+/// What the throwaway `--target-dir` proves about the failed run's stage.
+/// moon's single-file mode builds the snippet as package `single`, writing
+/// `<target>/<profile>/build/all_pkgs.json` when it starts planning the build
+/// and `single/single.<ext>` only once the snippet compiled AND linked; the
+/// directory is fresh for every call. Three evidence states:
+///
+/// - `Some(true)` — the runnable artifact exists: the build completed, so the
+///   failure belongs to the run step (the program failing, or its runner
+///   failing to launch — either way not a `source` compile problem).
+/// - `Some(false)` — no artifact, but moon's own `all_pkgs.json` shows a
+///   build was attempted and its tree is intact: the build failed. The
+///   diagnostics say whether the compiler rejected `source` or the toolchain
+///   faulted.
+/// - `None` — no moon trace at all (or the probe itself failed): claim
+///   NOTHING. This is deliberate, twice over. moon can fail before writing
+///   anything (a dependency-resolution fault exits 255 leaving an empty
+///   tree), and a snippet can spawn an allowed `moon clean --target-dir` at
+///   its own build tree — child processes are outside the wasm policy's fs
+///   rules — then fail; requiring residue keeps that wipe from being read as
+///   "the build failed" when in truth the build succeeded.
 ///
 /// Structural on purpose: the OUTPUT cannot make this distinction. moon exits
 /// 1 for a rejected build and for a trapped program alike, and a snippet
 /// legitimately runs `moon check`/`moon test` as child processes, so compiler
 /// diagnostics in the log are routinely the program's own (successful) output.
+/// The label stays diagnostic, not a security boundary: a snippet determined
+/// to misdescribe its own failure stage can only UNclassify itself (the wipe
+/// lands in `None`), never turn one stage's label into the other's without
+/// fabricating moon's residue.
 async fn snippet_compiled(build_dir : String, target : String) -> Bool? {
   let ext = match target {
     "js" => "js"
@@ -747,13 +759,8 @@ async fn snippet_compiled(build_dir : String, target : String) -> Bool? {
     // wasm and wasm-gc
     _ => "wasm"
   }
-  // moon run builds the debug profile today. The release path is probed too so
-  // a future default flip degrades this to an extra stat, not to every runtime
-  // failure being reported as a build failure.
-  for profile in ["debug", "release"] {
-    let present = @fs.exists(
-      "\{build_dir}/\{target}/\{profile}/build/single/single.\{ext}",
-    ) catch {
+  async fn present(relative : String) -> Bool? {
+    let exists = @fs.exists("\{build_dir}/\{target}/\{relative}") catch {
       error if @async.is_being_cancelled() => raise error
       // A probe fault (EIO, EACCES on the tool's own throwaway dir) must
       // neither fail a run that already finished nor masquerade as an answer:
@@ -761,19 +768,35 @@ async fn snippet_compiled(build_dir : String, target : String) -> Bool? {
       // wording rather than folding the fault into "did not build".
       _ => return None
     }
-    if present {
-      return Some(true)
+    Some(exists)
+  }
+
+  // moon run builds the debug profile today. The release path is probed too so
+  // a future default flip degrades this to an extra stat, not to every runtime
+  // failure being reported as a build failure.
+  for profile in ["debug", "release"] {
+    match present("\{profile}/build/single/single.\{ext}") {
+      Some(true) => return Some(true)
+      Some(false) => ()
+      None => return None
     }
   }
-  Some(false)
+  for profile in ["debug", "release"] {
+    match present("\{profile}/build/all_pkgs.json") {
+      Some(true) => return Some(false)
+      Some(false) => ()
+      None => return None
+    }
+  }
+  None
 }
 
 ///|
 /// The status framing for a finished run's body. Success passes the output
 /// through; a failure names WHICH stage failed — with `moon run`'s exit code
-/// identical for both, `compiled` (the artifact probe) is what separates "fix
-/// the build input" from "debug the program". `None` (the probe itself
-/// failed) keeps the pre-classification wording, claiming nothing.
+/// identical for both, `compiled` (the evidence probe) is what separates
+/// "fix the build input" from "debug the program". `None` (no usable
+/// evidence) keeps the pre-classification wording, claiming nothing.
 fn finished_body(text : String, exit_code : Int, compiled~ : Bool?) -> String {
   if exit_code == 0 {
     return if text.is_blank() {
@@ -783,11 +806,11 @@ fn finished_body(text : String, exit_code : Int, compiled~ : Bool?) -> String {
     }
   }
   match compiled {
-    // The exit code is moon's here, and it is kept: it is NOT always 1 (a
-    // dependency-cache fault exits 255), and distinct codes are diagnostic.
-    // "BUILD failed", not "compile error": no artifact proves the program
-    // never ran, while the output below is what says whether the compiler
-    // rejected `source` or the toolchain/dependencies faulted.
+    // The exit code is moon's here, and it is kept: build-stage faults are
+    // not all exit 1, and distinct codes are diagnostic. "BUILD failed", not
+    // "compile error": the evidence proves the program never ran, while the
+    // output below is what says whether the compiler rejected `source` or
+    // the toolchain faulted.
     Some(false) =>
       if text.is_blank() {
         "mbtx: the BUILD failed (exit \{exit_code}) with no output — the program never ran"
