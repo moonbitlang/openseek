@@ -607,9 +607,17 @@ async fn execute(
           }
         })
       }
+      // A staged job's label carries the phase marker: the notice and the job
+      // listing then say on their face that the build already succeeded, so a
+      // later nonzero exit reads as the program's — job_output shows pure
+      // program output and its `exit=N` is the program's own by construction.
       let id = runtime.adopt(
         exec,
-        command="mbtx: \{@agent_tool.brief_line(input.source, limit=64)}",
+        command=if staged {
+          "mbtx run (build ok): \{@agent_tool.brief_line(input.source, limit=64)}"
+        } else {
+          "mbtx: \{@agent_tool.brief_line(input.source, limit=64)}"
+        },
         cwd?=run_cwd,
         sandboxed_command?,
         output_rewrites=temp_path_rewrites([real, build_dir]),
@@ -617,8 +625,16 @@ async fn execute(
         on_terminal=terminal_cleanup,
       )
       job_owns_cleanup = true
+      let handoff = if staged {
+        "mbtx: the build succeeded and the RUNNING PROGRAM was still going after \{duration_label(auto_background_after_ms)}, so it moved to the background as job \{id} (nothing was lost; any later nonzero exit is the program's own). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\")."
+      } else {
+        "mbtx: still running after \{duration_label(auto_background_after_ms)}, so it moved to the background as job \{id} (nothing was lost). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\")."
+      }
+      // Explicitly requested compiler warnings must not vanish because the
+      // program outlived the grace: they exist only in the build phase's
+      // capture, so this response is their one ride to the model.
       return @agent_tool.respond(
-        "mbtx: still running after \{duration_label(auto_background_after_ms)}, so it moved to the background as job \{id} (nothing was lost). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\").",
+        with_build_notes(build_notes, handoff),
         brief="mbtx → bg \{id}",
       )
     }
@@ -733,7 +749,13 @@ async fn execute(
       } else {
         body
       }
-      @agent_tool.respond(body, is_error=true, brief="mbtx (timeout)")
+      // Requested compiler warnings live only in the build phase's capture, so
+      // a run that never finished must still carry them out.
+      @agent_tool.respond(
+        with_build_notes(build_notes, body),
+        is_error=true,
+        brief="mbtx (timeout)",
+      )
     }
   }
   action
@@ -837,7 +859,18 @@ async fn build_snippet(
   )
   let artifact_present = @fs.exists(artifact) catch {
     error if @async.is_being_cancelled() => raise error
-    _ => false
+    // A stat FAULT is not absence (AGENTS.md: never fold unrelated errors
+    // into the missing case): name the filesystem failure instead of
+    // reporting a missing artifact. Either way the run cannot proceed, so
+    // both are build-stage faults — they just say different true things.
+    error =>
+      return NotBuilt(
+        @agent_tool.respond(
+          "mbtx: the build succeeded but its artifact could not be verified (\{error}) — a filesystem fault, not a problem in `source`.",
+          is_error=true,
+          brief="mbtx (build fault)",
+        ),
+      )
   }
   guard artifact_present else {
     return NotBuilt(
@@ -855,6 +888,13 @@ async fn build_snippet(
 /// The artifact path `moon run --build-only` reports on success, read from
 /// the last `{"artifacts_path":[…]}` line of its output. `None` for a moon
 /// that does not print one.
+///
+/// A malformed or truncated report line is deliberately treated like an
+/// absent one, not surfaced as a fault: both degrade to the single-file
+/// layout fallback, and the existence check that follows validates WHICHEVER
+/// path was chosen — a wrong guess surfaces as a named build fault, never as
+/// a silent misrun. Failing the call on a report the fallback would have
+/// covered would only make the tool more brittle.
 fn parse_artifacts_path(output : String) -> String? {
   let mut found : String? = None
   for line in output.split("\n") {
@@ -1375,9 +1415,11 @@ fn description(
     $|
     $|Every call's RUN stays inline for up to \{handoff_bound}. If it is still running, it AUTOMATICALLY
     $|moves to a background job and returns the job id; no background flag or duration
-    $|guess is needed. A completion notice arrives when it finishes, so never wait with
-    $|sleep loops or repeated polling: keep working and act on the notice. Read recent
-    $|output with job_output (use one bounded wait_ms call only when the result is needed
-    $|now), and cancel it with job_stop.
+    $|guess is needed. A wasm job is always the RUNNING PROGRAM — its build already
+    $|succeeded, so the job's output and exit code are the program's own. A completion
+    $|notice arrives when it finishes, so never wait with sleep loops or repeated
+    $|polling: keep working and act on the notice. Read recent output with job_output
+    $|(use one bounded wait_ms call only when the result is needed now), and cancel it
+    $|with job_stop.
   )
 }

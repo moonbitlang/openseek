@@ -210,6 +210,47 @@ async test "a compile error reached inside the grace reports inline" {
 }
 
 ///|
+/// A handed-off run still carries the build phase's voice: requested compiler
+/// warnings exist only in the build capture, so the handoff response is their
+/// one ride to the model — and the job's label says the build succeeded, so a
+/// later nonzero exit reads as the program's own.
+async test "a handoff carries build warnings and the build-ok label" {
+  @async.with_task_group(group => {
+    let spill_dir = @fs.tmpdir(prefix="openseek-handoff-warn-")
+    let bg_runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir~)
+    let mbtx = @mbtx.definition(
+      workspace_root=".",
+      bg_runtime~,
+      job_dir=spill_dir,
+      auto_background_after_ms=1500,
+    )
+    let source =
+      #|import { "moonbitlang/async" }
+      #|
+      #|async fn main {
+      #|  let unused = 1
+      #|  @async.sleep(60_000)
+      #|}
+    let action = match mbtx.execute {
+      Async(execute) => execute({ "source": source, "warning": "on" })
+      Sync(_) => fail("mbtx should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_false(output.is_error)
+    assert_true(output.content.contains("moved to the background"))
+    assert_true(output.content.contains("Unused variable"))
+    // Warnings name the model's `source`, not the throwaway build dir.
+    assert_true(output.content.contains("source:"))
+    guard bg_runtime.list() is [job, ..] else { fail("no job was registered") }
+    assert_true(job.command.contains("build ok"))
+    let _ = bg_runtime.stop(job.id)
+    @fs.rmdir(spill_dir, recursive=true) catch {
+      _ => ()
+    }
+  })
+}
+
+///|
 /// Compilation can no longer cross the grace: the wasm build phase runs
 /// synchronously by design — its time does not count against the run's
 /// inline allowance — so even under the smallest possible handoff bound a

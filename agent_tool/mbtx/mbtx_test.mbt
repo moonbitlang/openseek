@@ -87,6 +87,36 @@ async test "a build that outlives its bound is reported as the build's" {
 }
 
 ///|
+/// A run that never finishes still carries the build phase's warnings: they
+/// exist only in the build capture, and the timeout report is their one ride
+/// to the model — alongside the staged wording that only the PROGRAM can be
+/// what hung, since the build had already succeeded.
+async test "a run timeout carries build warnings and blames only the program" {
+  @vfs.with_tmpdir(prefix="mbtx-timeout-warn-", ws => {
+    let definition = @mbtx.definition(
+      workspace_root=ws,
+      foreground_timeout_ms=500,
+    )
+    let source =
+      #|import { "moonbitlang/async" }
+      #|
+      #|async fn main {
+      #|  let unused = 1
+      #|  @async.sleep(60_000)
+      #|}
+    let action = match definition.execute {
+      Async(execute) => execute({ "source": source, "warning": "on" })
+      Sync(_) => fail("mbtx should be async")
+    }
+    guard action is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    assert_true(output.content.contains("timed out"))
+    assert_true(output.content.contains("the PROGRAM that did not finish"))
+    assert_true(output.content.contains("Unused variable"))
+  })
+}
+
+///|
 /// Only the wasm target is staged; a single-shot target's one exit code
 /// covers both phases and its report deliberately claims neither.
 async test "a non-wasm failure carries no stage label" {
