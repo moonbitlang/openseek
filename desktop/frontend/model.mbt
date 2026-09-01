@@ -3293,9 +3293,10 @@ fn Model::conversation_for_composer_action(
   identity : ComposerActionIdentity,
 ) -> Conversation? {
   let mut owner = identity.owner
-  // Follow only archive facts appended after this entry was born. An active
-  // archive has an exact handoff for its fact; a background archive has none,
-  // so its old actions expire instead of reaching a later unarchived record.
+  // Follow only archive facts appended after this entry was born. An archive
+  // that salvages editable state has an exact handoff for its fact; one with
+  // nothing to salvage has none, so stale actions expire instead of reaching
+  // a later unarchived record.
   for
     index in identity.archive_generation..<self.composer_entry_retirements.length() {
     if self.composer_entry_retirements[index] == owner {

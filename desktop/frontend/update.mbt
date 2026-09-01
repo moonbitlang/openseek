@@ -1540,6 +1540,26 @@ fn sync_browser_view(
 }
 
 ///|
+/// Record the exact composer-entry handoff for an archive retirement. The
+/// retirement index is the ownership generation consumed by both component
+/// state transfer and delayed root actions.
+fn Model::transfer_archived_composer(
+  self : Model,
+  archived : @interop.ConversationKey,
+  fresh : @interop.ConversationKey,
+) -> Model {
+  let mut archive_generation = 0
+  for index, retired in self.composer_entry_retirements {
+    if retired == archived {
+      archive_generation = index + 1
+    }
+  }
+  let composer_entry_replacements = self.composer_entry_replacements.copy()
+  composer_entry_replacements.push({ archived, fresh, archive_generation, })
+  { ..self, composer_entry_replacements, }
+}
+
+///|
 /// Leave an archived active session immediately, carrying only resubmittable
 /// composer state into the supplied fresh id. This is shared by list replies
 /// and identity notifications because either can win their delivery race.
@@ -1597,33 +1617,24 @@ fn replace_archived_active(
     goal_edit,
   }
   let fresh = { ..fresh, archived_pending_input: pending_input, }
-  let composer_entry_replacements = model.composer_entry_replacements.copy()
   let archived_owner : @interop.ConversationKey = { channel, session, }
-  let mut archive_generation = 0
-  for index, retired in model.composer_entry_retirements {
-    if retired == archived_owner {
-      archive_generation = index + 1
-    }
-  }
-  composer_entry_replacements.push({
-    archived: archived_owner,
-    fresh: { channel, session: fresh_session, },
-    archive_generation,
-  })
-  {
-    ..activated.replace_conversation(fresh).with_active_project(Some(workspace)),
-    screen: Chat,
-    loading_conversation: None,
-    composer_entry_replacements,
-  }
+  let replaced = activated
+    .replace_conversation(fresh)
+    .with_active_project(Some(workspace))
+    .transfer_archived_composer(archived_owner, {
+      channel,
+      session: fresh_session,
+    })
+  { ..replaced, screen: Chat, loading_conversation: None, }
 }
 
 ///|
 /// A peer may archive a background conversation after its run ended but
 /// before the final steer receipt reached this page. Move root-owned recovery
-/// text into a fresh, reachable composing row before the archived owner is
-/// filtered out. Each background owner gets its own id/project; combining
-/// drafts from unrelated conversations would destroy their provenance.
+/// state into a fresh, reachable composing row before the archived owner is
+/// filtered out. Root-owned recovery text is copied; component-owned unsent
+/// text follows the exact replacement fact. Each background owner gets its
+/// own id/project, because combining unrelated drafts destroys provenance.
 fn replace_archived_background(
   model : Model,
   channel : @interop.ChannelId,
@@ -1637,7 +1648,9 @@ fn replace_archived_background(
     return model
   }
   let salvaged = archived_conv.archive_salvage()
-  guard salvaged.has_content() else { return model }
+  guard salvaged.has_content() || archived_conv.composer_draft_present else {
+    return model
+  }
   let fresh_session = generated_session_id()
   let conversations = model.conversations.filter(conv => {
     conv.device != channel || conv.session_id != session
@@ -1652,11 +1665,18 @@ fn replace_archived_background(
     ),
     task: salvaged.task,
     mentions: salvaged.mentions,
+    composer_draft_present: archived_conv.composer_draft_present,
     worktree_mode: model.default_worktree_mode(channel, workspace),
     goal_edit,
     archived_pending_input: salvaged.pending_input,
   }
-  { ..model, conversations, }.replace_conversation(fresh)
+  let archived_owner : @interop.ConversationKey = { channel, session, }
+  { ..model, conversations, }
+  .replace_conversation(fresh)
+  .transfer_archived_composer(archived_owner, {
+    channel,
+    session: fresh_session,
+  })
 }
 
 ///|
@@ -7024,16 +7044,17 @@ fn update_device_msg(
         let duplicates_settlement = accepted_settlements
           .iter()
           .any(item => item.session == run.session && item.run_id == run.run_id)
-        // A delayed response may already have advanced a captured Starting
-        // owner to the exact predecessor Open row that this same atomic reply
-        // settles. The active row beside it is then the legitimate successor,
-        // not a stale replacement; admit both halves of the hand-off.
-        let captured_start_is_settled = accepted_settlements
+        // The exact captured lifecycle may settle in the same atomic reply
+        // that reports its active successor. This covers both a Starting
+        // submission advanced to its predecessor run and CancelNotOpen's
+        // captured Open owner closed locally before resync. The active row
+        // beside that admitted settlement is authoritative, not stale.
+        let captured_lifecycle_is_settled = accepted_settlements
           .iter()
           .any(item => {
             item.session == run.session &&
             snapshot_model.matched_settlement_frontier(channel, frontier, item)
-            is Some(SettlementBySubmission(_))
+            is Some(_)
           })
         if !duplicates_settlement &&
           !admitted_run_sessions.contains(run.session) &&
@@ -7043,7 +7064,7 @@ fn update_device_msg(
               frontier,
               run.session,
             ) ||
-            captured_start_is_settled
+            captured_lifecycle_is_settled
           ) {
           accepted_runs.push(run)
           admitted_run_sessions.push(run.session)
@@ -12846,6 +12867,54 @@ test "CancelNotOpen recovery accepts its exact retained settlement" {
 }
 
 ///|
+test "CancelNotOpen snapshot admits the atomic active successor" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling),
+  })
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    definitive_lifecycle_session="desktop-test",
+  )
+  let (_, closed) = update_dev(dispatch, CancelNotOpen(run_id="r7"), model)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[
+        {
+          run_id: "r8",
+          session: "desktop-test",
+          model: High,
+          max_steps: 1000,
+          session_root: None,
+          submission_id: None,
+        },
+      ],
+      settled=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          submission_id: None,
+          status: "finished",
+        },
+      ],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=["r8"],
+      frontier~,
+      connection_generation=closed.dev().connection_generation,
+    ),
+    closed,
+  )
+  assert_true(recovered.active().run is Open(run_id="r8", stage=Opened))
+  assert_eq(recovered.active().last_run_id, Some("r8"))
+  assert_true(recovered.active().sync is Reloading(..))
+}
+
+///|
 test "a failed Stop becomes retryable instead of staying Stopping" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
@@ -16307,6 +16376,73 @@ test "a background archive salvages a terminal steer into its own fresh row" {
   assert_true(fresh.session_id != "desktop-background")
   assert_true(fresh.archived_pending_input)
   inspect(fresh.pending_steers.length(), content="0")
+}
+
+///|
+test "a background archive transfers its component-owned unsent draft" {
+  let dispatch = test_dispatch()
+  let background = {
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      "desktop-background-draft",
+      @interop.ChannelId::Local.test_project(),
+    ),
+    composer_draft_present: true,
+  }
+  let model = running_model()
+    .replace_conversation(background)
+    .with_dev(dev => {
+      ..dev,
+      sessions: [placed_archived_item("desktop-background-draft")],
+    })
+  let (_, next) = update(
+    dispatch,
+    archived_loaded([placed_archived_item("desktop-background-draft")]),
+    model,
+  )
+  assert_true(
+    next.find_conversation(
+      @interop.ChannelId::Local,
+      "desktop-background-draft",
+    )
+    is None,
+  )
+  let mut recovered : Conversation? = None
+  for conv in next.conversations {
+    if conv.device is Local &&
+      conv.session_id != "desktop-test" &&
+      conv.composer_draft_present {
+      recovered = Some(conv)
+    }
+  }
+  guard recovered is Some(fresh) else {
+    fail("the component-owned draft did not get a fresh conversation")
+  }
+  let archived_owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-background-draft",
+  }
+  let fresh_owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: fresh.session_id,
+  }
+  assert_true(
+    next.composer_entry_replacements
+    .iter()
+    .any(replacement => {
+      replacement.archived == archived_owner &&
+      replacement.fresh == fresh_owner &&
+      replacement.archive_generation > 0
+    }),
+  )
+  assert_true(
+    next.conversation_for_composer_action({
+      owner: archived_owner,
+      archive_generation: 0,
+    })
+    is Some(owner) &&
+    owner.session_id == fresh.session_id,
+  )
 }
 
 ///|
