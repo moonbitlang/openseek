@@ -1791,6 +1791,7 @@ fn update_msg(
               clear_legacy_engine_settings(),
               watch_color_scheme(dispatch),
               request_sidebar_resize_mount(),
+              measure_scrollbar_lane(),
             ]),
             model,
           )
@@ -1801,6 +1802,7 @@ fn update_msg(
               watch_color_scheme(dispatch),
               rotate_session(dispatch, model.focused),
               request_sidebar_resize_mount(),
+              measure_scrollbar_lane(),
             ]),
             model,
           )

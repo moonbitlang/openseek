@@ -137,16 +137,9 @@ fn end_sidebar_resize() -> Unit {
 
 ///|
 /// Write the dragged width as a custom property on the document element,
-/// where the CSS `clamp(...)` reads it. Updating the property through CSSOM
-/// preserves the sizes owned by other panels (the editor width, the tree,
-/// the terminal height).
+/// where the CSS `clamp(...)` reads it.
 fn set_sidebar_width(width : Int) -> Unit {
-  guard document_element() is Some(root) else { return }
-  let style : @js.Value = @js.Value::cast_from(root).get_with_string("style")
-  let _ : @js.Value = style.apply_with_string("setProperty", [
-    @js.Value::cast_from("--sidebar-width"),
-    @js.Value::cast_from("\{width}px"),
-  ])
+  set_root_custom_property("--sidebar-width", "\{width}px")
 }
 
 ///|

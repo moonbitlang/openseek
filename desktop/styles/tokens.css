@@ -95,6 +95,14 @@
   /* Native overflow panes use a 12px hit lane; a 1px inset leaves a 10px
      visible thumb. */
   --scrollbar-size: 12px;
+
+  /* How much width a scrolling pane actually loses to its scrollbar,
+     measured once at startup by the frontend (dom_helpers.mbt) and rewritten
+     here. `0px` is the overlay case — macOS floats the bar above the content,
+     where `scrollbar-gutter` reserves nothing — and is the right fallback for
+     a page whose measurement never ran. Panels that want a fixed inset either
+     way subtract this from their own padding. */
+  --scrollbar-lane: 0px;
   --color-scrollbar-thumb: color-mix(
     in srgb,
     var(--color-text-primary) 32%,
