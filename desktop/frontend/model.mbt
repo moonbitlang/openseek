@@ -1245,6 +1245,7 @@ priv struct DeviceState {
   // Page-lifetime request tokens for the independently fetched sidebar
   // collections. Connection generation rejects dead sockets; these reject an
   // older reply from the same connection after a newer request was issued.
+  runs_request_generation : Int
   sessions_request_generation : Int
   archived_request_generation : Int
   projects_request_generation : Int
@@ -1294,6 +1295,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     connection_generation: 0,
     steer_ledger_ready: false,
     steer_ledger_id: None,
+    runs_request_generation: 0,
     sessions_request_generation: 0,
     archived_request_generation: 0,
     projects_request_generation: 0,
@@ -2326,7 +2328,8 @@ priv enum DeviceMsg {
     approvals~ : Array[RecoveredApproval],
     live~ : Array[String],
     frontier~ : Array[RunSnapshotFrontier],
-    connection_generation~ : Int
+    connection_generation~ : Int,
+    request_generation~ : Int
   )
   // The complete in-flight run set, from an `agent.runs` resync. Any
   // conversation still showing an open run this set lacks ended while the
@@ -3185,7 +3188,11 @@ fn Model::with_archive_override(
   let overrides = dev.archive_overrides.filter(item => item.key != key)
   overrides.push({ key, disposition, })
   let model = self.replace_device({ ..dev, archive_overrides: overrides, })
-  if !newly_retired {
+  let retires_composer = newly_retired &&
+    self.find_conversation(channel, key.session) is Some(conv) &&
+    conv.project() == key.workspace &&
+    !conv.is_archived_read_only()
+  if !retires_composer {
     return model
   }
   let composer_entry_retirements = model.composer_entry_retirements.copy()

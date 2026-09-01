@@ -548,6 +548,7 @@ fn fetch_runs(
   channel : @interop.ChannelId,
   frontier : Array[RunSnapshotFrontier],
   connection_generation : Int,
+  request_generation : Int,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   let payload = runs_payload(frontier)
@@ -616,6 +617,7 @@ fn fetch_runs(
             live~,
             frontier~,
             connection_generation~,
+            request_generation~,
           ),
         ),
       )

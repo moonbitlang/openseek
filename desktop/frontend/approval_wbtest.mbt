@@ -313,6 +313,7 @@ fn runs_loaded_with_approvals(
       live~,
       frontier~,
       connection_generation=0,
+      request_generation=0,
     ),
   )
 }
@@ -594,6 +595,7 @@ test "a session missing from the frontier still gets its question" {
         // Captured before this page knew the conversation.
         frontier=[],
         connection_generation=0,
+        request_generation=0,
       ),
     ),
     model,
@@ -671,6 +673,7 @@ test "a question survives a run handoff inside one snapshot" {
           },
         ],
         connection_generation=0,
+        request_generation=0,
       ),
     ),
     model,
