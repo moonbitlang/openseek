@@ -233,6 +233,7 @@ pub impl FromJson for RunsReply with fn from_json(json, path) {
     } else {
       None
     },
+    steer_ledger_id: object.optional_string("steer_ledger_id"),
   }
 }
 
@@ -245,6 +246,9 @@ pub impl ToJson for RunsReply with fn to_json(self) {
   }
   if self.steers is Some(steers) {
     fields["steers"] = Json(steers.map(steer => steer.to_json()))
+  }
+  if self.steer_ledger_id is Some(steer_ledger_id) {
+    fields["steer_ledger_id"] = Json(steer_ledger_id)
   }
   Json(fields)
 }

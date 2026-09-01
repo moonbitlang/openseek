@@ -36,6 +36,11 @@ priv struct Hub {
   // submitting client to ask whether its input is pending, applied, or
   // dropped. Submission ids are page-unique ownership keys.
   steer_settlements : Map[String, SteerSettlement]
+  // Process-lifetime identity for the ledger above. A reconnect to the same
+  // host sees the same value; a host restart sees a new one and therefore
+  // cannot mistake an empty new ledger for negative evidence about old work.
+  // None deliberately disables negative evidence if OS entropy is unavailable.
+  steer_ledger_id : String?
   // The permission question each session's engine is currently blocked on,
   // keyed by SESSION, because one engine can only be blocked on one at a time:
   // the asking tool is not `concurrent_safe`, so nothing runs beside it. That
@@ -57,8 +62,19 @@ fn Hub::Hub() -> Hub {
     active_starts: Map([]),
     settlements: Map([]),
     steer_settlements: Map([]),
+    steer_ledger_id: @entropy.random_hex(16),
     pending_approvals: Map([]),
   }
+}
+
+///|
+test "each host process owns a distinct steer ledger" {
+  let first = Hub::Hub().runs().steer_ledger_id
+  let second = Hub::Hub().runs().steer_ledger_id
+  guard first is Some(first) && second is Some(second) else {
+    fail("OS entropy did not produce host ledger identities")
+  }
+  assert_true(first != second)
 }
 
 ///|
@@ -407,7 +423,13 @@ fn Hub::runs(
       }
     }
   }
-  { runs, settled, approvals, steers: Some(steers), }
+  {
+    runs,
+    settled,
+    approvals,
+    steers: Some(steers),
+    steer_ledger_id: self.steer_ledger_id,
+  }
 }
 
 ///|
@@ -460,8 +482,7 @@ fn Hub::engine_connected(
   // An accepted steer still pending in the departed process can no longer be
   // applied. Exact outcomes already observed remain terminal and unchanged.
   for _, steer in self.steer_settlements {
-    if steer.status == "pending" &&
-      self.active_starts.get(steer.run_id) is Some(_) {
+    if steer.status == "pending" {
       steer.status = "dropped"
     }
   }
@@ -689,6 +710,11 @@ test "a new engine pump drops steers still pending in the old process" {
       submission_id: Some("steer-old"),
     },
     { steered: true, run_id: Some("r-old"), },
+  )
+  // Finished removes the active run before a trailing steer receipt. If that
+  // receipt dies with the old pump, Connected must still terminalize the row.
+  hub.publish(
+    AgentFinished(@json.from_json({ "run_id": "r-old", "status": "finished" })),
   )
   hub.engine_connected({ stage: Serving, })
   guard hub.runs(known=[
@@ -944,7 +970,7 @@ async test "agent.runs keeps old requests compatible and decodes known selectors
   let legacy : @protocol.RunsReply = @json.from_json(
     runs_endpoint.invoke_remote(Json::empty_object()),
   )
-  guard legacy is { runs: [], settled: [], approvals: [], steers: Some([]), } else {
+  guard legacy is { runs: [], settled: [], approvals: [], steers: Some([]), .. } else {
     fail("legacy agent.runs request changed shape")
   }
   let replay : @protocol.RunsReply = @json.from_json(

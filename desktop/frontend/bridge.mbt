@@ -574,6 +574,7 @@ fn fetch_runs(
       }
       let recovered_steers : Array[RecoveredSteerSettlement] = []
       let steer_recovery_supported = reply.steers is Some(_)
+      let steer_ledger_id = reply.steer_ledger_id
       if reply.steers is Some(steers) {
         for item in steers {
           if RecoveredSteerSettlement::from_reply(item) is Some(settlement) {
@@ -610,6 +611,7 @@ fn fetch_runs(
             settled=recovered_settlements,
             steers=recovered_steers,
             steer_recovery_supported~,
+            steer_ledger_id~,
             approvals=recovered_approvals,
             live~,
             frontier~,

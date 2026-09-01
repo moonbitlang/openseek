@@ -3352,9 +3352,14 @@ fn update_msg(
         // in the composer.
         if conv.run is Open(run_id~, stage~) && !(stage is Cancelling) {
           let (model, submission_id) = model.allocate_submission_id()
+          let steer_ledger_id = match model.device_state(model.focused) {
+            Some(device) => device.steer_ledger_id
+            None => None
+          }
           let conv = conv.enqueue_steer(
             submission_id,
             Some(run_id),
+            steer_ledger_id,
             task,
             conv.task,
             conv.mentions,
@@ -5389,7 +5394,7 @@ fn update_device_msg(
         (
           @cmd.none,
           model.replace_conversation(
-            conv.accept_steer(submission_id, Some(run_id)),
+            conv.accept_steer(submission_id, Some(run_id), dev.steer_ledger_id),
           ),
         )
       } else {
@@ -6716,6 +6721,7 @@ fn update_device_msg(
       settled~,
       steers~,
       steer_recovery_supported~,
+      steer_ledger_id~,
       approvals~,
       live~,
       frontier~,
@@ -6756,7 +6762,11 @@ fn update_device_msg(
           }
           let conv = match recovered {
             Some({ status: RecoveredSteerPending, .. }) =>
-              conv.accept_steer(owner.submission_id, Some(owner.run_id))
+              conv.accept_steer(
+                owner.submission_id,
+                Some(owner.run_id),
+                steer_ledger_id,
+              )
             Some({ status: RecoveredSteerApplied, .. }) => {
               commands.push(
                 acknowledge_steer_settlement(
@@ -6788,17 +6798,25 @@ fn update_device_msg(
               conv
             }
             // An older host cannot distinguish "not accepted" from "this
-            // protocol has no ledger". Retire ownership without restoring a
-            // possibly duplicated draft; its durable transcript remains the
-            // authority.
-            None if !steer_recovery_supported => {
+            // protocol has no ledger". Keep ownership for the exact live RPC;
+            // its later reply/receipt can still settle or restore the draft.
+            None if !steer_recovery_supported => conv
+            // Both sides named a ledger and they differ: the request belonged
+            // to a host process that no longer exists. Its outcome is
+            // intrinsically ambiguous, so retire the display owner without
+            // restoring text that may already be durable on disk.
+            None if owner.steer_ledger_id is Some(expected_ledger_id) &&
+              steer_ledger_id is Some(current_ledger_id) &&
+              expected_ledger_id != current_ledger_id => {
               let (conv, _) = conv.acknowledge_steer(
                 owner.submission_id,
                 Some(owner.run_id),
               )
               conv
             }
-            None if owner.absence_is_definitive => {
+            None if owner.absence_is_definitive &&
+              owner.steer_ledger_id is Some(expected_ledger_id) &&
+              steer_ledger_id == Some(expected_ledger_id) => {
               let (conv, _) = conv.reject_steer(
                 owner.submission_id,
                 Some(owner.run_id),
@@ -7048,6 +7066,11 @@ fn update_device_msg(
             pending_steers: pending_steers.copy(),
           })
         }
+      }
+      let seeded = if seeded.device_state(channel) is Some(current_dev) {
+        seeded.replace_device({ ..current_dev, steer_ledger_id, })
+      } else {
+        seeded
       }
       (@cmd.batch(commands), seeded)
     }
@@ -8022,12 +8045,14 @@ fn with_pending_steers(
   conv : Conversation,
   texts : Array[String],
   run_id? : String = "r7",
+  steer_ledger_id? : String = "test-ledger",
 ) -> Conversation {
   let mut next = conv
   for index, text in texts {
     next = next.enqueue_steer(
       "test-steer-" + index.to_string(),
       Some(run_id),
+      Some(steer_ledger_id),
       text,
       text,
       [],
@@ -11322,6 +11347,7 @@ test "a notification gap recovers a Finished notification dropped behind a slow 
       ],
       steers=[],
       steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=[],
       frontier~,
@@ -11414,6 +11440,7 @@ test "a notification gap preserves an in-flight steer until its RPC rejects" {
       ],
       steers=[],
       steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=[],
       frontier=resyncing.run_snapshot_frontier(
@@ -11470,6 +11497,7 @@ test "a notification gap replays a lost applied steer receipt" {
         },
       ],
       steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=[],
       frontier~,
@@ -11510,7 +11538,7 @@ test "negative steer recovery is authoritative only for its exact request" {
   ])
   let accepted_id = queued.pending_steers[0].submission_id
   let live_id = queued.pending_steers[1].submission_id
-  let conv = queued.accept_steer(accepted_id, Some("r7"))
+  let conv = queued.accept_steer(accepted_id, Some("r7"), Some("test-ledger"))
   let model = running_model().replace_conversation(conv)
   let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
   let (_, recovered) = update_dev(
@@ -11520,6 +11548,7 @@ test "negative steer recovery is authoritative only for its exact request" {
       settled=[],
       steers=[],
       steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
       approvals=[],
       live=["r7"],
       frontier~,
@@ -11533,11 +11562,44 @@ test "negative steer recovery is authoritative only for its exact request" {
 }
 
 ///|
-test "a host without steer recovery retires ambiguity without duplicating text" {
+test "an ambiguous steer failure lends negative authority only to its id" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(running_conversation(), [
+    "failed transport", "still live",
+  ])
+  let failed_id = queued.pending_steers[0].submission_id
+  let live_id = queued.pending_steers[1].submission_id
+  let model = running_model().replace_conversation(queued)
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    definitive_steer_id=failed_id,
+  )
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+    ),
+    model,
+  )
+  inspect(recovered.active().pending_steers.length(), content="1")
+  inspect(recovered.active().pending_steers[0].submission_id, content=live_id)
+  inspect(recovered.active().task, content="failed transport")
+}
+
+///|
+test "a host without steer recovery preserves live ownership for its reply" {
   let dispatch = test_dispatch()
   let queued = with_pending_steers(running_conversation(), ["maybe durable"])
   let id = queued.pending_steers[0].submission_id
-  let conv = queued.accept_steer(id, Some("r7"))
+  let conv = queued.accept_steer(id, Some("r7"), Some("test-ledger"))
   let model = running_model().replace_conversation(conv)
   let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
   let (_, recovered) = update_dev(
@@ -11547,6 +11609,44 @@ test "a host without steer recovery retires ambiguity without duplicating text" 
       settled=[],
       steers=[],
       steer_recovery_supported=false,
+      steer_ledger_id=None,
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+    ),
+    model,
+  )
+  inspect(recovered.active().pending_steers.length(), content="1")
+  inspect(recovered.active().task, content="")
+  let (_, rejected) = update_dev(
+    dispatch,
+    SteerRejected(session="desktop-test", submission_id=id, run_id="r7"),
+    recovered,
+  )
+  inspect(rejected.active().pending_steers.length(), content="0")
+  inspect(rejected.active().task, content="maybe durable")
+}
+
+///|
+test "a new host ledger cannot make old accepted input absent" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(running_conversation(), ["already durable"])
+  let id = queued.pending_steers[0].submission_id
+  let conv = queued.accept_steer(id, Some("r7"), Some("test-ledger"))
+  let model = running_model().replace_conversation(conv)
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=true,
+  )
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("replacement-host-ledger"),
       approvals=[],
       live=["r7"],
       frontier~,
@@ -11582,6 +11682,7 @@ test "a notification gap replays a lost dropped steer receipt" {
         },
       ],
       steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=["r7"],
       frontier~,
@@ -11610,6 +11711,7 @@ test "an older runs snapshot cannot sweep a steer submitted after its frontier" 
       settled=[],
       steers=[],
       steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=[],
       frontier~,
@@ -11669,6 +11771,7 @@ test "a steer receipt reduced before RunsLoaded is not resurrected" {
         },
       ],
       steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=["r7"],
       frontier~,
@@ -11791,6 +11894,7 @@ test "a restart settlement closes a delayed accepted response from the old pump"
       ],
       steers=[],
       steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=[],
       frontier~,
@@ -11912,6 +12016,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
     settled=[],
     steers=[],
     steer_recovery_supported=true,
+    steer_ledger_id=None,
     approvals=[],
     live=["old-run"],
     frontier=generation_one.run_snapshot_frontier(@interop.ChannelId::Local),
@@ -11927,6 +12032,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
       settled=[],
       steers=[],
       steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=[],
       frontier=generation_two.run_snapshot_frontier(@interop.ChannelId::Local),
@@ -11977,6 +12083,7 @@ test "a settlement captured for an older Starting owner cannot close its success
       ],
       steers=[],
       steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=[],
       frontier~,
@@ -12026,6 +12133,7 @@ test "an older positive runs row cannot replace a newer Started" {
       settled=[],
       steers=[],
       steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=["r7"],
       frontier~,
@@ -12063,6 +12171,7 @@ test "an older positive runs row cannot resurrect a finished run" {
       settled=[],
       steers=[],
       steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=["r7"],
       frontier~,

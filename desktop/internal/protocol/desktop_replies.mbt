@@ -232,6 +232,12 @@ pub(all) struct RunsReply {
   // recovery. None means the host cannot answer the negative-set question;
   // Some([]) is current-host proof that none of the requested ids exists.
   steers : Array[SteerSettlementPayload]?
+  // Random identity of the host-process ledger that produced `steers`.
+  // Optional for compatibility and when the host could not obtain entropy.
+  // A client may use absence as proof only when this matches the ledger that
+  // owned the request; capability presence alone does not prove continuity
+  // across a host restart.
+  steer_ledger_id : String?
 } derive(Debug, Eq)
 
 ///|

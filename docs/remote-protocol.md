@@ -207,7 +207,13 @@ re-reading state:
    connection generation, so no row from a pre-reconnect request crosses a
    later readiness boundary. Selector-matched steer rows report `pending`,
    `applied`, or `dropped`; they make the otherwise transient receipt
-   reconnect-safe without exposing another client's steering history.
+   reconnect-safe without exposing another client's steering history. The
+   snapshot also names its random process-lifetime `steer_ledger_id`.
+   Absence is negative proof only when that id matches the ledger recorded
+   when the steer was sent. A different id proves the old host process is
+   gone, but not whether its input became durable, so the client retires the
+   display owner without restoring possibly duplicated text. An absent id or
+   `steers` section is an older host and supplies no negative proof.
 3. Race note: notifications may arrive before the resync replies. This is
    harmless by construction — streaming deltas are ephemeral display state,
    and every completed step is delivered durably by `session.event` (legacy
@@ -283,7 +289,7 @@ This is lifecycle correlation only; durable transcript items still come from
 | `agent.steer_ack` | `{session, run_id, submission_id}` | `{}` — releases that exact terminal steer settlement after the submitting client has consumed it; pending and mismatched rows are unchanged. A current host bounds the ledger and refuses a new id-bearing steer before engine submission when unacknowledged rows fill it |
 | `agent.compact` | `{session, model?, thinking?, max_steps?, workspace?}` — `agent.start` minus `task`: a conversation resumed after a restart has no live process, and compacting spawns one with these settings | compaction outcome |
 | `agent.goal` | `{session, text?, auto?, model?, thinking?, max_steps?, workspace?}` — sets the session's standing goal to `text`, or clears it when `text` is absent; the engine settings match `agent.compact`'s, and a blank `session` is refused before engine lookup. `auto` arms the engine's autonomous continuation and is **currently rejected**: serve announces the turns it starts with `goal_continue`, which this host does not yet fold into a run's lifecycle, so an autonomous turn would leave the engine looking idle to `agent.start` | `{delivered}` — delivery, not durability: the command reached a live engine's stdin. The goal itself is confirmed by the `[goal]` / `[goal cleared]` runtime-notice arriving as a `session.event` commit, which is also what clients should render from; the engine's `goal_updated` stream event duplicates it |
-| `agent.runs` | `{known?: [{session, run_id?, submission_id?}]}` — each lifecycle selector carries a run or submission id; a steer selector carries both; `{}` remains valid | `{runs: […], settled: […], approvals: […], steers?: […]}` — every in-flight run's `agent.started` params, selector-matched lifecycle settlements, standing approvals, and selector-matched steer `{session, run_id, submission_id, status}` rows (`pending` / `applied` / `dropped`). Current hosts always include `steers`, including an empty array; its absence identifies an older host that cannot prove a requested steer is absent. Every lifecycle settlement a selector names is replayed, whatever its status: how much the run committed is a question the transcript read answers. Active, settled, approval, and steer state are captured atomically |
+| `agent.runs` | `{known?: [{session, run_id?, submission_id?}]}` — each lifecycle selector carries a run or submission id; a steer selector carries both; `{}` remains valid | `{runs: […], settled: […], approvals: […], steers?: […], steer_ledger_id?}` — every in-flight run's `agent.started` params, selector-matched lifecycle settlements, standing approvals, and selector-matched steer `{session, run_id, submission_id, status}` rows (`pending` / `applied` / `dropped`). Current hosts always include `steers`, including an empty array, and normally include a random process-lifetime `steer_ledger_id`; either field's absence identifies a host that cannot prove a requested steer is absent. A new engine pump marks every still-pending row from the departed pump `dropped`, including rows whose run already published `agent.finished`. Every lifecycle settlement a selector names is replayed, whatever its status: how much the run committed is a question the transcript read answers. Active, settled, approval, and steer state are captured atomically |
 
 All three engine-spawning requests use the same `thinking` setting. A present
 value overrides `OPENSEEK_THINKING`; an older client that omits it inherits

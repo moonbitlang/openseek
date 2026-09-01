@@ -652,6 +652,10 @@ priv struct SteerSnapshotOwner {
   // is known dead (or acceptance already proved the ledger row must exist).
   // An unrelated failed request must not lend that authority to this owner.
   absence_is_definitive : Bool
+  // The process-local host ledger that owned this request. Ordinary reconnect
+  // or accepted-request absence is proof only if the reply names this same
+  // ledger. None is conservative: positive rows still settle, absence does not.
+  steer_ledger_id : String?
 }
 
 ///|
@@ -1029,6 +1033,9 @@ priv struct PendingSteer {
   // stops a late echo from settling an entry belonging to a newer run.
   run_id : String?
   delivery : SteerDelivery
+  // Host-process ledger current when this request was sent. It fences negative
+  // recovery across a host restart; exact positive receipts remain portable.
+  steer_ledger_id : String?
   content : String
   draft : String
   mentions : Array[Mention]
@@ -1225,6 +1232,10 @@ priv struct DeviceState {
   // resync boundary. Session-list replies carry the value captured when their
   // request was issued, so an older cut cannot overwrite the rebuilt mirrors.
   connection_generation : Int
+  // The latest process-local steer ledger identity returned by `agent.runs`.
+  // It survives transport and engine-pump resyncs so same-host absence can be
+  // authoritative, and is replaced only by a snapshot from the new host.
+  steer_ledger_id : String?
   // Page-lifetime request tokens for the independently fetched sidebar
   // collections. Connection generation rejects dead sockets; these reject an
   // older reply from the same connection after a newer request was issued.
@@ -1275,6 +1286,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     reconnect_attempt: 0,
     reconnect_failures: 0,
     connection_generation: 0,
+    steer_ledger_id: None,
     sessions_request_generation: 0,
     archived_request_generation: 0,
     projects_request_generation: 0,
@@ -2293,6 +2305,7 @@ priv enum DeviceMsg {
     settled~ : Array[RecoveredSettlement],
     steers~ : Array[RecoveredSteerSettlement],
     steer_recovery_supported~ : Bool,
+    steer_ledger_id~ : String?,
     // Permission questions the host's engines are still blocked on. A card
     // this page rendered before a reload is gone with the page, and nothing
     // in the durable record can bring it back — so a rejoining client is
@@ -2940,6 +2953,7 @@ fn Model::run_snapshot_frontier(
           absence_is_definitive: pending.delivery is SteerAccepted ||
           lifecycle_absence_is_definitive ||
           definitive_steer_id == Some(pending.submission_id),
+          steer_ledger_id: pending.steer_ledger_id,
         })
       }
     }
@@ -3593,6 +3607,7 @@ fn Conversation::enqueue_steer(
   self : Conversation,
   submission_id : String,
   run_id : String?,
+  steer_ledger_id : String?,
   content : String,
   draft : String,
   mentions : Array[Mention],
@@ -3602,6 +3617,7 @@ fn Conversation::enqueue_steer(
     submission_id,
     run_id,
     delivery: SteerSending,
+    steer_ledger_id,
     content,
     draft,
     mentions: mentions.copy(),
@@ -3614,10 +3630,18 @@ fn Conversation::accept_steer(
   self : Conversation,
   submission_id : String,
   run_id : String?,
+  steer_ledger_id : String?,
 ) -> Conversation {
   let pending_steers = self.pending_steers.map(input => {
     if input.matches_receipt(submission_id, run_id) {
-      { ..input, delivery: SteerAccepted, }
+      {
+        ..input,
+        delivery: SteerAccepted,
+        steer_ledger_id: match steer_ledger_id {
+          Some(_) => steer_ledger_id
+          None => input.steer_ledger_id
+        },
+      }
     } else {
       input
     }

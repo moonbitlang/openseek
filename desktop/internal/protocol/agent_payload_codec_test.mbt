@@ -222,10 +222,12 @@ test "the runs snapshot requires each of its sections" {
   })
   assert_eq(empty.approvals.length(), 0)
   assert_true(empty.steers is None)
+  assert_true(empty.steer_ledger_id is None)
   let with_steer : @protocol.RunsReply = @json.from_json({
     "runs": [],
     "settled": [],
     "approvals": [],
+    "steer_ledger_id": "ledger-1",
     "steers": [
       {
         "session": "session-1",
@@ -240,10 +242,12 @@ test "the runs snapshot requires each of its sections" {
   }
   assert_eq(steer.submission_id, "steer-1")
   assert_eq(steer.status, "applied")
+  assert_eq(with_steer.steer_ledger_id, Some("ledger-1"))
   @debug.assert_eq(with_steer.to_json(), {
     "runs": [],
     "settled": [],
     "approvals": [],
+    "steer_ledger_id": "ledger-1",
     "steers": [
       {
         "session": "session-1",
