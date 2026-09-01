@@ -75,3 +75,51 @@ fn mbtx_card(arguments : String) -> @html.Html? {
     ]),
   )
 }
+
+///|
+/// The failure stage a finished `mbtx` call reports, read from its brief —
+/// the display-only caption the engine persists for renderers. The staged
+/// wasm engine writes `mbtx (build failed, exit=N)` / `mbtx (build timeout)`
+/// / `mbtx (build fault)` for build-phase failures and `mbtx (exit=N)` for a
+/// program that built and then failed; transcripts recorded before staging
+/// carry neither shape and keep the generic marker.
+priv enum MbtxFailureStage {
+  BuildError
+  RuntimeError
+}
+
+///|
+fn mbtx_failure_stage(
+  name : String,
+  brief : String?,
+  is_error : Bool,
+) -> MbtxFailureStage? {
+  guard is_error && name == "mbtx" && brief is Some(brief) else { return None }
+  if brief.has_prefix("mbtx (build") {
+    Some(BuildError)
+  } else if brief.has_prefix("mbtx (exit=") {
+    Some(RuntimeError)
+  } else {
+    None
+  }
+}
+
+///|
+/// The literal word beside a failed call's brief. An `mbtx` failure names its
+/// STAGE: a build error is fixed in the source, a runtime error in the
+/// program's behavior, and the row should say which before the card is even
+/// opened. Every other failed call keeps the generic word.
+fn failure_marker(
+  name : String,
+  brief : String?,
+  is_error : Bool,
+) -> @html.Html? {
+  guard is_error else { return None }
+  match mbtx_failure_stage(name, brief, is_error) {
+    Some(BuildError) =>
+      Some(@html.span(class="tool-call-failed tool-stage-build", "build error"))
+    Some(RuntimeError) =>
+      Some(@html.span(class="tool-call-failed tool-stage-run", "runtime error"))
+    None => Some(@html.span(class="tool-call-failed", "failed"))
+  }
+}

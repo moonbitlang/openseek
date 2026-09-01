@@ -77,6 +77,47 @@ test "an mbtx program past the transcript clamp keeps every numbered line" {
 }
 
 ///|
+/// A failed mbtx row names its stage from the brief alone — build errors are
+/// fixed in the source, runtime errors in the program's behavior, and the row
+/// says which before the card is opened. A brief carrying neither shape (a
+/// timeout, a kill) keeps the generic word, as does every other tool.
+#warnings("-alert_unstable")
+test "a failed mbtx row names its failure stage" {
+  fn markup_for(brief : String, is_error : Bool) -> String {
+    let rendered = tool_call_view({
+      kind: Tool(
+        call_id="c1",
+        name="mbtx",
+        arguments=Some("{\"source\":\"fn main {  }\"}"),
+        has_result=true,
+        is_error~,
+        brief=Some(brief),
+      ),
+      content: "x",
+      ts: None,
+      sequence: None,
+    })
+    @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
+  }
+
+  let build = markup_for("mbtx (build failed, exit=1)", true)
+  assert_true(build.contains("tool-stage-build"))
+  assert_true(build.contains("build error"))
+  assert_false(build.contains(">failed<"))
+  // Every build-phase brief shape maps to the same stage word.
+  assert_true(markup_for("mbtx (build timeout)", true).contains("build error"))
+  let runtime = markup_for("mbtx (exit=1)", true)
+  assert_true(runtime.contains("tool-stage-run"))
+  assert_true(runtime.contains("runtime error"))
+  // A clean exit carries no marker at all.
+  let ok = markup_for("mbtx (exit=0)", false)
+  assert_false(ok.contains("runtime error"))
+  assert_false(ok.contains(">failed<"))
+  // A brief outside both stage shapes keeps the generic word.
+  assert_true(markup_for("mbtx (timeout)", true).contains(">failed<"))
+}
+
+///|
 /// A payload this card cannot read keeps the generic arguments rendering,
 /// which clamps before parsing — nothing is ever shown as a program that is
 /// not one.

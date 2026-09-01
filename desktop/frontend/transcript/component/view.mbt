@@ -306,8 +306,8 @@ fn tool_request_view(item : @transcript.TranscriptItem) -> @html.Html {
     @html.span(class="tool-flow", "→"),
     @html.span(class="tool-call-text", label),
   ]
-  if is_error {
-    line.push(@html.span(class="tool-call-failed", "failed"))
+  if failure_marker(name, brief, is_error) is Some(marker) {
+    line.push(marker)
   }
   line.push(@plan.fold_progress([item]))
   let body : Array[@html.Html] = []
@@ -391,8 +391,8 @@ fn tool_result_view(
     @html.span(class="tool-flow", "←"),
     @html.span(class="tool-result-text", label),
   ]
-  if is_error {
-    line.push(@html.span(class="tool-call-failed", "failed"))
+  if failure_marker(name, brief, is_error) is Some(marker) {
+    line.push(marker)
   }
   let body : Array[@html.Html] = []
   // A sub-run result names the child session it spawned in its brief. The

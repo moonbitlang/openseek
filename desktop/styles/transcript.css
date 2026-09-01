@@ -922,6 +922,12 @@
   color: var(--color-danger);
   font-size: var(--font-size-xs);
 }
+/* An mbtx failure names its stage. A build error is a source problem — warn
+   amber, "fix the input" — while a runtime error keeps the row's danger red:
+   the program itself misbehaved. */
+.tool-call-failed.tool-stage-build {
+  color: var(--color-warning);
+}
 
 /* Arguments and output grow the page instead of scrolling in place: the
    transcript stays the only scroll area, so the wheel is never trapped by a
