@@ -25,7 +25,7 @@ pub fn Location::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
   Navigate(String)
-  Loaded(channel~ : @interop.ChannelId, location~ : Location, entries~ : Array[String], generation~ : Int)
+  Loaded(channel~ : @interop.ChannelId, location~ : Location, entries~ : Array[String], windows~ : Bool, generation~ : Int)
   Failed(channel~ : @interop.ChannelId, message~ : String, generation~ : Int)
   EditPath
   PathChanged(String)

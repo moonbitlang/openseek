@@ -185,7 +185,7 @@ pub fn BrowseDirectoryPayload::to_json(Self) -> Json
 pub fn BrowseDirectoryPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) enum BrowseDirectoryReply {
-  Listing(path~ : String, parent~ : String?, entries~ : Array[String])
+  Listing(path~ : String, parent~ : String?, entries~ : Array[String], windows~ : Bool)
   Drives(entries~ : Array[String])
   BrowseError(String)
 } derive(Eq, @debug.Debug)

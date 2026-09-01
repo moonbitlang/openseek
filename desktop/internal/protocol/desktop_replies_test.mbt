@@ -745,17 +745,35 @@ test "worktree creation results keep success compatible and carry refusals" {
 
 ///|
 test "browse replies keep success compatible and carry refusals" {
-  let rooted : @protocol.BrowseDirectoryReply = Listing(path="/", parent=None, entries=[
-    "home",
-  ])
-  // A root listing omits `parent`, matching the retired struct encoding.
+  let rooted : @protocol.BrowseDirectoryReply = Listing(
+    path="/",
+    parent=None,
+    entries=["home"],
+    windows=false,
+  )
+  // A root listing omits `parent`, matching the retired struct encoding;
+  // a POSIX host also omits `windows`, keeping the legacy shape.
   @debug.assert_eq(rooted.to_json(), { "path": "/", "entries": ["home"] })
   let nested : @protocol.BrowseDirectoryReply = Listing(
     path="/home/u",
     parent=Some("/home"),
     entries=[],
+    windows=false,
   )
-  for reply in [rooted, nested] {
+  // A Windows host says so in the reply, and the flag survives the trip.
+  let windows : @protocol.BrowseDirectoryReply = Listing(
+    path="/C:/Users",
+    parent=Some("/C:/"),
+    entries=["me"],
+    windows=true,
+  )
+  @debug.assert_eq(windows.to_json(), {
+    "path": "/C:/Users",
+    "entries": ["me"],
+    "parent": "/C:/",
+    "windows": true,
+  })
+  for reply in [rooted, nested, windows] {
     let decoded : @protocol.BrowseDirectoryReply = @json.from_json(
       reply.to_json(),
     )

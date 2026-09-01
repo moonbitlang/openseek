@@ -23,6 +23,7 @@ fn listed(
       channel~,
       location~,
       entries~,
+      windows=false,
       generation=opening.request_generation(),
     ),
   )
@@ -81,6 +82,7 @@ test "a listing for another channel is dropped" {
       channel=@interop.ChannelId::Remote("d_b"),
       location=@project_picker.Location::Directory("/from-b"),
       entries=["wrong"],
+      windows=false,
       generation=picker.request_generation(),
     ),
   )
@@ -116,6 +118,7 @@ test "a stale listing leaves the picker untouched" {
       channel=@interop.ChannelId::Local,
       location=@project_picker.Location::Directory("/elsewhere"),
       entries=["wrong"],
+      windows=false,
       generation=picker.request_generation(),
     ),
   )
