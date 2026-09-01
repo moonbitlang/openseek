@@ -82,6 +82,19 @@ pub fn view_event_json(id : Int, event : @proton.ViewEvent) -> Json {
         "code": error_code.to_json(),
         "text": error_text.to_json(),
       }
+    FoundInPage(result~) =>
+      {
+        "id": id.to_json(),
+        "kind": "found_in_page",
+        "request_id": result.request_id.to_json(),
+        "active_match_ordinal": result.active_match_ordinal.to_json(),
+        "matches": result.matches.to_json(),
+        "selection_x": result.selection_x.to_json(),
+        "selection_y": result.selection_y.to_json(),
+        "selection_width": result.selection_width.to_json(),
+        "selection_height": result.selection_height.to_json(),
+        "final_update": result.final_update.to_json(),
+      }
     Closed => { "id": id.to_json(), "kind": "closed" }
   }
 }
