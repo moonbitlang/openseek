@@ -1158,108 +1158,6 @@ priv struct ArchiveOverride {
 } derive(Eq)
 
 ///|
-/// The two Host reads issued per registered workspace, each fenced by its own
-/// exact request UUID.
-priv enum WorkspaceRead {
-  WorktreeList
-  SettingsFile
-} derive(Eq)
-
-///|
-/// The request UUID currently accepted for each (read, workspace). Absence
-/// means no request is in flight; replacing or removing one entry never
-/// disturbs a sibling workspace or the workspace's other read.
-priv struct WorkspaceRequestIds {
-  values : Array[(WorkspaceRead, @common.Uri, String)]
-} derive(Eq)
-
-///|
-fn WorkspaceRequestIds::WorkspaceRequestIds(
-  values? : Array[(WorkspaceRead, @common.Uri, String)] = [],
-) -> WorkspaceRequestIds {
-  { values, }
-}
-
-///|
-fn WorkspaceRequestIds::put(
-  self : WorkspaceRequestIds,
-  read : WorkspaceRead,
-  workspace : @common.Uri,
-  request_id : String,
-) -> WorkspaceRequestIds {
-  let values = self.without(read, workspace).values
-  values.push((read, workspace, request_id))
-  { values, }
-}
-
-///|
-fn WorkspaceRequestIds::without(
-  self : WorkspaceRequestIds,
-  read : WorkspaceRead,
-  workspace : @common.Uri,
-) -> WorkspaceRequestIds {
-  {
-    values: self.values.filter(entry => {
-      !(entry.0 == read && entry.1 == workspace)
-    }),
-  }
-}
-
-///|
-fn WorkspaceRequestIds::get(
-  self : WorkspaceRequestIds,
-  read : WorkspaceRead,
-  workspace : @common.Uri,
-) -> String? {
-  self.values
-  .iter()
-  .find_first(entry => entry.0 == read && entry.1 == workspace)
-  .map(entry => entry.2)
-}
-
-///|
-fn WorkspaceRequestIds::retain_workspaces(
-  self : WorkspaceRequestIds,
-  workspaces : Array[@common.Uri],
-) -> WorkspaceRequestIds {
-  { values: self.values.filter(entry => workspaces.contains(entry.1)), }
-}
-
-///|
-/// Mint the UUID for one workspace read and make it the reply that read now
-/// waits for.
-fn DeviceState::begin_workspace_request(
-  self : DeviceState,
-  read : WorkspaceRead,
-  workspace : @common.Uri,
-) -> (String, DeviceState) {
-  let request_id = @uuid.mint()
-  (
-    request_id,
-    {
-      ..self,
-      workspace_requests: self.workspace_requests.put(
-        read, workspace, request_id,
-      ),
-    },
-  )
-}
-
-///|
-/// Stop waiting for one workspace read: a delayed reply carrying the old UUID
-/// then fails the exact-id check without a replacement id being minted.
-fn DeviceState::retire_workspace_request(
-  self : DeviceState,
-  read : WorkspaceRead,
-  workspace : @common.Uri,
-) -> DeviceState {
-  {
-    ..self,
-    workspace_requests: self.workspace_requests.without(read, workspace),
-  }
-}
-
-///|
 /// Mint fresh UUIDs for both sidebar list reads at once, for the actions
 /// whose one reply carries the live and the archived list together.
 fn DeviceState::begin_list_requests(
@@ -1276,15 +1174,6 @@ fn DeviceState::begin_list_requests(
       archived_request_id: Some(archived_request_id),
     },
   )
-}
-
-///|
-fn DeviceState::workspace_request_id(
-  self : DeviceState,
-  read : WorkspaceRead,
-  workspace : @common.Uri,
-) -> String? {
-  self.workspace_requests.get(read, workspace)
 }
 
 ///|
@@ -1320,9 +1209,6 @@ priv struct DeviceState {
   sessions_request_id : String?
   archived_request_id : String?
   projects_request_id : String?
-  // The exact request currently accepted for each workspace read; sibling
-  // workspaces never invalidate one another.
-  workspace_requests : WorkspaceRequestIds
   // Durable sessions known to the engine's store, newest first, refreshed
   // when the bridge connects and when a run reaches the store. A new
   // conversation appears here once its first turn has been persisted.
@@ -1368,7 +1254,6 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     sessions_request_id: None,
     archived_request_id: None,
     projects_request_id: None,
-    workspace_requests: WorkspaceRequestIds(),
     sessions: [],
     archived: [],
     archive_overrides: [],

@@ -368,22 +368,24 @@ fn adopt_projects(
     None
   }
   // Each workspace's worktree list and settings mirror refresh with the
-  // adopted registry; a detached workspace's cached rows drop with its
-  // section. Each workspace receives an independent UUID so a sibling's
-  // broadcast cannot invalidate its in-flight reply.
-  let mut dev = dev
+  // adopted registry; a detached workspace drops both, and each takes the
+  // read it was waiting for with it. Each workspace receives an independent
+  // UUID so a sibling's broadcast cannot invalidate its in-flight reply.
+  let mut dev = {
+    ..dev,
+    worktrees: dev.worktrees.filter(group => paths.contains(group.project)),
+    workspace_settings: dev.workspace_settings.filter(row => {
+      paths.contains(row.project)
+    }),
+  }
   let commands : Array[@cmd.Cmd] = []
   for path in paths {
-    let (worktrees_request_id, next_dev) = dev.begin_workspace_request(
-      WorktreeList,
-      path,
-    )
+    let (worktrees_request_id, next_dev) = dev.begin_worktree_read(path)
     dev = next_dev
     commands.push(
       fetch_worktrees(dispatch, channel, path, worktrees_request_id),
     )
-    let (settings_request_id, next_dev) = dev.begin_workspace_request(
-      SettingsFile,
+    let (settings_request_id, next_dev) = dev.begin_workspace_settings_read(
       path,
     )
     dev = next_dev
@@ -391,11 +393,6 @@ fn adopt_projects(
       fetch_workspace_settings(dispatch, channel, path, settings_request_id),
     )
   }
-  let worktrees = dev.worktrees.filter(group => paths.contains(group.project))
-  let workspace_settings = dev.workspace_settings.filter(row => {
-    paths.contains(row.project)
-  })
-  let workspace_requests = dev.workspace_requests.retain_workspaces(paths)
   // The old whole-session snapshot can outlive the workspace commit
   // broadcast. Prune it immediately so neither the sidebar nor fallback
   // selection can retain a conversation whose store is no longer attached.
@@ -415,15 +412,7 @@ fn adopt_projects(
     model.loading_conversation
   }
   let (refresh_cmd, next) = request_sessions_refresh(dispatch, channel, {
-    ..model.replace_device({
-      ..dev,
-      sessions,
-      projects: paths,
-      active_project,
-      worktrees,
-      workspace_requests,
-      workspace_settings,
-    }),
+    ..model.replace_device({ ..dev, sessions, projects: paths, active_project, }),
     conversations,
     loading_conversation,
     // A detached workspace takes its settings page with it; the page
@@ -3549,10 +3538,7 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let workspace = conv.project()
-      let (request_id, next_dev) = dev.begin_workspace_request(
-        WorktreeList,
-        workspace,
-      )
+      let (request_id, next_dev) = dev.begin_worktree_read(workspace)
       (
         fetch_worktrees(dispatch, conv.device, workspace, request_id),
         model.replace_device(next_dev),
@@ -3773,7 +3759,7 @@ fn update_msg(
       // Apply optimistically after retiring the in-flight read, so a slower
       // reply cannot roll the page's select back. The failure path re-reads
       // the disk state under a newly minted request UUID.
-      let next_dev = dev.retire_workspace_request(SettingsFile, workspace)
+      let next_dev = dev.retire_workspace_settings_read(workspace)
       (
         save_workspace_settings(dispatch, channel, workspace, worktree_mode~),
         model.replace_device(
@@ -3783,7 +3769,7 @@ fn update_msg(
     }
     WorkspaceSubmodulesChosen(channel, workspace, value) => {
       guard model.device_state(channel) is Some(dev) &&
-        dev.workspace_settings_row(workspace) is Some(row) else {
+        dev.workspace_settings_values(workspace) is Some(row) else {
         return (@cmd.none, model)
       }
       let checkout_submodules = match value {
@@ -3794,7 +3780,7 @@ fn update_msg(
       // Preserve the workspace's launch mode locally and patch only the
       // submodule field on disk. Retiring its current read prevents that
       // older reply from undoing this choice.
-      let next_dev = dev.retire_workspace_request(SettingsFile, workspace)
+      let next_dev = dev.retire_workspace_settings_read(workspace)
       (
         save_workspace_settings(
           dispatch,
@@ -3813,7 +3799,7 @@ fn update_msg(
     }
     WorkspaceSubmoduleTimeoutChosen(channel, workspace, value) => {
       guard model.device_state(channel) is Some(dev) &&
-        dev.workspace_settings_row(workspace) is Some(row) else {
+        dev.workspace_settings_values(workspace) is Some(row) else {
         return (@cmd.none, model)
       }
       let submodule_checkout_timeout_seconds = match value {
@@ -3825,7 +3811,7 @@ fn update_msg(
       }
       // Patch only the timeout and keep both neighboring workspace choices.
       // No read is accepted until the save either broadcasts or re-fetches.
-      let next_dev = dev.retire_workspace_request(SettingsFile, workspace)
+      let next_dev = dev.retire_workspace_settings_read(workspace)
       (
         save_workspace_settings(
           dispatch,
@@ -4782,10 +4768,7 @@ fn Model::reject_start(
     // A checkout deleted outside the app cannot publish a registry
     // notification. Refresh placement after every rejected workspace start;
     // a newly missing row then exposes Repair/Archive immediately.
-    let (request_id, next_dev) = dev.begin_workspace_request(
-      WorktreeList,
-      conv.project(),
-    )
+    let (request_id, next_dev) = dev.begin_worktree_read(conv.project())
     (
       @cmd.batch([
         notice,
@@ -5030,16 +5013,13 @@ fn update_device_msg(
         sessions_request_id: Some(sessions_request_id),
         archived_request_id: Some(archived_request_id),
         projects_request_id: Some(projects_request_id),
-        // A reply carries its request UUID rather than the bridge connection.
-        // Forget every read the old connection had in flight before clearing
-        // the mirrors, so a late reply cannot repopulate either one during
-        // resync.
-        workspace_requests: WorkspaceRequestIds(),
         archive_overrides: [],
         // Worktree notifications are not replayed across a connection gap.
         // Keep every workspace blocked until this connection returns a fresh
         // list (or a newer `worktree.changed` broadcast) instead of trusting
-        // placement cached before the disconnect.
+        // placement cached before the disconnect. Dropping what is known
+        // also drops the reads the dead connection had in flight, so no late
+        // reply can repopulate either list during resync.
         worktrees: [],
         // Same rule for the settings mirror: a default changed by another
         // client during the gap must not be copied into a chat created
@@ -5563,14 +5543,13 @@ fn update_device_msg(
       // The exact per-workspace UUID is the same fence as `WorktreesLoaded`.
       // Membership also prevents a pre-detach reply resurrecting its row.
       guard dev.projects.contains(workspace) &&
-        dev.workspace_request_id(SettingsFile, workspace) == Some(request_id) else {
+        dev.workspace_settings_read_id(workspace) == Some(request_id) else {
         return (@cmd.none, model)
       }
-      let next_dev = dev.retire_workspace_request(SettingsFile, workspace)
       (
         @cmd.none,
         model.replace_device(
-          next_dev.with_workspace_settings(
+          dev.with_workspace_settings(
             workspace,
             worktree_mode,
             checkout_submodules~,
@@ -5589,14 +5568,13 @@ fn update_device_msg(
       // (the hub orders them per client, so an attach is always processed
       // before settings broadcasts that follow it).
       guard dev.projects.contains(workspace) else { return (@cmd.none, model) }
-      // A broadcast completes the workspace's current read frontier. Remove
-      // that accepted UUID so every older reply is stale without touching
-      // sibling workspaces.
-      let next_dev = dev.retire_workspace_request(SettingsFile, workspace)
+      // Adopting the broadcast settles this workspace, which retires whatever
+      // read it was waiting for; every older reply is then stale without
+      // touching sibling workspaces.
       (
         @cmd.none,
         model.replace_device(
-          next_dev.with_workspace_settings(
+          dev.with_workspace_settings(
             workspace,
             worktree_mode,
             checkout_submodules~,
@@ -5608,10 +5586,7 @@ fn update_device_msg(
     WorkspaceSettingsSaveFailed(workspace~, message~) => {
       // The page's optimistic value may be wrong now: alongside the toast,
       // re-read the disk state under a fresh UUID.
-      let (request_id, next_dev) = dev.begin_workspace_request(
-        SettingsFile,
-        workspace,
-      )
+      let (request_id, next_dev) = dev.begin_workspace_settings_read(workspace)
       let (toast, next) = model.notify_error(
         dispatch,
         "Workspace settings not saved for \{workspace.path}: \{message}",
@@ -5628,11 +5603,10 @@ fn update_device_msg(
       // The staleness fence is per workspace: a sibling broadcast does not
       // replace this workspace's accepted UUID.
       guard dev.projects.contains(workspace) &&
-        dev.workspace_request_id(WorktreeList, workspace) == Some(request_id) else {
+        dev.worktree_read_id(workspace) == Some(request_id) else {
         return (@cmd.none, model)
       }
-      let next_dev = dev.retire_workspace_request(WorktreeList, workspace)
-      let next_dev = next_dev.with_worktrees(workspace, rows)
+      let next_dev = dev.with_worktrees(workspace, rows)
       let next = model.replace_device(next_dev)
       // A fresh list can be the first proof that a binding disappeared while
       // this client was disconnected. Clear accepted Git request UUIDs for
@@ -5664,10 +5638,10 @@ fn update_device_msg(
       // A later snapshot, broadcast, or reconnect UUID makes this failure
       // irrelevant.
       guard dev.projects.contains(workspace) &&
-        dev.workspace_request_id(WorktreeList, workspace) == Some(request_id) else {
+        dev.worktree_read_id(workspace) == Some(request_id) else {
         return (@cmd.none, model)
       }
-      let next_dev = dev.retire_workspace_request(WorktreeList, workspace)
+      let next_dev = dev.retire_worktree_read(workspace)
       model
       .replace_device(next_dev)
       .notify_error(
@@ -5676,10 +5650,9 @@ fn update_device_msg(
       )
     }
     WorktreesChanged(rows, workspace~) => {
-      // Retire only this workspace's accepted UUID, then adopt the canonical
-      // rows. Older list replies can no longer roll the broadcast back.
-      let next_dev = dev.retire_workspace_request(WorktreeList, workspace)
-      let next_dev = next_dev.with_worktrees(workspace, rows)
+      // Adopting the canonical rows settles this workspace, so the list reply
+      // it was waiting for can no longer roll the broadcast back.
+      let next_dev = dev.with_worktrees(workspace, rows)
       let next = model.replace_device(next_dev)
       // Only an actual registry-row removal unbinds its conversations. Archive
       // keeps the row with `present: false`, so it passes through unchanged and
@@ -7394,11 +7367,27 @@ fn @interop.ChannelId::test_store_root(
 
 ///|
 /// The worktree registry mirror a placement needs before it resolves. Rows
-/// stay empty: the fixture conversation works in the project root.
+/// stay empty — the fixture conversation works in the project root — while a
+/// list read stays armed under a stable UUID that reply fixtures can name.
 fn @interop.ChannelId::test_worktrees(
   self : @interop.ChannelId,
 ) -> ProjectWorktrees {
-  { project: self.test_project(), rows: [], }
+  {
+    project: self.test_project(),
+    rows: WorktreeListReady(rows=[], refreshing=Some(TestWorktreeRequestId)),
+  }
+}
+
+///|
+/// A workspace whose first settings read is still out, under a stable UUID
+/// that reply fixtures can name.
+fn @interop.ChannelId::test_workspace_settings(
+  self : @interop.ChannelId,
+) -> ProjectSettings {
+  {
+    project: self.test_project(),
+    values: SettingsFileLoading(request_id=TestWorkspaceSettingsRequestId),
+  }
 }
 
 ///|
@@ -7468,20 +7457,11 @@ fn test_model() -> Model {
         sessions_request_id: Some("sessions-request-current"),
         archived_request_id: Some("archived-request-current"),
         projects_request_id: Some("projects-request-current"),
-        workspace_requests: WorkspaceRequestIds(values=[
-          (
-            WorktreeList,
-            @interop.ChannelId::Local.test_project(),
-            TestWorktreeRequestId,
-          ),
-          (
-            SettingsFile,
-            @interop.ChannelId::Local.test_project(),
-            TestWorkspaceSettingsRequestId,
-          ),
-        ]),
         projects: [@interop.ChannelId::Local.test_project()],
         worktrees: [@interop.ChannelId::Local.test_worktrees()],
+        workspace_settings: [
+          @interop.ChannelId::Local.test_workspace_settings(),
+        ],
       },
     ],
     focused: @interop.ChannelId::Local,
@@ -9322,10 +9302,7 @@ test "a reconnect retires the file index watcher until placement returns" {
     WorktreesLoaded(
       [],
       workspace=root,
-      request_id=rediscovered
-        .dev()
-        .workspace_request_id(WorktreeList, root)
-        .unwrap(),
+      request_id=rediscovered.dev().worktree_read_id(root).unwrap(),
     ),
     rediscovered,
   )
@@ -14734,7 +14711,7 @@ test "archive broadcast invalidates the active send target before list replies" 
           updated_at_ms: None,
         },
       ],
-      worktrees: [{ project: workspace, rows: [], }],
+      worktrees: [known_worktrees(workspace, [])],
     })
   let (_, invalidated) = update_dev(
     dispatch,
@@ -15681,18 +15658,15 @@ test "update is pure: a resolved transcript position opens its owning file" {
       ..dev,
       projects: [workspace],
       worktrees: [
-        {
-          project: workspace,
-          rows: [
-            {
-              name: "wt-4",
-              session: Some("desktop-test"),
-              codex_thread: None,
-              path: Some(worktree),
-              present: true,
-            },
-          ],
-        },
+        known_worktrees(workspace, [
+          {
+            name: "wt-4",
+            session: Some("desktop-test"),
+            codex_thread: None,
+            path: Some(worktree),
+            present: true,
+          },
+        ]),
       ],
     })
   let owner : @interop.ConversationKey = {
@@ -16331,7 +16305,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
       ..test_conversation(),
       workspace: Project(root=workspace),
     })
-    .with_dev(dev => { ..dev, worktrees: [{ project: workspace, rows: [], }], })
+    .with_dev(dev => { ..dev, worktrees: [known_worktrees(workspace, [])], })
   let model = {
     ..model,
     file_panel: {
@@ -16376,7 +16350,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
       ..test_conversation(),
       workspace: Project(root=workspace),
     })
-    .with_dev(dev => { ..dev, worktrees: [{ project: workspace, rows: [], }], })
+    .with_dev(dev => { ..dev, worktrees: [known_worktrees(workspace, [])], })
   let (_, next) = update(
     dispatch,
     JumpToLocation(
@@ -17968,18 +17942,15 @@ test "file rows and location jumps cannot open while checkout placement is missi
       ..dev,
       projects: [workspace],
       worktrees: [
-        {
-          project: workspace,
-          rows: [
-            {
-              name: "wt",
-              session: Some("desktop-test"),
-              path: None,
-              codex_thread: None,
-              present: false,
-            },
-          ],
-        },
+        known_worktrees(workspace, [
+          {
+            name: "wt",
+            session: Some("desktop-test"),
+            path: None,
+            codex_thread: None,
+            present: false,
+          },
+        ]),
       ],
     })
   let path = @pathx.Relative("src/main.mbt")

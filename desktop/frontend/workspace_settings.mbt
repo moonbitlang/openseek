@@ -12,13 +12,30 @@
 const DefaultWorkspaceSubmoduleCheckoutTimeoutSeconds : Int = 10
 
 ///|
-/// One project's settings mirror, keyed like `ProjectWorktrees`. Its current
-/// request UUID lives separately in `DeviceState::workspace_requests`.
-priv struct ProjectSettings {
-  project : @common.Uri
+/// One workspace's persisted desktop settings, as this connection last read
+/// or was told them.
+priv struct WorkspaceSettingsValues {
   worktree_mode : Bool
   checkout_submodules : Bool
   submodule_checkout_timeout_seconds : Int
+} derive(Eq)
+
+///|
+/// What this connection knows of one project's `.openseek/settings.json`,
+/// keyed like `ProjectWorktrees`.
+priv struct ProjectSettings {
+  project : @common.Uri
+  values : SettingsFile
+} derive(Eq)
+
+///|
+/// One workspace's settings and the read that will settle them. The read's
+/// UUID lives in the arm waiting for it — `SettingsFileLoading` before any
+/// values arrive, `refreshing` once a page can show them — so a sibling
+/// workspace's reply is never fenced by this one.
+priv enum SettingsFile {
+  SettingsFileLoading(request_id~ : String)
+  SettingsFileReady(values~ : WorkspaceSettingsValues, refreshing~ : String?)
 } derive(Eq)
 
 ///|
@@ -135,6 +152,20 @@ fn workspace_settings_changed_msg(
 }
 
 ///|
+/// Replace what is known for one project, leaving every sibling untouched.
+fn DeviceState::with_workspace_settings_file(
+  self : DeviceState,
+  project : @common.Uri,
+  values : SettingsFile,
+) -> DeviceState {
+  let rows = self.workspace_settings.filter(row => row.project != project)
+  rows.push({ project, values, })
+  { ..self, workspace_settings: rows, }
+}
+
+///|
+/// Adopt authoritative settings for one project, settling whatever read was
+/// out. Fields the caller does not name keep the value already read.
 fn DeviceState::with_workspace_settings(
   self : DeviceState,
   project : @common.Uri,
@@ -142,42 +173,116 @@ fn DeviceState::with_workspace_settings(
   checkout_submodules? : Bool,
   submodule_checkout_timeout_seconds? : Int,
 ) -> DeviceState {
+  let known = self.workspace_settings_values(project)
   let checkout_submodules = checkout_submodules.unwrap_or_else(() => {
-    self
-    .workspace_settings_row(project)
-    .map(row => row.checkout_submodules)
-    .unwrap_or(true)
+    known.map(values => values.checkout_submodules).unwrap_or(true)
   })
   let submodule_checkout_timeout_seconds = submodule_checkout_timeout_seconds.unwrap_or_else(() => {
-      self
-      .workspace_settings_row(project)
-      .map(row => row.submodule_checkout_timeout_seconds)
+      known
+      .map(values => values.submodule_checkout_timeout_seconds)
       .unwrap_or(DefaultWorkspaceSubmoduleCheckoutTimeoutSeconds)
     },
   )
-  let rows = self.workspace_settings.filter(row => row.project != project)
-  rows.push({
+  self.with_workspace_settings_file(
     project,
-    worktree_mode,
-    checkout_submodules,
-    submodule_checkout_timeout_seconds,
-  })
-  { ..self, workspace_settings: rows, }
+    SettingsFileReady(
+      values={
+        worktree_mode,
+        checkout_submodules,
+        submodule_checkout_timeout_seconds,
+      },
+      refreshing=None,
+    ),
+  )
 }
 
 ///|
-/// The loaded settings row for one project; `None` until the first
-/// authoritative read or broadcast for it arrives on this connection.
-fn DeviceState::workspace_settings_row(
+fn DeviceState::workspace_settings_file(
   self : DeviceState,
   project : @common.Uri,
-) -> ProjectSettings? {
-  for row in self.workspace_settings {
-    if row.project == project {
-      return Some(row)
-    }
+) -> SettingsFile? {
+  self.workspace_settings
+  .iter()
+  .find_first(row => row.project == project)
+  .map(row => row.values)
+}
+
+///|
+/// The settings this connection has read for one project; `None` until the
+/// first authoritative read or broadcast for it arrives.
+fn DeviceState::workspace_settings_values(
+  self : DeviceState,
+  project : @common.Uri,
+) -> WorkspaceSettingsValues? {
+  match self.workspace_settings_file(project) {
+    Some(SettingsFileReady(values~, ..)) => Some(values)
+    Some(SettingsFileLoading(..)) | None => None
   }
-  None
+}
+
+///|
+/// The settings reply `project` is currently waiting for.
+fn DeviceState::workspace_settings_read_id(
+  self : DeviceState,
+  project : @common.Uri,
+) -> String? {
+  match self.workspace_settings_file(project) {
+    Some(SettingsFileLoading(request_id~)) => Some(request_id)
+    Some(SettingsFileReady(refreshing~, ..)) => refreshing
+    None => None
+  }
+}
+
+///|
+/// Mint the UUID for one project's settings read and make it the reply that
+/// read waits for. Values already known stay visible while it runs.
+fn DeviceState::begin_workspace_settings_read(
+  self : DeviceState,
+  project : @common.Uri,
+) -> (String, DeviceState) {
+  let request_id = @uuid.mint()
+  (request_id, self.with_workspace_settings_read(project, request_id))
+}
+
+///|
+/// Make `request_id` the settings reply `project` waits for.
+fn DeviceState::with_workspace_settings_read(
+  self : DeviceState,
+  project : @common.Uri,
+  request_id : String,
+) -> DeviceState {
+  self.with_workspace_settings_file(
+    project,
+    match self.workspace_settings_values(project) {
+      Some(values) => SettingsFileReady(values~, refreshing=Some(request_id))
+      None => SettingsFileLoading(request_id~)
+    },
+  )
+}
+
+///|
+/// Stop waiting for one project's settings read, so a delayed reply carrying
+/// that UUID fails the exact-id check. With nothing read yet the row itself
+/// goes: "unread" is the absence of a row, never a row naming a dead request.
+fn DeviceState::retire_workspace_settings_read(
+  self : DeviceState,
+  project : @common.Uri,
+) -> DeviceState {
+  match self.workspace_settings_file(project) {
+    Some(SettingsFileReady(values~, refreshing=Some(_))) =>
+      self.with_workspace_settings_file(
+        project,
+        SettingsFileReady(values~, refreshing=None),
+      )
+    Some(SettingsFileLoading(..)) =>
+      {
+        ..self,
+        workspace_settings: self.workspace_settings.filter(row => {
+          row.project != project
+        }),
+      }
+    Some(SettingsFileReady(refreshing=None, ..)) | None => self
+  }
 }
 
 ///|
@@ -187,11 +292,10 @@ fn DeviceState::default_worktree_mode(
   self : DeviceState,
   project : @common.Uri,
 ) -> Bool {
-  if self.workspace_settings_row(project) is Some(row) {
-    row.worktree_mode
-  } else {
-    false
-  }
+  self
+  .workspace_settings_values(project)
+  .map(values => values.worktree_mode)
+  .unwrap_or(false)
 }
 
 ///|
@@ -221,7 +325,7 @@ fn Model::workspace_settings_input(self : Model) -> @workspace_settings.Input {
       guard self.device_state(channel) is Some(dev) else {
         return @workspace_settings.Input::inactive()
       }
-      let row = dev.workspace_settings_row(workspace)
+      let row = dev.workspace_settings_values(workspace)
       {
         page: Active(channel~, workspace~),
         settings: match row {
@@ -242,7 +346,13 @@ fn Model::workspace_settings_input(self : Model) -> @workspace_settings.Input {
 ///|
 test "workspace settings input projects the mirror row and falls back inert" {
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
-  let model = test_model().with_dev(dev => { ..dev, projects: [workspace], })
+  let model = test_model().with_dev(dev => {
+    ..dev.with_workspace_settings_read(
+      workspace,
+      TestWorkspaceSettingsRequestId,
+    ),
+    projects: [workspace],
+  })
   // Off the Workspace Settings screen the projected input is inactive and
   // the component renders nothing.
   assert_true(model.workspace_settings_input().page is Inactive)
@@ -253,8 +363,7 @@ test "workspace settings input projects the mirror row and falls back inert" {
       worktree_mode=true,
       checkout_submodules=false,
       submodule_checkout_timeout_seconds=30,
-      connection_generation=0,
-      request_generation=1,
+      request_id=TestWorkspaceSettingsRequestId,
     ),
     model,
   )
@@ -299,10 +408,9 @@ test "a settings reply lands once and an older token cannot roll it back" {
   let sibling = @interop.ChannelId::Local.test_resource("/other")
   let sibling_request_id = "workspace-settings-sibling"
   let attached = test_model().with_dev(dev => {
-    ..dev,
-    workspace_requests: dev.workspace_requests
-    .put(SettingsFile, workspace, TestWorkspaceSettingsRequestId)
-    .put(SettingsFile, sibling, sibling_request_id),
+    ..dev
+    .with_workspace_settings_read(workspace, TestWorkspaceSettingsRequestId)
+    .with_workspace_settings_read(sibling, sibling_request_id),
     projects: [workspace, sibling],
   })
   let (_, loaded) = update_dev(
@@ -317,11 +425,9 @@ test "a settings reply lands once and an older token cannot roll it back" {
     attached,
   )
   assert_true(loaded.default_worktree_mode(Local, workspace))
-  assert_true(
-    loaded.dev().workspace_request_id(SettingsFile, workspace) is None,
-  )
+  assert_true(loaded.dev().workspace_settings_read_id(workspace) is None)
   assert_eq(
-    loaded.dev().workspace_request_id(SettingsFile, sibling),
+    loaded.dev().workspace_settings_read_id(sibling),
     Some(sibling_request_id),
   )
   // An older reply for the same workspace is stale; one for a sibling
@@ -350,8 +456,8 @@ test "a settings reply lands once and an older token cannot roll it back" {
     stale,
   )
   assert_true(both.default_worktree_mode(Local, sibling))
-  guard both.dev().workspace_settings_row(workspace) is Some(primary) &&
-    both.dev().workspace_settings_row(sibling) is Some(secondary) else {
+  guard both.dev().workspace_settings_values(workspace) is Some(primary) &&
+    both.dev().workspace_settings_values(sibling) is Some(secondary) else {
     fail("expected independent workspace settings rows")
   }
   assert_true(primary.checkout_submodules)
@@ -378,9 +484,7 @@ test "a settings commit broadcast supersedes list replies" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let attached = test_model().with_dev(dev => {
-    ..dev,
-    workspace_requests: dev.workspace_requests.put(
-      SettingsFile,
+    ..dev.with_workspace_settings_read(
       workspace,
       TestWorkspaceSettingsRequestId,
     ),
@@ -397,9 +501,7 @@ test "a settings commit broadcast supersedes list replies" {
     attached,
   )
   assert_true(changed.default_worktree_mode(Local, workspace))
-  assert_true(
-    changed.dev().workspace_request_id(SettingsFile, workspace) is None,
-  )
+  assert_true(changed.dev().workspace_settings_read_id(workspace) is None)
   // A list reply issued before the commit answers on an older token.
   let (_, stale) = update_dev(
     dispatch,
@@ -422,9 +524,7 @@ test "the settings page select applies optimistically" {
   // The state the adopt fan-out leaves behind: this workspace's read is in
   // flight and its reply lands under that UUID.
   let fetched = test_model().with_dev(dev => {
-    ..dev,
-    workspace_requests: dev.workspace_requests.put(
-      SettingsFile,
+    ..dev.with_workspace_settings_read(
       workspace,
       TestWorkspaceSettingsRequestId,
     ),
@@ -449,9 +549,7 @@ test "the settings page select applies optimistically" {
   assert_true(chosen.default_worktree_mode(Local, workspace))
   // The optimistic write retired the previous read, so its reply cannot flip
   // the select back under the user.
-  assert_true(
-    chosen.dev().workspace_request_id(SettingsFile, workspace) is None,
-  )
+  assert_true(chosen.dev().workspace_settings_read_id(workspace) is None)
   let (_, raced) = update_dev(
     dispatch,
     WorkspaceSettingsLoaded(
@@ -477,9 +575,7 @@ test "the workspace submodule select preserves its launch mode" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let attached = test_model().with_dev(dev => {
-    ..dev,
-    workspace_requests: dev.workspace_requests.put(
-      SettingsFile,
+    ..dev.with_workspace_settings_read(
       workspace,
       TestWorkspaceSettingsRequestId,
     ),
@@ -501,7 +597,7 @@ test "the workspace submodule select preserves its launch mode" {
     WorkspaceSubmodulesChosen(Local, workspace, "skip"),
     loaded,
   )
-  guard chosen.dev().workspace_settings_row(workspace) is Some(row) else {
+  guard chosen.dev().workspace_settings_values(workspace) is Some(row) else {
     fail("expected the workspace settings row")
   }
   assert_true(row.worktree_mode)
@@ -512,7 +608,7 @@ test "the workspace submodule select preserves its launch mode" {
     WorkspaceSubmodulesChosen(Local, workspace, "unknown"),
     chosen,
   )
-  guard unknown.dev().workspace_settings_row(workspace) is Some(unchanged) else {
+  guard unknown.dev().workspace_settings_values(workspace) is Some(unchanged) else {
     fail("expected the workspace settings row")
   }
   assert_true(unchanged.worktree_mode)
@@ -524,9 +620,7 @@ test "the workspace submodule timeout select preserves neighboring settings" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let attached = test_model().with_dev(dev => {
-    ..dev,
-    workspace_requests: dev.workspace_requests.put(
-      SettingsFile,
+    ..dev.with_workspace_settings_read(
       workspace,
       TestWorkspaceSettingsRequestId,
     ),
@@ -548,7 +642,7 @@ test "the workspace submodule timeout select preserves neighboring settings" {
     WorkspaceSubmoduleTimeoutChosen(Local, workspace, "30"),
     loaded,
   )
-  guard chosen.dev().workspace_settings_row(workspace) is Some(row) else {
+  guard chosen.dev().workspace_settings_values(workspace) is Some(row) else {
     fail("expected the workspace settings row")
   }
   assert_true(row.worktree_mode)
@@ -559,7 +653,7 @@ test "the workspace submodule timeout select preserves neighboring settings" {
     WorkspaceSubmoduleTimeoutChosen(Local, workspace, "600"),
     chosen,
   )
-  guard unknown.dev().workspace_settings_row(workspace) is Some(unchanged) else {
+  guard unknown.dev().workspace_settings_values(workspace) is Some(unchanged) else {
     fail("expected the workspace settings row")
   }
   assert_eq(unchanged.submodule_checkout_timeout_seconds, 30)
@@ -570,9 +664,7 @@ test "a failed save pops a toast and re-reads under a fresh token" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let attached = test_model().with_dev(dev => {
-    ..dev,
-    workspace_requests: dev.workspace_requests.put(
-      SettingsFile,
+    ..dev.with_workspace_settings_read(
       workspace,
       TestWorkspaceSettingsRequestId,
     ),
@@ -583,9 +675,7 @@ test "a failed save pops a toast and re-reads under a fresh token" {
     WorkspaceDefaultModeChosen(Local, workspace, "worktree"),
     attached,
   )
-  assert_true(
-    chosen.dev().workspace_request_id(SettingsFile, workspace) is None,
-  )
+  assert_true(chosen.dev().workspace_settings_read_id(workspace) is None)
   let (_, failed) = update_dev(
     dispatch,
     WorkspaceSettingsSaveFailed(workspace~, message="disk full"),
@@ -593,10 +683,7 @@ test "a failed save pops a toast and re-reads under a fresh token" {
   )
   inspect(failed.notifications.length(), content="1")
   assert_true(failed.notifications[0].message.contains("disk full"))
-  let refetch_id = failed
-    .dev()
-    .workspace_request_id(SettingsFile, workspace)
-    .unwrap()
+  let refetch_id = failed.dev().workspace_settings_read_id(workspace).unwrap()
   assert_true(refetch_id != TestWorkspaceSettingsRequestId)
   // The refetch it issued may answer on the fresh token and correct the
   // optimistic value.
@@ -619,9 +706,7 @@ test "a reconnect clears the settings mirror until fresh reads land" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let attached = test_model().with_dev(dev => {
-    ..dev,
-    workspace_requests: dev.workspace_requests.put(
-      SettingsFile,
+    ..dev.with_workspace_settings_read(
       workspace,
       TestWorkspaceSettingsRequestId,
     ),
@@ -653,9 +738,7 @@ test "a straggler reply for a detached workspace is rejected" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let attached = test_model().with_dev(dev => {
-    ..dev,
-    workspace_requests: dev.workspace_requests.put(
-      SettingsFile,
+    ..dev.with_workspace_settings_read(
       workspace,
       TestWorkspaceSettingsRequestId,
     ),

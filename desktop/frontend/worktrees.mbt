@@ -21,12 +21,22 @@ priv struct WorktreeRow {
 } derive(Eq)
 
 ///|
-/// One project's worktree rows, keyed by the registry path the host also
-/// uses in `worktree.changed`. Request ownership lives separately on
-/// `DeviceState`, so these canonical rows contain data rather than a fence.
+/// What this connection knows of one project's `worktree.list`, keyed by the
+/// registry path the host also uses in `worktree.changed`.
 priv struct ProjectWorktrees {
   project : @common.Uri
-  rows : Array[WorktreeRow]
+  rows : WorktreeList
+} derive(Eq)
+
+///|
+/// One project's registry rows and the read that will settle them. The read's
+/// UUID lives in the arm waiting for it — `WorktreeListLoading` before any
+/// rows arrive, `refreshing` once a list is on screen — so leaving that arm
+/// is by itself the staleness fence, and nothing else has to be pruned when
+/// this project goes away.
+priv enum WorktreeList {
+  WorktreeListLoading(request_id~ : String)
+  WorktreeListReady(rows~ : Array[WorktreeRow], refreshing~ : String?)
 } derive(Eq)
 
 ///|
@@ -423,15 +433,8 @@ fn DeviceState::worktree_row(
   project : @common.Uri,
   session : String,
 ) -> WorktreeRow? {
-  for group in self.worktrees {
-    guard group.project == project else { continue }
-    for row in group.rows {
-      if row.session is Some(bound) && bound == session {
-        return Some(row)
-      }
-    }
-  }
-  None
+  guard self.worktree_rows(project) is Some(rows) else { return None }
+  rows.iter().find_first(row => row.session == Some(session))
 }
 
 ///|
@@ -445,19 +448,16 @@ fn DeviceState::conversation_workspace(
   session : String,
   current : Workspace,
 ) -> Workspace {
-  for group in self.worktrees {
-    guard group.project == project else { continue }
-    for row in group.rows {
-      if row.session == Some(session) {
-        return Worktree(project~, name=row.name)
-      }
+  guard self.worktree_rows(project) is Some(_) else {
+    return if current is Worktree(project=known, ..) && known == project {
+      current
+    } else {
+      Project(root=project)
     }
-    return Project(root=project)
   }
-  if current is Worktree(project=known, ..) && known == project {
-    current
-  } else {
-    Project(root=project)
+  match self.worktree_row(project, session) {
+    Some(row) => Worktree(project~, name=row.name)
+    None => Project(root=project)
   }
 }
 
@@ -483,7 +483,7 @@ fn Model::conversation_placement(
   match conv.workspace {
     Project(root~) => {
       guard self.device_state(conv.device) is Some(dev) &&
-        dev.worktrees.iter().any(group => group.project == root) else {
+        dev.worktree_rows(root) is Some(_) else {
         return None
       }
       Some(@interop.WorkspaceRoot(root~))
@@ -492,8 +492,8 @@ fn Model::conversation_placement(
       // The durable name is not a directory. Wait for the registry row before
       // exposing a live placement so no file or terminal request can combine
       // that name with the project's main checkout.
-      guard self.device_state(conv.device) is Some(dev) else { return None }
-      guard dev.worktrees.iter().any(group => group.project == project) else {
+      guard self.device_state(conv.device) is Some(dev) &&
+        dev.worktree_rows(project) is Some(_) else {
         return None
       }
       guard dev.worktree_row(project, conv.session_id) is Some(row) else {
@@ -519,14 +519,122 @@ fn Model::conversation_root(self : Model, conv : Conversation) -> @common.Uri? {
 }
 
 ///|
+/// Replace what is known for one project, leaving every sibling untouched.
+fn DeviceState::with_worktree_list(
+  self : DeviceState,
+  project : @common.Uri,
+  rows : WorktreeList,
+) -> DeviceState {
+  let groups = self.worktrees.filter(group => group.project != project)
+  groups.push({ project, rows, })
+  { ..self, worktrees: groups, }
+}
+
+///|
+/// One project group whose rows are read and settled.
+fn known_worktrees(
+  project : @common.Uri,
+  rows : Array[WorktreeRow],
+) -> ProjectWorktrees {
+  { project, rows: WorktreeListReady(rows~, refreshing=None), }
+}
+
+///|
+/// Adopt canonical rows for one project, settling whatever read was out.
 fn DeviceState::with_worktrees(
   self : DeviceState,
   project : @common.Uri,
   rows : Array[WorktreeRow],
 ) -> DeviceState {
-  let groups = self.worktrees.filter(group => group.project != project)
-  groups.push({ project, rows, })
-  { ..self, worktrees: groups, }
+  self.with_worktree_list(project, WorktreeListReady(rows~, refreshing=None))
+}
+
+///|
+fn DeviceState::worktree_list(
+  self : DeviceState,
+  project : @common.Uri,
+) -> WorktreeList? {
+  self.worktrees
+  .iter()
+  .find_first(group => group.project == project)
+  .map(group => group.rows)
+}
+
+///|
+/// The registry rows this connection has read for `project`. `None` while the
+/// first list is still out: callers must park placement rather than treat an
+/// unread workspace as one with no worktrees.
+fn DeviceState::worktree_rows(
+  self : DeviceState,
+  project : @common.Uri,
+) -> Array[WorktreeRow]? {
+  match self.worktree_list(project) {
+    Some(WorktreeListReady(rows~, ..)) => Some(rows)
+    Some(WorktreeListLoading(..)) | None => None
+  }
+}
+
+///|
+/// The list reply `project` is currently waiting for.
+fn DeviceState::worktree_read_id(
+  self : DeviceState,
+  project : @common.Uri,
+) -> String? {
+  match self.worktree_list(project) {
+    Some(WorktreeListLoading(request_id~)) => Some(request_id)
+    Some(WorktreeListReady(refreshing~, ..)) => refreshing
+    None => None
+  }
+}
+
+///|
+/// Mint the UUID for one project's list read and make it the reply that read
+/// waits for. Rows already known stay visible while it runs.
+fn DeviceState::begin_worktree_read(
+  self : DeviceState,
+  project : @common.Uri,
+) -> (String, DeviceState) {
+  let request_id = @uuid.mint()
+  (request_id, self.with_worktree_read(project, request_id))
+}
+
+///|
+/// Make `request_id` the list reply `project` waits for.
+fn DeviceState::with_worktree_read(
+  self : DeviceState,
+  project : @common.Uri,
+  request_id : String,
+) -> DeviceState {
+  self.with_worktree_list(
+    project,
+    match self.worktree_rows(project) {
+      Some(rows) => WorktreeListReady(rows~, refreshing=Some(request_id))
+      None => WorktreeListLoading(request_id~)
+    },
+  )
+}
+
+///|
+/// Stop waiting for one project's list read, so a delayed reply carrying that
+/// UUID fails the exact-id check. With nothing read yet the group itself goes:
+/// "unread" is the absence of a group, never a group naming a dead request.
+fn DeviceState::retire_worktree_read(
+  self : DeviceState,
+  project : @common.Uri,
+) -> DeviceState {
+  match self.worktree_list(project) {
+    Some(WorktreeListReady(rows~, refreshing=Some(_))) =>
+      self.with_worktree_list(
+        project,
+        WorktreeListReady(rows~, refreshing=None),
+      )
+    Some(WorktreeListLoading(..)) =>
+      {
+        ..self,
+        worktrees: self.worktrees.filter(group => group.project != project),
+      }
+    Some(WorktreeListReady(refreshing=None, ..)) | None => self
+  }
 }
 
 ///|
@@ -665,7 +773,7 @@ test "the launch mode toggles only before the conversation begins" {
   // The chip decides only this conversation. The workspace's own default
   // for future chats is a durable setting edited on its settings page, and
   // the chip must not silently rewrite it.
-  assert_true(on.dev().workspace_settings.is_empty())
+  assert_true(on.dev().workspace_settings_values(workspace) is None)
   // Replaying the same event from the same model is pure.
   let (_, replayed) = update(dispatch, ToggleWorktreeMode, model)
   assert_true(replayed.active().worktree_mode)
@@ -819,18 +927,15 @@ test "a worktree the registry says is bound closes the choice" {
       {
         ..test_model().focused_device().unwrap(),
         worktrees: [
-          {
-            project: workspace,
-            rows: [
-              {
-                name: "wt-1",
-                session: Some("desktop-test"),
-                path: None,
-                codex_thread: None,
-                present: true,
-              },
-            ],
-          },
+          known_worktrees(workspace, [
+            {
+              name: "wt-1",
+              session: Some("desktop-test"),
+              path: None,
+              codex_thread: None,
+              present: true,
+            },
+          ]),
         ],
       },
     ],
@@ -892,18 +997,15 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
       ..dev,
       projects: [workspace],
       worktrees: [
-        {
-          project: workspace,
-          rows: [
-            {
-              name: "wt",
-              session: Some("desktop-test"),
-              path: Some(worktree_root),
-              codex_thread: None,
-              present: true,
-            },
-          ],
-        },
+        known_worktrees(workspace, [
+          {
+            name: "wt",
+            session: Some("desktop-test"),
+            path: Some(worktree_root),
+            codex_thread: None,
+            present: true,
+          },
+        ]),
       ],
     })
   assert_true(
@@ -1095,12 +1197,7 @@ test "a restored workspace conversation waits for placement before using root" {
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let unresolved = test_model()
     .with_dev(dev => {
-      ..dev,
-      workspace_requests: dev.workspace_requests.put(
-        WorktreeList,
-        workspace,
-        TestWorktreeRequestId,
-      ),
+      ..dev.with_worktree_read(workspace, TestWorktreeRequestId),
       projects: [workspace],
     })
     .replace_conversation({
@@ -1115,15 +1212,9 @@ test "a restored workspace conversation waits for placement before using root" {
   // Placement is a separate typed fence; preserving the real identity lets
   // open review state survive while every host-backed action remains parked.
   assert_eq(file_ctx(unresolved).owner.session, "desktop-test")
-  let request_id = unresolved
-    .dev()
-    .workspace_request_id(WorktreeList, workspace)
-    .unwrap()
+  let request_id = unresolved.dev().worktree_read_id(workspace).unwrap()
   let (_, retrying) = update(dispatch, RetryWorktreePlacement, unresolved)
-  assert_true(
-    retrying.dev().workspace_request_id(WorktreeList, workspace) !=
-    Some(request_id),
-  )
+  assert_true(retrying.dev().worktree_read_id(workspace) != Some(request_id))
   assert_true(retrying.conversation_placement(retrying.active()) is None)
   let (_, loaded) = update_dev(
     dispatch,
@@ -1148,7 +1239,7 @@ test "a worktree mode submit opens the run like any other" {
       worktree_mode: true,
       task: "go",
     })
-    .with_dev(dev => { ..dev, worktrees: [{ project: workspace, rows: [], }], })
+    .with_dev(dev => { ..dev, worktrees: [known_worktrees(workspace, [])], })
   let (_, sent) = update(dispatch, Send, model)
   assert_true(sent.active().run is Starting(..))
   inspect(sent.active().task, content="")
@@ -1162,12 +1253,7 @@ test "worktrees loaded respects the request UUID fence" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let model = test_model().with_dev(dev => {
-    ..dev,
-    workspace_requests: dev.workspace_requests.put(
-      WorktreeList,
-      workspace,
-      TestWorktreeRequestId,
-    ),
+    ..dev.with_worktree_read(workspace, TestWorktreeRequestId),
     projects: [workspace],
   })
   let (_, applied) = update_dev(
@@ -1182,9 +1268,7 @@ test "worktrees loaded respects the request UUID fence" {
   assert_true(
     worktree_name_for(applied.dev(), workspace, "desktop-wt") is Some("wt"),
   )
-  assert_true(
-    applied.dev().workspace_request_id(WorktreeList, workspace) is None,
-  )
+  assert_true(applied.dev().worktree_read_id(workspace) is None)
   let (_, stale) = update_dev(
     dispatch,
     WorktreesLoaded([], workspace~, request_id=TestWorktreeRequestId),
@@ -1201,12 +1285,7 @@ test "a worktree list failure retires its request and retries explicitly" {
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let unresolved = test_model()
     .with_dev(dev => {
-      ..dev,
-      workspace_requests: dev.workspace_requests.put(
-        WorktreeList,
-        workspace,
-        TestWorktreeRequestId,
-      ),
+      ..dev.with_worktree_read(workspace, TestWorktreeRequestId),
       projects: [workspace],
     })
     .replace_conversation({
@@ -1225,9 +1304,7 @@ test "a worktree list failure retires its request and retries explicitly" {
   assert_true(failed.conversation_placement(failed.active()) is None)
   assert_eq(failed.notifications.length(), 1)
   assert_true(failed.notifications[0].message.contains("offline"))
-  assert_true(
-    failed.dev().workspace_request_id(WorktreeList, workspace) is None,
-  )
+  assert_true(failed.dev().worktree_read_id(workspace) is None)
   let (_, stale_loaded) = update_dev(
     dispatch,
     WorktreesLoaded([], workspace~, request_id=TestWorktreeRequestId),
@@ -1237,10 +1314,7 @@ test "a worktree list failure retires its request and retries explicitly" {
     stale_loaded.conversation_placement(stale_loaded.active()) is None,
   )
   let (_, retrying) = update(dispatch, RetryWorktreePlacement, failed)
-  let retry_request_id = retrying
-    .dev()
-    .workspace_request_id(WorktreeList, workspace)
-    .unwrap()
+  let retry_request_id = retrying.dev().worktree_read_id(workspace).unwrap()
   let (_, loaded) = update_dev(
     dispatch,
     WorktreesLoaded([], workspace~, request_id=retry_request_id),
@@ -1271,10 +1345,9 @@ test "a broadcast for one workspace never fences a sibling's reply" {
   // broadcast lands between them. /b's still-current reply must apply.
   let b_request_id = @uuid.mint()
   let model = test_model().with_dev(dev => {
-    ..dev,
-    workspace_requests: dev.workspace_requests
-    .put(WorktreeList, a, TestWorktreeRequestId)
-    .put(WorktreeList, b, b_request_id),
+    ..dev
+    .with_worktree_read(a, TestWorktreeRequestId)
+    .with_worktree_read(b, b_request_id),
     projects: [a, b],
   })
   let (_, changed) = update_dev(
@@ -1332,14 +1405,10 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
       branch: Some("openseek/wt"),
     })
     .with_dev(dev => {
-      ..dev,
-      workspace_requests: dev.workspace_requests.put(
-        WorktreeList,
-        workspace,
-        TestWorktreeRequestId,
-      ),
+      ..dev
+      .with_worktrees(workspace, test_worktree_rows())
+      .with_worktree_read(workspace, TestWorktreeRequestId),
       projects: [workspace],
-      worktrees: [{ project: workspace, rows: test_worktree_rows(), }],
     })
   // The durable worktree name has no registry row bound to this session, so
   // the conversation has no live checkout yet. Open Quick Open there, giving
@@ -1351,9 +1420,7 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
   let (_, repeated) = update_dev(dispatch, changed_msg, model)
   let (_, changed) = update_dev(dispatch, changed_msg, model)
   assert_true(changed.quick_open.is_open() == repeated.quick_open.is_open())
-  assert_true(
-    changed.dev().workspace_request_id(WorktreeList, workspace) is None,
-  )
+  assert_true(changed.dev().worktree_read_id(workspace) is None)
   assert_true(worktree_name_for(changed.dev(), workspace, "desktop-wt") is None)
   // The removed worktree's conversation is a plain workspace conversation
   // now — exactly what the host's registry prune did to the mapping — and
@@ -1391,19 +1458,13 @@ test "a failed worktree setup is an actionable toast and keeps retry eligible" {
       task: "go",
     })
     .with_dev(dev => {
-      ..dev.with_workspace_settings(workspace, true),
-      workspace_requests: dev.workspace_requests.put(
-        WorktreeList,
-        workspace,
-        TestWorktreeRequestId,
-      ),
+      ..dev
+      .with_workspace_settings(workspace, true)
+      .with_worktrees(workspace, [])
+      .with_worktree_read(workspace, TestWorktreeRequestId),
       projects: [workspace],
-      worktrees: [{ project: workspace, rows: [], }],
     })
-  let worktrees_request_id = model
-    .dev()
-    .workspace_request_id(WorktreeList, workspace)
-    .unwrap()
+  let worktrees_request_id = model.dev().worktree_read_id(workspace).unwrap()
   let (_, sent) = update(dispatch, Send, model)
   guard sent.active().pending_prompt is Some(entry) else {
     fail("expected the submission to be in flight")
@@ -1421,8 +1482,7 @@ test "a failed worktree setup is an actionable toast and keeps retry eligible" {
   assert_eq(repeated.notifications.length(), 1)
   assert_eq(repeated.notifications[0].message, message)
   assert_true(
-    repeated.dev().workspace_request_id(WorktreeList, workspace) !=
-    Some(worktrees_request_id),
+    repeated.dev().worktree_read_id(workspace) != Some(worktrees_request_id),
   )
   // Setup never reached an agent, so the explanation is a toast rather than
   // an agent-style transcript error. The exact prompt returns to the composer.
@@ -1437,8 +1497,7 @@ test "a failed worktree setup is an actionable toast and keeps retry eligible" {
   // failed setup honest, this is how an externally deleted checkout becomes
   // the typed missing state without restarting the app.
   assert_true(
-    rejected.dev().workspace_request_id(WorktreeList, workspace) !=
-    Some(worktrees_request_id),
+    rejected.dev().worktree_read_id(workspace) != Some(worktrees_request_id),
   )
   // And the escape hatch stays open: the toggle still switches the chat back
   // to Local without touching the workspace's own default.
@@ -1457,14 +1516,10 @@ test "a remote removal closes this client's discard dialog" {
       workspace: Worktree(project=workspace, name="wt"),
     })
     .with_dev(dev => {
-      ..dev,
-      workspace_requests: dev.workspace_requests.put(
-        WorktreeList,
-        workspace,
-        TestWorktreeRequestId,
-      ),
+      ..dev
+      .with_worktrees(workspace, test_worktree_rows())
+      .with_worktree_read(workspace, TestWorktreeRequestId),
       projects: [workspace],
-      worktrees: [{ project: workspace, rows: test_worktree_rows(), }],
     })
   let (_, staged) = update_dev(
     dispatch,
@@ -1507,12 +1562,7 @@ test "worktree broadcasts and reconnect snapshots update an open Codex task" {
     },
   })
   let model = { ..test_model(), codex, screen: Codex, }.with_dev(dev => {
-    ..dev,
-    workspace_requests: dev.workspace_requests.put(
-      WorktreeList,
-      workspace,
-      TestWorktreeRequestId,
-    ),
+    ..dev.with_worktree_read(workspace, TestWorktreeRequestId),
     projects: [workspace],
   })
   let rows = [
@@ -1584,14 +1634,10 @@ test "a removed worktree's probes cannot repopulate the composer" {
       workspace: Worktree(project=workspace, name="wt"),
     })
     .with_dev(dev => {
-      ..dev,
-      workspace_requests: dev.workspace_requests.put(
-        WorktreeList,
-        workspace,
-        TestWorktreeRequestId,
-      ),
+      ..dev
+      .with_worktrees(workspace, test_worktree_rows())
+      .with_worktree_read(workspace, TestWorktreeRequestId),
       projects: [workspace],
-      worktrees: [{ project: workspace, rows: test_worktree_rows(), }],
     })
   // A branch probe answers, which is also what starts the pull-request lookup:
   // both are now on record, and the second is still in flight.
