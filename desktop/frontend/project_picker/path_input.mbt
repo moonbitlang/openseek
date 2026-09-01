@@ -41,13 +41,14 @@ fn State::completion(self : State) -> (String, String)? {
   }
   // Only the home forms the host expands (`~`, `~/…`) are its to resolve —
   // any other `~`-led name is an ordinary child of the listed directory —
-  // and a drive-letter spelling such as `C:/Users` is the Windows host's
-  // own absolute form. Splitting either under the listed directory would
-  // browse nonsense and rewrite the draft.
+  // and, where the listing shows Windows semantics, a drive-letter spelling
+  // such as `C:/Users` is the host's own absolute form. On POSIX that same
+  // spelling is an ordinary relative name — `C:` is a legal directory — so
+  // there it keeps completing under the listed directory.
   let host_native = draft.has_prefix("/") ||
     draft == "~" ||
     draft.has_prefix("~/") ||
-    drive_rooted(draft)
+    (self.windows_semantics() && drive_rooted(draft))
   let absolute = if host_native { draft } else { location.base() + draft }
   match absolute.rev_find("/") {
     Some(index) =>
@@ -59,6 +60,20 @@ fn State::completion(self : State) -> (String, String)? {
       )
     // Only a bare `~` has no separator: the host expands it whole.
     None => Some((absolute, ""))
+  }
+}
+
+///|
+/// Whether the listed location displays Windows semantics: the drive list
+/// itself, or a directory whose resource path is drive-rooted. A POSIX
+/// directory literally named like `/C:` can masquerade, so this only picks
+/// where a draft completes from; path identity stays exact.
+fn State::windows_semantics(self : State) -> Bool {
+  match self.location {
+    Some(DriveList) => true
+    Some(Directory(path)) =>
+      path.strip_prefix("/") is Some(rest) && drive_rooted(rest.to_owned())
+    None => false
   }
 }
 
