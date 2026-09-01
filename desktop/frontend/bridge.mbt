@@ -626,12 +626,22 @@ fn runs_payload(frontier : Array[RunSnapshotFrontier]) -> @protocol.RunsPayload 
         })
         Some(submission_id)
       }
-      SnapshotOpen(run_id~) | SnapshotIdle(last_run_id=Some(run_id)) => {
+      SnapshotOpen(run_id~) => {
         known.push({
           session: captured.session,
           run_id: Some(run_id),
           submission_id: None,
         })
+        None
+      }
+      SnapshotIdle(last_run_id=Some(run_id)) => {
+        if !captured.reconciled_run_ids.contains(run_id) {
+          known.push({
+            session: captured.session,
+            run_id: Some(run_id),
+            submission_id: None,
+          })
+        }
         None
       }
       SnapshotIdle(last_run_id=None) => None
@@ -645,8 +655,114 @@ fn runs_payload(frontier : Array[RunSnapshotFrontier]) -> @protocol.RunsPayload 
         })
       }
     }
+    for run_id in captured.unreconciled_run_ids {
+      if !known
+        .iter()
+        .any(item => {
+          item.session == captured.session && item.run_id == Some(run_id)
+        }) {
+        known.push({
+          session: captured.session,
+          run_id: Some(run_id),
+          submission_id: None,
+        })
+      }
+    }
+    for run_id in captured.unresolved_accepted_run_ids {
+      if !known
+        .iter()
+        .any(item => {
+          item.session == captured.session && item.run_id == Some(run_id)
+        }) {
+        known.push({
+          session: captured.session,
+          run_id: Some(run_id),
+          submission_id: None,
+        })
+      }
+    }
   }
   { known: Some(known), }
+}
+
+///|
+test "runs payload carries an unreconciled predecessor beside its successor" {
+  let payload = runs_payload([
+    {
+      session: "desktop-test",
+      workspace: @interop.ChannelId::Local.test_project(),
+      record: LiveRecord,
+      state: SnapshotOpen(run_id="r8"),
+      unresolved_accepted_run_ids: [],
+      unreconciled_run_ids: ["r7"],
+      reconciled_run_ids: [],
+      initial_ids: [],
+      pending_approval_id: None,
+    },
+  ])
+  guard payload.known is Some(known) else { fail("missing known selectors") }
+  inspect(known.length(), content="2")
+  assert_true(
+    known
+    .iter()
+    .any(item => item.session == "desktop-test" && item.run_id == Some("r7")),
+  )
+  assert_true(
+    known
+    .iter()
+    .any(item => item.session == "desktop-test" && item.run_id == Some("r8")),
+  )
+}
+
+///|
+test "runs payload carries an accepted run awaiting lifecycle order" {
+  let payload = runs_payload([
+    {
+      session: "desktop-test",
+      workspace: @interop.ChannelId::Local.test_project(),
+      record: LiveRecord,
+      state: SnapshotOpen(run_id="r-visible"),
+      unresolved_accepted_run_ids: ["r-accepted"],
+      unreconciled_run_ids: [],
+      reconciled_run_ids: [],
+      initial_ids: [],
+      pending_approval_id: None,
+    },
+  ])
+  guard payload.known is Some(known) else { fail("missing known selectors") }
+  assert_true(
+    known
+    .iter()
+    .any(item => {
+      item.session == "desktop-test" && item.run_id == Some("r-visible")
+    }),
+  )
+  assert_true(
+    known
+    .iter()
+    .any(item => {
+      item.session == "desktop-test" && item.run_id == Some("r-accepted")
+    }),
+  )
+}
+
+///|
+test "runs payload omits an already reconciled idle lifecycle" {
+  let payload = runs_payload([
+    {
+      session: "desktop-test",
+      workspace: @interop.ChannelId::Local.test_project(),
+      record: LiveRecord,
+      state: SnapshotIdle(last_run_id=Some("r7")),
+      unresolved_accepted_run_ids: [],
+      unreconciled_run_ids: [],
+      reconciled_run_ids: ["r7"],
+      initial_ids: [],
+      pending_approval_id: None,
+    },
+  ])
+  guard payload.known is Some(known) else { fail("missing known selectors") }
+  inspect(known.length(), content="0")
 }
 
 ///|
@@ -1395,15 +1511,49 @@ async fn request_agent_goal(
 }
 
 ///|
-/// Ask the host to cancel `run_id`. A matching reply leaves the run in
-/// Cancelling until its `agent.finished`. An empty reply means the turn had
-/// already ended; report that boundary explicitly because the Finished push
-/// may be the very notification this page missed. Failures are likewise tied
-/// to the exact run so the optimistic Cancelling phase can be made retryable.
+/// Reduce a successful cancel reply before it enters the state machine. A
+/// matching run remains Cancelling until Finished; absence and identity skew
+/// are explicit results tied to the exact page-local attempt.
+fn cancel_reply_msg(
+  run_id : String,
+  attempt_id : String,
+  cancelled : String?,
+) -> DeviceMsg? {
+  match cancelled {
+    None => Some(CancelNotOpen(run_id~, attempt_id~))
+    Some(cancelled) if cancelled != run_id =>
+      Some(
+        CancelUndelivered(
+          run_id~,
+          attempt_id~,
+          message="Host cancelled unexpected run \{cancelled}",
+        ),
+      )
+    Some(_) => None
+  }
+}
+
+///|
+test "a mismatched successful cancel reply remains ambiguous" {
+  assert_true(
+    cancel_reply_msg("r1", "cancel-1", Some("r2"))
+    is Some(CancelUndelivered(run_id="r1", attempt_id="cancel-1", message=_)),
+  )
+  assert_true(cancel_reply_msg("r1", "cancel-1", Some("r1")) is None)
+}
+
+///|
+/// Ask the host to cancel `run_id`. Every result carries the page-local attempt
+/// id, so a delayed older request cannot mutate a later control attempt. A
+/// matching reply leaves the run in Cancelling until its `agent.finished`; the
+/// canonical empty reply proves the run was already absent. Only a refusal or
+/// unsent request is retryable. Once delivery is unknown, the cancel may be in
+/// the engine queue and the run must remain non-steerable until it terminates.
 fn cancel_openseek(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   run_id : String,
+  attempt_id : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
@@ -1413,23 +1563,18 @@ fn cancel_openseek(
         { run_id: Some(run_id), },
       ) catch {
         error => {
-          scheduler.add(
-            dispatch(
-              FromDevice(
-                channel,
-                CancelFailed(
-                  run_id~,
-                  message="Failed to cancel the run: " +
-                    @interop.bridge_error_text(error),
-                ),
-              ),
-            ),
-          )
+          let message = "Failed to cancel the run: " +
+            @interop.bridge_error_text(error)
+          let result = match @interop.bridge_failure(error) {
+            Refused | Unsent => CancelRejected(run_id~, attempt_id~, message~)
+            Unknown => CancelUndelivered(run_id~, attempt_id~, message~)
+          }
+          scheduler.add(dispatch(FromDevice(channel, result)))
           return
         }
       }
-      if reply.run_id is None {
-        scheduler.add(dispatch(FromDevice(channel, CancelNotOpen(run_id~))))
+      if cancel_reply_msg(run_id, attempt_id, reply.run_id) is Some(result) {
+        scheduler.add(dispatch(FromDevice(channel, result)))
       }
     })
   })

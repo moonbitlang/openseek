@@ -54,16 +54,39 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request(
     }
     Remote(_) => ws_request(channel, op, payload)
   }
-  let json = if reply.is_undefined() || reply.is_null() {
-    Json::empty_object()
-  } else {
-    reply.to_json() catch {
-      _ => raise BridgeError("Malformed reply from \{op}")
-    }
-  }
+  let json = bridge_reply_json(reply, op)
   @json.from_json(json) catch {
     _ => raise BridgeError("Malformed reply from \{op}")
   }
+}
+
+///|
+/// Preserve the transport's actual reply shape for the typed decoder. `null`
+/// is data, not `{}`, and `undefined` is no JSON-RPC result at all; folding
+/// either into an empty object can turn a malformed cancellation response into
+/// authoritative proof that no run was open.
+fn bridge_reply_json(reply : @js.Value, op : String) -> Json raise BridgeError {
+  if reply.is_undefined() {
+    raise BridgeError("Malformed reply from \{op}")
+  }
+  reply.to_json() catch {
+    _ => raise BridgeError("Malformed reply from \{op}")
+  }
+}
+
+///|
+test "bridge reply adaptation never fabricates an empty object" {
+  let null_reply = @js.Value::from_json(Json::null())
+  assert_eq(bridge_reply_json(null_reply, "agent.cancel"), Json::null())
+  let empty = @js.Object::new().to_value()
+  let missing_value : @js.Value = empty.get_with_string("missing")
+  let rejected = try {
+    ignore(bridge_reply_json(missing_value, "agent.cancel"))
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(rejected)
 }
 
 ///|
@@ -190,13 +213,7 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(
       }
       Remote(_) => ws_request(channel, op, payload)
     }
-    let json = if reply.is_undefined() || reply.is_null() {
-      Json::empty_object()
-    } else {
-      reply.to_json() catch {
-        _ => raise BridgeError("Malformed reply from \{op}")
-      }
-    }
+    let json = bridge_reply_json(reply, op)
     @json.from_json(json) catch {
       _ => raise BridgeError("Malformed reply from \{op}")
     }

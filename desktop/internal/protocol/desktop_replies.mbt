@@ -82,18 +82,24 @@ pub impl ToJson for CancelReply with fn to_json(self) {
 }
 
 ///|
-/// Every shape that is not a run id reads as "no run was cancelled" —
-/// missing, `null`, and a non-string alike. There is nothing to be strict
-/// about: the field is optional by design, and a reply this host cannot spell
-/// is not worth failing a Stop over.
+/// Only the canonical empty object means "nothing was open". A malformed
+/// `run_id` or a legacy nonempty shape is delivery-ambiguous: the host may
+/// already have queued the cancel before a schema-skewed reply reached this
+/// client, so it must fail decoding rather than fabricate authoritative idle
+/// evidence.
 pub impl FromJson for CancelReply with fn from_json(json, path) {
   guard json is Object(fields) else {
     raise JsonDecodeError((path, "expected a cancel reply"))
   }
   {
     run_id: match fields.get("run_id") {
-      Some(String(run_id)) => Some(run_id)
-      _ => None
+      Some(String(run_id)) if !run_id.is_blank() => Some(run_id)
+      Some(_) =>
+        raise JsonDecodeError(
+          (path.add_key("run_id"), "expected a non-blank run id"),
+        )
+      None if fields.is_empty() => None
+      None => raise JsonDecodeError((path, "ambiguous legacy cancel reply"))
     },
   }
 }

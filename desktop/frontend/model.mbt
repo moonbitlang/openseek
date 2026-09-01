@@ -547,7 +547,7 @@ priv enum TurnStage {
   // not number their steps).
   AtStep(Int?)
   // A Stop was sent and the engine has not yet honored it.
-  Cancelling
+  Cancelling(attempt_id~ : String)
 } derive(Eq)
 
 ///|
@@ -608,7 +608,26 @@ priv enum RunSnapshotState {
 ///|
 priv struct RunSnapshotFrontier {
   session : String
+  // Session ids are store-local. A reply captured for another workspace or
+  // for the live/archived twin must never reduce the conversation that now
+  // occupies this page's `(device, session)` slot.
+  workspace : @common.Uri
+  record : ConversationRecord
   state : RunSnapshotState
+  // Accepted start replies whose relative order against the currently shown
+  // run is not yet known. They are neither current nor terminal: a complete
+  // host snapshot decides whether each one is the live successor or a
+  // completed predecessor.
+  unresolved_accepted_run_ids : Array[String]
+  // Runs already retired from lifecycle ownership but still waiting for
+  // their authoritative Finished boundary. A successor may own `state` by
+  // the time this request returns; these exact ids remain independent replay
+  // selectors so predecessor terminal side effects are not lost.
+  unreconciled_run_ids : Array[String]
+  // Runs whose terminal side effects this page has already reduced. They stay
+  // in the lifecycle snapshot for stale-reply fencing, but must never be sent
+  // back to the host as completion selectors or admitted from a replay.
+  reconciled_run_ids : Array[String]
   // Initial prompts whose start transport failed before a run id came back.
   // Their submission id is still an exact owner and must survive the
   // lifecycle's transition to SnapshotIdle for reconnect settlement lookup.
@@ -627,6 +646,8 @@ priv struct RunSnapshotFrontier {
 /// began.
 priv enum SettlementFrontierMatch {
   SettlementByRun
+  SettlementByRetiredRun
+  SettlementByAcceptedRun
   SettlementBySubmission(String)
 }
 
@@ -785,6 +806,25 @@ priv struct Conversation {
   // engine events arrive stamped with this id once the run phase is already
   // back to `NoRun`; routing them needs the retained id.
   last_run_id : String?
+  // Run ids for which this page has reduced authoritative terminal evidence.
+  // Notifications and RPC replies reach the reducer through different queues,
+  // so a predecessor's delayed Started must stay fenced after a successor has
+  // replaced `last_run_id`. Host-random run ids are never reused.
+  retired_run_ids : Array[String]
+  // Retired runs whose Finished boundary has also driven the page's terminal
+  // side effects. Retirement alone may come from CancelNotOpen/RunsSettled;
+  // keeping the two facts separate lets a delayed Finished reconcile the
+  // transcript exactly once without reclaiming lifecycle ownership.
+  reconciled_run_ids : Array[String]
+  // A start RPC can prove that a run exists while an independently queued
+  // Started notification has installed a different run locally. Until an
+  // `agent.runs` cut orders those facts, neither id may be discarded or
+  // allowed to reclaim lifecycle ownership from the other.
+  unresolved_accepted_run_ids : Array[String]
+  // An undelivered Stop remains non-retryable until a complete host snapshot
+  // proves that this exact run is still live. The attempt id fences a stale
+  // snapshot from unlocking a newer cancel attempt.
+  cancel_retry_probe : CancelRetryProbe?
   // Where this conversation's compaction stands; see `CompactionPhase`.
   compaction : CompactionPhase
   // A run finished while this conversation was off screen and the user has
@@ -1030,6 +1070,12 @@ priv struct PendingPrompt {
 } derive(Eq)
 
 ///|
+priv struct CancelRetryProbe {
+  run_id : String
+  attempt_id : String
+} derive(Eq)
+
+///|
 /// Whether the conversation's durable transcript is up to date with the
 /// store, a generation-tagged re-read is in flight, or a bounded retry round
 /// has stopped. Commits stay buffered across every failure. A later commit,
@@ -1206,6 +1252,12 @@ priv struct DeviceState {
   // Cleared only at BridgeReady, immediately before fresh live and archived
   // lists are requested for the new connection.
   archive_overrides : Array[ArchiveOverride]
+  // Run ids whose conversation was removed by archive/delete after the id had
+  // already reached a terminal fence. Notification and RPC queues are ordered
+  // independently, so a delayed Started can outlive the conversation that used
+  // to carry the fence. Host run ids are random and process-unique; retaining
+  // them for this device generation cannot alias another store's session id.
+  retired_run_fences : Array[String]
   // Registered project directories: the host registry's absolute paths in
   // registration order. The sidebar shows one section per entry.
   projects : Array[@common.Uri]
@@ -1243,6 +1295,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     sessions: [],
     archived: [],
     archive_overrides: [],
+    retired_run_fences: [],
     projects: [],
     worktrees: [],
     workspace_settings: [],
@@ -2039,11 +2092,15 @@ priv enum DeviceMsg {
   // The addressed run was already absent when Stop reached the host. This is
   // success for the user's intent, but no future Finished notification can
   // retire a stale local Cancelling phase, so the reply itself must do it.
-  CancelNotOpen(run_id~ : String)
-  // A cancellation that could not be delivered must put the exact run back
-  // into a stoppable phase. A lifecycle resync follows in case the response
-  // failed after the run independently ended.
-  CancelFailed(run_id~ : String, message~ : String)
+  CancelNotOpen(run_id~ : String, attempt_id~ : String)
+  // A cancellation definitively refused before delivery may put this exact
+  // attempt back into a stoppable phase. A lifecycle resync follows in case
+  // the run independently ended.
+  CancelRejected(run_id~ : String, attempt_id~ : String, message~ : String)
+  // Delivery became ambiguous after the request may have reached the host.
+  // Keep this exact attempt non-steerable until terminal lifecycle evidence;
+  // resending or treating a live snapshot as proof of non-delivery is unsafe.
+  CancelUndelivered(run_id~ : String, attempt_id~ : String, message~ : String)
   SessionsLoaded(
     Array[@transcript.SessionListItem],
     connection_generation~ : Int,
@@ -2374,6 +2431,10 @@ fn empty_conversation(
     composer_draft_present: false,
     run: NoRun(ended=None),
     last_run_id: None,
+    retired_run_ids: [],
+    reconciled_run_ids: [],
+    unresolved_accepted_run_ids: [],
+    cancel_retry_probe: None,
     compaction: NotCompacting,
     unseen_finish: false,
     run_started_ms: None,
@@ -2842,7 +2903,7 @@ fn Model::display_status(self : Model) -> Status {
         Some(Starting(..)) => Starting
         Some(Open(stage=Opened, ..)) => Running
         Some(Open(stage=AtStep(step), ..)) => Step(step)
-        Some(Open(stage=Cancelling, ..)) => Cancelling
+        Some(Open(stage=Cancelling(..), ..)) => Cancelling
       }
   }
 }
@@ -2883,11 +2944,28 @@ fn Model::run_snapshot_frontier(
     }
     {
       session: conv.session_id,
+      workspace: conv.project(),
+      record: conv.record,
       state,
+      unresolved_accepted_run_ids: conv.unresolved_accepted_run_ids.copy(),
+      unreconciled_run_ids: conv.retired_run_ids.filter(run_id => {
+        !conv.reconciled_run_ids.contains(run_id)
+      }),
+      reconciled_run_ids: conv.reconciled_run_ids.copy(),
       initial_ids,
       pending_approval_id: conv.pending_approval.map(pending => pending.id),
     }
   })
+}
+
+///|
+fn RunSnapshotFrontier::owns(
+  self : RunSnapshotFrontier,
+  conv : Conversation,
+) -> Bool {
+  self.session == conv.session_id &&
+  self.workspace == conv.project() &&
+  self.record == conv.record
 }
 
 ///|
@@ -2905,6 +2983,7 @@ fn Model::matches_run_snapshot_frontier(
       guard self.find_conversation(channel, session) is Some(conv) else {
         return false
       }
+      guard captured.owns(conv) else { return false }
       return match captured.state {
         SnapshotIdle(last_run_id~) =>
           conv.run is NoRun(..) && conv.last_run_id == last_run_id
@@ -2920,10 +2999,47 @@ fn Model::matches_run_snapshot_frontier(
 }
 
 ///|
+fn Model::matches_unresolved_accepted_frontier(
+  self : Model,
+  channel : @interop.ChannelId,
+  frontier : Array[RunSnapshotFrontier],
+  session : String,
+  run_id : String,
+) -> Bool {
+  guard self.find_conversation(channel, session) is Some(conv) else {
+    return false
+  }
+  for captured in frontier {
+    if captured.session == session {
+      guard captured.owns(conv) &&
+        captured.unresolved_accepted_run_ids.contains(run_id) &&
+        conv.unresolved_accepted_run_ids.contains(run_id) else {
+        return false
+      }
+      // A terminal event for the captured predecessor may legitimately make
+      // the page idle before the snapshot returns. A different Starting/Open
+      // owner is newer lifecycle truth and must still fence this older cut.
+      return match captured.state {
+        SnapshotIdle(last_run_id~) =>
+          conv.run is NoRun(..) && conv.last_run_id == last_run_id
+        SnapshotStarting(submission_id~) =>
+          conv.run is Starting(submission_id=current) &&
+          current == submission_id
+        SnapshotOpen(run_id=captured_run) =>
+          (conv.run is Open(run_id=current, ..) && current == captured_run) ||
+          (conv.run is NoRun(..) && conv.last_run_id == Some(captured_run))
+      }
+    }
+  }
+  false
+}
+
+///|
 /// Match a replayed completion to the exact lifecycle owner captured when
 /// `agent.runs` began. Starting has no run id yet, so it uses the client's
-/// submission id; Open/Idle use the host run id. The session is required in
-/// every case, and current state must still equal the captured cut.
+/// submission id; Open/Idle use the host run id. A retired-but-unreconciled
+/// predecessor remains independently admissible after a successor changes
+/// current state. Every path still requires the exact captured session/owner.
 fn Model::matched_settlement_frontier(
   self : Model,
   channel : @interop.ChannelId,
@@ -2933,9 +3049,16 @@ fn Model::matched_settlement_frontier(
   guard self.find_conversation(channel, settlement.session) is Some(conv) else {
     return None
   }
+  // A replay can be selected by an older client frontier even after a live
+  // Finished has already driven this page's one-time terminal work. Reject it
+  // before current/last-run matching so reconnect cannot re-badge or re-probe.
+  if conv.reconciled_run_ids.contains(settlement.run_id) {
+    return None
+  }
   for captured in frontier {
     if captured.session == settlement.session {
-      return match captured.state {
+      guard captured.owns(conv) else { return None }
+      let lifecycle_owner = match captured.state {
         SnapshotStarting(submission_id~) if conv.run
           is Starting(submission_id=current) &&
           current == submission_id &&
@@ -2959,6 +3082,19 @@ fn Model::matched_settlement_frontier(
             None
           }
       }
+      if lifecycle_owner is Some(_) {
+        return lifecycle_owner
+      }
+      if captured.unreconciled_run_ids.contains(settlement.run_id) &&
+        conv.retired_run_ids.contains(settlement.run_id) &&
+        !conv.reconciled_run_ids.contains(settlement.run_id) {
+        return Some(SettlementByRetiredRun)
+      }
+      if captured.unresolved_accepted_run_ids.contains(settlement.run_id) &&
+        conv.unresolved_accepted_run_ids.contains(settlement.run_id) {
+        return Some(SettlementByAcceptedRun)
+      }
+      return None
     }
   }
   None
@@ -3070,9 +3206,23 @@ fn Model::with_archive_override(
   // expires stale composer actions for this owner.
   let newly_retired = !(disposition is ArchiveLive) &&
     dev.archive_override(key) is (None | Some(ArchiveLive))
+  let retired_run_fences = dev.retired_run_fences.copy()
+  if newly_retired &&
+    self.find_conversation(channel, key.session) is Some(conv) &&
+    conv.project() == key.workspace {
+    for run_id in conv.retired_run_ids {
+      if !retired_run_fences.contains(run_id) {
+        retired_run_fences.push(run_id)
+      }
+    }
+  }
   let overrides = dev.archive_overrides.filter(item => item.key != key)
   overrides.push({ key, disposition, })
-  let model = self.replace_device({ ..dev, archive_overrides: overrides, })
+  let model = self.replace_device({
+    ..dev,
+    archive_overrides: overrides,
+    retired_run_fences,
+  })
   if !newly_retired {
     return model
   }
@@ -3227,12 +3377,34 @@ fn Model::composing_new_chat(self : Model) -> Bool {
 ///|
 /// Replace (or add) the entry sharing `conv`'s session id, copy-on-write —
 /// prior model snapshots keep their own conversations array.
+///
+/// Session ids are store-local, while this UI deliberately keeps only one
+/// `(device, session)` owner. Replacing that owner across a live/archived or
+/// workspace boundary must therefore spill any terminal run identities the
+/// incoming owner does not carry into the device fence. Otherwise a delayed
+/// Started from the displaced store can be mistaken for the new store's run.
 fn Model::replace_conversation(self : Model, conv : Conversation) -> Model {
   let conversations = self.conversations.copy()
   for index, existing in conversations {
     if existing.device == conv.device && existing.session_id == conv.session_id {
       conversations[index] = conv
-      return { ..self, conversations, }
+      let replaced = { ..self, conversations, }
+      guard replaced.device_state(conv.device) is Some(dev) else {
+        return replaced
+      }
+      let retired_run_fences = dev.retired_run_fences.copy()
+      let mut changed = false
+      for run_id in existing.retired_run_ids {
+        if !conv.retired_run_ids.contains(run_id) &&
+          !retired_run_fences.contains(run_id) {
+          retired_run_fences.push(run_id)
+          changed = true
+        }
+      }
+      if changed {
+        return replaced.replace_device({ ..dev, retired_run_fences, })
+      }
+      return replaced
     }
   }
   conversations.push(conv)
@@ -3266,6 +3438,37 @@ fn Model::conversation_by_last_run(
 ) -> Conversation? {
   for conv in self.conversations.filter(conv => conv.device == channel) {
     if conv.last_run_id is Some(last) && last == run_id {
+      return Some(conv)
+    }
+  }
+  None
+}
+
+///|
+/// A conversation that has already retired `run_id`. Its current/last run may
+/// now be a successor, but a delayed Finished still belongs here for terminal
+/// transcript and file reconciliation.
+fn Model::conversation_by_retired_run(
+  self : Model,
+  channel : @interop.ChannelId,
+  run_id : String,
+) -> Conversation? {
+  for conv in self.conversations.filter(conv => conv.device == channel) {
+    if conv.retired_run_ids.contains(run_id) {
+      return Some(conv)
+    }
+  }
+  None
+}
+
+///|
+fn Model::conversation_by_unresolved_accepted_run(
+  self : Model,
+  channel : @interop.ChannelId,
+  run_id : String,
+) -> Conversation? {
+  for conv in self.conversations.filter(conv => conv.device == channel) {
+    if conv.unresolved_accepted_run_ids.contains(run_id) {
       return Some(conv)
     }
   }
@@ -3318,7 +3521,7 @@ fn Model::activate(
       found = true
       // Opening the conversation is what "seen" means.
       conversations.push({ ..conv, unseen_finish: false, })
-    } else if conv.worth_keeping() {
+    } else if conv.retain_in_memory() {
       conversations.push(conv)
     }
   }
@@ -3342,8 +3545,7 @@ fn Model::activate(
 ///|
 /// Whether the composer draft holds nothing at all — no typed text, no
 /// mention chips, and no goal being written or awaiting its marker. This is
-/// the retention test (`Model::activate` keeps a conversation whose draft
-/// still holds anything), not the send gate: that is `draft_sendable`.
+/// the visible in-memory row test, not the send gate: that is `draft_sendable`.
 ///
 /// The goal halves count because `/goal` moves the user's text out of `task`:
 /// without them a fresh conversation looks abandoned while holding the only
@@ -3351,11 +3553,20 @@ fn Model::activate(
 /// Whether this conversation is worth keeping once focus moves elsewhere:
 /// it has begun, or it still holds writing that was never sent.
 ///
-/// Retention and the sidebar row ask this same question, and have to. Keeping
-/// one the list cannot reach does not save the draft, it strands it — the
-/// conversation lives on in memory with no way back to it.
 fn Conversation::worth_keeping(self : Conversation) -> Bool {
   self.has_begun() || !self.draft_empty()
+}
+
+///|
+/// Keep an otherwise-empty lifecycle tombstone off the sidebar but alive for
+/// delayed Started/Finished notifications. Once a run id has been retired it
+/// cannot safely be forgotten during this page generation: host-random ids
+/// are not reused, while transport and reducer queues are independently
+/// ordered.
+fn Conversation::retain_in_memory(self : Conversation) -> Bool {
+  self.worth_keeping() ||
+  !self.retired_run_ids.is_empty() ||
+  !self.unresolved_accepted_run_ids.is_empty()
 }
 
 ///|
@@ -3469,7 +3680,7 @@ fn Conversation::run_heartbeat(self : Conversation) -> @composer.RunHeartbeat? {
     Open(stage=Opened, ..) => Thinking
     Open(stage=AtStep(Some(step)), ..) => AtStep(step)
     Open(stage=AtStep(None), ..) => Working
-    Open(stage=Cancelling, ..) => Stopping
+    Open(stage=Cancelling(..), ..) => Stopping
   }
   Some({
     stage,
@@ -3567,6 +3778,72 @@ fn Conversation::has_initial_submission(
   submission_id : String,
 ) -> Bool {
   self.pending_prompt is Some(pending) && pending.submission_id == submission_id
+}
+
+///|
+fn Conversation::retire_run(
+  self : Conversation,
+  run_id : String,
+) -> Conversation {
+  if self.retired_run_ids.contains(run_id) {
+    return self
+  }
+  let retired_run_ids = self.retired_run_ids.copy()
+  retired_run_ids.push(run_id)
+  { ..self, retired_run_ids, }
+}
+
+///|
+fn Conversation::hold_accepted_run(
+  self : Conversation,
+  run_id : String,
+) -> Conversation {
+  if self.unresolved_accepted_run_ids.contains(run_id) {
+    return self
+  }
+  let unresolved_accepted_run_ids = self.unresolved_accepted_run_ids.copy()
+  unresolved_accepted_run_ids.push(run_id)
+  { ..self, unresolved_accepted_run_ids, }
+}
+
+///|
+fn Conversation::resolve_accepted_run(
+  self : Conversation,
+  run_id : String,
+) -> Conversation {
+  if !self.unresolved_accepted_run_ids.contains(run_id) {
+    return self
+  }
+  {
+    ..self,
+    unresolved_accepted_run_ids: self.unresolved_accepted_run_ids.filter(candidate => {
+      candidate != run_id
+    }),
+  }
+}
+
+///|
+fn Conversation::has_unreconciled_run_authority(self : Conversation) -> Bool {
+  if self.run is (Starting(..) | Open(..)) ||
+    !self.unresolved_accepted_run_ids.is_empty() {
+    return true
+  }
+  self.retired_run_ids
+  .iter()
+  .any(run_id => !self.reconciled_run_ids.contains(run_id))
+}
+
+///|
+fn Conversation::record_reconciled_run(
+  self : Conversation,
+  run_id : String,
+) -> Conversation {
+  if self.reconciled_run_ids.contains(run_id) {
+    return self
+  }
+  let reconciled_run_ids = self.reconciled_run_ids.copy()
+  reconciled_run_ids.push(run_id)
+  { ..self, reconciled_run_ids, }
 }
 
 ///|

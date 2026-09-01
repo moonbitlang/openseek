@@ -236,8 +236,8 @@ fn handle_message(
   // raced a reconnect) has no one waiting.
   guard session.pending.get(id) is Some(deferred) else { return }
   session.pending.remove(id)
-  match js_prop(envelope, "error") {
-    Some(error_value) => {
+  match response_result(envelope) {
+    ResponseError(error_value) => {
       let message = match (error_value.to_json() catch { _ => Json::null() }) {
         { "message": String(message), .. } => message
         _ => "request failed"
@@ -247,16 +247,49 @@ fn handle_message(
       // when the host definitively answered this exact request.
       settle(deferred, "reject", js_error(message, rpc_rejection=true))
     }
-    None => {
-      let result = match js_prop(envelope, "result") {
-        Some(result) => result
-        // A result-less success settles as an empty object, which the typed
-        // response adapter decodes for acknowledgement-only methods.
-        None => @js.Object::new().to_value()
-      }
-      settle(deferred, "resolve", result)
-    }
+    ResponseValue(result) => settle(deferred, "resolve", result)
+    MalformedResponse(message) =>
+      // JSON-RPC requires exactly one of result/error. The request did leave,
+      // so a result-less reply or a contradictory result+error pair is
+      // delivery-ambiguous, never an authoritative host refusal.
+      settle(deferred, "reject", js_error(message, rpc_rejection=false))
   }
+}
+
+///|
+priv enum ResponseResult {
+  ResponseValue(@js.Value)
+  ResponseError(@js.Value)
+  MalformedResponse(String)
+}
+
+///|
+fn response_result(envelope : @js.Value) -> ResponseResult {
+  let result : @js.Value = envelope.get_with_string("result")
+  let error : @js.Value = envelope.get_with_string("error")
+  let has_result = !result.is_undefined()
+  let has_error = !error.is_undefined()
+  match (has_result, has_error) {
+    // Unlike the shared `js_prop`, preserve JSON `null`: it is an explicit
+    // result value, while JS `undefined` means the field was absent.
+    (true, false) => ResponseValue(result)
+    (false, true) if !error.is_null() => ResponseError(error)
+    (true, true) =>
+      MalformedResponse("malformed response: both result and error")
+    _ => MalformedResponse("malformed response: missing result")
+  }
+}
+
+///|
+test "a result-less success is malformed while an explicit null stays data" {
+  let envelope = @js.Object::new().to_value()
+  assert_true(response_result(envelope) is MalformedResponse(_))
+  envelope.set_with_string("result", @js.Value::from_json(Json::null()))
+  assert_true(
+    response_result(envelope) is ResponseValue(value) && value.is_null(),
+  )
+  envelope.set_with_string("error", @js.Object::new().to_value())
+  assert_true(response_result(envelope) is MalformedResponse(_))
 }
 
 ///|
