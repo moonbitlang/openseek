@@ -17,13 +17,11 @@ pub fn endpoints(HostState, HostConnection, @engine.EngineManager, () -> Unit) -
 
 pub async fn ensure_codex_config(@pathx.Path?) -> String
 
-pub async fn frontend_entry_path(String) -> String
+pub async fn frontend_entry_path() -> String
 
 pub fn new_host_state(String, runtime_dir? : @pathx.Path, executable? : String, app_version? : String) -> HostState
 
 pub async fn open_codex_config(@pathx.Path?) -> Unit
-
-pub async fn package_version(String) -> String
 
 pub async fn prepared_runtime_dir(String) -> @pathx.Path?
 
@@ -51,7 +49,7 @@ pub async fn HostState::viz_assets(Self) -> VizAssets
 
 type PackagedTools
 pub fn PackagedTools::apply_to_process_env(Self) -> Unit
-pub async fn PackagedTools::resolve(String) -> Self?
+pub async fn PackagedTools::resolve() -> Self?
 
 pub struct VizAssets {
   shell : String

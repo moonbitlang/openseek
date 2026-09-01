@@ -10,9 +10,9 @@ async fn main {
   // The async event loop on the process main thread drives Proton's native
   // loop directly (the external event loop is the only runner), so UI work
   // and shutdown ordering stay on the thread that owns AppKit and CEF.
-  // Proton runs everything in one process. Packaged builds resolve copied
-  // assets and the engine beside the executable; an unbundled Moon host
-  // derives the frontend, engine, and state paths from its `_build` layout.
+  // Proton runs everything in one process and supplies the same resource
+  // directory abstraction on every packaged platform. The development
+  // launcher exposes `desktop/` through the same abstraction.
   let executable = match @env.args() {
     [command, ..] => command
     [] => abort("current executable command is unavailable")
@@ -31,12 +31,13 @@ async fn main {
   // The user's login shell supplies the base environment, then installed
   // tools take precedence. Both the OpenSeek engine and Codex app-server are
   // created below and therefore pass this packaged `rg` to agent tool calls.
-  if @host.PackagedTools::resolve(executable) is Some(tools) {
+  if @host.PackagedTools::resolve() is Some(tools) {
     tools.apply_to_process_env()
   }
-  let frontend_entry = @host.frontend_entry_path(executable)
-  let engine = @engine.engine_command(executable)
-  let app_version = @host.package_version(executable)
+  let frontend_entry = @host.frontend_entry_path()
+  let engine = @engine.engine_command()
+  let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760)
+  let app_version = app.version() catch { _ => "development" }
   @xlog.info() <? { "message": "host process start" }
   @xlog.info() <? { "message": "frontend entry", "path": frontend_entry }
   @xlog.info() <? { "message": "engine", "path": engine }
@@ -122,7 +123,7 @@ async fn main {
   // entry serves from. The window is bridge-only: it makes no HTTP requests
   // at all. Remote browsers use the same method catalog over the relay
   // WebSocket instead (docs/remote-protocol.md).
-  let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760)
+  let app = app
     .load_config()
     // Let the page palette paint the native titlebar area. The default macOS
     // titlebar follows the system appearance, so an explicit in-app dark theme

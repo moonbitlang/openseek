@@ -12,27 +12,20 @@
          and Moon's _build artifact without copying them into a data_dir. -->
     <link rel="stylesheet" href="/desktop/dev/viewer.css" />
     <link rel="stylesheet" href="/desktop/app.css" />
-    <link
-      rel="stylesheet"
-      href="/desktop/target/vendor-xterm/work/xterm/css/xterm.css"
-    />
-    <!-- Mermaid's loader resolves its historical `mermaid/...` URL before
-         calling dynamic import. Remap that URL to the verified local ESM tree
-         prepared by the editor-owned asset package. -->
+    <link rel="stylesheet" href="/desktop/target/web/xterm.css" />
+    <!-- Mermaid is loaded directly from the exact npm package selected by
+         desktop/package-lock.json. -->
     <script type="importmap">
       {
         "imports": {
-          "https://proton.localhost/mermaid/": "/desktop/target/vendor-mermaid/dist/"
+          "https://proton.localhost/mermaid/": "/desktop/node_modules/mermaid/dist/"
         }
       }
     </script>
   </head>
   <body>
     <div id="app"></div>
-    <script src="/desktop/target/vendor-xterm/work/xterm/lib/xterm.js"></script>
-    <script src="/desktop/target/vendor-xterm/work/fit/lib/addon-fit.js"></script>
-    <script src="/desktop/target/vendor-xterm/work/web-links/lib/addon-web-links.js"></script>
-    <script src="/desktop/dev/xterm.js"></script>
+    <script src="/desktop/target/web/xterm.js"></script>
     <script src="/_build/js/debug/build/openseek_desktop/frontend/desktop/desktop.js"></script>
   </body>
 </html>

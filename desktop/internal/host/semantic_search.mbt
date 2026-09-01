@@ -795,12 +795,11 @@ async fn run_semantic_search(
 
 ///|
 async fn search_semantic_op(
-  state : HostState,
   service : SemanticSearchService,
   payload : SearchSemanticPayload,
 ) -> SearchSemanticReply {
   let root = WirePath::parse(payload.root).absolute
-  let command = moongrep_command(state.executable)
+  let command = moongrep_command()
   service.search(command, root, payload)
 }
 

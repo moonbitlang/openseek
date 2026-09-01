@@ -1132,12 +1132,11 @@ async fn run_text_search(
 
 ///|
 async fn search_text_op(
-  state : HostState,
   service : TextSearchService,
   payload : SearchTextPayload,
 ) -> SearchTextReply {
   let root = WirePath::parse(payload.root).absolute
-  let command = ripgrep_command(state.executable)
+  let command = ripgrep_command()
   service.search(command, root, payload)
 }
 

@@ -1,8 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "openseek_desktop/package/internal/pe"
+package "openseek_desktop/package/internal/cli"
 
 // Values
-pub async fn set_windows_gui_subsystem(String) -> Unit
+pub async fn run(String) -> Unit
 
 // Errors
 

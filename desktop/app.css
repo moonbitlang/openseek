@@ -1,9 +1,7 @@
 /* Development entrypoint for the application stylesheet.
  *
- * Keep these imports in the same order as `app_css_sources` in
- * package/internal/packaging. Production packages concatenate those source
- * files into one generated app.css; development serves them in place so CSS
- * edits only require a page refresh.
+ * The pinned esbuild binary follows these imports into packaged app.css;
+ * development serves them in place so CSS edits only require a page refresh.
  */
 @import url("./app_font.css");
 @import url("./styles/tokens.css");

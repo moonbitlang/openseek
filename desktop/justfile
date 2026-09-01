@@ -1,7 +1,20 @@
 default:
     just --list
 
-# Build the Desktop browser application and run its Playwright suite.
+# Parse the shared build program and type-check every compatibility entry.
+build-scripts-check:
+    node --check package/build.mjs
+    moon check package/internal/cli package/macos package/windows package/linux package/browser package/dev --target native
+
+# Build the current host's debug package through its historical Moon command.
+package:
+    {{ if os() == "macos" { "moon run package/macos --target native -- --no-open" } else if os() == "linux" { "moon run package/linux --target native" } else { "moon run package/windows --target native" } }}
+
+# Build and launch the unbundled native host with proton_cli dev.
+dev:
+    moon run package/dev --target native
+
+# Build the Desktop browser application and run Playwright.
 test-browser:
     moon run package/browser --target native
     npm --prefix e2e test

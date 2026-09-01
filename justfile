@@ -50,6 +50,18 @@ editor-test-browser:
 desktop-test-browser:
     just --justfile desktop/justfile test-browser
 
+# Parse Desktop's checked-in build scripts.
+desktop-build-scripts-check:
+    just --justfile desktop/justfile build-scripts-check
+
+# Build the current host's Desktop package.
+desktop-package:
+    just --justfile desktop/justfile package
+
+# Build and launch the unbundled Desktop host.
+desktop-dev:
+    just --justfile desktop/justfile dev
+
 # Run the session viewer's Rabbita views in Chromium.
 viz-test-browser:
     just --justfile cmd/viz_app/justfile test-browser

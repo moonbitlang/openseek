@@ -86,6 +86,13 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v5
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
       # Proton 0.2 installs its immutable runtime and versioned helper in the
       # shared user-level store selected by the dependency in desktop/moon.mod.
       - name: Cache Proton runtime
@@ -101,7 +108,7 @@ jobs:
       - name: Cache MoonBit toolchain seed
         uses: actions/cache@v4
         with:
-          path: desktop/dist/tools/moonbit
+          path: desktop/target/moonbit/cache
           key: moonbit-seed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/.moonbit-version') }}
 
       - name: Resolve release version
@@ -146,7 +153,7 @@ jobs:
           echo "RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
           echo "version=$release_version" >> "$GITHUB_OUTPUT"
 
-      # Stamp only this runner's checkout. OpenSeek's platform packagers use
+      # Stamp only this runner's checkout. OpenSeek's shared build program uses
       # moon.mod, while Proton 0.2 reads package.version from the project config.
       - name: Stamp release version
         shell: bash
@@ -244,8 +251,10 @@ jobs:
       - name: Build, sign, and notarize macOS artifacts
         shell: bash
         run: |
-          moon -C desktop run --target native package/macos -- \
+          moon -C desktop run package/macos --target native -- \
+            --ci \
             --release \
+            --no-open \
             --target dmg \
             --target zip \
             --sign "$MACOS_SIGNING_IDENTITY" \
@@ -268,7 +277,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          moon -C desktop run --target native package/browser -- --release
+          moon -C desktop run package/browser --target native -- --ci --release
           test -f desktop/dist/browser/index.html
           test -f desktop/dist/browser/browser.js
           COPYFILE_DISABLE=1 tar \

@@ -1,7 +1,12 @@
 _build/
 dist/
 target/
+seekmoon/
+.ninja_log
+.ninja_deps
+.tmp/
 .mooncakes/
+node_modules/
 .DS_Store
 
 # Proton native runtime assembled by `proton_cli cef setup` (CEF framework +
@@ -14,15 +19,6 @@ e2e/node_modules/
 e2e/playwright-report/
 e2e/test-results/
 
-# Generated frontend bundle (built by `moon run --target native build_frontend.mbtx`)
-/frontend.js
-# Application stylesheet assembled from the checked-in development imports.
-/app.generated.css
-# Embedded viewer stylesheet, assembled from the editor dependency by the packager.
-/viewer.css
-# The codicon icon font, copied from the editor dependency next to viewer.css so
-# proton serves it at the site root (`/codicon.ttf`).
-/codicon.ttf
 # The empty file redirected into one-shot child runs as stdin. It normally
 # lives in the per-user runtime dir; with no runtime dir (tests, and any bare
 # invocation) `prepare_engine_stdin` falls back to `<program>.stdin` beside the

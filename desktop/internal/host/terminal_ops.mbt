@@ -84,8 +84,7 @@ async fn terminal_open_op(
     @sys.get_env_var("SHELL").unwrap_or("/bin/sh")
   }
   let path_entries = [toolchain.bin_dir.to_string()]
-  if state.executable is Some(executable) &&
-    PackagedTools::resolve(executable) is Some(tools) {
+  if PackagedTools::resolve() is Some(tools) {
     path_entries.push(tools.bin_dir)
   }
   let activation_command = @shellenv.path_prepend_command(

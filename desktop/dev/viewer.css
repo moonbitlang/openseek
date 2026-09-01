@@ -1,33 +1,7 @@
-/* Development keeps the viewer styles as separate browser requests. This list
-   mirrors package/internal/packaging.viewer_css_sources; production still
-   concatenates the same files into one distributable stylesheet. */
-@import url("../viewer_theme.css");
-@import url("../../editor/viewer/browser/view/codicon/codicon.css");
-@import url("../../editor/viewer/browser/view/editor.css");
-@import url("../../editor/viewer/ui/scrollbar/scrollable_element.css");
-@import url("../../editor/viewer/browser/view_parts/view_lines/view_lines.css");
-@import url("../../editor/viewer/browser/view_parts/selections/view_overlays.css");
-@import url("../../editor/viewer/browser/view_parts/content_widgets/content_widgets.css");
-@import url("../../editor/viewer/browser/view_parts/overlay_widgets/overlay_widgets.css");
-@import url("../../editor/viewer/browser/view_parts/selections/selections.css");
-@import url("../../editor/viewer/browser/view_parts/current_line_highlight/current_line_highlight.css");
-@import url("../../editor/viewer/browser/view_parts/decorations/decorations.css");
-@import url("../../editor/viewer/browser/view_parts/view_cursors/view_cursors.css");
-@import url("../../editor/viewer/browser/view_parts/margin/margin.css");
-@import url("../../editor/viewer/browser/view_parts/margin/lines_decorations.css");
-@import url("../../editor/viewer/browser/view_parts/view_lines/tokens.css");
-@import url("../../editor/viewer/browser/view_parts/view_lines/markers.css");
-@import url("../../editor/viewer/browser/diff_editor/diff_editor.css");
-@import url("../../editor/viewer/contrib/folding/browser/folding.css");
-@import url("../../editor/viewer/contrib/contextmenu/browser/contextmenu.css");
-@import url("../../editor/viewer/contrib/definition/browser/definition.css");
-@import url("../../editor/viewer/contrib/references/browser/references.css");
-@import url("../../editor/viewer/contrib/hover/hover.css");
-@import url("../../editor/viewer/contrib/quick_diff/browser/quick_diff.css");
-@import url("../../editor/viewer/contrib/agent_feedback/browser/agent_feedback.css");
-@import url("../../editor/viewer/browser/diagram_viewport/diagram_viewport.css");
-@import url("../../editor/viewer/contrib/markdown_comments/browser/markdown_comments.css");
-@import url("../../editor/internal/viewer/browser/markdown_document/markdown_document.css");
+/* Development loads the production cascade before adding one repository-only
+   font URL override. Production bundles frontend/build/viewer.css directly, so the
+   override below can never leak into a distributable stylesheet. */
+@import url("../frontend/build/viewer.css");
 
 /* The upstream codicon sheet uses the packaged root path `/codicon.ttf`.
    Point the same family at its source file when the repository is the root. */

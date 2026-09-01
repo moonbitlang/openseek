@@ -1,16 +1,7 @@
 import {
-  "openseek_desktop/internal/env" @envx,
-  "openseek_desktop/package/internal/packaging",
-  "openseek_desktop/package/internal/xterm_assets",
+  "openseek_desktop/package/internal/cli",
   "moonbitlang/async",
-  "moonbitlang/async/fs" @asyncfs,
-  "moonbitlang/async/process",
-  "moonbitlang/core/env" @sys,
-  "moonbitlang/x/path",
-  "tonyfettes/platform",
 }
-
-warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 
 supported_targets = "native"
 

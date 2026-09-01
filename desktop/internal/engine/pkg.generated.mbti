@@ -25,7 +25,7 @@ pub async fn delete_archived_session(EngineManager, String, String, (String, Str
 
 pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) -> @protocol.WorkspacesReply
 
-pub async fn engine_command(String) -> String
+pub async fn engine_command() -> String
 
 pub async fn export_session_html(EngineManager, @protocol.SessionExportPayload, String, String) -> String
 

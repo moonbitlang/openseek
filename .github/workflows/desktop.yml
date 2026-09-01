@@ -56,39 +56,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: desktop/e2e/package-lock.json
+          cache-dependency-path: |
+            desktop/package-lock.json
+            desktop/e2e/package-lock.json
 
       - name: Update MoonBit dependencies
         run: moon update
-
-      # The browser packager is a native MoonBit command, so Proton's module
-      # prebuild still needs the runtime selected by desktop/moon.mod.
-      - name: Resolve pinned Proton version
-        id: proton
-        run: |
-          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/moon.mod)"
-          test -n "$version"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Restore Proton runtime
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.proton/store
-            ~/.proton/helpers
-          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
-
-      # Chromium's installer supplies runtime libraries, while Proton's
-      # prebuild also requires the pkg-config metadata from development packages.
-      - name: Install Proton Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes libgtk-3-dev libx11-dev
-
-      - name: Assemble Proton CEF runtime
-        run: >-
-          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
-          cef setup
 
       - name: Install E2E dependencies
         working-directory: desktop/e2e
@@ -100,7 +73,7 @@ jobs:
 
       - name: Build Desktop browser application
         working-directory: desktop
-        run: moon run package/browser --target native
+        run: moon run package/browser --target native -- --ci
 
       - name: Run Desktop E2E tests
         working-directory: desktop/e2e

@@ -1,0 +1,2 @@
+/* esbuild resolves xterm's package-owned stylesheet from the npm lockfile. */
+@import "@xterm/xterm/css/xterm.css";

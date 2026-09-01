@@ -1,14 +1,19 @@
 ///|
-const FrontendEntryPath = "assets/index.html"
+const PackagedFrontendEntryPath = "seekmoon/web/index.html"
 
 ///|
-const ProtonPackageFrontendEntryPath = "target/proton-package-input/assets/index.html"
+const PackagedRipgrepPath = "seekmoon/bin/rg"
 
 ///|
-const ProtonPackageRipgrepPath = "target/proton-package-input/bin/rg"
+const PackagedMoongrepPath = "seekmoon/bin/moongrep"
 
 ///|
-const ProtonPackageMoongrepPath = "target/proton-package-input/bin/moongrep"
+#cfg(platform="windows")
+const PackagedExecutableSuffix = ".exe"
+
+///|
+#cfg(not(platform="windows"))
+const PackagedExecutableSuffix = ""
 
 ///|
 /// The visualizer shell and compiled bundle used for a standalone export.
@@ -32,7 +37,7 @@ pub async fn HostState::viz_assets(self : HostState) -> VizAssets {
   let assets = match @development.Layout::detect(executable) {
     Some(layout) => { shell: layout.viz_shell(), bundle: layout.viz_bundle(), }
     None => {
-      let frontend = frontend_entry_path(executable)
+      let frontend = frontend_entry_path()
       let viz = @pathx.Path(frontend).dirname().join("viz")
       {
         shell: viz.join("index.html").normalize().to_string(),
@@ -76,33 +81,35 @@ struct PackagedTools {
 }
 
 ///|
-/// Resolve the packaged tools installed with `executable`. macOS keeps them
-/// below Contents/Resources; Linux and Windows keep them beside the Host.
-pub async fn PackagedTools::resolve(executable : String) -> PackagedTools? {
-  let command_dir = @pathx.Path(executable).dirname().resolve()
-  let candidates = [
-    command_dir.join("..").join("Resources").join(ProtonPackageRipgrepPath),
-    command_dir.join("rg.exe"),
-    command_dir.join("rg"),
-  ]
-  for candidate in candidates {
-    let path = candidate.normalize()
-    if @fs.exists(path.to_string()) {
-      return Some({
-        bin_dir: path.to_path().dirname().to_string(),
-        ripgrep: path.to_string(),
-      })
-    }
+/// Resolve the packaged tools from Proton's platform-independent resource
+/// directory. Development deliberately uses PATH even if a previous package
+/// build left generated `seekmoon/` files in the checkout.
+pub async fn PackagedTools::resolve() -> PackagedTools? {
+  if !@proton.is_packaged() {
+    return None
   }
-  None
+  PackagedTools::resolve_from_resource_dir(@proton.resource_dir())
+}
+
+///|
+/// Resolve a canonical resource root. This type method lets tests exercise
+/// path policy without pretending their test executable is a Proton package.
+async fn PackagedTools::resolve_from_resource_dir(
+  resource_dir : String,
+) -> PackagedTools? {
+  let path = @pathx.Path(resource_dir)
+    .join(PackagedRipgrepPath + PackagedExecutableSuffix)
+    .normalize()
+  guard @fs.exists(path.to_string()) else { return None }
+  Some({ bin_dir: path.dirname().to_string(), ripgrep: path.to_string(), })
 }
 
 ///|
 /// Put the packaged tools first in this process's PATH. Desktop child
 /// processes inherit this environment: OpenSeek's engine passes it to agent
 /// shell tools, while Codex app-server passes it to its own tool processes.
-/// Keep an already-leading entry unchanged so Linux's AppRun prefix is not
-/// duplicated.
+/// Keep an already-leading entry unchanged so embedding launchers cannot
+/// duplicate it.
 pub fn PackagedTools::apply_to_process_env(self : PackagedTools) -> Unit {
   @sys.set_env_var("PATH", self.path_with_precedence(@sys.get_env_var("PATH")))
 }
@@ -120,37 +127,29 @@ fn PackagedTools::path_with_precedence(
 }
 
 ///|
-/// Locate the bundled frontend entry relative to the executable. On macOS
-/// the assets live in `Contents/Resources/` — `Contents/MacOS/` may only
-/// hold code, since non-`--deep` codesigning rejects data files there — so
-/// probe `../Resources/` first; the executable-adjacent layout serves the
-/// Linux AppImage and the Windows bundle. If those installed layouts are
-/// absent, a host under Moon's native `_build` layout derives the checked-in
-/// development document from the same checkout.
-pub async fn frontend_entry_path(framework_command : String) -> String {
-  let command_dir = @pathx.Path(framework_command).dirname().resolve()
-  let candidates = [
-    command_dir
-    .join("..")
-    .join("Resources")
-    .join(ProtonPackageFrontendEntryPath),
-    command_dir.join("..").join("Resources").join(FrontendEntryPath),
-    command_dir.join(FrontendEntryPath),
-  ]
-  for candidate in candidates {
-    let path = candidate.normalize().to_string()
-    if @fs.exists(path) {
-      return path
-    }
-  }
-  if @development.Layout::detect(framework_command) is Some(layout) {
-    let path = layout.frontend_entry()
+/// Locate the frontend from Proton's resource directory. The supported
+/// development launcher exposes `desktop/` as that directory, while every
+/// installed app exposes the package root containing canonical `seekmoon/`.
+pub async fn frontend_entry_path() -> String {
+  if !@proton.is_packaged() {
+    let path = @pathx.Path(@proton.resource_dir())
+      .dirname()
+      .join("desktop-dev.html")
+      .normalize()
+      .to_string()
     guard @fs.exists(path) else {
-      fail("development frontend does not exist: \{path}")
+      raise HostError("development frontend does not exist: \{path}")
     }
     return path
   }
-  FrontendEntryPath
+  let path = @pathx.Path(@proton.resource_dir())
+    .join(PackagedFrontendEntryPath)
+    .normalize()
+    .to_string()
+  guard @fs.exists(path) else {
+    raise HostError("packaged frontend does not exist: \{path}")
+  }
+  path
 }
 
 ///|
@@ -159,21 +158,17 @@ pub async fn frontend_entry_path(framework_command : String) -> String {
 const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.3.1"
 
 ///|
-/// Locate the packaged ripgrep beside the installed Host. macOS stores data
-/// below Contents/Resources; Linux and Windows keep the executable beside the
-/// Host. Only a recognized Moon `_build` executable (or an embedding without
-/// an executable path, used by development tests) may fall back to `PATH`.
-/// An installed bundle with a missing asset fails closed instead of silently
+/// Locate ripgrep in the canonical Proton resource tree. An installed bundle
+/// with a missing asset fails closed instead of silently
 /// running a machine-global ripgrep of an unknown version.
-async fn ripgrep_command(executable : String?) -> String? {
-  guard executable is Some(executable) else { return Some("rg") }
-  if PackagedTools::resolve(executable) is Some(tools) {
+async fn ripgrep_command() -> String? {
+  if PackagedTools::resolve() is Some(tools) {
     return Some(tools.ripgrep)
   }
-  if @development.Layout::detect(executable) is Some(_) {
-    Some("rg")
-  } else {
+  if @proton.is_packaged() {
     None
+  } else {
+    Some("rg")
   }
 }
 
@@ -190,38 +185,37 @@ async fn ripgrep_command(executable : String?) -> String? {
 /// moongrep binary (or a bundled `moongrep.wasm` run through the packaged
 /// moonrun). The pinned coordinate keeps the version deterministic instead of
 /// silently running an arbitrary machine binary.
-async fn moongrep_command(executable : String?) -> String? {
-  guard executable is Some(executable) else { return Some("moonx") }
-  let command_dir = @pathx.Path(executable).dirname().resolve()
-  let candidates = [
-    command_dir.join("..").join("Resources").join(ProtonPackageMoongrepPath),
-    command_dir.join("moongrep.exe"),
-    command_dir.join("moongrep"),
-  ]
-  for candidate in candidates {
-    let path = candidate.normalize().to_string()
-    if @fs.exists(path) {
-      return Some(path)
-    }
+async fn moongrep_command() -> String? {
+  if !@proton.is_packaged() {
+    return Some("moonx")
+  }
+  let path = @pathx.Path(@proton.resource_dir())
+    .join(PackagedMoongrepPath + PackagedExecutableSuffix)
+    .normalize()
+    .to_string()
+  if @fs.exists(path) {
+    return Some(path)
   }
   Some("moonx")
 }
 
 ///|
-async test "ripgrep resolution uses only packaged or recognized development layouts" {
+async test "packaged tools use only the canonical resource directory" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-ripgrep-resolution-")
   defer @fs.rmdir(root.to_string(), recursive=true)
-  let installed = root.join("installed")
-  @fs.mkdir(installed.to_string(), recursive=true)
-  let installed_host = installed.join("openseek-desktop").to_string()
-  assert_true(ripgrep_command(Some(installed_host)) is None)
-  let adjacent = installed.join("rg").to_string()
-  @fs.write_file(adjacent, "rg", create_mode=CreateOrTruncate)
-  assert_eq(ripgrep_command(Some(installed_host)), Some(adjacent))
-  guard PackagedTools::resolve(installed_host) is Some(installed_tools) else {
-    fail("expected adjacent packaged tools")
+  let resources = root.join("Resources")
+  let resource_dir = resources.to_string()
+  assert_true(PackagedTools::resolve_from_resource_dir(resource_dir) is None)
+  let packaged = resources
+    .join(PackagedRipgrepPath + PackagedExecutableSuffix)
+    .to_string()
+  @fs.mkdir(@pathx.Path(packaged).dirname().to_string(), recursive=true)
+  @fs.write_file(packaged, "rg", create_mode=CreateOrTruncate)
+  guard PackagedTools::resolve_from_resource_dir(resource_dir)
+    is Some(installed_tools) else {
+    fail("expected canonical packaged tools")
   }
-  let installed_bin = installed.to_string()
+  let installed_bin = @pathx.Path(packaged).dirname().to_string()
   assert_eq(
     installed_tools.path_with_precedence(Some("/usr/bin")),
     "\{installed_bin}\{@env.path_sep}/usr/bin",
@@ -231,73 +225,38 @@ async test "ripgrep resolution uses only packaged or recognized development layo
     installed_tools.path_with_precedence(Some(already_first)),
     already_first,
   )
-
-  let windows = root.join("windows")
-  @fs.mkdir(windows.to_string(), recursive=true)
-  let windows_host = windows.join("openseek-desktop.exe").to_string()
-  let windows_rg = windows.join("rg.exe").to_string()
-  @fs.write_file(windows_rg, "rg", create_mode=CreateOrTruncate)
-  assert_eq(ripgrep_command(Some(windows_host)), Some(windows_rg))
-
-  let macos = root.join("SeekMoon.app/Contents/MacOS")
-  let resources_rg = root
-    .join("SeekMoon.app/Contents/Resources")
-    .join(ProtonPackageRipgrepPath)
-  @fs.mkdir(macos.to_string(), recursive=true)
-  @fs.mkdir(resources_rg.dirname().to_string(), recursive=true)
-  @fs.write_file(resources_rg.to_string(), "rg", create_mode=CreateOrTruncate)
-  assert_eq(
-    ripgrep_command(Some(macos.join("openseek-desktop").to_string())),
-    Some(resources_rg.normalize().to_string()),
-  )
-
-  let development = root.join("_build/native/debug/build/openseek_desktop")
-  @fs.mkdir(development.to_string(), recursive=true)
-  assert_eq(
-    ripgrep_command(Some(development.join("openseek_desktop").to_string())),
-    Some("rg"),
-  )
 }
 
 ///|
-async test "packaged frontend wins before the matching checkout document" {
+async test "unpackaged search commands use documented development providers" {
+  if !@proton.is_packaged() {
+    assert_eq(ripgrep_command(), Some("rg"))
+    assert_eq(moongrep_command(), Some("moonx"))
+  }
+}
+
+///|
+async test "development frontend comes from Proton's declared resource root" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-development-frontend-")
   defer @fs.rmdir(root.to_string(), recursive=true)
-  let command_dir = root.join("_build/native/debug/build/openseek_desktop")
-  @fs.mkdir(command_dir.to_string(), recursive=true)
-  let host = command_dir.join("openseek_desktop.exe").to_string()
   let development = root.join("desktop-dev.html").to_string()
   @fs.write_file(development, "development", create_mode=CreateOrTruncate)
-  assert_eq(frontend_entry_path(host), development)
-  let assets = command_dir.join("assets")
-  @fs.mkdir(assets.to_string())
-  let packaged = assets.join("index.html").to_string()
-  @fs.write_file(packaged, "packaged", create_mode=CreateOrTruncate)
-  assert_eq(frontend_entry_path(host), packaged)
-}
-
-///|
-/// Read the application version written by `proton_cli package`. Development
-/// binaries have no package manifest and identify themselves explicitly
-/// instead of consulting a second source version constant.
-pub async fn package_version(executable : String) -> String {
-  let command_dir = @pathx.Path(executable).dirname().resolve()
-  let manifest = command_dir
-    .join("..")
-    .join("Resources")
-    .join("proton-package.json")
-    .normalize()
-    .to_string()
-  guard @fs.exists(manifest) else { return "development" }
-  let text = @fs.read_file(manifest).text() catch { _ => return "development" }
-  match @json.parse(text) {
-    Object(fields) =>
-      match fields.get("version") {
-        Some(String(version)) if !version.is_blank() => version
-        _ => "development"
-      }
-    _ => "development"
-  }
+  let resources = root.join("desktop")
+  @fs.mkdir(resources.to_string(), recursive=true)
+  let resource_dir = resources.to_string()
+  let previous_resource_dir = @sys.get_env_var("PROTON_RESOURCE_DIR")
+  defer (match previous_resource_dir {
+    Some(value) => @sys.set_env_var("PROTON_RESOURCE_DIR", value)
+    None => @sys.unset_env_var("PROTON_RESOURCE_DIR")
+  })
+  @sys.set_env_var("PROTON_RESOURCE_DIR", resource_dir)
+  let packaged = resources.join(PackagedFrontendEntryPath)
+  @fs.mkdir(packaged.dirname().to_string(), recursive=true)
+  @fs.write_file(packaged.to_string(), "packaged", create_mode=CreateOrTruncate)
+  // Development must never consume generated package inputs left in the
+  // checkout; the launcher's declared resource root identifies the source
+  // checkout without threading the host executable through this API.
+  assert_eq(frontend_entry_path(), development)
 }
 
 ///|

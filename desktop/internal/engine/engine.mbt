@@ -2750,10 +2750,9 @@ async test "native engine env has one authoritative bundled moon path" {
   let ambient_path = @sys.get_env_var("PATH")
   let root = @pathx.Path(@fs.tmpdir(prefix="openseek-engine-env-"))
   defer (@fs.rmdir(root.to_string(), recursive=true) catch { _ => () })
-  // The macOS bundle's real shape (`package/macos/main.mbt`): the engine is
-  // staged in the Proton package input's `bin/`, with the toolchain seed
-  // beside that directory rather than inside it.
-  let input = root.join("Contents/Resources/target/proton-package-input")
+  // Every packaged platform uses the same `seekmoon/` tree below Proton's
+  // resource directory, so engine process setup observes one layout.
+  let input = root.join("Resources/seekmoon")
   let engine = input.join("bin/openseek")
   let seed = input.join("toolchains/moonbit/macos-arm64")
   let runtime = root.join("runtime")

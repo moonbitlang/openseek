@@ -132,7 +132,7 @@ async fn pattern_repair_op(
       "Pattern Repair Agent returned no candidate.",
     )
   }
-  match validate_pattern_repair_candidate(state, root, candidate) {
+  match validate_pattern_repair_candidate(root, candidate) {
     PatternRepairValid =>
       {
         root: payload.root,

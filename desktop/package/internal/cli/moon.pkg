@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/async/fs" @asyncfs,
+  "moonbitlang/async/process",
+  "moonbitlang/core/env",
+}
+
+warnings = "+missing_doc+unnecessary_annotation+unnecessary_view_op+unqualified_local_using"
+
+supported_targets = "native"

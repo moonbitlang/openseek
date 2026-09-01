@@ -32,14 +32,13 @@ priv enum PatternRepairValidation {
 
 ///|
 async fn validate_pattern_repair_candidate(
-  state : HostState,
   root : @pathx.Absolute,
   pattern : String,
 ) -> PatternRepairValidation {
   if !PatternRepairValidationEnabled {
     PatternRepairUnavailable
   } else {
-    guard moongrep_command(state.executable) is Some(command) else {
+    guard moongrep_command() is Some(command) else {
       return PatternRepairInvalid(
         "moongrep_unavailable", "The semantic-search provider is unavailable.",
       )

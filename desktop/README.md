@@ -180,82 +180,81 @@ package.
 
 The desktop frontend imports the `moonbitlang/editor` workspace member from
 `../editor`. Packaging reads its reusable CSS and codicon font from that same
-checkout, and invokes the editor-owned Mermaid asset builder to download and
-SHA-256-verify `mermaid@11.16.0`. Every desktop and browser package copies
-that local ESM tree beside the frontend bundle, so MoonBit code and browser
-assets cannot drift between registry and source versions and end users never
-fetch Mermaid from a CDN. `viewer_theme.css` supplies the desktop-owned theme
-variables; the editor's reference-shell theme remains development-only.
+checkout. `desktop/package-lock.json` pins Mermaid, xterm, and esbuild; every
+desktop and browser package copies those locked local files beside the
+frontend bundle, so end users never fetch Mermaid from a CDN.
+`viewer_theme.css` supplies the desktop-owned theme variables; the editor's
+reference-shell theme remains development-only.
 
 What still needs preparing, beyond the MoonBit packages:
 
 - The native host links `libproton`, which in turn needs CEF. The Proton
   package ships `libproton` for each platform but not CEF, so the first native
   build assembles a runtime from the two — see "Run during development" below.
-- The desktop host expects `assets/index.html`, `assets/app.css`,
-  `assets/frontend.js`, the generated `assets/mermaid/` tree, and an
-  `openseek` engine executable beside it when packaged.
+- The shared build program stages web files, the engine, ripgrep, licenses,
+  and the MoonBit seed below `seekmoon/`. Packaged code asks Proton for its resource
+  directory and resolves only this fixed relative tree.
 
 ## Build
 
-Build the frontend bundle and the native binary:
+Moon compiles programs, npm builds browser assets, one sequential Node program
+stages `seekmoon/`, and Proton owns the final package. Check the shared program
+and all Moon compatibility entries with:
 
 ```sh
-moon build frontend/desktop --target js
-cp ../_build/js/debug/build/openseek_desktop/frontend/desktop/desktop.js frontend.js
-moon build . --target native         # build the native binary
+just desktop-build-scripts-check
 ```
 
-The native binary is written to
-`_build/native/debug/build/openseek_desktop/openseek_desktop.exe`. Add
-`--release` to each build command for optimized output; those artifacts use the
-corresponding `_build/*/release/` directories.
+Build the current host's debug package with `just desktop-package`. The
+`just` recipe selects the existing platform-specific Moon entry, and that
+entry forwards its arguments unchanged to `package/build.mjs`. See
+[BUILD.md](BUILD.md) for file ownership, execution order, caching, and
+validation limits.
 
 ## Run during development
 
 From the monorepo root, run:
 
 ```sh
-moon run ./desktop/package/dev
+just desktop-dev
 ```
 
-The launcher detects the desktop workspace, builds the frontend, engine, and
-native host with Moon's normal incremental build, prepares the Proton/CEF
-runtime, and launches the bare host. Setup runs `proton_cli` through `moonx`,
+The shared program builds the frontend, viz application, and engine, then runs
+`proton_cli dev --no-frontend --setup`. Proton prepares the CEF environment,
+builds and launches the bare host. The CLI runs through `moonx`,
 which fetches the published CLI into the registry cache rather than installing
 anything, and installs the matching CEF runtime and subprocess helper into
 Proton's user-level immutable store. That first setup may download a large
 archive; later development and platform-package runs reuse the validated store
 entries.
 
-The executable implementation lives in `package/dev`; it accepts no path or
-build-mode arguments.
+The executable in `package/dev` is only a compatibility entry. It accepts no
+path or build-mode arguments and contains no build or launch implementation.
 
 Development does not use Moon's `data_dir` and does not assemble a package
 asset directory. `desktop-dev.html` is served with the repository as its asset
-root: it loads the frontend straight from `_build`, imports the application's
-split CSS through `desktop/app.css`, imports the editor's source styles as
-separate files, and loads xterm's upstream browser files without esbuild.
-Production packagers concatenate the application sources into
-`desktop/app.generated.css` before copying it into their asset layouts.
-Mermaid and xterm archives are downloaded, checksum-verified, and extracted
-once under ignored `target/` directories; they are reused until their pinned
-versions change.
+root: it loads the frontend straight from `_build`, the application's source
+CSS, and the npm-built xterm bundle under `desktop/target/web/`. Mermaid loads
+from the locked local npm package. Production uses the same npm build outputs
+and copies them into the fixed package resource tree.
 
 Desktop CSS conventions, including token scope and the single-owner form focus
 contract, live in [`styles/README.md`](styles/README.md).
 
-The host recognizes its `_build/native/<profile>/build/openseek_desktop`
-location and derives the checkout HTML, matching engine, and worktree-local
-`desktop/target/dev-state` from it. Packaged layouts are checked first. The
+The launcher declares `desktop/` as Proton's development resource directory.
+The host derives the checkout HTML and the fixed native/debug engine from that
+directory without passing its executable through those APIs. The executable
+location is still used for the worktree-local `desktop/target/dev-state` and
+self-update, whose meaning genuinely depends on the running process. The
 engine then finds the local MoonBit toolchain through the same deterministic
 resolver as production: a bundled seed when one exists, otherwise `moon` on
-`PATH`, then `~/.moon/bin`. No frontend, engine, state, or toolchain path
-argument is needed.
+`PATH`, then `~/.moon/bin`. The development launcher accepts no path arguments.
 
-Platform package commands remain the release-layout test. They build debug
-MoonBit artifacts by default; pass `--release` after `--` when you need
-optimized artifacts.
+The shared build program remains the release-layout test. The `just` recipe
+builds debug artifacts; release automation passes `--release` through the same
+platform command. Package commands use `npm install` locally so an existing
+`node_modules` is reused; automation passes `--ci` for a clean `npm ci`
+installation from `package-lock.json`.
 
 ## Test policy
 
@@ -299,129 +298,64 @@ protocol, approval, and packaging contract.
 
 ## Package (Windows)
 
-The scripted Windows path is:
+Build the Windows package on Windows with:
 
 ```powershell
-moon -C desktop run --target native package/windows
+cd desktop
+moon run package/windows
 ```
 
-It prepares the Proton/CEF runtime if needed, builds the frontend and native
-host, builds the `openseek` engine from the monorepo root, writes
-`dist/windows-x64/SeekMoon/`, and creates `dist/SeekMoon-windows-x64.zip`.
-
-This development command builds debug MoonBit artifacts. Add `-- --release`
-for an optimized bundle and archives.
-
-Without additional arguments, the command builds every output: the
-`dist/windows-x64/SeekMoon/` bundle directory, the
-`dist/SeekMoon-windows-x64.zip` portable zip, and the
-`dist/SeekMoon-Setup.exe` NSIS installer.
-
-Use repeatable `--target` options to select `app`, `zip`, or `installer`.
-The app bundle is always built; selecting `app` alone skips both distribution
-archives. For example, build only the bundle and portable zip with:
+The shared build program builds and verifies the application inputs under
+`desktop/seekmoon/`, then calls Proton once to create the portable application,
+ZIP, and NSIS outputs under `desktop/dist/`. Proton owns the CEF/runtime files,
+package metadata, portable layout, compression, installer layout, and Windows
+signing targets. Pass `--release` for optimized MoonBit artifacts. `--target`
+is repeatable; for example, build only the portable application and ZIP with:
 
 ```powershell
-moon -C desktop run --target native package/windows -- --target zip
+moon run package/windows -- --release --target app --target zip
 ```
 
-This still builds the bundle directory and portable zip, but does not require
-NSIS and does not create `dist/SeekMoon-Setup.exe`.
-
-To build the per-user NSIS installer, install NSIS so `makensis.exe` is on
-`PATH`, or extract portable NSIS to
-`desktop/dist/tools/nsis-3.12/makensis.exe`.
-
-The installer installs under
-`%LOCALAPPDATA%\Programs\SeekMoon`, creates Start Menu shortcuts,
-offers optional desktop-shortcut and launch-after-install checkboxes, and
-registers an HKCU uninstall entry, so it does not require administrator
-privileges.
+This does not require NSIS. Installer builds require Proton's NSIS dependency,
+including `makensis.exe`, on `PATH`.
 
 The Windows package also stages a read-only MoonBit toolchain seed under the
 app bundle. At runtime the host copies that seed into the app's per-user
 runtime directory, runs `moon bundle --all` and `moon bundle --target wasm-gc`
 there, and passes the writable copy as `MOON_HOME` to the engine.
 
-The manual steps below are useful when debugging the package script.
-
-From the repository root, assemble the Proton/CEF runtime the native host
-links against:
-
-```powershell
-moonx moonbit-community/proton_cli@<version> cef setup
-```
-
-`<version>` is whatever `moon.mod` pins `moonbit-community/proton` to; the
-packagers read it from there rather than repeating it.
-
-Build the frontend bundle, copy it to `frontend.js`, and build the native host:
-
-```powershell
-moon build frontend/desktop --target js --release
-Copy-Item ..\_build\js\release\build\openseek_desktop\frontend\desktop\desktop.js frontend.js
-moon build . --target native --release
-```
-
 On Windows, the platform native stub embeds the MSVC linker directives that
 select the GUI subsystem while retaining MoonBit's generated C `main` entry.
 The Windows host requires an MSVC-compatible toolchain; MinGW and GCC-style
-Clang are not supported.
+Clang are not supported. The shared program patches only the
+packaged engine copy to the GUI subsystem; Proton performs the final package
+work.
 
-Build the `openseek` engine from the monorepo root:
-
-```powershell
-cd ..
-moon build cmd/openseek --target native --release
-cd desktop
-```
-
-For a runnable development bundle, place these files together:
-
-```text
-dist/windows-x64/SeekMoon/
-  openseek-desktop.exe
-  openseek.exe
-  assets/index.html
-  assets/app.css
-  assets/frontend.js
-```
-
-The files come from:
-
-```text
-openseek-desktop.exe <- desktop/_build/native/release/build/openseek_desktop/openseek_desktop.exe
-openseek.exe         <- _build/native/release/build/cmd/openseek/openseek.exe
-assets/index.html    <- desktop/index.html
-assets/app.css       <- desktop/app.generated.css (assembled from desktop/app.css imports)
-assets/frontend.js   <- desktop/frontend.js
-```
+Inside every Windows output, application-owned resources have one fixed path:
+`Resources/seekmoon/`, independent of machine and package format.
 
 ## Package (macOS)
 
-`package/macos` runs all of the above (including the runtime preparation),
-builds the `openseek` engine from the monorepo's `cmd/openseek` source, and
-prepares the frontend and MoonBit toolchain inputs. It then delegates the App
-layout, CEF runtime, helper bundles, package metadata, signing, ZIP, and DMG to
-`proton_cli package`. The application-specific MoonBit artifacts are debug by
-default, and the command produces `dist/SeekMoon.app`:
+The shared build program builds the `openseek` engine from the monorepo's
+`cmd/openseek` source and prepares the frontend and MoonBit toolchain inputs.
+It delegates the App layout, CEF runtime, helper bundles, package metadata,
+signing, ZIP, and DMG to `proton_cli package`. Build a debug app with:
 
 ```sh
-moon run --target native package/macos
-# or, from the monorepo root:
-moon -C desktop run --target native package/macos
+just desktop-package
+# Equivalent macOS entry from the repository root:
+moon run ./desktop/package/macos
 ```
 
-The app-only output is ad-hoc signed by Proton for local use. Scripts may pass
-`--target app` to request the same output explicitly. Pass `--release` after
-`--` to build the frontend, host, and engine as optimized release artifacts.
-Codex is not part of the application bundle or its signing list.
+The app-only output is ad-hoc signed by Proton for local use. Codex is not part
+of the application bundle or its signing list.
 
 To build a distribution artifact, select `dmg` or `zip`:
 
 ```sh
-moon run --target native package/macos -- --release --target dmg
-moon run --target native package/macos -- --release --target zip
+cd desktop
+moon run package/macos -- --release --no-open --target dmg
+moon run package/macos -- --release --no-open --target zip
 ```
 
 - `dist/SeekMoon.dmg` is for first-time installation. It
@@ -430,9 +364,8 @@ moon run --target native package/macos -- --release --target zip
 - `dist/SeekMoon.app.zip` carries the same app for in-app
   updates.
 
-`--target` is repeatable. The `dmg` and `zip` targets always include the app
-bundle they package. With no `--target`, the command produces only the local app
-bundle.
+`--target` is the compatible repeatable package option. The `dmg` and `zip`
+targets always include the app bundle they package.
 
 The bundled engine is built from the same checkout, so the desktop app and its
 engine never drift out of version with each other.
@@ -451,10 +384,8 @@ timestamp are applied automatically) and notarize:
 ```sh
 # one-time: xcrun notarytool store-credentials openseek \
 #   --apple-id you@example.com --team-id TEAMID --password <app-specific-pw>
-moon run --target native package/macos -- \
-  --release \
-  --target dmg \
-  --target zip \
+moon run package/macos -- \
+  --release --no-open --target dmg --target zip \
   --sign "Developer ID Application: Your Name (TEAMID)" \
   --notarize openseek
 ```
@@ -466,21 +397,18 @@ ad-hoc signed. Such outputs are not intended for distribution.
 
 ## Package (Linux)
 
-`package/linux` runs the same build steps (including the runtime
-preparation), builds the `openseek` engine from the monorepo's `cmd/openseek`
-source, and produces `dist/SeekMoon-linux-x86_64.AppImage`. It builds debug
-MoonBit artifacts by default:
+The shared build program builds and verifies the same `seekmoon/` input tree,
+then asks Proton to create the AppDir, CEF/runtime layout, launcher, RPATH, metadata, and
+final AppImage under `desktop/dist/`. Build debug artifacts with:
 
 ```sh
-moon run --target native package/linux
-# or, from the monorepo root:
-moon -C desktop run --target native package/linux
+just desktop-package
 ```
 
-For an optimized AppImage, pass the package flag after Moon's `--` separator:
+For an optimized AppImage, invoke the Linux entry from `desktop/`:
 
 ```sh
-moon run --target native package/linux -- --release
+moon run package/linux -- --release
 ```
 
 Build requirements: `pkg-config` plus the GTK3 and WebKitGTK dev packages

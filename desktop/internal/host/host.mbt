@@ -71,9 +71,9 @@ pub fn HostConnection::HostConnection() -> HostConnection {
 
 ///|
 /// `engine` is the engine executable (the language services resolve the
-/// bundled `moon` next to it); `executable` is the host's own binary, used to
-/// locate packaged assets and the running .app bundle. Absent paths retain
-/// development fallbacks but disable installed-bundle-only behavior.
+/// bundled `moon` next to it); `executable` is the host's own binary. Absent
+/// paths retain development fallbacks but disable installed-only work. Proton
+/// owns resource-directory resolution directly in the operations that need it.
 pub fn new_host_state(
   engine : String,
   runtime_dir? : @pathx.Path,
@@ -219,7 +219,7 @@ pub fn endpoints(
       cancel_search_files_op(connection.file_search, payload)
     }),
     @endpoint.Endpoint::remote(@commands.fs_search_text, async fn(payload) {
-      search_text_op(state, connection.text_search, payload)
+      search_text_op(connection.text_search, payload)
     }),
     @endpoint.Endpoint::remote(@commands.fs_cancel_search_text, async fn(
       payload,
@@ -227,7 +227,7 @@ pub fn endpoints(
       cancel_search_text_op(connection.text_search, payload)
     }),
     @endpoint.Endpoint::remote(@commands.fs_search_semantic, async fn(payload) {
-      search_semantic_op(state, connection.semantic_search, payload)
+      search_semantic_op(connection.semantic_search, payload)
     }),
     @endpoint.Endpoint::remote(@commands.fs_cancel_search_semantic, async fn(
       payload,
