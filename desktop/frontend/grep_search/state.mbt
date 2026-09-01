@@ -43,11 +43,6 @@ pub fn State::reset_checkout(self : State) -> State {
 }
 
 ///|
-fn Input::root_text(self : Input) -> String {
-  self.root.map(root => root.path).unwrap_or("")
-}
-
-///|
 fn State::schedule(self : State, input : Input, immediate~ : Bool) -> State {
   let page = self
   let request_id = @uuid.mint()
@@ -209,9 +204,10 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         self
       }
     Loaded(reply~) => {
-      guard page.request_id == reply.request_id &&
-        page.mode is Text &&
-        reply.root == input.root_text() else {
+      // The request UUID is the whole staleness fence: every root or mode
+      // change re-mints it, so an id match implies the reply answers the
+      // current checkout's current query.
+      guard page.request_id == reply.request_id && page.mode is Text else {
         return self
       }
       if reply.cancelled {
@@ -232,9 +228,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       }
     }
     SemanticLoaded(reply~) => {
-      guard page.request_id == reply.request_id &&
-        page.mode is Semantic &&
-        reply.root == input.root_text() else {
+      guard page.request_id == reply.request_id && page.mode is Semantic else {
         return self
       }
       if reply.cancelled {
