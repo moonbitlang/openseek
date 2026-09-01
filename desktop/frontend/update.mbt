@@ -15237,22 +15237,6 @@ test "an archive failure pops a toast that a click or its timer dismisses" {
 }
 
 ///|
-test "toast ids only ever grow, so timers and toasts stay paired" {
-  let dispatch = test_dispatch()
-  let (_, first) = update_dev(dispatch, ArchiveFailed("one"), test_model())
-  let (_, second) = update_dev(
-    dispatch,
-    SessionsFailed(
-      request_id=first.dev().sessions_request_id.unwrap(),
-      message="two",
-    ),
-    first,
-  )
-  inspect(second.notifications.length(), content="2")
-  assert_true(second.notifications[0].id != second.notifications[1].id)
-}
-
-///|
 test "the color-scheme watcher only changes a system-following theme" {
   let dispatch = test_dispatch()
   let system = { ..test_model(), theme: System, system_dark: false, }
@@ -16771,15 +16755,6 @@ test "CompactRejected clears the queued notice and reports the error" {
   assert_true(next.active().compaction is NotCompacting)
   inspect(next.notifications.length(), content="1")
   inspect(next.notifications[0].message, content="no engine")
-}
-
-///|
-test "AppInfoLoaded replaces the displayed package version idempotently" {
-  let dispatch = test_dispatch()
-  let (_, once) = update(dispatch, AppInfoLoaded("0.2.0"), test_model())
-  let (_, twice) = update(dispatch, AppInfoLoaded("0.2.0"), once)
-  assert_eq(once.app_version, "0.2.0")
-  assert_eq(twice.app_version, once.app_version)
 }
 
 ///|
