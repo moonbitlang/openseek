@@ -166,3 +166,8 @@ pub fn FoldingController::clear_local(self : FoldingController) -> Unit {
   self.mouse_down_info = None
   self.restoring_view_state = false
 }
+
+///|
+#deprecated("Use `Debug::to_repr` via the trait or `Repr(value)` instead", skip_current_package=true)
+#doc(hidden)
+pub extend FoldingStateMemento with Debug::{to_repr}

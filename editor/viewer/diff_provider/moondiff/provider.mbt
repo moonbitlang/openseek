@@ -393,3 +393,21 @@ pub extend MoonDiffMode with Eq::{equal, not_equal}
 
 ///|
 pub extend MoonDiffMode with Debug::{to_repr}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend MoonFragmentDiffProvider with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` via the trait or `Repr(value)` instead", skip_current_package=true)
+#doc(hidden)
+pub extend MoonFragmentDiffProvider with Debug::{to_repr}
+
+///|
+#deprecated("Use the `@diff.DocumentDiffProvider` trait instead", skip_current_package=true)
+#doc(hidden)
+pub extend MoonFragmentDiffProvider with @diff.DocumentDiffProvider::{
+  compute_diff,
+  on_did_change,
+}

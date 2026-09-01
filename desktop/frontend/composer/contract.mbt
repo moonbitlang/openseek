@@ -301,6 +301,21 @@ pub fn Action::identity(self : Action) -> Identity {
 }
 
 ///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend ApprovalNotice with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend CodexRequestInput with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend ContextComponent with Eq::{equal, not_equal}
+
+///|
 pub extend Draft with Debug::{to_repr}
 
 ///|
@@ -311,6 +326,11 @@ pub extend FileIndex with Debug::{to_repr}
 
 ///|
 pub extend FileIndex with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend GitControl with Eq::{equal, not_equal}
 
 ///|
 pub extend GoalInput with Eq::{equal, not_equal}
@@ -335,6 +355,11 @@ pub extend Mention with Debug::{to_repr}
 
 ///|
 pub extend Mention with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend PermissionControl with Eq::{equal, not_equal}
 
 ///|
 pub extend Presentation with Eq::{equal, not_equal}
@@ -368,3 +393,8 @@ pub extend SlashCommand with Debug::{to_repr}
 
 ///|
 pub extend SlashCommand with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend StatusComponent with Eq::{equal, not_equal}

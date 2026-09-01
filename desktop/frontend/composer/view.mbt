@@ -880,7 +880,37 @@ fn is_submit_shortcut(event : @dom.KeyboardEvent) -> Bool {
 }
 
 ///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend MissingWorktreeNotice with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend ModelGroup with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend ModelOption with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend ModelSelect with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend ReasoningSelect with Eq::{equal, not_equal}
+
+///|
 pub extend WorktreeChoice with Debug::{to_repr}
 
 ///|
 pub extend WorktreeChoice with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend WorktreeControl with Eq::{equal, not_equal}

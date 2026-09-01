@@ -750,3 +750,13 @@ test "Git graph semantic colors follow refs through the pagination boundary" {
   assert_eq(rows[2].output_swimlanes.map(lane => lane.color), [GraphBaseColor])
   assert_eq(graph_ref_color(snapshot, "remote"), Some(GraphUpstreamColor))
 }
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend GraphLane with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend GraphRow with Eq::{equal, not_equal}

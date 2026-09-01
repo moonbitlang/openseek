@@ -1047,6 +1047,31 @@ pub extend FileEntry with Eq::{equal, not_equal}
 pub extend FileIndex with Eq::{equal, not_equal}
 
 ///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend GitCommitFiles with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend GitGraphState with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend HistoryBlob with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend HistoryDiffDoc with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend HistoryDiffSide with Eq::{equal, not_equal}
+
+///|
 pub extend ReconciledPlacement with Eq::{equal, not_equal}
 
 ///|
@@ -1054,6 +1079,16 @@ pub extend ReviewBaseline with Eq::{equal, not_equal}
 
 ///|
 pub extend ReviewDiffLayout with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` via the trait or `Repr(value)` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ReviewDiffMode with Debug::{to_repr}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend ReviewDiffMode with Eq::{equal, not_equal}
 
 ///|
 pub extend ReviewState with Eq::{equal, not_equal}

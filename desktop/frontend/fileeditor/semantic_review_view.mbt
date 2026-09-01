@@ -1342,3 +1342,13 @@ pub extend SemanticReviewInput with Eq::{equal, not_equal}
 
 ///|
 pub extend SemanticReviewInput with Debug::{to_repr}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend SemanticReviewLiveDocument with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` via the trait or `Repr(value)` instead", skip_current_package=true)
+#doc(hidden)
+pub extend SemanticReviewLiveDocument with Debug::{to_repr}

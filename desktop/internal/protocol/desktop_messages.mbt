@@ -2109,6 +2109,26 @@ pub extend WorktreeRemovePayload with Eq::{equal, not_equal}
 pub extend WorktreeRemovePayload with ToJson::{to_json}
 
 ///|
+#deprecated("Use `Debug::to_repr` via the trait or `Repr(value)` instead", skip_current_package=true)
+#doc(hidden)
+pub extend AppTitlebarThemePayload with Debug::{to_repr}
+
+///|
+#deprecated("Use `FromJson::from_json` via the trait instead", skip_current_package=true)
+#doc(hidden)
+pub extend AppTitlebarThemePayload with FromJson::{from_json}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend AppTitlebarThemePayload with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `ToJson::to_json` via the trait instead", skip_current_package=true)
+#doc(hidden)
+pub extend AppTitlebarThemePayload with ToJson::{to_json}
+
+///|
 pub extend BrowserThemePayload with Debug::{to_repr}
 
 ///|
@@ -2155,3 +2175,23 @@ pub extend SearchSemanticPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend SearchSemanticPayload with ToJson::{to_json}
+
+///|
+#deprecated("Use `Debug::to_repr` via the trait or `Repr(value)` instead", skip_current_package=true)
+#doc(hidden)
+pub extend SemanticSearchProgressPayload with Debug::{to_repr}
+
+///|
+#deprecated("Use `FromJson::from_json` via the trait instead", skip_current_package=true)
+#doc(hidden)
+pub extend SemanticSearchProgressPayload with FromJson::{from_json}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend SemanticSearchProgressPayload with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `ToJson::to_json` via the trait instead", skip_current_package=true)
+#doc(hidden)
+pub extend SemanticSearchProgressPayload with ToJson::{to_json}

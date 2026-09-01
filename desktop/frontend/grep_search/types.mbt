@@ -193,4 +193,19 @@ pub extend Phase with Debug::{to_repr}
 pub extend Phase with Eq::{equal, not_equal}
 
 ///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend SearchResultSummary with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend SemanticSearchState with Eq::{equal, not_equal}
+
+///|
 pub extend State with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend TextSearchState with Eq::{equal, not_equal}

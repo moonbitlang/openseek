@@ -224,3 +224,8 @@ pub fn State::subscription(
     @sub.SubLoader(search_request_loader),
   )
 }
+
+///|
+#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
+#doc(hidden)
+pub extend SearchRequestIdentity with Eq::{equal, not_equal}
