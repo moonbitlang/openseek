@@ -497,7 +497,8 @@ fn semantic_search_error(stderr : String) -> (String, String) {
   let lower = detail.to_lower()
   let code = if lower.contains("not a valid moonbit expression") ||
     lower.contains("lexical errors") ||
-    lower.contains("is not a valid") {
+    lower.contains("is not a valid") ||
+    lower.contains("invalid metavar syntax") {
     "invalid_pattern"
   } else if lower.contains("missing required --rules") ||
     lower.contains("missing required rule") {
