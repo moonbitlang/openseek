@@ -314,7 +314,7 @@ fn watch_workspace(
             path: watched.root.path,
             files: watched.files.map(path => path.0),
             directories: watched.directories.map(path => path.0),
-            recursive: Some(watched.recursive),
+            recursive: watched.recursive,
             watch_id,
           }) catch {
             error => {

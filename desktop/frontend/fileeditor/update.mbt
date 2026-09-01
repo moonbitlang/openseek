@@ -3267,11 +3267,11 @@ pub fn update(
       } else {
         (@cmd.none, state)
       }
-    FsChanged(root~, watch_id~, changes~) =>
-      if state.owner is Some(owner) &&
-        owner.channel == ctx.owner.channel &&
-        ctx.root() == Some(root) &&
-        watch_id == state.watch_id {
+    FsChanged(root=_, watch_id~, changes~) =>
+      // The watch UUID is the whole staleness fence: a fresh one is minted
+      // for every effective configuration, so an id match already proves the
+      // event comes from the watcher on this owner's current root.
+      if state.owner is Some(owner) && watch_id == state.watch_id {
         let reviewed_changes = match changes {
           Some(changes) =>
             state.reviewed_changes.filter(change => !change.touched_by(changes))
@@ -3704,10 +3704,8 @@ pub fn update(
         (@cmd.none, { ..state, error: Some(message), })
       }
     }
-    FileWatchFailed(root~, watch_id~, message~) =>
-      if state.owner is Some(owner) &&
-        ctx.root() == Some(root) &&
-        watch_id == state.watch_id {
+    FileWatchFailed(root=_, watch_id~, message~) =>
+      if state.owner is Some(owner) && watch_id == state.watch_id {
         // The Host reports request-time activation failures through the
         // `fs.watch` reply and reserves this event for a watcher that stopped
         // after it was active. Keep the failed configuration recorded so the
@@ -8457,12 +8455,13 @@ test "concrete watcher events refresh only affected listed directories" {
     test_ctx(),
   )
   assert_true(current.loading == [Relative("docs")])
-  // A late batch from the previous conversation is ignored.
+  // A late batch from the previous conversation carries that conversation's
+  // watcher UUID and is ignored.
   let (_, stale) = update(
     emit,
     FsChanged(
       root=test_ctx().test_resource("/previous-root"),
-      watch_id=state.watch_id,
+      watch_id="watch-from-previous-conversation",
       changes=Some([Created(Relative("docs/new.md"))]),
     ),
     state,
@@ -8590,11 +8589,13 @@ test "watcher failures are visible only in their owning conversation" {
     session: owner.session,
   }
   let other_ctx : Ctx = { ..test_ctx(), owner: other, }
+  // Another conversation's watcher carries its own UUID, so its late
+  // failure cannot attach here.
   let (_, unchanged) = update(
     emit,
     FileWatchFailed(
       root=other_ctx.test_resource("/work"),
-      watch_id=failed.watch_id,
+      watch_id="watch-from-another-conversation",
       message="stale failure",
     ),
     failed,

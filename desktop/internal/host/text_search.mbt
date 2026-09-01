@@ -137,23 +137,8 @@ async fn TextSearchService::run(self : TextSearchService) -> Unit {
         Search(command~, root~, payload~, reply~) => {
           let request_id = payload.request_id
           let reply_root = root.resource_path()
-          if request_id.is_blank() {
-            reply.put(
-              empty_text_search_reply(reply_root, request_id, error={
-                code: "invalid_request",
-                message: "Search request id is empty.",
-              }),
-            )
-            continue
-          }
           if cancellations.contains(request_id) {
             cancellations.remove(request_id)
-            reply.put(
-              empty_text_search_reply(reply_root, request_id, cancelled=true),
-            )
-            continue
-          }
-          if running.contains(request_id) {
             reply.put(
               empty_text_search_reply(reply_root, request_id, cancelled=true),
             )

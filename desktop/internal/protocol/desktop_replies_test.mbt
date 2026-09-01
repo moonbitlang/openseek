@@ -558,39 +558,25 @@ test "file search rejects a negative result limit" {
 }
 
 ///|
-test "workspace watch omits an absent recursive flag" {
-  let shallow : @protocol.WatchWorkspacePayload = {
+test "workspace watch carries its recursive flag explicitly" {
+  let payload : @protocol.WatchWorkspacePayload = {
     path: "/work/project",
     files: ["src/main.mbt"],
     directories: ["", "src"],
-    recursive: None,
+    recursive: false,
     watch_id: "watch-7",
   }
-  @debug.assert_eq(shallow.to_json(), {
-    "path": "/work/project",
-    "files": ["src/main.mbt"],
-    "directories": ["", "src"],
-    "watch_id": "watch-7",
-  })
-  let nullable : @protocol.WatchWorkspacePayload = @json.from_json({
-    "path": "/work/project",
-    "files": [],
-    "directories": [],
-    "recursive": null,
-    "watch_id": "watch-8",
-  })
-  assert_eq(nullable.recursive, None)
-  let recursive : @protocol.WatchWorkspacePayload = {
-    ..shallow,
-    recursive: Some(false),
-  }
-  @debug.assert_eq(recursive.to_json(), {
+  @debug.assert_eq(payload.to_json(), {
     "path": "/work/project",
     "files": ["src/main.mbt"],
     "directories": ["", "src"],
     "recursive": false,
     "watch_id": "watch-7",
   })
+  let decoded : @protocol.WatchWorkspacePayload = @json.from_json(
+    payload.to_json(),
+  )
+  assert_eq(decoded, payload)
 }
 
 ///|

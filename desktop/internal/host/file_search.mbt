@@ -424,10 +424,6 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
           request_id~,
           reply~
         ) => {
-          if cache_key.is_empty() {
-            reply.put(SearchFailed("file search cache key is empty"))
-            continue
-          }
           if cancellations.contains(request_id) {
             cancellations.remove(request_id)
             reply.put(SearchCancelled)

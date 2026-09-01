@@ -59,7 +59,7 @@ priv struct WatchInterest {
   paths : Set[@pathx.Relative]
   directories : Set[@pathx.Relative]
   recursive : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 fn WatchInterest::WatchInterest(
@@ -68,13 +68,13 @@ fn WatchInterest::WatchInterest(
   let interest = {
     paths: Set([]),
     directories: Set([]),
-    recursive: payload.recursive.unwrap_or(false),
+    recursive: payload.recursive,
   }
   for path in payload.files {
     let path = @pathx.Relative(path).normalize()
     // A recursive watcher already covers ordinary workspace paths. Retain
-    // only explicit selections beneath a pruned directory; this makes shallow
-    // explorer changes compare equal without losing deliberately opened files.
+    // only explicit selections beneath a pruned directory, so the interest
+    // stays as small as the pruning rules allow.
     if !interest.recursive || @file_search_policy.excludes_directory(path.0) {
       interest.remember(path)
     }
@@ -145,33 +145,24 @@ fn WatchInterest::ignores(self : WatchInterest, path : @pathx.Relative) -> Bool 
 
 ///|
 /// A repeated request is idempotent only when it names the same concrete
-/// watch_id and effective pruning rules. A different watch_id always
-/// activates a replacement and emits its own baseline; renaming an active
-/// watcher would otherwise lose events between the request and reply.
+/// watch_id. Clients mint a fresh UUID for every effective configuration, so
+/// id equality already implies the same root and pruning rules. A different
+/// watch_id always activates a replacement and emits its own baseline;
+/// renaming an active watcher would otherwise lose events between the
+/// request and reply.
 async fn FsWatchRequest::keeps_active_watcher(
   self : FsWatchRequest,
   target : FsWatchTarget,
 ) -> Bool {
   match self {
     Unwatch(..) => false
-    Watch(payload, reply~) => {
-      let root = WirePath::parse(payload.path) catch {
-        error => {
-          reply.put(Some("\{error}"))
-          return true
-        }
-      }
-      let interest = WatchInterest(payload)
-      if target.alive.val &&
-        root.absolute == target.root &&
-        interest == target.interest &&
-        payload.watch_id == target.watch_id {
+    Watch(payload, reply~) =>
+      if target.alive.val && payload.watch_id == target.watch_id {
         reply.put(None)
         true
       } else {
         false
       }
-    }
   }
 }
 
@@ -369,7 +360,7 @@ test "watch interest retains selected files, listed children, and ancestors" {
     path: "/work/project",
     files: ["src/main.mbt", "node_modules/pkg/index.js"],
     directories: ["", "docs"],
-    recursive: Some(false),
+    recursive: false,
     watch_id: "page-a:7",
   }
   let interest = WatchInterest(payload)
@@ -395,7 +386,7 @@ test "recursive watch interest covers non-indexed workspace directories" {
     path: "/work/project",
     files: ["node_modules/pkg/index.js"],
     directories: ["node_modules/vendor"],
-    recursive: Some(true),
+    recursive: true,
     watch_id: "page-a:8",
   })
   assert_false(interest.ignores(Relative("empty/deep/new.mbt")))
@@ -410,25 +401,6 @@ test "recursive watch interest covers non-indexed workspace directories" {
   // file. If it is a directory, only its descendants are pruned.
   assert_false(interest.ignores(Relative("_build")))
   assert_true(interest.ignores(Relative("_build/cache")))
-}
-
-///|
-test "recursive watch interest ignores shallow non-pruned selections" {
-  let initial = WatchInterest({
-    path: "/work/project",
-    files: ["src/main.mbt"],
-    directories: ["", "src"],
-    recursive: Some(true),
-    watch_id: "page-a:8",
-  })
-  let navigated = WatchInterest({
-    path: "/work/project",
-    files: ["docs/guide.md"],
-    directories: ["", "docs"],
-    recursive: Some(true),
-    watch_id: "page-a:9",
-  })
-  assert_eq(initial, navigated)
 }
 
 ///|
@@ -461,7 +433,7 @@ async test "watch activation fails through its request and can be retried" {
       path: file,
       files: [],
       directories: [],
-      recursive: Some(true),
+      recursive: true,
       watch_id: "page-a:failed-1",
     }) catch {
       HostError(_) => rejected = true
@@ -478,7 +450,7 @@ async test "watch activation fails through its request and can be retried" {
       path: file,
       files: [],
       directories: [],
-      recursive: Some(true),
+      recursive: true,
       watch_id: "page-a:ready-2",
     })
     guard changes.try_get() is Some(baseline) else {
@@ -504,7 +476,7 @@ async test "only an identical watch_id retains its active watcher" {
       path: dir,
       files: ["src/main.mbt"],
       directories: ["", "src"],
-      recursive: Some(true),
+      recursive: true,
       watch_id: "page-a:9",
     }
     actor.watch(payload)
@@ -547,15 +519,8 @@ test "filesystem payloads carry absolute target paths" {
   })
   assert_eq(selected.files, ["src/main.mbt"])
   assert_eq(selected.directories, ["", "src"])
-  assert_eq(selected.recursive, Some(true))
+  assert_true(selected.recursive)
   assert_eq(selected.watch_id, "page-a:7")
-  let legacy : WatchWorkspacePayload = @json.from_json({
-    "path": "/work/project",
-    "files": [],
-    "directories": [],
-    "watch_id": "page-a:6",
-  })
-  assert_true(legacy.recursive is None)
 }
 
 ///|

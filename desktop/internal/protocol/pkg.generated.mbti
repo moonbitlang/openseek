@@ -2371,7 +2371,7 @@ pub(all) struct WatchWorkspacePayload {
   path : String
   files : Array[String]
   directories : Array[String]
-  recursive : Bool?
+  recursive : Bool
   watch_id : String
 } derive(Eq, @debug.Debug)
 pub fn WatchWorkspacePayload::equal(Self, Self) -> Bool

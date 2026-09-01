@@ -557,9 +557,8 @@ pub(all) struct WatchWorkspacePayload {
   directories : Array[String]
   // Keep every non-ignored descendant observable while a workspace-wide file
   // index is live. Shallow mode remains sufficient for open files and the
-  // explorer's explicitly listed directories. `None` is the legacy shallow
-  // form and is omitted from encoded requests rather than written as `null`.
-  recursive : Bool?
+  // explorer's explicitly listed directories.
+  recursive : Bool
   // Concrete watcher/failure identity. Clients change it for every desired
   // configuration so a replaced watcher's delayed failure is stale.
   watch_id : String
@@ -572,23 +571,20 @@ pub impl FromJson for WatchWorkspacePayload with fn from_json(json, path) {
     path: object.required_string("path"),
     files: object.required_string_array("files"),
     directories: object.required_string_array("directories"),
-    recursive: object.optional_bool("recursive"),
+    recursive: object.required_bool("recursive"),
     watch_id: object.required_string("watch_id"),
   }
 }
 
 ///|
 pub impl ToJson for WatchWorkspacePayload with fn to_json(self) {
-  let fields : Map[String, Json] = {
-    "path": self.path.to_json(),
+  {
+    "path": self.path,
     "files": self.files.to_json(),
     "directories": self.directories.to_json(),
-    "watch_id": self.watch_id.to_json(),
+    "recursive": self.recursive,
+    "watch_id": self.watch_id,
   }
-  if self.recursive is Some(recursive) {
-    fields["recursive"] = recursive.to_json()
-  }
-  Json::object(fields)
 }
 
 ///|
