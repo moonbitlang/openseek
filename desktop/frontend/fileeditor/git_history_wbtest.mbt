@@ -8,7 +8,7 @@ fn graph_fixture_state() -> State {
     changes: ChangeListReady(
       repository=true,
       files=[],
-      refreshing=false,
+      refreshing=None,
       refresh_again=false,
     ),
     git_graph: GitGraphReady(
@@ -42,7 +42,7 @@ fn graph_fixture_state() -> State {
         },
       ],
       has_more=true,
-      loading_more=false,
+      loading_more=None,
       load_error=None,
     ),
     git_graph_selected: Some(commit),
@@ -76,8 +76,7 @@ test "Git history replies are fenced by request UUID" {
   let request_id = "git-history-current"
   let state = {
     ..graph_fixture_state(),
-    git_graph: GitGraphLoading,
-    git_graph_request_id: Some(request_id),
+    git_graph: GitGraphLoading(request_id~),
   }
   let reply : @protocol.GitHistoryReply = {
     repository: true,
@@ -96,7 +95,7 @@ test "Git history replies are fenced by request UUID" {
     state,
     test_ctx(),
   )
-  assert_true(stale.git_graph is GitGraphLoading)
+  assert_true(stale.git_graph is GitGraphLoading(..))
   let (_, settled) = update(
     test_emit(),
     GitHistoryLoaded(owner=test_ctx().owner, request_id~, append=false, reply~),

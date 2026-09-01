@@ -89,7 +89,6 @@ fn request_git_commit_changes(
         GitCommitChangesFailed(
           owner~,
           request_id~,
-          commit~,
           message="workspace moved to another host before commit inspection",
         ),
       )
@@ -112,7 +111,6 @@ fn request_git_commit_changes(
               GitCommitChangesFailed(
                 owner~,
                 request_id~,
-                commit~,
                 message=@interop.bridge_error_text(error),
               ),
             ),
@@ -209,8 +207,7 @@ fn refresh_git_graph(
     ),
     {
       ..state,
-      git_graph: GitGraphLoading,
-      git_graph_request_id: Some(request_id),
+      git_graph: GitGraphLoading(request_id~),
       git_graph_selected: None,
       git_commit_files: GitCommitFilesIdle,
     },
@@ -231,7 +228,7 @@ fn load_more_git_history(
       snapshot~,
       commits~,
       has_more=true,
-      loading_more=false,
+      loading_more=None,
       ..
     ) else {
     return (@cmd.none, state)
@@ -249,13 +246,12 @@ fn load_more_git_history(
     ),
     {
       ..state,
-      git_graph_request_id: Some(request_id),
       git_graph: GitGraphReady(
         repository=true,
         snapshot~,
         commits~,
         has_more=true,
-        loading_more=true,
+        loading_more=Some(request_id),
         load_error=None,
       ),
     },
@@ -295,8 +291,7 @@ fn select_git_commit(
     {
       ..state,
       git_graph_selected: Some(commit),
-      git_commit_files_request_id: Some(request_id),
-      git_commit_files: GitCommitFilesLoading(commit~),
+      git_commit_files: GitCommitFilesLoading(commit~, request_id~),
     },
   )
 }
@@ -322,11 +317,7 @@ fn retry_git_commit_changes(
       commit,
       workspace=ctx.workspace(),
     ),
-    {
-      ..state,
-      git_commit_files_request_id: Some(request_id),
-      git_commit_files: GitCommitFilesLoading(commit~),
-    },
+    { ..state, git_commit_files: GitCommitFilesLoading(commit~, request_id~), },
   )
 }
 

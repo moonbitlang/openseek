@@ -535,7 +535,8 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
       match self.console {
         Some(console) =>
           match console.roster_sync {
-            RosterLoading => notices.push("Loading device…")
+            RosterPending | RosterLoading(..) =>
+              notices.push("Loading device…")
             RosterFailed(message) => notices.push(message)
             RosterReady =>
               if console.roster.is_empty() {
@@ -1480,7 +1481,8 @@ fn console_gate_view(
       }
       AuthSignedIn(..) =>
         match console.roster_sync {
-          RosterLoading => card.push(@html.p("Checking device…"))
+          RosterPending | RosterLoading(..) =>
+            card.push(@html.p("Checking device…"))
           RosterFailed(message) => {
             card.push(@html.h2("Can't load device"))
             card.push(@html.p(message))

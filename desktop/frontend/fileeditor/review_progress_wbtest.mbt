@@ -17,12 +17,10 @@ fn review_progress_state() -> (State, Ctx, ChangedFile) raise {
     ..owned_state(),
     docs,
     explorer_mode: ExplorerChanges,
-    // The refresh these tests settle is the read in flight.
-    changes_request_id: Some("changes-1"),
     changes: ChangeListReady(
       repository=true,
       files=[selected],
-      refreshing=false,
+      refreshing=None,
       refresh_again=false,
     ),
   }
@@ -58,7 +56,7 @@ test "a final changes refresh invalidates progress when the row changes" {
     changes: ChangeListReady(
       repository=true,
       files=[selected],
-      refreshing=true,
+      refreshing=Some("changes-1"),
       refresh_again=false,
     ),
   }
@@ -66,7 +64,7 @@ test "a final changes refresh invalidates progress when the row changes" {
     test_emit(),
     ChangesLoaded(
       owner=ctx.owner,
-      request_id=refreshing.changes_request_id.unwrap(),
+      request_id="changes-1",
       repository=true,
       head=None,
       files=[changed_again],
@@ -81,7 +79,7 @@ test "a final changes refresh invalidates progress when the row changes" {
     changes: ChangeListReady(
       repository=true,
       files=[selected],
-      refreshing=true,
+      refreshing=Some("changes-2"),
       refresh_again=false,
     ),
     changes_head: Some("old-head"),
@@ -91,7 +89,7 @@ test "a final changes refresh invalidates progress when the row changes" {
     test_emit(),
     ChangesLoaded(
       owner=ctx.owner,
-      request_id=same_row_refresh.changes_request_id.unwrap(),
+      request_id="changes-2",
       repository=true,
       head=Some("new-head"),
       files=[selected],

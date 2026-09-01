@@ -956,10 +956,9 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
       changes: ChangeListReady(
         repository=true,
         files=[review_change],
-        refreshing=false,
+        refreshing=None,
         refresh_again=false,
       ),
-      changes_request_id: Some("changes-2"),
       changes_head: Some("head"),
       changes_head_known: true,
       review_generation: 3,

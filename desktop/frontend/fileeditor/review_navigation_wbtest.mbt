@@ -11,7 +11,7 @@ test "review navigation skips unavailable rows and stops at queue edges" {
     changes: ChangeListReady(
       repository=true,
       files=[first, unavailable, last],
-      refreshing=false,
+      refreshing=None,
       refresh_again=false,
     ),
   }
@@ -47,7 +47,7 @@ test "review navigation distinguishes duplicate same-path Git rows" {
     changes: ChangeListReady(
       repository=true,
       files=[deleted, untracked],
-      refreshing=false,
+      refreshing=None,
       refresh_again=false,
     ),
   }

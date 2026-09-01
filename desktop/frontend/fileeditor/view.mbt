@@ -814,7 +814,7 @@ fn git_graph_inventory(
   ctx : Ctx,
 ) -> Array[@html.Html] {
   match state.git_graph {
-    GitGraphIdle | GitGraphLoading =>
+    GitGraphIdle | GitGraphLoading(..) =>
       [@html.div(class="file-panel-empty", "Loading Git history…")]
     GitGraphFailed(message) =>
       [
@@ -870,18 +870,18 @@ fn git_graph_inventory(
           ),
         )
       }
-      if has_more || loading_more {
+      if has_more || loading_more is Some(_) {
         let continuation = layouts[layouts.length() - 1].output_swimlanes
         children.push(
           @html.button(
             class="git-graph-load-more",
-            disabled=loading_more,
+            disabled=loading_more is Some(_),
             on_click=dispatch(GitHistoryLoadMoreRequested),
             [
               git_graph_placeholder(continuation, None),
               @html.span(
                 class="git-graph-load-more-label",
-                if loading_more {
+                if loading_more is Some(_) {
                   "Loading…"
                 } else {
                   "Load more"
@@ -1285,7 +1285,7 @@ fn git_commit_files(
   let columns = layout.output_swimlanes
   let highlight_index = Some(graph_row_index(layout, commit.id))
   let rows : Array[@html.Html] = match state.git_commit_files {
-    GitCommitFilesLoading(commit=id) if id == commit.id =>
+    GitCommitFilesLoading(commit=id, ..) if id == commit.id =>
       [
         @html.div(class="git-commit-files-message", [
           git_graph_placeholder(columns, highlight_index),
@@ -1406,7 +1406,7 @@ fn change_inventory(
   ctx : Ctx,
 ) -> Array[@html.Html] {
   match state.changes {
-    ChangeListIdle | ChangeListLoading(_) =>
+    ChangeListIdle | ChangeListLoading(..) =>
       [@html.div(class="file-panel-empty", "Loading changes…")]
     ChangeListFailed(message) =>
       [

@@ -85,9 +85,9 @@ pub fn ChangeKind::not_equal(Self, Self) -> Bool
 
 pub(all) enum ChangeList {
   ChangeListIdle
-  ChangeListLoading(refresh_again~ : Bool)
+  ChangeListLoading(request_id~ : String, refresh_again~ : Bool)
   ChangeListFailed(String)
-  ChangeListReady(repository~ : Bool, files~ : Array[ChangedFile], refreshing~ : Bool, refresh_again~ : Bool)
+  ChangeListReady(repository~ : Bool, files~ : Array[ChangedFile], refreshing~ : String?, refresh_again~ : Bool)
 } derive(Eq)
 pub fn ChangeList::equal(Self, Self) -> Bool
 pub fn ChangeList::not_equal(Self, Self) -> Bool
@@ -174,16 +174,16 @@ pub(all) struct FileStat {
 
 pub(all) enum GitCommitFiles {
   GitCommitFilesIdle
-  GitCommitFilesLoading(commit~ : String)
+  GitCommitFilesLoading(commit~ : String, request_id~ : String)
   GitCommitFilesFailed(commit~ : String, message~ : String)
   GitCommitFilesReady(commit~ : String, parent~ : String?, files~ : Array[@protocol.GitHistoricalChange])
 } derive(Eq)
 
 pub(all) enum GitGraphState {
   GitGraphIdle
-  GitGraphLoading
+  GitGraphLoading(request_id~ : String)
   GitGraphFailed(String)
-  GitGraphReady(repository~ : Bool, snapshot~ : @protocol.GitHistorySnapshot, commits~ : Array[@protocol.GitHistoryCommit], has_more~ : Bool, loading_more~ : Bool, load_error~ : String?)
+  GitGraphReady(repository~ : Bool, snapshot~ : @protocol.GitHistorySnapshot, commits~ : Array[@protocol.GitHistoryCommit], has_more~ : Bool, loading_more~ : String?, load_error~ : String?)
 } derive(Eq)
 
 type GraphLane derive(Eq)
@@ -237,7 +237,7 @@ pub(all) enum Msg {
   GitHistoryFailed(owner~ : @interop.ConversationKey, request_id~ : String, append~ : Bool, message~ : String)
   GitCommitSelected(String)
   GitCommitChangesLoaded(owner~ : @interop.ConversationKey, request_id~ : String, reply~ : @protocol.GitCommitChangesReply)
-  GitCommitChangesFailed(owner~ : @interop.ConversationKey, request_id~ : String, commit~ : String, message~ : String)
+  GitCommitChangesFailed(owner~ : @interop.ConversationKey, request_id~ : String, message~ : String)
   GitCommitChangesRetry(String)
   HistoricalFileSelected(@dock.GitHistoryDiff)
   ToggleChangesSection
@@ -364,17 +364,14 @@ pub(all) struct State {
   review_diff_navigation_available : Bool
   changes : ChangeList
   git_graph : GitGraphState
-  git_graph_request_id : String?
   git_graph_selected : String?
   git_commit_files : GitCommitFiles
-  git_commit_files_request_id : String?
   git_actual_head : String?
   git_actual_head_known : Bool
   changes_collapsed : Bool
   git_graph_collapsed : Bool
   history_docs : Map[String, HistoryDiffDoc]
   reviewed_changes : Array[ChangedFile]
-  changes_request_id : String?
   checkout_id : String
   file_link_request_id : String
   changes_head : String?

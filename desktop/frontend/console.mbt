@@ -17,9 +17,13 @@ priv enum ConsoleAuth {
 
 ///|
 /// The device roster's fetch lifecycle, separate from `auth` so a refresh
-/// can reload the list without leaving the signed-in frame.
+/// can reload the list without leaving the signed-in frame. `RosterPending`
+/// has no request on the wire yet (auth is still settling); `RosterLoading`
+/// carries the newest `/v1/devices` request's UUID, so a slower pre-mutation
+/// snapshot cannot overwrite a newer roster.
 priv enum RosterSync {
-  RosterLoading
+  RosterPending
+  RosterLoading(request_id~ : String)
   RosterReady
   RosterFailed(String)
 } derive(Eq)
@@ -43,9 +47,6 @@ priv struct ConsoleState {
   // only to verify and describe its one query-selected device.
   roster : Array[DeviceMeta]
   roster_sync : RosterSync
-  // The newest `/v1/devices` request. Replies carry this UUID so a
-  // slower pre-mutation snapshot cannot overwrite a newer roster.
-  roster_request_id : String?
   // The required `?device=` from the page's own query. It remains for the
   // page's lifetime: one browser page/tab owns one device and never falls
   // through to another roster entry.
@@ -76,8 +77,7 @@ fn empty_console_state(
   {
     auth: AuthChecking,
     roster: [],
-    roster_sync: RosterLoading,
-    roster_request_id: None,
+    roster_sync: RosterPending,
     page_device,
     login_return_to,
     preselect_project,
@@ -141,8 +141,7 @@ fn update_console_msg(
           console: Some({
             ..console,
             auth: AuthSignedIn(login~, avatar~),
-            roster_sync: RosterLoading,
-            roster_request_id: Some(request_id),
+            roster_sync: RosterLoading(request_id~),
             notice: None,
           }),
         },
@@ -158,14 +157,16 @@ fn update_console_msg(
       // A reply that outlived the session, or was overtaken by a later roster
       // request, must not resurrect stale device channels.
       guard console.auth is AuthSignedIn(..) &&
-        console.roster_request_id == Some(request_id) else {
+        console.roster_sync is RosterLoading(request_id=expected) &&
+        expected == request_id else {
         return (@cmd.none, model)
       }
       apply_roster(dispatch, model, console, metas)
     }
     RosterFailed(message~, request_id~) => {
       guard console.auth is AuthSignedIn(..) &&
-        console.roster_request_id == Some(request_id) else {
+        console.roster_sync is RosterLoading(request_id=expected) &&
+        expected == request_id else {
         return (@cmd.none, model)
       }
       (
@@ -181,7 +182,7 @@ fn update_console_msg(
         fetch_console_me(dispatch),
         {
           ..model,
-          console: Some({ ..console, roster_sync: RosterLoading, notice: None, }),
+          console: Some({ ..console, roster_sync: RosterPending, notice: None, }),
         },
       )
     SignOutClicked => {
@@ -329,7 +330,7 @@ fn console_test_model() -> Model {
 /// fixture must name this request exactly; there is no numeric ordering left.
 fn Model::console_request_id(self : Model) -> String raise {
   guard self.console is Some(console) &&
-    console.roster_request_id is Some(request_id) else {
+    console.roster_sync is RosterLoading(request_id~) else {
     fail("no roster request in flight")
   }
   request_id
@@ -441,7 +442,7 @@ test "a 401 anywhere signs the console out and drops every channel" {
   assert_true(console.auth is AuthSignedOut)
   inspect(out.devices.length(), content="0")
   inspect(out.conversations.length(), content="0")
-  assert_true(console.roster_sync is RosterLoading)
+  assert_true(console.roster_sync is RosterPending)
   // A roster reply that outlived the session must not resurrect channels.
   let (_, stale) = update(
     dispatch,
@@ -582,10 +583,17 @@ test "a revoked page device is retired without connecting a survivor" {
   let survivor : Array[DeviceMeta] = [
     { id: "d_b", name: "B", hostname: None, online: true, },
   ]
+  // Revocation arrives through a fresh roster cycle; a settled page accepts
+  // no reply until another request is in flight.
+  let (_, refreshing) = update(
+    dispatch,
+    Console(MeLoaded(login="o", avatar="")),
+    seeded,
+  )
   let (_, refreshed) = update(
     dispatch,
-    Console(RosterLoaded(survivor, request_id=signed.console_request_id())),
-    seeded,
+    Console(RosterLoaded(survivor, request_id=refreshing.console_request_id())),
+    refreshing,
   )
   assert_true(refreshed.focused == @interop.ChannelId::Local)
   assert_true(refreshed.device_state(Remote("d_a")) is None)
@@ -857,7 +865,7 @@ fn console_signed_out(
         ..console,
         auth: AuthSignedOut,
         roster: [],
-        roster_sync: RosterLoading,
+        roster_sync: RosterPending,
         busy: false,
         notice: None,
       }),

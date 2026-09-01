@@ -16343,7 +16343,10 @@ test "chip jumps relativize legacy absolute paths against the roots" {
       tree_open: false,
       explorer_mode: @fileeditor.ExplorerChanges,
       review_view_mode: @fileeditor.ReviewDiff,
-      changes_request_id: Some("changes-7"),
+      changes: @fileeditor.ChangeListLoading(
+        request_id="changes-7",
+        refresh_again=false,
+      ),
       watch_id: "watch-11",
     },
   }
@@ -16360,9 +16363,10 @@ test "chip jumps relativize legacy absolute paths against the roots" {
   assert_false(next.file_panel.tree_open)
   assert_true(next.file_panel.explorer_mode is @fileeditor.ExplorerChanges)
   assert_true(next.file_panel.review_view_mode is @fileeditor.ReviewDiff)
-  // The eager re-root retains 7. The jump keeps the explorer hidden while the
-  // file is active, so Changes waits until the pane is shown before refreshing.
-  assert_true(next.file_panel.changes_request_id == Some("changes-7"))
+  // The eager re-root retires the previous conversation's read. The jump
+  // keeps the explorer hidden while the file is active, so Changes waits
+  // until the pane is shown before refreshing.
+  assert_true(next.file_panel.changes is @fileeditor.ChangeListIdle)
   // The fresh watch gets a new UUID, so an older watcher push cannot collide.
   assert_true(next.file_panel.watch_id != "watch-11")
   // The registry can still be loading; once loaded, the project root remains

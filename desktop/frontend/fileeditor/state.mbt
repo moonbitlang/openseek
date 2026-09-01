@@ -240,17 +240,19 @@ pub(all) struct ChangedFile {
 
 ///|
 /// The lazily requested changed-file inventory. A ready snapshot remains
-/// visible during a background refresh. `refreshing` limits the host to one
-/// outstanding request; `refresh_again` coalesces later watcher/run signals
-/// into at most one follow-up.
+/// visible during a background refresh. The in-flight read carries its request
+/// UUID — `ChangeListLoading` for a first load, `refreshing` for a background
+/// refresh — so only the exact reply that arm is waiting for can settle it;
+/// `refresh_again` coalesces later watcher/run signals into at most one
+/// follow-up.
 pub(all) enum ChangeList {
   ChangeListIdle
-  ChangeListLoading(refresh_again~ : Bool)
+  ChangeListLoading(request_id~ : String, refresh_again~ : Bool)
   ChangeListFailed(String)
   ChangeListReady(
     repository~ : Bool,
     files~ : Array[ChangedFile],
-    refreshing~ : Bool,
+    refreshing~ : String?,
     refresh_again~ : Bool
   )
 } derive(Eq)
@@ -258,26 +260,30 @@ pub(all) enum ChangeList {
 ///|
 /// The lazily loaded, snapshot-pinned Git graph. A ready page stays visible
 /// while more rows are requested; `load_error` therefore does not discard the
-/// history the user can still inspect.
+/// history the user can still inspect. In-flight reads carry their request
+/// UUID — `GitGraphLoading` for a fresh page, `loading_more` for pagination —
+/// so only the exact reply each arm is waiting for can settle it.
 pub(all) enum GitGraphState {
   GitGraphIdle
-  GitGraphLoading
+  GitGraphLoading(request_id~ : String)
   GitGraphFailed(String)
   GitGraphReady(
     repository~ : Bool,
     snapshot~ : @protocol.GitHistorySnapshot,
     commits~ : Array[@protocol.GitHistoryCommit],
     has_more~ : Bool,
-    loading_more~ : Bool,
+    loading_more~ : String?,
     load_error~ : String?
   )
 } derive(Eq)
 
 ///|
-/// The inline file expansion for the currently selected commit.
+/// The inline file expansion for the currently selected commit. The loading
+/// arm carries its request UUID, so only the reply to the newest selection
+/// can settle it.
 pub(all) enum GitCommitFiles {
   GitCommitFilesIdle
-  GitCommitFilesLoading(commit~ : String)
+  GitCommitFilesLoading(commit~ : String, request_id~ : String)
   GitCommitFilesFailed(commit~ : String, message~ : String)
   GitCommitFilesReady(
     commit~ : String,
@@ -426,12 +432,8 @@ pub(all) struct State {
   // refreshed only at meaningful repository boundaries rather than on the
   // three-second working-tree poll.
   git_graph : GitGraphState
-  // The graph and commit-file reads whose replies are still accepted; `None`
-  // while none is in flight.
-  git_graph_request_id : String?
   git_graph_selected : String?
   git_commit_files : GitCommitFiles
-  git_commit_files_request_id : String?
   git_actual_head : String?
   git_actual_head_known : Bool
   // Section presentation is a page-lifetime preference and survives owner
@@ -446,11 +448,6 @@ pub(all) struct State {
   // Watcher events and run boundaries invalidate affected progress; a final
   // Git refresh also drops rows whose status or rename identity changed.
   reviewed_changes : Array[ChangedFile]
-  // The Changes read whose reply is still accepted, or `None` while no read
-  // is in flight. Retained across conversation re-roots and cleared across
-  // same-owner placement changes, so owner plus this identity rejects an old
-  // A→B→A reply or one from an earlier checkout incarnation.
-  changes_request_id : String?
   // Placement/conversation UUID carried by filesystem request replies.
   // Replacing this value on either boundary rejects reads, listings, and
   // stats that outlived the checkout they addressed.
@@ -467,7 +464,7 @@ pub(all) struct State {
   changes_head_known : Bool
   // Monotonic token shared by changed-file baseline and working-tree reads.
   // Each side records its current token in `ReviewState`; it outlives
-  // conversation re-roots for the same A→B→A reason as `changes_request_id`.
+  // conversation re-roots so an A→B→A cycle cannot make an old read current.
   review_generation : Int
   // The pending comparison whose loading notice has survived the reveal
   // delay. A newer review generation does not inherit this value, so rapid
@@ -544,17 +541,14 @@ pub fn State::empty() -> State {
     review_diff_navigation_available: false,
     changes: ChangeListIdle,
     git_graph: GitGraphIdle,
-    git_graph_request_id: None,
     git_graph_selected: None,
     git_commit_files: GitCommitFilesIdle,
-    git_commit_files_request_id: None,
     git_actual_head: None,
     git_actual_head_known: false,
     changes_collapsed: false,
     git_graph_collapsed: false,
     history_docs: Map([]),
     reviewed_changes: [],
-    changes_request_id: None,
     checkout_id: @uuid.mint(),
     file_link_request_id: @uuid.mint(),
     changes_head: None,
@@ -608,7 +602,6 @@ pub fn State::prepare_owner(
     review_diff_mode: self.review_diff_mode,
     review_diff_ignore_comments: self.review_diff_ignore_comments,
     review_diff_ignore_tests: self.review_diff_ignore_tests,
-    changes_request_id: self.changes_request_id,
     checkout_id: @uuid.mint(),
     file_link_request_id: self.file_link_request_id,
     review_generation: self.review_generation,
@@ -803,7 +796,6 @@ pub(all) enum Msg {
   GitCommitChangesFailed(
     owner~ : @interop.ConversationKey,
     request_id~ : String,
-    commit~ : String,
     message~ : String
   )
   GitCommitChangesRetry(String)
