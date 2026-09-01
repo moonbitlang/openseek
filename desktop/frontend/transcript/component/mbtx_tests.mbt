@@ -83,12 +83,13 @@ test "an mbtx program past the transcript clamp keeps every numbered line" {
 /// timeout, a kill) keeps the generic word, as does every other tool.
 #warnings("-alert_unstable")
 test "a failed mbtx row names its failure stage" {
-  fn markup_for(brief : String, is_error : Bool) -> String {
+  let plain_arguments = "{\"source\":\"fn main {  }\"}"
+  fn markup_for(brief : String, is_error : Bool, arguments : String) -> String {
     let rendered = tool_call_view({
       kind: Tool(
         call_id="c1",
         name="mbtx",
-        arguments=Some("{\"source\":\"fn main {  }\"}"),
+        arguments=Some(arguments),
         has_result=true,
         is_error~,
         brief=Some(brief),
@@ -100,21 +101,42 @@ test "a failed mbtx row names its failure stage" {
     @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
   }
 
-  let build = markup_for("mbtx (build failed, exit=1)", true)
+  let build = markup_for("mbtx (build failed, exit=1)", true, plain_arguments)
   assert_true(build.contains("tool-stage-build"))
   assert_true(build.contains("build error"))
   assert_false(build.contains(">failed<"))
   // Every build-phase brief shape maps to the same stage word.
-  assert_true(markup_for("mbtx (build timeout)", true).contains("build error"))
-  let runtime = markup_for("mbtx (exit=1)", true)
+  assert_true(
+    markup_for("mbtx (build timeout)", true, plain_arguments).contains(
+      "build error",
+    ),
+  )
+  // The default target is the staged wasm path, so its exit brief is a
+  // run-stage claim; an explicit wasm target reads the same.
+  let runtime = markup_for("mbtx (exit=1)", true, plain_arguments)
   assert_true(runtime.contains("tool-stage-run"))
   assert_true(runtime.contains("runtime error"))
+  assert_true(
+    markup_for(
+      "mbtx (exit=1)", true, "{\"source\":\"fn main {  }\",\"target\":\"wasm\"}",
+    ).contains("runtime error"),
+  )
+  // A single-shot target's one exit code covers both stages — the engine's
+  // own report claims neither, and neither may this row: a js compile error
+  // must not read as a runtime one.
+  let single_shot = markup_for(
+    "mbtx (exit=1)", true, "{\"source\":\"fn main {  }\",\"target\":\"js\"}",
+  )
+  assert_true(single_shot.contains(">failed<"))
+  assert_false(single_shot.contains("runtime error"))
   // A clean exit carries no marker at all.
-  let ok = markup_for("mbtx (exit=0)", false)
+  let ok = markup_for("mbtx (exit=0)", false, plain_arguments)
   assert_false(ok.contains("runtime error"))
   assert_false(ok.contains(">failed<"))
   // A brief outside both stage shapes keeps the generic word.
-  assert_true(markup_for("mbtx (timeout)", true).contains(">failed<"))
+  assert_true(
+    markup_for("mbtx (timeout)", true, plain_arguments).contains(">failed<"),
+  )
 }
 
 ///|

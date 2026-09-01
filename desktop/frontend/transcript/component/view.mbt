@@ -306,7 +306,7 @@ fn tool_request_view(item : @transcript.TranscriptItem) -> @html.Html {
     @html.span(class="tool-flow", "→"),
     @html.span(class="tool-call-text", label),
   ]
-  if failure_marker(name, brief, is_error) is Some(marker) {
+  if failure_marker(name, brief, is_error, Some(arguments)) is Some(marker) {
     line.push(marker)
   }
   line.push(@plan.fold_progress([item]))
@@ -391,7 +391,7 @@ fn tool_result_view(
     @html.span(class="tool-flow", "←"),
     @html.span(class="tool-result-text", label),
   ]
-  if failure_marker(name, brief, is_error) is Some(marker) {
+  if failure_marker(name, brief, is_error, arguments) is Some(marker) {
     line.push(marker)
   }
   let body : Array[@html.Html] = []
