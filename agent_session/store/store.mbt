@@ -129,7 +129,8 @@ fn header_line(session : @agent_session.Session) -> String {
 fn events_jsonl(events : @vector.Vector[@agent_session.SessionEvent]) -> String {
   let builder = StringBuilder()
   for event in events {
-    builder <+ "\{event.to_json().stringify()}\n"
+    let line = ToJson::to_json(event).stringify()
+    builder <+ "\{line}\n"
   }
   builder.to_string()
 }
@@ -354,7 +355,7 @@ async fn persist_event(
     // does not silently follow an upstream default change.
     @fs.write_file(
       path,
-      "\{event.to_json().stringify()}\n",
+      ToJson::to_json(event).stringify() + "\n",
       create_mode=OpenOrCreate,
       append=true,
       sync=Data,

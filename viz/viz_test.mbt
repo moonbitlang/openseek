@@ -48,7 +48,8 @@ fn sample_session() -> @agent_session.Session {
 fn events_jsonl(session : @agent_session.Session) -> String {
   let out = StringBuilder()
   for event in session.events() {
-    out <+ "\{event.to_json().stringify()}\n"
+    let line = ToJson::to_json(event).stringify()
+    out <+ "\{line}\n"
   }
   out.to_string()
 }
