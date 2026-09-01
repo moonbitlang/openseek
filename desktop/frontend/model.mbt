@@ -1986,6 +1986,10 @@ priv enum Msg {
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
   BridgeReady
+  // Only the host notification subscription was replaced. Durable mirrors
+  // need the same resync as a reconnect, but request promises are still live
+  // and retain ownership of their pending prompt/steer entries.
+  NotificationGap
   BridgeUnavailable(String)
   // The channel's WebSocket closed (or failed to open). The handler counts
   // the loss and schedules `ReconnectDue`, making the model's device list

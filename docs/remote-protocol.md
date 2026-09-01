@@ -231,7 +231,11 @@ closes it, and the client reconnects into the resync path above.
 The in-process bridge does not use WebSocket reconnect or capability
 negotiation. It can still be recreated across a host restart: each
 `BridgeReady` transition makes the desktop rebuild host-derived state, so that
-readiness resync follows the same idempotent, race-tolerant rules.
+readiness resync follows the same idempotent, race-tolerant rules. If only its
+bounded hub subscription overflows, the bridge replaces that subscription and
+emits a distinct `notification.gap` boundary. The desktop performs the same
+durable state reads but preserves pending prompt and steer ownership because
+the in-process request promises did not disconnect and can still settle.
 
 ## Method catalog
 

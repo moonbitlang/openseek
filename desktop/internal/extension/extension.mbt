@@ -172,6 +172,15 @@ let browser_event : @proton_contract.Event[Json] = @commands.extension_contract.
 )
 
 ///|
+/// A window-local notification-stream discontinuity. The Proton request
+/// transport is still alive, so this is deliberately distinct from
+/// `agent.connected`: the page must resync host state without abandoning
+/// ownership of requests whose promises can still settle.
+let notification_gap_event : @proton_contract.Event[@protocol.EmptyPayload] = @commands.extension_contract.event(
+  "notification.gap",
+)
+
+///|
 /// The page connection and Proton's window lifecycle hook start independently.
 /// Bound the short startup backlog rather than letting either side grow an
 /// unbounded in-memory queue while it waits for the other.
@@ -191,6 +200,7 @@ priv enum BridgeControl {
 priv enum PageNotification {
   Hub(@protocol.Notification)
   BrowserEvent(Json)
+  NotificationGap
 }
 
 ///|
@@ -247,6 +257,7 @@ async fn PageEventTarget::emit(
     Hub(SemanticSearchProgress(payload)) =>
       self.events.emit(semantic_search_progress_event, payload)
     BrowserEvent(payload) => self.events.emit(browser_event, payload)
+    NotificationGap => self.events.emit(notification_gap_event, NoPayload)
   }
 }
 
@@ -259,7 +270,8 @@ priv enum BridgeInput {
   Deliver(PageNotification)
   // The process-wide hub evicted this subscriber after its bounded queue
   // filled. At least one notification is missing, so only a fresh subscription
-  // followed by the ordinary BridgeReady resync can restore truthful state.
+  // followed by a notification-gap resync can restore truthful state without
+  // pretending the still-live Proton request transport also disconnected.
   SubscriptionDropped
 }
 
@@ -277,6 +289,10 @@ struct DesktopBridgeActor {
   // touching the process-wide hub — a relay client has no native views, so
   // it must never see them.
   browser_events : @async.Queue[Json]
+  // Monotonic observability for the app-lifetime subscription owner. Besides
+  // making repeated recovery diagnosable, this lets the actor test wait for a
+  // real overflow/resubscribe boundary without exposing hub internals.
+  subscription_generation : Ref[Int]
 }
 
 ///|
@@ -291,6 +307,7 @@ pub fn DesktopBridgeActor::DesktopBridgeActor(
     // accumulate forever.
     controls: Queue(kind=Blocking(8)),
     browser_events: Queue(kind=Blocking(64)),
+    subscription_generation: Ref(0),
   }
 }
 
@@ -439,14 +456,12 @@ async fn deliver_to_page(
 /// through its request-scoped sender; later notifications use the window-owned
 /// sender installed by Proton's lifecycle hook.
 pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
-  // Retain every generation for final cleanup. Replaced subscriptions are
-  // unsubscribed immediately; keeping their handles makes cancellation safe
-  // without depending on how a defer captures the mutable current handle.
-  let subscriptions = [self.state.subscribe()]
-  defer (for notifications in subscriptions {
-    self.state.unsubscribe(notifications)
-  })
-  let mut notifications = subscriptions[0]
+  // The single-slot owner follows the current subscription, so final cleanup
+  // reaches the replacement without retaining every evicted queue (and its
+  // full-size allocation) for the rest of the app lifetime.
+  let subscription = [self.state.subscribe()]
+  defer self.state.unsubscribe(subscription[0])
+  let mut notifications = subscription[0]
   let host_notifications : @async.Queue[@protocol.Notification] = Queue(
     kind=Blocking(64),
   )
@@ -500,17 +515,13 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
           // Remote clients reconnect their socket when the hub closes a slow
           // subscription. The desktop bridge is process-local and has no
           // socket supervisor, so renew it here instead of silently ending its
-          // app-lifetime actor. Subscribe before publishing readiness: any
-          // concurrent notification then queues behind this resync boundary.
+          // app-lifetime actor. Subscribe before publishing the gap boundary:
+          // any concurrent notification then queues behind that resync signal.
           self.state.unsubscribe(notifications)
           notifications = self.state.subscribe()
-          subscriptions.push(notifications)
-          deliver_to_page(
-            connected,
-            target,
-            pending,
-            Hub(AgentConnected({ stage: Accepted, })),
-          )
+          subscription[0] = notifications
+          self.subscription_generation.val += 1
+          deliver_to_page(connected, target, pending, NotificationGap)
         }
       }
     }
@@ -524,4 +535,28 @@ async test "a closed hub subscription becomes a reconnect boundary" {
   )
   notifications.close(clear=true)
   assert_true(next_hub_input(notifications) is SubscriptionDropped)
+}
+
+///|
+async test "the bridge actor resubscribes after a real hub eviction" {
+  let state = @api.ApiState(engine="unused")
+  let bridge = DesktopBridgeActor(state)
+  @async.with_task_group(group => {
+    group.spawn_bg(allow_failure=true, () => bridge.run())
+    // Let the actor subscribe and park in its input race. Publishing below is
+    // synchronous, so the woken reader cannot drain again before the burst
+    // exceeds the hub's 1024-frame bound.
+    @async.sleep(0)
+    for _ in 0..<2048 {
+      state.publish(SkillsChanged)
+    }
+    for _ in 0..<100 {
+      if bridge.subscription_generation.val == 1 {
+        group.return_immediately(())
+        return
+      }
+      @async.sleep(1)
+    }
+    fail("the bridge actor did not replace its evicted subscription")
+  })
 }

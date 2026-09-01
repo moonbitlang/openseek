@@ -142,6 +142,14 @@ fn LocalBridgeSub::wire(
     guard event_payload(event) is Some(payload) else { return }
     scheduler.add((self.dispatch)(BrowserEvent(payload~)))
   })
+  // A hub overflow replaces only the native notification subscription. Keep
+  // it distinct from agent.connected so live Proton request promises retain
+  // their pending frontend ownership while the durable mirrors resync.
+  self.subscribe(extension_events, "openseek.notification.gap", _ => {
+    scheduler.add(
+      (self.dispatch)(NotificationGap(channel=@interop.ChannelId::Local)),
+    )
+  })
   // Application events use `__MoonBit__.app.on`; keep their command id typed
   // while leaving command policy to the parent frontend.
   self.subscribe(application_events, "menu.command", event => {

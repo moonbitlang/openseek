@@ -5039,7 +5039,8 @@ fn update_device_msg(
         // device is refreshed when focus moves to it.
         (@cmd.none, model)
       }
-    BridgeReady => {
+    BridgeReady | NotificationGap => {
+      let request_transport_survived = msg is NotificationGap
       let connection_generation = dev.connection_generation + 1
       let sessions_request_generation = dev.sessions_request_generation + 1
       let archived_request_generation = dev.archived_request_generation + 1
@@ -5090,20 +5091,24 @@ fn update_device_msg(
           commands.push(fetch_remote_status(dispatch))
         }
       }
-      // Delta streams are not replayable across a connection boundary; keep
+      // Delta streams are not replayable across a notification boundary; keep
       // none of the pre-gap fragment, or the first post-gap delta would splice
       // onto stale text. Compaction has no wire resync in this protocol: an
       // local queued/requested/in-flight marker is released here so a missed
-      // terminal event cannot disable Send forever. Any receipt still pending
-      // at this boundary can no longer arrive, so its entry ends here. If the
-      // host still compacts, its next prompt rejection is a transient,
-      // visible local failure.
+      // terminal event cannot disable Send forever. A full transport reconnect
+      // also makes outstanding request replies unobtainable, so their entries
+      // end there. A hub-only gap preserves them: Proton promises remain live,
+      // and a later definite refusal still needs the entry to restore its exact
+      // draft. If the host still compacts, its next prompt rejection is a
+      // transient, visible local failure.
       let conversations = model.conversations.map(conv => {
         if conv.device == channel {
-          {
-            ..conv.clear_streams().forget_awaiting_inputs(),
-            compaction: NotCompacting,
+          let conv = if request_transport_survived {
+            conv.clear_streams()
+          } else {
+            conv.clear_streams().forget_awaiting_inputs()
           }
+          { ..conv, compaction: NotCompacting, }
         } else {
           conv
         }
@@ -11089,11 +11094,11 @@ test "reconnect runs snapshot settles only its captured Starting submission" {
 }
 
 ///|
-test "reconnect recovers a Finished notification dropped behind a slow page" {
+test "a notification gap recovers a Finished notification dropped behind a slow page" {
   let dispatch = test_dispatch()
   // The host has already finished r7, but this page missed that one live
   // notification and still presents the run as open.
-  let (_, bridged) = update_dev(dispatch, BridgeReady, running_model())
+  let (_, bridged) = update_dev(dispatch, NotificationGap, running_model())
   let frontier = bridged.run_snapshot_frontier(@interop.ChannelId::Local)
   let (_, recovered) = update_dev(
     dispatch,
@@ -11118,6 +11123,57 @@ test "reconnect recovers a Finished notification dropped behind a slow page" {
     recovered.active().run is NoRun(ended=Some(RunFinished(Completed))),
   )
   assert_true(recovered.active().last_run_id is Some("r7"))
+}
+
+///|
+test "a notification gap preserves an in-flight prompt until its RPC rejects" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_prompt(
+    { ..test_conversation(), run: Starting(submission_id="still-live"), },
+    "still-live",
+    "restore this exact draft",
+  )
+  let (_, resyncing) = update_dev(
+    dispatch,
+    NotificationGap,
+    test_model().replace_conversation(conv),
+  )
+  assert_true(resyncing.active().has_initial_submission("still-live"))
+  let (_, rejected) = update_dev(
+    dispatch,
+    StartRejected(
+      session="desktop-test",
+      submission_id="still-live",
+      message="host refused",
+    ),
+    resyncing,
+  )
+  inspect(rejected.active().task, content="restore this exact draft")
+  assert_true(rejected.active().run is NoRun(ended=Some(RunFailed)))
+}
+
+///|
+test "a notification gap preserves an in-flight steer until its RPC rejects" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(running_conversation(), ["turn left"])
+  let (_, resyncing) = update_dev(
+    dispatch,
+    NotificationGap,
+    running_model().replace_conversation(conv),
+  )
+  inspect(resyncing.active().pending_steers.length(), content="1")
+  let pending = resyncing.active().pending_steers[0]
+  let (_, rejected) = update_dev(
+    dispatch,
+    SteerRejected(
+      session="desktop-test",
+      submission_id=pending.submission_id,
+      run_id="r7",
+    ),
+    resyncing,
+  )
+  inspect(rejected.active().task, content="turn left")
+  inspect(rejected.active().pending_steers.length(), content="0")
 }
 
 ///|

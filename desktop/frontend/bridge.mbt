@@ -286,6 +286,8 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
       dispatch(FromDevice(channel, BridgeUnavailable(message)))
     @bridge.Event::ChannelDown(channel~, websocket_epoch~) =>
       dispatch(FromDevice(channel, ChannelDown(websocket_epoch~)))
+    @bridge.Event::NotificationGap(channel~) =>
+      dispatch(FromDevice(channel, NotificationGap))
     @bridge.Event::BrowserEvent(payload~) =>
       if browser_event_msg(payload) is Some(msg) {
         dispatch(msg)
