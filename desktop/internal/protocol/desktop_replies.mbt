@@ -1526,8 +1526,10 @@ pub(all) struct TerminalOpenReply {
 
 ///|
 pub impl FromJson for TerminalOpenReply with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "terminal open reply")
-  { id: object.required_string("id"), }
+  guard json is Object(fields) && fields.get("id") is Some(String(id)) else {
+    raise JsonDecodeError((path, "expected terminal open reply"))
+  }
+  { id, }
 }
 
 ///|

@@ -531,19 +531,19 @@ solely for a detected development layout.
 
 ### terminal.* — connection-scoped PTYs
 
-Each terminal session receives a freshly minted UUID. A client connection owns
-the PTYs it opens: output returns only to that connection, and closing the
-desktop page or browser WebSocket tears down all of its PTYs. A reconnect
-therefore starts with no terminal sessions; clients must discard their old ids
-and open replacements after `BridgeReady` even though ids are never reused.
+Each client connection owns an independent set of PTYs. Terminal ids are
+unique only within that connection, output returns only to that connection,
+and closing the desktop page or browser WebSocket tears down all of its PTYs.
+A reconnect therefore starts with no terminal sessions; clients must discard
+their old ids and open replacements after `BridgeReady`.
 
 PTY bytes stay byte-transparent over JSON. Output is always base64. Text input
 uses `data`; byte-oriented xterm input uses `data_base64`, and exactly one of
 the two fields must be present. Each output chunk occupies the host's bounded
 flow-control window until the client acknowledges its `sequence`; retrying the
-same acknowledgement within that connection is safe. UUID identity prevents a
-delayed acknowledgement from naming an unrelated replacement session, while
-the owning connection still determines where the acknowledgement is routed.
+same acknowledgement within that connection is safe. An acknowledgement from
+a dead connection must not be replayed after reconnect because the new
+connection has an independent terminal-id namespace.
 
 | method | params | result |
 |---|---|---|

@@ -5,9 +5,9 @@
 // stay alive while the user looks elsewhere.
 
 ///|
-/// Which device/workspace a tab belongs to. A terminal UUID identifies the
-/// host session, while the channel retains the connection that owns and can
-/// operate that PTY.
+/// Which device/workspace a tab belongs to. The channel is part of the
+/// workspace grouping and selects the bridge used to drive that tab; terminal
+/// UUIDs themselves need no channel scope.
 /// Main-checkout conversations in the same registered project directory on
 /// one device share a group. A worktree is a separate group keyed by its
 /// registered project and worktree name, while a scratch group is keyed by
@@ -43,7 +43,7 @@ priv enum TabStatus {
 /// `session`/`workspace_path` are the binding the tab was opened with —
 /// restarts reuse them, so a tab never migrates between workspaces.
 priv struct Tab {
-  key : Int
+  key : String
   id : String?
   workspace : WorkspaceKey
   workspace_label : String
@@ -55,17 +55,17 @@ priv struct Tab {
 ///|
 pub struct State {
   priv open : Bool
-  priv next_key : Int
   priv tabs : Array[Tab]
   /// The remembered active tab per workspace group, as an association list
   /// (small; a workspace rarely has more than a handful of tabs).
-  priv active : Array[(WorkspaceKey, Int)]
+  priv active : Array[(WorkspaceKey, String)]
   /// The tab whose emulator element is currently displayed (`None` while
   /// the panel is closed). Mirrors imperative DOM state so `sync` can tell
   /// when a conversation switch must re-aim the display — the switch itself
   /// produces no terminal message.
-  priv shown : Int?
-  /// Channel/session ids whose exit event beat their `terminal_open` reply.
+  priv shown : String?
+  /// Session UUIDs whose exit event beat their `terminal_open` reply, paired
+  /// with the channel used to discard that channel's pending output on loss.
   /// The reply is the first event that identifies the opening tab, so it
   /// consumes the pair and retires that tab instead of reviving an
   /// already-dead session.
@@ -83,7 +83,6 @@ pub struct State {
 pub fn State::empty() -> State {
   {
     open: false,
-    next_key: 1,
     tabs: [],
     active: [],
     shown: None,
@@ -175,7 +174,7 @@ fn State::active_tab(self : State, ctx : Ctx) -> Tab? {
 }
 
 ///|
-fn State::tab_by_key(self : State, key : Int) -> Tab? {
+fn State::tab_by_key(self : State, key : String) -> Tab? {
   for tab in self.tabs {
     if tab.key == key {
       return Some(tab)
@@ -185,15 +184,9 @@ fn State::tab_by_key(self : State, key : Int) -> Tab? {
 }
 
 ///|
-fn State::tab_by_id(
-  self : State,
-  channel : @interop.ChannelId,
-  id : String,
-) -> Tab? {
+fn State::tab_by_id(self : State, id : String) -> Tab? {
   for tab in self.tabs {
-    if tab.workspace.channel() == channel &&
-      tab.id is Some(tab_id) &&
-      tab_id == id {
+    if tab.id is Some(tab_id) && tab_id == id {
       return Some(tab)
     }
   }
@@ -220,7 +213,7 @@ fn State::replace_tab(self : State, updated : Tab) -> State {
 fn State::remember_active(
   self : State,
   group : WorkspaceKey,
-  key : Int,
+  key : String,
 ) -> State {
   let active = self.active.filter(entry => entry.0 != group)
   active.push((group, key))
@@ -235,30 +228,30 @@ pub(all) enum Msg {
   SessionExited(channel~ : @interop.ChannelId, id~ : String, code~ : Int)
   /// Open one more terminal in the active conversation's workspace.
   NewTerminal
-  TabSelected(key~ : Int)
+  TabSelected(key~ : String)
   /// Close a tab: its shell is torn down, its emulator disposed.
-  TabClosed(key~ : Int)
+  TabClosed(key~ : String)
   /// The tab's emulator is mounted, fitted, and reports its grid size.
-  EmulatorReady(key~ : Int, cols~ : Int, rows~ : Int)
+  EmulatorReady(key~ : String, cols~ : Int, rows~ : Int)
   /// `terminal_open` replied for the tab. The channel is retained because the
   /// tab may have been closed or the UI may have switched devices meanwhile.
-  Opened(channel~ : @interop.ChannelId, key~ : Int, id~ : String)
-  OpenFailed(key~ : Int, message~ : String)
+  Opened(channel~ : @interop.ChannelId, key~ : String, id~ : String)
+  OpenFailed(key~ : String, message~ : String)
   /// Keystrokes from one tab's emulator.
-  UserInput(key~ : Int, data~ : String)
+  UserInput(key~ : String, data~ : String)
   /// A web URL activated through xterm's link addon. The main frontend routes
   /// it through the same dock/system-browser policy as conversation anchors.
   LinkActivated(url~ : String)
   /// xterm's `onBinary` payload, encoded as base64 so each JS character code
   /// reaches the PTY as exactly one byte instead of being UTF-8 re-encoded.
-  BinaryInput(key~ : Int, data~ : String)
+  BinaryInput(key~ : String, data~ : String)
   /// `terminal_input` failed for the tab: the keystrokes were lost. The
   /// main package surfaces the message as an error toast (the panel has no
   /// toast rail of its own); the tab's status is untouched — a lost
   /// keystroke does not make the session failed.
   InputFailed(message~ : String)
   /// One tab's emulator re-fit to a new grid size.
-  ViewportResized(key~ : Int, cols~ : Int, rows~ : Int)
+  ViewportResized(key~ : String, cols~ : Int, rows~ : Int)
 }
 
 ///|

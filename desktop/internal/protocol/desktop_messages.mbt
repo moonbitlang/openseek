@@ -590,6 +590,8 @@ pub(all) struct TerminalOpenPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// Terminal input is a wire union: text carries `data`, byte-oriented input
+/// carries `data_base64`, and the inactive field is absent rather than null.
 pub(all) struct TerminalInputPayload {
   id : String
   data : String?
@@ -597,8 +599,6 @@ pub(all) struct TerminalInputPayload {
 } derive(Debug, Eq)
 
 ///|
-/// Terminal input is a wire union: text carries `data`, byte-oriented input
-/// carries `data_base64`, and the inactive field is omitted rather than null.
 pub impl FromJson for TerminalInputPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "terminal input payload")
   let data = object.optional_string("data")

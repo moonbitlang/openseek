@@ -34,31 +34,27 @@ test "an exit before the open reply cannot revive a dead terminal" {
     connected: true,
   }
   let (_, opening) = update(emit, ToggleTerminal, State::empty(), ctx)
+  let key = opening.tabs[0].key
+  let terminal_id = "terminal-exit-race"
   let (_, exited) = update(
     emit,
-    SessionExited(
-      channel=@interop.ChannelId::Local,
-      id="terminal-exit-race",
-      code=0,
-    ),
+    SessionExited(channel=@interop.ChannelId::Local, id=terminal_id, code=0),
     opening,
     ctx,
   )
   assert_true(
-    exited.exited_before_open.contains(
-      (@interop.ChannelId::Local, "terminal-exit-race"),
-    ),
+    exited.exited_before_open.contains((@interop.ChannelId::Local, terminal_id)),
   )
   let (_, replied) = update(
     emit,
-    Opened(channel=@interop.ChannelId::Local, key=1, id="terminal-exit-race"),
+    Opened(channel=@interop.ChannelId::Local, key~, id=terminal_id),
     exited,
     ctx,
   )
   assert_true(replied.tabs.is_empty())
   assert_true(
     !replied.exited_before_open.contains(
-      (@interop.ChannelId::Local, "terminal-exit-race"),
+      (@interop.ChannelId::Local, terminal_id),
     ),
   )
   assert_true(!replied.open)
@@ -87,7 +83,7 @@ test "sync records color-scheme changes even when the shown tab is unchanged" {
 }
 
 ///|
-test "terminal routes retain their owning device" {
+test "terminal UUIDs route independently of the focused device" {
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   guard @resource.of_path(@interop.ChannelId::Local, "/work/project")
     is Some(local_workspace) else {
@@ -115,27 +111,27 @@ test "terminal routes retain their owning device" {
     State::empty(),
     local_ctx,
   )
+  let local_key = local_opening.tabs[0].key
+  let local_id = "terminal-local"
   let (_, local_running) = update(
     emit,
-    Opened(
-      channel=@interop.ChannelId::Local,
-      key=1,
-      id="shared-terminal-fixture",
-    ),
+    Opened(channel=@interop.ChannelId::Local, key=local_key, id=local_id),
     local_opening,
     local_ctx,
   )
   let (_, both_opening) = update(emit, NewTerminal, local_running, remote_ctx)
+  let remote_key = both_opening.tabs[1].key
+  let remote_id = "terminal-remote"
   let (_, both_running) = update(
     emit,
-    Opened(channel=remote, key=2, id="shared-terminal-fixture"),
+    Opened(channel=remote, key=remote_key, id=remote_id),
     both_opening,
     remote_ctx,
   )
   inspect(both_running.tabs.length(), content="2")
   let (_, remote_exited) = update(
     emit,
-    SessionExited(channel=remote, id="shared-terminal-fixture", code=0),
+    SessionExited(channel=remote, id=remote_id, code=0),
     both_running,
     remote_ctx,
   )
@@ -147,7 +143,7 @@ test "terminal routes retain their owning device" {
     tab.workspace is Project(@interop.ChannelId::Local, resource) &&
     resource.path == "/work/project",
   )
-  assert_true(tab.id is Some("shared-terminal-fixture"))
+  assert_true(tab.id == Some(local_id))
 }
 
 ///|
@@ -160,11 +156,10 @@ test "a disconnected channel retires only its terminal tabs" {
   }
   let state : State = {
     open: true,
-    next_key: 3,
     tabs: [
       {
-        key: 1,
-        id: Some("local-terminal"),
+        key: "tab-local",
+        id: Some("terminal-local"),
         workspace: Project(local_channel, local_workspace),
         workspace_label: "local",
         session: "local",
@@ -172,8 +167,8 @@ test "a disconnected channel retires only its terminal tabs" {
         status: TabRunning,
       },
       {
-        key: 2,
-        id: Some("remote-terminal"),
+        key: "tab-remote",
+        id: Some("terminal-remote"),
         workspace: Project(remote, remote_workspace),
         workspace_label: "remote",
         session: "remote",
@@ -182,13 +177,13 @@ test "a disconnected channel retires only its terminal tabs" {
       },
     ],
     active: [
-      (Project(local_channel, local_workspace), 1),
-      (Project(remote, remote_workspace), 2),
+      (Project(local_channel, local_workspace), "tab-local"),
+      (Project(remote, remote_workspace), "tab-remote"),
     ],
-    shown: Some(2),
+    shown: Some("tab-remote"),
     exited_before_open: [
-      (remote, "remote-opening-terminal"),
-      (local_channel, "local-opening-terminal"),
+      (remote, "exited-remote"),
+      (local_channel, "exited-local"),
     ],
     synced_dark_mode: Some(false),
     live_channels: [local_channel, remote],
@@ -202,8 +197,7 @@ test "a disconnected channel retires only its terminal tabs" {
   )
   assert_true(disconnected.shown is None)
   assert_true(
-    disconnected.exited_before_open ==
-    [(local_channel, "local-opening-terminal")],
+    disconnected.exited_before_open == [(local_channel, "exited-local")],
   )
 }
 
@@ -261,9 +255,14 @@ test "a missing checkout refuses new PTYs and retires only its conversation" {
     connected: true,
   }
   let (_, opening) = update(emit, ToggleTerminal, State::empty(), ctx)
+  let opening_key = opening.tabs[0].key
   let (_, running) = update(
     emit,
-    Opened(channel=@interop.ChannelId::Local, key=1, id="worktree-terminal"),
+    Opened(
+      channel=@interop.ChannelId::Local,
+      key=opening_key,
+      id="terminal-missing",
+    ),
     opening,
     ctx,
   )
@@ -273,9 +272,14 @@ test "a missing checkout refuses new PTYs and retires only its conversation" {
     placement: Some(@interop.WorkspaceRoot(root=workspace)),
   }
   let (_, other_opening) = update(emit, NewTerminal, running, other_ctx)
+  let other_key = other_opening.tabs[1].key
   let (_, both_running) = update(
     emit,
-    Opened(channel=@interop.ChannelId::Local, key=2, id="project-terminal"),
+    Opened(
+      channel=@interop.ChannelId::Local,
+      key=other_key,
+      id="terminal-other",
+    ),
     other_opening,
     other_ctx,
   )
@@ -289,15 +293,11 @@ test "a missing checkout refuses new PTYs and retires only its conversation" {
   assert_true(retired.shown is None)
   let (still_retired, _) = sync(emit, retired, missing_ctx)
   assert_true(still_retired == retired)
-  let (_, toggle_refused) = update(
-    emit,
-    ToggleTerminal,
-    State::empty(),
-    missing_ctx,
-  )
-  let (_, new_refused) = update(emit, NewTerminal, State::empty(), missing_ctx)
-  assert_true(toggle_refused == State::empty())
-  assert_true(new_refused == State::empty())
+  let empty = State::empty()
+  let (_, toggle_refused) = update(emit, ToggleTerminal, empty, missing_ctx)
+  let (_, new_refused) = update(emit, NewTerminal, empty, missing_ctx)
+  assert_true(toggle_refused == empty)
+  assert_true(new_refused == empty)
 }
 
 ///|
@@ -360,14 +360,10 @@ test "an unresolved placement cannot reveal or create a project terminal" {
   let (waiting, _) = sync(emit, project_opening, unresolved)
   assert_eq(waiting.tabs.length(), 1)
   assert_true(waiting.shown is None)
-  let (_, toggle_refused) = update(
-    emit,
-    ToggleTerminal,
-    State::empty(),
-    unresolved,
-  )
+  let empty = State::empty()
+  let (_, toggle_refused) = update(emit, ToggleTerminal, empty, unresolved)
   let (_, new_refused) = update(emit, NewTerminal, waiting, unresolved)
-  assert_true(toggle_refused == State::empty())
+  assert_true(toggle_refused == empty)
   assert_true(new_refused == waiting)
   // Once the list identifies the worktree, the already-open panel creates a
   // correctly isolated worktree tab instead of migrating the project tab.

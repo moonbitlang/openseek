@@ -3,17 +3,14 @@
 // reply back into the update loop; the steady-state ops are fire-and-forget
 // — input failures surface as `InputFailed` (an error toast),
 // resize/close failures are dropped (their loss only degrades, and a dead
-// session reports itself through `terminal_exit`). Flow-control acks retry
-// until the host accepts their idempotent output sequence.
-
-///|
-const AckRetryDelayMs = 100
+// session reports itself through `terminal_exit`). Flow-control acks are sent
+// once after xterm renders their output sequence.
 
 ///|
 fn open_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  key : Int,
+  key : String,
   session : String,
   workspace : @common.Uri?,
   cols : Int,
@@ -89,7 +86,7 @@ fn send_resize(
   cols : Int,
   rows : Int,
 ) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     @js.async_run(() => {
       ignore(
         @interop.bridge_request(channel, @commands.terminal_resize, {
@@ -105,9 +102,9 @@ fn send_resize(
 }
 
 ///|
-/// One output acknowledgement. Within its owning connection, retrying the
-/// same session/sequence pair is safe because the host removes each
-/// outstanding sequence at most once.
+/// One output acknowledgement, sent after xterm has rendered the chunk. A
+/// failed bridge no longer owns a PTY or flow-control window to release, so
+/// the acknowledgement is not retried.
 priv struct TerminalAck {
   channel : @interop.ChannelId
   id : String
@@ -116,23 +113,14 @@ priv struct TerminalAck {
 
 ///|
 fn TerminalAck::send(self : TerminalAck) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     @js.async_run(() => {
       ignore(
         @interop.bridge_request(self.channel, @commands.terminal_ack, {
           id: self.id,
           sequence: self.sequence,
         }) catch {
-          _ => {
-            // UUIDs are never reassigned, so a retry cannot acknowledge a
-            // replacement terminal. Keep the existing retry only for the
-            // in-process bridge; a remote WebSocket failure tears down the
-            // connection and all PTYs it owned.
-            if self.channel is @interop.ChannelId::Local {
-              _scheduler.add(@cmd.delay(self.send(), AckRetryDelayMs))
-            }
-            return
-          }
+          _ => return
         },
       )
     })
@@ -141,7 +129,7 @@ fn TerminalAck::send(self : TerminalAck) -> @cmd.Cmd {
 
 ///|
 fn send_close(channel : @interop.ChannelId, id : String) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     @js.async_run(() => {
       ignore(
         @interop.bridge_request(channel, @commands.terminal_close, { id, }) catch {

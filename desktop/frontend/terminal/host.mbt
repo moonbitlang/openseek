@@ -35,15 +35,15 @@ priv struct TerminalStyle {
 /// `terminal_open` reply that names it); `Opened` flushes them into the
 /// claiming tab.
 priv struct TermHost {
-  entries : Map[Int, TermEntry]
+  entries : Map[String, TermEntry]
   /// Root-owned terminal state projected into the imperative output path.
   /// The projection is refreshed only after terminal lifecycle transitions;
   /// raw output reads it without publishing a Rabbita message.
-  mut owners : Map[(@interop.ChannelId, String), Int]
+  mut owners : Map[String, (@interop.ChannelId, String)]
   mut opening_channels : Array[@interop.ChannelId]
   /// Output that arrived before `terminal_open` identified its tab:
   /// `(sequence, base64_data)`.
-  pending : Map[(@interop.ChannelId, String), Array[(Int, String)]]
+  pending : Map[String, (@interop.ChannelId, Array[(Int, String)])]
   mut resize_wired : Bool
 }
 
@@ -131,7 +131,7 @@ fn no_args() -> Array[@js.Value] {
 /// Show `key`'s element, hide the rest, then re-fit and focus the shown one
 /// (its `onResize` keeps the PTY's grid in sync). Imperative display state:
 /// the elements are outside the virtual DOM.
-fn show_only(key : Int) -> Unit {
+fn show_only(key : String) -> Unit {
   for entry_key, entry in term_host.entries {
     let style : @js.Value = entry.element.get_with_string("style")
     style.set_with_string(
@@ -169,7 +169,7 @@ fn refit_visible() -> Unit {
 /// exists), make it the visible one, and report its grid size through
 /// `EmulatorReady`. Idempotent: the update loop decides whether a ready
 /// report should spawn a session, so re-reports are harmless.
-fn mount_tab(dispatch : @cmd.Emit[Msg], key : Int) -> @cmd.Cmd {
+fn mount_tab(dispatch : @cmd.Emit[Msg], key : String) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
       guard xterm_module() is Some(module_) else { return }
@@ -288,9 +288,9 @@ fn hide_all() -> Unit {
 /// closed): show it, hide the rest, re-fit and focus. `sync` dispatches
 /// this whenever the tab that should be on screen changes — including
 /// conversation switches, which produce no terminal message of their own.
-fn apply_shown(key : Int?) -> @cmd.Cmd {
+fn apply_shown(key : String?) -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _scheduler => {
+    _ => {
       match key {
         Some(key) => show_only(key)
         None => hide_all()
@@ -306,7 +306,7 @@ fn apply_shown(key : Int?) -> @cmd.Cmd {
 /// command covers tabs that survive a later light/dark switch.
 fn apply_theme() -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _scheduler => {
+    _ => {
       let theme : @js.Value = terminal_style().get_with_string("theme")
       for _, entry in term_host.entries {
         let options : @js.Value = entry.term.get_with_string("options")
@@ -325,7 +325,7 @@ fn apply_theme() -> @cmd.Cmd {
 /// visible emulator updates both xterm's metrics and the PTY grid through the
 /// existing `onResize` callback.
 pub fn apply_font_family(font_family : String) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     for _, entry in term_host.entries {
       let options : @js.Value = entry.term.get_with_string("options")
       options.set_with_string("fontFamily", @js.Value::cast_from(font_family))
@@ -339,7 +339,7 @@ pub fn apply_font_family(font_family : String) -> @cmd.Cmd {
 /// same size from the root CSS token when they mount. Re-fitting reports the
 /// resulting grid through xterm's existing `onResize` callback.
 pub fn apply_font_size(font_size : Double) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     for _, entry in term_host.entries {
       let options : @js.Value = entry.term.get_with_string("options")
       options.set_with_string("fontSize", @js.Value::cast_from(font_size))
@@ -354,11 +354,11 @@ pub fn apply_font_size(font_size : Double) -> @cmd.Cmd {
 /// `opening_channels` always describe the same accepted State without making
 /// raw output enter the root update loop.
 fn State::sync_host_routes(self : State) -> @cmd.Cmd {
-  let owners : Map[(@interop.ChannelId, String), Int] = Map([])
+  let owners : Map[String, (@interop.ChannelId, String)] = Map([])
   let opening_channels : Array[@interop.ChannelId] = []
   for tab in self.tabs {
     match tab.id {
-      Some(id) => owners[(tab.workspace.channel(), id)] = tab.key
+      Some(id) => owners[id] = (tab.workspace.channel(), tab.key)
       None if tab.status is TabOpening => {
         let channel = tab.workspace.channel()
         if !opening_channels.contains(channel) {
@@ -368,7 +368,7 @@ fn State::sync_host_routes(self : State) -> @cmd.Cmd {
       None => ()
     }
   }
-  @cmd.custom_cmd(_scheduler => {
+  @cmd.custom_cmd(_ => {
     term_host.owners = owners
     term_host.opening_channels = opening_channels
   })
@@ -381,7 +381,7 @@ fn State::sync_host_routes(self : State) -> @cmd.Cmd {
 fn TermHost::write_to_tab(
   self : TermHost,
   channel : @interop.ChannelId,
-  key : Int,
+  key : String,
   id : String,
   sequence : Int,
   data : String,
@@ -415,15 +415,19 @@ pub fn output(
   data : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    let owner = (channel, id)
-    match term_host.owners.get(owner) {
-      Some(key) =>
-        scheduler.add(term_host.write_to_tab(channel, key, id, sequence, data))
+    match term_host.owners.get(id) {
+      Some((owner_channel, key)) =>
+        scheduler.add(
+          term_host.write_to_tab(owner_channel, key, id, sequence, data),
+        )
       None =>
         if term_host.opening_channels.contains(channel) {
-          let chunks = term_host.pending.get(owner).unwrap_or([])
+          let (pending_channel, chunks) = match term_host.pending.get(id) {
+            Some(pending) => pending
+            None => (channel, [])
+          }
           chunks.push((sequence, data))
-          term_host.pending[owner] = chunks
+          term_host.pending[id] = (pending_channel, chunks)
         } else {
           scheduler.add(TerminalAck::{ channel, id, sequence, }.send())
         }
@@ -435,15 +439,10 @@ pub fn output(
 /// Flush chunks buffered for `id` into the tab that just claimed it. Every
 /// flushed chunk goes through the normal write path, so each one is
 /// acknowledged as it renders.
-fn flush_pending(
-  channel : @interop.ChannelId,
-  key : Int,
-  id : String,
-) -> @cmd.Cmd {
+fn flush_pending(key : String, id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    let owner = (channel, id)
-    guard term_host.pending.get(owner) is Some(chunks) else { return }
-    term_host.pending.remove(owner)
+    guard term_host.pending.get(id) is Some((channel, chunks)) else { return }
+    term_host.pending.remove(id)
     for chunk in chunks {
       // The accepted Opened transition supplies the key directly; its route
       // projection is scheduled by reconciliation immediately afterward.
@@ -455,11 +454,10 @@ fn flush_pending(
 ///|
 /// Drop any buffer for a session that ended unclaimed, acknowledging the
 /// bytes so the host's window is released before the session's teardown.
-fn drop_pending(channel : @interop.ChannelId, id : String) -> @cmd.Cmd {
+fn drop_pending(id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    let owner = (channel, id)
-    guard term_host.pending.get(owner) is Some(chunks) else { return }
-    term_host.pending.remove(owner)
+    guard term_host.pending.get(id) is Some((channel, chunks)) else { return }
+    term_host.pending.remove(id)
     for chunk in chunks {
       scheduler.add(TerminalAck::{ channel, id, sequence: chunk.0, }.send())
     }
@@ -474,37 +472,37 @@ fn TermHost::clear_pending(
   self : TermHost,
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
-    let retained : Map[(@interop.ChannelId, String), Int] = Map([])
-    for owner, key in term_host.owners {
+  @cmd.custom_cmd(_ => {
+    let retained : Map[String, (@interop.ChannelId, String)] = Map([])
+    for id, owner in term_host.owners {
       if owner.0 != channel {
-        retained[owner] = key
+        retained[id] = owner
       }
     }
     term_host.owners = retained
     term_host.opening_channels = term_host.opening_channels.filter(existing => {
       existing != channel
     })
-    let owners : Array[(@interop.ChannelId, String)] = []
-    for owner, _ in self.pending {
-      if owner.0 == channel {
-        owners.push(owner)
+    let pending_ids : Array[String] = []
+    for id, pending in self.pending {
+      if pending.0 == channel {
+        pending_ids.push(id)
       }
     }
-    for owner in owners {
-      self.pending.remove(owner)
+    for id in pending_ids {
+      self.pending.remove(id)
     }
   })
 }
 
 ///|
 /// Dispose a closed tab's emulator and remove its element.
-fn dispose_tab(key : Int) -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
-    let retained : Map[(@interop.ChannelId, String), Int] = Map([])
-    for owner, owner_key in term_host.owners {
-      if owner_key != key {
-        retained[owner] = owner_key
+fn dispose_tab(key : String) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    let retained : Map[String, (@interop.ChannelId, String)] = Map([])
+    for id, owner in term_host.owners {
+      if owner.1 != key {
+        retained[id] = owner
       }
     }
     term_host.owners = retained

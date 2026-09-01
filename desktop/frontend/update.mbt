@@ -18065,7 +18065,7 @@ fn desktop_model() -> Model {
   let model = { ..test_model(), is_desktop: true, }
   let (_, model) = update(
     test_dispatch(),
-    Terminal(@terminal.TabSelected(key=0)),
+    Terminal(@terminal.TabSelected(key="missing-tab")),
     model,
   )
   model

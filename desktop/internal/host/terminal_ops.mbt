@@ -1,7 +1,6 @@
 // The integrated terminal's transport-independent host ops. PTY output stays
 // byte-transparent across JSON by using base64; each emitted chunk also has a
-// per-session sequence so a client can retry an acknowledgement safely. The
-// host mints each session id as a UUID; ordering remains the sequence's job.
+// per-session sequence so a client can retry an acknowledgement safely.
 
 ///|
 type TerminalOpenPayload = @protocol.TerminalOpenPayload

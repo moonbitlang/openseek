@@ -40,16 +40,16 @@ pub(all) enum Msg {
   ToggleTerminal
   SessionExited(channel~ : @interop.ChannelId, id~ : String, code~ : Int)
   NewTerminal
-  TabSelected(key~ : Int)
-  TabClosed(key~ : Int)
-  EmulatorReady(key~ : Int, cols~ : Int, rows~ : Int)
-  Opened(channel~ : @interop.ChannelId, key~ : Int, id~ : String)
-  OpenFailed(key~ : Int, message~ : String)
-  UserInput(key~ : Int, data~ : String)
+  TabSelected(key~ : String)
+  TabClosed(key~ : String)
+  EmulatorReady(key~ : String, cols~ : Int, rows~ : Int)
+  Opened(channel~ : @interop.ChannelId, key~ : String, id~ : String)
+  OpenFailed(key~ : String, message~ : String)
+  UserInput(key~ : String, data~ : String)
   LinkActivated(url~ : String)
-  BinaryInput(key~ : Int, data~ : String)
+  BinaryInput(key~ : String, data~ : String)
   InputFailed(message~ : String)
-  ViewportResized(key~ : Int, cols~ : Int, rows~ : Int)
+  ViewportResized(key~ : String, cols~ : Int, rows~ : Int)
 }
 
 pub struct State {

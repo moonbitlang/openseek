@@ -185,8 +185,8 @@ async test "close_all_terminals retires every live session" {
         }
       }
     })
-    let expected = [first, second]
     exited.sort()
+    let expected = [first, second]
     expected.sort()
     assert_eq(exited, expected)
   })

@@ -113,9 +113,6 @@ pub async fn open_terminal(
 ) -> String {
   guard !state.closed else { raise TerminalError("terminal service is closed") }
   let argv = session_argv(command?)
-  // Session ids cross the host/frontend boundary and may outlive a page
-  // connection in delayed messages, so mint a fresh identity instead of
-  // reusing a connection-local counter value.
   guard @uuid.mint() is Some(id) else {
     raise TerminalError("could not create a terminal id")
   }
