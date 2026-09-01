@@ -131,22 +131,33 @@ fn mbtx_failure_stage(
 }
 
 ///|
-/// The literal word beside a failed call's brief — only where it ADDS one. A
-/// build-stage brief already reads "build failed" / "build timeout" in the
-/// row's own label, so appending a marker repeated the brief verbatim
-/// ("mbtx (build failed, exit=1) build error"); those rows carry no marker
-/// and say their state through the brief itself, restyled amber by
-/// `failure_stage_class`. A runtime marker stays: "exit=1" alone does not
-/// name the stage. Every other failed call keeps the generic word.
+/// The literal word beside a failed row's label — only where it ADDS one.
+/// `brief_shown` says whether this row's label IS the brief: there a
+/// build-stage marker would repeat the label verbatim ("mbtx (build failed,
+/// exit=1) build error"), so the row says its state through the brief itself,
+/// restyled amber by `failure_stage_class`. A result row labeled
+/// "Tool error · mbtx" shows no brief, so it keeps the "build error" word —
+/// in a parallel burst the result rows sit apart from their requests, and
+/// amber alone must not carry the stage there. A runtime marker always
+/// stays: "exit=1" never names the stage. Every other failed row keeps the
+/// generic word.
 fn failure_marker(
   name : String,
   brief : String?,
   is_error : Bool,
   arguments : String?,
+  brief_shown~ : Bool,
 ) -> @html.Html? {
   guard is_error else { return None }
   match mbtx_failure_stage(name, brief, is_error, arguments) {
-    Some(BuildError) => None
+    Some(BuildError) =>
+      if brief_shown {
+        None
+      } else {
+        Some(
+          @html.span(class="tool-call-failed tool-stage-build", "build error"),
+        )
+      }
     Some(RuntimeError) =>
       Some(@html.span(class="tool-call-failed tool-stage-run", "runtime error"))
     None => Some(@html.span(class="tool-call-failed", "failed"))

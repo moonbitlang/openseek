@@ -307,7 +307,15 @@ fn tool_request_view(item : @transcript.TranscriptItem) -> @html.Html {
     @html.span(class="tool-flow", "→"),
     @html.span(class="tool-call-text", label),
   ]
-  if failure_marker(name, brief, is_error, Some(arguments)) is Some(marker) {
+  if failure_marker(
+      name,
+      brief,
+      is_error,
+      Some(arguments),
+      // The request row's label is the brief whenever one exists.
+      brief_shown=brief is Some(brief) && !brief.is_blank(),
+    )
+    is Some(marker) {
     line.push(marker)
   }
   line.push(@plan.fold_progress([item]))
@@ -393,7 +401,17 @@ fn tool_result_view(
     @html.span(class="tool-flow", "←"),
     @html.span(class="tool-result-text", label),
   ]
-  if failure_marker(name, brief, is_error, arguments) is Some(marker) {
+  if failure_marker(
+      name,
+      brief,
+      is_error,
+      arguments,
+      // The result row shows the brief as its label only for the
+      // argument-less shape (the first `label` arm above); the common
+      // "Tool error · mbtx" label carries no brief, so the stage word stays.
+      brief_shown=arguments is None && brief is Some(brief) && !brief.is_blank(),
+    )
+    is Some(marker) {
     line.push(marker)
   }
   let body : Array[@html.Html] = []
