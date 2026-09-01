@@ -27,6 +27,10 @@ struct State {
   location : Location?
   entries : Array[String]
   loading : Bool
+  // Whether the host that produced the current listing said it is Windows.
+  // Chooses where a drive-letter draft completes from; false until a
+  // listing arrives.
+  windows_host : Bool
   // `Some` renders the inline new-folder composer. Its value stays present
   // across a failed create so the user can correct it without retyping.
   new_folder : String?
@@ -53,13 +57,10 @@ pub extend State with Eq::{equal, not_equal}
 /// One completion browse from the draft's point of view: the directory it
 /// asked the host to list, still unanswered or refused with the host's
 /// reason.
-enum CompletionBrowse {
+priv enum CompletionBrowse {
   Asking(String)
   Refused(String, message~ : String)
 } derive(Eq)
-
-///|
-pub extend CompletionBrowse with Eq::{equal, not_equal}
 
 ///|
 fn CompletionBrowse::parent(self : CompletionBrowse) -> String {
@@ -95,11 +96,13 @@ pub(all) enum Msg {
   Navigate(String)
   // One location's listing came back from the host — a directory, or the
   // Windows drive list; `generation` names the browse request it answers,
-  // so a stale reply is dropped.
+  // so a stale reply is dropped. `windows` is the listing host's own word
+  // on its platform (a drive list always says so), never a guess.
   Loaded(
     channel~ : @interop.ChannelId,
     location~ : Location,
     entries~ : Array[String],
+    windows~ : Bool,
     generation~ : Int
   )
   // A browse or create failed; the shell pops the message as a toast and the
@@ -178,6 +181,7 @@ pub fn State::open(
     location: None,
     entries: [],
     loading: true,
+    windows_host: false,
     new_folder: None,
     path_draft: None,
     path_selection: 0,
@@ -198,7 +202,7 @@ pub fn State::handle(
 ) -> (@cmd.Cmd, State?, Outcome?) {
   match msg {
     Navigate(path) => self.navigate_to(emit, path)
-    Loaded(channel~, location~, entries~, generation~) =>
+    Loaded(channel~, location~, entries~, windows~, generation~) =>
       // A listing for a picker the user already closed — or one answering
       // a navigation that has since been superseded — is dropped.
       if channel == self.channel && generation == self.generation {
@@ -207,6 +211,7 @@ pub fn State::handle(
           location: Some(location),
           entries,
           loading: false,
+          windows_host: windows,
           new_folder: None,
           completion_browse: None,
           // A completion browse keeps editing with the canonical path the

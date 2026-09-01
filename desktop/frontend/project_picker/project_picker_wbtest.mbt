@@ -16,7 +16,12 @@ test "a listing keeps its raw protocol path" {
   assert_true(
     reply_message(
       @interop.ChannelId::Local,
-      @protocol.Listing(path="/C:/project", parent=Some("/C:/"), entries=[]),
+      @protocol.Listing(
+        path="/C:/project",
+        parent=Some("/C:/"),
+        entries=[],
+        windows=true,
+      ),
       generation=7,
       drives=true,
     )
@@ -24,6 +29,7 @@ test "a listing keeps its raw protocol path" {
       channel=@interop.ChannelId::Local,
       location=Directory("/C:/project"),
       entries=[],
+      windows=true,
       generation=7
     ),
   )
