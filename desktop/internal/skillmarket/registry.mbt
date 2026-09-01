@@ -78,9 +78,10 @@ const MaxRedirects = 5
 /// GET `url`, following redirects, and return the final status code and
 /// body. Transport failures (DNS, TLS, a refused connection) become a
 /// `SkillMarketError`; non-200 final codes are returned for the caller to
-/// judge with context of its own. A hop onto plain http is accepted:
-/// integrity never rests on the transport, since archives are verified
-/// against the registry's declared digest after download.
+/// judge with context of its own. A redirect hop from https onto plain
+/// http is always refused: metadata and preview content take their whole
+/// trust from the channel, and even the digest-checked archive download
+/// has no reason to leave TLS.
 async fn fetch_response(url : String) -> (Int, &@io.Data) {
   let mut current = url
   for _ in 0..<MaxRedirects {
@@ -93,9 +94,21 @@ async fn fetch_response(url : String) -> (Int, &@io.Data) {
       response.headers.get("Location") is Some(location) else {
       return (response.code, data)
     }
-    current = redirect_target(current, location)
+    let target = redirect_target(current, location)
+    guard !insecure_downgrade(current, target) else {
+      raise SkillMarketError(
+        "the skill registry redirected to an insecure address",
+      )
+    }
+    current = target
   }
   raise SkillMarketError("the skill registry redirected too many times")
+}
+
+///|
+/// Whether following a redirect from `current` to `target` drops TLS.
+fn insecure_downgrade(current : String, target : String) -> Bool {
+  current.has_prefix("https://") && target.has_prefix("http://")
 }
 
 ///|
@@ -297,6 +310,10 @@ async fn fetch_archive(entry : String, source : ArchiveSource) -> @zip.Archive {
 
 ///|
 /// Fetch the published instructions without changing the local library.
+/// The registry publishes each skill's bare SKILL.md under its assets tree,
+/// and that one small fetch is the whole preview: an archive can inflate to
+/// arbitrarily much work for the sake of one file, so preview never touches
+/// it, and a 404 already answers "no such skill instructions".
 pub async fn fetch_skill_content(
   module_name~ : String,
   version~ : String,
@@ -304,15 +321,20 @@ pub async fn fetch_skill_content(
   registry? : String = DefaultRegistry,
 ) -> String {
   let entry = entry_path(module_name, version, package_path)
-  let source = fetch_archive_source(registry, entry)
-  let skill = skill_files(fetch_archive(entry, source), entry)
-  guard skill.skill_md.length() <= MaxPreviewBytes else {
+  let (code, data) = fetch_response("\{registry}/assets/\{entry}/SKILL.md")
+  if code == 404 {
+    raise SkillMarketError("\{entry} does not publish a SKILL.md")
+  }
+  guard code == 200 else {
+    raise SkillMarketError("SKILL.md request returned HTTP \{code}")
+  }
+  guard data.binary().length() <= MaxPreviewBytes else {
     raise SkillMarketError("SKILL.md is too large to preview")
   }
-  @utf8.decode(skill.skill_md) catch {
+  data.text() catch {
     _ =>
       raise SkillMarketError(
-        "the archive for \{entry} holds an unreadable SKILL.md",
+        "the registry serves an unreadable SKILL.md for \{entry}",
       )
   }
 }
@@ -419,6 +441,13 @@ test "archive decompression ceilings scale with the packaged size" {
     0x7fff_ffff,
   )
   assert_eq(archive_limits(1024).max_entries, MaxArchiveEntries)
+}
+
+///|
+test "a redirect that drops TLS is recognized" {
+  assert_true(insecure_downgrade("https://a.example/x", "http://b.example/y"))
+  assert_false(insecure_downgrade("http://a.example/x", "http://b.example/y"))
+  assert_false(insecure_downgrade("https://a.example/x", "https://b.example/y"))
 }
 
 ///|

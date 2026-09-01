@@ -193,6 +193,11 @@ async fn fake_registry(
           conn.write_string(
             skill_entry_body(base, entry.to_owned(), skill.digest),
           )
+        } else if path == "/assets/acme/widget@1.0.0/SKILL.md" {
+          // The bare preview asset exists for v1 only; v2 covers the
+          // missing-asset refusal.
+          conn.send_response(200, "OK")
+          conn.write(skill_body)
         } else if path.strip_prefix(DownloadPrefix) is Some(download) &&
           download.strip_suffix(ZipSuffix) is Some(entry) &&
           skills.get(entry.to_owned()) is Some(skill) &&
@@ -334,7 +339,7 @@ async test "a redirect loop on the archive download is refused" {
 }
 
 ///|
-async test "preview fetches the published SKILL.md from the archive" {
+async test "preview fetches the bare SKILL.md from the registry assets tree" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
     let content = @skillmarket.fetch_skill_content(
@@ -345,6 +350,26 @@ async test "preview fetches the published SKILL.md from the archive" {
     )
     assert_true(content.contains("Build widgets fast."))
     assert_true(content.contains("Use moon runwasm acme/widget."))
+  }
+}
+
+///|
+async test "a skill without a bare SKILL.md has no preview" {
+  @async.with_task_group() <| group => {
+    guard fake_registry(group) is Some(base) else { return }
+    try {
+      let _ = @skillmarket.fetch_skill_content(
+        module_name="acme/widget",
+        version="2.0.0",
+        package_path="",
+        registry=base,
+      )
+      fail("preview without a bare SKILL.md should have failed")
+    } catch {
+      @skillmarket.SkillMarketError(message) =>
+        assert_true(message.contains("does not publish a SKILL.md"))
+      error => raise error
+    }
   }
 }
 
