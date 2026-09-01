@@ -6,7 +6,9 @@ rendering, DOM patching, focus, keyboard, layout, and event handling run in the
 browser. The stateful transport fixture also exercises composer send/stop,
 conversation creation/archive/restore, host settings, skill installation, and
 Codex account login plus first-turn start/stop through their real JSON-RPC
-client paths.
+client paths. Its repository snapshot also covers changed-file review,
+review progress and navigation, Git Graph keyboard interaction, commit
+expansion, and immutable historical diffs.
 
 ## Setup
 

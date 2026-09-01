@@ -33,6 +33,70 @@ export class DesktopBrowserHarness {
     ];
     this.codexRequiresAuth = false;
     this.codexModels = [];
+    // Review and Git Graph share these immutable commit identities. Keeping
+    // the file snapshots beside the graph data makes every fixture response
+    // describe one coherent repository instead of isolated RPC examples.
+    this.gitBaseline = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    this.gitParent = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    this.gitHead = 'cccccccccccccccccccccccccccccccccccccccc';
+    this.workingFiles = {
+      'src/main.mbt': [
+        'fn main {',
+        '  println("working tree")',
+        '}',
+        '',
+      ].join('\n'),
+      'src/lib.mbt': [
+        'pub fn answer() -> Int {',
+        '  43',
+        '}',
+        '',
+      ].join('\n'),
+    };
+    this.gitFilesByRevision = {
+      [this.gitBaseline]: {
+        'src/main.mbt': [
+          'fn main {',
+          '  println("baseline")',
+          '}',
+          '',
+        ].join('\n'),
+        'src/lib.mbt': [
+          'pub fn answer() -> Int {',
+          '  41',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      [this.gitParent]: {
+        'src/main.mbt': [
+          'fn main {',
+          '  println("history parent")',
+          '}',
+          '',
+        ].join('\n'),
+        'src/lib.mbt': [
+          'pub fn answer() -> Int {',
+          '  42',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      [this.gitHead]: {
+        'src/main.mbt': [
+          'fn main {',
+          '  println("history commit")',
+          '}',
+          '',
+        ].join('\n'),
+        'src/lib.mbt': [
+          'pub fn answer() -> Int {',
+          '  43',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    };
     this.sessionEvents = [
       {
         sequence: 1,
@@ -520,6 +584,95 @@ export class DesktopBrowserHarness {
         };
       case 'git.branch':
         return {};
+      case 'git.changes':
+        return {
+          repository: true,
+          head: this.gitHead,
+          baseline: this.gitBaseline,
+          changes: [
+            {
+              path: 'src/main.mbt',
+              index_status: ' ',
+              worktree_status: 'M',
+              kind: 'modified',
+            },
+            {
+              path: 'src/lib.mbt',
+              index_status: 'M',
+              worktree_status: ' ',
+              kind: 'modified',
+            },
+          ],
+        };
+      case 'git.history':
+        return {
+          repository: true,
+          snapshot: {
+            head: this.gitHead,
+            branch: 'codex/browser-fixture',
+            refs: [
+              {
+                name: 'codex/browser-fixture',
+                revision: this.gitHead,
+                kind: 'current',
+              },
+              {
+                name: 'origin/main',
+                revision: this.gitParent,
+                kind: 'base',
+              },
+            ],
+            tips: [this.gitHead, this.gitParent],
+          },
+          commits: [
+            {
+              id: this.gitHead,
+              parent_ids: [this.gitParent],
+              subject: 'Cover Desktop Git flows',
+              author: 'OpenSeek fixture',
+              authored_at: '2026-09-01T09:30:00+08:00',
+            },
+            {
+              id: this.gitParent,
+              parent_ids: [this.gitBaseline],
+              subject: 'Add Review surface',
+              author: 'OpenSeek fixture',
+              authored_at: '2026-08-31T18:00:00+08:00',
+            },
+          ],
+          has_more: false,
+        };
+      case 'git.commit_changes':
+        return {
+          commit: request.params?.commit,
+          parent: request.params?.commit === this.gitHead
+            ? this.gitParent
+            : this.gitBaseline,
+          changes: request.params?.commit === this.gitHead
+            ? [
+                {
+                  path: 'src/main.mbt',
+                  status: 'modified',
+                  kind: 'file',
+                },
+                {
+                  path: 'src/lib.mbt',
+                  status: 'modified',
+                  kind: 'file',
+                },
+              ]
+            : [
+                {
+                  path: 'src/lib.mbt',
+                  status: 'modified',
+                  kind: 'file',
+                },
+              ],
+        };
+      case 'git.original_file':
+        return this.gitOriginalFile(request.params || {});
+      case 'fs.read_file':
+        return this.readWorkingFile(request.params || {});
       case 'fs.browse':
         return {
           path: '/Users/test',
@@ -557,6 +710,43 @@ export class DesktopBrowserHarness {
       navigator.platform.includes('Mac') ? 'Meta+P' : 'Control+P');
     await this.page.keyboard.press(shortcut);
     await this.page.locator('#quick-open-input').waitFor();
+  }
+
+  async openReview() {
+    // Review has no global shortcut of its own. Open the real right-panel
+    // picker through Search, then use the product's Changes tab so the test
+    // exercises the same Rabbita messages as a pointer-driven Review launch.
+    const shortcut = await this.page.evaluate(() =>
+      navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');
+    await this.page.keyboard.press(shortcut);
+    const tabs = this.page.getByRole('tablist', { name: 'Explorer views' });
+    await tabs.getByRole('tab', { name: /Changes/ }).click();
+    await this.page.getByRole('tree', { name: 'Git commit history' }).waitFor();
+  }
+
+  readWorkingFile(params) {
+    const absolute = params.path;
+    const prefix = '/workspace/';
+    const path = absolute?.startsWith(prefix) ? absolute.slice(prefix.length) : absolute;
+    const content = this.workingFiles[path];
+    if (content === undefined) {
+      return { kind: 'binary' };
+    }
+    return {
+      kind: 'content',
+      content,
+      absolute,
+      sig: `working:${path}`,
+    };
+  }
+
+  gitOriginalFile(params) {
+    const revision = params.revision || this.gitBaseline;
+    const content = this.gitFilesByRevision[revision]?.[params.path];
+    if (content === undefined) {
+      return { kind: 'missing' };
+    }
+    return { kind: 'content', content };
   }
 
   notify(method, params) {

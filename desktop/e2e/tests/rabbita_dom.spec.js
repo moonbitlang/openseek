@@ -72,6 +72,178 @@ test('workspace search mounts its real tablist, focus target, and option control
   expect(app.pageErrors).toEqual([]);
 });
 
+test('Review loads changed files and preserves its interactive diff workflow', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+
+  await expect.poll(() => app.requests.find(request => request.method === 'git.changes'))
+    .toMatchObject({
+      params: {
+        session: 'session-1',
+        workspace: '/workspace',
+      },
+    });
+  const changes = page.locator('#review-changes-body');
+  await expect(changes.locator('.review-progress-summary')).toHaveText(
+    '0 of 2 reviewable files reviewed',
+  );
+  const main = changes.getByRole('button', { name: /View diff: src\/main\.mbt/ });
+  const library = changes.getByRole('button', { name: /View diff: src\/lib\.mbt/ });
+  await expect(main).toHaveAttribute('aria-current', 'false');
+  await main.click();
+
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'fs.read_file' && request.params?.path === '/workspace/src/main.mbt'))
+    .toBeTruthy();
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'git.original_file' &&
+    request.params?.path === 'src/main.mbt' &&
+    request.params?.revision === app.gitBaseline))
+    .toBeTruthy();
+  const reviewToolbar = page.getByRole('toolbar', { name: 'Review mode' });
+  await expect(reviewToolbar.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.locator('#viewer-host')).toHaveClass(/moonbit-viewer-surface-hidden/);
+  await expect(page.locator('#diff-editor-host')).not.toHaveClass(/moonbit-viewer-surface-hidden/);
+  await expect(page.locator('#semantic-review-host')).toHaveClass(
+    /moonbit-viewer-surface-hidden/,
+  );
+
+  // Line diff keeps semantic-only filters inert. Token and Tree switch to the
+  // real semantic surface without replacing any of the stable editor hosts.
+  const ignoreComments = page.getByRole('button', { name: 'Ignore comments' });
+  const ignoreTests = page.getByRole('button', { name: 'Ignore tests' });
+  await expect(ignoreComments).toBeDisabled();
+  await expect(ignoreTests).toBeDisabled();
+
+  await reviewToolbar.getByRole('button', { name: 'File view' }).click();
+  await expect(reviewToolbar.getByRole('button', { name: 'File view' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.locator('#viewer-host')).not.toHaveClass(/moonbit-viewer-surface-hidden/);
+  await reviewToolbar.getByRole('button', { name: 'Line diff' }).click();
+
+  await reviewToolbar.getByRole('button', { name: 'Token diff' }).click();
+  await expect(reviewToolbar.getByRole('button', { name: 'Token diff' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.locator('#diff-editor-host')).toHaveClass(/moonbit-viewer-surface-hidden/);
+  const semanticReview = page.locator('#semantic-review-host');
+  await expect(semanticReview).not.toHaveClass(/moonbit-viewer-surface-hidden/);
+  await expect(semanticReview.locator('.semantic-review')).toHaveAttribute('data-mode', 'token');
+  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'true');
+  await expect(ignoreTests).toHaveAttribute('aria-pressed', 'true');
+  await ignoreComments.click();
+  await ignoreTests.click();
+  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'false');
+  await expect(ignoreTests).toHaveAttribute('aria-pressed', 'false');
+
+  await reviewToolbar.getByRole('button', { name: 'Tree diff' }).click();
+  await expect(reviewToolbar.getByRole('button', { name: 'Tree diff' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(semanticReview.locator('.semantic-review')).toHaveAttribute('data-mode', 'tree');
+
+  await reviewToolbar.getByRole('button', { name: 'Line diff' }).click();
+  await expect(page.locator('#diff-editor-host')).not.toHaveClass(/moonbit-viewer-surface-hidden/);
+  await expect(semanticReview).toHaveClass(/moonbit-viewer-surface-hidden/);
+  const layout = page.getByRole('group', { name: 'Diff layout' });
+  await layout.getByRole('button', { name: 'Unified diff layout' }).click();
+  await expect(layout.getByRole('button', { name: 'Unified diff layout' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+
+  const progress = page.getByRole('button', { name: 'Mark file reviewed' });
+  await progress.click();
+  await expect(progress).toHaveAttribute('aria-pressed', 'true');
+  await expect(changes.locator('.review-progress-summary')).toHaveText(
+    '1 of 2 reviewable files reviewed',
+  );
+  await page.getByRole('button', { name: 'Next changed file' }).click();
+  await expect(library).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.review-nav-position')).toHaveText('2 of 2');
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'git.original_file' &&
+    request.params?.path === 'src/lib.mbt' &&
+    request.params?.revision === app.gitBaseline))
+    .toBeTruthy();
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Git history expands commits and opens an immutable historical diff', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+
+  await expect.poll(() => app.requests.find(request => request.method === 'git.history'))
+    .toMatchObject({
+      params: {
+        session: 'session-1',
+        workspace: '/workspace',
+        skip: 0,
+        limit: 50,
+      },
+    });
+  await expect(page.locator('.git-graph-branch')).toContainText('codex/browser-fixture');
+  const history = page.getByRole('tree', { name: 'Git commit history' });
+  const head = history.getByRole('treeitem', { name: /Cover Desktop Git flows/ });
+  const parent = history.getByRole('treeitem', { name: /Add Review surface/ });
+  await head.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(parent).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(head).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'git.commit_changes' && request.params?.commit === app.gitHead))
+    .toMatchObject({
+      params: {
+        session: 'session-1',
+        workspace: '/workspace',
+        commit: app.gitHead,
+      },
+    });
+  await expect(head).toHaveAttribute('aria-expanded', 'true');
+  const historicalMain = history.getByRole('treeitem', { name: /src\/main\.mbt/ });
+  await expect(historicalMain).toContainText('M');
+  await historicalMain.click();
+
+  await expect.poll(() => app.requests.filter(request =>
+    request.method === 'git.original_file' &&
+    request.params?.path === 'src/main.mbt' &&
+    [app.gitParent, app.gitHead].includes(request.params?.revision)).length)
+    .toBe(2);
+  await expect(page.locator('.editor-tab.active')).toContainText('main.mbt (cccccccc)');
+  const breadcrumb = page.locator('.history-breadcrumb');
+  await expect(breadcrumb.locator('.history-commit-crumb')).toHaveText('cccccccc');
+  await expect(breadcrumb.locator('.crumb-file')).toHaveText('src/main.mbt');
+  const algorithms = page.getByRole('toolbar', { name: 'Comparison algorithm' });
+  await expect(algorithms.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(algorithms.getByRole('button')).toHaveText(['Line', 'Token', 'Tree']);
+  await expect(page.getByRole('button', { name: 'Ignore comments' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Ignore tests' })).toBeDisabled();
+  await expect(page.locator('#diff-editor-host')).not.toHaveClass(/moonbit-viewer-surface-hidden/);
+  await expect(page.locator('#semantic-review-host')).toHaveClass(
+    /moonbit-viewer-surface-hidden/,
+  );
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('project picker and quick open use browser focus and keyboard events', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
