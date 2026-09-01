@@ -1,8 +1,14 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/frontend"
 
+import {
+  "moonbit-community/rabbita/cmd",
+}
+
 // Values
 pub fn boot() -> Unit
+
+pub fn request_sidebar_resize_mount() -> @cmd.Cmd
 
 // Errors
 
