@@ -13,15 +13,37 @@ const DefaultRegistry = "https://mooncakes.io"
 const MaxPreviewBytes : Int = 512 * 1024
 
 ///|
-/// Bound the packaged archive download, and separately its decompressed
-/// contents, so a hostile or malformed archive cannot exhaust memory.
-const MaxArchiveBytes : Int = 32 * 1024 * 1024
+/// Decompression floor and ratio for one downloaded archive. How large a
+/// published archive may be is the registry's publish policy, not ours — but
+/// a zip's decompressed size is not bounded by its packaged size (deflate
+/// reaches ~1000:1), publishing is open to anyone, and this reader inflates
+/// in memory, so a small hostile package must not expand without limit. A
+/// generous multiple of the packaged bytes never brakes a legitimately large
+/// skill, while the floor keeps small archives clear of the edge.
+const ArchiveExpansionFloorBytes : Int = 256 * 1024 * 1024
 
 ///|
-const MaxArchiveTotalBytes : Int = 64 * 1024 * 1024
+const ArchiveExpansionRatio : Int = 64
 
 ///|
-const MaxArchiveEntries : Int = 512
+const MaxArchiveEntries : Int = 65536
+
+///|
+/// Decompression ceilings for an archive of `package_bytes` packaged size.
+fn archive_limits(package_bytes : Int) -> @zip.ReadLimits {
+  let saturation = 0x7fff_ffff / ArchiveExpansionRatio
+  let scaled = if package_bytes >= saturation {
+    0x7fff_ffff
+  } else if package_bytes * ArchiveExpansionRatio > ArchiveExpansionFloorBytes {
+    package_bytes * ArchiveExpansionRatio
+  } else {
+    ArchiveExpansionFloorBytes
+  }
+  @zip.ReadLimits::default()
+  .with_entries_limit(MaxArchiveEntries)
+  .with_entry_limit(scaled)
+  .with_total_limit(scaled)
+}
 
 ///|
 /// A registry or library failure with a user-facing message; the host's op
@@ -244,7 +266,9 @@ async fn fetch_archive_source(
 ///|
 /// Download the archive behind `source` and decode it. Every byte is checked
 /// against the digest the registry declared before any entry is trusted, and
-/// decompression runs under explicit size and entry-count ceilings.
+/// decompression runs under ceilings scaled to the packaged size. The
+/// download itself is not size-capped here: publish limits are the
+/// registry's policy, and the digest pins the content either way.
 async fn fetch_archive(entry : String, source : ArchiveSource) -> @zip.Archive {
   let (code, data) = fetch_response(source.url)
   if code == 404 {
@@ -256,19 +280,12 @@ async fn fetch_archive(entry : String, source : ArchiveSource) -> @zip.Archive {
     raise SkillMarketError("skill archive download returned HTTP \{code}")
   }
   let bytes = data.binary()
-  guard bytes.length() <= MaxArchiveBytes else {
-    raise SkillMarketError("the archive for \{entry} is too large to install")
-  }
   guard content_digest(bytes) == source.digest else {
     raise SkillMarketError(
       "the archive for \{entry} does not match its published digest",
     )
   }
-  let limits = @zip.ReadLimits::default()
-    .with_package_limit(MaxArchiveBytes)
-    .with_entries_limit(MaxArchiveEntries)
-    .with_entry_limit(MaxArchiveTotalBytes)
-    .with_total_limit(MaxArchiveTotalBytes)
+  let limits = archive_limits(bytes.length())
   @zip.read(bytes, limits~, cancelled=@async.is_being_cancelled) catch {
     error if @async.is_being_cancelled() => raise error
     ZipError(_, message) =>
@@ -382,6 +399,26 @@ test "a wrapped catalog response decodes like a bare one" {
     fail("expected one entry from the wrapped catalog")
   }
   assert_eq(skill.name, "alice/alpha")
+}
+
+///|
+test "archive decompression ceilings scale with the packaged size" {
+  // Small packages get the floor; big ones the ratio; near Int range the
+  // ceiling saturates instead of overflowing.
+  assert_eq(
+    archive_limits(1024).max_total_uncompressed_bytes,
+    ArchiveExpansionFloorBytes,
+  )
+  let big = 16 * 1024 * 1024
+  assert_eq(
+    archive_limits(big).max_total_uncompressed_bytes,
+    big * ArchiveExpansionRatio,
+  )
+  assert_eq(
+    archive_limits(0x7fff_ffff).max_total_uncompressed_bytes,
+    0x7fff_ffff,
+  )
+  assert_eq(archive_limits(1024).max_entries, MaxArchiveEntries)
 }
 
 ///|
