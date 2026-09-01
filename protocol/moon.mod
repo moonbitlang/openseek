@@ -13,3 +13,5 @@ repository = "https://github.com/bobzhang/openseek"
 license = "Apache-2.0"
 
 description = "Typed engine event stream: the openseek run/serve stdout wire contract."
+
+warnings = "+implicit_impl_as_method"
