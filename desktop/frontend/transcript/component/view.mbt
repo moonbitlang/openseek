@@ -297,11 +297,12 @@ fn tool_request_view(item : @transcript.TranscriptItem) -> @html.Html {
   } else {
     name
   }
-  let error_class = if is_error { " error" } else { "" }
-  // The row's always-visible line: the brief, a literal `failed` marker when
-  // the result errored (the row's red must not carry the state alone), and —
-  // for an applied `plan` call — the compact progress meter. `fold_progress`
-  // renders nothing for every other call.
+  let error_class = (if is_error { " error" } else { "" }) +
+    failure_stage_class(name, brief, is_error, Some(arguments))
+  // The row's always-visible line: the brief, a literal marker when the
+  // result errored and the brief does not already carry the state in words
+  // (see `failure_marker`), and — for an applied `plan` call — the compact
+  // progress meter. `fold_progress` renders nothing for every other call.
   let line : Array[@html.Html] = [
     @html.span(class="tool-flow", "→"),
     @html.span(class="tool-call-text", label),
@@ -385,7 +386,8 @@ fn tool_result_view(
     _ if is_error => "Tool error · \{name}"
     _ => "Tool result · \{name}"
   }
-  let error_class = if is_error { " error" } else { "" }
+  let error_class = (if is_error { " error" } else { "" }) +
+    failure_stage_class(name, brief, is_error, arguments)
   let pending_class = if has_result { "" } else { " pending" }
   let line : Array[@html.Html] = [
     @html.span(class="tool-flow", "←"),

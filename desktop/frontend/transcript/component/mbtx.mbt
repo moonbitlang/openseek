@@ -131,10 +131,13 @@ fn mbtx_failure_stage(
 }
 
 ///|
-/// The literal word beside a failed call's brief. An `mbtx` failure names its
-/// STAGE: a build error is fixed in the source, a runtime error in the
-/// program's behavior, and the row should say which before the card is even
-/// opened. Every other failed call keeps the generic word.
+/// The literal word beside a failed call's brief — only where it ADDS one. A
+/// build-stage brief already reads "build failed" / "build timeout" in the
+/// row's own label, so appending a marker repeated the brief verbatim
+/// ("mbtx (build failed, exit=1) build error"); those rows carry no marker
+/// and say their state through the brief itself, restyled amber by
+/// `failure_stage_class`. A runtime marker stays: "exit=1" alone does not
+/// name the stage. Every other failed call keeps the generic word.
 fn failure_marker(
   name : String,
   brief : String?,
@@ -143,10 +146,25 @@ fn failure_marker(
 ) -> @html.Html? {
   guard is_error else { return None }
   match mbtx_failure_stage(name, brief, is_error, arguments) {
-    Some(BuildError) =>
-      Some(@html.span(class="tool-call-failed tool-stage-build", "build error"))
+    Some(BuildError) => None
     Some(RuntimeError) =>
       Some(@html.span(class="tool-call-failed tool-stage-run", "runtime error"))
     None => Some(@html.span(class="tool-call-failed", "failed"))
+  }
+}
+
+///|
+/// The stage modifier for a failed row's container class: build failures read
+/// amber (the fix lives in the source, and their brief carries the literal
+/// stage words), runtime failures keep the error red.
+fn failure_stage_class(
+  name : String,
+  brief : String?,
+  is_error : Bool,
+  arguments : String?,
+) -> String {
+  match mbtx_failure_stage(name, brief, is_error, arguments) {
+    Some(BuildError) => " stage-build"
+    Some(RuntimeError) | None => ""
   }
 }

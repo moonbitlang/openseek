@@ -922,10 +922,15 @@
   color: var(--color-danger);
   font-size: var(--font-size-xs);
 }
-/* An mbtx failure names its stage. A build error is a source problem — warn
-   amber, "fix the input" — while a runtime error keeps the row's danger red:
-   the program itself misbehaved. */
-.tool-call-failed.tool-stage-build {
+/* An mbtx build failure reads amber, not the error red: the fix lives in the
+   source, and its BRIEF already carries the literal stage words ("build
+   failed", "build timeout"), so the row appends no marker — appending one
+   repeated the brief verbatim. Runtime failures keep the red row plus the
+   "runtime error" marker, which does add a word the brief lacks. */
+.tool-call-label.error.stage-build,
+.tool-call.error.stage-build > .tool-call-summary,
+.tool-result-label.error.stage-build,
+.tool-result.error.stage-build > .tool-result-summary {
   color: var(--color-warning);
 }
 
