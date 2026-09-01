@@ -654,7 +654,10 @@ test "a question survives a run handoff inside one snapshot" {
         frontier=[
           {
             session: asked.session_id,
+            workspace: asked.project(),
+            record: asked.record,
             state: SnapshotOpen(run_id~),
+            unresolved_accepted_run_ids: [],
             unreconciled_run_ids: [],
             reconciled_run_ids: [],
             initial_ids: [],

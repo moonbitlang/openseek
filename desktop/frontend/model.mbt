@@ -608,7 +608,17 @@ priv enum RunSnapshotState {
 ///|
 priv struct RunSnapshotFrontier {
   session : String
+  // Session ids are store-local. A reply captured for another workspace or
+  // for the live/archived twin must never reduce the conversation that now
+  // occupies this page's `(device, session)` slot.
+  workspace : @common.Uri
+  record : ConversationRecord
   state : RunSnapshotState
+  // Accepted start replies whose relative order against the currently shown
+  // run is not yet known. They are neither current nor terminal: a complete
+  // host snapshot decides whether each one is the live successor or a
+  // completed predecessor.
+  unresolved_accepted_run_ids : Array[String]
   // Runs already retired from lifecycle ownership but still waiting for
   // their authoritative Finished boundary. A successor may own `state` by
   // the time this request returns; these exact ids remain independent replay
@@ -637,6 +647,7 @@ priv struct RunSnapshotFrontier {
 priv enum SettlementFrontierMatch {
   SettlementByRun
   SettlementByRetiredRun
+  SettlementByAcceptedRun
   SettlementBySubmission(String)
 }
 
@@ -805,6 +816,15 @@ priv struct Conversation {
   // keeping the two facts separate lets a delayed Finished reconcile the
   // transcript exactly once without reclaiming lifecycle ownership.
   reconciled_run_ids : Array[String]
+  // A start RPC can prove that a run exists while an independently queued
+  // Started notification has installed a different run locally. Until an
+  // `agent.runs` cut orders those facts, neither id may be discarded or
+  // allowed to reclaim lifecycle ownership from the other.
+  unresolved_accepted_run_ids : Array[String]
+  // An undelivered Stop remains non-retryable until a complete host snapshot
+  // proves that this exact run is still live. The attempt id fences a stale
+  // snapshot from unlocking a newer cancel attempt.
+  cancel_retry_probe : CancelRetryProbe?
   // Where this conversation's compaction stands; see `CompactionPhase`.
   compaction : CompactionPhase
   // A run finished while this conversation was off screen and the user has
@@ -1047,6 +1067,12 @@ priv struct PendingPrompt {
   submission_id : String
   draft : String
   mentions : Array[Mention]
+} derive(Eq)
+
+///|
+priv struct CancelRetryProbe {
+  run_id : String
+  attempt_id : String
 } derive(Eq)
 
 ///|
@@ -2407,6 +2433,8 @@ fn empty_conversation(
     last_run_id: None,
     retired_run_ids: [],
     reconciled_run_ids: [],
+    unresolved_accepted_run_ids: [],
+    cancel_retry_probe: None,
     compaction: NotCompacting,
     unseen_finish: false,
     run_started_ms: None,
@@ -2916,7 +2944,10 @@ fn Model::run_snapshot_frontier(
     }
     {
       session: conv.session_id,
+      workspace: conv.project(),
+      record: conv.record,
       state,
+      unresolved_accepted_run_ids: conv.unresolved_accepted_run_ids.copy(),
       unreconciled_run_ids: conv.retired_run_ids.filter(run_id => {
         !conv.reconciled_run_ids.contains(run_id)
       }),
@@ -2925,6 +2956,16 @@ fn Model::run_snapshot_frontier(
       pending_approval_id: conv.pending_approval.map(pending => pending.id),
     }
   })
+}
+
+///|
+fn RunSnapshotFrontier::owns(
+  self : RunSnapshotFrontier,
+  conv : Conversation,
+) -> Bool {
+  self.session == conv.session_id &&
+  self.workspace == conv.project() &&
+  self.record == conv.record
 }
 
 ///|
@@ -2942,6 +2983,7 @@ fn Model::matches_run_snapshot_frontier(
       guard self.find_conversation(channel, session) is Some(conv) else {
         return false
       }
+      guard captured.owns(conv) else { return false }
       return match captured.state {
         SnapshotIdle(last_run_id~) =>
           conv.run is NoRun(..) && conv.last_run_id == last_run_id
@@ -2954,6 +2996,42 @@ fn Model::matches_run_snapshot_frontier(
     }
   }
   self.find_conversation(channel, session) is None
+}
+
+///|
+fn Model::matches_unresolved_accepted_frontier(
+  self : Model,
+  channel : @interop.ChannelId,
+  frontier : Array[RunSnapshotFrontier],
+  session : String,
+  run_id : String,
+) -> Bool {
+  guard self.find_conversation(channel, session) is Some(conv) else {
+    return false
+  }
+  for captured in frontier {
+    if captured.session == session {
+      guard captured.owns(conv) &&
+        captured.unresolved_accepted_run_ids.contains(run_id) &&
+        conv.unresolved_accepted_run_ids.contains(run_id) else {
+        return false
+      }
+      // A terminal event for the captured predecessor may legitimately make
+      // the page idle before the snapshot returns. A different Starting/Open
+      // owner is newer lifecycle truth and must still fence this older cut.
+      return match captured.state {
+        SnapshotIdle(last_run_id~) =>
+          conv.run is NoRun(..) && conv.last_run_id == last_run_id
+        SnapshotStarting(submission_id~) =>
+          conv.run is Starting(submission_id=current) &&
+          current == submission_id
+        SnapshotOpen(run_id=captured_run) =>
+          (conv.run is Open(run_id=current, ..) && current == captured_run) ||
+          (conv.run is NoRun(..) && conv.last_run_id == Some(captured_run))
+      }
+    }
+  }
+  false
 }
 
 ///|
@@ -2979,6 +3057,7 @@ fn Model::matched_settlement_frontier(
   }
   for captured in frontier {
     if captured.session == settlement.session {
+      guard captured.owns(conv) else { return None }
       let lifecycle_owner = match captured.state {
         SnapshotStarting(submission_id~) if conv.run
           is Starting(submission_id=current) &&
@@ -3010,6 +3089,10 @@ fn Model::matched_settlement_frontier(
         conv.retired_run_ids.contains(settlement.run_id) &&
         !conv.reconciled_run_ids.contains(settlement.run_id) {
         return Some(SettlementByRetiredRun)
+      }
+      if captured.unresolved_accepted_run_ids.contains(settlement.run_id) &&
+        conv.unresolved_accepted_run_ids.contains(settlement.run_id) {
+        return Some(SettlementByAcceptedRun)
       }
       return None
     }
@@ -3379,6 +3462,20 @@ fn Model::conversation_by_retired_run(
 }
 
 ///|
+fn Model::conversation_by_unresolved_accepted_run(
+  self : Model,
+  channel : @interop.ChannelId,
+  run_id : String,
+) -> Conversation? {
+  for conv in self.conversations.filter(conv => conv.device == channel) {
+    if conv.unresolved_accepted_run_ids.contains(run_id) {
+      return Some(conv)
+    }
+  }
+  None
+}
+
+///|
 /// The conversation holding an exact id-bearing steer receipt. A receipt may
 /// trail its run's Finished event and even the next run's Started event, so
 /// current/last run ownership alone is not enough to route it.
@@ -3467,7 +3564,9 @@ fn Conversation::worth_keeping(self : Conversation) -> Bool {
 /// are not reused, while transport and reducer queues are independently
 /// ordered.
 fn Conversation::retain_in_memory(self : Conversation) -> Bool {
-  self.worth_keeping() || !self.retired_run_ids.is_empty()
+  self.worth_keeping() ||
+  !self.retired_run_ids.is_empty() ||
+  !self.unresolved_accepted_run_ids.is_empty()
 }
 
 ///|
@@ -3692,6 +3791,46 @@ fn Conversation::retire_run(
   let retired_run_ids = self.retired_run_ids.copy()
   retired_run_ids.push(run_id)
   { ..self, retired_run_ids, }
+}
+
+///|
+fn Conversation::hold_accepted_run(
+  self : Conversation,
+  run_id : String,
+) -> Conversation {
+  if self.unresolved_accepted_run_ids.contains(run_id) {
+    return self
+  }
+  let unresolved_accepted_run_ids = self.unresolved_accepted_run_ids.copy()
+  unresolved_accepted_run_ids.push(run_id)
+  { ..self, unresolved_accepted_run_ids, }
+}
+
+///|
+fn Conversation::resolve_accepted_run(
+  self : Conversation,
+  run_id : String,
+) -> Conversation {
+  if !self.unresolved_accepted_run_ids.contains(run_id) {
+    return self
+  }
+  {
+    ..self,
+    unresolved_accepted_run_ids: self.unresolved_accepted_run_ids.filter(candidate => {
+      candidate != run_id
+    }),
+  }
+}
+
+///|
+fn Conversation::has_unreconciled_run_authority(self : Conversation) -> Bool {
+  if self.run is (Starting(..) | Open(..)) ||
+    !self.unresolved_accepted_run_ids.is_empty() {
+    return true
+  }
+  self.retired_run_ids
+  .iter()
+  .any(run_id => !self.reconciled_run_ids.contains(run_id))
 }
 
 ///|

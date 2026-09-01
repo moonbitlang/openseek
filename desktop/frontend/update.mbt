@@ -229,6 +229,33 @@ fn Model::open_archived_session_on(
 ) -> (@cmd.Cmd, Model) {
   let owner : @interop.ConversationKey = { channel, session: session_id, }
   let known = self.find_conversation(channel, session_id)
+  if known is Some(existing) &&
+    !(existing.is_archived_read_only() && existing.project() == workspace) &&
+    existing.has_unreconciled_run_authority() {
+    // This page has one visible `(device, session)` slot, while session ids
+    // are store-local. Replacing a live owner with a same-id archived record
+    // would orphan its Stop control and terminal routing. Keep the owner and
+    // ask the host for the cut that can release it; the archive can be opened
+    // once that authority is reconciled.
+    let (notice, notified) = self.notify_error(
+      dispatch, "This same-id conversation still owns an active or unreconciled run in another store; wait for it to settle before opening the archive.",
+    )
+    guard notified.device_state(channel) is Some(dev) else {
+      return (notice, notified)
+    }
+    return (
+      @cmd.batch([
+        notice,
+        fetch_runs(
+          dispatch,
+          channel,
+          notified.run_snapshot_frontier(channel),
+          dev.connection_generation,
+        ),
+      ]),
+      notified,
+    )
+  }
   let conversation = match known {
     Some(conv) if conv.is_archived_read_only() && conv.project() == workspace =>
       conv
@@ -3466,6 +3493,7 @@ fn update_msg(
           model.replace_conversation({
             ..conv,
             run: Open(run_id~, stage=Cancelling(attempt_id~)),
+            cancel_retry_probe: None,
           }),
         )
       } else {
@@ -5408,6 +5436,7 @@ fn update_device_msg(
         ..closed,
         run: NoRun(ended=None),
         last_run_id: Some(run_id),
+        cancel_retry_probe: None,
       })
       (
         fetch_runs(
@@ -5432,6 +5461,7 @@ fn update_device_msg(
       let retryable = model.replace_conversation({
         ..conv,
         run: Open(run_id~, stage=AtStep(None)),
+        cancel_retry_probe: None,
       })
       let (notice, notified) = retryable.notify_error(dispatch, message)
       (
@@ -5456,11 +5486,17 @@ fn update_device_msg(
         return (@cmd.none, model)
       }
       // The host may have queued this cancel before the response path failed.
-      // A live runs snapshot only says Finished has not arrived yet; it cannot
-      // prove non-delivery, so keep the run non-steerable and non-retryable.
-      let (notice, notified) = model.notify_error(
+      // Keep the run non-steerable and non-retryable until a complete live cut
+      // confirms the same id still exists. Retrying that exact id is then
+      // idempotent at the host; a terminal cut closes it instead.
+      let waiting = model.replace_conversation({
+        ..conv,
+        cancel_retry_probe: Some({ run_id, attempt_id, }),
+      })
+      let (notice, notified) = waiting.notify_error(
         dispatch,
-        message + " — delivery is unknown; waiting for the run to stop",
+        message +
+        " — delivery is unknown; checking whether the run is still live",
       )
       (
         @cmd.batch([
@@ -6648,6 +6684,28 @@ fn update_device_msg(
           )
         }
       }
+      // Session ids are store-local. A Started carrying an exact durable root
+      // cannot take ownership of a same-id conversation from another store,
+      // nor can a live run be transplanted into an archived record.
+      if existing.record is ArchivedRecord ||
+        (started_project is Some(project) && existing.project() != project) {
+        return (@cmd.none, model)
+      }
+      // An accepted RPC reply can race with a different run's Started. Until
+      // one complete `agent.runs` cut orders them, replaying this id would
+      // guess whether it is the live successor or a delayed predecessor.
+      if existing.unresolved_accepted_run_ids.contains(run_id) &&
+        !(existing.run is Open(run_id=current, ..) && current == run_id) {
+        return (
+          fetch_runs(
+            dispatch,
+            channel,
+            model.run_snapshot_frontier(channel),
+            dev.connection_generation,
+          ),
+          model,
+        )
+      }
       let existing = match started_project {
         Some(project) =>
           {
@@ -6688,7 +6746,10 @@ fn update_device_msg(
         Open(run_id=current, ..) if current == run_id => (conv, false, false)
         Open(run_id=previous_run, ..) =>
           (
-            conv.clear_streams().forget_steers_for_run(previous_run),
+            conv
+            .clear_streams()
+            .forget_steers_for_run(previous_run)
+            .retire_run(previous_run),
             true,
             false,
           )
@@ -6748,6 +6809,11 @@ fn update_device_msg(
       let conv = {
         ..conv,
         run,
+        cancel_retry_probe: if same_open {
+          conv.cancel_retry_probe
+        } else {
+          None
+        },
         turn,
         run_started_ms,
         sync,
@@ -6837,7 +6903,7 @@ fn update_device_msg(
             // A predecessor selector is independent of the session's current
             // lifecycle frontier. Its completion must not suppress negative
             // settlement of a captured successor that is absent from `live`.
-            if !(owner is SettlementByRetiredRun) &&
+            if !(owner is (SettlementByRetiredRun | SettlementByAcceptedRun)) &&
               !settled_sessions.contains(settlement.session) {
               settled_sessions.push(settlement.session)
             }
@@ -6857,7 +6923,15 @@ fn update_device_msg(
           .any(item => item.session == run.session && item.run_id == run.run_id)
         if !duplicates_settlement &&
           !admitted_run_sessions.contains(run.session) &&
-          model.matches_run_snapshot_frontier(channel, frontier, run.session) {
+          (
+            model.matches_run_snapshot_frontier(channel, frontier, run.session) ||
+            model.matches_unresolved_accepted_frontier(
+              channel,
+              frontier,
+              run.session,
+              run.run_id,
+            )
+          ) {
           accepted_runs.push(run)
           admitted_run_sessions.push(run.session)
         }
@@ -6873,7 +6947,9 @@ fn update_device_msg(
       let ordered_settlements : Array[RecoveredSettlement] = []
       for settlement in accepted_settlements {
         if model.matched_settlement_frontier(channel, frontier, settlement)
-          is (Some(SettlementByRun) | Some(SettlementByRetiredRun)) {
+          is (Some(SettlementByRun)
+          | Some(SettlementByRetiredRun)
+          | Some(SettlementByAcceptedRun)) {
           ordered_settlements.push(settlement)
         }
       }
@@ -6887,6 +6963,14 @@ fn update_device_msg(
         guard model.matched_settlement_frontier(channel, frontier, settlement)
           is Some(owner) else {
           continue
+        }
+        if owner is SettlementByAcceptedRun &&
+          next.find_conversation(channel, settlement.session) is Some(conv) {
+          next = next.replace_conversation(
+            conv
+            .resolve_accepted_run(settlement.run_id)
+            .retire_run(settlement.run_id),
+          )
         }
         if owner is SettlementBySubmission(submission_id) &&
           next.find_conversation(channel, settlement.session) is Some(conv) {
@@ -6914,6 +6998,28 @@ fn update_device_msg(
         next = updated
       }
       for run in accepted_runs {
+        if next.find_conversation(channel, run.session) is Some(conv) {
+          let resolved = conv.resolve_accepted_run(run.run_id)
+          let resolved = if resolved.cancel_retry_probe
+            is Some({ run_id: probe_run, attempt_id: probe_attempt, }) &&
+            probe_run == run.run_id &&
+            resolved.run
+            is Open(
+              run_id=current,
+              stage=Cancelling(attempt_id=current_attempt)
+            ) &&
+            current == run.run_id &&
+            current_attempt == probe_attempt {
+            {
+              ..resolved,
+              run: Open(run_id=current, stage=AtStep(None)),
+              cancel_retry_probe: None,
+            }
+          } else {
+            resolved
+          }
+          next = next.replace_conversation(resolved)
+        }
         let (cmd, updated) = update_device_msg(
           dispatch,
           channel,
@@ -6967,7 +7073,10 @@ fn update_device_msg(
         // Anything else is newer truth than the reply, live events having
         // landed meanwhile.
         let captured = match captured_by_session.get(recovered.session) {
-          Some(row) => row.pending_approval_id
+          Some(row) => {
+            guard row.owns(conv) else { continue }
+            row.pending_approval_id
+          }
           None => None
         }
         guard showing == captured else { continue }
@@ -7012,6 +7121,7 @@ fn update_device_msg(
         guard seeded.find_conversation(channel, captured.session) is Some(conv) else {
           continue
         }
+        guard captured.owns(conv) else { continue }
         if conv.pending_approval is Some(current) && current.id == captured_id {
           seeded = seeded.replace_conversation({
             ..conv,
@@ -7035,8 +7145,8 @@ fn update_device_msg(
           return conv
         }
         for captured in frontier {
-          if captured.session == conv.session_id {
-            return match captured.state {
+          if captured.session == conv.session_id && captured.owns(conv) {
+            let next = match captured.state {
               SnapshotOpen(run_id~) if conv.run is Open(run_id=current, ..) &&
                 current == run_id &&
                 !live.contains(run_id) =>
@@ -7050,6 +7160,7 @@ fn update_device_msg(
                   .retire_run(run_id),
                   run: NoRun(ended=None),
                   last_run_id: Some(run_id),
+                  cancel_retry_probe: None,
                 }
               SnapshotIdle(last_run_id=Some(run_id)) if conv.run is NoRun(..) &&
                 conv.last_run_id is Some(current) &&
@@ -7074,6 +7185,16 @@ fn update_device_msg(
               }
               _ => conv
             }
+            let mut resolved = next
+            for run_id in captured.unresolved_accepted_run_ids {
+              if resolved.unresolved_accepted_run_ids.contains(run_id) &&
+                !live.contains(run_id) {
+                resolved = resolved
+                  .resolve_accepted_run(run_id)
+                  .retire_run(run_id)
+              }
+            }
+            return resolved
           }
         }
         conv
@@ -7182,14 +7303,14 @@ fn update_device_msg(
           owner == run_id &&
           !(conv.run is NoRun(ended=Some(RunFinished(outcome))) &&
           outcome is (Completed | ContextYield | MaxStepsExhausted))
-        let settled = if owns_lifecycle {
+        let settled = if owns_lifecycle || conv.retired_run_ids.contains(run_id) {
           conv
         } else {
-          // The accepted response can overtake this run's queued Started and
-          // Finished while another lifecycle already owns the conversation.
-          // Retaining its exact id keeps it selectable for terminal replay and
-          // prevents its delayed Started from reclaiming the successor.
-          conv.retire_run(run_id)
+          // The reply proves this run exists, but an independently queued
+          // Started installed a different id locally. Neither is known to be
+          // older yet: retain the accepted id as unresolved and let one
+          // complete host snapshot decide whether it is live or settled.
+          conv.hold_accepted_run(run_id)
         }
         // The reply still opens the lifecycle when its Started notification
         // was delayed. A very short run may already be finished; never
@@ -7239,6 +7360,16 @@ fn update_device_msg(
           updated.conversation_root(settled),
         )
         let commands = [branch_cmd]
+        if !owns_lifecycle {
+          commands.push(
+            fetch_runs(
+              dispatch,
+              channel,
+              updated.run_snapshot_frontier(channel),
+              dev.connection_generation,
+            ),
+          )
+        }
         if generation is Some(generation) {
           commands.push(
             session_snapshot_command(
@@ -7363,6 +7494,9 @@ fn update_device_msg(
           // A predecessor's process diagnostics have no durable twin, so still
           // surface them, but never let them rewrite a successor's phase.
           Some((conv, true))
+        } else if model.conversation_by_unresolved_accepted_run(channel, run_id)
+          is Some(conv) {
+          Some((conv.resolve_accepted_run(run_id).retire_run(run_id), true))
         } else if model.conversation_by_last_run(channel, run_id) is Some(conv) {
           Some((conv, false))
         } else {
@@ -7486,6 +7620,11 @@ fn update_device_msg(
           // preserves the predecessor's routing identity. Reduce its terminal
           // side effects without replacing that successor.
           Some((conv, true))
+        } else if model.conversation_by_unresolved_accepted_run(channel, run_id)
+          is Some(conv) {
+          // The terminal boundary itself orders an accepted-but-ambiguous run:
+          // it is a completed predecessor, never the currently shown owner.
+          Some((conv.resolve_accepted_run(run_id).retire_run(run_id), true))
         } else {
           None
         })
@@ -7510,8 +7649,16 @@ fn update_device_msg(
             conv.clear_streams()
           })
           .forget_steers_for_run(run_id)
+          .resolve_accepted_run(run_id)
           .retire_run(run_id)
           .record_reconciled_run(run_id)
+        let settled_inputs = if settled_inputs.cancel_retry_probe
+          is Some({ run_id: probe_run, .. }) &&
+          probe_run == run_id {
+          { ..settled_inputs, cancel_retry_probe: None, }
+        } else {
+          settled_inputs
+        }
         // A question belonging to this run goes with it. The engine settles
         // its own on the way out, so what reaches here is the engine that
         // could not — a killed process emits no `approval_resolved` — and
@@ -11245,7 +11392,10 @@ test "runs settled closes runs the host no longer has, sparing live and starting
     RunsSettled(live=["r7"], frontier=[
       {
         session: "desktop-test",
+        workspace: @interop.ChannelId::Local.test_project(),
+        record: LiveRecord,
         state: SnapshotOpen(run_id="r7"),
+        unresolved_accepted_run_ids: [],
         unreconciled_run_ids: [],
         reconciled_run_ids: [],
         initial_ids: [],
@@ -11253,7 +11403,10 @@ test "runs settled closes runs the host no longer has, sparing live and starting
       },
       {
         session: "desktop-stale",
+        workspace: @interop.ChannelId::Local.test_project(),
+        record: LiveRecord,
         state: SnapshotOpen(run_id="r9"),
+        unresolved_accepted_run_ids: [],
         unreconciled_run_ids: [],
         reconciled_run_ids: [],
         initial_ids: [],
@@ -11811,7 +11964,7 @@ test "a definitively rejected Stop becomes retryable" {
 }
 
 ///|
-test "an ambiguously delivered Stop stays non-steerable until Finished" {
+test "an ambiguously delivered Stop becomes retryable after a live host cut" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
@@ -11841,6 +11994,35 @@ test "an ambiguously delivered Stop stays non-steerable until Finished" {
     not_retried.active().run
     is Open(run_id="r7", stage=Cancelling(attempt_id="cancel-1")),
   )
+  let frontier = not_retried.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, confirmed_live) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          model: High,
+          max_steps: 1000,
+          session_root: None,
+          submission_id: None,
+        },
+      ],
+      settled=[],
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=not_retried.dev().connection_generation,
+    ),
+    not_retried,
+  )
+  assert_true(
+    confirmed_live.active().run is Open(run_id="r7", stage=AtStep(None)),
+  )
+  assert_true(confirmed_live.active().cancel_retry_probe is None)
+  let (_, retried) = update(dispatch, Stop, confirmed_live)
+  assert_eq(retried.submission_sequence, sequence + 1)
+  assert_true(retried.active().run is Open(run_id="r7", stage=Cancelling(..)))
 }
 
 ///|
@@ -12153,13 +12335,151 @@ test "an accepted overtaken start remains selectable for settlement" {
     foreign,
   )
   assert_true(accepted.active().run is Open(run_id="r-foreign", ..))
-  assert_true(accepted.active().retired_run_ids.contains("r-first"))
+  assert_true(accepted.active().unresolved_accepted_run_ids.contains("r-first"))
+  let frontier = accepted.run_snapshot_frontier(@interop.ChannelId::Local)
   assert_true(
-    accepted
-    .run_snapshot_frontier(@interop.ChannelId::Local)
+    frontier
     .iter()
-    .any(captured => captured.unreconciled_run_ids.contains("r-first")),
+    .any(captured => captured.unresolved_accepted_run_ids.contains("r-first")),
   )
+  let (_, ordered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[
+        {
+          run_id: "r-foreign",
+          session: "desktop-test",
+          model: High,
+          max_steps: 1000,
+          session_root: None,
+          submission_id: Some("foreign-start"),
+        },
+      ],
+      settled=[],
+      approvals=[],
+      live=["r-foreign"],
+      frontier~,
+      connection_generation=accepted.dev().connection_generation,
+    ),
+    accepted,
+  )
+  assert_true(ordered.active().run is Open(run_id="r-foreign", ..))
+  assert_false(ordered.active().unresolved_accepted_run_ids.contains("r-first"))
+  assert_true(ordered.active().retired_run_ids.contains("r-first"))
+  assert_false(ordered.active().reconciled_run_ids.contains("r-first"))
+}
+
+///|
+test "an accepted predecessor settlement does not hide successor absence" {
+  let dispatch = test_dispatch()
+  let model = test_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r-current", stage=Opened),
+    unresolved_accepted_run_ids: ["r-predecessor"],
+  })
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "r-predecessor",
+          session: "desktop-test",
+          submission_id: Some("old-start"),
+          status: "finished",
+        },
+      ],
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+    ),
+    model,
+  )
+  assert_true(settled.active().run is NoRun(ended=None))
+  assert_eq(settled.active().last_run_id, Some("r-current"))
+  assert_true(settled.active().reconciled_run_ids.contains("r-predecessor"))
+}
+
+///|
+test "an accepted successor survives a delayed predecessor lifecycle" {
+  let dispatch = test_dispatch()
+  let successor = with_pending_prompt(
+    { ..test_conversation(), run: Starting(submission_id="next-start"), },
+    "next-start",
+    "next prompt",
+  )
+  let (_, predecessor) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-old",
+      session="desktop-test",
+      model=High,
+      max_steps=1000,
+      session_root=None,
+      submission_id=Some("old-start"),
+    ),
+    test_model().replace_conversation(successor),
+  )
+  assert_true(predecessor.active().run is Open(run_id="r-old", ..))
+  let (_, accepted) = update_dev(
+    dispatch,
+    StartResponded(
+      session="desktop-test",
+      submission_id="next-start",
+      run_id="r-new",
+      status="accepted",
+      exit_code=0,
+    ),
+    predecessor,
+  )
+  assert_true(accepted.active().run is Open(run_id="r-old", ..))
+  assert_true(accepted.active().unresolved_accepted_run_ids.contains("r-new"))
+  let frontier = accepted.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, predecessor_finished) = update_dev(
+    dispatch,
+    Finished(run_id="r-old", status="finished", answer=None),
+    accepted,
+  )
+  assert_true(predecessor_finished.active().run is NoRun(..))
+  let (_, deferred) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-new",
+      session="desktop-test",
+      model=High,
+      max_steps=1000,
+      session_root=None,
+      submission_id=Some("next-start"),
+    ),
+    predecessor_finished,
+  )
+  assert_true(deferred.active().run is NoRun(..))
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[
+        {
+          run_id: "r-new",
+          session: "desktop-test",
+          model: High,
+          max_steps: 1000,
+          session_root: None,
+          submission_id: Some("next-start"),
+        },
+      ],
+      settled=[],
+      approvals=[],
+      live=["r-new"],
+      frontier~,
+      connection_generation=deferred.dev().connection_generation,
+    ),
+    deferred,
+  )
+  assert_true(recovered.active().run is Open(run_id="r-new", stage=Opened))
+  assert_false(recovered.active().retired_run_ids.contains("r-new"))
+  assert_false(recovered.active().unresolved_accepted_run_ids.contains("r-new"))
 }
 
 ///|
@@ -14925,6 +15245,136 @@ test "opening an archived row creates a read-only transcript owner" {
 }
 
 ///|
+test "a same-id archive cannot displace an active owner from another store" {
+  let dispatch = test_dispatch()
+  let live_store = @interop.ChannelId::Local.test_resource("/live")
+  let archived_store = @interop.ChannelId::Local.test_resource("/archived")
+  let archived : @transcript.SessionListItem = {
+    ..archived_item("desktop-shared-active"),
+    workspace: archived_store,
+    workspace_name: "archived",
+    updated_at_ms: None,
+  }
+  let owner = {
+    ..empty_conversation(@interop.ChannelId::Local, archived.id, live_store),
+    run: Open(run_id="r-live-store", stage=Opened),
+  }
+  let model = test_model()
+    .with_dev(dev => {
+      ..dev,
+      archived: [archived],
+      projects: [live_store, archived_store],
+    })
+    .replace_conversation(owner)
+    .activate(@interop.ChannelId::Local, archived.id, live_store)
+  let (_, blocked) = update(
+    dispatch,
+    OpenArchivedSession(
+      @interop.ChannelId::Local,
+      session=archived.id,
+      workspace=archived.workspace,
+    ),
+    model,
+  )
+  assert_eq(blocked.active().project(), live_store)
+  assert_true(blocked.active().record is LiveRecord)
+  assert_true(blocked.active().run is Open(run_id="r-live-store", stage=Opened))
+  assert_true(
+    blocked.notifications
+    .iter()
+    .any(item => {
+      item.message.contains("still owns an active or unreconciled run")
+    }),
+  )
+}
+
+///|
+test "a same-id archive cannot discard an unreconciled predecessor" {
+  let dispatch = test_dispatch()
+  let old_store = @interop.ChannelId::Local.test_resource("/retired")
+  let archived_store = @interop.ChannelId::Local.test_resource("/archived")
+  let archived : @transcript.SessionListItem = {
+    ..archived_item("desktop-shared-retired"),
+    workspace: archived_store,
+    workspace_name: "archived",
+    updated_at_ms: None,
+  }
+  let owner = {
+    ..empty_conversation(@interop.ChannelId::Local, archived.id, old_store),
+    last_run_id: Some("r-retired-store"),
+    retired_run_ids: ["r-retired-store"],
+  }
+  let model = test_model()
+    .with_dev(dev => {
+      ..dev,
+      archived: [archived],
+      projects: [old_store, archived_store],
+    })
+    .replace_conversation(owner)
+    .activate(@interop.ChannelId::Local, archived.id, old_store)
+  let (_, blocked) = update(
+    dispatch,
+    OpenArchivedSession(
+      @interop.ChannelId::Local,
+      session=archived.id,
+      workspace=archived.workspace,
+    ),
+    model,
+  )
+  assert_eq(blocked.active().project(), old_store)
+  assert_true(blocked.active().record is LiveRecord)
+  assert_true(blocked.active().retired_run_ids.contains("r-retired-store"))
+  assert_false(blocked.active().reconciled_run_ids.contains("r-retired-store"))
+}
+
+///|
+test "a run snapshot cannot cross a same-id store replacement" {
+  let dispatch = test_dispatch()
+  let first = @interop.ChannelId::Local.test_resource("/snapshot-first")
+  let second = @interop.ChannelId::Local.test_resource("/snapshot-second")
+  let session = "desktop-shared-snapshot"
+  let original = {
+    ..empty_conversation(@interop.ChannelId::Local, session, first),
+    run: Open(run_id="r-first-snapshot", stage=Opened),
+  }
+  let original_model = test_model()
+    .with_dev(dev => { ..dev, projects: [first, second], })
+    .replace_conversation(original)
+  let frontier = original_model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let replacement = {
+    ..empty_conversation(@interop.ChannelId::Local, session, second),
+    record: ArchivedRecord,
+  }
+  let switched = original_model
+    .replace_conversation(replacement)
+    .activate(@interop.ChannelId::Local, session, second)
+  let (_, stale) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[
+        {
+          run_id: "r-first-snapshot",
+          session,
+          model: High,
+          max_steps: 1000,
+          session_root: Some(first),
+          submission_id: Some("first-snapshot-start"),
+        },
+      ],
+      settled=[],
+      approvals=[],
+      live=["r-first-snapshot"],
+      frontier~,
+      connection_generation=switched.dev().connection_generation,
+    ),
+    switched,
+  )
+  assert_eq(stale.active().project(), second)
+  assert_true(stale.active().record is ArchivedRecord)
+  assert_true(stale.active().run is NoRun(..))
+}
+
+///|
 test "switching same-id archived stores fences the first transcript load" {
   let dispatch = test_dispatch()
   let first = @interop.ChannelId::Local.test_resource("/first")
@@ -14962,6 +15412,7 @@ test "switching same-id archived stores fences the first transcript load" {
   let loading_first = loading_first.replace_conversation({
     ..loading_first.active(),
     retired_run_ids: ["r-first-store"],
+    reconciled_run_ids: ["r-first-store"],
   })
   let (_, loading_second) = update(
     dispatch,

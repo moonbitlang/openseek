@@ -668,6 +668,19 @@ fn runs_payload(frontier : Array[RunSnapshotFrontier]) -> @protocol.RunsPayload 
         })
       }
     }
+    for run_id in captured.unresolved_accepted_run_ids {
+      if !known
+        .iter()
+        .any(item => {
+          item.session == captured.session && item.run_id == Some(run_id)
+        }) {
+        known.push({
+          session: captured.session,
+          run_id: Some(run_id),
+          submission_id: None,
+        })
+      }
+    }
   }
   { known: Some(known), }
 }
@@ -677,7 +690,10 @@ test "runs payload carries an unreconciled predecessor beside its successor" {
   let payload = runs_payload([
     {
       session: "desktop-test",
+      workspace: @interop.ChannelId::Local.test_project(),
+      record: LiveRecord,
       state: SnapshotOpen(run_id="r8"),
+      unresolved_accepted_run_ids: [],
       unreconciled_run_ids: ["r7"],
       reconciled_run_ids: [],
       initial_ids: [],
@@ -699,11 +715,46 @@ test "runs payload carries an unreconciled predecessor beside its successor" {
 }
 
 ///|
+test "runs payload carries an accepted run awaiting lifecycle order" {
+  let payload = runs_payload([
+    {
+      session: "desktop-test",
+      workspace: @interop.ChannelId::Local.test_project(),
+      record: LiveRecord,
+      state: SnapshotOpen(run_id="r-visible"),
+      unresolved_accepted_run_ids: ["r-accepted"],
+      unreconciled_run_ids: [],
+      reconciled_run_ids: [],
+      initial_ids: [],
+      pending_approval_id: None,
+    },
+  ])
+  guard payload.known is Some(known) else { fail("missing known selectors") }
+  assert_true(
+    known
+    .iter()
+    .any(item => {
+      item.session == "desktop-test" && item.run_id == Some("r-visible")
+    }),
+  )
+  assert_true(
+    known
+    .iter()
+    .any(item => {
+      item.session == "desktop-test" && item.run_id == Some("r-accepted")
+    }),
+  )
+}
+
+///|
 test "runs payload omits an already reconciled idle lifecycle" {
   let payload = runs_payload([
     {
       session: "desktop-test",
+      workspace: @interop.ChannelId::Local.test_project(),
+      record: LiveRecord,
       state: SnapshotIdle(last_run_id=Some("r7")),
+      unresolved_accepted_run_ids: [],
       unreconciled_run_ids: [],
       reconciled_run_ids: ["r7"],
       initial_ids: [],
