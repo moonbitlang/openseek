@@ -597,7 +597,11 @@ async fn execute(
       )
     }
     let raw = exec.head()
-    let exit_code = exec.exit_code().unwrap_or(-1)
+    // `None` is a KILLED run — on this path, the output-cap kill below. It
+    // stays `None`: the old `-1` stand-in flowed into the stage labels as a
+    // real-looking status ("exit -1") that then contradicted the STOPPED
+    // note appended for the cap.
+    let exit_code = exec.exit_code()
     // The retained execution is KILLED once output passes the inline cap, so a
     // clipped head means a stopped program, not a quiet one — say which.
     let output_limit_reached = exec.over_inline_cap() || exec.output_truncated()
@@ -615,14 +619,34 @@ async fn execute(
     )
     exec.discard()
     let text = rewrite_temp_paths(raw, [real, build_dir])
-    // A zero exit already proves the program ran; only a failure needs the
-    // artifact probe to say which stage it failed at.
-    let compiled = if exit_code == 0 {
-      Some(true)
-    } else {
-      snippet_compiled(build_dir, input.target)
+    let (body, brief, run_failed) = match exit_code {
+      Some(code) => {
+        // A zero exit already proves the program ran; only a failure needs
+        // the evidence probe to say which stage it failed at.
+        let compiled = if code == 0 {
+          Some(true)
+        } else {
+          snippet_compiled_or_unknown(build_dir, input.target)
+        }
+        (
+          finished_body(text, code, compiled~),
+          finished_brief(code, compiled~),
+          code != 0,
+        )
+      }
+      // A killed run has no exit status and gets no stage label — the cap
+      // note appended below is what tells the story.
+      None =>
+        (
+          if text.is_blank() {
+            "mbtx: the run was killed with no output"
+          } else {
+            text
+          },
+          "mbtx (killed)",
+          true,
+        )
     }
-    let body = finished_body(text, exit_code, compiled~)
     let body = if output_limit_reached {
       "\{body}\n[mbtx: output passed the fixed \{OutputCapBytes}-byte inline limit, so the program was STOPPED and this is only what it printed first. Retrying the same call will hit the same limit. Redirect bulky child output with `stdout=ToFile(path)` where `path` is under `@fs.tmpdir()`, then have that same snippet read the file and print only the needed excerpt before it exits.]"
     } else {
@@ -640,10 +664,8 @@ async fn execute(
     }
     return @agent_tool.respond(
       body,
-      is_error=exit_code != 0 ||
-        sandbox_denied is Some(_) ||
-        output_limit_reached,
-      brief=finished_brief(exit_code, compiled~),
+      is_error=run_failed || sandbox_denied is Some(_) || output_limit_reached,
+      brief~,
     )
   }
   let result = @async.with_timeout_opt(foreground_timeout_ms, () => {
@@ -679,7 +701,7 @@ async fn execute(
       let compiled = if exit_code == 0 {
         Some(true)
       } else {
-        snippet_compiled(build_dir, input.target)
+        snippet_compiled_or_unknown(build_dir, input.target)
       }
       // PREPEND the exit status so it survives the agent loop's outer 60k
       // result clamp (which cuts the tail); the output cap is below 60k so
@@ -704,7 +726,7 @@ async fn execute(
       let partial = rewrite_temp_paths(read_capped(log), [real, build_dir])
       let head = timeout_head(
         foreground_timeout_ms,
-        compiled=snippet_compiled(build_dir, input.target),
+        compiled=snippet_compiled_or_unknown(build_dir, input.target),
       )
       let body = if partial.is_blank() {
         head
@@ -736,13 +758,13 @@ async fn execute(
 ///   build was attempted and its tree is intact: the build failed. The
 ///   diagnostics say whether the compiler rejected `source` or the toolchain
 ///   faulted.
-/// - `None` — no moon trace at all (or the probe itself failed): claim
-///   NOTHING. This is deliberate, twice over. moon can fail before writing
-///   anything (a dependency-resolution fault exits 255 leaving an empty
-///   tree), and a snippet can spawn an allowed `moon clean --target-dir` at
-///   its own build tree — child processes are outside the wasm policy's fs
-///   rules — then fail; requiring residue keeps that wipe from being read as
-///   "the build failed" when in truth the build succeeded.
+/// - `None` — no moon trace at all: claim NOTHING. This is deliberate, twice
+///   over. moon can fail before writing anything (a dependency-resolution
+///   fault exits 255 leaving an empty tree), and a snippet can spawn an
+///   allowed `moon clean --target-dir` at its own build tree — child
+///   processes are outside the wasm policy's fs rules — then fail; requiring
+///   residue keeps that wipe from being read as "the build failed" when in
+///   truth the build succeeded.
 ///
 /// Structural on purpose: the OUTPUT cannot make this distinction. moon exits
 /// 1 for a rejected build and for a trapped program alike, and a snippet
@@ -752,6 +774,11 @@ async fn execute(
 /// to misdescribe its own failure stage can only UNclassify itself (the wipe
 /// lands in `None`), never turn one stage's label into the other's without
 /// fabricating moon's residue.
+///
+/// A probe FAULT (EIO, EACCES on the tool's own throwaway dir) raises rather
+/// than posing as any of the three states: the background classifier lets it
+/// propagate into a typed `ClassificationFailed`, while the foreground call
+/// sites catch it into "unclassified" via `snippet_compiled_or_unknown`.
 async fn snippet_compiled(build_dir : String, target : String) -> Bool? {
   let ext = match target {
     "js" => "js"
@@ -759,36 +786,39 @@ async fn snippet_compiled(build_dir : String, target : String) -> Bool? {
     // wasm and wasm-gc
     _ => "wasm"
   }
-  async fn present(relative : String) -> Bool? {
-    let exists = @fs.exists("\{build_dir}/\{target}/\{relative}") catch {
-      error if @async.is_being_cancelled() => raise error
-      // A probe fault (EIO, EACCES on the tool's own throwaway dir) must
-      // neither fail a run that already finished nor masquerade as an answer:
-      // the stage is unknown, and the report falls back to the unclassified
-      // wording rather than folding the fault into "did not build".
-      _ => return None
-    }
-    Some(exists)
-  }
-
   // moon run builds the debug profile today. The release path is probed too so
   // a future default flip degrades this to an extra stat, not to every runtime
   // failure being reported as a build failure.
   for profile in ["debug", "release"] {
-    match present("\{profile}/build/single/single.\{ext}") {
-      Some(true) => return Some(true)
-      Some(false) => ()
-      None => return None
+    if @fs.exists(
+        "\{build_dir}/\{target}/\{profile}/build/single/single.\{ext}",
+      ) {
+      return Some(true)
     }
   }
   for profile in ["debug", "release"] {
-    match present("\{profile}/build/all_pkgs.json") {
-      Some(true) => return Some(false)
-      Some(false) => ()
-      None => return None
+    if @fs.exists("\{build_dir}/\{target}/\{profile}/build/all_pkgs.json") {
+      return Some(false)
     }
   }
   None
+}
+
+///|
+/// The foreground call sites' probe: a fault folds into "no evidence" HERE,
+/// as an explicit per-site choice — the run already finished, and its report
+/// must neither fail nor misclassify over a stat error on the tool's own
+/// throwaway dir. The unclassified wording claims nothing, so no falsehood
+/// can result. (The background classifier makes the opposite choice; see
+/// `snippet_compiled`.)
+async fn snippet_compiled_or_unknown(
+  build_dir : String,
+  target : String,
+) -> Bool? {
+  snippet_compiled(build_dir, target) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => None
+  }
 }
 
 ///|

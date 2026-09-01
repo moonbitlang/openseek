@@ -611,6 +611,12 @@ async test "the inline output cap gives actionable retry guidance" {
     assert_true(output.content.contains("Retrying the same call"))
     assert_true(output.content.contains("stdout=ToFile(path)"))
     assert_true(output.content.contains("same snippet read the file"))
+    // A cap kill has NO exit status: the report must not invent one ("exit
+    // -1") or hang a stage label off it — the STOPPED note above is the
+    // whole story.
+    assert_false(output.content.contains("-1"))
+    assert_false(output.content.contains("at RUNTIME"))
+    assert_true(output.brief is Some("mbtx (killed)"))
     @fs.rmdir(spill_dir, recursive=true) catch {
       _ => ()
     }
