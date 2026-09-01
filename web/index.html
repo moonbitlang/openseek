@@ -23,6 +23,7 @@
       --assistant: #1a8f63;
       --tool: #8a6d10;
       --error: #c2334a;
+      --warn: #9a6700;
       --added: #1a8f63;
       --runtime: #6d4fb0;
       --summary: #b5701f;
@@ -55,6 +56,7 @@
       --assistant: #36c08a;
       --tool: #c9a227;
       --error: #e0556b;
+      --warn: #d4a72c;
       --added: #36c08a;
       --runtime: #9a7bd6;
       --summary: #d98a3a;
@@ -88,6 +90,7 @@
         --assistant: #36c08a;
         --tool: #c9a227;
         --error: #e0556b;
+      --warn: #d4a72c;
         --added: #36c08a;
         --runtime: #9a7bd6;
         --summary: #d98a3a;
@@ -257,7 +260,8 @@
     }
     .sticky-toolbar .mode-row { margin-bottom: 0; }
     .sticky-toolbar .error-bar,
-    .sticky-toolbar .escalated-bar { margin: 10px 0 0; }
+    .sticky-toolbar .escalated-bar,
+    .sticky-toolbar .build-error-bar { margin: 10px 0 0; }
     .mode-row {
       display: flex;
       align-items: center;
@@ -371,6 +375,31 @@
     .session-view.escalated-only .card.assistant:not(:has(.tool-call-escalated)) { display: none; }
     .session-view.escalated-only .card.assistant .tool-call:not(.tool-call-escalated) { display: none; }
     .session-view.escalated-only .turn:not(:has(.tool-call-escalated)):not(:has(.card.tool.escalated)) { display: none; }
+
+    /* mbtx failure-stage words: a build error is a source problem (amber),
+       a runtime error keeps the failure red. */
+    .tool-stage-build { color: var(--warn); font-weight: 600; }
+    .tool-stage-run { color: var(--error); font-weight: 600; }
+    .tool-flag.tool-stage-build { color: var(--warn); }
+
+    /* build-errors-only: find compile errors. Keep each mbtx call whose result
+       brief says the BUILD failed, its paired result card (tagged build-failed),
+       and their turns; hide everything else. */
+    .build-error-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: -6px 0 16px; }
+    .build-error-count { color: var(--warn); font-size: 12px; font-weight: 600; margin-right: 2px; }
+    .build-error-toggle, .build-error-jump {
+      background: var(--panel); color: var(--text);
+      border: 1px solid var(--border); border-radius: 999px;
+      padding: 4px 12px; cursor: pointer; font-size: 12px;
+    }
+    .build-error-jump { padding: 4px 11px; font-family: ui-monospace, monospace; }
+    .build-error-toggle:hover, .build-error-jump:hover { border-color: var(--warn); }
+    .build-error-toggle.active { background: var(--warn); color: #fff; border-color: var(--warn); }
+    .build-errors-only-empty { color: var(--muted); margin-top: 24px; }
+    .session-view.build-errors-only .card:not(.assistant):not(.tool.build-failed) { display: none; }
+    .session-view.build-errors-only .card.assistant:not(:has(.tool-call-build-failed)) { display: none; }
+    .session-view.build-errors-only .card.assistant .tool-call:not(.tool-call-build-failed) { display: none; }
+    .session-view.build-errors-only .turn:not(:has(.tool-call-build-failed)):not(:has(.card.tool.build-failed)) { display: none; }
 
     /* notices */
     .notices { margin-bottom: 16px; }

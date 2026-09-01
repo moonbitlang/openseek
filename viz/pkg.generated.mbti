@@ -15,6 +15,8 @@ pub fn render_notices(@log.ParsedLog) -> @html.Html
 
 pub fn render_session(@agent_session.Session, ViewMode, subrun_children? : Map[String, @agent_session.Session]) -> @html.Html
 
+pub fn rendered_build_error_count(@agent_session.Session, ViewMode) -> Int
+
 pub fn rendered_error_count(@agent_session.Session, ViewMode) -> Int
 
 pub fn rendered_escalated_count(@agent_session.Session, ViewMode) -> Int

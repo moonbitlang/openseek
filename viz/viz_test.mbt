@@ -471,6 +471,103 @@ test "a failed tool call is tagged so errors-only keeps its call card" {
 }
 
 ///|
+/// mbtx failure-stage fixtures: a build-stage failure (staged brief), a
+/// wasm-default runtime failure, and a js single-shot failure whose one exit
+/// code must claim neither stage.
+fn mbtx_stage_session() -> @agent_session.Session {
+  @agent_session.Session(SessionId("mbtx-stage"), system_prompt="")
+  .append(
+    Assistant(
+      AssistantMessage("", tool_calls=[
+        ToolCall(
+          id="b1",
+          name="mbtx",
+          arguments="{\"source\":\"fn main {  }\"}",
+        ),
+        ToolCall(
+          id="r1",
+          name="mbtx",
+          arguments="{\"source\":\"fn main {  }\"}",
+        ),
+        ToolCall(
+          id="j1",
+          name="mbtx",
+          arguments="{\"source\":\"fn main {  }\",\"target\":\"js\"}",
+        ),
+      ]),
+    ),
+  )
+  .append(
+    Tool(
+      ToolResult(
+        tool_call_id="b1",
+        tool_name="mbtx",
+        content="diag",
+        is_error=true,
+        brief="mbtx (build failed, exit=1)",
+      ),
+    ),
+  )
+  .append(
+    Tool(
+      ToolResult(
+        tool_call_id="r1",
+        tool_name="mbtx",
+        content="trap",
+        is_error=true,
+        brief="mbtx (exit=1)",
+      ),
+    ),
+  )
+  .append(
+    Tool(
+      ToolResult(
+        tool_call_id="j1",
+        tool_name="mbtx",
+        content="js diag",
+        is_error=true,
+        brief="mbtx (exit=1)",
+      ),
+    ),
+  )
+}
+
+///|
+/// The stage words and the filter hooks: a build failure tags its call
+/// (`tool-call-build-failed`) and its result card (`build-failed`) — what the
+/// build-errors-only stylesheet keys on — while the wasm runtime failure gets
+/// the run word and the js single-shot failure claims neither stage.
+test "mbtx rows name their failure stage and tag the filter hooks" {
+  let raw = render(@viz.render_session(mbtx_stage_session(), RawLog))
+  assert_true(raw.contains("tool-call-build-failed"))
+  assert_true(raw.contains("build error"))
+  assert_true(raw.contains("card tool error build-failed"))
+  assert_true(raw.contains("🚩 build error"))
+  assert_true(raw.contains("tool-call-run-failed"))
+  assert_true(raw.contains("runtime error"))
+  // Exactly one call carries each stage class: the js failure is neither.
+  assert_eq(raw.split("tool-call-build-failed").length(), 2)
+  assert_eq(raw.split("tool-call-run-failed").length(), 2)
+  // The model view renders the same tags from the projected maps.
+  let model = render(@viz.render_session(mbtx_stage_session(), ModelView))
+  assert_true(model.contains("tool-call-build-failed"))
+  assert_true(model.contains("card tool error build-failed"))
+  assert_true(model.contains("🚩 build error"))
+  // A clean session tags nothing.
+  let clean = render(@viz.render_session(clean_sample_session(), RawLog))
+  assert_false(clean.contains("tool-call-build-failed"))
+  assert_false(clean.contains("tool-call-run-failed"))
+}
+
+///|
+test "rendered_build_error_count counts staged build failures per mode" {
+  let session = mbtx_stage_session()
+  assert_eq(@viz.rendered_build_error_count(session, RawLog), 1)
+  assert_eq(@viz.rendered_build_error_count(session, ModelView), 1)
+  assert_eq(@viz.rendered_build_error_count(clean_sample_session(), RawLog), 0)
+}
+
+///|
 test "failed tool result is folded and red-flagged" {
   let html = render(@viz.render_session(error_tool_session(), RawLog))
   // Folded by default (a <details> with no `open`), tagged as an error, and the

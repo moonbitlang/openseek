@@ -909,6 +909,28 @@ fn tool_call_view(
     (false, true) => "tool-call tool-call-escalated"
     (true, true) => "tool-call tool-call-failed tool-call-escalated"
   }
+  // A failed mbtx call names its STAGE — a build error is fixed in the
+  // source, a runtime error in the program's behavior — as a visible word
+  // beside the brief and as a class the build-errors-only filter keys on.
+  let build_failed = tool_call_is_build_failed(call, briefs, failed)
+  let run_failed = !build_failed &&
+    tool_call_is_run_failed(call, briefs, failed)
+  let cls = if build_failed {
+    "\{cls} tool-call-build-failed"
+  } else if run_failed {
+    "\{cls} tool-call-run-failed"
+  } else {
+    cls
+  }
+  if build_failed {
+    name_row.push(
+      @html.span(class="tool-stage tool-stage-build") <| " build error",
+    )
+  } else if run_failed {
+    name_row.push(
+      @html.span(class="tool-stage tool-stage-run") <| " runtime error",
+    )
+  }
   let original = pretty_json(call.arguments)
   if is_blank_args(original) {
     return @html.div(id?=anchor, class=cls) <| [
@@ -1146,12 +1168,19 @@ fn tool_card(
     (false, true) => "tool escalated"
     (true, true) => "tool error escalated"
   }
+  // Tag mbtx build failures so the build-errors-only filter keeps this result
+  // card — the diagnostics live here — beside its originating call.
+  let kind = if result_is_build_failed(result) {
+    "\{kind} build-failed"
+  } else {
+    kind
+  }
   let label = if is_error {
     "Tool error · \{result.tool_name()}"
   } else {
     "Tool result · \{result.tool_name()}"
   }
-  let flag = failed_flag(is_error)
+  let flag = result_flag(result)
   // Pair this result back to the call that produced it (same `call N` tag).
   // The pair anchor wins the element's single id (the cross-link targets
   // it); an unpaired result anchors at its sequence like every other card —
@@ -1188,6 +1217,20 @@ fn failed_flag(is_error : Bool) -> @html.Html {
     @html.span(class="tool-flag") <| "🚩 failed"
   } else {
     @html.nothing
+  }
+}
+
+///|
+/// The collapsed-card flag for a durable result: an mbtx build failure names
+/// its stage (the fix lives in the source, not the program), every other
+/// failure keeps the generic word. The run stage is deliberately not named
+/// here — the result alone cannot see the call's target, and the call card
+/// beside it already says it.
+fn result_flag(result : @agent_session.ToolResult) -> @html.Html {
+  if result_is_build_failed(result) {
+    @html.span(class="tool-flag tool-stage-build") <| "🚩 build error"
+  } else {
+    failed_flag(result.is_error())
   }
 }
 
@@ -1634,6 +1677,62 @@ fn tool_call_is_escalated(call : @deepseek.ToolCall) -> Bool {
 }
 
 ///|
+/// Whether a failed `mbtx` call's brief reports a BUILD-stage failure — the
+/// staged engine's `mbtx (build …)` shapes (`build failed`, `build timeout`,
+/// `build fault`), which only it ever writes, so the tag carries no
+/// pre-staging or single-shot ambiguity.
+fn tool_call_is_build_failed(
+  call : @deepseek.ToolCall,
+  briefs : Map[String, String],
+  failed : Map[String, Unit],
+) -> Bool {
+  call.name == "mbtx" &&
+  failed.contains(call.id) &&
+  briefs.get(call.id) is Some(brief) &&
+  brief.has_prefix("mbtx (build")
+}
+
+///|
+/// Whether a failed `mbtx` call reads as a RUN-stage failure: an exit brief
+/// on the staged wasm path (target absent or `"wasm"` in the call's own
+/// arguments). A single-shot target's one exit code covers both stages and
+/// claims neither. A wasm failure recorded before the staged engine shares
+/// the brief shape and reads as runtime — an accepted imprecision, by
+/// explicit owner decision (no backwards compatibility for old transcripts).
+fn tool_call_is_run_failed(
+  call : @deepseek.ToolCall,
+  briefs : Map[String, String],
+  failed : Map[String, Unit],
+) -> Bool {
+  guard call.name == "mbtx" &&
+    failed.contains(call.id) &&
+    briefs.get(call.id) is Some(brief) &&
+    brief.has_prefix("mbtx (exit=") else {
+    return false
+  }
+  let json = @json.parse(call.arguments) catch { _ => return false }
+  match json {
+    Object(fields) =>
+      match fields.get("target") {
+        None | Some(String("wasm")) | Some(Null) => true
+        _ => false
+      }
+    _ => false
+  }
+}
+
+///|
+/// Whether a durable `mbtx` result reports a BUILD-stage failure, read from
+/// the fields the result itself carries — no call lookup needed, so result
+/// cards stay tagged in both view modes without extra threading.
+fn result_is_build_failed(result : @agent_session.ToolResult) -> Bool {
+  result.is_error() &&
+  result.tool_name() == "mbtx" &&
+  result.brief() is Some(brief) &&
+  brief.has_prefix("mbtx (build")
+}
+
+///|
 /// Escalated call ids whose result can be identified unambiguously in the raw
 /// view. `tags` already contains exactly the 1:1 call/result pairs, so using it
 /// avoids attaching an escalation marker to a result when duplicate ids make
@@ -1934,6 +2033,44 @@ pub fn rendered_escalated_count(
 }
 
 ///|
+/// How many rendered `mbtx` calls failed in the BUILD stage, per view mode —
+/// what the build-errors-only toolbar counts and jumps between. Derived from
+/// the same per-mode brief/failure maps the cards themselves render from, so
+/// the count and the tags can never disagree; the model view's maps already
+/// pass everything through `model_shown_result`.
+pub fn rendered_build_error_count(
+  session : @agent_session.Session,
+  mode : ViewMode,
+) -> Int {
+  let mut count = 0
+  match mode {
+    RawLog => {
+      let briefs = tool_call_briefs(session)
+      let failed = raw_failed_call_ids(session)
+      for event in session.events() {
+        if event.item() is Assistant(message) {
+          count += message
+            .tool_calls()
+            .count_if(call => tool_call_is_build_failed(call, briefs, failed))
+        }
+      }
+    }
+    ModelView => {
+      let messages = session.chat_messages()
+      let tool_results = tool_results_by_id(session)
+      let briefs = model_tool_call_briefs(messages, tool_results)
+      let failed = model_failed_call_ids(messages, tool_results)
+      for message in messages {
+        count += message.tool_calls.count_if(call => {
+          tool_call_is_build_failed(call, briefs, failed)
+        })
+      }
+    }
+  }
+  count
+}
+
+///|
 /// Model-view tool result, folded by default like the raw view. `result` is the
 /// durable `ToolResult` looked up by id, which lets this recover the tool name
 /// and red-flag failures even though the projection drops `is_error`. A non-zero
@@ -1968,6 +2105,13 @@ fn model_tool_card(
     (false, true) => "tool escalated"
     (true, true) => "tool error escalated"
   }
+  // Same build-failure tag as the raw view's result card, derived only from
+  // the result the projection actually shows.
+  let kind = if shown is Some(r) && result_is_build_failed(r) {
+    "\{kind} build-failed"
+  } else {
+    kind
+  }
   let label = match (is_error, name.is_empty()) {
     (_, true) => "Tool result"
     (true, false) => "Tool error · \{name}"
@@ -1986,7 +2130,11 @@ fn model_tool_card(
     Some(n) => Some(tool_result_anchor(n))
     None => anchor
   }
-  let summary = model_card_head(label, time~, flag=failed_flag(is_error), link~)
+  let flag = match shown {
+    Some(r) => result_flag(r)
+    None => failed_flag(is_error)
+  }
+  let summary = model_card_head(label, time~, flag~, link~)
   // Chip only, no nested transcript: the model view shows what the model
   // was fed, and the child's transcript never was.
   if shown is Some(result) &&

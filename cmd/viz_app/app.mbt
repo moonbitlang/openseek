@@ -48,6 +48,9 @@ struct Model {
   // "Escalated only" keeps tool calls whose durable arguments explicitly carry
   // top-level `escalated: true`, plus their matching result cards.
   escalated_only : Bool
+  // "Build errors only" keeps mbtx calls whose result brief reports a
+  // BUILD-stage failure, plus their matching result cards.
+  build_errors_only : Bool
   // Tool-call arguments rendering: the human-friendly form (values shown verbatim,
   // no JSON quoting) by default, or the original pretty-printed JSON for debugging.
   show_original_args : Bool
@@ -102,6 +105,8 @@ enum Msg {
   JumpToError(Int)
   ToggleEscalatedOnly
   JumpToEscalated(Int)
+  ToggleBuildErrorsOnly
+  JumpToBuildError(Int)
   UnfoldCurrent
 }
 
@@ -185,6 +190,7 @@ fn init_model() -> Model {
     loading: false,
     status: "loading sessions…",
     errors_only: false,
+    build_errors_only: false,
     escalated_only: false,
     show_original_args: false,
     subrun_children: Map([]),
@@ -429,7 +435,12 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
     ToggleErrorsOnly =>
       (
         @cmd.none,
-        { ..model, errors_only: !model.errors_only, escalated_only: false, },
+        {
+          ..model,
+          errors_only: !model.errors_only,
+          escalated_only: false,
+          build_errors_only: false,
+        },
       )
     // Scroll to the next/previous failed-tool card, cycling. The count is
     // recomputed for the active view, while the browser chooses the target
@@ -450,7 +461,12 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
     ToggleEscalatedOnly =>
       (
         @cmd.none,
-        { ..model, escalated_only: !model.escalated_only, errors_only: false, },
+        {
+          ..model,
+          escalated_only: !model.escalated_only,
+          errors_only: false,
+          build_errors_only: false,
+        },
       )
     JumpToEscalated(direction) => {
       let count = current_escalated_count(model)
@@ -460,6 +476,29 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
         (
           @cmd.effect(() => {
             scroll_to_card_from_viewport(".tool-call-escalated", direction)
+          }),
+          model,
+        )
+      }
+    }
+    ToggleBuildErrorsOnly =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          build_errors_only: !model.build_errors_only,
+          errors_only: false,
+          escalated_only: false,
+        },
+      )
+    JumpToBuildError(direction) => {
+      let count = current_build_error_count(model)
+      if count <= 0 {
+        (@cmd.none, model)
+      } else {
+        (
+          @cmd.effect(() => {
+            scroll_to_card_from_viewport(".tool-call-build-failed", direction)
           }),
           model,
         )
@@ -1375,6 +1414,10 @@ fn session_pane(
   )
   let error_count = @viz.rendered_error_count(session, model.view_mode)
   let escalated_count = @viz.rendered_escalated_count(session, model.view_mode)
+  let build_error_count = @viz.rendered_build_error_count(
+    session,
+    model.view_mode,
+  )
   @html.div(class=session_view_class(model)) <| [
     header_strip(model, id, root_label),
     // Pin the view/args toggles and the error bar to the top of the
@@ -1383,9 +1426,12 @@ fn session_pane(
       mode_row(emit, model, parsed, @viz.step_scrubber(session)),
       error_bar(emit, model, error_count),
       escalated_bar(emit, model, escalated_count),
+      build_error_bar(emit, model, build_error_count),
     ],
     @viz.render_notices(parsed),
-    session_log_view(model, session, error_count, escalated_count),
+    session_log_view(
+      model, session, error_count, escalated_count, build_error_count,
+    ),
   ]
 }
 
@@ -1596,7 +1642,12 @@ fn session_view_class(model : Model) -> String {
     "escalated-only",
     model.escalated_only,
   )
-  class_with(with_escalated, "show-original", model.show_original_args)
+  let with_build = class_with(
+    with_escalated,
+    "build-errors-only",
+    model.build_errors_only,
+  )
+  class_with(with_build, "show-original", model.show_original_args)
 }
 
 ///|
@@ -1697,6 +1748,61 @@ fn escalated_bar(
 }
 
 ///|
+/// Build-error counterpart of `escalated_bar`: a count of mbtx BUILD-stage
+/// failures (the staged engine's `mbtx (build …)` briefs), a filter toggle,
+/// and viewport-relative prev/next jumps — the way to find compile errors in
+/// a long log without reading it. Stays visible at zero while active so the
+/// filter can always be switched back off.
+fn build_error_bar(
+  emit : @cmd.Emit[Msg],
+  model : Model,
+  count : Int,
+) -> @html.Html {
+  if count == 0 && !model.build_errors_only {
+    return @html.nothing
+  }
+  let toggle_class = class_with(
+    "build-error-toggle",
+    "active",
+    model.build_errors_only,
+  )
+  let children : Array[@html.Html] = []
+  if count > 0 {
+    children.push(
+      @html.span(class="build-error-count") <| "🔨 \{count} build error\{plural_s(count)}",
+    )
+  }
+  children.push(
+    @html.button(
+      class=toggle_class,
+      title="Show only mbtx calls whose build failed, with their results",
+      on_click=emit(ToggleBuildErrorsOnly),
+    ) <| (if model.build_errors_only {
+      "Build errors only: on"
+    } else {
+      "Build errors only"
+    }),
+  )
+  if count > 0 {
+    children.push(
+      @html.button(
+        class="build-error-jump",
+        title="Scroll to the previous build error",
+        on_click=emit(JumpToBuildError(-1)),
+      ) <| "↑ prev",
+    )
+    children.push(
+      @html.button(
+        class="build-error-jump",
+        title="Scroll to the next build error",
+        on_click=emit(JumpToBuildError(1)),
+      ) <| "↓ next",
+    )
+  }
+  @html.div(class="build-error-bar") <| children
+}
+
+///|
 /// The log, or a hint when the errors-only filter would hide everything (so the
 /// pane never looks empty/broken when a clean view is filtered).
 fn session_log_view(
@@ -1704,11 +1810,14 @@ fn session_log_view(
   session : @agent_session.Session,
   error_count : Int,
   escalated_count : Int,
+  build_error_count : Int,
 ) -> @html.Html {
   if model.errors_only && error_count == 0 {
     @html.div(class="errors-only-empty") <| "No failed tool results in this view."
   } else if model.escalated_only && escalated_count == 0 {
     @html.div(class="escalated-only-empty") <| "No escalated tool calls in this view."
+  } else if model.build_errors_only && build_error_count == 0 {
+    @html.div(class="build-errors-only-empty") <| "No mbtx build errors in this view."
   } else {
     @viz.render_session(
       session,
@@ -1742,6 +1851,17 @@ fn current_escalated_count(model : Model) -> Int {
     system_prompt=model.system_prompt,
   )
   @viz.rendered_escalated_count(session, model.view_mode)
+}
+
+///|
+fn current_build_error_count(model : Model) -> Int {
+  guard model.parsed is Some(parsed) else { return 0 }
+  let session = @viz.session_from_parse(
+    parsed,
+    id="",
+    system_prompt=model.system_prompt,
+  )
+  @viz.rendered_build_error_count(session, model.view_mode)
 }
 
 ///|
@@ -2338,6 +2458,27 @@ test "escalated toolbar mirrors errors-only controls" {
 }
 
 ///|
+test "build-error toolbar mirrors the other filter controls" {
+  let model = init_model()
+  let html = render_html(build_error_bar(stub_emit(), model, 2))
+  assert_true(html.contains("2 build errors"))
+  assert_true(html.contains("Build errors only"))
+  assert_true(html.contains("↑ prev"))
+  assert_true(html.contains("↓ next"))
+  // Hidden entirely for a clean view with the filter off; kept visible at
+  // zero while active so it can always be switched back off.
+  assert_false(
+    render_html(build_error_bar(stub_emit(), model, 0)).contains("Build errors"),
+  )
+  let active = { ..init_model(), build_errors_only: true, }
+  assert_true(
+    render_html(build_error_bar(stub_emit(), active, 0)).contains(
+      "Build errors only: on",
+    ),
+  )
+}
+
+///|
 test "error and escalated filters are mutually exclusive" {
   let emit = stub_emit()
   let errors = { ..init_model(), errors_only: true, }
@@ -2347,6 +2488,24 @@ test "error and escalated filters are mutually exclusive" {
   let (_, errors_again) = update(emit, ToggleErrorsOnly, escalated)
   assert_true(errors_again.errors_only)
   assert_false(errors_again.escalated_only)
+  // The build-error filter joins the same exclusivity group in both
+  // directions: switching it on clears the others, and vice versa.
+  let (_, build) = update(emit, ToggleBuildErrorsOnly, errors_again)
+  assert_true(build.build_errors_only)
+  assert_false(build.errors_only)
+  assert_false(build.escalated_only)
+  let (_, back) = update(emit, ToggleErrorsOnly, build)
+  assert_true(back.errors_only)
+  assert_false(back.build_errors_only)
+}
+
+///|
+test "session view class includes the build-error filter" {
+  let filtered = { ..init_model(), build_errors_only: true, }
+  inspect(
+    session_view_class(filtered),
+    content="session-view build-errors-only",
+  )
 }
 
 ///|
