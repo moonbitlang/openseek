@@ -54,7 +54,7 @@ pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self?, Outcome?)
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::open(@interop.ChannelId, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)
-pub fn State::request_id(Self) -> String
+pub fn State::pending_request_id(Self) -> String?
 
 // Type aliases
 

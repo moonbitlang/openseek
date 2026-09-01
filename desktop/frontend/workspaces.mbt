@@ -555,10 +555,11 @@ test "a picker message with no picker open is dropped" {
 ///|
 /// Test-only: the request fence currently expected by an open picker.
 fn Model::picker_request_id(self : Model) -> String raise {
-  guard self.project_picker is Some(picker) else {
-    fail("expected an open project picker")
+  guard self.project_picker is Some(picker) &&
+    picker.pending_request_id() is Some(request_id) else {
+    fail("expected an open picker with a browse in flight")
   }
-  picker.request_id()
+  request_id
 }
 
 ///|
@@ -580,15 +581,20 @@ test "a failed navigation keeps the listing and pops a toast" {
     ),
     opened,
   )
+  let (_, browsing) = update(
+    dispatch,
+    ProjectPicker(@project_picker.Msg::Navigate("/gone")),
+    loaded,
+  )
   let (_, failed) = update(
     dispatch,
     ProjectPicker(
       @project_picker.Msg::Failed(
         message="no such directory: /gone",
-        request_id=loaded.picker_request_id(),
+        request_id=browsing.picker_request_id(),
       ),
     ),
-    loaded,
+    browsing,
   )
   guard failed.project_picker is Some(picker) else {
     fail("picker closed by a failed navigation")

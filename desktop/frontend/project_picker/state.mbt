@@ -8,12 +8,11 @@
 ///|
 /// The in-app folder picker's state: the host location currently shown and
 /// the rows inside it — a directory's subdirectories, or the Windows drive
-/// list's drives. `loading` marks a browse or folder creation in flight; a
-/// failed operation pops a toast while the previous listing stays usable.
-/// `channel` selects the host for browsing and the eventual project mutation;
-/// `request_id` is the UUID of the latest request. Only the UUID rides on
+/// list's drives. `channel` selects the host for browsing and the eventual
+/// project mutation; `pending` is the UUID of the browse or folder creation
+/// in flight, and therefore also what "busy" means. Only the UUID rides on
 /// replies, so a superseded navigation or a closed picker cannot replace the
-/// current listing.
+/// current listing, and dropping it is how a request is retired.
 ///
 /// Opaque outside this package: the shell holds the value but cannot read
 /// into it — every transition goes through `open`, `handle`, `view`, or
@@ -24,7 +23,7 @@ struct State {
   // initial home listing is in flight.
   location : Location?
   entries : Array[String]
-  loading : Bool
+  pending : String?
   // `Some` renders the inline new-folder composer. Its value stays present
   // across a failed create so the user can correct it without retyping.
   new_folder : String?
@@ -33,17 +32,24 @@ struct State {
   // commits that directory without waiting for a separate Enter press.
   path_draft : String?
   path_selection : Int
-  request_id : String
 } derive(Eq)
 
 ///|
 pub extend State with Eq::{equal, not_equal}
 
 ///|
-/// The fence expected by the current host reply. Exposed with the otherwise
-/// opaque state so black-box adapters can drive the state machine directly.
-pub fn State::request_id(self : State) -> String {
-  self.request_id
+/// The fence expected by the host reply in flight, or `None` when the picker
+/// is idle. Exposed with the otherwise opaque state so black-box adapters can
+/// drive the state machine directly.
+pub fn State::pending_request_id(self : State) -> String? {
+  self.pending
+}
+
+///|
+/// A browse or folder creation is in flight, so the listing on screen is
+/// stale and every action that depends on it must wait.
+fn State::busy(self : State) -> Bool {
+  self.pending is Some(_)
 }
 
 ///|
@@ -126,11 +132,10 @@ pub fn State::open(
     channel,
     location: None,
     entries: [],
-    loading: true,
+    pending: Some(request_id),
     new_folder: None,
     path_draft: None,
     path_selection: 0,
-    request_id,
   }
   (browse(emit, channel, "", request_id~), picker)
 }
@@ -149,14 +154,14 @@ pub fn State::handle(
     Loaded(location~, entries~, request_id~) =>
       // A listing for a picker the user already closed — or one answering
       // a navigation that has since been superseded — is dropped.
-      if request_id == self.request_id {
+      if self.pending == Some(request_id) {
         (
           self.resume_path_edit_after_render(),
           Some({
             ..self,
             location: Some(location),
             entries,
-            loading: false,
+            pending: None,
             new_folder: None,
             // A separator-committed browse keeps editing with the canonical
             // path the host actually listed, avoiding a second request when
@@ -179,7 +184,7 @@ pub fn State::handle(
       // The failure pops as a toast while the previous listing stays usable.
       // One answering a superseded request stays silent: its toast would
       // describe an operation the user has already replaced.
-      if request_id == self.request_id {
+      if self.pending == Some(request_id) {
         let message = if self.new_folder is Some(_) {
           "Cannot create folder: \{message}"
         } else {
@@ -187,14 +192,14 @@ pub fn State::handle(
         }
         (
           self.resume_path_edit_after_render(),
-          Some({ ..self, loading: false, }),
+          Some({ ..self, pending: None, }),
           Some(Failed(message)),
         )
       } else {
         (@cmd.none, Some(self), None)
       }
     EditPath =>
-      if !self.loading && self.new_folder is None && self.path_draft is None {
+      if !self.busy() && self.new_folder is None && self.path_draft is None {
         (
           focus_path_after_render(true),
           Some({
@@ -204,7 +209,7 @@ pub fn State::handle(
           }),
           None,
         )
-      } else if !self.loading &&
+      } else if !self.busy() &&
         self.new_folder is None &&
         self.path_draft is Some(_) {
         (focus_path_after_render(true), Some(self), None)
@@ -212,7 +217,7 @@ pub fn State::handle(
         (@cmd.none, Some(self), None)
       }
     PathChanged(value) =>
-      if !self.loading && self.path_draft is Some(_) {
+      if !self.busy() && self.path_draft is Some(_) {
         let changed = { ..self, path_draft: Some(value), path_selection: 0, }
         match changed.committed_child_path(value) {
           Some(path) => changed.navigate_to(emit, path, path_draft=path)
@@ -222,7 +227,7 @@ pub fn State::handle(
         (@cmd.none, Some(self), None)
       }
     MovePathSelection(delta) =>
-      if !self.loading && self.path_draft is Some(_) {
+      if !self.busy() && self.path_draft is Some(_) {
         let next = self.move_path_selection(delta)
         let command = if next.path_selection == self.path_selection {
           @cmd.none
@@ -235,7 +240,7 @@ pub fn State::handle(
       }
     CompletePath =>
       match self.selected_path_suggestion() {
-        Some(name) if !self.loading =>
+        Some(name) if !self.busy() =>
           (
             @cmd.none,
             Some({
@@ -249,7 +254,7 @@ pub fn State::handle(
       }
     SubmitPath =>
       match self.path_destination() {
-        Some(path) if !self.loading => {
+        Some(path) if !self.busy() => {
           let already_loaded = match self.location {
             // A trailing separator does not change a directory. Everything
             // else stays exact; the host decides whether alternate casing is
@@ -275,48 +280,40 @@ pub fn State::handle(
         }
         _ => (@cmd.none, Some(self), None)
       }
-    CancelPathEdit | Escape if self.path_draft is Some(_) => {
+    CancelPathEdit | Escape if self.path_draft is Some(_) =>
       // Separator completion may have started a browse while the editor is
-      // still visible. Cancelling must also fence that request; otherwise its
+      // still visible. Cancelling retires that request too; otherwise its
       // late reply would move the picker after the edit was discarded.
-      let request_id = @uuid.mint()
       (
         @cmd.none,
-        Some({
-          ..self,
-          loading: false,
-          path_draft: None,
-          path_selection: 0,
-          request_id,
-        }),
+        Some({ ..self, pending: None, path_draft: None, path_selection: 0, }),
         None,
       )
-    }
     CancelPathEdit => (@cmd.none, Some(self), None)
     Escape => (@cmd.none, None, None)
     BeginCreateFolder =>
       if self.location is Some(Directory(_)) &&
-        !self.loading &&
+        !self.busy() &&
         self.path_draft is None {
         (@cmd.none, Some({ ..self, new_folder: Some(""), }), None)
       } else {
         (@cmd.none, Some(self), None)
       }
     NewFolderNameChanged(name) =>
-      if self.new_folder is Some(_) && !self.loading {
+      if self.new_folder is Some(_) && !self.busy() {
         (@cmd.none, Some({ ..self, new_folder: Some(name), }), None)
       } else {
         (@cmd.none, Some(self), None)
       }
     CancelCreateFolder =>
-      if self.loading {
+      if self.busy() {
         (@cmd.none, Some(self), None)
       } else {
         (@cmd.none, Some({ ..self, new_folder: None, }), None)
       }
     CreateFolder =>
       match (self.location, self.new_folder) {
-        (Some(Directory(parent)), Some(name)) if !self.loading &&
+        (Some(Directory(parent)), Some(name)) if !self.busy() &&
           !name.trim().is_empty() => {
           let request_id = @uuid.mint()
           (
@@ -327,7 +324,7 @@ pub fn State::handle(
               name.trim().to_owned(),
               request_id~,
             ),
-            Some({ ..self, loading: true, request_id, }),
+            Some({ ..self, pending: Some(request_id), }),
             None,
           )
         }
@@ -341,7 +338,7 @@ pub fn State::handle(
       // previous directory, not the destination. The Windows drive list is
       // not a directory and cannot be registered.
       if self.location is Some(Directory(path)) &&
-        !self.loading &&
+        !self.busy() &&
         self.new_folder is None &&
         self.path_draft is None {
         (@cmd.none, None, Some(Picked(self.channel, path)))
@@ -367,11 +364,10 @@ fn State::navigate_to(
     browse(emit, self.channel, path, request_id~),
     Some({
       ..self,
-      loading: true,
+      pending: Some(request_id),
       new_folder: None,
       path_draft,
       path_selection: 0,
-      request_id,
     }),
     None,
   )

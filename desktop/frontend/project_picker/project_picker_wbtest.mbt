@@ -34,11 +34,11 @@ fn opened(
   entries? : Array[String] = [],
 ) -> State raise {
   let (_, opening) = State::open(channel, emit())
-  assert_true(opening.loading)
+  guard opening.pending is Some(request_id) else { fail("browse expected") }
   let (_, loaded, _) = State::handle(
     opening,
     emit(),
-    Msg::Loaded(location~, entries~, request_id=opening.request_id),
+    Msg::Loaded(location~, entries~, request_id~),
   )
   guard loaded is Some(picker) else { fail("picker closed by its own listing") }
   picker
@@ -56,21 +56,22 @@ fn updated(picker : State, msg : Msg) -> State raise {
 test "the picker opens loading and adopts the first listing" {
   let home = "/home/u"
   let (_, opening) = State::open(@interop.ChannelId::Local, emit())
-  assert_true(opening.loading)
+  assert_true(opening.busy())
   assert_true(opening.location is None)
+  guard opening.pending is Some(request_id) else { fail("browse expected") }
   let (_, loaded, _) = State::handle(
     opening,
     emit(),
     Msg::Loaded(
       location=Location::Directory(home),
       entries=["proj"],
-      request_id=opening.request_id,
+      request_id~,
     ),
   )
   guard loaded is Some(picker) else { fail("picker closed by its own listing") }
   assert_true(picker.location is Some(Directory(path)) && path == "/home/u")
   inspect(picker.entries.length(), content="1")
-  assert_true(!picker.loading)
+  assert_true(!picker.busy())
 }
 
 ///|
@@ -98,7 +99,7 @@ test "a listing for another request UUID is dropped" {
     Navigate("/home/u/proj"),
   )
   guard navigated is Some(browsing) else { fail("picker closed by navigation") }
-  assert_true(browsing.loading)
+  assert_true(browsing.busy())
   assert_true(browsing.location is Some(Directory(path)) && path == "/home/u")
   let (_, stale, _) = State::handle(
     browsing,
@@ -106,7 +107,7 @@ test "a listing for another request UUID is dropped" {
     Msg::Loaded(
       location=Location::Directory("/elsewhere"),
       entries=["wrong"],
-      request_id=opening.request_id,
+      request_id="settled-listing",
     ),
   )
   guard stale is Some(picker) else { fail("picker closed by a stale listing") }
@@ -116,20 +117,19 @@ test "a listing for another request UUID is dropped" {
 ///|
 test "a failed navigation keeps the listing" {
   let opening = opened(location=Directory("/home/u"), entries=["proj"])
+  let browsing = updated(opening, Navigate("/gone"))
+  guard browsing.pending is Some(request_id) else { fail("browse expected") }
   let (_, failed, outcome) = State::handle(
-    opening,
+    browsing,
     emit(),
-    Msg::Failed(
-      message="no such directory: /gone",
-      request_id=opening.request_id,
-    ),
+    Msg::Failed(message="no such directory: /gone", request_id~),
   )
   guard failed is Some(picker) else {
     fail("picker closed by a failed navigation")
   }
   assert_true(picker.location is Some(Directory(path)) && path == "/home/u")
   inspect(picker.entries.length(), content="1")
-  assert_true(!picker.loading)
+  assert_true(!picker.busy())
   assert_true(
     outcome is Some(Failed(message)) &&
     message == "Cannot open folder: no such directory: /gone",
@@ -140,7 +140,7 @@ test "a failed navigation keeps the listing" {
 test "reopened pickers do not reuse request UUIDs" {
   let (_, first) = State::open(@interop.ChannelId::Local, emit())
   let (_, second) = State::open(@interop.ChannelId::Local, emit())
-  assert_true(first.request_id != second.request_id)
+  assert_true(first.pending != second.pending)
 }
 
 ///|
@@ -181,7 +181,7 @@ test "path editing filters the loaded rows and ranks prefixes first" {
   assert_eq(filtered.selected_path_suggestion(), Some("Beryl"))
   assert_eq(filtered.path_destination(), Some("/home/u/Beryl"))
   let absolute = updated(filtered, PathChanged("/tmp/other/"))
-  assert_false(absolute.loading)
+  assert_false(absolute.busy())
   assert_eq(absolute.path_filter(), "")
   assert_eq(absolute.visible_entries(), picker.entries)
   assert_eq(absolute.path_destination(), Some("/tmp/other/"))
@@ -210,7 +210,7 @@ test "path keyboard selection wraps and completion remains local" {
   assert_eq(completed.visible_entries(), ["betterment", "better"])
   assert_eq(completed.selected_path_suggestion(), None)
   assert_eq(completed.path_destination(), Some("/home/u/better"))
-  assert_false(completed.loading)
+  assert_false(completed.busy())
   assert_true(completed.location == picker.location)
 }
 
@@ -219,74 +219,74 @@ test "typing a separator after an exact child navigates immediately" {
   let picker = opened(location=Directory("/Users/dii"), entries=["git", "go"])
   let editing = updated(picker, EditPath)
   let navigating = updated(editing, PathChanged("git/"))
-  assert_true(navigating.loading)
+  assert_true(navigating.busy())
   assert_eq(navigating.path_draft, Some("/Users/dii/git/"))
 
   let git = "/Users/dii/git"
+  guard navigating.pending is Some(cancelled_request_id) else {
+    fail("browse expected")
+  }
   let cancelled = updated(navigating, Escape)
-  assert_false(cancelled.loading)
+  assert_false(cancelled.busy())
   assert_eq(cancelled.path_draft, None)
-  assert_true(cancelled.request_id != navigating.request_id)
   let loaded_after_cancel = updated(
     cancelled,
     Loaded(
       location=Directory(git),
       entries=["openseek"],
-      request_id=navigating.request_id,
+      request_id=cancelled_request_id,
     ),
   )
   assert_true(loaded_after_cancel == cancelled)
 
   let navigating = updated(editing, PathChanged("/Users/dii/git/"))
+  guard navigating.pending is Some(request_id) else { fail("browse expected") }
   let loaded = updated(
     navigating,
-    Loaded(
-      location=Directory(git),
-      entries=["openseek"],
-      request_id=navigating.request_id,
-    ),
+    Loaded(location=Directory(git), entries=["openseek"], request_id~),
   )
   assert_eq(loaded.path_draft, Some("/Users/dii/git/"))
   let submitted = updated(loaded, SubmitPath)
-  assert_false(submitted.loading)
+  assert_false(submitted.busy())
   assert_eq(submitted.path_draft, None)
-  assert_eq(submitted.request_id, loaded.request_id)
   assert_true(submitted.location == loaded.location)
   let nested = updated(loaded, PathChanged("/Users/dii/git/openseek/"))
-  assert_true(nested.loading)
+  assert_true(nested.busy())
   assert_eq(nested.path_draft, Some("/Users/dii/git/openseek/"))
 
   let drives = opened(location=DriveList, entries=["C:", "D:"])
   let navigating_drive = updated(updated(drives, EditPath), PathChanged("/c:/"))
-  assert_true(navigating_drive.loading)
+  assert_true(navigating_drive.busy())
   assert_eq(navigating_drive.path_draft, Some("/C:/"))
   let drive = "/C:/"
+  guard navigating_drive.pending is Some(drive_request_id) else {
+    fail("browse expected")
+  }
   let loaded_drive = updated(
     navigating_drive,
     Loaded(
       location=Directory(drive),
       entries=["Users"],
-      request_id=navigating_drive.request_id,
+      request_id=drive_request_id,
     ),
   )
   assert_eq(loaded_drive.path_draft, Some("/C:/"))
   let submitted_drive = updated(loaded_drive, SubmitPath)
-  assert_false(submitted_drive.loading)
+  assert_false(submitted_drive.busy())
   assert_eq(submitted_drive.path_draft, None)
-  assert_eq(submitted_drive.request_id, loaded_drive.request_id)
 
   let code = opened(location=Directory("/C:/Code"), entries=["src"])
   let mixed_case = updated(updated(code, EditPath), PathChanged("/c:/CODE/"))
   let submitted_mixed_case = updated(mixed_case, SubmitPath)
-  assert_true(submitted_mixed_case.loading)
+  assert_true(submitted_mixed_case.busy())
   assert_eq(submitted_mixed_case.path_draft, None)
-  assert_true(submitted_mixed_case.request_id != mixed_case.request_id)
+  assert_true(submitted_mixed_case.pending != mixed_case.pending)
   assert_true(submitted_mixed_case.location == code.location)
   let mixed_case_child = updated(
     updated(code, EditPath),
     PathChanged("/c:/CODE/src/"),
   )
-  assert_false(mixed_case_child.loading)
+  assert_false(mixed_case_child.busy())
 
   // A drive-shaped prefix is not proof that the host is Windows. These are
   // distinct legal POSIX paths, so the alternate spelling must be validated.
@@ -296,15 +296,15 @@ test "typing a separator after an exact child navigates immediately" {
     PathChanged("/C:/project"),
   )
   let validating = updated(alternate, SubmitPath)
-  assert_true(validating.loading)
-  assert_true(validating.request_id != alternate.request_id)
+  assert_true(validating.busy())
+  assert_true(validating.pending != alternate.pending)
 
   let upper = opened(location=Directory("/C:/project"))
   let upper_editing = updated(upper, EditPath)
   assert_eq(upper_editing.path_draft, Some("/C:/project"))
   let upper_submitted = updated(upper_editing, SubmitPath)
-  assert_false(upper_submitted.loading)
-  assert_eq(upper_submitted.request_id, upper_editing.request_id)
+  assert_false(upper_submitted.busy())
+  assert_eq(upper_submitted.pending, upper_editing.pending)
   assert_true(upper_submitted.location == upper.location)
 }
 
@@ -314,13 +314,13 @@ test "submitting or cancelling a path keeps one navigation path" {
   let editing = updated(picker, EditPath)
   let typed = updated(editing, PathChanged("/home/u/pro"))
   let navigating = updated(typed, SubmitPath)
-  assert_true(navigating.loading)
+  assert_true(navigating.busy())
   assert_eq(navigating.path_draft, None)
-  assert_true(navigating.request_id != typed.request_id)
+  assert_true(navigating.pending != typed.pending)
   let cancelled = updated(updated(picker, EditPath), CancelPathEdit)
   assert_eq(cancelled.path_draft, None)
   assert_true(cancelled.location == picker.location)
-  assert_false(cancelled.loading)
+  assert_false(cancelled.busy())
 }
 
 ///|
@@ -328,7 +328,7 @@ test "the Windows drive list shows its drives and refuses a confirm" {
   let opening = opened(location=DriveList, entries=["C:", "D:"])
   assert_true(opening.location is Some(DriveList))
   inspect(opening.entries.length(), content="2")
-  assert_true(!opening.loading)
+  assert_true(!opening.busy())
   let (_, held, outcome) = State::handle(opening, emit(), Confirm)
   assert_true(held is Some(_))
   assert_true(outcome is None)
@@ -357,24 +357,21 @@ test "new folder creation enters the created directory" {
   guard creating is Some(creating) else {
     fail("picker closed while creating a folder")
   }
-  assert_true(creating.loading)
-  assert_true(creating.request_id != named.request_id)
+  assert_true(creating.busy())
+  assert_true(creating.pending != named.pending)
   assert_eq(creating.new_folder, Some("new project"))
+  guard creating.pending is Some(request_id) else { fail("create expected") }
   let created = "/home/u/new project"
   let (_, loaded, outcome) = State::handle(
     creating,
     emit(),
-    Loaded(
-      location=Directory(created),
-      entries=[],
-      request_id=creating.request_id,
-    ),
+    Loaded(location=Directory(created), entries=[], request_id~),
   )
   assert_true(outcome is None)
   guard loaded is Some(loaded) else { fail("created directory closed picker") }
   assert_true(loaded.location == Some(Directory(created)))
   assert_eq(loaded.new_folder, None)
-  assert_false(loaded.loading)
+  assert_false(loaded.busy())
 }
 
 ///|
@@ -393,11 +390,11 @@ test "a failed folder create keeps its name editable" {
   let (_, failed, outcome) = State::handle(
     creating,
     emit(),
-    Failed(message="already exists", request_id=creating.request_id),
+    Failed(message="already exists", request_id=creating.pending.unwrap()),
   )
   guard failed is Some(failed) else { fail("failed create closed picker") }
   assert_eq(failed.new_folder, Some("taken"))
-  assert_false(failed.loading)
+  assert_false(failed.busy())
   assert_true(
     outcome is Some(Failed(message)) &&
     message == "Cannot create folder: already exists",

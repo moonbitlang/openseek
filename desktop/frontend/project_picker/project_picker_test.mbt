@@ -16,14 +16,13 @@ fn listed(
   entries~ : Array[String],
 ) -> @project_picker.State raise {
   let (_, opening) = @project_picker.State::open(channel, emit())
+  guard opening.pending_request_id() is Some(request_id) else {
+    fail("opening the picker should browse the host home directory")
+  }
   let (_, loaded, outcome) = @project_picker.State::handle(
     opening,
     emit(),
-    @project_picker.Msg::Loaded(
-      location~,
-      entries~,
-      request_id=opening.request_id(),
-    ),
+    @project_picker.Msg::Loaded(location~, entries~, request_id~),
   )
   assert_true(outcome is None)
   guard loaded is Some(picker) else { fail("picker closed by its own listing") }
@@ -105,15 +104,15 @@ test "a stale listing leaves the picker untouched" {
   guard browsing is Some(navigating) else {
     fail("picker closed by navigation")
   }
-  // The reply to the original listing lands after navigation moved to a new
-  // request UUID: it must not move the picker back.
+  // A listing the picker is no longer waiting for — the settled first browse,
+  // or any other request — must not move it back.
   let (_, stale, outcome) = @project_picker.State::handle(
     navigating,
     emit(),
     @project_picker.Msg::Loaded(
       location=@project_picker.Location::Directory("/elsewhere"),
       entries=["wrong"],
-      request_id=picker.request_id(),
+      request_id="settled-listing",
     ),
   )
   assert_true(outcome is None)
@@ -129,13 +128,21 @@ test "a failed navigation reports the failure and keeps the picker" {
     location=@project_picker.Location::Directory(home),
     entries=["proj"],
   )
-  let (_, kept, outcome) = @project_picker.State::handle(
+  let (_, browsing, _) = @project_picker.State::handle(
     picker,
     emit(),
-    @project_picker.Msg::Failed(
-      message="no such directory: /gone",
-      request_id=picker.request_id(),
-    ),
+    @project_picker.Msg::Navigate("/gone"),
+  )
+  guard browsing is Some(navigating) else {
+    fail("picker closed by navigation")
+  }
+  guard navigating.pending_request_id() is Some(request_id) else {
+    fail("navigation should browse the requested directory")
+  }
+  let (_, kept, outcome) = @project_picker.State::handle(
+    navigating,
+    emit(),
+    @project_picker.Msg::Failed(message="no such directory: /gone", request_id~),
   )
   guard kept is Some(state) else {
     fail("picker closed by a failed navigation")

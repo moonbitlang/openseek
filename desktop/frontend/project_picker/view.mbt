@@ -70,7 +70,7 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
       @html.button(
         class=if selected { "picker-row selected" } else { "picker-row" },
         type_="button",
-        disabled=picker.loading,
+        disabled=picker.busy(),
         on_click=emit(Navigate(target)),
         attrs=row_attrs,
         [
@@ -88,7 +88,7 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
   if visible_entries.is_empty() && picker.new_folder is None {
     rows.push(empty_view(picker, filter_active))
   }
-  let can_create = !picker.loading &&
+  let can_create = !picker.busy() &&
     picker.location is Some(Directory(_)) &&
     picker.new_folder is None &&
     picker.path_draft is None
@@ -107,7 +107,7 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
   let list_attrs = @html.Attrs::build()
     .id(PathListId)
     .aria_label("Folders")
-    .aria_busy(picker.loading.to_string())
+    .aria_busy(picker.busy().to_string())
   let list_attrs = if path_editing {
     list_attrs.role("listbox")
   } else {
@@ -171,7 +171,7 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
               @html.span("Name"),
               @html.span(
                 class="picker-list-count",
-                if picker.loading {
+                if picker.busy() {
                   "Loading…"
                 } else {
                   folder_count_label
@@ -203,7 +203,7 @@ fn path_editor(
     .aria_autocomplete("list")
     .aria_keyshortcuts("Meta+L Control+L")
     .data_set("focus-owner", "")
-    .disabled(picker.loading)
+    .disabled(picker.busy())
     .on_keydown(event => {
       if event.is_composing() {
         return @cmd.none
@@ -284,7 +284,7 @@ fn new_folder_row(
       attrs=@html.Attrs::build()
         .aria_label("New folder name")
         .data_set("focus-owner", "")
-        .disabled(picker.loading)
+        .disabled(picker.busy())
         .on_keydown(event => {
           if event.is_composing() {
             return @cmd.none
@@ -309,16 +309,16 @@ fn new_folder_row(
     @html.button(
       class="picker-create-cancel",
       type_="button",
-      disabled=picker.loading,
+      disabled=picker.busy(),
       on_click=emit(CancelCreateFolder),
       "Cancel",
     ),
     @html.button(
       class="picker-create-submit",
       type_="button",
-      disabled=picker.loading || !valid,
+      disabled=picker.busy() || !valid,
       on_click=emit(CreateFolder),
-      if picker.loading {
+      if picker.busy() {
         "Creating…"
       } else {
         "Create"
@@ -329,7 +329,7 @@ fn new_folder_row(
 
 ///|
 fn empty_view(picker : State, filter_active : Bool) -> @html.Html {
-  let (title, detail) = if picker.loading {
+  let (title, detail) = if picker.busy() {
     ("Loading folders…", "This should only take a moment.")
   } else if filter_active {
     ("No matching folders", "Try a different name or enter a complete path.")
@@ -344,7 +344,7 @@ fn empty_view(picker : State, filter_active : Bool) -> @html.Html {
 
 ///|
 fn picker_footer(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
-  let can_confirm = !picker.loading &&
+  let can_confirm = !picker.busy() &&
     picker.location is Some(Directory(_)) &&
     picker.new_folder is None &&
     picker.path_draft is None
@@ -404,7 +404,7 @@ fn picker_breadcrumbs(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
         class="picker-crumb current",
         type_="button",
         title="Edit path (⌘L)",
-        disabled=picker.loading,
+        disabled=picker.busy(),
         on_click=emit(EditPath),
         attrs=@html.Attrs::build().aria_label("Edit current path"),
         "This PC",
@@ -427,7 +427,7 @@ fn picker_breadcrumbs(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
       },
       type_="button",
       title=if segments.is_empty() { "Edit path (⌘L)" } else { "Open root" },
-      disabled=picker.loading,
+      disabled=picker.busy(),
       on_click=if segments.is_empty() {
         emit(EditPath)
       } else {
@@ -472,7 +472,7 @@ fn picker_breadcrumbs(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
         } else {
           "Open \{segment}"
         },
-        disabled=picker.loading,
+        disabled=picker.busy(),
         on_click=if index == segments.length() - 1 {
           emit(EditPath)
         } else {

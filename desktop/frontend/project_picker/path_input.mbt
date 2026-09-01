@@ -56,7 +56,7 @@ fn State::path_filter(self : State) -> String {
 /// Hide stale rows during a browse; otherwise preserve directory order inside
 /// prefix and looser-contains buckets.
 fn State::visible_entries(self : State) -> Array[String] {
-  if self.loading && self.new_folder is None {
+  if self.busy() && self.new_folder is None {
     return []
   }
   let query = self.path_filter()
