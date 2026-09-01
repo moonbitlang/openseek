@@ -1619,6 +1619,47 @@ fn replace_archived_active(
 }
 
 ///|
+/// A peer may archive a background conversation after its run ended but
+/// before the final steer receipt reached this page. Move root-owned recovery
+/// text into a fresh, reachable composing row before the archived owner is
+/// filtered out. Each background owner gets its own id/project; combining
+/// drafts from unrelated conversations would destroy their provenance.
+fn replace_archived_background(
+  model : Model,
+  channel : @interop.ChannelId,
+  session : String,
+  workspace : @common.Uri,
+) -> Model {
+  guard !(channel == model.focused && model.active_session == session) &&
+    model.find_conversation(channel, session) is Some(archived_conv) &&
+    archived_conv.project() == workspace &&
+    !archived_conv.is_archived_read_only() else {
+    return model
+  }
+  let salvaged = archived_conv.archive_salvage()
+  guard salvaged.has_content() else { return model }
+  let fresh_session = generated_session_id()
+  let conversations = model.conversations.filter(conv => {
+    conv.device != channel || conv.session_id != session
+  })
+  let goal_edit = salvaged.goal_draft.map(draft => { draft, })
+  let fresh = {
+    ..empty_conversation(
+      channel,
+      fresh_session,
+      workspace,
+      model=archived_conv.engine_model,
+    ),
+    task: salvaged.task,
+    mentions: salvaged.mentions,
+    worktree_mode: model.default_worktree_mode(channel, workspace),
+    goal_edit,
+    archived_pending_input: salvaged.pending_input,
+  }
+  { ..model, conversations, }.replace_conversation(fresh)
+}
+
+///|
 fn update(
   dispatch : @cmd.Emit[Msg],
   msg : Msg,
@@ -6019,6 +6060,19 @@ fn update_device_msg(
           active.project(),
         )
       }
+      let archived_conversations = next.conversations.copy()
+      for conv in archived_conversations {
+        if conv.device == channel &&
+          archived_now(conv.session_id, conv.project()) &&
+          !conv.is_archived_read_only() {
+          next = replace_archived_background(
+            next,
+            channel,
+            conv.session_id,
+            conv.project(),
+          )
+        }
+      }
       let conversations = next.conversations.filter(conv => {
         conv.device != channel ||
         !archived_now(conv.session_id, conv.project()) ||
@@ -6251,12 +6305,6 @@ fn update_device_msg(
       // placeholder archived entry also blocks a late session.event from
       // rematerializing it during this window.
       let sessions = dev.sessions.filter(item => !key.matches(item))
-      let conversations = model.conversations.filter(conv => {
-        conv.device != channel ||
-        conv.session_id != key.session ||
-        conv.project() != key.workspace ||
-        conv.is_archived_read_only()
-      })
       let archived = dev.archived.copy()
       if !archived.iter().any(item => key.matches(item)) {
         let mut item : @transcript.SessionListItem = {
@@ -6285,14 +6333,7 @@ fn update_device_msg(
         model.find_conversation(channel, key.session) is Some(active) &&
         active.project() == key.workspace &&
         !active.is_archived_read_only()
-      let next = {
-        ..overridden,
-        conversations: if active_archived {
-          model.conversations
-        } else {
-          conversations
-        },
-      }
+      let next = overridden
       if active_archived && fresh_session is Some(fresh) {
         (
           commands,
@@ -6305,7 +6346,19 @@ fn update_device_msg(
           ),
         )
       } else {
-        (commands, { ..next, conversations, })
+        let salvaged = replace_archived_background(
+          next,
+          channel,
+          key.session,
+          key.workspace,
+        )
+        let conversations = salvaged.conversations.filter(conv => {
+          conv.device != channel ||
+          conv.session_id != key.session ||
+          conv.project() != key.workspace ||
+          conv.is_archived_read_only()
+        })
+        (commands, { ..salvaged, conversations, })
       }
     }
     SessionLoaded(
@@ -12750,6 +12803,49 @@ test "CancelNotOpen preserves a dropped steer until recovery restores its draft"
 }
 
 ///|
+test "CancelNotOpen recovery accepts its exact retained settlement" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling),
+  })
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    definitive_lifecycle_session="desktop-test",
+  )
+  let (_, closed) = update_dev(dispatch, CancelNotOpen(run_id="r7"), model)
+  assert_true(closed.active().run is NoRun(ended=None))
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          submission_id: None,
+          status: "finished",
+        },
+      ],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=closed.dev().connection_generation,
+    ),
+    closed,
+  )
+  assert_true(
+    recovered.active().run is NoRun(ended=Some(RunFinished(Completed))),
+  )
+  guard recovered.active().sync is Reloading(..) else {
+    fail("the retained settlement did not trigger transcript recovery")
+  }
+}
+
+///|
 test "a failed Stop becomes retryable instead of staying Stopping" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
@@ -16166,6 +16262,51 @@ test "an archive response salvages a terminal steer awaiting its receipt" {
   inspect(next.active().mentions.length(), content="1")
   inspect(next.active().pending_steers.length(), content="0")
   assert_true(next.active().archived_pending_input)
+}
+
+///|
+test "a background archive salvages a terminal steer into its own fresh row" {
+  let dispatch = test_dispatch()
+  let background = {
+    ..with_pending_steers(
+      empty_conversation(
+        @interop.ChannelId::Local,
+        "desktop-background",
+        @interop.ChannelId::Local.test_project(),
+      ),
+      ["background steer draft"],
+    ),
+    run: NoRun(ended=Some(RunFinished(Completed))),
+    last_run_id: Some("r7"),
+  }
+  let model = running_model()
+    .replace_conversation(background)
+    .with_dev(dev => {
+      ..dev,
+      sessions: [placed_archived_item("desktop-background")],
+    })
+  let (_, next) = update(
+    dispatch,
+    archived_loaded([placed_archived_item("desktop-background")]),
+    model,
+  )
+  inspect(next.active_session, content="desktop-test")
+  assert_true(
+    next.find_conversation(@interop.ChannelId::Local, "desktop-background")
+    is None,
+  )
+  let mut recovered : Conversation? = None
+  for conv in next.conversations {
+    if conv.device is Local && conv.task == "background steer draft" {
+      recovered = Some(conv)
+    }
+  }
+  guard recovered is Some(fresh) else {
+    fail("the background steer draft did not get a fresh conversation")
+  }
+  assert_true(fresh.session_id != "desktop-background")
+  assert_true(fresh.archived_pending_input)
+  inspect(fresh.pending_steers.length(), content="0")
 }
 
 ///|

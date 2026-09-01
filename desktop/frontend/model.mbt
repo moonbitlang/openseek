@@ -3047,6 +3047,16 @@ fn Model::matched_settlement_frontier(
         SnapshotOpen(run_id~) if conv.run is Open(run_id=current, ..) &&
           current == run_id &&
           settlement.run_id == run_id => Some(SettlementByRun)
+        // CancelNotOpen captures the exact Open owner, then deliberately
+        // closes it before asking agent.runs for the missed terminal row. The
+        // per-session definitive flag makes that one request-time transition
+        // admissible; unrelated snapshots may not reinterpret a newer idle
+        // state as the captured run.
+        SnapshotOpen(run_id~) if captured.lifecycle_absence_is_definitive &&
+          conv.run is NoRun(..) &&
+          conv.last_run_id is Some(current) &&
+          current == run_id &&
+          settlement.run_id == run_id => Some(SettlementByRun)
         SnapshotIdle(last_run_id=Some(run_id)) if conv.run is NoRun(..) &&
           conv.last_run_id is Some(current) &&
           current == run_id &&
@@ -3818,6 +3828,14 @@ priv struct ArchiveSalvage {
   mentions : Array[Mention]
   goal_draft : String?
   pending_input : Bool
+}
+
+///|
+fn ArchiveSalvage::has_content(self : ArchiveSalvage) -> Bool {
+  !self.task.is_blank() ||
+  !self.mentions.is_empty() ||
+  self.goal_draft is Some(_) ||
+  self.pending_input
 }
 
 ///|
