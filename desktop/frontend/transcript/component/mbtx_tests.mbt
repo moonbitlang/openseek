@@ -101,18 +101,25 @@ test "a failed mbtx row names its failure stage" {
     @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
   }
 
-  // A build brief already reads "build failed" in the row's own label, so no
-  // marker word is appended — the earlier appended marker made the row read
-  // "mbtx (build failed, exit=1) build error". The stage rides the container
-  // class instead, which the stylesheet turns amber.
+  // This view renders the whole exchange: a REQUEST row whose label is the
+  // brief, then a RESULT row labeled "Tool error · mbtx". The request row
+  // appends no marker — one there read "mbtx (build failed, exit=1) build
+  // error", repeating its own label — while the result row keeps the word,
+  // since its label carries no brief. So the stage word appears exactly
+  // once, and never adjacent to the brief label.
   let build = markup_for("mbtx (build failed, exit=1)", true, plain_arguments)
   assert_true(build.contains("error stage-build"))
-  assert_false(build.contains("build error"))
+  assert_false(build.contains("exit=1)</span><span class=\"tool-call-failed"))
+  assert_eq(build.split("build error").length(), 2)
+  assert_true(build.contains("Tool error · mbtx"))
   assert_false(build.contains(">failed<"))
   assert_true(build.contains("mbtx (build failed, exit=1)"))
   // Every build-phase brief shape gets the same treatment.
   let timeout_row = markup_for("mbtx (build timeout)", true, plain_arguments)
   assert_true(timeout_row.contains("error stage-build"))
+  assert_false(
+    timeout_row.contains("timeout)</span><span class=\"tool-call-failed"),
+  )
   assert_false(timeout_row.contains(">failed<"))
   // The default target is the staged wasm path, so its exit brief is a
   // run-stage claim; an explicit wasm target reads the same.
@@ -140,6 +147,32 @@ test "a failed mbtx row names its failure stage" {
   assert_true(
     markup_for("mbtx (timeout)", true, plain_arguments).contains(">failed<"),
   )
+}
+
+///|
+/// The RESULT row's label is "Tool error · mbtx" — no brief — so it keeps the
+/// "build error" word: in a parallel burst the result rows sit apart from
+/// their requests, and the amber color must not carry the stage alone there.
+#warnings("-alert_unstable")
+test "a build-failure result row keeps its stage word" {
+  let rendered = tool_result_view({
+    kind: Tool(
+      call_id="c1",
+      name="mbtx",
+      arguments=Some("{\"source\":\"fn main {  }\"}"),
+      has_result=true,
+      is_error=true,
+      brief=Some("mbtx (build failed, exit=1)"),
+    ),
+    content: "diag",
+    ts: None,
+    sequence: None,
+  })
+  let markup = @rabbita.render_to_string(() => @rabbita.Val::constant(rendered))
+  assert_true(markup.contains("Tool error · mbtx"))
+  assert_true(markup.contains("build error"))
+  assert_true(markup.contains("error stage-build"))
+  assert_false(markup.contains(">failed<"))
 }
 
 ///|

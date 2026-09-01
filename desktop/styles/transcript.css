@@ -933,6 +933,10 @@
 .tool-result.error.stage-build > .tool-result-summary {
   color: var(--color-warning);
 }
+/* The result row's own "build error" word (its label shows no brief). */
+.tool-call-failed.tool-stage-build {
+  color: var(--color-warning);
+}
 
 /* Arguments and output grow the page instead of scrolling in place: the
    transcript stays the only scroll area, so the wheel is never trapped by a
