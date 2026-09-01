@@ -1691,8 +1691,13 @@ fn tool_call_is_build_failed(
   // id collapses briefs into one map entry, which would make a call's stage
   // depend on event order — so an ambiguous call is labeled with no stage at
   // all. Its RESULT cards still carry their own per-result tags.
+  //
+  // The BRIEF is the whole identity here, deliberately: the brief map is
+  // result data, and `result_is_build_failed` reads the same field, so call
+  // tags, result tags, and the toolbar count classify one way even when a
+  // hand-edited log's call name and result tool_name disagree. Re-checking a
+  // name on either side is what would let them diverge.
   tags.contains(call.id) &&
-  call.name == "mbtx" &&
   failed.contains(call.id) &&
   briefs.get(call.id) is Some(brief) &&
   brief.has_prefix("mbtx (build")
@@ -1730,12 +1735,15 @@ fn tool_call_is_run_failed(
 }
 
 ///|
-/// Whether a durable `mbtx` result reports a BUILD-stage failure, read from
+/// Whether a durable result reports an mbtx BUILD-stage failure, read from
 /// the fields the result itself carries — no call lookup needed, so result
 /// cards stay tagged in both view modes without extra threading.
 fn result_is_build_failed(result : @agent_session.ToolResult) -> Bool {
+  // Brief-only, matching `tool_call_is_build_failed`: one identity for both
+  // sides of a pair keeps the tags and the toolbar count consistent even on
+  // logs whose call name and result tool_name disagree. The `mbtx (build`
+  // shape is written only by the staged engine.
   result.is_error() &&
-  result.tool_name() == "mbtx" &&
   result.brief() is Some(brief) &&
   brief.has_prefix("mbtx (build")
 }

@@ -653,6 +653,41 @@ test "duplicated ids label no call stage but still count their results" {
 }
 
 ///|
+/// One identity for both sides of a pair: classification reads the BRIEF, so
+/// a log whose call name and result tool_name disagree still tags the call
+/// row, the result card, and the count the same way — never a visible tag
+/// with a zero count.
+test "a name-mismatched pair classifies consistently from the brief" {
+  let session = @agent_session.Session(SessionId("mismatch"), system_prompt="")
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(
+            id="m1",
+            name="mbtx",
+            arguments="{\"source\":\"fn main {  }\"}",
+          ),
+        ]),
+      ),
+    )
+    .append(
+      Tool(
+        ToolResult(
+          tool_call_id="m1",
+          tool_name="shell",
+          content="diag",
+          is_error=true,
+          brief="mbtx (build failed, exit=1)",
+        ),
+      ),
+    )
+  let raw = render(@viz.render_session(session, RawLog))
+  assert_true(raw.contains("tool-call-build-failed"))
+  assert_true(raw.contains("build-failed"))
+  assert_eq(@viz.rendered_build_error_count(session, RawLog), 1)
+}
+
+///|
 test "failed tool result is folded and red-flagged" {
   let html = render(@viz.render_session(error_tool_session(), RawLog))
   // Folded by default (a <details> with no `open`), tagged as an error, and the
