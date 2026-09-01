@@ -187,6 +187,14 @@ async fn fake_registry(
         if path == "/api/v0/skills" {
           conn.send_response(200, "OK", extra_headers=json_headers)
           conn.write_string(catalog_body(base, widget_digest))
+        } else if path == "/api/v0/skills/acme/bare@1.0.0" {
+          // A registered entry that legitimately publishes no archive.
+          conn.send_response(200, "OK", extra_headers=json_headers)
+          conn.write_string("{\"module\":\"acme/bare\"}")
+        } else if path == "/api/v0/skills/acme/malformed@1.0.0" {
+          // Empty-string coordinates: registry corruption, not absence.
+          conn.send_response(200, "OK", extra_headers=json_headers)
+          conn.write_string("{\"archive_url\":\"\",\"archive_digest\":\"\"}")
         } else if path.strip_prefix(SkillsPrefix) is Some(entry) &&
           skills.get(entry.to_owned()) is Some(skill) {
           conn.send_response(200, "OK", extra_headers=json_headers)
@@ -551,6 +559,28 @@ async test "a non-skill module is refused" {
       "acme/nothing",
     )
     assert_true(message.contains("is not a published skill"))
+  }
+}
+
+///|
+async test "a skill without archive coordinates is not installable" {
+  @async.with_task_group() <| group => {
+    guard fake_registry(group) is Some(base) else { return }
+    let lib = @fs.tmpdir(prefix="skillmarket-")
+    let message = install_failure(base, lib, "acme/bare")
+    assert_true(message.contains("does not publish a skill archive"))
+    assert_false(@fs.exists("\{lib}/acme-bare"))
+  }
+}
+
+///|
+async test "malformed archive coordinates are a registry error, not absence" {
+  @async.with_task_group() <| group => {
+    guard fake_registry(group) is Some(base) else { return }
+    let lib = @fs.tmpdir(prefix="skillmarket-")
+    let message = install_failure(base, lib, "acme/malformed")
+    assert_true(message.contains("malformed"))
+    assert_false(@fs.exists("\{lib}/acme-malformed"))
   }
 }
 

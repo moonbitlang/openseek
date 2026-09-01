@@ -265,15 +265,29 @@ async fn fetch_archive_source(
   }
   let json = data.json() catch {
     _ =>
-      raise SkillMarketError("skill registry returned a malformed skill entry")
+      raise SkillMarketError(
+        "skill registry returned a malformed entry for \{entry}",
+      )
   }
-  guard json
-    is { "archive_url": String(url), "archive_digest": String(digest), .. } &&
-    !url.is_empty() &&
-    !digest.is_empty() else {
-    raise SkillMarketError("\{entry} does not publish a skill archive")
+  guard json is Object(fields) else {
+    raise SkillMarketError(
+      "skill registry returned a malformed entry for \{entry}",
+    )
   }
-  { url, digest: digest.trim().to_owned().to_lower(), }
+  // Absent coordinates are the one legitimate "no archive" shape; a present
+  // field of the wrong type or an empty string is registry corruption, not
+  // absence, and deserves its own diagnosis.
+  match (fields.get("archive_url"), fields.get("archive_digest")) {
+    (None, None) =>
+      raise SkillMarketError("\{entry} does not publish a skill archive")
+    (Some(String(url)), Some(String(digest))) if !url.is_empty() &&
+      !digest.is_empty() =>
+      { url, digest: digest.trim().to_owned().to_lower(), }
+    _ =>
+      raise SkillMarketError(
+        "skill registry returned a malformed entry for \{entry}",
+      )
+  }
 }
 
 ///|
