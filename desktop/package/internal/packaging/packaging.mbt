@@ -299,7 +299,9 @@ pub async fn Workspace::write_proton_package_manifest(
       }
     }),
   }
-  write_text(self.at(destination), manifest.stringify() + "\n")
+  let manifest_path = self.at(destination)
+  ensure_dir((manifest_path : @path.Path).dirname().to_string())
+  write_text(manifest_path, manifest.stringify() + "\n")
 }
 
 ///|
