@@ -1,0 +1,89 @@
+name: Desktop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "desktop/**"
+      # The browser packager reads Editor MoonBit packages, styles, fonts, and
+      # Mermaid assets directly from this checkout.
+      - "editor/**"
+      # Desktop's browser frontend renders the shared engine event protocol
+      # and root-module tool output views.
+      - "protocol/**"
+      - "agent_tool/edit_diff/**"
+      - "agent_tool/read/**"
+      - "moon.mod"
+      - "moon.work"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+    paths:
+      - "desktop/**"
+      - "editor/**"
+      - "protocol/**"
+      - "agent_tool/edit_diff/**"
+      - "agent_tool/read/**"
+      - "moon.mod"
+      - "moon.work"
+      - ".github/workflows/desktop.yml"
+
+# A newer PR head supersedes its older browser run. Keep main runs complete so
+# every relevant merged commit still receives a Desktop E2E result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # This is the browser-console product-flow gate. Root CI retains the complete
+  # native/JS MoonBit integration checks for Desktop and its local dependencies.
+  desktop-e2e:
+    name: desktop e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/e2e/package-lock.json
+
+      - name: Update MoonBit dependencies
+        run: moon update
+
+      - name: Install E2E dependencies
+        working-directory: desktop/e2e
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: desktop/e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Build Desktop browser application
+        working-directory: desktop
+        run: moon run package/browser --target native
+
+      - name: Run Desktop E2E tests
+        working-directory: desktop/e2e
+        run: npm test
+
+      - name: Upload Playwright report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-playwright-report
+          path: |
+            desktop/e2e/playwright-report
+            desktop/e2e/test-results
+          if-no-files-found: ignore
+          retention-days: 7
