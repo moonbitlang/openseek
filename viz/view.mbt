@@ -912,9 +912,9 @@ fn tool_call_view(
   // A failed mbtx call names its STAGE — a build error is fixed in the
   // source, a runtime error in the program's behavior — as a visible word
   // beside the brief and as a class the build-errors-only filter keys on.
-  let build_failed = tool_call_is_build_failed(call, briefs, failed)
+  let build_failed = tool_call_is_build_failed(call, briefs, failed, tags)
   let run_failed = !build_failed &&
-    tool_call_is_run_failed(call, briefs, failed)
+    tool_call_is_run_failed(call, briefs, failed, tags)
   let cls = if build_failed {
     "\{cls} tool-call-build-failed"
   } else if run_failed {
@@ -1685,7 +1685,13 @@ fn tool_call_is_build_failed(
   call : @deepseek.ToolCall,
   briefs : Map[String, String],
   failed : Map[String, Unit],
+  tags : Map[String, Int],
 ) -> Bool {
+  // `tags` holds exactly the unambiguous 1:1 call/result pairs. A duplicated
+  // id collapses briefs into one map entry, which would make a call's stage
+  // depend on event order — so an ambiguous call is labeled with no stage at
+  // all. Its RESULT cards still carry their own per-result tags.
+  tags.contains(call.id) &&
   call.name == "mbtx" &&
   failed.contains(call.id) &&
   briefs.get(call.id) is Some(brief) &&
@@ -1703,8 +1709,10 @@ fn tool_call_is_run_failed(
   call : @deepseek.ToolCall,
   briefs : Map[String, String],
   failed : Map[String, Unit],
+  tags : Map[String, Int],
 ) -> Bool {
-  guard call.name == "mbtx" &&
+  guard tags.contains(call.id) &&
+    call.name == "mbtx" &&
     failed.contains(call.id) &&
     briefs.get(call.id) is Some(brief) &&
     brief.has_prefix("mbtx (exit=") else {
@@ -2033,41 +2041,37 @@ pub fn rendered_escalated_count(
 }
 
 ///|
-/// How many rendered `mbtx` calls failed in the BUILD stage, per view mode —
-/// what the build-errors-only toolbar counts and jumps between. Derived from
-/// the same per-mode brief/failure maps the cards themselves render from, so
-/// the count and the tags can never disagree; the model view's maps already
-/// pass everything through `model_shown_result`.
+/// How many rendered BUILD-stage mbtx failures each view mode shows — what
+/// the build-errors-only toolbar counts and jumps between. Counted from the
+/// RESULTS, the same per-result test that tags their cards `build-failed`, so
+/// the count and the visible tags can never disagree — including for an
+/// orphan result with no matching call, which the raw renderer still shows
+/// and the filter must not hide behind a zero count. The model view counts
+/// only results the projection shows (`model_shown_result`).
 pub fn rendered_build_error_count(
   session : @agent_session.Session,
   mode : ViewMode,
 ) -> Int {
-  let mut count = 0
   match mode {
     RawLog => {
-      let briefs = tool_call_briefs(session)
-      let failed = raw_failed_call_ids(session)
+      let mut count = 0
       for event in session.events() {
-        if event.item() is Assistant(message) {
-          count += message
-            .tool_calls()
-            .count_if(call => tool_call_is_build_failed(call, briefs, failed))
+        if event.item() is Tool(result) && result_is_build_failed(result) {
+          count += 1
         }
       }
+      count
     }
     ModelView => {
-      let messages = session.chat_messages()
       let tool_results = tool_results_by_id(session)
-      let briefs = model_tool_call_briefs(messages, tool_results)
-      let failed = model_failed_call_ids(messages, tool_results)
-      for message in messages {
-        count += message.tool_calls.count_if(call => {
-          tool_call_is_build_failed(call, briefs, failed)
-        })
-      }
+      session
+      .chat_messages()
+      .count_if(message => {
+        model_shown_result(message, tool_results) is Some(result) &&
+        result_is_build_failed(result)
+      })
     }
   }
-  count
 }
 
 ///|

@@ -498,7 +498,10 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
       } else {
         (
           @cmd.effect(() => {
-            scroll_to_card_from_viewport(".tool-call-build-failed", direction)
+            // Result cards, not call rows: every build failure has exactly
+            // one tagged result card — orphans included — so the jump set
+            // matches the count.
+            scroll_to_card_from_viewport(".card.build-failed", direction)
           }),
           model,
         )

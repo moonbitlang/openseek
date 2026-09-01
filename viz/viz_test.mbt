@@ -568,6 +568,91 @@ test "rendered_build_error_count counts staged build failures per mode" {
 }
 
 ///|
+/// An orphan build-failed result — no matching call, a shape the raw renderer
+/// still shows — must be counted, or an active filter would replace visible
+/// diagnostics with an empty-state message.
+test "an orphan build-failed result is counted and tagged" {
+  let session = @agent_session.Session(SessionId("orphan"), system_prompt="").append(
+    Tool(
+      ToolResult(
+        tool_call_id="ghost",
+        tool_name="mbtx",
+        content="diag",
+        is_error=true,
+        brief="mbtx (build failed, exit=1)",
+      ),
+    ),
+  )
+  assert_eq(@viz.rendered_build_error_count(session, RawLog), 1)
+  let raw = render(@viz.render_session(session, RawLog))
+  assert_true(raw.contains("card tool error build-failed"))
+}
+
+///|
+/// A duplicated tool_call_id makes call/result pairing ambiguous, and the
+/// brief maps collapse to whichever result came last — so a call's stage
+/// would depend on event order. An ambiguous call is labeled with no stage;
+/// its per-result cards keep their own tags and the count stays order-free.
+test "duplicated ids label no call stage but still count their results" {
+  fn session_with(first : String, second : String) -> @agent_session.Session {
+    @agent_session.Session(SessionId("dup"), system_prompt="")
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(
+            id="d1",
+            name="mbtx",
+            arguments="{\"source\":\"fn main {  }\"}",
+          ),
+          ToolCall(
+            id="d1",
+            name="mbtx",
+            arguments="{\"source\":\"fn main {  }\"}",
+          ),
+        ]),
+      ),
+    )
+    .append(
+      Tool(
+        ToolResult(
+          tool_call_id="d1",
+          tool_name="mbtx",
+          content="a",
+          is_error=true,
+          brief=first,
+        ),
+      ),
+    )
+    .append(
+      Tool(
+        ToolResult(
+          tool_call_id="d1",
+          tool_name="mbtx",
+          content="b",
+          is_error=true,
+          brief=second,
+        ),
+      ),
+    )
+  }
+
+  for
+    briefs in [
+      ("mbtx (build failed, exit=1)", "mbtx (exit=1)"),
+      ("mbtx (exit=1)", "mbtx (build failed, exit=1)"),
+    ] {
+    let (first, second) = briefs
+    let session = session_with(first, second)
+    // Order-free: exactly the one build RESULT counts either way.
+    assert_eq(@viz.rendered_build_error_count(session, RawLog), 1)
+    let raw = render(@viz.render_session(session, RawLog))
+    assert_false(raw.contains("tool-call-build-failed"))
+    assert_false(raw.contains("tool-call-run-failed"))
+    assert_true(raw.contains("card tool error build-failed"))
+  }
+}
+
+///|
 test "failed tool result is folded and red-flagged" {
   let html = render(@viz.render_session(error_tool_session(), RawLog))
   // Folded by default (a <details> with no `open`), tagged as an error, and the
