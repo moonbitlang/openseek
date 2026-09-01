@@ -81,8 +81,15 @@ fn mbtx_card(arguments : String) -> @html.Html? {
 /// the display-only caption the engine persists for renderers. The staged
 /// wasm engine writes `mbtx (build failed, exit=N)` / `mbtx (build timeout)`
 /// / `mbtx (build fault)` for build-phase failures and `mbtx (exit=N)` for a
-/// program that built and then failed; transcripts recorded before staging
-/// carry neither shape and keep the generic marker.
+/// program that built and then failed.
+///
+/// One accepted imprecision, by explicit owner decision (no backwards
+/// compatibility for old transcripts): a WASM failure recorded before the
+/// staged engine carries the same `mbtx (exit=N)` brief whichever stage
+/// failed, and reads here as a runtime error. Disambiguating it would need a
+/// new engine brief shape or a recording-version gate — complexity spent
+/// entirely on sessions that predate the label. The build shapes carry no
+/// such ambiguity: only the staged engine ever wrote them.
 priv enum MbtxFailureStage {
   BuildError
   RuntimeError
