@@ -23,6 +23,8 @@ pub let agent_start : Command[@protocol.StartPayload, @protocol.StartReply]
 
 pub let agent_steer : Command[@protocol.SteerPayload, @protocol.SteerReply]
 
+pub let agent_steer_ack : Command[@protocol.SteerSettlementAckPayload, @protocol.EmptyReply]
+
 pub let app_info : Command[@protocol.EmptyPayload, @protocol.AppInfoReply]
 
 pub let app_open_devtools : Command[@protocol.EmptyPayload, @protocol.EmptyReply]

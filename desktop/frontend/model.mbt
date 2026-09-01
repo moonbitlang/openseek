@@ -624,11 +624,10 @@ priv enum RunSnapshotState {
 priv struct RunSnapshotFrontier {
   session : String
   state : RunSnapshotState
-  // A notification-only gap or engine-generation restart leaves this page's
-  // request transport alive. Negative host state may settle lifecycle,
-  // but it must not consume inputs whose exact RPC replies can still restore
-  // their drafts.
-  request_transport_survived : Bool
+  // True only when this request follows loss of the lifecycle RPC transport.
+  // Input authority is deliberately not channel-wide: each steer owner below
+  // records whether absence is definitive for that exact request.
+  lifecycle_absence_is_definitive : Bool
   // Initial prompts whose start transport failed before a run id came back.
   // Their submission id is still an exact owner and must survive the
   // lifecycle's transition to SnapshotIdle for reconnect settlement lookup.
@@ -649,6 +648,10 @@ priv struct RunSnapshotFrontier {
 priv struct SteerSnapshotOwner {
   submission_id : String
   run_id : String
+  // Negative host state may restore this exact draft only after its own RPC
+  // is known dead (or acceptance already proved the ledger row must exist).
+  // An unrelated failed request must not lend that authority to this owner.
+  absence_is_definitive : Bool
 }
 
 ///|
@@ -2289,6 +2292,7 @@ priv enum DeviceMsg {
     runs~ : Array[RecoveredRun],
     settled~ : Array[RecoveredSettlement],
     steers~ : Array[RecoveredSteerSettlement],
+    steer_recovery_supported~ : Bool,
     // Permission questions the host's engines are still blocked on. A card
     // this page rendered before a reload is gone with the page, and nothing
     // in the durable record can bring it back — so a rejoining client is
@@ -2912,7 +2916,8 @@ fn Model::find_conversation(
 fn Model::run_snapshot_frontier(
   self : Model,
   channel : @interop.ChannelId,
-  request_transport_survived? : Bool = false,
+  lifecycle_absence_is_definitive? : Bool = false,
+  definitive_steer_id? : String,
 ) -> Array[RunSnapshotFrontier] {
   self.conversations
   .filter(conv => conv.device == channel)
@@ -2929,13 +2934,19 @@ fn Model::run_snapshot_frontier(
     let steers : Array[SteerSnapshotOwner] = []
     for pending in conv.pending_steers {
       if pending.run_id is Some(run_id) {
-        steers.push({ submission_id: pending.submission_id, run_id, })
+        steers.push({
+          submission_id: pending.submission_id,
+          run_id,
+          absence_is_definitive: pending.delivery is SteerAccepted ||
+          lifecycle_absence_is_definitive ||
+          definitive_steer_id == Some(pending.submission_id),
+        })
       }
     }
     {
       session: conv.session_id,
       state,
-      request_transport_survived,
+      lifecycle_absence_is_definitive,
       initial_ids,
       steers,
       pending_approval_id: conv.pending_approval.map(pending => pending.id),
@@ -3812,40 +3823,6 @@ fn Conversation::settle_pending_prompt(
     return (self, false)
   }
   ({ ..self, pending_prompt: None, }, true)
-}
-
-///|
-/// Forget every submission still waiting for a receipt.
-///
-/// A submitted input is sent once. The composer keeps its entry only until
-/// the host answers, and a boundary that makes the answer unobtainable — a
-/// reconnect, a run ending without the commit — ends the entry rather than
-/// converting it into a guess about the record. The record is authoritative
-/// and the client can read it; a notice that says "delivery could not be
-/// confirmed" adds nothing the transcript does not already show, and cannot
-/// be retracted correctly when it is wrong.
-fn Conversation::forget_awaiting_inputs(self : Conversation) -> Conversation {
-  if self.pending_steers.is_empty() && self.pending_prompt is None {
-    return self
-  }
-  let pending_steers : Array[PendingSteer] = []
-  { ..self, pending_steers, pending_prompt: None, }
-}
-
-///|
-/// Forget every submission this exact run owned, whatever it was waiting for.
-/// See `forget_awaiting_inputs` for why nothing is retained.
-fn Conversation::forget_steers_for_run(
-  self : Conversation,
-  run_id : String,
-) -> Conversation {
-  let pending_steers = self.pending_steers.filter(input => {
-    !(input.run_id is Some(owner) && owner == run_id)
-  })
-  if pending_steers.length() == self.pending_steers.length() {
-    return self
-  }
-  { ..self, pending_steers, }
 }
 
 ///|

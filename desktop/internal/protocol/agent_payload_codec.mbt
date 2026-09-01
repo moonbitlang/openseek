@@ -211,27 +211,42 @@ pub impl FromJson for RunsReply with fn from_json(json, path) {
     )
   }
   let steers : Array[SteerSettlementPayload] = []
+  let mut has_steer_recovery = false
   match object.optional_json("steers") {
-    Some(Array(values)) =>
+    Some(Array(values)) => {
+      has_steer_recovery = true
       for index, raw in values {
         steers.push(
           @json.from_json(raw, path=path.add_key("steers").add_index(index)),
         )
       }
+    }
     Some(_) => raise JsonDecodeError((path.add_key("steers"), "expected array"))
     None => ()
   }
-  { runs, settled, approvals, steers, }
+  {
+    runs,
+    settled,
+    approvals,
+    steers: if has_steer_recovery {
+      Some(steers)
+    } else {
+      None
+    },
+  }
 }
 
 ///|
 pub impl ToJson for RunsReply with fn to_json(self) {
-  {
+  let fields = {
     "runs": Json(self.runs.map(run => run.to_json())),
     "settled": Json(self.settled.map(entry => entry.to_json())),
     "approvals": Json(self.approvals.map(approval => approval.to_json())),
-    "steers": Json(self.steers.map(steer => steer.to_json())),
   }
+  if self.steers is Some(steers) {
+    fields["steers"] = Json(steers.map(steer => steer.to_json()))
+  }
+  Json(fields)
 }
 
 ///|

@@ -221,7 +221,7 @@ test "the runs snapshot requires each of its sections" {
     "approvals": [],
   })
   assert_eq(empty.approvals.length(), 0)
-  assert_eq(empty.steers.length(), 0)
+  assert_true(empty.steers is None)
   let with_steer : @protocol.RunsReply = @json.from_json({
     "runs": [],
     "settled": [],
@@ -235,9 +235,11 @@ test "the runs snapshot requires each of its sections" {
       },
     ],
   })
-  assert_eq(with_steer.steers.length(), 1)
-  assert_eq(with_steer.steers[0].submission_id, "steer-1")
-  assert_eq(with_steer.steers[0].status, "applied")
+  guard with_steer.steers is Some([steer]) else {
+    fail("present steer recovery section was not preserved")
+  }
+  assert_eq(steer.submission_id, "steer-1")
+  assert_eq(steer.status, "applied")
   @debug.assert_eq(with_steer.to_json(), {
     "runs": [],
     "settled": [],

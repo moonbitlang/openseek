@@ -5040,7 +5040,7 @@ fn update_device_msg(
         (@cmd.none, model)
       }
     BridgeReady | EngineReady | NotificationGap => {
-      let request_transport_survived = msg is (EngineReady | NotificationGap)
+      let lifecycle_absence_is_definitive = msg is BridgeReady
       let connection_generation = dev.connection_generation + 1
       let sessions_request_generation = dev.sessions_request_generation + 1
       let archived_request_generation = dev.archived_request_generation + 1
@@ -5050,7 +5050,7 @@ fn update_device_msg(
       // its reply then wins over both stale positive rows and stale absence.
       let run_frontier = model.run_snapshot_frontier(
         channel,
-        request_transport_survived~,
+        lifecycle_absence_is_definitive~,
       )
       let commands = [
         fetch_sessions(
@@ -5098,19 +5098,18 @@ fn update_device_msg(
       // none of the pre-gap fragment, or the first post-gap delta would splice
       // onto stale text. Compaction has no wire resync in this protocol: an
       // local queued/requested/in-flight marker is released here so a missed
-      // terminal event cannot disable Send forever. A full transport reconnect
-      // also makes outstanding request replies unobtainable, so their entries
-      // end there. A hub-only gap or engine-generation restart preserves them:
-      // Request promises remain live, and a later definite refusal still needs
-      // the entry to restore its exact draft. If the host still compacts, its
-      // next prompt rejection is a transient, visible local failure.
+      // terminal event cannot disable Send forever. Pending inputs survive
+      // every boundary until the atomic runs reply classifies their exact
+      // owner. A full reconnect makes absence definitive for dead requests; a
+      // hub-only gap or engine restart leaves their promises live. If the host
+      // still compacts, its next prompt rejection is a transient, visible
+      // local failure.
       let conversations = model.conversations.map(conv => {
         if conv.device == channel {
-          let conv = if request_transport_survived {
-            conv.clear_streams()
-          } else {
-            conv.clear_streams().forget_awaiting_inputs()
-          }
+          // Recovery owns the exact pending inputs until the atomic runs
+          // reply classifies them. Deleting them here would make the reply's
+          // owner guard reject the very evidence this request captured.
+          let conv = conv.clear_streams()
           { ..conv, compaction: NotCompacting, }
         } else {
           conv
@@ -5376,7 +5375,10 @@ fn update_device_msg(
         .any(input => input.matches_receipt(submission_id, Some(run_id))) else {
         return (@cmd.none, model)
       }
-      let frontier = model.run_snapshot_frontier(channel)
+      let frontier = model.run_snapshot_frontier(
+        channel,
+        definitive_steer_id=submission_id,
+      )
       (
         fetch_runs(dispatch, channel, frontier, dev.connection_generation),
         model,
@@ -6593,12 +6595,7 @@ fn update_device_msg(
         // rejection must remain able to restore that draft.
         Starting(..) => (conv, true, false)
         Open(run_id=current, ..) if current == run_id => (conv, false, false)
-        Open(run_id=previous_run, ..) =>
-          (
-            conv.clear_streams().forget_steers_for_run(previous_run),
-            true,
-            false,
-          )
+        Open(..) => (conv.clear_streams(), true, false)
         NoRun(..) if existing.last_run_id is Some(last) && last == run_id =>
           (conv, false, true)
         NoRun(..) => (conv, true, false)
@@ -6718,6 +6715,7 @@ fn update_device_msg(
       runs~,
       settled~,
       steers~,
+      steer_recovery_supported~,
       approvals~,
       live~,
       frontier~,
@@ -6733,10 +6731,10 @@ fn update_device_msg(
       let mut next = model
       // Reconcile only request-time steer owners. A row is host evidence that
       // the exact command remains pending or reached one of its two terminal
-      // receipts. Absence settles a dead request transport as not accepted;
-      // on a surviving transport it says nothing because this snapshot may
-      // have overtaken the still-live RPC. Entries born after the frontier are
-      // deliberately untouched.
+      // receipts. Absence is actionable only for the exact owner whose RPC is
+      // dead (or whose accepted reply proved a row had to exist); it says
+      // nothing about a different live request that this snapshot may have
+      // overtaken. Entries born after the frontier are deliberately untouched.
       for captured in frontier {
         for owner in captured.steers {
           guard next.find_conversation(channel, captured.session) is Some(conv) &&
@@ -6760,6 +6758,14 @@ fn update_device_msg(
             Some({ status: RecoveredSteerPending, .. }) =>
               conv.accept_steer(owner.submission_id, Some(owner.run_id))
             Some({ status: RecoveredSteerApplied, .. }) => {
+              commands.push(
+                acknowledge_steer_settlement(
+                  channel,
+                  captured.session,
+                  owner.run_id,
+                  owner.submission_id,
+                ),
+              )
               let (conv, _) = conv.acknowledge_steer(
                 owner.submission_id,
                 Some(owner.run_id),
@@ -6767,20 +6773,39 @@ fn update_device_msg(
               conv
             }
             Some({ status: RecoveredSteerDropped, .. }) => {
+              commands.push(
+                acknowledge_steer_settlement(
+                  channel,
+                  captured.session,
+                  owner.run_id,
+                  owner.submission_id,
+                ),
+              )
               let (conv, _) = conv.reject_steer(
                 owner.submission_id,
                 Some(owner.run_id),
               )
               conv
             }
-            None if captured.request_transport_survived => conv
-            None => {
+            // An older host cannot distinguish "not accepted" from "this
+            // protocol has no ledger". Retire ownership without restoring a
+            // possibly duplicated draft; its durable transcript remains the
+            // authority.
+            None if !steer_recovery_supported => {
+              let (conv, _) = conv.acknowledge_steer(
+                owner.submission_id,
+                Some(owner.run_id),
+              )
+              conv
+            }
+            None if owner.absence_is_definitive => {
               let (conv, _) = conv.reject_steer(
                 owner.submission_id,
                 Some(owner.run_id),
               )
               conv
             }
+            None => conv
           }
           next = next.replace_conversation(conv)
         }
@@ -7045,14 +7070,10 @@ fn update_device_msg(
               SnapshotOpen(run_id~) if conv.run is Open(run_id=current, ..) &&
                 current == run_id &&
                 !live.contains(run_id) => {
-                // The runs reply proves this run is over. A reconnect also
-                // ended its request paths, so those submissions end with it;
-                // a local gap keeps its exact RPC replies alive instead.
-                let settled = if captured.request_transport_survived {
-                  conv.clear_streams()
-                } else {
-                  conv.clear_streams().forget_steers_for_run(run_id)
-                }
+                // The runs reply proves only that this lifecycle is over.
+                // Exact input ownership was reconciled independently above;
+                // it must survive long enough for a trailing receipt.
+                let settled = conv.clear_streams()
                 {
                   ..settled,
                   run: NoRun(ended=None),
@@ -7064,15 +7085,11 @@ fn update_device_msg(
                 current == run_id =>
                 // The run this conversation last owned is idle at the host,
                 // so nothing it carried is still in flight.
-                if captured.request_transport_survived {
-                  conv
-                } else {
-                  conv.forget_steers_for_run(run_id)
-                }
+                conv
               SnapshotStarting(submission_id~) if conv.run
                 is Starting(submission_id=current) &&
                 current == submission_id &&
-                !captured.request_transport_survived => {
+                captured.lifecycle_absence_is_definitive => {
                 // The host has no record of this start, so the prompt never
                 // opened a run. Close the local lifecycle and let the entry
                 // go with it.
@@ -7126,6 +7143,23 @@ fn update_device_msg(
         None
       }
       if conv is Some(conv) {
+        let steer_ack = match (run_id, event) {
+          (Some(owner_run), SteerApplied(submission_id=Some(submission_id), ..))
+          | (
+            Some(owner_run),
+            SteerDropped(submission_id=Some(submission_id), ..),
+          ) =>
+            if conv.pending_steers
+              .iter()
+              .any(input => {
+                input.matches_receipt(submission_id, Some(owner_run))
+              }) {
+              Some((owner_run, submission_id))
+            } else {
+              None
+            }
+          _ => None
+        }
         let approval_notification = approval_system_notification(
           channel, run_id, event,
         )
@@ -7156,7 +7190,17 @@ fn update_device_msg(
           }
           (command, updated)
         }
-        (@cmd.batch([finished_cmd, report_cmd]), updated)
+        let ack_cmd = match steer_ack {
+          Some((owner_run, submission_id)) =>
+            acknowledge_steer_settlement(
+              channel,
+              conv.session_id,
+              owner_run,
+              submission_id,
+            )
+          None => @cmd.none
+        }
+        (@cmd.batch([finished_cmd, report_cmd, ack_cmd]), updated)
       } else {
         (@cmd.none, model)
       }
@@ -7252,11 +7296,7 @@ fn update_device_msg(
         // the reload below is what answers it.
         ignore(status)
         ignore(exit_code)
-        let closed = if owns_lifecycle {
-          conv.forget_steers_for_run(run_id)
-        } else {
-          conv
-        }
+        let closed = conv
         let next = if owns_lifecycle {
           match closed.run {
             Starting(..) | Open(..) =>
@@ -7465,14 +7505,13 @@ fn update_device_msg(
         let first_finish = !(conv.run is NoRun(ended=Some(RunFinished(_))) &&
           conv.last_run_id is Some(last) &&
           last == run_id)
-        // Missing receipts are not guessed dropped. Keep exact-id ownership
-        // briefly and show a truthful unconfirmed notice behind the durable
-        // terminal boundary; a trailing receipt may still settle it.
-        //
-        // The run is over, so nothing it carried can still acquire a receipt.
-        // Whether each submission reached the store is the record's question;
-        // the transcript answers it without a local placeholder.
-        let settled_inputs = conv.clear_streams().forget_steers_for_run(run_id)
+        // Finished intentionally precedes the engine's trailing steer receipt
+        // drain. Keep exact-id ownership across this lifecycle boundary; the
+        // receipt or the host ledger below is what may apply or restore it.
+        let had_pending_steer = conv.pending_steers
+          .iter()
+          .any(input => input.run_id == Some(run_id))
+        let settled_inputs = conv.clear_streams()
         // A question belonging to this run goes with it. The engine settles
         // its own on the way out, so what reaches here is the engine that
         // could not — a killed process emits no `approval_resolved` — and
@@ -7511,6 +7550,20 @@ fn update_device_msg(
         )
         next = probed
         let commands = [sessions, branch_cmd]
+        // Finished intentionally precedes trailing steer receipts. Keep the
+        // exact owners and query the host ledger: current hosts classify them,
+        // while an older host's absent capability safely retires them without
+        // restoring a draft that may already be durable.
+        if had_pending_steer {
+          commands.push(
+            fetch_runs(
+              dispatch,
+              channel,
+              next.run_snapshot_frontier(channel),
+              dev.connection_generation,
+            ),
+          )
+        }
         // Only the embedded desktop page owns system notifications. Remote
         // browser pages never have the notification extension, and replaying
         // the same Finished boundary must not post a second notification.
@@ -9382,7 +9435,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
 test "BridgeReady clears every non-replayable stream and compaction phase" {
   let dispatch = test_dispatch()
   let active = {
-    ..test_conversation(),
+    ..with_pending_steers(running_conversation(), ["recover after reconnect"]),
     compaction: Queued,
     turn: {
       ..test_conversation().turn,
@@ -9413,6 +9466,7 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
     assert_eq(conv.turn.streaming_response, None)
     assert_true(conv.compaction is NotCompacting)
   }
+  inspect(next.active().pending_steers.length(), content="1")
 }
 
 ///|
@@ -10818,9 +10872,9 @@ test "a distinct started id replaces a stale open run as foreign" {
     fail("expected the new run to replace the stale id")
   }
   assert_eq(next.active().turn.streaming_response, None)
-  inspect(next.active().pending_steers.length(), content="0")
-  // The replaced run took its pending input with it and left no placeholder:
-  // what the turn actually recorded is in the transcript.
+  inspect(next.active().pending_steers.length(), content="1")
+  // Lifecycle replacement does not erase an exact receipt owner. A trailing
+  // applied/dropped event still settles it without touching the new run.
   guard next.active().sync is Reloading(generation=1, attempt=1, ..) else {
     fail("a foreign replacement did not refresh the transcript")
   }
@@ -11184,7 +11238,7 @@ test "runs settled closes runs the host no longer has, sparing live and starting
       {
         session: "desktop-test",
         state: SnapshotOpen(run_id="r7"),
-        request_transport_survived: false,
+        lifecycle_absence_is_definitive: true,
         initial_ids: [],
         steers: [],
         pending_approval_id: None,
@@ -11192,7 +11246,7 @@ test "runs settled closes runs the host no longer has, sparing live and starting
       {
         session: "desktop-stale",
         state: SnapshotOpen(run_id="r9"),
-        request_transport_survived: false,
+        lifecycle_absence_is_definitive: true,
         initial_ids: [],
         steers: [],
         pending_approval_id: None,
@@ -11231,13 +11285,16 @@ test "reconnect runs snapshot settles only its captured Starting submission" {
     BridgeReady,
     test_model().replace_conversation(conv),
   )
-  // The gap ended the entry: no receipt can cross it.
-  inspect(bridged.active().pending_steers.length(), content="0")
+  // The snapshot owns the entry until it classifies the dead request path.
+  assert_true(bridged.active().pending_prompt is Some(_))
   let (_, settled) = update_dev(
     dispatch,
     RunsSettled(
       live=[],
-      frontier=bridged.run_snapshot_frontier(@interop.ChannelId::Local),
+      frontier=bridged.run_snapshot_frontier(
+        @interop.ChannelId::Local,
+        lifecycle_absence_is_definitive=true,
+      ),
     ),
     bridged,
   )
@@ -11264,6 +11321,7 @@ test "a notification gap recovers a Finished notification dropped behind a slow 
         },
       ],
       steers=[],
+      steer_recovery_supported=true,
       approvals=[],
       live=[],
       frontier~,
@@ -11309,7 +11367,7 @@ test "a notification gap preserves an in-flight prompt until its RPC rejects" {
       live=[],
       frontier=resyncing.run_snapshot_frontier(
         @interop.ChannelId::Local,
-        request_transport_survived=true,
+        lifecycle_absence_is_definitive=false,
       ),
     ),
     resyncing,
@@ -11355,11 +11413,12 @@ test "a notification gap preserves an in-flight steer until its RPC rejects" {
         },
       ],
       steers=[],
+      steer_recovery_supported=true,
       approvals=[],
       live=[],
       frontier=resyncing.run_snapshot_frontier(
         @interop.ChannelId::Local,
-        request_transport_survived=true,
+        lifecycle_absence_is_definitive=false,
       ),
       connection_generation=resyncing.dev().connection_generation,
     ),
@@ -11387,7 +11446,7 @@ test "a notification gap replays a lost applied steer receipt" {
   let model = running_model().replace_conversation(conv)
   let frontier = model.run_snapshot_frontier(
     @interop.ChannelId::Local,
-    request_transport_survived=true,
+    lifecycle_absence_is_definitive=false,
   )
   let pending = conv.pending_steers[0]
   let (_, recovered) = update_dev(
@@ -11410,6 +11469,7 @@ test "a notification gap replays a lost applied steer receipt" {
           status: RecoveredSteerApplied,
         },
       ],
+      steer_recovery_supported=true,
       approvals=[],
       live=[],
       frontier~,
@@ -11443,13 +11503,69 @@ test "a successful steer RPC remains distinct from its engine receipt" {
 }
 
 ///|
+test "negative steer recovery is authoritative only for its exact request" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(running_conversation(), [
+    "accepted draft", "unrelated live request",
+  ])
+  let accepted_id = queued.pending_steers[0].submission_id
+  let live_id = queued.pending_steers[1].submission_id
+  let conv = queued.accept_steer(accepted_id, Some("r7"))
+  let model = running_model().replace_conversation(conv)
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+    ),
+    model,
+  )
+  inspect(recovered.active().pending_steers.length(), content="1")
+  inspect(recovered.active().pending_steers[0].submission_id, content=live_id)
+  inspect(recovered.active().task, content="accepted draft")
+}
+
+///|
+test "a host without steer recovery retires ambiguity without duplicating text" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(running_conversation(), ["maybe durable"])
+  let id = queued.pending_steers[0].submission_id
+  let conv = queued.accept_steer(id, Some("r7"))
+  let model = running_model().replace_conversation(conv)
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=false,
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+    ),
+    model,
+  )
+  inspect(recovered.active().pending_steers.length(), content="0")
+  inspect(recovered.active().task, content="")
+}
+
+///|
 test "a notification gap replays a lost dropped steer receipt" {
   let dispatch = test_dispatch()
   let conv = with_pending_steers(running_conversation(), ["turn right"])
   let model = running_model().replace_conversation(conv)
   let frontier = model.run_snapshot_frontier(
     @interop.ChannelId::Local,
-    request_transport_survived=true,
+    lifecycle_absence_is_definitive=false,
   )
   let pending = conv.pending_steers[0]
   let (_, recovered) = update_dev(
@@ -11465,6 +11581,7 @@ test "a notification gap replays a lost dropped steer receipt" {
           status: RecoveredSteerDropped,
         },
       ],
+      steer_recovery_supported=true,
       approvals=[],
       live=["r7"],
       frontier~,
@@ -11492,6 +11609,7 @@ test "an older runs snapshot cannot sweep a steer submitted after its frontier" 
       runs=[],
       settled=[],
       steers=[],
+      steer_recovery_supported=true,
       approvals=[],
       live=[],
       frontier~,
@@ -11521,7 +11639,7 @@ test "a steer receipt reduced before RunsLoaded is not resurrected" {
   let before = running_model().replace_conversation(conv)
   let frontier = before.run_snapshot_frontier(
     @interop.ChannelId::Local,
-    request_transport_survived=true,
+    lifecycle_absence_is_definitive=false,
   )
   let pending = conv.pending_steers[0]
   let (_, applied) = update_dev(
@@ -11550,6 +11668,7 @@ test "a steer receipt reduced before RunsLoaded is not resurrected" {
           status: RecoveredSteerPending,
         },
       ],
+      steer_recovery_supported=true,
       approvals=[],
       live=["r7"],
       frontier~,
@@ -11579,7 +11698,7 @@ test "an engine restart preserves a worktree start until setup rejects" {
       live=[],
       frontier=resyncing.run_snapshot_frontier(
         @interop.ChannelId::Local,
-        request_transport_survived=true,
+        lifecycle_absence_is_definitive=false,
       ),
     ),
     resyncing,
@@ -11644,7 +11763,7 @@ test "a restart settlement closes a delayed accepted response from the old pump"
   let before = test_model().replace_conversation(conv)
   let frontier = before.run_snapshot_frontier(
     @interop.ChannelId::Local,
-    request_transport_survived=true,
+    lifecycle_absence_is_definitive=false,
   )
   let (_, delayed_accept) = update_dev(
     dispatch,
@@ -11671,6 +11790,7 @@ test "a restart settlement closes a delayed accepted response from the old pump"
         },
       ],
       steers=[],
+      steer_recovery_supported=true,
       approvals=[],
       live=[],
       frontier~,
@@ -11791,6 +11911,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
     ],
     settled=[],
     steers=[],
+    steer_recovery_supported=true,
     approvals=[],
     live=["old-run"],
     frontier=generation_one.run_snapshot_frontier(@interop.ChannelId::Local),
@@ -11805,6 +11926,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
       runs=[],
       settled=[],
       steers=[],
+      steer_recovery_supported=true,
       approvals=[],
       live=[],
       frontier=generation_two.run_snapshot_frontier(@interop.ChannelId::Local),
@@ -11854,6 +11976,7 @@ test "a settlement captured for an older Starting owner cannot close its success
         },
       ],
       steers=[],
+      steer_recovery_supported=true,
       approvals=[],
       live=[],
       frontier~,
@@ -11902,6 +12025,7 @@ test "an older positive runs row cannot replace a newer Started" {
       ],
       settled=[],
       steers=[],
+      steer_recovery_supported=true,
       approvals=[],
       live=["r7"],
       frontier~,
@@ -11938,6 +12062,7 @@ test "an older positive runs row cannot resurrect a finished run" {
       ],
       settled=[],
       steers=[],
+      steer_recovery_supported=true,
       approvals=[],
       live=["r7"],
       frontier~,
@@ -12331,6 +12456,7 @@ test "a late exact applied receipt retracts a run-end unconfirmed notice" {
     Finished(run_id="r7", status="finished", answer=Some("")),
     model,
   )
+  inspect(finished.active().pending_steers.length(), content="1")
   let (_, next) = update_dev(
     dispatch,
     Engine(
@@ -12379,14 +12505,13 @@ test "a trailing dropped receipt for run A cannot close run B" {
     ),
     started,
   )
-  // Run A ended when B replaced it, taking A's pending steer with it, so the
-  // trailing receipt has nothing left to settle. What it must not do is
-  // disturb B.
+  // Run A's exact owner survives B. The trailing receipt restores only that
+  // draft and must not disturb B's lifecycle or prompt.
   assert_true(next.active().run is Open(run_id="r8", ..))
   assert_true(next.active().last_run_id is Some("r8"))
   inspect(next.active().pending_steers.length(), content="0")
   assert_true(next.active().pending_prompt is Some(_))
-  inspect(next.active().task, content="")
+  inspect(next.active().task, content="late steer")
 }
 
 ///|
@@ -12643,10 +12768,10 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
     ),
     settled,
   )
-  // The snapshot already ended the run and its pending steer; a receipt that
-  // trails it owns nothing.
+  // Lifecycle absence does not delete exact steer ownership. The trailing
+  // receipt still restores its draft.
   inspect(dropped.active().pending_steers.length(), content="0")
-  inspect(dropped.active().task, content="")
+  inspect(dropped.active().task, content="late dropped")
 }
 
 ///|

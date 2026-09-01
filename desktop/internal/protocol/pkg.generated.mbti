@@ -1622,7 +1622,7 @@ pub(all) struct RunsReply {
   runs : Array[StartedPayload]
   settled : Array[RunSettlementPayload]
   approvals : Array[PendingApprovalPayload]
-  steers : Array[SteerSettlementPayload]
+  steers : Array[SteerSettlementPayload]?
 } derive(Eq, @debug.Debug)
 pub fn RunsReply::equal(Self, Self) -> Bool
 pub fn RunsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2132,6 +2132,17 @@ pub fn SteerReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecod
 pub fn SteerReply::not_equal(Self, Self) -> Bool
 pub fn SteerReply::to_json(Self) -> Json
 pub fn SteerReply::to_repr(Self) -> @debug.Repr
+
+pub(all) struct SteerSettlementAckPayload {
+  session : String
+  run_id : String
+  submission_id : String
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn SteerSettlementAckPayload::equal(Self, Self) -> Bool
+pub fn SteerSettlementAckPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SteerSettlementAckPayload::not_equal(Self, Self) -> Bool
+pub fn SteerSettlementAckPayload::to_json(Self) -> Json
+pub fn SteerSettlementAckPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SteerSettlementPayload {
   session : String

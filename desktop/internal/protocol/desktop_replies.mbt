@@ -229,8 +229,9 @@ pub(all) struct RunsReply {
   /// for every engine that never asks.
   approvals : Array[PendingApprovalPayload]
   // Optional on the wire for compatibility with hosts predating steer
-  // recovery; current hosts always emit the array.
-  steers : Array[SteerSettlementPayload]
+  // recovery. None means the host cannot answer the negative-set question;
+  // Some([]) is current-host proof that none of the requested ids exists.
+  steers : Array[SteerSettlementPayload]?
 } derive(Debug, Eq)
 
 ///|

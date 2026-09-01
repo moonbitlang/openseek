@@ -12,6 +12,12 @@
 const SubscriberQueueCapacity = 1024
 
 ///|
+/// A client must acknowledge terminal steer rows. Older or disconnected
+/// clients may never do so, therefore admission has a hard process-wide cap:
+/// once full, a new id-bearing steer is refused before it reaches the engine.
+const SteerSettlementCapacity = 4096
+
+///|
 /// The hub is owned by `ApiState`; transports reach it through
 /// `ApiState::subscribe`/`unsubscribe`.
 priv struct Hub {
@@ -135,6 +141,21 @@ fn Hub::record_finished(
 }
 
 ///|
+/// Reserve bounded recovery capacity before an id-bearing steer reaches the
+/// engine. This check and the synchronous engine submission have no suspension
+/// between them, so another request cannot consume the admitted slot first.
+fn Hub::admits_steer(self : Hub, payload : @protocol.SteerPayload) -> Bool {
+  guard @engine.normalize_submission_id(payload.submission_id)
+    is Some(submission_id) else {
+    // Legacy and malformed ids remain untracked; the engine applies the same
+    // normalization before echoing a receipt, so the two layers cannot drift.
+    return true
+  }
+  self.steer_settlements.get(submission_id) is None &&
+  self.steer_settlements.length() < SteerSettlementCapacity
+}
+
+///|
 /// Record the synchronous acceptance boundary of one steer. A receipt may
 /// race this endpoint return; never overwrite a terminal row already captured
 /// from the engine stream.
@@ -145,8 +166,8 @@ fn Hub::record_steer_accepted(
 ) -> Unit {
   guard reply.steered &&
     reply.run_id is Some(run_id) &&
-    payload.submission_id is Some(submission_id) &&
-    !submission_id.is_blank() &&
+    @engine.normalize_submission_id(payload.submission_id)
+    is Some(submission_id) &&
     self.active_starts.get(run_id) is Some(started) else {
     return
   }
@@ -167,6 +188,23 @@ fn Hub::record_steer_accepted(
 }
 
 ///|
+/// Terminal rows remain replayable until their exact owner consumes them.
+/// Pending rows cannot be acknowledged: they are the evidence a reconnecting
+/// client still needs while the engine owes a receipt.
+fn Hub::ack_steer(
+  self : Hub,
+  payload : @protocol.SteerSettlementAckPayload,
+) -> Unit {
+  guard self.steer_settlements.get(payload.submission_id) is Some(existing) &&
+    existing.session == payload.session &&
+    existing.run_id == payload.run_id &&
+    existing.status != "pending" else {
+    return
+  }
+  self.steer_settlements.remove(payload.submission_id)
+}
+
+///|
 /// Capture the exact id-bearing engine receipt before publishing it. If the
 /// subscriber drops that live frame, `agent.runs` can replay this outcome.
 fn Hub::track_steer(self : Hub, payload : @protocol.AgentEventPayload) -> Unit {
@@ -177,13 +215,19 @@ fn Hub::track_steer(self : Hub, payload : @protocol.AgentEventPayload) -> Unit {
   }
   guard status is Some(status) &&
     payload.run_id is Some(run_id) &&
-    payload.event.submission_id is Some(submission_id) else {
+    @engine.normalize_submission_id(payload.event.submission_id)
+    is Some(submission_id) else {
     return
   }
   if self.steer_settlements.get(submission_id) is Some(existing) {
     if existing.session == payload.session && existing.run_id == run_id {
       existing.status = status
     }
+    return
+  }
+  guard self.steer_settlements.length() < SteerSettlementCapacity else {
+    // Every admitted id already has a pending row. Reaching this branch means
+    // an unsolicited/malformed receipt, which must not bypass the hard cap.
     return
   }
   self.steer_settlements[submission_id] = {
@@ -354,13 +398,16 @@ fn Hub::runs(
   }
   let steers : Array[@protocol.SteerSettlementPayload] = []
   if known is Some(selectors) {
-    for _, steer in self.steer_settlements {
-      if selectors.any(selector => steer_matches(steer, selector)) {
+    for selector in selectors {
+      if selector.submission_id is Some(submission_id) &&
+        self.steer_settlements.get(submission_id) is Some(steer) &&
+        steer_matches(steer, selector) &&
+        !steers.iter().any(row => row.submission_id == submission_id) {
         steers.push(steer.wire_payload())
       }
     }
   }
-  { runs, settled, approvals, steers, }
+  { runs, settled, approvals, steers: Some(steers), }
 }
 
 ///|
@@ -522,7 +569,7 @@ test "agent.runs replays exact steer state across a subscriber gap" {
     run_id: Some("r-steer"),
     submission_id: Some("steer-1"),
   }
-  guard hub.runs(known=[selector]).steers is [{ status: "pending", .. }] else {
+  guard hub.runs(known=[selector]).steers is Some([{ status: "pending", .. }]) else {
     fail("accepted steer was not replayed as pending")
   }
   hub.publish(
@@ -535,7 +582,7 @@ test "agent.runs replays exact steer state across a subscriber gap" {
       },
     }),
   )
-  guard hub.runs(known=[selector]).steers is [{ status: "applied", .. }] else {
+  guard hub.runs(known=[selector]).steers is Some([{ status: "applied", .. }]) else {
     fail("lost applied receipt was not replayable")
   }
   // A selector must carry the complete owner; the submission id alone cannot
@@ -543,9 +590,90 @@ test "agent.runs replays exact steer state across a subscriber gap" {
   guard hub.runs(known=[
       { session: "s-steer", run_id: None, submission_id: Some("steer-1"), },
     ]).steers
-    is [] else {
+    is Some([]) else {
     fail("an incomplete steer selector received a settlement")
   }
+}
+
+///|
+test "steer ledger normalizes ids, acknowledges terminal rows, and stays bounded" {
+  let hub = Hub::Hub()
+  hub.publish(
+    AgentStarted(
+      @json.from_json({ "run_id": "r-ledger", "session": "s-ledger" }),
+    ),
+  )
+  let overlong = "x".repeat(129)
+  let malformed : @protocol.SteerPayload = {
+    text: "legacy input",
+    run_id: Some("r-ledger"),
+    submission_id: Some(overlong),
+  }
+  assert_true(hub.admits_steer(malformed))
+  hub.record_steer_accepted(malformed, {
+    steered: true,
+    run_id: Some("r-ledger"),
+  })
+  assert_eq(hub.steer_settlements.length(), 0)
+
+  let payload : @protocol.SteerPayload = {
+    text: "tracked input",
+    run_id: Some("r-ledger"),
+    submission_id: Some("steer-ledger"),
+  }
+  assert_true(hub.admits_steer(payload))
+  hub.record_steer_accepted(payload, {
+    steered: true,
+    run_id: Some("r-ledger"),
+  })
+  let ack : @protocol.SteerSettlementAckPayload = {
+    session: "s-ledger",
+    run_id: "r-ledger",
+    submission_id: "steer-ledger",
+  }
+  hub.ack_steer(ack)
+  assert_eq(hub.steer_settlements.length(), 1)
+  hub.publish(
+    AgentEvent({
+      run_id: Some("r-ledger"),
+      session: "s-ledger",
+      event: {
+        event: SteerApplied(kind="prompt", content="tracked input"),
+        submission_id: Some("steer-ledger"),
+      },
+    }),
+  )
+  hub.ack_steer(ack)
+  assert_eq(hub.steer_settlements.length(), 0)
+
+  for index = 0; index < SteerSettlementCapacity; index = index + 1 {
+    let submission_id = "held-" + index.to_string()
+    hub.steer_settlements[submission_id] = {
+      session: "s-ledger",
+      run_id: "r-ledger",
+      submission_id,
+      status: "applied",
+    }
+  }
+  assert_false(
+    hub.admits_steer({
+      text: "one too many",
+      run_id: Some("r-ledger"),
+      submission_id: Some("overflow"),
+    }),
+  )
+  hub.ack_steer({
+    session: "s-ledger",
+    run_id: "r-ledger",
+    submission_id: "held-0",
+  })
+  assert_true(
+    hub.admits_steer({
+      text: "slot released",
+      run_id: Some("r-ledger"),
+      submission_id: Some("replacement"),
+    }),
+  )
 }
 
 ///|
@@ -570,7 +698,7 @@ test "a new engine pump drops steers still pending in the old process" {
         submission_id: Some("steer-old"),
       },
     ]).steers
-    is [{ status: "dropped", .. }] else {
+    is Some([{ status: "dropped", .. }]) else {
     fail("the departed engine left an accepted steer pending forever")
   }
 }
@@ -816,7 +944,7 @@ async test "agent.runs keeps old requests compatible and decodes known selectors
   let legacy : @protocol.RunsReply = @json.from_json(
     runs_endpoint.invoke_remote(Json::empty_object()),
   )
-  guard legacy is { runs: [], settled: [], approvals: [], steers: [], } else {
+  guard legacy is { runs: [], settled: [], approvals: [], steers: Some([]), } else {
     fail("legacy agent.runs request changed shape")
   }
   let replay : @protocol.RunsReply = @json.from_json(

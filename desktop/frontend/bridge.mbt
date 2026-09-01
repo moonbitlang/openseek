@@ -573,9 +573,12 @@ fn fetch_runs(
         }
       }
       let recovered_steers : Array[RecoveredSteerSettlement] = []
-      for item in reply.steers {
-        if RecoveredSteerSettlement::from_reply(item) is Some(settlement) {
-          recovered_steers.push(settlement)
+      let steer_recovery_supported = reply.steers is Some(_)
+      if reply.steers is Some(steers) {
+        for item in steers {
+          if RecoveredSteerSettlement::from_reply(item) is Some(settlement) {
+            recovered_steers.push(settlement)
+          }
         }
       }
       // Standing questions come back unfiltered: unlike a settlement, which is
@@ -606,6 +609,7 @@ fn fetch_runs(
             runs=recovered,
             settled=recovered_settlements,
             steers=recovered_steers,
+            steer_recovery_supported~,
             approvals=recovered_approvals,
             live~,
             frontier~,
@@ -613,6 +617,31 @@ fn fetch_runs(
           ),
         ),
       )
+    })
+  })
+}
+
+///|
+/// Release one terminal host-ledger row only after the frontend consumed it.
+/// Failure is harmless: the row remains replayable and the hard host cap keeps
+/// an abandoned client bounded.
+fn acknowledge_steer_settlement(
+  channel : @interop.ChannelId,
+  session : String,
+  run_id : String,
+  submission_id : String,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(_scheduler => {
+    @js.async_run(() => {
+      ignore(
+        @interop.bridge_request(channel, @commands.agent_steer_ack, {
+          session,
+          run_id,
+          submission_id,
+        }),
+      ) catch {
+        _ => ()
+      }
     })
   })
 }
