@@ -235,20 +235,14 @@ fn Model::workspace_settings_input(self : Model) -> @workspace_settings.Input {
   match self.screen {
     WorkspaceSettings(channel~, workspace~) => {
       // While the page's device is absent from the roster there is nothing
-      // authoritative to show; the input is inactive, and the device's
-      // WebSocket epoch is part of the active key, so a roster drop and
-      // restore can never match component state left behind before it.
+      // authoritative to show, so the input is inactive and the page
+      // renders nothing until the device is back.
       guard self.device_state(channel) is Some(dev) else {
         return @workspace_settings.Input::inactive()
       }
       let row = dev.workspace_settings_row(workspace)
       {
-        page: Active(
-          channel~,
-          workspace~,
-          generation=self.workspace_settings_page_generation,
-          device_epoch=dev.websocket_epoch,
-        ),
+        page: Active(channel~, workspace~),
         settings: match row {
           Some(row) =>
             Loaded(

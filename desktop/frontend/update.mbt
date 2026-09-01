@@ -3805,15 +3805,7 @@ fn update_msg(
         (@cmd.none, model)
       }
     OpenWorkspaceSettings(channel, workspace) =>
-      (
-        @cmd.none,
-        {
-          ..model,
-          screen: WorkspaceSettings(channel~, workspace~),
-          workspace_settings_page_generation: model.workspace_settings_page_generation +
-          1,
-        },
-      )
+      (@cmd.none, { ..model, screen: WorkspaceSettings(channel~, workspace~), })
     WorkspaceDefaultModeChosen(channel, workspace, value) => {
       guard model.device_state(channel) is Some(dev) else {
         return (@cmd.none, model)

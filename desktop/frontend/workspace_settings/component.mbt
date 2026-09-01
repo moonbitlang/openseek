@@ -23,18 +23,9 @@ pub(all) enum SettingsSnapshot {
 /// The workspace identity the page renders for. `Inactive` carries no
 /// workspace at all, so an inactive input can never be mistaken for a real
 /// workspace page: the component is mounted for the app's lifetime, and
-/// while another screen is active the view renders nothing. Each page open
-/// gets a fresh `generation`, and the device's WebSocket epoch is part of
-/// the identity too — so component-local state left over from a previous
-/// open, a detach, or a roster drop-and-restore (all message-less from the
-/// component's view) can never match the new page's key.
+/// while another screen is active the view renders nothing.
 pub(all) enum WorkspacePage {
-  Active(
-    channel~ : @interop.ChannelId,
-    workspace~ : @common.Uri,
-    generation~ : Int,
-    device_epoch~ : Int
-  )
+  Active(channel~ : @interop.ChannelId, workspace~ : @common.Uri)
   Inactive
 } derive(Eq)
 
@@ -77,10 +68,10 @@ priv enum Menu {
 
 ///|
 priv struct Model {
-  /// The page identity the menu state belongs to. Any change — leaving the
-  /// page, re-entering it, or opening another workspace's settings —
-  /// dismisses the menu, matching the root model's screen-change
-  /// dismissal.
+  /// The page identity the menu state belongs to, so a menu opened for one
+  /// workspace is neither shown nor toggled for another. A local invariant
+  /// rather than a mechanism the page leans on — see the note on `open` in
+  /// `setting_select`.
   key : WorkspacePage
   menu : Menu?
 } derive(Eq)
@@ -136,7 +127,7 @@ fn setting_select(
   // The change command names the workspace it came from. `Inactive` never
   // renders, so the fallback arm is unreachable in practice.
   let change = match input.page {
-    Active(channel~, workspace~, ..) =>
+    Active(channel~, workspace~) =>
       (value : String) => {
         @cmd.batch([emit(CloseMenu), change(channel, workspace, value)])
       }
@@ -147,10 +138,11 @@ fn setting_select(
     groups: [{ label: aria_label, options, }],
     selected,
     disabled: input.settings is Unloaded,
-    // The menu only renders open under the page identity it was opened
-    // for: an input change that never delivers a component message (for
-    // example a workspace detach redirecting to Chat) must not leave a
-    // stale menu open on re-entry.
+    // A menu is only shown for the page it was opened under. Nothing
+    // observed depends on this today: opening a menu focuses its trigger,
+    // and the shared select dismisses on blur, so a page change takes the
+    // trigger out of the DOM and closes the menu on the way. This keeps the
+    // view honest if that ever stops holding.
     open: state.menu == Some(menu) && state.key == input.page,
     toggle: emit(ToggleMenu(menu)),
     dismiss: emit(CloseMenu),
@@ -170,10 +162,8 @@ fn page_view(
 ) -> @html.Html {
   match input.page {
     Inactive => @html.nothing
-    Active(workspace~, channel~, generation~, device_epoch~) => {
+    Active(workspace~, channel~) => {
       let _ = channel
-      let _ = generation
-      let _ = device_epoch
       // Unloaded pages render with display-only placeholders; the controls
       // stay disabled so these values are never acted on.
       let (
