@@ -585,6 +585,21 @@ priv struct RecoveredSettlement {
 }
 
 ///|
+priv enum RecoveredSteerStatus {
+  RecoveredSteerPending
+  RecoveredSteerApplied
+  RecoveredSteerDropped
+}
+
+///|
+priv struct RecoveredSteerSettlement {
+  session : String
+  run_id : String
+  submission_id : String
+  status : RecoveredSteerStatus
+}
+
+///|
 /// One standing permission question, routed back to its conversation. The
 /// question itself is the same value the live event produces; only the session
 /// it belongs to has to travel beside it, since `PendingApproval` lives inside
@@ -618,12 +633,22 @@ priv struct RunSnapshotFrontier {
   // Their submission id is still an exact owner and must survive the
   // lifecycle's transition to SnapshotIdle for reconnect settlement lookup.
   initial_ids : Array[String]
+  // Exact steer owners present when this request began. Snapshot settlement
+  // may reconcile only these ids; a steer submitted while the reply is in
+  // flight belongs to a newer cut and keeps its own RPC/receipt path.
+  steers : Array[SteerSnapshotOwner]
   // The permission question this page was showing when the request began, if
   // any. A snapshot that does not list it proves it was answered while this
   // page was away — but only for THIS id: a question asked after the request
   // went out is not in the reply either, and clearing that one would take a
   // live card off screen and leave the turn blocked with nothing to press.
   pending_approval_id : String?
+}
+
+///|
+priv struct SteerSnapshotOwner {
+  submission_id : String
+  run_id : String
 }
 
 ///|
@@ -989,11 +1014,18 @@ fn GoalRequest::settled_by(
 /// transcript text and legacy receipts without an id never settle this entry.
 /// The original draft shape is retained so a definitive refusal can restore
 /// it to the composer without exposing the serialized mention envelope.
+priv enum SteerDelivery {
+  SteerSending
+  SteerAccepted
+} derive(Eq)
+
+///|
 priv struct PendingSteer {
   submission_id : String
   // The run this steer was sent into. A receipt names it too, which is what
   // stops a late echo from settling an entry belonging to a newer run.
   run_id : String?
+  delivery : SteerDelivery
   content : String
   draft : String
   mentions : Array[Mention]
@@ -2037,15 +2069,18 @@ priv enum DeviceMsg {
   // Another client changed this host's library; the focused client re-reads
   // it so the Skills page and `$` completion share the new contents.
   SkillsChanged
-  // The steer RPC failed before its outcome was known. Whether the host took
-  // it is unknowable here, so the queue entry ends rather than being guessed
-  // at.
+  // The steer RPC failed before its outcome was known. Keep the exact owner
+  // while `agent.runs` asks the host's steer ledger whether it was accepted.
   SteerUndelivered(
     session~ : String,
     submission_id~ : String,
     text~ : String,
     run_id~ : String
   )
+  // The host synchronously accepted this exact steer. Its later engine
+  // receipt remains the semantic outcome, but a resync can now ask the host
+  // to replay that pending/applied/dropped state.
+  SteerAccepted(session~ : String, submission_id~ : String, run_id~ : String)
   // The host definitively returned `steered:false`; no canonical User can
   // follow, so the queue entry retires and its draft comes back. The text is
   // not carried: the entry holds the draft to restore, and without an entry
@@ -2253,6 +2288,7 @@ priv enum DeviceMsg {
   RunsLoaded(
     runs~ : Array[RecoveredRun],
     settled~ : Array[RecoveredSettlement],
+    steers~ : Array[RecoveredSteerSettlement],
     // Permission questions the host's engines are still blocked on. A card
     // this page rendered before a reload is gone with the page, and nothing
     // in the durable record can bring it back — so a rejoining client is
@@ -2890,11 +2926,18 @@ fn Model::run_snapshot_frontier(
     if conv.pending_prompt is Some(pending) {
       initial_ids.push(pending.submission_id)
     }
+    let steers : Array[SteerSnapshotOwner] = []
+    for pending in conv.pending_steers {
+      if pending.run_id is Some(run_id) {
+        steers.push({ submission_id: pending.submission_id, run_id, })
+      }
+    }
     {
       session: conv.session_id,
       state,
       request_transport_survived,
       initial_ids,
+      steers,
       pending_approval_id: conv.pending_approval.map(pending => pending.id),
     }
   })
@@ -2949,6 +2992,15 @@ fn Model::matched_settlement_frontier(
         SnapshotStarting(submission_id~) if conv.run
           is Starting(submission_id=current) &&
           current == submission_id &&
+          settlement.submission_id is Some(recovered) &&
+          recovered == submission_id =>
+          Some(SettlementBySubmission(submission_id))
+        // A delayed accepted response may have advanced the exact captured
+        // start to Open before the restart settlement snapshot is reduced.
+        // Both the host run id and the client submission id must match, so a
+        // successor cannot be closed through this bridge.
+        SnapshotStarting(submission_id~) if conv.run is Open(run_id=current, ..) &&
+          current == settlement.run_id &&
           settlement.submission_id is Some(recovered) &&
           recovered == submission_id =>
           Some(SettlementBySubmission(submission_id))
@@ -3538,9 +3590,26 @@ fn Conversation::enqueue_steer(
   pending_steers.push({
     submission_id,
     run_id,
+    delivery: SteerSending,
     content,
     draft,
     mentions: mentions.copy(),
+  })
+  { ..self, pending_steers, }
+}
+
+///|
+fn Conversation::accept_steer(
+  self : Conversation,
+  submission_id : String,
+  run_id : String?,
+) -> Conversation {
+  let pending_steers = self.pending_steers.map(input => {
+    if input.matches_receipt(submission_id, run_id) {
+      { ..input, delivery: SteerAccepted, }
+    } else {
+      input
+    }
   })
   { ..self, pending_steers, }
 }

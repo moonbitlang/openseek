@@ -25,6 +25,11 @@ priv struct Hub {
   // process, so a reconnecting owner learns how its run ended. Run ids carry
   // host-wide random identity, so they are the deduplication key.
   settlements : Map[String, RunSettlement]
+  // Exact steer submissions accepted by this host process. Unlike the live
+  // notification, this ledger survives a subscriber gap long enough for the
+  // submitting client to ask whether its input is pending, applied, or
+  // dropped. Submission ids are page-unique ownership keys.
+  steer_settlements : Map[String, SteerSettlement]
   // The permission question each session's engine is currently blocked on,
   // keyed by SESSION, because one engine can only be blocked on one at a time:
   // the asking tool is not `concurrent_safe`, so nothing runs beside it. That
@@ -45,6 +50,7 @@ fn Hub::Hub() -> Hub {
     subscribers: [],
     active_starts: Map([]),
     settlements: Map([]),
+    steer_settlements: Map([]),
     pending_approvals: Map([]),
   }
 }
@@ -57,6 +63,26 @@ priv struct RunSettlement {
   mut submission_id : String?
   status : String
   mut exit_code : Int?
+}
+
+///|
+priv struct SteerSettlement {
+  session : String
+  run_id : String
+  submission_id : String
+  mut status : String
+}
+
+///|
+fn SteerSettlement::wire_payload(
+  self : SteerSettlement,
+) -> @protocol.SteerSettlementPayload {
+  {
+    session: self.session,
+    run_id: self.run_id,
+    submission_id: self.submission_id,
+    status: self.status,
+  }
 }
 
 ///|
@@ -109,6 +135,66 @@ fn Hub::record_finished(
 }
 
 ///|
+/// Record the synchronous acceptance boundary of one steer. A receipt may
+/// race this endpoint return; never overwrite a terminal row already captured
+/// from the engine stream.
+fn Hub::record_steer_accepted(
+  self : Hub,
+  payload : @protocol.SteerPayload,
+  reply : @protocol.SteerReply,
+) -> Unit {
+  guard reply.steered &&
+    reply.run_id is Some(run_id) &&
+    payload.submission_id is Some(submission_id) &&
+    !submission_id.is_blank() &&
+    self.active_starts.get(run_id) is Some(started) else {
+    return
+  }
+  if self.steer_settlements.get(submission_id) is Some(existing) {
+    // Globally unique ids make a different owner a malformed reuse. Preserve
+    // the first identity rather than cross-wiring two clients.
+    if existing.session == started.session && existing.run_id == run_id {
+      return
+    }
+    return
+  }
+  self.steer_settlements[submission_id] = {
+    session: started.session,
+    run_id,
+    submission_id,
+    status: "pending",
+  }
+}
+
+///|
+/// Capture the exact id-bearing engine receipt before publishing it. If the
+/// subscriber drops that live frame, `agent.runs` can replay this outcome.
+fn Hub::track_steer(self : Hub, payload : @protocol.AgentEventPayload) -> Unit {
+  let status = match payload.event.event {
+    SteerApplied(..) => Some("applied")
+    SteerDropped(..) => Some("dropped")
+    _ => None
+  }
+  guard status is Some(status) &&
+    payload.run_id is Some(run_id) &&
+    payload.event.submission_id is Some(submission_id) else {
+    return
+  }
+  if self.steer_settlements.get(submission_id) is Some(existing) {
+    if existing.session == payload.session && existing.run_id == run_id {
+      existing.status = status
+    }
+    return
+  }
+  self.steer_settlements[submission_id] = {
+    session: payload.session,
+    run_id,
+    submission_id,
+    status,
+  }
+}
+
+///|
 /// Push one notification to every live subscriber. `try_put` never
 /// suspends, so the order every subscriber sees is the publish order. A
 /// full queue marks its subscriber dead: the queue is closed (ending the
@@ -131,7 +217,10 @@ fn Hub::publish(self : Hub, notification : @protocol.Notification) -> Unit {
       // get to — a killed process emits no `approval_resolved`.
       self.forget_run_approvals(payload.run_id)
     }
-    AgentEvent(payload) => self.track_approval(payload)
+    AgentEvent(payload) => {
+      self.track_approval(payload)
+      self.track_steer(payload)
+    }
     _ => ()
   }
   let wedged : Array[Int] = []
@@ -263,7 +352,15 @@ fn Hub::runs(
   for _, approval in self.pending_approvals {
     approvals.push(approval)
   }
-  { runs, settled, approvals, }
+  let steers : Array[@protocol.SteerSettlementPayload] = []
+  if known is Some(selectors) {
+    for _, steer in self.steer_settlements {
+      if selectors.any(selector => steer_matches(steer, selector)) {
+        steers.push(steer.wire_payload())
+      }
+    }
+  }
+  { runs, settled, approvals, steers, }
 }
 
 ///|
@@ -282,6 +379,15 @@ fn settlement_matches(
 }
 
 ///|
+fn steer_matches(steer : SteerSettlement, selector : KnownRunPayload) -> Bool {
+  selector.run_id is Some(run_id) &&
+  selector.submission_id is Some(submission_id) &&
+  steer.session == selector.session &&
+  steer.run_id == run_id &&
+  steer.submission_id == submission_id
+}
+
+///|
 /// A real engine Connected event marks a new pump lifetime. Consumers from
 /// the old task group may have been cancelled before emitting Finished, so
 /// their starts are no longer live and must be cleared before readiness is
@@ -290,6 +396,28 @@ fn Hub::engine_connected(
   self : Hub,
   payload : @protocol.ConnectedPayload,
 ) -> Unit {
+  // The old pump can disappear without publishing Finished. Turn every live
+  // row into reconnect-safe failure evidence before clearing it, so a delayed
+  // accepted start response cannot resurrect a run the new pump does not own.
+  for run_id, started in self.active_starts {
+    if self.settlements.get(run_id) is None {
+      self.settlements[run_id] = {
+        run_id,
+        session: started.session,
+        submission_id: started.submission_id,
+        status: "failed",
+        exit_code: None,
+      }
+    }
+  }
+  // An accepted steer still pending in the departed process can no longer be
+  // applied. Exact outcomes already observed remain terminal and unchanged.
+  for _, steer in self.steer_settlements {
+    if steer.status == "pending" &&
+      self.active_starts.get(steer.run_id) is Some(_) {
+      steer.status = "dropped"
+    }
+  }
   self.active_starts.clear()
   // A question belongs to the engine process that asked it: the reply queue
   // it was blocking on died with that process, so replaying it would offer an
@@ -340,7 +468,13 @@ test "a real engine connection retires old active runs before readiness" {
   let hub = Hub::Hub()
   let subscriber = hub.subscribe()
   hub.publish(
-    AgentStarted(@json.from_json({ "run_id": "r-old", "session": "s-old" })),
+    AgentStarted(
+      @json.from_json({
+        "run_id": "r-old",
+        "session": "s-old",
+        "submission_id": "sub-old",
+      }),
+    ),
   )
   guard hub.runs().runs is [_] else {
     fail("expected one active run before reconnect")
@@ -348,6 +482,12 @@ test "a real engine connection retires old active runs before readiness" {
   hub.engine_connected({ stage: Serving, })
   guard hub.runs().runs is [] else {
     fail("old active run survived a new engine pump")
+  }
+  guard hub.runs(known=[
+      { session: "s-old", run_id: None, submission_id: Some("sub-old"), },
+    ]).settled
+    is [{ run_id: "r-old", status: "failed", .. }] else {
+    fail("the departed pump did not leave reconnect-safe settlement evidence")
   }
   guard subscriber.try_get() is Some(started) else {
     fail("missing started notification")
@@ -357,6 +497,82 @@ test "a real engine connection retires old active runs before readiness" {
     fail("missing connected notification")
   }
   assert_eq(connected.wire_name(), "agent.connected")
+}
+
+///|
+test "agent.runs replays exact steer state across a subscriber gap" {
+  let hub = Hub::Hub()
+  hub.publish(
+    AgentStarted(
+      @json.from_json({
+        "run_id": "r-steer",
+        "session": "s-steer",
+        "submission_id": "prompt-steer",
+      }),
+    ),
+  )
+  let payload : @protocol.SteerPayload = {
+    text: "turn left",
+    run_id: Some("r-steer"),
+    submission_id: Some("steer-1"),
+  }
+  hub.record_steer_accepted(payload, { steered: true, run_id: Some("r-steer"), })
+  let selector : KnownRunPayload = {
+    session: "s-steer",
+    run_id: Some("r-steer"),
+    submission_id: Some("steer-1"),
+  }
+  guard hub.runs(known=[selector]).steers is [{ status: "pending", .. }] else {
+    fail("accepted steer was not replayed as pending")
+  }
+  hub.publish(
+    AgentEvent({
+      run_id: Some("r-steer"),
+      session: "s-steer",
+      event: {
+        event: SteerApplied(kind="prompt", content="turn left"),
+        submission_id: Some("steer-1"),
+      },
+    }),
+  )
+  guard hub.runs(known=[selector]).steers is [{ status: "applied", .. }] else {
+    fail("lost applied receipt was not replayable")
+  }
+  // A selector must carry the complete owner; the submission id alone cannot
+  // expose another run's steering history.
+  guard hub.runs(known=[
+      { session: "s-steer", run_id: None, submission_id: Some("steer-1"), },
+    ]).steers
+    is [] else {
+    fail("an incomplete steer selector received a settlement")
+  }
+}
+
+///|
+test "a new engine pump drops steers still pending in the old process" {
+  let hub = Hub::Hub()
+  hub.publish(
+    AgentStarted(@json.from_json({ "run_id": "r-old", "session": "s-old" })),
+  )
+  hub.record_steer_accepted(
+    {
+      text: "old input",
+      run_id: Some("r-old"),
+      submission_id: Some("steer-old"),
+    },
+    { steered: true, run_id: Some("r-old"), },
+  )
+  hub.engine_connected({ stage: Serving, })
+  guard hub.runs(known=[
+      {
+        session: "s-old",
+        run_id: Some("r-old"),
+        submission_id: Some("steer-old"),
+      },
+    ]).steers
+    is [{ status: "dropped", .. }] else {
+    fail("the departed engine left an accepted steer pending forever")
+  }
 }
 
 ///|
@@ -600,7 +816,7 @@ async test "agent.runs keeps old requests compatible and decodes known selectors
   let legacy : @protocol.RunsReply = @json.from_json(
     runs_endpoint.invoke_remote(Json::empty_object()),
   )
-  guard legacy is { runs: [], settled: [], approvals: [], } else {
+  guard legacy is { runs: [], settled: [], approvals: [], steers: [], } else {
     fail("legacy agent.runs request changed shape")
   }
   let replay : @protocol.RunsReply = @json.from_json(

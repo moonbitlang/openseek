@@ -572,6 +572,12 @@ fn fetch_runs(
           recovered_settlements.push(settlement)
         }
       }
+      let recovered_steers : Array[RecoveredSteerSettlement] = []
+      for item in reply.steers {
+        if RecoveredSteerSettlement::from_reply(item) is Some(settlement) {
+          recovered_steers.push(settlement)
+        }
+      }
       // Standing questions come back unfiltered: unlike a settlement, which is
       // history only its owner wants, a blocked turn is stopped right now and
       // whoever is looking at that session should be able to unblock it.
@@ -599,6 +605,7 @@ fn fetch_runs(
           RunsLoaded(
             runs=recovered,
             settled=recovered_settlements,
+            steers=recovered_steers,
             approvals=recovered_approvals,
             live~,
             frontier~,
@@ -645,6 +652,13 @@ fn runs_payload(frontier : Array[RunSnapshotFrontier]) -> @protocol.RunsPayload 
           submission_id: Some(submission_id),
         })
       }
+    }
+    for steer in captured.steers {
+      known.push({
+        session: captured.session,
+        run_id: Some(steer.run_id),
+        submission_id: Some(steer.submission_id),
+      })
     }
   }
   { known: Some(known), }
@@ -736,6 +750,30 @@ fn RecoveredSettlement::from_reply(
     session: payload.session,
     submission_id: payload.submission_id,
     status: payload.status,
+  })
+}
+
+///|
+fn RecoveredSteerSettlement::from_reply(
+  payload : @protocol.SteerSettlementPayload,
+) -> RecoveredSteerSettlement? {
+  let status = match payload.status {
+    "pending" => Some(RecoveredSteerPending)
+    "applied" => Some(RecoveredSteerApplied)
+    "dropped" => Some(RecoveredSteerDropped)
+    _ => None
+  }
+  guard status is Some(status) &&
+    !payload.session.is_empty() &&
+    !payload.run_id.is_empty() &&
+    !payload.submission_id.is_empty() else {
+    return None
+  }
+  Some({
+    session: payload.session,
+    run_id: payload.run_id,
+    submission_id: payload.submission_id,
+    status,
   })
 }
 
@@ -1211,6 +1249,10 @@ fn steer_openseek(
       if !delivered {
         scheduler.add(
           dispatch(SteerRejected(session~, submission_id~, run_id~)),
+        )
+      } else {
+        scheduler.add(
+          dispatch(SteerAccepted(session~, submission_id~, run_id~)),
         )
       }
     })

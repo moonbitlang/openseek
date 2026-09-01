@@ -454,7 +454,12 @@ async fn deliver_to_page(
         if pending[0] is NotificationGap {
           ignore(pending.remove(1))
         } else {
-          ignore(pending.remove(0))
+          // This bounded queue is a second lossy seam after the hub. Once an
+          // ordinary frame falls out, the prefix is no more trustworthy than
+          // a dropped hub subscription: discard it and retain an explicit
+          // resync boundary ahead of the frame that exposed the overflow.
+          pending.clear()
+          pending.push(NotificationGap)
         }
       }
       pending.push(notification)
@@ -568,6 +573,30 @@ async test "the pre-window backlog cannot evict its notification gap" {
   }
   assert_eq(pending.length(), PendingNotificationCapacity)
   assert_true(pending[0] is NotificationGap)
+}
+
+///|
+async test "overflowing the pre-window backlog creates a notification gap" {
+  let pending : Array[PageNotification] = []
+  for _ in 0..<PendingNotificationCapacity {
+    deliver_to_page(true, None, pending, Hub(SkillsChanged))
+  }
+  deliver_to_page(
+    true,
+    None,
+    pending,
+    Hub(
+      AgentFinished({
+        run_id: "r-overflow",
+        status: "finished",
+        answer: None,
+        exit_code: None,
+      }),
+    ),
+  )
+  assert_eq(pending.length(), 2)
+  assert_true(pending[0] is NotificationGap)
+  assert_true(pending[1] is Hub(AgentFinished(_)))
 }
 
 ///|

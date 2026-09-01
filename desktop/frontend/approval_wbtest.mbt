@@ -306,6 +306,7 @@ fn runs_loaded_with_approvals(
     RunsLoaded(
       runs=[],
       settled=[],
+      steers=[],
       approvals~,
       live~,
       frontier~,
@@ -571,6 +572,7 @@ test "a session missing from the frontier still gets its question" {
       RunsLoaded(
         runs=[],
         settled=[],
+        steers=[],
         approvals=[
           {
             session: conv.session_id,
@@ -637,6 +639,7 @@ test "a question survives a run handoff inside one snapshot" {
             status: "finished",
           },
         ],
+        steers=[],
         approvals=[
           {
             session: asked.session_id,
@@ -657,6 +660,7 @@ test "a question survives a run handoff inside one snapshot" {
             state: SnapshotOpen(run_id~),
             request_transport_survived: false,
             initial_ids: [],
+            steers: [],
             pending_approval_id: Some("ap-1"),
           },
         ],

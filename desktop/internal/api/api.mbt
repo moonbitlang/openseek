@@ -436,7 +436,9 @@ pub fn endpoints(
       @engine.cancel_run(state.manager, payload)
     }),
     @endpoint.Endpoint::remote(@commands.agent_steer, fn(payload) {
-      @engine.steer_run(state.manager, payload)
+      let reply = @engine.steer_run(state.manager, payload)
+      state.hub.record_steer_accepted(payload, reply)
+      reply
     }),
     @endpoint.Endpoint::remote(@commands.agent_compact, async fn(payload) {
       @engine.compact_run(state.manager, payload)

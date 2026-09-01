@@ -1622,6 +1622,7 @@ pub(all) struct RunsReply {
   runs : Array[StartedPayload]
   settled : Array[RunSettlementPayload]
   approvals : Array[PendingApprovalPayload]
+  steers : Array[SteerSettlementPayload]
 } derive(Eq, @debug.Debug)
 pub fn RunsReply::equal(Self, Self) -> Bool
 pub fn RunsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2131,6 +2132,18 @@ pub fn SteerReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecod
 pub fn SteerReply::not_equal(Self, Self) -> Bool
 pub fn SteerReply::to_json(Self) -> Json
 pub fn SteerReply::to_repr(Self) -> @debug.Repr
+
+pub(all) struct SteerSettlementPayload {
+  session : String
+  run_id : String
+  submission_id : String
+  status : String
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn SteerSettlementPayload::equal(Self, Self) -> Bool
+pub fn SteerSettlementPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SteerSettlementPayload::not_equal(Self, Self) -> Bool
+pub fn SteerSettlementPayload::to_json(Self) -> Json
+pub fn SteerSettlementPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SubrunProgressPayload {
   id : String
