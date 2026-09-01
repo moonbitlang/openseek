@@ -12,9 +12,9 @@
 const SubscriberQueueCapacity = 1024
 
 ///|
-/// A client must acknowledge terminal steer rows. Older or disconnected
-/// clients may never do so, therefore admission has a hard process-wide cap:
-/// once full, a new id-bearing steer is refused before it reaches the engine.
+/// A client should acknowledge terminal steer rows. Older, disconnected, or
+/// crashed clients may never do so, therefore the process-wide cap protects
+/// pending evidence first and reclaims the oldest terminal row under pressure.
 const SteerSettlementCapacity = 4096
 
 ///|
@@ -157,6 +157,26 @@ fn Hub::record_finished(
 }
 
 ///|
+/// Make room without ever discarding a steer the engine still owes a receipt.
+/// Terminal replay is best-effort after its owner has gone away; retaining it
+/// forever must not turn one lost ACK into a process-lifetime steer outage.
+fn Hub::ensure_steer_capacity(self : Hub) -> Bool {
+  if self.steer_settlements.length() < SteerSettlementCapacity {
+    return true
+  }
+  let mut reclaim : String? = None
+  for submission_id, settlement in self.steer_settlements {
+    if settlement.status != "pending" {
+      reclaim = Some(submission_id)
+      break
+    }
+  }
+  guard reclaim is Some(submission_id) else { return false }
+  self.steer_settlements.remove(submission_id)
+  true
+}
+
+///|
 /// Reserve bounded recovery capacity before an id-bearing steer reaches the
 /// engine. This check and the synchronous engine submission have no suspension
 /// between them, so another request cannot consume the admitted slot first.
@@ -168,7 +188,7 @@ fn Hub::admits_steer(self : Hub, payload : @protocol.SteerPayload) -> Bool {
     return true
   }
   self.steer_settlements.get(submission_id) is None &&
-  self.steer_settlements.length() < SteerSettlementCapacity
+  self.ensure_steer_capacity()
 }
 
 ///|
@@ -204,9 +224,10 @@ fn Hub::record_steer_accepted(
 }
 
 ///|
-/// Terminal rows remain replayable until their exact owner consumes them.
-/// Pending rows cannot be acknowledged: they are the evidence a reconnecting
-/// client still needs while the engine owes a receipt.
+/// Terminal rows remain replayable until their exact owner consumes them or
+/// capacity pressure reclaims the oldest one. Pending rows cannot be
+/// acknowledged: they are the evidence a reconnecting client still needs
+/// while the engine owes a receipt.
 fn Hub::ack_steer(
   self : Hub,
   payload : @protocol.SteerSettlementAckPayload,
@@ -227,6 +248,7 @@ fn Hub::track_steer(self : Hub, payload : @protocol.AgentEventPayload) -> Unit {
   let status = match payload.event.event {
     SteerApplied(..) => Some("applied")
     SteerDropped(..) => Some("dropped")
+    SteerUnconfirmed(..) => Some("unknown")
     _ => None
   }
   guard status is Some(status) &&
@@ -241,9 +263,9 @@ fn Hub::track_steer(self : Hub, payload : @protocol.AgentEventPayload) -> Unit {
     }
     return
   }
-  guard self.steer_settlements.length() < SteerSettlementCapacity else {
-    // Every admitted id already has a pending row. Reaching this branch means
-    // an unsolicited/malformed receipt, which must not bypass the hard cap.
+  guard self.ensure_steer_capacity() else {
+    // Every retained row is pending. Reaching this branch means an
+    // unsolicited/malformed receipt, which must not evict live evidence.
     return
   }
   self.steer_settlements[submission_id] = {
@@ -479,11 +501,13 @@ fn Hub::engine_connected(
       }
     }
   }
-  // An accepted steer still pending in the departed process can no longer be
-  // applied. Exact outcomes already observed remain terminal and unchanged.
+  // An accepted steer still pending in the departed process can no longer
+  // produce its exact receipt, but may already be durable. Retire its owner as
+  // unknown; calling it dropped would make a client restore and resend it.
+  // Exact outcomes already observed remain terminal and unchanged.
   for _, steer in self.steer_settlements {
     if steer.status == "pending" {
-      steer.status = "dropped"
+      steer.status = "unknown"
     }
   }
   self.active_starts.clear()
@@ -606,6 +630,35 @@ test "agent.runs replays exact steer state across a subscriber gap" {
   guard hub.runs(known=[selector]).steers is Some([{ status: "applied", .. }]) else {
     fail("lost applied receipt was not replayable")
   }
+  let uncertain : @protocol.SteerPayload = {
+    text: "maybe durable",
+    run_id: Some("r-steer"),
+    submission_id: Some("steer-2"),
+  }
+  hub.record_steer_accepted(uncertain, {
+    steered: true,
+    run_id: Some("r-steer"),
+  })
+  hub.publish(
+    AgentEvent({
+      run_id: Some("r-steer"),
+      session: "s-steer",
+      event: {
+        event: SteerUnconfirmed(content="maybe durable"),
+        submission_id: Some("steer-2"),
+      },
+    }),
+  )
+  guard hub.runs(known=[
+      {
+        session: "s-steer",
+        run_id: Some("r-steer"),
+        submission_id: Some("steer-2"),
+      },
+    ]).steers
+    is Some([{ status: "unknown", .. }]) else {
+    fail("lost exact receipt was not replayed as unknown")
+  }
   // A selector must carry the complete owner; the submission id alone cannot
   // expose another run's steering history.
   guard hub.runs(known=[
@@ -617,7 +670,7 @@ test "agent.runs replays exact steer state across a subscriber gap" {
 }
 
 ///|
-test "steer ledger normalizes ids, acknowledges terminal rows, and stays bounded" {
+test "steer ledger normalizes ids, acknowledges rows, and reclaims terminal capacity" {
   let hub = Hub::Hub()
   hub.publish(
     AgentStarted(
@@ -676,29 +729,37 @@ test "steer ledger normalizes ids, acknowledges terminal rows, and stays bounded
       status: "applied",
     }
   }
-  assert_false(
+  assert_true(
     hub.admits_steer({
-      text: "one too many",
+      text: "reclaim oldest terminal",
       run_id: Some("r-ledger"),
       submission_id: Some("overflow"),
     }),
   )
-  hub.ack_steer({
-    session: "s-ledger",
-    run_id: "r-ledger",
-    submission_id: "held-0",
-  })
-  assert_true(
+  assert_true(hub.steer_settlements.get("held-0") is None)
+  assert_eq(hub.steer_settlements.length(), SteerSettlementCapacity - 1)
+
+  hub.steer_settlements.clear()
+  for index = 0; index < SteerSettlementCapacity; index = index + 1 {
+    let submission_id = "pending-" + index.to_string()
+    hub.steer_settlements[submission_id] = {
+      session: "s-ledger",
+      run_id: "r-ledger",
+      submission_id,
+      status: "pending",
+    }
+  }
+  assert_false(
     hub.admits_steer({
-      text: "slot released",
+      text: "must preserve pending evidence",
       run_id: Some("r-ledger"),
-      submission_id: Some("replacement"),
+      submission_id: Some("pending-overflow"),
     }),
   )
 }
 
 ///|
-test "a new engine pump drops steers still pending in the old process" {
+test "a new engine pump leaves written steers unknown rather than dropped" {
   let hub = Hub::Hub()
   hub.publish(
     AgentStarted(@json.from_json({ "run_id": "r-old", "session": "s-old" })),
@@ -724,8 +785,8 @@ test "a new engine pump drops steers still pending in the old process" {
         submission_id: Some("steer-old"),
       },
     ]).steers
-    is Some([{ status: "dropped", .. }]) else {
-    fail("the departed engine left an accepted steer pending forever")
+    is Some([{ status: "unknown", .. }]) else {
+    fail("the departed engine did not retire an ambiguous written steer")
   }
 }
 

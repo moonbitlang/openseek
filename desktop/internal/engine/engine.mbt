@@ -562,6 +562,26 @@ fn ServeEngine::publish_steer_dropped(
 }
 
 ///|
+/// Retire a steer whose stdin write succeeded but whose exact engine receipt
+/// can no longer arrive. This is deliberately distinct from `SteerDropped`:
+/// the engine may have appended the input before dying, so restoring it would
+/// invite the controller to resend duplicate durable text.
+fn ServeEngine::publish_steer_unconfirmed(
+  self : ServeEngine,
+  steer : TrackedSteer,
+) -> Unit {
+  let event : @wire.Event = SteerUnconfirmed(content=steer.text)
+  emit(
+    self.sink,
+    StreamEvent({
+      run_id: Some(steer.run_id),
+      session: self.session_key,
+      event: { event, submission_id: steer.submission_id, },
+    }),
+  )
+}
+
+///|
 fn ServeEngine::drop_tracked_steer(
   self : ServeEngine,
   steer : TrackedSteer,
@@ -572,16 +592,16 @@ fn ServeEngine::drop_tracked_steer(
 }
 
 ///|
-fn ServeEngine::drop_stale_settling_steers(self : ServeEngine) -> Unit {
+fn ServeEngine::unconfirm_stale_settling_steers(self : ServeEngine) -> Unit {
   for steer in self.steer_runs.take_stale_settling() {
-    self.publish_steer_dropped(steer)
+    self.publish_steer_unconfirmed(steer)
   }
 }
 
 ///|
-fn ServeEngine::drop_all_tracked_steers(self : ServeEngine) -> Unit {
+fn ServeEngine::unconfirm_all_tracked_steers(self : ServeEngine) -> Unit {
   for steer in self.steer_runs.take_all() {
-    self.publish_steer_dropped(steer)
+    self.publish_steer_unconfirmed(steer)
   }
 }
 
@@ -1901,11 +1921,11 @@ async fn ServeEngine::consume(
           )
         }
         // Once the next step begins, serve has drained every receipt owed by
-        // the preceding turn. Any exact owner still waiting at this boundary
-        // was discarded without a receipt, so synthesize that receipt before
-        // the new step can reuse equal text.
+        // the preceding turn. An exact owner still waiting may already have
+        // been appended before its receipt was lost, so retire it as unknown
+        // before the new step can reuse equal text; never restore and resend.
         if decoded is Some(AgentStep) {
-          engine.drop_stale_settling_steers()
+          engine.unconfirm_stale_settling_steers()
         }
         let (run_id, submission_id) = engine.steer_runs.route_event(
           decoded,
@@ -2000,8 +2020,9 @@ async fn ServeEngine::consume(
     // it is harmless.
     engine.discard_commands("the engine exited")
     // Written commands are no longer in the queue, but EOF proves no engine
-    // receipt can follow. Close every remaining exact owner before retirement.
-    engine.drop_all_tracked_steers()
+    // receipt can follow. Their durable outcome is unknowable, so retire every
+    // remaining owner without reporting a definitive drop.
+    engine.unconfirm_all_tracked_steers()
     // A lifecycle timeout cancels the Process task. Its cancellation handler
     // does not finish until the child has actually terminated, but the task's
     // result is `Cancelled` rather than an exit code; normalize that reaped
@@ -2041,9 +2062,9 @@ async fn ServeEngine::retire(
     }
   engine.discard_commands("the engine exited")
   // A consumer failure can bypass consume_events' normal EOF epilogue. Once
-  // retirement begins no event source remains, so close any written steer
-  // owners here as the idempotent backstop.
-  engine.drop_all_tracked_steers()
+  // retirement begins no event source remains, so retire any written steer
+  // owners as unknown here as the idempotent backstop.
+  engine.unconfirm_all_tracked_steers()
   // Capture ownership only if the slot still contains THIS engine by
   // identity. Correct replacement waits on this handle through final
   // drain, but pump teardown and defensive cleanup can still detach it;
@@ -2300,7 +2321,7 @@ async test "a failed pump closes its open run and retires the slot" {
     assert_true(engine.phase is Idle(..))
     let mut cause = ""
     let mut status = ""
-    let mut dropped = false
+    let mut unconfirmed = false
     for event in emitted {
       match event {
         Error(payload) if payload.run_id == Some("r-consumer-died") =>
@@ -2308,15 +2329,15 @@ async test "a failed pump closes its open run and retires the slot" {
         Finished(payload) if payload.run_id == "r-consumer-died" =>
           status = payload.status
         StreamEvent(payload) if payload.run_id == Some("r-consumer-died") &&
-          payload.event.event is SteerDropped(content="unresolved input") &&
+          payload.event.event is SteerUnconfirmed(content="unresolved input") &&
           payload.event.submission_id == Some("steer-consumer-died") =>
-          dropped = true
+          unconfirmed = true
         _ => ()
       }
     }
     assert_true(cause.contains("the engine's event consumer failed"))
     assert_eq(status, "failed")
-    assert_true(dropped)
+    assert_true(unconfirmed)
   })
 }
 

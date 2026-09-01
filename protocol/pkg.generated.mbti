@@ -47,6 +47,7 @@ pub(all) enum Event {
   ApprovalResolved(id~ : String, outcome~ : String)
   SteerApplied(kind~ : String, content~ : String)
   SteerDropped(content~ : String)
+  SteerUnconfirmed(content~ : String)
   BackgroundNotice(content~ : String)
   GoalUpdated(goal~ : String?)
   GoalBlocked(reason~ : String)

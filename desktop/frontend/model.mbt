@@ -589,6 +589,7 @@ priv enum RecoveredSteerStatus {
   RecoveredSteerPending
   RecoveredSteerApplied
   RecoveredSteerDropped
+  RecoveredSteerUnknown
 }
 
 ///|
@@ -1232,9 +1233,14 @@ priv struct DeviceState {
   // resync boundary. Session-list replies carry the value captured when their
   // request was issued, so an older cut cannot overwrite the rebuilt mirrors.
   connection_generation : Int
-  // The latest process-local steer ledger identity returned by `agent.runs`.
-  // It survives transport and engine-pump resyncs so same-host absence can be
-  // authoritative, and is replaced only by a snapshot from the new host.
+  // Whether the current bridge generation has returned its first `agent.runs`
+  // snapshot. A newly attached host must establish this boundary before the
+  // page can steer: otherwise a command could be sent to H2 while stamped with
+  // H1's cached ledger identity.
+  steer_ledger_ready : Bool
+  // The process-local steer ledger identity returned by that snapshot. It
+  // survives engine-pump and notification-gap resyncs within one bridge, but a
+  // fresh BridgeReady clears it until the new host answers.
   steer_ledger_id : String?
   // Page-lifetime request tokens for the independently fetched sidebar
   // collections. Connection generation rejects dead sockets; these reject an
@@ -1286,6 +1292,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     reconnect_attempt: 0,
     reconnect_failures: 0,
     connection_generation: 0,
+    steer_ledger_ready: false,
     steer_ledger_id: None,
     sessions_request_generation: 0,
     archived_request_generation: 0,
@@ -2094,7 +2101,7 @@ priv enum DeviceMsg {
   )
   // The host synchronously accepted this exact steer. Its later engine
   // receipt remains the semantic outcome, but a resync can now ask the host
-  // to replay that pending/applied/dropped state.
+  // to replay that pending/applied/dropped/unknown state.
   SteerAccepted(session~ : String, submission_id~ : String, run_id~ : String)
   // The host definitively returned `steered:false`; no canonical User can
   // follow, so the queue entry retires and its draft comes back. The text is

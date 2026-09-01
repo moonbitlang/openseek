@@ -70,6 +70,8 @@ pub fn Event::to_json(self : Event) -> Json {
     SteerApplied(kind~, content~) =>
       { "event": "steer_applied", "kind": kind, "content": content }
     SteerDropped(content~) => { "event": "steer_dropped", "content": content }
+    SteerUnconfirmed(content~) =>
+      { "event": "steer_unconfirmed", "content": content }
     BackgroundNotice(content~) =>
       { "event": "background_notice", "content": content }
     GoalUpdated(goal~) => { "event": "goal_updated", "goal": or_null(goal) }

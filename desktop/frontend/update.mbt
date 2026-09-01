@@ -711,7 +711,7 @@ fn is_idle_event(event : @transcript.EngineEvent) -> Bool {
 
 ///|
 fn is_steer_receipt(event : @transcript.EngineEvent) -> Bool {
-  event is (SteerApplied(..) | SteerDropped(..))
+  event is (SteerApplied(..) | SteerDropped(..) | SteerUnconfirmed(..))
 }
 
 ///|
@@ -1254,6 +1254,16 @@ fn apply_engine_event(
       if submission_id is Some(submission_id) {
         let (next, removed) = conv.reject_steer(submission_id, event_run_id)
         (if removed { Some(SteerDroppedNotice) } else { None }, next)
+      } else {
+        (None, conv)
+      }
+    // The command crossed stdin but its exact receipt died with the engine.
+    // It may already be durable, so retire the UI owner without restoring a
+    // draft whose resend could duplicate user input.
+    SteerUnconfirmed(content=_, submission_id~) =>
+      if submission_id is Some(submission_id) {
+        let (next, _) = conv.acknowledge_steer(submission_id, event_run_id)
+        (None, next)
       } else {
         (None, conv)
       }
@@ -3350,16 +3360,16 @@ fn update_msg(
         // cannot be steered — the steer could outlive the dying turn in the
         // engine's queue and contaminate a later prompt — so the text stays
         // in the composer.
+        guard model.device_state(model.focused) is Some(steer_device) &&
+          steer_device.steer_ledger_ready else {
+          return (@cmd.none, model)
+        }
         if conv.run is Open(run_id~, stage~) && !(stage is Cancelling) {
           let (model, submission_id) = model.allocate_submission_id()
-          let steer_ledger_id = match model.device_state(model.focused) {
-            Some(device) => device.steer_ledger_id
-            None => None
-          }
           let conv = conv.enqueue_steer(
             submission_id,
             Some(run_id),
-            steer_ledger_id,
+            steer_device.steer_ledger_id,
             task,
             conv.task,
             conv.mentions,
@@ -5125,6 +5135,16 @@ fn update_device_msg(
         bridge: Connected,
         reconnect_failures: 0,
         connection_generation,
+        steer_ledger_ready: if msg is BridgeReady {
+          false
+        } else {
+          dev.steer_ledger_ready
+        },
+        steer_ledger_id: if msg is BridgeReady {
+          None
+        } else {
+          dev.steer_ledger_id
+        },
         sessions_request_generation,
         archived_request_generation,
         projects_request_generation,
@@ -6797,6 +6817,21 @@ fn update_device_msg(
               )
               conv
             }
+            Some({ status: RecoveredSteerUnknown, .. }) => {
+              commands.push(
+                acknowledge_steer_settlement(
+                  channel,
+                  captured.session,
+                  owner.run_id,
+                  owner.submission_id,
+                ),
+              )
+              let (conv, _) = conv.acknowledge_steer(
+                owner.submission_id,
+                Some(owner.run_id),
+              )
+              conv
+            }
             // An older host cannot distinguish "not accepted" from "this
             // protocol has no ledger". Keep ownership for the exact live RPC;
             // its later reply/receipt can still settle or restore the draft.
@@ -7068,7 +7103,11 @@ fn update_device_msg(
         }
       }
       let seeded = if seeded.device_state(channel) is Some(current_dev) {
-        seeded.replace_device({ ..current_dev, steer_ledger_id, })
+        seeded.replace_device({
+          ..current_dev,
+          steer_ledger_ready: true,
+          steer_ledger_id,
+        })
       } else {
         seeded
       }
@@ -7146,6 +7185,8 @@ fn update_device_msg(
             model.conversation_by_pending_steer(channel, submission_id, id)
           SteerDropped(submission_id=Some(submission_id), ..) =>
             model.conversation_by_pending_steer(channel, submission_id, id)
+          SteerUnconfirmed(submission_id=Some(submission_id), ..) =>
+            model.conversation_by_pending_steer(channel, submission_id, id)
           _ => None
         }
         if exact is Some(conv) {
@@ -7171,6 +7212,10 @@ fn update_device_msg(
           | (
             Some(owner_run),
             SteerDropped(submission_id=Some(submission_id), ..),
+          )
+          | (
+            Some(owner_run),
+            SteerUnconfirmed(submission_id=Some(submission_id), ..),
           ) =>
             if conv.pending_steers
               .iter()
@@ -7760,6 +7805,8 @@ fn test_model() -> Model {
       {
         ..empty_device_state(@interop.ChannelId::Local),
         bridge: Connected,
+        steer_ledger_ready: true,
+        steer_ledger_id: Some("test-ledger"),
         projects: [@interop.ChannelId::Local.test_project()],
         worktrees: [@interop.ChannelId::Local.test_worktrees()],
       },
@@ -10899,7 +10946,8 @@ test "a distinct started id replaces a stale open run as foreign" {
   assert_eq(next.active().turn.streaming_response, None)
   inspect(next.active().pending_steers.length(), content="1")
   // Lifecycle replacement does not erase an exact receipt owner. A trailing
-  // applied/dropped event still settles it without touching the new run.
+  // applied/dropped/unconfirmed event still settles it without touching the
+  // new run.
   guard next.active().sync is Reloading(generation=1, attempt=1, ..) else {
     fail("a foreign replacement did not refresh the transcript")
   }
@@ -11508,6 +11556,109 @@ test "a notification gap replays a lost applied steer receipt" {
   assert_true(recovered.active().run is NoRun(..))
   inspect(recovered.active().pending_steers.length(), content="0")
   inspect(recovered.active().task, content="")
+}
+
+///|
+test "an unknown steer receipt retires ownership without restoring the draft" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(running_conversation(), ["maybe durable"])
+  let model = running_model().replace_conversation(conv)
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=false,
+  )
+  let pending = conv.pending_steers[0]
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[
+        {
+          session: "desktop-test",
+          run_id: "r7",
+          submission_id: pending.submission_id,
+          status: RecoveredSteerUnknown,
+        },
+      ],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+    ),
+    model,
+  )
+  inspect(recovered.active().pending_steers.length(), content="0")
+  inspect(recovered.active().task, content="")
+  assert_true(recovered.active().run is Open(run_id="r7", ..))
+}
+
+///|
+test "BridgeReady fences steering until the new host ledger snapshot lands" {
+  let dispatch = test_dispatch()
+  let old_host = running_model().with_dev(dev => {
+    ..dev,
+    steer_ledger_ready: true,
+    steer_ledger_id: Some("host-one"),
+  })
+  let (_, bridged) = update_dev(dispatch, BridgeReady, old_host)
+  let (_, bridged) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek", has_deepseek_key=true),
+      connection_generation=None,
+    ),
+    bridged,
+  )
+  let bridged = bridged.with_dev(dev => {
+    ..dev,
+    worktrees: [@interop.ChannelId::Local.test_worktrees()],
+  })
+  assert_false(bridged.dev().steer_ledger_ready)
+  assert_eq(bridged.dev().steer_ledger_id, None)
+
+  let blocked = bridged.replace_conversation({
+    ..bridged.active(),
+    task: "must wait for host two",
+  })
+  let (_, blocked) = update(dispatch, Send, blocked)
+  inspect(blocked.active().task, content="must wait for host two")
+  inspect(blocked.active().pending_steers.length(), content="0")
+
+  let frontier = blocked.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=true,
+  )
+  let (_, ready) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("host-two"),
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=blocked.dev().connection_generation,
+    ),
+    blocked,
+  )
+  assert_true(ready.dev().steer_ledger_ready)
+  assert_eq(ready.dev().steer_ledger_id, Some("host-two"))
+
+  let steerable = ready.replace_conversation({
+    ..running_conversation(),
+    task: "send on host two",
+  })
+  let (_, sent) = update(dispatch, Send, steerable)
+  inspect(sent.active().task, content="")
+  guard sent.active().pending_steers is [pending] else {
+    fail("the post-snapshot steer was not queued")
+  }
+  assert_eq(pending.steer_ledger_id, Some("host-two"))
 }
 
 ///|
@@ -12532,6 +12683,29 @@ test "steer_dropped settles the pending steer with a visible notice" {
   inspect(next.active().task, content="go left")
   inspect(next.notifications.length(), content="1")
   assert_true(next.notifications[0].message.contains("back in the composer"))
+}
+
+///|
+test "steer_unconfirmed settles pending UI without restoring duplicate text" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["maybe durable"]),
+  )
+  let (_, next) = update_dev(
+    dispatch,
+    Engine(
+      Some("r7"),
+      SteerUnconfirmed(
+        content="maybe durable",
+        submission_id=Some("test-steer-0"),
+      ),
+      session=None,
+    ),
+    model,
+  )
+  inspect(next.active().pending_steers.length(), content="0")
+  inspect(next.active().task, content="")
+  inspect(next.notifications.length(), content="0")
 }
 
 ///|

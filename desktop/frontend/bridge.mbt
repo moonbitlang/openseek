@@ -625,8 +625,9 @@ fn fetch_runs(
 
 ///|
 /// Release one terminal host-ledger row only after the frontend consumed it.
-/// Failure is harmless: the row remains replayable and the hard host cap keeps
-/// an abandoned client bounded.
+/// Failure is harmless to liveness: the row remains replayable until pressure
+/// reclaims the oldest terminal entry, while the bounded ledger keeps every
+/// still-pending receipt protected.
 fn acknowledge_steer_settlement(
   channel : @interop.ChannelId,
   session : String,
@@ -792,6 +793,7 @@ fn RecoveredSteerSettlement::from_reply(
     "pending" => Some(RecoveredSteerPending)
     "applied" => Some(RecoveredSteerApplied)
     "dropped" => Some(RecoveredSteerDropped)
+    "unknown" => Some(RecoveredSteerUnknown)
     _ => None
   }
   guard status is Some(status) &&
@@ -806,6 +808,19 @@ fn RecoveredSteerSettlement::from_reply(
     submission_id: payload.submission_id,
     status,
   })
+}
+
+///|
+test "agent.runs decodes an unknown steer as a non-restoring settlement" {
+  guard RecoveredSteerSettlement::from_reply({
+      session: "s1",
+      run_id: "r1",
+      submission_id: "steer-1",
+      status: "unknown",
+    })
+    is Some({ status: RecoveredSteerUnknown, .. }) else {
+    fail("unknown steer settlement was not decoded")
+  }
 }
 
 ///|

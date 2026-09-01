@@ -23,6 +23,9 @@ pub fn decode_event(object : Json) -> AgentEvent? {
     // which decodes the same line itself.
     SteerApplied(content~, ..) => Some(SteerApplied(content))
     SteerDropped(content~) => Some(SteerDropped(content))
+    // This is synthesized by the desktop host after decoding the engine
+    // stream, so a raw child event has no host-side routing work to perform.
+    SteerUnconfirmed(..) => None
     // Only the derived total is shown.
     Usage(usage~) =>
       Some(

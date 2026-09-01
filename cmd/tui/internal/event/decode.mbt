@@ -34,6 +34,10 @@ pub fn decode_event(object : Json) -> AgentEvent? {
         _ => Some(SteerApplied(Prompt(content)))
       }
     SteerDropped(content~) => Some(SteerDropped(content))
+    // Synthesized only by the desktop host after a child engine disappears;
+    // the standalone TUI reads the child's stdout directly and never owns the
+    // host-side recovery ledger this receipt settles.
+    SteerUnconfirmed(..) => None
     BackgroundNotice(content~) => Some(BackgroundNotice(content))
     AssistantMessage(content~) => Some(AssistantMessage(content))
     SessionError(error~) => Some(SessionError(error))

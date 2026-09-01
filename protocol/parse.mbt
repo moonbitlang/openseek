@@ -143,6 +143,8 @@ pub fn parse(line : Json) -> Event? {
       })
     "steer_dropped" =>
       text(fields, "content").map(content => SteerDropped(content~))
+    "steer_unconfirmed" =>
+      text(fields, "content").map(content => SteerUnconfirmed(content~))
     "background_notice" =>
       text(fields, "content").map(content => BackgroundNotice(content~))
     // `goal` is null when the goal was cleared: absent and null are the same
