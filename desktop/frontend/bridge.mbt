@@ -1395,11 +1395,11 @@ async fn request_agent_goal(
 }
 
 ///|
-/// Ask the host to cancel `run_id`. Only a failure is worth reporting: the
-/// host raises when the cancellation could not be delivered, and answers
-/// normally otherwise — including for a turn that ended on its own just
-/// before the request landed, which is a race the user cannot see and does
-/// not need to. The run itself ends through its `agent.finished`.
+/// Ask the host to cancel `run_id`. A matching reply leaves the run in
+/// Cancelling until its `agent.finished`. An empty reply means the turn had
+/// already ended; report that boundary explicitly because the Finished push
+/// may be the very notification this page missed. Failures are likewise tied
+/// to the exact run so the optimistic Cancelling phase can be made retryable.
 fn cancel_openseek(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -1407,7 +1407,7 @@ fn cancel_openseek(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let _ : @protocol.CancelReply = @interop.bridge_request(
+      let reply : @protocol.CancelReply = @interop.bridge_request(
         channel,
         @commands.agent_cancel,
         { run_id: Some(run_id), },
@@ -1415,13 +1415,21 @@ fn cancel_openseek(
         error => {
           scheduler.add(
             dispatch(
-              HostActionFailed(
-                "Failed to cancel the run: " + @interop.bridge_error_text(error),
+              FromDevice(
+                channel,
+                CancelFailed(
+                  run_id~,
+                  message="Failed to cancel the run: " +
+                    @interop.bridge_error_text(error),
+                ),
               ),
             ),
           )
           return
         }
+      }
+      if reply.run_id is None {
+        scheduler.add(dispatch(FromDevice(channel, CancelNotOpen(run_id~))))
       }
     })
   })

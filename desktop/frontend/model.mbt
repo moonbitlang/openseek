@@ -2039,6 +2039,14 @@ priv enum DeviceMsg {
   // this client did not send it and must not put another client's text in
   // this composer.
   SteerRejected(session~ : String, submission_id~ : String, run_id~ : String)
+  // The addressed run was already absent when Stop reached the host. This is
+  // success for the user's intent, but no future Finished notification can
+  // retire a stale local Cancelling phase, so the reply itself must do it.
+  CancelNotOpen(run_id~ : String)
+  // A cancellation that could not be delivered must put the exact run back
+  // into a stoppable phase. A lifecycle resync follows in case the response
+  // failed after the run independently ended.
+  CancelFailed(run_id~ : String, message~ : String)
   SessionsLoaded(
     Array[@transcript.SessionListItem],
     connection_generation~ : Int,
