@@ -96,8 +96,12 @@ test "finished_body and finished_brief name the failure stage" {
   assert_true(build_failed.contains("BUILD failed"))
   assert_true(build_failed.contains("never ran"))
   assert_true(build_failed.contains("diagnostics"))
+  // The run-side wording claims exactly what presence proves: the build
+  // completed — not that the program itself launched (a missing runner also
+  // lands here, and is likewise not a `source` problem).
   let runtime_failure = finished_body("trace", 3, compiled=Some(true))
   assert_true(runtime_failure.contains("exited 3 at RUNTIME"))
+  assert_true(runtime_failure.contains("from the run, not the build"))
   assert_true(runtime_failure.contains("trace"))
   // The blank-output corners still name the stage.
   assert_true(
@@ -118,7 +122,9 @@ test "finished_body and finished_brief name the failure stage" {
 ///|
 test "timeout_head says which half of the run never finished" {
   let program_hung = timeout_head(5_000, compiled=Some(true))
-  assert_true(program_hung.contains("compiled but did not finish"))
+  assert_true(
+    program_hung.contains("BUILD completed but the run did not finish"),
+  )
   let build_hung = timeout_head(5_000, compiled=Some(false))
   assert_true(build_hung.contains("BUILD never completed"))
   assert_true(build_hung.contains("never ran"))

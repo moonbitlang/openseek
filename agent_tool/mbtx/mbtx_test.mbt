@@ -53,7 +53,7 @@ async test "a runtime trap is classified as runtime, whatever the output says" {
   )
   assert_true(out.is_error)
   assert_true(out.content.contains("at RUNTIME"))
-  assert_true(out.content.contains("compiled and ran"))
+  assert_true(out.content.contains("from the run, not the build"))
   assert_false(out.content.contains("BUILD failed"))
 }
 
@@ -982,16 +982,19 @@ async test "a runtime-less run uses its foreground timeout, not the handoff grac
 }
 
 ///|
-/// A timeout during the BUILD is named as such: with a bound far below what
-/// any compile takes, the artifact probe finds nothing, and the report blames
-/// the build instead of hinting at an infinite loop in a program that never
-/// existed. (The compiled-side timeout wording is pinned by the `timeout_head`
-/// whitebox test; reaching it live would cost a full foreground timeout.)
+/// A timeout during the BUILD is named as such: the artifact probe finds
+/// nothing, and the report blames the build instead of hinting at an infinite
+/// loop in a program that never existed. The 1ms bound is a physical
+/// impossibility for the build, not a latency guess: within it `moon` cannot
+/// even be spawned and waited on, let alone compile, link, and write the
+/// artifact the probe would have to find. (The other timeout arms are pinned
+/// by the `timeout_head` whitebox test; reaching the built-side arm live
+/// would cost a real foreground timeout after a completed build.)
 async test "a timeout before the build completes blames the build" {
   @vfs.with_tmpdir(prefix="mbtx-timeout-build-", ws => {
     let definition = @mbtx.definition(
       workspace_root=ws,
-      foreground_timeout_ms=50,
+      foreground_timeout_ms=1,
     )
     let action = match definition.execute {
       Async(execute) => execute({ "source": "fn main { println(1) }" })

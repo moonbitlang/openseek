@@ -23,9 +23,10 @@ dir for the runnable artifact moon links only after a successful build
 (`single/single.wasm`/`.js`/`.exe`): absence means the **build failed and the
 program never ran** (most often compiler diagnostics about `source`, though
 the output itself says whether it was that or a toolchain/dependency fault),
-presence means the program **compiled, ran, and failed at runtime** — and a
-foreground timeout likewise says whether the build or the program is what
-never finished. A probe fault claims neither stage and keeps the plain exit
+presence means the **build completed and the failure came from the run** —
+the program failing at runtime, or its runner failing to launch; either way
+not a compile problem — and a foreground timeout likewise says whether the
+build or the run is what never finished. A probe fault claims neither stage and keeps the plain exit
 report. The probe is structural on purpose: a snippet legitimately runs
 `moon check` as a child process, so compiler-diagnostic text in the output
 proves nothing about the snippet itself. For a run that was handed off, the

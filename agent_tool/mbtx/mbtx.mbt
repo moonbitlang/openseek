@@ -554,7 +554,7 @@ async fn execute(
               match snippet_compiled(build_dir, input.target) {
                 Some(true) =>
                   Some(
-                    "mbtx: exit \{code} is a RUNTIME failure — the snippet compiled and the program ran.",
+                    "mbtx: exit \{code} came after a successful BUILD — the failure is from the run, not the build.",
                   )
                 Some(false) =>
                   Some(
@@ -704,16 +704,17 @@ async fn execute(
 
 ///|
 /// Whether the snippet's runnable artifact exists under the throwaway
-/// `--target-dir` — the structural line between "the run failed at BUILD
-/// time" and "the program ran". moon's single-file mode builds the snippet as
-/// package `single` and writes `single/single.<ext>` only once it compiled
-/// AND linked, and the directory is fresh for every call, so `Some(true)`
-/// proves the program was launched, and `Some(false)` after a failed run
-/// means the failure came from the build — most often the compiler rejecting
-/// `source`, but the diagnostics themselves say whether it was that or a
-/// toolchain/dependency fault; absence alone cannot tell those apart, so the
-/// framing never claims more than "the program never ran". `None` means the
-/// probe itself failed and the stage is unknown.
+/// `--target-dir` — the structural line between the BUILD stage and the run.
+/// moon's single-file mode builds the snippet as package `single` and writes
+/// `single/single.<ext>` only once it compiled AND linked, and the directory
+/// is fresh for every call, so `Some(true)` proves the build completed and a
+/// failure then belongs to the run step (the program failing, or its runner
+/// failing to launch — either way not a `source` compile problem), while
+/// `Some(false)` after a failed run means the failure came from the build —
+/// most often the compiler rejecting `source`, but the diagnostics themselves
+/// say whether it was that or a toolchain/dependency fault; each side's
+/// framing claims exactly that much and no more. `None` means the probe
+/// itself failed and the stage is unknown.
 ///
 /// Structural on purpose: the OUTPUT cannot make this distinction. moon exits
 /// 1 for a rejected build and for a trapped program alike, and a snippet
@@ -772,11 +773,14 @@ fn finished_body(text : String, exit_code : Int, compiled~ : Bool?) -> String {
       } else {
         "[mbtx: BUILD failed — the program never ran; the output below is the build's]\n\{text}"
       }
+    // "From the run, not the build" is all presence proves: the run step
+    // includes launching the runner, so a missing `node` lands here too —
+    // which the output says, and which is still not a `source` problem.
     Some(true) =>
       if text.is_blank() {
-        "mbtx: the program compiled and ran, then exited \{exit_code} with no output"
+        "mbtx: the snippet built, then the run exited \{exit_code} with no output"
       } else {
-        "[mbtx: exited \{exit_code} at RUNTIME — the program compiled and ran]\n\{text}"
+        "[mbtx: exited \{exit_code} at RUNTIME — the snippet built, so this failure is from the run, not the build]\n\{text}"
       }
     None =>
       if text.is_blank() {
@@ -805,7 +809,7 @@ fn timeout_head(foreground_timeout_ms : Int, compiled~ : Bool?) -> String {
   let bound = duration_label(foreground_timeout_ms)
   match compiled {
     Some(true) =>
-      "mbtx: timed out after \{bound} and was cancelled — the program compiled but did not finish (an infinite loop, or waiting on something that never arrived)."
+      "mbtx: timed out after \{bound} and was cancelled — the BUILD completed but the run did not finish (an infinite loop, or waiting on something that never arrived)."
     Some(false) =>
       "mbtx: timed out after \{bound} and was cancelled — the BUILD never completed (compilation or a dependency download stalled), so the program never ran."
     None =>
