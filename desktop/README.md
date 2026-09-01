@@ -256,6 +256,14 @@ Platform package commands remain the release-layout test. They build debug
 MoonBit artifacts by default; pass `--release` after `--` when you need
 optimized artifacts.
 
+`just test-browser` from `desktop/` builds the browser-console bundle and
+mounts the Desktop Rabbita application in Playwright Chromium. It checks
+rendered DOM, keyboard and focus behavior, composer send/stop, conversation
+creation/archive/restore, settings persistence, skill installation, Codex
+login controls and first-turn start/stop, approval decisions, and
+narrow-viewport layout without requiring a packaged Desktop host. The
+repository root also exposes `just desktop-test-browser` as an alias.
+
 When adding another command-line binary to the Desktop bundle, follow
 [`package/README.md`](package/README.md). Copying a file into the package is
 only one part of the contract: runtime lookup, child-process and integrated

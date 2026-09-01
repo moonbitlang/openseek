@@ -147,3 +147,112 @@ jobs:
       - name: Cram (offline CLI docs)
         if: matrix.target == 'native'
         run: moon cram test tests/cram
+
+  # Keep Desktop browser behavior in its owning tree. Like Rabbita upstream's
+  # E2E job, this installs a locked Playwright toolchain, builds the actual
+  # MoonBit application, and drives it in Chromium.
+  desktop-e2e:
+    name: desktop e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/e2e/package-lock.json
+
+      - name: Update MoonBit dependencies
+        run: moon update
+
+      - name: Install E2E dependencies
+        working-directory: desktop/e2e
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: desktop/e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Build Desktop browser application
+        working-directory: desktop
+        run: moon run package/browser --target native
+
+      - name: Run Desktop E2E tests
+        working-directory: desktop/e2e
+        run: npm test
+
+      - name: Upload Playwright report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-playwright-report
+          path: |
+            desktop/e2e/playwright-report
+            desktop/e2e/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # cmd/viz_app is a separate MoonBit module and owns its browser test runner.
+  # Keep it out of Desktop's recipe so either application can be tested alone.
+  viz-e2e:
+    name: viz e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cmd/viz_app/e2e/package-lock.json
+
+      - name: Update MoonBit dependencies
+        run: moon update
+
+      - name: Install E2E dependencies
+        working-directory: cmd/viz_app/e2e
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: cmd/viz_app/e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Build session viewer
+        working-directory: cmd/viz_app
+        run: moon build --target js
+
+      - name: Run session viewer E2E tests
+        working-directory: cmd/viz_app/e2e
+        run: npm test
+
+      - name: Upload Playwright report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: viz-playwright-report
+          path: |
+            cmd/viz_app/e2e/playwright-report
+            cmd/viz_app/e2e/test-results
+          if-no-files-found: ignore
+          retention-days: 7

@@ -35,16 +35,6 @@ fn input(
 }
 
 ///|
-/// The palette as the browser would see it. `component` is the only rendering
-/// entry the shell has, so the tests use it too.
-#warnings("-alert_unstable")
-fn markup(state : @quick_open.State) -> String {
-  @rabbita.render_to_string(() => {
-    @quick_open.component(@rabbita.Val::constant(state), emit())
-  })
-}
-
-///|
 /// A palette showing one workspace symbol. `SymbolsLoaded` carries the
 /// generation its request was minted with; standing in for the effect layer
 /// means minting it here too, and a run opened out of `State::empty` is the
@@ -73,58 +63,14 @@ fn symbol_run(name : String, path : String) -> @quick_open.State raise {
 }
 
 ///|
-test "a closed palette draws nothing at all" {
+test "a new palette starts closed" {
   let state = @quick_open.State::empty()
   assert_false(state.is_open())
-  assert_false(markup(state).contains("quick-open-dialog"))
-}
-
-///|
-test "each provider names itself in the dialog it opens" {
-  let (_, files) = @quick_open.State::empty().open(
-    emit(),
-    input(),
-    @quick_open.Files,
-  )
-  assert_true(files.is_open())
-  let files_markup = markup(files)
-  assert_true(files_markup.contains("Search workspace files"))
-  assert_true(files_markup.contains("Search files"))
-  assert_true(files_markup.contains("Indexing files…"))
-  let (_, symbols) = @quick_open.State::empty().open(
-    emit(),
-    input(),
-    @quick_open.Symbols,
-  )
-  let symbols_markup = markup(symbols)
-  assert_true(symbols_markup.contains("Search workspace symbols"))
-  assert_true(symbols_markup.contains("Searching symbols…"))
-}
-
-///|
-test "open editor tabs are offered before the Host index answers" {
-  let (_, opened) = @quick_open.State::empty().open(
-    emit(),
-    input(
-      open_files=[Relative("src/open.mbt"), Relative("src/active.mbt")],
-      active_file=Relative("src/active.mbt"),
-    ),
-    @quick_open.Files,
-  )
-  let rendered = markup(opened)
-  assert_true(rendered.contains("src/open.mbt"))
-  // The active file leads, and the leading row is the selected one.
-  assert_true(
-    rendered.contains(
-      "<div id=\"quick-open-row-0\" role=\"option\" aria-selected=\"true\" class=\"quick-open-row selected\"><span aria-hidden=\"true\" class=\"quick-open-kind codicon codicon-symbol-file\"></span><div class=\"quick-open-row-text\"><div class=\"quick-open-name\">active.mbt</div><div class=\"quick-open-detail\">src/active.mbt</div>",
-    ),
-  )
 }
 
 ///|
 test "accepting a row closes the palette and hands back its editor target" {
   let ready = symbol_run("parse_hover", "src/main.mbt")
-  assert_true(markup(ready).contains("parse_hover"))
   let (_, accepted, target) = ready.handle(emit(), @quick_open.Pick(0), input())
   assert_false(accepted.is_open())
   assert_eq(
@@ -161,8 +107,7 @@ test "accepting nothing is not an accept" {
 test "selection wraps in both directions" {
   let ready = symbol_run("parse_hover", "src/main.mbt")
   let (_, up, _) = ready.handle(emit(), @quick_open.Move(-1), input())
-  // One row, so either direction returns to it and it stays selected.
-  assert_true(markup(up).contains("quick-open-row selected"))
+  // One row, so either direction returns to the same state.
   let (_, down, _) = up.handle(emit(), @quick_open.Move(1), input())
   assert_true(down == up)
 }
@@ -196,33 +141,4 @@ test "a conversation switch retires the run that opened before it" {
   // The same conversation reconciles to a no-op, however often it is asked.
   let (_, settled) = opened.reconcile(emit(), input())
   assert_true(settled == opened)
-}
-
-///|
-#warnings("-alert_unstable")
-test "the palette keeps its separator neutral while owning input focus" {
-  let (_, opened) = @quick_open.State::empty().open(
-    emit(),
-    input(),
-    @quick_open.Files,
-  )
-  let rendered = markup(opened)
-  // The wrapper's bottom border is a structural separator, not a focus ring.
-  assert_true(rendered.contains("<div class=\"quick-open-input-wrap\">"))
-  assert_true(rendered.contains("data-focus-owner=\"\""))
-  assert_false(rendered.contains("data-focus-target=\"\""))
-  for tag in ["<input", "<textarea", "<select"] {
-    let parts = rendered.split(tag).collect()
-    for index, part in parts {
-      if index > 0 {
-        guard part.split_once(">") is Some((opening, _)) else {
-          fail("unterminated form element in rendered markup")
-        }
-        assert_true(
-          opening.contains("data-focus-owner") ||
-          opening.contains("data-focus-target"),
-        )
-      }
-    }
-  }
 }

@@ -15,8 +15,4 @@ import {
   "openseek_desktop/frontend/interop",
 } for "test"
 
-import {
-  "moonbit-community/rabbita",
-} for "wbtest"
-
 supported_targets = "js"

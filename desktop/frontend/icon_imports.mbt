@@ -5,7 +5,6 @@
 using @icons {
   icon,
   icon_chat_export,
-  icon_close,
   icon_extensions,
   icon_folder,
   icon_key,
@@ -15,7 +14,6 @@ using @icons {
   icon_link_external,
   icon_sparkle,
   icon_sync,
-  icon_target,
   icon_terminal,
   icon_worktree,
 }

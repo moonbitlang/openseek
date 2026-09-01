@@ -29,12 +29,6 @@ fn emit() -> @cmd.Emit[Msg] {
 }
 
 ///|
-#warnings("-alert_unstable")
-fn markup(picker : State) -> String {
-  @rabbita.render_to_string(() => @rabbita.Val::constant(view(emit(), picker)))
-}
-
-///|
 /// Open the picker and land one listing at `location`.
 fn opened(
   channel? : @interop.ChannelId = @interop.ChannelId::Local,
@@ -233,16 +227,6 @@ test "typing a separator after an exact child navigates immediately" {
   let navigating = updated(editing, PathChanged("git/"))
   assert_true(navigating.loading)
   assert_eq(navigating.path_draft, Some("/Users/dii/git/"))
-  let loading_html = markup(navigating)
-  assert_true(loading_html.contains("Loading folders…"))
-  assert_true(loading_html.contains("value=\"/Users/dii/git/\""))
-  assert_false(
-    loading_html.contains(
-      "type=\"button\" class=\"picker-path-editor-cancel\" disabled",
-    ),
-  )
-  assert_false(loading_html.contains("Open folder git"))
-  assert_false(loading_html.contains("Open folder go"))
 
   let git = "/Users/dii/git"
   let cancelled = updated(navigating, Escape)
@@ -432,45 +416,4 @@ test "a failed folder create keeps its name editable" {
     outcome is Some(Failed(message)) &&
     message == "Cannot create folder: already exists",
   )
-}
-
-///|
-#warnings("-alert_unstable")
-test "picker view exposes the folder controls" {
-  let picker = opened(location=Directory("/home/u"), entries=["alpha", "beta"])
-  let html = markup(picker)
-  assert_true(html.contains("role=\"dialog\""))
-  assert_false(html.contains("role=\"listbox\""))
-  assert_false(html.contains("role=\"option\""))
-  assert_true(html.contains("Choose a folder to use as a project workspace"))
-  assert_true(html.contains("New folder"))
-  assert_true(html.contains("Open folder alpha"))
-  assert_true(html.contains("picker-row-chevron"))
-  assert_true(html.contains("2 folders"))
-  assert_true(html.contains("Current folder"))
-  assert_true(html.contains("/home/u"))
-  assert_true(html.contains("Edit current path"))
-  assert_true(html.contains("Add project"))
-  let editing = updated(picker, EditPath)
-  let editor_html = markup(editing)
-  assert_true(editor_html.contains("role=\"combobox\""))
-  assert_true(editor_html.contains("role=\"listbox\""))
-  assert_true(editor_html.contains("role=\"option\""))
-  assert_true(editor_html.contains("aria-label=\"Folder path\""))
-  assert_true(editor_html.contains("value=\"/home/u\""))
-  assert_true(editor_html.contains("placeholder=\"Enter a folder path\""))
-  let filtered = updated(editing, PathChanged("/home/u/al"))
-  let filtered_html = markup(filtered)
-  assert_true(filtered_html.contains("1 match"))
-  assert_true(filtered_html.contains("Open folder alpha"))
-  assert_false(filtered_html.contains("Open folder beta"))
-  assert_true(filtered_html.contains("picker-row selected"))
-  let completed = updated(filtered, CompletePath)
-  let completed_html = markup(completed)
-  assert_false(completed_html.contains("aria-activedescendant"))
-  let composing = updated(picker, BeginCreateFolder)
-  let composer_html = markup(composing)
-  assert_true(composer_html.contains("picker-create-row"))
-  assert_true(composer_html.contains("placeholder=\"New folder name\""))
-  assert_true(composer_html.contains("autofocus"))
 }

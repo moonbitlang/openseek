@@ -5,8 +5,4 @@ import {
   "openseek_desktop/frontend/transcript",
 }
 
-import {
-  "moonbit-community/rabbita",
-} for "test"
-
 supported_targets = "js"

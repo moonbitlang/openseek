@@ -240,39 +240,6 @@ fn subrun_chip(child : String, open : (String) -> @cmd.Cmd) -> @html.Html {
 }
 
 ///|
-/// A complete tool exchange for focused rendering tests and the unreachable
-/// one-item fallback. Activity runs use `tool_run_views` directly so calls
-/// from one Assistant event can precede all of their distinct result rows.
-fn tool_call_view(
-  item : @transcript.TranscriptItem,
-  subrun? : SubrunLink,
-) -> @html.Html {
-  let rows : Array[@html.Html] = []
-  append_tool_request(rows, item)
-  append_tool_result(rows, item, subrun?)
-  @html.div(class="tool-exchange", rows)
-}
-
-///|
-fn append_tool_request(
-  rows : Array[@html.Html],
-  item : @transcript.TranscriptItem,
-) -> Unit {
-  guard item.kind is Tool(arguments=Some(_), ..) else { return }
-  rows.push(tool_request_view(item))
-}
-
-///|
-fn append_tool_result(
-  rows : Array[@html.Html],
-  item : @transcript.TranscriptItem,
-  subrun? : SubrunLink,
-) -> Unit {
-  guard tool_result_row_is_visible(item) else { return }
-  rows.push(tool_result_view(item, subrun?))
-}
-
-///|
 /// A completed result always gets its own row, including an empty one. Codex
 /// command items can also accumulate output while still in progress; surface
 /// that stream immediately, but let `has_result` keep the row labelled pending

@@ -18405,27 +18405,6 @@ test "navigating an already-placed tab re-places its view" {
 }
 
 ///|
-#warnings("-alert_unstable")
-fn render_grep_state_for_test(model : Model) -> String {
-  let emit : @cmd.Emit[@grep_search.Msg] = @cmd.Emit(_ => @cmd.none)
-  let active = model
-    .active_checkout()
-    .unwrap_or({
-      owner: { channel: model.focused, session: "", },
-      placement: None,
-    })
-  let input = @grep_search.Input(
-    owner=active.owner,
-    root=active.placement.bind(placement => placement.checkout_root()),
-  )
-  @rabbita.render_to_string(() => {
-    @rabbita.Val::constant(
-      model.file_panel.search.explorer_view(input, emit, (_, _) => @cmd.none),
-    )
-  })
-}
-
-///|
 test "Search reuses the picker and keeps a request when its Explorer tab leaves" {
   let dispatch = test_dispatch()
   let (_, opened) = update(
@@ -18454,19 +18433,14 @@ test "Search reuses the picker and keeps a request when its Explorer tab leaves"
     FileEditor(Search(@grep_search.Submit)),
     edited,
   )
-  assert_true(render_grep_state_for_test(running).contains("Searching…"))
   let (_, files) = update(
     dispatch,
     FileEditor(@fileeditor.ExplorerModeSelected(ExplorerFiles)),
     running,
   )
-  assert_true(render_grep_state_for_test(files).contains("Searching…"))
   let (_, reopened) = update(dispatch, ExplorerRequested(ExplorerSearch), files)
   assert_true(reopened.dock.tabs == [@dock.DockTab::FilePicker])
   assert_true(reopened.file_panel.explorer_mode is ExplorerSearch)
-  let markup = render_grep_state_for_test(reopened)
-  assert_true(markup.contains("Searching…"))
-  assert_true(markup.contains("value=\"moon\""))
 }
 
 ///|
@@ -18497,7 +18471,6 @@ test "a Search result fulfills the picker while preserving Search beside the fil
     selected.file_panel.docs.get(path)
     is Some({ review: None, state: TabLoading, .. }),
   )
-  assert_true(render_grep_state_for_test(selected).contains("value=\"moon\""))
 
   // Opening Search again appends the one shared picker. Picking the already
   // open file removes that picker and activates the existing file tab.
@@ -18542,7 +18515,6 @@ test "narrow Search drill-down hides and restores the retained Explorer" {
   )
   assert_true(drilled.file_panel.explorer_mode is ExplorerSearch)
   assert_false(drilled.file_panel.tree_open)
-  assert_true(render_grep_state_for_test(drilled).contains("value=\"needle\""))
   let (_, restored) = update(
     dispatch,
     FileEditor(@fileeditor.ToggleTree),
@@ -18577,19 +18549,15 @@ test "Search requests survive hidden Explorer Browser and panel states" {
     FileEditor(Search(@grep_search.Submit)),
     edited,
   )
-  assert_true(render_grep_state_for_test(running).contains("Searching…"))
 
   let (_, tree_hidden) = update(
     dispatch,
     FileEditor(@fileeditor.ToggleTree),
     running,
   )
-  assert_true(render_grep_state_for_test(tree_hidden).contains("Searching…"))
   let (_, browser) = update(dispatch, BrowserTabRequested, tree_hidden)
-  assert_true(render_grep_state_for_test(browser).contains("Searching…"))
   let (_, panel_closed) = update(dispatch, ToggleRightPanel, browser)
   assert_false(panel_closed.right_panel_open)
-  assert_true(render_grep_state_for_test(panel_closed).contains("Searching…"))
 }
 
 ///|

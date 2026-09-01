@@ -37,3 +37,11 @@ editor-test:
 # Run the editor's required Playwright smoke and component suites.
 editor-test-browser:
     just --justfile editor/justfile test-browser-smoke
+
+# Run Desktop's Rabbita views in Chromium through the browser-console bundle.
+desktop-test-browser:
+    just --justfile desktop/justfile test-browser
+
+# Run the session viewer's Rabbita views in Chromium.
+viz-test-browser:
+    just --justfile cmd/viz_app/justfile test-browser

@@ -9,6 +9,11 @@ target/
 .proton/
 .cef-cache/
 
+# Local dependencies and reports produced by the Desktop Playwright suite.
+e2e/node_modules/
+e2e/playwright-report/
+e2e/test-results/
+
 # Generated frontend bundle (built by `moon run --target native build_frontend.mbtx`)
 /frontend.js
 # Application stylesheet assembled from the checked-in development imports.

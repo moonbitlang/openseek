@@ -7,7 +7,6 @@ import {
 }
 
 import {
-  "moonbit-community/rabbita",
   "moonbitlang/core/debug",
 } for "test"
 

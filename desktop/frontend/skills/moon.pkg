@@ -14,7 +14,6 @@ import {
 supported_targets = "js"
 
 import {
-  "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/internal/protocol",

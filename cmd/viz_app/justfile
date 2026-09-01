@@ -1,0 +1,7 @@
+default:
+    just --list
+
+# Build the session viewer and run its Playwright suite.
+test-browser:
+    moon build --target js
+    npm --prefix e2e test

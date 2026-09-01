@@ -7,8 +7,4 @@ import {
   "moonbitlang/editor/viewer" @editor_viewer,
 }
 
-import {
-  "moonbit-community/rabbita",
-} for "wbtest"
-
 supported_targets = "js"

@@ -25,9 +25,12 @@ System follows the OS via `prefers-color-scheme`).
 | `cmd/viz_app`    | js     | The rabbita (TEA) frontend: session browser, fetch, mode toggle.    |
 | `inspect`        | native+wasm | Read-only web server (`moonbitlang/async/http`, standalone module `bobzhang/inspect`) exposing a JSON/raw-file API over discovered `openseek_session-*.jsonl` files. It never writes, so pointing it at a live session root is safe. |
 
-The `viz` library is headless-testable: `render_session` returns `@html.Html`,
-which `@rabbita.render_to_string` turns into a string for snapshot assertions —
-no browser needed in CI.
+The `viz` library keeps its parsing, projection, and error-count rules
+headless-testable. `render_session` returns `@html.Html`, which the Rabbita
+browser application mounts into the page; the repository does not serialize
+that virtual tree for string-based render assertions. Run
+`just viz-test-browser` from the repository root, or `just test-browser` from
+`cmd/viz_app/`, for the Playwright DOM coverage of the mounted viewer.
 
 ## Server API
 

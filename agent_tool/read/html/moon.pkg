@@ -5,10 +5,6 @@ import {
   "moonbitlang/editor/viewer/html" @syntax_html,
 }
 
-import {
-  "moonbit-community/rabbita",
-} for "test"
-
 warnings = "+unnecessary_annotation"
 
 supported_targets = "js"

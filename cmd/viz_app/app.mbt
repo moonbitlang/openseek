@@ -2296,12 +2296,6 @@ fn stub_emit() -> @cmd.Emit[Msg] {
 }
 
 ///|
-#warnings("-alert_unstable")
-fn render_html(html : @html.Html) -> String {
-  @rabbita.render_to_string(() => @rabbita.Val::constant(html))
-}
-
-///|
 test "session grouping derives container, row label, and heading" {
   // A nested run workspace (marker store): grouped by container, labelled by
   // workspace name.
@@ -2459,48 +2453,6 @@ test "standalone exports auto-open their first session" {
   assert_false(should_auto_open(true, [row], selected=Some("k1"), dropped=None))
   assert_false(
     should_auto_open(true, [row], selected=None, dropped=Some("f.jsonl")),
-  )
-}
-
-///|
-test "escalated toolbar mirrors errors-only controls" {
-  let model = init_model()
-  let html = render_html(escalated_bar(stub_emit(), model, 2))
-  assert_true(html.contains("2 escalated tool calls"))
-  assert_true(html.contains("Escalated only"))
-  assert_true(html.contains("↑ prev"))
-  assert_true(html.contains("↓ next"))
-}
-
-///|
-test "build-error toolbar mirrors the other filter controls" {
-  let model = init_model()
-  let html = render_html(build_error_bar(stub_emit(), model, 2, present=true))
-  assert_true(html.contains("2 build errors"))
-  assert_true(html.contains("Build errors only"))
-  assert_true(html.contains("↑ prev"))
-  assert_true(html.contains("↓ next"))
-  // DISCOVERABLE: the toggle shows whenever the session has mbtx activity,
-  // even at zero failures — hidden-at-zero chrome made the control invisible
-  // on exactly the sessions a user would reach for it in. Only a session
-  // with no mbtx at all keeps a clean toolbar.
-  let clean_with_mbtx = render_html(
-    build_error_bar(stub_emit(), model, 0, present=true),
-  )
-  assert_true(clean_with_mbtx.contains("Build errors only"))
-  assert_false(clean_with_mbtx.contains("build error<"))
-  assert_false(clean_with_mbtx.contains("↑ prev"))
-  assert_false(
-    render_html(build_error_bar(stub_emit(), model, 0, present=false)).contains(
-      "Build errors",
-    ),
-  )
-  // Kept visible while active so the filter can always be switched back off.
-  let active = { ..init_model(), build_errors_only: true, }
-  assert_true(
-    render_html(build_error_bar(stub_emit(), active, 0, present=false)).contains(
-      "Build errors only: on",
-    ),
   )
 }
 

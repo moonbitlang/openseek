@@ -42,9 +42,13 @@ Two source files:
   `extern "js"` DOM glue.
 
 Everything is private. The parse + render logic (session text → typed events →
-`@html.Html`) lives in the `viz` package, where it is snapshot-tested headlessly
-via `@rabbita.render_to_string`; this package is the browser shell around it —
-state, fetching, and DOM wiring.
+`@html.Html`) lives in the `viz` package. Its parsing and projection rules are
+tested headlessly; this package is the browser shell that mounts the resulting
+HTML and owns state, fetching, and DOM wiring. Run `just test-browser` from
+this directory to build the bundle and use Playwright to verify the mounted
+cards, mode and argument toggles, filters, dropped files, URL/scroll restore,
+keyboard shortcuts, standalone embedded data, and theme behavior in Chromium.
+The repository root exposes the same command as `just viz-test-browser`.
 
 ## Data sources
 

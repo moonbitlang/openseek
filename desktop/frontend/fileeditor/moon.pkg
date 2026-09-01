@@ -34,7 +34,3 @@ import {
 }
 
 supported_targets = "js"
-
-import {
-  "moonbit-community/rabbita",
-} for "wbtest"

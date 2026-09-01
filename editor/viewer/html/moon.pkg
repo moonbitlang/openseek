@@ -6,8 +6,4 @@ import {
   "moonbitlang/editor/viewer/common/services",
 }
 
-import {
-  "moonbit-community/rabbita",
-} for "test"
-
 supported_targets = "js"

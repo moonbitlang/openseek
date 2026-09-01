@@ -1,0 +1,386 @@
+export class DesktopBrowserHarness {
+  constructor(page) {
+    this.page = page;
+    this.socket = null;
+    this.requests = [];
+    this.pageErrors = [];
+    // Requests mutate the same fixture snapshots a real Desktop host would
+    // return on the next list/read. That lets browser tests verify complete
+    // UI -> RPC -> refreshed-DOM flows instead of stopping at button clicks.
+    this.liveSessions = [
+      {
+        id: 'session-1',
+        title: 'Rabbita browser fixture',
+        updated_at_ms: 1,
+      },
+    ];
+    this.archivedSessions = [];
+    this.hostSettings = {
+      revision: 1,
+      provider: 'deepseek',
+      custom_api_url: '',
+      has_deepseek_key: true,
+      has_glm_key: false,
+      has_custom_key: false,
+    };
+    this.installedSkills = [
+      {
+        id: 'moonbit',
+        name: 'MoonBit',
+        description: 'Authoritative MoonBit guidance',
+        source: '',
+      },
+    ];
+    this.codexRequiresAuth = false;
+    this.codexModels = [];
+    this.sessionEvents = [
+      {
+        sequence: 1,
+        item: {
+          kind: 'user',
+          payload: { content: 'Show the browser fixture' },
+        },
+      },
+      {
+        sequence: 2,
+        item: {
+          kind: 'assistant',
+          payload: {
+            content: '# Browser result\n\nRendered **successfully** with `Rabbita 0.15`.',
+          },
+        },
+      },
+      {
+        sequence: 3,
+        item: {
+          kind: 'assistant',
+          payload: {
+            content: '',
+            tool_calls: [
+              {
+                id: 'plan-1',
+                name: 'plan',
+                arguments: JSON.stringify({
+                  steps: [
+                    { title: 'Inspect DOM', status: 'completed' },
+                    { title: 'Run Playwright', status: 'in_progress' },
+                    { title: 'Review layout', status: 'pending' },
+                  ],
+                }),
+              },
+            ],
+          },
+        },
+      },
+      {
+        sequence: 4,
+        item: {
+          kind: 'tool_result',
+          payload: {
+            tool_call_id: 'plan-1',
+            tool_name: 'plan',
+            content: 'Plan updated.',
+            is_error: false,
+            brief: 'plan 1/3',
+          },
+        },
+      },
+      {
+        sequence: 5,
+        item: {
+          kind: 'runtime_notice',
+          payload: { content: '[goal]\nShip Rabbita 0.15 browser tests' },
+        },
+      },
+      {
+        sequence: 6,
+        item: {
+          kind: 'assistant',
+          payload: {
+            content: '',
+            tool_calls: [
+              {
+                id: 'mbtx-1',
+                name: 'mbtx',
+                arguments: JSON.stringify({ source: 'fn main { println(42) }' }),
+              },
+            ],
+          },
+        },
+      },
+      {
+        sequence: 7,
+        item: {
+          kind: 'tool_result',
+          payload: {
+            tool_call_id: 'mbtx-1',
+            tool_name: 'mbtx',
+            content: '42',
+            is_error: false,
+            brief: 'completed',
+          },
+        },
+      },
+    ];
+  }
+
+  sessionGroups(sessions) {
+    return {
+      groups: [
+        {
+          workspace: '/workspace',
+          name: 'Fixture',
+          session_root: '/workspace/.openseek',
+          sessions,
+          error: '',
+        },
+      ],
+    };
+  }
+
+  async install() {
+    this.page.on('pageerror', error => this.pageErrors.push(error.message));
+
+    await this.page.route('**/v1/auth/me', route => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ login: 'octocat', avatar_url: '' }),
+    }));
+    await this.page.route('**/v1/devices', route => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        devices: [
+          {
+            id: 'device-a',
+            name: 'Test Mac',
+            hostname: 'test.local',
+            online: true,
+          },
+        ],
+      }),
+    }));
+
+    // The product browser bundle normally talks to a selected Desktop host.
+    // This route replaces only that transport and leaves Rabbita, the views,
+    // browser layout, DOM events, and focus behavior running unchanged.
+    await this.page.routeWebSocket('**/v1/devices/device-a/ws', socket => {
+      this.socket = socket;
+      socket.onMessage(message => {
+        const request = JSON.parse(message.toString());
+        this.requests.push(request);
+        if (request.id === undefined) {
+          return;
+        }
+        socket.send(JSON.stringify({
+          jsonrpc: '2.0',
+          id: request.id,
+          result: this.replyFor(request),
+        }));
+      });
+      socket.send(JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'agent.connected',
+        params: { stage: 'serving' },
+      }));
+    });
+  }
+
+  replyFor(request) {
+    switch (request.method) {
+      case 'session.list':
+        return this.sessionGroups(this.liveSessions);
+      case 'session.list_archived':
+        return this.sessionGroups(this.archivedSessions);
+      case 'session.load':
+      case 'session.load_archived':
+        return {
+          session: {
+            version: 1,
+            id: 'session-1',
+            events: this.sessionEvents,
+          },
+          watermark: 7,
+        };
+      case 'agent.runs':
+        return { runs: [], settled: [], approvals: [] };
+      case 'workspace.list':
+        return { workspaces: ['/workspace'] };
+      case 'settings.get':
+        return this.hostSettings;
+      case 'settings.set': {
+        const patch = request.params || {};
+        for (const key of [
+          'provider',
+          'custom_api_url',
+          'deepseek_api_key',
+          'glm_api_key',
+          'custom_api_key',
+        ]) {
+          if (patch[key] === undefined) {
+            continue;
+          }
+          if (key === 'provider' || key === 'custom_api_url') {
+            this.hostSettings[key] = patch[key];
+          } else {
+            const savedKey = `has_${key.replace('_api_key', '')}_key`;
+            this.hostSettings[savedKey] = patch[key].trim().length > 0;
+          }
+        }
+        this.hostSettings.revision += 1;
+        return this.hostSettings;
+      }
+      case 'skills.installed':
+        return { skills: this.installedSkills };
+      case 'skills.catalog':
+        return {
+          skills: [
+            {
+              name: 'rabbita',
+              module_name: 'rabbita',
+              package_path: 'moonbitlang/rabbita',
+              version: '0.15.4',
+              description: 'Elm-style browser UI',
+              author: 'MoonBit',
+              repository: 'https://github.com/moonbit-community/rabbita',
+            },
+          ],
+        };
+      case 'skills.install': {
+        const installed = {
+          id: 'rabbita',
+          name: 'Rabbita',
+          description: 'Elm-style browser UI',
+          source: 'rabbita@0.15.4/moonbitlang/rabbita',
+        };
+        if (!this.installedSkills.some(skill => skill.id === installed.id)) {
+          this.installedSkills.push(installed);
+        }
+        return { installed };
+      }
+      case 'skills.uninstall':
+        this.installedSkills = this.installedSkills.filter(
+          skill => skill.id !== request.params?.id,
+        );
+        return { removed: true };
+      case 'agent.start':
+        return { run_id: 'run-e2e', status: 'accepted', exit_code: 0 };
+      case 'agent.cancel':
+        return { run_id: request.params?.run_id || 'run-e2e' };
+      case 'session.archive': {
+        const index = this.liveSessions.findIndex(
+          session => session.id === request.params?.session,
+        );
+        if (index >= 0) {
+          this.archivedSessions.push(...this.liveSessions.splice(index, 1));
+        }
+        return this.sessionGroups(this.archivedSessions);
+      }
+      case 'session.unarchive': {
+        const index = this.archivedSessions.findIndex(
+          session => session.id === request.params?.session,
+        );
+        if (index >= 0) {
+          this.liveSessions.push(...this.archivedSessions.splice(index, 1));
+        }
+        return this.sessionGroups(this.archivedSessions);
+      }
+      case 'codex.status':
+        return { status: 'ready' };
+      case 'codex.account.read':
+        return { requiresOpenaiAuth: this.codexRequiresAuth };
+      case 'codex.account.login.start':
+        return {
+          loginId: 'login-e2e',
+          authUrl: 'https://example.test/codex-login',
+        };
+      case 'codex.account.login.cancel':
+      case 'codex.config.open':
+        return {};
+      case 'codex.server_request.list':
+        return { data: [], generation: 1 };
+      case 'codex.model.list':
+        return { data: this.codexModels };
+      case 'codex.thread.list':
+        return { data: [] };
+      case 'codex.draft.open':
+        return {
+          draftId: request.params?.draft_id,
+          cwd: request.params?.cwd,
+          projectRoot: request.params?.cwd,
+        };
+      case 'codex.draft.close':
+        return {};
+      case 'codex.thread.start':
+        return {
+          thread: {
+            id: 'codex-thread-e2e',
+            cwd: request.params?.cwd,
+            projectRoot: request.params?.cwd,
+            preview: 'Codex browser fixture',
+            updatedAt: 2,
+            turns: [],
+          },
+        };
+      case 'codex.turn.start':
+        return {
+          turn: {
+            id: 'codex-turn-e2e',
+            status: 'inProgress',
+            items: [],
+          },
+        };
+      case 'codex.turn.interrupt':
+        return {};
+      case 'worktree.list':
+        return { worktrees: [] };
+      case 'workspace.settings_get':
+        return {
+          workspace: '/workspace',
+          worktree_mode: false,
+          checkout_submodules: false,
+          submodule_checkout_timeout_seconds: 30,
+        };
+      case 'git.branch':
+        return {};
+      case 'fs.browse':
+        return {
+          path: '/Users/test',
+          parent: '/Users',
+          entries: ['Projects', 'Workspace'],
+        };
+      case 'fs.search_files':
+        return {
+          files: ['src/main.mbt', 'README.md'],
+          from_cache: false,
+          limit_hit: false,
+          cancelled: false,
+        };
+      case 'agent.approval':
+        return { delivered: true };
+      default:
+        return {};
+    }
+  }
+
+  async goto() {
+    await this.page.goto('/dist/browser/index.html?device=device-a');
+    await this.page.getByRole('main').waitFor();
+  }
+
+  async openSession() {
+    await this.page.getByText('Rabbita browser fixture', { exact: true }).first().click();
+    await this.page.locator('.transcript .msg-content', {
+      hasText: 'Show the browser fixture',
+    }).waitFor();
+  }
+
+  async openQuickOpen() {
+    const shortcut = await this.page.evaluate(() =>
+      navigator.platform.includes('Mac') ? 'Meta+P' : 'Control+P');
+    await this.page.keyboard.press(shortcut);
+    await this.page.locator('#quick-open-input').waitFor();
+  }
+
+  notify(method, params) {
+    this.socket.send(JSON.stringify({ jsonrpc: '2.0', method, params }));
+  }
+}
