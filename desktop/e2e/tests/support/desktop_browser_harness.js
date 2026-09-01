@@ -39,6 +39,23 @@ export class DesktopBrowserHarness {
     this.gitBaseline = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     this.gitParent = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     this.gitHead = 'cccccccccccccccccccccccccccccccccccccccc';
+    // Tests may replace this inventory together with workingFiles and the
+    // baseline snapshot to exercise repository states that the default Review
+    // flow does not contain. The RPC still returns ordinary product data.
+    this.gitChanges = [
+      {
+        path: 'src/main.mbt',
+        index_status: ' ',
+        worktree_status: 'M',
+        kind: 'modified',
+      },
+      {
+        path: 'src/lib.mbt',
+        index_status: 'M',
+        worktree_status: ' ',
+        kind: 'modified',
+      },
+    ];
     this.workingFiles = {
       'src/main.mbt': [
         'fn main {',
@@ -589,20 +606,7 @@ export class DesktopBrowserHarness {
           repository: true,
           head: this.gitHead,
           baseline: this.gitBaseline,
-          changes: [
-            {
-              path: 'src/main.mbt',
-              index_status: ' ',
-              worktree_status: 'M',
-              kind: 'modified',
-            },
-            {
-              path: 'src/lib.mbt',
-              index_status: 'M',
-              worktree_status: ' ',
-              kind: 'modified',
-            },
-          ],
+          changes: this.gitChanges,
         };
       case 'git.history':
         return {
@@ -671,6 +675,8 @@ export class DesktopBrowserHarness {
         };
       case 'git.original_file':
         return this.gitOriginalFile(request.params || {});
+      case 'fs.read_directory':
+        return { entries: [] };
       case 'fs.read_file':
         return this.readWorkingFile(request.params || {});
       case 'fs.browse':

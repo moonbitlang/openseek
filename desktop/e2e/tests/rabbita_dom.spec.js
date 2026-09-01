@@ -179,6 +179,143 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   expect(app.pageErrors).toEqual([]);
 });
 
+test('semantic Review renders sectioned, fallback, and empty states in the browser', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const semanticSources = {
+    'src/sections.mbt': {
+      baseline: [
+        'fn kept() { println("KEPT_OLD_BODY") }',
+        'fn removed() { println("DELETED_SOURCE_BODY") }',
+      ].join('\n'),
+      working: [
+        'fn inserted() { println("INSERTED_SOURCE_BODY") }',
+        'fn kept() { println("KEPT_NEW_BODY") }',
+      ].join('\n'),
+    },
+    'src/reordered.mbt': {
+      baseline: 'fn first() {}\nfn second() {}',
+      working: 'fn second() {}\nfn first() {}',
+    },
+    'src/fallback.mbt': {
+      baseline: 'fn broken( {',
+      working: 'fn okay() {}',
+    },
+    'src/ignored.mbt': {
+      baseline: '/// old documentation\nfn value() -> Int { 1 }',
+      working: '/// new documentation\nfn value() -> Int { 1 }',
+    },
+    'src/structural.mbt': {
+      baseline: 'fn value() { 1 }',
+      working: 'fn value() {\n  1\n}',
+    },
+    // A host can briefly report a stale changed row after contents converge.
+    // The browser must render a safe empty state instead of allocating editors.
+    'src/identical.mbt': {
+      baseline: 'fn same() {}',
+      working: 'fn same() {}',
+    },
+  };
+  app.gitChanges = [];
+  for (const [path, sources] of Object.entries(semanticSources)) {
+    app.workingFiles[path] = sources.working;
+    app.gitFilesByRevision[app.gitBaseline][path] = sources.baseline;
+    app.gitChanges.push({
+      path,
+      index_status: ' ',
+      worktree_status: 'M',
+      kind: 'modified',
+    });
+  }
+
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+
+  const changes = page.locator('#review-changes-body');
+  await expect(changes.locator('.review-progress-summary')).toHaveText(
+    '0 of 6 reviewable files reviewed',
+  );
+  const reviewToolbar = page.getByRole('toolbar', { name: 'Review mode' });
+  const tokenDiff = reviewToolbar.getByRole('button', { name: 'Token diff' });
+  const treeDiff = reviewToolbar.getByRole('button', { name: 'Tree diff' });
+  const semanticHost = page.locator('#semantic-review-host');
+  const semanticReview = semanticHost.locator('.semantic-review');
+
+  const sectionsChange = changes.getByRole('button', {
+    name: /View diff: src\/sections\.mbt/,
+  });
+  await sectionsChange.click();
+  await tokenDiff.click();
+  await expect(semanticHost).not.toHaveClass(/moonbit-viewer-surface-hidden/);
+  await expect(semanticReview).toHaveAttribute('data-mode', 'token');
+  const entries = semanticReview.locator('.semantic-diff-entry');
+  await expect(entries).toHaveCount(3);
+  await expect(entries.locator('.semantic-entry-status')).toHaveText(['A', 'D']);
+  const editorHosts = semanticReview.locator('.semantic-diff-editor-host');
+  await expect(editorHosts).toHaveCount(3);
+  await expect.poll(() => editorHosts.evaluateAll(nodes =>
+    nodes.every(node => node.childElementCount > 0))).toBe(true);
+  const hostIds = await editorHosts.evaluateAll(nodes => nodes.map(node => node.id));
+  expect(hostIds.every(id => id.startsWith('semantic-diff-editor-'))).toBe(true);
+  expect(new Set(hostIds).size).toBe(hostIds.length);
+  await expect(semanticReview.locator('table')).toHaveCount(0);
+  await expect(semanticReview.locator('.diff-scroll')).toHaveCount(0);
+  await expect(semanticReview.locator('#semantic-review-scroll-width')).toHaveCount(1);
+
+  const layout = page.getByRole('group', { name: 'Diff layout' });
+  await layout.getByRole('button', { name: 'Unified diff layout' }).click();
+  await expect(semanticReview).toHaveAttribute('data-layout', 'unified');
+  const firstEntry = entries.first();
+  const collapse = firstEntry.getByRole('button', { name: /Collapse/ });
+  await expect(collapse).toHaveAttribute('aria-expanded', 'true');
+  await collapse.click();
+  await expect(firstEntry.getByRole('button', { name: /Expand/ })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await expect(firstEntry).toHaveClass(/collapsed/);
+
+  await changes.getByRole('button', { name: /View diff: src\/ignored\.mbt/ }).click();
+  await expect(semanticReview.locator('.semantic-empty')).toHaveText(
+    'No changes besides ignored comments, blank lines, or test blocks were found. Turn off the relevant Ignore filter to view them.',
+  );
+  await expect(semanticReview.locator('.semantic-diff-editor-host')).toHaveCount(0);
+  await sectionsChange.click();
+  await expect(semanticReview).toHaveAttribute('data-layout', 'unified');
+
+  await changes.getByRole('button', { name: /View diff: src\/reordered\.mbt/ }).click();
+  await treeDiff.click();
+  await expect(semanticReview).toHaveAttribute('data-mode', 'tree');
+  await expect(semanticReview.locator('.semantic-reorder')).toHaveText(
+    'Top-level declarations are reordered; each declaration keeps its own DiffEditor.',
+  );
+  await expect(semanticReview.locator('.semantic-diff-editor-host')).toHaveCount(0);
+
+  await changes.getByRole('button', { name: /View diff: src\/fallback\.mbt/ }).click();
+  const fallback = semanticReview.locator('.diff-notice.fallback');
+  await expect(fallback.locator('strong')).toHaveText('Lexical fallback');
+  await expect(fallback.locator('span')).toHaveText(/.+/);
+  await expect(semanticReview.getByText('Whole file', { exact: true })).toBeVisible();
+  await expect(semanticReview.locator('#semantic-diff-editor-whole')).toHaveCount(1);
+  await expect.poll(() => semanticReview.locator('#semantic-diff-editor-whole').evaluate(
+    node => node.childElementCount,
+  )).toBeGreaterThan(0);
+
+  await changes.getByRole('button', { name: /View diff: src\/structural\.mbt/ }).click();
+  await expect(semanticReview.locator('.semantic-empty')).toHaveText(
+    'No structural changes found. Switch to Token to view text changes.',
+  );
+  await expect(semanticReview.locator('.semantic-diff-editor-host')).toHaveCount(0);
+
+  await changes.getByRole('button', { name: /View diff: src\/identical\.mbt/ }).click();
+  await tokenDiff.click();
+  await expect(semanticReview.locator('.semantic-empty')).toHaveText('No token changes found.');
+  await expect(semanticReview.locator('.semantic-diff-editor-host')).toHaveCount(0);
+  await expect(page.getByText(/Malformed reply from/)).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('Git history expands commits and opens an immutable historical diff', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -688,8 +825,15 @@ test('Codex command and network approvals render the facts and advertised decisi
 
   await page.getByRole('button', { name: 'Model', exact: true }).click();
   await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
+  // Opening the Codex draft is asynchronous. Wait for the host round-trip so
+  // the composer cannot race its still-disabled Send button on a loaded suite.
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'codex.draft.open'))
+    .toMatchObject({ params: { cwd: '/workspace' } });
   await page.locator('#task').fill('Start a Codex turn for approval testing');
-  await page.getByTitle('Send', { exact: true }).click();
+  const send = page.getByTitle('Send', { exact: true });
+  await expect(send).toBeEnabled();
+  await send.click();
   await expect.poll(() => app.requests.some(request =>
     request.method === 'codex.turn.start')).toBe(true);
 
