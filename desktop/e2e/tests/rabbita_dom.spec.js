@@ -179,6 +179,79 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   expect(app.pageErrors).toEqual([]);
 });
 
+test('Review routes Markdown source and keeps non-MoonBit comparisons on Line diff', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const path = 'docs/Guide.MD';
+  app.gitChanges = [{
+    path,
+    index_status: ' ',
+    worktree_status: 'M',
+    kind: 'modified',
+  }];
+  app.workingFiles[path] = '# Guide\n\nWorking tree documentation.\n';
+  app.gitFilesByRevision[app.gitBaseline][path] = '# Guide\n\nBaseline documentation.\n';
+
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+
+  await page.getByRole('button', { name: /View diff: docs\/Guide\.MD/ }).click();
+  const toolbar = page.getByRole('toolbar', { name: 'Review mode' });
+  await expect(toolbar.getByRole('button')).toHaveText(['File', 'Line']);
+  await expect(toolbar.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.locator('#diff-editor-host')).not.toHaveClass(
+    /moonbit-viewer-surface-hidden/,
+  );
+  await expect(page.locator('#semantic-review-host')).toHaveClass(
+    /moonbit-viewer-surface-hidden/,
+  );
+  await expect(page.getByRole('button', { name: 'Ignore comments' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Ignore tests' })).toHaveCount(0);
+
+  await toolbar.getByRole('button', { name: 'File view' }).click();
+  await expect(page.locator('#viewer-host')).toHaveClass(/moonbit-viewer-surface-hidden/);
+  await expect(page.locator('#markdown-viewer-host')).not.toHaveClass(
+    /moonbit-viewer-surface-hidden/,
+  );
+  await expect(page.locator('#markdown-viewer-host')).toContainText(
+    'Working tree documentation.',
+  );
+
+  await toolbar.getByRole('button', { name: 'Line diff' }).click();
+  await expect(page.locator('#markdown-viewer-host')).toHaveClass(
+    /moonbit-viewer-surface-hidden/,
+  );
+  await expect(page.locator('#diff-editor-host')).not.toHaveClass(
+    /moonbit-viewer-surface-hidden/,
+  );
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Review shields a pending diff before showing its delayed loading notice', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.rpcDelays.set('git.original_file', 1_200);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+
+  await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+  await expect(page.locator('#viewer-host')).toHaveClass(/moonbit-viewer-surface-hidden/);
+  await expect(page.locator('#diff-editor-host')).not.toHaveClass(
+    /moonbit-viewer-surface-hidden/,
+  );
+  const notice = page.locator('.viewer-notice');
+  await expect(notice).toHaveClass(/diff-transition-shield/);
+  expect(await notice.textContent()).toBe('');
+  await expect(notice).toHaveText('Loading diff for main.mbt…', { timeout: 1_000 });
+  await expect(notice).toHaveClass(/hidden/, { timeout: 3_000 });
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('semantic Review renders sectioned, fallback, and empty states in the browser', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const semanticSources = {
@@ -335,8 +408,14 @@ test('Git history expands commits and opens an immutable historical diff', async
   await expect(page.locator('.git-graph-branch')).toContainText('codex/browser-fixture');
   const history = page.getByRole('tree', { name: 'Git commit history' });
   const head = history.getByRole('treeitem', { name: /Cover Desktop Git flows/ });
+  const merge = history.getByRole('treeitem', { name: /Merge fixture lanes/ });
   const parent = history.getByRole('treeitem', { name: /Add Review surface/ });
+  await expect(merge.locator('.git-graph-node-merge-outer')).toHaveCount(1);
+  await expect(merge.locator('.git-graph-node-merge-inner')).toHaveCount(1);
+  expect(await merge.locator('.git-graph-cell path').count()).toBeGreaterThan(0);
   await head.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(merge).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(parent).toBeFocused();
   await page.keyboard.press('Home');
@@ -356,11 +435,13 @@ test('Git history expands commits and opens an immutable historical diff', async
   const historicalMain = history.getByRole('treeitem', { name: /src\/main\.mbt/ });
   await expect(historicalMain).toContainText('M');
   await historicalMain.click();
+  await expect(historicalMain).toHaveClass(/selected/);
+  await expect(historicalMain).toHaveAttribute('aria-current', 'page');
 
   await expect.poll(() => app.requests.filter(request =>
     request.method === 'git.original_file' &&
     request.params?.path === 'src/main.mbt' &&
-    [app.gitParent, app.gitHead].includes(request.params?.revision)).length)
+    [app.gitMerge, app.gitHead].includes(request.params?.revision)).length)
     .toBe(2);
   await expect(page.locator('.editor-tab.active')).toContainText('main.mbt (cccccccc)');
   const breadcrumb = page.locator('.history-breadcrumb');
@@ -378,6 +459,39 @@ test('Git history expands commits and opens an immutable historical diff', async
   await expect(page.locator('#semantic-review-host')).toHaveClass(
     /moonbit-viewer-surface-hidden/,
   );
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Git history and commit failures retry through the browser transport', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.rpcErrors.set('git.history', 'unknown command');
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview({ waitForHistory: false });
+
+  await expect(page.getByText(/Could not load Git history:.*unknown command/)).toBeVisible();
+  app.rpcErrors.delete('git.history');
+  await page.getByRole('button', { name: 'Retry' }).click();
+  const history = page.getByRole('tree', { name: 'Git commit history' });
+  const head = history.getByRole('treeitem', { name: /Cover Desktop Git flows/ });
+  await expect(head).toBeVisible();
+  await expect.poll(() => app.requests.filter(request =>
+    request.method === 'git.history').length).toBe(2);
+
+  app.rpcErrors.set('git.commit_changes', 'object unavailable');
+  await head.click();
+  const commitFailure = page.locator('.git-commit-files-message.error');
+  await expect(commitFailure).toContainText(
+    'Could not load this commit: object unavailable.',
+  );
+  app.rpcErrors.delete('git.commit_changes');
+  await commitFailure.getByRole('button', { name: 'Retry' }).click();
+  await expect(
+    history.getByRole('treeitem', { name: /src\/main\.mbt/ }),
+  ).toBeVisible();
+  await expect.poll(() => app.requests.filter(request =>
+    request.method === 'git.commit_changes').length).toBe(2);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -485,6 +599,7 @@ test('transcript names mbtx build and runtime failures without mislabeling JS fa
     'mbtx (build failed, exit=1)',
   );
   await expect(buildCall.locator('.tool-call-failed')).toHaveCount(0);
+  await expect(buildCall.locator('.tool-stage-build')).toHaveCount(0);
   await expect(runtimeCall.locator('.tool-call-failed.tool-stage-run')).toHaveText('runtime error');
   await expect(singleShotCall.locator('.tool-call-failed')).toHaveText('failed');
   await expect(singleShotCall.locator('.tool-stage-build, .tool-stage-run')).toHaveCount(0);
@@ -495,10 +610,71 @@ test('transcript names mbtx build and runtime failures without mislabeling JS fa
     hasText: 'single-shot diagnostic',
   });
   await expect(buildResult).toHaveClass(/stage-build/);
-  await expect(buildResult.locator('.tool-call-failed')).toHaveCount(0);
+  await expect(buildResult.locator('.tool-call-failed.tool-stage-build')).toHaveText(
+    'build error',
+  );
   await expect(runtimeResult.locator('.tool-call-failed.tool-stage-run')).toHaveText('runtime error');
   await expect(singleShotResult.locator('.tool-call-failed')).toHaveText('failed');
   await expect(singleShotResult.locator('.tool-stage-build, .tool-stage-run')).toHaveCount(0);
+
+  await buildCall.locator('.tool-call-summary').click();
+  await expect(buildCall.locator('.mbtx-args')).toContainText('fn main { compile_error }');
+  await expect(buildCall.locator('.moonbit-gutter')).toHaveText(['1']);
+  await expect(buildCall.locator('.mtk3').first()).toHaveText('fn');
+  await expect(buildCall.getByText('Program', { exact: true })).toBeVisible();
+  await expect(buildCall.getByText('Original JSON', { exact: true })).toBeVisible();
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('transcript keeps every line of a long mbtx program in the mounted card', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const source = Array.from({ length: 120 }, (_, index) => `let x${index} = ${index}`)
+    .join('\n');
+  app.sessionEvents = [
+    {
+      sequence: 1,
+      item: {
+        kind: 'user',
+        payload: { content: 'Show the browser fixture' },
+      },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: '',
+          tool_calls: [{
+            id: 'mbtx-long',
+            name: 'mbtx',
+            arguments: JSON.stringify({ source, target: 'js' }),
+          }],
+        },
+      },
+    },
+    {
+      sequence: 3,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'mbtx-long',
+          tool_name: 'mbtx',
+          content: 'ok',
+          is_error: false,
+          brief: 'mbtx (exit=0)',
+        },
+      },
+    },
+  ];
+
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const call = page.locator('.tool-call').filter({ hasText: 'let x119 = 119' });
+  await call.locator('.tool-call-summary').click();
+  await expect(call.locator('.moonbit-gutter')).toHaveCount(120);
+  await expect(call.locator('.moonbit-gutter').last()).toHaveText('120');
+  await expect(call).not.toContainText('skipped');
   expect(app.pageErrors).toEqual([]);
 });
 

@@ -18,6 +18,10 @@ test('session viewer mounts log cards and interactive filters in Chromium', asyn
   await expect(page.locator('.card.tool.error.escalated')).toContainText('fixture failure');
   await expect(page.locator('.error-count')).toContainText('4 tool errors');
   await expect(page.locator('.escalated-count')).toContainText('1 escalated tool call');
+  await expect(page.locator('.filter-bars')).toHaveCount(1);
+  await expect(
+    page.locator('.filter-bars > .error-bar, .filter-bars > .escalated-bar, .filter-bars > .build-error-bar'),
+  ).toHaveCount(3);
 
   await page.getByRole('button', { name: 'Model view' }).click();
   await expect(page.getByRole('button', { name: 'Model view' })).toHaveClass(/active/);
@@ -89,7 +93,7 @@ test('viewer classifies mbtx failure stages and filters to build diagnostics', a
     '.tool-call.tool-call-failed:not(.tool-call-build-failed):not(.tool-call-run-failed)',
   ).filter({ hasText: 'single shot' });
   await expect(buildCall).toHaveCount(1);
-  await expect(buildCall.locator('.tool-stage-build')).toHaveText('build error');
+  await expect(buildCall.locator('.tool-stage-build')).toHaveCount(0);
   await expect(runtimeCall).toHaveCount(1);
   await expect(runtimeCall.locator('.tool-stage-run')).toHaveText('runtime error');
   await expect(singleShotCall).toHaveCount(1);
@@ -99,6 +103,8 @@ test('viewer classifies mbtx failure stages and filters to build diagnostics', a
   const runtimeResult = page.locator('.card.tool.error').filter({ hasText: 'runtime trap' });
   await expect(buildResult.locator('.tool-flag.tool-stage-build')).toHaveText('🚩 build error');
   await expect(page.locator('.build-error-count')).toHaveText('🔨 1 build error');
+  await expect(page.getByTitle('Scroll to the previous build error')).toBeVisible();
+  await expect(page.getByTitle('Scroll to the next build error')).toBeVisible();
 
   await page.getByRole('button', { name: 'Build errors only', exact: true }).click();
   await expect(page.locator('.session-view')).toHaveClass(/build-errors-only/);
@@ -111,6 +117,85 @@ test('viewer classifies mbtx failure stages and filters to build diagnostics', a
   await page.getByRole('button', { name: 'Errors only', exact: true }).click();
   await expect(page.locator('.session-view')).toHaveClass(/errors-only/);
   await expect(page.locator('.session-view')).not.toHaveClass(/build-errors-only/);
+  expect(viewer.pageErrors).toEqual([]);
+});
+
+test('clean mbtx activity exposes the build filter without inventing an error count', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  viewer.events = [
+    JSON.stringify({
+      version: 1,
+      id: 'viz-1',
+      system_prompt: 'You are a browser fixture.',
+    }),
+    JSON.stringify({
+      sequence: 1,
+      ts: 1_000,
+      item: {
+        kind: 'user',
+        payload: { content: 'Inspect the session viewer' },
+      },
+    }),
+    JSON.stringify({
+      sequence: 2,
+      ts: 2_000,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: '',
+          tool_calls: [{
+            id: 'mbtx-clean',
+            name: 'mbtx',
+            arguments: JSON.stringify({ source: 'fn main { println(42) }' }),
+          }],
+        },
+      },
+    }),
+    JSON.stringify({
+      sequence: 3,
+      ts: 3_000,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'mbtx-clean',
+          tool_name: 'mbtx',
+          content: '42',
+          is_error: false,
+          brief: 'mbtx (exit=0)',
+        },
+      },
+    }),
+  ].join('\n') + '\n';
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+
+  await expect(page.getByRole('button', {
+    name: 'Build errors only',
+    exact: true,
+  })).toBeVisible();
+  await expect(page.locator('.build-error-count')).toHaveCount(0);
+  await expect(page.getByTitle('Scroll to the previous build error')).toHaveCount(0);
+  await expect(page.getByTitle('Scroll to the next build error')).toHaveCount(0);
+
+  viewer.events = [
+    JSON.stringify({
+      version: 1,
+      id: 'viz-1',
+      system_prompt: 'You are a browser fixture.',
+    }),
+    JSON.stringify({
+      sequence: 1,
+      ts: 1_000,
+      item: {
+        kind: 'user',
+        payload: { content: 'Inspect the session viewer' },
+      },
+    }),
+  ].join('\n') + '\n';
+  await viewer.goto();
+  await viewer.openSession();
+  await expect(page.getByRole('button', { name: /Build errors only/ })).toHaveCount(0);
   expect(viewer.pageErrors).toEqual([]);
 });
 

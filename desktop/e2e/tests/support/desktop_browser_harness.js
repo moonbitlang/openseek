@@ -4,6 +4,10 @@ export class DesktopBrowserHarness {
     this.socket = null;
     this.requests = [];
     this.pageErrors = [];
+    // Error and delay controls let tests exercise the product's real pending,
+    // failed, and retry states without replacing its Rabbita update logic.
+    this.rpcErrors = new Map();
+    this.rpcDelays = new Map();
     // Requests mutate the same fixture snapshots a real Desktop host would
     // return on the next list/read. That lets browser tests verify complete
     // UI -> RPC -> refreshed-DOM flows instead of stopping at button clicks.
@@ -39,6 +43,7 @@ export class DesktopBrowserHarness {
     this.gitBaseline = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     this.gitParent = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     this.gitHead = 'cccccccccccccccccccccccccccccccccccccccc';
+    this.gitMerge = 'dddddddddddddddddddddddddddddddddddddddd';
     // Tests may replace this inventory together with workingFiles and the
     // baseline snapshot to exercise repository states that the default Review
     // flow does not contain. The RPC still returns ordinary product data.
@@ -109,6 +114,20 @@ export class DesktopBrowserHarness {
         'src/lib.mbt': [
           'pub fn answer() -> Int {',
           '  43',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      [this.gitMerge]: {
+        'src/main.mbt': [
+          'fn main {',
+          '  println("history merge")',
+          '}',
+          '',
+        ].join('\n'),
+        'src/lib.mbt': [
+          'pub fn answer() -> Int {',
+          '  42',
           '}',
           '',
         ].join('\n'),
@@ -416,11 +435,24 @@ export class DesktopBrowserHarness {
         if (request.id === undefined) {
           return;
         }
-        socket.send(JSON.stringify({
-          jsonrpc: '2.0',
-          id: request.id,
-          result: this.replyFor(request),
-        }));
+        const errorMessage = this.rpcErrors.get(request.method);
+        const response = errorMessage === undefined
+          ? {
+              jsonrpc: '2.0',
+              id: request.id,
+              result: this.replyFor(request),
+            }
+          : {
+              jsonrpc: '2.0',
+              id: request.id,
+              error: { code: -32000, message: errorMessage },
+            };
+        const delay = this.rpcDelays.get(request.method) || 0;
+        if (delay > 0) {
+          setTimeout(() => socket.send(JSON.stringify(response)), delay);
+        } else {
+          socket.send(JSON.stringify(response));
+        }
       });
       socket.send(JSON.stringify({
         jsonrpc: '2.0',
@@ -631,10 +663,17 @@ export class DesktopBrowserHarness {
           commits: [
             {
               id: this.gitHead,
-              parent_ids: [this.gitParent],
+              parent_ids: [this.gitMerge],
               subject: 'Cover Desktop Git flows',
               author: 'OpenSeek fixture',
               authored_at: '2026-09-01T09:30:00+08:00',
+            },
+            {
+              id: this.gitMerge,
+              parent_ids: [this.gitParent, this.gitBaseline],
+              subject: 'Merge fixture lanes',
+              author: 'OpenSeek fixture',
+              authored_at: '2026-09-01T08:00:00+08:00',
             },
             {
               id: this.gitParent,
@@ -643,6 +682,13 @@ export class DesktopBrowserHarness {
               author: 'OpenSeek fixture',
               authored_at: '2026-08-31T18:00:00+08:00',
             },
+            {
+              id: this.gitBaseline,
+              parent_ids: [],
+              subject: 'Initialize browser fixture',
+              author: 'OpenSeek fixture',
+              authored_at: '2026-08-30T10:00:00+08:00',
+            },
           ],
           has_more: false,
         };
@@ -650,8 +696,10 @@ export class DesktopBrowserHarness {
         return {
           commit: request.params?.commit,
           parent: request.params?.commit === this.gitHead
-            ? this.gitParent
-            : this.gitBaseline,
+            ? this.gitMerge
+            : request.params?.commit === this.gitMerge
+              ? this.gitParent
+              : this.gitBaseline,
           changes: request.params?.commit === this.gitHead
             ? [
                 {
@@ -718,7 +766,7 @@ export class DesktopBrowserHarness {
     await this.page.locator('#quick-open-input').waitFor();
   }
 
-  async openReview() {
+  async openReview({ waitForHistory = true } = {}) {
     // Review has no global shortcut of its own. Open the real right-panel
     // picker through Search, then use the product's Changes tab so the test
     // exercises the same Rabbita messages as a pointer-driven Review launch.
@@ -727,7 +775,9 @@ export class DesktopBrowserHarness {
     await this.page.keyboard.press(shortcut);
     const tabs = this.page.getByRole('tablist', { name: 'Explorer views' });
     await tabs.getByRole('tab', { name: /Changes/ }).click();
-    await this.page.getByRole('tree', { name: 'Git commit history' }).waitFor();
+    if (waitForHistory) {
+      await this.page.getByRole('tree', { name: 'Git commit history' }).waitFor();
+    }
   }
 
   readWorkingFile(params) {
