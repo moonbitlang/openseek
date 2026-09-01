@@ -31,8 +31,8 @@ Options:
   --session <session>            Create or resume this durable session id.
   --session-root <session-root>  Directory containing durable OpenSeek sessions. [default: .openseek]
   --continue                     Resume the most recently active session in --session-root.
-  --engine <engine>              Agent engine to spawn (default: this openseek binary); reads its JSONL event stream from stdout. [env: OPENSEEK_ENGINE]
-  --engine-mode <engine-mode>    Engine protocol: serve (one persistent, steerable process) or oneshot (spawn per prompt, for replay engines). [env: OPENSEEK_ENGINE_MODE] [default: serve]
+  --engine <engine>              Agent engine to spawn (default: this openseek binary); reads its JSONL event stream from stdout.
+  --engine-mode <engine-mode>    Engine protocol: serve (one persistent, steerable process) or oneshot (spawn per prompt, for replay engines). [default: serve]
   --prompt <prompt>              Initial prompt to send once the UI opens.
 ```
 
@@ -80,13 +80,13 @@ stdout-empty
 ## The Engine Is Probed Before The UI Starts
 
 The UI spawns the `openseek` engine (by default this same binary, in `serve`
-mode; override with `--engine`/`OPENSEEK_ENGINE`) and probes it with `--help`
+mode; override with `--engine`) and probes it with `--help`
 first. A missing engine fails fast, before the UI takes over the terminal.
 
 ```mooncram
 $ env DEEPSEEK=test-key openseek.exe tui --engine openseek-not-a-real-binary
 error: engine 'openseek-not-a-real-binary' is not usable: it must be on PATH, executable, and accept `--help` (exit 0) the way openseek does.
-Pass --engine <path>, set OPENSEEK_ENGINE, or install the openseek binary.
+Pass --engine <path> or install the openseek binary.
 [1]
 ```
 
@@ -99,6 +99,6 @@ prompt path is wired — there is no free-form positional.
 ```mooncram
 $ env DEEPSEEK=test-key openseek.exe tui --engine does-not-exist --prompt "inspect project"
 error: engine 'does-not-exist' is not usable: it must be on PATH, executable, and accept `--help` (exit 0) the way openseek does.
-Pass --engine <path>, set OPENSEEK_ENGINE, or install the openseek binary.
+Pass --engine <path> or install the openseek binary.
 [1]
 ```

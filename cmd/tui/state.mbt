@@ -16,8 +16,7 @@ priv struct AppConfig {
   // The agent engine the TUI spawns and reads JSONL events from. Defaults to
   // this running `openseek` binary re-launched as the engine (see
   // `default_engine`), so it never spawns a stale, separately-built engine;
-  // override (e.g. to a recorded-stream replayer) with `--engine` or
-  // `OPENSEEK_ENGINE`.
+  // override (e.g. to a recorded-stream replayer) with `--engine`.
   engine : String
   // Extra arguments inserted before the engine subcommand. Usually empty; when
   // the TUI itself was launched through Moon's debug native `tcc -run` path, the

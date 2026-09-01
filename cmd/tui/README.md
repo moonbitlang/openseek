@@ -9,7 +9,7 @@ explicit `openseek tui` subcommand. There is no separate `tui` executable.
 The UI runs no agent code itself. It spawns the `openseek` engine — by default
 this same binary, re-launched in `serve` mode (so the UI and engine can never
 drift out of sync), resolved from `argv[0]` when invoked by path and otherwise
-from `PATH`; override with `--engine` or `OPENSEEK_ENGINE` — **once per session**
+from `PATH`; override with `--engine` — **once per session**
 and drives it over stdin commands, rendering the engine's JSONL event stream:
 streamed thinking and answer text move live on the activity line, each turn's
 reasoning is kept as a dim `✻` transcript aside above its answer, and tool
@@ -18,8 +18,8 @@ Ctrl-C cancels the turn (a second Ctrl-C kills the engine, and the next prompt
 respawns it on the same session).
 
 A custom or recorded-stream engine that only speaks the original
-one-process-per-prompt protocol works with `--engine-mode oneshot` (env
-`OPENSEEK_ENGINE_MODE`); it spawns `<engine> run --session=<id>
+one-process-per-prompt protocol works with `--engine-mode oneshot`; it spawns
+`<engine> run --session=<id>
 --session-root=<root> -- <task>` per prompt, steering is unavailable, and it
 requires an explicit `--engine` (re-launching this binary in oneshot would only
 lose steering for no gain).

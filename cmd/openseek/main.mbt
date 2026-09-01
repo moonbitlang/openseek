@@ -36,8 +36,8 @@ async fn dispatch() -> Unit {
     // argparse rejects unknown subcommands during parse, so this is unreachable.
     Some((name, _)) => fail("unhandled subcommand: \{name}")
     // Bare `openseek` IS `openseek tui`: re-parse through the `tui` subcommand so
-    // its own options and env bindings (OPENSEEK_ENGINE, OPENSEEK_ENGINE_MODE)
-    // apply to the default UI, not only to an explicit `tui`. The first parse
+    // its own options apply to the default UI, not only to an explicit `tui`.
+    // The first parse
     // already accepted `argv` at the root, and `tui` inherits the root globals,
     // so this re-parse cannot newly fail.
     None => {

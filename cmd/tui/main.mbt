@@ -99,13 +99,11 @@ pub fn tui_ui_options() -> Array[@argparse.OptionArg] {
     OptionArg(
       "engine",
       long="engine",
-      env="OPENSEEK_ENGINE",
       about="Agent engine to spawn (default: this openseek binary); reads its JSONL event stream from stdout.",
     ),
     OptionArg(
       "engine-mode",
       long="engine-mode",
-      env="OPENSEEK_ENGINE_MODE",
       default_values=["serve"],
       about="Engine protocol: serve (one persistent, steerable process) or oneshot (spawn per prompt, for replay engines).",
     ),
@@ -245,10 +243,10 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
       root
     }
   }
-  // An explicit --engine / OPENSEEK_ENGINE wins; otherwise re-launch this
-  // command as the engine (see `default_engine`). Presence of a non-blank value,
-  // not a magic default string, decides — which also gates oneshot below. A
-  // blank `--engine ""` counts as unset rather than an empty command.
+  // An explicit --engine wins; otherwise re-launch this command as the engine
+  // (see `default_engine`). Presence of a non-blank value, not a magic default
+  // string, decides — which also gates oneshot below. A blank `--engine ""`
+  // counts as unset rather than an empty command.
   let explicit_engine : String? = if engine_input.trim().is_empty() {
     None
   } else {
@@ -262,7 +260,7 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
   // and loses steering/compaction, so require an explicit engine.
   if engine_mode is OneShot && explicit_engine is None {
     fail(
-      "--engine-mode oneshot requires an explicit --engine / OPENSEEK_ENGINE (it is for replay/custom engines)",
+      "--engine-mode oneshot requires an explicit --engine (it is for replay/custom engines)",
     )
   }
   // Enforced here rather than via argparse `required`: see `tui_shared_options`.
@@ -302,8 +300,8 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
 }
 
 ///|
-/// The engine command when `--engine`/`OPENSEEK_ENGINE` is unset. A normal
-/// binary argv0 is re-execed directly; a bare argv0 falls back to PATH lookup.
+/// The engine command when `--engine` is unset. A normal binary argv0 is
+/// re-execed directly; a bare argv0 falls back to PATH lookup.
 /// Moon's debug native `tcc -run` path is different: argv0 is the generated C
 /// source and no sibling `.exe` is produced, so re-enter through the generated
 /// TCC response file; it carries the include paths, defines, linked dylibs, and
@@ -442,9 +440,7 @@ pub async fn run(matches : @argparse.Matches) -> Unit {
     println(
       "error: engine '\{config.engine_display()}' is not usable: it must be on PATH, executable, and accept `--help` (exit 0) the way openseek does.",
     )
-    println(
-      "Pass --engine <path>, set OPENSEEK_ENGINE, or install the openseek binary.",
-    )
+    println("Pass --engine <path> or install the openseek binary.")
     @sys.exit(1)
   }
   // The UI takes over the terminal, so refuse when stdin/stdout is not a TTY (a
@@ -682,23 +678,14 @@ test "default_engine re-launches a path argv0 and falls back to PATH otherwise" 
 }
 
 ///|
-async test "engine defaults to this binary; --engine/OPENSEEK_ENGINE override it" {
-  // No --engine and no env: fall through to re-launching this binary.
+async test "engine defaults to this binary; --engine overrides it" {
+  // No --engine: fall through to re-launching this binary.
   let default_cfg = parse_config(
     cli_command().parse(argv=[], env={ "DEEPSEEK": "k" }),
   )
   let (expected_engine, expected_prefix) = default_engine(@env.args())
   assert_eq(default_cfg.engine, expected_engine)
   @debug.assert_eq(default_cfg.engine_args_prefix, expected_prefix)
-  // OPENSEEK_ENGINE is treated as an explicit engine.
-  let env_cfg = parse_config(
-    cli_command().parse(argv=[], env={
-      "DEEPSEEK": "k",
-      "OPENSEEK_ENGINE": "./fake-engine",
-    }),
-  )
-  assert_eq(env_cfg.engine, "./fake-engine")
-  @debug.assert_eq(env_cfg.engine_args_prefix, [])
 }
 
 ///|
@@ -717,7 +704,7 @@ async test "oneshot engine mode requires an explicit engine" {
 }
 
 ///|
-async test "oneshot with an explicit engine (flag or env) is accepted" {
+async test "oneshot with an explicit engine is accepted" {
   let flag_cfg = parse_config(
     cli_command().parse(
       argv=["--engine-mode", "oneshot", "--engine", "./fake-engine"],
@@ -727,14 +714,6 @@ async test "oneshot with an explicit engine (flag or env) is accepted" {
   assert_true(flag_cfg.engine_mode is OneShot)
   assert_eq(flag_cfg.engine, "./fake-engine")
   @debug.assert_eq(flag_cfg.engine_args_prefix, [])
-  let env_cfg = parse_config(
-    cli_command().parse(argv=[], env={
-      "DEEPSEEK": "k",
-      "OPENSEEK_ENGINE": "./fake-engine",
-      "OPENSEEK_ENGINE_MODE": "oneshot",
-    }),
-  )
-  assert_true(env_cfg.engine_mode is OneShot)
 }
 
 ///|

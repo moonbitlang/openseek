@@ -101,16 +101,13 @@ error: unexpected value 'something' found; no more were expected
 
 ## Bare `openseek` Is The Interactive UI
 
-With no subcommand, `openseek` launches the UI — it behaves as `openseek tui`, so
-the UI's environment config (`OPENSEEK_ENGINE`, `OPENSEEK_ENGINE_MODE`) still
-applies to the default entrypoint. Here a bogus `OPENSEEK_ENGINE` makes the
-engine pre-flight fail deterministically, proving the env var is honored for a
-bare launch.
+With no subcommand, `openseek` launches the UI — it behaves as `openseek tui`.
+Here the default engine reaches the non-TTY guard, proving the bare entrypoint
+was dispatched through the UI without needing a custom engine.
 
 ```mooncram
-$ env DEEPSEEK=test-key OPENSEEK_ENGINE=does-not-exist openseek.exe 2>&1
-error: engine 'does-not-exist' is not usable: it must be on PATH, executable, and accept `--help` (exit 0) the way openseek does.
-Pass --engine <path>, set OPENSEEK_ENGINE, or install the openseek binary.
+$ env DEEPSEEK=test-key openseek.exe 2>&1
+error: the interactive UI needs a terminal; run a headless task with `openseek run "…"` (or `openseek serve` for the JSONL protocol).
 [1]
 ```
 
