@@ -289,10 +289,13 @@ pub fn Notification::params(self : Notification) -> Json {
 
 ///|
 test "desktop notifications round-trip at the wire edge" {
-  let event = Notification::from_wire("terminal.exit", { "id": 1, "code": 0 })
+  let event = Notification::from_wire("terminal.exit", {
+    "id": "terminal-fixture",
+    "code": 0,
+  })
   guard event is Some(event) else { fail("known notification was rejected") }
   assert_eq(event.wire_name(), "terminal.exit")
-  assert_eq(event.params(), { "id": 1, "code": 0 })
+  assert_eq(event.params(), { "id": "terminal-fixture", "code": 0 })
   let settings = Notification::from_wire("workspace.settings_changed", {
     "workspace": "/home/u/proj",
     "worktree_mode": true,

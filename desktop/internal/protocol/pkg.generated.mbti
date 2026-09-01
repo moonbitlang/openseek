@@ -2178,44 +2178,52 @@ pub fn SymbolRange::to_json(Self) -> Json
 pub fn SymbolRange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TerminalAckPayload {
-  id : Int
+  id : String
   sequence : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn TerminalAckPayload::equal(Self, Self) -> Bool
 pub fn TerminalAckPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalAckPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalAckPayload::to_json(Self) -> Json
 pub fn TerminalAckPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalAckPayload
+pub impl @json.FromJson for TerminalAckPayload
 
 pub(all) struct TerminalClosePayload {
-  id : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  id : String
+} derive(Eq, @debug.Debug)
 pub fn TerminalClosePayload::equal(Self, Self) -> Bool
 pub fn TerminalClosePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalClosePayload::not_equal(Self, Self) -> Bool
 pub fn TerminalClosePayload::to_json(Self) -> Json
 pub fn TerminalClosePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalClosePayload
+pub impl @json.FromJson for TerminalClosePayload
 
 pub(all) struct TerminalExitPayload {
-  id : Int
+  id : String
   code : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn TerminalExitPayload::equal(Self, Self) -> Bool
 pub fn TerminalExitPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalExitPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalExitPayload::to_json(Self) -> Json
 pub fn TerminalExitPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalExitPayload
+pub impl @json.FromJson for TerminalExitPayload
 
 pub(all) struct TerminalInputPayload {
-  id : Int
+  id : String
   data : String?
   data_base64 : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn TerminalInputPayload::equal(Self, Self) -> Bool
 pub fn TerminalInputPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalInputPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalInputPayload::to_json(Self) -> Json
 pub fn TerminalInputPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalInputPayload
+pub impl @json.FromJson for TerminalInputPayload
 
 pub(all) struct TerminalOpenPayload {
   session : String
@@ -2230,35 +2238,41 @@ pub fn TerminalOpenPayload::to_json(Self) -> Json
 pub fn TerminalOpenPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TerminalOpenReply {
-  id : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  id : String
+} derive(Eq, @debug.Debug)
 pub fn TerminalOpenReply::equal(Self, Self) -> Bool
 pub fn TerminalOpenReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalOpenReply::not_equal(Self, Self) -> Bool
 pub fn TerminalOpenReply::to_json(Self) -> Json
 pub fn TerminalOpenReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalOpenReply
+pub impl @json.FromJson for TerminalOpenReply
 
 pub(all) struct TerminalOutputPayload {
-  id : Int
+  id : String
   sequence : Int
   data : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn TerminalOutputPayload::equal(Self, Self) -> Bool
 pub fn TerminalOutputPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalOutputPayload::not_equal(Self, Self) -> Bool
 pub fn TerminalOutputPayload::to_json(Self) -> Json
 pub fn TerminalOutputPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalOutputPayload
+pub impl @json.FromJson for TerminalOutputPayload
 
 pub(all) struct TerminalResizePayload {
-  id : Int
+  id : String
   cols : Int
   rows : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn TerminalResizePayload::equal(Self, Self) -> Bool
 pub fn TerminalResizePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn TerminalResizePayload::not_equal(Self, Self) -> Bool
 pub fn TerminalResizePayload::to_json(Self) -> Json
 pub fn TerminalResizePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalResizePayload
+pub impl @json.FromJson for TerminalResizePayload
 
 pub(all) struct TextSearchError {
   code : String

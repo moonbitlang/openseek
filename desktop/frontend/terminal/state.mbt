@@ -5,9 +5,9 @@
 // stay alive while the user looks elsewhere.
 
 ///|
-/// Which device/workspace a tab belongs to. Host-assigned terminal ids are
-/// scoped to one bridge connection, so the channel is part of the identity:
-/// two devices can both name their first terminal `1` without sharing tabs.
+/// Which device/workspace a tab belongs to. A terminal UUID identifies the
+/// host session, while the channel retains the connection that owns and can
+/// operate that PTY.
 /// Main-checkout conversations in the same registered project directory on
 /// one device share a group. A worktree is a separate group keyed by its
 /// registered project and worktree name, while a scratch group is keyed by
@@ -44,7 +44,7 @@ priv enum TabStatus {
 /// restarts reuse them, so a tab never migrates between workspaces.
 priv struct Tab {
   key : Int
-  id : Int?
+  id : String?
   workspace : WorkspaceKey
   workspace_label : String
   session : String
@@ -69,7 +69,7 @@ pub struct State {
   /// The reply is the first event that identifies the opening tab, so it
   /// consumes the pair and retires that tab instead of reviving an
   /// already-dead session.
-  priv exited_before_open : Array[(@interop.ChannelId, Int)]
+  priv exited_before_open : Array[(@interop.ChannelId, String)]
   /// The color scheme last applied to every mounted emulator. Keeping this in
   /// model state lets `sync` refresh existing xterm instances exactly once
   /// when the application switches between light and dark mode.
@@ -188,7 +188,7 @@ fn State::tab_by_key(self : State, key : Int) -> Tab? {
 fn State::tab_by_id(
   self : State,
   channel : @interop.ChannelId,
-  id : Int,
+  id : String,
 ) -> Tab? {
   for tab in self.tabs {
     if tab.workspace.channel() == channel &&
@@ -232,7 +232,7 @@ pub(all) enum Msg {
   /// Show/hide the panel (every shell keeps running while hidden).
   ToggleTerminal
   /// `terminal_exit` event: the shell ended, so its tab retires.
-  SessionExited(channel~ : @interop.ChannelId, id~ : Int, code~ : Int)
+  SessionExited(channel~ : @interop.ChannelId, id~ : String, code~ : Int)
   /// Open one more terminal in the active conversation's workspace.
   NewTerminal
   TabSelected(key~ : Int)
@@ -242,7 +242,7 @@ pub(all) enum Msg {
   EmulatorReady(key~ : Int, cols~ : Int, rows~ : Int)
   /// `terminal_open` replied for the tab. The channel is retained because the
   /// tab may have been closed or the UI may have switched devices meanwhile.
-  Opened(channel~ : @interop.ChannelId, key~ : Int, id~ : Int)
+  Opened(channel~ : @interop.ChannelId, key~ : Int, id~ : String)
   OpenFailed(key~ : Int, message~ : String)
   /// Keystrokes from one tab's emulator.
   UserInput(key~ : Int, data~ : String)

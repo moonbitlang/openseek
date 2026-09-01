@@ -26,8 +26,8 @@ pub(all) enum TerminalPush {
   /// `sequence` identifies this output chunk within one session. The webview
   /// echoes it in `terminal_ack`, making retries safe when a bridge response
   /// is lost after the host already applied the acknowledgement.
-  Output(id~ : Int, sequence~ : Int, data~ : Bytes)
-  Exited(id~ : Int, code~ : Int)
+  Output(id~ : String, sequence~ : Int, data~ : Bytes)
+  Exited(id~ : String, code~ : Int)
 }
 
 ///|
@@ -60,7 +60,7 @@ priv struct TerminalSession {
 
 ///|
 priv struct OpenRequest {
-  id : Int
+  id : String
   /// The page connection that submitted this request. A later connect
   /// handshake invalidates it even if the pump has already dequeued it.
   connection_generation : Int
@@ -78,8 +78,7 @@ priv struct OpenRequest {
 /// spawns, the table of live sessions, and the current page connection.
 struct TerminalState {
   requests : @async.Queue[OpenRequest]
-  sessions : Map[Int, TerminalSession]
-  mut next_id : Int
+  sessions : Map[String, TerminalSession]
   /// Once closed, this state cannot serve another connection. Page reconnects
   /// use `close_all_terminals` instead and leave the pump available.
   mut closed : Bool
@@ -93,7 +92,6 @@ pub fn new_terminal_state() -> TerminalState {
   {
     requests: Queue(kind=Unbounded),
     sessions: Map([]),
-    next_id: 1,
     closed: false,
     connection_generation: 0,
   }
@@ -112,11 +110,15 @@ pub async fn open_terminal(
   cols~ : Int,
   rows~ : Int,
   command? : Array[String],
-) -> Int {
+) -> String {
   guard !state.closed else { raise TerminalError("terminal service is closed") }
   let argv = session_argv(command?)
-  let id = state.next_id
-  state.next_id = id + 1
+  // Session ids cross the host/frontend boundary and may outlive a page
+  // connection in delayed messages, so mint a fresh identity instead of
+  // reusing a connection-local counter value.
+  guard @uuid.mint() is Some(id) else {
+    raise TerminalError("could not create a terminal id")
+  }
   let reply : @async.Queue[Result[Unit, String]] = Queue(kind=Blocking(1))
   state.requests.put({
     id,
@@ -140,7 +142,7 @@ pub async fn open_terminal(
 /// Write user input (already encoded as terminal input bytes) to a session.
 pub async fn write_terminal(
   state : TerminalState,
-  id~ : Int,
+  id~ : String,
   data : Bytes,
 ) -> Unit {
   guard state.sessions.get(id) is Some(session) else {
@@ -156,7 +158,7 @@ pub async fn write_terminal(
 /// Propagate a webview-side viewport change to the PTY.
 pub fn resize_terminal(
   state : TerminalState,
-  id~ : Int,
+  id~ : String,
   cols~ : Int,
   rows~ : Int,
 ) -> Unit raise {
@@ -172,7 +174,11 @@ pub fn resize_terminal(
 /// Acknowledge one output chunk the webview has finished rendering. A sequence
 /// is removed at most once, so retrying after a lost bridge response cannot
 /// double-release the flow-control window.
-pub fn ack_terminal(state : TerminalState, id~ : Int, sequence~ : Int) -> Unit {
+pub fn ack_terminal(
+  state : TerminalState,
+  id~ : String,
+  sequence~ : Int,
+) -> Unit {
   guard state.sessions.get(id) is Some(session) else { return }
   guard session.unacked_chunks.get(sequence) is Some(bytes) else { return }
   session.unacked_chunks.remove(sequence)
@@ -190,7 +196,7 @@ pub fn ack_terminal(state : TerminalState, id~ : Int, sequence~ : Int) -> Unit {
 /// output tasks together; the PTY then closes its controlling handle, allows a
 /// bounded graceful exit, and releases its native resources before `Exited`.
 /// Unknown ids are a no-op (already exited).
-pub fn close_terminal(state : TerminalState, id~ : Int) -> Unit {
+pub fn close_terminal(state : TerminalState, id~ : String) -> Unit {
   guard state.sessions.get(id) is Some(session) else { return }
   guard !session.closing else { return }
   session.closing = true

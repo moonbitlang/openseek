@@ -320,9 +320,9 @@ fn update(
 ///|
 /// Retire all tabs owned by one dead connection. Terminal ids cannot survive a
 /// WebSocket reconnect: the host tears down the old connection's PTYs before
-/// the browser dials again. Keeping another channel's same-numbered tab is
-/// safe because both model lookup and the imperative pre-open buffer use the
-/// `(channel, id)` pair.
+/// the browser dials again. UUIDs do not replace connection ownership: model
+/// lookup and the imperative pre-open buffer retain `(channel, id)` so only
+/// the disconnected channel's state is removed.
 fn disconnect(state : State, channel : @interop.ChannelId) -> (@cmd.Cmd, State) {
   let commands : Array[@cmd.Cmd] = [term_host.clear_pending(channel)]
   let retired_keys : Array[Int] = []

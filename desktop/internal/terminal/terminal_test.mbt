@@ -177,7 +177,7 @@ async test "close_all_terminals retires every live session" {
     let first = @terminal.open_terminal(state, cwd=".", cols=80, rows=24)
     let second = @terminal.open_terminal(state, cwd=".", cols=80, rows=24)
     @terminal.close_all_terminals(state)
-    let exited : Array[Int] = []
+    let exited : Array[String] = []
     @async.with_timeout(5000, () => {
       while exited.length() < 2 {
         if pushes.get() is Exited(id~, ..) {
@@ -185,8 +185,10 @@ async test "close_all_terminals retires every live session" {
         }
       }
     })
+    let expected = [first, second]
     exited.sort()
-    assert_eq(exited, [first, second])
+    expected.sort()
+    assert_eq(exited, expected)
   })
 }
 
@@ -300,10 +302,10 @@ async test "duplicate acknowledgements release an output chunk only once" {
 test "ops on unknown terminal ids degrade cleanly" {
   let state = @terminal.new_terminal_state()
   // ack and close are fire-and-forget: an id that already exited is fine.
-  @terminal.ack_terminal(state, id=99, sequence=1)
-  @terminal.close_terminal(state, id=99)
+  @terminal.ack_terminal(state, id="missing-terminal", sequence=1)
+  @terminal.close_terminal(state, id="missing-terminal")
   let failed = try {
-    @terminal.resize_terminal(state, id=99, cols=80, rows=24)
+    @terminal.resize_terminal(state, id="missing-terminal", cols=80, rows=24)
     false
   } catch {
     @terminal.TerminalError(_) => true

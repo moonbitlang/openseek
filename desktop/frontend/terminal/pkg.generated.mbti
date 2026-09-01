@@ -15,7 +15,7 @@ pub fn apply_font_size(Double) -> @cmd.Cmd
 
 pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @cmd.Emit[Msg]) -> @rabbita.Val[@html.Html]
 
-pub fn output(@interop.ChannelId, Int, Int, String) -> @cmd.Cmd
+pub fn output(@interop.ChannelId, String, Int, String) -> @cmd.Cmd
 
 // Errors
 
@@ -38,12 +38,12 @@ pub fn Input::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
   ToggleTerminal
-  SessionExited(channel~ : @interop.ChannelId, id~ : Int, code~ : Int)
+  SessionExited(channel~ : @interop.ChannelId, id~ : String, code~ : Int)
   NewTerminal
   TabSelected(key~ : Int)
   TabClosed(key~ : Int)
   EmulatorReady(key~ : Int, cols~ : Int, rows~ : Int)
-  Opened(channel~ : @interop.ChannelId, key~ : Int, id~ : Int)
+  Opened(channel~ : @interop.ChannelId, key~ : Int, id~ : String)
   OpenFailed(key~ : Int, message~ : String)
   UserInput(key~ : Int, data~ : String)
   LinkActivated(url~ : String)

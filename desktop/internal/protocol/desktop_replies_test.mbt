@@ -1409,6 +1409,179 @@ test "a reconnect settlement is refused unless it names run, session and outcome
 }
 
 ///|
+test "terminal input encodes one data arm and rejects malformed identities" {
+  let text : @protocol.TerminalInputPayload = {
+    id: "terminal-text",
+    data: Some("ls\n"),
+    data_base64: None,
+  }
+  @debug.assert_eq(text.to_json(), { "id": "terminal-text", "data": "ls\n" })
+  let decoded_text : @protocol.TerminalInputPayload = @json.from_json(
+    text.to_json(),
+  )
+  assert_eq(decoded_text, text)
+  let binary : @protocol.TerminalInputPayload = {
+    id: "terminal-binary",
+    data: None,
+    data_base64: Some("AA=="),
+  }
+  @debug.assert_eq(binary.to_json(), {
+    "id": "terminal-binary",
+    "data_base64": "AA==",
+  })
+  let decoded_binary : @protocol.TerminalInputPayload = @json.from_json(
+    binary.to_json(),
+  )
+  assert_eq(decoded_binary, binary)
+  for
+    invalid in (
+      [
+        { "data": "x" },
+        { "id": null, "data": "x" },
+        { "id": 7, "data": "x" },
+        { "id": "terminal-empty" },
+        { "id": "terminal-empty", "data": null, "data_base64": null },
+        { "id": "terminal-both", "data": "x", "data_base64": "eA==" },
+      ] : Array[Json]) {
+    let rejected = try {
+      let _ : @protocol.TerminalInputPayload = @json.from_json(invalid)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
+}
+
+///|
+test "terminal command payloads require a string id and integer arguments" {
+  let resize : @protocol.TerminalResizePayload = {
+    id: "terminal-resize",
+    cols: 120,
+    rows: 40,
+  }
+  let decoded_resize : @protocol.TerminalResizePayload = @json.from_json(
+    resize.to_json(),
+  )
+  assert_eq(decoded_resize, resize)
+  let ack : @protocol.TerminalAckPayload = { id: "terminal-ack", sequence: 3, }
+  let decoded_ack : @protocol.TerminalAckPayload = @json.from_json(
+    ack.to_json(),
+  )
+  assert_eq(decoded_ack, ack)
+  let close : @protocol.TerminalClosePayload = { id: "terminal-close", }
+  let decoded_close : @protocol.TerminalClosePayload = @json.from_json(
+    close.to_json(),
+  )
+  assert_eq(decoded_close, close)
+  for
+    invalid in (
+      [
+        { "id": 7, "cols": 120, "rows": 40 },
+        { "id": "terminal-resize", "rows": 40 },
+        { "id": "terminal-resize", "cols": "120", "rows": 40 },
+      ] : Array[Json]) {
+    let rejected = try {
+      let _ : @protocol.TerminalResizePayload = @json.from_json(invalid)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
+  for
+    invalid in (
+      [
+        { "sequence": 3 },
+        { "id": null, "sequence": 3 },
+        { "id": "terminal-ack", "sequence": "3" },
+      ] : Array[Json]) {
+    let rejected = try {
+      let _ : @protocol.TerminalAckPayload = @json.from_json(invalid)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
+  for
+    invalid in (
+      [Json::empty_object(), { "id": null }, { "id": 7 }] : Array[Json]) {
+    let rejected = try {
+      let _ : @protocol.TerminalClosePayload = @json.from_json(invalid)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
+}
+
+///|
+test "terminal replies and notifications require their complete wire shape" {
+  let opened : @protocol.TerminalOpenReply = { id: "terminal-open", }
+  let decoded_opened : @protocol.TerminalOpenReply = @json.from_json(
+    opened.to_json(),
+  )
+  assert_eq(decoded_opened, opened)
+  let output : @protocol.TerminalOutputPayload = {
+    id: "terminal-output",
+    sequence: 4,
+    data: "cHR5",
+  }
+  let decoded_output : @protocol.TerminalOutputPayload = @json.from_json(
+    output.to_json(),
+  )
+  assert_eq(decoded_output, output)
+  let exited : @protocol.TerminalExitPayload = { id: "terminal-exit", code: 0, }
+  let decoded_exited : @protocol.TerminalExitPayload = @json.from_json(
+    exited.to_json(),
+  )
+  assert_eq(decoded_exited, exited)
+  for
+    invalid in (
+      [Json::empty_object(), { "id": null }, { "id": 7 }] : Array[Json]) {
+    let rejected = try {
+      let _ : @protocol.TerminalOpenReply = @json.from_json(invalid)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
+  for
+    invalid in (
+      [
+        { "id": 7, "sequence": 4, "data": "cHR5" },
+        { "id": "terminal-output", "sequence": 4 },
+        { "id": "terminal-output", "sequence": null, "data": "cHR5" },
+      ] : Array[Json]) {
+    let rejected = try {
+      let _ : @protocol.TerminalOutputPayload = @json.from_json(invalid)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
+  for
+    invalid in (
+      [
+        { "id": 7, "code": 0 },
+        { "id": "terminal-exit" },
+        { "id": "terminal-exit", "code": "0" },
+      ] : Array[Json]) {
+    let rejected = try {
+      let _ : @protocol.TerminalExitPayload = @json.from_json(invalid)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
+}
+
+///|
 test "file stats keep missing, present, and failed distinct on the wire" {
   let reply : @protocol.StatFilesReply = {
     stats: [

@@ -39,11 +39,11 @@ priv struct TermHost {
   /// Root-owned terminal state projected into the imperative output path.
   /// The projection is refreshed only after terminal lifecycle transitions;
   /// raw output reads it without publishing a Rabbita message.
-  mut owners : Map[(@interop.ChannelId, Int), Int]
+  mut owners : Map[(@interop.ChannelId, String), Int]
   mut opening_channels : Array[@interop.ChannelId]
   /// Output that arrived before `terminal_open` identified its tab:
   /// `(sequence, base64_data)`.
-  pending : Map[(@interop.ChannelId, Int), Array[(Int, String)]]
+  pending : Map[(@interop.ChannelId, String), Array[(Int, String)]]
   mut resize_wired : Bool
 }
 
@@ -354,7 +354,7 @@ pub fn apply_font_size(font_size : Double) -> @cmd.Cmd {
 /// `opening_channels` always describe the same accepted State without making
 /// raw output enter the root update loop.
 fn State::sync_host_routes(self : State) -> @cmd.Cmd {
-  let owners : Map[(@interop.ChannelId, Int), Int] = Map([])
+  let owners : Map[(@interop.ChannelId, String), Int] = Map([])
   let opening_channels : Array[@interop.ChannelId] = []
   for tab in self.tabs {
     match tab.id {
@@ -382,7 +382,7 @@ fn TermHost::write_to_tab(
   self : TermHost,
   channel : @interop.ChannelId,
   key : Int,
-  id : Int,
+  id : String,
   sequence : Int,
   data : String,
 ) -> @cmd.Cmd {
@@ -410,7 +410,7 @@ fn TermHost::write_to_tab(
 /// dropped so it cannot consume the host's flow-control window.
 pub fn output(
   channel : @interop.ChannelId,
-  id : Int,
+  id : String,
   sequence : Int,
   data : String,
 ) -> @cmd.Cmd {
@@ -435,7 +435,11 @@ pub fn output(
 /// Flush chunks buffered for `id` into the tab that just claimed it. Every
 /// flushed chunk goes through the normal write path, so each one is
 /// acknowledged as it renders.
-fn flush_pending(channel : @interop.ChannelId, key : Int, id : Int) -> @cmd.Cmd {
+fn flush_pending(
+  channel : @interop.ChannelId,
+  key : Int,
+  id : String,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     let owner = (channel, id)
     guard term_host.pending.get(owner) is Some(chunks) else { return }
@@ -451,7 +455,7 @@ fn flush_pending(channel : @interop.ChannelId, key : Int, id : Int) -> @cmd.Cmd 
 ///|
 /// Drop any buffer for a session that ended unclaimed, acknowledging the
 /// bytes so the host's window is released before the session's teardown.
-fn drop_pending(channel : @interop.ChannelId, id : Int) -> @cmd.Cmd {
+fn drop_pending(channel : @interop.ChannelId, id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     let owner = (channel, id)
     guard term_host.pending.get(owner) is Some(chunks) else { return }
@@ -471,7 +475,7 @@ fn TermHost::clear_pending(
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    let retained : Map[(@interop.ChannelId, Int), Int] = Map([])
+    let retained : Map[(@interop.ChannelId, String), Int] = Map([])
     for owner, key in term_host.owners {
       if owner.0 != channel {
         retained[owner] = key
@@ -481,7 +485,7 @@ fn TermHost::clear_pending(
     term_host.opening_channels = term_host.opening_channels.filter(existing => {
       existing != channel
     })
-    let owners : Array[(@interop.ChannelId, Int)] = []
+    let owners : Array[(@interop.ChannelId, String)] = []
     for owner, _ in self.pending {
       if owner.0 == channel {
         owners.push(owner)
@@ -497,7 +501,7 @@ fn TermHost::clear_pending(
 /// Dispose a closed tab's emulator and remove its element.
 fn dispose_tab(key : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    let retained : Map[(@interop.ChannelId, Int), Int] = Map([])
+    let retained : Map[(@interop.ChannelId, String), Int] = Map([])
     for owner, owner_key in term_host.owners {
       if owner_key != key {
         retained[owner] = owner_key

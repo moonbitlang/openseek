@@ -2,21 +2,21 @@
 package "openseek_desktop/internal/terminal"
 
 // Values
-pub fn ack_terminal(TerminalState, id~ : Int, sequence~ : Int) -> Unit
+pub fn ack_terminal(TerminalState, id~ : String, sequence~ : Int) -> Unit
 
 pub fn close_all_terminals(TerminalState) -> Unit
 
-pub fn close_terminal(TerminalState, id~ : Int) -> Unit
+pub fn close_terminal(TerminalState, id~ : String) -> Unit
 
 pub fn new_terminal_state() -> TerminalState
 
-pub async fn open_terminal(TerminalState, cwd~ : String, cols~ : Int, rows~ : Int, command? : Array[String]) -> Int
+pub async fn open_terminal(TerminalState, cwd~ : String, cols~ : Int, rows~ : Int, command? : Array[String]) -> String
 
-pub fn resize_terminal(TerminalState, id~ : Int, cols~ : Int, rows~ : Int) -> Unit raise
+pub fn resize_terminal(TerminalState, id~ : String, cols~ : Int, rows~ : Int) -> Unit raise
 
 pub async fn run_terminal_pump(TerminalState, async (TerminalPush) -> Unit) -> Unit
 
-pub async fn write_terminal(TerminalState, id~ : Int, Bytes) -> Unit
+pub async fn write_terminal(TerminalState, id~ : String, Bytes) -> Unit
 
 // Errors
 pub suberror TerminalError {
@@ -25,8 +25,8 @@ pub suberror TerminalError {
 
 // Types and methods
 pub(all) enum TerminalPush {
-  Output(id~ : Int, sequence~ : Int, data~ : Bytes)
-  Exited(id~ : Int, code~ : Int)
+  Output(id~ : String, sequence~ : Int, data~ : Bytes)
+  Exited(id~ : String, code~ : Int)
 }
 
 type TerminalState

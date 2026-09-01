@@ -591,28 +591,97 @@ pub(all) struct TerminalOpenPayload {
 
 ///|
 pub(all) struct TerminalInputPayload {
-  id : Int
+  id : String
   data : String?
   data_base64 : String?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+/// Terminal input is a wire union: text carries `data`, byte-oriented input
+/// carries `data_base64`, and the inactive field is omitted rather than null.
+pub impl FromJson for TerminalInputPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal input payload")
+  let data = object.optional_string("data")
+  let data_base64 = object.optional_string("data_base64")
+  match (data, data_base64) {
+    (Some(_), None) | (None, Some(_)) => ()
+    _ =>
+      raise JsonDecodeError(
+        (path, "exactly one of data and data_base64 must be present"),
+      )
+  }
+  { id: object.required_string("id"), data, data_base64, }
+}
+
+///|
+pub impl ToJson for TerminalInputPayload with fn to_json(self) {
+  let fields : Map[String, Json] = { "id": self.id.to_json() }
+  if self.data is Some(data) {
+    fields["data"] = data.to_json()
+  }
+  if self.data_base64 is Some(data_base64) {
+    fields["data_base64"] = data_base64.to_json()
+  }
+  Json::object(fields)
+}
 
 ///|
 pub(all) struct TerminalResizePayload {
-  id : Int
+  id : String
   cols : Int
   rows : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for TerminalResizePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal resize payload")
+  {
+    id: object.required_string("id"),
+    cols: object.required_int("cols"),
+    rows: object.required_int("rows"),
+  }
+}
+
+///|
+pub impl ToJson for TerminalResizePayload with fn to_json(self) {
+  { "id": self.id, "cols": self.cols, "rows": self.rows }
+}
 
 ///|
 pub(all) struct TerminalAckPayload {
-  id : Int
+  id : String
   sequence : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for TerminalAckPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal ack payload")
+  {
+    id: object.required_string("id"),
+    sequence: object.required_int("sequence"),
+  }
+}
+
+///|
+pub impl ToJson for TerminalAckPayload with fn to_json(self) {
+  { "id": self.id, "sequence": self.sequence }
+}
 
 ///|
 pub(all) struct TerminalClosePayload {
-  id : Int
-} derive(Debug, Eq, FromJson, ToJson)
+  id : String
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for TerminalClosePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal close payload")
+  { id: object.required_string("id"), }
+}
+
+///|
+pub impl ToJson for TerminalClosePayload with fn to_json(self) {
+  { "id": self.id }
+}
 
 ///|
 pub(all) struct LspOpenPayload {
@@ -1149,16 +1218,42 @@ pub(all) struct FsWatchFailedPayload {
 
 ///|
 pub(all) struct TerminalOutputPayload {
-  id : Int
+  id : String
   sequence : Int
   data : String
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for TerminalOutputPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal output payload")
+  {
+    id: object.required_string("id"),
+    sequence: object.required_int("sequence"),
+    data: object.required_string("data"),
+  }
+}
+
+///|
+pub impl ToJson for TerminalOutputPayload with fn to_json(self) {
+  { "id": self.id, "sequence": self.sequence, "data": self.data }
+}
 
 ///|
 pub(all) struct TerminalExitPayload {
-  id : Int
+  id : String
   code : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for TerminalExitPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal exit payload")
+  { id: object.required_string("id"), code: object.required_int("code"), }
+}
+
+///|
+pub impl ToJson for TerminalExitPayload with fn to_json(self) {
+  { "id": self.id, "code": self.code }
+}
 
 ///|
 pub extend AgentErrorPayload with Debug::{to_repr}
