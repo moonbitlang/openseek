@@ -247,16 +247,48 @@ fn handle_message(
       // when the host definitively answered this exact request.
       settle(deferred, "reject", js_error(message, rpc_rejection=true))
     }
-    None => {
-      let result = match js_prop(envelope, "result") {
-        Some(result) => result
-        // A result-less success settles as an empty object, which the typed
-        // response adapter decodes for acknowledgement-only methods.
-        None => @js.Object::new().to_value()
+    None =>
+      match response_result(envelope) {
+        ResponseValue(result) => settle(deferred, "resolve", result)
+        MissingResult =>
+          // JSON-RPC requires exactly one of result/error. This request did
+          // leave, so reject it as an unmarked, delivery-ambiguous transport
+          // failure rather than fabricating `{}` for a typed reply.
+          settle(
+            deferred,
+            "reject",
+            js_error("malformed response: missing result", rpc_rejection=false),
+          )
       }
-      settle(deferred, "resolve", result)
-    }
   }
+}
+
+///|
+priv enum ResponseResult {
+  ResponseValue(@js.Value)
+  MissingResult
+}
+
+///|
+fn response_result(envelope : @js.Value) -> ResponseResult {
+  let result : @js.Value = envelope.get_with_string("result")
+  if result.is_undefined() {
+    MissingResult
+  } else {
+    // Unlike the shared `js_prop`, preserve JSON `null`: it is an explicit
+    // result value, while JS `undefined` means the field was absent.
+    ResponseValue(result)
+  }
+}
+
+///|
+test "a result-less success is malformed while an explicit null stays data" {
+  let envelope = @js.Object::new().to_value()
+  assert_true(response_result(envelope) is MissingResult)
+  envelope.set_with_string("result", @js.Value::from_json(Json::null()))
+  assert_true(
+    response_result(envelope) is ResponseValue(value) && value.is_null(),
+  )
 }
 
 ///|

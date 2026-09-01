@@ -1395,6 +1395,38 @@ async fn request_agent_goal(
 }
 
 ///|
+/// Reduce a successful cancel reply before it enters the state machine. A
+/// matching run remains Cancelling until Finished; absence and identity skew
+/// are explicit results tied to the exact page-local attempt.
+fn cancel_reply_msg(
+  run_id : String,
+  attempt_id : String,
+  cancelled : String?,
+) -> DeviceMsg? {
+  match cancelled {
+    None => Some(CancelNotOpen(run_id~, attempt_id~))
+    Some(cancelled) if cancelled != run_id =>
+      Some(
+        CancelRejected(
+          run_id~,
+          attempt_id~,
+          message="Host cancelled unexpected run \{cancelled}",
+        ),
+      )
+    Some(_) => None
+  }
+}
+
+///|
+test "a mismatched successful cancel reply reopens the requested attempt" {
+  assert_true(
+    cancel_reply_msg("r1", "cancel-1", Some("r2"))
+    is Some(CancelRejected(run_id="r1", attempt_id="cancel-1", message=_)),
+  )
+  assert_true(cancel_reply_msg("r1", "cancel-1", Some("r1")) is None)
+}
+
+///|
 /// Ask the host to cancel `run_id`. Every result carries the page-local attempt
 /// id, so a delayed older request cannot mutate a later control attempt. A
 /// matching reply leaves the run in Cancelling until its `agent.finished`; the
@@ -1425,10 +1457,8 @@ fn cancel_openseek(
           return
         }
       }
-      if reply.run_id is None {
-        scheduler.add(
-          dispatch(FromDevice(channel, CancelNotOpen(run_id~, attempt_id~))),
-        )
+      if cancel_reply_msg(run_id, attempt_id, reply.run_id) is Some(result) {
+        scheduler.add(dispatch(FromDevice(channel, result)))
       }
     })
   })

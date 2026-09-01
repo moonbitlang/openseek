@@ -785,6 +785,11 @@ priv struct Conversation {
   // engine events arrive stamped with this id once the run phase is already
   // back to `NoRun`; routing them needs the retained id.
   last_run_id : String?
+  // Run ids for which this page has reduced authoritative terminal evidence.
+  // Notifications and RPC replies reach the reducer through different queues,
+  // so a predecessor's delayed Started must stay fenced after a successor has
+  // replaced `last_run_id`. Host-random run ids are never reused.
+  retired_run_ids : Array[String]
   // Where this conversation's compaction stands; see `CompactionPhase`.
   compaction : CompactionPhase
   // A run finished while this conversation was off screen and the user has
@@ -2378,6 +2383,7 @@ fn empty_conversation(
     composer_draft_present: false,
     run: NoRun(ended=None),
     last_run_id: None,
+    retired_run_ids: [],
     compaction: NotCompacting,
     unseen_finish: false,
     run_started_ms: None,
@@ -3571,6 +3577,19 @@ fn Conversation::has_initial_submission(
   submission_id : String,
 ) -> Bool {
   self.pending_prompt is Some(pending) && pending.submission_id == submission_id
+}
+
+///|
+fn Conversation::retire_run(
+  self : Conversation,
+  run_id : String,
+) -> Conversation {
+  if self.retired_run_ids.contains(run_id) {
+    return self
+  }
+  let retired_run_ids = self.retired_run_ids.copy()
+  retired_run_ids.push(run_id)
+  { ..self, retired_run_ids, }
 }
 
 ///|
