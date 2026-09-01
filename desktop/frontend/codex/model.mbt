@@ -3037,17 +3037,11 @@ fn CodexItem::text(self : CodexItem) -> String {
           } else if value is Object(input) &&
             @jsonx.json_text(input, "type") is Some("mention") &&
             @jsonx.json_text(input, "path") is Some(path) {
-            // This envelope is presentation-only. Codex still sends and
-            // stores native `UserInput::Mention` values; adapting them here
-            // lets the shared transcript rebuild the same chips its composer
-            // showed without changing the app-server payload.
-            mentions.push(
-              @mention_context.Symbol(
-                name=@jsonx.json_text(input, "name").unwrap_or(path),
-                file=path,
-                line=0,
-              ),
-            )
+            // The composer sends a File as app-server's native path-only
+            // mention. Restore that same kind: the native envelope carries no
+            // source line, so it must not become an unplaced Symbol with a
+            // fabricated numeric line.
+            mentions.push(@mention_context.File(path~))
           } else if value is Object(input) &&
             @jsonx.json_text(input, "type") is Some("skill") &&
             @jsonx.json_text(input, "name") is Some(name) {
@@ -3567,7 +3561,9 @@ fn CodexItem::tool_brief(self : CodexItem) -> String? {
       "imageView" =>
         "viewed " + @jsonx.json_text(fields, "path").unwrap_or("image")
       "sleep" =>
-        "slept \{@jsonx.json_int(fields, "durationMs").unwrap_or(0)} ms"
+        @jsonx.json_int(fields, "durationMs")
+        .map(duration => "slept \{duration} ms")
+        .unwrap_or("slept")
       "imageGeneration" =>
         match @jsonx.json_text(fields, "savedPath") {
           Some(path) if !path.is_blank() => "generated \{path}"

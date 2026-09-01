@@ -50,13 +50,7 @@ test "Codex adapts app-server items to the shared transcript model" {
   assert_eq(user.task, "inspect this")
   assert_true(
     user.mentions
-    is [
-      @mention_context.Symbol(
-        name="model.mbt",
-        file="desktop/frontend/codex/model.mbt",
-        line=0
-      ),
-    ],
+    is [@mention_context.File(path="desktop/frontend/codex/model.mbt")],
   )
   assert_true(
     items[1].kind is @transcript.Assistant(reasoning=None, calls=[], ..),
@@ -104,6 +98,30 @@ test "Codex omits unavailable command metadata from shared arguments" {
     fail("expected read metadata in shared tool arguments")
   }
   assert_eq(arguments, "{\"path\":\"src/main.mbt\"}")
+}
+
+///|
+test "Codex sleep brief preserves an absent duration" {
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "thread-1",
+      "turns": [
+        {
+          "id": "turn-1",
+          "status": "completed",
+          "items": [{ "id": "sleep-1", "type": "sleep" }],
+        },
+      ],
+    },
+  })
+  let items = state.transcript_items()
+  assert_eq(items.length(), 1)
+  guard items[0].kind is @transcript.Assistant(calls=[call], ..) else {
+    fail("expected a sleep tool call")
+  }
+  assert_eq(call.name, "sleep")
+  assert_eq(call.arguments, None)
+  assert_true(call.outcome is Done(brief=Some("slept"), ..))
 }
 
 ///|
