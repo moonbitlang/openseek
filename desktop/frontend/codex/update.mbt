@@ -2085,6 +2085,30 @@ test "Codex observed running task steers without resume" {
 }
 
 ///|
+test "Codex status-only running task waits for its turn id" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let observed = {
+    ..State::from_thread_snapshot({
+      "thread": {
+        "id": "thread-1",
+        "status": { "type": "active", "activeFlags": [] },
+        "turns": [],
+      },
+    }),
+    connection: CodexReady,
+    draft: "follow up",
+  }
+  assert_true(observed.is_running())
+  let (_, once) = observed.submit_composer(dispatch, @interop.ChannelId::Local)
+  let (_, twice) = observed.submit_composer(dispatch, @interop.ChannelId::Local)
+  assert_true(once == twice)
+  assert_false(once.owns_foreground(CodexResumeReply("thread-1")))
+  assert_false(once.owns_foreground(CodexTurnStartReply("thread-1")))
+  assert_false(once.owns_foreground(CodexTurnSteerReply("thread-1")))
+  assert_eq(once.draft, "follow up")
+}
+
+///|
 test "Codex idle stored task resumes before starting a turn" {
   let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let idle = {

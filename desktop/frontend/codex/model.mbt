@@ -740,7 +740,7 @@ fn State::registry_turn_cwd(self : State) -> String? {
 /// Permission changes are frozen while an operation is being accepted or a
 /// turn is active, so the visible choice always describes the next request.
 fn State::can_choose_permission(self : State) -> Bool {
-  self.foreground is None && self.active_turn_id() is None
+  self.foreground is None && !self.is_running()
 }
 
 ///|
@@ -2068,8 +2068,12 @@ fn State::with_login(self : State, value : Json) -> State {
 }
 
 ///|
+/// Report whether the selected stored task is running from either ordered
+/// task-level activity or a loaded in-progress turn. Reconnect snapshots can
+/// expose the first fact before this page has received the turn body.
 fn State::is_running(self : State) -> Bool {
   guard self.active_thread() is Some(active) else { return false }
+  self.activity.is_running(active.id) ||
   active.turns.iter().any(turn => turn.is_running())
 }
 
@@ -3256,6 +3260,9 @@ fn CodexItem::tool_name(self : CodexItem) -> String {
 ///|
 /// Keep the operation input separate from its result so the shared expanded
 /// tool row can render Arguments before Output instead of one raw JSON blob.
+/// Optional app-server metadata stays absent from the projected object; an
+/// empty string, null, or empty collection can be a real supplied value and
+/// therefore must not be invented as a missing-field marker.
 fn CodexItem::tool_arguments(self : CodexItem) -> String? {
   guard self.value is Object(fields) else {
     return Some(self.value.stringify())
@@ -3297,25 +3304,28 @@ fn CodexItem::tool_arguments(self : CodexItem) -> String? {
     "mcpToolCall" | "dynamicToolCall" =>
       fields.get("arguments").map(value => value.stringify())
     "collabAgentToolCall" => {
-      let arguments : Json = {
-        "tool": @jsonx.json_text(fields, "tool").unwrap_or("agent"),
-        "prompt": fields.get("prompt").unwrap_or(Json::null()),
-        "model": fields.get("model").unwrap_or(Json::null()),
-        "reasoningEffort": fields.get("reasoningEffort").unwrap_or(Json::null()),
-        "senderThreadId": fields.get("senderThreadId").unwrap_or(Json::null()),
-        "receiverThreadIds": fields
-        .get("receiverThreadIds")
-        .unwrap_or(Json::array([])),
+      let arguments : Map[String, Json] = Map([])
+      if @jsonx.json_text(fields, "tool") is Some(tool) {
+        arguments["tool"] = Json(tool)
       }
-      Some(arguments.stringify())
+      for
+        key in [
+          "prompt", "model", "reasoningEffort", "senderThreadId", "receiverThreadIds",
+        ] {
+        if fields.get(key) is Some(value) {
+          arguments[key] = value
+        }
+      }
+      Some(Json::object(arguments).stringify())
     }
     "subAgentActivity" => {
-      let arguments : Json = {
-        "agentPath": @jsonx.json_text(fields, "agentPath").unwrap_or(""),
-        "agentThreadId": @jsonx.json_text(fields, "agentThreadId").unwrap_or(""),
-        "kind": @jsonx.json_text(fields, "kind").unwrap_or(""),
+      let arguments : Map[String, Json] = Map([])
+      for key in ["agentPath", "agentThreadId", "kind"] {
+        if @jsonx.json_text(fields, key) is Some(value) {
+          arguments[key] = Json(value)
+        }
       }
-      Some(arguments.stringify())
+      Some(Json::object(arguments).stringify())
     }
     "hookPrompt" =>
       fields
@@ -3325,17 +3335,21 @@ fn CodexItem::tool_arguments(self : CodexItem) -> String? {
         arguments.stringify()
       })
     "webSearch" => {
-      let arguments : Json = {
-        "query": @jsonx.json_text(fields, "query").unwrap_or(""),
-        "action": fields.get("action").unwrap_or(Json::null()),
+      let arguments : Map[String, Json] = Map([])
+      if @jsonx.json_text(fields, "query") is Some(query) {
+        arguments["query"] = Json(query)
       }
-      Some(arguments.stringify())
+      if fields.get("action") is Some(action) {
+        arguments["action"] = action
+      }
+      Some(Json::object(arguments).stringify())
     }
     "imageView" => {
-      let arguments : Json = {
-        "path": @jsonx.json_text(fields, "path").unwrap_or(""),
+      let arguments : Map[String, Json] = Map([])
+      if @jsonx.json_text(fields, "path") is Some(path) {
+        arguments["path"] = Json(path)
       }
-      Some(arguments.stringify())
+      Some(Json::object(arguments).stringify())
     }
     "sleep" =>
       fields
@@ -3345,19 +3359,20 @@ fn CodexItem::tool_arguments(self : CodexItem) -> String? {
         arguments.stringify()
       })
     "imageGeneration" => {
-      let arguments : Json = {
-        "revisedPrompt": fields.get("revisedPrompt").unwrap_or(Json::null()),
-        "transparentBackground": fields
-        .get("transparentBackground")
-        .unwrap_or(Json::null()),
+      let arguments : Map[String, Json] = Map([])
+      for key in ["revisedPrompt", "transparentBackground"] {
+        if fields.get(key) is Some(value) {
+          arguments[key] = value
+        }
       }
-      Some(arguments.stringify())
+      Some(Json::object(arguments).stringify())
     }
     "enteredReviewMode" | "exitedReviewMode" => {
-      let arguments : Json = {
-        "review": @jsonx.json_text(fields, "review").unwrap_or(""),
+      let arguments : Map[String, Json] = Map([])
+      if @jsonx.json_text(fields, "review") is Some(review) {
+        arguments["review"] = Json(review)
       }
-      Some(arguments.stringify())
+      Some(Json::object(arguments).stringify())
     }
     "planUpdate" =>
       fields

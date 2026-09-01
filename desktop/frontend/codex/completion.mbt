@@ -110,7 +110,8 @@ fn State::input_empty(self : State) -> Bool {
 ///|
 /// Interpret a submitted shared-composer draft through thread creation,
 /// direct steering, or resume. Running tasks steer their reported active turn;
-/// idle stored tasks resume before starting a new turn.
+/// a status-only running task waits for that turn id instead of starting a
+/// competing turn, while idle stored tasks resume before starting a new turn.
 fn State::submit_composer(
   self : State,
   dispatch : @cmd.Emit[Msg],
@@ -142,15 +143,16 @@ fn State::submit_composer(
       next.start_draft_thread(dispatch, channel),
       next.begin_foreground(CodexDraftThreadReply(draft.id)),
     )
-  } else if ready.active_turn_id() is Some(_) {
+  } else if ready.is_running() {
+    guard ready.active_turn_id() is Some(turn_id) else {
+      return (@cmd.none, ready)
+    }
     guard ready.active_thread() is Some(active) else {
       return (@cmd.none, ready)
     }
-    let next = (if ready.active_turn_id() is Some(turn_id) {
-      ready.with_pending_steer(turn_id)
-    } else {
-      ready
-    }).begin_foreground(CodexTurnSteerReply(active.id))
+    let next = ready
+      .with_pending_steer(turn_id)
+      .begin_foreground(CodexTurnSteerReply(active.id))
     // Dispatch from the state that minted the receipt so both the local row
     // and app-server request carry the same client user-message id.
     (next.send(dispatch, channel), next)
@@ -286,10 +288,7 @@ fn State::composer_run(self : State) -> @composer.RunHeartbeat? {
     return Some({ stage: @composer.Starting, started_ms: None, tokens: 0, })
   }
   let active_turn = self.active_turn()
-  guard self.active_thread() is Some(active) &&
-    (self.activity.is_running(active.id) || active_turn is Some(_)) else {
-    return None
-  }
+  guard self.is_running() else { return None }
   Some({
     stage: @composer.Working,
     started_ms: active_turn
@@ -363,14 +362,16 @@ pub fn State::composer_input(
     )
   }
   let active_turn = self.active_turn_id()
+  let task_running = self.is_running()
   let missing_worktree = self.has_missing_worktree()
   let can_edit = self.can_prompt() &&
     self.connection is CodexReady &&
     !missing_worktree
-  let primary_action = if active_turn is Some(_) {
+  let primary_action = if task_running {
+    let turn_loaded = active_turn is Some(_)
     @composer.Running(
-      steer_available=can_edit,
-      can_stop=true,
+      steer_available=can_edit && turn_loaded,
+      can_stop=turn_loaded,
       submit=@composer.Steer,
     )
   } else {

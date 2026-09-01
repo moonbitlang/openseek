@@ -107,6 +107,74 @@ test "Codex omits unavailable command metadata from shared arguments" {
 }
 
 ///|
+test "Codex omits unavailable metadata from other tool arguments" {
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "thread-1",
+      "turns": [
+        {
+          "id": "turn-1",
+          "status": "completed",
+          "items": [
+            { "id": "collab-1", "type": "collabAgentToolCall", "tool": "wait" },
+            {
+              "id": "subagent-1",
+              "type": "subAgentActivity",
+              "agentPath": "root/reviewer",
+            },
+            {
+              "id": "search-1",
+              "type": "webSearch",
+              "action": { "type": "search" },
+            },
+            { "id": "view-1", "type": "imageView" },
+            {
+              "id": "image-1",
+              "type": "imageGeneration",
+              "transparentBackground": false,
+            },
+            { "id": "review-1", "type": "enteredReviewMode" },
+          ],
+        },
+      ],
+    },
+  })
+  let items = state.transcript_items()
+  assert_eq(items.length(), 6)
+  guard items[0].kind is @transcript.Assistant(calls=[collab_call], ..) &&
+    collab_call.arguments is Some(collab) else {
+    fail("expected collaboration arguments")
+  }
+  assert_eq(collab, "{\"tool\":\"wait\"}")
+  guard items[1].kind is @transcript.Assistant(calls=[subagent_call], ..) &&
+    subagent_call.arguments is Some(subagent) else {
+    fail("expected subagent arguments")
+  }
+  assert_eq(subagent, "{\"agentPath\":\"root/reviewer\"}")
+  guard items[2].kind is @transcript.Assistant(calls=[search_call], ..) &&
+    search_call.arguments is Some(search) else {
+    fail("expected web-search arguments")
+  }
+  assert_true(search.contains("\"action\""))
+  assert_false(search.contains("\"query\""))
+  guard items[3].kind is @transcript.Assistant(calls=[view_call], ..) &&
+    view_call.arguments is Some(image_view) else {
+    fail("expected image-view arguments")
+  }
+  assert_eq(image_view, "{}")
+  guard items[4].kind is @transcript.Assistant(calls=[generation_call], ..) &&
+    generation_call.arguments is Some(generation) else {
+    fail("expected image-generation arguments")
+  }
+  assert_eq(generation, "{\"transparentBackground\":false}")
+  guard items[5].kind is @transcript.Assistant(calls=[review_call], ..) &&
+    review_call.arguments is Some(review) else {
+    fail("expected review arguments")
+  }
+  assert_eq(review, "{}")
+}
+
+///|
 test "Codex omits reasoning without visible summary text" {
   let state = @codex.State::from_thread_snapshot({
     "thread": {

@@ -32,12 +32,17 @@ test "Codex composer reports selected task run status" {
       ],
     },
   })
-  guard turn_running.composer_input(context).run is Some(turn_run) else {
+  let turn_input = turn_running.composer_input(context)
+  guard turn_input.run is Some(turn_run) else {
     fail("an in-progress Codex turn should produce a composer heartbeat")
   }
   assert_true(turn_run.stage is @composer.Working)
   assert_eq(turn_run.started_ms, Some(1_000_000.0))
   assert_eq(turn_run.tokens, 0)
+  assert_true(
+    turn_input.presentation.primary_action
+    is @composer.Running(can_stop=true, ..),
+  )
 
   // The task-level status also covers an adopted run whose turns have not
   // been loaded yet, such as immediately after reconnect.
@@ -48,10 +53,17 @@ test "Codex composer reports selected task run status" {
       "turns": [],
     },
   })
-  guard task_running.composer_input(context).run is Some(task_run) else {
+  let task_input = task_running.composer_input(context)
+  guard task_input.run is Some(task_run) else {
     fail("an active Codex task should produce a composer heartbeat")
   }
   assert_true(task_run.stage is @composer.Working)
+  guard task_input.presentation.primary_action
+    is @composer.Running(steer_available~, can_stop~, ..) else {
+    fail("an active Codex task without a turn id must keep running controls")
+  }
+  assert_false(steer_available)
+  assert_false(can_stop)
 
   let idle = @codex.State::from_thread_snapshot({
     "thread": {
