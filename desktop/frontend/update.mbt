@@ -6800,15 +6800,23 @@ fn update_device_msg(
       let accepted_settlements : Array[RecoveredSettlement] = []
       let settled_sessions : Array[String] = []
       for settlement in settled {
-        if !accepted_settlements
+        if accepted_settlements
           .iter()
-          .any(item => item.run_id == settlement.run_id) &&
-          model.matched_settlement_frontier(channel, frontier, settlement)
-          is Some(_) {
-          accepted_settlements.push(settlement)
-          if !settled_sessions.contains(settlement.session) {
-            settled_sessions.push(settlement.session)
+          .any(item => item.run_id == settlement.run_id) {
+          continue
+        }
+        match model.matched_settlement_frontier(channel, frontier, settlement) {
+          Some(owner) => {
+            accepted_settlements.push(settlement)
+            // A predecessor selector is independent of the session's current
+            // lifecycle frontier. Its completion must not suppress negative
+            // settlement of a captured successor that is absent from `live`.
+            if !(owner is SettlementByRetiredRun) &&
+              !settled_sessions.contains(settlement.session) {
+              settled_sessions.push(settlement.session)
+            }
           }
+          None => ()
         }
       }
       // Validate positive rows against the same immutable request-time model,
@@ -6839,7 +6847,7 @@ fn update_device_msg(
       let ordered_settlements : Array[RecoveredSettlement] = []
       for settlement in accepted_settlements {
         if model.matched_settlement_frontier(channel, frontier, settlement)
-          is Some(SettlementByRun) {
+          is (Some(SettlementByRun) | Some(SettlementByRetiredRun)) {
           ordered_settlements.push(settlement)
         }
       }
@@ -11166,12 +11174,14 @@ test "runs settled closes runs the host no longer has, sparing live and starting
       {
         session: "desktop-test",
         state: SnapshotOpen(run_id="r7"),
+        unreconciled_run_ids: [],
         initial_ids: [],
         pending_approval_id: None,
       },
       {
         session: "desktop-stale",
         state: SnapshotOpen(run_id="r9"),
+        unreconciled_run_ids: [],
         initial_ids: [],
         pending_approval_id: None,
       },
@@ -11864,6 +11874,71 @@ test "a predecessor Finished cannot erase a successor Starting phase" {
     .iter()
     .any(item => item.content == "predecessor final item"),
   )
+}
+
+///|
+test "a retired predecessor settlement survives a successor lifecycle" {
+  let dispatch = test_dispatch()
+  let stopping = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling(attempt_id="cancel-1")),
+  })
+  let (_, idle) = update_dev(
+    dispatch,
+    CancelNotOpen(run_id="r7", attempt_id="cancel-1"),
+    stopping,
+  )
+  let frontier = idle.run_snapshot_frontier(@interop.ChannelId::Local)
+  assert_true(
+    frontier
+    .iter()
+    .any(captured => {
+      captured.session == "desktop-test" &&
+      captured.unreconciled_run_ids.contains("r7")
+    }),
+  )
+  let drafted = idle.replace_conversation({ ..idle.active(), task: "next run", })
+  let (_, starting) = update(dispatch, Send, drafted)
+  guard starting.active().run is Starting(submission_id~) else {
+    fail("the successor did not enter Starting")
+  }
+  let (_, successor) = update_dev(
+    dispatch,
+    Started(
+      run_id="r8",
+      session="desktop-test",
+      model=High,
+      max_steps=1000,
+      session_root=None,
+      submission_id=Some(submission_id),
+    ),
+    starting,
+  )
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          submission_id: None,
+          status: "finished",
+        },
+      ],
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=successor.dev().connection_generation,
+    ),
+    successor,
+  )
+  assert_true(recovered.active().run is Open(run_id="r8", ..))
+  assert_eq(recovered.active().last_run_id, Some("r8"))
+  assert_true(recovered.active().reconciled_run_ids.contains("r7"))
+  guard recovered.active().sync is Reloading(..) else {
+    fail("the predecessor settlement did not reconcile its transcript")
+  }
 }
 
 ///|

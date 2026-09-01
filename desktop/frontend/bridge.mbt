@@ -645,8 +645,46 @@ fn runs_payload(frontier : Array[RunSnapshotFrontier]) -> @protocol.RunsPayload 
         })
       }
     }
+    for run_id in captured.unreconciled_run_ids {
+      if !known
+        .iter()
+        .any(item => {
+          item.session == captured.session && item.run_id == Some(run_id)
+        }) {
+        known.push({
+          session: captured.session,
+          run_id: Some(run_id),
+          submission_id: None,
+        })
+      }
+    }
   }
   { known: Some(known), }
+}
+
+///|
+test "runs payload carries an unreconciled predecessor beside its successor" {
+  let payload = runs_payload([
+    {
+      session: "desktop-test",
+      state: SnapshotOpen(run_id="r8"),
+      unreconciled_run_ids: ["r7"],
+      initial_ids: [],
+      pending_approval_id: None,
+    },
+  ])
+  guard payload.known is Some(known) else { fail("missing known selectors") }
+  inspect(known.length(), content="2")
+  assert_true(
+    known
+    .iter()
+    .any(item => item.session == "desktop-test" && item.run_id == Some("r7")),
+  )
+  assert_true(
+    known
+    .iter()
+    .any(item => item.session == "desktop-test" && item.run_id == Some("r8")),
+  )
 }
 
 ///|

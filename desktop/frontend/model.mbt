@@ -609,6 +609,11 @@ priv enum RunSnapshotState {
 priv struct RunSnapshotFrontier {
   session : String
   state : RunSnapshotState
+  // Runs already retired from lifecycle ownership but still waiting for
+  // their authoritative Finished boundary. A successor may own `state` by
+  // the time this request returns; these exact ids remain independent replay
+  // selectors so predecessor terminal side effects are not lost.
+  unreconciled_run_ids : Array[String]
   // Initial prompts whose start transport failed before a run id came back.
   // Their submission id is still an exact owner and must survive the
   // lifecycle's transition to SnapshotIdle for reconnect settlement lookup.
@@ -627,6 +632,7 @@ priv struct RunSnapshotFrontier {
 /// began.
 priv enum SettlementFrontierMatch {
   SettlementByRun
+  SettlementByRetiredRun
   SettlementBySubmission(String)
 }
 
@@ -2900,6 +2906,9 @@ fn Model::run_snapshot_frontier(
     {
       session: conv.session_id,
       state,
+      unreconciled_run_ids: conv.retired_run_ids.filter(run_id => {
+        !conv.reconciled_run_ids.contains(run_id)
+      }),
       initial_ids,
       pending_approval_id: conv.pending_approval.map(pending => pending.id),
     }
@@ -2938,8 +2947,9 @@ fn Model::matches_run_snapshot_frontier(
 ///|
 /// Match a replayed completion to the exact lifecycle owner captured when
 /// `agent.runs` began. Starting has no run id yet, so it uses the client's
-/// submission id; Open/Idle use the host run id. The session is required in
-/// every case, and current state must still equal the captured cut.
+/// submission id; Open/Idle use the host run id. A retired-but-unreconciled
+/// predecessor remains independently admissible after a successor changes
+/// current state. Every path still requires the exact captured session/owner.
 fn Model::matched_settlement_frontier(
   self : Model,
   channel : @interop.ChannelId,
@@ -2951,7 +2961,7 @@ fn Model::matched_settlement_frontier(
   }
   for captured in frontier {
     if captured.session == settlement.session {
-      return match captured.state {
+      let lifecycle_owner = match captured.state {
         SnapshotStarting(submission_id~) if conv.run
           is Starting(submission_id=current) &&
           current == submission_id &&
@@ -2975,6 +2985,15 @@ fn Model::matched_settlement_frontier(
             None
           }
       }
+      if lifecycle_owner is Some(_) {
+        return lifecycle_owner
+      }
+      if captured.unreconciled_run_ids.contains(settlement.run_id) &&
+        conv.retired_run_ids.contains(settlement.run_id) &&
+        !conv.reconciled_run_ids.contains(settlement.run_id) {
+        return Some(SettlementByRetiredRun)
+      }
+      return None
     }
   }
   None
