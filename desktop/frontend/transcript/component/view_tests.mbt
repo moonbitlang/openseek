@@ -32,8 +32,9 @@ test "transcript stream children use stable typed keys in display order" {
       {
         item: { kind: User("question"), ts: None, sequence: Some(41), },
         identity: "s41",
+        step_identity: None,
       },
-      { item: response, identity: "s42", },
+      { item: response, identity: "s42", step_identity: None, },
     ],
     streaming_response=Some("partial answer"),
     streaming_identity="r7",
@@ -64,6 +65,7 @@ test "transcript stream children use stable typed keys in display order" {
           ),
         },
         identity: "s42",
+        step_identity: None,
       },
     ],
   }
@@ -71,10 +73,84 @@ test "transcript stream children use stable typed keys in display order" {
 }
 
 ///|
+test "Codex step identities label one row per step and the live successor" {
+  let input = Input(
+    source=Codex,
+    focused=@interop.ChannelId::Local,
+    active_session="thread-1",
+    root=None,
+    submission_generation=0,
+    items=[
+      {
+        item: {
+          kind: Assistant(
+            reasoning=Some("Inspecting"),
+            prose=None,
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
+          ts: None,
+          sequence: None,
+        },
+        identity: "reasoning-1",
+        step_identity: Some("step-1"),
+      },
+      {
+        item: {
+          kind: Assistant(
+            reasoning=None,
+            prose=None,
+            calls=[
+              {
+                call_id: "command-1",
+                name: "shell",
+                arguments: Some("moon check"),
+                outcome: Done(content="ok", is_error=false, brief=None),
+              },
+            ],
+            replay=false,
+            finished=false,
+          ),
+          ts: None,
+          sequence: None,
+        },
+        identity: "command-1",
+        step_identity: Some("step-1"),
+      },
+      {
+        item: {
+          kind: Assistant(
+            reasoning=None,
+            prose=Some("Done"),
+            calls=[],
+            replay=false,
+            finished=true,
+          ),
+          ts: None,
+          sequence: None,
+        },
+        identity: "agent-1",
+        step_identity: Some("step-2"),
+      },
+    ],
+    streaming_response=Some("One more thing"),
+    streaming_identity="turn-2",
+  )
+  let blocks = stream_blocks(input).to_array()
+  assert_eq(blocks.length(), 4)
+  assert_true(blocks[0].content is Item(step_label=Some("#1"), ..))
+  assert_true(blocks[1].content is Item(step_label=None, ..))
+  assert_true(blocks[2].content is Item(step_label=Some("#2"), ..))
+  assert_true(blocks[3].content is Live(step_label=Some("#3"), ..))
+}
+
+///|
 test "the live response is one node, replaced by the durable one" {
   let user : VisibleRow = {
     item: { kind: User("question"), ts: None, sequence: Some(1), },
     identity: "s1",
+    step_identity: None,
   }
   let live_input = Input(
     source=OpenSeek,
@@ -110,6 +186,7 @@ test "the live response is one node, replaced by the durable one" {
           sequence: Some(2),
         },
         identity: "s2",
+        step_identity: None,
       },
     ],
     streaming_reasoning: None,
@@ -129,6 +206,7 @@ test "a streaming delta changes only the live block" {
       {
         item: { kind: User("question"), ts: Some(1.0e12), sequence: Some(1), },
         identity: "s1",
+        step_identity: None,
       },
       {
         item: {
@@ -143,6 +221,7 @@ test "a streaming delta changes only the live block" {
           sequence: Some(2),
         },
         identity: "s2",
+        step_identity: None,
       },
     ],
     streaming_response=Some("partial"),

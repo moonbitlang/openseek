@@ -2551,6 +2551,7 @@ fn initial_model() -> Model {
     _ => None
   }
   let is_desktop = @interop.openseek_api() is Some(_)
+  let page_namespace = generated_session_id()
   {
     // The desktop window's one channel; a browser page starts empty and
     // fills `devices` from the fetched roster (`apply_roster`).
@@ -2603,7 +2604,7 @@ fn initial_model() -> Model {
     active_session: "",
     loading_conversation: None,
     transcript_request_generation: 0,
-    page_namespace: generated_session_id(),
+    page_namespace,
     submission_sequence: 0,
     conversations: [],
     project_picker: None,
@@ -2614,7 +2615,7 @@ fn initial_model() -> Model {
     selected_conversation: None,
     conversation_load_failure: None,
     screen: Chat,
-    codex: @codex.State(),
+    codex: @codex.State(client_namespace=page_namespace),
     skills: @skills.State::empty(),
     installed_skills: [],
     composer_context_generation: 0,

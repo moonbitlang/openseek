@@ -37,12 +37,14 @@ fn CodexThread::has_item_id(
 ///|
 /// Create the receipt synchronously before the asynchronous steer command can
 /// emit either a reply or an item notification. `next_steer_submission_id` is
-/// local presentation identity only; it is never sent to app-server.
+/// local presentation identity; `client_user_message_id` is the exact value
+/// sent to app-server and later echoed by the canonical User item.
 fn State::with_pending_steer(self : State, turn_id : String) -> State {
   guard self.active_thread() is Some(active) else { return self }
   let pending_steers = self.pending_steers.copy()
   pending_steers.push({
     submission_id: self.next_steer_submission_id,
+    client_user_message_id: self.client_user_message_id(),
     turn_id,
     submitted: { task: self.draft, mentions: self.mentions.copy(), },
     known_user_item_ids: active.user_item_ids(turn_id),
@@ -100,26 +102,20 @@ fn State::without_sending_steer(self : State, thread_id : String) -> State {
 
 ///|
 /// Reconcile one previously unseen canonical User item with local receipts.
-///
-/// The protocol supplies `(threadId, turnId, item.id)`, but neither the steer
-/// reply nor the item identifies the other: there is no returned `itemId`,
-/// echoed client submission id, or `source: "steer"` marker. We therefore make
-/// one explicit integration assumption here: this Desktop is the single writer
-/// for the turn, its composer lock serializes steer RPCs, and app-server emits
-/// User items for that connection in submission FIFO order. Under that rule,
-/// the first previously unseen User item in the same turn consumes the oldest
-/// eligible receipt. We never compare message text, so identical consecutive
-/// messages remain distinct through their app-server item ids.
+/// A current item consumes only the receipt whose request id it echoes. When
+/// either side predates that protocol field, the older FIFO behavior remains
+/// available explicitly; message text is never used as identity.
 ///
 /// The first prompt has its own older receipt. If it has not produced a User
-/// item yet, FIFO assigns the next unseen item to that prompt rather than to a
-/// later steer. Duplicate started/completed notifications are ignored because
-/// the item id is already present in the pre-notification state.
+/// item yet, a later steer receipt cannot consume it. Duplicate started and
+/// completed notifications are ignored because the item id is already present
+/// in the pre-notification state.
 fn State::with_observed_user_item(
   self : State,
   thread_id : String,
   turn_id : String,
   item_id : String,
+  client_user_message_id : String?,
 ) -> State {
   guard self.active_thread() is Some(active) &&
     active.id == thread_id &&
@@ -132,7 +128,14 @@ fn State::with_observed_user_item(
   let mut consumed = false
   let pending_steers : Array[CodexSteerReceipt] = []
   for receipt in self.pending_steers {
+    let same_submission = match client_user_message_id {
+      Some(client_id) => receipt.client_user_message_id == Some(client_id)
+      // Older app-server items and tests have no echo, so retain serialized
+      // FIFO only for that explicit compatibility shape.
+      None => true
+    }
     if !consumed &&
+      same_submission &&
       receipt.turn_id == turn_id &&
       !receipt.known_user_item_ids.contains(item_id) {
       consumed = true
@@ -153,13 +156,26 @@ fn State::with_observed_steer_turn(self : State, turn : CodexTurn) -> State {
   let mut next = self
   for item in turn.items {
     if item.kind == "userMessage" && !observed_user_item_ids.contains(item.id) {
-      if next.waiting_for_first_user_item() {
+      let owns_first_prompt = match next.submitted_first_prompt_client_id {
+        Some(client_id) => item.client_id() == Some(client_id)
+        None => true
+      }
+      if next.waiting_for_first_user_item() && owns_first_prompt {
         // This decoded turn is installed immediately after reconciliation, so
         // its first new User item can authoritatively replace the older prompt
         // receipt. Notifications keep the old install-then-observe ordering.
-        next = { ..next, submitted_first_prompt: None, }
+        next = {
+          ..next,
+          submitted_first_prompt: None,
+          submitted_first_prompt_client_id: None,
+        }
       } else {
-        next = next.with_observed_user_item(active.id, turn.id, item.id)
+        next = next.with_observed_user_item(
+          active.id,
+          turn.id,
+          item.id,
+          item.client_id(),
+        )
       }
       observed_user_item_ids.push(item.id)
     }
@@ -186,7 +202,7 @@ fn State::with_observed_steer_item(
     item.kind == "userMessage" else {
     return self
   }
-  self.with_observed_user_item(thread_id, turn_id, item.id)
+  self.with_observed_user_item(thread_id, turn_id, item.id, item.client_id())
 }
 
 ///|

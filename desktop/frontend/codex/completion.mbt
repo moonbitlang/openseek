@@ -136,6 +136,7 @@ fn State::submit_composer(
         task: self.draft,
         mentions: self.mentions.copy(),
       }),
+      submitted_first_prompt_client_id: self.client_user_message_id(),
     }
     (
       next.start_draft_thread(dispatch, channel),
@@ -150,7 +151,9 @@ fn State::submit_composer(
     } else {
       ready
     }).begin_foreground(CodexTurnSteerReply(active.id))
-    (ready.send(dispatch, channel), next)
+    // Dispatch from the state that minted the receipt so both the local row
+    // and app-server request carry the same client user-message id.
+    (next.send(dispatch, channel), next)
   } else {
     guard ready.active_thread() is Some(active) else {
       return (@cmd.none, ready)
@@ -272,6 +275,31 @@ fn CodexPermissionPicker::confirmation_dialog(
 }
 
 ///|
+/// Project the selected task's run state into the shared composer heartbeat.
+/// Codex does not expose OpenSeek's live phase, so an active task reports the
+/// generic fact that it is working. A loaded turn contributes its protocol
+/// start time and latest model-call usage; a status-only adopted task reports
+/// neither rather than inventing facts. The activity ledger covers reconnect,
+/// while the turn fallback covers an item observed before its lifecycle event.
+fn State::composer_run(self : State) -> @composer.RunHeartbeat? {
+  if self.waiting_for_first_user_item() {
+    return Some({ stage: @composer.Starting, started_ms: None, tokens: 0, })
+  }
+  let active_turn = self.active_turn()
+  guard self.active_thread() is Some(active) &&
+    (self.activity.is_running(active.id) || active_turn is Some(_)) else {
+    return None
+  }
+  Some({
+    stage: @composer.Working,
+    started_ms: active_turn
+    .bind(turn => turn.started_at)
+    .map(seconds => seconds.to_double() * 1000.0),
+    tokens: active_turn.map(turn => turn.latest_usage_tokens).unwrap_or(0),
+  })
+}
+
+///|
 /// Project Codex's canonical task state and app-server-specific controls into
 /// the shared composer component. No editable or completion state is retained
 /// in this view projection.
@@ -351,14 +379,7 @@ pub fn State::composer_input(
   {
     identity: self.composer_identity(context.channel),
     draft: { task: self.draft, mentions: self.mentions, },
-    // Before the first real User item arrives, the only honest progress fact
-    // is that this accepted local submission is starting. Later Codex turns
-    // can overlap, so no broader single-turn heartbeat is inferred here.
-    run: if self.waiting_for_first_user_item() {
-      Some({ stage: @composer.Starting, started_ms: None, tokens: 0, })
-    } else {
-      None
-    },
+    run: self.composer_run(),
     goal: { draft: None, standing: None, pending: None, },
     slash_commands: [
       {

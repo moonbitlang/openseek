@@ -30,7 +30,7 @@ fn Conversation::visible_transcript_rows(
       Some(sequence) => DurableTranscriptRow(sequence)
       None => LegacyTranscriptRow(index)
     }
-    durable.push({ item, identity: identity.wire(), })
+    durable.push({ item, identity: identity.wire(), step_identity: None, })
   }
   durable
 }

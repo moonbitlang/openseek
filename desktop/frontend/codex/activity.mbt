@@ -58,6 +58,17 @@ fn CodexActivityLedger::entry(
 }
 
 ///|
+/// Whether ordered lifecycle evidence says this task is still running.
+/// Consumers use this semantic fact directly; sidebar marks and composer
+/// heartbeats remain separate presentations of it.
+fn CodexActivityLedger::is_running(
+  self : CodexActivityLedger,
+  thread_id : String,
+) -> Bool {
+  self.entry(thread_id).running
+}
+
+///|
 /// Replace one entry and advance the causal revision in the same operation.
 /// Keeping the mutable Map copy here prevents any lifecycle caller from
 /// aliasing an earlier State snapshot or forgetting the ordering fence.
@@ -154,8 +165,7 @@ fn CodexActivityLedger::presentation(
   self : CodexActivityLedger,
   thread_id : String,
 ) -> @conversation.RunMark {
-  let entry = self.entry(thread_id)
-  if entry.running {
+  if self.is_running(thread_id) {
     @conversation.RunningMark
   } else {
     @conversation.NoRunMark

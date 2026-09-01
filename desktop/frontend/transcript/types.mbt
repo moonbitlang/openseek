@@ -96,6 +96,18 @@ pub fn TranscriptItem::text(self : TranscriptItem) -> String? {
 }
 
 ///|
+/// One display row with identities that survive transcript insertions and
+/// reloads. `identity` names this exact row; `step_identity` groups the prose,
+/// reasoning, and tool activity produced by one model step. Neither value is a
+/// DOM id or durable store sequence, so transcript sources can retain their
+/// native string ids without overloading `TranscriptItem::sequence`.
+pub(all) struct TranscriptRow {
+  item : TranscriptItem
+  identity : String
+  step_identity : String?
+} derive(Eq)
+
+///|
 /// One sidebar entry from the engine's durable session list: the session id
 /// and its display title (first user message, already truncated engine-side;
 /// blank or absent for a session with no user message yet). `workspace` is
@@ -128,3 +140,6 @@ pub extend SessionListItem with Eq::{equal, not_equal}
 
 ///|
 pub extend TranscriptItem with Eq::{equal, not_equal}
+
+///|
+pub extend TranscriptRow with Eq::{equal, not_equal}

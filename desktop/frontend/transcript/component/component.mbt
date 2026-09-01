@@ -16,11 +16,14 @@ fn Source::wire(self : Source) -> String {
 
 ///|
 /// One visible transcript item paired with the stable identity used by keyed
-/// reconciliation. The identity is opaque to the component's callers and is
-/// never emitted as a DOM id or attribute.
+/// reconciliation. `step_identity` groups Codex rows that belong to the same
+/// inferred model step; OpenSeek responses already carry one whole step in a
+/// single item and leave it absent. Neither identity is emitted as a DOM id or
+/// attribute.
 pub(all) struct VisibleRow {
   item : @transcript.TranscriptItem
   identity : String
+  step_identity : String?
 } derive(Eq)
 
 ///|
@@ -35,7 +38,7 @@ pub fn VisibleRow::history(
       Some(sequence) => "s\{sequence}"
       None => "l\{index}"
     }
-    rows.push({ item, identity, })
+    rows.push({ item, identity, step_identity: None, })
   }
   rows
 }
@@ -678,6 +681,7 @@ test "local pinned transitions are pure" {
         {
           item: { kind: User("new turn"), ts: None, sequence: None, },
           identity: "l0",
+          step_identity: None,
         },
       ],
     },

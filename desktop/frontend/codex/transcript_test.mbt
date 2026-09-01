@@ -77,6 +77,36 @@ test "Codex adapts app-server items to the shared transcript model" {
 }
 
 ///|
+test "Codex omits unavailable command metadata from shared arguments" {
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "thread-1",
+      "turns": [
+        {
+          "id": "turn-1",
+          "status": "completed",
+          "items": [
+            {
+              "id": "read-1",
+              "type": "commandExecution",
+              "commandActions": [{ "type": "read", "path": "src/main.mbt" }],
+              "status": "completed",
+              "aggregatedOutput": "ok",
+            },
+          ],
+        },
+      ],
+    },
+  })
+  let items = state.transcript_items()
+  guard items[0].kind is @transcript.Assistant(calls=[call], ..) &&
+    call.arguments is Some(arguments) else {
+    fail("expected read metadata in shared tool arguments")
+  }
+  assert_eq(arguments, "{\"path\":\"src/main.mbt\"}")
+}
+
+///|
 test "Codex omits reasoning without visible summary text" {
   let state = @codex.State::from_thread_snapshot({
     "thread": {
@@ -104,7 +134,12 @@ test "Codex omits reasoning without visible summary text" {
                 { "type": "summary_text", "text": "Inspecting the fix" },
               ],
             },
-            { "id": "agent-1", "type": "agentMessage", "text": "Done." },
+            {
+              "id": "agent-1",
+              "type": "agentMessage",
+              "phase": Json::null(),
+              "text": "Done.",
+            },
           ],
         },
       ],
@@ -119,9 +154,196 @@ test "Codex omits reasoning without visible summary text" {
   assert_eq(thought, "Inspecting the fix")
   assert_true(items[0].text() is None)
   assert_true(
-    items[1].kind is @transcript.Assistant(reasoning=None, calls=[], ..),
+    items[1].kind
+    is @transcript.Assistant(
+      reasoning=None,
+      prose=Some("Done."),
+      calls=[],
+      finished=true,
+      ..
+    ),
   )
   assert_eq(items[1].text(), Some("Done."))
+}
+
+///|
+test "Codex preserves item ids, step groups, and explicit final answers" {
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "thread-1",
+      "turns": [
+        {
+          "id": "turn-1",
+          "status": "completed",
+          "completedAt": 123,
+          "items": [
+            {
+              "id": "user-1",
+              "type": "userMessage",
+              "clientId": "page-1-submission-1",
+              "content": [{ "type": "text", "text": "inspect" }],
+            },
+            {
+              "id": "reasoning-1",
+              "type": "reasoning",
+              "summary": [{ "text": "Checking" }],
+            },
+            {
+              "id": "command-1",
+              "type": "commandExecution",
+              "command": "moon check",
+              "status": "completed",
+              "aggregatedOutput": "ok",
+            },
+            {
+              "id": "agent-1",
+              "type": "agentMessage",
+              "phase": "final_answer",
+              "text": "Done.",
+            },
+          ],
+        },
+      ],
+    },
+  })
+  let rows = state.transcript_rows()
+  assert_eq(rows.length(), 4)
+  assert_eq(rows[0].identity, "turn\u{0}turn-1\u{0}item\u{0}user-1")
+  assert_eq(rows[0].step_identity, None)
+  assert_eq(rows[1].step_identity, rows[2].step_identity)
+  assert_true(rows[1].step_identity is Some(_))
+  assert_true(rows[3].step_identity is Some(_))
+  assert_true(rows[3].step_identity != rows[2].step_identity)
+  assert_true(
+    rows[3].item.kind
+    is @transcript.Assistant(prose=Some("Done."), finished=true, ..),
+  )
+  assert_eq(rows[3].item.ts, Some(123000.0))
+}
+
+///|
+test "Codex keeps async final-shaped delivery as ordinary assistant prose" {
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "thread-1",
+      "turns": [
+        {
+          "id": "turn-1",
+          "status": "completed",
+          "items": [
+            {
+              "id": "agent-1",
+              "type": "agentMessage",
+              "phase": "final_answer",
+              "delivery": "async",
+              "text": "Background result",
+            },
+          ],
+        },
+      ],
+    },
+  })
+  let items = state.transcript_items()
+  assert_eq(items.length(), 1)
+  assert_true(
+    items[0].kind
+    is @transcript.Assistant(
+      prose=Some("Background result"),
+      finished=false,
+      ..
+    ),
+  )
+}
+
+///|
+#warnings("-alert_unstable")
+test "Codex keeps indexed reasoning summary separate from raw content" {
+  let dispatch : @cmd.Emit[@codex.Msg] = @cmd.Emit(_ => @cmd.none)
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "thread-1",
+      "turns": [
+        {
+          "id": "turn-1",
+          "status": "inProgress",
+          "items": [{ "id": "reasoning-1", "type": "reasoning" }],
+        },
+      ],
+    },
+  })
+  let (_, first_part) = @codex.update(
+    dispatch,
+    @codex.Msg::notification(
+      "item/reasoning/summaryPartAdded",
+      {
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "itemId": "reasoning-1",
+        "summaryIndex": 0,
+      },
+      0,
+    ),
+    state,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, first_text) = @codex.update(
+    dispatch,
+    @codex.Msg::notification(
+      "item/reasoning/summaryTextDelta",
+      {
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "itemId": "reasoning-1",
+        "summaryIndex": 0,
+        "delta": "First",
+      },
+      0,
+    ),
+    first_part,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, second_text) = @codex.update(
+    dispatch,
+    @codex.Msg::notification(
+      "item/reasoning/summaryTextDelta",
+      {
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "itemId": "reasoning-1",
+        "summaryIndex": 1,
+        "delta": "Second",
+      },
+      0,
+    ),
+    first_text,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, with_raw) = @codex.update(
+    dispatch,
+    @codex.Msg::notification(
+      "item/reasoning/textDelta",
+      {
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "itemId": "reasoning-1",
+        "contentIndex": 0,
+        "delta": "raw details",
+      },
+      0,
+    ),
+    second_text,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let items = with_raw.transcript_items()
+  assert_eq(items.length(), 1)
+  assert_true(
+    items[0].kind
+    is @transcript.Assistant(reasoning=Some("First\n\nSecond"), ..),
+  )
 }
 
 ///|
@@ -211,48 +433,46 @@ test "Codex normalizes semantic app-server tools for the shared transcript" {
   })
   let items = state.transcript_items()
   assert_eq(items.length(), 5)
-  guard items[0].kind
-    is @transcript.Tool(
-      name="read",
-      arguments=Some(read_arguments),
-      has_result=true,
-      is_error=false,
-      ..
-    ) else {
+  guard items[0].kind is @transcript.Assistant(calls=[read_call], ..) &&
+    read_call.name == "read" &&
+    read_call.arguments is Some(read_arguments) else {
     fail("expected a classified command read")
   }
   assert_true(read_arguments.contains("src/main.mbt"))
-  assert_eq(items[0].content, "fn main { }")
-  guard items[1].kind
-    is @transcript.Tool(name="edit", arguments=Some(edit_arguments), ..) else {
+  assert_true(
+    read_call.outcome is Done(content="fn main { }", is_error=false, ..),
+  )
+  guard items[1].kind is @transcript.Assistant(calls=[edit_call], ..) &&
+    edit_call.name == "edit" &&
+    edit_call.arguments is Some(edit_arguments) else {
     fail("expected one file change to become edit")
   }
   assert_true(edit_arguments.contains("@@ -1 +1 @@"))
   assert_true(edit_arguments.contains("src/main.mbt"))
-  guard items[2].kind
-    is @transcript.Tool(name="multi_edit", arguments=Some(multi_arguments), ..) else {
+  guard items[2].kind is @transcript.Assistant(calls=[multi_edit_call], ..) &&
+    multi_edit_call.name == "multi_edit" &&
+    multi_edit_call.arguments is Some(multi_arguments) else {
     fail("expected several file changes to become multi_edit")
   }
   assert_true(multi_arguments.contains("\"edits\""))
   assert_true(multi_arguments.contains("a.mbt"))
   assert_true(multi_arguments.contains("b.mbt"))
-  guard items[3].kind
-    is @transcript.Tool(name="mcp__docs__lookup", arguments=Some(mcp_args), ..) else {
+  guard items[3].kind is @transcript.Assistant(calls=[mcp_call], ..) &&
+    mcp_call.name == "mcp__docs__lookup" &&
+    mcp_call.arguments is Some(mcp_args) else {
     fail("expected an MCP registry-style tool name")
   }
   assert_true(mcp_args.contains("TranscriptItem"))
-  assert_eq(items[3].content, "MCP result")
-  guard items[4].kind
-    is @transcript.Tool(
-      name="run_moonbit",
-      arguments=Some(dynamic_args),
-      is_error=false,
-      ..
-    ) else {
+  assert_true(mcp_call.outcome is Done(content="MCP result", ..))
+  guard items[4].kind is @transcript.Assistant(calls=[dynamic_call], ..) &&
+    dynamic_call.name == "run_moonbit" &&
+    dynamic_call.arguments is Some(dynamic_args) else {
     fail("expected a dynamic tool to retain its semantic name")
   }
   assert_true(dynamic_args.contains("fn main"))
-  assert_eq(items[4].content, "program passed")
+  assert_true(
+    dynamic_call.outcome is Done(content="program passed", is_error=false, ..),
+  )
 }
 
 ///|
@@ -326,27 +546,59 @@ test "Codex gives every remaining app-server activity a shared semantic row" {
   })
   let items = state.transcript_items()
   assert_eq(items.length(), 10)
-  assert_true(items[0].kind is @transcript.Assistant(is_danger=false))
-  assert_eq(items[0].content, "Proposed approach")
-  assert_true(items[1].kind is @transcript.Tool(name="hook_prompt", ..))
-  assert_eq(items[1].content, "Check generated files")
   assert_true(
-    items[2].kind is @transcript.Tool(name="spawnAgent", is_error=false, ..),
+    items[0].kind
+    is @transcript.Assistant(prose=Some("Proposed approach"), calls=[], ..),
   )
-  assert_true(items[2].content.contains("thread-2"))
-  assert_true(items[3].kind is @transcript.Tool(name="subagent", ..))
-  assert_true(items[4].kind is @transcript.Tool(name="web_search", ..))
-  assert_true(items[4].content.contains("Result"))
-  assert_true(items[5].kind is @transcript.Tool(name="image_view", ..))
-  assert_true(items[6].kind is @transcript.Tool(name="sleep", ..))
+  guard items[1].kind is @transcript.Assistant(calls=[hook_call], ..) else {
+    fail("expected a hook prompt tool call")
+  }
+  assert_eq(hook_call.name, "hook_prompt")
+  assert_true(hook_call.outcome is Done(content="Check generated files", ..))
+  guard items[2].kind is @transcript.Assistant(calls=[spawn_call], ..) else {
+    fail("expected a spawnAgent tool call")
+  }
+  assert_eq(spawn_call.name, "spawnAgent")
+  guard spawn_call.outcome is Done(content=spawn_content, is_error=false, ..) else {
+    fail("expected completed spawnAgent output")
+  }
+  assert_true(spawn_content.contains("thread-2"))
+  guard items[3].kind is @transcript.Assistant(calls=[subagent_call], ..) else {
+    fail("expected a subagent tool call")
+  }
+  assert_eq(subagent_call.name, "subagent")
+  guard items[4].kind is @transcript.Assistant(calls=[search_call], ..) else {
+    fail("expected a web search tool call")
+  }
+  assert_eq(search_call.name, "web_search")
+  guard search_call.outcome is Done(content=search_content, ..) else {
+    fail("expected completed web search output")
+  }
+  assert_true(search_content.contains("Result"))
+  guard items[5].kind is @transcript.Assistant(calls=[view_call], ..) else {
+    fail("expected an image view tool call")
+  }
+  assert_eq(view_call.name, "image_view")
+  guard items[6].kind is @transcript.Assistant(calls=[sleep_call], ..) else {
+    fail("expected a sleep tool call")
+  }
+  assert_eq(sleep_call.name, "sleep")
+  guard items[7].kind is @transcript.Assistant(calls=[image_call], ..) else {
+    fail("expected an image generation tool call")
+  }
+  assert_eq(image_call.name, "image_generation")
   assert_true(
-    items[7].kind
-    is @transcript.Tool(name="image_generation", is_error=false, ..),
+    image_call.outcome
+    is Done(content="https://example.invalid/image.png", is_error=false, ..),
   )
-  assert_eq(items[7].content, "https://example.invalid/image.png")
-  assert_true(items[8].kind is @transcript.Tool(name="review", ..))
-  assert_eq(items[8].content, "Review the current changes")
-  assert_true(items[9].kind is @transcript.Summary)
+  guard items[8].kind is @transcript.Assistant(calls=[review_call], ..) else {
+    fail("expected a review tool call")
+  }
+  assert_eq(review_call.name, "review")
+  assert_true(
+    review_call.outcome is Done(content="Review the current changes", ..),
+  )
+  assert_true(items[9].kind is @transcript.Summary(_))
 }
 
 ///|
@@ -381,14 +633,14 @@ test "Codex structured plan notifications use the shared plan payload" {
   )
   let items = planned.transcript_items()
   assert_eq(items.length(), 1)
-  guard items[0].kind
-    is @transcript.Tool(
-      name="plan",
-      arguments=Some(arguments),
-      has_result=true,
+  guard items[0].kind is @transcript.Assistant(calls=[call], ..) &&
+    call.name == "plan" &&
+    call.arguments is Some(arguments) &&
+    call.outcome
+    is Done(
+      content="Starting with the adapter",
       is_error=false,
-      brief=Some(brief),
-      ..
+      brief=Some(brief)
     ) else {
     fail("expected a shared plan tool row")
   }
@@ -420,10 +672,12 @@ test "Codex item notifications preserve pending tool state" {
     @interop.ChannelId::Local,
     _ => @cmd.none,
   )
-  assert_true(
-    pending.transcript_items()[0].kind
-    is @transcript.Tool(name="web_search", has_result=false, ..),
-  )
+  guard pending.transcript_items()[0].kind
+    is @transcript.Assistant(calls=[pending_call], ..) else {
+    fail("expected a pending web search")
+  }
+  assert_eq(pending_call.name, "web_search")
+  assert_true(pending_call.outcome is Pending(_))
   assert_eq(pending.transcript_items()[0].ts, Some(1000.0))
   let completed_params : Json = {
     "threadId": "thread-1",
@@ -438,11 +692,80 @@ test "Codex item notifications preserve pending tool state" {
     @interop.ChannelId::Local,
     _ => @cmd.none,
   )
-  assert_true(
-    completed.transcript_items()[0].kind
-    is @transcript.Tool(name="web_search", has_result=true, ..),
-  )
+  guard completed.transcript_items()[0].kind
+    is @transcript.Assistant(calls=[completed_call], ..) else {
+    fail("expected a completed web search")
+  }
+  assert_eq(completed_call.name, "web_search")
+  assert_true(completed_call.outcome is Done(_))
   assert_eq(completed.transcript_items()[0].ts, Some(2000.0))
+}
+
+///|
+#warnings("-alert_unstable")
+test "Codex summary turns retain item lifecycle timestamps" {
+  let dispatch : @cmd.Emit[@codex.Msg] = @cmd.Emit(_ => @cmd.none)
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "thread-1",
+      "turns": [{ "id": "turn-1", "status": "inProgress", "items": [] }],
+    },
+  })
+  let (_, observed) = @codex.update(
+    dispatch,
+    @codex.Msg::notification(
+      "item/completed",
+      {
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "completedAtMs": 1234,
+        "item": {
+          "id": "agent-1",
+          "type": "agentMessage",
+          "phase": "commentary",
+          "text": "Working",
+        },
+      },
+      0,
+    ),
+    state,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, settled) = @codex.update(
+    dispatch,
+    @codex.Msg::notification(
+      "turn/completed",
+      {
+        "threadId": "thread-1",
+        "turn": {
+          "id": "turn-1",
+          "status": "completed",
+          "completedAt": 2,
+          "itemsView": "summary",
+          "items": [
+            {
+              "id": "agent-1",
+              "type": "agentMessage",
+              "phase": "commentary",
+              "text": "Working",
+            },
+          ],
+        },
+      },
+      0,
+    ),
+    observed,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let items = settled.transcript_items()
+  assert_eq(items.length(), 1)
+  assert_true(
+    items[0].kind
+    is @transcript.Assistant(prose=Some("Working"), finished=false, ..),
+  )
+  assert_eq(items[0].ts, Some(1234.0))
 }
 
 ///|
@@ -499,12 +822,10 @@ test "Codex live patch and MCP progress update their shared rows" {
     _ => @cmd.none,
   )
   guard patched.transcript_items()[0].kind
-    is @transcript.Tool(
-      name="edit",
-      arguments=Some(arguments),
-      has_result=false,
-      ..
-    ) else {
+    is @transcript.Assistant(calls=[edit_call], ..) &&
+    edit_call.name == "edit" &&
+    edit_call.arguments is Some(arguments) &&
+    edit_call.outcome is Pending(_) else {
     fail("expected a pending live edit")
   }
   assert_true(arguments.contains("-old\\n+new"))
@@ -549,9 +870,12 @@ test "Codex live patch and MCP progress update their shared rows" {
     @interop.ChannelId::Local,
     _ => @cmd.none,
   )
-  assert_eq(
-    progressed.transcript_items()[1].content,
-    "Searching documentation\n",
+  guard progressed.transcript_items()[1].kind
+    is @transcript.Assistant(calls=[mcp_call], ..) else {
+    fail("expected MCP progress in the shared tool call")
+  }
+  assert_true(
+    mcp_call.outcome is Pending(output=Some("Searching documentation\n")),
   )
 }
 
@@ -580,7 +904,8 @@ test "Codex keeps skill and local media inputs as shared mention chips" {
     },
   })
   let items = state.transcript_items()
-  guard @mention_context.parse(items[0].content) is Some(message) else {
+  guard items[0].kind is @transcript.User(content) &&
+    @mention_context.parse(content) is Some(message) else {
     fail("expected a shared mention envelope")
   }
   assert_eq(message.task, "Inspect these")

@@ -77,7 +77,7 @@ fn focus_channel(
       // Codex is host-owned just like the other focused mirrors. Clear the
       // previous device's account and conversation list before its replies
       // can be mistaken for this device's sidebar section.
-      codex: @codex.State(loading=true),
+      codex: @codex.State(loading=true, client_namespace=model.page_namespace),
       // The old HostConnection is already parked. Preserve the remaining
       // owner/root state until the post-dispatch sync retires its file-index
       // cache and re-roots against the newly focused host.

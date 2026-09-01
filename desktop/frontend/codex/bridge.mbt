@@ -430,12 +430,18 @@ fn State::send(
   guard self.active_thread() is Some(active) else { return @cmd.none }
   guard !self.input_empty() else { return @cmd.none }
   let inputs = self.turn_inputs()
+  let client_user_message_id = self.client_user_message_id()
   if self.active_turn_id() is Some(turn_id) {
     CodexTurnSteerReply(active.id).request(
       dispatch,
       channel,
       @commands.codex_turn_steer,
-      { thread_id: active.id, input: inputs, expected_turn_id: turn_id, },
+      {
+        thread_id: active.id,
+        input: inputs,
+        client_user_message_id,
+        expected_turn_id: turn_id,
+      },
     )
   } else {
     if self.placement.wants_fresh() && active.turns.is_empty() {
@@ -443,7 +449,7 @@ fn State::send(
         active.cwd.unwrap_or("")
       })
       return self.start_turn_in_new_worktree(
-        dispatch, channel, active, workspace, inputs,
+        dispatch, channel, active, workspace, inputs, client_user_message_id,
       )
     }
     let model = self.selected_model.trim().to_owned()
@@ -455,6 +461,7 @@ fn State::send(
       {
         thread_id: active.id,
         input: inputs,
+        client_user_message_id,
         model: if model.is_empty() {
           None
         } else {
@@ -493,6 +500,17 @@ fn State::turn_inputs(self : State) -> Array[Json] {
 }
 
 ///|
+/// Prefix the next submission number with this Desktop page's opaque id.
+/// App-server echoes the result on the canonical User item. The counter
+/// advances only after a successful reply, so a failed request may retry the
+/// same human submission without changing ids.
+fn State::client_user_message_id(self : State) -> String? {
+  self.client_namespace.map(client_scope => {
+    "\{client_scope}-codex-submission-\{self.submission_sequence + 1}"
+  })
+}
+
+///|
 /// The shared first-send placement flow's Codex adapter: invoke the same
 /// owner-aware `worktree.create` used by OpenSeek, then differ only at the
 /// final backend call by starting an app-server turn with that exact cwd.
@@ -505,6 +523,7 @@ fn State::start_turn_in_new_worktree(
   active : CodexThread,
   workspace : String,
   inputs : Array[Json],
+  client_user_message_id : String?,
 ) -> @cmd.Cmd {
   let thread_id = active.id
   let model = self.selected_model.trim().to_owned()
@@ -560,6 +579,7 @@ fn State::start_turn_in_new_worktree(
             {
               thread_id,
               input: inputs,
+              client_user_message_id,
               model: if model.is_empty() {
                 None
               } else {

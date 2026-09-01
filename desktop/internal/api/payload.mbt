@@ -119,6 +119,9 @@ fn @protocol.CodexTurnStartPayload::app_server_params(
   if self.cwd is Some(cwd) {
     fields["cwd"] = Json(cwd)
   }
+  if self.client_user_message_id is Some(client_id) {
+    fields["clientUserMessageId"] = Json(client_id)
+  }
   self.permission_mode.write_app_server_settings(fields)
   Json(fields)
 }
@@ -173,6 +176,7 @@ test "Codex resume and turn map full access without a reviewer" {
     "threadId": "thread-1",
     "cwd": "/work/project",
     "input": [{ "type": "text", "text": "hello" }],
+    "clientUserMessageId": "page-1-submission-1",
     "model": "gpt-test",
     "effort": "high",
     "permissionMode": "requestApproval",
@@ -183,6 +187,7 @@ test "Codex resume and turn map full access without a reviewer" {
     "threadId": "thread-1",
     "cwd": "/work/project",
     "input": [{ "type": "text", "text": "hello" }],
+    "clientUserMessageId": "page-1-submission-1",
     "model": "gpt-test",
     "effort": "high",
     "permissions": ":workspace",

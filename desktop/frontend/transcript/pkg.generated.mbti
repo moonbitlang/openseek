@@ -135,6 +135,14 @@ pub fn TranscriptItem::equal(Self, Self) -> Bool
 pub fn TranscriptItem::not_equal(Self, Self) -> Bool
 pub fn TranscriptItem::text(Self) -> String?
 
+pub(all) struct TranscriptRow {
+  item : TranscriptItem
+  identity : String
+  step_identity : String?
+} derive(Eq)
+pub fn TranscriptRow::equal(Self, Self) -> Bool
+pub fn TranscriptRow::not_equal(Self, Self) -> Bool
+
 // Type aliases
 
 // Traits
