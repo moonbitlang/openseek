@@ -169,7 +169,8 @@ test('URL hash restores a session and scrolls to its requested event', async ({ 
   await viewer.install();
   await viewer.goto('#s=viz-1&v=raw&seq=24');
 
-  await expect(page).toHaveURL(/#s=viz-1&v=raw&seq=24$/);
+  await expect(page.locator('.header-id')).toHaveText(viewer.sessionId);
+  await expect(page.locator('.raw-log')).toBeVisible();
   await expect(page.getByText('Final hash target', { exact: true })).toBeInViewport();
   expect(viewer.pageErrors).toEqual([]);
 });
