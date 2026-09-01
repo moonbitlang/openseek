@@ -790,6 +790,11 @@ priv struct Conversation {
   // so a predecessor's delayed Started must stay fenced after a successor has
   // replaced `last_run_id`. Host-random run ids are never reused.
   retired_run_ids : Array[String]
+  // Retired runs whose Finished boundary has also driven the page's terminal
+  // side effects. Retirement alone may come from CancelNotOpen/RunsSettled;
+  // keeping the two facts separate lets a delayed Finished reconcile the
+  // transcript exactly once without reclaiming lifecycle ownership.
+  reconciled_run_ids : Array[String]
   // Where this conversation's compaction stands; see `CompactionPhase`.
   compaction : CompactionPhase
   // A run finished while this conversation was off screen and the user has
@@ -2384,6 +2389,7 @@ fn empty_conversation(
     run: NoRun(ended=None),
     last_run_id: None,
     retired_run_ids: [],
+    reconciled_run_ids: [],
     compaction: NotCompacting,
     unseen_finish: false,
     run_started_ms: None,
@@ -3283,6 +3289,23 @@ fn Model::conversation_by_last_run(
 }
 
 ///|
+/// A conversation that has already retired `run_id`. Its current/last run may
+/// now be a successor, but a delayed Finished still belongs here for terminal
+/// transcript and file reconciliation.
+fn Model::conversation_by_retired_run(
+  self : Model,
+  channel : @interop.ChannelId,
+  run_id : String,
+) -> Conversation? {
+  for conv in self.conversations.filter(conv => conv.device == channel) {
+    if conv.retired_run_ids.contains(run_id) {
+      return Some(conv)
+    }
+  }
+  None
+}
+
+///|
 /// The conversation holding an exact id-bearing steer receipt. A receipt may
 /// trail its run's Finished event and even the next run's Started event, so
 /// current/last run ownership alone is not enough to route it.
@@ -3328,7 +3351,7 @@ fn Model::activate(
       found = true
       // Opening the conversation is what "seen" means.
       conversations.push({ ..conv, unseen_finish: false, })
-    } else if conv.worth_keeping() {
+    } else if conv.retain_in_memory() {
       conversations.push(conv)
     }
   }
@@ -3352,8 +3375,7 @@ fn Model::activate(
 ///|
 /// Whether the composer draft holds nothing at all — no typed text, no
 /// mention chips, and no goal being written or awaiting its marker. This is
-/// the retention test (`Model::activate` keeps a conversation whose draft
-/// still holds anything), not the send gate: that is `draft_sendable`.
+/// the visible in-memory row test, not the send gate: that is `draft_sendable`.
 ///
 /// The goal halves count because `/goal` moves the user's text out of `task`:
 /// without them a fresh conversation looks abandoned while holding the only
@@ -3361,11 +3383,18 @@ fn Model::activate(
 /// Whether this conversation is worth keeping once focus moves elsewhere:
 /// it has begun, or it still holds writing that was never sent.
 ///
-/// Retention and the sidebar row ask this same question, and have to. Keeping
-/// one the list cannot reach does not save the draft, it strands it — the
-/// conversation lives on in memory with no way back to it.
 fn Conversation::worth_keeping(self : Conversation) -> Bool {
   self.has_begun() || !self.draft_empty()
+}
+
+///|
+/// Keep an otherwise-empty lifecycle tombstone off the sidebar but alive for
+/// delayed Started/Finished notifications. Once a run id has been retired it
+/// cannot safely be forgotten during this page generation: host-random ids
+/// are not reused, while transport and reducer queues are independently
+/// ordered.
+fn Conversation::retain_in_memory(self : Conversation) -> Bool {
+  self.worth_keeping() || !self.retired_run_ids.is_empty()
 }
 
 ///|
@@ -3590,6 +3619,19 @@ fn Conversation::retire_run(
   let retired_run_ids = self.retired_run_ids.copy()
   retired_run_ids.push(run_id)
   { ..self, retired_run_ids, }
+}
+
+///|
+fn Conversation::record_reconciled_run(
+  self : Conversation,
+  run_id : String,
+) -> Conversation {
+  if self.reconciled_run_ids.contains(run_id) {
+    return self
+  }
+  let reconciled_run_ids = self.reconciled_run_ids.copy()
+  reconciled_run_ids.push(run_id)
+  { ..self, reconciled_run_ids, }
 }
 
 ///|
