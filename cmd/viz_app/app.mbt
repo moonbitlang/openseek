@@ -88,9 +88,11 @@ enum Msg {
   SessionsFetched(Result[String, Error])
   Select(String)
   SessionFetched(String, Result[String, Error])
-  // A subrun chip (or any in-page `#s=` anchor) changed the hash: resolve
-  // the value against the listing and select.
-  HashNavigated(String)
+  // Rabbita captured an anchor click. Only internal `#s=…` requests belong to
+  // this viewer; other anchors keep their existing handling.
+  UrlRequested(@url.UrlRequest)
+  // A URL pushed by the request handler, or restored through browser history.
+  UrlChanged(@url.Url)
   // One child (subagent) session fetched for the selected parent:
   // (parent key, child session id, response).
   SubrunFetched(String, String, Result[String, Error])
@@ -282,14 +284,29 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
         },
       )
     }
-    HashNavigated(value) =>
-      // Resolve like the startup restore; an unknown value (an element
-      // anchor's hash, an unlisted id) is ignored rather than clearing the
-      // current session.
-      match resolve_session_key(model.sessions, value) {
-        Some(key) if model.selected != Some(key) =>
-          update(emit, Select(key), model)
-        _ => (@cmd.none, model)
+    UrlRequested(request) =>
+      match request {
+        Internal(url) =>
+          if url.fragment is Some(fragment) &&
+            HashSessionKey::from_fragment(fragment) is Some(_) {
+            (@nav.push_url(url.to_string()), model)
+          } else {
+            (@cmd.none, model)
+          }
+        External(_) => (@cmd.none, model)
+      }
+    UrlChanged(url) =>
+      if url.fragment is Some(fragment) &&
+        HashSessionKey::from_fragment(fragment) is Some(key) {
+        // Resolve like startup restoration; unknown anchors do not clear the
+        // current session.
+        match resolve_session_key(model.sessions, key.0) {
+          Some(key) if model.selected != Some(key) =>
+            update(emit, Select(key), model)
+          _ => (@cmd.none, model)
+        }
+      } else {
+        (@cmd.none, model)
       }
     SubrunFetched(parent_key, child_id, result) =>
       // A child transcript for a parent the user already left is stale;
@@ -972,29 +989,62 @@ fn subrun_child_refs(
 }
 
 ///|
-/// In-page session navigation: subrun chips are plain `#s=…` anchors, so a
-/// click only changes the hash — this listener turns that into a selection.
-/// App-initiated hash writes use replaceState, which never fires
-/// `hashchange`, so navigation cannot loop.
-fn install_hash_navigation(emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
-  @cmd.custom_cmd(scheduler => {
-    install_hashchange_listener(key => scheduler.add(emit(HashNavigated(key))))
-  })
+/// The decoded session key carried by an `s=` hash parameter. Keeping the
+/// decoder on this type makes URL parsing a self-contained boundary instead of
+/// scattering percent-decoding rules through update branches.
+priv struct HashSessionKey(String)
+
+///|
+/// Read the first `s=` parameter from a URL fragment. Subrun links percent-
+/// encode UTF-8 bytes, and `+` follows URLSearchParams' spelling for a space.
+fn HashSessionKey::from_fragment(fragment : StringView) -> HashSessionKey? {
+  for parameter in fragment.split("&") {
+    if parameter is [.. "s=", .. encoded] {
+      return HashSessionKey::decode(encoded)
+    }
+  }
+  None
 }
 
 ///|
-extern "js" fn install_hashchange_listener(
-  on_session : (String) -> Unit,
-) -> Unit =
-  #|(cb) => {
-  #|  if (typeof window === 'undefined') return;
-  #|  window.addEventListener('hashchange', () => {
-  #|    try {
-  #|      const s = new URLSearchParams(location.hash.slice(1)).get('s') || '';
-  #|      if (s) cb(s);
-  #|    } catch (e) {}
-  #|  });
-  #|}
+fn HashSessionKey::decode(encoded : StringView) -> HashSessionKey? {
+  let bytes = Buffer(size_hint=encoded.length())
+  for remaining = encoded {
+    match remaining {
+      [] => {
+        let value = @utf8.decode(bytes.to_bytes()) catch { _ => break None }
+        break Some(HashSessionKey(value))
+      }
+      ['%', high, low, .. rest] => {
+        guard HashSessionKey::hex_value(high) is Some(high) &&
+          HashSessionKey::hex_value(low) is Some(low) else {
+          break None
+        }
+        bytes.write_byte((high * 16 + low).to_byte())
+        continue rest
+      }
+      ['%', ..] => break None
+      ['+', .. rest] => {
+        bytes.write_byte(b' ')
+        continue rest
+      }
+      [character, .. rest] => {
+        bytes.write_char_utf8(character)
+        continue rest
+      }
+    }
+  }
+}
+
+///|
+fn HashSessionKey::hex_value(character : Char) -> Int? {
+  match character {
+    '0'..='9' => Some(character.to_int() - 0x30)
+    'A'..='F' => Some(character.to_int() - 0x41 + 10)
+    'a'..='f' => Some(character.to_int() - 0x61 + 10)
+    _ => None
+  }
+}
 
 ///|
 fn session_label(model : Model, key : String) -> String {

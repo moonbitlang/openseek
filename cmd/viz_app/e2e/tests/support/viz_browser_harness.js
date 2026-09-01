@@ -5,6 +5,9 @@ export class VizBrowserHarness {
     this.page = page;
     this.pageErrors = [];
     this.apiRequests = [];
+    this.sessionId = 'viz-1';
+    this.extraSessionRows = [];
+    this.childEvents = new Map();
     this.events = [
       JSON.stringify({
         version: 1,
@@ -114,13 +117,14 @@ export class VizBrowserHarness {
   sessionRows() {
     return [
       {
-        key: 'viz-1',
-        id: 'viz-1',
+        key: this.sessionId,
+        id: this.sessionId,
         root_label: '/workspace/.openseek',
         is_marker: true,
         last_active: 1,
         first_prompt: 'Inspect the session viewer',
       },
+      ...this.extraSessionRows,
     ];
   }
 
@@ -137,8 +141,12 @@ export class VizBrowserHarness {
     ].join('\n') + '\n';
   }
 
-  sessionEnvelope(id = 'viz-1') {
-    if (id !== 'viz-1') {
+  sessionEnvelope(id = this.sessionId) {
+    if (this.childEvents.has(id)) {
+      const events = this.childEvents.get(id);
+      return { found: true, events, events_bytes: events.length };
+    }
+    if (id !== this.sessionId) {
       return { found: false, events: '', events_bytes: 0 };
     }
     return {
@@ -160,7 +168,7 @@ export class VizBrowserHarness {
         window.__OPENSEEK_DATA__ = data;
       }, {
         '/api/sessions': JSON.stringify(this.sessionRows()),
-        '/api/sessions/viz-1': JSON.stringify(this.sessionEnvelope()),
+        [`/api/sessions/${this.sessionId}`]: JSON.stringify(this.sessionEnvelope()),
       });
     }
     await this.page.route('**/viz_app.js', route => route.fulfill({
@@ -198,6 +206,6 @@ export class VizBrowserHarness {
     await this.page.locator('.session-item', {
       hasText: 'Inspect the session viewer',
     }).click();
-    await this.page.locator('.header-id', { hasText: 'viz-1' }).waitFor();
+    await this.page.locator('.header-id', { hasText: this.sessionId }).waitFor();
   }
 }

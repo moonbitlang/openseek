@@ -13,9 +13,6 @@ fn main {
           @cmd.batch([
             fetch_text(emit, "/api/sessions", result => SessionsFetched(result)),
             install_shortcuts(emit),
-            // Subrun chips navigate by writing `#s=…`; turn those hash changes
-            // into selections.
-            install_hash_navigation(emit),
             // Keep `seq=` in the URL hash while scrolling and make scrubber
             // segments jump, so a refresh restores the position.
             @cmd.effect(() => install_position_tracker()),
@@ -25,6 +22,15 @@ fn main {
       update=(state, msg, emit) => {
         let (cmd, model) = update(emit, msg, state)
         (model, cmd)
+      },
+      // Rabbita owns clicks on its `<a>` nodes. Accept subrun URL requests,
+      // push them into browser history, then resolve the resulting URL change
+      // through the same selection path used by startup restoration.
+      subscriptions=(_, emit) => {
+        @sub.batch([
+          @sub.on_url_request(emit.map(request => UrlRequested(request))),
+          @sub.on_url_changed(emit.map(url => UrlChanged(url))),
+        ])
       },
     )
     state.view(state => view(emit, state))

@@ -81,6 +81,79 @@ test('a dropped session file replaces the served selection without another fetch
   await dataTransfer.dispose();
 });
 
+test('a subrun link opens the child session', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  viewer.sessionId = 'viz parent';
+  viewer.events = viewer.eventLog([
+    {
+      sequence: 1,
+      item: { kind: 'user', payload: { content: 'Delegate the investigation' } },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: '',
+          tool_calls: [{
+            id: 'explore-parent',
+            name: 'explore',
+            arguments: '{"query":"find the renderer"}',
+          }],
+        },
+      },
+    },
+    {
+      sequence: 3,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'explore-parent',
+          tool_name: 'explore',
+          content: 'Subagent completed.',
+          is_error: false,
+          brief: 'explore sr-2 (completed)',
+        },
+      },
+    },
+  ], { id: viewer.sessionId });
+  const childId = 'viz parent-sr-2';
+  viewer.extraSessionRows = [{
+    key: childId,
+    id: childId,
+    root_label: '/workspace/.openseek',
+    is_marker: true,
+    last_active: 1,
+    first_prompt: 'Child investigation',
+  }];
+  viewer.childEvents.set(childId, viewer.eventLog([
+    {
+      sequence: 1,
+      item: { kind: 'user', payload: { content: 'Child investigation' } },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'assistant',
+        payload: { content: 'The child session is open.', tool_calls: [] },
+      },
+    },
+  ], { id: childId }));
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+
+  // Wait for the child prefetch to finish so its parent re-render cannot race
+  // the user click that this test exercises.
+  await page.locator('.subrun-transcript').waitFor({ state: 'attached' });
+  await page.getByRole('link', { name: '↳ subagent' }).click();
+  await expect(page.locator('.header-id')).toHaveText(childId);
+  await expect(page.getByText('The child session is open.', { exact: true }))
+    .toBeVisible();
+  expect(viewer.pageErrors).toEqual([]);
+});
+
 test('URL hash restores a session and scrolls to its requested event', async ({ page }) => {
   const viewer = new VizBrowserHarness(page);
   viewer.events = viewer.eventLog(Array.from({ length: 24 }, (_, index) => ({
