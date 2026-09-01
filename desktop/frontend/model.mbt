@@ -2942,11 +2942,14 @@ fn Model::run_snapshot_frontier(
   self : Model,
   channel : @interop.ChannelId,
   lifecycle_absence_is_definitive? : Bool = false,
+  definitive_lifecycle_session? : String,
   definitive_steer_id? : String,
 ) -> Array[RunSnapshotFrontier] {
   self.conversations
   .filter(conv => conv.device == channel)
   .map(conv => {
+    let captured_lifecycle_absence = lifecycle_absence_is_definitive ||
+      definitive_lifecycle_session == Some(conv.session_id)
     let state = match conv.run {
       NoRun(..) => SnapshotIdle(last_run_id=conv.last_run_id)
       Starting(submission_id~) => SnapshotStarting(submission_id~)
@@ -2963,7 +2966,7 @@ fn Model::run_snapshot_frontier(
           submission_id: pending.submission_id,
           run_id,
           absence_is_definitive: pending.delivery is SteerAccepted ||
-          lifecycle_absence_is_definitive ||
+          captured_lifecycle_absence ||
           definitive_steer_id == Some(pending.submission_id),
           steer_ledger_id: pending.steer_ledger_id,
         })
@@ -2972,7 +2975,7 @@ fn Model::run_snapshot_frontier(
     {
       session: conv.session_id,
       state,
-      lifecycle_absence_is_definitive,
+      lifecycle_absence_is_definitive: captured_lifecycle_absence,
       initial_ids,
       steers,
       pending_approval_id: conv.pending_approval.map(pending => pending.id),
@@ -3756,8 +3759,24 @@ fn Conversation::restore_submission(
 fn Conversation::archive_salvage(self : Conversation) -> ArchiveSalvage {
   let drafts : Array[String] = []
   let mentions : Array[Mention] = []
-  let pending_initial = self.pending_prompt is Some(_)
+  let pending_input = self.pending_prompt is Some(_) ||
+    !self.pending_steers.is_empty()
   if self.pending_prompt is Some(pending) {
+    if !pending.draft.is_blank() {
+      drafts.push(pending.draft)
+    }
+    for mention in pending.mentions {
+      mentions.push(mention)
+    }
+  }
+  // A terminal event can arrive before the steer receipt that classifies its
+  // text as applied or dropped. Archiving is delivered on another queue and
+  // can overtake that receipt, so carry every unresolved steer into the safe
+  // replacement composer before retiring its exact owner. The warning bit
+  // tells the user this text came from an in-flight submission and may already
+  // be durable; silently dropping it would lose the only resubmittable copy
+  // when the eventual receipt is `dropped`.
+  for pending in self.pending_steers {
     if !pending.draft.is_blank() {
       drafts.push(pending.draft)
     }
@@ -3789,7 +3808,7 @@ fn Conversation::archive_salvage(self : Conversation) -> ArchiveSalvage {
   } else {
     None
   }
-  { task: drafts.join("\n\n"), mentions, goal_draft, pending_initial, }
+  { task: drafts.join("\n\n"), mentions, goal_draft, pending_input, }
 }
 
 ///|
@@ -3798,7 +3817,7 @@ priv struct ArchiveSalvage {
   task : String
   mentions : Array[Mention]
   goal_draft : String?
-  pending_initial : Bool
+  pending_input : Bool
 }
 
 ///|

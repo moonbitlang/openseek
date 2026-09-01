@@ -1558,7 +1558,7 @@ fn replace_archived_active(
   let salvaged = archived_conv.archive_salvage()
   let restored_task = salvaged.task
   let restored_mentions = salvaged.mentions
-  let pending_initial = salvaged.pending_initial
+  let pending_input = salvaged.pending_input
   let conversations = model.conversations.filter(conv => {
     conv.device != channel || conv.session_id != session
   })
@@ -1596,7 +1596,7 @@ fn replace_archived_active(
     worktree_mode: model.default_worktree_mode(channel, workspace),
     goal_edit,
   }
-  let fresh = { ..fresh, archived_pending_input: pending_initial, }
+  let fresh = { ..fresh, archived_pending_input: pending_input, }
   let composer_entry_replacements = model.composer_entry_replacements.copy()
   let archived_owner : @interop.ConversationKey = { channel, session, }
   let mut archive_generation = 0
@@ -5458,7 +5458,7 @@ fn update_device_msg(
       // three outcomes and can silently discard known-rejected input.
       let frontier = model.run_snapshot_frontier(
         channel,
-        lifecycle_absence_is_definitive=true,
+        definitive_lifecycle_session=conv.session_id,
       )
       let closed = conv.clear_streams()
       let closed = if closed.pending_approval
@@ -11453,6 +11453,76 @@ test "reconnect runs snapshot settles only its captured Starting submission" {
 }
 
 ///|
+test "CancelNotOpen recovery scopes definitive absence to its conversation" {
+  let other = with_pending_steers(
+    with_pending_prompt(
+      {
+        ..empty_conversation(
+          @interop.ChannelId::Local,
+          "desktop-other",
+          @interop.ChannelId::Local.test_project(),
+        ),
+        run: Starting(submission_id="other-start"),
+      },
+      "other-start",
+      "other prompt",
+    ),
+    ["other steer"],
+    run_id="other-predecessor",
+  )
+  let before = running_model().replace_conversation(other)
+  let frontier = before.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    definitive_lifecycle_session="desktop-test",
+  )
+  let mut saw_target = false
+  let mut saw_other = false
+  for captured in frontier {
+    if captured.session == "desktop-test" {
+      saw_target = true
+      assert_true(captured.lifecycle_absence_is_definitive)
+    } else if captured.session == "desktop-other" {
+      saw_other = true
+      assert_false(captured.lifecycle_absence_is_definitive)
+      guard captured.steers is [owner] else {
+        fail("the other conversation's steer owner was not captured")
+      }
+      assert_false(owner.absence_is_definitive)
+    }
+  }
+  assert_true(saw_target && saw_other)
+  // This is the state immediately after CancelNotOpen closes only its exact
+  // run, while the request-time frontier above remains attached to agent.runs.
+  let after_cancel = before.replace_conversation({
+    ..before.active().clear_streams(),
+    run: NoRun(ended=None),
+    last_run_id: Some("r7"),
+  })
+  let (_, recovered) = update_dev(
+    test_dispatch(),
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=after_cancel.dev().connection_generation,
+    ),
+    after_cancel,
+  )
+  guard recovered.find_conversation(@interop.ChannelId::Local, "desktop-other")
+    is Some(kept) else {
+    fail("the unrelated conversation disappeared")
+  }
+  assert_true(kept.run is Starting(submission_id="other-start"))
+  assert_true(kept.pending_prompt is Some(_))
+  inspect(kept.pending_steers.length(), content="1")
+}
+
+///|
 test "a notification gap recovers a Finished notification dropped behind a slow page" {
   let dispatch = test_dispatch()
   // The host has already finished r7, but this page missed that one live
@@ -16060,6 +16130,42 @@ test "archiving a pending start restores its original composer without ownership
   assert_true(next.active().archived_pending_input)
   let (_, acknowledged) = update(dispatch, DismissArchivedPendingInput, next)
   assert_false(acknowledged.active().archived_pending_input)
+}
+
+///|
+test "an archive response salvages a terminal steer awaiting its receipt" {
+  let dispatch = test_dispatch()
+  let sent_mention : Mention = { ref_: Skill(name="steer-skill"), range: None, }
+  let terminal = {
+    ..running_conversation()
+    .enqueue_steer(
+      "terminal-steer",
+      Some("r7"),
+      Some("test-ledger"),
+      "steer text",
+      "steer draft",
+      [sent_mention],
+    )
+    .accept_steer("terminal-steer", Some("r7"), Some("test-ledger")),
+    run: NoRun(ended=Some(RunFinished(Completed))),
+    last_run_id: Some("r7"),
+  }
+  let model = running_model()
+    .replace_conversation(terminal)
+    .with_dev(dev => {
+      ..dev,
+      sessions: [placed_archived_item("desktop-test")],
+    })
+  let (_, next) = update(
+    dispatch,
+    archived_loaded([placed_archived_item("desktop-test")]),
+    model,
+  )
+  inspect(next.active_session, content="desktop-archive-replacement")
+  inspect(next.active().task, content="steer draft")
+  inspect(next.active().mentions.length(), content="1")
+  inspect(next.active().pending_steers.length(), content="0")
+  assert_true(next.active().archived_pending_input)
 }
 
 ///|

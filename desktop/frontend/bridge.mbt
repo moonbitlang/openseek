@@ -972,11 +972,12 @@ async fn request_agent_start(
       let message = @interop.bridge_error_text(error)
       scheduler.add(
         dispatch(
-          if @interop.bridge_error_is_definite(error) {
-            StartRejected(session~, submission_id~, message~)
-          } else {
-            StartUndelivered(session~, submission_id~, message~)
-          },
+          start_failure_msg(
+            @interop.bridge_failure(error),
+            session,
+            submission_id,
+            message,
+          ),
         ),
       )
       return
@@ -991,6 +992,39 @@ async fn request_agent_start(
         status=reply.status,
         exit_code=reply.exit_code,
       ),
+    ),
+  )
+}
+
+///|
+/// A host refusal and a request that never reached a transport both leave the
+/// initial prompt wholly page-owned, so the reducer can restore its draft.
+/// Only a request that went out without a trustworthy reply needs durable
+/// recovery rather than resubmission.
+fn start_failure_msg(
+  failure : @interop.BridgeFailure,
+  session : String,
+  submission_id : String,
+  message : String,
+) -> DeviceMsg {
+  match failure {
+    Refused | Unsent => StartRejected(session~, submission_id~, message~)
+    Unknown => StartUndelivered(session~, submission_id~, message~)
+  }
+}
+
+///|
+test "a known-unsent start restores its prompt" {
+  assert_true(
+    start_failure_msg(Unsent, "s1", "sub1", "socket down")
+    is StartRejected(session="s1", submission_id="sub1", message="socket down"),
+  )
+  assert_true(
+    start_failure_msg(Unknown, "s1", "sub1", "reply lost")
+    is StartUndelivered(
+      session="s1",
+      submission_id="sub1",
+      message="reply lost"
     ),
   )
 }
