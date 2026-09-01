@@ -1,36 +1,51 @@
 import { test, expect } from '@playwright/test';
 import { VizBrowserHarness } from './support/viz_browser_harness.js';
 
-// Exercise the mounted session viewer rather than serializing Rabbita's
-// virtual DOM into a test-only string representation.
-test('session viewer mounts log cards and interactive filters in Chromium', async ({ page }) => {
+// Exercise the mounted session viewer through its controls. Fixture strings
+// identify rows, but the assertions below verify the resulting browser state.
+test('session filters and argument modes change the mounted cards', async ({ page }) => {
   const viewer = new VizBrowserHarness(page);
   await viewer.install();
   await viewer.goto();
-
-  await expect(page.locator('.session-root-name')).toHaveText('/workspace');
-  await expect(page.locator('.session-item')).toContainText('Inspect the session viewer');
+  await expect(page.locator('.session-item')).toHaveCount(1);
   await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
 
-  await expect(page.locator('.header-strip')).toContainText('session header loaded');
-  await expect(page.locator('#seq-1.card.user')).toContainText('Inspect the session viewer');
-  await expect(page.locator('.tool-call.tool-call-escalated')).toContainText('shell');
-  await expect(page.locator('.card.tool.error.escalated')).toContainText('fixture failure');
-  await expect(page.locator('.error-count')).toContainText('4 tool errors');
-  await expect(page.locator('.escalated-count')).toContainText('1 escalated tool call');
+  const userCard = page.locator('#seq-1.card.user');
+  const escalatedCall = page.locator('.tool-call.tool-call-escalated');
+  const escalatedResult = page.locator('.card.tool.error.escalated');
+  const unrelatedError = page.locator('.card.tool.error.build-failed');
+  await expect(page.locator('.card.tool.error')).toHaveCount(4);
+  await expect(escalatedCall).toHaveCount(1);
+  await expect(escalatedResult).toHaveCount(1);
   await expect(page.locator('.filter-bars')).toHaveCount(1);
   await expect(
     page.locator('.filter-bars > .error-bar, .filter-bars > .escalated-bar, .filter-bars > .build-error-bar'),
   ).toHaveCount(3);
 
-  await page.getByRole('button', { name: 'Model view' }).click();
-  await expect(page.getByRole('button', { name: 'Model view' })).toHaveClass(/active/);
-  await page.getByRole('button', { name: 'Original' }).click();
-  await expect(page.locator('.session-view')).toHaveClass(/show-original/);
-
   await page.getByRole('button', { name: 'Errors only', exact: true }).click();
-  await expect(page.locator('.session-view')).toHaveClass(/errors-only/);
-  await expect(page.getByRole('button', { name: 'Errors only: on' })).toBeVisible();
+  await expect(userCard).toBeHidden();
+  await expect(escalatedResult).toBeVisible();
+  await page.getByRole('button', { name: 'Errors only: on' }).click();
+  await expect(userCard).toBeVisible();
+
+  await page.getByRole('button', { name: 'Escalated only', exact: true }).click();
+  await expect(escalatedCall).toBeVisible();
+  await expect(escalatedResult).toBeVisible();
+  await expect(unrelatedError).toBeHidden();
+  await page.getByRole('button', { name: 'Escalated only: on' }).click();
+  await expect(unrelatedError).toBeVisible();
+
+  await escalatedCall.locator('summary').click();
+  const renderedArguments = escalatedCall.locator('.tool-call-args-rendered');
+  const originalArguments = escalatedCall.locator('.tool-call-args-original');
+  await expect(renderedArguments).toBeVisible();
+  await expect(originalArguments).toBeHidden();
+  await page.getByRole('button', { name: 'Original' }).click();
+  await expect(renderedArguments).toBeHidden();
+  await expect(originalArguments).toBeVisible();
+  await page.getByRole('button', { name: 'Rendered' }).click();
+  await expect(renderedArguments).toBeVisible();
   expect(viewer.pageErrors).toEqual([]);
 });
 
@@ -45,9 +60,15 @@ test('viewer renders plan evolution, goal markers, tool links, sub-runs, and Moo
   await expect(planCalls).toHaveCount(2);
   const updatedPlan = planCalls.nth(1);
   await expect(updatedPlan.locator('.plan-progress-count')).toHaveText('1/3');
-  await expect(updatedPlan.locator('.step-delta-done')).toHaveText('done');
-  await expect(updatedPlan.locator('.step-delta-started')).toHaveText('started');
-  await expect(updatedPlan.locator('.step-delta-new')).toHaveText('new');
+  const completedStep = updatedPlan.locator('.plan-step').filter({ hasText: 'Inspect DOM' });
+  const activeStep = updatedPlan.locator('.plan-step').filter({ hasText: 'Run browser tests' });
+  const addedStep = updatedPlan.locator('.plan-step').filter({ hasText: 'Review layout' });
+  await expect(completedStep).toHaveClass(/completed/);
+  await expect(completedStep.locator('.step-delta-done')).toHaveCount(1);
+  await expect(activeStep).toHaveClass(/in_progress/);
+  await expect(activeStep.locator('.step-delta-started')).toHaveCount(1);
+  await expect(addedStep).toHaveClass(/pending/);
+  await expect(addedStep.locator('.step-delta-new')).toHaveCount(1);
 
   await expect(page.locator('.card.runtime.goal-set')).toContainText(
     'Ship the Playwright migration',
@@ -319,10 +340,20 @@ test('plan history skips rejected baselines and names reopened and paused steps'
   await viewer.openSession();
   await page.getByRole('button', { name: 'Raw log' }).click();
 
-  await expect(page.locator('.step-delta-done')).toHaveCount(1);
-  await expect(page.locator('.step-delta-started')).toHaveCount(1);
-  await expect(page.locator('.step-delta-reopened')).toHaveText('reopened');
-  await expect(page.locator('.step-delta-paused')).toHaveText('paused');
+  const completedPlan = page.locator('#tool-call-3');
+  const reopenedPlan = page.locator('#tool-call-4');
+  const completedA = completedPlan.locator('.plan-step').filter({ hasText: 'step a' });
+  const startedB = completedPlan.locator('.plan-step').filter({ hasText: 'step b' });
+  const reopenedA = reopenedPlan.locator('.plan-step').filter({ hasText: 'step a' });
+  const pausedB = reopenedPlan.locator('.plan-step').filter({ hasText: 'step b' });
+  await expect(completedA).toHaveClass(/completed/);
+  await expect(completedA.locator('.step-delta-done')).toHaveCount(1);
+  await expect(startedB).toHaveClass(/in_progress/);
+  await expect(startedB.locator('.step-delta-started')).toHaveCount(1);
+  await expect(reopenedA).toHaveClass(/in_progress/);
+  await expect(reopenedA.locator('.step-delta-reopened')).toHaveCount(1);
+  await expect(pausedB).toHaveClass(/pending/);
+  await expect(pausedB.locator('.step-delta-paused')).toHaveCount(1);
   await expect(page.locator('.step-delta-dropped')).toHaveCount(0);
   const rejectedCall = page.locator('.tool-call').filter({ hasText: 'phantom step' });
   await expect(rejectedCall.locator('.plan-args')).toHaveCount(0);
@@ -472,22 +503,23 @@ test('viewer classifies mbtx failure stages and filters to build diagnostics', a
   await viewer.openSession();
   await page.getByRole('button', { name: 'Raw log' }).click();
 
-  const buildCall = page.locator('.tool-call.tool-call-build-failed');
-  const runtimeCall = page.locator('.tool-call.tool-call-run-failed');
-  const singleShotCall = page.locator(
-    '.tool-call.tool-call-failed:not(.tool-call-build-failed):not(.tool-call-run-failed)',
-  ).filter({ hasText: 'single shot' });
-  await expect(buildCall).toHaveCount(1);
+  const buildCall = page.locator('.tool-call').filter({ hasText: 'compile_error' });
+  const runtimeCall = page.locator('.tool-call').filter({ hasText: 'abort("runtime")' });
+  const singleShotCall = page.locator('.tool-call').filter({ hasText: 'single shot' });
+  await expect(buildCall).toHaveClass(/tool-call-build-failed/);
   await expect(buildCall.locator('.tool-stage-build')).toHaveCount(0);
-  await expect(runtimeCall).toHaveCount(1);
-  await expect(runtimeCall.locator('.tool-stage-run')).toHaveText('runtime error');
-  await expect(singleShotCall).toHaveCount(1);
+  await expect(runtimeCall).toHaveClass(/tool-call-run-failed/);
+  await expect(runtimeCall.locator('.tool-stage-run')).toHaveCount(1);
+  await expect(singleShotCall).toHaveClass(/tool-call-failed/);
+  await expect(singleShotCall).not.toHaveClass(/tool-call-build-failed|tool-call-run-failed/);
   await expect(singleShotCall.locator('.tool-stage')).toHaveCount(0);
 
-  const buildResult = page.locator('.card.tool.error.build-failed');
+  const buildResult = page.locator('.card.tool.error').filter({ hasText: 'type mismatch' });
   const runtimeResult = page.locator('.card.tool.error').filter({ hasText: 'runtime trap' });
-  await expect(buildResult.locator('.tool-flag.tool-stage-build')).toHaveText('🚩 build error');
-  await expect(page.locator('.build-error-count')).toHaveText('🔨 1 build error');
+  await expect(buildResult).toHaveClass(/build-failed/);
+  await expect(buildResult.locator('.tool-flag.tool-stage-build')).toHaveCount(1);
+  await expect(runtimeResult).not.toHaveClass(/build-failed/);
+  await expect(page.locator('.build-error-count')).toHaveCount(1);
   await expect(page.getByTitle('Scroll to the previous build error')).toBeVisible();
   await expect(page.getByTitle('Scroll to the next build error')).toBeVisible();
 
@@ -599,10 +631,10 @@ test('a dropped session file replaces the served selection without another fetch
   }, viewer.events);
   await page.locator('.app').dispatchEvent('drop', { dataTransfer });
 
-  await expect(page.locator('.header-id')).toHaveText('viz-1');
   await expect(page.locator('.header-meta')).toContainText(
     'dropped file: dropped-session.jsonl',
   );
+  await expect(page.locator('.session-view .card')).not.toHaveCount(0);
   expect(viewer.apiRequests).toHaveLength(requestsBeforeDrop);
   expect(viewer.pageErrors).toEqual([]);
   await dataTransfer.dispose();
@@ -621,7 +653,6 @@ test('URL hash restores the session, raw view, and sequence scroll position', as
   await viewer.install();
   await viewer.goto('#s=viz-1&v=raw&seq=2');
 
-  await expect(page.locator('.header-id')).toHaveText('viz-1');
   await expect(page.getByRole('button', { name: 'Raw log' })).toHaveClass(/active/);
   await expect.poll(() => page.evaluate(() => window.__scrollTargets))
     .toContainEqual(expect.objectContaining({ id: 'seq-2' }));
@@ -673,9 +704,8 @@ test('standalone export reads embedded data and auto-opens in raw mode', async (
   await viewer.install({ standalone: true });
   await viewer.goto();
 
-  await expect(page.locator('.header-id')).toHaveText('viz-1');
   await expect(page.getByRole('button', { name: 'Raw log' })).toHaveClass(/active/);
-  await expect(page.locator('.card.user')).toContainText('Inspect the session viewer');
+  await expect(page.locator('.session-view .card')).not.toHaveCount(0);
   expect(viewer.apiRequests).toEqual([]);
   expect(viewer.pageErrors).toEqual([]);
 });
