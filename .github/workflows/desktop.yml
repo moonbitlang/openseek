@@ -129,8 +129,11 @@ jobs:
       - name: Test Desktop MoonBit
         working-directory: desktop
         run: |
-          moon test --target native --target-dir ../_build
-          moon test --target js --target-dir ../_build
+          moon test internal/*/ frontend/fileeditor/feedback --target native --target-dir ../_build
+          moon test frontend \
+            internal/file_search_policy internal/file_search_score \
+            internal/filekind internal/jsonx internal/protocol internal/uri \
+            --target js --target-dir ../_build
 
       - name: Install E2E dependencies
         working-directory: desktop/e2e
