@@ -192,10 +192,12 @@ test "an approval reply requires its one field" {
 }
 
 ///|
-/// Every section of the runs snapshot is required. Desktop ships its frontend
-/// and host together, so an absent section is drift in the current host — and
-/// reading it as empty loses live state silently: a tool left waiting on an
-/// approval with no card to answer it, and no deadline behind the question.
+/// Every original section of the runs snapshot is required. Desktop ships its
+/// frontend and host together, so an absent section is drift in the current
+/// host — and reading it as empty loses live state silently: a tool left
+/// waiting on an approval with no card to answer it, and no deadline behind the
+/// question. `steers` was added later and remains optional so a newer frontend
+/// can reconnect through an older host.
 test "the runs snapshot requires each of its sections" {
   for missing in ["runs", "settled", "approvals"] {
     let fields : Map[String, Json] = {
@@ -219,4 +221,40 @@ test "the runs snapshot requires each of its sections" {
     "approvals": [],
   })
   assert_eq(empty.approvals.length(), 0)
+  assert_true(empty.steers is None)
+  assert_true(empty.steer_ledger_id is None)
+  let with_steer : @protocol.RunsReply = @json.from_json({
+    "runs": [],
+    "settled": [],
+    "approvals": [],
+    "steer_ledger_id": "ledger-1",
+    "steers": [
+      {
+        "session": "session-1",
+        "run_id": "run-1",
+        "submission_id": "steer-1",
+        "status": "applied",
+      },
+    ],
+  })
+  guard with_steer.steers is Some([steer]) else {
+    fail("present steer recovery section was not preserved")
+  }
+  assert_eq(steer.submission_id, "steer-1")
+  assert_eq(steer.status, "applied")
+  assert_eq(with_steer.steer_ledger_id, Some("ledger-1"))
+  @debug.assert_eq(with_steer.to_json(), {
+    "runs": [],
+    "settled": [],
+    "approvals": [],
+    "steer_ledger_id": "ledger-1",
+    "steers": [
+      {
+        "session": "session-1",
+        "run_id": "run-1",
+        "submission_id": "steer-1",
+        "status": "applied",
+      },
+    ],
+  })
 }

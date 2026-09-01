@@ -172,6 +172,15 @@ let browser_event : @proton_contract.Event[Json] = @commands.extension_contract.
 )
 
 ///|
+/// A window-local notification-stream discontinuity. The Proton request
+/// transport is still alive, so this is deliberately distinct from
+/// `agent.connected`: the page must resync host state without abandoning
+/// ownership of requests whose promises can still settle.
+let notification_gap_event : @proton_contract.Event[@protocol.EmptyPayload] = @commands.extension_contract.event(
+  "notification.gap",
+)
+
+///|
 /// The page connection and Proton's window lifecycle hook start independently.
 /// Bound the short startup backlog rather than letting either side grow an
 /// unbounded in-memory queue while it waits for the other.
@@ -191,6 +200,7 @@ priv enum BridgeControl {
 priv enum PageNotification {
   Hub(@protocol.Notification)
   BrowserEvent(Json)
+  NotificationGap
 }
 
 ///|
@@ -247,6 +257,7 @@ async fn PageEventTarget::emit(
     Hub(SemanticSearchProgress(payload)) =>
       self.events.emit(semantic_search_progress_event, payload)
     BrowserEvent(payload) => self.events.emit(browser_event, payload)
+    NotificationGap => self.events.emit(notification_gap_event, NoPayload)
   }
 }
 
@@ -257,6 +268,11 @@ async fn PageEventTarget::emit(
 priv enum BridgeInput {
   Control(BridgeControl)
   Deliver(PageNotification)
+  // The process-wide hub evicted this subscriber after its bounded queue
+  // filled. At least one notification is missing, so only a fresh subscription
+  // followed by a notification-gap resync can restore truthful state without
+  // pretending the still-live Proton request transport also disconnected.
+  SubscriptionDropped
 }
 
 ///|
@@ -273,6 +289,10 @@ struct DesktopBridgeActor {
   // touching the process-wide hub — a relay client has no native views, so
   // it must never see them.
   browser_events : @async.Queue[Json]
+  // Monotonic observability for the app-lifetime subscription owner. Besides
+  // making repeated recovery diagnosable, this lets the actor test wait for a
+  // real overflow/resubscribe boundary without exposing hub internals.
+  subscription_generation : Ref[Int]
 }
 
 ///|
@@ -287,6 +307,7 @@ pub fn DesktopBridgeActor::DesktopBridgeActor(
     // accumulate forever.
     controls: Queue(kind=Blocking(8)),
     browser_events: Queue(kind=Blocking(64)),
+    subscription_generation: Ref(0),
   }
 }
 
@@ -382,6 +403,16 @@ pub async fn DesktopBridgeActor::window_closed(
 }
 
 ///|
+async fn next_hub_input(
+  notifications : @async.Queue[@protocol.Notification],
+) -> BridgeInput {
+  Deliver(Hub(notifications.get())) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => SubscriptionDropped
+  }
+}
+
+///|
 /// Prefer pending lifecycle/control work over another notification. Once neither
 /// lane is ready, race their blocking reads; `any` cancels the losing read.
 async fn DesktopBridgeActor::next_input(
@@ -394,10 +425,46 @@ async fn DesktopBridgeActor::next_input(
   }
   @async.any([
     () => Control(self.controls.get()),
-    () => Deliver(Hub(notifications.get())),
+    () => next_hub_input(notifications),
     () => Deliver(Hub(host_notifications.get())),
     () => Deliver(BrowserEvent(self.browser_events.get())),
   ])
+}
+
+///|
+async fn deliver_to_page(
+  connected : Bool,
+  target : PageEventTarget?,
+  pending : Array[PageNotification],
+  notification : PageNotification,
+) -> Unit {
+  if connected {
+    if target is Some(target) {
+      target.emit(notification)
+    } else if notification is NotificationGap {
+      // Everything already buffered belongs to the now-incomplete prefix.
+      // Keep the boundary first so WindowReady resyncs before any frame from
+      // the replacement subscription.
+      pending.clear()
+      pending.push(notification)
+    } else {
+      if pending.length() == PendingNotificationCapacity {
+        // A gap is control state, not a disposable data frame. Keep it at
+        // the front while bounding the post-gap startup backlog.
+        if pending[0] is NotificationGap {
+          ignore(pending.remove(1))
+        } else {
+          // This bounded queue is a second lossy seam after the hub. Once an
+          // ordinary frame falls out, the prefix is no more trustworthy than
+          // a dropped hub subscription: discard it and retain an explicit
+          // resync boundary ahead of the frame that exposed the overflow.
+          pending.clear()
+          pending.push(NotificationGap)
+        }
+      }
+      pending.push(notification)
+    }
+  }
 }
 
 ///|
@@ -406,8 +473,12 @@ async fn DesktopBridgeActor::next_input(
 /// through its request-scoped sender; later notifications use the window-owned
 /// sender installed by Proton's lifecycle hook.
 pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
-  let notifications = self.state.subscribe()
-  defer self.state.unsubscribe(notifications)
+  // The single-slot owner follows the current subscription, so final cleanup
+  // reaches the replacement without retaining every evicted queue (and its
+  // full-size allocation) for the rest of the app lifetime.
+  let subscription = [self.state.subscribe()]
+  defer self.state.unsubscribe(subscription[0])
+  let mut notifications = subscription[0]
   let host_notifications : @async.Queue[@protocol.Notification] = Queue(
     kind=Blocking(64),
   )
@@ -456,17 +527,98 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
             }
           }
         Deliver(notification) =>
-          if connected {
-            if target is Some(target) {
-              target.emit(notification)
-            } else {
-              if pending.length() == PendingNotificationCapacity {
-                ignore(pending.remove(0))
-              }
-              pending.push(notification)
-            }
-          }
+          deliver_to_page(connected, target, pending, notification)
+        SubscriptionDropped => {
+          // Remote clients reconnect their socket when the hub closes a slow
+          // subscription. The desktop bridge is process-local and has no
+          // socket supervisor, so renew it here instead of silently ending its
+          // app-lifetime actor. Subscribe before publishing the gap boundary:
+          // any concurrent notification then queues behind that resync signal.
+          self.state.unsubscribe(notifications)
+          notifications = self.state.subscribe()
+          subscription[0] = notifications
+          self.subscription_generation.val += 1
+          deliver_to_page(connected, target, pending, NotificationGap)
+        }
       }
     }
+  })
+}
+
+///|
+async test "a closed hub subscription becomes a reconnect boundary" {
+  let notifications : @async.Queue[@protocol.Notification] = Queue(
+    kind=Blocking(1),
+  )
+  notifications.close(clear=true)
+  assert_true(next_hub_input(notifications) is SubscriptionDropped)
+}
+
+///|
+async test "the pre-window backlog cannot evict its notification gap" {
+  let pending : Array[PageNotification] = []
+  for _ in 0..<8 {
+    deliver_to_page(
+      true,
+      None,
+      pending,
+      Hub(AgentConnected({ stage: Serving, })),
+    )
+  }
+  deliver_to_page(true, None, pending, NotificationGap)
+  // The incomplete pre-gap prefix is gone and the marker stays first even
+  // after more than one full startup backlog arrives behind it.
+  for _ in 0..<(PendingNotificationCapacity * 2) {
+    deliver_to_page(true, None, pending, Hub(SkillsChanged))
+  }
+  assert_eq(pending.length(), PendingNotificationCapacity)
+  assert_true(pending[0] is NotificationGap)
+}
+
+///|
+async test "overflowing the pre-window backlog creates a notification gap" {
+  let pending : Array[PageNotification] = []
+  for _ in 0..<PendingNotificationCapacity {
+    deliver_to_page(true, None, pending, Hub(SkillsChanged))
+  }
+  deliver_to_page(
+    true,
+    None,
+    pending,
+    Hub(
+      AgentFinished({
+        run_id: "r-overflow",
+        status: "finished",
+        answer: None,
+        exit_code: None,
+      }),
+    ),
+  )
+  assert_eq(pending.length(), 2)
+  assert_true(pending[0] is NotificationGap)
+  assert_true(pending[1] is Hub(AgentFinished(_)))
+}
+
+///|
+async test "the bridge actor resubscribes after a real hub eviction" {
+  let state = @api.ApiState(engine="unused")
+  let bridge = DesktopBridgeActor(state)
+  @async.with_task_group(group => {
+    group.spawn_bg(allow_failure=true, () => bridge.run())
+    // Let the actor subscribe and park in its input race. Publishing below is
+    // synchronous, so the woken reader cannot drain again before the burst
+    // exceeds the hub's 1024-frame bound.
+    @async.sleep(0)
+    for _ in 0..<2048 {
+      state.publish(SkillsChanged)
+    }
+    for _ in 0..<100 {
+      if bridge.subscription_generation.val == 1 {
+        group.return_immediately(())
+        return
+      }
+      @async.sleep(1)
+    }
+    fail("the bridge actor did not replace its evicted subscription")
   })
 }

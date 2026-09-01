@@ -151,6 +151,10 @@ async fn ServeEngine::close_and_wait(self : ServeEngine) -> Unit {
 priv struct EngineCommand {
   command : @wire.Command
   failure_reason : String
+  // Exact steer ownership, when this command is a prompt steer. If the
+  // writer or a turn boundary discards the queued command, this lets the host
+  // publish the same id-bearing dropped receipt the engine would have owed.
+  steer : TrackedSteer?
   // Answered once this command's fate is decided: `None` when it reached
   // stdin, the reason otherwise.
   //
@@ -198,9 +202,25 @@ fn ServeEngine::submit(
   command : @wire.Command,
   failure_reason~ : String,
   ack? : @async.Queue[EngineError?],
+  steer? : TrackedSteer,
 ) -> Bool {
-  self.commands.try_put({ command, failure_reason, ack, }) catch {
+  self.commands.try_put({ command, failure_reason, ack, steer, }) catch {
     _ => false
+  }
+}
+
+///|
+/// Settle a command that definitively cannot reach stdin. A steer has a
+/// second obligation beyond its request reply: retire the exact recovery
+/// ledger row through an id-bearing dropped event.
+fn ServeEngine::refuse_command(
+  self : ServeEngine,
+  command : EngineCommand,
+  reason : String,
+) -> Unit {
+  command.settle(Some(EngineError(reason)))
+  if command.steer is Some(steer) {
+    self.drop_tracked_steer(steer)
   }
 }
 
@@ -253,7 +273,7 @@ fn ServeEngine::settle_turn_commands(
     let next = self.commands.try_get() catch { _ => break }
     guard next is Some(queued) else { break }
     if ends_with_turn(queued.command) {
-      queued.settle(Some(EngineError(reason)))
+      self.refuse_command(queued, reason)
     } else {
       survivors.push(queued)
     }
@@ -263,7 +283,7 @@ fn ServeEngine::settle_turn_commands(
     // closed under us — the engine is going away and the command cannot be
     // delivered, which is exactly what its sender needs to hear.
     if !(self.commands.try_put(queued) catch { _ => false }) {
-      queued.settle(Some(EngineError(reason)))
+      self.refuse_command(queued, reason)
     }
   }
 }
@@ -276,7 +296,7 @@ fn ServeEngine::settle_queued(self : ServeEngine, reason : String) -> Unit {
   for ;; {
     let next = self.commands.try_get() catch { _ => break }
     guard next is Some(queued) else { break }
-    queued.settle(Some(EngineError(reason)))
+    self.refuse_command(queued, reason)
   }
 }
 
@@ -310,7 +330,7 @@ async fn ServeEngine::write_commands(self : ServeEngine) -> Unit {
       error if @async.is_being_cancelled() => raise error
       error => {
         let reason = "\{command.failure_reason}: \{error}"
-        command.settle(Some(EngineError(reason)))
+        self.refuse_command(command, reason)
         failure = Some(reason)
         break
       }
@@ -418,20 +438,22 @@ fn EnginePhase::after_run_close(self : EnginePhase) -> EnginePhase {
 
 ///|
 priv struct TrackedSteer {
+  sequence : Int
+  run_id : String
   text : String
   submission_id : String?
 }
 
 ///|
 priv struct SteerRunTracker {
-  mut settling_run : String?
+  mut next_sequence : Int
   open_steers : Array[TrackedSteer]
   settling_steers : Array[TrackedSteer]
 }
 
 ///|
 fn SteerRunTracker::SteerRunTracker() -> SteerRunTracker {
-  { settling_run: None, open_steers: [], settling_steers: [], }
+  { next_sequence: 0, open_steers: [], settling_steers: [], }
 }
 
 ///|
@@ -440,14 +462,136 @@ fn SteerRunTracker::begin_run(self : SteerRunTracker) -> Unit {
 }
 
 ///|
+fn SteerRunTracker::prepare(
+  self : SteerRunTracker,
+  run_id : String,
+  text : String,
+  submission_id : String?,
+) -> TrackedSteer {
+  self.next_sequence += 1
+  { sequence: self.next_sequence, run_id, text, submission_id, }
+}
+
+///|
+fn SteerRunTracker::record_entry(
+  self : SteerRunTracker,
+  entry : TrackedSteer,
+) -> Unit {
+  self.open_steers.push(entry)
+}
+
+///|
+/// Test and legacy helper for tracker-only callers that do not enqueue an
+/// EngineCommand. Production steering prepares the entry first so the queue
+/// and tracker share the same sequence identity.
 fn SteerRunTracker::record_sent(
   self : SteerRunTracker,
   text : String,
   submission_id : String?,
+  run_id? : String = "test-run",
 ) -> TrackedSteer {
-  let entry : TrackedSteer = { text, submission_id, }
-  self.open_steers.push(entry)
+  let entry = self.prepare(run_id, text, submission_id)
+  self.record_entry(entry)
   entry
+}
+
+///|
+fn SteerRunTracker::take_sequence(
+  self : SteerRunTracker,
+  sequence : Int,
+) -> TrackedSteer? {
+  for index, entry in self.open_steers {
+    if entry.sequence == sequence {
+      return Some(self.open_steers.remove(index))
+    }
+  }
+  for index, entry in self.settling_steers {
+    if entry.sequence == sequence {
+      let removed = self.settling_steers.remove(index)
+      return Some(removed)
+    }
+  }
+  None
+}
+
+///|
+fn SteerRunTracker::take_stale_settling(
+  self : SteerRunTracker,
+) -> Array[TrackedSteer] {
+  let stale = self.settling_steers.copy()
+  self.settling_steers.clear()
+  stale
+}
+
+///|
+fn SteerRunTracker::take_all(self : SteerRunTracker) -> Array[TrackedSteer] {
+  let unresolved = self.settling_steers.copy()
+  for entry in self.open_steers {
+    unresolved.push(entry)
+  }
+  self.settling_steers.clear()
+  self.open_steers.clear()
+  unresolved
+}
+
+///|
+fn ServeEngine::publish_steer_dropped(
+  self : ServeEngine,
+  steer : TrackedSteer,
+) -> Unit {
+  let event : @wire.Event = SteerDropped(content=steer.text)
+  emit(
+    self.sink,
+    StreamEvent({
+      run_id: Some(steer.run_id),
+      session: self.session_key,
+      event: { event, submission_id: steer.submission_id, },
+    }),
+  )
+}
+
+///|
+/// Retire a steer whose stdin write succeeded but whose exact engine receipt
+/// can no longer arrive. This is deliberately distinct from `SteerDropped`:
+/// the engine may have appended the input before dying, so restoring it would
+/// invite the controller to resend duplicate durable text.
+fn ServeEngine::publish_steer_unconfirmed(
+  self : ServeEngine,
+  steer : TrackedSteer,
+) -> Unit {
+  let event : @wire.Event = SteerUnconfirmed(content=steer.text)
+  emit(
+    self.sink,
+    StreamEvent({
+      run_id: Some(steer.run_id),
+      session: self.session_key,
+      event: { event, submission_id: steer.submission_id, },
+    }),
+  )
+}
+
+///|
+fn ServeEngine::drop_tracked_steer(
+  self : ServeEngine,
+  steer : TrackedSteer,
+) -> Unit {
+  if self.steer_runs.take_sequence(steer.sequence) is Some(owned) {
+    self.publish_steer_dropped(owned)
+  }
+}
+
+///|
+fn ServeEngine::unconfirm_stale_settling_steers(self : ServeEngine) -> Unit {
+  for steer in self.steer_runs.take_stale_settling() {
+    self.publish_steer_unconfirmed(steer)
+  }
+}
+
+///|
+fn ServeEngine::unconfirm_all_tracked_steers(self : ServeEngine) -> Unit {
+  for steer in self.steer_runs.take_all() {
+    self.publish_steer_unconfirmed(steer)
+  }
 }
 
 ///|
@@ -455,14 +599,11 @@ fn SteerRunTracker::record_terminal(
   self : SteerRunTracker,
   run_id : String,
 ) -> Unit {
-  self.settling_steers.clear()
-  if self.open_steers.length() > 0 {
-    self.settling_run = Some(run_id)
-    for text in self.open_steers {
-      self.settling_steers.push(text)
-    }
-  } else {
-    self.settling_run = None
+  // A successor can fail before producing its first AgentStep. Keep older
+  // terminal owners beside this run's owners until an exact receipt, a step
+  // boundary, or EOF settles them; clearing here would strand their hub rows.
+  for entry in self.open_steers {
+    self.settling_steers.push({ ..entry, run_id, })
   }
   self.open_steers.clear()
 }
@@ -482,7 +623,6 @@ fn SteerRunTracker::route_event(
     // AgentStep is therefore the explicit boundary after which an absent old
     // receipt must not steal an equal-text steer from the new run.
     Some(AgentStep) => {
-      self.settling_run = None
       self.settling_steers.clear()
       (latest_run, None)
     }
@@ -500,13 +640,7 @@ fn SteerRunTracker::route_receipt(
   latest_run : String?,
 ) -> (String?, String?) {
   if take_first_tracked_steer(self.settling_steers, content) is Some(entry) {
-    let run_id = self.settling_run
-    if self.settling_steers.is_empty() {
-      self.settling_run = None
-    }
-    if run_id is Some(_) {
-      return (run_id, entry.submission_id)
-    }
+    return (Some(entry.run_id), entry.submission_id)
   }
   if take_first_tracked_steer(self.open_steers, content) is Some(entry) {
     return (latest_run, entry.submission_id)
@@ -1765,6 +1899,13 @@ async fn ServeEngine::consume(
             "the engine finished its turn before this command was written",
           )
         }
+        // Once the next step begins, serve has drained every receipt owed by
+        // the preceding turn. An exact owner still waiting may already have
+        // been appended before its receipt was lost, so retire it as unknown
+        // before the new step can reuse equal text; never restore and resend.
+        if decoded is Some(AgentStep) {
+          engine.unconfirm_stale_settling_steers()
+        }
         let (run_id, submission_id) = engine.steer_runs.route_event(
           decoded,
           stream.prompt_steer_applied,
@@ -1857,6 +1998,10 @@ async fn ServeEngine::consume(
     // that has already stopped reading. Idempotent, so `retire` repeating
     // it is harmless.
     engine.discard_commands("the engine exited")
+    // Written commands are no longer in the queue, but EOF proves no engine
+    // receipt can follow. Their durable outcome is unknowable, so retire every
+    // remaining owner without reporting a definitive drop.
+    engine.unconfirm_all_tracked_steers()
     // A lifecycle timeout cancels the Process task. Its cancellation handler
     // does not finish until the child has actually terminated, but the task's
     // result is `Cancelled` rather than an exit code; normalize that reaped
@@ -1895,6 +2040,10 @@ async fn ServeEngine::retire(
       "run_id": engine.phase.latest_run().unwrap_or(""),
     }
   engine.discard_commands("the engine exited")
+  // A consumer failure can bypass consume_events' normal EOF epilogue. Once
+  // retirement begins no event source remains, so retire any written steer
+  // owners as unknown here as the idempotent backstop.
+  engine.unconfirm_all_tracked_steers()
   // Capture ownership only if the slot still contains THIS engine by
   // identity. Correct replacement waits on this handle through final
   // drain, but pump teardown and defensive cleanup can still detach it;
@@ -2129,6 +2278,14 @@ async test "a failed pump closes its open run and retires the slot" {
       sink,
       phase=Running(run_id="r-consumer-died", compact_queued=false),
     )
+    // Represents an id-bearing steer whose frame reached stdin before the
+    // event consumer failed. EOF is now its only possible terminal proof.
+    let tracked = engine.steer_runs.prepare(
+      "r-consumer-died",
+      "unresolved input",
+      Some("steer-consumer-died"),
+    )
+    engine.steer_runs.record_entry(tracked)
     let sessions : Map[String, SessionSlot] = Map([])
     let slot = slot_for(sessions, "s-consumer-died")
     slot.engine = Some(engine)
@@ -2143,17 +2300,23 @@ async test "a failed pump closes its open run and retires the slot" {
     assert_true(engine.phase is Idle(..))
     let mut cause = ""
     let mut status = ""
+    let mut unconfirmed = false
     for event in emitted {
       match event {
         Error(payload) if payload.run_id == Some("r-consumer-died") =>
           cause = payload.message.unwrap_or("")
         Finished(payload) if payload.run_id == "r-consumer-died" =>
           status = payload.status
+        StreamEvent(payload) if payload.run_id == Some("r-consumer-died") &&
+          payload.event.event is SteerUnconfirmed(content="unresolved input") &&
+          payload.event.submission_id == Some("steer-consumer-died") =>
+          unconfirmed = true
         _ => ()
       }
     }
     assert_true(cause.contains("the engine's event consumer failed"))
     assert_eq(status, "failed")
+    assert_true(unconfirmed)
   })
 }
 
@@ -2399,13 +2562,20 @@ async test "a run's close spares the commands queued to outlive its turn" {
     // Arrival order: a steer and a cancel aimed at the open turn, with the
     // queued compaction and a goal between them.
     let steer_ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
+    let tracked = engine.steer_runs.prepare(
+      "r-outlive",
+      "keep going",
+      Some("steer-outlive"),
+    )
     assert_true(
       engine.submit(
         @protocol.steer("keep going"),
         failure_reason="steer",
         ack=steer_ack,
+        steer=tracked,
       ),
     )
+    engine.steer_runs.record_entry(tracked)
     assert_true(engine.submit(@protocol.compact(), failure_reason="compact"))
     let goal_ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
     assert_true(
@@ -2424,6 +2594,14 @@ async test "a run's close spares the commands queued to outlive its turn" {
     }
     assert_true(goal_ack.try_get() is None)
     assert_false(engine.condemned)
+    assert_true(
+      emitted.any(event => {
+        event is StreamEvent(payload) &&
+        payload.run_id == Some("r-outlive") &&
+        payload.event.event is SteerDropped(content="keep going") &&
+        payload.event.submission_id == Some("steer-outlive")
+      }),
+    )
 
     // The survivors are still queued, still in arrival order.
     let queued = []
@@ -2673,6 +2851,27 @@ test "background events do not clear trailing steer receipts" {
   assert_eq(
     tracker.route_event(Some(SteerDropped("second")), false, Some("r-new")),
     (Some("r-old"), Some("submission-second")),
+  )
+}
+
+///|
+test "a successor terminal preserves unresolved predecessor steer ownership" {
+  let tracker = SteerRunTracker::SteerRunTracker()
+  tracker.begin_run()
+  ignore(tracker.record_sent("predecessor", Some("submission-old")))
+  tracker.record_terminal("r-old")
+  tracker.begin_run()
+  ignore(tracker.record_sent("successor", Some("submission-new")))
+  // The successor can fail during setup, before an AgentStep has drained the
+  // predecessor's receipt window. Its terminal cut must append, not erase.
+  tracker.record_terminal("r-new")
+  assert_eq(
+    tracker.route_event(Some(SteerApplied("predecessor")), true, Some("r-new")),
+    (Some("r-old"), Some("submission-old")),
+  )
+  assert_eq(
+    tracker.route_event(Some(SteerDropped("successor")), false, Some("r-new")),
+    (Some("r-new"), Some("submission-new")),
   )
 }
 

@@ -306,10 +306,14 @@ fn runs_loaded_with_approvals(
     RunsLoaded(
       runs=[],
       settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals~,
       live~,
       frontier~,
       connection_generation=0,
+      request_generation=0,
     ),
   )
 }
@@ -571,6 +575,9 @@ test "a session missing from the frontier still gets its question" {
       RunsLoaded(
         runs=[],
         settled=[],
+        steers=[],
+        steer_recovery_supported=true,
+        steer_ledger_id=None,
         approvals=[
           {
             session: conv.session_id,
@@ -588,6 +595,7 @@ test "a session missing from the frontier still gets its question" {
         // Captured before this page knew the conversation.
         frontier=[],
         connection_generation=0,
+        request_generation=0,
       ),
     ),
     model,
@@ -637,6 +645,9 @@ test "a question survives a run handoff inside one snapshot" {
             status: "finished",
           },
         ],
+        steers=[],
+        steer_recovery_supported=true,
+        steer_ledger_id=None,
         approvals=[
           {
             session: asked.session_id,
@@ -654,12 +665,17 @@ test "a question survives a run handoff inside one snapshot" {
         frontier=[
           {
             session: asked.session_id,
+            workspace: asked.project(),
+            record: asked.record,
             state: SnapshotOpen(run_id~),
+            lifecycle_absence_is_definitive: true,
             initial_ids: [],
+            steers: [],
             pending_approval_id: Some("ap-1"),
           },
         ],
         connection_generation=0,
+        request_generation=0,
       ),
     ),
     model,

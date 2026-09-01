@@ -96,6 +96,16 @@ pub(all) struct RunsPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// Release one terminal steer settlement after the submitting client has
+/// consumed it. All owner fields are required so a delayed acknowledgement
+/// cannot remove a row belonging to a reused conversation or run.
+pub(all) struct SteerSettlementAckPayload {
+  session : String
+  run_id : String
+  submission_id : String
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
 pub(all) struct CompactPayload {
   // Compaction addresses a durable conversation rather than a live run.
   session : String
@@ -1831,6 +1841,18 @@ pub extend SteerPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend SteerPayload with ToJson::{to_json}
+
+///|
+pub extend SteerSettlementAckPayload with Debug::{to_repr}
+
+///|
+pub extend SteerSettlementAckPayload with FromJson::{from_json}
+
+///|
+pub extend SteerSettlementAckPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SteerSettlementAckPayload with ToJson::{to_json}
 
 ///|
 pub extend SubrunProgressPayload with Debug::{to_repr}

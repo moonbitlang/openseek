@@ -76,6 +76,11 @@ pub(all) enum Event {
   // ── steering ───────────────────────────────────────────────────────────
   SteerApplied(kind~ : String, content~ : String)
   SteerDropped(content~ : String)
+  /// The host wrote this steer to the engine, but the process boundary closed
+  /// before its exact receipt arrived. The input may already be durable, so a
+  /// controller must retire its pending owner without restoring or resending
+  /// the text.
+  SteerUnconfirmed(content~ : String)
   BackgroundNotice(content~ : String)
 
   // ── goal ───────────────────────────────────────────────────────────────

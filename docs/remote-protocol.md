@@ -185,7 +185,8 @@ re-reading state:
    is open via `session.load`). The client gives `agent.runs` the exact owners
    from its request-time frontier: `{session, run_id}` after Started, or
    `{session, submission_id}` while a start is in flight or delivery became
-   unconfirmed before its run id arrived. The reply contains the **complete**
+   unconfirmed before its run id arrived. Each pending steer adds the complete
+   `{session, run_id, submission_id}` owner. The reply contains the **complete**
    in-flight set plus matching completed settlements retained by this host
    process. The in-flight set introduces runs the client has
    never seen, and any run the client still shows that the reply lacks
@@ -204,7 +205,21 @@ re-reading state:
    atomic reply may contain a predecessor settlement and that session's active
    successor, and clients apply both. The whole reply is also tagged with the
    connection generation, so no row from a pre-reconnect request crosses a
-   later readiness boundary.
+   later readiness boundary. A client does not send a steer on a newly
+   attached bridge until this first snapshot establishes the new host's ledger
+   generation. Selector-matched steer rows report `pending`, `applied`,
+   `dropped`, or `unknown`; `unknown` means stdin accepted the command but the
+   exact receipt died, so the client retires ownership without restoring or
+   resending possibly durable text. These rows make the transient receipt
+   reconnect-safe without exposing another client's steering history. The
+   snapshot also names its random `steer_ledger_id` recovery epoch. It remains
+   stable while the ledger retains complete evidence and rotates before
+   capacity pressure reclaims an unacknowledged terminal row.
+   Absence is negative proof only when that id matches the ledger recorded
+   when the steer was sent. A different id proves the old recovery epoch is no
+   longer complete, but not whether its input became durable, so the client
+   retires the display owner without restoring possibly duplicated text. An absent id or
+   `steers` section is an older host and supplies no negative proof.
 3. Race note: notifications may arrive before the resync replies. This is
    harmless by construction — streaming deltas are ephemeral display state,
    and every completed step is delivered durably by `session.event` (legacy
@@ -212,8 +227,10 @@ re-reading state:
    commits while loading and reconciles them against the snapshot watermark.
 
 What this costs, deliberately: transient events that occurred while
-disconnected (`usage` ticks, steer receipts, background notices) are gone —
-none of them carry state a resync cannot rebuild or safely ignore. A run
+disconnected (`usage` ticks and background notices) are gone. Exact steer
+receipts are the exception: `agent.runs` retains their state for the submitting
+owner because losing one would otherwise strand pending UI or lose a dropped
+draft; an unconfirmed row prevents an ambiguous write from being resent. A run
 that *finished* while the client was away is visible through `session.load`;
 its targeted `agent.runs` settlement supplies the lifecycle outcome. A run
 that recorded nothing loads as an empty transcript rather than a failure, so
@@ -229,9 +246,16 @@ frame-by-frame: when a connection's outbound queue overflows, the host
 closes it, and the client reconnects into the resync path above.
 
 The in-process bridge does not use WebSocket reconnect or capability
-negotiation. It can still be recreated across a host restart: each
-`BridgeReady` transition makes the desktop rebuild host-derived state, so that
-readiness resync follows the same idempotent, race-tolerant rules.
+negotiation. A newly attached page receives the accepted readiness stage; that
+is a real transport boundary, so no request promise from the previous page can
+still answer. The serving stage instead marks a new engine-pump generation on
+the same page transport. Both stages rebuild host-derived state, but the latter
+preserves pending prompt and steer ownership until their still-live request
+promises settle. If only the bounded hub subscription overflows, the bridge
+replaces that subscription and emits a distinct `notification.gap` boundary
+with the same promise-preserving rule. Its marker is retained ahead of every
+post-gap startup notification, and both lifecycle and transcript snapshots are
+required to take a post-boundary cut before the resync is considered complete.
 
 ## Method catalog
 
@@ -251,7 +275,8 @@ It must contain non-whitespace content and be at most 128 UTF-8 bytes; the host
 treats a blank or overlong value as absent rather than retaining or echoing it.
 On `agent.start` the host echoes it unchanged in the corresponding
 `agent.started`; on `agent.steer` it is echoed in that submission's eventual
-`steer_applied` or `steer_dropped` event. This identifies the exact live
+`steer_applied`, `steer_dropped`, or host-synthesized `steer_unconfirmed`
+event. This identifies the exact live
 submission that owns the returned run or receipt, even when two steers have
 identical text. The `agent.started` echo establishes run ownership but not
 durability—it is emitted before the host writes the prompt. An `agent.start`
@@ -268,9 +293,10 @@ This is lifecycle correlation only; durable transcript items still come from
 | `agent.start` | `{task, session, submission_id?, model?, thinking?, max_steps?, workspace?}` — `session` is a required non-blank durable conversation id. `thinking`, when present, is `no`, `high`, or `max`. No credentials or store path are accepted: the host resolves settings and durable placement; `workspace` is honored only when registered. A session bound to one of the workspace's worktrees (`worktree.create` binds at creation) runs in that checkout — the start never names or mutates worktrees | `{run_id, status, …}` — `accepted` after the complete prompt command is written; a post-`started` write failure returns `failed`, while pre-`started` failures use the error response. Every reply that returns names the run it opened; the host does not deduplicate a resent `submission_id` |
 | `agent.cancel` | `{run_id?}` (absent = the latest run) | `{run_id?}` — the run the cancellation reached, absent when no turn was open. Absence is an answer, not a failure: a Stop racing a turn that just ended wanted the run over, and it is. The call fails only when the cancellation could not be delivered, which means the turn is still running and nobody asked it to stop. Delivery is not the end of the turn — the run ends through its own `agent.finished` |
 | `agent.steer` | `{text, run_id?, submission_id?}` | steer outcome |
+| `agent.steer_ack` | `{session, run_id, submission_id}` | `{}` — releases that exact terminal steer settlement after the submitting client has consumed it; pending and mismatched rows are unchanged. The ACK is best-effort: under capacity pressure the host rotates the ledger recovery epoch before reclaiming the oldest terminal row, so later absence is ambiguous rather than false refusal evidence; pending rows remain protected. A new id-bearing steer is refused only when every bounded slot is still pending |
 | `agent.compact` | `{session, model?, thinking?, max_steps?, workspace?}` — `agent.start` minus `task`: a conversation resumed after a restart has no live process, and compacting spawns one with these settings | compaction outcome |
 | `agent.goal` | `{session, text?, auto?, model?, thinking?, max_steps?, workspace?}` — sets the session's standing goal to `text`, or clears it when `text` is absent; the engine settings match `agent.compact`'s, and a blank `session` is refused before engine lookup. `auto` arms the engine's autonomous continuation and is **currently rejected**: serve announces the turns it starts with `goal_continue`, which this host does not yet fold into a run's lifecycle, so an autonomous turn would leave the engine looking idle to `agent.start` | `{delivered}` — delivery, not durability: the command reached a live engine's stdin. The goal itself is confirmed by the `[goal]` / `[goal cleared]` runtime-notice arriving as a `session.event` commit, which is also what clients should render from; the engine's `goal_updated` stream event duplicates it |
-| `agent.runs` | `{known?: [{session, run_id?, submission_id?}]}` — each selector must carry a run or submission id; `{}` remains valid | `{runs: […], settled: […]}` — every in-flight run's `agent.started` params plus selector-matched `{run_id, session, submission_id?, status, exit_code?}` lifecycle settlements. Every settlement a selector names is replayed, whatever its status: how much the run committed is a question the transcript read answers. Active and settled state are captured atomically |
+| `agent.runs` | `{known?: [{session, run_id?, submission_id?}]}` — each lifecycle selector carries a run or submission id; a steer selector carries both; `{}` remains valid | `{runs: […], settled: […], approvals: […], steers?: […], steer_ledger_id?}` — every in-flight run's `agent.started` params, selector-matched lifecycle settlements, standing approvals, and selector-matched steer `{session, run_id, submission_id, status}` rows (`pending` / `applied` / `dropped` / `unknown`). Current hosts always include `steers`, including an empty array, and normally include a random `steer_ledger_id` recovery epoch; it changes after terminal-row reclamation as well as host replacement, because either boundary makes missing old evidence ambiguous. Either field's absence identifies a host that cannot prove a requested steer is absent. A new engine pump marks every still-pending row from the departed pump `unknown`, including rows whose run already published `agent.finished`, because stdin acceptance cannot prove or disprove durability after the exact receipt is lost. Every lifecycle settlement a selector names is replayed, whatever its status: how much the run committed is a question the transcript read answers. Active, settled, approval, and steer state are captured atomically |
 
 All three engine-spawning requests use the same `thinking` setting. A present
 value overrides `OPENSEEK_THINKING`; an older client that omits it inherits

@@ -210,12 +210,34 @@ pub(all) struct PendingApprovalPayload {
 } derive(Debug, Eq)
 
 ///|
+/// Reconnect-safe state of one exact steer submission. `pending` means the
+/// host accepted the command and still expects its engine receipt; `applied`
+/// and `dropped` are the two terminal receipts. The client supplies all three
+/// owner fields in its `agent.runs` selector, so this is not a history feed.
+pub(all) struct SteerSettlementPayload {
+  session : String
+  run_id : String
+  submission_id : String
+  status : String
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
 pub(all) struct RunsReply {
   runs : Array[StartedPayload]
   settled : Array[RunSettlementPayload]
   /// Questions still waiting for an answer. Empty for a host with none, and
   /// for every engine that never asks.
   approvals : Array[PendingApprovalPayload]
+  // Optional on the wire for compatibility with hosts predating steer
+  // recovery. None means the host cannot answer the negative-set question;
+  // Some([]) is current-host proof that none of the requested ids exists.
+  steers : Array[SteerSettlementPayload]?
+  // Random identity of the host-process ledger that produced `steers`.
+  // Optional for compatibility and when the host could not obtain entropy.
+  // A client may use absence as proof only when this matches the ledger that
+  // owned the request; capability presence alone does not prove continuity
+  // across a host restart.
+  steer_ledger_id : String?
 } derive(Debug, Eq)
 
 ///|
@@ -2379,6 +2401,18 @@ pub extend PendingApprovalPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend PendingApprovalPayload with ToJson::{to_json}
+
+///|
+pub extend SteerSettlementPayload with Debug::{to_repr}
+
+///|
+pub extend SteerSettlementPayload with FromJson::{from_json}
+
+///|
+pub extend SteerSettlementPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SteerSettlementPayload with ToJson::{to_json}
 
 ///|
 pub extend RunsReply with Debug::{to_repr}

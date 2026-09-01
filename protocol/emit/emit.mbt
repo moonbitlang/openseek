@@ -16,6 +16,7 @@ fn level(event : @protocol.Event) -> @xlog.Level {
     AgentAborted(_)
     | MaxStepsExhausted
     | SteerDropped(_)
+    | SteerUnconfirmed(_)
     | GoalBudgetExhausted(_)
     | AutoCompactionFailed(_)
     | McpConfigIgnored(_)

@@ -43,6 +43,8 @@ pub async fn migrate_global_store() -> Int
 
 pub fn new_engine_actor(String, runtime_dir? : @pathx.Path) -> EngineActor
 
+pub fn normalize_submission_id(String?) -> String?
+
 pub async fn remote_server_base(EngineManager) -> String?
 
 pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload

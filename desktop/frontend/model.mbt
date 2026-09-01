@@ -207,6 +207,12 @@ const TranscriptRefreshFailedNotice : String = "Transcript refresh failed repeat
 const SteerDroppedNotice : String = "Input was not delivered (the task ended as you sent it) — it is back in the composer."
 
 ///|
+/// A pre-ledger host cannot distinguish accepted input from input lost with a
+/// dead bridge. Return the exact draft, but make the ambiguity explicit so a
+/// retry is a user decision after checking the transcript.
+const SteerUnconfirmedRecoveryNotice : String = "Input delivery could not be confirmed after reconnect — it is back in the composer. Check the transcript before resending."
+
+///|
 /// Legacy localStorage keys from when the page stored the engine endpoint
 /// settings itself. Those now live on the host (`settings.get`/`set`); the
 /// keys remain only so the desktop window can migrate stored values up once
@@ -585,6 +591,22 @@ priv struct RecoveredSettlement {
 }
 
 ///|
+priv enum RecoveredSteerStatus {
+  RecoveredSteerPending
+  RecoveredSteerApplied
+  RecoveredSteerDropped
+  RecoveredSteerUnknown
+}
+
+///|
+priv struct RecoveredSteerSettlement {
+  session : String
+  run_id : String
+  submission_id : String
+  status : RecoveredSteerStatus
+}
+
+///|
 /// One standing permission question, routed back to its conversation. The
 /// question itself is the same value the live event produces; only the session
 /// it belongs to has to travel beside it, since `PendingApproval` lives inside
@@ -608,17 +630,49 @@ priv enum RunSnapshotState {
 ///|
 priv struct RunSnapshotFrontier {
   session : String
+  // Session ids are store-local. A reply captured for another workspace or
+  // for the live/archived twin must never reduce the conversation that now
+  // occupies the page's `(device, session)` slot.
+  workspace : @common.Uri
+  record : ConversationRecord
   state : RunSnapshotState
+  // True only when this request follows loss of the lifecycle RPC transport.
+  // Input authority is deliberately not channel-wide: each steer owner below
+  // records whether absence is definitive for that exact request.
+  lifecycle_absence_is_definitive : Bool
   // Initial prompts whose start transport failed before a run id came back.
   // Their submission id is still an exact owner and must survive the
   // lifecycle's transition to SnapshotIdle for reconnect settlement lookup.
   initial_ids : Array[String]
+  // Exact steer owners present when this request began. Snapshot settlement
+  // may reconcile only these ids; a steer submitted while the reply is in
+  // flight belongs to a newer cut and keeps its own RPC/receipt path.
+  steers : Array[SteerSnapshotOwner]
   // The permission question this page was showing when the request began, if
   // any. A snapshot that does not list it proves it was answered while this
   // page was away — but only for THIS id: a question asked after the request
   // went out is not in the reply either, and clearing that one would take a
   // live card off screen and leave the turn blocked with nothing to press.
   pending_approval_id : String?
+}
+
+///|
+priv struct SteerSnapshotOwner {
+  submission_id : String
+  run_id : String
+  // Negative host state may restore this exact draft only after its own RPC
+  // is known dead (or acceptance already proved the ledger row must exist).
+  // An unrelated failed request must not lend that authority to this owner.
+  absence_is_definitive : Bool
+  // The process-local host ledger that owned this request. Ordinary reconnect
+  // or accepted-request absence is proof only if the reply names this same
+  // ledger. None is conservative: positive rows still settle, absence does not.
+  steer_ledger_id : String?
+  // The notification path that could still carry this steer's exact receipt
+  // belonged to a bridge generation which has ended. Older hosts have no
+  // ledger rows to classify, so this is the finite boundary at which their
+  // ambiguous owner must become recoverable instead of staying pending.
+  receipt_path_lost : Bool
 }
 
 ///|
@@ -984,11 +1038,28 @@ fn GoalRequest::settled_by(
 /// transcript text and legacy receipts without an id never settle this entry.
 /// The original draft shape is retained so a definitive refusal can restore
 /// it to the composer without exposing the serialized mention envelope.
+priv enum SteerDelivery {
+  SteerSending
+  // The request left this page but its reply did not return. Keep this fact
+  // on the owner: a later resync can invalidate the first exact snapshot, and
+  // the replacement cut must retain the same negative-ledger authority.
+  SteerResponseLost
+  SteerAccepted
+} derive(Eq)
+
+///|
 priv struct PendingSteer {
   submission_id : String
   // The run this steer was sent into. A receipt names it too, which is what
   // stops a late echo from settling an entry belonging to a newer run.
   run_id : String?
+  delivery : SteerDelivery
+  // Host-process ledger current when this request was sent. It fences negative
+  // recovery across a host restart; exact positive receipts remain portable.
+  steer_ledger_id : String?
+  // A full bridge replacement ended the only live notification path which
+  // could still carry this request's id-bearing engine receipt.
+  receipt_path_lost : Bool
   content : String
   draft : String
   mentions : Array[Mention]
@@ -1181,13 +1252,28 @@ priv struct DeviceState {
   // Drives the reconnect backoff and the BridgeLost threshold; always 0 for
   // the proton channel, whose bridge never reconnects.
   reconnect_failures : Int
-  // Incremented at every BridgeReady. Session-list replies carry the value
-  // captured when their request was issued, so a reply from a dead connection
-  // cannot overwrite the lists rebuilt after reconnect.
+  // Incremented at every transport, engine-generation, or notification-gap
+  // resync boundary. Session-list replies carry the value captured when their
+  // request was issued, so an older cut cannot overwrite the rebuilt mirrors.
   connection_generation : Int
-  // Page-lifetime request tokens for the independently fetched sidebar
-  // collections. Connection generation rejects dead sockets; these reject an
-  // older reply from the same connection after a newer request was issued.
+  // Whether the current bridge generation has returned its first `agent.runs`
+  // snapshot. A newly attached host must establish this boundary before the
+  // page can steer: otherwise a command could be sent to H2 while stamped with
+  // H1's cached ledger identity.
+  steer_ledger_ready : Bool
+  // The process-local steer ledger identity returned by that snapshot. It
+  // survives engine-pump and notification-gap resyncs within one bridge, but a
+  // fresh BridgeReady clears it until the new host answers.
+  steer_ledger_id : String?
+  // Page-lifetime request tokens for independently fetched collections.
+  // Connection generation rejects dead sockets. Runs replies additionally
+  // merge through exact frontiers; this counter orders only host-ledger
+  // metadata, while the remaining collection counters reject older replies.
+  runs_request_generation : Int
+  // Highest successful reply whose host-ledger metadata was adopted. Lifecycle
+  // rows remain governed by their exact frontier, so an older authoritative
+  // cut may still reduce after this; it simply cannot roll the ledger back.
+  runs_applied_generation : Int?
   sessions_request_generation : Int
   archived_request_generation : Int
   projects_request_generation : Int
@@ -1203,8 +1289,8 @@ priv struct DeviceState {
   // same entry shape as the live list.
   archived : Array[@transcript.SessionListItem]
   // Per-session archive facts newer than an unversioned whole-list reply.
-  // Cleared only at BridgeReady, immediately before fresh live and archived
-  // lists are requested for the new connection.
+  // Cleared only at a full host-mirror resync, immediately before fresh live
+  // and archived lists are requested.
   archive_overrides : Array[ArchiveOverride]
   // Registered project directories: the host registry's absolute paths in
   // registration order. The sidebar shows one section per entry.
@@ -1235,6 +1321,10 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     reconnect_attempt: 0,
     reconnect_failures: 0,
     connection_generation: 0,
+    steer_ledger_ready: false,
+    steer_ledger_id: None,
+    runs_request_generation: 0,
+    runs_applied_generation: None,
     sessions_request_generation: 0,
     archived_request_generation: 0,
     projects_request_generation: 0,
@@ -1983,6 +2073,14 @@ priv enum Msg {
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
   BridgeReady
+  // The engine pump began a new generation without replacing the page's
+  // request transport. Host mirrors need a full resync, while request promises
+  // issued by the still-live page retain ownership of their inputs.
+  EngineReady
+  // Only the host notification subscription was replaced. Durable mirrors
+  // need the same resync as a reconnect, but request promises are still live
+  // and retain ownership of their pending prompt/steer entries.
+  NotificationGap
   BridgeUnavailable(String)
   // The channel's WebSocket closed (or failed to open). The handler counts
   // the loss and schedules `ReconnectDue`, making the model's device list
@@ -2021,15 +2119,18 @@ priv enum DeviceMsg {
   // Another client changed this host's library; the focused client re-reads
   // it so the Skills page and `$` completion share the new contents.
   SkillsChanged
-  // The steer RPC failed before its outcome was known. Whether the host took
-  // it is unknowable here, so the queue entry ends rather than being guessed
-  // at.
+  // The steer RPC failed before its outcome was known. Keep the exact owner
+  // while `agent.runs` asks the host's steer ledger whether it was accepted.
   SteerUndelivered(
     session~ : String,
     submission_id~ : String,
     text~ : String,
     run_id~ : String
   )
+  // The host synchronously accepted this exact steer. Its later engine
+  // receipt remains the semantic outcome, but a resync can now ask the host
+  // to replay that pending/applied/dropped/unknown state.
+  SteerAccepted(session~ : String, submission_id~ : String, run_id~ : String)
   // The host definitively returned `steered:false`; no canonical User can
   // follow, so the queue entry retires and its draft comes back. The text is
   // not carried: the entry holds the draft to restore, and without an entry
@@ -2245,6 +2346,9 @@ priv enum DeviceMsg {
   RunsLoaded(
     runs~ : Array[RecoveredRun],
     settled~ : Array[RecoveredSettlement],
+    steers~ : Array[RecoveredSteerSettlement],
+    steer_recovery_supported~ : Bool,
+    steer_ledger_id~ : String?,
     // Permission questions the host's engines are still blocked on. A card
     // this page rendered before a reload is gone with the page, and nothing
     // in the durable record can bring it back — so a rejoining client is
@@ -2253,7 +2357,16 @@ priv enum DeviceMsg {
     approvals~ : Array[RecoveredApproval],
     live~ : Array[String],
     frontier~ : Array[RunSnapshotFrontier],
-    connection_generation~ : Int
+    connection_generation~ : Int,
+    request_generation~ : Int
+  )
+  // A runs request produced no snapshot. The captured frontier remains the
+  // retry authority: recomputing it would discard exact negative authority for
+  // a failed start, cancel, or steer while leaving the UI stuck indefinitely.
+  RunsFailed(
+    frontier~ : Array[RunSnapshotFrontier],
+    connection_generation~ : Int,
+    request_generation~ : Int
   )
   // The complete in-flight run set, from an `agent.runs` resync. Any
   // conversation still showing an open run this set lacks ended while the
@@ -2868,10 +2981,15 @@ fn Model::find_conversation(
 fn Model::run_snapshot_frontier(
   self : Model,
   channel : @interop.ChannelId,
+  lifecycle_absence_is_definitive? : Bool = false,
+  definitive_lifecycle_session? : String,
+  definitive_steer_id? : String,
 ) -> Array[RunSnapshotFrontier] {
   self.conversations
   .filter(conv => conv.device == channel)
   .map(conv => {
+    let captured_lifecycle_absence = lifecycle_absence_is_definitive ||
+      definitive_lifecycle_session == Some(conv.session_id)
     let state = match conv.run {
       NoRun(..) => SnapshotIdle(last_run_id=conv.last_run_id)
       Starting(submission_id~) => SnapshotStarting(submission_id~)
@@ -2881,13 +2999,42 @@ fn Model::run_snapshot_frontier(
     if conv.pending_prompt is Some(pending) {
       initial_ids.push(pending.submission_id)
     }
+    let steers : Array[SteerSnapshotOwner] = []
+    for pending in conv.pending_steers {
+      if pending.run_id is Some(run_id) {
+        steers.push({
+          submission_id: pending.submission_id,
+          run_id,
+          absence_is_definitive: pending.delivery is SteerAccepted ||
+          pending.delivery is SteerResponseLost ||
+          captured_lifecycle_absence ||
+          definitive_steer_id == Some(pending.submission_id),
+          steer_ledger_id: pending.steer_ledger_id,
+          receipt_path_lost: pending.receipt_path_lost,
+        })
+      }
+    }
     {
       session: conv.session_id,
+      workspace: conv.project(),
+      record: conv.record,
       state,
+      lifecycle_absence_is_definitive: captured_lifecycle_absence,
       initial_ids,
+      steers,
       pending_approval_id: conv.pending_approval.map(pending => pending.id),
     }
   })
+}
+
+///|
+fn RunSnapshotFrontier::owns(
+  self : RunSnapshotFrontier,
+  conv : Conversation,
+) -> Bool {
+  self.session == conv.session_id &&
+  self.workspace == conv.project() &&
+  self.record == conv.record
 }
 
 ///|
@@ -2905,6 +3052,7 @@ fn Model::matches_run_snapshot_frontier(
       guard self.find_conversation(channel, session) is Some(conv) else {
         return false
       }
+      guard captured.owns(conv) else { return false }
       return match captured.state {
         SnapshotIdle(last_run_id~) =>
           conv.run is NoRun(..) && conv.last_run_id == last_run_id
@@ -2935,6 +3083,7 @@ fn Model::matched_settlement_frontier(
   }
   for captured in frontier {
     if captured.session == settlement.session {
+      guard captured.owns(conv) else { return None }
       return match captured.state {
         SnapshotStarting(submission_id~) if conv.run
           is Starting(submission_id=current) &&
@@ -2942,10 +3091,29 @@ fn Model::matched_settlement_frontier(
           settlement.submission_id is Some(recovered) &&
           recovered == submission_id =>
           Some(SettlementBySubmission(submission_id))
+        // A delayed accepted response may have advanced the exact captured
+        // start to Open before the restart settlement snapshot is reduced.
+        // Both the host run id and the client submission id must match, so a
+        // successor cannot be closed through this bridge.
+        SnapshotStarting(submission_id~) if conv.run is Open(run_id=current, ..) &&
+          current == settlement.run_id &&
+          settlement.submission_id is Some(recovered) &&
+          recovered == submission_id =>
+          Some(SettlementBySubmission(submission_id))
         SnapshotOpen(run_id~) if conv.run is Open(run_id=current, ..) &&
           current == run_id &&
           settlement.run_id == run_id => Some(SettlementByRun)
-        SnapshotIdle(last_run_id=Some(run_id)) if conv.run is NoRun(..) &&
+        // CancelNotOpen captures the exact Open owner, then deliberately
+        // closes it before asking agent.runs for the missed terminal row. The
+        // per-session definitive flag makes that one request-time transition
+        // admissible; unrelated snapshots may not reinterpret a newer idle
+        // state as the captured run.
+        SnapshotOpen(run_id~) if captured.lifecycle_absence_is_definitive &&
+          conv.run is NoRun(..) &&
+          conv.last_run_id is Some(current) &&
+          current == run_id &&
+          settlement.run_id == run_id => Some(SettlementByRun)
+        SnapshotIdle(last_run_id=Some(run_id)) if conv.run is NoRun(ended=None) &&
           conv.last_run_id is Some(current) &&
           current == run_id &&
           settlement.run_id == run_id => Some(SettlementByRun)
@@ -3073,7 +3241,11 @@ fn Model::with_archive_override(
   let overrides = dev.archive_overrides.filter(item => item.key != key)
   overrides.push({ key, disposition, })
   let model = self.replace_device({ ..dev, archive_overrides: overrides, })
-  if !newly_retired {
+  let retires_composer = newly_retired &&
+    self.find_conversation(channel, key.session) is Some(conv) &&
+    conv.project() == key.workspace &&
+    !conv.is_archived_read_only()
+  if !retires_composer {
     return model
   }
   let composer_entry_retirements = model.composer_entry_retirements.copy()
@@ -3181,9 +3353,10 @@ fn Model::conversation_for_composer_action(
   identity : ComposerActionIdentity,
 ) -> Conversation? {
   let mut owner = identity.owner
-  // Follow only archive facts appended after this entry was born. An active
-  // archive has an exact handoff for its fact; a background archive has none,
-  // so its old actions expire instead of reaching a later unarchived record.
+  // Follow only archive facts appended after this entry was born. An archive
+  // that salvages editable state has an exact handoff for its fact; one with
+  // nothing to salvage has none, so stale actions expire instead of reaching
+  // a later unarchived record.
   for
     index in identity.archive_generation..<self.composer_entry_retirements.length() {
     if self.composer_entry_retirements[index] == owner {
@@ -3520,6 +3693,7 @@ fn Conversation::enqueue_steer(
   self : Conversation,
   submission_id : String,
   run_id : String?,
+  steer_ledger_id : String?,
   content : String,
   draft : String,
   mentions : Array[Mention],
@@ -3528,9 +3702,73 @@ fn Conversation::enqueue_steer(
   pending_steers.push({
     submission_id,
     run_id,
+    delivery: SteerSending,
+    steer_ledger_id,
+    receipt_path_lost: false,
     content,
     draft,
     mentions: mentions.copy(),
+  })
+  { ..self, pending_steers, }
+}
+
+///|
+/// Remember that this exact steer request no longer has a reply. The host may
+/// still have accepted it and an id-bearing receipt may still arrive, so this
+/// changes recovery authority without settling or restoring the draft.
+fn Conversation::lose_steer_response(
+  self : Conversation,
+  submission_id : String,
+  run_id : String?,
+) -> Conversation {
+  let pending_steers = self.pending_steers.map(input => {
+    if input.matches_receipt(submission_id, run_id) &&
+      input.delivery is SteerSending {
+      { ..input, delivery: SteerResponseLost, }
+    } else {
+      input
+    }
+  })
+  { ..self, pending_steers, }
+}
+
+///|
+/// End every receipt path owned by the bridge generation being replaced.
+/// Accepted input stays accepted; a request whose reply was still outstanding
+/// also becomes response-lost so subsequent resync cuts preserve that fact.
+fn Conversation::lose_steer_receipt_paths(self : Conversation) -> Conversation {
+  let pending_steers = self.pending_steers.map(input => {
+    ..input,
+    delivery: if input.delivery is SteerSending {
+      SteerResponseLost
+    } else {
+      input.delivery
+    },
+    receipt_path_lost: true,
+  })
+  { ..self, pending_steers, }
+}
+
+///|
+fn Conversation::accept_steer(
+  self : Conversation,
+  submission_id : String,
+  run_id : String?,
+  steer_ledger_id : String?,
+) -> Conversation {
+  let pending_steers = self.pending_steers.map(input => {
+    if input.matches_receipt(submission_id, run_id) {
+      {
+        ..input,
+        delivery: SteerAccepted,
+        steer_ledger_id: match steer_ledger_id {
+          Some(_) => steer_ledger_id
+          None => input.steer_ledger_id
+        },
+      }
+    } else {
+      input
+    }
   })
   { ..self, pending_steers, }
 }
@@ -3600,8 +3838,6 @@ fn Conversation::acknowledge_steer(
 }
 
 ///|
-
-///|
 /// Restore a definitively refused submission without overwriting a draft the
 /// user typed while the request was in flight. Recovered text is placed first,
 /// followed by the newer draft; mention chips retain both submissions' order.
@@ -3632,8 +3868,24 @@ fn Conversation::restore_submission(
 fn Conversation::archive_salvage(self : Conversation) -> ArchiveSalvage {
   let drafts : Array[String] = []
   let mentions : Array[Mention] = []
-  let pending_initial = self.pending_prompt is Some(_)
+  let pending_input = self.pending_prompt is Some(_) ||
+    !self.pending_steers.is_empty()
   if self.pending_prompt is Some(pending) {
+    if !pending.draft.is_blank() {
+      drafts.push(pending.draft)
+    }
+    for mention in pending.mentions {
+      mentions.push(mention)
+    }
+  }
+  // A terminal event can arrive before the steer receipt that classifies its
+  // text as applied or dropped. Archiving is delivered on another queue and
+  // can overtake that receipt, so carry every unresolved steer into the safe
+  // replacement composer before retiring its exact owner. The warning bit
+  // tells the user this text came from an in-flight submission and may already
+  // be durable; silently dropping it would lose the only resubmittable copy
+  // when the eventual receipt is `dropped`.
+  for pending in self.pending_steers {
     if !pending.draft.is_blank() {
       drafts.push(pending.draft)
     }
@@ -3665,7 +3917,7 @@ fn Conversation::archive_salvage(self : Conversation) -> ArchiveSalvage {
   } else {
     None
   }
-  { task: drafts.join("\n\n"), mentions, goal_draft, pending_initial, }
+  { task: drafts.join("\n\n"), mentions, goal_draft, pending_input, }
 }
 
 ///|
@@ -3674,7 +3926,15 @@ priv struct ArchiveSalvage {
   task : String
   mentions : Array[Mention]
   goal_draft : String?
-  pending_initial : Bool
+  pending_input : Bool
+}
+
+///|
+fn ArchiveSalvage::has_content(self : ArchiveSalvage) -> Bool {
+  !self.task.is_blank() ||
+  !self.mentions.is_empty() ||
+  self.goal_draft is Some(_) ||
+  self.pending_input
 }
 
 ///|
@@ -3683,6 +3943,27 @@ priv struct ArchiveSalvage {
 /// ever carry it, so it is a toast, and the text is back in the composer where
 /// the user can act on it.
 fn Conversation::reject_steer(
+  self : Conversation,
+  submission_id : String,
+  run_id : String?,
+) -> (Conversation, Bool) {
+  for index, input in self.pending_steers {
+    if input.matches_receipt(submission_id, run_id) {
+      let pending_steers = self.pending_steers.copy()
+      let _ = pending_steers.remove(index)
+      let next = { ..self, pending_steers, }
+      return (next.restore_submission(input.draft, input.mentions), true)
+    }
+  }
+  (self, false)
+}
+
+///|
+/// Retire a steer whose outcome an older host cannot replay after its receipt
+/// transport ended. Unlike a refusal, this is ambiguous: restore the exact
+/// draft so the user can recover it, while the caller warns them to inspect
+/// the transcript before choosing whether to resend.
+fn Conversation::recover_unconfirmed_steer(
   self : Conversation,
   submission_id : String,
   run_id : String?,
@@ -3733,40 +4014,6 @@ fn Conversation::settle_pending_prompt(
     return (self, false)
   }
   ({ ..self, pending_prompt: None, }, true)
-}
-
-///|
-/// Forget every submission still waiting for a receipt.
-///
-/// A submitted input is sent once. The composer keeps its entry only until
-/// the host answers, and a boundary that makes the answer unobtainable — a
-/// reconnect, a run ending without the commit — ends the entry rather than
-/// converting it into a guess about the record. The record is authoritative
-/// and the client can read it; a notice that says "delivery could not be
-/// confirmed" adds nothing the transcript does not already show, and cannot
-/// be retracted correctly when it is wrong.
-fn Conversation::forget_awaiting_inputs(self : Conversation) -> Conversation {
-  if self.pending_steers.is_empty() && self.pending_prompt is None {
-    return self
-  }
-  let pending_steers : Array[PendingSteer] = []
-  { ..self, pending_steers, pending_prompt: None, }
-}
-
-///|
-/// Forget every submission this exact run owned, whatever it was waiting for.
-/// See `forget_awaiting_inputs` for why nothing is retained.
-fn Conversation::forget_steers_for_run(
-  self : Conversation,
-  run_id : String,
-) -> Conversation {
-  let pending_steers = self.pending_steers.filter(input => {
-    !(input.run_id is Some(owner) && owner == run_id)
-  })
-  if pending_steers.length() == self.pending_steers.length() {
-    return self
-  }
-  { ..self, pending_steers, }
 }
 
 ///|

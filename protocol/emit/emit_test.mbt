@@ -118,6 +118,7 @@ fn all_events() -> Array[@protocol.Event] {
     ApprovalResolved(id="ap-3", outcome="cancelled"),
     SteerApplied(kind="prompt", content="also fix docs"),
     SteerDropped(content="too late"),
+    SteerUnconfirmed(content="receipt lost"),
     BackgroundNotice(content="job 2 exited"),
     GoalUpdated(goal=Some("ship it")),
     GoalUpdated(goal=None),

@@ -427,9 +427,11 @@ pub fn steer_run(
     return { steered: false, run_id: None, }
   }
   let submission_id = normalize_submission_id(payload.submission_id)
+  let tracked = live.steer_runs.prepare(run_id, payload.text, submission_id)
   guard live.submit(
     @protocol.steer(payload.text),
     failure_reason="failed to write steering to the engine",
+    steer=tracked,
   ) else {
     return { steered: false, run_id: Some(run_id), }
   }
@@ -443,7 +445,7 @@ pub fn steer_run(
   // produce a durable User plus steer_applied before EOF. The client keeps
   // exact-id ownership, and the trailing receipt or Finished/durable recovery
   // settles it without restoring a duplicate draft.
-  live.steer_runs.record_sent(payload.text, submission_id) |> ignore
+  live.steer_runs.record_entry(tracked)
   { steered: true, run_id: Some(run_id), }
 }
 

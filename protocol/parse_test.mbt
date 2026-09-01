@@ -139,6 +139,20 @@ test "an older engine's steer_applied still decodes" {
 }
 
 ///|
+test "a host-synthesized unconfirmed steer round-trips" {
+  debug_inspect(
+    decode(
+      (
+        #|{"event":"steer_unconfirmed","content":"maybe durable"}
+      ),
+    ),
+    content=(
+      #|Some(SteerUnconfirmed(content="maybe durable"))
+    ),
+  )
+}
+
+///|
 /// `session_started` predates `--dir`: engines between d11e04c2 (which added the
 /// event) and d5d0b208 (which added the workspace option) emit only `session`
 /// and `session_root`. Same rule as `steer_applied`'s `kind` — a field added

@@ -170,18 +170,17 @@ fn notification_msg(
 }
 
 ///|
-/// A device-scoped notification's decoder. `agent.connected` is the
-/// readiness/resync signal on both transports: it re-fires on every
-/// reconnect (and engine-pump restart), and the refetches BridgeReady
-/// triggers — including `agent.runs` — rebuild whatever was missed.
+/// A device-scoped notification's decoder. The accepted stage belongs to a
+/// newly attached transport, whose old request promises cannot answer. The
+/// serving stage belongs to a new engine-pump generation on the same
+/// transport, so its resync must preserve those still-live promises.
 fn device_msg(
   channel : @interop.ChannelId,
   notification : @protocol.Notification,
 ) -> DeviceMsg? {
   match notification {
-    // The payload's stage says how much of the host is up; every stage asks
-    // this client for the same resync, so the signal alone is the message.
-    AgentConnected(_) => Some(BridgeReady)
+    AgentConnected({ stage: Serving, }) => Some(EngineReady)
+    AgentConnected({ stage: Accepted, }) => Some(BridgeReady)
     AgentStarted(payload) => started_msg(channel, payload)
     AgentEvent(payload) => engine_msg(payload)
     AgentError(payload) => error_msg(payload)
@@ -286,6 +285,8 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
       dispatch(FromDevice(channel, BridgeUnavailable(message)))
     @bridge.Event::ChannelDown(channel~, websocket_epoch~) =>
       dispatch(FromDevice(channel, ChannelDown(websocket_epoch~)))
+    @bridge.Event::NotificationGap(channel~) =>
+      dispatch(FromDevice(channel, NotificationGap))
     @bridge.Event::BrowserEvent(payload~) =>
       if browser_event_msg(payload) is Some(msg) {
         dispatch(msg)
@@ -540,13 +541,15 @@ fn reconnect_delay(failures : Int) -> Int {
 /// steer it. The reply is the complete in-flight set, so it also settles the
 /// other direction — `RunsSettled` follows with every live id, and any run
 /// this client still shows that the host no longer has ended while the
-/// client was away. Nothing is dispatched when the op fails: a missing
-/// answer says nothing about the runs.
+/// client was away. A failure returns the exact captured frontier to update;
+/// it says nothing about the runs, but update can retry without losing the
+/// owner-specific authority that caused this request.
 fn fetch_runs(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   frontier : Array[RunSnapshotFrontier],
   connection_generation : Int,
+  request_generation : Int,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   let payload = runs_payload(frontier)
@@ -555,7 +558,14 @@ fn fetch_runs(
       let reply = @interop.bridge_request(
         channel, @commands.agent_runs, payload,
       ) catch {
-        _ => return
+        _ => {
+          scheduler.add(
+            dispatch(
+              RunsFailed(frontier~, connection_generation~, request_generation~),
+            ),
+          )
+          return
+        }
       }
       let live : Array[String] = []
       let recovered : Array[RecoveredRun] = []
@@ -569,6 +579,16 @@ fn fetch_runs(
       for item in reply.settled {
         if RecoveredSettlement::from_reply(item) is Some(settlement) {
           recovered_settlements.push(settlement)
+        }
+      }
+      let recovered_steers : Array[RecoveredSteerSettlement] = []
+      let steer_recovery_supported = reply.steers is Some(_)
+      let steer_ledger_id = reply.steer_ledger_id
+      if reply.steers is Some(steers) {
+        for item in steers {
+          if RecoveredSteerSettlement::from_reply(item) is Some(settlement) {
+            recovered_steers.push(settlement)
+          }
         }
       }
       // Standing questions come back unfiltered: unlike a settlement, which is
@@ -598,13 +618,43 @@ fn fetch_runs(
           RunsLoaded(
             runs=recovered,
             settled=recovered_settlements,
+            steers=recovered_steers,
+            steer_recovery_supported~,
+            steer_ledger_id~,
             approvals=recovered_approvals,
             live~,
             frontier~,
             connection_generation~,
+            request_generation~,
           ),
         ),
       )
+    })
+  })
+}
+
+///|
+/// Release one terminal host-ledger row only after the frontend consumed it.
+/// Failure is harmless to liveness: the row remains replayable until pressure
+/// reclaims the oldest terminal entry, while the bounded ledger keeps every
+/// still-pending receipt protected.
+fn acknowledge_steer_settlement(
+  channel : @interop.ChannelId,
+  session : String,
+  run_id : String,
+  submission_id : String,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(_scheduler => {
+    @js.async_run(() => {
+      ignore(
+        @interop.bridge_request(channel, @commands.agent_steer_ack, {
+          session,
+          run_id,
+          submission_id,
+        }),
+      ) catch {
+        _ => ()
+      }
     })
   })
 }
@@ -644,6 +694,13 @@ fn runs_payload(frontier : Array[RunSnapshotFrontier]) -> @protocol.RunsPayload 
           submission_id: Some(submission_id),
         })
       }
+    }
+    for steer in captured.steers {
+      known.push({
+        session: captured.session,
+        run_id: Some(steer.run_id),
+        submission_id: Some(steer.submission_id),
+      })
     }
   }
   { known: Some(known), }
@@ -736,6 +793,44 @@ fn RecoveredSettlement::from_reply(
     submission_id: payload.submission_id,
     status: payload.status,
   })
+}
+
+///|
+fn RecoveredSteerSettlement::from_reply(
+  payload : @protocol.SteerSettlementPayload,
+) -> RecoveredSteerSettlement? {
+  let status = match payload.status {
+    "pending" => Some(RecoveredSteerPending)
+    "applied" => Some(RecoveredSteerApplied)
+    "dropped" => Some(RecoveredSteerDropped)
+    "unknown" => Some(RecoveredSteerUnknown)
+    _ => None
+  }
+  guard status is Some(status) &&
+    !payload.session.is_empty() &&
+    !payload.run_id.is_empty() &&
+    !payload.submission_id.is_empty() else {
+    return None
+  }
+  Some({
+    session: payload.session,
+    run_id: payload.run_id,
+    submission_id: payload.submission_id,
+    status,
+  })
+}
+
+///|
+test "agent.runs decodes an unknown steer as a non-restoring settlement" {
+  guard RecoveredSteerSettlement::from_reply({
+      session: "s1",
+      run_id: "r1",
+      submission_id: "steer-1",
+      status: "unknown",
+    })
+    is Some({ status: RecoveredSteerUnknown, .. }) else {
+    fail("unknown steer settlement was not decoded")
+  }
 }
 
 ///|
@@ -887,11 +982,12 @@ async fn request_agent_start(
       let message = @interop.bridge_error_text(error)
       scheduler.add(
         dispatch(
-          if @interop.bridge_error_is_definite(error) {
-            StartRejected(session~, submission_id~, message~)
-          } else {
-            StartUndelivered(session~, submission_id~, message~)
-          },
+          start_failure_msg(
+            @interop.bridge_failure(error),
+            session,
+            submission_id,
+            message,
+          ),
         ),
       )
       return
@@ -906,6 +1002,39 @@ async fn request_agent_start(
         status=reply.status,
         exit_code=reply.exit_code,
       ),
+    ),
+  )
+}
+
+///|
+/// A host refusal and a request that never reached a transport both leave the
+/// initial prompt wholly page-owned, so the reducer can restore its draft.
+/// Only a request that went out without a trustworthy reply needs durable
+/// recovery rather than resubmission.
+fn start_failure_msg(
+  failure : @interop.BridgeFailure,
+  session : String,
+  submission_id : String,
+  message : String,
+) -> DeviceMsg {
+  match failure {
+    Refused | Unsent => StartRejected(session~, submission_id~, message~)
+    Unknown => StartUndelivered(session~, submission_id~, message~)
+  }
+}
+
+///|
+test "a known-unsent start restores its prompt" {
+  assert_true(
+    start_failure_msg(Unsent, "s1", "sub1", "socket down")
+    is StartRejected(session="s1", submission_id="sub1", message="socket down"),
+  )
+  assert_true(
+    start_failure_msg(Unknown, "s1", "sub1", "reply lost")
+    is StartUndelivered(
+      session="s1",
+      submission_id="sub1",
+      message="reply lost"
     ),
   )
 }
@@ -1178,10 +1307,42 @@ fn SessionExport::command(
 }
 
 ///|
+fn steer_failure_msg(
+  failure : @interop.BridgeFailure,
+  session : String,
+  submission_id : String,
+  text : String,
+  run_id : String,
+) -> DeviceMsg {
+  match failure {
+    Refused | Unsent => SteerRejected(session~, submission_id~, run_id~)
+    Unknown => SteerUndelivered(session~, submission_id~, text~, run_id~)
+  }
+}
+
+///|
+test "steering restores known-unsent input but preserves ambiguous ownership" {
+  assert_true(
+    steer_failure_msg(Unsent, "s1", "sub1", "draft", "r1")
+    is SteerRejected(session="s1", submission_id="sub1", run_id="r1"),
+  )
+  assert_true(
+    steer_failure_msg(Unknown, "s1", "sub1", "draft", "r1")
+    is SteerUndelivered(
+      session="s1",
+      submission_id="sub1",
+      text="draft",
+      run_id="r1"
+    ),
+  )
+}
+
+///|
 /// Inject steering input into the running turn. Delivery is acknowledged by
 /// the engine's own `steer_applied`/`steer_dropped` events; this command only
-/// distinguishes a definitive host refusal from an indeterminate transport
-/// failure: only the latter may still be followed by an exact engine receipt.
+/// distinguishes known non-delivery (host refusal or a request that never left)
+/// from an indeterminate transport failure: only the latter may still be
+/// followed by an exact engine receipt.
 fn steer_openseek(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -1197,11 +1358,13 @@ fn steer_openseek(
         error => {
           scheduler.add(
             dispatch(
-              if @interop.bridge_error_is_definite(error) {
-                SteerRejected(session~, submission_id~, run_id~)
-              } else {
-                SteerUndelivered(session~, submission_id~, text~, run_id~)
-              },
+              steer_failure_msg(
+                @interop.bridge_failure(error),
+                session,
+                submission_id,
+                text,
+                run_id,
+              ),
             ),
           )
           return
@@ -1210,6 +1373,10 @@ fn steer_openseek(
       if !delivered {
         scheduler.add(
           dispatch(SteerRejected(session~, submission_id~, run_id~)),
+        )
+      } else {
+        scheduler.add(
+          dispatch(SteerAccepted(session~, submission_id~, run_id~)),
         )
       }
     })

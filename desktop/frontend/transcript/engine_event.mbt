@@ -34,12 +34,14 @@ pub(all) enum EngineEvent {
   AgentAborted(String)
   MaxStepsExhausted
   AgentSetupFailed(String)
-  // Steering input settled by the engine: applied at a step boundary, or
-  // dropped because it raced the turn's end. Current hosts echo the globally
-  // unique local submission id; `None` is a legacy lifecycle-only receipt and
-  // must never claim a local ledger entry by matching text.
+  // Steering input settled by the engine: applied at a step boundary, dropped
+  // before reaching stdin, or left unconfirmed when the host lost the exact
+  // receipt after writing it. Current hosts echo the globally unique local
+  // submission id; `None` is a legacy lifecycle-only receipt and must never
+  // claim a local ledger entry by matching text.
   SteerApplied(content~ : String, submission_id~ : String?)
   SteerDropped(content~ : String, submission_id~ : String?)
+  SteerUnconfirmed(content~ : String, submission_id~ : String?)
   // An automatic checkpoint completed inside the open turn. Unlike the
   // manual lifecycle below, this does not put the conversation into an idle
   // compaction phase.
@@ -110,6 +112,8 @@ pub fn decode_engine_event(
       Some(SteerApplied(content~, submission_id=stream.submission_id))
     SteerDropped(content~) =>
       Some(SteerDropped(content~, submission_id=stream.submission_id))
+    SteerUnconfirmed(content~) =>
+      Some(SteerUnconfirmed(content~, submission_id=stream.submission_id))
     AutoCompactionFinished(summary~, ..) =>
       Some(AutoCompactionFinished(summary))
     CompactionStarted(..) => Some(CompactionStarted)
@@ -335,6 +339,16 @@ test "decode recognizes the steer events" {
     )
     is Some(SteerDropped(content="left", submission_id=None)) else {
     fail("steer_dropped not decoded")
+  }
+  guard decode_engine_event(
+      event_fields({
+        "event": "steer_unconfirmed",
+        "content": "left",
+        "submission_id": "input-8",
+      }),
+    )
+    is Some(SteerUnconfirmed(content="left", submission_id=Some("input-8"))) else {
+    fail("steer_unconfirmed not decoded")
   }
 }
 

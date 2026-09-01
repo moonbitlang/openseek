@@ -331,6 +331,36 @@ fn request_archived_refresh(
 }
 
 ///|
+/// Issue one atomic run/steer snapshot with a same-connection request token.
+/// Connection generation rejects dead transports. Request order controls the
+/// host-ledger mirror, while each reply's captured frontier independently
+/// decides whether its lifecycle and input evidence still owns local state.
+const RunsRetryDelayMs = 1_000
+
+///|
+fn request_runs_refresh(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  model : Model,
+  frontier : Array[RunSnapshotFrontier],
+) -> (@cmd.Cmd, Model) {
+  guard model.device_state(channel) is Some(dev) else {
+    return (@cmd.none, model)
+  }
+  let request_generation = dev.runs_request_generation + 1
+  (
+    fetch_runs(
+      dispatch,
+      channel,
+      frontier,
+      dev.connection_generation,
+      request_generation,
+    ),
+    model.replace_device({ ..dev, runs_request_generation: request_generation, }),
+  )
+}
+
+///|
 /// Adopt one canonical workspace registry snapshot. Conversations from a
 /// detached workspace leave this page with its sidebar section: their durable
 /// records stay on disk and return when the directory is attached again. If
@@ -711,7 +741,7 @@ fn is_idle_event(event : @transcript.EngineEvent) -> Bool {
 
 ///|
 fn is_steer_receipt(event : @transcript.EngineEvent) -> Bool {
-  event is (SteerApplied(..) | SteerDropped(..))
+  event is (SteerApplied(..) | SteerDropped(..) | SteerUnconfirmed(..))
 }
 
 ///|
@@ -1257,6 +1287,16 @@ fn apply_engine_event(
       } else {
         (None, conv)
       }
+    // The command crossed stdin but its exact receipt died with the engine.
+    // It may already be durable, so retire the UI owner without restoring a
+    // draft whose resend could duplicate user input.
+    SteerUnconfirmed(content=_, submission_id~) =>
+      if submission_id is Some(submission_id) {
+        let (next, _) = conv.acknowledge_steer(submission_id, event_run_id)
+        (None, next)
+      } else {
+        (None, conv)
+      }
     AutoCompactionFinished(_) => (None, conv)
     CompactionStarted => (None, { ..conv, compaction: Compacting, })
     CompactionFinished(_) => (None, { ..conv, compaction: NotCompacting, })
@@ -1530,6 +1570,26 @@ fn sync_browser_view(
 }
 
 ///|
+/// Record the exact composer-entry handoff for an archive retirement. The
+/// retirement index is the ownership generation consumed by both component
+/// state transfer and delayed root actions.
+fn Model::transfer_archived_composer(
+  self : Model,
+  archived : @interop.ConversationKey,
+  fresh : @interop.ConversationKey,
+) -> Model {
+  let mut archive_generation = 0
+  for index, retired in self.composer_entry_retirements {
+    if retired == archived {
+      archive_generation = index + 1
+    }
+  }
+  let composer_entry_replacements = self.composer_entry_replacements.copy()
+  composer_entry_replacements.push({ archived, fresh, archive_generation, })
+  { ..self, composer_entry_replacements, }
+}
+
+///|
 /// Leave an archived active session immediately, carrying only resubmittable
 /// composer state into the supplied fresh id. This is shared by list replies
 /// and identity notifications because either can win their delivery race.
@@ -1548,7 +1608,7 @@ fn replace_archived_active(
   let salvaged = archived_conv.archive_salvage()
   let restored_task = salvaged.task
   let restored_mentions = salvaged.mentions
-  let pending_initial = salvaged.pending_initial
+  let pending_input = salvaged.pending_input
   let conversations = model.conversations.filter(conv => {
     conv.device != channel || conv.session_id != session
   })
@@ -1586,26 +1646,67 @@ fn replace_archived_active(
     worktree_mode: model.default_worktree_mode(channel, workspace),
     goal_edit,
   }
-  let fresh = { ..fresh, archived_pending_input: pending_initial, }
-  let composer_entry_replacements = model.composer_entry_replacements.copy()
+  let fresh = { ..fresh, archived_pending_input: pending_input, }
   let archived_owner : @interop.ConversationKey = { channel, session, }
-  let mut archive_generation = 0
-  for index, retired in model.composer_entry_retirements {
-    if retired == archived_owner {
-      archive_generation = index + 1
-    }
+  let replaced = activated
+    .replace_conversation(fresh)
+    .with_active_project(Some(workspace))
+    .transfer_archived_composer(archived_owner, {
+      channel,
+      session: fresh_session,
+    })
+  { ..replaced, screen: Chat, loading_conversation: None, }
+}
+
+///|
+/// A peer may archive a background conversation after its run ended but
+/// before the final steer receipt reached this page. Move root-owned recovery
+/// state into a fresh, reachable composing row before the archived owner is
+/// filtered out. Root-owned recovery text is copied; component-owned unsent
+/// text follows the exact replacement fact. Each background owner gets its
+/// own id/project, because combining unrelated drafts destroys provenance.
+fn replace_archived_background(
+  model : Model,
+  channel : @interop.ChannelId,
+  session : String,
+  workspace : @common.Uri,
+) -> Model {
+  guard !(channel == model.focused && model.active_session == session) &&
+    model.find_conversation(channel, session) is Some(archived_conv) &&
+    archived_conv.project() == workspace &&
+    !archived_conv.is_archived_read_only() else {
+    return model
   }
-  composer_entry_replacements.push({
-    archived: archived_owner,
-    fresh: { channel, session: fresh_session, },
-    archive_generation,
+  let salvaged = archived_conv.archive_salvage()
+  guard salvaged.has_content() || archived_conv.composer_draft_present else {
+    return model
+  }
+  let fresh_session = generated_session_id()
+  let conversations = model.conversations.filter(conv => {
+    conv.device != channel || conv.session_id != session
   })
-  {
-    ..activated.replace_conversation(fresh).with_active_project(Some(workspace)),
-    screen: Chat,
-    loading_conversation: None,
-    composer_entry_replacements,
+  let goal_edit = salvaged.goal_draft.map(draft => { draft, })
+  let fresh = {
+    ..empty_conversation(
+      channel,
+      fresh_session,
+      workspace,
+      model=archived_conv.engine_model,
+    ),
+    task: salvaged.task,
+    mentions: salvaged.mentions,
+    composer_draft_present: archived_conv.composer_draft_present,
+    worktree_mode: model.default_worktree_mode(channel, workspace),
+    goal_edit,
+    archived_pending_input: salvaged.pending_input,
   }
+  let archived_owner : @interop.ConversationKey = { channel, session, }
+  { ..model, conversations, }
+  .replace_conversation(fresh)
+  .transfer_archived_composer(archived_owner, {
+    channel,
+    session: fresh_session,
+  })
 }
 
 ///|
@@ -3352,11 +3453,16 @@ fn update_msg(
         // cannot be steered — the steer could outlive the dying turn in the
         // engine's queue and contaminate a later prompt — so the text stays
         // in the composer.
+        guard model.device_state(model.focused) is Some(steer_device) &&
+          steer_device.steer_ledger_ready else {
+          return (@cmd.none, model)
+        }
         if conv.run is Open(run_id~, stage~) && !(stage is Cancelling) {
           let (model, submission_id) = model.allocate_submission_id()
           let conv = conv.enqueue_steer(
             submission_id,
             Some(run_id),
+            steer_device.steer_ledger_id,
             task,
             conv.task,
             conv.mentions,
@@ -4854,6 +4960,7 @@ fn Model::reject_start(
     // notification. Refresh placement after every rejected workspace start;
     // a newly missing row then exposes Repair/Archive immediately.
     let request_generation = dev.worktrees_request_generation + 1
+    let runs_request_generation = dev.runs_request_generation + 1
     (
       @cmd.batch([
         notice,
@@ -4864,10 +4971,21 @@ fn Model::reject_start(
           dev.connection_generation,
           request_generation,
         ),
+        // A transient Starting owner can fence an older snapshot's active row.
+        // Once this exact start is definitively rejected, acquire a new cut so
+        // the host's still-active predecessor/successor becomes visible.
+        fetch_runs(
+          dispatch,
+          channel,
+          updated.run_snapshot_frontier(channel),
+          dev.connection_generation,
+          runs_request_generation,
+        ),
       ]),
       updated.replace_device({
         ..dev,
         worktrees_request_generation: request_generation,
+        runs_request_generation,
       }),
     )
   } else {
@@ -5038,15 +5156,39 @@ fn update_device_msg(
         // device is refreshed when focus moves to it.
         (@cmd.none, model)
       }
-    BridgeReady => {
+    BridgeReady | EngineReady | NotificationGap => {
+      let lifecycle_absence_is_definitive = msg is BridgeReady
+      // A replacement bridge ends both the outstanding response and the only
+      // notification stream which could still carry an exact steer receipt.
+      // Persist that boundary before capturing the recovery cut: an
+      // EngineReady/NotificationGap may supersede this first request before
+      // its reply, and the next cut must retain the same owner authority.
+      let recovery_model = if msg is BridgeReady {
+        {
+          ..model,
+          conversations: model.conversations.map(conv => {
+            if conv.device == channel {
+              conv.lose_steer_receipt_paths()
+            } else {
+              conv
+            }
+          }),
+        }
+      } else {
+        model
+      }
       let connection_generation = dev.connection_generation + 1
       let sessions_request_generation = dev.sessions_request_generation + 1
       let archived_request_generation = dev.archived_request_generation + 1
       let projects_request_generation = dev.projects_request_generation + 1
+      let runs_request_generation = dev.runs_request_generation + 1
       // Capture the exact per-session lifecycle frontier before issuing the
       // unversioned runs snapshot. A live Started or Finished received before
       // its reply then wins over both stale positive rows and stale absence.
-      let run_frontier = model.run_snapshot_frontier(channel)
+      let run_frontier = recovery_model.run_snapshot_frontier(
+        channel,
+        lifecycle_absence_is_definitive~,
+      )
       let commands = [
         fetch_sessions(
           dispatch, channel, connection_generation, sessions_request_generation,
@@ -5054,7 +5196,9 @@ fn update_device_msg(
         // In-flight runs, so a page that joined (or reconnected) mid-run
         // learns each live run's identity — the resync half of the
         // protocol's reconnect story (docs/remote-protocol.md).
-        fetch_runs(dispatch, channel, run_frontier, connection_generation),
+        fetch_runs(
+          dispatch, channel, run_frontier, connection_generation, runs_request_generation,
+        ),
         fetch_archived(
           dispatch, channel, connection_generation, archived_request_generation,
         ),
@@ -5089,29 +5233,43 @@ fn update_device_msg(
           commands.push(fetch_remote_status(dispatch))
         }
       }
-      // Delta streams are not replayable across a connection boundary; keep
+      // Delta streams are not replayable across a notification boundary; keep
       // none of the pre-gap fragment, or the first post-gap delta would splice
       // onto stale text. Compaction has no wire resync in this protocol: an
       // local queued/requested/in-flight marker is released here so a missed
-      // terminal event cannot disable Send forever. Any receipt still pending
-      // at this boundary can no longer arrive, so its entry ends here. If the
-      // host still compacts, its next prompt rejection is a transient,
-      // visible local failure.
-      let conversations = model.conversations.map(conv => {
+      // terminal event cannot disable Send forever. Pending inputs survive
+      // every boundary until the atomic runs reply classifies their exact
+      // owner. A full reconnect makes absence definitive for dead requests; a
+      // hub-only gap or engine restart leaves their promises live. If the host
+      // still compacts, its next prompt rejection is a transient, visible
+      // local failure.
+      let conversations = recovery_model.conversations.map(conv => {
         if conv.device == channel {
-          {
-            ..conv.clear_streams().forget_awaiting_inputs(),
-            compaction: NotCompacting,
-          }
+          // Recovery owns the exact pending inputs until the atomic runs
+          // reply classifies them. Deleting them here would make the reply's
+          // owner guard reject the very evidence this request captured.
+          let conv = conv.clear_streams()
+          { ..conv, compaction: NotCompacting, }
         } else {
           conv
         }
       })
-      let model = model.replace_device({
+      let model = recovery_model.replace_device({
         ..dev,
         bridge: Connected,
         reconnect_failures: 0,
         connection_generation,
+        runs_request_generation,
+        steer_ledger_ready: if msg is BridgeReady {
+          false
+        } else {
+          dev.steer_ledger_ready
+        },
+        steer_ledger_id: if msg is BridgeReady {
+          None
+        } else {
+          dev.steer_ledger_id
+        },
         sessions_request_generation,
         archived_request_generation,
         projects_request_generation,
@@ -5144,15 +5302,33 @@ fn update_device_msg(
       // re-reads now, every other one re-reads when opened (`OpenSession`
       // always reloads). An in-flight user load keeps right of way.
       let model = if channel == model.focused {
+        // A foreground OpenSession keeps the previous conversation active
+        // until its target snapshot lands. Fence that actual in-flight owner
+        // as well: its cut may predate this boundary even though it is not yet
+        // `active_session`.
+        let model = match model.loading_conversation {
+          Some(owner) if owner.channel == channel =>
+            match model.find_conversation(channel, owner.session) {
+              Some(conv) if conv.sync is Reloading(..) => {
+                let (model, _) = model.ensure_transcript_reload_after_current(
+                  conv,
+                )
+                model
+              }
+              _ => model
+            }
+          _ => model
+        }
         match model.find_conversation(channel, model.active_session) {
-          Some(conv) if (
-              model.can_reload_transcript(conv) || conv.sync is Reloading(..)
-            ) &&
+          Some(conv) if conv.sync is Reloading(..) => {
+            // A read already in flight may have taken its cut before this
+            // boundary. This includes a foreground `session.load`: it keeps
+            // right of way, but must schedule one post-boundary generation.
+            let (model, _) = model.ensure_transcript_reload_after_current(conv)
+            model
+          }
+          Some(conv) if model.can_reload_transcript(conv) &&
             model.loading_conversation is None => {
-            // A real engine pump can restart while the transport remains
-            // open. If an older read is already in flight, it may carry a
-            // pre-ready cut, so require one follow-up generation rather than
-            // treating the old single-flight request as sufficient.
             let (model, generation) = model.ensure_transcript_reload_after_current(
               conv,
             )
@@ -5218,7 +5394,16 @@ fn update_device_msg(
           dispatch(FromDevice(channel, ReconnectDue(websocket_epoch~))),
           reconnect_delay(failures),
         ),
-        model.replace_device({ ..dev, bridge, reconnect_failures: failures, }),
+        model.replace_device({
+          ..dev,
+          bridge,
+          reconnect_failures: failures,
+          // The replacement socket can become writable before its BridgeReady
+          // notification is reduced. Fence Send at the first observed loss so
+          // no H2 request can carry H1's cached ledger identity.
+          steer_ledger_ready: false,
+          steer_ledger_id: None,
+        }),
       )
     }
     ReconnectDue(websocket_epoch~) => {
@@ -5340,23 +5525,37 @@ fn update_device_msg(
     }
     SteerUndelivered(session~, submission_id~, text~, run_id~) => {
       // The response path failed and the host may or may not have taken the
-      // steer. Neither answer is knowable here and neither is worth guessing
-      // at: the entry ends, and the transcript says what actually happened.
+      // steer. Keep exact ownership and ask the reconnect-safe ledger; ending
+      // the entry here used to lose the only draft when no receipt followed.
       ignore(text)
+      guard model.find_conversation(channel, session) is Some(conv) &&
+        conv.pending_steers
+        .iter()
+        .any(input => input.matches_receipt(submission_id, Some(run_id))) else {
+        return (@cmd.none, model)
+      }
+      // Keep the dead-response fact on the owner, not just this one frontier.
+      // A newer resync boundary can invalidate the request before it replies.
+      let model = model.replace_conversation(
+        conv.lose_steer_response(submission_id, Some(run_id)),
+      )
+      let frontier = model.run_snapshot_frontier(
+        channel,
+        definitive_steer_id=submission_id,
+      )
+      request_runs_refresh(dispatch, channel, model, frontier)
+    }
+    SteerAccepted(session~, submission_id~, run_id~) =>
       if model.find_conversation(channel, session) is Some(conv) {
-        let (next, changed) = conv.acknowledge_steer(
-          submission_id,
-          Some(run_id),
+        (
+          @cmd.none,
+          model.replace_conversation(
+            conv.accept_steer(submission_id, Some(run_id), dev.steer_ledger_id),
+          ),
         )
-        if changed {
-          (@cmd.none, model.replace_conversation(next))
-        } else {
-          (@cmd.none, model)
-        }
       } else {
         (@cmd.none, model)
       }
-    }
     SteerRejected(session~, submission_id~, run_id~) =>
       // A concrete `steered:false` cannot later commit. Retire the queue entry
       // and restore its exact draft; a later same-text submission is unrelated.
@@ -5381,7 +5580,15 @@ fn update_device_msg(
       // then ask for the saved settlement so the ordinary Finished path can
       // recover its outcome and refresh the transcript. A successor that won
       // the race has another id and is left untouched by the guard above.
-      let closed = conv.clear_streams().forget_steers_for_run(run_id)
+      // Preserve exact steer owners through the recovery request. A retained
+      // dropped row must restore its draft; applied/unknown rows must retire it
+      // without resubmission. Clearing before capturing the selector loses all
+      // three outcomes and can silently discard known-rejected input.
+      let frontier = model.run_snapshot_frontier(
+        channel,
+        definitive_lifecycle_session=conv.session_id,
+      )
+      let closed = conv.clear_streams()
       let closed = if closed.pending_approval
         is Some({ run_id: Some(owner), .. }) &&
         owner == run_id {
@@ -5394,15 +5601,7 @@ fn update_device_msg(
         run: NoRun(ended=None),
         last_run_id: Some(run_id),
       })
-      (
-        fetch_runs(
-          dispatch,
-          channel,
-          updated.run_snapshot_frontier(channel),
-          dev.connection_generation,
-        ),
-        updated,
-      )
+      request_runs_refresh(dispatch, channel, updated, frontier)
     }
     CancelFailed(run_id~, message~) => {
       guard model.conversation_by_run(channel, run_id) is Some(conv) &&
@@ -5417,18 +5616,13 @@ fn update_device_msg(
         run: Open(run_id~, stage=AtStep(None)),
       })
       let (notice, notified) = retryable.notify_error(dispatch, message)
-      (
-        @cmd.batch([
-          notice,
-          fetch_runs(
-            dispatch,
-            channel,
-            notified.run_snapshot_frontier(channel),
-            dev.connection_generation,
-          ),
-        ]),
+      let (runs, refreshed) = request_runs_refresh(
+        dispatch,
+        channel,
         notified,
+        notified.run_snapshot_frontier(channel),
       )
+      (@cmd.batch([notice, runs]), refreshed)
     }
     SessionsLoaded(items, connection_generation~, request_generation~) => {
       guard connection_generation == dev.connection_generation &&
@@ -5945,6 +6139,19 @@ fn update_device_msg(
           active.project(),
         )
       }
+      let archived_conversations = next.conversations.copy()
+      for conv in archived_conversations {
+        if conv.device == channel &&
+          archived_now(conv.session_id, conv.project()) &&
+          !conv.is_archived_read_only() {
+          next = replace_archived_background(
+            next,
+            channel,
+            conv.session_id,
+            conv.project(),
+          )
+        }
+      }
       let conversations = next.conversations.filter(conv => {
         conv.device != channel ||
         !archived_now(conv.session_id, conv.project()) ||
@@ -6004,6 +6211,20 @@ fn update_device_msg(
           fresh_session,
           key.workspace,
         )
+      }
+      let deleting = tombstoned.conversations.copy()
+      for conv in deleting {
+        if conv.device == channel &&
+          conv.project() == key.workspace &&
+          sessions.contains(conv.session_id) &&
+          !conv.is_archived_read_only() {
+          tombstoned = replace_archived_background(
+            tombstoned,
+            channel,
+            conv.session_id,
+            key.workspace,
+          )
+        }
       }
       if tombstoned.device_state(channel) is Some(ndev) {
         tombstoned = tombstoned.replace_device({
@@ -6077,7 +6298,14 @@ fn update_device_msg(
         return (commands, model)
       }
       if change == "deleted" {
-        let mut changed = model
+        // Append the exact archive retirement while its owner still exists.
+        // Active and background replacements below must record this generation
+        // so delayed component actions follow the same handoff.
+        let mut changed = model.with_archive_override(
+          channel,
+          key,
+          ArchiveDeleted,
+        )
         if channel == changed.focused &&
           changed.active_session == key.session &&
           changed.find_conversation(channel, key.session) is Some(active) &&
@@ -6091,8 +6319,17 @@ fn update_device_msg(
             key.workspace,
           )
         }
-        let sessions = dev.sessions.filter(item => !key.matches(item))
-        let archived = dev.archived.filter(item => !key.matches(item))
+        changed = replace_archived_background(
+          changed,
+          channel,
+          key.session,
+          key.workspace,
+        )
+        guard changed.device_state(channel) is Some(changed_dev) else {
+          return (commands, changed)
+        }
+        let sessions = changed_dev.sessions.filter(item => !key.matches(item))
+        let archived = changed_dev.archived.filter(item => !key.matches(item))
         let conversations = changed.conversations.filter(conv => {
           conv.device != channel ||
           conv.session_id != key.session ||
@@ -6103,9 +6340,7 @@ fn update_device_msg(
             None
           other => other
         }
-        let next = changed
-          .replace_device({ ..dev, sessions, archived, })
-          .with_archive_override(channel, key, ArchiveDeleted)
+        let next = changed.replace_device({ ..changed_dev, sessions, archived, })
         return (
           commands,
           { ..next, conversations, archived_delete_confirm: confirm, },
@@ -6177,12 +6412,6 @@ fn update_device_msg(
       // placeholder archived entry also blocks a late session.event from
       // rematerializing it during this window.
       let sessions = dev.sessions.filter(item => !key.matches(item))
-      let conversations = model.conversations.filter(conv => {
-        conv.device != channel ||
-        conv.session_id != key.session ||
-        conv.project() != key.workspace ||
-        conv.is_archived_read_only()
-      })
       let archived = dev.archived.copy()
       if !archived.iter().any(item => key.matches(item)) {
         let mut item : @transcript.SessionListItem = {
@@ -6211,14 +6440,7 @@ fn update_device_msg(
         model.find_conversation(channel, key.session) is Some(active) &&
         active.project() == key.workspace &&
         !active.is_archived_read_only()
-      let next = {
-        ..overridden,
-        conversations: if active_archived {
-          model.conversations
-        } else {
-          conversations
-        },
-      }
+      let next = overridden
       if active_archived && fresh_session is Some(fresh) {
         (
           commands,
@@ -6231,7 +6453,19 @@ fn update_device_msg(
           ),
         )
       } else {
-        (commands, { ..next, conversations, })
+        let salvaged = replace_archived_background(
+          next,
+          channel,
+          key.session,
+          key.workspace,
+        )
+        let conversations = salvaged.conversations.filter(conv => {
+          conv.device != channel ||
+          conv.session_id != key.session ||
+          conv.project() != key.workspace ||
+          conv.is_archived_read_only()
+        })
+        (commands, { ..salvaged, conversations, })
       }
     }
     SessionLoaded(
@@ -6615,12 +6849,7 @@ fn update_device_msg(
         // rejection must remain able to restore that draft.
         Starting(..) => (conv, true, false)
         Open(run_id=current, ..) if current == run_id => (conv, false, false)
-        Open(run_id=previous_run, ..) =>
-          (
-            conv.clear_streams().forget_steers_for_run(previous_run),
-            true,
-            false,
-          )
+        Open(..) => (conv.clear_streams(), true, false)
         NoRun(..) if existing.last_run_id is Some(last) && last == run_id =>
           (conv, false, true)
         NoRun(..) => (conv, true, false)
@@ -6739,26 +6968,181 @@ fn update_device_msg(
     RunsLoaded(
       runs~,
       settled~,
+      steers~,
+      steer_recovery_supported~,
+      steer_ledger_id~,
       approvals~,
       live~,
       frontier~,
-      connection_generation~
+      connection_generation~,
+      request_generation~
     ) => {
-      guard connection_generation == dev.connection_generation else {
+      guard connection_generation == dev.connection_generation &&
+        request_generation <= dev.runs_request_generation else {
         return (@cmd.none, model)
+      }
+      let advances_ledger = match dev.runs_applied_generation {
+        None => true
+        Some(applied) => request_generation > applied
       }
       // Accept the snapshot as one state transition. No intermediate replayed
       // Started row is rendered, and a later BridgeReady invalidates both its
       // positive rows and its negative frontier together.
       let commands : Array[@cmd.Cmd] = []
       let mut next = model
+      // Reconcile only request-time steer owners. A row is host evidence that
+      // the exact command remains pending or reached one of its two terminal
+      // receipts. Absence is actionable only for the exact owner whose RPC is
+      // dead (or whose accepted reply proved a row had to exist); it says
+      // nothing about a different live request that this snapshot may have
+      // overtaken. Entries born after the frontier are deliberately untouched.
+      let mut recovered_unconfirmed_steer = false
+      for captured in frontier {
+        for owner in captured.steers {
+          guard next.find_conversation(channel, captured.session) is Some(conv) &&
+            captured.owns(conv) &&
+            conv.pending_steers
+            .iter()
+            .any(input => {
+              input.matches_receipt(owner.submission_id, Some(owner.run_id))
+            }) else {
+            continue
+          }
+          let mut recovered : RecoveredSteerSettlement? = None
+          for settlement in steers {
+            if settlement.session == captured.session &&
+              settlement.run_id == owner.run_id &&
+              settlement.submission_id == owner.submission_id {
+              recovered = Some(settlement)
+              break
+            }
+          }
+          let conv = match recovered {
+            Some({ status: RecoveredSteerPending, .. }) =>
+              conv.accept_steer(
+                owner.submission_id,
+                Some(owner.run_id),
+                steer_ledger_id,
+              )
+            Some({ status: RecoveredSteerApplied, .. }) => {
+              commands.push(
+                acknowledge_steer_settlement(
+                  channel,
+                  captured.session,
+                  owner.run_id,
+                  owner.submission_id,
+                ),
+              )
+              let (conv, _) = conv.acknowledge_steer(
+                owner.submission_id,
+                Some(owner.run_id),
+              )
+              conv
+            }
+            Some({ status: RecoveredSteerDropped, .. }) => {
+              commands.push(
+                acknowledge_steer_settlement(
+                  channel,
+                  captured.session,
+                  owner.run_id,
+                  owner.submission_id,
+                ),
+              )
+              let (conv, _) = conv.reject_steer(
+                owner.submission_id,
+                Some(owner.run_id),
+              )
+              conv
+            }
+            Some({ status: RecoveredSteerUnknown, .. }) => {
+              commands.push(
+                acknowledge_steer_settlement(
+                  channel,
+                  captured.session,
+                  owner.run_id,
+                  owner.submission_id,
+                ),
+              )
+              let (conv, _) = conv.acknowledge_steer(
+                owner.submission_id,
+                Some(owner.run_id),
+              )
+              conv
+            }
+            // An older host cannot replay steer ownership at all. Keep it only
+            // while its exact receipt path is live. Once a full bridge
+            // replacement ended that path, retire the indefinite pending row,
+            // restore the draft, and report its ambiguity below.
+            None if !steer_recovery_supported && owner.receipt_path_lost => {
+              let (conv, recovered) = conv.recover_unconfirmed_steer(
+                owner.submission_id,
+                Some(owner.run_id),
+              )
+              recovered_unconfirmed_steer = recovered_unconfirmed_steer ||
+                recovered
+              conv
+            }
+            // Its response or notification can still arrive on this bridge,
+            // so absence of an unsupported wire field proves nothing yet.
+            None if !steer_recovery_supported => conv
+            // Both sides named a ledger and they differ: the request belonged
+            // to a host process that no longer exists. Its outcome is
+            // intrinsically ambiguous, so retire the display owner without
+            // restoring text that may already be durable on disk.
+            None if owner.steer_ledger_id is Some(expected_ledger_id) &&
+              steer_ledger_id is Some(current_ledger_id) &&
+              expected_ledger_id != current_ledger_id => {
+              let (conv, _) = conv.acknowledge_steer(
+                owner.submission_id,
+                Some(owner.run_id),
+              )
+              conv
+            }
+            None if owner.absence_is_definitive &&
+              owner.steer_ledger_id is Some(expected_ledger_id) &&
+              steer_ledger_id == Some(expected_ledger_id) => {
+              let (conv, _) = conv.reject_steer(
+                owner.submission_id,
+                Some(owner.run_id),
+              )
+              conv
+            }
+            None => conv
+          }
+          next = next.replace_conversation(conv)
+        }
+      }
+      if recovered_unconfirmed_steer {
+        let (notice, notified) = next.notify_error(
+          dispatch,
+          SteerUnconfirmedRecoveryNotice,
+        )
+        commands.push(notice)
+        next = notified
+      }
+      // Snapshot lifecycle reducers may clear the run they describe. Preserve
+      // every exact steer that remains after reconciliation: captured pending
+      // host work and entries created after the request are both newer than a
+      // blanket lifecycle clear. A receipt reduced before this point already
+      // removed its entry and cannot be resurrected.
+      let surviving_pending_steers : Map[String, Array[PendingSteer]] = Map([])
+      for captured in frontier {
+        if next.find_conversation(channel, captured.session) is Some(conv) &&
+          captured.owns(conv) &&
+          !conv.pending_steers.is_empty() {
+          surviving_pending_steers[captured.session] = conv.pending_steers.copy()
+        }
+      }
+      let snapshot_model = next
       let accepted_settlements : Array[RecoveredSettlement] = []
       let settled_sessions : Array[String] = []
       for settlement in settled {
         if !accepted_settlements
           .iter()
           .any(item => item.run_id == settlement.run_id) &&
-          model.matched_settlement_frontier(channel, frontier, settlement)
+          snapshot_model.matched_settlement_frontier(
+            channel, frontier, settlement,
+          )
           is Some(_) {
           accepted_settlements.push(settlement)
           if !settled_sessions.contains(settlement.session) {
@@ -6776,9 +7160,41 @@ fn update_device_msg(
         let duplicates_settlement = accepted_settlements
           .iter()
           .any(item => item.session == run.session && item.run_id == run.run_id)
+        // The exact captured lifecycle may settle in the same atomic reply
+        // that reports its active successor. This covers both a Starting
+        // submission advanced to its predecessor run and CancelNotOpen's
+        // captured Open owner closed locally before resync. The active row
+        // beside that admitted settlement is authoritative, not stale.
+        let captured_lifecycle_is_settled = accepted_settlements
+          .iter()
+          .any(item => {
+            item.session == run.session &&
+            snapshot_model.matched_settlement_frontier(channel, frontier, item)
+            is Some(_)
+          })
+        let definitively_closed_predecessor = frontier
+          .iter()
+          .any(captured => {
+            captured.session == run.session &&
+            captured.lifecycle_absence_is_definitive &&
+            snapshot_model.find_conversation(channel, run.session) is Some(conv) &&
+            captured.owns(conv) &&
+            captured.state is SnapshotOpen(run_id=predecessor) &&
+            conv.run is NoRun(..) &&
+            conv.last_run_id == Some(predecessor) &&
+            run.run_id != predecessor
+          })
         if !duplicates_settlement &&
           !admitted_run_sessions.contains(run.session) &&
-          model.matches_run_snapshot_frontier(channel, frontier, run.session) {
+          (
+            snapshot_model.matches_run_snapshot_frontier(
+              channel,
+              frontier,
+              run.session,
+            ) ||
+            captured_lifecycle_is_settled ||
+            definitively_closed_predecessor
+          ) {
           accepted_runs.push(run)
           admitted_run_sessions.push(run.session)
         }
@@ -6793,19 +7209,25 @@ fn update_device_msg(
       // submission-owned completion that controls the current composer gate.
       let ordered_settlements : Array[RecoveredSettlement] = []
       for settlement in accepted_settlements {
-        if model.matched_settlement_frontier(channel, frontier, settlement)
+        if snapshot_model.matched_settlement_frontier(
+            channel, frontier, settlement,
+          )
           is Some(SettlementByRun) {
           ordered_settlements.push(settlement)
         }
       }
       for settlement in accepted_settlements {
-        if model.matched_settlement_frontier(channel, frontier, settlement)
+        if snapshot_model.matched_settlement_frontier(
+            channel, frontier, settlement,
+          )
           is Some(SettlementBySubmission(_)) {
           ordered_settlements.push(settlement)
         }
       }
       for settlement in ordered_settlements {
-        guard model.matched_settlement_frontier(channel, frontier, settlement)
+        guard snapshot_model.matched_settlement_frontier(
+            channel, frontier, settlement,
+          )
           is Some(owner) else {
           continue
         }
@@ -6888,7 +7310,13 @@ fn update_device_msg(
         // Anything else is newer truth than the reply, live events having
         // landed meanwhile.
         let captured = match captured_by_session.get(recovered.session) {
-          Some(row) => row.pending_approval_id
+          Some(owner) => {
+            guard owner.owns(conv) else { continue }
+            owner.pending_approval_id
+          }
+          // A fresh page can learn this conversation from the positive run row
+          // in the same reply. With no displaced owner to confuse, absence from
+          // the frontier remains the intentional join path.
           None => None
         }
         guard showing == captured else { continue }
@@ -6930,7 +7358,8 @@ fn update_device_msg(
         if approvals.iter().any(item => item.approval.id == captured_id) {
           continue
         }
-        guard seeded.find_conversation(channel, captured.session) is Some(conv) else {
+        guard seeded.find_conversation(channel, captured.session) is Some(conv) &&
+          captured.owns(conv) else {
           continue
         }
         if conv.pending_approval is Some(current) && current.id == captured_id {
@@ -6940,7 +7369,40 @@ fn update_device_msg(
           })
         }
       }
+      // Re-attach only still-live RPC ownership after the lifecycle snapshot
+      // has converged. Positive settlements and replacement Started rows may
+      // legitimately change the run phase, but they do not settle these
+      // request promises; their eventual exact replies do.
+      for session, pending_steers in surviving_pending_steers {
+        if seeded.find_conversation(channel, session) is Some(conv) {
+          seeded = seeded.replace_conversation({
+            ..conv,
+            pending_steers: pending_steers.copy(),
+          })
+        }
+      }
+      let seeded = if advances_ledger &&
+        seeded.device_state(channel) is Some(current_dev) {
+        seeded.replace_device({
+          ..current_dev,
+          steer_ledger_ready: true,
+          steer_ledger_id,
+          runs_applied_generation: Some(request_generation),
+        })
+      } else {
+        seeded
+      }
       (@cmd.batch(commands), seeded)
+    }
+    RunsFailed(frontier~, connection_generation~, request_generation~) => {
+      guard connection_generation == dev.connection_generation &&
+        request_generation <= dev.runs_request_generation else {
+        return (@cmd.none, model)
+      }
+      let (retry, next) = request_runs_refresh(
+        dispatch, channel, model, frontier,
+      )
+      (@cmd.delay(retry, RunsRetryDelayMs), next)
     }
     RunsSettled(live~, frontier~) => {
       // A conversation still showing an open run the host no longer has: the
@@ -6956,28 +7418,31 @@ fn update_device_msg(
           return conv
         }
         for captured in frontier {
-          if captured.session == conv.session_id {
+          if captured.session == conv.session_id && captured.owns(conv) {
             return match captured.state {
               SnapshotOpen(run_id~) if conv.run is Open(run_id=current, ..) &&
                 current == run_id &&
-                !live.contains(run_id) =>
-                // The runs reply proves this run is over. Its submissions can
-                // no longer acquire a receipt, so they end with it; the
-                // transcript, not a local notice, says what the run recorded.
+                !live.contains(run_id) => {
+                // The runs reply proves only that this lifecycle is over.
+                // Exact input ownership was reconciled independently above;
+                // it must survive long enough for a trailing receipt.
+                let settled = conv.clear_streams()
                 {
-                  ..conv.clear_streams().forget_steers_for_run(run_id),
+                  ..settled,
                   run: NoRun(ended=None),
                   last_run_id: Some(run_id),
                 }
+              }
               SnapshotIdle(last_run_id=Some(run_id)) if conv.run is NoRun(..) &&
                 conv.last_run_id is Some(current) &&
                 current == run_id =>
                 // The run this conversation last owned is idle at the host,
                 // so nothing it carried is still in flight.
-                conv.forget_steers_for_run(run_id)
+                conv
               SnapshotStarting(submission_id~) if conv.run
                 is Starting(submission_id=current) &&
-                current == submission_id => {
+                current == submission_id &&
+                captured.lifecycle_absence_is_definitive => {
                 // The host has no record of this start, so the prompt never
                 // opened a run. Close the local lifecycle and let the entry
                 // go with it.
@@ -7011,6 +7476,8 @@ fn update_device_msg(
             model.conversation_by_pending_steer(channel, submission_id, id)
           SteerDropped(submission_id=Some(submission_id), ..) =>
             model.conversation_by_pending_steer(channel, submission_id, id)
+          SteerUnconfirmed(submission_id=Some(submission_id), ..) =>
+            model.conversation_by_pending_steer(channel, submission_id, id)
           _ => None
         }
         if exact is Some(conv) {
@@ -7031,6 +7498,27 @@ fn update_device_msg(
         None
       }
       if conv is Some(conv) {
+        let steer_ack = match (run_id, event) {
+          (Some(owner_run), SteerApplied(submission_id=Some(submission_id), ..))
+          | (
+            Some(owner_run),
+            SteerDropped(submission_id=Some(submission_id), ..),
+          )
+          | (
+            Some(owner_run),
+            SteerUnconfirmed(submission_id=Some(submission_id), ..),
+          ) =>
+            if conv.pending_steers
+              .iter()
+              .any(input => {
+                input.matches_receipt(submission_id, Some(owner_run))
+              }) {
+              Some((owner_run, submission_id))
+            } else {
+              None
+            }
+          _ => None
+        }
         let approval_notification = approval_system_notification(
           channel, run_id, event,
         )
@@ -7061,7 +7549,17 @@ fn update_device_msg(
           }
           (command, updated)
         }
-        (@cmd.batch([finished_cmd, report_cmd]), updated)
+        let ack_cmd = match steer_ack {
+          Some((owner_run, submission_id)) =>
+            acknowledge_steer_settlement(
+              channel,
+              conv.session_id,
+              owner_run,
+              submission_id,
+            )
+          None => @cmd.none
+        }
+        (@cmd.batch([finished_cmd, report_cmd, ack_cmd]), updated)
       } else {
         (@cmd.none, model)
       }
@@ -7157,11 +7655,7 @@ fn update_device_msg(
         // the reload below is what answers it.
         ignore(status)
         ignore(exit_code)
-        let closed = if owns_lifecycle {
-          conv.forget_steers_for_run(run_id)
-        } else {
-          conv
-        }
+        let closed = conv
         let next = if owns_lifecycle {
           match closed.run {
             Starting(..) | Open(..) =>
@@ -7181,15 +7675,13 @@ fn update_device_msg(
         let (sessions, model) = request_sessions_refresh(
           dispatch, channel, model,
         )
-        let commands = [
-          sessions,
-          fetch_runs(
-            dispatch,
-            channel,
-            model.run_snapshot_frontier(channel),
-            dev.connection_generation,
-          ),
-        ]
+        let (runs, model) = request_runs_refresh(
+          dispatch,
+          channel,
+          model,
+          model.run_snapshot_frontier(channel),
+        )
+        let commands = [sessions, runs]
         if generation is Some(generation) {
           commands.push(
             session_snapshot_command(
@@ -7223,15 +7715,13 @@ fn update_device_msg(
           let (sessions, updated) = request_sessions_refresh(
             dispatch, channel, updated,
           )
-          let commands = [
-            sessions,
-            fetch_runs(
-              dispatch,
-              channel,
-              updated.run_snapshot_frontier(channel),
-              dev.connection_generation,
-            ),
-          ]
+          let (runs, updated) = request_runs_refresh(
+            dispatch,
+            channel,
+            updated,
+            updated.run_snapshot_frontier(channel),
+          )
+          let commands = [sessions, runs]
           if changed {
             commands.push(@cmd.none)
           }
@@ -7370,14 +7860,19 @@ fn update_device_msg(
         let first_finish = !(conv.run is NoRun(ended=Some(RunFinished(_))) &&
           conv.last_run_id is Some(last) &&
           last == run_id)
-        // Missing receipts are not guessed dropped. Keep exact-id ownership
-        // briefly and show a truthful unconfirmed notice behind the durable
-        // terminal boundary; a trailing receipt may still settle it.
-        //
-        // The run is over, so nothing it carried can still acquire a receipt.
-        // Whether each submission reached the store is the record's question;
-        // the transcript answers it without a local placeholder.
-        let settled_inputs = conv.clear_streams().forget_steers_for_run(run_id)
+        // Recovered settlements and live Finished notifications can carry the
+        // same boundary on independent queues. The first one owns every
+        // terminal side effect, including the steer-ledger refresh.
+        if !first_finish {
+          return (@cmd.none, model)
+        }
+        // Finished intentionally precedes the engine's trailing steer receipt
+        // drain. Keep exact-id ownership across this lifecycle boundary; the
+        // receipt or the host ledger below is what may apply or restore it.
+        let had_pending_steer = conv.pending_steers
+          .iter()
+          .any(input => input.run_id == Some(run_id))
+        let settled_inputs = conv.clear_streams()
         // A question belonging to this run goes with it. The engine settles
         // its own on the way out, so what reaches here is the engine that
         // could not — a killed process emits no `approval_resolved` — and
@@ -7416,6 +7911,20 @@ fn update_device_msg(
         )
         next = probed
         let commands = [sessions, branch_cmd]
+        // Finished intentionally precedes trailing steer receipts. Keep the
+        // exact owners and query the host ledger: current hosts classify them,
+        // while an older host's absent capability safely retires them without
+        // restoring a draft that may already be durable.
+        if had_pending_steer {
+          let (runs, refreshed) = request_runs_refresh(
+            dispatch,
+            channel,
+            next,
+            next.run_snapshot_frontier(channel),
+          )
+          commands.push(runs)
+          next = refreshed
+        }
         // Only the embedded desktop page owns system notifications. Remote
         // browser pages never have the notification extension, and replaying
         // the same Finished boundary must not post a second notification.
@@ -7589,6 +8098,8 @@ fn test_model() -> Model {
       {
         ..empty_device_state(@interop.ChannelId::Local),
         bridge: Connected,
+        steer_ledger_ready: true,
+        steer_ledger_id: Some("test-ledger"),
         projects: [@interop.ChannelId::Local.test_project()],
         worktrees: [@interop.ChannelId::Local.test_worktrees()],
       },
@@ -7874,12 +8385,14 @@ fn with_pending_steers(
   conv : Conversation,
   texts : Array[String],
   run_id? : String = "r7",
+  steer_ledger_id? : String = "test-ledger",
 ) -> Conversation {
   let mut next = conv
   for index, text in texts {
     next = next.enqueue_steer(
       "test-steer-" + index.to_string(),
       Some(run_id),
+      Some(steer_ledger_id),
       text,
       text,
       [],
@@ -9287,7 +9800,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
 test "BridgeReady clears every non-replayable stream and compaction phase" {
   let dispatch = test_dispatch()
   let active = {
-    ..test_conversation(),
+    ..with_pending_steers(running_conversation(), ["recover after reconnect"]),
     compaction: Queued,
     turn: {
       ..test_conversation().turn,
@@ -9318,6 +9831,7 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
     assert_eq(conv.turn.streaming_response, None)
     assert_true(conv.compaction is NotCompacting)
   }
+  inspect(next.active().pending_steers.length(), content="1")
 }
 
 ///|
@@ -9511,7 +10025,14 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
   let channel : @interop.ChannelId = Remote("d1")
   let model = {
     ..initial_model(),
-    devices: [{ ..empty_device_state(channel), bridge: Connected, }],
+    devices: [
+      {
+        ..empty_device_state(channel),
+        bridge: Connected,
+        steer_ledger_ready: true,
+        steer_ledger_id: Some("departed-host"),
+      },
+    ],
     focused: channel,
   }
   let (_, one) = update(
@@ -9519,6 +10040,8 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
     FromDevice(channel, ChannelDown(websocket_epoch=0)),
     model,
   )
+  assert_false(one.dev().steer_ledger_ready)
+  assert_eq(one.dev().steer_ledger_id, None)
   let (_, due) = update(
     dispatch,
     FromDevice(channel, ReconnectDue(websocket_epoch=0)),
@@ -10723,9 +11246,10 @@ test "a distinct started id replaces a stale open run as foreign" {
     fail("expected the new run to replace the stale id")
   }
   assert_eq(next.active().turn.streaming_response, None)
-  inspect(next.active().pending_steers.length(), content="0")
-  // The replaced run took its pending input with it and left no placeholder:
-  // what the turn actually recorded is in the transcript.
+  inspect(next.active().pending_steers.length(), content="1")
+  // Lifecycle replacement does not erase an exact receipt owner. A trailing
+  // applied/dropped/unconfirmed event still settles it without touching the
+  // new run.
   guard next.active().sync is Reloading(generation=1, attempt=1, ..) else {
     fail("a foreign replacement did not refresh the transcript")
   }
@@ -11088,14 +11612,22 @@ test "runs settled closes runs the host no longer has, sparing live and starting
     RunsSettled(live=["r7"], frontier=[
       {
         session: "desktop-test",
+        workspace: @interop.ChannelId::Local.test_project(),
+        record: LiveRecord,
         state: SnapshotOpen(run_id="r7"),
+        lifecycle_absence_is_definitive: true,
         initial_ids: [],
+        steers: [],
         pending_approval_id: None,
       },
       {
         session: "desktop-stale",
+        workspace: @interop.ChannelId::Local.test_project(),
+        record: LiveRecord,
         state: SnapshotOpen(run_id="r9"),
+        lifecycle_absence_is_definitive: true,
         initial_ids: [],
+        steers: [],
         pending_approval_id: None,
       },
     ]),
@@ -11132,17 +11664,1077 @@ test "reconnect runs snapshot settles only its captured Starting submission" {
     BridgeReady,
     test_model().replace_conversation(conv),
   )
-  // The gap ended the entry: no receipt can cross it.
-  inspect(bridged.active().pending_steers.length(), content="0")
+  // The snapshot owns the entry until it classifies the dead request path.
+  assert_true(bridged.active().pending_prompt is Some(_))
   let (_, settled) = update_dev(
     dispatch,
     RunsSettled(
       live=[],
-      frontier=bridged.run_snapshot_frontier(@interop.ChannelId::Local),
+      frontier=bridged.run_snapshot_frontier(
+        @interop.ChannelId::Local,
+        lifecycle_absence_is_definitive=true,
+      ),
     ),
     bridged,
   )
   assert_true(settled.active().run is NoRun(ended=None))
+}
+
+///|
+test "CancelNotOpen recovery scopes definitive absence to its conversation" {
+  let other = with_pending_steers(
+    with_pending_prompt(
+      {
+        ..empty_conversation(
+          @interop.ChannelId::Local,
+          "desktop-other",
+          @interop.ChannelId::Local.test_project(),
+        ),
+        run: Starting(submission_id="other-start"),
+      },
+      "other-start",
+      "other prompt",
+    ),
+    ["other steer"],
+    run_id="other-predecessor",
+  )
+  let before = running_model().replace_conversation(other)
+  let frontier = before.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    definitive_lifecycle_session="desktop-test",
+  )
+  let mut saw_target = false
+  let mut saw_other = false
+  for captured in frontier {
+    if captured.session == "desktop-test" {
+      saw_target = true
+      assert_true(captured.lifecycle_absence_is_definitive)
+    } else if captured.session == "desktop-other" {
+      saw_other = true
+      assert_false(captured.lifecycle_absence_is_definitive)
+      guard captured.steers is [owner] else {
+        fail("the other conversation's steer owner was not captured")
+      }
+      assert_false(owner.absence_is_definitive)
+    }
+  }
+  assert_true(saw_target && saw_other)
+  // This is the state immediately after CancelNotOpen closes only its exact
+  // run, while the request-time frontier above remains attached to agent.runs.
+  let after_cancel = before.replace_conversation({
+    ..before.active().clear_streams(),
+    run: NoRun(ended=None),
+    last_run_id: Some("r7"),
+  })
+  let (_, recovered) = update_dev(
+    test_dispatch(),
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=after_cancel.dev().connection_generation,
+      request_generation=0,
+    ),
+    after_cancel,
+  )
+  guard recovered.find_conversation(@interop.ChannelId::Local, "desktop-other")
+    is Some(kept) else {
+    fail("the unrelated conversation disappeared")
+  }
+  assert_true(kept.run is Starting(submission_id="other-start"))
+  assert_true(kept.pending_prompt is Some(_))
+  inspect(kept.pending_steers.length(), content="1")
+}
+
+///|
+test "a notification gap recovers a Finished notification dropped behind a slow page" {
+  let dispatch = test_dispatch()
+  // The host has already finished r7, but this page missed that one live
+  // notification and still presents the run as open.
+  let (_, bridged) = update_dev(dispatch, NotificationGap, running_model())
+  let frontier = bridged.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          submission_id: None,
+          status: "finished",
+        },
+      ],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=None,
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=bridged.dev().connection_generation,
+      request_generation=bridged.dev().runs_request_generation,
+    ),
+    bridged,
+  )
+  assert_true(
+    recovered.active().run is NoRun(ended=Some(RunFinished(Completed))),
+  )
+  assert_true(recovered.active().last_run_id is Some("r7"))
+}
+
+///|
+test "agent readiness distinguishes transport attach from engine restart" {
+  assert_true(
+    device_msg(@interop.ChannelId::Local, AgentConnected({ stage: Accepted, }))
+    is Some(BridgeReady),
+  )
+  assert_true(
+    device_msg(@interop.ChannelId::Local, AgentConnected({ stage: Serving, }))
+    is Some(EngineReady),
+  )
+}
+
+///|
+test "a notification gap preserves an in-flight prompt until its RPC rejects" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_prompt(
+    { ..test_conversation(), run: Starting(submission_id="still-live"), },
+    "still-live",
+    "restore this exact draft",
+  )
+  let (_, resyncing) = update_dev(
+    dispatch,
+    NotificationGap,
+    test_model().replace_conversation(conv),
+  )
+  assert_true(resyncing.active().has_initial_submission("still-live"))
+  let (_, before_reply) = update_dev(
+    dispatch,
+    RunsSettled(
+      live=[],
+      frontier=resyncing.run_snapshot_frontier(
+        @interop.ChannelId::Local,
+        lifecycle_absence_is_definitive=false,
+      ),
+    ),
+    resyncing,
+  )
+  // An empty snapshot can overtake the suspended start request. It says
+  // nothing about a promise that is still able to reject definitively.
+  assert_true(before_reply.active().run is Starting(..))
+  assert_true(before_reply.active().has_initial_submission("still-live"))
+  let (_, rejected) = update_dev(
+    dispatch,
+    StartRejected(
+      session="desktop-test",
+      submission_id="still-live",
+      message="host refused",
+    ),
+    before_reply,
+  )
+  inspect(rejected.active().task, content="restore this exact draft")
+  assert_true(rejected.active().run is NoRun(ended=Some(RunFailed)))
+}
+
+///|
+test "a notification gap preserves an in-flight steer until its RPC rejects" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(running_conversation(), ["turn left"])
+  let (_, resyncing) = update_dev(
+    dispatch,
+    NotificationGap,
+    running_model().replace_conversation(conv),
+  )
+  inspect(resyncing.active().pending_steers.length(), content="1")
+  let pending = resyncing.active().pending_steers[0]
+  let (_, before_reply) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          submission_id: None,
+          status: "finished",
+        },
+      ],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=None,
+      approvals=[],
+      live=[],
+      frontier=resyncing.run_snapshot_frontier(
+        @interop.ChannelId::Local,
+        lifecycle_absence_is_definitive=false,
+      ),
+      connection_generation=resyncing.dev().connection_generation,
+      request_generation=resyncing.dev().runs_request_generation,
+    ),
+    resyncing,
+  )
+  assert_true(before_reply.active().run is NoRun(..))
+  inspect(before_reply.active().pending_steers.length(), content="1")
+  let (_, rejected) = update_dev(
+    dispatch,
+    SteerRejected(
+      session="desktop-test",
+      submission_id=pending.submission_id,
+      run_id="r7",
+    ),
+    before_reply,
+  )
+  inspect(rejected.active().task, content="turn left")
+  inspect(rejected.active().pending_steers.length(), content="0")
+}
+
+///|
+test "a notification gap replays a lost applied steer receipt" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(running_conversation(), ["turn left"])
+  let model = running_model().replace_conversation(conv)
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=false,
+  )
+  let pending = conv.pending_steers[0]
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          submission_id: None,
+          status: "finished",
+        },
+      ],
+      steers=[
+        {
+          session: "desktop-test",
+          run_id: "r7",
+          submission_id: pending.submission_id,
+          status: RecoveredSteerApplied,
+        },
+      ],
+      steer_recovery_supported=true,
+      steer_ledger_id=None,
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+      request_generation=0,
+    ),
+    model,
+  )
+  assert_true(recovered.active().run is NoRun(..))
+  inspect(recovered.active().pending_steers.length(), content="0")
+  inspect(recovered.active().task, content="")
+}
+
+///|
+test "an unknown steer receipt retires ownership without restoring the draft" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(running_conversation(), ["maybe durable"])
+  let model = running_model().replace_conversation(conv)
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=false,
+  )
+  let pending = conv.pending_steers[0]
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[
+        {
+          session: "desktop-test",
+          run_id: "r7",
+          submission_id: pending.submission_id,
+          status: RecoveredSteerUnknown,
+        },
+      ],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+      request_generation=0,
+    ),
+    model,
+  )
+  inspect(recovered.active().pending_steers.length(), content="0")
+  inspect(recovered.active().task, content="")
+  assert_true(recovered.active().run is Open(run_id="r7", ..))
+}
+
+///|
+test "BridgeReady fences steering until the new host ledger snapshot lands" {
+  let dispatch = test_dispatch()
+  let old_host = running_model().with_dev(dev => {
+    ..dev,
+    steer_ledger_ready: true,
+    steer_ledger_id: Some("host-one"),
+  })
+  let (_, bridged) = update_dev(dispatch, BridgeReady, old_host)
+  let (_, bridged) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(provider="deepseek", has_deepseek_key=true),
+      connection_generation=None,
+    ),
+    bridged,
+  )
+  let bridged = bridged.with_dev(dev => {
+    ..dev,
+    worktrees: [@interop.ChannelId::Local.test_worktrees()],
+  })
+  assert_false(bridged.dev().steer_ledger_ready)
+  assert_eq(bridged.dev().steer_ledger_id, None)
+
+  let blocked = bridged.replace_conversation({
+    ..bridged.active(),
+    task: "must wait for host two",
+  })
+  let (_, blocked) = update(dispatch, Send, blocked)
+  inspect(blocked.active().task, content="must wait for host two")
+  inspect(blocked.active().pending_steers.length(), content="0")
+
+  let frontier = blocked.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=true,
+  )
+  let (_, ready) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("host-two"),
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=blocked.dev().connection_generation,
+      request_generation=blocked.dev().runs_request_generation,
+    ),
+    blocked,
+  )
+  assert_true(ready.dev().steer_ledger_ready)
+  assert_eq(ready.dev().steer_ledger_id, Some("host-two"))
+
+  let steerable = ready.replace_conversation({
+    ..running_conversation(),
+    task: "send on host two",
+  })
+  let (_, sent) = update(dispatch, Send, steerable)
+  inspect(sent.active().task, content="")
+  guard sent.active().pending_steers is [pending] else {
+    fail("the post-snapshot steer was not queued")
+  }
+  assert_eq(pending.steer_ledger_id, Some("host-two"))
+}
+
+///|
+test "an older same-connection runs reply cannot roll the steer ledger backward" {
+  let dispatch = test_dispatch()
+  let model = running_model().with_dev(dev => {
+    ..dev,
+    steer_ledger_ready: true,
+    steer_ledger_id: Some("ledger-zero"),
+  })
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, first_pending) = request_runs_refresh(
+    dispatch,
+    @interop.ChannelId::Local,
+    model,
+    frontier,
+  )
+  let first_generation = first_pending.dev().runs_request_generation
+  let (_, second_pending) = request_runs_refresh(
+    dispatch,
+    @interop.ChannelId::Local,
+    first_pending,
+    frontier,
+  )
+  let second_generation = second_pending.dev().runs_request_generation
+  let (_, current) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("ledger-two"),
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=second_pending.dev().connection_generation,
+      request_generation=second_generation,
+    ),
+    second_pending,
+  )
+  assert_eq(current.dev().steer_ledger_id, Some("ledger-two"))
+  let (_, stale) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("ledger-one"),
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=current.dev().connection_generation,
+      request_generation=first_generation,
+    ),
+    current,
+  )
+  assert_eq(stale.dev().steer_ledger_id, Some("ledger-two"))
+}
+
+///|
+test "an older exact recovery cut survives a newer generic runs reply" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(running_conversation(), ["recover me"])
+  let submission_id = queued.pending_steers[0].submission_id
+  let model = running_model().replace_conversation(queued)
+  let exact = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    definitive_steer_id=submission_id,
+  )
+  let (_, first_pending) = request_runs_refresh(
+    dispatch,
+    @interop.ChannelId::Local,
+    model,
+    exact,
+  )
+  let first_generation = first_pending.dev().runs_request_generation
+  let generic = first_pending.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, second_pending) = request_runs_refresh(
+    dispatch,
+    @interop.ChannelId::Local,
+    first_pending,
+    generic,
+  )
+  let second_generation = second_pending.dev().runs_request_generation
+  let (_, generic_applied) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=["r7"],
+      frontier=generic,
+      connection_generation=second_pending.dev().connection_generation,
+      request_generation=second_generation,
+    ),
+    second_pending,
+  )
+  inspect(generic_applied.active().pending_steers.length(), content="1")
+  let (_, exact_applied) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=["r7"],
+      frontier=exact,
+      connection_generation=generic_applied.dev().connection_generation,
+      request_generation=first_generation,
+    ),
+    generic_applied,
+  )
+  inspect(exact_applied.active().pending_steers.length(), content="0")
+  inspect(exact_applied.active().task, content="recover me")
+  assert_eq(
+    exact_applied.dev().runs_applied_generation,
+    Some(second_generation),
+  )
+}
+
+///|
+test "a failed runs snapshot preserves its frontier for a delayed retry" {
+  let dispatch = test_dispatch()
+  let model = running_model().with_dev(dev => {
+    ..dev,
+    steer_ledger_ready: false,
+    steer_ledger_id: None,
+  })
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=true,
+  )
+  let (_, retrying) = update_dev(
+    dispatch,
+    RunsFailed(
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+      request_generation=model.dev().runs_request_generation,
+    ),
+    model,
+  )
+  assert_false(retrying.dev().steer_ledger_ready)
+  assert_eq(retrying.dev().steer_ledger_id, None)
+  inspect(retrying.dev().runs_request_generation, content="1")
+}
+
+///|
+test "a rejected transient start reacquires the host's active run" {
+  let dispatch = test_dispatch()
+  let starting = with_pending_prompt(
+    {
+      ..test_conversation(),
+      run: Starting(submission_id="start-c"),
+      last_run_id: Some("r-a"),
+    },
+    "start-c",
+    "prompt c",
+  )
+  let (_, rejected) = update_dev(
+    dispatch,
+    StartRejected(
+      session="desktop-test",
+      submission_id="start-c",
+      message="run b is still active",
+    ),
+    test_model().replace_conversation(starting),
+  )
+  assert_true(rejected.active().run is NoRun(ended=Some(RunFailed)))
+  assert_true(rejected.dev().runs_request_generation > 0)
+  let frontier = rejected.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[
+        {
+          run_id: "r-b",
+          session: "desktop-test",
+          model: High,
+          max_steps: 1000,
+          session_root: None,
+          submission_id: None,
+        },
+      ],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=["r-b"],
+      frontier~,
+      connection_generation=rejected.dev().connection_generation,
+      request_generation=rejected.dev().runs_request_generation,
+    ),
+    rejected,
+  )
+  assert_true(recovered.active().run is Open(run_id="r-b", stage=Opened))
+}
+
+///|
+test "a successful steer RPC remains distinct from its engine receipt" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(running_conversation(), ["accepted input"])
+  let pending = conv.pending_steers[0]
+  let (_, accepted) = update_dev(
+    dispatch,
+    SteerAccepted(
+      session="desktop-test",
+      submission_id=pending.submission_id,
+      run_id="r7",
+    ),
+    running_model().replace_conversation(conv),
+  )
+  guard accepted.active().pending_steers is [steer] else {
+    fail("accepted steer left its ownership slot")
+  }
+  assert_true(steer.delivery is SteerAccepted)
+}
+
+///|
+test "negative steer recovery is authoritative only for its exact request" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(running_conversation(), [
+    "accepted draft", "unrelated live request",
+  ])
+  let accepted_id = queued.pending_steers[0].submission_id
+  let live_id = queued.pending_steers[1].submission_id
+  let conv = queued.accept_steer(accepted_id, Some("r7"), Some("test-ledger"))
+  let model = running_model().replace_conversation(conv)
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+      request_generation=0,
+    ),
+    model,
+  )
+  inspect(recovered.active().pending_steers.length(), content="1")
+  inspect(recovered.active().pending_steers[0].submission_id, content=live_id)
+  inspect(recovered.active().task, content="accepted draft")
+}
+
+///|
+test "an ambiguous steer failure lends negative authority only to its id" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(running_conversation(), [
+    "failed transport", "still live",
+  ])
+  let failed_id = queued.pending_steers[0].submission_id
+  let live_id = queued.pending_steers[1].submission_id
+  let model = running_model().replace_conversation(queued)
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    definitive_steer_id=failed_id,
+  )
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+      request_generation=0,
+    ),
+    model,
+  )
+  inspect(recovered.active().pending_steers.length(), content="1")
+  inspect(recovered.active().pending_steers[0].submission_id, content=live_id)
+  inspect(recovered.active().task, content="failed transport")
+}
+
+///|
+test "a lost steer response survives a superseding engine resync" {
+  let dispatch = test_dispatch()
+  for boundary in [EngineReady, NotificationGap] {
+    let queued = with_pending_steers(running_conversation(), ["recover me"])
+    let submission_id = queued.pending_steers[0].submission_id
+    let model = running_model().replace_conversation(queued)
+    let (_, undelivered) = update_dev(
+      dispatch,
+      SteerUndelivered(
+        session="desktop-test",
+        submission_id~,
+        text="recover me",
+        run_id="r7",
+      ),
+      model,
+    )
+    guard undelivered.active().pending_steers is [lost] else {
+      fail("lost steer owner disappeared")
+    }
+    assert_true(lost.delivery is SteerResponseLost)
+    let (_, superseded) = update_dev(dispatch, boundary, undelivered)
+    let frontier = superseded.run_snapshot_frontier(@interop.ChannelId::Local)
+    guard frontier is [{ steers: [owner], .. }] else {
+      fail("replacement resync did not capture the steer")
+    }
+    assert_true(owner.absence_is_definitive)
+    let (_, recovered) = update_dev(
+      dispatch,
+      RunsLoaded(
+        runs=[],
+        settled=[],
+        steers=[],
+        steer_recovery_supported=true,
+        steer_ledger_id=Some("test-ledger"),
+        approvals=[],
+        live=["r7"],
+        frontier~,
+        connection_generation=superseded.dev().connection_generation,
+        request_generation=superseded.dev().runs_request_generation,
+      ),
+      superseded,
+    )
+    inspect(recovered.active().pending_steers.length(), content="0")
+    inspect(recovered.active().task, content="recover me")
+  }
+}
+
+///|
+test "a host without steer recovery preserves live ownership for its reply" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(running_conversation(), ["maybe durable"])
+  let id = queued.pending_steers[0].submission_id
+  let conv = queued.accept_steer(id, Some("r7"), Some("test-ledger"))
+  let model = running_model().replace_conversation(conv)
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=false,
+      steer_ledger_id=None,
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+      request_generation=0,
+    ),
+    model,
+  )
+  inspect(recovered.active().pending_steers.length(), content="1")
+  inspect(recovered.active().task, content="")
+  let (_, rejected) = update_dev(
+    dispatch,
+    SteerRejected(session="desktop-test", submission_id=id, run_id="r7"),
+    recovered,
+  )
+  inspect(rejected.active().pending_steers.length(), content="0")
+  inspect(rejected.active().task, content="maybe durable")
+}
+
+///|
+test "a dead bridge makes an old-host steer finite and recoverable" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(running_conversation(), [
+    "check before retry",
+  ])
+  let model = running_model().replace_conversation(queued)
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, model)
+  guard reconnected.active().pending_steers is [lost] else {
+    fail("bridge replacement discarded the steer owner too early")
+  }
+  assert_true(lost.delivery is SteerResponseLost)
+  assert_true(lost.receipt_path_lost)
+  let frontier = reconnected.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=false,
+      steer_ledger_id=None,
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=reconnected.dev().connection_generation,
+      request_generation=reconnected.dev().runs_request_generation,
+    ),
+    reconnected,
+  )
+  inspect(recovered.active().pending_steers.length(), content="0")
+  inspect(recovered.active().task, content="check before retry")
+  inspect(recovered.notifications.length(), content="1")
+  assert_true(
+    recovered.notifications[0].message.contains("could not be confirmed"),
+  )
+  assert_true(recovered.notifications[0].message.contains("before resending"))
+}
+
+///|
+test "a new host ledger cannot make old accepted input absent" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(running_conversation(), ["already durable"])
+  let id = queued.pending_steers[0].submission_id
+  let conv = queued.accept_steer(id, Some("r7"), Some("test-ledger"))
+  let model = running_model().replace_conversation(conv)
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=true,
+  )
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("replacement-host-ledger"),
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+      request_generation=0,
+    ),
+    model,
+  )
+  inspect(recovered.active().pending_steers.length(), content="0")
+  inspect(recovered.active().task, content="")
+}
+
+///|
+test "a notification gap replays a lost dropped steer receipt" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(running_conversation(), ["turn right"])
+  let model = running_model().replace_conversation(conv)
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=false,
+  )
+  let pending = conv.pending_steers[0]
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[
+        {
+          session: "desktop-test",
+          run_id: "r7",
+          submission_id: pending.submission_id,
+          status: RecoveredSteerDropped,
+        },
+      ],
+      steer_recovery_supported=true,
+      steer_ledger_id=None,
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+      request_generation=0,
+    ),
+    model,
+  )
+  inspect(recovered.active().pending_steers.length(), content="0")
+  inspect(recovered.active().task, content="turn right")
+  assert_true(recovered.active().run is Open(run_id="r7", ..))
+}
+
+///|
+test "an older runs snapshot cannot sweep a steer submitted after its frontier" {
+  let dispatch = test_dispatch()
+  let before = running_model()
+  let frontier = before.run_snapshot_frontier(@interop.ChannelId::Local)
+  let with_new_steer = before.replace_conversation(
+    with_pending_steers(before.active(), ["newer steer"]),
+  )
+  let pending = with_new_steer.active().pending_steers[0]
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=None,
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=with_new_steer.dev().connection_generation,
+      request_generation=0,
+    ),
+    with_new_steer,
+  )
+  assert_true(settled.active().run is NoRun(..))
+  inspect(settled.active().pending_steers.length(), content="1")
+  let (_, rejected) = update_dev(
+    dispatch,
+    SteerRejected(
+      session="desktop-test",
+      submission_id=pending.submission_id,
+      run_id="r7",
+    ),
+    settled,
+  )
+  inspect(rejected.active().pending_steers.length(), content="0")
+  inspect(rejected.active().task, content="newer steer")
+}
+
+///|
+test "a steer receipt reduced before RunsLoaded is not resurrected" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_steers(running_conversation(), ["already applied"])
+  let before = running_model().replace_conversation(conv)
+  let frontier = before.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=false,
+  )
+  let pending = conv.pending_steers[0]
+  let (_, applied) = update_dev(
+    dispatch,
+    Engine(
+      Some("r7"),
+      SteerApplied(
+        content="already applied",
+        submission_id=Some(pending.submission_id),
+      ),
+      session=Some("desktop-test"),
+    ),
+    before,
+  )
+  inspect(applied.active().pending_steers.length(), content="0")
+  let (_, after_snapshot) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[
+        {
+          session: "desktop-test",
+          run_id: "r7",
+          submission_id: pending.submission_id,
+          status: RecoveredSteerPending,
+        },
+      ],
+      steer_recovery_supported=true,
+      steer_ledger_id=None,
+      approvals=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=applied.dev().connection_generation,
+      request_generation=0,
+    ),
+    applied,
+  )
+  inspect(after_snapshot.active().pending_steers.length(), content="0")
+}
+
+///|
+test "an engine restart preserves a worktree start until setup rejects" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_prompt(
+    { ..test_conversation(), run: Starting(submission_id="worktree-live"), },
+    "worktree-live",
+    "restore worktree draft",
+  )
+  let (_, resyncing) = update_dev(
+    dispatch,
+    EngineReady,
+    test_model().replace_conversation(conv),
+  )
+  let (_, before_reply) = update_dev(
+    dispatch,
+    RunsSettled(
+      live=[],
+      frontier=resyncing.run_snapshot_frontier(
+        @interop.ChannelId::Local,
+        lifecycle_absence_is_definitive=false,
+      ),
+    ),
+    resyncing,
+  )
+  let (_, rejected) = update_dev(
+    dispatch,
+    WorktreeSetupFailed(
+      session="desktop-test",
+      submission_id="worktree-live",
+      message="create failed",
+    ),
+    before_reply,
+  )
+  inspect(rejected.active().task, content="restore worktree draft")
+  assert_true(rejected.active().run is NoRun(ended=Some(RunFailed)))
+}
+
+///|
+test "a notification gap follows an in-flight foreground transcript read" {
+  let dispatch = test_dispatch()
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-loading",
+  }
+  let loading = {
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      "desktop-loading",
+      @interop.ChannelId::Local.test_project(),
+    ),
+    messages: [{ kind: User, content: "old", ts: None, sequence: None, }],
+    watermark: 1,
+    sync: Reloading(
+      generation=1,
+      attempt=1,
+      buffered=[],
+      reload_after_current=false,
+    ),
+  }
+  let model = {
+    ..test_model().replace_conversation(loading),
+    loading_conversation: Some(owner),
+    transcript_request_generation: 1,
+  }
+  let (_, next) = update_dev(dispatch, NotificationGap, model)
+  guard next.find_conversation(@interop.ChannelId::Local, "desktop-loading")
+    is Some(loading) &&
+    loading.sync is Reloading(generation=1, reload_after_current=true, ..) else {
+    fail("the pre-gap foreground read was treated as sufficient")
+  }
+  assert_eq(next.loading_conversation, Some(owner))
+}
+
+///|
+test "a restart settlement closes a delayed accepted response from the old pump" {
+  let dispatch = test_dispatch()
+  let conv = with_pending_prompt(
+    { ..test_conversation(), run: Starting(submission_id="old-start"), },
+    "old-start",
+    "old prompt",
+  )
+  let before = test_model().replace_conversation(conv)
+  let frontier = before.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=false,
+  )
+  let (_, delayed_accept) = update_dev(
+    dispatch,
+    StartResponded(
+      session="desktop-test",
+      submission_id="old-start",
+      run_id="r-old",
+      status="accepted",
+      exit_code=0,
+    ),
+    before,
+  )
+  assert_true(delayed_accept.active().run is Open(run_id="r-old", ..))
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "r-old",
+          session: "desktop-test",
+          submission_id: Some("old-start"),
+          status: "failed",
+        },
+      ],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=None,
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=delayed_accept.dev().connection_generation,
+      request_generation=0,
+    ),
+    delayed_accept,
+  )
+  assert_true(settled.active().run is NoRun(ended=Some(RunFinished(RunFailed))))
+  assert_true(settled.active().last_run_id is Some("r-old"))
 }
 
 ///|
@@ -11253,10 +12845,14 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
       },
     ],
     settled=[],
+    steers=[],
+    steer_recovery_supported=true,
+    steer_ledger_id=None,
     approvals=[],
     live=["old-run"],
     frontier=generation_one.run_snapshot_frontier(@interop.ChannelId::Local),
     connection_generation=generation_one.dev().connection_generation,
+    request_generation=0,
   )
   let (_, generation_two) = update_dev(dispatch, BridgeReady, generation_one)
   // The current generation's empty answer wins first. The delayed older
@@ -11266,10 +12862,14 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
     RunsLoaded(
       runs=[],
       settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=[],
       frontier=generation_two.run_snapshot_frontier(@interop.ChannelId::Local),
       connection_generation=generation_two.dev().connection_generation,
+      request_generation=0,
     ),
     generation_two,
   )
@@ -11314,10 +12914,14 @@ test "a settlement captured for an older Starting owner cannot close its success
           status: "failed",
         },
       ],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=[],
       frontier~,
       connection_generation=model.dev().connection_generation,
+      request_generation=0,
     ),
     model,
   )
@@ -11361,10 +12965,14 @@ test "an older positive runs row cannot replace a newer Started" {
         },
       ],
       settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=["r7"],
       frontier~,
       connection_generation=0,
+      request_generation=0,
     ),
     newer,
   )
@@ -11396,10 +13004,14 @@ test "an older positive runs row cannot resurrect a finished run" {
         },
       ],
       settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=None,
       approvals=[],
       live=["r7"],
       frontier~,
       connection_generation=0,
+      request_generation=0,
     ),
     finished,
   )
@@ -11622,6 +13234,252 @@ test "a Stop reply for an already-ended run retires Stopping" {
 }
 
 ///|
+test "CancelNotOpen preserves a dropped steer until recovery restores its draft" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(
+    { ..running_conversation(), run: Open(run_id="r7", stage=Cancelling), },
+    ["definitely rejected"],
+  )
+  let pending = queued.pending_steers[0]
+  let accepted = queued.accept_steer(
+    pending.submission_id,
+    Some("r7"),
+    Some("test-ledger"),
+  )
+  let model = running_model()
+    .replace_conversation(accepted)
+    .with_dev(dev => {
+      ..dev,
+      steer_ledger_ready: true,
+      steer_ledger_id: Some("test-ledger"),
+    })
+  let (_, closed) = update_dev(dispatch, CancelNotOpen(run_id="r7"), model)
+  assert_true(closed.active().run is NoRun(ended=None))
+  inspect(closed.active().pending_steers.length(), content="1")
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    lifecycle_absence_is_definitive=true,
+  )
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      steers=[
+        {
+          session: "desktop-test",
+          run_id: "r7",
+          submission_id: pending.submission_id,
+          status: RecoveredSteerDropped,
+        },
+      ],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=closed.dev().connection_generation,
+      request_generation=closed.dev().runs_request_generation,
+    ),
+    closed,
+  )
+  inspect(recovered.active().pending_steers.length(), content="0")
+  inspect(recovered.active().task, content="definitely rejected")
+}
+
+///|
+test "CancelNotOpen recovery accepts its exact retained settlement" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling),
+  })
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    definitive_lifecycle_session="desktop-test",
+  )
+  let (_, closed) = update_dev(dispatch, CancelNotOpen(run_id="r7"), model)
+  assert_true(closed.active().run is NoRun(ended=None))
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          submission_id: None,
+          status: "finished",
+        },
+      ],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=closed.dev().connection_generation,
+      request_generation=closed.dev().runs_request_generation,
+    ),
+    closed,
+  )
+  assert_true(
+    recovered.active().run is NoRun(ended=Some(RunFinished(Completed))),
+  )
+  guard recovered.active().sync is Reloading(..) else {
+    fail("the retained settlement did not trigger transcript recovery")
+  }
+}
+
+///|
+test "CancelNotOpen snapshot admits the atomic active successor" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling),
+  })
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    definitive_lifecycle_session="desktop-test",
+  )
+  let (_, closed) = update_dev(dispatch, CancelNotOpen(run_id="r7"), model)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[
+        {
+          run_id: "r8",
+          session: "desktop-test",
+          model: High,
+          max_steps: 1000,
+          session_root: None,
+          submission_id: None,
+        },
+      ],
+      settled=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          submission_id: None,
+          status: "finished",
+        },
+      ],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=["r8"],
+      frontier~,
+      connection_generation=closed.dev().connection_generation,
+      request_generation=closed.dev().runs_request_generation,
+    ),
+    closed,
+  )
+  assert_true(recovered.active().run is Open(run_id="r8", stage=Opened))
+  assert_eq(recovered.active().last_run_id, Some("r8"))
+  assert_true(recovered.active().sync is Reloading(..))
+}
+
+///|
+test "CancelNotOpen snapshot admits a successor after host settlement loss" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=Cancelling),
+  })
+  let frontier = model.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+    definitive_lifecycle_session="desktop-test",
+  )
+  let (_, closed) = update_dev(dispatch, CancelNotOpen(run_id="r7"), model)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[
+        {
+          run_id: "r8",
+          session: "desktop-test",
+          model: High,
+          max_steps: 1000,
+          session_root: None,
+          submission_id: None,
+        },
+      ],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=["r8"],
+      frontier~,
+      connection_generation=closed.dev().connection_generation,
+      request_generation=closed.dev().runs_request_generation,
+    ),
+    closed,
+  )
+  assert_true(recovered.active().run is Open(run_id="r8", stage=Opened))
+  assert_eq(recovered.active().last_run_id, Some("r8"))
+}
+
+///|
+test "a replayed settlement with a pending steer cannot schedule forever" {
+  let dispatch = test_dispatch()
+  let queued = with_pending_steers(running_conversation(), ["trailing steer"])
+  let pending = queued.pending_steers[0]
+  let model = running_model().replace_conversation(queued)
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let settlement : RecoveredSettlement = {
+    run_id: "r7",
+    session: "desktop-test",
+    submission_id: None,
+    status: "finished",
+  }
+  let recovered_steer : RecoveredSteerSettlement = {
+    session: "desktop-test",
+    run_id: "r7",
+    submission_id: pending.submission_id,
+    status: RecoveredSteerPending,
+  }
+  let (_, first) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[settlement],
+      steers=[recovered_steer],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+      request_generation=model.dev().runs_request_generation,
+    ),
+    model,
+  )
+  assert_true(first.active().run is NoRun(ended=Some(RunFinished(_))))
+  let scheduled_generation = first.dev().runs_request_generation
+  let replay_frontier = first.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, replayed) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[settlement],
+      steers=[recovered_steer],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=[],
+      frontier=replay_frontier,
+      connection_generation=first.dev().connection_generation,
+      request_generation=scheduled_generation,
+    ),
+    first,
+  )
+  assert_eq(replayed.dev().runs_request_generation, scheduled_generation)
+  inspect(replayed.active().pending_steers.length(), content="1")
+}
+
+///|
 test "a failed Stop becomes retryable instead of staying Stopping" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
@@ -11802,6 +13660,29 @@ test "steer_dropped settles the pending steer with a visible notice" {
 }
 
 ///|
+test "steer_unconfirmed settles pending UI without restoring duplicate text" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation(
+    with_pending_steers(running_conversation(), ["maybe durable"]),
+  )
+  let (_, next) = update_dev(
+    dispatch,
+    Engine(
+      Some("r7"),
+      SteerUnconfirmed(
+        content="maybe durable",
+        submission_id=Some("test-steer-0"),
+      ),
+      session=None,
+    ),
+    model,
+  )
+  inspect(next.active().pending_steers.length(), content="0")
+  inspect(next.active().task, content="")
+  inspect(next.notifications.length(), content="0")
+}
+
+///|
 test "an identical-text settle removes exactly one pending entry" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation(
@@ -11832,6 +13713,7 @@ test "a late exact applied receipt retracts a run-end unconfirmed notice" {
     Finished(run_id="r7", status="finished", answer=Some("")),
     model,
   )
+  inspect(finished.active().pending_steers.length(), content="1")
   let (_, next) = update_dev(
     dispatch,
     Engine(
@@ -11880,14 +13762,13 @@ test "a trailing dropped receipt for run A cannot close run B" {
     ),
     started,
   )
-  // Run A ended when B replaced it, taking A's pending steer with it, so the
-  // trailing receipt has nothing left to settle. What it must not do is
-  // disturb B.
+  // Run A's exact owner survives B. The trailing receipt restores only that
+  // draft and must not disturb B's lifecycle or prompt.
   assert_true(next.active().run is Open(run_id="r8", ..))
   assert_true(next.active().last_run_id is Some("r8"))
   inspect(next.active().pending_steers.length(), content="0")
   assert_true(next.active().pending_prompt is Some(_))
-  inspect(next.active().task, content="")
+  inspect(next.active().task, content="late steer")
 }
 
 ///|
@@ -12144,10 +14025,10 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
     ),
     settled,
   )
-  // The snapshot already ended the run and its pending steer; a receipt that
-  // trails it owns nothing.
+  // Lifecycle absence does not delete exact steer ownership. The trailing
+  // receipt still restores its draft.
   inspect(dropped.active().pending_steers.length(), content="0")
-  inspect(dropped.active().task, content="")
+  inspect(dropped.active().task, content="late dropped")
 }
 
 ///|
@@ -14152,6 +16033,37 @@ test "switching same-id archived stores fences the first transcript load" {
     fail("the second archived store reused the first request generation")
   }
   assert_eq(loading_second.active().workspace, Project(root=second))
+  let first_run_frontier = loading_first.run_snapshot_frontier(
+    @interop.ChannelId::Local,
+  )
+  let (_, stale_run) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[
+        {
+          run_id: "r-first-store",
+          session: first_item.id,
+          model: High,
+          max_steps: 1000,
+          session_root: Some(first),
+          submission_id: None,
+        },
+      ],
+      settled=[],
+      steers=[],
+      steer_recovery_supported=true,
+      steer_ledger_id=Some("test-ledger"),
+      approvals=[],
+      live=["r-first-store"],
+      frontier=first_run_frontier,
+      connection_generation=loading_second.dev().connection_generation,
+      request_generation=loading_second.dev().runs_request_generation,
+    ),
+    loading_second,
+  )
+  assert_eq(stale_run.active().workspace, Project(root=second))
+  assert_true(stale_run.active().record is ArchivedRecord)
+  assert_true(stale_run.active().run is NoRun(..))
   let (_, stale_first) = update_dev(
     dispatch,
     SessionLoaded(
@@ -14169,7 +16081,7 @@ test "switching same-id archived stores fences the first transcript load" {
       goal_markers=[],
       generation=1,
     ),
-    loading_second,
+    stale_run,
   )
   inspect(stale_first.active().messages.length(), content="0")
   assert_eq(stale_first.active().workspace, Project(root=second))
@@ -14979,6 +16891,301 @@ test "archiving a pending start restores its original composer without ownership
   assert_true(next.active().archived_pending_input)
   let (_, acknowledged) = update(dispatch, DismissArchivedPendingInput, next)
   assert_false(acknowledged.active().archived_pending_input)
+}
+
+///|
+test "an archive response salvages a terminal steer awaiting its receipt" {
+  let dispatch = test_dispatch()
+  let sent_mention : Mention = { ref_: Skill(name="steer-skill"), range: None, }
+  let terminal = {
+    ..running_conversation()
+    .enqueue_steer(
+      "terminal-steer",
+      Some("r7"),
+      Some("test-ledger"),
+      "steer text",
+      "steer draft",
+      [sent_mention],
+    )
+    .accept_steer("terminal-steer", Some("r7"), Some("test-ledger")),
+    run: NoRun(ended=Some(RunFinished(Completed))),
+    last_run_id: Some("r7"),
+  }
+  let model = running_model()
+    .replace_conversation(terminal)
+    .with_dev(dev => {
+      ..dev,
+      sessions: [placed_archived_item("desktop-test")],
+    })
+  let (_, next) = update(
+    dispatch,
+    archived_loaded([placed_archived_item("desktop-test")]),
+    model,
+  )
+  inspect(next.active_session, content="desktop-archive-replacement")
+  inspect(next.active().task, content="steer draft")
+  inspect(next.active().mentions.length(), content="1")
+  inspect(next.active().pending_steers.length(), content="0")
+  assert_true(next.active().archived_pending_input)
+}
+
+///|
+test "a background archive salvages a terminal steer into its own fresh row" {
+  let dispatch = test_dispatch()
+  let background = {
+    ..with_pending_steers(
+      empty_conversation(
+        @interop.ChannelId::Local,
+        "desktop-background",
+        @interop.ChannelId::Local.test_project(),
+      ),
+      ["background steer draft"],
+    ),
+    run: NoRun(ended=Some(RunFinished(Completed))),
+    last_run_id: Some("r7"),
+  }
+  let model = running_model()
+    .replace_conversation(background)
+    .with_dev(dev => {
+      ..dev,
+      sessions: [placed_archived_item("desktop-background")],
+    })
+  let (_, next) = update(
+    dispatch,
+    archived_loaded([placed_archived_item("desktop-background")]),
+    model,
+  )
+  inspect(next.active_session, content="desktop-test")
+  assert_true(
+    next.find_conversation(@interop.ChannelId::Local, "desktop-background")
+    is None,
+  )
+  let mut recovered : Conversation? = None
+  for conv in next.conversations {
+    if conv.device is Local && conv.task == "background steer draft" {
+      recovered = Some(conv)
+    }
+  }
+  guard recovered is Some(fresh) else {
+    fail("the background steer draft did not get a fresh conversation")
+  }
+  assert_true(fresh.session_id != "desktop-background")
+  assert_true(fresh.archived_pending_input)
+  inspect(fresh.pending_steers.length(), content="0")
+}
+
+///|
+test "a background archive transfers its component-owned unsent draft" {
+  let dispatch = test_dispatch()
+  let background = {
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      "desktop-background-draft",
+      @interop.ChannelId::Local.test_project(),
+    ),
+    composer_draft_present: true,
+  }
+  let model = running_model()
+    .replace_conversation(background)
+    .with_dev(dev => {
+      ..dev,
+      sessions: [placed_archived_item("desktop-background-draft")],
+    })
+  let (_, next) = update(
+    dispatch,
+    archived_loaded([placed_archived_item("desktop-background-draft")]),
+    model,
+  )
+  assert_true(
+    next.find_conversation(
+      @interop.ChannelId::Local,
+      "desktop-background-draft",
+    )
+    is None,
+  )
+  let mut recovered : Conversation? = None
+  for conv in next.conversations {
+    if conv.device is Local &&
+      conv.session_id != "desktop-test" &&
+      conv.composer_draft_present {
+      recovered = Some(conv)
+    }
+  }
+  guard recovered is Some(fresh) else {
+    fail("the component-owned draft did not get a fresh conversation")
+  }
+  let archived_owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-background-draft",
+  }
+  let fresh_owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: fresh.session_id,
+  }
+  assert_true(
+    next.composer_entry_replacements
+    .iter()
+    .any(replacement => {
+      replacement.archived == archived_owner &&
+      replacement.fresh == fresh_owner &&
+      replacement.archive_generation > 0
+    }),
+  )
+  assert_true(
+    next.conversation_for_composer_action({
+      owner: archived_owner,
+      archive_generation: 0,
+    })
+    is Some(owner) &&
+    owner.session_id == fresh.session_id,
+  )
+}
+
+///|
+test "archive retirement keeps a same-id conversation in another workspace" {
+  let other_workspace = @interop.ChannelId::Local.test_resource(
+    "/other-project",
+  )
+  let model = test_model()
+  let next = model.with_archive_override(
+    @interop.ChannelId::Local,
+    { session: "desktop-test", workspace: other_workspace, },
+    ArchiveStored,
+  )
+  inspect(next.composer_entry_retirements.length(), content="0")
+  assert_true(
+    next.find_conversation(@interop.ChannelId::Local, "desktop-test")
+    is Some(conv) &&
+    conv.project() == @interop.ChannelId::Local.test_project(),
+  )
+}
+
+///|
+test "deleted notification transfers the active component draft at its retirement generation" {
+  let dispatch = test_dispatch()
+  let key : ArchiveRecordKey = {
+    session: "desktop-test",
+    workspace: @interop.ChannelId::Local.test_project(),
+  }
+  let model = test_model().replace_conversation({
+    ..test_conversation(),
+    composer_draft_present: true,
+  })
+  let (_, next) = update_dev(
+    dispatch,
+    SessionsChanged(
+      change="deleted",
+      key~,
+      fresh_session=Some("desktop-after-delete"),
+    ),
+    model,
+  )
+  inspect(next.active_session, content="desktop-after-delete")
+  assert_true(next.active().composer_draft_present)
+  let archived_owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-test",
+  }
+  assert_true(
+    next.composer_entry_replacements
+    .iter()
+    .any(replacement => {
+      replacement.archived == archived_owner &&
+      replacement.fresh.session == "desktop-after-delete" &&
+      replacement.archive_generation == next.composer_entry_retirements.length()
+    }),
+  )
+}
+
+///|
+test "deleted notification transfers a background component draft" {
+  let dispatch = test_dispatch()
+  let background = {
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      "desktop-delete-background",
+      @interop.ChannelId::Local.test_project(),
+    ),
+    composer_draft_present: true,
+  }
+  let model = test_model().replace_conversation(background)
+  let key : ArchiveRecordKey = {
+    session: background.session_id,
+    workspace: background.project(),
+  }
+  let (_, next) = update_dev(
+    dispatch,
+    SessionsChanged(change="deleted", key~, fresh_session=None),
+    model,
+  )
+  assert_true(
+    next.find_conversation(@interop.ChannelId::Local, background.session_id)
+    is None,
+  )
+  assert_true(
+    next.conversations
+    .iter()
+    .any(conv => {
+      conv.session_id != "desktop-test" && conv.composer_draft_present
+    }),
+  )
+  assert_true(
+    next.composer_entry_replacements
+    .iter()
+    .any(replacement => {
+      replacement.archived.session == background.session_id &&
+      replacement.archive_generation > 0
+    }),
+  )
+}
+
+///|
+test "delete confirmation transfers a background component draft" {
+  let dispatch = test_dispatch()
+  let background = {
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      "desktop-confirm-delete-background",
+      @interop.ChannelId::Local.test_project(),
+    ),
+    composer_draft_present: true,
+  }
+  let model = test_model().replace_conversation(background)
+  let key : ArchiveRecordKey = {
+    session: background.session_id,
+    workspace: background.project(),
+  }
+  let (_, next) = update_dev(
+    dispatch,
+    ArchivedDeleted(
+      key~,
+      sessions=[background.session_id],
+      items=[],
+      connection_generation=model.dev().connection_generation,
+      request_generation=model.dev().archived_request_generation,
+      fresh_session="desktop-confirm-delete-fresh",
+    ),
+    model,
+  )
+  assert_true(
+    next.find_conversation(@interop.ChannelId::Local, background.session_id)
+    is None,
+  )
+  assert_true(
+    next.conversations
+    .iter()
+    .any(conv => {
+      conv.session_id != "desktop-test" && conv.composer_draft_present
+    }),
+  )
+  assert_true(
+    next.composer_entry_replacements
+    .iter()
+    .any(replacement => {
+      replacement.archived.session == background.session_id &&
+      replacement.archive_generation > 0
+    }),
+  )
 }
 
 ///|
