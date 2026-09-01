@@ -1237,6 +1237,31 @@ test('composer, quick open, settings, and skills keep explicit focus ownership',
   expect(app.pageErrors).toEqual([]);
 });
 
+test('settings apply and persist the smallest and largest font sizes', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const fontSize = page.getByRole('button', { name: 'Font size' });
+  await fontSize.click();
+  await page.getByRole('option', { name: '12px' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-font-size', '12');
+  await expect.poll(() => page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--font-size-base').trim()))
+    .toBe('12px');
+
+  await fontSize.click();
+  await page.getByRole('option', { name: '18px' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-font-size', '18');
+  await expect.poll(() => page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--font-size-base').trim()))
+    .toBe('18px');
+  await expect.poll(() => page.evaluate(() =>
+    localStorage.getItem('openseek.font_size'))).toBe('18');
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('settings persist host API changes through settings.set', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
