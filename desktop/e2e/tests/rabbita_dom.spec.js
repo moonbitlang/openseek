@@ -15,6 +15,63 @@ test('desktop browser shell renders host and conversation DOM', async ({ page })
   expect(app.pageErrors).toEqual([]);
 });
 
+test('remote panel launcher and toolbar preserve their visible actions and order', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+
+  const launcher = page.locator('.dock-launcher');
+  await expect(launcher.getByRole('button')).toHaveText([
+    'SearchSearch text across the workspace',
+    'FilesOpen a file from the workspace',
+    'ReviewReview changed files and diffs',
+  ]);
+  await expect(launcher.getByRole('button', { name: /Browse/ })).toHaveCount(0);
+
+  const expand = page.getByTitle('Expand panel');
+  const hide = page.getByTitle('Hide panel');
+  await expect(expand).toHaveAttribute('aria-pressed', 'false');
+  expect(await expand.evaluate((node, other) =>
+    Boolean(node.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING),
+  await hide.elementHandle())).toBe(true);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('workspace search mounts its real tablist, focus target, and option controls', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+
+  const shortcut = await page.evaluate(() =>
+    navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');
+  await page.keyboard.press(shortcut);
+
+  const tabs = page.getByRole('tablist', { name: 'Explorer views' });
+  await expect(tabs.getByRole('tab')).toHaveText(['Files', 'Changes', 'Search']);
+  const filesTab = tabs.locator('#explorer-files-tab');
+  const searchTab = tabs.locator('#explorer-search-tab');
+  await expect(searchTab).toHaveAttribute('aria-selected', 'true');
+
+  const query = page.getByRole('textbox', { name: 'Search' });
+  await expect(query).toBeFocused();
+  await expect(query).toHaveAttribute('data-focus-owner', '');
+
+  const wholeWord = page.getByRole('button', { name: 'Match Whole Word' });
+  await expect(wholeWord.locator('svg')).toBeVisible();
+  await expect(wholeWord).toHaveAttribute('aria-pressed', 'false');
+  await wholeWord.click();
+  await expect(wholeWord).toHaveAttribute('aria-pressed', 'true');
+
+  await searchTab.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(filesTab).toBeFocused();
+  await expect(filesTab).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('End');
+  await expect(searchTab).toHaveAttribute('aria-selected', 'true');
+  await expect(query).toBeFocused();
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('project picker and quick open use browser focus and keyboard events', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -55,12 +112,84 @@ test('transcript mounts markdown, plan, goal, and MoonBit tool DOM', async ({ pa
   await expect(transcript.locator('.plan-step.in_progress')).toContainText('Run Playwright');
   await expect(transcript.locator('.plan-step.pending')).toContainText('Review layout');
   await expect(page.locator('.composer-goal')).toContainText('Ship Rabbita 0.15 browser tests');
-  const mbtxCall = transcript.locator('.tool-call').filter({ has: page.locator('.mbtx-args') });
+  const mbtxCall = transcript.locator('.tool-call').filter({ hasText: 'println(42)' });
   await mbtxCall.locator('.tool-call-summary').click();
   await expect(mbtxCall.locator('.mbtx-args')).toContainText('fn main { println(42) }');
-  const mbtxResult = transcript.locator('.tool-result').filter({ hasText: 'mbtx' });
+  const mbtxResult = transcript.locator('.tool-result').filter({ hasText: '42' });
   await mbtxResult.locator('.tool-result-summary').click();
   await expect(mbtxResult.locator('.tool-call-output')).toContainText('42');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('transcript preserves link boundaries, structured arguments, MoonBit reads, and sub-run links', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+
+  const transcript = page.locator('.transcript');
+  const userMessage = transcript.locator('.msg.user');
+  await expect(userMessage.locator('a[href="https://example.test/docs"]')).toBeVisible();
+  await expect(userMessage.locator('code')).toHaveText('https://inside.example.test');
+  await expect(userMessage.locator('code a')).toHaveCount(0);
+
+  const shellCall = transcript.locator('.tool-call').filter({ hasText: 'tests passed' });
+  await shellCall.locator('.tool-call-summary').click();
+  await expect(shellCall.locator('.tool-argument-key')).toContainText([
+    'cmd',
+    'options',
+    'cwd',
+    'targets',
+  ]);
+  await expect(shellCall.locator('.tool-argument-array')).toContainText('js');
+  await expect(shellCall.locator('.tool-argument-array')).toContainText('native');
+
+  const readResult = transcript.locator('.tool-result').filter({ hasText: 'read' });
+  await readResult.locator('.tool-result-summary').click();
+  await expect(readResult.locator('.read-moonbit-output')).toBeVisible();
+  await expect(readResult.locator('.read-moonbit-gutter')).toHaveText(['9', '10', '11']);
+  await expect(readResult.locator('.mtk3').first()).toHaveText('fn');
+  await expect(readResult.locator('.read-moonbit-status')).toContainText('start_line=9');
+  await expect(readResult.locator('.read-moonbit-status .mtk3')).toHaveCount(0);
+
+  const exploreResult = transcript.locator('.tool-result').filter({ hasText: 'explore' });
+  await exploreResult.locator('.tool-result-summary').click();
+  await expect(transcript.locator('.subrun-chip')).toHaveAttribute(
+    'title',
+    'Open this subagent\'s own transcript (session-1-sr-2)',
+  );
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('transcript names mbtx build and runtime failures without mislabeling JS failures', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+
+  const transcript = page.locator('.transcript');
+  const buildCall = transcript.locator('.tool-call.error').filter({ hasText: 'compile_error' });
+  const runtimeCall = transcript.locator('.tool-call.error').filter({ hasText: 'abort("runtime")' });
+  const singleShotCall = transcript.locator('.tool-call.error').filter({ hasText: 'single shot' });
+  await expect(buildCall).toHaveClass(/stage-build/);
+  await expect(buildCall.locator('.tool-call-summary')).toContainText(
+    'mbtx (build failed, exit=1)',
+  );
+  await expect(buildCall.locator('.tool-call-failed')).toHaveCount(0);
+  await expect(runtimeCall.locator('.tool-call-failed.tool-stage-run')).toHaveText('runtime error');
+  await expect(singleShotCall.locator('.tool-call-failed')).toHaveText('failed');
+  await expect(singleShotCall.locator('.tool-stage-build, .tool-stage-run')).toHaveCount(0);
+
+  const buildResult = transcript.locator('.tool-result.error').filter({ hasText: 'type mismatch' });
+  const runtimeResult = transcript.locator('.tool-result.error').filter({ hasText: 'runtime trap' });
+  const singleShotResult = transcript.locator('.tool-result.error').filter({
+    hasText: 'single-shot diagnostic',
+  });
+  await expect(buildResult).toHaveClass(/stage-build/);
+  await expect(buildResult.locator('.tool-call-failed')).toHaveCount(0);
+  await expect(runtimeResult.locator('.tool-call-failed.tool-stage-run')).toHaveText('runtime error');
+  await expect(singleShotResult.locator('.tool-call-failed')).toHaveText('failed');
+  await expect(singleShotResult.locator('.tool-stage-build, .tool-stage-run')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -93,11 +222,15 @@ test('approval card sends its decision through the browser transport', async ({ 
   await expect(approval).toBeVisible();
   await expect(approval.locator('.composer-approval-tool')).toContainText('mbtx');
   await expect(approval.locator('.composer-approval-body')).toContainText('@myshell.Cmd');
+  await expect(approval.getByRole('button', { name: 'Deny' })).toBeVisible();
   await approval.getByRole('button', { name: 'Allow once' }).click();
   await expect.poll(() => app.requests.some(request =>
     request.method === 'agent.approval' &&
     request.params?.id === 'approval-1' &&
     request.params?.allow === true)).toBe(true);
+  await expect(approval).toContainText('Sending…');
+  await expect(approval.getByRole('button', { name: 'Allow once' })).toHaveCount(0);
+  await expect(approval.getByRole('button', { name: 'Deny' })).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -150,12 +283,49 @@ test('new chat, archive, and restore update the conversation sidebar', async ({ 
   await archivedHeading.click();
   const archivedRow = page.locator('.conversation-row[title="session-1"]');
   await expect(archivedRow).toBeVisible();
+  await archivedRow.click();
+  await expect(page.getByText('Archived conversation · Read only')).toBeVisible();
+  await expect(page.locator('#task')).toHaveCount(0);
+  await expect(page.locator('#send')).toHaveCount(0);
+  await expect(page.locator('#stop')).toHaveCount(0);
   await archivedRow.hover();
   await archivedRow.getByTitle('Restore this conversation to the sidebar').click();
   await expect.poll(() => app.requests.some(request =>
     request.method === 'session.unarchive' &&
     request.params?.session === 'session-1')).toBe(true);
   await expect(page.getByText('Rabbita browser fixture', { exact: true }).first()).toBeVisible();
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('composer, quick open, settings, and skills keep explicit focus ownership', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+
+  await expect(page.locator('.composer-inner')).toHaveAttribute('data-focus-owner', '');
+  await expect(page.locator('#task')).toHaveAttribute('data-focus-target', '');
+
+  await app.openQuickOpen();
+  await expect(page.locator('#quick-open-input')).toHaveAttribute('data-focus-owner', '');
+  await expect(page.locator('#quick-open-input')).not.toHaveAttribute('data-focus-target', '');
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.locator('select')).toHaveCount(0);
+  await expect(page.locator('.custom-select.setting-select button').first()).toHaveAttribute(
+    'aria-haspopup',
+    'listbox',
+  );
+  for (const field of await page.locator('input, textarea').all()) {
+    const owner = await field.getAttribute('data-focus-owner');
+    const target = await field.getAttribute('data-focus-target');
+    expect(owner === '' || target === '').toBe(true);
+  }
+
+  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await expect(page.locator('.skills-search')).toHaveAttribute('data-focus-owner', '');
+  await expect(page.locator('.skills-search input')).toHaveAttribute('data-focus-target', '');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -206,6 +376,47 @@ test('skills installs a catalog entry and refreshes the installed library', asyn
   });
   await expect(installed.locator('.skill-row').filter({ hasText: 'Rabbita' })).toBeVisible();
   await expect(rabbita).toContainText('Installed');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('skills search, detail navigation, and hand-written protections use the mounted page', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+
+  const search = page.locator('.skills-search input');
+  await search.fill('rabbita');
+  const installed = page.locator('.settings-group').filter({
+    has: page.getByRole('heading', { name: 'Installed' }),
+  });
+  const registry = page.locator('.settings-group').filter({
+    has: page.getByRole('heading', { name: 'Mooncakes registry' }),
+  });
+  await expect(installed).toContainText('No installed skill matches the search.');
+  await expect(registry.locator('.skill-row')).toContainText('rabbita');
+  await expect(registry.locator('.skill-row')).toHaveCount(1);
+
+  await search.fill('');
+  const moonbit = installed.locator('.skill-row').filter({ hasText: 'MoonBit' });
+  await expect(moonbit).toContainText('hand-written');
+  await expect(moonbit.getByRole('button', { name: 'Uninstall' })).toHaveCount(0);
+
+  const rabbita = registry.locator('.skill-row').filter({ hasText: 'rabbita' });
+  await rabbita.locator('.skill-summary').click();
+  await expect(page.getByRole('button', { name: '← Back to skills' })).toBeVisible();
+  await expect(page.locator('.skill-file-name')).toHaveText('SKILL.md');
+  await expect(page.getByRole('heading', { name: 'rabbita', exact: true })).toBeVisible();
+  await expect(page.locator('.skill-preview-markdown')).toContainText('Browser UI guidance.');
+  await page.getByRole('button', { name: '← Back to skills' }).click();
+
+  await installed.locator('.skill-row').filter({ hasText: 'MoonBit' })
+    .locator('.skill-summary').click();
+  await expect(page.locator('.skill-detail-meta')).toHaveText('hand-written');
+  await expect(page.getByRole('button', { name: 'Uninstall' })).toHaveCount(0);
+  await expect(page.locator('.skill-preview-markdown')).toContainText(
+    'Authoritative MoonBit guidance.',
+  );
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -284,6 +495,93 @@ test('Codex creates a thread, sends its first turn, and stops it', async ({ page
         turnId: 'codex-turn-e2e',
       },
     });
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Codex command and network approvals render the facts and advertised decisions', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.codexModels = [
+    {
+      id: 'gpt-5.4-codex',
+      displayName: 'GPT-5.4 Codex',
+      isDefault: true,
+      defaultReasoningEffort: 'medium',
+      supportedReasoningEfforts: [
+        { reasoningEffort: 'medium', description: 'Balanced' },
+      ],
+    },
+  ];
+  await app.install();
+  await app.goto();
+
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
+  await page.locator('#task').fill('Start a Codex turn for approval testing');
+  await page.getByTitle('Send', { exact: true }).click();
+  await expect.poll(() => app.requests.some(request =>
+    request.method === 'codex.turn.start')).toBe(true);
+
+  app.notify('codex.server_request', {
+    request_id: 'approval-command',
+    method: 'item/commandExecution/requestApproval',
+    params: {
+      threadId: 'codex-thread-e2e',
+      turnId: 'codex-turn-e2e',
+      itemId: 'command-1',
+      reason: 'Generate package interface metadata',
+      command: '/bin/zsh -lc "moon info"',
+      cwd: '/workspace',
+      proposedExecpolicyAmendment: ['moon', 'info'],
+      availableDecisions: [
+        'accept',
+        {
+          acceptWithExecpolicyAmendment: {
+            execpolicy_amendment: ['moon', 'info'],
+          },
+        },
+        'cancel',
+      ],
+    },
+    generation: 2,
+  });
+
+  const commandApproval = page.locator('.codex-request').filter({
+    hasText: 'Command approval',
+  });
+  await expect(commandApproval).toContainText('Generate package interface metadata');
+  await expect(commandApproval.locator('.codex-request-command')).toContainText('moon info');
+  await expect(commandApproval).toContainText('/workspace');
+  await expect(commandApproval).toContainText('Requested rule');
+  await expect(commandApproval.getByRole('button', { name: 'Allow by rule: moon info' })).toBeVisible();
+  await expect(commandApproval.getByRole('button', { name: 'Approve once' })).toBeVisible();
+  await expect(commandApproval.getByRole('button', { name: 'Cancel' })).toBeVisible();
+  await expect(commandApproval.locator('.codex-request-raw-summary')).toHaveText('Show details');
+
+  app.notify('codex.server_request', {
+    request_id: 'approval-network',
+    method: 'item/commandExecution/requestApproval',
+    params: {
+      threadId: 'codex-thread-e2e',
+      turnId: 'codex-turn-e2e',
+      itemId: 'command-2',
+      command: 'internal network request',
+      cwd: '/workspace',
+      networkApprovalContext: {
+        host: 'api.example.test',
+        protocol: 'https',
+        port: 443,
+      },
+      availableDecisions: ['accept', 'cancel'],
+    },
+    generation: 3,
+  });
+
+  const networkApproval = page.locator('.codex-request').filter({
+    hasText: 'Network access approval',
+  });
+  await expect(networkApproval).toContainText('Network destination');
+  await expect(networkApproval).toContainText('https://api.example.test:443');
+  await expect(networkApproval.locator('.codex-request-command')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 

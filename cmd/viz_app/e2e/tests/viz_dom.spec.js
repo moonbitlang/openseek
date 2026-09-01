@@ -13,10 +13,10 @@ test('session viewer mounts log cards and interactive filters in Chromium', asyn
   await viewer.openSession();
 
   await expect(page.locator('.header-strip')).toContainText('session header loaded');
-  await expect(page.locator('.card.user')).toContainText('Inspect the session viewer');
+  await expect(page.locator('#seq-1.card.user')).toContainText('Inspect the session viewer');
   await expect(page.locator('.tool-call.tool-call-escalated')).toContainText('shell');
   await expect(page.locator('.card.tool.error.escalated')).toContainText('fixture failure');
-  await expect(page.locator('.error-count')).toContainText('1 tool error');
+  await expect(page.locator('.error-count')).toContainText('4 tool errors');
   await expect(page.locator('.escalated-count')).toContainText('1 escalated tool call');
 
   await page.getByRole('button', { name: 'Model view' }).click();
@@ -24,9 +24,93 @@ test('session viewer mounts log cards and interactive filters in Chromium', asyn
   await page.getByRole('button', { name: 'Original' }).click();
   await expect(page.locator('.session-view')).toHaveClass(/show-original/);
 
-  await page.getByRole('button', { name: 'Errors only' }).click();
+  await page.getByRole('button', { name: 'Errors only', exact: true }).click();
   await expect(page.locator('.session-view')).toHaveClass(/errors-only/);
   await expect(page.getByRole('button', { name: 'Errors only: on' })).toBeVisible();
+  expect(viewer.pageErrors).toEqual([]);
+});
+
+test('viewer renders plan evolution, goal markers, tool links, sub-runs, and MoonBit reads', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+
+  const planCalls = page.locator('.tool-call').filter({ has: page.locator('.plan-args') });
+  await expect(planCalls).toHaveCount(2);
+  const updatedPlan = planCalls.nth(1);
+  await expect(updatedPlan.locator('.plan-progress-count')).toHaveText('1/3');
+  await expect(updatedPlan.locator('.step-delta-done')).toHaveText('done');
+  await expect(updatedPlan.locator('.step-delta-started')).toHaveText('started');
+  await expect(updatedPlan.locator('.step-delta-new')).toHaveText('new');
+
+  await expect(page.locator('.card.runtime.goal-set')).toContainText(
+    'Ship the Playwright migration',
+  );
+  await expect(page.locator('.card.runtime.goal-blocked')).toContainText(
+    'waiting for fixture data',
+  );
+  await expect(page.locator('.card.runtime.goal-cleared')).toContainText(
+    'standing goal cleared',
+  );
+
+  await expect(page.locator('#tool-call-1 .tool-link')).toHaveAttribute(
+    'href',
+    '#tool-result-1',
+  );
+  await expect(page.locator('#tool-result-1 .tool-link')).toHaveAttribute(
+    'href',
+    '#tool-call-1',
+  );
+  await expect(page.locator('.subrun-link')).toHaveAttribute('href', '#s=viz-1-sr-2');
+
+  const readResult = page.locator('#tool-result-5');
+  await expect(readResult.locator('.read-moonbit-output')).toBeAttached();
+  await expect(readResult.locator('.read-moonbit-gutter')).toHaveText(['9', '10', '11']);
+  await expect(readResult.locator('.mtk3').first()).toHaveText('fn');
+  await expect(readResult.locator('.read-moonbit-status')).toContainText('start_line=9');
+
+  await expect(page.locator('.step-scrubber [data-seq]')).toHaveCount(5);
+  await expect(page.locator('.card-ts').first()).toHaveText('+0.0s');
+  expect(viewer.pageErrors).toEqual([]);
+});
+
+test('viewer classifies mbtx failure stages and filters to build diagnostics', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+
+  const buildCall = page.locator('.tool-call.tool-call-build-failed');
+  const runtimeCall = page.locator('.tool-call.tool-call-run-failed');
+  const singleShotCall = page.locator(
+    '.tool-call.tool-call-failed:not(.tool-call-build-failed):not(.tool-call-run-failed)',
+  ).filter({ hasText: 'single shot' });
+  await expect(buildCall).toHaveCount(1);
+  await expect(buildCall.locator('.tool-stage-build')).toHaveText('build error');
+  await expect(runtimeCall).toHaveCount(1);
+  await expect(runtimeCall.locator('.tool-stage-run')).toHaveText('runtime error');
+  await expect(singleShotCall).toHaveCount(1);
+  await expect(singleShotCall.locator('.tool-stage')).toHaveCount(0);
+
+  const buildResult = page.locator('.card.tool.error.build-failed');
+  const runtimeResult = page.locator('.card.tool.error').filter({ hasText: 'runtime trap' });
+  await expect(buildResult.locator('.tool-flag.tool-stage-build')).toHaveText('🚩 build error');
+  await expect(page.locator('.build-error-count')).toHaveText('🔨 1 build error');
+
+  await page.getByRole('button', { name: 'Build errors only', exact: true }).click();
+  await expect(page.locator('.session-view')).toHaveClass(/build-errors-only/);
+  await expect(buildCall).toBeVisible();
+  await expect(buildResult).toBeVisible();
+  await expect(runtimeCall).toBeHidden();
+  await expect(runtimeResult).toBeHidden();
+  await expect(page.locator('.card.tool.error.escalated')).toBeHidden();
+
+  await page.getByRole('button', { name: 'Errors only', exact: true }).click();
+  await expect(page.locator('.session-view')).toHaveClass(/errors-only/);
+  await expect(page.locator('.session-view')).not.toHaveClass(/build-errors-only/);
   expect(viewer.pageErrors).toEqual([]);
 });
 

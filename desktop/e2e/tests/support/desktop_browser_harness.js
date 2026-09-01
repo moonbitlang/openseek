@@ -38,7 +38,9 @@ export class DesktopBrowserHarness {
         sequence: 1,
         item: {
           kind: 'user',
-          payload: { content: 'Show the browser fixture' },
+          payload: {
+            content: 'Show the browser fixture at https://example.test/docs but keep `https://inside.example.test` inert.',
+          },
         },
       },
       {
@@ -121,6 +123,169 @@ export class DesktopBrowserHarness {
           },
         },
       },
+      {
+        sequence: 8,
+        item: {
+          kind: 'assistant',
+          payload: {
+            content: '',
+            tool_calls: [
+              {
+                id: 'shell-1',
+                name: 'shell',
+                arguments: JSON.stringify({
+                  cmd: 'moon test',
+                  options: { cwd: '/workspace', targets: ['js', 'native'] },
+                }),
+              },
+            ],
+          },
+        },
+      },
+      {
+        sequence: 9,
+        item: {
+          kind: 'tool_result',
+          payload: {
+            tool_call_id: 'shell-1',
+            tool_name: 'shell',
+            content: 'all targets passed',
+            is_error: false,
+            brief: 'tests passed',
+          },
+        },
+      },
+      {
+        sequence: 10,
+        item: {
+          kind: 'assistant',
+          payload: {
+            content: '',
+            tool_calls: [
+              {
+                id: 'read-1',
+                name: 'read',
+                arguments: JSON.stringify({ path: 'src/main.mbt' }),
+              },
+            ],
+          },
+        },
+      },
+      {
+        sequence: 11,
+        item: {
+          kind: 'tool_result',
+          payload: {
+            tool_call_id: 'read-1',
+            tool_name: 'read',
+            content: [
+              ' 9 |fn main {',
+              '10 |  println("hi")',
+              '11 |}',
+              '<system>start_line=9 shown_lines=3 total_lines=20 truncated=false</system>',
+            ].join('\n'),
+            is_error: false,
+            brief: 'read main.mbt (truncated)',
+          },
+        },
+      },
+      {
+        sequence: 12,
+        item: {
+          kind: 'assistant',
+          payload: {
+            content: '',
+            tool_calls: [
+              {
+                id: 'explore-1',
+                name: 'explore',
+                arguments: JSON.stringify({ query: 'find the API' }),
+              },
+            ],
+          },
+        },
+      },
+      {
+        sequence: 13,
+        item: {
+          kind: 'tool_result',
+          payload: {
+            tool_call_id: 'explore-1',
+            tool_name: 'explore',
+            content: 'Answer: use the browser fixture.',
+            is_error: false,
+            brief: 'explore sr-2 (1 citation(s), 7 step(s))',
+          },
+        },
+      },
+      {
+        sequence: 14,
+        item: {
+          kind: 'assistant',
+          payload: {
+            content: '',
+            tool_calls: [
+              {
+                id: 'mbtx-build',
+                name: 'mbtx',
+                arguments: JSON.stringify({ source: 'fn main { compile_error }' }),
+              },
+              {
+                id: 'mbtx-run',
+                name: 'mbtx',
+                arguments: JSON.stringify({ source: 'fn main { abort("runtime") }' }),
+              },
+              {
+                id: 'mbtx-js',
+                name: 'mbtx',
+                arguments: JSON.stringify({
+                  source: 'fn main { abort("single shot") }',
+                  target: 'js',
+                }),
+              },
+            ],
+          },
+        },
+      },
+      {
+        sequence: 15,
+        item: {
+          kind: 'tool_result',
+          payload: {
+            tool_call_id: 'mbtx-build',
+            tool_name: 'mbtx',
+            content: 'type mismatch',
+            is_error: true,
+            brief: 'mbtx (build failed, exit=1)',
+          },
+        },
+      },
+      {
+        sequence: 16,
+        item: {
+          kind: 'tool_result',
+          payload: {
+            tool_call_id: 'mbtx-run',
+            tool_name: 'mbtx',
+            content: 'runtime trap',
+            is_error: true,
+            brief: 'mbtx (exit=1)',
+          },
+        },
+      },
+      {
+        sequence: 17,
+        item: {
+          kind: 'tool_result',
+          payload: {
+            tool_call_id: 'mbtx-js',
+            tool_name: 'mbtx',
+            content: 'single-shot diagnostic',
+            is_error: true,
+            brief: 'mbtx (exit=1)',
+          },
+        },
+      },
     ];
   }
 
@@ -198,7 +363,7 @@ export class DesktopBrowserHarness {
             id: 'session-1',
             events: this.sessionEvents,
           },
-          watermark: 7,
+          watermark: 17,
         };
       case 'agent.runs':
         return { runs: [], settled: [], approvals: [] };
@@ -243,6 +408,20 @@ export class DesktopBrowserHarness {
               repository: 'https://github.com/moonbit-community/rabbita',
             },
           ],
+        };
+      case 'skills.content':
+        return {
+          kind: 'content',
+          content: '---\nname: rabbita\n---\n\n# Rabbita\n\nBrowser UI guidance.',
+          absolute: '/fixture/rabbita/SKILL.md',
+          sig: 'catalog-fixture',
+        };
+      case 'skills.installed_content':
+        return {
+          kind: 'content',
+          content: '# MoonBit\n\nAuthoritative MoonBit guidance.',
+          absolute: '/fixture/moonbit/SKILL.md',
+          sig: 'installed-fixture',
         };
       case 'skills.install': {
         const installed = {
