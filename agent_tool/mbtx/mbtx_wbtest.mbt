@@ -58,59 +58,73 @@ async test "snippet_compiled reads moon's per-target runnable artifact" {
     // A failed build's leftovers (moon writes all_pkgs.json before compiling
     // anything) are not a runnable artifact.
     plant("wasm/debug/build", "all_pkgs.json")
-    assert_false(snippet_compiled(dir, "wasm"))
+    assert_true(snippet_compiled(dir, "wasm") is Some(false))
     plant("wasm/debug/build/single", "single.wasm")
-    assert_true(snippet_compiled(dir, "wasm"))
+    assert_true(snippet_compiled(dir, "wasm") is Some(true))
     // Target dirs are disjoint: one target's artifact proves nothing about
     // another's.
-    assert_false(snippet_compiled(dir, "wasm-gc"))
+    assert_true(snippet_compiled(dir, "wasm-gc") is Some(false))
     plant("wasm-gc/debug/build/single", "single.wasm")
-    assert_true(snippet_compiled(dir, "wasm-gc"))
-    assert_false(snippet_compiled(dir, "js"))
+    assert_true(snippet_compiled(dir, "wasm-gc") is Some(true))
+    assert_true(snippet_compiled(dir, "js") is Some(false))
     plant("js/debug/build/single", "single.js")
-    assert_true(snippet_compiled(dir, "js"))
-    assert_false(snippet_compiled(dir, "llvm"))
+    assert_true(snippet_compiled(dir, "js") is Some(true))
+    assert_true(snippet_compiled(dir, "llvm") is Some(false))
     plant("llvm/debug/build/single", "single.exe")
-    assert_true(snippet_compiled(dir, "llvm"))
+    assert_true(snippet_compiled(dir, "llvm") is Some(true))
     // The release profile is the fallback for a future moon default flip, so a
     // release-only artifact still counts.
     plant("js/release/build/single", "single.js")
     @fs.rmdir("\{dir}/js/debug", recursive=true)
-    assert_true(snippet_compiled(dir, "js"))
+    assert_true(snippet_compiled(dir, "js") is Some(true))
   })
 }
 
 ///|
-/// The body/brief framing names the failure stage. A compile error drops the
+/// The body/brief framing names the failure stage. A build failure drops the
 /// exit code — moon's is always 1 there and says nothing the diagnostics do
-/// not — while a runtime failure keeps the program's own code.
+/// not — while a runtime failure keeps the program's own code, and an unknown
+/// probe result keeps the pre-classification wording, claiming nothing.
 test "finished_body and finished_brief name the failure stage" {
-  assert_eq(finished_body("out\n", 0, compiled=true), "out\n")
+  assert_eq(finished_body("out\n", 0, compiled=Some(true)), "out\n")
   assert_true(
-    finished_body("", 0, compiled=true).contains("exited 0 with no output"),
+    finished_body("", 0, compiled=Some(true)).contains(
+      "exited 0 with no output",
+    ),
   )
-  let compile_error = finished_body("diagnostics", 1, compiled=false)
-  assert_true(compile_error.contains("COMPILE error"))
-  assert_true(compile_error.contains("never ran"))
-  assert_true(compile_error.contains("diagnostics"))
-  let runtime_failure = finished_body("trace", 3, compiled=true)
+  let build_failed = finished_body("diagnostics", 1, compiled=Some(false))
+  assert_true(build_failed.contains("BUILD failed"))
+  assert_true(build_failed.contains("never ran"))
+  assert_true(build_failed.contains("diagnostics"))
+  let runtime_failure = finished_body("trace", 3, compiled=Some(true))
   assert_true(runtime_failure.contains("exited 3 at RUNTIME"))
   assert_true(runtime_failure.contains("trace"))
   // The blank-output corners still name the stage.
-  assert_true(finished_body("", 1, compiled=false).contains("COMPILE error"))
-  assert_true(finished_body("", 3, compiled=true).contains("exited 3"))
-  assert_eq(finished_brief(1, compiled=false), "mbtx (compile error)")
-  assert_eq(finished_brief(3, compiled=true), "mbtx (exit=3)")
-  assert_eq(finished_brief(0, compiled=true), "mbtx (exit=0)")
+  assert_true(
+    finished_body("", 1, compiled=Some(false)).contains("BUILD failed"),
+  )
+  assert_true(finished_body("", 3, compiled=Some(true)).contains("exited 3"))
+  // An unknown probe result claims no stage in either direction.
+  let unknown = finished_body("out", 3, compiled=None)
+  assert_true(unknown.contains("exited 3"))
+  assert_false(unknown.contains("BUILD failed"))
+  assert_false(unknown.contains("RUNTIME"))
+  assert_eq(finished_brief(1, compiled=Some(false)), "mbtx (build failed)")
+  assert_eq(finished_brief(3, compiled=Some(true)), "mbtx (exit=3)")
+  assert_eq(finished_brief(3, compiled=None), "mbtx (exit=3)")
+  assert_eq(finished_brief(0, compiled=Some(true)), "mbtx (exit=0)")
 }
 
 ///|
 test "timeout_head says which half of the run never finished" {
-  let program_hung = timeout_head(5_000, compiled=true)
+  let program_hung = timeout_head(5_000, compiled=Some(true))
   assert_true(program_hung.contains("compiled but did not finish"))
-  let build_hung = timeout_head(5_000, compiled=false)
+  let build_hung = timeout_head(5_000, compiled=Some(false))
   assert_true(build_hung.contains("BUILD never completed"))
   assert_true(build_hung.contains("never ran"))
+  // The probe failing keeps the original both-ways hedge.
+  let unknown = timeout_head(5_000, compiled=None)
+  assert_true(unknown.contains("a build that never completed"))
 }
 
 ///|

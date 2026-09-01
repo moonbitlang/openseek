@@ -551,14 +551,17 @@ async fn execute(
         exit_note=exit_code => {
           match exit_code {
             Some(code) if code != 0 =>
-              if snippet_compiled(build_dir, input.target) {
-                Some(
-                  "mbtx: exit \{code} is a RUNTIME failure — the snippet compiled and the program ran.",
-                )
-              } else {
-                Some(
-                  "mbtx: this is a COMPILE error — the snippet did not build, so the program never ran.",
-                )
+              match snippet_compiled(build_dir, input.target) {
+                Some(true) =>
+                  Some(
+                    "mbtx: exit \{code} is a RUNTIME failure — the snippet compiled and the program ran.",
+                  )
+                Some(false) =>
+                  Some(
+                    "mbtx: the BUILD failed — the program never ran; the job's output is the build's own.",
+                  )
+                // The probe itself failed: claim nothing rather than guess.
+                None => None
               }
             // A success needs no classifying, and a killed job's stop reason is
             // already named by the reader.
@@ -594,7 +597,11 @@ async fn execute(
     let text = rewrite_temp_paths(raw, [real, build_dir])
     // A zero exit already proves the program ran; only a failure needs the
     // artifact probe to say which stage it failed at.
-    let compiled = exit_code == 0 || snippet_compiled(build_dir, input.target)
+    let compiled = if exit_code == 0 {
+      Some(true)
+    } else {
+      snippet_compiled(build_dir, input.target)
+    }
     let body = finished_body(text, exit_code, compiled~)
     let body = if output_limit_reached {
       "\{body}\n[mbtx: output passed the fixed \{OutputCapBytes}-byte inline limit, so the program was STOPPED and this is only what it printed first. Retrying the same call will hit the same limit. Redirect bulky child output with `stdout=ToFile(path)` where `path` is under `@fs.tmpdir()`, then have that same snippet read the file and print only the needed excerpt before it exits.]"
@@ -649,7 +656,11 @@ async fn execute(
       // Rewrite the throwaway temp path to `source` so the model reads
       // `source:LINE:COL` about its own input, not a random temp path.
       let text = rewrite_temp_paths(raw, [real, build_dir])
-      let compiled = exit_code == 0 || snippet_compiled(build_dir, input.target)
+      let compiled = if exit_code == 0 {
+        Some(true)
+      } else {
+        snippet_compiled(build_dir, input.target)
+      }
       // PREPEND the exit status so it survives the agent loop's outer 60k
       // result clamp (which cuts the tail); the output cap is below 60k so
       // both the status line and the body are retained.
@@ -693,18 +704,22 @@ async fn execute(
 
 ///|
 /// Whether the snippet's runnable artifact exists under the throwaway
-/// `--target-dir` — the structural line between "the compiler rejected the
-/// program" and "the program ran". moon's single-file mode builds the snippet
-/// as package `single` and writes `single/single.<ext>` only once it compiled
-/// AND linked, and the directory is fresh for every call, so presence proves
-/// the program was launched, and absence after a failed run means the build
-/// rejected it before anything ran.
+/// `--target-dir` — the structural line between "the run failed at BUILD
+/// time" and "the program ran". moon's single-file mode builds the snippet as
+/// package `single` and writes `single/single.<ext>` only once it compiled
+/// AND linked, and the directory is fresh for every call, so `Some(true)`
+/// proves the program was launched, and `Some(false)` after a failed run
+/// means the failure came from the build — most often the compiler rejecting
+/// `source`, but the diagnostics themselves say whether it was that or a
+/// toolchain/dependency fault; absence alone cannot tell those apart, so the
+/// framing never claims more than "the program never ran". `None` means the
+/// probe itself failed and the stage is unknown.
 ///
 /// Structural on purpose: the OUTPUT cannot make this distinction. moon exits
 /// 1 for a rejected build and for a trapped program alike, and a snippet
 /// legitimately runs `moon check`/`moon test` as child processes, so compiler
 /// diagnostics in the log are routinely the program's own (successful) output.
-async fn snippet_compiled(build_dir : String, target : String) -> Bool {
+async fn snippet_compiled(build_dir : String, target : String) -> Bool? {
   let ext = match target {
     "js" => "js"
     "llvm" => "exe"
@@ -713,24 +728,32 @@ async fn snippet_compiled(build_dir : String, target : String) -> Bool {
   }
   // moon run builds the debug profile today. The release path is probed too so
   // a future default flip degrades this to an extra stat, not to every runtime
-  // failure being reported as a compile error.
+  // failure being reported as a build failure.
   for profile in ["debug", "release"] {
-    if @fs.exists(
-        "\{build_dir}/\{target}/\{profile}/build/single/single.\{ext}",
-      ) {
-      return true
+    let present = @fs.exists(
+      "\{build_dir}/\{target}/\{profile}/build/single/single.\{ext}",
+    ) catch {
+      error if @async.is_being_cancelled() => raise error
+      // A probe fault (EIO, EACCES on the tool's own throwaway dir) must
+      // neither fail a run that already finished nor masquerade as an answer:
+      // the stage is unknown, and the report falls back to the unclassified
+      // wording rather than folding the fault into "did not build".
+      _ => return None
+    }
+    if present {
+      return Some(true)
     }
   }
-  false
+  Some(false)
 }
 
 ///|
 /// The status framing for a finished run's body. Success passes the output
-/// through; a failure names WHICH failure it was — with `moon run`'s exit code
+/// through; a failure names WHICH stage failed — with `moon run`'s exit code
 /// identical for both, `compiled` (the artifact probe) is what separates "fix
-/// the source" from "debug the program", and saying so saves the model from
-/// misreading a runtime trap as a build it must re-check.
-fn finished_body(text : String, exit_code : Int, compiled~ : Bool) -> String {
+/// the build input" from "debug the program". `None` (the probe itself
+/// failed) keeps the pre-classification wording, claiming nothing.
+fn finished_body(text : String, exit_code : Int, compiled~ : Bool?) -> String {
   if exit_code == 0 {
     return if text.is_blank() {
       "mbtx: program exited 0 with no output"
@@ -738,25 +761,36 @@ fn finished_body(text : String, exit_code : Int, compiled~ : Bool) -> String {
       text
     }
   }
-  if !compiled {
-    // The build's own exit code (always 1) adds nothing over the diagnostics.
-    return if text.is_blank() {
-      "mbtx: COMPILE error with no diagnostics — the snippet did not build, so the program never ran"
-    } else {
-      "[mbtx: COMPILE error — the snippet did not build, so the program never ran]\n\{text}"
-    }
-  }
-  if text.is_blank() {
-    "mbtx: the program compiled and ran, then exited \{exit_code} with no output"
-  } else {
-    "[mbtx: exited \{exit_code} at RUNTIME — the program compiled and ran]\n\{text}"
+  match compiled {
+    // The build's own exit code (always 1) adds nothing over its diagnostics.
+    // "BUILD failed", not "compile error": no artifact proves the program
+    // never ran, while the output below is what says whether the compiler
+    // rejected `source` or the toolchain/dependencies faulted.
+    Some(false) =>
+      if text.is_blank() {
+        "mbtx: the BUILD failed with no output — the program never ran"
+      } else {
+        "[mbtx: BUILD failed — the program never ran; the output below is the build's]\n\{text}"
+      }
+    Some(true) =>
+      if text.is_blank() {
+        "mbtx: the program compiled and ran, then exited \{exit_code} with no output"
+      } else {
+        "[mbtx: exited \{exit_code} at RUNTIME — the program compiled and ran]\n\{text}"
+      }
+    None =>
+      if text.is_blank() {
+        "mbtx: program exited \{exit_code} with no output"
+      } else {
+        "[mbtx: exited \{exit_code}]\n\{text}"
+      }
   }
 }
 
 ///|
-fn finished_brief(exit_code : Int, compiled~ : Bool) -> String {
-  if exit_code != 0 && !compiled {
-    "mbtx (compile error)"
+fn finished_brief(exit_code : Int, compiled~ : Bool?) -> String {
+  if exit_code != 0 && compiled is Some(false) {
+    "mbtx (build failed)"
   } else {
     "mbtx (exit=\{exit_code})"
   }
@@ -765,13 +799,17 @@ fn finished_brief(exit_code : Int, compiled~ : Bool) -> String {
 ///|
 /// The first line of a foreground timeout report: the artifact probe says
 /// which half of the run never finished, so the model knows whether to
-/// suspect its program or the build.
-fn timeout_head(foreground_timeout_ms : Int, compiled~ : Bool) -> String {
+/// suspect its program or the build. An unknown probe result keeps the
+/// original hedge.
+fn timeout_head(foreground_timeout_ms : Int, compiled~ : Bool?) -> String {
   let bound = duration_label(foreground_timeout_ms)
-  if compiled {
-    "mbtx: timed out after \{bound} and was cancelled — the program compiled but did not finish (an infinite loop, or waiting on something that never arrived)."
-  } else {
-    "mbtx: timed out after \{bound} and was cancelled — the BUILD never completed (compilation or a dependency download stalled), so the program never ran."
+  match compiled {
+    Some(true) =>
+      "mbtx: timed out after \{bound} and was cancelled — the program compiled but did not finish (an infinite loop, or waiting on something that never arrived)."
+    Some(false) =>
+      "mbtx: timed out after \{bound} and was cancelled — the BUILD never completed (compilation or a dependency download stalled), so the program never ran."
+    None =>
+      "mbtx: timed out after \{bound} and was cancelled — the program did not finish (an infinite loop, or a build that never completed)."
   }
 }
 

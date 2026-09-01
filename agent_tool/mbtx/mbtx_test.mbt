@@ -34,18 +34,19 @@ async test "surfaces a compile error via moon's own diagnostics" {
   assert_true(
     out.content.to_lower().contains("type") || out.content.contains("String"),
   )
-  // ...and CLASSIFIED as one: moon exits 1 for a rejected build and a trapped
-  // program alike, so the report itself must say the program never ran.
-  assert_true(out.content.contains("COMPILE error"))
+  // ...and CLASSIFIED as a build-stage failure: moon exits 1 for a rejected
+  // build and a trapped program alike, so the report itself must say the
+  // program never ran.
+  assert_true(out.content.contains("BUILD failed"))
   assert_true(out.content.contains("never ran"))
-  assert_true(out.brief is Some("mbtx (compile error)"))
+  assert_true(out.brief is Some("mbtx (build failed)"))
 }
 
 ///|
 /// The classifier is structural (the build artifact probe), so program OUTPUT
 /// cannot sway it: compiler-diagnostic-shaped text is routinely a snippet's
 /// legitimate output — a child `moon check` run prints exactly that — and must
-/// not turn a runtime trap into a "compile error" or taint a clean exit.
+/// not turn a runtime trap into a build failure or taint a clean exit.
 async test "a runtime trap is classified as runtime, whatever the output says" {
   let out = run(
     "fn main { println(\"Error: [4014] fake diagnostic\"); panic() }",
@@ -53,14 +54,14 @@ async test "a runtime trap is classified as runtime, whatever the output says" {
   assert_true(out.is_error)
   assert_true(out.content.contains("at RUNTIME"))
   assert_true(out.content.contains("compiled and ran"))
-  assert_false(out.content.contains("COMPILE error"))
+  assert_false(out.content.contains("BUILD failed"))
 }
 
 ///|
 async test "diagnostic-shaped output with a clean exit stays unclassified" {
   let out = run("fn main { println(\"Error: [4014] fake diagnostic\") }")
   assert_false(out.is_error)
-  assert_false(out.content.contains("COMPILE error"))
+  assert_false(out.content.contains("BUILD failed"))
   assert_false(out.content.contains("at RUNTIME"))
 }
 

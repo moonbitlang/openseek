@@ -699,11 +699,11 @@ async test "a finished background job queues a notice and wakes the controller" 
 }
 
 ///|
-/// A compile error that only surfaces AFTER the handoff is still classified:
+/// A build failure that only surfaces AFTER the handoff is still classified:
 /// the adopted job's exit note is computed at terminal time (before the build
 /// dir is reclaimed) and rides the completion notice, so the model learns the
 /// snippet never built without spending another tool call.
-async test "a handed-off compile error is classified in its completion notice" {
+async test "a handed-off build failure is classified in its completion notice" {
   @async.with_task_group(group => {
     let scope = @agent_runtime.AgentTaskScope(group)
     let notices : Array[String] = []
@@ -734,7 +734,7 @@ async test "a handed-off compile error is classified in its completion notice" {
       @async.sleep(25)
     }
     guard notices is [notice, ..] else { fail("no completion notice arrived") }
-    assert_true(notice.contains("COMPILE error"))
+    assert_true(notice.contains("BUILD failed"))
     assert_true(notice.contains("never ran"))
     @fs.rmdir(spill_dir, recursive=true) catch {
       _ => ()

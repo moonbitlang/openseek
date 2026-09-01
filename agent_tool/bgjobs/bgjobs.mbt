@@ -111,19 +111,30 @@ priv struct BgJob {
   // observers are added later.
   mut on_terminal : (async () -> Unit)?
   // Optional launcher-supplied classification of a terminal exit (mbtx uses it
-  // to separate "the snippet never compiled" from "the program ran and
-  // failed"). Called with the exit code (`None` for a killed job) once the
-  // process is terminal — BEFORE `on_terminal`, because the classifier's
-  // evidence is often exactly what that cleanup deletes. Deliberately NOT
-  // cleared after use: a concurrent first computation must find the same
-  // closure and cache the same answer, never a spurious `None`.
+  // to separate "the snippet never built" from "the program ran and failed").
+  // Called with the exit code (`None` for a killed job) once the process is
+  // terminal — BEFORE `on_terminal`, because the classifier's evidence is
+  // often exactly what that cleanup deletes. It must settle promptly: a
+  // waiter (the exit watcher included, so cleanup too) blocks on an in-flight
+  // computation.
   exit_note_fn : (async (Int?) -> String?)?
-  mut exit_note_cached : Bool
-  mut exit_note : String?
+  mut exit_note_state : ExitNoteState
   // A terminal denial scan may read a large retained log. Cache its
   // classification so repeated job_output calls do not repeat that allocation.
   mut denial_scanned : Bool
   mut denial_feedback : String?
+}
+
+///|
+/// Lifecycle of a job's launcher-supplied exit classification. Single-flight
+/// on purpose: exactly one task may run the classifier, because a second
+/// computation could start before the terminal cleanup deletes the
+/// classifier's evidence, finish after it, and overwrite a correct cached
+/// answer with one read from the emptied directory.
+priv enum ExitNoteState {
+  NotComputed
+  Computing
+  Cached(String?)
 }
 
 ///|
@@ -363,8 +374,7 @@ fn BgJobRuntime::register(
     moonrun_policy_active,
     on_terminal,
     exit_note_fn,
-    exit_note_cached: false,
-    exit_note: None,
+    exit_note_state: NotComputed,
     denial_scanned: false,
     denial_feedback: None,
   }
@@ -444,38 +454,60 @@ fn BgJob::to_snapshot(self : BgJob) -> BgJobSnapshot {
     moonrun_policy_active: self.moonrun_policy_active,
     killed_by_output_limit: self.exec.killed_by_output_limit(),
     killed_by_time_limit: self.exec.killed_by_time_limit(),
-    exit_note: self.exit_note,
+    exit_note: match self.exit_note_state {
+      Cached(note) => note
+      NotComputed | Computing => None
+    },
   }
 }
 
 ///|
 /// The launcher's classification of a terminal job's exit — `None` while the
 /// job still runs, when the launcher supplied no classifier, or when it had
-/// nothing to say. Computed once and cached: the exit watcher calls this
-/// before `on_terminal`, so the classifier may read launcher resources that
-/// cleanup is about to reclaim, and every later reader hits the cache. A
-/// caller racing that first computation recomputes from the same still-intact
-/// evidence and caches the same answer, so the race is benign.
+/// nothing to say. Computed exactly once (single-flight) and cached: the exit
+/// watcher calls this before `on_terminal`, so the classifier reads launcher
+/// resources that cleanup is about to reclaim, and every other caller —
+/// including one racing that first computation — waits for its answer rather
+/// than recomputing. Recomputing was a live bug: a reader that entered before
+/// the watcher's answer landed could finish AFTER cleanup emptied the
+/// evidence directory and overwrite the correct note with a wrong one.
 pub async fn BgJobRuntime::exit_note(
   self : BgJobRuntime,
   id : String,
 ) -> String? {
   guard self.jobs.get(id) is Some(job) else { return None }
   guard !(bg_status(job.exec.status()) is Running) else { return None }
-  if job.exit_note_cached {
-    return job.exit_note
-  }
-  let note = match job.exit_note_fn {
-    Some(classify) =>
-      classify(job.exec.exit_code()) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => None
+  for ;; {
+    match job.exit_note_state {
+      Cached(note) => return note
+      // Another task holds the flight; await its answer. (The single-threaded
+      // scheduler makes the NotComputed→Computing transition below atomic, so
+      // two tasks can never both claim it.)
+      Computing => @async.sleep(5)
+      NotComputed => {
+        guard job.exit_note_fn is Some(classify) else {
+          job.exit_note_state = Cached(None)
+          return None
+        }
+        job.exit_note_state = Computing
+        let note = classify(job.exec.exit_code()) catch {
+          error if @async.is_being_cancelled() => {
+            // A cancelled computation decided nothing: release the flight so
+            // the next caller (usually the exit watcher) computes, instead of
+            // caching a guess or wedging every waiter.
+            job.exit_note_state = NotComputed
+            raise error
+          }
+          // A real classifier failure is an answer of its own — caching it as
+          // "nothing to say" would silently erase the failure stage from the
+          // notice and job_output.
+          error => Some("exit-stage classification failed (\{error}).")
+        }
+        job.exit_note_state = Cached(note)
+        return note
       }
-    None => None
+    }
   }
-  job.exit_note = note
-  job.exit_note_cached = true
-  note
 }
 
 ///|
@@ -732,6 +764,71 @@ async test "the exit note is computed before terminal cleanup" {
     assert_true(received is [Some(3)])
     // The cached note is also on the snapshot for sync readers (the notice).
     assert_true(rt.snapshot(id).unwrap().exit_note is Some("cleaned=false"))
+  })
+}
+
+///|
+/// Regression (review finding): a reader that entered classification while
+/// the watcher's flight was still running used to RECOMPUTE — finishing after
+/// terminal cleanup had emptied the evidence directory and overwriting the
+/// correct cached note with one read from the emptied state. Single-flight
+/// means the late reader waits for the flight's answer and the classifier
+/// runs exactly once, strictly before cleanup.
+#cfg(not(platform="windows"))
+async test "a reader racing the exit watcher joins its flight, never recomputes" {
+  @async.with_task_group(group => {
+    let scope : @agent_runtime.AgentTaskScope[Unit] = AgentTaskScope(group)
+    let rt = BgJobRuntime::BgJobRuntime(scope)
+    let exec = @shell_exec.ShellExecution::start(scope, program="sh", args=[
+      "-c", "exit 3",
+    ])
+    let mut calls = 0
+    let mut cleaned = false
+    let id = rt.adopt(
+      exec,
+      command="exit 3",
+      exit_note=_ => {
+        calls += 1
+        // Hold the flight open long enough for the reader below to land in it.
+        @async.sleep(100)
+        Some(if cleaned { "missing" } else { "present" })
+      },
+      on_terminal=() => cleaned = true,
+    )
+    // Enter the accessor while the watcher's classification is in flight.
+    for _ in 0..<200 {
+      if calls == 1 {
+        break
+      }
+      @async.sleep(5)
+    }
+    assert_true(rt.exit_note(id) is Some("present"))
+    assert_true(rt.snapshot(id).unwrap().exit_note is Some("present"))
+    assert_eq(calls, 1)
+  })
+}
+
+///|
+/// A classifier failure is an answer of its own: folding it into "nothing to
+/// say" would silently erase the failure stage from the completion notice and
+/// job_output.
+#cfg(not(platform="windows"))
+async test "a failing classifier is reported, not silently dropped" {
+  @async.with_task_group(group => {
+    let scope : @agent_runtime.AgentTaskScope[Unit] = AgentTaskScope(group)
+    let rt = BgJobRuntime::BgJobRuntime(scope)
+    let exec = @shell_exec.ShellExecution::start(scope, program="sh", args=[
+      "-c", "exit 3",
+    ])
+    let id = rt.adopt(exec, command="exit 3", exit_note=_ => {
+      fail("probe exploded")
+    })
+    let _ = rt.wait_exit(id, 30_000)
+    guard rt.exit_note(id) is Some(note) else {
+      fail("expected a tagged failure note")
+    }
+    assert_true(note.contains("classification failed"))
+    assert_true(note.contains("probe exploded"))
   })
 }
 
