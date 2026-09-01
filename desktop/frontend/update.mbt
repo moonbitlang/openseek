@@ -7062,9 +7062,15 @@ fn update_device_msg(
                 current == submission_id => {
                 // The host has no record of this start, so the prompt never
                 // opened a run. Close the local lifecycle and let the entry
-                // go with it.
+                // go with it. The predecessor is already represented by its
+                // retirement fence; it must not remain the successor's
+                // last-run owner and intercept a delayed Finished first.
                 let (settled, _) = conv.settle_pending_prompt(submission_id)
-                { ..settled.clear_streams(), run: NoRun(ended=None), }
+                {
+                  ..settled.clear_streams(),
+                  run: NoRun(ended=None),
+                  last_run_id: None,
+                }
               }
               _ => conv
             }
@@ -7307,7 +7313,14 @@ fn update_device_msg(
         } else {
           let next = if conv.run is Starting(submission_id=current) &&
             current == submission_id {
-            { ..settled.clear_streams(), run: NoRun(ended=Some(RunFailed)), }
+            {
+              ..settled.clear_streams(),
+              run: NoRun(ended=Some(RunFailed)),
+              // A predecessor remains addressable through retired_run_ids;
+              // keeping it as this failed successor's last owner would let its
+              // delayed Finished overwrite the failure below.
+              last_run_id: None,
+            }
           } else {
             // A Started push/response for another run won the race. An
             // uncorrelated transport failure must never close that open run.
@@ -7478,6 +7491,12 @@ fn update_device_msg(
         })
         is Some((conv, preserve_successor)) {
         let first_finish = !conv.reconciled_run_ids.contains(run_id)
+        // A recovered settlement and the live notification travel on
+        // independently queued paths. Whichever reaches this reducer first
+        // owns every terminal side effect; the other is a strict replay.
+        if !first_finish {
+          return (@cmd.none, model)
+        }
         // Missing receipts are not guessed dropped. Keep exact-id ownership
         // briefly and show a truthful unconfirmed notice behind the durable
         // terminal boundary; a trailing receipt may still settle it.
@@ -10990,7 +11009,12 @@ test "a start failure closes only a still-starting run" {
 test "a matching Started establishes the run after an undelivered response" {
   let dispatch = test_dispatch()
   let conv = with_pending_prompt(
-    { ..test_conversation(), run: Starting(submission_id="prompt-id"), },
+    {
+      ..test_conversation(),
+      run: Starting(submission_id="prompt-id"),
+      last_run_id: Some("r-predecessor"),
+      retired_run_ids: ["r-predecessor"],
+    },
     "prompt-id",
     "accepted prompt",
   )
@@ -11003,6 +11027,13 @@ test "a matching Started establishes the run after an undelivered response" {
     ),
     test_model().replace_conversation(conv),
   )
+  assert_eq(failed.active().last_run_id, None)
+  let (_, predecessor_finished) = update_dev(
+    dispatch,
+    Finished(run_id="r-predecessor", status="finished", answer=None),
+    failed,
+  )
+  assert_true(predecessor_finished.active().run is NoRun(ended=Some(RunFailed)))
   let (_, started) = update_dev(
     dispatch,
     Started(
@@ -11013,7 +11044,7 @@ test "a matching Started establishes the run after an undelivered response" {
       session_root=None,
       submission_id=Some("prompt-id"),
     ),
-    failed,
+    predecessor_finished,
   )
   // The lost response ended the entry and left no notice behind; a Started
   // that arrives anyway is still the run's exact identity.
@@ -12235,6 +12266,39 @@ test "a rejected successor is not overwritten by its predecessor Finished" {
 }
 
 ///|
+test "negative Starting settlement clears predecessor last-run authority" {
+  let dispatch = test_dispatch()
+  let starting = with_pending_prompt(
+    {
+      ..test_conversation(),
+      run: Starting(submission_id="successor-start"),
+      last_run_id: Some("r-predecessor"),
+      retired_run_ids: ["r-predecessor"],
+    },
+    "successor-start",
+    "successor prompt",
+  )
+  let model = test_model().replace_conversation(starting)
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, settled) = update_dev(
+    dispatch,
+    RunsSettled(live=[], frontier~),
+    model,
+  )
+  assert_true(settled.active().run is NoRun(ended=None))
+  assert_eq(settled.active().last_run_id, None)
+  let (_, predecessor_finished) = update_dev(
+    dispatch,
+    Finished(run_id="r-predecessor", status="finished", answer=None),
+    settled,
+  )
+  assert_true(predecessor_finished.active().run is NoRun(ended=None))
+  assert_true(
+    predecessor_finished.active().reconciled_run_ids.contains("r-predecessor"),
+  )
+}
+
+///|
 test "a reconciled idle settlement replay has no terminal side effects" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
@@ -12267,6 +12331,52 @@ test "a reconciled idle settlement replay has no terminal side effects" {
   )
   assert_false(replayed.active().unseen_finish)
   assert_true(replayed.active().sync is Synced)
+}
+
+///|
+test "a live Finished after recovered settlement cannot re-badge it" {
+  let dispatch = test_dispatch()
+  let model = running_model()
+  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          submission_id: None,
+          status: "finished",
+        },
+      ],
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=model.dev().connection_generation,
+    ),
+    model,
+  )
+  assert_false(recovered.active().unseen_finish)
+  let elsewhere = recovered.activate(
+    @interop.ChannelId::Local,
+    "desktop-elsewhere",
+    @interop.ChannelId::Local.test_project(),
+  )
+  let sessions_generation = elsewhere.dev().sessions_request_generation
+  let transcript_generation = elsewhere.transcript_request_generation
+  let (_, duplicate) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="finished", answer=None),
+    elsewhere,
+  )
+  guard duplicate.find_conversation(@interop.ChannelId::Local, "desktop-test")
+    is Some(settled) else {
+    fail("settled conversation disappeared")
+  }
+  assert_false(settled.unseen_finish)
+  assert_eq(duplicate.dev().sessions_request_generation, sessions_generation)
+  assert_eq(duplicate.transcript_request_generation, transcript_generation)
 }
 
 ///|
@@ -14849,6 +14959,10 @@ test "switching same-id archived stores fences the first transcript load" {
     fail("the first archived store did not begin loading")
   }
   assert_eq(loading_first.active().workspace, Project(root=first))
+  let loading_first = loading_first.replace_conversation({
+    ..loading_first.active(),
+    retired_run_ids: ["r-first-store"],
+  })
   let (_, loading_second) = update(
     dispatch,
     OpenArchivedSession(
@@ -14907,6 +15021,22 @@ test "switching same-id archived stores fences the first transcript load" {
     loaded_second.active().messages[0].content,
     content="second store answer",
   )
+  assert_true(loaded_second.dev().retired_run_fences.contains("r-first-store"))
+  let (_, delayed_first) = update_dev(
+    dispatch,
+    Started(
+      run_id="r-first-store",
+      session=first_item.id,
+      model=High,
+      max_steps=1000,
+      session_root=Some(first),
+      submission_id=Some("first-store-start"),
+    ),
+    loaded_second,
+  )
+  assert_eq(delayed_first.active().workspace, Project(root=second))
+  assert_true(delayed_first.active().record is ArchivedRecord)
+  assert_true(delayed_first.active().run is NoRun(..))
 }
 
 ///|

@@ -3294,12 +3294,34 @@ fn Model::composing_new_chat(self : Model) -> Bool {
 ///|
 /// Replace (or add) the entry sharing `conv`'s session id, copy-on-write —
 /// prior model snapshots keep their own conversations array.
+///
+/// Session ids are store-local, while this UI deliberately keeps only one
+/// `(device, session)` owner. Replacing that owner across a live/archived or
+/// workspace boundary must therefore spill any terminal run identities the
+/// incoming owner does not carry into the device fence. Otherwise a delayed
+/// Started from the displaced store can be mistaken for the new store's run.
 fn Model::replace_conversation(self : Model, conv : Conversation) -> Model {
   let conversations = self.conversations.copy()
   for index, existing in conversations {
     if existing.device == conv.device && existing.session_id == conv.session_id {
       conversations[index] = conv
-      return { ..self, conversations, }
+      let replaced = { ..self, conversations, }
+      guard replaced.device_state(conv.device) is Some(dev) else {
+        return replaced
+      }
+      let retired_run_fences = dev.retired_run_fences.copy()
+      let mut changed = false
+      for run_id in existing.retired_run_ids {
+        if !conv.retired_run_ids.contains(run_id) &&
+          !retired_run_fences.contains(run_id) {
+          retired_run_fences.push(run_id)
+          changed = true
+        }
+      }
+      if changed {
+        return replaced.replace_device({ ..dev, retired_run_fences, })
+      }
+      return replaced
     }
   }
   conversations.push(conv)
