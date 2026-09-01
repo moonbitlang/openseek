@@ -552,6 +552,7 @@ async fn execute(
       "moon",
       [
         "run",
+        "-q",
         "\{build_dir}/snippet.mbtx",
         "--target",
         input.target,
@@ -803,6 +804,7 @@ async fn build_snippet(
 ) -> BuildOutcome {
   let build_argv = [
     "run",
+    "-q",
     "\{build_dir}/snippet.mbtx",
     "--build-only",
     "--target",
