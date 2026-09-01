@@ -175,6 +175,36 @@ jobs:
       - name: Update MoonBit dependencies
         run: moon update
 
+      # The workspace includes Desktop, so Proton's module prebuild runs while
+      # Viz builds its JS target too. Keep this job on the version pinned by
+      # Desktop instead of duplicating the dependency version in CI.
+      - name: Resolve pinned Proton version
+        id: proton
+        run: |
+          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/moon.mod)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Proton runtime
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
+
+      # Proton's prebuild queries pkg-config even for the workspace's JS build.
+      # Playwright installs browser libraries, not these development metadata.
+      - name: Install Proton Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgtk-3-dev libx11-dev
+
+      - name: Assemble Proton CEF runtime
+        run: >-
+          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
+          cef setup
+
       - name: Install E2E dependencies
         working-directory: cmd/viz_app/e2e
         run: npm ci
