@@ -388,7 +388,7 @@ pub fn boot() -> Unit {
             emit.map((_ : Unit) => CloseGitDetails)
           }
           subs.push(
-            dismiss_subscription(
+            @dismiss.on_outside_click(
               "composer-git-dismiss",
               trigger=".composer-git-button",
               close,
@@ -397,7 +397,7 @@ pub fn boot() -> Unit {
         }
         if model.select_menu is Some(_) {
           subs.push(
-            dismiss_subscription(
+            @dismiss.on_outside_click(
               "custom-select-dismiss",
               trigger=".custom-select-button",
               emit.map((_ : Unit) => CloseSelectMenu),
@@ -406,7 +406,7 @@ pub fn boot() -> Unit {
         }
         if model.right_panel_menu_open {
           subs.push(
-            dismiss_subscription(
+            @dismiss.on_outside_click(
               "right-panel-menu-dismiss",
               trigger=".tab-add",
               emit.map((_ : Unit) => CloseRightPanelMenu),
@@ -446,7 +446,7 @@ pub fn boot() -> Unit {
         }
         if model.file_panel.highlighted is Some(directory) {
           subs.push(
-            dismiss_subscription(
+            @dismiss.on_outside_click(
               "breadcrumb-picker-dismiss",
               // Directory crumbs toggle the picker, and the picker itself
               // supports nested folder navigation. Every other click closes

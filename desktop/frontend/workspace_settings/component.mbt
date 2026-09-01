@@ -118,105 +118,6 @@ fn Model::update(
 }
 
 ///|
-/// Click-away dismissal for this page's select menus, active only while one
-/// is open. Same capture-phase document listener shape as the root app's
-/// menus, but component-local: the trigger selector matches the shared
-/// custom-select button, and everything else closes the menu.
-priv suberror MenuDismissSubscription {
-  MenuDismissSubscription(@cmd.Emit[Unit])
-}
-
-///|
-fn menu_dismiss_subscription(emit : @cmd.Emit[Unit]) -> @sub.Sub {
-  @sub.custom_sub(
-    "workspace-settings-select-dismiss",
-    @sub.Scope::Global,
-    MenuDismissSubscription(emit),
-    menu_dismiss_loader,
-  )
-}
-
-///|
-fn menu_dismiss_loader(
-  payload : Error,
-  scheduler : &@cmd.Scheduler,
-) -> @sub.RunningSub? {
-  match payload {
-    MenuDismissSubscription(emit) => {
-      let mut emit = emit
-      let target = @dom.document().as_event_target()
-      let listener : @dom.Listener = event => {
-        // Event targets can be non-elements. Those cannot be the trigger,
-        // so they dismiss just like a click anywhere else in the document.
-        if event.target().to_element() is Some(element) &&
-          element.closest(".custom-select-button") is Some(_) {
-          return
-        }
-        scheduler.add(emit(()))
-      }
-      target.add_event_listener_with_options("click", listener, capture=true)
-      Some({
-        unload: _ => {
-          target.remove_event_listener_with_options(
-            "click",
-            listener,
-            capture=true,
-          )
-        },
-        update_tagger: payload => {
-          guard payload is MenuDismissSubscription(next) else { return }
-          emit = next
-        },
-      })
-    }
-    _ => None
-  }
-}
-
-///|
-/// One settings row: name and optional description on the left, the control
-/// on the right. Mirrors the root Settings page's row layout so the two
-/// pages read as siblings.
-fn setting_row(
-  name : String,
-  controls : Array[@html.Html],
-  desc? : String,
-) -> @html.Html {
-  let text : Array[@html.Html] = [@html.div(class="setting-name", name)]
-  if desc is Some(desc) && !desc.is_empty() {
-    text.push(@html.div(class="setting-desc", desc))
-  }
-  @html.div(class="setting-row", [
-    @html.div(class="setting-text", text),
-    @html.div(class="setting-control", controls),
-  ])
-}
-
-///|
-/// A titled card of rows: an accent-tinted icon and heading above a
-/// bordered surface — the design system's settings section, shared with the
-/// Settings page so the two pages read as siblings.
-fn settings_group(
-  icon_image : () -> @html.Html,
-  title : String,
-  rows : Array[@html.Html],
-) -> @html.Html {
-  @html.div(class="settings-group", [
-    @html.div(class="settings-group-head", [icon(icon_image), @html.h2(title)]),
-    @html.div(class="settings-group-card", rows),
-  ])
-}
-
-///|
-/// An icon in a fixed-size span. Icons are functions, not shared constants,
-/// so each render site gets its own virtual-DOM value.
-fn icon(image : () -> @html.Html) -> @html.Html {
-  @html.span(class="icon", attrs=@html.Attrs::build().aria_hidden("true"), [
-    image(),
-  ])
-}
-
-///|
 /// Build one full-width settings select from the shared custom control,
 /// bound to this component's local menu state. Choosing a value closes the
 /// menu immediately and hands the choice to the root-owned action, which
@@ -291,7 +192,7 @@ fn page_view(
         Unloaded => (false, true, 10)
       }
       let conversation_rows : Array[@html.Html] = [
-        setting_row(
+        @settings.row(
           "New chats",
           [
             setting_select(
@@ -313,7 +214,7 @@ fn page_view(
         ),
       ]
       let worktree_rows : Array[@html.Html] = [
-        setting_row(
+        @settings.row(
           "Submodules",
           [
             setting_select(
@@ -333,7 +234,7 @@ fn page_view(
           ],
           desc="For new or repaired worktrees in this workspace, mirror the top-level submodules already initialized in its main checkout.",
         ),
-        setting_row(
+        @settings.row(
           "Checkout timeout",
           [
             setting_select(
@@ -364,10 +265,10 @@ fn page_view(
             @html.div(class="settings-subtitle", workspace.path),
           ]),
           @html.div(class="settings", [
-            settings_group(
+            @settings.group(
               @icons.icon_worktree, "Conversations", conversation_rows,
             ),
-            settings_group(@icons.icon_worktree, "Worktrees", worktree_rows),
+            @settings.group(@icons.icon_worktree, "Worktrees", worktree_rows),
           ]),
         ]),
       ])
@@ -392,7 +293,11 @@ pub fn component(
       // (workspace detach, screen switch) unloads the click-away listener
       // even though the menu state itself resets on the next update.
       if state.menu is Some(_) && state.key == input.page {
-        menu_dismiss_subscription(emit.map(_ => CloseMenu))
+        @dismiss.on_outside_click(
+          "workspace-settings-select-dismiss",
+          trigger=".custom-select-button",
+          emit.map(_ => CloseMenu),
+        )
       } else {
         @sub.none
       }

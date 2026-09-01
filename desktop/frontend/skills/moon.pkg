@@ -9,6 +9,7 @@ import {
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/markdown",
+  "openseek_desktop/frontend/settings",
 }
 
 supported_targets = "js"

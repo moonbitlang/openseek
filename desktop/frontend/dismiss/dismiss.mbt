@@ -15,19 +15,21 @@
 /// Close a menu on the next click that is not its own trigger.
 ///
 /// `key` names the running subscription, so two menus open at once (or a menu
-/// reopened under a different trigger) do not share one listener. `trigger` is
+/// reopened under a different trigger) do not share one listener. The scope is
+/// global, so a component's key has to stay distinct from the root app's too.
+/// `trigger` is
 /// a CSS selector for the control that toggles the menu: a click there must
 /// not close it here, or the toggle that follows would reopen what the click
 /// meant to dismiss. Everything else closes it, the menu's own contents
 /// included — an item that acts and an item that navigates both leave.
-fn dismiss_subscription(
+pub fn on_outside_click(
   key : String,
   trigger~ : String,
   emit : @cmd.Emit[Unit],
 ) -> @sub.Sub {
   @sub.custom_sub(
     key,
-    Global,
+    @sub.Scope::Global,
     DismissSubscription(trigger, emit),
     dismiss_sub_loader,
   )
@@ -41,7 +43,7 @@ priv suberror DismissSubscription {
 ///|
 fn dismiss_sub_loader(
   payload : Error,
-  scheduler : &Scheduler,
+  scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
     DismissSubscription(trigger, emit) => {

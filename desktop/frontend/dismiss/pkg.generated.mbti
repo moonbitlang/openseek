@@ -1,0 +1,18 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/dismiss"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/sub",
+}
+
+// Values
+pub fn on_outside_click(String, trigger~ : String, @cmd.Emit[Unit]) -> @sub.Sub
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

@@ -2,21 +2,6 @@
 // so the whole page can be rendered in a test from constant values.
 
 ///|
-/// A titled card of rows: an accent-tinted icon and heading above a bordered
-/// surface. The Settings page draws its sections the same way, which is what
-/// makes the two pages read as siblings.
-fn group(
-  icon_image : () -> @html.Html,
-  title : String,
-  rows : Array[@html.Html],
-) -> @html.Html {
-  @html.div(class="settings-group", [
-    @html.div(class="settings-group-head", [icon(icon_image), @html.h2(title)]),
-    @html.div(class="settings-group-card", rows),
-  ])
-}
-
-///|
 /// One local-library row: name, description, and — for registry installs
 /// only — the source tag and the uninstall button. Hand-written skills are
 /// listed so the user sees everything the engine advertises, but the app
@@ -363,7 +348,7 @@ fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html 
       ),
     )
   }
-  sections.push(group(icon_extensions, "Installed", installed_rows))
+  sections.push(@settings.group(icon_extensions, "Installed", installed_rows))
   let market_rows : Array[@html.Html] = []
   match state.catalog {
     Idle | Loading(_) =>
