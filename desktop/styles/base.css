@@ -179,34 +179,18 @@ samp,
   background: var(--color-text-selection);
 }
 
-/* Shared native scrollbar geometry and visible-thumb inset. */
+/* The app's one say over native scrollbars: the thumb color. Everything else
+   — the bar's width, and whether it overlays the content or takes a lane out
+   of it — belongs to the platform. Panes that need to know which of those
+   they got read `--scrollbar-lane`, measured at startup by
+   frontend/dom_helpers.mbt.
+
+   Do not reach for `::-webkit-scrollbar` to take any of that back: Chromium
+   drops those rules for any element with a non-initial `scrollbar-color`, and
+   this declaration inherits to every element in the page. Rules written there
+   would apply nowhere and quietly mislead whoever reads them next. */
 html {
   scrollbar-color: var(--color-scrollbar-thumb) transparent;
-}
-
-::-webkit-scrollbar {
-  width: var(--scrollbar-size);
-  height: var(--scrollbar-size);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-scrollbar-thumb);
-  border-radius: var(--radius-pill);
-  border: 1px solid transparent;
-  background-clip: padding-box;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-scrollbar-thumb-hover);
-  background-clip: padding-box;
-}
-::-webkit-scrollbar-thumb:active {
-  background: var(--color-scrollbar-thumb-active);
-  background-clip: padding-box;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-corner {
-  background: transparent;
 }
 
 /* Inline SVG icons (vscode-codicons). They take the surrounding control's
