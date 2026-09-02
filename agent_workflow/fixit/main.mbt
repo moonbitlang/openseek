@@ -22,9 +22,9 @@ async fn main raise {
   // ---- Phase 1: the scout finds something worth fixing ----
   wf.phase("Scout")
   let finding = wf.agent(
-    "Find ONE small, uncontroversial documentation defect — a typo, a stale sentence, or a wrong identifier — in the markdown or doc comments of workflow/ or agent_workflow/. Reply with: the file path, the EXACT current text, and the corrected text. Pick something a one-line edit fixes.",
+    "Read the 'Known limits' section of agent_workflow/README.mbt.md and the code each limit describes. Pick the ONE limit whose wording is least precise, and draft a sharper version of that sentence, justified by a specific code line. Reply with: the file path, the EXACT current sentence, and the improved sentence (a one-line edit).",
     kind="explore",
-    max_steps=20,
+    max_steps=24,
     label="scout:defect",
   ) catch {
     error => {
@@ -38,6 +38,7 @@ async fn main raise {
   }
   println("── scout found:\n\{clip(brief, 500)}\n")
 
+
   // ---- Phase 2: a confined worker applies it ----
   // The worker's task EMBEDS the scout's finding: edit the scout's
   // prompt later and replay re-runs both; edit nothing and both replay.
@@ -47,7 +48,7 @@ async fn main raise {
       wf,
       name="fixit",
       task="Apply EXACTLY this one documentation correction and nothing else: \{clip(brief, 1500)}",
-      allowed_paths=["workflow/", "agent_workflow/"],
+      allowed_paths=["workflow/", "agent_workflow/", "agent_subrun/", "agent_subtask/"],
       max_steps=40,
     ) {
     Ok(outcome) => {

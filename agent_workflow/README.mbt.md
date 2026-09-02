@@ -96,11 +96,13 @@ guessed), `discard_slice` abandons it, `slices()` lists every generation.
 
 ## Known limits
 
-- No adapter-level `continue` for truncated slices yet. A cancelled
-  child leaves its entry `Running`, which only discard can clear
-  (provisioning's resume path accepts `Committed`/`Captured`, not
-  `Running`); a truncated-but-captured slice can be continued through
-  the engine's `subtask continue`.
+- No adapter-level `continue` for truncated slices yet. An EXTERNALLY
+  cancelled child (the workflow torn down mid-slice) re-raises before
+  git capture and leaves its entry `Running`, which only discard can
+  clear (provisioning's resume path accepts `Committed`/`Captured`,
+  not `Running`). A child cancelled by the wall DEADLINE is different:
+  it reaches capture as `TimedOut`, so mergeable edits are salvaged and
+  the slice can be continued through the engine's `subtask continue`.
 - Provision refusals and non-mergeable captures both surface as
   `AgentFailure::Failed(reason)` — a typed split is future work.
 - One writing workflow process per journal path, and one engine per
