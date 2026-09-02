@@ -1,6 +1,5 @@
 import {
   "bobzhang/openseek/agent_runtime",
-  "moonbitlang/async/fs",
   "bobzhang/openseek/agent_tool/internal/sandbox",
   "bobzhang/openseek/agent_tool/shell_exec",
   "moonbitlang/async",

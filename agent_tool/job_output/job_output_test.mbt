@@ -47,7 +47,6 @@ async fn poll_bg_terminal(bg : @bgjobs.BgJobRuntime, id : String) -> Unit {
 /// Poll until the job's captured output contains `needle`, on the same budget
 /// as `poll_bg_terminal`. Replaces fixed sleeps: moonx startup is ~100ms warm
 /// and unbounded cold, so a flat delay would flake.
-#cfg(not(platform="windows"))
 async fn poll_bg_output(
   bg : @bgjobs.BgJobRuntime,
   id : String,

@@ -282,8 +282,10 @@ jobs:
         # The whole integrated workspace compiles on Windows — including the
         # desktop member — the local-dependency integration gate the Linux
         # rows perform for their own target. No CEF runtime is needed:
-        # checks never link.
-        run: moon check --target native --deny-warn
+        # checks never link. Warnings are tolerated here (Linux keeps the
+        # --deny-warn gate): platform-gated tests legitimately leave some
+        # imports/fields unused on Windows.
+        run: moon check --target native
 
       # Full native test suite: the root module and every workspace member
       # (editor, desktop, inspect, protocol, workflow). Nothing here

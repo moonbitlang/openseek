@@ -10,6 +10,10 @@ import {
 
 import {
   "bobzhang/openseek/testkit/filesystem" @vfs,
+} for "wbtest"
+
+import {
+  "bobzhang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",

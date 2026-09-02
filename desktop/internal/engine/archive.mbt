@@ -632,21 +632,23 @@ async fn move_session_record(
 let ambient_env_test_lock : @async.Mutex = Mutex()
 
 ///|
+#cfg(platform="windows")
+fn test_home_env_name() -> String {
+  "USERPROFILE"
+}
+
+///|
 #cfg(not(platform="windows"))
 fn test_home_env_name() -> String {
   "HOME"
 }
 
 ///|
-
-///|
-#cfg(not(platform="windows"))
 fn set_test_home(value : String) -> Unit {
   @sys.set_env_var(test_home_env_name(), value)
 }
 
 ///|
-#cfg(not(platform="windows"))
 fn restore_home_env(previous : String?) -> Unit {
   if previous is Some(value) {
     @sys.set_env_var(test_home_env_name(), value)

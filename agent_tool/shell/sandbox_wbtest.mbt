@@ -1196,7 +1196,6 @@ async test "sandbox preblocks common source-writing commands" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 fn is_some_path(value : String?, expected : String) -> Bool {
   match value {
     Some(path) => path == expected
@@ -1353,7 +1352,6 @@ async fn dyn_tree_target(cmd : String, root : String, cwd : String?) -> String? 
 
 ///|
 /// `direct_source_write_redirect_target_for_root` on `cmd` parsed for policy.
-#cfg(not(platform="windows"))
 fn redirect_target(cmd : String, root : String, cwd : String?) -> String? {
   direct_source_write_redirect_target_for_root(
     @shell_parse.parse_for_policy(cmd),
