@@ -561,6 +561,7 @@ test "parse_ide_hover collapses malformed or empty output" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "parse_check_output groups diagnostics per file in LSP shape" {
   guard @pathx.Path("/w").to_absolute() is Some(root) else {
     fail("expected an absolute fixture root")
@@ -637,6 +638,7 @@ test "parse_check_output groups diagnostics per file in LSP shape" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "diagnostics_pushes uses root-relative paths and clears dropped files" {
   guard @pathx.Path("/w").to_absolute() is Some(root) else {
     fail("expected an absolute request root")

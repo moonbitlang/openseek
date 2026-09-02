@@ -56,6 +56,7 @@ pub async fn engine_command(framework_command : String) -> String {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "packaged sibling wins before the matching Moon build engine" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-development-engine-")
   let build = root.join("_build/native/debug/build")

@@ -756,6 +756,7 @@ async test "a corrupt file reads as defaults and survives until a save" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "run config resolves the endpoint from the stored provider" {
   with_settings_dir(async fn(dir, manager) {
     // A run needs a workspace before it can resolve anything else. This test

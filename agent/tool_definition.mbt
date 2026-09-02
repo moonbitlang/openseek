@@ -293,6 +293,7 @@ async test "a compile error never becomes a job, whatever the grace" {
 /// A handed-off snippet may put a bulky result in its policy-owned temp area
 /// and print the path. Terminal status reclaims compiler artifacts without
 /// deleting that result before the completion notice can be acted on.
+#cfg(not(platform="windows"))
 async test "a handed-off job cleans builds but keeps result files until teardown" {
   @async.with_task_group(group => {
     let spill_dir = @fs.tmpdir(prefix="openseek-job-result-")

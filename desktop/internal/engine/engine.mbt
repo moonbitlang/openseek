@@ -2685,6 +2685,7 @@ async test "timed out command-lock waiter is removed" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "native engine env has one authoritative bundled moon path" {
   let ambient_path = @sys.get_env_var("PATH")
   let root = @pathx.Path(@fs.tmpdir(prefix="openseek-engine-env-"))
@@ -2751,6 +2752,7 @@ async test "native engine env has one authoritative bundled moon path" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async fn prepare_fake_moonbit_seed(
   seed : @pathx.Path,
   version~ : String,
@@ -2766,6 +2768,7 @@ async fn prepare_fake_moonbit_seed(
 }
 
 ///|
+#cfg(not(platform="windows"))
 async fn prepare_fake_bundled_moonbit_home(
   moon_home : @pathx.Path,
   version~ : String,
@@ -2785,6 +2788,7 @@ async fn prepare_fake_bundled_moonbit_home(
 }
 
 ///|
+#cfg(not(platform="windows"))
 async fn write_fake_file(path : @pathx.Path) -> Unit {
   @fsx.ensure_dir(path.dirname())
   @fs.write_file(path.to_string(), "", create_mode=CreateOrTruncate)
@@ -2793,6 +2797,7 @@ async fn write_fake_file(path : @pathx.Path) -> Unit {
 ///|
 /// The resolver only assembles a toolchain around a regular executable `moon`,
 /// and initialization executes `moonc`, so both fakes must carry the bit.
+#cfg(not(platform="windows"))
 async fn write_fake_executable(path : @pathx.Path) -> Unit {
   @fsx.ensure_dir(path.dirname())
   @fs.write_file(

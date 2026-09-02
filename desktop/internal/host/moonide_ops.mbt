@@ -379,6 +379,7 @@ test "Moon IDE relative paths normalize in-root paths and reject escapes" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "Moon IDE parser expands ranges before physical security filtering" {
   let workspace = @pathx.Path("/workspace").resolve()
   let reply = parse_moonide_output(
@@ -431,6 +432,7 @@ test "Moon IDE parser expands ranges before physical security filtering" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "physical Moon IDE results keep the supplied lexical root identity" {
   let lexical = @pathx.Path("/attached/project-link").resolve()
   let physical = @pathx.Path("/private/projects/project").resolve()

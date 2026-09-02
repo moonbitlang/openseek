@@ -11,6 +11,7 @@ checking shape rather than spelling:
 
 ```mbt check
 ///|
+#cfg(not(platform="windows"))
 test "args carries the command text through as the final argument" {
   // ["-c", cmd] on POSIX, ["-NoProfile", "-Command", cmd] on Windows —
   // either way the command text is the last argument, verbatim.

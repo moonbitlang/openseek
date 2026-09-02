@@ -1567,6 +1567,7 @@ async test "--dir rejects existing non-directories" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "session root resolves relative to workspace root" {
   let parsed = run_matches(argv=["write", "MoonBit"], env={
     "DEEPSEEK": "test-key",
@@ -1741,6 +1742,7 @@ async test "configured system prompt advertises global skills" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "configured system prompt uses the selected workspace root" {
   @vfs.with_tmpdir(prefix="openseek-prompt-workspace-", workspace => {
     let real_workspace = @fs.realpath(workspace)

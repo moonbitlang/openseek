@@ -349,6 +349,7 @@ async test "write creates a file with the given content" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "write resolves relative paths under the workspace root" {
   @vfs.with_tmpdir(prefix="openseek-write-workspace-", dir => {
     let tool = definition(workspace_root=dir)
@@ -496,6 +497,7 @@ async test "write rejects overwriting an existing .mbt.md doc file" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "write rejects overwriting source through a symlink" {
   @vfs.with_tmpdir(dir => {
     let src = "\{dir}/lib.mbt"
@@ -513,6 +515,7 @@ async test "write rejects overwriting source through a symlink" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "write fails on a dangling symlink instead of creating its target" {
   @vfs.with_tmpdir(dir => {
     // alias.txt -> lib/new.mbt where the target does not exist: `exists`
@@ -538,6 +541,7 @@ async test "write fails on a dangling symlink instead of creating its target" {
 /// the target's kind: `alias.txt -> moon.pkg` must not let malformed manifest
 /// content land in the real `moon.pkg` (the write would otherwise follow the
 /// link and truncate it). The existing manifest is left untouched.
+#cfg(not(platform="windows"))
 async test "write parse-gates manifest content written through a symlink" {
   @vfs.with_tmpdir(prefix="openseek-write-manifest-link-", dir => {
     let manifest = "\{dir}/moon.pkg"

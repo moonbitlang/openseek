@@ -203,6 +203,7 @@ async fn moongrep_command(executable : String?) -> String? {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "ripgrep resolution uses only packaged or recognized development layouts" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-ripgrep-resolution-")
   defer @fs.rmdir(root.to_string(), recursive=true)
@@ -255,6 +256,7 @@ async test "ripgrep resolution uses only packaged or recognized development layo
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "packaged frontend wins before the matching checkout document" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-development-frontend-")
   let command_dir = root.join("_build/native/debug/build/openseek_desktop")

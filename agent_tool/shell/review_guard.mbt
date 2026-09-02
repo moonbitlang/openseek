@@ -243,6 +243,7 @@ test "read-only guard blocks mutating moon anywhere; allows read-only commands" 
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "the scratch lab re-opens exactly the lab, nothing else" {
   let lab = "/tmp/openseek-explore-lab-x"
   fn blocks(cmd : String) -> Bool {

@@ -8,6 +8,11 @@ import {
   "moonbitlang/async",
 } for "test"
 
-warnings = "+unnecessary_annotation"
+// test-scope-only imports (@vfs/@async) are used only by tests that are
+// Windows-excluded, so they are legitimately unused under the Windows
+// check; disable unused_package rather than dropping imports the Linux
+// tests need.
+
+warnings = "+unnecessary_annotation-unused_package"
 
 supported_targets = "+native"

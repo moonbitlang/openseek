@@ -49,6 +49,7 @@ test "sandbox trusts only narrow moon source-writing commands" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "sandbox preblocks source-writing script snippets" {
   let root = "/workspace"
   assert_true(
@@ -230,6 +231,7 @@ async test "sandbox preblocks source-writing script snippets" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "sandbox preblocks command-line created source directories" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-created-dir-", root => {
     @fs.write_file(
@@ -247,6 +249,7 @@ async test "sandbox preblocks command-line created source directories" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "sandbox preblocks scripted existing source tree moves" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-script-source-dir-", root => {
     @fs.mkdir("\{root}/pkg")
@@ -265,6 +268,7 @@ async test "sandbox preblocks scripted existing source tree moves" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "sandbox keeps guarded cd cwd visible after semicolon" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-guarded-cd-", root => {
     @fs.mkdir("\{root}/pkg")
@@ -280,6 +284,7 @@ async test "sandbox keeps guarded cd cwd visible after semicolon" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "sandbox preblocks scripted external source tree imports" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-script-external-dir-", root => {
     let workspace = "\{root}/workspace"
@@ -311,6 +316,7 @@ async test "sandbox preblocks scripted external source tree imports" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "sandbox preblocks common source-writing commands" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-common-writers-", root => {
     @fs.write_file(
@@ -1190,6 +1196,7 @@ async test "sandbox preblocks common source-writing commands" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 fn is_some_path(value : String?, expected : String) -> Bool {
   match value {
     Some(path) => path == expected
@@ -1235,6 +1242,7 @@ async test "sandbox denial detection ignores masked exit code" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "sandbox detects direct protected source write redirects" {
   let root = "/workspace"
   assert_true(
@@ -1345,6 +1353,7 @@ async fn dyn_tree_target(cmd : String, root : String, cwd : String?) -> String? 
 
 ///|
 /// `direct_source_write_redirect_target_for_root` on `cmd` parsed for policy.
+#cfg(not(platform="windows"))
 fn redirect_target(cmd : String, root : String, cwd : String?) -> String? {
   direct_source_write_redirect_target_for_root(
     @shell_parse.parse_for_policy(cmd),

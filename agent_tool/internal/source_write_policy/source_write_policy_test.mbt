@@ -54,6 +54,7 @@ test "protected workspace source policy" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "scratch lab containment policy" {
   assert_true(@source_write_policy.path_is_under_lab("/tmp/lab", "/tmp/lab"))
   assert_true(

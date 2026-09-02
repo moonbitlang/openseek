@@ -47,6 +47,7 @@ async fn poll_bg_terminal(bg : @bgjobs.BgJobRuntime, id : String) -> Unit {
 /// Poll until the job's captured output contains `needle`, on the same budget
 /// as `poll_bg_terminal`. Replaces fixed sleeps: moonx startup is ~100ms warm
 /// and unbounded cold, so a flat delay would flake.
+#cfg(not(platform="windows"))
 async fn poll_bg_output(
   bg : @bgjobs.BgJobRuntime,
   id : String,
@@ -61,6 +62,7 @@ async fn poll_bg_output(
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "job_output returns a running job's output and status" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
@@ -253,6 +255,7 @@ async test "a job with policy disabled does not invent a policy refusal" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "a terminal job finds a policy refusal before the displayed tail" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-job-policy-")

@@ -103,6 +103,7 @@ fn parsed_xdg_documents_line(line : String) -> String? {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "XDG Documents parser accepts documented home and absolute forms" {
   assert_true(
     parsed_xdg_documents_line("XDG_DOCUMENTS_DIR=\"$HOME/Documents\"")

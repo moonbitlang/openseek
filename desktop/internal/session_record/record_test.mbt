@@ -207,6 +207,7 @@ async test "an event line longer than one read is folded in whole" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "a lock that cannot be taken is a failure, not an unlocked read" {
   let dir = @fs.tmpdir(prefix="openseek-record-lock-")
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()

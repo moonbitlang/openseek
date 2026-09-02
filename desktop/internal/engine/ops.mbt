@@ -806,6 +806,7 @@ fn commit_terminal_sh() -> String {
 /// Every run belongs to a workspace now, so a test that starts one registers
 /// a real directory rather than relying on the removed scratch fallback.
 /// Returns the path to send as the start payload's workspace hint.
+#cfg(not(platform="windows"))
 async fn attach_run_workspace(root : @pathx.Path) -> String {
   let workspace = root.join("ws")
   @fsx.ensure_dir(workspace)

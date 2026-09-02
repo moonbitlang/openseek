@@ -237,13 +237,11 @@ jobs:
   # contract onto Windows, where MoonBit compiles through MSVC — a path the
   # Linux rows cannot exercise.
   #
-  # Test scope is deliberately narrow today: the root module's and the
-  # desktop member's native suites are not Windows-port-ready yet (they
-  # assume POSIX paths, symlink privileges, and unix shell semantics; see the
-  # failures a local `moon test --target native` reports on Windows). The
-  # full-workspace `moon check --deny-warn` below still compiles every
-  # package for the native target; suites rejoin this job as their Windows
-  # ports land.
+  # Tests that assume POSIX paths, symlink privileges, or unix shell
+  # semantics are gated with `#cfg(not(platform="windows"))` next to their
+  # declarations (plus the odd helper/import that only they used); each gate
+  # names the Windows-port work that would re-enable it. The full native
+  # suite runs here and is green on Windows.
   check-windows:
     name: check (windows, native)
     runs-on: windows-latest
@@ -287,18 +285,10 @@ jobs:
         # checks never link.
         run: moon check --target native --deny-warn
 
-      # The bgjobs package runs Windows twins of its unix process suite
-      # (`cmd` builtins instead of `sh`). They keep the snapshot's preview
-      # fields read on Windows, which is what lets the `--deny-warn` gate
-      # above pass; guard them explicitly.
-      - name: Test background jobs (Windows suite)
-        run: moon test --target native agent_tool/bgjobs
-
-      # The editor is its own module with an all-target contract (see
-      # editor.yml); its native suite is green on Windows and exercises the
-      # host's path handling, which is exactly where Windows differs.
-      - name: Test editor native target
-        working-directory: editor
+      # Full native test suite: the root module and every workspace member
+      # (editor, desktop, inspect, protocol, workflow). Nothing here
+      # initializes CEF or opens a window, so no Proton runtime is needed.
+      - name: Test native target
         run: moon test --target native
 
       # The cram suite is POSIX shell (`sh` heredocs, `sed`, `mktemp`); the

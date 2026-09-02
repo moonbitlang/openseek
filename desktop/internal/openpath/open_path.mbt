@@ -44,7 +44,12 @@ priv struct ExistingPath {
 /// Filesystem errors propagate to the host: an unreadable path must not be
 /// silently reinterpreted as a different file.
 pub async fn Reference::resolve(self : Reference) -> Resolution {
-  if @fs.exists(self.0) {
+  // A literal path that cannot be stat'ed is not a real file: on Windows a
+  // colon in the name (a `path:line:col` suffix) is invalid, so `exists`
+  // raises instead of returning false. Treat that as missing — never
+  // reinterpret the literal as an editor position.
+  let literal_exists = @fs.exists(self.0) catch { _ => false }
+  if literal_exists {
     let existing : ExistingPath = { path: self.0, line: None, column: None, }
     return existing.resolve()
   }

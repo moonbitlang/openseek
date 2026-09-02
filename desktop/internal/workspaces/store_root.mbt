@@ -36,6 +36,7 @@ test "explicit relative session roots resolve against the host cwd" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "explicit absolute session roots are normalized" {
   let root = @pathx.Path(".openseek-test-root").resolve().join("..")
   let expected = root.normalize()

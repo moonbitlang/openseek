@@ -103,6 +103,7 @@ async test "append_summary surfaces raw moon check failure" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "append_summary preserves module dependency graph failure text" {
   @vfs.with_tmpdir(prefix="openseek-auto-check-deps-", dir => {
     let path = "\{dir}/moon.mod"
@@ -130,6 +131,7 @@ async test "append_summary preserves module dependency graph failure text" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "append_summary checks from moon.work workspace root" {
   @vfs.with_tmpdir(prefix="openseek-auto-check-workspace-", dir => {
     let path = "\{dir}/moon.work"

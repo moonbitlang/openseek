@@ -14,6 +14,7 @@ test "sandbox source write profile regex covers source and manifests" {
 /// would not notice a lost trailing newline, and
 /// `source_write_readonly_profile_data` appends the lab rule straight onto this
 /// text, so the final newline is load-bearing.
+#cfg(not(platform="windows"))
 async test "sandbox profile text" {
   inspect(
     source_write_readonly_profile_data("/workspace").profile,
@@ -28,6 +29,7 @@ async test "sandbox profile text" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "sandbox profile is cached per normalized workspace root" {
   let profile = source_write_readonly_profile_data("/workspace").profile
   let cached = source_write_readonly_profile_data("/workspace/").profile
@@ -39,6 +41,7 @@ async test "sandbox profile is cached per normalized workspace root" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "sandbox profile blocks existing directories that contain source" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-source-tree-profile-", root => {
     @fs.mkdir("\{root}/pkg")
@@ -75,6 +78,7 @@ async test "sandbox profile blocks existing directories that contain source" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "sandbox profile cache invalidates when source tree changes" {
   @vfs.with_tmpdir(prefix="openseek-shell-sandbox-profile-invalidate-", root => {
     @fs.mkdir("\{root}/assets")
