@@ -1445,7 +1445,7 @@ fn change_inventory(
       } else {
         let reviewable = files.filter(change => change.selectable())
         let reviewed = reviewable
-          .filter(change => state.reviewed_changes.contains(change))
+          .filter(change => state.is_change_reviewed(change))
           .length()
         let rows = [
           @html.div(
@@ -1492,9 +1492,9 @@ fn changed_file_row(
   index : Int,
 ) -> @html.Html {
   let selected = change.is_selected(state, ctx)
-  let reviewed = state.reviewed_changes.contains(change)
+  let progress = state.changed_file_review_state(change)
   let mut class = if selected { "change-row selected" } else { "change-row" }
-  if reviewed {
+  if progress is ReviewComplete {
     class += " reviewed"
   }
   if !change.selectable() {
@@ -1513,10 +1513,10 @@ fn changed_file_row(
         "change-action unavailable"
       },
       if change.selectable() {
-        if reviewed {
-          "✓ Reviewed"
-        } else {
-          "View diff"
+        match progress {
+          ReviewComplete => "✓ Reviewed"
+          ReviewInProgress => "◐ In progress"
+          ReviewUnviewed => "View diff"
         }
       } else {
         "Unavailable"
@@ -1848,6 +1848,7 @@ pub fn breadcrumb_view(
         review_comments_control(dispatch, state, ctx),
         review_tests_control(dispatch, state, ctx),
         review_diff_navigation(dispatch, state, ctx),
+        review_hunk_toggle(dispatch, state, ctx),
       ]),
     ]
     if state.highlighted is Some(directory) {
@@ -2275,6 +2276,71 @@ fn review_diff_navigation(
 }
 
 ///|
+fn review_hunk_toggle_button(
+  dispatch : @cmd.Emit[Msg],
+  hunk_state : ReviewHunkState,
+  file_complete : Bool,
+) -> @html.Html {
+  let viewed = hunk_state is ReviewHunkViewed
+  @html.button(
+    type_="button",
+    class=if viewed {
+      "review-badge review-progress reviewed"
+    } else {
+      "review-badge review-progress"
+    },
+    title=if file_complete {
+      "File is marked reviewed"
+    } else if viewed {
+      "Mark this hunk unviewed"
+    } else {
+      "Mark this hunk viewed"
+    },
+    disabled=file_complete,
+    on_click=dispatch(ToggleActiveReviewHunk),
+    attrs=@html.Attrs::build()
+      .aria_label(
+        if file_complete {
+          "Hunk viewed"
+        } else if viewed {
+          "Unmark hunk viewed"
+        } else {
+          "Mark hunk viewed"
+        },
+      )
+      .aria_pressed(
+        match hunk_state {
+          ReviewHunkUnviewed => "false"
+          ReviewHunkPartial => "mixed"
+          ReviewHunkViewed => "true"
+        },
+      ),
+    match hunk_state {
+      ReviewHunkUnviewed => "Mark viewed"
+      ReviewHunkPartial => "◐ Mark viewed"
+      ReviewHunkViewed => "✓ Viewed"
+    },
+  )
+}
+
+///|
+fn review_hunk_toggle(
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+  ctx : Ctx,
+) -> @html.Html {
+  guard state.active_review_hunk(ctx.active_file) is Some(active) else {
+    return @html.nothing
+  }
+  let hunk_state = state.review_hunk_state(active.change, active.hunk)
+  review_hunk_toggle_button(
+    dispatch,
+    hunk_state,
+    state.is_change_reviewed(active.change),
+  )
+}
+
+///|
 /// Line keeps its two models mounted while Token/Tree reuse one section plan;
 /// this explicit pair changes either presentation. File mode preserves the
 /// preference but disables both choices until the next review reveal.
@@ -2569,13 +2635,14 @@ fn review_progress(
     files.contains(review.selected) else {
     return @html.span(class="review-badge hidden", "")
   }
-  let reviewed = state.reviewed_changes.contains(review.selected)
+  let progress = state.changed_file_review_state(review.selected)
+  let reviewed = progress is ReviewComplete
   @html.button(
     type_="button",
-    class=if reviewed {
-      "review-badge review-progress reviewed"
-    } else {
-      "review-badge review-progress"
+    class=match progress {
+      ReviewComplete => "review-badge review-progress reviewed"
+      ReviewInProgress => "review-badge review-progress"
+      ReviewUnviewed => "review-badge review-progress"
     },
     title=if reviewed {
       "Return this changed file to the review queue"
@@ -2584,12 +2651,24 @@ fn review_progress(
     },
     on_click=dispatch(ToggleReviewProgress),
     attrs=@html.Attrs::build()
-      .aria_label("Mark file reviewed")
-      .aria_pressed(reviewed.to_string()),
-    if reviewed {
-      "✓ Reviewed"
-    } else {
-      "Mark reviewed"
+      .aria_label(
+        if reviewed {
+          "Mark file unreviewed"
+        } else {
+          "Mark file reviewed"
+        },
+      )
+      .aria_pressed(
+        match progress {
+          ReviewComplete => "true"
+          ReviewInProgress => "mixed"
+          ReviewUnviewed => "false"
+        },
+      ),
+    match progress {
+      ReviewComplete => "✓ Reviewed"
+      ReviewInProgress => "◐ In progress"
+      ReviewUnviewed => "Mark reviewed"
     },
   )
 }

@@ -464,6 +464,7 @@ priv struct SemanticReviewEditorHost {
   editor : @viewer.DiffEditor
   provider : @moon_diff_provider.MoonFragmentDiffProvider?
   diff_subscription : @common.Disposable
+  active_hunk_subscription : @common.Disposable
   content_height_subscription : @common.Disposable
   navigation_reveal_subscription : @common.Disposable
   pending_navigation_reveal_generation : Ref[Int?]
@@ -1178,6 +1179,7 @@ fn schedule_semantic_review_scroll_width_update() -> Unit {
 fn dispose_semantic_review_editor(entry : SemanticReviewEditorHost) -> Unit {
   semantic_review_navigation_generation.val += 1
   entry.diff_subscription.dispose()
+  entry.active_hunk_subscription.dispose()
   entry.content_height_subscription.dispose()
   entry.pending_navigation_reveal_generation.val = None
   entry.navigation_reveal_subscription.dispose()
@@ -1274,6 +1276,11 @@ fn create_semantic_review_editor(
   let diff_subscription = editor.on_did_update_diff(() => {
     schedule_semantic_review_scroll_width_update()
   })
+  let active_hunk_subscription = editor.on_did_change_active_hunk(active_index => {
+    publish_semantic_review_active_hunk(
+      input, key, editor, section, active_index,
+    )
+  })
   // DiffEditor publishes only after the comment ViewZone and both panes'
   // derived alignment zones have committed. Resize synchronously in that same
   // geometry batch; a delayed retry would only hide a missing notification and
@@ -1292,6 +1299,13 @@ fn create_semantic_review_editor(
   })
   let focus_listener : @dom.Listener = _ => {
     semantic_review_active_key.val = Some(key)
+    publish_semantic_review_active_hunk(
+      input,
+      key,
+      editor,
+      section,
+      editor.get_active_hunk_index(),
+    )
   }
   host.add_event_listener("focusin", focus_listener)
   let focus_subscription = @common.Disposable::from(() => {
@@ -1325,6 +1339,7 @@ fn create_semantic_review_editor(
     editor,
     provider,
     diff_subscription,
+    active_hunk_subscription,
     content_height_subscription,
     navigation_reveal_subscription,
     pending_navigation_reveal_generation,
@@ -1484,20 +1499,33 @@ fn reveal_semantic_review_section_change(
 ///|
 /// Reconcile section widgets after Rabbita has committed their keyed hosts.
 /// Unchanged sections retain their editor models, selection, and scroll state.
-fn sync_semantic_review_editors(state : State) -> @cmd.Cmd {
+fn sync_semantic_review_editors(
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+  active_file : @pathx.Relative?,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(
-    _scheduler => {
+    scheduler => {
+      sync_review_hunk_bridge_target(state, active_file, msg => {
+        scheduler.add(dispatch(msg))
+      })
       guard state.semantic_review_input is Some(input) else {
         clear_semantic_review_editors()
         return
       }
       let desired = semantic_sections(state.semantic_review_plan)
       let desired_keys = desired.map(section => section.key)
+      let visible_keys = desired_keys.filter(key => {
+        !state.semantic_review_collapsed.contains(key)
+      })
       semantic_review_order.clear()
       semantic_review_order.append(desired_keys)
       if semantic_review_active_key.val is Some(key) &&
-        !desired_keys.contains(key) {
+        !visible_keys.contains(key) {
         semantic_review_active_key.val = None
+      }
+      if semantic_review_active_key.val is None && !visible_keys.is_empty() {
+        semantic_review_active_key.val = Some(visible_keys[0])
       }
       let stale = semantic_review_editors
         .to_array()
@@ -1553,6 +1581,16 @@ fn sync_semantic_review_editors(state : State) -> @cmd.Cmd {
           is Some(entry) {
           semantic_review_editors[key] = entry
         }
+      }
+      if semantic_review_active_key.val is Some(key) &&
+        semantic_review_editors.get(key) is Some(entry) {
+        publish_semantic_review_active_hunk(
+          input,
+          key,
+          entry.editor,
+          entry.section,
+          entry.editor.get_active_hunk_index(),
+        )
       }
       update_semantic_review_scroll_width()
       schedule_semantic_review_scroll_width_update()

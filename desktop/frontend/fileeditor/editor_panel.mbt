@@ -496,6 +496,10 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           )
         })
         |> ignore
+        diff_editor.on_did_change_active_hunk(active_index => {
+          publish_line_review_active_hunk(diff_editor, active_index)
+        })
+        |> ignore
         viewer_state.diff_editor = Some(diff_editor)
       }
     },

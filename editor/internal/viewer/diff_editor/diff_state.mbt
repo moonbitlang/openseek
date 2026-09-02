@@ -103,6 +103,14 @@ priv struct DiffNavigationTarget {
 }
 
 ///|
+/// One product-visible hunk. `members` retains only the provider's real changed
+/// mappings; `reveal_mapping` is the joined range used by F7/Shift+F7.
+pub(all) struct DiffHunk {
+  members : Array[@diff.DetailedLineRangeMapping]
+  priv reveal_mapping : @diff.DetailedLineRangeMapping
+}
+
+///|
 // Pinned behavior oracle: vscode@07c20d96cf3f2cbc8142ac7079ba9048cf7f6134,
 // `accessibleDiffViewer.ts::computeViewElementGroups`. Its three context lines
 // on each side merge adjacent mappings while the gap is strictly less than
@@ -110,31 +118,41 @@ priv struct DiffNavigationTarget {
 const DiffNavigationGroupLineMargin = 3
 
 ///|
-fn DiffState::navigation_changes(
-  self : DiffState,
-) -> Array[@diff.DetailedLineRangeMapping] {
-  let result : Array[@diff.DetailedLineRangeMapping] = []
+fn DiffState::hunks(self : DiffState) -> Array[DiffHunk] {
+  let result : Array[DiffHunk] = []
   for mapping in self.mappings {
     let change = mapping.line_range_mapping
     if result.is_empty() {
-      result.push(change)
+      result.push({ members: [change], reveal_mapping: change, })
       continue
     }
     let last_index = result.length() - 1
     let previous = result[last_index]
     if change.modified.start_line_number -
-      previous.modified.end_line_number_exclusive <
+      previous.reveal_mapping.modified.end_line_number_exclusive <
       2 * DiffNavigationGroupLineMargin {
-      result[last_index] = DetailedLineRangeMapping(
-        previous.original.join(change.original),
-        previous.modified.join(change.modified),
-        None,
-      )
+      let members = previous.members.copy()
+      members.push(change)
+      result[last_index] = {
+        members,
+        reveal_mapping: DetailedLineRangeMapping(
+          previous.reveal_mapping.original.join(change.original),
+          previous.reveal_mapping.modified.join(change.modified),
+          None,
+        ),
+      }
     } else {
-      result.push(change)
+      result.push({ members: [change], reveal_mapping: change, })
     }
   }
   result
+}
+
+///|
+fn DiffState::navigation_changes(
+  self : DiffState,
+) -> Array[@diff.DetailedLineRangeMapping] {
+  self.hunks().map(hunk => hunk.reveal_mapping)
 }
 
 ///|
