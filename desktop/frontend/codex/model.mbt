@@ -1767,6 +1767,14 @@ fn State::with_thread_reply(
       notice: "Codex returned thread \{active.id} for requested thread \{requested}",
     }
   }
+  // A reconnect history read can race a token-usage notification for the
+  // selected task. Snapshot turns do not contain that notification-only
+  // field, so retain it before replacing the otherwise-authoritative thread.
+  let active = match self.active_thread() {
+    Some(previous) if previous.id == active.id =>
+      active.with_snapshot_usage_from(previous)
+    _ => active
+  }
   // Selecting a stored thread must not promote it to the top of the sidebar.
   // Replace its row in place; only `thread/start`, whose id is genuinely new,
   // is prepended until the authoritative catalog refresh arrives.
@@ -2262,6 +2270,30 @@ fn CodexTurn::with_reasoning_content_delta(
       } else {
         item
       }
+    }),
+  }
+}
+
+///|
+/// Copy notification-only usage into a replacement snapshot by app-server
+/// turn id. Transcript and lifecycle fields remain owned by the new snapshot.
+fn CodexThread::with_snapshot_usage_from(
+  self : CodexThread,
+  previous : CodexThread,
+) -> CodexThread {
+  {
+    ..self,
+    turns: self.turns.map(turn => {
+      let mut latest_usage_tokens = turn.latest_usage_tokens
+      if latest_usage_tokens is None {
+        for existing in previous.turns {
+          if existing.id == turn.id {
+            latest_usage_tokens = existing.latest_usage_tokens
+            break
+          }
+        }
+      }
+      { ..turn, latest_usage_tokens, }
     }),
   }
 }

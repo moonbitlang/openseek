@@ -55,6 +55,7 @@ export class DesktopBrowserHarness {
     ];
     this.codexRequiresAuth = false;
     this.codexModels = [];
+    this.codexThreadHistory = null;
     // Review and Git Graph share these immutable commit identities. Keeping
     // the file snapshots beside the graph data makes every fixture response
     // describe one coherent repository instead of isolated RPC examples.
@@ -623,6 +624,10 @@ export class DesktopBrowserHarness {
         return { data: this.codexModels };
       case 'codex.thread.list':
         return { data: [] };
+      case 'codex.thread.history.read':
+        return this.codexThreadHistory || {
+          thread: { id: request.params?.threadId, turns: [] },
+        };
       case 'codex.draft.open':
         return {
           draftId: request.params?.draft_id,

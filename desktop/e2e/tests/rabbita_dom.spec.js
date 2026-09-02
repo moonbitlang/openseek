@@ -1419,7 +1419,7 @@ test('Codex account login can be started and cancelled from Settings', async ({ 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Codex creates a thread, sends its first turn, and stops it', async ({ page }) => {
+test('Codex preserves usage when reconnect history replaces the thread', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.codexModels = [
     {
@@ -1461,6 +1461,53 @@ test('Codex creates a thread, sends its first turn, and stops it', async ({ page
         input: [{ type: 'text', text: 'Run the Codex browser E2E turn' }],
       },
     });
+
+  app.codexThreadHistory = {
+    thread: {
+      id: 'codex-thread-e2e',
+      cwd: '/workspace',
+      projectRoot: '/workspace',
+      preview: 'Codex reconnect fixture',
+      status: { type: 'active' },
+      turns: [
+        {
+          id: 'codex-turn-e2e',
+          status: 'inProgress',
+          items: [
+            {
+              type: 'agentMessage',
+              id: 'codex-agent-reconnected',
+              text: 'Reconnect snapshot arrived',
+            },
+          ],
+        },
+      ],
+    },
+  };
+  app.rpcDelays.set('codex.thread.history.read', 250);
+  app.notify('codex.status_changed', { status: 'starting' });
+  app.notify('codex.status_changed', { status: 'ready' });
+  await expect.poll(() => app.requests.some(request =>
+    request.method === 'codex.thread.history.read' &&
+    request.params?.threadId === 'codex-thread-e2e')).toBe(true);
+
+  // The usage event lands while the reconnect snapshot reply is delayed.
+  app.notify('codex.notification', {
+    method: 'thread/tokenUsage/updated',
+    params: {
+      threadId: 'codex-thread-e2e',
+      turnId: 'codex-turn-e2e',
+      tokenUsage: { last: { totalTokens: 12345 } },
+    },
+    generation: 1,
+  });
+  const running = page.locator('.composer-running');
+  await expect(running).toContainText('12.3k tokens');
+
+  // Seeing snapshot-only transcript content proves the delayed reply was
+  // installed; the composer must still retain the earlier usage notification.
+  await expect(page.getByText('Reconnect snapshot arrived')).toBeVisible();
+  await expect(running).toContainText('12.3k tokens');
 
   await page.getByTitle('Stop', { exact: true }).click();
   await expect.poll(() => app.requests.find(request =>
