@@ -328,8 +328,24 @@ jobs:
       # Full native test suite: the root module and every workspace member
       # (editor, desktop, inspect, protocol, workflow). Nothing here
       # initializes CEF or opens a window, so only the headers are needed.
-      - name: Test native target
+      # PROBE: bisect the runner-only hang (full-suite run stalls ~10 min in,
+      # after the deepseek/client smoke skips). Sequential area steps; the
+      # job stops at whichever step hangs.
+      - name: Probe area 1 - deepseek
+        run: moon test --target native deepseek deepseek/client
+      - name: Probe area 2 - mcp
+        run: moon test --target native mcp
+      - name: Probe area 3 - openseek cli + agent core
+        run: moon test --target native cmd/openseek agent_subrun agent agent_review agent_worker agent_explore agent_workflow
+      - name: Probe area 4 - agent_tool
+        run: moon test --target native agent_tool
+      - name: Probe area 5 - eval/internal/misc root packages
+        run: moon test --target native eval internal inspect protocol testkit tui viz cmd/tui cmd/viz_app prompt workflow
+      - name: Probe area 6 - editor module
+        working-directory: editor
         run: moon test --target native
+      - name: Probe area 7 - desktop member
+        run: moon test --target native desktop
 
       # The cram suite is POSIX shell (`sh` heredocs, `sed`, `mktemp`); the
       # Linux job owns it. A Windows port would need PowerShell-flavored
