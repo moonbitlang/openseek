@@ -108,7 +108,7 @@ async fn research() -> Unit {
       kind="explore",
       hints="workflow/",
       label="synthesis",
-      max_steps=14,
+      max_steps=28,
     ) {
     Ok(report) => println("\n━━ PROPOSAL ━━\n\{answer_of(report)}")
     Err(error) => println("synthesis failed: \{error}")
