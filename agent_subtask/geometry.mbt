@@ -81,7 +81,7 @@ pub fn Geometry::worker_deny_roots(self : Geometry) -> Array[String] {
 /// from a sibling worktree cannot merge or discard another worktree's slice.
 /// The exact path is safe for schema-v1 entries because provision has always
 /// created workers at `<integration-root>/.worktrees/<name>`.
-fn Geometry::is_integration_target_for(
+pub fn Geometry::is_integration_target_for(
   self : Geometry,
   entry : SubtaskEntry,
 ) -> Bool {

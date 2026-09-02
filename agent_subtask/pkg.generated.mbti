@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/cmd/openseek/internal/subtask"
+package "bobzhang/openseek/agent_subtask"
 
 import {
   "moonbitlang/core/debug",
@@ -46,6 +46,7 @@ pub struct Geometry {
   common_git_dir : String
   // private fields
 }
+pub fn Geometry::is_integration_target_for(Self, SubtaskEntry) -> Bool
 pub fn Geometry::worker_deny_roots(Self) -> Array[String]
 
 pub struct IntegrateOutcome {
