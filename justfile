@@ -12,6 +12,14 @@ build:
     moon build --target native
     moon build --target js
 
+# The runtime lives outside the repository in ~/.proton/store, keyed by the CEF
+# archive digest and layout version pinned in the Proton release, so every
+# Proton upgrade that moves either key is a cache miss. The resulting failure
+# reads as a missing cef_browser_capi.h rather than a missing runtime.
+# Install the CEF runtime Desktop's Proton dependency compiles against.
+cef-setup:
+    moonx moonbit-community/proton_cefsetup
+
 # Serve recorded sessions in the browser; flags pass through to the server
 # (e.g. just inspect --session-root path/to/sessions --port 8081).
 inspect *args:
