@@ -1,0 +1,118 @@
+import {
+  "moonbitlang/async@0.21.1",
+  "bobzhang/workflow@0.1.1",
+  "bobzhang/workflow@0.1.1/spawn",
+}
+
+///|
+/// Structured disagreement: two advocate scouts argue OPPOSITE sides of a
+/// real design question from code evidence, in parallel; a judge then
+/// rules on their combined output. Because the judge's input EMBEDS the
+/// advocates' answers, replay dependencies follow the data: edit one
+/// advocate's brief and a re-run replays the untouched advocate, re-runs
+/// the edited one, and re-runs the judge — nothing else.
+///
+///   moon run workflow/examples/debate.mbtx     (from the repo root)
+///
+/// Needs `openseek` on PATH and a provider key in the environment.
+async fn main {
+  debate() catch {
+    error => println("workflow failed: \{error}")
+  }
+}
+
+///|
+let question : String = "Should agent_subrun remain a separate package wrapping workflow/spawn, or should its remaining duties (ids, lifecycle brackets, child sessions, report re-typing) fold into workflow/spawn?"
+
+///|
+async fn debate() -> Unit {
+  let wf = @workflow.Workflow(
+    runner=@spawn.contract_runner(launch=_ => {
+      command: "openseek",
+      args: ["subrun", "explore"],
+      cwd: None,
+      extra_env: None,
+      deadline_ms: None,
+    }),
+    journal=@workflow.Journal::load("debate.jsonl"),
+    max_concurrent=2,
+  )
+
+  // ---- Round 1: opposing advocates, in parallel ----
+  wf.phase("Advocate")
+  let briefs = [
+    (
+      "keep",
+      "Argue FOR keeping agent_subrun as a separate package over workflow/spawn. Ground every point in concrete code. \{question}",
+    ),
+    (
+      "fold",
+      "Argue FOR folding agent_subrun's remaining duties into workflow/spawn. Ground every point in concrete code. \{question}",
+    ),
+  ]
+  let positions = @workflow.all_ok(
+    @workflow.fan_out(briefs, brief => {
+      let (side, prompt) = brief
+      wf.try_agent(
+        prompt,
+        kind="explore",
+        hints="agent_subrun/runner.mbt workflow/spawn/contract.mbt",
+        label="advocate:\{side}",
+        max_steps=16,
+      )
+    }),
+  ) catch {
+    error => {
+      println("advocacy round failed: \{error}")
+      return
+    }
+  }
+  let keep_case = answer_of(positions[0])
+  let fold_case = answer_of(positions[1])
+  println("── KEEP  argues: \{clip(keep_case, 300)}…\n")
+  println("── FOLD  argues: \{clip(fold_case, 300)}…\n")
+
+  // ---- Round 2: the judge reads both and rules ----
+  // The judge's input EMBEDS both cases: its replay identity now depends
+  // on theirs, so an edited brief cascades exactly this far and no
+  // further.
+  wf.phase("Judge")
+  let ruling = wf.agent(
+    "Two advocates examined: \{question} Rule which position the CODE better supports, in one paragraph ending with VERDICT: KEEP or VERDICT: FOLD. Verify their claims yourself before ruling.",
+    kind="explore",
+    hints="KEEP: \{clip(keep_case, 900)} ||| FOLD: \{clip(fold_case, 900)}",
+    label="judge",
+    max_steps=16,
+  ) catch {
+    error => {
+      println("the judge failed: \{error}")
+      return
+    }
+  }
+  println("── RULING: \{answer_of(ruling)}\n")
+  println(
+    "\{wf.calls_made()} live, \{wf.calls_replayed()} replayed, \{wf.tokens_spent()} fresh tokens",
+  )
+}
+
+///|
+fn answer_of(report : Json) -> String {
+  match report {
+    { "answer": String(text), .. } => text
+    other => other.stringify()
+  }
+}
+
+///|
+fn clip(text : String, limit : Int) -> String {
+  let out = StringBuilder()
+  let mut count = 0
+  for ch in text {
+    if count >= limit {
+      break
+    }
+    out.write_char(ch)
+    count += 1
+  }
+  out.to_string()
+}

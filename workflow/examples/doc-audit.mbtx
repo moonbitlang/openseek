@@ -1,0 +1,73 @@
+import {
+  "moonbitlang/async@0.21.1",
+  "bobzhang/workflow@0.1.1",
+  "bobzhang/workflow@0.1.1/spawn",
+}
+
+///|
+/// Documentation drift audit: one scout per package README, each
+/// comparing the doc's CLAIMS against the code it describes, reduced to
+/// an actionable drift report. The practical pre-release sweep —
+/// journaled, so iterating on the report format below re-runs nothing.
+///
+///   moon run workflow/examples/doc-audit.mbtx     (from the repo root)
+///
+/// Needs `openseek` on PATH and a provider key in the environment.
+async fn main {
+  audit() catch {
+    error => println("workflow failed: \{error}")
+  }
+}
+
+///|
+async fn audit() -> Unit {
+  let wf = @workflow.Workflow(
+    runner=@spawn.contract_runner(launch=_ => {
+      command: "openseek",
+      args: ["subrun", "explore"],
+      cwd: None,
+      extra_env: None,
+      deadline_ms: None,
+    }),
+    journal=@workflow.Journal::load("doc-audit.jsonl"),
+    max_concurrent=4,
+  )
+  wf.phase("Audit")
+  let targets = [
+    ("workflow", "workflow/README.mbt.md"),
+    ("workflow/spawn", "workflow/spawn/contract.mbt"),
+    ("agent_workflow", "agent_workflow/README.mbt.md"),
+    ("agent_subrun", "agent_subrun/README.mbt.md"),
+  ]
+  let results = @workflow.fan_out(targets, target => {
+    let (name, doc) = target
+    wf.try_agent(
+      "Audit \{doc} (its prose claims, including doc comments if it is source) against the CODE it describes. Report the single most significant DRIFT — a claim that is stale, wrong, or importantly incomplete — as one sentence starting with DRIFT:, plus file:line evidence. If everything checks out, say NO DRIFT and cite the claim you found hardest to verify.",
+      kind="explore",
+      hints=doc,
+      label="audit:\{name}",
+      max_steps=20,
+    )
+  })
+  // ---- Reduce: the drift report ----
+  let mut drifts = 0
+  for index, result in results {
+    let (name, _) = targets[index]
+    match result {
+      Ok(report) => {
+        let answer = match report {
+          { "answer": String(text), .. } => text
+          other => other.stringify()
+        }
+        if answer.contains("DRIFT:") && !answer.contains("NO DRIFT") {
+          drifts += 1
+        }
+        println("── \{name}:\n\{answer}\n")
+      }
+      Err(error) => println("── \{name}: AUDIT FAILED — \{error}\n")
+    }
+  }
+  println(
+    "\{drifts}/\{targets.length()} docs drifted · \{wf.calls_made()} live, \{wf.calls_replayed()} replayed, \{wf.tokens_spent()} fresh tokens",
+  )
+}

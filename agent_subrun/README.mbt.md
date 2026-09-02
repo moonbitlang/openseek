@@ -10,10 +10,14 @@ codecs cannot drift: the process boundary still carries a typed channel.
 
 Layers:
 
-- `run_subrun` (parent side): spawn/drain/deadline/teardown. The wall
-  deadline closes stdin and grants `cancel_grace_ms` before terminating; a
-  report arriving in the grace window still counts. External cancellation
-  re-raises — never folded into a terminal. Crash isolation is structural:
+- `run_subrun` (parent side): the ENGINE's layer over the shared contract
+  implementation — the spawn/drain/deadline/teardown machinery itself
+  lives in `bobzhang/workflow/spawn` (`contract_run`), and this wrapper
+  adds subrun ids, lifecycle brackets, child sessions, and typed report
+  re-checking. The wall deadline closes stdin and grants a grace window
+  before terminating; a report arriving in the grace still counts.
+  External cancellation re-raises — never folded into a terminal. Crash
+  isolation is structural:
   a dead child is a `Failed` result, not a dead engine.
 - `execute_kind` (child side): one bounded turn with a restricted toolset
   and a `capture_tool` submit channel — run by the `subrun` child mode, by
