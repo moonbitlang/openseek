@@ -470,7 +470,7 @@ fn ApiProvider::parse(value : String) -> ApiProvider {
 /// the page's last model choice belong to different known model families.
 fn ApiProvider::default_model(self : ApiProvider) -> EngineModel {
   match self {
-    Deepseek | Custom => High
+    Deepseek | Custom => Low
     Glm => Glm53
   }
 }
@@ -2453,10 +2453,10 @@ fn initial_model() -> Model {
     },
     websocket_epoch: 0,
     focused: page_channel.unwrap_or(@interop.ChannelId::Local),
-    default_model: High,
+    default_model: Low,
     default_agent: OpenSeekAgent,
     conversation_models: [],
-    openseek_reasoning: ReasoningMax,
+    openseek_reasoning: ReasoningHigh,
     glm_reasoning: ReasoningOff,
     max_steps: DefaultMaxSteps,
     deepseek_key_saved: false,

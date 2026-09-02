@@ -12234,8 +12234,8 @@ test "loaded UI preferences parse their wire names" {
   assert_true(unknown.theme is System)
   assert_true(unknown.app_font is SystemMono)
   assert_eq(unknown.app_font_size, AppFontSize(14))
-  assert_true(unknown.default_model is High)
-  assert_true(unknown.openseek_reasoning is ReasoningMax)
+  assert_true(unknown.default_model is Low)
+  assert_true(unknown.openseek_reasoning is ReasoningHigh)
   assert_true(unknown.glm_reasoning is ReasoningOff)
   assert_true(unknown.default_agent is OpenSeekAgent)
   // A store that will not parse remembers nothing rather than wedging.
@@ -12621,12 +12621,17 @@ test "a conversation first met through a live run adopts its tier" {
     Started(
       run_id="r2",
       session="background-chat",
-      model=Low,
+      model=High,
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
     ),
-    test_model(),
+    // The chat on screen sits on the page default, so the run's other tier
+    // contrasts with both of the things it must not move.
+    test_model().replace_conversation({
+      ..test_conversation(),
+      engine_model: Low,
+    }),
   )
   guard background.find_conversation(
       @interop.ChannelId::Local,
@@ -12635,9 +12640,9 @@ test "a conversation first met through a live run adopts its tier" {
     is Some(conv) else {
     fail("the background run materialized no conversation")
   }
-  assert_true(conv.engine_model is Low)
-  assert_true(background.active().engine_model is High)
-  assert_true(background.default_model is High)
+  assert_true(conv.engine_model is High)
+  assert_true(background.active().engine_model is Low)
+  assert_true(background.default_model is Low)
 }
 
 ///|
@@ -12850,9 +12855,9 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   assert_true(glm.default_model is Glm53)
   assert_true(glm.active().engine_model is Glm53)
   // GLM's forced-thinking default is the shared low wire value, independent
-  // from the Max preference DeepSeek keeps.
+  // from the High preference DeepSeek keeps.
   assert_true(glm.reasoning_for(glm.active().engine_model) is ReasoningOff)
-  assert_true(glm.openseek_reasoning is ReasoningMax)
+  assert_true(glm.openseek_reasoning is ReasoningHigh)
   // A host snapshot on a later launch performs the same alignment even
   // though the page-local model preference loads before host settings do.
   let (_, restored) = update_dev(
@@ -13934,16 +13939,17 @@ test "GLM and DeepSeek remember independent reasoning choices" {
   assert_eq(control.selected, "no")
   assert_eq(control.options[0].label, "Low")
   assert_eq(control.title, "Reasoning effort: Low")
-  let (_, glm_high) = update(dispatch, OpenSeekEffortPicked("high"), glm)
-  assert_true(glm_high.glm_reasoning is ReasoningHigh)
-  assert_true(glm_high.openseek_reasoning is ReasoningMax)
-  let deepseek = glm_high.replace_conversation({
-    ..glm_high.active(),
+  // Max is not DeepSeek's default, so the two sides stay distinguishable.
+  let (_, glm_max) = update(dispatch, OpenSeekEffortPicked("max"), glm)
+  assert_true(glm_max.glm_reasoning is ReasoningMax)
+  assert_true(glm_max.openseek_reasoning is ReasoningHigh)
+  let deepseek = glm_max.replace_conversation({
+    ..glm_max.active(),
     engine_model: High,
   })
   let (_, deepseek_off) = update(dispatch, OpenSeekEffortPicked("no"), deepseek)
   assert_true(deepseek_off.openseek_reasoning is ReasoningOff)
-  assert_true(deepseek_off.glm_reasoning is ReasoningHigh)
+  assert_true(deepseek_off.glm_reasoning is ReasoningMax)
 }
 
 ///|

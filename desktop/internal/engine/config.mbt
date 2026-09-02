@@ -2,7 +2,7 @@
 // is spawned with.
 
 ///|
-const DefaultModel = "deepseek-v4-pro"
+const DefaultModel = "deepseek-v4-flash"
 
 ///|
 const DefaultMaxSteps = 1000
@@ -49,7 +49,7 @@ fn RunConfig::configured_thinking(
     }
     return thinking
   }
-  ThinkingMax
+  ThinkingHigh
 }
 
 ///|

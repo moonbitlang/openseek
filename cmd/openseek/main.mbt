@@ -1374,8 +1374,9 @@ test "cli defaults model and max steps" {
   let parsed = run_matches(argv=["write", "MoonBit"], env={
     "DEEPSEEK": "test-key",
   })
-  let (model, _, api_url) = agent_settings(parsed)
-  assert_true(model is Deepseek(V4Pro))
+  let (model, thinking, api_url) = agent_settings(parsed)
+  assert_true(model is Deepseek(V4Flash))
+  assert_true(thinking is High)
   assert_eq(model.api_key(parsed.values), Some("test-key"))
   assert_true(api_url is None)
   assert_eq(@cli.value(parsed, "dir"), ".")
