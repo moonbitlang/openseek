@@ -411,7 +411,7 @@ fn user_role_card_style(
 ) -> (String, String) {
   match origin {
     FromRuntime => ("runtime", "Runtime notice")
-    FromSummary => ("summary", "Summary")
+    FromSummary(from~, to~) => ("summary", summary_label(from~, to~))
     // `Other` cannot reach a user-role card: the projection only synthesizes
     // assistant and tool messages. Classifying it as input is the honest
     // fallback if that ever changes — it says no more than the role does.
@@ -1414,8 +1414,18 @@ fn summary_card(
   time : String,
   summary : @agent_session.SessionSummary,
 ) -> @html.Html {
-  let label = "Summary · covers events \{summary.from_sequence()}..\{summary.to_sequence()}"
+  let label = summary_label(
+    from=summary.from_sequence(),
+    to=summary.to_sequence(),
+  )
   card("summary", label, seq, time~, [text_block(summary.content())])
+}
+
+///|
+/// Caption for a compaction summary, shared by the raw log's card and the
+/// model view's projection of the same event so the two cannot drift.
+fn summary_label(from~ : Int, to~ : Int) -> String {
+  "Summary · covers events \{from}..\{to}"
 }
 
 ///|
@@ -1691,7 +1701,9 @@ fn model_message_step_labels(session : @agent_session.Session) -> Array[String] 
 priv enum MessageOrigin {
   FromUser
   FromRuntime
-  FromSummary
+  /// A compaction summary, carrying the range it covers so the model view can
+  /// caption it exactly as the raw log's own card does.
+  FromSummary(from~ : Int, to~ : Int)
   /// An assistant/tool/terminal event, or a message with no durable event at
   /// all: the system prompt and the projection's synthesized tool repairs.
   Other
@@ -1707,7 +1719,8 @@ fn model_message_origins(
     match event.item() {
       User(_) => FromUser
       Runtime(_) => FromRuntime
-      Summary(_) => FromSummary
+      Summary(summary) =>
+        FromSummary(from=summary.from_sequence(), to=summary.to_sequence())
       Assistant(_) | Tool(_) | Terminal(_) => Other
     }
   }
@@ -1844,9 +1857,18 @@ test "model-view user cards keep the caption of the event behind them" {
     )
     captions.push(label)
   }
+  // The summary keeps the caption the raw log's own card gives it, range and
+  // all, so the same event reads the same way in both views.
   debug_inspect(
     captions,
-    content="[\"Summary\", \"Auto-continue\", \"Runtime notice\", \"You\"]",
+    content=(
+      #|[
+      #|  "Summary · covers events 1..3",
+      #|  "Auto-continue",
+      #|  "Runtime notice",
+      #|  "You",
+      #|]
+    ),
   )
 }
 
