@@ -1,15 +1,15 @@
 ///|
 #warnings("-alert_unstable")
+#cfg(not(target="js"))
 fn render_search(state : State, input : Input) -> String {
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  @rabbita.render_to_string(() => {
-    @rabbita.Val::constant(
-      state.explorer_view(input, emit, (_, _) => @cmd.none),
-    )
+  @vdom.server_side_render(() => {
+    state.explorer_view(input, emit, (_, _) => @cmd.none).to_virtual_dom()
   })
 }
 
 ///|
+#cfg(not(target="js"))
 test "Search renders VS Code's Whole Word codicon instead of a text label" {
   let input : Input = {
     owner: { channel: @interop.ChannelId::Local, session: "icons", },
@@ -22,6 +22,7 @@ test "Search renders VS Code's Whole Word codicon instead of a text label" {
 }
 
 ///|
+#cfg(not(target="js"))
 test "Code search renders the pattern repair placeholder only in semantic mode" {
   let owner : @interop.ConversationKey = {
     channel: @interop.ChannelId::Local,
@@ -89,6 +90,7 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
 }
 
 ///|
+#cfg(not(target="js"))
 test "Search view groups files and marks matching UTF-16 slices" {
   let owner : @interop.ConversationKey = {
     channel: @interop.ChannelId::Local,
@@ -138,6 +140,7 @@ test "Search view groups files and marks matching UTF-16 slices" {
 }
 
 ///|
+#cfg(not(target="js"))
 test "large Search replies render incrementally without changing totals" {
   let owner : @interop.ConversationKey = {
     channel: @interop.ChannelId::Local,

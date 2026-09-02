@@ -18,7 +18,3 @@ supported_targets = "js"
 import {
   "moonbitlang/core/debug",
 } for "test"
-
-import {
-  "moonbit-community/rabbita",
-} for "wbtest"
