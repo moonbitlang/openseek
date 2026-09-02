@@ -102,13 +102,20 @@ error: unexpected value 'something' found; no more were expected
 ## Bare `openseek` Is The Interactive UI
 
 With no subcommand, `openseek` launches the UI — it behaves as `openseek tui`.
-Here the default engine reaches the non-TTY guard, proving the bare entrypoint
-was dispatched through the UI without needing a custom engine.
+The cram sandbox exposes the binary only as `openseek.exe`, while the default
+engine re-launches the canonical name `openseek`; symlinking it into a scratch
+dir on `PATH` simulates a real install where that name resolves. The default
+engine's pre-flight succeeds and the bare entrypoint reaches the non-TTY guard,
+proving it was dispatched through the UI.
 
 ```mooncram
-$ env DEEPSEEK=test-key openseek.exe 2>&1
+$ sh <<'EOF'
+> bin=$(mktemp -d)
+> ln -s "$(command -v openseek.exe)" "$bin/openseek"
+> PATH="$bin:$PATH" env DEEPSEEK=test-key openseek.exe 2>&1
+> rm -rf "$bin"
+> EOF
 error: the interactive UI needs a terminal; run a headless task with `openseek run "…"` (or `openseek serve` for the JSONL protocol).
-[1]
 ```
 
 ## `openseek run` Runs One Task Headlessly
