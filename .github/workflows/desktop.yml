@@ -31,103 +31,15 @@ on:
       - "moon.work"
       - ".github/workflows/desktop.yml"
 
-# A newer PR head supersedes its older Desktop run. Keep main runs complete so
-# every relevant merged commit still receives the complete Desktop gate.
+# A newer PR head supersedes its older browser run. Keep main runs complete so
+# every relevant merged commit still receives a Desktop E2E result.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Keep the existing job name so repositories that require the `desktop`
-  # check continue to recognize the MoonBit gate after E2E is split out.
-  desktop:
-    name: desktop
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Set up MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-
-      - name: Update MoonBit dependencies
-        run: moon update
-
-      - name: Resolve pinned Proton version
-        id: proton
-        run: |
-          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/moon.mod)"
-          test -n "$version"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Restore Proton runtime
-        id: cef-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.proton/store
-            ~/.proton/helpers
-          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
-
-      # Moon runs module prebuilds for JS targets too. Proton 0.2.5 queries
-      # Linux native link metadata for every Desktop check, test, and build.
-      - name: Install Proton build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes libgtk-3-dev libx11-dev
-
-      - name: Assemble Proton CEF runtime
-        working-directory: desktop
-        run: >-
-          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
-          cef setup
-
-      - name: Save Proton runtime
-        if: >-
-          github.event_name == 'push' &&
-          steps.cef-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ~/.proton/store
-            ~/.proton/helpers
-          key: ${{ steps.cef-cache.outputs.cache-primary-key }}
-
-      - name: Check Desktop MoonBit
-        working-directory: desktop
-        run: |
-          moon check --target native --target-dir ../_build --deny-warn
-          moon check --target js --target-dir ../_build --deny-warn
-          moon fmt --check
-
-      - name: Check Desktop generated interfaces
-        working-directory: desktop
-        run: |
-          moon info --target-dir ../_build
-          untracked_mbti="$(git ls-files --others --exclude-standard -- '*.mbti')"
-          if [ -n "$untracked_mbti" ] ||
-            ! git diff --quiet --ignore-blank-lines -- '*.mbti'; then
-            git status --short -- '*.mbti'
-            git diff --ignore-blank-lines -- '*.mbti'
-            exit 1
-          fi
-
-      - name: Test Desktop MoonBit
-        working-directory: desktop
-        run: |
-          moon test internal/*/ frontend/fileeditor/feedback --target native --target-dir ../_build
-          moon test frontend \
-            internal/file_search_policy internal/file_search_score \
-            internal/filekind internal/jsonx internal/protocol internal/uri \
-            --target js --target-dir ../_build
-
-  e2e:
-    name: e2e
+  desktop-e2e:
+    name: desktop e2e
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
