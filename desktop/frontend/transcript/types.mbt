@@ -1,5 +1,5 @@
 // The display-ready forms of what the engine reports: transcript entries,
-// sidebar session entries, and parsed runtime updates. The decoders in this
+// sidebar session entries, and runtime notices. The decoders in this
 // package produce them from the host's wire data; the app's update and view
 // construct and consume them freely, so the types are fully public.
 
@@ -23,7 +23,7 @@ pub(all) enum ItemKind {
   // One tool call in its original assistant-message order. `call_id` pairs the
   // later durable result into this same item instead of adding a second row;
   // `arguments` is `Some` for a recorded call and `None` for an unmatched
-  // legacy result. `has_result` distinguishes a
+  // legacy result or a synthetic runtime notice. `has_result` distinguishes a
   // pending call from a completed call even when the legitimate result has
   // empty content, `is_error=false`, and no brief.
   Tool(
@@ -40,10 +40,6 @@ pub(all) enum ItemKind {
   // would read as an anonymous tool call row and swallow the preceding
   // answer bubble into the step's group.
   Summary
-  // A runtime notice the engine injected between turns — a background-job
-  // completion, or a legacy `moon_check` block from an older record. Stands
-  // alone in the transcript, never batched into a step's activity.
-  Notice
 } derive(Eq)
 
 ///|

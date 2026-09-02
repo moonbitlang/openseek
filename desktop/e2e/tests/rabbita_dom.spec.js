@@ -584,6 +584,40 @@ test('tool-call tabs keep focus-driven scrolling inside the transcript', async (
   expect(app.pageErrors).toEqual([]);
 });
 
+test('runtime notices keep the compact result-row presentation', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = [
+    {
+      sequence: 1,
+      item: {
+        kind: 'user',
+        payload: { content: 'Show the browser fixture runtime notice' },
+      },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'runtime_notice',
+        payload: {
+          content: 'background job bg-1 finished (exit=0): `moon test`',
+        },
+      },
+    },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+
+  const notice = page.locator('.activity-row', { hasText: 'runtime notice' });
+  const result = notice.locator('details.tool-result');
+  await expect(notice.locator('.summary-card')).toHaveCount(0);
+  await expect(result.locator('.tool-result-text')).toHaveText('runtime notice');
+  await expect(result).not.toHaveAttribute('open', '');
+  await result.locator('.tool-result-summary').click();
+  await expect(result).toContainText('background job bg-1 finished (exit=0)');
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('transcript Markdown keeps links safe and loads local raster bytes through the host', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.binaryFiles['diagram.png'] = {

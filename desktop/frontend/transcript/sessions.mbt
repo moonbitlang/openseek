@@ -518,7 +518,17 @@ pub fn apply_session_item(
           None =>
             if !is_model_directed_notice(payload.content) {
               items.push({
-                kind: Notice,
+                // Runtime notices keep the compact completed-result row used
+                // by the old projection, but the generic label no longer
+                // claims every background event came from `moon_check`.
+                kind: Tool(
+                  call_id="",
+                  name="runtime notice",
+                  arguments=None,
+                  has_result=true,
+                  is_error=false,
+                  brief=None,
+                ),
                 content: payload.content,
                 ts,
                 sequence,
@@ -1204,7 +1214,10 @@ test "transcript mapping keeps summaries and background notices" {
   let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="2")
   guard items[0].kind is Summary else { fail("expected summary") }
-  guard items[1].kind is Notice else { fail("expected notice card") }
+  guard items[1].kind
+    is Tool(name="runtime notice", arguments=None, is_error=false, ..) else {
+    fail("expected runtime notice row")
+  }
   inspect(items[1].content, content="background job bg-1 finished (exit=0)")
 }
 
@@ -1256,7 +1269,10 @@ test "transcript mapping drops the plan reminder instead of carding it" {
     #|{"sequence":2,"item":{"kind":"runtime_notice","payload":{"content":"background job bg-2 finished (exit=1)"}}}
   let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="1")
-  guard items[0].kind is Notice else { fail("expected only the notice card") }
+  guard items[0].kind
+    is Tool(name="runtime notice", arguments=None, is_error=false, ..) else {
+    fail("expected only the runtime notice row")
+  }
   inspect(items[0].content, content="background job bg-2 finished (exit=1)")
 }
 

@@ -765,7 +765,6 @@ fn transcript_item_view(
     Reasoning => activity_view([item], on_open)
     Tool(..) => activity_view([item], on_open)
     Summary => summary_card_view(item.content, on_open)
-    Notice => notice_card_view(item.content)
   }
 }
 
@@ -921,25 +920,4 @@ fn transcript_view(
       ),
     children,
   )
-}
-
-///|
-/// A runtime notice the engine injected between turns (a background-job
-/// completion, or a legacy `moon_check` block from an older record). Rendered
-/// with the summary card's quiet styling but open by default — the notice's
-/// text is the payload, not something to discover behind a fold. Plain text,
-/// never assistant markdown and never a tool call.
-fn notice_card_view(content : String) -> @html.Html {
-  @html.div(class="activity-row", [
-    @html.details(class="summary-card", open=true, [
-      @html.summary(class="summary-card-label", [
-        @html.span(class="summary-card-icon", @icons.icon(@icons.icon_fold)),
-        @html.span(class="summary-card-text", "Notice"),
-      ]),
-      @html.div(
-        class="msg-content summary-card-body",
-        inline_code_nodes(content),
-      ),
-    ]),
-  ])
 }
