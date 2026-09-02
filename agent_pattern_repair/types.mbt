@@ -9,6 +9,18 @@ pub struct PatternRepairReport {
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
+pub extend PatternRepairReport with Debug::{to_repr}
+
+///|
+pub extend PatternRepairReport with Eq::{equal, not_equal}
+
+///|
+pub extend PatternRepairReport with ToJson::{to_json}
+
+///|
+pub extend PatternRepairReport with FromJson::{from_json}
+
+///|
 fn PatternRepairReport::validate(self : PatternRepairReport) -> Array[String] {
   let problems : Array[String] = []
   if self.candidate_pattern.trim().is_empty() {

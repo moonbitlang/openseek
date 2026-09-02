@@ -16,6 +16,9 @@ pub impl FromJson for PatternRepairPayload with fn from_json(json, path) {
 }
 
 ///|
+pub extend PatternRepairPayload with FromJson::{from_json}
+
+///|
 pub impl ToJson for PatternRepairPayload with fn to_json(self) {
   {
     "root": self.root,
@@ -24,6 +27,9 @@ pub impl ToJson for PatternRepairPayload with fn to_json(self) {
     "generation": self.generation,
   }
 }
+
+///|
+pub extend PatternRepairPayload with ToJson::{to_json}
 
 ///|
 pub impl FromJson for PatternRepairReply with fn from_json(json, path) {
@@ -45,6 +51,9 @@ pub impl FromJson for PatternRepairReply with fn from_json(json, path) {
 }
 
 ///|
+pub extend PatternRepairReply with FromJson::{from_json}
+
+///|
 pub impl ToJson for PatternRepairReply with fn to_json(self) {
   {
     "root": self.root,
@@ -55,3 +64,6 @@ pub impl ToJson for PatternRepairReply with fn to_json(self) {
     "message": self.message,
   }
 }
+
+///|
+pub extend PatternRepairReply with ToJson::{to_json}

@@ -495,6 +495,12 @@ pub(all) struct PatternRepairPayload {
 } derive(Debug, Eq)
 
 ///|
+pub extend PatternRepairPayload with Debug::{to_repr}
+
+///|
+pub extend PatternRepairPayload with Eq::{equal, not_equal}
+
+///|
 /// One batch of an in-flight semantic search, pushed as a connection
 /// notification so the client can render hits before the final reply arrives.
 /// The reply remains authoritative: `matches` are the Host's partial

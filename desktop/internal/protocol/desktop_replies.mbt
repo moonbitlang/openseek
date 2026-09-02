@@ -1345,6 +1345,12 @@ pub(all) struct PatternRepairReply {
 } derive(Debug, Eq)
 
 ///|
+pub extend PatternRepairReply with Debug::{to_repr}
+
+///|
+pub extend PatternRepairReply with Eq::{equal, not_equal}
+
+///|
 pub impl FromJson for ReadFileReply with fn from_json(json, path) {
   guard json is Object(fields) && fields.get("kind") is Some(String(kind_)) else {
     raise JsonDecodeError((path, "expected file reply"))

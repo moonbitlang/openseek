@@ -1542,6 +1542,11 @@ pub(all) struct PatternRepairPayload {
   instruction : String
   generation : Int
 } derive(Eq, @debug.Debug)
+pub fn PatternRepairPayload::equal(Self, Self) -> Bool
+pub fn PatternRepairPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PatternRepairPayload::not_equal(Self, Self) -> Bool
+pub fn PatternRepairPayload::to_json(Self) -> Json
+pub fn PatternRepairPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for PatternRepairPayload
 pub impl @json.FromJson for PatternRepairPayload
 
@@ -1553,6 +1558,11 @@ pub(all) struct PatternRepairReply {
   validation_status : String
   message : String
 } derive(Eq, @debug.Debug)
+pub fn PatternRepairReply::equal(Self, Self) -> Bool
+pub fn PatternRepairReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PatternRepairReply::not_equal(Self, Self) -> Bool
+pub fn PatternRepairReply::to_json(Self) -> Json
+pub fn PatternRepairReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for PatternRepairReply
 pub impl @json.FromJson for PatternRepairReply
 

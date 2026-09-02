@@ -123,16 +123,16 @@ pub struct BgJobSnapshot {
   id : String
   command : String
   status : BgJobStatus
-  priv output : String
+  output : String
   output_truncated : Bool
-  priv over_inline_cap : Bool
+  over_inline_cap : Bool
   size : Int
-  priv exit_code : Int?
+  exit_code : Int?
   // Preserved so a reader can match the foreground path's error semantics: mark
   // binary output as an error, and detect a sandboxed source-write denial.
   had_invalid_utf8 : Bool
   sandboxed_command : @sandbox.SandboxedCommand?
-  priv read_only_review : Bool
+  read_only_review : Bool
   output_rewrites : Array[(String, String)]
   moonrun_policy_active : Bool
   // The job was killed by the output-limit watchdog (flooded past the hard cap),

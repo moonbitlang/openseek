@@ -17,6 +17,11 @@ pub struct PatternRepairReport {
   candidate_pattern : String
   message : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn PatternRepairReport::equal(Self, Self) -> Bool
+pub fn PatternRepairReport::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PatternRepairReport::not_equal(Self, Self) -> Bool
+pub fn PatternRepairReport::to_json(Self) -> Json
+pub fn PatternRepairReport::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 
