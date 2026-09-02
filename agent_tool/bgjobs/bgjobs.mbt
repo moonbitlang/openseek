@@ -621,7 +621,10 @@ async test "stop terminates a running job" {
 #cfg(not(platform="windows"))
 async test "a large-output job spills; snapshot previews, read_output is full" {
   @async.with_task_group(group => {
-    let rt = BgJobRuntime::BgJobRuntime(AgentTaskScope(group), spill_dir="/tmp")
+    let rt = BgJobRuntime::BgJobRuntime(
+      AgentTaskScope(group),
+      spill_dir=@fs.tmpdir(prefix="openseek-bgjobs-"),
+    )
     let id = rt.start(
       program="sh",
       args=["-c", "seq 1 5000"],
