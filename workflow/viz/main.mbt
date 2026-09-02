@@ -5,26 +5,80 @@
 /// output appears verbatim inside a later agent's input. Dynamic
 /// workflows declare no graph, so none is stored; content recovers it.
 ///
-///   moon run workflow/viz -- <journal.jsonl> [out.html]
+///   moon run workflow/viz -- <journal.jsonl> [out.html] [--watch]
+///   moonx bobzhang/workflow/viz <journal.jsonl> [out.html] [--watch]
+///
+/// `--watch` re-renders every 2 seconds and the page auto-refreshes —
+/// a live view of a RUNNING workflow's completions.
 async fn main {
-  render() catch {
+  run() catch {
     error => println("viz failed: \{error}")
   }
 }
 
 ///|
-async fn render() -> Unit {
+async fn run() -> Unit {
   let args = @env.args()
-  guard args.length() >= 2 else {
-    println("usage: viz <journal.jsonl> [out.html]")
+  let positional : Array[String] = []
+  let mut watch = false
+  for index, arg in args {
+    if index == 0 {
+      continue
+    }
+    if arg == "--watch" {
+      watch = true
+    } else {
+      positional.push(arg)
+    }
+  }
+  guard positional.length() >= 1 else {
+    println("usage: viz <journal.jsonl> [out.html] [--watch]")
     return
   }
-  let path = args[1]
-  let out = if args.length() >= 3 { args[2] } else { "\{path}.html" }
-  let journal = @workflow.Journal::load(path)
-  let entries = journal.prior()
+  let path = positional[0]
+  let out = if positional.length() >= 2 { positional[1] } else { "\{path}.html" }
+  for ;; {
+    render(path, out, watch) catch {
+      error => if watch { println("(\{error} — retrying)") } else { raise error }
+    }
+    guard watch else { break }
+    @async.sleep(2_000)
+  }
+}
+
+///|
+/// READ-ONLY journal parse. Deliberately not `Journal::load`: load
+/// REPAIRS torn tails on disk, and a watcher must never rewrite a file
+/// a running workflow is appending to. Unparsable lines (the live
+/// writer's torn tail) are simply skipped for this tick.
+async fn read_entries(path : String) -> Array[@workflow.JournalEntry] {
+  let entries : Array[@workflow.JournalEntry] = []
+  guard @fs.exists(path) else { return entries }
+  let text = @fs.read_file(path).text() catch { _ => return entries }
+  for line in text.split("\n") {
+    let line = line.trim()
+    if line.is_empty() {
+      continue
+    }
+    let parsed : @workflow.JournalEntry? = (match
+        @json.parse(line.to_owned()) {
+      { "v": Number(1, ..), "e": entry, .. } => Some(@json.from_json(entry))
+      _ => None
+    }) catch {
+      _ => None
+    }
+    if parsed is Some(entry) {
+      entries.push(entry)
+    }
+  }
+  entries
+}
+
+///|
+async fn render(path : String, out : String, watch : Bool) -> Unit {
+  let entries = read_entries(path)
   guard entries.length() > 0 else {
-    println("journal \{path} holds no entries")
+    println("journal \{path} holds no entries yet")
     return
   }
 
@@ -97,8 +151,15 @@ async fn render() -> Unit {
     )
   }
   graph.write_string("</svg>")
+  let refresh = if watch {
+    "<meta http-equiv=\"refresh\" content=\"2\">"
+  } else {
+    ""
+  }
   let page =
-    "<!doctype html><meta charset=\"utf-8\"><title>journal: \{escape(path)}</title>" +
+    "<!doctype html><meta charset=\"utf-8\">" +
+    refresh +
+    "<title>journal: \{escape(path)}</title>" +
     style +
     "<div class=\"wrap\"><h1>\{escape(path)}</h1><p class=\"dek\">\{entries.length()} recorded attempt(s) · \{edges.length()} dataflow edge(s) derived from content. A journal records LIVE outcomes only — repeated labels are re-attempts or cascade generations; replays are served, never re-appended.</p><div class=\"grid\"><div class=\"panel\"><h2>Ledger</h2><div style=\"overflow-x:auto\"><table><tr><th>#</th><th>agent</th><th>outcome</th><th style=\"text-align:right\">steps</th><th>tokens</th></tr>" +
     rows.to_string() +
