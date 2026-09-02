@@ -508,7 +508,6 @@ pub async fn BgJobRuntime::stop(self : BgJobRuntime, id : String) -> Bool {
 /// Poll `id` until it leaves `Running`, failing after a bounded deadline so a
 /// hung child can never hang the test. Async tests run in parallel, so each test
 /// isolates its own runtime and jobs.
-#cfg(not(platform="windows"))
 async fn poll_until_terminal(
   rt : BgJobRuntime,
   id : String,
@@ -556,11 +555,49 @@ async test "bg job runs to completion and captures output" {
 }
 
 ///|
+/// Windows twin of the completion test: `cmd` builtins instead of `sh`, so the
+/// snapshot's preview fields stay exercised where the unix suite is compiled
+/// out.
+#cfg(platform="windows")
+async test "bg job runs to completion and captures output on Windows" {
+  @async.with_task_group(group => {
+    let rt = BgJobRuntime::BgJobRuntime(AgentTaskScope(group))
+    let id = rt.start(
+      program="cmd",
+      args=["/c", "echo hello"],
+      command="cmd /c echo hello",
+      read_only_review=true,
+    )
+    let snap = poll_until_terminal(rt, id)
+    assert_true(snap.status is Exited(0))
+    assert_true(snap.output.contains("hello"))
+    assert_true(snap.exit_code is Some(0))
+    assert_true(snap.read_only_review)
+  })
+}
+
+///|
 #cfg(not(platform="windows"))
 async test "bg job records a non-zero exit code" {
   @async.with_task_group(group => {
     let rt = BgJobRuntime::BgJobRuntime(AgentTaskScope(group))
     let id = rt.start(program="sh", args=["-c", "exit 3"], command="exit 3")
+    let snap = poll_until_terminal(rt, id)
+    assert_true(snap.status is Exited(3))
+    assert_true(snap.exit_code is Some(3))
+  })
+}
+
+///|
+#cfg(platform="windows")
+async test "bg job records a non-zero exit code on Windows" {
+  @async.with_task_group(group => {
+    let rt = BgJobRuntime::BgJobRuntime(AgentTaskScope(group))
+    let id = rt.start(
+      program="cmd",
+      args=["/c", "exit 3"],
+      command="cmd /c exit 3",
+    )
     let snap = poll_until_terminal(rt, id)
     assert_true(snap.status is Exited(3))
     assert_true(snap.exit_code is Some(3))
@@ -599,6 +636,33 @@ async test "a large-output job spills; snapshot previews, read_output is full" {
     // ...while read_output returns the full output from the spill file.
     let full = rt.read_output(id).unwrap()
     assert_true(full.has_prefix("1\n"))
+    assert_true(full.contains("5000"))
+  })
+}
+
+///|
+/// Windows twin of the spill test: a `for /l` echo loop replaces `seq`.
+#cfg(platform="windows")
+async test "a large-output job spills on Windows; snapshot previews, read_output is full" {
+  @async.with_task_group(group => {
+    let rt = BgJobRuntime::BgJobRuntime(
+      AgentTaskScope(group),
+      spill_dir=@fs.tmpdir(prefix="openseek-bgjobs-"),
+    )
+    let id = rt.start(
+      program="cmd",
+      args=["/c", "for /l %i in (1,1,5000) do @echo %i"],
+      command="cmd /c for /l %i in (1,1,5000) do @echo %i",
+      max_output_chars=100,
+    )
+    let snap = poll_until_terminal(rt, id)
+    assert_true(snap.status is Exited(0))
+    assert_true(snap.over_inline_cap)
+    // The snapshot output is a bounded preview...
+    assert_true(snap.output.char_length() <= 100)
+    // ...while read_output returns the full output from the spill file.
+    let full = rt.read_output(id).unwrap()
+    assert_true(full.has_prefix("1"))
     assert_true(full.contains("5000"))
   })
 }

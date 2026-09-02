@@ -231,3 +231,76 @@ jobs:
             cmd/viz_app/e2e/test-results
           if-no-files-found: ignore
           retention-days: 7
+
+  # The Linux rows above own the canonical native/JS pair, the committed
+  # `.mbti` gate, and the POSIX cram suite. This job carries the native
+  # contract onto Windows, where MoonBit compiles through MSVC — a path the
+  # Linux rows cannot exercise.
+  #
+  # Test scope is deliberately narrow today: the root module's and the
+  # desktop member's native suites are not Windows-port-ready yet (they
+  # assume POSIX paths, symlink privileges, and unix shell semantics; see the
+  # failures a local `moon test --target native` reports on Windows). The
+  # full-workspace `moon check --deny-warn` below still compiles every
+  # package for the native target; suites rejoin this job as their Windows
+  # ports land.
+  check-windows:
+    name: check (windows, native)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      # actions/checkout inherits the runner's autocrlf on Windows, which
+      # rewrites committed LFs; the repository has no .gitattributes and its
+      # canonical tree (fmt, cram, `.mbti`) is LF. Pin autocrlf before the
+      # checkout so the working tree stays byte-identical to the commit.
+      - name: Pin Git line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit (stable)
+        run: |
+          Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          "$HOME\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Show MoonBit version
+        run: moon version --all
+
+      - name: Update MoonBit package registry
+        run: moon update
+
+      - name: Check formatting
+        run: moon fmt --check
+
+      - name: Check native target
+        # The whole integrated workspace compiles on Windows — including the
+        # desktop member — the local-dependency integration gate the Linux
+        # rows perform for their own target. No CEF runtime is needed:
+        # checks never link.
+        run: moon check --target native --deny-warn
+
+      # The bgjobs package runs Windows twins of its unix process suite
+      # (`cmd` builtins instead of `sh`). They keep the snapshot's preview
+      # fields read on Windows, which is what lets the `--deny-warn` gate
+      # above pass; guard them explicitly.
+      - name: Test background jobs (Windows suite)
+        run: moon test --target native agent_tool/bgjobs
+
+      # The editor is its own module with an all-target contract (see
+      # editor.yml); its native suite is green on Windows and exercises the
+      # host's path handling, which is exactly where Windows differs.
+      - name: Test editor native target
+        working-directory: editor
+        run: moon test --target native
+
+      # The cram suite is POSIX shell (`sh` heredocs, `sed`, `mktemp`); the
+      # Linux job owns it. A Windows port would need PowerShell-flavored
+      # blocks.
