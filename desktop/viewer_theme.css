@@ -35,7 +35,7 @@
   --vscode-cornerRadius-medium: var(--radius-sm);
   --vscode-cornerRadius-large: var(--radius-md);
 
-  /* The context menu mirrors the app menus (.workspace-menu,
+  /* The context menu mirrors the app menus (.action-menu,
      .completion-menu): surface panel, hairline border, accent-soft
      selection. */
   --vscode-menu-background: var(--color-bg-surface);

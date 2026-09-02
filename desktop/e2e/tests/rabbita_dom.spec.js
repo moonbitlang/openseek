@@ -850,6 +850,52 @@ test('new chat, archive, and restore update the conversation sidebar', async ({ 
   expect(app.pageErrors).toEqual([]);
 });
 
+test('shared WebView action menu supports context position, keyboard, and rename', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+
+  const liveRow = page.locator('.conversation-row[title="session-1"]');
+  await liveRow.click({ button: 'right', position: { x: 18, y: 18 } });
+  const menu = page.getByRole('menu', { name: 'Conversation actions' });
+  await expect(menu).toBeVisible();
+  const rename = menu.getByRole('menuitem', { name: 'Rename…' });
+  const archive = menu.getByRole('menuitem', { name: 'Archive' });
+  await expect(rename).toBeFocused();
+
+  const bounds = await menu.boundingBox();
+  const viewport = page.viewportSize();
+  expect(bounds).not.toBeNull();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
+
+  await page.keyboard.press('ArrowDown');
+  await expect(archive).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(rename).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(liveRow.getByRole('button', { name: 'Conversation actions' })).toBeFocused();
+
+  await liveRow.getByRole('button', { name: 'Conversation actions' }).click();
+  await page.getByRole('menuitem', { name: 'Rename…' }).click();
+  const input = page.getByRole('textbox', { name: 'Rename conversation' });
+  await expect(input).toBeFocused();
+  await input.fill('Renamed in WebView');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'session.rename')).toMatchObject({
+      params: {
+        session: 'session-1',
+        workspace: '/workspace',
+        title: 'Renamed in WebView',
+      },
+    });
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('settings change and preserve the visible font size', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -1065,7 +1111,7 @@ test('workspace settings open and persist per-workspace choices', async ({ page 
   // The project row's "…" menu is the way into a workspace's settings page.
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
   await page.getByTitle('More actions').click();
-  await page.getByRole('button', { name: 'Workspace settings' }).click();
+  await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
   await expect(page.getByRole('heading', { name: 'workspace' })).toBeVisible();
   await expect(page.locator('.settings-subtitle')).toHaveText('/workspace');
 
@@ -1124,7 +1170,7 @@ test('workspace settings open and persist per-workspace choices', async ({ page 
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
   await page.getByTitle('More actions').click();
-  await page.getByRole('button', { name: 'Workspace settings' }).click();
+  await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
   await expect(page.getByRole('button', { name: 'New chats' })).toHaveText('Worktree');
   await expect(page.getByRole('button', { name: 'Submodules in worktrees' })).toHaveText('Initialize');
   await expect(page.getByRole('button', { name: 'Submodule checkout timeout' })).toHaveText('60 seconds');
@@ -1150,7 +1196,7 @@ test('workspace settings open and persist per-workspace choices', async ({ page 
   app.notify('workspace.changed', { workspaces: ['/workspace'] });
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
   await page.getByTitle('More actions').click();
-  await page.getByRole('button', { name: 'Workspace settings' }).click();
+  await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
   const reopened = page.getByRole('button', { name: 'New chats' });
   await expect(reopened).toHaveAttribute('aria-expanded', 'false');
   await reopened.click();

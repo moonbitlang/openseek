@@ -1,12 +1,6 @@
-// Root-owned coordination for native sidebar menus and inline title editing.
-// Shared row components remain presentation-only; this layer retains stable
-// identities while Proton reports selected native command ids.
-
-///|
-priv enum SidebarMenuTarget {
-  ConversationTarget(id~ : @conversation.Id, label~ : String)
-  WorkspaceTarget(@project.Id)
-} derive(Eq)
+// Root-owned coordination for inline title editing. The shared WebView menu
+// lives with each keyed row; only the asynchronous rename operation crosses
+// into the application model.
 
 ///|
 priv struct ConversationRename {
@@ -32,49 +26,21 @@ fn Model::decorate_conversation_input(
 }
 
 ///|
-fn popup_conversation_menu(
-  dispatch : @cmd.Emit[Msg],
-  payload : @protocol.ConversationMenuPayload,
-) -> @cmd.Cmd {
-  @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
-      let _ : @protocol.EmptyReply = @interop.bridge_request(
-        @interop.ChannelId::Local,
-        @commands.app_conversation_menu,
-        payload,
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(HostActionFailed(@interop.bridge_error_text(error))),
-          )
-          return
-        }
+fn focus_conversation_rename() -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => {
+      if @dom.document()
+        .get_element_by_id(@conversation.RenameInputId)
+        .to_option()
+        is Some(input) {
+        let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
+          "focus",
+          ([] : Array[@js.Value]),
+        )
       }
-    })
-  })
-}
-
-///|
-fn popup_workspace_menu(
-  dispatch : @cmd.Emit[Msg],
-  payload : @protocol.WorkspaceMenuPayload,
-) -> @cmd.Cmd {
-  @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
-      let _ : @protocol.EmptyReply = @interop.bridge_request(
-        @interop.ChannelId::Local,
-        @commands.app_workspace_menu,
-        payload,
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(HostActionFailed(@interop.bridge_error_text(error))),
-          )
-          return
-        }
-      }
-    })
-  })
+    },
+    kind=@cmd.after_render,
+  )
 }
 
 ///|

@@ -767,46 +767,6 @@ pub fn ConnectedStage::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ConnectedStage
 pub impl @json.FromJson for ConnectedStage
 
-pub(all) enum ConversationMenuAction {
-  RenameConversation
-  ArchiveConversation
-  RestoreConversation
-  DeleteConversation
-} derive(Eq, @debug.Debug)
-pub fn ConversationMenuAction::equal(Self, Self) -> Bool
-pub fn ConversationMenuAction::not_equal(Self, Self) -> Bool
-pub fn ConversationMenuAction::parse(String) -> Self?
-pub fn ConversationMenuAction::to_repr(Self) -> @debug.Repr
-pub fn ConversationMenuAction::wire(Self) -> String
-
-pub(all) enum ConversationMenuKind {
-  LiveConversationMenu
-  ArchivedConversationMenu
-} derive(Eq, @debug.Debug)
-pub fn ConversationMenuKind::equal(Self, Self) -> Bool
-pub fn ConversationMenuKind::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn ConversationMenuKind::not_equal(Self, Self) -> Bool
-pub fn ConversationMenuKind::to_json(Self) -> Json
-pub fn ConversationMenuKind::to_repr(Self) -> @debug.Repr
-pub fn ConversationMenuKind::wire(Self) -> String
-pub impl ToJson for ConversationMenuKind
-pub impl @json.FromJson for ConversationMenuKind
-
-pub(all) struct ConversationMenuPayload {
-  x : Int
-  y : Int
-  kind : ConversationMenuKind
-  archive_enabled : Bool
-  delete_enabled : Bool
-} derive(Eq, @debug.Debug)
-pub fn ConversationMenuPayload::equal(Self, Self) -> Bool
-pub fn ConversationMenuPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn ConversationMenuPayload::not_equal(Self, Self) -> Bool
-pub fn ConversationMenuPayload::to_json(Self) -> Json
-pub fn ConversationMenuPayload::to_repr(Self) -> @debug.Repr
-pub impl ToJson for ConversationMenuPayload
-pub impl @json.FromJson for ConversationMenuPayload
-
 pub(all) struct CreateDirectoryPayload {
   parent : String
   name : String
@@ -2467,28 +2427,6 @@ pub fn WatchWorkspacePayload::from_json(Json, @json.JsonPath) -> Self raise @jso
 pub fn WatchWorkspacePayload::not_equal(Self, Self) -> Bool
 pub fn WatchWorkspacePayload::to_json(Self) -> Json
 pub fn WatchWorkspacePayload::to_repr(Self) -> @debug.Repr
-
-pub(all) enum WorkspaceMenuAction {
-  OpenWorkspaceSettings
-  DetachWorkspace
-} derive(Eq, @debug.Debug)
-pub fn WorkspaceMenuAction::equal(Self, Self) -> Bool
-pub fn WorkspaceMenuAction::not_equal(Self, Self) -> Bool
-pub fn WorkspaceMenuAction::parse(String) -> Self?
-pub fn WorkspaceMenuAction::to_repr(Self) -> @debug.Repr
-pub fn WorkspaceMenuAction::wire(Self) -> String
-
-pub(all) struct WorkspaceMenuPayload {
-  x : Int
-  y : Int
-} derive(Eq, @debug.Debug)
-pub fn WorkspaceMenuPayload::equal(Self, Self) -> Bool
-pub fn WorkspaceMenuPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn WorkspaceMenuPayload::not_equal(Self, Self) -> Bool
-pub fn WorkspaceMenuPayload::to_json(Self) -> Json
-pub fn WorkspaceMenuPayload::to_repr(Self) -> @debug.Repr
-pub impl ToJson for WorkspaceMenuPayload
-pub impl @json.FromJson for WorkspaceMenuPayload
 
 pub(all) struct WorkspacePayload {
   path : String

@@ -74,6 +74,9 @@ pub(all) struct RenameInput {
 } derive(Debug, Eq)
 
 ///|
+pub const RenameInputId : String = "sidebar-conversation-rename"
+
+///|
 /// Plain, comparable input to one conversation component. Child runs are
 /// nested data so their lifetime follows the parent branch rather than array
 /// position in the global sidebar.
@@ -103,12 +106,11 @@ pub fn Input::id(self : Input) -> Id {
 /// into its navigation message; this package only owns row behavior and
 /// local disclosure state.
 pub(all) struct Actions {
-  native_menu : Bool
   open : (Id) -> @cmd.Cmd
   archive : (Id) -> @cmd.Cmd
   restore : (Id) -> @cmd.Cmd
   delete : (Id) -> @cmd.Cmd
-  show_menu : (Id, String, @protocol.ConversationMenuKind, Bool, Bool, Int, Int) -> @cmd.Cmd
+  rename : (Id, String) -> @cmd.Cmd
   rename_changed : (Id, String) -> @cmd.Cmd
   rename_submit : (Id) -> @cmd.Cmd
   rename_cancel : (Id) -> @cmd.Cmd
@@ -117,11 +119,14 @@ pub(all) struct Actions {
 ///|
 priv enum Msg {
   ToggleChildren
+  OpenMenu(@action_menu.Anchor)
+  CloseMenu
 }
 
 ///|
 priv struct State {
   children_open : Bool
+  menu : @action_menu.Anchor?
 } derive(Eq)
 
 ///|
@@ -138,13 +143,19 @@ fn Actions::command(
 }
 
 ///|
-fn Input::native_menu_kind(self : Input) -> @protocol.ConversationMenuKind? {
+priv enum MenuKind {
+  LiveMenu
+  ArchivedMenu
+}
+
+///|
+fn Input::menu_kind(self : Input) -> MenuKind? {
   if self.subrun || self.trailing.is_empty() {
     return None
   }
   match self.id.source() {
-    "openseek.live" | "codex.live" => Some(LiveConversationMenu)
-    "openseek.archived" | "codex.archived" => Some(ArchivedConversationMenu)
+    "openseek.live" | "codex.live" => Some(LiveMenu)
+    "openseek.archived" | "codex.archived" => Some(ArchivedMenu)
     _ => None
   }
 }
@@ -164,13 +175,78 @@ fn Input::menu_enabled(self : Input) -> (Bool, Bool) {
 }
 
 ///|
-/// Direct row actions remain available alongside the native menu. Running
+/// Direct row actions remain available alongside the WebView menu. Running
 /// conversations keep the menu for discovery but cannot be archived directly.
 fn Input::direct_actions(self : Input) -> Array[TrailingAction] {
   if self.run_mark is RunningMark {
     []
   } else {
     self.trailing
+  }
+}
+
+///|
+fn Input::menu_id(self : Input) -> String {
+  self.id.key() + ":actions"
+}
+
+///|
+fn Input::menu_trigger_id(self : Input) -> String {
+  self.id.key() + ":actions-trigger"
+}
+
+///|
+fn Input::menu_entries(
+  self : Input,
+  actions : Actions,
+  kind : MenuKind,
+) -> Array[@action_menu.Entry] {
+  let (archive_enabled, delete_enabled) = self.menu_enabled()
+  match kind {
+    LiveMenu =>
+      [
+        Action({
+          label: "Rename…",
+          title: "Rename conversation",
+          icon: None,
+          enabled: true,
+          destructive: false,
+          command: (actions.rename)(self.id, self.label),
+        }),
+        Separator,
+        Action({
+          label: "Archive",
+          title: if archive_enabled {
+            "Archive conversation"
+          } else {
+            "Stop this conversation before archiving it"
+          },
+          icon: Some(@icons.icon(@icons.icon_archive)),
+          enabled: archive_enabled,
+          destructive: false,
+          command: (actions.archive)(self.id),
+        }),
+      ]
+    ArchivedMenu =>
+      [
+        Action({
+          label: "Restore",
+          title: "Restore conversation",
+          icon: Some(@icons.icon(@icons.icon_arrow_up)),
+          enabled: true,
+          destructive: false,
+          command: (actions.restore)(self.id),
+        }),
+        Separator,
+        Action({
+          label: "Delete…",
+          title: "Permanently delete conversation",
+          icon: Some(@icons.icon(@icons.icon_close)),
+          enabled: delete_enabled,
+          destructive: true,
+          command: (actions.delete)(self.id),
+        }),
+      ]
   }
 }
 
@@ -194,10 +270,24 @@ pub fn component(
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
-    init=(_, _) => ({ children_open: false, }, @cmd.none),
+    init=(_, _) => ({ children_open: false, menu: None, }, @cmd.none),
     update=(state, _, msg, _) => {
       match msg {
-        ToggleChildren => ({ children_open: !state.children_open, }, @cmd.none)
+        ToggleChildren =>
+          ({ ..state, children_open: !state.children_open, }, @cmd.none)
+        OpenMenu(anchor) => ({ ..state, menu: Some(anchor), }, @cmd.none)
+        CloseMenu => ({ ..state, menu: None, }, @cmd.none)
+      }
+    },
+    subscriptions=(state, input, emit) => {
+      if state.menu is Some(_) {
+        @action_menu.dismiss_subscription(
+          input.id.key() + ":actions-dismiss",
+          input.menu_trigger_id(),
+          emit.map((_ : Unit) => CloseMenu),
+        )
+      } else {
+        @sub.none
       }
     },
   )
@@ -250,6 +340,7 @@ pub fn component(
         let valid = !rename.draft.trim().is_empty() && !rename.saving
         children.push(
           @html.input(
+            id=RenameInputId,
             input_type=@html.InputType::Text,
             class="sidebar-label conversation-rename",
             value=rename.draft,
@@ -313,14 +404,10 @@ pub fn component(
       CompletedMark => status.push(@html.span(class="run-dot accent", ""))
       FailedMark => status.push(@html.span(class="run-dot warn", ""))
     }
-    let menu_kind = if actions.native_menu {
-      input.native_menu_kind()
-    } else {
-      None
-    }
-    // Native and browser rows retain their direct durable-action shortcuts.
-    // The native ellipsis and context menu add discoverability and Rename;
-    // they do not replace the existing one-click actions.
+    let menu_kind = input.menu_kind()
+    // Direct durable-action shortcuts stay alongside the shared WebView menu.
+    // The ellipsis and context menu add discoverability and Rename; they do
+    // not replace the existing one-click actions.
     let trailing_actions = input.direct_actions()
     if !status.is_empty() ||
       !trailing_actions.is_empty() ||
@@ -350,35 +437,23 @@ pub fn component(
           ),
         )
       }
-      if menu_kind is Some(kind) {
-        let (archive_enabled, delete_enabled) = input.menu_enabled()
-        let command = fn(x : Int, y : Int) {
-          (actions.show_menu)(
-            input.id,
-            input.label,
-            kind,
-            archive_enabled,
-            delete_enabled,
-            x,
-            y,
-          )
-        }
+      if menu_kind is Some(_) {
         buttons.push(
           @html.button(
-            class="row-archive row-menu",
+            class=if state.menu is Some(_) {
+              "row-archive row-menu open"
+            } else {
+              "row-archive row-menu"
+            },
             type_="button",
             title="Conversation actions",
-            attrs=@html.Attrs::build()
-              .aria_label("Conversation actions")
-              .on_click(event => {
-                event.stop_propagation()
-                guard event.target().to_element() is Some(target) &&
-                  target.closest(".row-menu") is Some(button) else {
-                  return @cmd.none
-                }
-                let rect = button.get_bounding_client_rect()
-                command(rect.get_right().to_int(), rect.get_bottom().to_int())
-              }),
+            attrs=@action_menu.button_attrs(
+              input.menu_id(),
+              input.menu_trigger_id(),
+              state.menu is Some(_),
+              emit.map(anchor => OpenMenu(anchor)),
+              emit(CloseMenu),
+            ).aria_label("Conversation actions"),
             @icons.icon(@icons.icon_more),
           ),
         )
@@ -389,23 +464,26 @@ pub fn component(
         trailing.push(@html.span(class="row-actions", buttons))
       }
       children.push(@html.span(class="row-trailing", trailing))
+      if menu_kind is Some(kind) && state.menu is Some(anchor) {
+        children.push(
+          @action_menu.Menu::{
+            id: input.menu_id(),
+            trigger_id: input.menu_trigger_id(),
+            label: "Conversation actions",
+            anchor,
+            entries: input.menu_entries(actions, kind),
+            dismiss: emit(CloseMenu),
+          }.render(),
+        )
+      }
     }
     let row_attrs = match menu_kind {
-      Some(kind) => {
-        let (archive_enabled, delete_enabled) = input.menu_enabled()
-        @html.Attrs::build().on_contextmenu(event => {
-          event.prevent_default()
-          (actions.show_menu)(
-            input.id,
-            input.label,
-            kind,
-            archive_enabled,
-            delete_enabled,
-            event.get_client_x(),
-            event.get_client_y(),
-          )
-        })
-      }
+      Some(_) =>
+        @action_menu.context_attrs(
+          input.menu_id(),
+          input.menu_trigger_id(),
+          emit.map(anchor => OpenMenu(anchor)),
+        )
       None => @html.Attrs::build()
     }
     let row = @html.div(

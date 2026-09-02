@@ -296,11 +296,6 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
     @bridge.Event::MenuCommand(command_id~) =>
       if command_id == @commands.app_open_devtools.name() {
         dispatch(AppDeveloperToolsRequested)
-      } else if @protocol.ConversationMenuAction::parse(command_id)
-        is Some(action) {
-        dispatch(ConversationMenuSelected(action))
-      } else if @protocol.WorkspaceMenuAction::parse(command_id) is Some(action) {
-        dispatch(WorkspaceMenuSelected(action))
       } else {
         @cmd.none
       }
