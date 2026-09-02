@@ -1,14 +1,4 @@
 ///|
-/// Where a menu was requested. Button geometry is resolved inside this
-/// module after render; pointer coordinates are used only for a context menu.
-pub(all) enum Anchor {
-  Button
-  Pointer(Int, Int)
-} derive(Debug, Eq)
-
-///|
-/// One actionable menu row. Callers describe meaning and appearance; this
-/// module owns selection, dismissal, keyboard navigation, and focus.
 pub(all) struct Item {
   label : String
   title : String
@@ -25,14 +15,173 @@ pub(all) enum Entry {
 }
 
 ///|
-/// Complete rendering input for one open menu.
-pub(all) struct Menu {
-  id : String
-  trigger_id : String
+/// Current menu meaning for one target. The open state retains only the
+/// target and gesture; callers resolve this definition from their latest
+/// input whenever it is rendered or acted upon.
+pub(all) struct Definition {
   label : String
-  anchor : Anchor
   entries : Array[Entry]
-  dismiss : @cmd.Cmd
+}
+
+///|
+priv enum Anchor {
+  Button
+  Pointer(Int, Int)
+} derive(Eq)
+
+///|
+priv struct Open {
+  target : String
+  anchor : Anchor
+  restore_focus_id : String?
+} derive(Eq)
+
+///|
+priv struct State {
+  menu : Open?
+} derive(Eq)
+
+///|
+priv enum Msg {
+  Open(Open)
+  Close
+}
+
+///|
+const OpenEvent : String = "openseek-action-menu-open"
+
+///|
+fn menu_id(target : String) -> String {
+  target + ":actions"
+}
+
+///|
+fn trigger_id(target : String) -> String {
+  target + ":actions-trigger"
+}
+
+///|
+fn item_id(target : String, index : Int) -> String {
+  menu_id(target) + ":item:\{index}"
+}
+
+///|
+fn focused_element_id() -> String? {
+  guard @dom.document().get_active_element() is Some(element) else {
+    return None
+  }
+  element.get_attribute("id")
+}
+
+///|
+fn remember_context_focus(event : @dom.MouseEvent) -> @cmd.Cmd {
+  guard event.get_button() == 2 &&
+    event.current_target().to_option() is Some(target) &&
+    target.to_element() is Some(element) else {
+    return @cmd.none
+  }
+  match focused_element_id() {
+    Some(id) => element.set_attribute("data-action-menu-restore-focus", id)
+    None => element.remove_attribute("data-action-menu-restore-focus")
+  }
+  @cmd.none
+}
+
+///|
+fn remembered_context_focus(event : @dom.MouseEvent) -> String? {
+  guard event.current_target().to_option() is Some(target) &&
+    target.to_element() is Some(element) else {
+    return None
+  }
+  element.get_attribute("data-action-menu-restore-focus")
+}
+
+///|
+fn dispatch_open(open : Open) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    let detail = @js.Object::new()
+    detail["target"] = open.target
+    match open.anchor {
+      Button => detail["anchor"] = "button"
+      Pointer(x, y) => {
+        detail["anchor"] = "pointer"
+        detail["x"] = x
+        detail["y"] = y
+      }
+    }
+    if open.restore_focus_id is Some(id) {
+      detail["restoreFocusId"] = id
+    }
+    let event = @dom.CustomEvent::new(
+      OpenEvent,
+      detail=@js.Optional::from_option(Some(detail.to_value())),
+    )
+    @dom.document().as_event_target().dispatch_event(event.as_event())
+  })
+}
+
+///|
+/// Build an ellipsis trigger for a stable target. The menu component owns
+/// toggle state, positioning, and focus.
+pub fn button_attrs(target : String) -> @html.Attrs {
+  @html.Attrs::build()
+  .id(trigger_id(target))
+  .data_set("action-menu-owner", target)
+  .aria_haspopup("menu")
+  .aria_controls(menu_id(target))
+  .on_click(event => {
+    event.stop_propagation()
+    dispatch_open({
+      target,
+      anchor: Button,
+      restore_focus_id: focused_element_id(),
+    })
+  })
+}
+
+///|
+/// Build the context-menu entry point for a stable target.
+pub fn context_attrs(target : String) -> @html.Attrs {
+  @html.Attrs::build()
+  .data_set("action-menu-context", target)
+  .on_mousedown(event => remember_context_focus(event))
+  .on_contextmenu(event => {
+    event.prevent_default()
+    dispatch_open({
+      target,
+      anchor: Pointer(event.get_client_x(), event.get_client_y()),
+      restore_focus_id: remembered_context_focus(event),
+    })
+  })
+}
+
+///|
+fn parse_open(event : @dom.Event) -> Open? {
+  guard event.to_custom_event() is Some(event) else { return None }
+  let detail = event.get_detail()
+  let target : @js.Value = detail.get_with_string("target")
+  let anchor : @js.Value = detail.get_with_string("anchor")
+  guard target.is_string() && anchor.is_string() else { return None }
+  let anchor = match anchor.cast() {
+    "button" => Button
+    "pointer" => {
+      let x : @js.Value = detail.get_with_string("x")
+      let y : @js.Value = detail.get_with_string("y")
+      guard x.is_number() && y.is_number() else { return None }
+      Pointer(x.cast(), y.cast())
+    }
+    _ => return None
+  }
+  let restore : @js.Value = detail.get_with_string("restoreFocusId")
+  Some({
+    target: target.cast(),
+    anchor,
+    restore_focus_id: if restore.is_string() {
+      Some(restore.cast())
+    } else {
+      None
+    },
+  })
 }
 
 ///|
@@ -53,29 +202,16 @@ fn focus_element(id : String, after_render : Bool) -> @cmd.Cmd {
 }
 
 ///|
-fn item_id(menu_id : String, index : Int) -> String {
-  "\{menu_id}-item-\{index}"
-}
-
-///|
-fn Menu::enabled_count(self : Menu) -> Int {
-  let mut count = 0
-  for entry in self.entries {
-    if entry is Action(item) && item.enabled {
-      count += 1
-    }
-  }
-  count
-}
-
-///|
-fn Menu::focus_item(self : Menu, index : Int, after_render : Bool) -> @cmd.Cmd {
-  focus_element(item_id(self.id, index), after_render)
-}
-
-///|
-fn Menu::focus_trigger(self : Menu, after_render : Bool) -> @cmd.Cmd {
-  focus_element(self.trigger_id, after_render)
+fn set_trigger_open(target : String, open : Bool) -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => {
+      if @dom.document().get_element_by_id(trigger_id(target)).to_option()
+        is Some(trigger) {
+        trigger.set_attribute("aria-expanded", open.to_string())
+      }
+    },
+    kind=@cmd.after_render,
+  )
 }
 
 ///|
@@ -99,13 +235,11 @@ fn clamp(value : Double, low : Double, high : Double) -> Double {
 }
 
 ///|
-/// Resolve the anchor only after the menu exists, then keep the whole surface
-/// inside the visual viewport. The hidden first frame prevents a flash at the
-/// document origin while Rabbita commits the DOM.
-fn position(menu_id : String, trigger_id : String, anchor : Anchor) -> @cmd.Cmd {
+fn position(target : String, anchor : Anchor) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
-      guard @dom.document().get_element_by_id(menu_id).to_option() is Some(menu) else {
+      guard @dom.document().get_element_by_id(menu_id(target)).to_option()
+        is Some(menu) else {
         return
       }
       let window = @dom.window()
@@ -126,7 +260,9 @@ fn position(menu_id : String, trigger_id : String, anchor : Anchor) -> @cmd.Cmd 
       let (wanted_left, wanted_top) = match anchor {
         Pointer(x, y) => (x.to_double(), y.to_double())
         Button => {
-          guard @dom.document().get_element_by_id(trigger_id).to_option()
+          guard @dom.document()
+            .get_element_by_id(trigger_id(target))
+            .to_option()
             is Some(trigger) else {
             return
           }
@@ -171,97 +307,81 @@ fn position(menu_id : String, trigger_id : String, anchor : Anchor) -> @cmd.Cmd 
 }
 
 ///|
-/// Open commands always measure and focus after the caller has committed its
-/// open state. Callers never inspect button geometry themselves.
-fn open(
-  menu_id : String,
-  trigger_id : String,
-  anchor : Anchor,
-  show : @cmd.Emit[Anchor],
-) -> @cmd.Cmd {
-  @cmd.batch([
-    show(anchor),
-    position(menu_id, trigger_id, anchor),
-    focus_element(item_id(menu_id, 0), true),
-  ])
+fn Definition::enabled_indices(self : Definition) -> Array[Int] {
+  let result : Array[Int] = []
+  for index, entry in self.entries {
+    if entry is Action(item) && item.enabled {
+      result.push(index)
+    }
+  }
+  result
 }
 
 ///|
-/// Attributes for the ellipsis trigger. Opening, positioning, and focus are a
-/// single operation; an already-open trigger toggles the menu closed.
-pub fn button_attrs(
-  menu_id : String,
-  trigger_id : String,
-  is_open : Bool,
-  show : @cmd.Emit[Anchor],
+fn enabled_position(indices : Array[Int], index : Int) -> Int? {
+  for position, candidate in indices {
+    if candidate == index {
+      return Some(position)
+    }
+  }
+  None
+}
+
+///|
+fn item_attrs(
+  open : Open,
+  enabled : Array[Int],
+  index : Int,
+  select : @cmd.Cmd,
   dismiss : @cmd.Cmd,
 ) -> @html.Attrs {
   @html.Attrs::build()
-  .id(trigger_id)
-  .data_set("action-menu-owner", trigger_id)
-  .aria_haspopup("menu")
-  .aria_controls(menu_id)
-  .aria_expanded(is_open.to_string())
-  .on_click(event => {
-    event.stop_propagation()
-    if is_open {
-      dismiss
-    } else {
-      open(menu_id, trigger_id, Button, show)
-    }
-  })
-}
-
-///|
-/// Attributes for a surface that opens the same menu on right click.
-pub fn context_attrs(
-  menu_id : String,
-  trigger_id : String,
-  show : @cmd.Emit[Anchor],
-) -> @html.Attrs {
-  @html.Attrs::build()
-  .data_set("action-menu-owner", trigger_id)
-  .on_contextmenu(event => {
-    event.prevent_default()
-    open(
-      menu_id,
-      trigger_id,
-      Pointer(event.get_client_x(), event.get_client_y()),
-      show,
-    )
-  })
-}
-
-///|
-fn Menu::item_attrs(
-  self : Menu,
-  index : Int,
-  count : Int,
-  select : @cmd.Cmd,
-) -> @html.Attrs {
-  @html.Attrs::build()
-  .id(item_id(self.id, index))
+  .id(item_id(open.target, index))
   .role("menuitem")
   .on_click(event => {
     event.stop_propagation()
-    select
+    @cmd.batch([dismiss, @cmd.delay(select, 0)])
+  })
+  .on_contextmenu(event => {
+    event.prevent_default()
+    event.stop_propagation()
+    @cmd.batch([dismiss, @cmd.delay(select, 0)])
   })
   .on_keydown(event => {
-    let next = match event.key() {
-      "ArrowDown" => Some(if index + 1 < count { index + 1 } else { 0 })
-      "ArrowUp" => Some(if index > 0 { index - 1 } else { count - 1 })
-      "Home" => Some(0)
-      "End" => Some(count - 1)
+    guard enabled_position(enabled, index) is Some(position) else {
+      return @cmd.none
+    }
+    let destination = match event.key() {
+      "ArrowDown" => Some(enabled[(position + 1) % enabled.length()])
+      "ArrowUp" =>
+        Some(
+          enabled[if position > 0 {
+            position - 1
+          } else {
+            enabled.length() - 1
+          }],
+        )
+      "Home" => Some(enabled[0])
+      "End" => Some(enabled[enabled.length() - 1])
       _ => None
     }
-    if next is Some(next) {
+    if destination is Some(destination) {
       event.prevent_default()
-      self.focus_item(next, false)
+      focus_element(item_id(open.target, destination), false)
     } else if event.key() == "Escape" {
       event.prevent_default()
-      @cmd.batch([self.dismiss, self.focus_trigger(true)])
+      @cmd.batch([
+        dismiss,
+        match open.restore_focus_id {
+          Some(id) => focus_element(id, true)
+          None => @cmd.none
+        },
+      ])
     } else if event.key() == "Tab" {
-      self.dismiss
+      @cmd.delay(dismiss, 0)
+    } else if event.key() == "Enter" || event.key() == " " {
+      event.prevent_default()
+      @cmd.batch([dismiss, @cmd.delay(select, 0)])
     } else {
       @cmd.none
     }
@@ -269,11 +389,14 @@ fn Menu::item_attrs(
 }
 
 ///|
-pub fn Menu::render(self : Menu) -> @html.Html {
+fn render_menu(
+  open : Open,
+  definition : Definition,
+  dismiss : @cmd.Cmd,
+) -> @html.Html {
   let rows : Array[@html.Html] = []
-  let count = self.enabled_count()
-  let mut index = 0
-  for entry in self.entries {
+  let enabled = definition.enabled_indices()
+  for index, entry in definition.entries {
     match entry {
       Separator =>
         rows.push(
@@ -290,9 +413,20 @@ pub fn Menu::render(self : Menu) -> @html.Html {
           "action-menu-item"
         }
         let attrs = if item.enabled {
-          self.item_attrs(index, count, item.command)
+          item_attrs(open, enabled, index, item.command, dismiss)
         } else {
-          @html.Attrs::build().role("menuitem").aria_disabled("true")
+          @html.Attrs::build()
+          .role("menuitem")
+          .aria_disabled("true")
+          .on_click(event => {
+            event.stop_propagation()
+            @cmd.none
+          })
+          .on_contextmenu(event => {
+            event.prevent_default()
+            event.stop_propagation()
+            @cmd.none
+          })
         }
         rows.push(
           @html.button(
@@ -310,18 +444,16 @@ pub fn Menu::render(self : Menu) -> @html.Html {
             ],
           ),
         )
-        if item.enabled {
-          index += 1
-        }
       }
     }
   }
   @html.div(
     class="action-menu",
     attrs=@html.Attrs::build()
-      .id(self.id)
+      .id(menu_id(open.target))
       .role("menu")
-      .aria_label(self.label)
+      .aria_label(definition.label)
+      .data_set("action-menu-surface", open.target)
       .data_set("positioned", "false")
       .on_click(event => {
         event.stop_propagation()
@@ -337,73 +469,272 @@ pub fn Menu::render(self : Menu) -> @html.Html {
 }
 
 ///|
-priv suberror DismissSubscription {
-  DismissSubscription(String, @cmd.Emit[Unit])
+priv suberror OpenSubscription {
+  OpenSubscription(@cmd.Emit[Open])
 }
 
 ///|
-/// Close an open menu when a click or context-menu request starts outside its
-/// trigger or owning row. Menu-item clicks therefore dismiss from the capture
-/// listener before their caller-owned action runs at the target. Exact owner
-/// comparison lets another row's trigger close this menu while opening its own
-/// in the same gesture.
-pub fn dismiss_subscription(
-  key : String,
-  trigger_id : String,
-  emit : @cmd.Emit[Unit],
-) -> @sub.Sub {
-  @sub.custom_sub(key, Global, DismissSubscription(trigger_id, emit), (
+fn open_subscription(emit : @cmd.Emit[Open]) -> @sub.Sub {
+  @sub.custom_sub("action-menu-open", Local, OpenSubscription(emit), (
     payload,
     scheduler,
   ) => {
-    guard payload is DismissSubscription(owner, emit) else { return None }
+    guard payload is OpenSubscription(emit) else { return None }
     let mut emit = emit
     let target = @dom.document().as_event_target()
-    let window = @dom.window().as_event_target()
     let listener : @dom.Listener = event => {
-      if event.target().to_element() is Some(element) &&
-        element.closest("[data-action-menu-owner]") is Some(owned) &&
-        owned.get_attribute("data-action-menu-owner") is Some(found) &&
-        found == owner {
-        return
+      if parse_open(event) is Some(open) {
+        scheduler.add(emit(open))
       }
-      scheduler.add(emit(()))
     }
-    target.add_event_listener_with_options("click", listener, capture=true)
-    target.add_event_listener_with_options(
-      "contextmenu",
-      listener,
-      capture=true,
-    )
-    let blur_listener : @dom.Listener = _ => scheduler.add(emit(()))
-    window.add_event_listener("blur", blur_listener)
+    target.add_event_listener(OpenEvent, listener)
     Some({
-      unload: _ => {
-        target.remove_event_listener_with_options(
-          "click",
-          listener,
-          capture=true,
-        )
-        target.remove_event_listener_with_options(
-          "contextmenu",
-          listener,
-          capture=true,
-        )
-        window.remove_event_listener("blur", blur_listener)
-      },
+      unload: _ => target.remove_event_listener(OpenEvent, listener),
       update_tagger: payload => {
-        guard payload is DismissSubscription(next_owner, next_emit) &&
-          next_owner == owner else {
-          return
-        }
-        emit = next_emit
+        guard payload is OpenSubscription(next) else { return }
+        emit = next
       },
     })
   })
 }
 
 ///|
-pub extend Anchor with Debug::{to_repr}
+priv suberror DismissSubscription {
+  DismissSubscription(String, @cmd.Emit[Unit])
+}
 
 ///|
-pub extend Anchor with Eq::{equal, not_equal}
+fn dismiss_subscription(
+  target_key : String,
+  emit : @cmd.Emit[Unit],
+) -> @sub.Sub {
+  @sub.custom_sub(
+    "action-menu-dismiss",
+    Local,
+    DismissSubscription(target_key, emit),
+    (payload, scheduler) => {
+      guard payload is DismissSubscription(owner, emit) else { return None }
+      let mut emit = emit
+      let document = @dom.document().as_event_target()
+      let dom_window = @dom.window()
+      let window = dom_window.as_event_target()
+      let click_listener : @dom.Listener = event => {
+        if event.target().to_element() is Some(element) {
+          if element.closest("[data-action-menu-surface]") is Some(_) ||
+            element.closest("[data-action-menu-owner]") is Some(_) {
+            return
+          }
+        }
+        let _ = @dom.window().set_timeout(() => scheduler.add(emit(())), 0)
+      }
+      let context_listener : @dom.Listener = event => {
+        if event.target().to_element() is Some(element) {
+          if element.closest("[data-action-menu-surface]") is Some(_) ||
+            element.closest("[data-action-menu-context]") is Some(_) ||
+            element.closest("[data-action-menu-owner]") is Some(_) {
+            return
+          }
+        }
+        scheduler.add(emit(()))
+      }
+      document.add_event_listener_with_options(
+        "click",
+        click_listener,
+        capture=true,
+      )
+      document.add_event_listener("contextmenu", context_listener)
+      let blur_listener : @dom.Listener = _ => scheduler.add(emit(()))
+      let resize_listener : @dom.Listener = _ => scheduler.add(emit(()))
+      window.add_event_listener("blur", blur_listener)
+      window.add_event_listener("resize", resize_listener)
+      let mut viewport_target : @dom.EventTarget? = None
+      if dom_window.get_visual_viewport() is Some(viewport) {
+        let target = viewport.as_event_target()
+        target.add_event_listener("resize", resize_listener)
+        viewport_target = Some(target)
+      }
+      let mut scroll_target : @dom.EventTarget? = None
+      let scroll_listener : @dom.Listener = _ => scheduler.add(emit(()))
+      if @dom.document().query_selector(".sidebar-main").to_option()
+        is Some(sidebar) {
+        let target = sidebar.as_event_target()
+        target.add_event_listener("scroll", scroll_listener)
+        scroll_target = Some(target)
+      }
+      Some({
+        unload: _ => {
+          document.remove_event_listener_with_options(
+            "click",
+            click_listener,
+            capture=true,
+          )
+          document.remove_event_listener("contextmenu", context_listener)
+          window.remove_event_listener("blur", blur_listener)
+          window.remove_event_listener("resize", resize_listener)
+          if viewport_target is Some(target) {
+            target.remove_event_listener("resize", resize_listener)
+          }
+          if scroll_target is Some(target) {
+            target.remove_event_listener("scroll", scroll_listener)
+          }
+        },
+        update_tagger: payload => {
+          guard payload is DismissSubscription(next_owner, next_emit) &&
+            next_owner == owner else {
+            return
+          }
+          emit = next_emit
+        },
+      })
+    },
+  )
+}
+
+///|
+priv suberror FocusSubscription {
+  FocusSubscription(String, Array[Int], @cmd.Emit[Unit])
+}
+
+///|
+/// If current input disables the focused source entry, move to the next
+/// enabled entry, falling back to the previous one.
+fn focus_subscription(
+  target : String,
+  enabled : Array[Int],
+  close : @cmd.Emit[Unit],
+) -> @sub.Sub {
+  @sub.custom_sub(
+    "action-menu-focus",
+    Local,
+    FocusSubscription(target, enabled, close),
+    (payload, scheduler) => {
+      guard payload is FocusSubscription(target, enabled, close) else {
+        return None
+      }
+      let mut previous = enabled
+      let mut close = close
+      Some({
+        unload: _ => (),
+        update_tagger: payload => {
+          guard payload is FocusSubscription(next_target, next, next_close) &&
+            next_target == target else {
+            return
+          }
+          close = next_close
+          if next.is_empty() {
+            scheduler.add(close(()))
+            previous = next
+            return
+          }
+          guard focused_element_id() is Some(focused) else {
+            previous = next
+            return
+          }
+          let mut old_index : Int? = None
+          for index in previous {
+            if focused == item_id(target, index) {
+              old_index = Some(index)
+            }
+          }
+          if old_index is Some(old_index) &&
+            enabled_position(next, old_index) is None {
+            let mut replacement : Int? = None
+            for index in next {
+              if replacement is None && index > old_index {
+                replacement = Some(index)
+              }
+            }
+            if replacement is None {
+              replacement = Some(next[next.length() - 1])
+            }
+            if replacement is Some(index) {
+              let _ = @dom.window().set_timeout(
+                () => {
+                  scheduler.add(focus_element(item_id(target, index), false))
+                },
+                0,
+              )
+            }
+          }
+          previous = next
+        },
+      })
+    },
+  )
+}
+
+///|
+/// Own one WebView menu surface. Rows only dispatch stable targets; the
+/// resolver supplies current labels, enabled state, and commands.
+pub fn[Input : Eq] component(
+  input : @rabbita.Val[Input],
+  resolve : (Input, String) -> Definition?,
+) -> @rabbita.Val[@html.Html] {
+  let (state, emit) = @rabbita.create_state_with_input(
+    input~,
+    init=(_, _) => ({ menu: None, }, @cmd.none),
+    update=(state, input, msg, _) => {
+      match msg {
+        Open(next) => {
+          if next.anchor is Button &&
+            state.menu is Some(current) &&
+            current.target == next.target {
+            return ({ menu: None, }, set_trigger_open(next.target, false))
+          }
+          guard resolve(input, next.target) is Some(definition) &&
+            definition.enabled_indices() is [first, ..] else {
+            return (state, @cmd.none)
+          }
+          let close_previous = match state.menu {
+            Some(current) if current.target != next.target =>
+              set_trigger_open(current.target, false)
+            _ => @cmd.none
+          }
+          (
+            { menu: Some(next), },
+            @cmd.batch([
+              close_previous,
+              set_trigger_open(next.target, true),
+              position(next.target, next.anchor),
+              focus_element(item_id(next.target, first), true),
+            ]),
+          )
+        }
+        Close => {
+          let command = match state.menu {
+            Some(current) => set_trigger_open(current.target, false)
+            None => @cmd.none
+          }
+          ({ menu: None, }, command)
+        }
+      }
+    },
+    subscriptions=(state, input, emit) => {
+      let open = open_subscription(emit.map(open => Msg::Open(open)))
+      guard state.menu is Some(menu) else { return open }
+      guard resolve(input, menu.target) is Some(definition) else {
+        return @sub.batch([open, @sub.every(1, emit(Close))])
+      }
+      let enabled = definition.enabled_indices()
+      if enabled.is_empty() {
+        return @sub.batch([open, @sub.every(1, emit(Close))])
+      }
+      @sub.batch([
+        open,
+        dismiss_subscription(menu.target, emit.map((_ : Unit) => Msg::Close)),
+        focus_subscription(
+          menu.target,
+          enabled,
+          emit.map((_ : Unit) => Msg::Close),
+        ),
+      ])
+    },
+  )
+  state.map2(input, (state, input) => {
+    guard state.menu is Some(open) &&
+      resolve(input, open.target) is Some(definition) else {
+      return @html.nothing
+    }
+    render_menu(open, definition, emit(Close))
+  })
+}

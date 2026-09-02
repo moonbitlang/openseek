@@ -29,11 +29,6 @@ pub fn Id::root(self : Id) -> String {
 }
 
 ///|
-fn Id::subscription_key(self : Id) -> String {
-  "sidebar-project-menu:\{self.source}:\{self.channel}:\{self.root}"
-}
-
-///|
 /// The DOM child key for this project's folder row inside the sidebar's one
 /// keyed container.
 pub fn Id::key(self : Id) -> String {
@@ -72,8 +67,6 @@ pub(all) struct Actions {
 priv enum Msg {
   ToggleDisclosure
   ShowMore
-  OpenMenu(@action_menu.Anchor)
-  CloseMenu
 }
 
 ///|
@@ -89,7 +82,6 @@ priv enum Fold {
 priv struct State {
   fold : Fold
   preview_limit : Int
-  menu : @action_menu.Anchor?
 } derive(Eq)
 
 ///|
@@ -105,20 +97,14 @@ fn State::update(self : State, input : Input, msg : Msg) -> State {
       // Toggle the fold the user sees: a stored fold currently overridden by
       // an activation reveal must fold on click, not silently flip to open.
       if self.folded(input) {
-        { ..self, fold: Open, menu: None, }
+        { ..self, fold: Open, }
       } else {
         // Folding ends the current preview session. Opening the project again
         // starts from the compact five-chat view, even after several Show
         // more clicks.
-        {
-          fold: Folded(during=input.activation),
-          preview_limit: PreviewLimit,
-          menu: None,
-        }
+        { fold: Folded(during=input.activation), preview_limit: PreviewLimit, }
       }
     ShowMore => { ..self, preview_limit: self.next_preview_limit(input), }
-    OpenMenu(anchor) => { ..self, menu: Some(anchor), }
-    CloseMenu => { ..self, menu: None, }
   }
 }
 
@@ -170,17 +156,7 @@ fn State::has_hidden_conversation(self : State, input : Input) -> Bool {
 }
 
 ///|
-fn Input::menu_id(self : Input) -> String {
-  self.id.key() + ":actions"
-}
-
-///|
-fn Input::menu_trigger_id(self : Input) -> String {
-  self.id.key() + ":actions-trigger"
-}
-
-///|
-fn Input::menu_entries(
+pub fn Input::menu_entries(
   self : Input,
   actions : Actions,
 ) -> Array[@action_menu.Entry] {
@@ -193,6 +169,7 @@ fn Input::menu_entries(
       destructive: false,
       command: (actions.open_settings)(self.id),
     }),
+    Separator,
     Action({
       label: "Detach project",
       title: "Detach this project — its files and sessions stay",
@@ -214,31 +191,19 @@ fn Actions::conversation_component(
 }
 
 ///|
-/// One keyed project component owns disclosure, compact-preview, and menu
-/// state. Those values therefore cannot leak to an equal path rendered by a
-/// different sidebar source. Rows are (key, node) pairs for the sidebar's one
-/// keyed container.
+/// One keyed project component owns disclosure and compact-preview state.
+/// Those values therefore cannot leak to an equal path rendered by a
+/// different sidebar source. The shared action-menu component owns the one
+/// menu overlay.
+/// Rows are (key, node) pairs for the sidebar's one keyed container.
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
-    init=(_, _) => {
-      ({ fold: Open, preview_limit: PreviewLimit, menu: None, }, @cmd.none)
-    },
+    init=(_, _) => ({ fold: Open, preview_limit: PreviewLimit, }, @cmd.none),
     update=(state, input, msg, _) => (state.update(input, msg), @cmd.none),
-    subscriptions=(state, input, emit) => {
-      if state.menu is Some(_) {
-        @action_menu.dismiss_subscription(
-          input.id.subscription_key(),
-          input.menu_trigger_id(),
-          emit.map((_ : Unit) => CloseMenu),
-        )
-      } else {
-        @sub.none
-      }
-    },
   )
   let conversation_inputs = input.map(input => {
     @vector.from_array(input.conversations)
@@ -256,9 +221,6 @@ pub fn component(
     }
     if input.activation is Some(_) {
       class += " active"
-    }
-    if state.menu is Some(_) {
-      class += " menu-open"
     }
     let row_children : Array[@html.Html] = [
       @html.button(
@@ -285,20 +247,12 @@ pub fn component(
     if input.managed {
       row_children.push(
         @html.button(
-          class=if state.menu is Some(_) {
-            "row-archive workspace-menu-button open"
-          } else {
-            "row-archive workspace-menu-button"
-          },
+          class="row-archive workspace-menu-button",
           type_="button",
           title="More actions",
-          attrs=@action_menu.button_attrs(
-            input.menu_id(),
-            input.menu_trigger_id(),
-            state.menu is Some(_),
-            emit.map(anchor => OpenMenu(anchor)),
-            emit(CloseMenu),
-          ).aria_label("Workspace actions"),
+          attrs=@action_menu.button_attrs(input.id.key()).aria_label(
+            "Workspace actions",
+          ),
           @icons.icon(@icons.icon_more),
         ),
       )
@@ -317,20 +271,16 @@ pub fn component(
         ),
       )
     }
-    if input.managed && state.menu is Some(anchor) {
-      row_children.push(
-        @action_menu.Menu::{
-          id: input.menu_id(),
-          trigger_id: input.menu_trigger_id(),
-          label: "Workspace actions",
-          anchor,
-          entries: input.menu_entries(actions),
-          dismiss: emit(CloseMenu),
-        }.render(),
-      )
+    let row_attrs = if input.managed {
+      @action_menu.context_attrs(input.id.key())
+    } else {
+      @html.Attrs::build()
     }
     let rows : Array[(String, @html.Html)] = [
-      (input.id.key(), @html.div(class~, title=input.title, row_children)),
+      (
+        input.id.key(),
+        @html.div(class~, title=input.title, attrs=row_attrs, row_children),
+      ),
     ]
     if collapsed {
       return rows

@@ -17,15 +17,18 @@ It contains no remaining design questions.
 
 ## Menu state ownership
 
-- The Sidebar owns exactly one transient menu state and renders exactly one
-  WebView menu overlay.
-- The menu state belongs to the Sidebar component, not the application root
-  `Model`.
+- The shared WebView menu module owns exactly one transient menu state and
+  renders exactly one overlay for the Sidebar.
+- The menu state belongs to that UI module, not the Sidebar component or the
+  application root `Model`.
 - Project/session rows do not own menu state and do not register their own
   document-level dismissal listeners.
-- A row sends an open request containing a stable target and an anchor.
-- The Sidebar resolves the target against current input before rendering or
-  executing actions. A stale or missing target is never actionable.
+- A row sends an open request containing only a stable target and an anchor.
+- The Sidebar supplies a target resolver and current menu definitions; it does
+  not receive or forward menu state.
+- The menu module resolves the target against current Sidebar input before
+  rendering or executing actions. A stale or missing target is never
+  actionable.
 - Menu entries, labels, and enabled state are derived from the latest Sidebar
   input on every render. The open state does not retain stale command closures
   or an enabled-state snapshot.

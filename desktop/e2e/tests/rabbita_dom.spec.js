@@ -852,10 +852,29 @@ test('new chat, archive, and restore update the conversation sidebar', async ({ 
 
 test('shared WebView action menu supports context position, keyboard, and rename', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
+  app.workspaces.push('/other');
   await app.install();
   await app.goto();
 
+  const firstWorkspace = page.locator('.workspace-row[title="/workspace"]');
+  const secondWorkspace = page.locator('.workspace-row[title="/other"]');
+  const firstWorkspaceMenu = firstWorkspace.getByTitle('More actions');
+  const secondWorkspaceMenu = secondWorkspace.getByTitle('More actions');
+  await firstWorkspace.hover();
+  await firstWorkspaceMenu.click();
+  await expect(firstWorkspaceMenu).toHaveAttribute('aria-expanded', 'true');
+  await secondWorkspace.hover();
+  await secondWorkspaceMenu.click();
+  await expect(firstWorkspaceMenu).toHaveAttribute('aria-expanded', 'false');
+  await expect(secondWorkspaceMenu).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('menu', { name: 'Workspace actions' })).toBeVisible();
+  await secondWorkspaceMenu.click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+
   const liveRow = page.locator('.conversation-row[title="session-1"]');
+  const archiveButton = liveRow.getByTitle(/Archive —/);
+  await liveRow.hover();
+  await archiveButton.focus();
   await liveRow.click({ button: 'right', position: { x: 18, y: 18 } });
   const menu = page.getByRole('menu', { name: 'Conversation actions' });
   await expect(menu).toBeVisible();
@@ -877,14 +896,22 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await expect(rename).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
-  await expect(liveRow.getByRole('button', { name: 'Conversation actions' })).toBeFocused();
+  await expect(archiveButton).toBeFocused();
+  await expect(liveRow.getByRole('button', { name: 'Conversation actions' })).toHaveCount(0);
 
-  await liveRow.getByRole('button', { name: 'Conversation actions' }).click();
-  await page.getByRole('menuitem', { name: 'Rename…' }).click();
+  await liveRow.click({ button: 'right', position: { x: 18, y: 18 } });
+  await page.getByRole('menuitem', { name: 'Rename…' }).click({ button: 'right' });
   const input = page.getByRole('textbox', { name: 'Rename conversation' });
   await expect(input).toBeFocused();
+  await expect.poll(() => input.evaluate(element => ({
+    start: element.selectionStart,
+    end: element.selectionEnd,
+    length: element.value.length,
+  }))).toEqual({ start: 0, end: 23, length: 23 });
   await input.fill('Renamed in WebView');
-  await page.keyboard.press('Enter');
+  await input.click({ button: 'right' });
+  await expect(menu).toHaveCount(0);
+  await page.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'session.rename')).toMatchObject({
       params: {

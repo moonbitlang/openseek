@@ -39,6 +39,73 @@ pub(all) struct Actions {
 }
 
 ///|
+fn Input::find_project(self : Input, key : String) -> @project.Input? {
+  for section in self.sections {
+    for entry in section.entries {
+      if entry is @section.Project(project) && project.id().key() == key {
+        return Some(project)
+      }
+    }
+  }
+  None
+}
+
+///|
+fn find_conversation_in(
+  rows : Array[@conversation.Input],
+  key : String,
+) -> @conversation.Input? {
+  for row in rows {
+    if row.id().key() == key {
+      return Some(row)
+    }
+    if find_conversation_in(row.children, key) is Some(found) {
+      return Some(found)
+    }
+  }
+  None
+}
+
+///|
+fn Input::find_conversation(self : Input, key : String) -> @conversation.Input? {
+  for section in self.sections {
+    for entry in section.entries {
+      match entry {
+        @section.Project(project) =>
+          if find_conversation_in(project.conversations, key) is Some(found) {
+            return Some(found)
+          }
+        @section.Conversation(row) =>
+          if find_conversation_in([row], key) is Some(found) {
+            return Some(found)
+          }
+        @section.Placeholder(_) => ()
+      }
+    }
+  }
+  None
+}
+
+///|
+fn Input::menu_definition(
+  self : Input,
+  target : String,
+  actions : Actions,
+) -> @action_menu.Definition? {
+  if self.find_project(target) is Some(project) {
+    return Some({
+      label: "Workspace actions",
+      entries: project.menu_entries(actions.section.project),
+    })
+  }
+  guard self.find_conversation(target) is Some(row) &&
+    row.menu_entries(actions.section.conversation) is Some(entries) else {
+    return None
+  }
+  Some({ label: "Conversation actions", entries, })
+}
+
+///|
 fn Actions::section_component(
   self : Actions,
   _id : @section.Id,
@@ -60,7 +127,10 @@ pub fn component(
     (id, section) => actions.section_component(id, section),
     by=section => section.id(),
   )
-  input.view2(section_rows, (input, section_rows) => {
+  let overlay = @action_menu.component(input, (input, target) => {
+    input.menu_definition(target, actions)
+  })
+  input.map3(section_rows, overlay, (input, section_rows, overlay) => {
     // One keyed container holds every row. Child components cache their
     // (key, node) output; keyed diffing re-pairs each cached node with its
     // own element when neighbours appear or leave, so a row's event slots
@@ -176,6 +246,9 @@ pub fn component(
         @html.div(class="sidebar-section sessions", rows),
       ]),
       @html.div(class="sidebar-footer", footer),
+      // The action-menu component owns open/replace/position/dismiss state;
+      // the Sidebar contributes only stable targets and current definitions.
+      overlay,
       // Grab strip for drag-to-resize; wired imperatively by the shell's
       // sidebar_resize. Absolutely positioned, so it is not a grid item and
       // never disturbs the aside's rows.

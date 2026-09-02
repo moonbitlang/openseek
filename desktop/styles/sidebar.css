@@ -162,7 +162,15 @@ html.is-resizing .sidebar-resize-handle {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.conversation-row > .conversation-rename {
+.conversation-rename-editor {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.conversation-rename-editor > .conversation-rename {
+  flex: 1 1 auto;
   min-width: 0;
   padding: 2px 4px;
   border: 1px solid var(--color-accent-border);
@@ -171,6 +179,25 @@ html.is-resizing .sidebar-resize-handle {
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font: inherit;
+}
+.conversation-rename-action {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-accent-strong);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+.conversation-rename-action:hover:not(:disabled) {
+  background: var(--color-accent-soft);
+}
+.conversation-rename-action:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+  opacity: 0.6;
 }
 
 .conversation-row:hover {
@@ -213,6 +240,14 @@ html.is-resizing .sidebar-resize-handle {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
+.row-archive.disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.row-archive.disabled:hover {
+  background: transparent;
+  color: var(--color-text-muted);
+}
 .row-archive.row-delete:hover {
   background: var(--color-danger-soft);
   color: var(--color-danger);
@@ -240,16 +275,8 @@ html.is-resizing .sidebar-resize-handle {
 /* Both groups stay in layout (visibility, not display) so the cell keeps
    one width across the swap. An open menu keeps its trigger visible while
    the pointer moves into the floating surface. */
-.conversation-row:hover .row-trailing:has(.row-actions) .row-status,
-.conversation-row:has(.row-menu.open) .row-status {
+.conversation-row:hover .row-trailing:has(.row-actions) .row-status {
   visibility: hidden;
-}
-.conversation-row:has(.row-menu.open) .row-archive {
-  visibility: visible;
-}
-.row-menu.open {
-  background: var(--color-hover-subtle);
-  color: var(--color-text-primary);
 }
 
 /* The chat list's two section headings ("Workspaces", "Chats"): the
@@ -341,13 +368,12 @@ html.is-resizing .sidebar-resize-handle {
   visibility: visible;
 }
 
-/* An open workspace menu keeps the hover-revealed controls visible while the
+/* An open workspace menu keeps the hover-revealed trigger visible while the
    pointer moves into the floating surface. */
-.workspace-row.menu-open .row-archive,
-.workspace-menu-button.open {
+.workspace-menu-button[aria-expanded="true"] {
   visibility: visible;
 }
-.workspace-menu-button.open {
+.workspace-menu-button[aria-expanded="true"] {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }

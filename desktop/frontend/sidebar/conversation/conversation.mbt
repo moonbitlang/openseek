@@ -77,6 +77,9 @@ pub(all) struct RenameInput {
 pub const RenameInputId : String = "sidebar-conversation-rename"
 
 ///|
+pub const RenameEditorId : String = "sidebar-conversation-rename-editor"
+
+///|
 /// Plain, comparable input to one conversation component. Child runs are
 /// nested data so their lifetime follows the parent branch rather than array
 /// position in the global sidebar.
@@ -119,14 +122,11 @@ pub(all) struct Actions {
 ///|
 priv enum Msg {
   ToggleChildren
-  OpenMenu(@action_menu.Anchor)
-  CloseMenu
 }
 
 ///|
 priv struct State {
   children_open : Bool
-  menu : @action_menu.Anchor?
 } derive(Eq)
 
 ///|
@@ -178,25 +178,11 @@ fn Input::menu_enabled(self : Input) -> (Bool, Bool) {
 /// Direct row actions remain available alongside the WebView menu. Running
 /// conversations keep the menu for discovery but cannot be archived directly.
 fn Input::direct_actions(self : Input) -> Array[TrailingAction] {
-  if self.run_mark is RunningMark {
-    []
-  } else {
-    self.trailing
-  }
+  self.trailing
 }
 
 ///|
-fn Input::menu_id(self : Input) -> String {
-  self.id.key() + ":actions"
-}
-
-///|
-fn Input::menu_trigger_id(self : Input) -> String {
-  self.id.key() + ":actions-trigger"
-}
-
-///|
-fn Input::menu_entries(
+fn Input::menu_entries_for_kind(
   self : Input,
   actions : Actions,
   kind : MenuKind,
@@ -240,13 +226,31 @@ fn Input::menu_entries(
         Separator,
         Action({
           label: "Delete…",
-          title: "Permanently delete conversation",
+          title: if delete_enabled {
+            "Permanently delete conversation"
+          } else {
+            "Permanent deletion is unavailable for this conversation source"
+          },
           icon: Some(@icons.icon(@icons.icon_close)),
           enabled: delete_enabled,
           destructive: true,
           command: (actions.delete)(self.id),
         }),
       ]
+  }
+}
+
+///|
+/// Resolve menu contents from the latest row input. `None` means the row has
+/// no contextual actions, independent of whether it has visible direct
+/// buttons.
+pub fn Input::menu_entries(
+  self : Input,
+  actions : Actions,
+) -> Array[@action_menu.Entry]? {
+  match self.menu_kind() {
+    Some(kind) => Some(self.menu_entries_for_kind(actions, kind))
+    None => None
   }
 }
 
@@ -270,24 +274,10 @@ pub fn component(
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
-    init=(_, _) => ({ children_open: false, menu: None, }, @cmd.none),
+    init=(_, _) => ({ children_open: false, }, @cmd.none),
     update=(state, _, msg, _) => {
       match msg {
-        ToggleChildren =>
-          ({ ..state, children_open: !state.children_open, }, @cmd.none)
-        OpenMenu(anchor) => ({ ..state, menu: Some(anchor), }, @cmd.none)
-        CloseMenu => ({ ..state, menu: None, }, @cmd.none)
-      }
-    },
-    subscriptions=(state, input, emit) => {
-      if state.menu is Some(_) {
-        @action_menu.dismiss_subscription(
-          input.id.key() + ":actions-dismiss",
-          input.menu_trigger_id(),
-          emit.map((_ : Unit) => CloseMenu),
-        )
-      } else {
-        @sub.none
+        ToggleChildren => ({ children_open: !state.children_open, }, @cmd.none)
       }
     },
   )
@@ -338,41 +328,90 @@ pub fn component(
     match input.rename {
       Some(rename) => {
         let valid = !rename.draft.trim().is_empty() && !rename.saving
+        let input_node = @html.input(
+          id=RenameInputId,
+          input_type=@html.InputType::Text,
+          class="sidebar-label conversation-rename",
+          value=rename.draft,
+          autofocus=true,
+          on_input=value => (actions.rename_changed)(input.id, value),
+          attrs=@html.Attrs::build()
+            .aria_label("Rename conversation")
+            .disabled(rename.saving)
+            .on_click(event => {
+              event.stop_propagation()
+              @cmd.none
+            })
+            .on_contextmenu(event => {
+              event.stop_propagation()
+              @cmd.none
+            })
+            .on_blur(event => {
+              if event.related_target() is Some(target) &&
+                target.to_node() is Some(next) &&
+                @dom.document().get_element_by_id(RenameEditorId).to_option()
+                is Some(editor) &&
+                editor.contains(next) {
+                @cmd.none
+              } else {
+                (actions.rename_cancel)(input.id)
+              }
+            })
+            .on_keydown(event => {
+              if event.is_composing() {
+                return @cmd.none
+              }
+              match event.key() {
+                "Enter" => {
+                  event.prevent_default()
+                  if valid {
+                    (actions.rename_submit)(input.id)
+                  } else {
+                    @cmd.none
+                  }
+                }
+                "Escape" => {
+                  event.prevent_default()
+                  (actions.rename_cancel)(input.id)
+                }
+                _ => @cmd.none
+              }
+            }),
+        )
+        let buttons : Array[@html.Html] = [
+          @html.button(
+            class="conversation-rename-action",
+            type_="button",
+            disabled=!valid,
+            on_click=(actions.rename_submit)(input.id),
+            if rename.saving {
+              "Saving…"
+            } else {
+              "Save"
+            },
+          ),
+          @html.button(
+            class="conversation-rename-action",
+            type_="button",
+            disabled=rename.saving,
+            on_click=(actions.rename_cancel)(input.id),
+            "Cancel",
+          ),
+        ]
         children.push(
-          @html.input(
-            id=RenameInputId,
-            input_type=@html.InputType::Text,
-            class="sidebar-label conversation-rename",
-            value=rename.draft,
-            autofocus=true,
-            on_input=value => (actions.rename_changed)(input.id, value),
+          @html.span(
+            id=RenameEditorId,
+            class="conversation-rename-editor",
             attrs=@html.Attrs::build()
-              .aria_label("Rename conversation")
-              .disabled(rename.saving)
               .on_click(event => {
                 event.stop_propagation()
                 @cmd.none
               })
-              .on_keydown(event => {
-                if event.is_composing() {
-                  return @cmd.none
-                }
-                match event.key() {
-                  "Enter" => {
-                    event.prevent_default()
-                    if valid {
-                      (actions.rename_submit)(input.id)
-                    } else {
-                      @cmd.none
-                    }
-                  }
-                  "Escape" => {
-                    event.prevent_default()
-                    (actions.rename_cancel)(input.id)
-                  }
-                  _ => @cmd.none
-                }
+              .on_contextmenu(event => {
+                event.stop_propagation()
+                @cmd.none
               }),
+            [input_node, ..buttons],
           ),
         )
       }
@@ -405,56 +444,51 @@ pub fn component(
       FailedMark => status.push(@html.span(class="run-dot warn", ""))
     }
     let menu_kind = input.menu_kind()
-    // Direct durable-action shortcuts stay alongside the shared WebView menu.
-    // The ellipsis and context menu add discoverability and Rename; they do
-    // not replace the existing one-click actions.
+    // Direct durable-action shortcuts stay alongside the shared WebView
+    // context menu; they remain the one-click path for frequent actions.
     let trailing_actions = input.direct_actions()
-    if !status.is_empty() ||
-      !trailing_actions.is_empty() ||
-      menu_kind is Some(_) {
+    if !status.is_empty() || !trailing_actions.is_empty() {
       let trailing : Array[@html.Html] = []
       if !status.is_empty() {
         trailing.push(@html.span(class="row-status", status))
       }
       let buttons : Array[@html.Html] = []
       for action in trailing_actions {
-        let (title, button_class, image) = match action {
-          Archive(title~) => (title, "row-archive", @icons.icon_archive)
-          Restore(title~) => (title, "row-archive", @icons.icon_arrow_up)
-          Delete(title~) => (title, "row-archive row-delete", @icons.icon_close)
+        let enabled = !(action is Archive(..) && input.run_mark is RunningMark)
+        let (title, button_class, image, id_suffix) = match action {
+          Archive(title~) =>
+            (title, "row-archive", @icons.icon_archive, "archive")
+          Restore(title~) =>
+            (title, "row-archive", @icons.icon_arrow_up, "restore")
+          Delete(title~) =>
+            (title, "row-archive row-delete", @icons.icon_close, "delete")
         }
-        let command = actions.command(action, input.id)
+        let command = if enabled {
+          actions.command(action, input.id)
+        } else {
+          @cmd.none
+        }
         buttons.push(
           @html.button(
-            class=button_class,
-            type_="button",
-            title~,
-            attrs=@html.Attrs::build().on_click(event => {
-              event.stop_propagation()
-              command
-            }),
-            @icons.icon(image),
-          ),
-        )
-      }
-      if menu_kind is Some(_) {
-        buttons.push(
-          @html.button(
-            class=if state.menu is Some(_) {
-              "row-archive row-menu open"
+            id=input.id.key() + ":direct:" + id_suffix,
+            class=if enabled {
+              button_class
             } else {
-              "row-archive row-menu"
+              button_class + " disabled"
             },
             type_="button",
-            title="Conversation actions",
-            attrs=@action_menu.button_attrs(
-              input.menu_id(),
-              input.menu_trigger_id(),
-              state.menu is Some(_),
-              emit.map(anchor => OpenMenu(anchor)),
-              emit(CloseMenu),
-            ).aria_label("Conversation actions"),
-            @icons.icon(@icons.icon_more),
+            title=if enabled {
+              title
+            } else {
+              "Stop this conversation before archiving it"
+            },
+            attrs=@html.Attrs::build()
+              .aria_disabled((!enabled).to_string())
+              .on_click(event => {
+                event.stop_propagation()
+                command
+              }),
+            @icons.icon(image),
           ),
         )
       }
@@ -464,26 +498,9 @@ pub fn component(
         trailing.push(@html.span(class="row-actions", buttons))
       }
       children.push(@html.span(class="row-trailing", trailing))
-      if menu_kind is Some(kind) && state.menu is Some(anchor) {
-        children.push(
-          @action_menu.Menu::{
-            id: input.menu_id(),
-            trigger_id: input.menu_trigger_id(),
-            label: "Conversation actions",
-            anchor,
-            entries: input.menu_entries(actions, kind),
-            dismiss: emit(CloseMenu),
-          }.render(),
-        )
-      }
     }
     let row_attrs = match menu_kind {
-      Some(_) =>
-        @action_menu.context_attrs(
-          input.menu_id(),
-          input.menu_trigger_id(),
-          emit.map(anchor => OpenMenu(anchor)),
-        )
+      Some(_) => @action_menu.context_attrs(input.id.key())
       None => @html.Attrs::build()
     }
     let row = @html.div(

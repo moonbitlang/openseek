@@ -1,6 +1,6 @@
-// Root-owned coordination for inline title editing. The shared WebView menu
-// lives with each keyed row; only the asynchronous rename operation crosses
-// into the application model.
+// Root-owned coordination for inline title editing. The shared action-menu
+// component owns transient WebView menu state; only the asynchronous rename
+// operation crosses into the application model.
 
 ///|
 priv struct ConversationRename {
@@ -35,6 +35,10 @@ fn focus_conversation_rename() -> @cmd.Cmd {
         is Some(input) {
         let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
           "focus",
+          ([] : Array[@js.Value]),
+        )
+        let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
+          "select",
           ([] : Array[@js.Value]),
         )
       }
