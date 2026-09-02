@@ -471,12 +471,15 @@ fn SteerRunTracker::record_terminal(
 fn SteerRunTracker::route_event(
   self : SteerRunTracker,
   event : @wire.Event?,
+  prompt_steer_applied : Bool,
   latest_run : String?,
 ) -> (String?, String?) {
   match event {
-    // `kind` is the wire's own word: only a prompt steer consumes a desktop
-    // steer — the same check the decode layer used to apply to the raw line.
-    Some(SteerApplied(kind~, content~)) if kind == "prompt" =>
+    // The raw flag, not the wire kind, is what says "prompt": @wire.parse
+    // defaults both an absent kind and a malformed one onto `"prompt"`, so
+    // only the raw object still tells a legacy engine's steer apart from a
+    // receipt this host must not correlate (prompt_steer_applied_raw).
+    Some(SteerApplied(content~, ..)) if prompt_steer_applied =>
       self.route_receipt(content, latest_run)
     Some(SteerDropped(content~)) => self.route_receipt(content, latest_run)
     // serve drains every old prompt receipt before beginning the next step.
@@ -1658,6 +1661,44 @@ fn turn_died(event : @wire.Event) -> Bool {
 }
 
 ///|
+/// The raw classifier behind `turn_died` that the typed parse cannot
+/// replace: a terminal event whose payload is malformed parses to `None`,
+/// yet the engine wrote it on its way out of the turn. The name alone
+/// condemns the child — serve survives a failed turn and waits for more
+/// input, so without this check the host stays `Running`, refuses the next
+/// prompt, and never reaches EOF retirement.
+fn turn_died_raw(raw : Json) -> Bool {
+  match raw {
+    Object(fields) =>
+      match fields.get("event") {
+        Some(String(name)) =>
+          name == "agent_setup_failed" ||
+          name == "turn_failed" ||
+          name == "agent_aborted"
+        _ => false
+      }
+    _ => false
+  }
+}
+
+///|
+/// Whether the raw line's `kind` marks a prompt steer. Absent means prompt —
+/// the only engines that omit `kind` predate the field and meant prompt —
+/// but a kind that is present yet not a string is malformed and must not
+/// consume a pending steer. The typed parse defaults both cases onto
+/// `"prompt"`, so the distinction lives only on the raw object.
+fn prompt_steer_applied_raw(raw : Json) -> Bool {
+  match raw {
+    Object(fields) =>
+      match fields.get("kind") {
+        None | Some(String("prompt")) => true
+        _ => false
+      }
+    _ => false
+  }
+}
+
+///|
 /// Whether this stream event starts after, or completes after, a durable
 /// transcript span. The host publishes these only after the session follower
 /// has broadcast everything currently committed; other progress events stay
@@ -1753,13 +1794,15 @@ async fn ServeEngine::consume(
         // start is forced through this child's close/reap barrier instead of
         // racing it. This is synchronous, so no request can be between its
         // admission check and its enqueue.
-        if wire_event is Some(event) && turn_died(event) {
+        if turn_died_raw(json) ||
+          (wire_event is Some(event) && turn_died(event)) {
           engine.discard_commands(
             "the engine finished its turn before this command was written",
           )
         }
         let (run_id, submission_id) = engine.steer_runs.route_event(
           wire_event,
+          prompt_steer_applied_raw(json),
           engine.phase.latest_run(),
         )
         // Step and successful terminal events are causal transcript
@@ -2434,6 +2477,30 @@ test "a turn that died stops accepting commands for that child" {
 }
 
 ///|
+test "raw terminal names condemn the child even when the payload is malformed" {
+  assert_true(turn_died_raw({ "event": "turn_failed" }))
+  assert_true(
+    turn_died_raw({ "event": "agent_setup_failed", "error": Json::null() }),
+  )
+  assert_true(turn_died_raw({ "event": "agent_aborted" }))
+  assert_false(turn_died_raw({ "event": "agent_finished" }))
+  assert_false(turn_died_raw({ "event": "max_steps_exhausted" }))
+  assert_false(turn_died_raw({}))
+  assert_false(turn_died_raw(Json(([] : Array[Json]))))
+}
+
+///|
+test "raw kind distinguishes prompt steers from malformed ones" {
+  assert_true(prompt_steer_applied_raw({}))
+  assert_true(prompt_steer_applied_raw({ "kind": "prompt" }))
+  assert_false(prompt_steer_applied_raw({ "kind": "command" }))
+  assert_false(prompt_steer_applied_raw({ "kind": "notice" }))
+  assert_false(prompt_steer_applied_raw({ "kind": Json::null() }))
+  assert_false(prompt_steer_applied_raw({ "kind": 1 }))
+  assert_false(prompt_steer_applied_raw(Json(([] : Array[Json]))))
+}
+
+///|
 /// The stream event that ends a turn is what closes its run, and the outcome
 /// it publishes is the one the event spells. An abort reports as aborted: the
 /// host no longer tracks whether a cancel is what caused it, and the record
@@ -2522,11 +2589,11 @@ test "trailing steer settle events keep the terminal run id" {
     SteerApplied(kind="prompt", content="fresh steer"),
   )
   assert_eq(
-    tracker.route_event(old_drop, Some("r42")),
+    tracker.route_event(old_drop, false, Some("r42")),
     (Some("r41"), Some("submission-old")),
   )
   assert_eq(
-    tracker.route_event(fresh_apply, Some("r42")),
+    tracker.route_event(fresh_apply, true, Some("r42")),
     (Some("r42"), Some("submission-fresh")),
   )
 }
@@ -2538,7 +2605,11 @@ test "equal steer text receipts retain writer-order submission ids" {
   ignore(tracker.record_sent("same", Some("submission-a")))
   ignore(tracker.record_sent("same", Some("submission-b")))
   let receipt : @wire.Event? = Some(SteerApplied(kind="prompt", content="same"))
-  let (first_run, first_submission) = tracker.route_event(receipt, Some("r9"))
+  let (first_run, first_submission) = tracker.route_event(
+    receipt,
+    true,
+    Some("r9"),
+  )
   assert_eq(first_run, Some("r9"))
   let first_event : @protocol.AgentStreamEvent = {
     event: (SteerApplied(kind="prompt", content="same") : @wire.Event),
@@ -2549,7 +2620,11 @@ test "equal steer text receipts retain writer-order submission ids" {
     fail("first receipt did not carry a submission id")
   }
   assert_eq(first_id, "submission-a")
-  let (second_run, second_submission) = tracker.route_event(receipt, Some("r9"))
+  let (second_run, second_submission) = tracker.route_event(
+    receipt,
+    true,
+    Some("r9"),
+  )
   assert_eq(second_run, Some("r9"))
   let second_event : @protocol.AgentStreamEvent = {
     event: (SteerApplied(kind="prompt", content="same") : @wire.Event),
@@ -2570,7 +2645,7 @@ test "legacy steer receipt does not gain a submission field" {
   let decoded : @wire.Event? = Some(
     SteerApplied(kind="prompt", content="legacy"),
   )
-  let (_, submission_id) = tracker.route_event(decoded, Some("r11"))
+  let (_, submission_id) = tracker.route_event(decoded, true, Some("r11"))
   let event : @protocol.AgentStreamEvent = {
     event: (SteerApplied(kind="prompt", content="legacy") : @wire.Event),
     submission_id,
@@ -2624,11 +2699,14 @@ test "new turn events clear stale settling state" {
   ignore(tracker.record_sent("old steer", Some("submission-old")))
   tracker.record_terminal("r7")
   assert_eq(
-    tracker.route_event(Some(AgentStep(step=1)), Some("r8")),
+    tracker.route_event(Some(AgentStep(step=1)), false, Some("r8")),
     (Some("r8"), None),
   )
   let old_drop : @wire.Event? = Some(SteerDropped(content="old steer"))
-  assert_eq(tracker.route_event(old_drop, Some("r8")), (Some("r8"), None))
+  assert_eq(
+    tracker.route_event(old_drop, false, Some("r8")),
+    (Some("r8"), None),
+  )
 }
 
 ///|
@@ -2639,16 +2717,24 @@ test "background events do not clear trailing steer receipts" {
   ignore(tracker.record_sent("second", Some("submission-second")))
   tracker.record_terminal("r-old")
   tracker.begin_run()
-  assert_eq(tracker.route_event(None, Some("r-new")), (Some("r-new"), None))
+  assert_eq(
+    tracker.route_event(None, false, Some("r-new")),
+    (Some("r-new"), None),
+  )
   assert_eq(
     tracker.route_event(
       Some(SteerApplied(kind="prompt", content="first")),
+      true,
       Some("r-new"),
     ),
     (Some("r-old"), Some("submission-first")),
   )
   assert_eq(
-    tracker.route_event(Some(SteerDropped(content="second")), Some("r-new")),
+    tracker.route_event(
+      Some(SteerDropped(content="second")),
+      false,
+      Some("r-new"),
+    ),
     (Some("r-old"), Some("submission-second")),
   )
 }
@@ -2663,11 +2749,22 @@ test "only prompt steer_applied consumes a desktop steer" {
     SteerApplied(kind="command", content="same"),
   )
   let notice : @wire.Event? = Some(SteerApplied(kind="notice", content="same"))
-  assert_eq(tracker.route_event(command, Some("r1")), (Some("r1"), None))
-  assert_eq(tracker.route_event(notice, Some("r1")), (Some("r1"), None))
+  assert_eq(tracker.route_event(command, false, Some("r1")), (Some("r1"), None))
+  assert_eq(tracker.route_event(notice, false, Some("r1")), (Some("r1"), None))
   assert_eq(
-    tracker.route_event(prompt, Some("r1")),
+    tracker.route_event(prompt, true, Some("r1")),
     (Some("r1"), Some("submission-prompt")),
+  )
+  // A kind that is present but not a string is malformed, not prompt: wire
+  // parse collapses it onto "prompt" (its missing-kind default), so the raw
+  // flag — false here, as prompt_steer_applied_raw would derive from the
+  // original line — is what refuses to consume the pending steer.
+  let malformed : @wire.Event? = Some(
+    SteerApplied(kind="prompt", content="same"),
+  )
+  assert_eq(
+    tracker.route_event(malformed, false, Some("r1")),
+    (Some("r1"), None),
   )
 }
 
