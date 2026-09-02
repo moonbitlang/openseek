@@ -4,7 +4,6 @@ import {
   "bobzhang/jsonl",
   "openseek_desktop/internal/development",
   "openseek_desktop/internal/env",
-  "openseek_desktop/internal/event",
   "openseek_desktop/internal/fsx",
   "openseek_desktop/internal/home",
   "openseek_desktop/internal/moonbit",

@@ -470,18 +470,19 @@ fn SteerRunTracker::record_terminal(
 ///|
 fn SteerRunTracker::route_event(
   self : SteerRunTracker,
-  decoded : @event.AgentEvent?,
-  prompt_steer_applied : Bool,
+  event : @wire.Event?,
   latest_run : String?,
 ) -> (String?, String?) {
-  match decoded {
-    Some(SteerApplied(content)) if prompt_steer_applied =>
+  match event {
+    // `kind` is the wire's own word: only a prompt steer consumes a desktop
+    // steer — the same check the decode layer used to apply to the raw line.
+    Some(SteerApplied(kind~, content~)) if kind == "prompt" =>
       self.route_receipt(content, latest_run)
-    Some(SteerDropped(content)) => self.route_receipt(content, latest_run)
+    Some(SteerDropped(content~)) => self.route_receipt(content, latest_run)
     // serve drains every old prompt receipt before beginning the next step.
     // AgentStep is therefore the explicit boundary after which an absent old
     // receipt must not steal an equal-text steer from the new run.
-    Some(AgentStep) => {
+    Some(AgentStep(..)) => {
       self.settling_run = None
       self.settling_steers.clear()
       (latest_run, None)
@@ -1034,46 +1035,6 @@ async fn EngineManager::close_engines_for_sessions(
 }
 
 ///|
-/// One engine JSONL event with every fact the pump needs extracted from it,
-/// so the loop reads typed facts instead of re-inspecting raw JSON.
-priv struct DecodedStreamEvent {
-  legacy : @event.AgentEvent?
-  wire : @wire.Event?
-  prompt_steer_applied : Bool
-  // The turn died rather than finished — the engine writes these from a catch
-  // block on its way out of the turn, and can follow one with another for the
-  // same turn. This child is not trusted with another turn.
-  turn_died : Bool
-}
-
-///|
-fn DecodedStreamEvent::from_wire(raw : Json) -> DecodedStreamEvent {
-  let (prompt_steer_applied, turn_died) = match raw {
-    Object(fields) => {
-      let prompt_steer_applied = match fields.get("kind") {
-        None | Some(String("prompt")) => true
-        _ => false
-      }
-      let turn_died = match fields.get("event") {
-        Some(String(name)) =>
-          name == "agent_setup_failed" ||
-          name == "turn_failed" ||
-          name == "agent_aborted"
-        _ => false
-      }
-      (prompt_steer_applied, turn_died)
-    }
-    _ => (false, false)
-  }
-  {
-    legacy: @event.decode_event(raw),
-    wire: @wire.parse(raw),
-    prompt_steer_applied,
-    turn_died,
-  }
-}
-
-///|
 fn new_engine_manager(
   engine : String,
   runtime_dir? : @pathx.Path,
@@ -1146,18 +1107,18 @@ fn open_run_engine(manager : EngineManager, run_id? : String) -> ServeEngine? {
 fn close_run_from_stream(
   sink : EventSink,
   run_id : String,
-  decoded : @event.AgentEvent,
+  event : @wire.Event,
 ) -> Bool {
-  match decoded {
-    AgentFinished(answer) => {
+  match event {
+    AgentFinished(answer~) => {
       emit_finished(sink, run_id, Finished, answer~)
       true
     }
-    ContextYield(answer) => {
+    ContextYield(answer~, ..) => {
       emit_finished(sink, run_id, ContextYield, answer~)
       true
     }
-    AgentAborted(reason) => {
+    AgentAborted(reason~) => {
       emit_error(sink, "agent aborted: \{reason}", run_id~)
       emit_finished(sink, run_id, Aborted)
       true
@@ -1167,8 +1128,13 @@ fn close_run_from_stream(
       emit_finished(sink, run_id, MaxStepsExhausted)
       true
     }
-    AgentError(message) => {
-      emit_error(sink, message, run_id~)
+    AgentSetupFailed(error~) => {
+      emit_error(sink, "agent setup failed: \{error}", run_id~)
+      emit_finished(sink, run_id, Failed)
+      true
+    }
+    TurnFailed(error~) => {
+      emit_error(sink, "turn failed: \{error}", run_id~)
       emit_finished(sink, run_id, Failed)
       true
     }
@@ -1180,9 +1146,12 @@ fn close_run_from_stream(
 /// Whether a terminal-class stream event carries its own failure text. Those
 /// events are published as the run's Error/Finished pair by the close above,
 /// so forwarding their raw form as well would render the same failure twice.
-fn host_reports_terminal_error(decoded : @event.AgentEvent) -> Bool {
-  match decoded {
-    AgentAborted(_) | MaxStepsExhausted | AgentError(_) => true
+fn host_reports_terminal_error(event : @wire.Event) -> Bool {
+  match event {
+    AgentAborted(..)
+    | MaxStepsExhausted
+    | AgentSetupFailed(..)
+    | TurnFailed(..) => true
     _ => false
   }
 }
@@ -1677,24 +1646,50 @@ async fn ServeEngine::run(
 }
 
 ///|
+/// Whether this wire event means the turn died rather than finished — the
+/// engine writes these from a catch block on its way out of the turn, and can
+/// follow one with another for the same turn. This child is not trusted with
+/// another turn.
+fn turn_died(event : @wire.Event) -> Bool {
+  match event {
+    AgentSetupFailed(..) | TurnFailed(..) | AgentAborted(..) => true
+    _ => false
+  }
+}
+
+///|
 /// Whether this stream event starts after, or completes after, a durable
 /// transcript span. The host publishes these only after the session follower
 /// has broadcast everything currently committed; other progress events stay
 /// on the low-latency kick path.
-fn event_requires_durable_barrier(event : @event.AgentEvent) -> Bool {
+fn event_requires_durable_barrier(event : @wire.Event) -> Bool {
   match event {
-    AgentStep | AgentFinished(_) | ContextYield(_) => true
+    AgentStep(..) | AgentFinished(..) | ContextYield(..) => true
     _ => false
   }
 }
 
 ///|
 test "model-step and successful-terminal events are durable barriers" {
-  assert_true(event_requires_durable_barrier(AgentStep))
-  assert_true(event_requires_durable_barrier(AgentFinished("done")))
-  assert_true(event_requires_durable_barrier(ContextYield("continue")))
-  assert_false(event_requires_durable_barrier(AssistantMessage("live")))
-  assert_false(event_requires_durable_barrier(Usage({ total_tokens: 3, })))
+  assert_true(event_requires_durable_barrier(AgentStep(step=1)))
+  assert_true(event_requires_durable_barrier(AgentFinished(answer="done")))
+  assert_true(
+    event_requires_durable_barrier(
+      ContextYield(to_sequence=1, answer="continue"),
+    ),
+  )
+  assert_false(event_requires_durable_barrier(AssistantMessage(content="live")))
+  assert_false(
+    event_requires_durable_barrier(
+      Usage(usage={
+        prompt_tokens: 1,
+        completion_tokens: 2,
+        total_tokens: 3,
+        prompt_cache_hit_tokens: 0,
+        prompt_cache_miss_tokens: 0,
+      }),
+    ),
+  )
 }
 
 ///|
@@ -1725,13 +1720,11 @@ async fn ServeEngine::consume(
     for ;; {
       guard reader.read_until("\n") is Some(line) else { break }
       for json in @jsonl.parse(line) {
-        let stream = DecodedStreamEvent::from_wire(json)
         // Every stdout event is a hint that the engine may just have
         // appended to the durable record — the follower's low-latency
         // wakeup (its poll only backstops this).
         manager.kick_follower(engine.session_key)
-        let decoded = stream.legacy
-        let wire_event = stream.wire
+        let wire_event = @wire.parse(json)
         // The brackets are the only thing that knows a sub-run's lifetime;
         // the probe in between reads the child's own record, which is the
         // only place its progress is visible to this process.
@@ -1760,14 +1753,13 @@ async fn ServeEngine::consume(
         // start is forced through this child's close/reap barrier instead of
         // racing it. This is synchronous, so no request can be between its
         // admission check and its enqueue.
-        if stream.turn_died {
+        if wire_event is Some(event) && turn_died(event) {
           engine.discard_commands(
             "the engine finished its turn before this command was written",
           )
         }
         let (run_id, submission_id) = engine.steer_runs.route_event(
-          decoded,
-          stream.prompt_steer_applied,
+          wire_event,
           engine.phase.latest_run(),
         )
         // Step and successful terminal events are causal transcript
@@ -1775,20 +1767,19 @@ async fn ServeEngine::consume(
         // the frontend can then use its current durable frontier to associate
         // reasoning with this exact model step, and a finish cannot clear a
         // sealed preview before its canonical Assistant commit is visible.
-        if decoded is Some(event) &&
+        if wire_event is Some(event) &&
           event_requires_durable_barrier(event) &&
           manager.followers.get(engine.session_key) is Some(follower) {
           await_follower_barrier(follower)
         }
-        match decoded {
-          Some(decoded) => {
+        match wire_event {
+          Some(event) => {
             // Terminal failures are published as the run's Error/Finished
             // pair below; forwarding their raw event as well would make the
             // frontend render the same failure twice. With no run to close
             // (no id recorded yet) that close cannot happen, so the raw
             // event is the report.
-            if (!host_reports_terminal_error(decoded) || run_id is None) &&
-              wire_event is Some(event) {
+            if !host_reports_terminal_error(event) || run_id is None {
               emit(
                 sink,
                 StreamEvent({
@@ -1798,18 +1789,18 @@ async fn ServeEngine::consume(
                 }),
               )
             }
-            match decoded {
+            match event {
               // A compaction queued behind an open turn begins only now, so
               // the engine's own event is what flips the phase; entering
               // from anything but Idle would clobber a run's state.
-              CompactionStarted =>
+              CompactionStarted(..) =>
                 if engine.phase is Idle(last_run~) {
                   engine.phase = Compacting(last_run~)
                 }
               // Either way the engine is done writing the record's summary,
               // so operations gated on compaction (starts, archiving) may
               // proceed.
-              CompactionFinished | CompactionFailed =>
+              CompactionFinished(..) | CompactionFailed(..) =>
                 engine.phase = engine.phase.to_idle()
               _ => ()
             }
@@ -1823,7 +1814,7 @@ async fn ServeEngine::consume(
             // block with the announcement, so no suspension separates them.
             if engine.phase is Running(..) &&
               run_id is Some(id) &&
-              close_run_from_stream(sink, id, decoded) {
+              close_run_from_stream(sink, id, event) {
               engine.phase = engine.phase.after_run_close()
               engine.steer_runs.record_terminal(id)
               // A command still queued for the turn that just ended would be
@@ -1838,15 +1829,6 @@ async fn ServeEngine::consume(
               )
             }
           }
-          None if wire_event is Some(event) =>
-            emit(
-              sink,
-              StreamEvent({
-                run_id,
-                session: engine.session_key,
-                event: { event, submission_id, },
-              }),
-            )
           None => ()
         }
       }
@@ -2360,14 +2342,17 @@ async test "a failed command leaves settlement to the EOF retirement" {
 
 ///|
 test "terminal failures are normalized by the host" {
-  assert_false(host_reports_terminal_error(AgentStep))
-  assert_false(host_reports_terminal_error(AgentFinished("done")))
+  assert_false(host_reports_terminal_error(AgentStep(step=1)))
+  assert_false(host_reports_terminal_error(AgentFinished(answer="done")))
   assert_false(
-    host_reports_terminal_error(ContextYield("[context ceiling] checkpointed")),
+    host_reports_terminal_error(
+      ContextYield(to_sequence=1, answer="[context ceiling] checkpointed"),
+    ),
   )
-  assert_true(host_reports_terminal_error(AgentAborted("interrupted")))
+  assert_true(host_reports_terminal_error(AgentAborted(reason="interrupted")))
   assert_true(host_reports_terminal_error(MaxStepsExhausted))
-  assert_true(host_reports_terminal_error(AgentError("boom")))
+  assert_true(host_reports_terminal_error(AgentSetupFailed(error="boom")))
+  assert_true(host_reports_terminal_error(TurnFailed(error="boom")))
 }
 
 ///|
@@ -2441,21 +2426,11 @@ async test "a run's close spares the commands queued to outlive its turn" {
 
 ///|
 test "a turn that died stops accepting commands for that child" {
-  assert_true(
-    DecodedStreamEvent::from_wire({ "event": "agent_setup_failed" }).turn_died,
-  )
-  assert_true(
-    DecodedStreamEvent::from_wire({ "event": "turn_failed" }).turn_died,
-  )
-  assert_true(
-    DecodedStreamEvent::from_wire({ "event": "agent_aborted" }).turn_died,
-  )
-  assert_false(
-    DecodedStreamEvent::from_wire({ "event": "agent_finished" }).turn_died,
-  )
-  assert_false(
-    DecodedStreamEvent::from_wire({ "event": "max_steps_exhausted" }).turn_died,
-  )
+  assert_true(turn_died(AgentSetupFailed(error="e")))
+  assert_true(turn_died(TurnFailed(error="e")))
+  assert_true(turn_died(AgentAborted(reason="r")))
+  assert_false(turn_died(AgentFinished(answer="done")))
+  assert_false(turn_died(MaxStepsExhausted))
 }
 
 ///|
@@ -2464,26 +2439,28 @@ test "a turn that died stops accepting commands for that child" {
 /// host no longer tracks whether a cancel is what caused it, and the record
 /// keeps the precise account.
 test "a terminal stream event closes its run with the event's outcome" {
-  fn closed(decoded : @event.AgentEvent) -> (Bool, Array[EngineEvent]) {
+  fn closed(event : @wire.Event) -> (Bool, Array[EngineEvent]) {
     let emitted : Array[EngineEvent] = []
     let sink = EventSink(fn(event) { emitted.push(event) })
-    (close_run_from_stream(sink, "r17", decoded), emitted)
+    (close_run_from_stream(sink, "r17", event), emitted)
   }
 
-  assert_eq(closed(AgentStep).0, false)
-  guard closed(AgentFinished("done")) is (true, [Finished(finish)]) else {
+  assert_eq(closed(AgentStep(step=1)).0, false)
+  guard closed(AgentFinished(answer="done")) is (true, [Finished(finish)]) else {
     fail("expected exactly one finished event")
   }
   assert_eq(finish.run_id, "r17")
   assert_eq(finish.status, "finished")
   assert_eq(finish.answer, Some("done"))
-  guard closed(ContextYield("[context ceiling] checkpointed"))
+  guard closed(
+      ContextYield(to_sequence=3, answer="[context ceiling] checkpointed"),
+    )
     is (true, [Finished(yielded)]) else {
     fail("expected exactly one finished event")
   }
   assert_eq(yielded.status, "context_yield")
   assert_eq(yielded.answer, Some("[context ceiling] checkpointed"))
-  guard closed(AgentAborted("interrupted"))
+  guard closed(AgentAborted(reason="interrupted"))
     is (true, [Error(error), Finished(aborted)]) else {
     fail("expected an error and a finished event")
   }
@@ -2493,10 +2470,17 @@ test "a terminal stream event closes its run with the event's outcome" {
     fail("expected an error and a finished event")
   }
   assert_eq(exhausted.status, "max_steps_exhausted")
-  guard closed(AgentError("boom")) is (true, [Error(failure), Finished(failed)]) else {
+  guard closed(AgentSetupFailed(error="boom"))
+    is (true, [Error(setup_failure), Finished(setup_finished)]) else {
     fail("expected an error and a finished event")
   }
-  assert_eq(failure.message, Some("boom"))
+  assert_eq(setup_failure.message, Some("agent setup failed: boom"))
+  assert_eq(setup_finished.status, "failed")
+  guard closed(TurnFailed(error="boom"))
+    is (true, [Error(failure), Finished(failed)]) else {
+    fail("expected an error and a finished event")
+  }
+  assert_eq(failure.message, Some("turn failed: boom"))
   assert_eq(failed.status, "failed")
 }
 
@@ -2533,14 +2517,16 @@ test "trailing steer settle events keep the terminal run id" {
   tracker.record_terminal("r41")
   tracker.begin_run()
   ignore(tracker.record_sent("fresh steer", Some("submission-fresh")))
-  let old_drop : @event.AgentEvent? = Some(SteerDropped("old steer"))
-  let fresh_apply : @event.AgentEvent? = Some(SteerApplied("fresh steer"))
+  let old_drop : @wire.Event? = Some(SteerDropped(content="old steer"))
+  let fresh_apply : @wire.Event? = Some(
+    SteerApplied(kind="prompt", content="fresh steer"),
+  )
   assert_eq(
-    tracker.route_event(old_drop, false, Some("r42")),
+    tracker.route_event(old_drop, Some("r42")),
     (Some("r41"), Some("submission-old")),
   )
   assert_eq(
-    tracker.route_event(fresh_apply, true, Some("r42")),
+    tracker.route_event(fresh_apply, Some("r42")),
     (Some("r42"), Some("submission-fresh")),
   )
 }
@@ -2551,12 +2537,8 @@ test "equal steer text receipts retain writer-order submission ids" {
   tracker.begin_run()
   ignore(tracker.record_sent("same", Some("submission-a")))
   ignore(tracker.record_sent("same", Some("submission-b")))
-  let receipt : @event.AgentEvent? = Some(SteerApplied("same"))
-  let (first_run, first_submission) = tracker.route_event(
-    receipt,
-    true,
-    Some("r9"),
-  )
+  let receipt : @wire.Event? = Some(SteerApplied(kind="prompt", content="same"))
+  let (first_run, first_submission) = tracker.route_event(receipt, Some("r9"))
   assert_eq(first_run, Some("r9"))
   let first_event : @protocol.AgentStreamEvent = {
     event: (SteerApplied(kind="prompt", content="same") : @wire.Event),
@@ -2567,11 +2549,7 @@ test "equal steer text receipts retain writer-order submission ids" {
     fail("first receipt did not carry a submission id")
   }
   assert_eq(first_id, "submission-a")
-  let (second_run, second_submission) = tracker.route_event(
-    receipt,
-    true,
-    Some("r9"),
-  )
+  let (second_run, second_submission) = tracker.route_event(receipt, Some("r9"))
   assert_eq(second_run, Some("r9"))
   let second_event : @protocol.AgentStreamEvent = {
     event: (SteerApplied(kind="prompt", content="same") : @wire.Event),
@@ -2589,8 +2567,10 @@ test "legacy steer receipt does not gain a submission field" {
   let tracker = SteerRunTracker::SteerRunTracker()
   tracker.begin_run()
   ignore(tracker.record_sent("legacy", None))
-  let decoded : @event.AgentEvent? = Some(SteerApplied("legacy"))
-  let (_, submission_id) = tracker.route_event(decoded, true, Some("r11"))
+  let decoded : @wire.Event? = Some(
+    SteerApplied(kind="prompt", content="legacy"),
+  )
+  let (_, submission_id) = tracker.route_event(decoded, Some("r11"))
   let event : @protocol.AgentStreamEvent = {
     event: (SteerApplied(kind="prompt", content="legacy") : @wire.Event),
     submission_id,
@@ -2644,14 +2624,11 @@ test "new turn events clear stale settling state" {
   ignore(tracker.record_sent("old steer", Some("submission-old")))
   tracker.record_terminal("r7")
   assert_eq(
-    tracker.route_event(Some(AgentStep), false, Some("r8")),
+    tracker.route_event(Some(AgentStep(step=1)), Some("r8")),
     (Some("r8"), None),
   )
-  let old_drop : @event.AgentEvent? = Some(SteerDropped("old steer"))
-  assert_eq(
-    tracker.route_event(old_drop, false, Some("r8")),
-    (Some("r8"), None),
-  )
+  let old_drop : @wire.Event? = Some(SteerDropped(content="old steer"))
+  assert_eq(tracker.route_event(old_drop, Some("r8")), (Some("r8"), None))
 }
 
 ///|
@@ -2662,16 +2639,16 @@ test "background events do not clear trailing steer receipts" {
   ignore(tracker.record_sent("second", Some("submission-second")))
   tracker.record_terminal("r-old")
   tracker.begin_run()
+  assert_eq(tracker.route_event(None, Some("r-new")), (Some("r-new"), None))
   assert_eq(
-    tracker.route_event(None, false, Some("r-new")),
-    (Some("r-new"), None),
-  )
-  assert_eq(
-    tracker.route_event(Some(SteerApplied("first")), true, Some("r-new")),
+    tracker.route_event(
+      Some(SteerApplied(kind="prompt", content="first")),
+      Some("r-new"),
+    ),
     (Some("r-old"), Some("submission-first")),
   )
   assert_eq(
-    tracker.route_event(Some(SteerDropped("second")), false, Some("r-new")),
+    tracker.route_event(Some(SteerDropped(content="second")), Some("r-new")),
     (Some("r-old"), Some("submission-second")),
   )
 }
@@ -2681,15 +2658,15 @@ test "only prompt steer_applied consumes a desktop steer" {
   let tracker = SteerRunTracker::SteerRunTracker()
   tracker.begin_run()
   ignore(tracker.record_sent("same", Some("submission-prompt")))
-  let decoded : @event.AgentEvent? = Some(SteerApplied("same"))
-  for _ in ["command", "notice"] {
-    assert_eq(
-      tracker.route_event(decoded, false, Some("r1")),
-      (Some("r1"), None),
-    )
-  }
+  let prompt : @wire.Event? = Some(SteerApplied(kind="prompt", content="same"))
+  let command : @wire.Event? = Some(
+    SteerApplied(kind="command", content="same"),
+  )
+  let notice : @wire.Event? = Some(SteerApplied(kind="notice", content="same"))
+  assert_eq(tracker.route_event(command, Some("r1")), (Some("r1"), None))
+  assert_eq(tracker.route_event(notice, Some("r1")), (Some("r1"), None))
   assert_eq(
-    tracker.route_event(decoded, true, Some("r1")),
+    tracker.route_event(prompt, Some("r1")),
     (Some("r1"), Some("submission-prompt")),
   )
 }
