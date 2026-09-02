@@ -1,0 +1,10 @@
+import {
+  "bobzhang/workflow",
+  "moonbitlang/async",
+  "bobzhang/workflow/spawn",
+  "moonbitlang/core/env",
+}
+
+supported_targets = "+native"
+
+pkgtype(kind: "executable")
