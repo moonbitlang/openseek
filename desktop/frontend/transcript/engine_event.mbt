@@ -87,8 +87,8 @@ pub fn decode_engine_event(
     ReasoningMessage(content~) => Some(ReasoningMessage(content))
     AssistantMessage(content~) => Some(AssistantMessage(content))
     // A background-job completion notice (or an engine idle-time diagnostic),
-    // emitted while the engine is idle. Rendered as a transient toast on the
-    // live path and as a durable notice card once the session record reloads.
+    // emitted while the engine is idle. Transport for the conversation's
+    // idle-event routing; the durable notice card is its one presentation.
     BackgroundNotice(content~) => Some(BackgroundNotice(content))
     Usage(usage~) =>
       Some(

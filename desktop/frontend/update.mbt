@@ -1131,9 +1131,10 @@ fn apply_engine_event(
     }
     AssistantMessage(_) => (None, conv.complete_reasoning().clear_response())
     // A background-job completion notice while idle. The durable record owns
-    // the transcript card; the live copy is a transient toast so an idle
-    // reader sees it without waiting for the next snapshot.
-    BackgroundNotice(content) => (Some(content), conv)
+    // the transcript card, and the completion is already surfaced to the
+    // model as a steer — a toast would double it for an idle reader without
+    // adding anything the card does not say.
+    BackgroundNotice(_) => (None, conv)
     // A sub-run opened: the lane replaces the notice this used to be, so the
     // minutes it blocks for read as activity rather than silence. A repeated
     // id (a reconnect replaying the bracket) refreshes rather than doubles.
@@ -8686,22 +8687,25 @@ test "a background finish marks its conversation until it is opened" {
 }
 
 ///|
-test "an idle background notice routes by the last run id" {
+test "an idle background notice is absorbed without a toast" {
   let dispatch = test_dispatch()
   // The run already finished: `active_run_id` is cleared, only the last-run
-  // memory ties the id back to its conversation.
+  // memory ties the id back to its conversation — so the event still reaches
+  // `apply_engine_event`, which must raise nothing.
   let model = test_model().replace_conversation({
     ..test_conversation(),
     last_run_id: Some("r7"),
   })
-  let notice = "background job bg-1 finished (exit=0)"
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r7"), BackgroundNotice(notice), session=None),
+    Engine(
+      Some("r7"),
+      BackgroundNotice("background job bg-1 finished (exit=0)"),
+      session=None,
+    ),
     model,
   )
-  assert_eq(next.notifications.length(), 1)
-  assert_eq(next.notifications[0].message, notice)
+  assert_true(next.notifications.is_empty())
 }
 
 ///|
