@@ -1,0 +1,94 @@
+import {
+  "moonbitlang/async@0.21.1",
+  "moonbitlang/async@0.21.1/fs",
+  "bobzhang/workflow@0.1.1",
+  "bobzhang/workflow@0.1.1/spawn",
+}
+
+///|
+/// A durability showcase: the FIRST run "crashes" after its survey phase;
+/// the SECOND run replays the survey from the journal for free and
+/// completes verification (a quorum over IDENTICAL calls — multiset
+/// replay) and a budget-bounded tail ending in a typed refusal.
+///
+///   moon run workflow/examples/showcase.mbtx     (twice; needs `openseek` on PATH)
+///
+/// Keyless: it drives the engine's modelless `echo` kind.
+async fn main {
+  showcase() catch {
+    error => println("workflow failed: \{error}")
+  }
+}
+
+///|
+async fn showcase() -> Unit {
+  let resuming = @fs.exists("showcase.jsonl")
+  let journal = @workflow.Journal::load("showcase.jsonl")
+  let runner = @spawn.contract_runner(launch=_ => {
+    command: "openseek",
+    args: ["subrun", "echo"],
+    cwd: None,
+    extra_env: None,
+    deadline_ms: None,
+  })
+  let wf = @workflow.Workflow(runner~, journal~, max_concurrent=4)
+
+  // ---- Phase 1: survey fan-out ----
+  wf.phase("Survey")
+  let topics = ["journal", "contract", "workers", "budget", "events"]
+  let surveyed = @workflow.collect_ok(
+    @workflow.fan_out(topics, topic => wf.try_agent(
+      "survey \{topic}",
+      kind="echo",
+      label="survey:\{topic}",
+    )),
+    min_ok=4,
+  )
+  println(
+    "survey: \{surveyed.length()}/5 gathered (\{wf.calls_replayed()} replayed, \{wf.calls_made()} live)",
+  )
+  guard resuming else {
+    println("💥 simulating a crash before verification — run me again to resume")
+    return
+  }
+
+  // ---- Phase 2: adversarial quorum over IDENTICAL calls (multiset) ----
+  wf.phase("Verify")
+  let votes = @workflow.parallel([
+    () => wf.try_agent("vote on the finding", kind="echo", label="voter-1"),
+    () => wf.try_agent("vote on the finding", kind="echo", label="voter-2"),
+    () => wf.try_agent("vote on the finding", kind="echo", label="voter-3"),
+  ])
+  let agreed = @workflow.quorum(votes, need=2) catch {
+    @workflow.QuorumNotReached(need~, ok~, of~) => {
+      println("quorum failed: \{ok}/\{of}, needed \{need}")
+      return
+    }
+    error => {
+      println("verify phase failed: \{error}")
+      return
+    }
+  }
+  println("verify: quorum reached with \{agreed.length()} votes")
+
+  // ---- Phase 3: a budget-bounded loop hits the typed backstop ----
+  wf.phase("Tail")
+  let bounded = @workflow.Workflow(runner~, journal~, max_calls=2)
+  let mut sweeps = 0
+  for index in 0..<10 {
+    match bounded.try_agent("sweep \{index}", kind="echo") {
+      Ok(_) => sweeps += 1
+      Err(@workflow.CallBudgetExhausted(..)) => {
+        println("tail: allowance spent after \{sweeps} sweeps — typed refusal, not a crash")
+        break
+      }
+      Err(error) => {
+        println("tail: unexpected failure \{error}")
+        break
+      }
+    }
+  }
+  println(
+    "done: \{wf.calls_replayed()} replayed + \{wf.calls_made()} live on the main workflow, \{wf.tokens_spent()} fresh tokens",
+  )
+}

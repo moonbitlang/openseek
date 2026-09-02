@@ -1,0 +1,77 @@
+import {
+  "moonbitlang/async@0.21.1",
+  "bobzhang/workflow@0.1.1",
+  "bobzhang/workflow@0.1.1/spawn",
+}
+
+///|
+/// Live multi-agent research: three read-only scouts fan out over the
+/// repository IN PARALLEL, each a real model-driven child process,
+/// journaled so a re-run replays every answer for free.
+///
+///   moon run workflow/examples/research.mbtx     (from the repo root)
+///
+/// Needs `openseek` on PATH and a provider key in the environment
+/// (DEEPSEEK / KIMI / GLM). Run it twice: generation 2 spawns nothing.
+async fn main {
+  research() catch {
+    error => println("workflow failed: \{error}")
+  }
+}
+
+///|
+async fn research() -> Unit {
+  let wf = @workflow.Workflow(
+    runner=@spawn.contract_runner(
+      launch=_ => {
+        command: "openseek",
+        args: ["subrun", "explore"],
+        // Children inherit this script's cwd: run me from the repo root.
+        cwd: None,
+        extra_env: None,
+        deadline_ms: None,
+      },
+      deadline_ms=600_000,
+    ),
+    journal=@workflow.Journal::load("research.jsonl"),
+    max_concurrent=3,
+  )
+  wf.phase("Research")
+  let questions = [
+    (
+      "How does the workflow journal repair a torn tail on load? One short paragraph.",
+      "workflow/journal.mbt",
+    ),
+    (
+      "What fields does the workflow child contract's v1 request envelope carry, and who unwraps it? One short paragraph.",
+      "workflow/spawn/contract.mbt cmd/openseek/subrun.mbt",
+    ),
+    (
+      "When does a worker slice count as SUCCESS in agent_workflow? One short paragraph.",
+      "agent_workflow/worker_runner.mbt",
+    ),
+  ]
+  let results = @workflow.fan_out(questions, question => {
+    let (query, hints) = question
+    wf.try_agent(query, kind="explore", hints~, max_steps=16)
+  })
+  for result in results {
+    match result {
+      Ok(answer) => {
+        let text = match answer {
+          { "answer": String(text), .. } => text
+          other => other.stringify()
+        }
+        let citations = match answer {
+          { "citations": Array(citations), .. } => citations.length()
+          _ => 0
+        }
+        println("── (\{citations} citation(s)) \{text}\n")
+      }
+      Err(error) => println("── FAILED: \{error}\n")
+    }
+  }
+  println(
+    "\{wf.calls_made()} live scouts, \{wf.calls_replayed()} replayed, \{wf.tokens_spent()} fresh tokens",
+  )
+}
