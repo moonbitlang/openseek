@@ -186,11 +186,7 @@ async test "wait_ms blocks until the job finishes and returns its output" {
 async test "a wait_ms deadline on a still-running job is not an error" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
-    let id = bg.start(
-      program="moonx",
-      args=[CLI_SLEEP, "30"],
-      command="slow",
-    )
+    let id = bg.start(program="moonx", args=[CLI_SLEEP, "30"], command="slow")
     let output = run_job_output(bg, { "job_id": id, "wait_ms": 200 })
     // Deadline expiry just reports the live status; the model can call again.
     assert_false(output.is_error)
@@ -267,7 +263,9 @@ async test "a terminal job finds a policy refusal before the displayed tail" {
     let id = bg.start(
       program="moonx",
       args=[
-        CLI_SH, "-c", "printf 'Sandbox policy blocked file write: example\\n'; seq 1 10000",
+        CLI_SH,
+        "-c",
+        "printf 'Sandbox policy blocked file write: example\\n'; seq 1 10000",
       ],
       command="policy then output",
       moonrun_policy_active=true,
