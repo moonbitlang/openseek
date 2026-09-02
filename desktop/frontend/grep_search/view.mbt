@@ -248,7 +248,17 @@ fn pattern_repair_control(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
         },
       )
       .aria_pressed(requested.to_string())
-      .on_click(_ => if requested { @cmd.none } else { emit(FixPattern) }),
+      .on_click(_ => {
+        if requested {
+          @cmd.none
+        } else if page.pattern_repair_phase is PatternRepairComposer ||
+          completed ||
+          failed {
+          emit(RejectPatternRepair)
+        } else {
+          emit(FixPattern)
+        }
+      }),
     @icons.icon(
       if requested {
         @icons.icon_sparkle
@@ -486,7 +496,8 @@ fn search_message(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html? {
             @html.div(class="search-empty-title", heading),
             @html.div(class="search-empty-detail", [
               @html.span(message),
-              if code == "invalid_pattern" && page.mode is Semantic {
+              if page.mode is Semantic &&
+                (code == "invalid_pattern" || code == "search_failed") {
                 @html.button(
                   class="search-fix-pattern-link",
                   on_click=emit(

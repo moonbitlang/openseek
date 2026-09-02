@@ -24,6 +24,9 @@ const MaxSemanticSearchErrorMessageUnits : Int = 1000
 const SemanticSearchProgressBatch : Int = 50
 
 ///|
+const MoongrepErroJsonParseEnabled : Bool = false
+
+///|
 /// The mooncakes coordinate pinned for the interim `moonx` provider. moongrep
 /// publishes no upstream release binaries, so a trial bundle resolves the
 /// provider through `moonx <coordinate> --`; pinning the version keeps the
@@ -735,9 +738,11 @@ async fn run_semantic_search(
     }
     let stderr = stderr_task.wait() catch { _ => "" }
     let mut json_error : (String, String)? = None
-    for line in stderr.split("\n") {
-      if parse_moongrep_error(line.to_owned()) is Some(parsed_error) {
-        json_error = Some(parsed_error)
+    if MoongrepErroJsonParseEnabled {
+      for line in stderr.split("\n") {
+        if parse_moongrep_error(line.to_owned()) is Some(parsed_error) {
+          json_error = Some(parsed_error)
+        }
       }
     }
     let lower = stderr.to_lower()

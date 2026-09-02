@@ -37,6 +37,10 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
   assert_true(requested_html.contains("PATTERN REPAIR"))
   assert_true(requested_html.contains("Pattern repair instruction"))
   assert_true(requested_html.contains("Submit pattern repair"))
+  let collapsed = requested.handle(RejectPatternRepair, input)
+  assert_false(render_search(collapsed, input).contains("PATTERN REPAIR"))
+  let reopened = collapsed.handle(FixPattern, input)
+  assert_true(render_search(reopened, input).contains("PATTERN REPAIR"))
   let submitted = requested
     .handle(PatternRepairInstructionChanged("allow labelled arguments"), input)
     .handle(SubmitPatternRepair, input)
