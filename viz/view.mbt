@@ -1873,6 +1873,57 @@ test "model-view user cards keep the caption of the event behind them" {
 }
 
 ///|
+/// The origins array is only useful if it stays index-for-index with
+/// `chat_messages()`, and one extra or missing entry silently shifts every
+/// later caption instead of failing loudly. The projection's own invariant
+/// pins that down: `User`, `Runtime` and `Summary` are exactly the items that
+/// become user-role messages, so an origin from one of them must land on a
+/// user-role message and nothing else may. Exercised against the cases the
+/// walker special-cases — a summary projecting at the start of its covered
+/// range, a dangling call healed with a synthetic result, a terminal
+/// repeating the assistant's final answer, and a context-yield terminal that
+/// projects no message at all.
+test "message origins stay aligned with the projection" {
+  let session = @agent_session.Session(
+      SessionId("aligned"),
+      system_prompt="sys",
+    )
+    .append(Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nobjective")))
+    .append(User(UserMessage("first")))
+    .append(
+      Assistant(
+        AssistantMessage("calling", tool_calls=[
+          ToolCall(id="dangling", name="shell", arguments="{}"),
+        ]),
+      ),
+    )
+    // No result for `dangling`: the projection heals it with a synthetic tool
+    // message that no durable event backs.
+    .append(Terminal(Finished("first answer")))
+    .append(User(UserMessage("second")))
+    .append(Assistant(AssistantMessage("answer")))
+    // Repeats the assistant final, so it projects no extra message.
+    .append(Terminal(Finished("answer")))
+    .append(User(UserMessage("third")))
+    .append(
+      Summary(SessionSummary(content="covered", from_sequence=8, to_sequence=8)),
+    )
+    .append(
+      Terminal(Finished("\{@agent_session.ContextYieldAnswerPrefix} continued")),
+    )
+  let messages = session.chat_messages()
+  let origins = model_message_origins(session)
+  assert_eq(origins.length(), messages.length())
+  for index, message in messages {
+    let from_user_item = match origins[index] {
+      FromUser | FromRuntime | FromSummary(..) => true
+      Other => false
+    }
+    assert_eq(from_user_item, message.role is User)
+  }
+}
+
+///|
 test "model metadata omits an assistant final's duplicate terminal" {
   let session = @agent_session.Session(SessionId("labels"), system_prompt="")
     .append(User(UserMessage("first")))
