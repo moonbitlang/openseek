@@ -1,5 +1,6 @@
 import {
   "bobzhang/openseek/agent",
+  "bobzhang/workflow/spawn",
   "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_session",
   "bobzhang/openseek/agent_tool",
@@ -7,8 +8,6 @@ import {
   "bobzhang/openseek_protocol" @protocol,
   "bobzhang/openseek_protocol/emit",
   "moonbitlang/async",
-  "moonbitlang/async/process",
-  "moonbitlang/async/io",
   "moonbitlang/core/json",
 }
 

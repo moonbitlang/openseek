@@ -17,7 +17,7 @@ pub async fn[T] execute_kind(session_id~ : String, system_prompt~ : String, task
 
 pub fn report_line(Json) -> String
 
-pub async fn[T] run_subrun(command~ : String, args~ : Array[String], input~ : Json, parse_report~ : (Json) -> Result[T, String], wall_deadline_ms~ : Int, kind~ : String, label~ : String, cwd? : String, child_session? : ChildSession, emit_event? : (@openseek_protocol.Event) -> Unit) -> SubrunResult[T]
+pub async fn[T] run_subrun(command~ : String, args~ : Array[String], input~ : Json, parse_report~ : (Json) -> Result[T, String], wall_deadline_ms~ : Int, kind~ : String, label~ : String, cwd? : String, child_session? : ChildSession, extra_env? : Map[String, String], emit_event? : (@openseek_protocol.Event) -> Unit) -> SubrunResult[T]
 
 pub fn[T] validated(Result[T, String], (T) -> Array[String]) -> Result[T, Array[String]]
 

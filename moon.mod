@@ -12,6 +12,7 @@ import {
   "bobzhang/openseek_protocol@0.1.0",
   "moonbit-community/rabbita@0.15.4",
   "moonbitlang/editor@0.4.4",
+  "bobzhang/workflow@0.1.0",
 }
 
 readme = "README.mbt.md"

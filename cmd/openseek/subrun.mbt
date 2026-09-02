@@ -34,9 +34,23 @@ async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
     guard (Some(@json.parse(line.trim(chars="\r\n").to_owned())) catch {
         _ => None
       })
-      is Some(input) else {
+      is Some(parsed) else {
       @emit.emit(CommandError(error="subrun input is not JSON"))
       return
+    }
+    // The workflow contract's v1 request envelope carries the input
+    // under `input`; a bare input line (the engine's own older callers,
+    // hand-driven children) still works. Unknown future majors fail
+    // loudly rather than half-parse.
+    let input = match parsed {
+      { "workflow_contract": Number(1, ..), "input": inner, .. } => inner
+      { "workflow_contract": Number(version, ..), .. } => {
+        @emit.emit(
+          CommandError(error="unsupported workflow_contract version \{version}"),
+        )
+        return
+      }
+      other => other
     }
     @async.with_task_group() <| group => {
       // Failures are caught INSIDE the task: a spawned task's failure
