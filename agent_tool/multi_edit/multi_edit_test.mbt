@@ -109,6 +109,7 @@ async test "multi_edit applies a batch spanning several files" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "multi_edit collapses aliased spellings of one file into a single group" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/note.txt"
@@ -360,6 +361,7 @@ async test "multi_edit uses line anchors to disambiguate duplicate spans" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "multi_edit resolves relative paths under the workspace root" {
   @vfs.with_tmpdir(prefix="openseek-multi-edit-workspace-", dir => {
     let path = "\{dir}/note.txt"

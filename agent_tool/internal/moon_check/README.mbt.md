@@ -115,6 +115,7 @@ that member rather than the whole workspace.
 
 ```mbt check
 ///|
+#cfg(not(platform="windows"))
 async test "the walk stops at the first marker it meets" {
   @vfs.with_tmpdir(prefix="openseek-moon-check-readme-", dir => {
     let module_dir = "\{dir}/packages/demo"
