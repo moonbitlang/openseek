@@ -1,0 +1,54 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/workflow/spawn"
+
+import {
+  "bobzhang/workflow",
+}
+
+// Values
+pub async fn contract_run(command~ : String, args~ : Array[String], input~ : Json, kind~ : String, id~ : String, max_steps? : Int, wall_deadline_ms~ : Int, cancel_grace_ms? : Int, cwd? : String, extra_env? : Map[String, String], progress? : ContractProgress, observe_line? : (Json) -> Unit) -> ContractResult
+
+pub fn contract_runner(launch~ : (@workflow.AgentCall) -> LaunchSpec, deadline_ms? : Int, validate_replay? : async (@workflow.AgentCall, @workflow.AgentOutcome) -> @workflow.ReplayDecision) -> @workflow.Runner
+
+// Errors
+
+// Types and methods
+pub struct ContractProgress {
+  mut steps : Int
+  mut prompt_tokens : Int
+  mut completion_tokens : Int
+}
+pub fn ContractProgress::ContractProgress() -> Self
+
+pub struct ContractResult {
+  report : Json?
+  terminal : ContractTerminal
+  steps_used : Int
+  prompt_tokens : Int
+  completion_tokens : Int
+}
+
+pub enum ContractTerminal {
+  Captured
+  NoReport
+  MaxSteps
+  ContextYield
+  TimedOut
+  Failed(String)
+} derive(Eq)
+pub fn ContractTerminal::equal(Self, Self) -> Bool
+pub fn ContractTerminal::not_equal(Self, Self) -> Bool
+
+pub(all) struct LaunchSpec {
+  command : String
+  args : Array[String]
+  cwd : String?
+  extra_env : Map[String, String]?
+  deadline_ms : Int?
+} derive(Eq)
+pub fn LaunchSpec::equal(Self, Self) -> Bool
+pub fn LaunchSpec::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

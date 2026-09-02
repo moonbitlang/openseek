@@ -1,0 +1,158 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/workflow"
+
+import {
+  "moonbitlang/async/semaphore",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn[T] all_ok(Array[Result[T, WorkflowError]]) -> Array[T] raise WorkflowError
+
+pub fn[T] collect_ok(Array[Result[T, WorkflowError]], min_ok? : Int) -> Array[T] raise WorkflowError
+
+pub async fn[A, B] fan_out(Array[A], async (A) -> Result[B, WorkflowError]) -> Array[Result[B, WorkflowError]]
+
+pub async fn[T] parallel(Array[async () -> Result[T, WorkflowError]]) -> Array[Result[T, WorkflowError]]
+
+pub async fn[T] parallel_all(Array[async () -> T]) -> Array[T]
+
+pub fn[T] quorum(Array[Result[T, WorkflowError]], need~ : Int) -> Array[T] raise WorkflowError
+
+// Errors
+pub suberror JournalCorrupted {
+  JournalCorrupted(path~ : String, line~ : Int)
+}
+pub fn JournalCorrupted::output(Self, &Logger) -> Unit
+pub fn JournalCorrupted::to_string(Self) -> String
+pub impl Show for JournalCorrupted
+
+pub suberror WorkflowError {
+  AgentFailed(label~ : String, failure~ : AgentFailure)
+  CallBudgetExhausted(label~ : String)
+  QuorumNotReached(need~ : Int, ok~ : Int, of~ : Int)
+}
+pub fn WorkflowError::output(Self, &Logger) -> Unit
+pub fn WorkflowError::to_string(Self) -> String
+pub impl Show for WorkflowError
+
+// Types and methods
+pub(all) struct AgentAttempt {
+  attempt_id : String
+  steps_used : Int
+  prompt_tokens : Int
+  completion_tokens : Int
+} derive(Eq, ToJson, @json.FromJson)
+pub fn AgentAttempt::equal(Self, Self) -> Bool
+pub fn AgentAttempt::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AgentAttempt::not_equal(Self, Self) -> Bool
+pub fn AgentAttempt::to_json(Self) -> Json
+
+pub(all) struct AgentCall {
+  kind : String
+  input : Json
+  label : String
+  max_steps : Int?
+  scope : String
+} derive(Eq, ToJson, @json.FromJson)
+pub fn AgentCall::equal(Self, Self) -> Bool
+pub fn AgentCall::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AgentCall::not_equal(Self, Self) -> Bool
+pub fn AgentCall::to_json(Self) -> Json
+
+pub(all) enum AgentDisposition {
+  Succeeded
+  FailedAgent
+  Interrupted
+  Errored
+} derive(Eq)
+pub fn AgentDisposition::equal(Self, Self) -> Bool
+pub fn AgentDisposition::not_equal(Self, Self) -> Bool
+
+pub(all) enum AgentFailure {
+  TimedOut
+  NoReport
+  MaxSteps
+  ContextYield
+  Skipped
+  Failed(String)
+} derive(Eq, ToJson, @json.FromJson)
+pub fn AgentFailure::equal(Self, Self) -> Bool
+pub fn AgentFailure::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AgentFailure::not_equal(Self, Self) -> Bool
+pub fn AgentFailure::output(Self, &Logger) -> Unit
+pub fn AgentFailure::to_json(Self) -> Json
+pub fn AgentFailure::to_string(Self) -> String
+pub impl Show for AgentFailure
+
+pub(all) enum AgentOutcome {
+  Finished(value~ : Json, attempt~ : AgentAttempt)
+  DidNotFinish(failure~ : AgentFailure, attempt~ : AgentAttempt?)
+} derive(Eq, ToJson, @json.FromJson)
+pub fn AgentOutcome::equal(Self, Self) -> Bool
+pub fn AgentOutcome::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AgentOutcome::not_equal(Self, Self) -> Bool
+pub fn AgentOutcome::to_json(Self) -> Json
+
+pub struct Journal {
+  // private fields
+}
+pub fn Journal::in_memory(prior? : Array[JournalEntry]) -> Self
+pub async fn Journal::load(String) -> Self
+pub fn Journal::prior(Self) -> Array[JournalEntry]
+pub fn Journal::recorded(Self) -> Array[JournalEntry]
+
+pub(all) struct JournalEntry {
+  call : AgentCall
+  outcome : AgentOutcome
+} derive(Eq, ToJson, @json.FromJson)
+pub fn JournalEntry::equal(Self, Self) -> Bool
+pub fn JournalEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JournalEntry::not_equal(Self, Self) -> Bool
+pub fn JournalEntry::to_json(Self) -> Json
+
+pub(all) enum ReplayDecision {
+  Serve(AgentOutcome)
+  Rerun
+}
+
+pub struct Runner {
+  // private fields
+}
+pub fn Runner::Runner(async (AgentCall) -> AgentOutcome, validate_replay? : async (AgentCall, AgentOutcome) -> ReplayDecision) -> Self
+pub async fn Runner::invoke(Self, AgentCall) -> AgentOutcome
+
+pub struct Workflow {
+  runner : Runner
+  slots : @semaphore.Semaphore
+  on_event : (WorkflowEvent) -> Unit
+  journal : Journal?
+  replay_scope : String
+  max_calls : Int?
+  mut calls_made : Int
+  mut replays : Int
+  mut prompt_tokens : Int
+  mut completion_tokens : Int
+  mut current_phase : String?
+}
+pub fn Workflow::Workflow(runner~ : Runner, max_concurrent? : Int, max_calls? : Int, journal? : Journal, replay_scope? : String, on_event? : (WorkflowEvent) -> Unit) -> Self raise
+pub async fn Workflow::agent(Self, String, kind~ : String, hints? : String, label? : String, max_steps? : Int) -> Json
+pub async fn Workflow::agent_call(Self, kind~ : String, input~ : Json, label~ : String, max_steps? : Int) -> Json
+pub fn Workflow::calls_made(Self) -> Int
+pub fn Workflow::calls_replayed(Self) -> Int
+pub fn Workflow::log(Self, String) -> Unit
+pub fn Workflow::phase(Self, String) -> Unit
+pub fn Workflow::tokens_spent(Self) -> Int
+pub async fn Workflow::try_agent(Self, String, kind~ : String, hints? : String, label? : String, max_steps? : Int) -> Result[Json, WorkflowError]
+
+pub(all) enum WorkflowEvent {
+  PhaseStarted(String)
+  Log(String)
+  AgentStarted(label~ : String, kind~ : String, phase~ : String?)
+  AgentFinished(label~ : String, disposition~ : AgentDisposition)
+  AgentReplayed(label~ : String, disposition~ : AgentDisposition)
+}
+
+// Type aliases
+
+// Traits

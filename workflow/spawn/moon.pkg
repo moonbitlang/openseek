@@ -1,0 +1,16 @@
+import {
+  "bobzhang/workflow",
+  "moonbitlang/async",
+  "moonbitlang/async/io",
+  "moonbitlang/async/process",
+  "moonbitlang/core/json",
+}
+
+import {
+  "bobzhang/workflow",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+} for "test"
+
+supported_targets = "+native"
