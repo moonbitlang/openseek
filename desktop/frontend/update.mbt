@@ -11193,6 +11193,38 @@ test "reconnect runs snapshot settles only its captured Starting submission" {
 }
 
 ///|
+test "reconnect recovers a Finished notification dropped behind a slow page" {
+  let dispatch = test_dispatch()
+  // The host has already finished r7, but this page missed that one live
+  // notification and still presents the run as open.
+  let (_, bridged) = update_dev(dispatch, BridgeReady, running_model())
+  let frontier = bridged.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, recovered) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[
+        {
+          run_id: "r7",
+          session: "desktop-test",
+          submission_id: None,
+          status: "finished",
+        },
+      ],
+      approvals=[],
+      live=[],
+      frontier~,
+      connection_generation=bridged.dev().connection_generation,
+    ),
+    bridged,
+  )
+  assert_true(
+    recovered.active().run is NoRun(ended=Some(RunFinished(Completed))),
+  )
+  assert_true(recovered.active().last_run_id is Some("r7"))
+}
+
+///|
 test "an old empty runs snapshot cannot close a start sent after reconnect" {
   let dispatch = test_dispatch()
   let (_, bridged) = update_dev(dispatch, BridgeReady, test_model())
