@@ -264,6 +264,9 @@ async fn @packaging.Workspace::package_with_proton(
 ) -> Unit {
   let args = options.proton_args(self)
   let package_env : Map[String, String] = {
+    // Proton performs the final native build while packaging, so this target
+    // must reach that nested Moon process as well as the prebuild above.
+    "MACOSX_DEPLOYMENT_TARGET": MinMacOSVersion,
     "PROTON_MACOS_ENTITLEMENTS": self.at(SigningEntitlementsPath),
   }
   match options.sign.identity {
