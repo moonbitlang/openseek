@@ -287,9 +287,47 @@ jobs:
         # imports/fields unused on Windows.
         run: moon check --target native
 
+      # Same version read the Linux job performs; duplicated here because a
+      # job cannot reach another job's step outputs.
+      - name: Resolve pinned Proton version
+        id: proton
+        run: |
+          $version = (Select-String -Path desktop/moon.mod -Pattern '"moonbit-community/proton@([^"]*)"').Matches[0].Groups[1].Value
+          if (-not $version) { throw "proton version not found in desktop/moon.mod" }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      # The full native test build compiles Proton's C sources, which include
+      # CEF headers from the user-level store; `cef setup` assembles it.
+      - name: Restore Proton runtime
+        id: cef-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
+
+      - name: Assemble Proton CEF runtime
+        run: >-
+          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
+          cef setup
+
+      # The sole Windows writer: main pushes populate the Windows cache key,
+      # while PR jobs remain restore-only.
+      - name: Save Proton runtime
+        if: >-
+          github.event_name == 'push' &&
+          steps.cef-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: ${{ steps.cef-cache.outputs.cache-primary-key }}
+
       # Full native test suite: the root module and every workspace member
       # (editor, desktop, inspect, protocol, workflow). Nothing here
-      # initializes CEF or opens a window, so no Proton runtime is needed.
+      # initializes CEF or opens a window, so only the headers are needed.
       - name: Test native target
         run: moon test --target native
 
