@@ -436,6 +436,82 @@ test('transcript overview previews failed turns and jumps among mounted messages
   expect(app.pageErrors).toEqual([]);
 });
 
+test('tool-call tabs keep focus-driven scrolling inside the transcript', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const events = [
+    {
+      sequence: 1,
+      item: {
+        kind: 'user',
+        payload: { content: 'Show the browser fixture with a long transcript' },
+      },
+    },
+  ];
+  let sequence = 2;
+  for (let row = 1; row <= 100; row += 1) {
+    events.push({
+      sequence,
+      item: {
+        kind: 'assistant',
+        payload: { content: `Transcript filler row ${row}` },
+      },
+    });
+    sequence += 1;
+  }
+  events.push({
+    sequence,
+    item: {
+      kind: 'assistant',
+      payload: {
+        content: '',
+        tool_calls: [
+          {
+            id: 'deep-tabbed-call',
+            name: 'mbtx',
+            arguments: JSON.stringify({
+              source: 'fn main { println("browser fixture") }',
+            }),
+          },
+        ],
+      },
+    },
+  });
+  app.sessionEvents = events;
+  await app.install();
+  await app.goto();
+  // Proton's current CEF does not use the size container as the absolute
+  // positioning root. Neutralize Chromium's newer behavior so this browser
+  // test exercises the same geometry as the shipping desktop host.
+  await page.addStyleTag({ content: '#transcript { container-type: normal; }' });
+  await app.openSession();
+
+  const transcript = page.locator('#transcript');
+  const tabs = transcript.locator('.tool-call-tabs');
+  const originalJson = tabs.getByText('Original JSON', { exact: true });
+  await transcript.locator('.tool-call-summary').click();
+  await transcript.evaluate(node => {
+    node.scrollTop = node.scrollHeight;
+  });
+  await expect(originalJson).toBeVisible();
+  expect(await transcript.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => document.scrollingElement.scrollTop)).toBe(0);
+
+  await originalJson.click();
+
+  const originalJsonInput = tabs.locator('.tool-call-tab-input').nth(1);
+  await expect(originalJsonInput).toBeChecked();
+  await originalJsonInput.focus();
+  await expect(originalJsonInput).toBeFocused();
+  expect(await transcript.evaluate(node => getComputedStyle(node).position))
+    .toBe('relative');
+  expect(await originalJsonInput.evaluate(node =>
+    Boolean(node.offsetParent?.closest('#transcript')))).toBe(true);
+  expect(await page.evaluate(() => document.scrollingElement.scrollTop)).toBe(0);
+  expect(await page.locator('.app').evaluate(node =>
+    node.getBoundingClientRect().top)).toBe(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('transcript Markdown keeps links safe and loads local raster bytes through the host', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.binaryFiles['diagram.png'] = {

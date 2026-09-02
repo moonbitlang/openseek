@@ -1,6 +1,10 @@
 
 /* ---------- transcript ---------- */
 .transcript {
+  /* Keep clipped accessibility controls in this scroller's coordinate
+     space. Proton's CEF otherwise positions a focused tool-tab radio
+     against the document and scrolls the entire app out of the viewport. */
+  position: relative;
   min-height: 0;
   overflow: auto;
   /* Reserve both edges so the centered stream does not shift when overflow
