@@ -513,25 +513,16 @@ pub fn apply_session_item(
               sequence,
             })
           // What is left is either model-directed text — never a display
-          // card — or a background job's runtime update, which is.
+          // card — or a runtime notice the engine injected between turns
+          // (a background-job completion, or a legacy `moon_check` block).
           None =>
             if !is_model_directed_notice(payload.content) {
-              let update = parse_runtime_update(payload.content)
-              if update.status is Some(_) || update.diagnostics.length() > 0 {
-                items.push({
-                  kind: Tool(
-                    call_id="",
-                    name=runtime_update_title(update),
-                    arguments=None,
-                    has_result=true,
-                    is_error=false,
-                    brief=None,
-                  ),
-                  content: update.diagnostics.join("\n"),
-                  ts,
-                  sequence,
-                })
-              }
+              items.push({
+                kind: Notice,
+                content: payload.content,
+                ts,
+                sequence,
+              })
             }
         }
       }
@@ -1205,18 +1196,16 @@ test "transcript mapping renders non-finished terminals as error bubbles" {
 }
 
 ///|
-test "transcript mapping keeps summaries and meaningful runtime notices" {
+test "transcript mapping keeps summaries and background notices" {
   let events =
     #|{"sequence":1,"item":{"kind":"summary","payload":{"content":"earlier turns compacted","from_sequence":1,"to_sequence":8}}},
-    #|{"sequence":2,"item":{"kind":"runtime_notice","payload":{"content":"[moon_check update]\nstatus=failed\nmain.mbt:1 error"}}},
+    #|{"sequence":2,"item":{"kind":"runtime_notice","payload":{"content":"background job bg-1 finished (exit=0)"}}},
     #|{"sequence":3,"item":{"kind":"runtime_notice","payload":{"content":""}}}
   let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="2")
   guard items[0].kind is Summary else { fail("expected summary") }
-  guard items[1].kind is Tool(name="moon_check failed", is_error=false, ..) else {
-    fail("expected runtime notice card")
-  }
-  inspect(items[1].content, content="main.mbt:1 error")
+  guard items[1].kind is Notice else { fail("expected notice card") }
+  inspect(items[1].content, content="background job bg-1 finished (exit=0)")
 }
 
 ///|
@@ -1259,17 +1248,16 @@ test "transcript mapping renders goal markers as cards and reduces the standing 
 
 ///|
 test "transcript mapping drops the plan reminder instead of carding it" {
-  // The reminder is durable and carries no metadata assignments, so without
-  // an explicit exclusion every one of its lines reads as a `moon_check`
-  // diagnostic. The live path drops the matching `plan_reminder` event.
+  // The reminder is durable model-directed text, so without an explicit
+  // exclusion it would surface as a notice card. The live path drops the
+  // matching `plan_reminder` event.
   let events =
     #|{"sequence":1,"item":{"kind":"runtime_notice","payload":{"content":"[plan reminder]\nUpdate the plan before continuing."}}},
-    #|{"sequence":2,"item":{"kind":"runtime_notice","payload":{"content":"[moon_check update]\nstatus=passed"}}}
+    #|{"sequence":2,"item":{"kind":"runtime_notice","payload":{"content":"background job bg-2 finished (exit=1)"}}}
   let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="1")
-  guard items[0].kind is Tool(name="moon_check passed", ..) else {
-    fail("expected only the runtime update card")
-  }
+  guard items[0].kind is Notice else { fail("expected only the notice card") }
+  inspect(items[0].content, content="background job bg-2 finished (exit=1)")
 }
 
 ///|

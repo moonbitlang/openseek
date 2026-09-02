@@ -12,7 +12,7 @@ pub(all) enum EngineEvent {
   ReasoningDelta(String)
   ReasoningMessage(String)
   AssistantMessage(String)
-  RuntimeUpdate(String)
+  BackgroundNotice(String)
   Usage(prompt_tokens~ : Int, completion_tokens~ : Int)
   ToolResult(
     tool_name~ : String,
@@ -86,10 +86,10 @@ pub fn decode_engine_event(
     ReasoningDelta(content~) => Some(ReasoningDelta(content))
     ReasoningMessage(content~) => Some(ReasoningMessage(content))
     AssistantMessage(content~) => Some(AssistantMessage(content))
-    // A background job's completion notice (the `moon_check --watch` stream),
-    // emitted while the engine is idle. `RuntimeUpdate` is this view's older
-    // name for it, kept because the transcript item and its parser use it.
-    BackgroundNotice(content~) => Some(RuntimeUpdate(content))
+    // A background-job completion notice (or an engine idle-time diagnostic),
+    // emitted while the engine is idle. Rendered as a transient toast on the
+    // live path and as a durable notice card once the session record reloads.
+    BackgroundNotice(content~) => Some(BackgroundNotice(content))
     Usage(usage~) =>
       Some(
         Usage(
@@ -296,17 +296,14 @@ test "decode normalizes numbers and unknown events" {
 }
 
 ///|
-test "decode maps background notices onto the runtime-update path" {
-  // `RuntimeUpdate` is this view's older name for a background notice; the
-  // `runtime_update` wire event itself has not been emitted since 4b1ec831
-  // (2026-07-05) removed its producer.
+test "decode maps background notices onto the notice path" {
   guard decode_engine_event(
       event_fields({
         "event": "background_notice",
-        "content": "[moon_check update]",
+        "content": "background job bg-1 finished (exit=0)",
       }),
     )
-    is Some(RuntimeUpdate("[moon_check update]")) else {
+    is Some(BackgroundNotice("background job bg-1 finished (exit=0)")) else {
     fail("background_notice not decoded")
   }
   // The engine's plan reminder is model-directed text, not a user notice.

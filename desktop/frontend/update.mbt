@@ -704,7 +704,7 @@ fn is_idle_event(event : @transcript.EngineEvent) -> Bool {
     | CompactionFinished(_)
     | CompactionFailed(_)
     | SessionAppendFailed(_)
-    | RuntimeUpdate(_) => true
+    | BackgroundNotice(_) => true
     _ => false
   }
 }
@@ -1130,10 +1130,10 @@ fn apply_engine_event(
       }
     }
     AssistantMessage(_) => (None, conv.complete_reasoning().clear_response())
-    RuntimeUpdate(content) => {
-      let update = @transcript.parse_runtime_update(content)
-      (None, { ..conv, watcher_status: update.status, })
-    }
+    // A background-job completion notice while idle. The durable record owns
+    // the transcript card; the live copy is a transient toast so an idle
+    // reader sees it without waiting for the next snapshot.
+    BackgroundNotice(content) => (Some(content), conv)
     // A sub-run opened: the lane replaces the notice this used to be, so the
     // minutes it blocks for read as activity rather than silence. A repeated
     // id (a reconnect replaying the bracket) refreshes rather than doubles.
@@ -8694,13 +8694,14 @@ test "an idle background notice routes by the last run id" {
     ..test_conversation(),
     last_run_id: Some("r7"),
   })
-  let notice = "[moon_check update]\nstatus=failed\nmain.mbt:1 error"
+  let notice = "background job bg-1 finished (exit=0)"
   let (_, next) = update_dev(
     dispatch,
-    Engine(Some("r7"), RuntimeUpdate(notice), session=None),
+    Engine(Some("r7"), BackgroundNotice(notice), session=None),
     model,
   )
-  assert_eq(next.active().watcher_status, Some("failed"))
+  assert_eq(next.notifications.length(), 1)
+  assert_eq(next.notifications[0].message, notice)
 }
 
 ///|
@@ -10371,7 +10372,6 @@ test "session loaded swaps the active conversation onto the stored session" {
   let model = test_model()
     .replace_conversation({
       ..test_conversation(),
-      watcher_status: Some("running"),
       messages: [{ kind: User, content: "old chat", ts: None, sequence: None, }],
       turn: {
         ..test_conversation().turn,
@@ -10436,7 +10436,6 @@ test "session loaded swaps the active conversation onto the stored session" {
   inspect(once.active().messages[0].content, content="stored question")
   assert_eq(once.active().turn.streaming_response, None)
   inspect(once.active().turn.usage_tokens, content="0")
-  assert_eq(once.active().watcher_status, None)
   assert_eq(
     once.active().workspace,
     Project(root=@interop.ChannelId::Local.test_project()),

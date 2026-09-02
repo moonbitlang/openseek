@@ -823,10 +823,6 @@ priv struct Conversation {
   // reason. It sits out here rather than in the probe because clearing the
   // probe must not rewind it — see `Conversation::forget_pull_request`.
   pull_request_generation : Int
-  // The engine's `moon_check --watch` state, as its last `runtime_update`
-  // notice reported it. `None` until one arrives — a conversation whose
-  // engine runs no watcher never shows the chip at all.
-  watcher_status : String?
   // Everything belonging to the turn in flight; see `RunState`.
   turn : RunState
   // Steers submitted into an open run and not yet acknowledged — the queue
@@ -2390,7 +2386,6 @@ fn empty_conversation(
     branch_generation: 0,
     pull_request: None,
     pull_request_generation: 0,
-    watcher_status: None,
     turn: RunState::empty(),
     pending_steers: [],
     pending_approval: None,
