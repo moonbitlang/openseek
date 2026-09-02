@@ -2468,6 +2468,28 @@ pub fn WatchWorkspacePayload::not_equal(Self, Self) -> Bool
 pub fn WatchWorkspacePayload::to_json(Self) -> Json
 pub fn WatchWorkspacePayload::to_repr(Self) -> @debug.Repr
 
+pub(all) enum WorkspaceMenuAction {
+  OpenWorkspaceSettings
+  DetachWorkspace
+} derive(Eq, @debug.Debug)
+pub fn WorkspaceMenuAction::equal(Self, Self) -> Bool
+pub fn WorkspaceMenuAction::not_equal(Self, Self) -> Bool
+pub fn WorkspaceMenuAction::parse(String) -> Self?
+pub fn WorkspaceMenuAction::to_repr(Self) -> @debug.Repr
+pub fn WorkspaceMenuAction::wire(Self) -> String
+
+pub(all) struct WorkspaceMenuPayload {
+  x : Int
+  y : Int
+} derive(Eq, @debug.Debug)
+pub fn WorkspaceMenuPayload::equal(Self, Self) -> Bool
+pub fn WorkspaceMenuPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn WorkspaceMenuPayload::not_equal(Self, Self) -> Bool
+pub fn WorkspaceMenuPayload::to_json(Self) -> Json
+pub fn WorkspaceMenuPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WorkspaceMenuPayload
+pub impl @json.FromJson for WorkspaceMenuPayload
+
 pub(all) struct WorkspacePayload {
   path : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)

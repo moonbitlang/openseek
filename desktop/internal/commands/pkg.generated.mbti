@@ -35,6 +35,8 @@ pub let app_set_titlebar_theme : Command[@protocol.AppTitlebarThemePayload, @pro
 
 pub let app_toggle_maximized : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
 
+pub let app_workspace_menu : Command[@protocol.WorkspaceMenuPayload, @protocol.EmptyReply]
+
 pub let auth_cancel : Command[@protocol.EmptyPayload, @protocol.AuthStatusPayload]
 
 pub let auth_connect : Command[@protocol.EmptyPayload, @protocol.AuthStatusPayload]

@@ -164,6 +164,17 @@ fn Input::menu_enabled(self : Input) -> (Bool, Bool) {
 }
 
 ///|
+/// Direct row actions remain available alongside the native menu. Running
+/// conversations keep the menu for discovery but cannot be archived directly.
+fn Input::direct_actions(self : Input) -> Array[TrailingAction] {
+  if self.run_mark is RunningMark {
+    []
+  } else {
+    self.trailing
+  }
+}
+
+///|
 fn Actions::child_component(
   self : Actions,
   _id : Id,
@@ -307,14 +318,10 @@ pub fn component(
     } else {
       None
     }
-    // Browser-console rows retain their existing direct buttons. Native rows
-    // keep one stable ellipsis button and let Proton present enabled state.
-    let trailing_actions = if menu_kind is Some(_) ||
-      input.run_mark is RunningMark {
-      []
-    } else {
-      input.trailing
-    }
+    // Native and browser rows retain their direct durable-action shortcuts.
+    // The native ellipsis and context menu add discoverability and Rename;
+    // they do not replace the existing one-click actions.
+    let trailing_actions = input.direct_actions()
     if !status.is_empty() ||
       !trailing_actions.is_empty() ||
       menu_kind is Some(_) {
@@ -322,30 +329,26 @@ pub fn component(
       if !status.is_empty() {
         trailing.push(@html.span(class="row-status", status))
       }
-      if !trailing_actions.is_empty() {
-        let buttons : Array[@html.Html] = []
-        for action in trailing_actions {
-          let (title, button_class, image) = match action {
-            Archive(title~) => (title, "row-archive", @icons.icon_archive)
-            Restore(title~) => (title, "row-archive", @icons.icon_arrow_up)
-            Delete(title~) =>
-              (title, "row-archive row-delete", @icons.icon_close)
-          }
-          let command = actions.command(action, input.id)
-          buttons.push(
-            @html.button(
-              class=button_class,
-              type_="button",
-              title~,
-              attrs=@html.Attrs::build().on_click(event => {
-                event.stop_propagation()
-                command
-              }),
-              @icons.icon(image),
-            ),
-          )
+      let buttons : Array[@html.Html] = []
+      for action in trailing_actions {
+        let (title, button_class, image) = match action {
+          Archive(title~) => (title, "row-archive", @icons.icon_archive)
+          Restore(title~) => (title, "row-archive", @icons.icon_arrow_up)
+          Delete(title~) => (title, "row-archive row-delete", @icons.icon_close)
         }
-        trailing.push(@html.span(class="row-actions", buttons))
+        let command = actions.command(action, input.id)
+        buttons.push(
+          @html.button(
+            class=button_class,
+            type_="button",
+            title~,
+            attrs=@html.Attrs::build().on_click(event => {
+              event.stop_propagation()
+              command
+            }),
+            @icons.icon(image),
+          ),
+        )
       }
       if menu_kind is Some(kind) {
         let (archive_enabled, delete_enabled) = input.menu_enabled()
@@ -360,27 +363,30 @@ pub fn component(
             y,
           )
         }
-        trailing.push(
-          @html.span(class="row-actions", [
-            @html.button(
-              class="row-archive row-menu",
-              type_="button",
-              title="Conversation actions",
-              attrs=@html.Attrs::build()
-                .aria_label("Conversation actions")
-                .on_click(event => {
-                  event.stop_propagation()
-                  guard event.target().to_element() is Some(target) &&
-                    target.closest(".row-menu") is Some(button) else {
-                    return @cmd.none
-                  }
-                  let rect = button.get_bounding_client_rect()
-                  command(rect.get_right().to_int(), rect.get_bottom().to_int())
-                }),
-              @icons.icon(@icons.icon_more),
-            ),
-          ]),
+        buttons.push(
+          @html.button(
+            class="row-archive row-menu",
+            type_="button",
+            title="Conversation actions",
+            attrs=@html.Attrs::build()
+              .aria_label("Conversation actions")
+              .on_click(event => {
+                event.stop_propagation()
+                guard event.target().to_element() is Some(target) &&
+                  target.closest(".row-menu") is Some(button) else {
+                  return @cmd.none
+                }
+                let rect = button.get_bounding_client_rect()
+                command(rect.get_right().to_int(), rect.get_bottom().to_int())
+              }),
+            @icons.icon(@icons.icon_more),
+          ),
         )
+      }
+      if !buttons.is_empty() {
+        // Every action belongs to one grid child. Separate row-actions
+        // children occupy the same CSS grid area and overlap each other.
+        trailing.push(@html.span(class="row-actions", buttons))
       }
       children.push(@html.span(class="row-trailing", trailing))
     }

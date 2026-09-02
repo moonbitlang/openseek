@@ -337,9 +337,11 @@ fn SidebarDispatcher::actions(
     rename_cancel: id => self.emit(ConversationRenameCancelled(id)),
   }
   let project : @project.Actions = {
+    native_menu,
     new_conversation: id => self.project_new(id),
     open_settings: id => self.project_settings(id),
     detach: id => self.project_detach(id),
+    show_menu: (id, x, y) => self.emit(ShowWorkspaceMenu(id~, x~, y~)),
     conversation,
   }
   let section : @section.Actions = {

@@ -1444,10 +1444,10 @@ priv struct Model {
   // Permanent archived-chat deletion has its own explicit confirmation. It
   // never shares the worktree-discard dialog because the data at risk differs.
   archived_delete_confirm : ArchivedDeleteConfirm?
-  // The row whose native popup is currently open. Proton reports only the
-  // selected command id, so the application retains the exact row identity
-  // until that command arrives.
-  conversation_menu_target : ConversationMenuTarget?
+  // The sidebar row whose native popup is currently open. Proton reports only
+  // the selected command id, so the application retains the exact tagged row
+  // identity until that command arrives. Only one native popup can be active.
+  sidebar_menu_target : SidebarMenuTarget?
   // Controlled sidebar editor for one live conversation title.
   conversation_rename : ConversationRename?
   // The conversation on screen; always present in `conversations` once the
@@ -1944,6 +1944,8 @@ priv enum Msg {
     y~ : Int
   )
   ConversationMenuSelected(@protocol.ConversationMenuAction)
+  ShowWorkspaceMenu(id~ : @project.Id, x~ : Int, y~ : Int)
+  WorkspaceMenuSelected(@protocol.WorkspaceMenuAction)
   ConversationRenameChanged(id~ : @conversation.Id, value~ : String)
   ConversationRenameSubmitted(@conversation.Id)
   ConversationRenameCancelled(@conversation.Id)
@@ -2582,7 +2584,7 @@ fn initial_model() -> Model {
     pending_project_adoption: None,
     archive_confirm: None,
     archived_delete_confirm: None,
-    conversation_menu_target: None,
+    sidebar_menu_target: None,
     conversation_rename: None,
     screen: Chat,
     codex: @codex.State(),

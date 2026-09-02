@@ -26,11 +26,12 @@ test "native menu selection enters controlled rename and blank cannot submit" {
     ),
     model,
   )
-  guard model.conversation_menu_target is Some(target) else {
+  guard model.sidebar_menu_target
+    is Some(ConversationTarget(id=target_id, label~)) else {
     fail("native menu target was not retained")
   }
-  assert_eq(target.id, id)
-  assert_eq(target.label, "Original")
+  assert_eq(target_id, id)
+  assert_eq(label, "Original")
   let (_, model) = update_msg(
     dispatch,
     ConversationMenuSelected(RenameConversation),

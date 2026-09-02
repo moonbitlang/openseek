@@ -29,6 +29,7 @@ test "native live menu keeps archive visible but disabled while running" {
   ])
   assert_eq(input.native_menu_kind(), Some(LiveConversationMenu))
   assert_eq(input.menu_enabled(), (false, false))
+  assert_eq(input.direct_actions(), [])
 }
 
 ///|
@@ -39,6 +40,12 @@ test "native archived menu reports permanent-delete availability" {
   ])
   assert_eq(input.native_menu_kind(), Some(ArchivedConversationMenu))
   assert_eq(input.menu_enabled(), (false, true))
+  assert_eq(input.direct_actions(), [
+    Restore(title="Restore"),
+    Delete(title="Delete"),
+  ])
+  let live = test_input("openseek.live", NoRunMark, [Archive(title="Archive")])
+  assert_eq(live.direct_actions(), [Archive(title="Archive")])
   assert_eq(
     test_input(
       "openseek.live",

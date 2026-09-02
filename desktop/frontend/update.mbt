@@ -4104,6 +4104,26 @@ fn update_msg(
         },
       )
     }
+    ShowWorkspaceMenu(id~, x~, y~) =>
+      if model.is_desktop {
+        (
+          popup_workspace_menu(dispatch, { x, y, }),
+          { ..model, sidebar_menu_target: Some(WorkspaceTarget(id)), },
+        )
+      } else {
+        (@cmd.none, model)
+      }
+    WorkspaceMenuSelected(action) => {
+      guard model.sidebar_menu_target is Some(WorkspaceTarget(id)) else {
+        return (@cmd.none, model)
+      }
+      let model = { ..model, sidebar_menu_target: None, }
+      let sidebar = SidebarDispatcher::{ emit: dispatch, }
+      match action {
+        @protocol.OpenWorkspaceSettings => (sidebar.project_settings(id), model)
+        @protocol.DetachWorkspace => (sidebar.project_detach(id), model)
+      }
+    }
     ShowConversationMenu(
       id~,
       label~,
@@ -4122,29 +4142,27 @@ fn update_msg(
             archive_enabled,
             delete_enabled,
           }),
-          { ..model, conversation_menu_target: Some({ id, label, }), },
+          {
+            ..model,
+            sidebar_menu_target: Some(ConversationTarget(id~, label~)),
+          },
         )
       } else {
         (@cmd.none, model)
       }
     ConversationMenuSelected(action) => {
-      guard model.conversation_menu_target is Some(target) else {
+      guard model.sidebar_menu_target is Some(ConversationTarget(id~, label~)) else {
         return (@cmd.none, model)
       }
-      let model = { ..model, conversation_menu_target: None, }
+      let model = { ..model, sidebar_menu_target: None, }
       match action {
         RenameConversation =>
-          if target.id.source() == "openseek.live" ||
-            target.id.source() == "codex.live" {
+          if id.source() == "openseek.live" || id.source() == "codex.live" {
             (
               @cmd.none,
               {
                 ..model,
-                conversation_rename: Some({
-                  id: target.id,
-                  draft: target.label,
-                  saving: false,
-                }),
+                conversation_rename: Some({ id, draft: label, saving: false, }),
               },
             )
           } else {
@@ -4152,23 +4170,17 @@ fn update_msg(
           }
         ArchiveConversation =>
           (
-            SidebarDispatcher::{ emit: dispatch, }.conversation_archive(
-              target.id,
-            ),
+            SidebarDispatcher::{ emit: dispatch, }.conversation_archive(id),
             model,
           )
         RestoreConversation =>
           (
-            SidebarDispatcher::{ emit: dispatch, }.conversation_restore(
-              target.id,
-            ),
+            SidebarDispatcher::{ emit: dispatch, }.conversation_restore(id),
             model,
           )
         DeleteConversation =>
           (
-            SidebarDispatcher::{ emit: dispatch, }.conversation_delete(
-              target.id,
-            ),
+            SidebarDispatcher::{ emit: dispatch, }.conversation_delete(id),
             model,
           )
       }

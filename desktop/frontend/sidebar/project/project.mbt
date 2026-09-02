@@ -62,9 +62,11 @@ pub fn Input::id(self : Input) -> Id {
 
 ///|
 pub(all) struct Actions {
+  native_menu : Bool
   new_conversation : (Id) -> @cmd.Cmd
   open_settings : (Id) -> @cmd.Cmd
   detach : (Id) -> @cmd.Cmd
+  show_menu : (Id, Int, Int) -> @cmd.Cmd
   conversation : @conversation.Actions
 }
 
@@ -280,7 +282,7 @@ pub fn component(
     if input.activation is Some(_) {
       class += " active"
     }
-    if state.menu_open {
+    if state.menu_open && !actions.native_menu {
       class += " menu-open"
     }
     let row_children : Array[@html.Html] = [
@@ -308,7 +310,7 @@ pub fn component(
     if input.managed {
       row_children.push(
         @html.button(
-          class=if state.menu_open {
+          class=if state.menu_open && !actions.native_menu {
             "row-archive workspace-menu-button open"
           } else {
             "row-archive workspace-menu-button"
@@ -319,7 +321,20 @@ pub fn component(
             .data_set("sidebar-project-menu", input.id.subscription_key())
             .on_click(event => {
               event.stop_propagation()
-              emit(ToggleMenu)
+              if actions.native_menu {
+                guard event.target().to_element() is Some(target) &&
+                  target.closest(".workspace-menu-button") is Some(button) else {
+                  return @cmd.none
+                }
+                let rect = button.get_bounding_client_rect()
+                (actions.show_menu)(
+                  input.id,
+                  rect.get_right().to_int(),
+                  rect.get_bottom().to_int(),
+                )
+              } else {
+                emit(ToggleMenu)
+              }
             }),
           @icons.icon(@icons.icon_more),
         ),
@@ -339,7 +354,7 @@ pub fn component(
         ),
       )
     }
-    if input.managed && state.menu_open {
+    if input.managed && state.menu_open && !actions.native_menu {
       row_children.push(
         @html.div(class="workspace-menu", [
           @html.button(

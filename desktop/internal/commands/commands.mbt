@@ -686,6 +686,13 @@ pub let app_conversation_menu : Command[
 ] = Command("app.conversation_menu")
 
 ///|
+/// Show the native workspace-row menu at view-relative CSS coordinates.
+pub let app_workspace_menu : Command[
+  @protocol.WorkspaceMenuPayload,
+  @protocol.EmptyReply,
+] = Command("app.workspace_menu")
+
+///|
 /// Match this native desktop window's caption controls to the effective app
 /// palette. Window-only: a relay browser has no local application window.
 pub let app_set_titlebar_theme : Command[
