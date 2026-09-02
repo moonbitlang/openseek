@@ -9,7 +9,7 @@
 ///
 /// Needs `openseek` on PATH, a provider key in the environment, and a
 /// CLEAN git tree (workers fork HEAD).
-async fn main raise {
+async fn main {
   let wf = @workflow.Workflow(
     runner=@agent_workflow.openseek_runner(
       exe="openseek",
@@ -38,7 +38,6 @@ async fn main raise {
   }
   println("── scout found:\n\{clip(brief, 500)}\n")
 
-
   // ---- Phase 2: a confined worker applies it ----
   // The worker's task EMBEDS the scout's finding: edit the scout's
   // prompt later and replay re-runs both; edit nothing and both replay.
@@ -48,7 +47,9 @@ async fn main raise {
       wf,
       name="fixit",
       task="Apply EXACTLY this one documentation correction and nothing else: \{clip(brief, 1500)}",
-      allowed_paths=["workflow/", "agent_workflow/", "agent_subrun/", "agent_subtask/"],
+      allowed_paths=[
+        "workflow/", "agent_workflow/", "agent_subrun/", "agent_subtask/",
+      ],
       max_steps=40,
     ) {
     Ok(outcome) => {
@@ -64,8 +65,7 @@ async fn main raise {
       // Keep the demo rerunnable: drop the slice (the branch and its
       // registry entry). To LAND the fix instead:
       //   @agent_workflow.integrate_slice(workspace_root=".", name="fixit")
-      match
-        @agent_workflow.discard_slice(workspace_root=".", name="fixit") {
+      match @agent_workflow.discard_slice(workspace_root=".", name="fixit") {
         Ok(_) => println("   slice discarded — rerun-safe demo")
         Err(reason) => println("   discard: \{reason}")
       }
