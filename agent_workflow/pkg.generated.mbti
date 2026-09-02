@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/agent_workflow"
+
+import {
+  "bobzhang/openseek/agent_subtask",
+  "bobzhang/workflow",
+  "bobzhang/workflow/spawn",
+}
+
+// Values
+pub async fn discard_slice(workspace_root~ : String, name~ : String) -> Result[Unit, String]
+
+pub async fn integrate_slice(workspace_root~ : String, name~ : String) -> Result[@agent_subtask.IntegrateOutcome, String]
+
+pub fn openseek_runner(exe~ : String, workspace_root~ : String, model? : String, api_url? : String, deadline_ms? : Int, max_workers? : Int, extra_env? : Map[String, String], map_launch? : (@spawn.LaunchSpec, @workflow.AgentCall) -> @spawn.LaunchSpec) -> @workflow.Runner raise
+
+pub async fn slices(workspace_root~ : String) -> Result[Array[@agent_subtask.SubtaskEntry], String]
+
+pub fn subrun_runner(exe~ : String, model? : String, api_url? : String, workspace_root? : String, deadline_ms? : Int, extra_env? : Map[String, String], map_launch? : (@spawn.LaunchSpec, @workflow.AgentCall) -> @spawn.LaunchSpec) -> @workflow.Runner
+
+pub async fn try_worker(@workflow.Workflow, name~ : String, task~ : String, allowed_paths~ : Array[String], context? : String, max_steps? : Int) -> Result[Json, @workflow.WorkflowError]
+
+pub async fn worker(@workflow.Workflow, name~ : String, task~ : String, allowed_paths~ : Array[String], context? : String, max_steps? : Int) -> Json
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
