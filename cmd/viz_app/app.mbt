@@ -701,6 +701,27 @@ extern "js" fn install_position_tracker() -> Unit =
   #|    history.replaceState(null, '', '#' + params.toString());
   #|    el.scrollIntoView({ block: 'start' });
   #|  });
+  #|  // Prompt-rail ticks are `<a>` nodes, and Rabbita owns those clicks: it
+  #|  // prevents the default jump and dispatches a UrlRequest the app drops
+  #|  // for fragment-only links. The jump is delegated here instead, like the
+  #|  // scrubber's, so it keeps the `#s=…` state hash intact and records the
+  #|  // new position in `seq=` without a history entry.
+  #|  document.addEventListener('click', (event) => {
+  #|    if (!(event.target instanceof Element)) return;
+  #|    const mark = event.target.closest('a.rail-mark');
+  #|    if (!mark) return;
+  #|    event.preventDefault();
+  #|    const href = mark.getAttribute('href') || '';
+  #|    const id = href.startsWith('#') ? href.slice(1) : '';
+  #|    const el = id ? document.getElementById(id) : null;
+  #|    if (!el) return;
+  #|    if (id.startsWith('seq-')) {
+  #|      const params = new URLSearchParams(location.hash.slice(1));
+  #|      params.set('seq', id.slice(4));
+  #|      history.replaceState(null, '', '#' + params.toString());
+  #|    }
+  #|    el.scrollIntoView({ block: 'start' });
+  #|  });
   #|  // Instant scrubber tooltip: shows each segment's data-label ("Step
   #|  // N/M[ · has failures]") the moment the pointer touches it — a native
   #|  // title tooltip would lag behind the OS hover delay while sweeping.

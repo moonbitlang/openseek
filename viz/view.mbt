@@ -76,8 +76,12 @@ fn render_raw(
   let plans = raw_plan_baselines(session, failed)
   let step_labels = agent_step_labels(session)
   let turns = group_turns(session.events())
-  let blocks : Array[@html.Html] = [
-    for index, turn in turns => {
+  if turns.is_empty() {
+    return empty_state("This session has no events yet.")
+  }
+  let blocks : Array[@html.Html] = [prompt_rail(session, subrun)]
+  for index, turn in turns {
+    blocks.push(
       turn_block(
         index + 1,
         turn,
@@ -88,11 +92,8 @@ fn render_raw(
         plans,
         step_labels,
         subrun,
-      )
-    }
-  ]
-  if blocks.is_empty() {
-    return empty_state("This session has no events yet.")
+      ),
+    )
   }
   @html.div(class="log raw-log") <| blocks
 }
@@ -390,7 +391,7 @@ fn user_input(content : String, delegated~ : Bool) -> UserInput {
 
 ///|
 /// Card class and caption for a user-role message. Only `Typed` gets the
-/// `typed` bubble the stylesheet fills and pushes right.
+/// `typed` raised card the stylesheet elevates and sets in bold type.
 fn UserInput::card_style(self : UserInput) -> (String, String) {
   match self {
     Typed => ("user typed", "You")
@@ -1509,6 +1510,185 @@ fn steps_with_errors(
   flagged
 }
 
+// ---- prompt rail -----------------------------------------------------------
+
+///|
+/// One entry in the prompt navigator: a prompt the person actually typed,
+/// with what a reader needs to decide whether to jump — when it was sent,
+/// whether the work it started hit tool errors, and how the model's reply
+/// opened.
+priv struct PromptMark {
+  seq : Int
+  time : String
+  text : String
+  mut errors : Int
+  mut reply : String
+}
+
+///|
+/// The typed prompts of a session, in log order. Each mark's error count and
+/// reply preview cover the span from its prompt up to the next typed prompt,
+/// so a mid-turn steer owns the errors that followed it, not the whole
+/// turn's. Replayed assistant events are skipped: the reply shown is the one
+/// this prompt actually drew.
+fn prompt_marks(
+  session : @agent_session.Session,
+  delegated~ : Bool,
+) -> Array[PromptMark] {
+  let marks : Array[PromptMark] = []
+  for event in session.events() {
+    match event.item() {
+      User(message) =>
+        if user_input(message.content(), delegated~) is Typed {
+          marks.push({
+            seq: event.sequence(),
+            time: wall_clock_label(event.unix_ms()),
+            text: message.content(),
+            errors: 0,
+            reply: "",
+          })
+        }
+      Assistant(message) =>
+        if !message.is_replay() &&
+          !message.content().is_blank() &&
+          marks.last() is Some(mark) &&
+          mark.reply.is_empty() {
+          mark.reply = message.content()
+        }
+      Tool(result) =>
+        if result.is_error() && marks.last() is Some(mark) {
+          mark.errors += 1
+        }
+      _ => ()
+    }
+  }
+  marks
+}
+
+///|
+/// A Codex-style prompt navigator: a slim column of tick marks riding the
+/// log's left gutter, one per typed prompt. Hovering a tick raises the same
+/// card the prompt itself wears — bold text, wall-clock stamp, an error
+/// flag, the reply's opening — and clicking jumps to the prompt's card via
+/// its `seq-` anchor, which both views share. Renders nothing when the
+/// session has no typed prompts (a sub-run child's task is its parent's).
+fn prompt_rail(
+  session : @agent_session.Session,
+  subrun : SubrunView,
+) -> @html.Html {
+  let marks = prompt_marks(session, delegated=subrun.delegated)
+  guard !marks.is_empty() else { return @html.nothing }
+  let items : Array[@html.Html] = [
+    for mark in marks => {
+      let preview : Array[@html.Html] = [
+        @html.div(class="rail-preview-text") <| truncate(
+          one_line(mark.text), 220,
+        ),
+      ]
+      if !mark.time.is_empty() {
+        preview.push(@html.div(class="rail-preview-time") <| mark.time)
+      }
+      if mark.errors > 0 {
+        preview.push(
+          @html.div(class="rail-preview-errors") <| "had error\{plural(mark.errors)}",
+        )
+      }
+      if !mark.reply.is_blank() {
+        preview.push(
+          @html.blockquote(class="rail-preview-reply") <| truncate(
+            one_line(mark.reply), 180,
+          ),
+        )
+      }
+      @html.a(class="rail-mark", href="#\{seq_anchor(mark.seq)}", [
+        @html.span(class="rail-tick") <| "",
+        @html.div(class="rail-preview") <| preview,
+      ])
+    }
+  ]
+  @html.nav(
+    class="prompt-rail",
+    attrs=@html.Attrs::build().aria_label("User prompts"),
+  ) <| [@html.div(class="rail-marks") <| items]
+}
+
+///|
+/// A unix-ms stamp as `YYYY-MM-DD HH:MM UTC` (the app header's spelling), or
+/// `""` for the 0 sentinel of an event appended without a clock. Pure civil-
+/// from-days arithmetic so the label is identical on every target and in
+/// every test environment.
+fn wall_clock_label(unix_ms : Int64) -> String {
+  guard unix_ms > 0 else { return "" }
+  let seconds = unix_ms / 1000
+  let days = (seconds / 86400).to_int()
+  let day_seconds = (seconds % 86400).to_int()
+  let z = days + 719468
+  let era = z / 146097
+  let doe = z % 146097
+  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+  let mp = (5 * doy + 2) / 153
+  let day = doy - (153 * mp + 2) / 5 + 1
+  let month = if mp < 10 { mp + 3 } else { mp - 9 }
+  let year = yoe + era * 400 + (if month <= 2 { 1 } else { 0 })
+  let hour = day_seconds / 3600
+  let minute = day_seconds % 3600 / 60
+  "\{year}-\{pad2(month)}-\{pad2(day)} \{pad2(hour)}:\{pad2(minute)} UTC"
+}
+
+///|
+fn pad2(n : Int) -> String {
+  if n < 10 {
+    "0\{n}"
+  } else {
+    "\{n}"
+  }
+}
+
+///|
+test "wall_clock_label converts unix ms to a civil UTC stamp" {
+  // 2026-09-02 02:41:05 UTC
+  inspect(wall_clock_label(1788316865000), content="2026-09-02 02:41 UTC")
+  // The unix epoch itself, exercising the year/month arithmetic at a boundary.
+  inspect(wall_clock_label(31536000000), content="1971-01-01 00:00 UTC")
+  // Events appended without a clock keep the 0 sentinel and get no stamp.
+  inspect(wall_clock_label(0), content="")
+}
+
+///|
+/// Marks segment the log by typed prompts: a steer's mark owns the errors
+/// and the reply that followed it, and engine-authored user messages (the
+/// auto-continue prompt) contribute no mark at all.
+test "prompt_marks segments errors and replies by typed prompt" {
+  let s = @agent_session.Session(SessionId("rail"), system_prompt="")
+    .append(User(UserMessage("ship the feature")))
+    .append(Assistant(AssistantMessage("Starting on it.")))
+    .append(
+      Tool(
+        ToolResult(
+          tool_call_id="c1",
+          tool_name="shell",
+          content="boom",
+          is_error=true,
+        ),
+      ),
+    )
+    .append(User(UserMessage("also fix the docs")))
+    .append(Assistant(AssistantMessage("Docs updated.")))
+    .append(Terminal(Finished("done")))
+    .append(User(UserMessage(@agent_session.GoalContinuePrompt)))
+    .append(Terminal(Finished("done again")))
+  let marks = prompt_marks(s, delegated=false)
+  inspect(marks.length(), content="2")
+  inspect(marks[0].text, content="ship the feature")
+  inspect(marks[0].errors, content="1")
+  inspect(marks[0].reply, content="Starting on it.")
+  inspect(marks[1].errors, content="0")
+  inspect(marks[1].reply, content="Docs updated.")
+  // A sub-run child's user messages are its parent's task: no marks at all.
+  inspect(prompt_marks(s, delegated=true).length(), content="0")
+}
+
 // ---- model projection view -------------------------------------------------
 
 ///|
@@ -1563,7 +1743,9 @@ fn render_model(
   if cards.is_empty() {
     return empty_state("The model projection is empty.")
   }
-  @html.div(class="log model-log") <| cards
+  let blocks : Array[@html.Html] = [prompt_rail(session, subrun)]
+  blocks.append(cards)
+  @html.div(class="log model-log") <| blocks
 }
 
 ///|

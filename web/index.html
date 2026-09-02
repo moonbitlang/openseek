@@ -20,8 +20,9 @@
       --accent: #2563eb;
       --on-accent: #ffffff;
       --user: #2f5bd6;
-      --user-bubble: #e7edfd;
-      --user-bubble-border: #b6c7f2;
+      --user-card: #f1f3f7;
+      --user-card-border: #dfe3ea;
+      --user-card-shadow: 0 1px 3px rgba(28, 32, 39, .07), 0 10px 24px rgba(28, 32, 39, .1);
       --assistant: #1a8f63;
       --tool: #8a6d10;
       --error: #c2334a;
@@ -55,8 +56,9 @@
       --accent: #6ea8fe;
       --on-accent: #0b0d12;
       --user: #6f93ff;
-      --user-bubble: #1a2340;
-      --user-bubble-border: #33436f;
+      --user-card: #21252f;
+      --user-card-border: #353b49;
+      --user-card-shadow: 0 1px 3px rgba(0, 0, 0, .3), 0 12px 28px rgba(0, 0, 0, .35);
       --assistant: #36c08a;
       --tool: #c9a227;
       --error: #e0556b;
@@ -91,8 +93,9 @@
         --accent: #6ea8fe;
         --on-accent: #0b0d12;
         --user: #6f93ff;
-        --user-bubble: #1a2340;
-        --user-bubble-border: #33436f;
+        --user-card: #21252f;
+        --user-card-border: #353b49;
+        --user-card-shadow: 0 1px 3px rgba(0, 0, 0, .3), 0 12px 28px rgba(0, 0, 0, .35);
         --assistant: #36c08a;
         --tool: #c9a227;
         --error: #e0556b;
@@ -442,20 +445,70 @@
     .card.user { border-left-color: var(--user); }
     /* The user's own words are the one thing in a log nobody generated, and a
        left rail three pixels wide did not say so. A typed prompt — or a steer
-       dropped mid-turn — gets the desktop transcript's bubble: filled, its own
-       border, pushed to the right edge, so the human side of the conversation
-       is findable at a glance in a wall of tool cards. The engine's
-       auto-continue prompt and a sub-run child's task from its parent are
-       user-role messages too, so they keep the plain card on the agent's side
-       of the column, muted, and say who wrote them. */
+       dropped mid-turn — gets a Codex-style card: a raised surface with a
+       shadow, the prompt set in bold headline type, and the caption tucked
+       underneath it, so the human side of the conversation is findable at a
+       glance in a wall of tool cards. The engine's auto-continue prompt and
+       a sub-run child's task from its parent are user-role messages too, so
+       they keep the plain flat card, muted, and say who wrote them. */
     .card.user.typed {
-      margin-left: auto;
-      max-width: 88%;
-      background: var(--user-bubble);
-      border-color: var(--user-bubble-border);
-      border-left-color: var(--user);
+      display: flex; flex-direction: column;
+      max-width: 92%;
+      background: var(--user-card);
+      border-color: var(--user-card-border);
+      border-left-width: 1px;
+      border-radius: 14px;
+      padding: 14px 18px;
+      box-shadow: var(--user-card-shadow);
     }
-    .card.user.typed > .card-label { color: var(--user); }
+    .card.user.typed > .card-label { order: 1; margin: 8px 0 0; }
+    .card.user.typed .content {
+      font-family: inherit; font-size: 15px; font-weight: 600; line-height: 1.5;
+    }
+    /* Codex-style prompt navigator: a sticky column of tick marks in the
+       log's left gutter, one per typed prompt. Hovering a tick raises the
+       same card the prompt itself wears; clicking jumps to the prompt's
+       seq- anchor. The nav is height 0 so it never displaces the cards. */
+    .log { position: relative; }
+    .prompt-rail { position: sticky; top: 130px; height: 0; z-index: 45; }
+    .rail-marks {
+      position: absolute; left: -24px; top: 0;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .rail-mark {
+      position: relative; display: block; width: 22px; padding: 2px 0;
+      text-decoration: none;
+    }
+    .rail-tick {
+      display: block; width: 15px; height: 3px; border-radius: 2px;
+      background: var(--user); opacity: .5;
+    }
+    .rail-mark:hover .rail-tick, .rail-mark:focus-visible .rail-tick { opacity: 1; }
+    .rail-preview {
+      display: none; position: absolute; left: 22px; top: -10px;
+      width: min(520px, 60vw);
+      background: var(--user-card);
+      border: 1px solid var(--user-card-border);
+      border-radius: 14px;
+      box-shadow: var(--user-card-shadow);
+      padding: 14px 18px;
+    }
+    .rail-mark:hover .rail-preview, .rail-mark:focus-visible .rail-preview {
+      display: block;
+    }
+    .rail-preview-text { font-weight: 600; font-size: 14px; color: var(--text); }
+    .rail-preview-time {
+      margin-top: 6px; font-size: 11.5px; color: var(--muted);
+      font-family: ui-monospace, monospace;
+    }
+    .rail-preview-errors {
+      margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--error);
+    }
+    .rail-preview-reply {
+      margin: 8px 0 0; padding: 0 0 0 10px;
+      border-left: 2px solid var(--border);
+      color: var(--muted); font-size: 12.5px; line-height: 1.45;
+    }
     .card.user.auto-continue, .card.user.delegated {
       border-left-color: var(--muted);
     }

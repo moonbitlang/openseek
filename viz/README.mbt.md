@@ -19,17 +19,18 @@ System follows the OS via `prefers-color-scheme`).
 
 ## Who said it
 
-Both views give a prompt a person actually typed the desktop transcript's
-treatment — a filled bubble pushed to the right edge, captioned **You** — so
-the human side of a long conversation is findable at a glance. A turn header
-also counts the mid-turn steers it hides while collapsed (`✋ 2 steers`).
+Both views give a prompt a person actually typed a Codex-style treatment — a
+raised card with a shadow, the prompt in bold headline type, captioned **You**
+beneath it — so the human side of a long conversation is findable at a glance.
+A turn header also counts the mid-turn steers it hides while collapsed
+(`✋ 2 steers`).
 
 Not every user-role message is the user's, and the viewer says so rather than
-lending them the bubble:
+lending them the raised card:
 
 | Message | Caption |
 |---|---|
-| A prompt or steer someone typed | **You** (bubble) |
+| A prompt or steer someone typed | **You** (raised card) |
 | `@agent_session.GoalContinuePrompt`, which serve submits to relaunch a turn on a standing goal | **Auto-continue** |
 | The opening task of a sub-run child session (`<parent>-sr-N`), written by the agent that spawned it | **Task from parent** |
 | A runtime notice or compaction summary, which `chat_messages` replays as a user-role message | **Runtime notice** / **Summary**, as in the raw log |
@@ -37,6 +38,13 @@ lending them the bubble:
 The auto-continue text is matched against the constant the engine submits, so
 rewording that prompt stops the match instead of quietly captioning engine
 text as the user's.
+
+A Codex-style prompt navigator rides the log's left gutter in both views: one
+tick mark per typed prompt, in a column that stays put while the log scrolls.
+Hovering a tick raises the same card the prompt wears — its text, wall-clock
+stamp, a `had errors` flag when the span it started hit failed tools, and the
+opening of the reply it drew — and clicking jumps to the prompt's card
+(recording the position in the hash's `seq=`, like the step scrubber).
 
 ## Pieces
 

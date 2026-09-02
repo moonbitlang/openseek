@@ -8,7 +8,9 @@ test('session filters and argument modes change what the reader can see', async 
   await viewer.openSession();
   await page.getByRole('button', { name: 'Raw log' }).click();
 
-  const userMessage = page.locator('.session-view')
+  // Scoped to the card: the prompt rail's hover preview repeats the prompt
+  // text, and this test is about the card the filters show and hide.
+  const userMessage = page.locator('.session-view .card')
     .getByText('Inspect the session viewer', { exact: true });
   const shellCall = page.locator('details.tool-call').filter({ hasText: 'moon test' });
   const shellFailure = page.locator('details.card').filter({ hasText: 'fixture failure' });
@@ -75,7 +77,8 @@ test('a dropped session file replaces the served selection without another fetch
   await page.locator('.app').dispatchEvent('drop', { dataTransfer });
 
   await expect(page.getByText(/dropped file: dropped-session\.jsonl/)).toBeVisible();
-  await expect(page.getByText('Running the browser fixture.', { exact: true })).toBeVisible();
+  await expect(page.locator('.card').getByText('Running the browser fixture.', { exact: true }))
+    .toBeVisible();
   expect(viewer.apiRequests).toHaveLength(requestsBeforeDrop);
   expect(viewer.pageErrors).toEqual([]);
   await dataTransfer.dispose();
@@ -284,7 +287,8 @@ test('standalone export reads embedded data without session requests', async ({ 
   await viewer.install({ standalone: true });
   await viewer.goto();
 
-  await expect(page.getByText('Running the browser fixture.', { exact: true })).toBeVisible();
+  await expect(page.locator('.card').getByText('Running the browser fixture.', { exact: true }))
+    .toBeVisible();
   expect(viewer.apiRequests).toEqual([]);
   expect(viewer.pageErrors).toEqual([]);
 });
@@ -314,7 +318,7 @@ test('theme controls change the rendered palette and follow the system theme', a
   expect(viewer.pageErrors).toEqual([]);
 });
 
-test('the user bubble marks only the prompts a person typed', async ({ page }) => {
+test('the raised user card marks only the prompts a person typed', async ({ page }) => {
   const continuePrompt = 'Continue working toward the standing goal. When it is fully met, record\n'
     + 'that by calling the goal tool with status "met".';
   const viewer = new VizBrowserHarness(page);
@@ -338,32 +342,101 @@ test('the user bubble marks only the prompts a person typed', async ({ page }) =
   await page.getByRole('button', { name: 'Raw log' }).click();
 
   // The opening prompt and the mid-turn steer are the user's; the engine's
-  // relaunch prompt is not, and must not wear the same bubble.
+  // relaunch prompt is not, and must not wear the same raised card.
   await expect(page.locator('.card.user.typed')).toHaveCount(2);
   await expect(page.locator('.card.user.typed').first()).toContainText('You');
   await expect(page.locator('.card.user.auto-continue')).toHaveCount(1);
   await expect(page.locator('.card.user.auto-continue')).toContainText('Auto-continue');
 
-  // The bubble is a fill and an offset, not only a caption: that is what a
-  // reader skimming a long log actually sees. Both cards are measured in one
-  // evaluate so a re-render between two measurements cannot split the pair.
+  // The raised card is elevation, fill, and bold type, not only a caption:
+  // that is what a reader skimming a long log actually sees. Both cards are
+  // measured in one evaluate so a re-render between two measurements cannot
+  // split the pair.
   const layout = await page.evaluate(() => {
-    const box = selector => document.querySelector(selector).getBoundingClientRect();
-    const fill = selector =>
-      getComputedStyle(document.querySelector(selector)).backgroundColor;
+    const style = selector => getComputedStyle(document.querySelector(selector));
     return {
-      bubbleLeft: box('.card.user.typed').left,
-      plainLeft: box('.card.user.auto-continue').left,
-      bubbleFill: fill('.card.user.typed'),
-      plainFill: fill('.card.user.auto-continue'),
+      typedFill: style('.card.user.typed').backgroundColor,
+      plainFill: style('.card.user.auto-continue').backgroundColor,
+      typedShadow: style('.card.user.typed').boxShadow,
+      plainShadow: style('.card.user.auto-continue').boxShadow,
+      typedWeight: style('.card.user.typed .content').fontWeight,
+      plainWeight: style('.card.user.auto-continue .content').fontWeight,
     };
   });
-  expect(layout.bubbleLeft).toBeGreaterThan(layout.plainLeft);
-  expect(layout.bubbleFill).not.toBe(layout.plainFill);
+  expect(layout.typedFill).not.toBe(layout.plainFill);
+  expect(layout.typedShadow).not.toBe('none');
+  expect(layout.plainShadow).toBe('none');
+  expect(Number(layout.typedWeight)).toBeGreaterThan(Number(layout.plainWeight));
 
   // A collapsed turn still reports the steer it hides.
   await expect(page.locator('.turn-steer-badge')).toHaveCount(1);
   await expect(page.locator('.turn-steer-badge')).toContainText('1 steer');
+  expect(viewer.pageErrors).toEqual([]);
+});
+
+test('the prompt rail previews typed prompts and jumps to them', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  viewer.events = viewer.eventLog([
+    {
+      sequence: 1,
+      ts: 1788316865000,
+      item: { kind: 'user', payload: { content: 'Ship the viewer change' } },
+    },
+    {
+      sequence: 2,
+      item: { kind: 'assistant', payload: { content: 'On it.', tool_calls: [] } },
+    },
+    ...Array.from({ length: 30 }, (_, index) => ({
+      sequence: index + 3,
+      item: {
+        kind: 'runtime_notice',
+        payload: { content: `Progress update ${index + 1}` },
+      },
+    })),
+    { sequence: 33, item: { kind: 'user', payload: { content: 'Also update the docs' } } },
+    {
+      sequence: 34,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'late-call',
+          tool_name: 'shell',
+          content: 'boom',
+          is_error: true,
+        },
+      },
+    },
+    { sequence: 35, item: { kind: 'terminal', payload: { kind: 'finished', message: 'Done.' } } },
+  ]);
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+
+  // One tick per typed prompt; the engine wrote nothing here, so two.
+  const marks = page.locator('.rail-mark');
+  await expect(marks).toHaveCount(2);
+
+  // Hovering a tick raises the Codex-style preview: the prompt in bold, its
+  // wall-clock stamp, and the opening of the reply it drew.
+  await marks.first().hover();
+  const firstPreview = marks.first().locator('.rail-preview');
+  await expect(firstPreview).toBeVisible();
+  await expect(firstPreview).toContainText('Ship the viewer change');
+  await expect(firstPreview).toContainText('2026-09-02 02:41 UTC');
+  await expect(firstPreview).toContainText('On it.');
+
+  // The steer's span contains the failed tool call, and its preview says so.
+  await marks.last().hover();
+  const lastPreview = marks.last().locator('.rail-preview');
+  await expect(lastPreview).toBeVisible();
+  await expect(lastPreview).toContainText('had error');
+
+  // Clicking the steer's tick crosses thirty notice cards in one jump.
+  const steer = page.locator('.card.user.typed').filter({ hasText: 'Also update the docs' });
+  await expect(steer).not.toBeInViewport();
+  await marks.last().click();
+  await expect(steer).toBeInViewport();
   expect(viewer.pageErrors).toEqual([]);
 });
 
