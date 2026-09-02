@@ -20,6 +20,8 @@
       --accent: #2563eb;
       --on-accent: #ffffff;
       --user: #2f5bd6;
+      --user-bubble: #e7edfd;
+      --user-bubble-border: #b6c7f2;
       --assistant: #1a8f63;
       --tool: #8a6d10;
       --error: #c2334a;
@@ -53,6 +55,8 @@
       --accent: #6ea8fe;
       --on-accent: #0b0d12;
       --user: #6f93ff;
+      --user-bubble: #1a2340;
+      --user-bubble-border: #33436f;
       --assistant: #36c08a;
       --tool: #c9a227;
       --error: #e0556b;
@@ -87,6 +91,8 @@
         --accent: #6ea8fe;
         --on-accent: #0b0d12;
         --user: #6f93ff;
+        --user-bubble: #1a2340;
+        --user-bubble-border: #33436f;
         --assistant: #36c08a;
         --tool: #c9a227;
         --error: #e0556b;
@@ -354,6 +360,7 @@
     .error-toggle:hover, .error-jump:hover { border-color: var(--error); }
     .error-toggle.active { background: var(--error); color: #fff; border-color: var(--error); }
     .turn-error-badge { color: var(--error); }
+    .turn-steer-badge { color: var(--user); }
     .errors-only-empty { color: var(--muted); margin-top: 24px; }
     /* errors-only: keep failed tool-result cards AND the assistant card holding the
        failing call (so the call and its result stay as two cells), plus the turns
@@ -433,6 +440,28 @@
       margin: 8px 0;
     }
     .card.user { border-left-color: var(--user); }
+    /* The user's own words are the one thing in a log nobody generated, and a
+       left rail three pixels wide did not say so. A typed prompt — or a steer
+       dropped mid-turn — gets the desktop transcript's bubble: filled, its own
+       border, pushed to the right edge, so the human side of the conversation
+       is findable at a glance in a wall of tool cards. The engine's
+       auto-continue prompt and a sub-run child's task from its parent are
+       user-role messages too, so they keep the plain card on the agent's side
+       of the column, muted, and say who wrote them. */
+    .card.user.typed {
+      margin-left: auto;
+      max-width: 88%;
+      background: var(--user-bubble);
+      border-color: var(--user-bubble-border);
+      border-left-color: var(--user);
+    }
+    .card.user.typed > .card-label { color: var(--user); }
+    .card.user.auto-continue, .card.user.delegated {
+      border-left-color: var(--muted);
+    }
+    .card.user.auto-continue > .card-body, .card.user.delegated > .card-body {
+      color: var(--muted);
+    }
     .card.assistant { border-left-color: var(--assistant); }
     .card.tool { border-left-color: var(--tool); }
     .card.tool.error { border-left-color: var(--error); background: var(--notice-error-bg); }

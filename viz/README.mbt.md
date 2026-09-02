@@ -17,6 +17,27 @@ either view remains available from the toggle.
 A Light / Dark / System theme toggle sits in the sidebar (default Light;
 System follows the OS via `prefers-color-scheme`).
 
+## Who said it
+
+Both views give a prompt a person actually typed the desktop transcript's
+treatment — a filled bubble pushed to the right edge, captioned **You** — so
+the human side of a long conversation is findable at a glance. A turn header
+also counts the mid-turn steers it hides while collapsed (`✋ 2 steers`).
+
+Not every user-role message is the user's, and the viewer says so rather than
+lending them the bubble:
+
+| Message | Caption |
+|---|---|
+| A prompt or steer someone typed | **You** (bubble) |
+| `@agent_session.GoalContinuePrompt`, which serve submits to relaunch a turn on a standing goal | **Auto-continue** |
+| The opening task of a sub-run child session (`<parent>-sr-N`), written by the agent that spawned it | **Task from parent** |
+| A runtime notice or compaction summary, which `chat_messages` replays as a user-role message | **Runtime notice** / **Summary**, as in the raw log |
+
+The auto-continue text is matched against the constant the engine submits, so
+rewording that prompt stops the match instead of quietly captioning engine
+text as the user's.
+
 ## Pieces
 
 | Package          | Target | Role                                                                 |

@@ -35,9 +35,11 @@ priv enum GoalAction {
 const GoalAutoContinueMaxTurns : Int = 20
 
 ///|
-const GoalContinuePrompt : String =
-  #|Continue working toward the standing goal. When it is fully met, record
-  #|that by calling the goal tool with status "met".
+/// The prompt that opens an auto-continuation turn. Defined with the goal
+/// vocabulary in `agent_session` because the visualizer has to recognize the
+/// resulting `User` event as engine-injected rather than something the user
+/// said, and a second copy of the text here would let the two drift.
+const GoalContinuePrompt : String = @agent_session.GoalContinuePrompt
 
 ///|
 /// Whether a pending auto intent may be promoted to armed: the persisted

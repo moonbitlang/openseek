@@ -35,6 +35,7 @@ pub fn subrun_child_ids(@agent_session.Session, String) -> Array[String]
 pub struct SubrunView {
   parent : String
   children : Map[String, @agent_session.Session]
+  delegated : Bool
 }
 
 pub(all) enum ViewMode {

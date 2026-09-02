@@ -313,3 +313,77 @@ test('theme controls change the rendered palette and follow the system theme', a
   expect(systemBackground).toBe(darkBackground);
   expect(viewer.pageErrors).toEqual([]);
 });
+
+test('the user bubble marks only the prompts a person typed', async ({ page }) => {
+  const continuePrompt = 'Continue working toward the standing goal. When it is fully met, record\n'
+    + 'that by calling the goal tool with status "met".';
+  const viewer = new VizBrowserHarness(page);
+  viewer.events = viewer.eventLog([
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Ship the viewer change' } } },
+    {
+      sequence: 2,
+      item: { kind: 'assistant', payload: { content: 'On it.', tool_calls: [] } },
+    },
+    { sequence: 3, item: { kind: 'user', payload: { content: 'Also update the docs' } } },
+    { sequence: 4, item: { kind: 'terminal', payload: { kind: 'finished', message: 'Done.' } } },
+    { sequence: 5, item: { kind: 'user', payload: { content: continuePrompt } } },
+    {
+      sequence: 6,
+      item: { kind: 'terminal', payload: { kind: 'finished', message: 'Done again.' } },
+    },
+  ]);
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+
+  // The opening prompt and the mid-turn steer are the user's; the engine's
+  // relaunch prompt is not, and must not wear the same bubble.
+  await expect(page.locator('.card.user.typed')).toHaveCount(2);
+  await expect(page.locator('.card.user.typed').first()).toContainText('You');
+  await expect(page.locator('.card.user.auto-continue')).toHaveCount(1);
+  await expect(page.locator('.card.user.auto-continue')).toContainText('Auto-continue');
+
+  // The bubble is a fill and an offset, not only a caption: that is what a
+  // reader skimming a long log actually sees. Both cards are measured in one
+  // evaluate so a re-render between two measurements cannot split the pair.
+  const layout = await page.evaluate(() => {
+    const box = selector => document.querySelector(selector).getBoundingClientRect();
+    const fill = selector =>
+      getComputedStyle(document.querySelector(selector)).backgroundColor;
+    return {
+      bubbleLeft: box('.card.user.typed').left,
+      plainLeft: box('.card.user.auto-continue').left,
+      bubbleFill: fill('.card.user.typed'),
+      plainFill: fill('.card.user.auto-continue'),
+    };
+  });
+  expect(layout.bubbleLeft).toBeGreaterThan(layout.plainLeft);
+  expect(layout.bubbleFill).not.toBe(layout.plainFill);
+
+  // A collapsed turn still reports the steer it hides.
+  await expect(page.locator('.turn-steer-badge')).toHaveCount(1);
+  await expect(page.locator('.turn-steer-badge')).toContainText('1 steer');
+  expect(viewer.pageErrors).toEqual([]);
+});
+
+test("a subagent transcript's task is not captioned as the user's", async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  viewer.sessionId = 'viz-1-sr-1';
+  viewer.events = viewer.eventLog([
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Question: which version?' } } },
+    {
+      sequence: 2,
+      item: { kind: 'assistant', payload: { content: 'Looking it up.', tool_calls: [] } },
+    },
+  ], { id: viewer.sessionId });
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.getByRole('button', { name: 'Raw log' }).click();
+
+  await expect(page.locator('.card.user.delegated')).toHaveCount(1);
+  await expect(page.locator('.card.user.delegated')).toContainText('Task from parent');
+  await expect(page.locator('.card.user.typed')).toHaveCount(0);
+  expect(viewer.pageErrors).toEqual([]);
+});

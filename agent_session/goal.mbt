@@ -37,6 +37,19 @@ pub const GoalReminderPrefix : String = "[goal reminder]"
 pub const GoalCheckPrefix : String = "[goal check]"
 
 ///|
+/// Exact text of the prompt the serve engine submits to open an
+/// auto-continuation turn on a standing goal.
+///
+/// It is durably appended as a `User` message like any other prompt — the
+/// model has to read it as one — but no human typed it. Readers that tell
+/// the user's own words apart from engine-injected input (the visualizer)
+/// need the exact text, so it lives here with the goal vocabulary where the
+/// producer (`cmd/openseek` serve) and its readers cannot drift.
+pub const GoalContinuePrompt : String =
+  #|Continue working toward the standing goal. When it is fully met, record
+  #|that by calling the goal tool with status "met".
+
+///|
 /// A standing goal derived from the durable event log.
 pub struct StandingGoal {
   priv text : String

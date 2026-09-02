@@ -18,6 +18,9 @@ pub fn render_session(
   let subrun = SubrunView::{
     parent: session.id().value(),
     children: subrun_children,
+    // A child opened on its own (from the sidebar, or a `#s=` link) is only
+    // recognizable by the id shape the sub-run runner mints.
+    delegated: is_subrun_session_id(session.id().value()),
   }
   match mode {
     RawLog => render_raw(session, subrun)
@@ -209,6 +212,14 @@ fn turn_block(
   // Surface failed tools in the turn header so a turn carrying errors is
   // scannable even while its cards are folded or the turn itself is collapsed.
   let summary : Array[@html.Html] = [@html.text(label)]
+  // Same reason for steering: a mid-turn interjection can redirect the whole
+  // turn, and it is the one thing in the turn the user wrote themselves.
+  let steers = if subrun.delegated { 0 } else { count_turn_steers(turn) }
+  if steers > 0 {
+    summary.push(
+      @html.span(class="turn-steer-badge") <| " · ✋ \{steers} steer\{plural(steers)}",
+    )
+  }
   let errors = count_turn_tool_errors(turn)
   if errors > 0 {
     summary.push(
@@ -283,13 +294,156 @@ fn format_span_total_seconds(span_ms : Int64) -> String {
 }
 
 ///|
+/// The turn header's one-line preview: what opened the turn. A turn the
+/// engine relaunched on a standing goal always opens with the same boilerplate
+/// prompt, so it is named for what it is instead of spending the header on 80
+/// characters every such turn repeats.
 fn turn_preview(turn : Array[@agent_session.SessionEvent]) -> String {
   for event in turn {
     if event.item() is User(message) {
-      return truncate(one_line(message.content()), 80)
+      return if message.content() == @agent_session.GoalContinuePrompt {
+        "↻ auto-continue"
+      } else {
+        truncate(one_line(message.content()), 80)
+      }
     }
   }
   "\{turn.length()} events"
+}
+
+///|
+test "an auto-continued turn is named rather than previewed" {
+  let session = @agent_session.Session(SessionId("t"), system_prompt="")
+    .append(User(UserMessage(@agent_session.GoalContinuePrompt)))
+    .append(Terminal(Finished("done")))
+    .append(User(UserMessage("now do the other thing")))
+    .append(Terminal(Finished("done again")))
+  let turns = group_turns(session.events())
+  inspect(turn_preview(turns[0]), content="↻ auto-continue")
+  inspect(turn_preview(turns[1]), content="now do the other thing")
+}
+
+///|
+test "the turn header counts only the steers a person typed" {
+  let session = @agent_session.Session(SessionId("t"), system_prompt="")
+    .append(User(UserMessage("start")))
+    .append(Assistant(AssistantMessage("working")))
+    .append(User(UserMessage("actually, also this")))
+    .append(User(UserMessage(@agent_session.GoalContinuePrompt)))
+    .append(Terminal(Finished("done")))
+  let turns = group_turns(session.events())
+  // The opening prompt is not a steer, and the engine's prompt never is.
+  inspect(count_turn_steers(turns[0]), content="1")
+}
+
+///|
+/// Mid-turn steering: `User` events after the one that opened the turn that a
+/// person actually typed. A collapsed turn hides its cards, so the header
+/// carries a count — without it, an interjection that redirected a whole turn
+/// is invisible until the turn is expanded.
+fn count_turn_steers(turn : Array[@agent_session.SessionEvent]) -> Int {
+  let mut steers = 0
+  let mut seen_first = false
+  for event in turn {
+    guard event.item() is User(message) else { continue }
+    if !seen_first {
+      seen_first = true
+      continue
+    }
+    if user_input(message.content(), delegated=false) is Typed {
+      steers += 1
+    }
+  }
+  steers
+}
+
+///|
+/// Who actually wrote a user-role message.
+///
+/// Everything the engine replays to the model as a user turn lands in the log
+/// as a `User` event, but only some of it is a person's own words: a standing
+/// goal relaunches turns with `GoalContinuePrompt`, and a sub-run child's
+/// opening task is written by the agent that spawned it. Captioning all three
+/// "You" would put words in the reader's mouth — in a goal-driven session most
+/// `User` events are auto-continuations.
+priv enum UserInput {
+  /// A prompt or mid-turn steer a person typed.
+  Typed
+  /// The exact prompt serve submits to open an auto-continuation turn.
+  AutoContinue
+  /// The task a parent agent handed a sub-run child.
+  Delegated
+}
+
+///|
+/// Classify one user-role message. `delegated` is a property of the session
+/// being rendered, not of the text, so it decides first.
+fn user_input(content : String, delegated~ : Bool) -> UserInput {
+  if delegated {
+    Delegated
+  } else if content == @agent_session.GoalContinuePrompt {
+    AutoContinue
+  } else {
+    Typed
+  }
+}
+
+///|
+/// Card class and caption for a user-role message. Only `Typed` gets the
+/// `typed` bubble the stylesheet fills and pushes right.
+fn UserInput::card_style(self : UserInput) -> (String, String) {
+  match self {
+    Typed => ("user typed", "You")
+    AutoContinue => ("user auto-continue", "Auto-continue")
+    Delegated => ("user delegated", "Task from parent")
+  }
+}
+
+///|
+/// Card class and caption for a model-view user-role message, which the
+/// projection feeds from three different durable items. A runtime notice or a
+/// summary keeps the class the raw log gives it, so the same event reads the
+/// same way in both views.
+fn user_role_card_style(
+  content : String,
+  origin~ : MessageOrigin,
+  delegated~ : Bool,
+) -> (String, String) {
+  match origin {
+    FromRuntime => ("runtime", "Runtime notice")
+    FromSummary => ("summary", "Summary")
+    // `Other` cannot reach a user-role card: the projection only synthesizes
+    // assistant and tool messages. Classifying it as input is the honest
+    // fallback if that ever changes — it says no more than the role does.
+    FromUser | Other => user_input(content, delegated~).card_style()
+  }
+}
+
+///|
+/// The engine's auto-continuation prompt is matched against the exact constant
+/// serve submits, so rewording it stops the match instead of silently
+/// captioning engine text as the user's.
+test "user cards name who actually wrote the message" {
+  fn caption(content : String, delegated : Bool) -> String {
+    let (kind, label) = user_input(content, delegated~).card_style()
+    "\{kind} · \{label}"
+  }
+
+  inspect(caption("ship the feature", false), content="user typed · You")
+  inspect(
+    caption(@agent_session.GoalContinuePrompt, false),
+    content="user auto-continue · Auto-continue",
+  )
+  // Text that only resembles the engine's prompt is still the user's own.
+  inspect(
+    caption("Continue working toward the standing goal.", false),
+    content="user typed · You",
+  )
+  // A sub-run child's prompt is its parent agent's task, whatever it says.
+  inspect(
+    caption("survey the parser", true),
+    content="user delegated · Task from parent",
+  )
 }
 
 ///|
@@ -306,8 +460,13 @@ fn event_card(
 ) -> @html.Html {
   let seq = event.sequence()
   match event.item() {
-    User(message) =>
-      card("user", "User", seq, time~, [text_block(message.content())])
+    User(message) => {
+      let (kind, label) = user_input(
+        message.content(),
+        delegated=subrun.delegated,
+      ).card_style()
+      card(kind, label, seq, time~, [text_block(message.content())])
+    }
     Assistant(message) =>
       assistant_card(
         seq,
@@ -1364,6 +1523,9 @@ fn render_model(
   let escalated = model_escalated_result_ids(messages, tags)
   let plans = model_plan_baselines(messages, failed)
   let anchor_seqs = model_message_anchor_seqs(session)
+  // The projection replays runtime notices and summaries as user-role
+  // messages, so a card's caption comes from the durable item behind it.
+  let origins = model_message_origins(session)
   let cards : Array[@html.Html] = [
     for index, message in messages => {
       let time = time_labels.get(index).unwrap_or("")
@@ -1384,6 +1546,7 @@ fn render_model(
         time~,
         step_label~,
         anchor~,
+        origin=origins.get(index).unwrap_or(Other),
       )
     }
   ]
@@ -1447,14 +1610,15 @@ fn remove_pending_tool_id(
 }
 
 ///|
-fn flush_pending_tool_labels(
+fn[T] flush_pending_tool_labels(
   pending : Array[String],
-  labels : Array[String],
+  labels : Array[T],
+  unbacked~ : T,
 ) -> Unit {
   for _ in pending {
     // Synthetic repair messages are not backed by a durable event, so they do
     // not get a timestamp/step label.
-    labels.push("")
+    labels.push(unbacked)
   }
   pending.clear()
 }
@@ -1500,7 +1664,7 @@ fn model_message_time_labels(session : @agent_session.Session) -> Array[String] 
   let label_of = (event : @agent_session.SessionEvent) => {
     event_label(labels, event)
   }
-  model_message_labels(session, label_of~, tool_label_of=label_of)
+  model_message_labels(session, label_of~, tool_label_of=label_of, unbacked="")
 }
 
 ///|
@@ -1509,9 +1673,50 @@ fn model_message_time_labels(session : @agent_session.Session) -> Array[String] 
 /// results may project as model messages, but they are not agent-loop steps.
 fn model_message_step_labels(session : @agent_session.Session) -> Array[String] {
   let steps = agent_step_labels(session)
-  model_message_labels(session, label_of=event => event_label(steps, event), tool_label_of=_ => {
-    ""
-  })
+  model_message_labels(
+    session,
+    label_of=event => event_label(steps, event),
+    tool_label_of=_ => "",
+    unbacked="",
+  )
+}
+
+///|
+/// The durable item a projected model message came from.
+///
+/// The projection replays `User`, `Runtime` and `Summary` events alike as
+/// user-role messages, so the model view cannot read "a person wrote this" off
+/// a message's role — it asks here instead, and a goal marker or a compaction
+/// summary keeps the caption the raw log gives it.
+priv enum MessageOrigin {
+  FromUser
+  FromRuntime
+  FromSummary
+  /// An assistant/tool/terminal event, or a message with no durable event at
+  /// all: the system prompt and the projection's synthesized tool repairs.
+  Other
+}
+
+///|
+/// One origin per projected model message, parallel to
+/// `Session::chat_messages()`.
+fn model_message_origins(
+  session : @agent_session.Session,
+) -> Array[MessageOrigin] {
+  let origin_of = (event : @agent_session.SessionEvent) => {
+    match event.item() {
+      User(_) => FromUser
+      Runtime(_) => FromRuntime
+      Summary(_) => FromSummary
+      Assistant(_) | Tool(_) | Terminal(_) => Other
+    }
+  }
+  model_message_labels(
+    session,
+    label_of=origin_of,
+    tool_label_of=origin_of,
+    unbacked=Other,
+  )
 }
 
 ///|
@@ -1521,7 +1726,12 @@ fn model_message_step_labels(session : @agent_session.Session) -> Array[String] 
 /// to anchor at) get `""`.
 fn model_message_anchor_seqs(session : @agent_session.Session) -> Array[String] {
   let seq_of = (event : @agent_session.SessionEvent) => "\{event.sequence()}"
-  model_message_labels(session, label_of=seq_of, tool_label_of=seq_of)
+  model_message_labels(
+    session,
+    label_of=seq_of,
+    tool_label_of=seq_of,
+    unbacked="",
+  )
 }
 
 ///|
@@ -1532,12 +1742,13 @@ fn model_message_anchor_seqs(session : @agent_session.Session) -> Array[String] 
 /// `""` (see `flush_pending_tool_labels`). This walker must mirror the
 /// projection's message order exactly; one extra or missing label shifts every
 /// later chip.
-fn model_message_labels(
+fn[T] model_message_labels(
   session : @agent_session.Session,
-  label_of~ : (@agent_session.SessionEvent) -> String,
-  tool_label_of~ : (@agent_session.SessionEvent) -> String,
-) -> Array[String] {
-  let out : Array[String] = [""]
+  label_of~ : (@agent_session.SessionEvent) -> T,
+  tool_label_of~ : (@agent_session.SessionEvent) -> T,
+  unbacked~ : T,
+) -> Array[T] {
+  let out : Array[T] = [unbacked]
   let pending_tool_calls : Array[String] = []
   let mut previous_assistant_answer : String? = None
   let events = session.events()
@@ -1548,7 +1759,7 @@ fn model_message_labels(
       if candidate.item() is Summary(summary) &&
         summary.from_sequence() == event.sequence() &&
         !model_event_covered_by_later_summary(candidate, events) {
-        flush_pending_tool_labels(pending_tool_calls, out)
+        flush_pending_tool_labels(pending_tool_calls, out, unbacked~)
         out.push(label_of(candidate))
         previous_assistant_answer = None
       }
@@ -1560,7 +1771,7 @@ fn model_message_labels(
       // Labeled above at the start of its covered range.
       Summary(_) => ()
       Assistant(message) => {
-        flush_pending_tool_labels(pending_tool_calls, out)
+        flush_pending_tool_labels(pending_tool_calls, out, unbacked~)
         out.push(label_of(event))
         previous_assistant_answer = Some(message.content())
         for call in message.tool_calls() {
@@ -1574,7 +1785,7 @@ fn model_message_labels(
         }
       Terminal(terminal) => {
         if !pending_tool_calls.is_empty() {
-          flush_pending_tool_labels(pending_tool_calls, out)
+          flush_pending_tool_labels(pending_tool_calls, out, unbacked~)
           previous_assistant_answer = None
         }
         let repeated_assistant_final = terminal is Finished(answer) &&
@@ -1587,7 +1798,7 @@ fn model_message_labels(
         previous_assistant_answer = None
       }
       item => {
-        flush_pending_tool_labels(pending_tool_calls, out)
+        flush_pending_tool_labels(pending_tool_calls, out, unbacked~)
         previous_assistant_answer = None
         if item_projects_model_message(item) {
           out.push(label_of(event))
@@ -1595,8 +1806,48 @@ fn model_message_labels(
       }
     }
   }
-  flush_pending_tool_labels(pending_tool_calls, out)
+  flush_pending_tool_labels(pending_tool_calls, out, unbacked~)
   out
+}
+
+///|
+/// Everything the projection feeds the model as a user turn arrives with role
+/// `User`, so captioning off the role alone would file a goal marker and a
+/// compaction summary under the user's own words.
+test "model-view user cards keep the caption of the event behind them" {
+  let session = @agent_session.Session(
+      SessionId("origins"),
+      system_prompt="sys",
+    )
+    .append(Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nship it")))
+    .append(User(UserMessage("do the thing")))
+    .append(Assistant(AssistantMessage("on it")))
+    .append(
+      Summary(SessionSummary(content="covered", from_sequence=1, to_sequence=3)),
+    )
+    .append(User(UserMessage(@agent_session.GoalContinuePrompt)))
+    .append(
+      Runtime(RuntimeNotice("\{@agent_session.GoalReminderPrefix}\nship it")),
+    )
+    .append(User(UserMessage("one more thing")))
+    .append(Terminal(Finished("done")))
+  let messages = session.chat_messages()
+  let origins = model_message_origins(session)
+  assert_eq(origins.length(), messages.length())
+  let captions : Array[String] = []
+  for index, message in messages {
+    guard message.role is User else { continue }
+    let (_, label) = user_role_card_style(
+      message.content,
+      origin=origins[index],
+      delegated=false,
+    )
+    captions.push(label)
+  }
+  debug_inspect(
+    captions,
+    content="[\"Summary\", \"Auto-continue\", \"Runtime notice\", \"You\"]",
+  )
 }
 
 ///|
@@ -1924,6 +2175,7 @@ fn message_card(
   time~ : String,
   step_label~ : String,
   anchor~ : String?,
+  origin~ : MessageOrigin,
   subrun~ : SubrunView,
 ) -> @html.Html {
   match message.role {
@@ -1937,10 +2189,15 @@ fn message_card(
           text_block(message.content),
         ],
       ]
-    User =>
+    User => {
+      let (kind, label) = user_role_card_style(
+        message.content,
+        origin~,
+        delegated=subrun.delegated,
+      )
       model_card(
-        "user",
-        "User",
+        kind,
+        label,
         message,
         briefs,
         failed,
@@ -1950,6 +2207,7 @@ fn message_card(
         step_label~,
         anchor~,
       )
+    }
     Assistant =>
       model_card(
         "assistant",
@@ -2379,6 +2637,32 @@ test "truncate caps by character without splitting surrogate pairs" {
 pub struct SubrunView {
   parent : String
   children : Map[String, @agent_session.Session]
+  /// Whether the session being rendered is itself a sub-run child. Its
+  /// `User` events are the task its parent agent handed it, so the view must
+  /// not caption them as the person's own words.
+  delegated : Bool
+}
+
+///|
+/// Whether a session id is one the sub-run runner minted for a child
+/// (`<parent>-sr-N`, the shape `subrun_child_id` builds). Parent ids are
+/// user-chosen, so a hand-named session can wear the shape; it only decides
+/// how a `User` card is captioned, never what is shown.
+fn is_subrun_session_id(id : String) -> Bool {
+  lexmatch id {
+    re"^(.|\n)*" + re"-sr-[0-9]+$" => true
+    _ => false
+  }
+}
+
+///|
+test "sub-run child ids are the ones ending in -sr-<n>" {
+  inspect(is_subrun_session_id("run7-sr-1"), content="true")
+  inspect(is_subrun_session_id("run7-sr-12"), content="true")
+  // A parent id may itself contain dashes and digits without being a child.
+  inspect(is_subrun_session_id("run7"), content="false")
+  inspect(is_subrun_session_id("run-sr-x"), content="false")
+  inspect(is_subrun_session_id("run7-sr-1-more"), content="false")
 }
 
 ///|
@@ -2493,6 +2777,9 @@ fn subrun_transcript(child : @agent_session.Session) -> @html.Html {
   let body = render_raw(child, {
     parent: child.id().value(),
     children: Map([]),
+    // Known for certain here, whatever the child's id looks like: this
+    // transcript is nested inside the parent's own tool result.
+    delegated: true,
   })
   anchor_namespace.val = saved
   @html.details(class="subrun-transcript") <| [

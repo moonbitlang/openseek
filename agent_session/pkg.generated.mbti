@@ -17,6 +17,8 @@ pub const GoalCheckPrefix : String = "[goal check]"
 
 pub const GoalClearedNotice : String = "[goal cleared]"
 
+pub const GoalContinuePrompt : String = "Continue working toward the standing goal. When it is fully met, record\nthat by calling the goal tool with status \"met\"."
+
 pub const GoalPrefix : String = "[goal]"
 
 pub const GoalReminderPrefix : String = "[goal reminder]"
