@@ -13,4 +13,4 @@ import {
   "moonbitlang/async/process",
 } for "test"
 
-supported_targets = "+native"
+supported_targets = "native+wasm"
