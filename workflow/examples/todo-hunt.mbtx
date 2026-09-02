@@ -1,0 +1,94 @@
+import {
+  "moonbitlang/async@0.21.1",
+  "bobzhang/workflow@0.1.1",
+  "bobzhang/workflow@0.1.1/spawn",
+}
+
+///|
+/// Loop-until-dry: rounds of finder scouts sweep the workflow packages
+/// for explicitly deferred work (TODOs, known limits, "future work"),
+/// each round seeded with everything already found — the loop ends after
+/// two consecutive dry rounds, a termination condition no static DAG can
+/// express. The journal makes the whole hunt resumable mid-loop: a
+/// killed round re-attempts, finished rounds replay.
+///
+///   moon run workflow/examples/todo-hunt.mbtx     (from the repo root)
+///
+/// Needs `openseek` on PATH and a provider key in the environment.
+async fn main {
+  hunt() catch {
+    error => println("workflow failed: \{error}")
+  }
+}
+
+///|
+async fn hunt() -> Unit {
+  let wf = @workflow.Workflow(
+    runner=@spawn.contract_runner(launch=_ => {
+      command: "openseek",
+      args: ["subrun", "explore"],
+      cwd: None,
+      extra_env: None,
+      deadline_ms: None,
+    }),
+    journal=@workflow.Journal::load("todo-hunt.jsonl"),
+  )
+  wf.phase("Hunt")
+  let found : Array[String] = []
+  let mut dry = 0
+  let mut rounds = 0
+  while dry < 2 && rounds < 6 {
+    rounds += 1
+    // The seed list rides the prompt, so each round's replay identity is
+    // a function of everything found before it — resume replays exactly
+    // the rounds whose world-state matches.
+    let seen = if found.length() == 0 {
+      "(nothing yet)"
+    } else {
+      clip(found.join(" ||| "), 1400)
+    }
+    let answer = wf.try_agent(
+      "Hunt the packages workflow/, agent_workflow/, agent_subtask/ for ONE piece of explicitly deferred work (a TODO/FIXME, a documented known limit, or a 'future work'/'post-v1'/'deferred' note) NOT already in this list: \{seen}. Reply STRICTLY one line: 'ITEM: file:line — what is deferred — why it matters' or exactly 'DRY' if you can find nothing new.",
+      kind="explore",
+      max_steps=14,
+      label="hunter round \{rounds}",
+    )
+    match answer {
+      Ok(report) => {
+        let text = match report {
+          { "answer": String(text), .. } => text
+          other => other.stringify()
+        }
+        if text.contains("ITEM:") {
+          found.push(clip(text, 220))
+          dry = 0
+          println("round \{rounds}: \{clip(text, 160)}…")
+        } else {
+          dry += 1
+          println("round \{rounds}: dry (\{dry}/2)")
+        }
+      }
+      Err(error) => {
+        println("round \{rounds}: failed — \{error}")
+        dry += 1
+      }
+    }
+  }
+  println(
+    "\nhunted \{found.length()} deferred-work items in \{rounds} rounds · \{wf.calls_made()} live, \{wf.calls_replayed()} replayed, \{wf.tokens_spent()} fresh tokens",
+  )
+}
+
+///|
+fn clip(text : String, limit : Int) -> String {
+  let out = StringBuilder()
+  let mut count = 0
+  for ch in text {
+    if count >= limit {
+      break
+    }
+    out.write_char(ch)
+    count += 1
+  }
+  out.to_string()
+}
