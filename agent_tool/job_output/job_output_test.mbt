@@ -1,6 +1,23 @@
 ///|
+/// Pinned moonx coordinates for the wasm CLI tools the tests spawn: the pin
+/// keeps a registry release from silently changing test behavior, and the
+/// wasm tools keep these tests runnable on Windows (no /bin/sh needed).
+const CLI_SH : String = "cli/sh@0.1.1"
+
+///|
+const CLI_SEQ : String = "cli/seq@0.1.0"
+
+///|
+const CLI_PRINTF : String = "cli/printf@0.1.0"
+
+///|
+const CLI_SLEEP : String = "cli/sleep@0.1.0"
+
+///|
+const CLI_TRUE : String = "cli/true@0.1.0"
+
+///|
 /// Execute the job_output tool and unwrap its Respond output.
-#cfg(not(platform="windows"))
 async fn run_job_output(
   bg : @bgjobs.BgJobRuntime,
   arguments : Json,
@@ -14,11 +31,11 @@ async fn run_job_output(
 }
 
 ///|
-/// Poll until `id` leaves Running, on the same 200 x 25ms budget every test
-/// used inline (timing-sensitive: keep in lockstep with the old loops).
-#cfg(not(platform="windows"))
+/// Poll until `id` leaves Running. Jobs run through `moonx`, which resolves
+/// and caches the wasm tool on first use, so the budget (400 x 25ms) leaves
+/// headroom for a cold registry cache.
 async fn poll_bg_terminal(bg : @bgjobs.BgJobRuntime, id : String) -> Unit {
-  for _ in 0..<200 {
+  for _ in 0..<400 {
     if bg.snapshot(id) is Some(s) && !(s.status is Running) {
       break
     }
@@ -27,16 +44,32 @@ async fn poll_bg_terminal(bg : @bgjobs.BgJobRuntime, id : String) -> Unit {
 }
 
 ///|
-#cfg(not(platform="windows"))
+/// Poll until the job's captured output contains `needle`, on the same budget
+/// as `poll_bg_terminal`. Replaces fixed sleeps: moonx startup is ~100ms warm
+/// and unbounded cold, so a flat delay would flake.
+async fn poll_bg_output(
+  bg : @bgjobs.BgJobRuntime,
+  id : String,
+  needle : String,
+) -> Unit {
+  for _ in 0..<400 {
+    if bg.read_output(id) is Some(o) && o.contains(needle) {
+      break
+    }
+    @async.sleep(25)
+  }
+}
+
+///|
 async test "job_output returns a running job's output and status" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
     let id = bg.start(
-      program="sh",
-      args=["-c", "printf hi; sleep 30"],
+      program="moonx",
+      args=[CLI_SH, "-c", "printf hi; sleep 30"],
       command="job",
     )
-    @async.sleep(100)
+    poll_bg_output(bg, id, "hi")
     let output = run_job_output(bg, { "job_id": id })
     assert_false(output.is_error)
     assert_true(output.content.contains("hi"))
@@ -46,11 +79,14 @@ async test "job_output returns a running job's output and status" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async test "job_output reports a finished job's exit code" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
-    let id = bg.start(program="sh", args=["-c", "exit 2"], command="job")
+    let id = bg.start(
+      program="moonx",
+      args=[CLI_SH, "-c", "exit 2"],
+      command="job",
+    )
     poll_bg_terminal(bg, id)
     let output = run_job_output(bg, { "job_id": id })
     assert_true(output.is_error)
@@ -59,14 +95,13 @@ async test "job_output reports a finished job's exit code" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async test "job_output windows a large job's output and notes truncation" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-test-")
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir=dir)
     let id = bg.start(
-      program="sh",
-      args=["-c", "seq 1 20000"],
+      program="moonx",
+      args=[CLI_SEQ, "1", "20000"],
       command="seq",
       max_output_chars=100,
     )
@@ -84,14 +119,13 @@ async test "job_output windows a large job's output and notes truncation" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async test "job_output flags dropped output for a memory-only job" {
   @async.with_task_group(group => {
     // Memory-only runtime (no spill dir): output past the budget is dropped.
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
     let id = bg.start(
-      program="sh",
-      args=["-c", "seq 1 2000"],
+      program="moonx",
+      args=[CLI_SEQ, "1", "2000"],
       command="seq",
       max_output_chars=100,
     )
@@ -104,15 +138,14 @@ async test "job_output flags dropped output for a memory-only job" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async test "job_output marks binary background output as a tool error" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
     // A background command with non-UTF-8 output that exits 0 must still be a
     // tool error when read, matching the foreground path.
     let id = bg.start(
-      program="sh",
-      args=["-c", "printf '\\377'"],
+      program="moonx",
+      args=[CLI_PRINTF, "\\377"],
       command="binary",
     )
     poll_bg_terminal(bg, id)
@@ -123,7 +156,6 @@ async test "job_output marks binary background output as a tool error" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async test "job_output errors on an unknown job id" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
@@ -134,13 +166,12 @@ async test "job_output errors on an unknown job id" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async test "wait_ms blocks until the job finishes and returns its output" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
     let id = bg.start(
-      program="sh",
-      args=["-c", "sleep 1; echo WAITED-OK"],
+      program="moonx",
+      args=[CLI_SH, "-c", "sleep 1; echo WAITED-OK"],
       command="waited",
     )
     // No polling loop: a single call awaits the exit and returns the result.
@@ -152,11 +183,14 @@ async test "wait_ms blocks until the job finishes and returns its output" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async test "a wait_ms deadline on a still-running job is not an error" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
-    let id = bg.start(program="sh", args=["-c", "sleep 30"], command="slow")
+    let id = bg.start(
+      program="moonx",
+      args=[CLI_SLEEP, "30"],
+      command="slow",
+    )
     let output = run_job_output(bg, { "job_id": id, "wait_ms": 200 })
     // Deadline expiry just reports the live status; the model can call again.
     assert_false(output.is_error)
@@ -166,11 +200,10 @@ async test "a wait_ms deadline on a still-running job is not an error" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async test "a non-positive wait_ms is a tool error" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
-    let id = bg.start(program="sh", args=["-c", "true"], command="noop")
+    let id = bg.start(program="moonx", args=[CLI_TRUE], command="noop")
     let output = run_job_output(bg, { "job_id": id, "wait_ms": -5 })
     assert_true(output.is_error)
     assert_true(output.content.contains("wait_ms"))
@@ -178,11 +211,10 @@ async test "a non-positive wait_ms is a tool error" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async test "a non-numeric wait_ms is a tool error, not silently ignored" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
-    let id = bg.start(program="sh", args=["-c", "true"], command="noop")
+    let id = bg.start(program="moonx", args=[CLI_TRUE], command="noop")
     let output = run_job_output(bg, { "job_id": id, "wait_ms": "30000" })
     assert_true(output.is_error)
     assert_true(output.content.contains("wait_ms must be a number"))
@@ -190,13 +222,12 @@ async test "a non-numeric wait_ms is a tool error, not silently ignored" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async test "job_output applies display rewrites supplied by the launcher" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::BgJobRuntime(AgentTaskScope(group))
     let id = bg.start(
-      program="sh",
-      args=["-c", "printf '/tmp/mbtx/snippet.mbtx:1:2: error\\n'"],
+      program="moonx",
+      args=[CLI_PRINTF, "/tmp/mbtx/snippet.mbtx:1:2: error\\n"],
       command="compiler",
       output_rewrites=[("/tmp/mbtx/snippet.mbtx", "source")],
     )
@@ -208,13 +239,12 @@ async test "job_output applies display rewrites supplied by the launcher" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async test "a job with policy disabled does not invent a policy refusal" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime::BgJobRuntime(AgentTaskScope(group))
     let id = bg.start(
-      program="sh",
-      args=["-c", "printf 'Sandbox policy blocked file write: example\\n'"],
+      program="moonx",
+      args=[CLI_PRINTF, "Sandbox policy blocked file write: example\\n"],
       command="unconfined",
       moonrun_policy_active=false,
     )
@@ -227,7 +257,6 @@ async test "a job with policy disabled does not invent a policy refusal" {
 }
 
 ///|
-#cfg(not(platform="windows"))
 async test "a terminal job finds a policy refusal before the displayed tail" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-job-policy-")
@@ -236,9 +265,9 @@ async test "a terminal job finds a policy refusal before the displayed tail" {
       spill_dir=dir,
     )
     let id = bg.start(
-      program="sh",
+      program="moonx",
       args=[
-        "-c", "printf 'Sandbox policy blocked file write: example\\n'; seq 1 10000",
+        CLI_SH, "-c", "printf 'Sandbox policy blocked file write: example\\n'; seq 1 10000",
       ],
       command="policy then output",
       moonrun_policy_active=true,
@@ -252,13 +281,4 @@ async test "a terminal job finds a policy refusal before the displayed tail" {
       _ => ()
     }
   })
-}
-
-///|
-/// Mark the platform-gated test imports as used: this binding is `_`-prefixed
-/// (never warned about) and its body is never evaluated.
-let _unused_test_imports : Unit = {
-  ignore(@agent_runtime.default_agent_event_capacity)
-  ignore(@async.sleep)
-  ignore(@fs.exists)
 }
