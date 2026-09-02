@@ -1705,7 +1705,7 @@ test "a start payload never names a worktree" {
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let payload = start_payload(
     "go",
-    High,
+    DsPro,
     ReasoningMax,
     "1000",
     "desktop-wt",

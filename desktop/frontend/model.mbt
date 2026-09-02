@@ -6,8 +6,8 @@
 /// back by `agent.started` — so the chip reports what the engine actually ran
 /// instead of a tier it never used.
 priv enum EngineModel {
-  High
-  Low
+  DsPro
+  DsFlash
   Glm53
   Glm53Flash
   Other(String)
@@ -16,8 +16,8 @@ priv enum EngineModel {
 ///|
 fn EngineModel::wire(self : EngineModel) -> String {
   match self {
-    High => "deepseek-v4-pro"
-    Low => "deepseek-v4-flash"
+    DsPro => "deepseek-v4-pro"
+    DsFlash => "deepseek-v4-flash"
     Glm53 => "glm-5.3"
     Glm53Flash => "glm-5.3-flash"
     Other(name) => name
@@ -30,8 +30,8 @@ fn EngineModel::wire(self : EngineModel) -> String {
 /// and the event decoders treat it like the missing field it is.
 fn EngineModel::parse(value : String) -> EngineModel? {
   match value.trim().to_owned() {
-    "deepseek-v4-pro" => Some(High)
-    "deepseek-v4-flash" => Some(Low)
+    "deepseek-v4-pro" => Some(DsPro)
+    "deepseek-v4-flash" => Some(DsFlash)
     "glm-5.3" => Some(Glm53)
     "glm-5.3-flash" => Some(Glm53Flash)
     "" => None
@@ -40,12 +40,12 @@ fn EngineModel::parse(value : String) -> EngineModel? {
 }
 
 ///|
-/// The product-facing tier name shown on the composer chip. An unknown model
+/// The product-facing model name shown on the composer chip. An unknown model
 /// keeps its wire name, so a custom endpoint never renders as a blank label.
 fn EngineModel::label(self : EngineModel) -> String {
   match self {
-    High => "High"
-    Low => "Low"
+    DsPro => "DS Pro"
+    DsFlash => "DS Flash"
     Glm53 => "GLM 5.3"
     Glm53Flash => "GLM 5.3 Flash"
     Other(name) => name
@@ -61,7 +61,7 @@ fn EngineModel::label(self : EngineModel) -> String {
 /// expose.
 fn EngineModel::supports_reasoning(self : EngineModel) -> Bool {
   match self {
-    High | Low | Glm53 | Glm53Flash => true
+    DsPro | DsFlash | Glm53 | Glm53Flash => true
     Other(_) => false
   }
 }
@@ -168,11 +168,11 @@ fn conversation_model_key(
 test "engine models round-trip their wire names" {
   inspect(
     EngineModel::parse("deepseek-v4-pro").unwrap().label(),
-    content="High",
+    content="DS Pro",
   )
   inspect(
     EngineModel::parse("deepseek-v4-flash").unwrap().label(),
-    content="Low",
+    content="DS Flash",
   )
   inspect(EngineModel::parse("glm-5.3").unwrap().label(), content="GLM 5.3")
   inspect(
@@ -470,7 +470,7 @@ fn ApiProvider::parse(value : String) -> ApiProvider {
 /// the page's last model choice belong to different known model families.
 fn ApiProvider::default_model(self : ApiProvider) -> EngineModel {
   match self {
-    Deepseek | Custom => Low
+    Deepseek | Custom => DsFlash
     Glm => Glm53
   }
 }
@@ -485,7 +485,7 @@ fn EngineModel::matches_provider(
 ) -> Bool {
   match (provider, self) {
     (Custom, _) | (_, Other(_)) => true
-    (Deepseek, High | Low) | (Glm, Glm53 | Glm53Flash) => true
+    (Deepseek, DsPro | DsFlash) | (Glm, Glm53 | Glm53Flash) => true
     _ => false
   }
 }
@@ -2360,7 +2360,7 @@ fn empty_conversation(
   channel : @interop.ChannelId,
   session_id : String,
   project : @common.Uri,
-  model? : EngineModel = High,
+  model? : EngineModel = DsPro,
 ) -> Conversation {
   {
     device: channel,
@@ -2453,7 +2453,7 @@ fn initial_model() -> Model {
     },
     websocket_epoch: 0,
     focused: page_channel.unwrap_or(@interop.ChannelId::Local),
-    default_model: Low,
+    default_model: DsFlash,
     default_agent: OpenSeekAgent,
     conversation_models: [],
     openseek_reasoning: ReasoningHigh,
@@ -2713,7 +2713,7 @@ fn Model::reasoning_for(
 ) -> OpenSeekReasoning {
   match engine_model {
     Glm53 | Glm53Flash => self.glm_reasoning
-    High | Low | Other(_) => self.openseek_reasoning
+    DsPro | DsFlash | Other(_) => self.openseek_reasoning
   }
 }
 

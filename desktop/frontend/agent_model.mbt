@@ -84,7 +84,7 @@ fn ModelChoice::parse(value : String) -> ModelChoice? {
 ///|
 test "model choices round-trip and the agent namespaces stay disjoint" {
   assert_true(
-    ModelChoice::parse("openseek:deepseek-v4-pro") is Some(OpenSeekModel(High)),
+    ModelChoice::parse("openseek:deepseek-v4-pro") is Some(OpenSeekModel(DsPro)),
   )
   assert_true(
     ModelChoice::parse("openseek:glm-5.3") is Some(OpenSeekModel(Glm53)),
@@ -102,7 +102,7 @@ test "model choices round-trip and the agent namespaces stay disjoint" {
   assert_true(ModelChoice::parse("codex:") is None)
   assert_true(ModelChoice::parse("openseek:") is None)
   inspect(
-    ModelChoice::OpenSeekModel(Low).wire(),
+    ModelChoice::OpenSeekModel(DsFlash).wire(),
     content="openseek:deepseek-v4-flash",
   )
   inspect(ModelChoice::CodexModel("gpt-5.4").wire(), content="codex:gpt-5.4")
@@ -133,9 +133,9 @@ fn openseek_model_group(
   selected : EngineModel,
 ) -> @composer.ModelGroup {
   let listed : Array[EngineModel] = match provider {
-    Deepseek => [High, Low]
+    Deepseek => [DsPro, DsFlash]
     Glm => [Glm53, Glm53Flash]
-    Custom => [High, Low, Glm53, Glm53Flash]
+    Custom => [DsPro, DsFlash, Glm53, Glm53Flash]
   }
   let options : Array[@composer.ModelOption] = []
   for model in listed {
@@ -155,21 +155,21 @@ fn openseek_model_group(
 
 ///|
 test "the model group follows the configured provider" {
-  let deepseek = openseek_model_group(Deepseek, High)
-  assert_eq(deepseek.options.map(option => option.label), ["High", "Low"])
+  let deepseek = openseek_model_group(Deepseek, DsPro)
+  assert_eq(deepseek.options.map(option => option.label), ["DS Pro", "DS Flash"])
   let glm = openseek_model_group(Glm, Glm53)
   assert_eq(glm.options.map(option => option.value), [
     "openseek:glm-5.3", "openseek:glm-5.3-flash",
   ])
   // A conversation carried across a provider switch keeps its model visible,
   // same as an unknown wire name always did.
-  let carried = openseek_model_group(Glm, High)
+  let carried = openseek_model_group(Glm, DsPro)
   assert_eq(carried.options.map(option => option.label), [
-    "GLM 5.3", "GLM 5.3 Flash", "High",
+    "GLM 5.3", "GLM 5.3 Flash", "DS Pro",
   ])
   let custom = openseek_model_group(Custom, Other("proxy-model"))
   assert_eq(custom.options.map(option => option.label), [
-    "High", "Low", "GLM 5.3", "GLM 5.3 Flash", "proxy-model",
+    "DS Pro", "DS Flash", "GLM 5.3", "GLM 5.3 Flash", "proxy-model",
   ])
 }
 

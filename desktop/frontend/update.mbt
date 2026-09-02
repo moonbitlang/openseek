@@ -7800,7 +7800,7 @@ test "an approval notification click opens its local conversation" {
 fn encoded_start_workspace(conv : Conversation) -> String? {
   let payload = start_payload(
     "continue",
-    High,
+    DsPro,
     ReasoningMax,
     "1000",
     conv.session_id,
@@ -7915,7 +7915,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
     Started(
       run_id="r-first",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=Some("first-start"),
@@ -7966,7 +7966,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
     Started(
       run_id="r-second",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=Some(second_submission),
@@ -8015,7 +8015,7 @@ fn second_run_started_before_first_steer_receipt() -> Model? {
     Started(
       run_id="r8",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=Some(second_submission),
@@ -8357,7 +8357,7 @@ test "a new run frontier includes commits already buffered by reload" {
     Started(
       run_id="r7",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -9096,7 +9096,7 @@ test "session list assigns a Started-first conversation to its durable workspace
     Started(
       run_id="foreign-run",
       session="desktop-started-first",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
@@ -9152,7 +9152,7 @@ test "Started places a foreign conversation from its host session root" {
     Started(
       run_id="foreign-run",
       session="desktop-workspace-run",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=Some(
         @interop.ChannelId::Local.test_resource("/C:/work/core/.openseek"),
@@ -10472,7 +10472,7 @@ test "started routes by session without restating its placement" {
     Started(
       run_id="r7",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -10549,7 +10549,7 @@ test "started for an unknown session materializes its conversation" {
     Started(
       run_id="r7",
       session="desktop-ghost",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
@@ -10580,7 +10580,7 @@ test "started for an unknown session materializes its conversation" {
     Started(
       run_id="r8",
       session="desktop-rootless",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -10609,7 +10609,7 @@ test "started places a conversation before the registry arrives" {
       Started(
         run_id="r9",
         session~,
-        model=High,
+        model=DsPro,
         max_steps=1000,
         session_root~,
         submission_id=None,
@@ -10673,7 +10673,7 @@ test "a run boundary discards the previous turn's live state whole" {
     Started(
       run_id="r-new",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -10712,7 +10712,7 @@ test "a distinct started id replaces a stale open run as foreign" {
     Started(
       run_id="r-new",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -10754,7 +10754,7 @@ test "a repeated started id is idempotent" {
     Started(
       run_id="r7",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -10785,7 +10785,7 @@ test "a start failure cannot close a run opened by a winning push" {
     Started(
       run_id="r-foreign",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=Some("theirs"),
@@ -10882,7 +10882,7 @@ test "a matching Started establishes the run after an undelivered response" {
     Started(
       run_id="r-recovered",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=Some("prompt-id"),
@@ -10924,7 +10924,7 @@ test "an accepted start response opens the run without Started" {
     Started(
       run_id="r-response",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=Some("prompt-id"),
@@ -10972,7 +10972,7 @@ test "an old-host Started without an id is settled by the exact start response" 
     Started(
       run_id="r-old-host",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -11220,7 +11220,7 @@ test "a Started racing ahead of an older runs response stays open" {
     Started(
       run_id="r-after-snapshot",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=Some("foreign-new"),
@@ -11246,7 +11246,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
       {
         run_id: "old-run",
         session: "old-session",
-        model: High,
+        model: DsPro,
         max_steps: 1000,
         session_root: None,
         submission_id: None,
@@ -11340,7 +11340,7 @@ test "an older positive runs row cannot replace a newer Started" {
     Started(
       run_id="r8",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -11354,7 +11354,7 @@ test "an older positive runs row cannot replace a newer Started" {
         {
           run_id: "r7",
           session: "desktop-test",
-          model: High,
+          model: DsPro,
           max_steps: 1000,
           session_root: None,
           submission_id: None,
@@ -11389,7 +11389,7 @@ test "an older positive runs row cannot resurrect a finished run" {
         {
           run_id: "r7",
           session: "desktop-test",
-          model: High,
+          model: DsPro,
           max_steps: 1000,
           session_root: None,
           submission_id: None,
@@ -11443,7 +11443,7 @@ test "a failed response after durable Finished cannot resurrect its prompt" {
     Started(
       run_id="r-fast",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=Some("fast-start"),
@@ -11930,7 +11930,7 @@ test "a foreign background run schedules one causal read after Started" {
     Started(
       run_id="foreign-next",
       session~,
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -12205,12 +12205,12 @@ test "loaded UI preferences parse their wire names" {
   assert_true(restored.theme is Dark)
   assert_true(restored.app_font is Menlo)
   assert_eq(restored.app_font_size, AppFontSize(15))
-  assert_true(restored.default_model is Low)
+  assert_true(restored.default_model is DsFlash)
   assert_true(restored.default_agent is CodexAgent)
   assert_true(restored.openseek_reasoning is ReasoningHigh)
   assert_true(restored.glm_reasoning is ReasoningMax)
   // The stored conversation outranks the stored default for its own chat.
-  assert_true(restored.active().engine_model is High)
+  assert_true(restored.active().engine_model is DsPro)
   // Unknown stored values fall back to the defaults.
   let (_, unknown) = update(
     dispatch,
@@ -12234,7 +12234,7 @@ test "loaded UI preferences parse their wire names" {
   assert_true(unknown.theme is System)
   assert_true(unknown.app_font is SystemMono)
   assert_eq(unknown.app_font_size, AppFontSize(14))
-  assert_true(unknown.default_model is Low)
+  assert_true(unknown.default_model is DsFlash)
   assert_true(unknown.openseek_reasoning is ReasoningHigh)
   assert_true(unknown.glm_reasoning is ReasoningOff)
   assert_true(unknown.default_agent is OpenSeekAgent)
@@ -12252,42 +12252,49 @@ test "the model selector switches one conversation, not the app" {
       @interop.ChannelId::Local.test_project(),
     ),
   )
-  let (_, low) = update(
+  let (_, flash) = update(
     dispatch,
     ModelPicked("openseek:deepseek-v4-flash"),
     model,
   )
-  assert_true(low.active().engine_model is Low)
+  assert_true(flash.active().engine_model is DsFlash)
   // The handler is pure: applying the same message to the same model produces
   // the same selected/default/stored model state.
-  let (_, low_again) = update(
+  let (_, flash_again) = update(
     dispatch,
     ModelPicked("openseek:deepseek-v4-flash"),
     model,
   )
-  @debug.assert_eq(low.active().engine_model, low_again.active().engine_model)
-  @debug.assert_eq(low.default_model, low_again.default_model)
-  @debug.assert_eq(low.conversation_models, low_again.conversation_models)
+  @debug.assert_eq(
+    flash.active().engine_model,
+    flash_again.active().engine_model,
+  )
+  @debug.assert_eq(flash.default_model, flash_again.default_model)
+  @debug.assert_eq(flash.conversation_models, flash_again.conversation_models)
   // The conversation next door keeps the tier it was already on.
-  guard low.find_conversation(@interop.ChannelId::Local, "other-chat")
+  guard flash.find_conversation(@interop.ChannelId::Local, "other-chat")
     is Some(other) else {
     fail("the second conversation vanished")
   }
-  assert_true(other.engine_model is High)
+  assert_true(other.engine_model is DsPro)
   // The tier just picked is what conversations opened afterwards start from.
-  assert_true(low.default_model is Low)
+  assert_true(flash.default_model is DsFlash)
   assert_true(
-    low
+    flash
     .activate(
       @interop.ChannelId::Local,
       "fresh-chat",
       @interop.ChannelId::Local.test_project(),
     )
     .active().engine_model
-    is Low,
+    is DsFlash,
   )
-  let (_, high) = update(dispatch, ModelPicked("openseek:deepseek-v4-pro"), low)
-  assert_true(high.active().engine_model is High)
+  let (_, pro) = update(
+    dispatch,
+    ModelPicked("openseek:deepseek-v4-pro"),
+    flash,
+  )
+  assert_true(pro.active().engine_model is DsPro)
 }
 
 ///|
@@ -12302,67 +12309,67 @@ test "a start never overrides the tier picked for the next turn" {
     ModelPicked("openseek:deepseek-v4-flash"),
     test_model(),
   )
-  assert_true(queued.active().engine_model is Low)
+  assert_true(queued.active().engine_model is DsFlash)
   let (_, ran) = update_dev(
     dispatch,
     Started(
       run_id="r1",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=None,
     ),
     queued,
   )
-  assert_true(ran.active().engine_model is Low)
+  assert_true(ran.active().engine_model is DsFlash)
 }
 
 ///|
 test "reopening a conversation recovers its own tier, not the last pick" {
   let dispatch = test_dispatch()
-  // Set the chat on screen to Low, then open a different one and put it back
-  // on High. The second pick moves the default new chats inherit — it must
-  // not follow the first conversation home.
-  let (_, low) = update(
+  // Set the chat on screen to DsFlash, then open a different one and put it
+  // back on DsPro. The second pick moves the default new chats inherit — it
+  // must not follow the first conversation home.
+  let (_, flash) = update(
     dispatch,
     ModelPicked("openseek:deepseek-v4-flash"),
     test_model(),
   )
-  let other = low.activate(
+  let other = flash.activate(
     @interop.ChannelId::Local,
     "other-chat",
     @interop.ChannelId::Local.test_project(),
   )
-  assert_true(other.active().engine_model is Low)
-  let (_, high) = update(
+  assert_true(other.active().engine_model is DsFlash)
+  let (_, pro) = update(
     dispatch,
     ModelPicked("openseek:deepseek-v4-pro"),
     other,
   )
-  assert_true(high.default_model is High)
+  assert_true(pro.default_model is DsPro)
   // Reopening drops the conversation and mints it again (nothing was sent,
   // so `activate` does not retain it) — exactly the path that used to hand
   // back the unrelated default.
-  let reopened = high.activate(
+  let reopened = pro.activate(
     @interop.ChannelId::Local,
     "desktop-test",
     @interop.ChannelId::Local.test_project(),
   )
-  assert_true(reopened.active().engine_model is Low)
+  assert_true(reopened.active().engine_model is DsFlash)
 }
 
 ///|
 test "a run pins an inherited tier the user never clicked for" {
   let dispatch = test_dispatch()
-  // This chat never touched the chip — it just inherited High and ran. That
+  // This chat never touched the chip — it just inherited DsPro and ran. That
   // still has to pin, or a later toggle elsewhere silently retiers it.
   let (_, ran) = update_dev(
     dispatch,
     Started(
       run_id="r1",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -12371,9 +12378,9 @@ test "a run pins an inherited tier the user never clicked for" {
   )
   assert_true(
     ran.remembered_model(@interop.ChannelId::Local, "desktop-test")
-    is Some(High),
+    is Some(DsPro),
   )
-  // Another chat moves the page default to Low...
+  // Another chat moves the page default to DsFlash...
   let elsewhere = ran.activate(
     @interop.ChannelId::Local,
     "other-chat",
@@ -12384,14 +12391,14 @@ test "a run pins an inherited tier the user never clicked for" {
     ModelPicked("openseek:deepseek-v4-flash"),
     elsewhere,
   )
-  assert_true(moved.default_model is Low)
+  assert_true(moved.default_model is DsFlash)
   // ...and the first one still comes back on the tier it ran with.
   let reopened = moved.activate(
     @interop.ChannelId::Local,
     "desktop-test",
     @interop.ChannelId::Local.test_project(),
   )
-  assert_true(reopened.active().engine_model is High)
+  assert_true(reopened.active().engine_model is DsPro)
 }
 
 ///|
@@ -12429,7 +12436,7 @@ test "a begun conversation never changes agents" {
     Started(
       run_id="r1",
       session="desktop-test",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=None,
       submission_id=None,
@@ -12458,7 +12465,7 @@ test "an OpenSeek pick on a composing Codex draft hands the chat back" {
   )
   assert_false(back.codex.composing_draft())
   assert_true(back.default_agent is OpenSeekAgent)
-  assert_true(back.default_model is Low)
+  assert_true(back.default_model is DsFlash)
 }
 
 ///|
@@ -12538,7 +12545,7 @@ test "remembered tiers survive a round trip through storage" {
     encoded_conversation_models(chosen.conversation_models),
   )
   assert_eq(restored, chosen.conversation_models)
-  assert_true(restored is [{ key: "local/desktop-test", model: Low, }])
+  assert_true(restored is [{ key: "local/desktop-test", model: DsFlash, }])
 }
 
 ///|
@@ -12548,16 +12555,16 @@ test "a write merges into the stored rows instead of replacing them" {
   // tab's row — that conversation would silently revert to the default.
   let stored = parse_conversation_models(
     encoded_conversation_models([
-      { key: "remote.b/sibling-chat", model: Low, },
-      { key: "remote.a/desktop-test", model: High, },
+      { key: "remote.b/sibling-chat", model: DsFlash, },
+      { key: "remote.a/desktop-test", model: DsPro, },
     ]),
   )
-  let merged = remembered_with(stored, "remote.a/desktop-test", Low)
+  let merged = remembered_with(stored, "remote.a/desktop-test", DsFlash)
   assert_true(
     merged
     is [
-      { key: "remote.a/desktop-test", model: Low, },
-      { key: "remote.b/sibling-chat", model: Low, },
+      { key: "remote.a/desktop-test", model: DsFlash, },
+      { key: "remote.b/sibling-chat", model: DsFlash, },
     ],
   )
 }
@@ -12585,9 +12592,9 @@ test "the remembered list stays capped, newest first" {
       @interop.ChannelId::Local,
       "session-\{index}",
       if index % 2 == 0 {
-        Low
+        DsFlash
       } else {
-        High
+        DsPro
       },
     )
   }
@@ -12600,13 +12607,18 @@ test "the remembered list stays capped, newest first" {
       @interop.ChannelId::Local,
       "session-\{ConversationModelsLimit}",
     )
-    is Some(Low),
+    is Some(DsFlash),
   )
   // Re-choosing an existing conversation moves it, never duplicates it.
-  let again = model.remember_model(@interop.ChannelId::Local, "session-1", Low)
+  let again = model.remember_model(
+    @interop.ChannelId::Local,
+    "session-1",
+    DsFlash,
+  )
   assert_eq(again.conversation_models.length(), ConversationModelsLimit)
   assert_true(
-    again.remembered_model(@interop.ChannelId::Local, "session-1") is Some(Low),
+    again.remembered_model(@interop.ChannelId::Local, "session-1")
+    is Some(DsFlash),
   )
 }
 
@@ -12621,7 +12633,7 @@ test "a conversation first met through a live run adopts its tier" {
     Started(
       run_id="r2",
       session="background-chat",
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
@@ -12630,7 +12642,7 @@ test "a conversation first met through a live run adopts its tier" {
     // contrasts with both of the things it must not move.
     test_model().replace_conversation({
       ..test_conversation(),
-      engine_model: Low,
+      engine_model: DsFlash,
     }),
   )
   guard background.find_conversation(
@@ -12640,9 +12652,9 @@ test "a conversation first met through a live run adopts its tier" {
     is Some(conv) else {
     fail("the background run materialized no conversation")
   }
-  assert_true(conv.engine_model is High)
-  assert_true(background.active().engine_model is Low)
-  assert_true(background.default_model is Low)
+  assert_true(conv.engine_model is DsPro)
+  assert_true(background.active().engine_model is DsFlash)
+  assert_true(background.default_model is DsFlash)
 }
 
 ///|
@@ -12898,7 +12910,7 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   let (_, running) = update(dispatch, ProviderChanged("glm"), running_model())
   assert_true(running.api_provider is Glm)
   assert_true(running.default_model is Glm53)
-  assert_true(running.active().engine_model is High)
+  assert_true(running.active().engine_model is DsPro)
   assert_true(running.display_status() is Running)
 }
 
@@ -13945,7 +13957,7 @@ test "GLM and DeepSeek remember independent reasoning choices" {
   assert_true(glm_max.openseek_reasoning is ReasoningHigh)
   let deepseek = glm_max.replace_conversation({
     ..glm_max.active(),
-    engine_model: High,
+    engine_model: DsPro,
   })
   let (_, deepseek_off) = update(dispatch, OpenSeekEffortPicked("no"), deepseek)
   assert_true(deepseek_off.openseek_reasoning is ReasoningOff)
@@ -14602,7 +14614,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
     Started(
       run_id="unrelated-run",
       session=deleted_item.id,
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=Some(
         @interop.ChannelId::Local.test_resource("/project/.openseek"),
@@ -14625,7 +14637,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
     Started(
       run_id="recreated-run",
       session=deleted_item.id,
-      model=High,
+      model=DsPro,
       max_steps=1000,
       session_root=Some(@interop.ChannelId::Local.test_store_root()),
       submission_id=None,
