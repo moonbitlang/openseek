@@ -14,6 +14,25 @@ fn Model::decorate_conversation_input(
   self : Model,
   input : @conversation.Input,
 ) -> @conversation.Input {
+  let openseek = match input.id.source() {
+    "openseek.live" | "openseek.archived" => true
+    _ => false
+  }
+  let selected = match input.id.source() {
+    "openseek.live" | "openseek.archived" =>
+      match self.selected_conversation {
+        Some(id) => id == input.id
+        None => input.active
+      }
+    _ => input.active
+  }
+  let load_failed = selected &&
+    self.conversation_load_failure is Some(failure) &&
+    failure.target == input.id
+  let loading = openseek &&
+    selected &&
+    !self.selected_conversation_loaded() &&
+    !load_failed
   let rename = match self.conversation_rename {
     Some(rename) if rename.id == input.id =>
       Some(@conversation.RenameInput::{
@@ -22,7 +41,15 @@ fn Model::decorate_conversation_input(
       })
     _ => None
   }
-  { ..input, rename, }
+  { ..input, active: selected, loading, load_failed, rename, }
+}
+
+///|
+fn Model::cancel_unsubmitted_conversation_rename(self : Model) -> Model {
+  match self.conversation_rename {
+    Some(rename) if !rename.saving => { ..self, conversation_rename: None, }
+    _ => self
+  }
 }
 
 ///|

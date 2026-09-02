@@ -923,6 +923,64 @@ test('shared WebView action menu supports context position, keyboard, and rename
   expect(app.pageErrors).toEqual([]);
 });
 
+test('sidebar menu dismissal and pending selection follow the clicked row', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.liveSessions.push({
+    id: 'session-2',
+    title: 'Second browser fixture',
+    updated_at_ms: 2,
+  });
+  await app.install();
+  await app.goto();
+
+  const workspace = page.locator('.workspace-row', { hasText: 'workspace' });
+  await workspace.click({ button: 'right', position: { x: 24, y: 16 } });
+  await expect(page.getByRole('menu', { name: 'Workspace actions' })).toBeVisible();
+
+  const first = page.locator('.conversation-row[title="session-1"]');
+  await first.click({ position: { x: 220, y: 16 } });
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(first).toHaveClass(/active/);
+  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+
+  app.rpcDelays.set('session.load', 10000);
+  await first.click({ button: 'right', position: { x: 18, y: 18 } });
+  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
+  const second = page.locator('.conversation-row[title="session-2"]');
+  await second.click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(second).toHaveClass(/active/);
+  await expect(first).not.toHaveClass(/active/);
+  await expect(second.getByRole('status', { name: 'Loading conversation' })).toBeVisible();
+  await expect(page.getByText('Loading conversation…', { exact: true })).toBeVisible();
+  await expect(page.getByText('Browser result', { exact: true })).toHaveCount(0);
+  await expect.poll(() => app.requests.some(request =>
+    request.method === 'session.load' && request.params?.session === 'session-2'))
+    .toBe(true);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a failed first conversation load keeps selection and can retry', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.rpcErrors.set('session.load', 'fixture unavailable');
+  await app.install();
+  await app.goto();
+
+  const row = page.locator('.conversation-row[title="session-1"]');
+  await row.click();
+  await expect(row).toHaveClass(/active/);
+  await expect(page.getByText('Could not load conversation', { exact: true })).toBeVisible();
+  await expect(page.getByText(/fixture unavailable/).last()).toBeVisible();
+  await expect(row).toHaveClass(/load-failed/);
+
+  app.rpcErrors.delete('session.load');
+  await page.getByRole('button', { name: 'Retry' }).click();
+  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  await expect(row).toHaveClass(/active/);
+  await expect(row).not.toHaveClass(/load-failed/);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('settings change and preserve the visible font size', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();

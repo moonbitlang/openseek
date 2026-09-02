@@ -1316,6 +1316,14 @@ priv enum SelectMenu {
 } derive(Eq)
 
 ///|
+/// A blocking first-load failure belongs to the row the user selected, not
+/// to the last conversation whose transcript happened to load successfully.
+priv struct ConversationLoadFailure {
+  target : @conversation.Id
+  message : String
+} derive(Eq)
+
+///|
 priv struct Model {
   // Connected device channels in stable order: the desktop window's one
   // Local host, or a browser console's roster devices — empty there until
@@ -1446,6 +1454,10 @@ priv struct Model {
   archived_delete_confirm : ArchivedDeleteConfirm?
   // Controlled sidebar editor for one live conversation title.
   conversation_rename : ConversationRename?
+  // Immediate sidebar intent. The loaded `active_session` remains separate so
+  // an older async snapshot cannot steal highlight or expose stale content.
+  selected_conversation : @conversation.Id?
+  conversation_load_failure : ConversationLoadFailure?
   // The conversation on screen; always present in `conversations` once the
   // startup session rotation lands.
   active_session : String
@@ -1840,6 +1852,7 @@ priv enum Msg {
   // Open a conversation on one device's explicit channel, selecting that
   // channel first when it differs from the current one.
   OpenSession(@interop.ChannelId, String)
+  RetrySelectedConversation
   // Open a conversation on the channel already focused. A transcript link has
   // only a session id to go on — the child session a sub-run tool card names
   // belongs to the same device as the transcript that names it — and the
@@ -2570,6 +2583,8 @@ fn initial_model() -> Model {
     archive_confirm: None,
     archived_delete_confirm: None,
     conversation_rename: None,
+    selected_conversation: None,
+    conversation_load_failure: None,
     screen: Chat,
     codex: @codex.State(),
     skills: @skills.State::empty(),
@@ -3455,6 +3470,22 @@ fn Model::activate(
     ..self,
     focused: channel,
     active_session: session_id,
+    selected_conversation: conversations
+    .iter()
+    .find_first(conv => conv.device == channel && conv.session_id == session_id)
+    .map(conv => {
+      @conversation.Id(
+        source=if conv.is_archived_read_only() {
+          "openseek.archived"
+        } else {
+          "openseek.live"
+        },
+        channel=channel.uri_authority(),
+        conversation=session_id,
+        root=conv.project().path,
+      )
+    }),
+    conversation_load_failure: None,
     conversations,
   }
   // `activate` is the explicit navigation path into this transcript. A

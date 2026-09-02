@@ -73,6 +73,8 @@ fn focus_channel(
       ..model.clear_host_settings(),
       focused: channel,
       active_session: "",
+      selected_conversation: None,
+      conversation_load_failure: None,
       loading_conversation: None,
       installed_skills: [],
       // Codex is host-owned just like the other focused mirrors. Clear the
@@ -212,6 +214,24 @@ fn open_session_on(
       (@cmd.none, next)
     }
   }
+}
+
+///|
+fn Model::live_selection_id(
+  self : Model,
+  channel : @interop.ChannelId,
+  session : String,
+) -> @conversation.Id? {
+  self
+  .session_project(channel, session)
+  .map(workspace => {
+    @conversation.Id(
+      source="openseek.live",
+      channel=channel.uri_authority(),
+      conversation=session,
+      root=workspace.path,
+    )
+  })
 }
 
 ///|
@@ -594,6 +614,7 @@ fn retry_session_snapshot(
     let scroll = @cmd.none
     let owner : @interop.ConversationKey = { channel, session, }
     if activate_on_success && model.loading_conversation == Some(owner) {
+      let blocking_failure = !next.selected_conversation_loaded()
       let (toast, next) = next.notify_error(
         dispatch,
         TranscriptRefreshFailedNotice + " (" + message + ")",
@@ -605,7 +626,16 @@ fn retry_session_snapshot(
       }
       (
         @cmd.batch([toast, sessions, scroll]),
-        { ..next, loading_conversation: None, },
+        {
+          ..next,
+          loading_conversation: None,
+          conversation_load_failure: match next.selected_conversation {
+            Some(target) if blocking_failure &&
+              target.channel() == channel.uri_authority() &&
+              target.conversation() == session => Some({ target, message, })
+            _ => None
+          },
+        },
       )
     } else {
       (scroll, next)
@@ -659,6 +689,7 @@ fn apply_session_snapshot(
     next = {
       ..next.activate(channel, session, conv.project()),
       loading_conversation: None,
+      conversation_load_failure: None,
     }
     // An archived transcript has no runnable checkout to inspect here. Its
     // retained workspace placement is still available to file links, but git
@@ -4193,8 +4224,44 @@ fn update_msg(
           return (@cmd.none, model)
         }
         let (focus_cmd, model) = focus_channel(dispatch, model, channel)
+        guard model.live_selection_id(channel, session_id) is Some(target) else {
+          return (@cmd.none, model)
+        }
+        let model = {
+          ..model.cancel_unsubmitted_conversation_rename(),
+          selected_conversation: Some(target),
+          conversation_load_failure: None,
+          screen: Chat,
+        }
         let (cmd, model) = open_session_on(dispatch, channel, model, session_id)
         (@cmd.batch([focus_cmd, cmd]), model)
+      }
+    RetrySelectedConversation =>
+      match model.selected_conversation {
+        Some(id) if id.source() == "openseek.live" =>
+          update_msg(dispatch, OpenSession(model.focused, id.conversation()), {
+            ..model,
+            conversation_load_failure: None,
+          })
+        Some(id) if id.source() == "openseek.archived" =>
+          match id.root() {
+            Some(root) =>
+              match @resource.of_path(model.focused, root) {
+                Some(workspace) =>
+                  update_msg(
+                    dispatch,
+                    OpenArchivedSession(
+                      model.focused,
+                      session=id.conversation(),
+                      workspace~,
+                    ),
+                    { ..model, conversation_load_failure: None, },
+                  )
+                None => (@cmd.none, model)
+              }
+            None => (@cmd.none, model)
+          }
+        _ => (@cmd.none, model)
       }
     OpenArchivedSession(channel, session~, workspace~) => {
       guard !session.is_empty() && model.device_state(channel) is Some(dev) else {
@@ -4209,6 +4276,19 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
+      let model = {
+        ..model.cancel_unsubmitted_conversation_rename(),
+        selected_conversation: Some(
+          @conversation.Id(
+            source="openseek.archived",
+            channel=channel.uri_authority(),
+            conversation=session,
+            root=workspace.path,
+          ),
+        ),
+        conversation_load_failure: None,
+        screen: Chat,
+      }
       let (cmd, model) = model.open_archived_session_on(
         dispatch, channel, session, workspace,
       )
@@ -6382,6 +6462,24 @@ fn update_device_msg(
         let next = model
           .replace_device({ ..dev, sessions, archived, })
           .with_archive_override(channel, key, ArchiveLive)
+        let next = match next.selected_conversation {
+          Some(selected) if selected.source() == "openseek.archived" &&
+            selected.channel() == channel.uri_authority() &&
+            selected.conversation() == key.session &&
+            selected.root() == Some(key.workspace.path) =>
+            {
+              ..next,
+              selected_conversation: Some(
+                @conversation.Id(
+                  source="openseek.live",
+                  channel=channel.uri_authority(),
+                  conversation=key.session,
+                  root=key.workspace.path,
+                ),
+              ),
+            }
+          _ => next
+        }
         // Fence an archived read that was already in flight, then re-read the
         // now-live record. The transcript stays visible while this new
         // generation settles; only the record source and composer capability

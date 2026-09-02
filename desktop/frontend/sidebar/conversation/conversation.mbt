@@ -90,6 +90,8 @@ pub(all) struct Input {
   nested : Bool
   subrun : Bool
   active : Bool
+  loading : Bool
+  load_failed : Bool
   running : Bool
   openable : Bool
   worktree : String?
@@ -297,6 +299,12 @@ pub fn component(
     if input.active {
       class += " active"
     }
+    if input.loading {
+      class += " loading"
+    }
+    if input.load_failed {
+      class += " load-failed"
+    }
     if input.running {
       class += " running"
     }
@@ -418,6 +426,25 @@ pub fn component(
       None => children.push(@html.span(class="sidebar-label", input.label))
     }
     let status : Array[@html.Html] = []
+    if input.loading {
+      status.push(
+        @html.span(
+          class="conversation-load-spinner",
+          attrs=@html.Attrs::build()
+            .role("status")
+            .aria_label("Loading conversation"),
+          "",
+        ),
+      )
+    } else if input.load_failed {
+      status.push(
+        @html.span(
+          class="conversation-load-failed",
+          attrs=@html.Attrs::build().aria_label("Conversation failed to load"),
+          "!",
+        ),
+      )
+    }
     if input.worktree is Some(name) {
       status.push(
         @html.span(

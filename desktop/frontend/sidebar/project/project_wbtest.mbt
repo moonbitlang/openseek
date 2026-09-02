@@ -47,6 +47,8 @@ fn test_conversations(
       nested: true,
       subrun: false,
       active: active_index == Some(index),
+      loading: false,
+      load_failed: false,
       running: false,
       openable: true,
       worktree: None,

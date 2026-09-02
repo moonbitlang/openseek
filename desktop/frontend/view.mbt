@@ -131,6 +131,8 @@ fn session_component_input(
     nested,
     subrun,
     active,
+    loading: false,
+    load_failed: false,
     running,
     openable: true,
     worktree,
@@ -488,6 +490,8 @@ fn Model::sidebar_component_sections(
           nested: false,
           subrun: false,
           active,
+          loading: false,
+          load_failed: false,
           running: false,
           openable: true,
           worktree: None,
@@ -1634,6 +1638,50 @@ fn Model::terminal_panel_visible(self : Model) -> Bool {
 }
 
 ///|
+/// A selected row is loaded only when the active transcript has the same
+/// durable identity, including live-vs-archived placement and workspace.
+fn Model::selected_conversation_loaded(self : Model) -> Bool {
+  guard self.selected_conversation is Some(selected) &&
+    self.active_conversation() is Some(active) else {
+    return self.selected_conversation is None
+  }
+  let source = if active.is_archived_read_only() {
+    "openseek.archived"
+  } else {
+    "openseek.live"
+  }
+  selected.source() == source &&
+  selected.channel() == active.device.uri_authority() &&
+  selected.conversation() == active.session_id &&
+  selected.root() == Some(active.project().path)
+}
+
+///|
+fn conversation_loading_view() -> @html.Html {
+  @html.div(class="conversation-load-state", [
+    @html.span(class="conversation-load-state-spinner", ""),
+    @html.span("Loading conversation…"),
+  ])
+}
+
+///|
+fn conversation_load_failed_view(
+  dispatch : @cmd.Emit[Msg],
+  message : String,
+) -> @html.Html {
+  @html.div(class="conversation-load-state failed", [
+    @html.strong("Could not load conversation"),
+    @html.span(class="conversation-load-state-message", message),
+    @html.button(
+      class="secondary",
+      type_="button",
+      on_click=dispatch(RetrySelectedConversation),
+      "Retry",
+    ),
+  ])
+}
+
+///|
 fn view(
   dispatch : @cmd.Emit[Msg],
   toggle_terminal : @cmd.Cmd,
@@ -1695,21 +1743,32 @@ fn view(
     // attached — the column is onboarding instead. Everything below this
     // point in the Chat branch has both.
     Chat =>
-      match model.active_conversation() {
-        None =>
-          page_with_toggle(dispatch, model, onboarding_view(dispatch, model))
-        Some(conv) =>
-          [
-            topbar_view(
-              dispatch, toggle_terminal, toggle_right_panel, model, conv,
-            ),
-            transcript_html,
-            if conv.is_archived_read_only() {
-              conv.archived_read_only_view(dispatch)
-            } else {
-              composer_html
-            },
-          ]
+      if model.conversation_load_failure is Some(failure) &&
+        model.selected_conversation == Some(failure.target) {
+        page_with_toggle(
+          dispatch,
+          model,
+          conversation_load_failed_view(dispatch, failure.message),
+        )
+      } else if !model.selected_conversation_loaded() {
+        page_with_toggle(dispatch, model, conversation_loading_view())
+      } else {
+        match model.active_conversation() {
+          None =>
+            page_with_toggle(dispatch, model, onboarding_view(dispatch, model))
+          Some(conv) =>
+            [
+              topbar_view(
+                dispatch, toggle_terminal, toggle_right_panel, model, conv,
+              ),
+              transcript_html,
+              if conv.is_archived_read_only() {
+                conv.archived_read_only_view(dispatch)
+              } else {
+                composer_html
+              },
+            ]
+        }
       }
     Codex =>
       model.codex.page(
