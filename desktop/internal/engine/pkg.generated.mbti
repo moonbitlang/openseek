@@ -47,6 +47,8 @@ pub fn queue_run(EngineManager, @protocol.QueuePayload) -> @protocol.QueueReply 
 
 pub async fn remote_server_base(EngineManager) -> String?
 
+pub async fn rename_session(EngineManager, @protocol.SessionRenamePayload) -> Unit
+
 pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 
 pub async fn start_run(EventSink, EngineManager, @protocol.StartPayload) -> @protocol.StartReply

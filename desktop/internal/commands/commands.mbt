@@ -113,6 +113,12 @@ pub let session_archive : Command[
 ] = Command("session.archive")
 
 ///|
+pub let session_rename : Command[
+  @protocol.SessionRenamePayload,
+  @protocol.EmptyReply,
+] = Command("session.rename")
+
+///|
 pub let session_unarchive : Command[
   @protocol.SessionPayload,
   @protocol.SessionsReply,
@@ -317,6 +323,12 @@ pub let codex_thread_unarchive : Command[
   @protocol.CodexThreadPayload,
   @protocol.CodexCommandReply[@protocol.EmptyReply],
 ] = Command("codex.thread.unarchive")
+
+///|
+pub let codex_thread_rename : Command[
+  @protocol.CodexThreadRenamePayload,
+  @protocol.CodexCommandReply[@protocol.EmptyReply],
+] = Command("codex.thread.rename")
 
 ///|
 pub let codex_thread_compact : Command[
@@ -665,6 +677,13 @@ pub let app_open_devtools : Command[
   @protocol.EmptyPayload,
   @protocol.EmptyReply,
 ] = Command("app.open_devtools")
+
+///|
+/// Show the native conversation-row menu at view-relative CSS coordinates.
+pub let app_conversation_menu : Command[
+  @protocol.ConversationMenuPayload,
+  @protocol.EmptyReply,
+] = Command("app.conversation_menu")
 
 ///|
 /// Match this native desktop window's caption controls to the effective app

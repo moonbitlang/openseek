@@ -162,6 +162,16 @@ html.is-resizing .sidebar-resize-handle {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.conversation-row > .conversation-rename {
+  min-width: 0;
+  padding: 2px 4px;
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font: inherit;
+}
 
 .conversation-row:hover {
   background: var(--color-bg-subtle);
@@ -229,8 +239,8 @@ html.is-resizing .sidebar-resize-handle {
 }
 /* Both groups stay in layout (visibility, not display) so the cell keeps
    one width across the swap. Only a slot that actually has actions hides
-   its status — a running row has no archive button, and blanking its dot
-   under the cursor would leave the slot empty. */
+   its status; native rows retain their menu while a run is active, with
+   Archive disabled by the menu payload. */
 .conversation-row:hover .row-trailing:has(.row-actions) .row-status {
   visibility: hidden;
 }

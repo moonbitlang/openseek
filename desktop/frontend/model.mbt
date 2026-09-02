@@ -1444,6 +1444,12 @@ priv struct Model {
   // Permanent archived-chat deletion has its own explicit confirmation. It
   // never shares the worktree-discard dialog because the data at risk differs.
   archived_delete_confirm : ArchivedDeleteConfirm?
+  // The row whose native popup is currently open. Proton reports only the
+  // selected command id, so the application retains the exact row identity
+  // until that command arrives.
+  conversation_menu_target : ConversationMenuTarget?
+  // Controlled sidebar editor for one live conversation title.
+  conversation_rename : ConversationRename?
   // The conversation on screen; always present in `conversations` once the
   // startup session rotation lands.
   active_session : String
@@ -1928,6 +1934,21 @@ priv enum Msg {
   DeleteArchivedSession(@interop.ChannelId, ArchiveRecordKey)
   ConfirmDeleteArchivedSession
   CancelDeleteArchivedSession
+  ShowConversationMenu(
+    id~ : @conversation.Id,
+    label~ : String,
+    kind~ : @protocol.ConversationMenuKind,
+    archive_enabled~ : Bool,
+    delete_enabled~ : Bool,
+    x~ : Int,
+    y~ : Int
+  )
+  ConversationMenuSelected(@protocol.ConversationMenuAction)
+  ConversationRenameChanged(id~ : @conversation.Id, value~ : String)
+  ConversationRenameSubmitted(@conversation.Id)
+  ConversationRenameCancelled(@conversation.Id)
+  ConversationRenameSucceeded(@conversation.Id)
+  ConversationRenameFailed(id~ : @conversation.Id, message~ : String)
   // The host's dark-mode preference changed. It updates the palette only while
   // no explicit Light/Dark choice has been saved.
   ColorSchemeChanged(Bool)
@@ -2109,8 +2130,8 @@ priv enum DeviceMsg {
   )
   SessionsFailed(String)
   // The host's identity-bearing `session.changed` broadcast. Archive changes
-  // invalidate that exact live target immediately; both sidebar lists are
-  // then re-read for their durable contents.
+  // invalidate that exact live target immediately; rename and every placement
+  // change re-read both sidebar lists for their durable contents.
   SessionsChanged(
     change~ : String,
     key~ : ArchiveRecordKey,
@@ -2561,6 +2582,8 @@ fn initial_model() -> Model {
     pending_project_adoption: None,
     archive_confirm: None,
     archived_delete_confirm: None,
+    conversation_menu_target: None,
+    conversation_rename: None,
     screen: Chat,
     codex: @codex.State(),
     skills: @skills.State::empty(),

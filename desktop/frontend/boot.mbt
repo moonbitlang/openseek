@@ -307,12 +307,34 @@ fn SidebarDispatcher::placeholder_open(
 }
 
 ///|
-fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
+fn SidebarDispatcher::actions(
+  self : SidebarDispatcher,
+  native_menu : Bool,
+) -> @sidebar.Actions {
   let conversation : @conversation.Actions = {
+    native_menu,
     open: id => self.conversation_open(id),
     archive: id => self.conversation_archive(id),
     restore: id => self.conversation_restore(id),
     delete: id => self.conversation_delete(id),
+    show_menu: (id, label, kind, archive_enabled, delete_enabled, x, y) => {
+      self.emit(
+        ShowConversationMenu(
+          id~,
+          label~,
+          kind~,
+          archive_enabled~,
+          delete_enabled~,
+          x~,
+          y~,
+        ),
+      )
+    },
+    rename_changed: (id, value) => {
+      self.emit(ConversationRenameChanged(id~, value~))
+    },
+    rename_submit: id => self.emit(ConversationRenameSubmitted(id)),
+    rename_cancel: id => self.emit(ConversationRenameCancelled(id)),
   }
   let project : @project.Actions = {
     new_conversation: id => self.project_new(id),
@@ -526,7 +548,7 @@ pub fn boot() -> Unit {
     let sidebar_input = state.map(model => model.sidebar_component_input())
     let sidebar_html = @sidebar.component(
       sidebar_input,
-      SidebarDispatcher::{ emit, }.actions(),
+      SidebarDispatcher::{ emit, }.actions(@interop.openseek_api() is Some(_)),
     )
     let quick_open_html = @quick_open.component(
       state.map(model => model.quick_open),

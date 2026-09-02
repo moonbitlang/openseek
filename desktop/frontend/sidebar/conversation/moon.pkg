@@ -1,9 +1,11 @@
 import {
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/immut/vector",
   "openseek_desktop/frontend/icons",
+  "openseek_desktop/internal/protocol",
 }
 
 supported_targets = "js"

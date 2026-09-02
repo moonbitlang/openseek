@@ -415,6 +415,7 @@ pub fn endpoints(
     state.codex_endpoint(@commands.codex_thread_list),
     state.codex_endpoint(@commands.codex_thread_archive),
     state.codex_endpoint(@commands.codex_thread_unarchive),
+    state.codex_endpoint(@commands.codex_thread_rename),
     state.codex_endpoint(@commands.codex_thread_compact),
     state.codex_endpoint(@commands.codex_review_start),
     @endpoint.Endpoint::codex(@commands.codex_turn_start, async fn(payload) {
@@ -482,6 +483,16 @@ pub fn endpoints(
           publish_worktree_changed(state, workspace, worktrees)
         },
       )
+    }),
+    @endpoint.Endpoint::remote(@commands.session_rename, async fn(payload) {
+      @engine.rename_session(state.manager, payload)
+      publish_session_changed(
+        state,
+        "renamed",
+        payload.session.trim().to_owned(),
+        payload.workspace.trim().to_owned(),
+      )
+      Acknowledged
     }),
     @endpoint.Endpoint::remote(@commands.session_unarchive, async fn(payload) {
       let session = payload.canonical_session()
@@ -1044,6 +1055,7 @@ async fn ApiState::codex_request(
     "codex.thread.list" => "thread/list"
     "codex.thread.archive" => "thread/archive"
     "codex.thread.unarchive" => "thread/unarchive"
+    "codex.thread.rename" => "thread/name/set"
     "codex.thread.compact" => "thread/compact/start"
     "codex.review.start" => "review/start"
     "codex.turn.start" => "turn/start"

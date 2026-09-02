@@ -4104,6 +4104,118 @@ fn update_msg(
         },
       )
     }
+    ShowConversationMenu(
+      id~,
+      label~,
+      kind~,
+      archive_enabled~,
+      delete_enabled~,
+      x~,
+      y~
+    ) =>
+      if model.is_desktop {
+        (
+          popup_conversation_menu(dispatch, {
+            x,
+            y,
+            kind,
+            archive_enabled,
+            delete_enabled,
+          }),
+          { ..model, conversation_menu_target: Some({ id, label, }), },
+        )
+      } else {
+        (@cmd.none, model)
+      }
+    ConversationMenuSelected(action) => {
+      guard model.conversation_menu_target is Some(target) else {
+        return (@cmd.none, model)
+      }
+      let model = { ..model, conversation_menu_target: None, }
+      match action {
+        RenameConversation =>
+          if target.id.source() == "openseek.live" ||
+            target.id.source() == "codex.live" {
+            (
+              @cmd.none,
+              {
+                ..model,
+                conversation_rename: Some({
+                  id: target.id,
+                  draft: target.label,
+                  saving: false,
+                }),
+              },
+            )
+          } else {
+            (@cmd.none, model)
+          }
+        ArchiveConversation =>
+          (
+            SidebarDispatcher::{ emit: dispatch, }.conversation_archive(
+              target.id,
+            ),
+            model,
+          )
+        RestoreConversation =>
+          (
+            SidebarDispatcher::{ emit: dispatch, }.conversation_restore(
+              target.id,
+            ),
+            model,
+          )
+        DeleteConversation =>
+          (
+            SidebarDispatcher::{ emit: dispatch, }.conversation_delete(
+              target.id,
+            ),
+            model,
+          )
+      }
+    }
+    ConversationRenameChanged(id~, value~) =>
+      match model.conversation_rename {
+        Some(rename) if rename.id == id && !rename.saving =>
+          (
+            @cmd.none,
+            { ..model, conversation_rename: Some({ ..rename, draft: value, }), },
+          )
+        _ => (@cmd.none, model)
+      }
+    ConversationRenameSubmitted(id) =>
+      match model.conversation_rename {
+        Some(rename) if rename.id == id &&
+          !rename.saving &&
+          !rename.draft.trim().is_empty() => {
+          let saving = { ..rename, saving: true, }
+          (
+            rename_conversation(dispatch, saving),
+            { ..model, conversation_rename: Some(saving), },
+          )
+        }
+        _ => (@cmd.none, model)
+      }
+    ConversationRenameCancelled(id) =>
+      match model.conversation_rename {
+        Some(rename) if rename.id == id && !rename.saving =>
+          (@cmd.none, { ..model, conversation_rename: None, })
+        _ => (@cmd.none, model)
+      }
+    ConversationRenameSucceeded(id) =>
+      match model.conversation_rename {
+        Some(rename) if rename.id == id =>
+          (@cmd.none, { ..model, conversation_rename: None, })
+        _ => (@cmd.none, model)
+      }
+    ConversationRenameFailed(id~, message~) =>
+      match model.conversation_rename {
+        Some(rename) if rename.id == id =>
+          { ..model, conversation_rename: Some({ ..rename, saving: false, }), }.notify_error(
+            dispatch,
+            "Rename failed: " + message,
+          )
+        _ => (@cmd.none, model)
+      }
     NotificationClicked(run_id~) => {
       // Proton notifications are emitted only for the embedded local host. A
       // finished run usually matches by last run id; a permission request

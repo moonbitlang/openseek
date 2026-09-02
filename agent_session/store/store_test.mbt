@@ -149,6 +149,51 @@ async test "listings order by recency and keep husk directories visible" {
 }
 
 ///|
+async test "an explicit session title overrides the first prompt without rewriting it" {
+  let store = new_store()
+  let id = @agent_session.SessionId("named")
+  store.create(
+    @agent_session.Session(id, system_prompt="system").append(
+      User(UserMessage("original first prompt")),
+    ),
+  )
+  assert_eq(store.title(id), None)
+  store.set_title(id, "  Renamed conversation  ")
+  assert_eq(store.title(id), Some("Renamed conversation"))
+  let listings = store.listings()
+  assert_eq(listings.length(), 1)
+  assert_eq(listings[0].title(), Some("Renamed conversation"))
+  assert_eq(listings[0].first_prompt(), "original first prompt")
+  let loaded = store.load(id)
+  guard loaded.events()[0].item() is User(message) else {
+    fail("renaming changed the first durable event")
+  }
+  assert_eq(message.content(), "original first prompt")
+  @fs.rmdir(store.root(), recursive=true)
+}
+
+///|
+async test "session titles reject blank text and missing records" {
+  let store = new_store()
+  let id : @agent_session.SessionId = SessionId("named")
+  store.create(Session(id, system_prompt="system"))
+  for title in ["", "   ", "\n\t"] {
+    try store.set_title(id, title) catch {
+      error => assert_true("\{error}".contains("must not be blank"))
+    } noraise {
+      _ => fail("blank session title accepted")
+    }
+  }
+  let missing : @agent_session.SessionId = SessionId("missing")
+  try store.set_title(missing, "Name") catch {
+    error => assert_true("\{error}".contains("does not exist"))
+  } noraise {
+    _ => fail("title written for a missing session")
+  }
+  @fs.rmdir(store.root(), recursive=true)
+}
+
+///|
 async test "latest skips a corrupt newest session in favor of a loadable one" {
   let store = new_store()
   store.create(Session(SessionId("valid"), system_prompt="system"))

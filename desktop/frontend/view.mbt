@@ -116,7 +116,7 @@ fn session_component_input(
   } else {
     session_id
   }
-  {
+  model.decorate_conversation_input({
     // The store placement rides in `root`: session ids may repeat across
     // project stores, and without it two same-id rows would collide on one
     // key in the sidebar's keyed container.
@@ -134,10 +134,10 @@ fn session_component_input(
     running,
     openable: true,
     worktree,
-    // Archiving a running conversation would pull the durable record out
-    // from under its engine, so the button waits for the turn to end.
+    // Keep the capability in the row input while a run is active: Proton
+    // presents Archive disabled, while the browser fallback hides it.
     run_mark,
-    trailing: if archivable && !running {
+    trailing: if archivable {
       [
         @conversation.Archive(
           title="Archive — tuck this chat away; its files stay where they are",
@@ -146,8 +146,9 @@ fn session_component_input(
     } else {
       []
     },
+    rename: None,
     children,
-  }
+  })
 }
 
 ///|
@@ -234,8 +235,9 @@ fn Model::push_group_component_inputs(
   // is the one on screen (its title settles at the first send), and
   // otherwise comes from the host's listing.
   for tree in @transcript.session_tree(durable) {
-    let parent_label = if self.find_conversation(dev.channel, tree.item.id)
-      is Some(conv) &&
+    let parent_label = if tree.item.title is Some(title) && !title.is_blank() {
+      title
+    } else if self.find_conversation(dev.channel, tree.item.id) is Some(conv) &&
       dev.channel == self.focused &&
       tree.item.id == self.active_session {
       conversation_title(conv)
@@ -405,7 +407,7 @@ fn Model::sidebar_component_sections(
           Some(ms) => ActiveAt(ms)
           None => Unstamped
         }
-        stamped.push((stamp, row.input))
+        stamped.push((stamp, self.decorate_conversation_input(row.input)))
       }
       codex_activation = self.codex.project_activation(context, root)
     }
@@ -434,7 +436,13 @@ fn Model::sidebar_component_sections(
     // Codex threads in unregistered roots keep top-level rows at the end of
     // the section, as they did in the retired Codex section.
     for entry in self.codex.loose_entries(context) {
-      projects.push(entry)
+      projects.push(
+        match entry {
+          @section.Conversation(input) =>
+            @section.Conversation(self.decorate_conversation_input(input))
+          other => other
+        },
+      )
     }
   }
   let openseek_section_activation = activation(dev.active_project is Some(_))
@@ -467,37 +475,46 @@ fn Model::sidebar_component_sections(
       self.find_conversation(dev.channel, item.id) is Some(conv) &&
       conv.is_archived_read_only()
     archived_entries.push(
-      @section.Conversation({
-        id: @conversation.Id(
-          source="openseek.archived",
-          channel~,
-          conversation=item.id,
-          root=item.workspace.path,
-        ),
-        title: item.id,
-        label: session_item_label(item),
-        nested: false,
-        subrun: false,
-        active,
-        running: false,
-        openable: true,
-        worktree: None,
-        run_mark: @conversation.NoRunMark,
-        trailing: [
-          @conversation.Restore(
-            title="Restore this conversation to the sidebar",
+      @section.Conversation(
+        self.decorate_conversation_input({
+          id: @conversation.Id(
+            source="openseek.archived",
+            channel~,
+            conversation=item.id,
+            root=item.workspace.path,
           ),
-          @conversation.Delete(
-            title="Permanently delete this archived conversation",
-          ),
-        ],
-        children: [],
-      }),
+          title: item.id,
+          label: session_item_label(item),
+          nested: false,
+          subrun: false,
+          active,
+          running: false,
+          openable: true,
+          worktree: None,
+          run_mark: @conversation.NoRunMark,
+          trailing: [
+            @conversation.Restore(
+              title="Restore this conversation to the sidebar",
+            ),
+            @conversation.Delete(
+              title="Permanently delete this archived conversation",
+            ),
+          ],
+          rename: None,
+          children: [],
+        }),
+      ),
     )
   }
   if dev.channel == self.focused {
     for entry in self.codex.archived_sidebar_entries(dev.channel) {
-      archived_entries.push(entry)
+      archived_entries.push(
+        match entry {
+          @section.Conversation(input) =>
+            @section.Conversation(self.decorate_conversation_input(input))
+          other => other
+        },
+      )
     }
   }
   sections.push({

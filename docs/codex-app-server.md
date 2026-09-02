@@ -55,7 +55,7 @@ limited to:
 
 - account read, ChatGPT login start/cancel, and logout;
 - model list;
-- thread start, resume, read, list, archive, unarchive, and compact;
+- thread start, resume, read, list, rename, archive, unarchive, and compact;
 - turn start, steer, and interrupt;
 - pending server-request list and typed server-request response.
 

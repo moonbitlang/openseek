@@ -16,6 +16,12 @@ fn session_file_name(id : @agent_session.SessionId) -> String {
 let lock_file_name : String = "session.lock"
 
 ///|
+/// User-authored display titles live beside the append-only transcript. A
+/// separate file lets a running session be renamed without rewriting history
+/// or replacing the inode its engine is still appending to.
+let title_file_name : String = "session-title"
+
+///|
 /// Native filesystem-backed collection of durable OpenSeek sessions.
 ///
 /// A `SessionStore` owns a root path string plus an in-memory sync cache.
@@ -114,6 +120,14 @@ fn SessionStore::lock_path(
   id : @agent_session.SessionId,
 ) -> String raise {
   "\{self.session_dir(id)}/\{lock_file_name}"
+}
+
+///|
+fn SessionStore::title_path(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String raise {
+  "\{self.session_dir(id)}/\{title_file_name}"
 }
 
 ///|
@@ -508,6 +522,7 @@ pub struct SessionListing {
   priv id : @agent_session.SessionId
   priv last_active_unix_seconds : Int64?
   priv first_prompt : String
+  priv title : String?
 } derive(Debug)
 
 ///|
@@ -540,6 +555,54 @@ pub fn SessionListing::last_active_unix_seconds(
 /// be read, or when the session directory is damaged.
 pub fn SessionListing::first_prompt(self : SessionListing) -> String {
   self.first_prompt
+}
+
+///|
+/// Return the explicit user-authored title, or `None` when this session still
+/// uses its first prompt as the display label.
+pub fn SessionListing::title(self : SessionListing) -> String? {
+  self.title
+}
+
+///|
+/// Read a session's explicit display title. A missing sidecar means the title
+/// still derives from the first user prompt; malformed or unreadable metadata
+/// remains an error rather than masquerading as absence.
+pub async fn SessionStore::title(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String? {
+  let text = @fs.read_file(self.title_path(id)).text() catch {
+    @os_error.OSError(_) as error if error.is_ENOENT() => return None
+    error => raise error
+  }
+  let title = text.trim().to_owned()
+  guard !title.is_empty() else { fail("session title must not be blank") }
+  Some(title)
+}
+
+///|
+/// Persist a user-authored display title without touching the append-only
+/// transcript. The title file is atomically replaced under the session lock,
+/// so concurrent readers see either complete value and a running engine may
+/// continue appending to its existing JSONL inode.
+pub async fn SessionStore::set_title(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+  title : String,
+) -> Unit {
+  let title = title.trim().to_owned()
+  guard !title.is_empty() else { fail("session title must not be blank") }
+  guard @fs.exists(self.session_file_path(id)) else {
+    fail("session \{id.value()} does not exist")
+  }
+  with_session_lock(self, id, Exclusive, () => {
+    write_text_atomic(
+      self.title_path(id),
+      title,
+      dirs=self.session_dir_chain(id),
+    )
+  })
 }
 
 ///|
@@ -610,6 +673,7 @@ pub async fn SessionStore::listings(
           id,
           last_active_unix_seconds: None,
           first_prompt: "",
+          title: self.title(id),
         })
         continue
       }
@@ -621,6 +685,7 @@ pub async fn SessionStore::listings(
           id,
           last_active_unix_seconds: Some(seconds),
           first_prompt: first_prompt_in_log(path),
+          title: self.title(id),
         },
         seconds,
         nanoseconds,

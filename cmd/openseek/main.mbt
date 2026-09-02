@@ -978,15 +978,16 @@ fn format_utc_minute(seconds : Int64) -> String {
 
 ///|
 /// One `sessions list` row: tab-separated id, last-activity stamp (UTC,
-/// minute precision; `-` for an unreadable session), and the first user
-/// prompt as a one-line label. Tab separation keeps the listing scriptable —
+/// minute precision; `-` for an unreadable session), and its explicit title
+/// or first user prompt as a one-line label. Tab separation keeps the listing scriptable —
 /// `sessions list | cut -f1` recovers the bare ids the old format printed.
 fn format_session_listing(listing : @store.SessionListing) -> String {
   let when = match listing.last_active_unix_seconds() {
     Some(seconds) => format_utc_minute(seconds)
     None => "-"
   }
-  "\{listing.id().value()}\t\{when}\t\{compact_prompt_label(listing.first_prompt())}"
+  let title = listing.title().unwrap_or_else(() => listing.first_prompt())
+  "\{listing.id().value()}\t\{when}\t\{compact_prompt_label(title)}"
 }
 
 ///|
@@ -1010,9 +1011,10 @@ fn session_list_format(matches : @argparse.Matches) -> SessionListFormat raise {
 /// The store's listings as JSON for machine consumers (e.g. the desktop
 /// client's sidebar): an array of `{id, title, updated_at_ms}`, most
 /// recently active first. `title` is the untruncated first line of the first
-/// user prompt; `updated_at_ms` is the session file mtime rounded down to
-/// milliseconds, or `null` for a directory whose session files cannot be
-/// stat-ed (such husks sort last, like the human-readable listing).
+/// user prompt unless an explicit title sidecar overrides it;
+/// `updated_at_ms` is the session file mtime rounded down to milliseconds, or
+/// `null` for a directory whose session files cannot be stat-ed (such husks
+/// sort last, like the human-readable listing).
 async fn session_list_json(store : @store.SessionStore) -> Json {
   let entries : Array[Json] = [
     for listing in store.listings() => {
@@ -1023,7 +1025,9 @@ async fn session_list_json(store : @store.SessionStore) -> Json {
       }
       {
         "id": listing.id().value(),
-        "title": session_title(listing.first_prompt()),
+        "title": listing
+        .title()
+        .unwrap_or_else(() => session_title(listing.first_prompt())),
         "updated_at_ms": updated_at_ms,
       }
     }
@@ -1975,6 +1979,7 @@ async test "session list json reports titles newest first with husks last" {
     store.create(
       older.append(User(UserMessage("  first question\nwith detail  "))),
     )
+    store.set_title(SessionId("older"), "Renamed conversation")
     let newer : @agent_session.Session = Session(
       SessionId("newer"),
       system_prompt="system",
@@ -1995,7 +2000,14 @@ async test "session list json reports titles newest first with husks last" {
     assert_true(newest.get("id") is Some(String("newer")))
     assert_true(newest.get("title") is Some(String("")))
     assert_true(oldest.get("id") is Some(String("older")))
-    assert_true(oldest.get("title") is Some(String("first question")))
+    assert_true(oldest.get("title") is Some(String("Renamed conversation")))
+    guard store.listings().iter().find_first(row => row.id().value() == "older")
+      is Some(older_listing) else {
+      fail("expected older listing")
+    }
+    assert_true(
+      format_session_listing(older_listing).has_suffix("\tRenamed conversation"),
+    )
     guard oldest.get("updated_at_ms") is Some(Number(stamp, ..)) else {
       fail("expected updated_at_ms")
     }

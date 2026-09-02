@@ -618,6 +618,18 @@ pub fn CodexThreadReadPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CodexThreadReadPayload
 pub impl @json.FromJson for CodexThreadReadPayload
 
+pub(all) struct CodexThreadRenamePayload {
+  thread_id : String
+  name : String
+} derive(Eq, @debug.Debug)
+pub fn CodexThreadRenamePayload::equal(Self, Self) -> Bool
+pub fn CodexThreadRenamePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CodexThreadRenamePayload::not_equal(Self, Self) -> Bool
+pub fn CodexThreadRenamePayload::to_json(Self) -> Json
+pub fn CodexThreadRenamePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for CodexThreadRenamePayload
+pub impl @json.FromJson for CodexThreadRenamePayload
+
 pub(all) struct CodexThreadReply {
   thread : Json
 } derive(Eq, @debug.Debug)
@@ -754,6 +766,46 @@ pub fn ConnectedStage::to_json(Self) -> Json
 pub fn ConnectedStage::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ConnectedStage
 pub impl @json.FromJson for ConnectedStage
+
+pub(all) enum ConversationMenuAction {
+  RenameConversation
+  ArchiveConversation
+  RestoreConversation
+  DeleteConversation
+} derive(Eq, @debug.Debug)
+pub fn ConversationMenuAction::equal(Self, Self) -> Bool
+pub fn ConversationMenuAction::not_equal(Self, Self) -> Bool
+pub fn ConversationMenuAction::parse(String) -> Self?
+pub fn ConversationMenuAction::to_repr(Self) -> @debug.Repr
+pub fn ConversationMenuAction::wire(Self) -> String
+
+pub(all) enum ConversationMenuKind {
+  LiveConversationMenu
+  ArchivedConversationMenu
+} derive(Eq, @debug.Debug)
+pub fn ConversationMenuKind::equal(Self, Self) -> Bool
+pub fn ConversationMenuKind::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConversationMenuKind::not_equal(Self, Self) -> Bool
+pub fn ConversationMenuKind::to_json(Self) -> Json
+pub fn ConversationMenuKind::to_repr(Self) -> @debug.Repr
+pub fn ConversationMenuKind::wire(Self) -> String
+pub impl ToJson for ConversationMenuKind
+pub impl @json.FromJson for ConversationMenuKind
+
+pub(all) struct ConversationMenuPayload {
+  x : Int
+  y : Int
+  kind : ConversationMenuKind
+  archive_enabled : Bool
+  delete_enabled : Bool
+} derive(Eq, @debug.Debug)
+pub fn ConversationMenuPayload::equal(Self, Self) -> Bool
+pub fn ConversationMenuPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ConversationMenuPayload::not_equal(Self, Self) -> Bool
+pub fn ConversationMenuPayload::to_json(Self) -> Json
+pub fn ConversationMenuPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ConversationMenuPayload
+pub impl @json.FromJson for ConversationMenuPayload
 
 pub(all) struct CreateDirectoryPayload {
   parent : String
@@ -1958,6 +2010,19 @@ pub fn SessionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonD
 pub fn SessionPayload::not_equal(Self, Self) -> Bool
 pub fn SessionPayload::to_json(Self) -> Json
 pub fn SessionPayload::to_repr(Self) -> @debug.Repr
+
+pub(all) struct SessionRenamePayload {
+  session : String
+  workspace : String
+  title : String
+} derive(Eq, @debug.Debug)
+pub fn SessionRenamePayload::equal(Self, Self) -> Bool
+pub fn SessionRenamePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionRenamePayload::not_equal(Self, Self) -> Bool
+pub fn SessionRenamePayload::to_json(Self) -> Json
+pub fn SessionRenamePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionRenamePayload
+pub impl @json.FromJson for SessionRenamePayload
 
 pub(all) struct SessionRuntimeNotice {
   content : String

@@ -25,6 +25,8 @@ pub let agent_start : Command[@protocol.StartPayload, @protocol.StartReply]
 
 pub let agent_steer : Command[@protocol.SteerPayload, @protocol.SteerReply]
 
+pub let app_conversation_menu : Command[@protocol.ConversationMenuPayload, @protocol.EmptyReply]
+
 pub let app_info : Command[@protocol.EmptyPayload, @protocol.AppInfoReply]
 
 pub let app_open_devtools : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
@@ -96,6 +98,8 @@ pub let codex_thread_history_read : Command[@protocol.CodexThreadPayload, @proto
 pub let codex_thread_list : Command[@protocol.CodexThreadListPayload, @protocol.CodexCommandReply[@protocol.CodexDataReply]]
 
 pub let codex_thread_read : Command[@protocol.CodexThreadReadPayload, @protocol.CodexCommandReply[@protocol.CodexThreadReply]]
+
+pub let codex_thread_rename : Command[@protocol.CodexThreadRenamePayload, @protocol.CodexCommandReply[@protocol.EmptyReply]]
 
 pub let codex_thread_resume : Command[@protocol.CodexThreadResumePayload, @protocol.CodexCommandReply[@protocol.CodexThreadReply]]
 
@@ -178,6 +182,8 @@ pub let session_list_archived : Command[@protocol.EmptyPayload, @protocol.Sessio
 pub let session_load : Command[@protocol.LoadSessionPayload, @protocol.LoadSessionReply]
 
 pub let session_load_archived : Command[@protocol.LoadSessionPayload, @protocol.LoadSessionReply]
+
+pub let session_rename : Command[@protocol.SessionRenamePayload, @protocol.EmptyReply]
 
 pub let session_unarchive : Command[@protocol.SessionPayload, @protocol.SessionsReply]
 

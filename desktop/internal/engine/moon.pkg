@@ -1,4 +1,6 @@
 import {
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_session/store",
   "bobzhang/openseek/viz_export",
   "bobzhang/openseek_protocol" @wire,
   "bobzhang/jsonl",

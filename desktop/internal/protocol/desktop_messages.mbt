@@ -1066,6 +1066,9 @@ pub(all) struct SubrunProgressPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// One exact store-qualified session changed placement or display metadata.
+/// Current change values are `archived`, `unarchived`, `deleted`, and
+/// `renamed`; clients still treat unknown values as list invalidations.
 pub(all) struct SessionChangedPayload {
   change : String
   session : String

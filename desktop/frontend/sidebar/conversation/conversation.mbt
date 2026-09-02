@@ -68,6 +68,12 @@ pub(all) enum TrailingAction {
 } derive(Debug, Eq)
 
 ///|
+pub(all) struct RenameInput {
+  draft : String
+  saving : Bool
+} derive(Debug, Eq)
+
+///|
 /// Plain, comparable input to one conversation component. Child runs are
 /// nested data so their lifetime follows the parent branch rather than array
 /// position in the global sidebar.
@@ -83,6 +89,7 @@ pub(all) struct Input {
   worktree : String?
   run_mark : RunMark
   trailing : Array[TrailingAction]
+  rename : RenameInput?
   children : Array[Input]
 } derive(Debug, Eq)
 
@@ -96,10 +103,15 @@ pub fn Input::id(self : Input) -> Id {
 /// into its navigation message; this package only owns row behavior and
 /// local disclosure state.
 pub(all) struct Actions {
+  native_menu : Bool
   open : (Id) -> @cmd.Cmd
   archive : (Id) -> @cmd.Cmd
   restore : (Id) -> @cmd.Cmd
   delete : (Id) -> @cmd.Cmd
+  show_menu : (Id, String, @protocol.ConversationMenuKind, Bool, Bool, Int, Int) -> @cmd.Cmd
+  rename_changed : (Id, String) -> @cmd.Cmd
+  rename_submit : (Id) -> @cmd.Cmd
+  rename_cancel : (Id) -> @cmd.Cmd
 }
 
 ///|
@@ -123,6 +135,32 @@ fn Actions::command(
     Restore(..) => (self.restore)(id)
     Delete(..) => (self.delete)(id)
   }
+}
+
+///|
+fn Input::native_menu_kind(self : Input) -> @protocol.ConversationMenuKind? {
+  if self.subrun || self.trailing.is_empty() {
+    return None
+  }
+  match self.id.source() {
+    "openseek.live" | "codex.live" => Some(LiveConversationMenu)
+    "openseek.archived" | "codex.archived" => Some(ArchivedConversationMenu)
+    _ => None
+  }
+}
+
+///|
+fn Input::menu_enabled(self : Input) -> (Bool, Bool) {
+  let mut archive = false
+  let mut delete = false
+  for action in self.trailing {
+    match action {
+      Archive(..) => archive = !(self.run_mark is RunningMark)
+      Delete(..) => delete = true
+      Restore(..) => ()
+    }
+  }
+  (archive, delete)
 }
 
 ///|
@@ -196,7 +234,48 @@ pub fn component(
         ),
       )
     }
-    children.push(@html.span(class="sidebar-label", input.label))
+    match input.rename {
+      Some(rename) => {
+        let valid = !rename.draft.trim().is_empty() && !rename.saving
+        children.push(
+          @html.input(
+            input_type=@html.InputType::Text,
+            class="sidebar-label conversation-rename",
+            value=rename.draft,
+            autofocus=true,
+            on_input=value => (actions.rename_changed)(input.id, value),
+            attrs=@html.Attrs::build()
+              .aria_label("Rename conversation")
+              .disabled(rename.saving)
+              .on_click(event => {
+                event.stop_propagation()
+                @cmd.none
+              })
+              .on_keydown(event => {
+                if event.is_composing() {
+                  return @cmd.none
+                }
+                match event.key() {
+                  "Enter" => {
+                    event.prevent_default()
+                    if valid {
+                      (actions.rename_submit)(input.id)
+                    } else {
+                      @cmd.none
+                    }
+                  }
+                  "Escape" => {
+                    event.prevent_default()
+                    (actions.rename_cancel)(input.id)
+                  }
+                  _ => @cmd.none
+                }
+              }),
+          ),
+        )
+      }
+      None => children.push(@html.span(class="sidebar-label", input.label))
+    }
     let status : Array[@html.Html] = []
     if input.worktree is Some(name) {
       status.push(
@@ -223,15 +302,22 @@ pub fn component(
       CompletedMark => status.push(@html.span(class="run-dot accent", ""))
       FailedMark => status.push(@html.span(class="run-dot warn", ""))
     }
-    // Runtime callers advertise the row's durable actions. The shared row
-    // owns the safety rule that none of them are actionable during a run, so a
-    // caller cannot accidentally pair a running mark with Archive.
-    let trailing_actions = if input.run_mark is RunningMark {
+    let menu_kind = if actions.native_menu {
+      input.native_menu_kind()
+    } else {
+      None
+    }
+    // Browser-console rows retain their existing direct buttons. Native rows
+    // keep one stable ellipsis button and let Proton present enabled state.
+    let trailing_actions = if menu_kind is Some(_) ||
+      input.run_mark is RunningMark {
       []
     } else {
       input.trailing
     }
-    if !status.is_empty() || !trailing_actions.is_empty() {
+    if !status.is_empty() ||
+      !trailing_actions.is_empty() ||
+      menu_kind is Some(_) {
       let trailing : Array[@html.Html] = []
       if !status.is_empty() {
         trailing.push(@html.span(class="row-status", status))
@@ -261,12 +347,66 @@ pub fn component(
         }
         trailing.push(@html.span(class="row-actions", buttons))
       }
+      if menu_kind is Some(kind) {
+        let (archive_enabled, delete_enabled) = input.menu_enabled()
+        let command = fn(x : Int, y : Int) {
+          (actions.show_menu)(
+            input.id,
+            input.label,
+            kind,
+            archive_enabled,
+            delete_enabled,
+            x,
+            y,
+          )
+        }
+        trailing.push(
+          @html.span(class="row-actions", [
+            @html.button(
+              class="row-archive row-menu",
+              type_="button",
+              title="Conversation actions",
+              attrs=@html.Attrs::build()
+                .aria_label("Conversation actions")
+                .on_click(event => {
+                  event.stop_propagation()
+                  guard event.target().to_element() is Some(target) &&
+                    target.closest(".row-menu") is Some(button) else {
+                    return @cmd.none
+                  }
+                  let rect = button.get_bounding_client_rect()
+                  command(rect.get_right().to_int(), rect.get_bottom().to_int())
+                }),
+              @icons.icon(@icons.icon_more),
+            ),
+          ]),
+        )
+      }
       children.push(@html.span(class="row-trailing", trailing))
+    }
+    let row_attrs = match menu_kind {
+      Some(kind) => {
+        let (archive_enabled, delete_enabled) = input.menu_enabled()
+        @html.Attrs::build().on_contextmenu(event => {
+          event.prevent_default()
+          (actions.show_menu)(
+            input.id,
+            input.label,
+            kind,
+            archive_enabled,
+            delete_enabled,
+            event.get_client_x(),
+            event.get_client_y(),
+          )
+        })
+      }
+      None => @html.Attrs::build()
     }
     let row = @html.div(
       class~,
       title=input.title,
       on_click=if input.openable { (actions.open)(input.id) } else { @cmd.none },
+      attrs=row_attrs,
       children,
     )
     let rows : Array[(String, @html.Html)] = [(input.id.key(), row)]
@@ -307,3 +447,9 @@ pub extend TrailingAction with Debug::{to_repr}
 
 ///|
 pub extend TrailingAction with Eq::{equal, not_equal}
+
+///|
+pub extend RenameInput with Debug::{to_repr}
+
+///|
+pub extend RenameInput with Eq::{equal, not_equal}

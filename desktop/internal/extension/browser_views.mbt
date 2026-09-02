@@ -363,6 +363,46 @@ fn BrowserViews::close(
 }
 
 ///|
+fn BrowserViews::conversation_menu(
+  self : BrowserViews,
+  payload : @protocol.ConversationMenuPayload,
+) -> @protocol.EmptyReply raise {
+  guard self.window is Some(window) else {
+    raise Failure("application window is unavailable")
+  }
+  let items = match payload.kind {
+    LiveConversationMenu =>
+      [
+        @proton.MenuItem::command(
+          @protocol.RenameConversation.wire(),
+          "Rename…",
+        ),
+        @proton.MenuItem::separator(),
+        @proton.MenuItem::command(
+          @protocol.ArchiveConversation.wire(),
+          "Archive",
+          enabled=payload.archive_enabled,
+        ),
+      ]
+    ArchivedConversationMenu =>
+      [
+        @proton.MenuItem::command(
+          @protocol.RestoreConversation.wire(),
+          "Restore",
+        ),
+        @proton.MenuItem::separator(),
+        @proton.MenuItem::command(
+          @protocol.DeleteConversation.wire(),
+          "Delete…",
+          enabled=payload.delete_enabled,
+        ),
+      ]
+  }
+  @proton.Menu("Conversation", items~).popup(window, payload.x, payload.y)
+  Acknowledged
+}
+
+///|
 /// The desktop-window endpoints, kept beside the window and native-view
 /// handlers they use. A relay browser owns neither, so none of these commands
 /// enters the shared remote catalog. `browser.navigate` deliberately binds
@@ -389,6 +429,9 @@ fn window_endpoints(views : BrowserViews) -> Array[@endpoint.Endpoint] {
     }),
     @endpoint.Endpoint::window(@commands.app_open_devtools, (_, _) => {
       views.open_app_devtools()
+    }),
+    @endpoint.Endpoint::window(@commands.app_conversation_menu, (_, payload) => {
+      views.conversation_menu(payload)
     }),
     @endpoint.Endpoint::window(@commands.app_set_titlebar_theme, (_, payload) => {
       views.set_app_titlebar_theme(payload)
@@ -423,6 +466,11 @@ test "native window ops are absent from the relay method catalog" {
     window_only
     .iter()
     .any(endpoint => endpoint.name() == @commands.app_set_titlebar_theme.name()),
+  )
+  assert_true(
+    window_only
+    .iter()
+    .any(endpoint => endpoint.name() == @commands.app_conversation_menu.name()),
   )
   for endpoint in window_only {
     let name = endpoint.name()

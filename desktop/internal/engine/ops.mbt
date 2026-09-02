@@ -594,6 +594,38 @@ pub async fn list_sessions(manager : EngineManager) -> SessionsReply {
 }
 
 ///|
+/// Give one exact live conversation a durable display title without rewriting
+/// its append-only transcript. Placement and record-operation guards keep the
+/// sidecar write from racing archive, detach, or another preparatory operation.
+pub async fn rename_session(
+  manager : EngineManager,
+  payload : @protocol.SessionRenamePayload,
+) -> Unit {
+  let session = payload.session.trim().to_owned()
+  let title = payload.title.trim().to_owned()
+  guard !session.is_empty() else {
+    raise EngineError("session id must not be empty")
+  }
+  guard !title.is_empty() else { raise EngineError("title must not be empty") }
+  guard @pathx.Absolute::from_uri_path(payload.workspace) is Some(requested) &&
+    @workspaces.registered_dir(requested) is Some(workspace) else {
+    raise EngineError("workspace is not a registered workspace")
+  }
+  manager.workspace_lifecycle_lock.acquire()
+  let mut placement_locked = true
+  defer (if placement_locked { manager.workspace_lifecycle_lock.release() })
+  let record_guard = manager.begin_record_op(session)
+  defer manager.end_record_op(session, record_guard)
+  placement_locked = false
+  manager.workspace_lifecycle_lock.release()
+  let store = @store.SessionStore(@workspaces.store_root(workspace).to_string())
+  let id : @agent_session.SessionId = SessionId(session)
+  store.set_title(id, title) catch {
+    error => raise EngineError("session rename failed: \{error}")
+  }
+}
+
+///|
 async fn session_group(
   manager : EngineManager,
   workspace : @pathx.Absolute,
