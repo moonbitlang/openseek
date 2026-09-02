@@ -47,9 +47,7 @@ async fn main {
       wf,
       name="fixit",
       task="Apply EXACTLY this one documentation correction and nothing else: \{clip(brief, 1500)}",
-      allowed_paths=[
-        "workflow/", "agent_workflow/", "agent_subrun/", "agent_subtask/",
-      ],
+      allowed_paths=["agent_workflow/", "agent_subrun/", "agent_subtask/"],
       max_steps=40,
     ) {
     Ok(outcome) => {
