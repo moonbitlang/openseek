@@ -1417,7 +1417,10 @@ async test "worktree create provisions checkout, branch, registry, exclusion" {
   assert_eq(reply.name, "fix-auth")
   guard reply.worktrees is [info] else { fail("expected one worktree") }
   assert_eq(info.name, "fix-auth")
-  assert_eq(info.branch, "openseek/fix-auth")
+  // The branch is minted salted past the bare name (`openseek/<name>-<salt>`)
+  // so machine-local counters can never collide on a shared remote.
+  assert_true(info.branch.has_prefix("openseek/fix-auth-"))
+  assert_eq(info.branch.length(), "openseek/fix-auth-".length() + 16)
   assert_eq(info.base, @gitx.run(repo, ["rev-parse", "HEAD"]))
   // Creation IS the binding: the entry carries its conversation from birth.
   assert_eq(info.session, Some("s-fix-auth"))
@@ -1428,7 +1431,10 @@ async test "worktree create provisions checkout, branch, registry, exclusion" {
   assert_true(@fsx.is_dir(repo.join(".worktrees/fix-auth").to_path()))
   assert_true(
     @gitx.probe(repo, [
-      "show-ref", "--verify", "--quiet", "refs/heads/openseek/fix-auth",
+      "show-ref",
+      "--verify",
+      "--quiet",
+      "refs/heads/\{info.branch}",
     ])
     is Some(_),
   )
@@ -1437,7 +1443,7 @@ async test "worktree create provisions checkout, branch, registry, exclusion" {
     @gitx.run(repo.join(".worktrees/fix-auth"), [
       "rev-parse", "--abbrev-ref", "HEAD",
     ]),
-    "openseek/fix-auth",
+    info.branch,
   )
   let exclude = @fsx.read_text(repo.join(".git/info/exclude").to_path())
   assert_true(exclude.contains(".worktrees/"))
@@ -1673,12 +1679,6 @@ async test "worktree create names the holder in every refusal" {
       "already exists on disk",
     ),
   )
-  ignore(@gitx.run(repo, ["branch", "openseek/task"]))
-  assert_true(
-    create_refusal(host, repo.to_string(), "s-4", "task").contains(
-      "branch openseek/task already exists",
-    ),
-  )
   // A workspace that is not a git repository cannot host worktrees; a linked
   // worktree registered before the attach guard existed is refused too.
   let plain = root.join("plain")
@@ -1738,14 +1738,12 @@ async test "worktree remove enforces the dirty check and keeps the branch" {
       "no worktree named",
     ),
   )
-  ignore(
-    create(
-      host,
-      repo.to_string(),
-      WorktreeOwner::openseek("s-w1"),
-      fn(_) {  },
-      name="w1",
-    ),
+  let w1 = create(
+    host,
+    repo.to_string(),
+    WorktreeOwner::openseek("s-w1"),
+    fn(_) {  },
+    name="w1",
   )
   @fs.write_file(
     repo.join(".worktrees/w1/junk.txt").to_string(),
@@ -1765,27 +1763,33 @@ async test "worktree remove enforces the dirty check and keeps the branch" {
   assert_eq(committed.val, 0)
   assert_eq(forced.worktrees.length(), 0)
   assert_false(@fsx.exists(repo.join(".worktrees/w1").to_path()))
+  guard w1.worktrees is [w1_info] else { fail("expected one worktree") }
   // Committed work is never lost: the branch survives every removal.
   assert_true(
     @gitx.probe(repo, [
-      "show-ref", "--verify", "--quiet", "refs/heads/openseek/w1",
+      "show-ref",
+      "--verify",
+      "--quiet",
+      "refs/heads/\{w1_info.branch}",
     ])
     is Some(_),
   )
-  ignore(
-    create(
-      host,
-      repo.to_string(),
-      WorktreeOwner::openseek("s-w2"),
-      fn(_) {  },
-      name="w2",
-    ),
+  let w2 = create(
+    host,
+    repo.to_string(),
+    WorktreeOwner::openseek("s-w2"),
+    fn(_) {  },
+    name="w2",
   )
   ignore(remove(host, repo.to_string(), "w2", false, fn(_) {  }))
   assert_eq(list(repo.to_string()).worktrees.length(), 0)
+  guard w2.worktrees is [w2_info] else { fail("expected one worktree") }
   assert_true(
     @gitx.probe(repo, [
-      "show-ref", "--verify", "--quiet", "refs/heads/openseek/w2",
+      "show-ref",
+      "--verify",
+      "--quiet",
+      "refs/heads/\{w2_info.branch}",
     ])
     is Some(_),
   )
