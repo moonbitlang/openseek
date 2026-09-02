@@ -1661,27 +1661,6 @@ fn turn_died(event : @wire.Event) -> Bool {
 }
 
 ///|
-/// The raw classifier behind `turn_died` that the typed parse cannot
-/// replace: a terminal event whose payload is malformed parses to `None`,
-/// yet the engine wrote it on its way out of the turn. The name alone
-/// condemns the child — serve survives a failed turn and waits for more
-/// input, so without this check the host stays `Running`, refuses the next
-/// prompt, and never reaches EOF retirement.
-fn turn_died_raw(raw : Json) -> Bool {
-  match raw {
-    Object(fields) =>
-      match fields.get("event") {
-        Some(String(name)) =>
-          name == "agent_setup_failed" ||
-          name == "turn_failed" ||
-          name == "agent_aborted"
-        _ => false
-      }
-    _ => false
-  }
-}
-
-///|
 /// Whether the raw line's `kind` marks a prompt steer. Absent means prompt —
 /// the only engines that omit `kind` predate the field and meant prompt —
 /// but a kind that is present yet not a string is malformed and must not
@@ -1794,8 +1773,7 @@ async fn ServeEngine::consume(
         // start is forced through this child's close/reap barrier instead of
         // racing it. This is synchronous, so no request can be between its
         // admission check and its enqueue.
-        if turn_died_raw(json) ||
-          (wire_event is Some(event) && turn_died(event)) {
+        if wire_event is Some(event) && turn_died(event) {
           engine.discard_commands(
             "the engine finished its turn before this command was written",
           )
@@ -2474,19 +2452,6 @@ test "a turn that died stops accepting commands for that child" {
   assert_true(turn_died(AgentAborted(reason="r")))
   assert_false(turn_died(AgentFinished(answer="done")))
   assert_false(turn_died(MaxStepsExhausted))
-}
-
-///|
-test "raw terminal names condemn the child even when the payload is malformed" {
-  assert_true(turn_died_raw({ "event": "turn_failed" }))
-  assert_true(
-    turn_died_raw({ "event": "agent_setup_failed", "error": Json::null() }),
-  )
-  assert_true(turn_died_raw({ "event": "agent_aborted" }))
-  assert_false(turn_died_raw({ "event": "agent_finished" }))
-  assert_false(turn_died_raw({ "event": "max_steps_exhausted" }))
-  assert_false(turn_died_raw({}))
-  assert_false(turn_died_raw(Json(([] : Array[Json]))))
 }
 
 ///|
