@@ -1,0 +1,10 @@
+import {
+  "bobzhang/workflow",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+}
+
+supported_targets = "native+wasm"
+
+pkgtype(kind: "executable")
