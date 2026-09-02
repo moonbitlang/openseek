@@ -1,6 +1,7 @@
 import {
   "moonbit-community/pty",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/deque",
   "moonbitlang/async",
   "moonbitlang/async/cond_var",
   "moonbitlang/core/debug",

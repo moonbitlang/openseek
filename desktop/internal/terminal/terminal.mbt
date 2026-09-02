@@ -43,18 +43,24 @@ const HighWatermark = 262144
 /// the client has not demonstrated it received.
 priv struct TerminalOutputWindow {
   mut unacked : Int
-  chunks : Map[Int, Int]
+  // Byte counts in sequence order. The first outstanding sequence is
+  // `next_sequence - chunks.length()`, so no sequence-to-size map is needed.
+  chunks : @deque.Deque[Int]
+  mut next_sequence : Int
 }
 
 ///|
-/// Record one emitted chunk before it becomes visible to the client.
+/// Record one emitted chunk before it becomes visible to the client and
+/// return its monotonically increasing sequence.
 fn TerminalOutputWindow::record(
   self : TerminalOutputWindow,
-  sequence : Int,
   bytes : Int,
-) -> Unit {
-  self.chunks[sequence] = bytes
+) -> Int {
+  let sequence = self.next_sequence
+  self.next_sequence += 1
+  self.chunks.push_back(bytes)
   self.unacked += bytes
+  sequence
 }
 
 ///|
@@ -64,22 +70,26 @@ fn TerminalOutputWindow::acknowledge_through(
   self : TerminalOutputWindow,
   sequence : Int,
 ) -> Bool {
-  guard self.chunks.get(sequence) is Some(_) else { return false }
-  for chunk in self.chunks.to_array() {
-    let (chunk_sequence, bytes) = chunk
-    if chunk_sequence <= sequence {
-      self.chunks.remove(chunk_sequence)
-      self.unacked -= bytes
-    }
+  let first_sequence = self.next_sequence - self.chunks.length()
+  let acknowledged_chunks = sequence - first_sequence + 1
+  guard acknowledged_chunks > 0 && acknowledged_chunks <= self.chunks.length() else {
+    return false
+  }
+  for bytes in self.chunks.drain(start=0, len=acknowledged_chunks) {
+    self.unacked -= bytes
   }
   self.unacked < HighWatermark
 }
 
 ///|
 test "a later terminal acknowledgement advances the output window" {
-  let window : TerminalOutputWindow = { unacked: 0, chunks: Map([]), }
+  let window : TerminalOutputWindow = {
+    unacked: 0,
+    chunks: Deque([]),
+    next_sequence: 1,
+  }
   for sequence in 1..<=16 {
-    window.record(sequence, 16384)
+    assert_eq(window.record(16384), sequence)
   }
   assert_eq(window.unacked, HighWatermark)
   // A successful acknowledgement before four missing tail requests frees
@@ -88,13 +98,13 @@ test "a later terminal acknowledgement advances the output window" {
   assert_true(window.acknowledge_through(12))
   assert_eq(window.unacked, 65536)
   assert_eq(window.chunks.length(), 4)
-  window.record(17, 16384)
+  assert_eq(window.record(16384), 17)
   assert_true(window.acknowledge_through(17))
   assert_eq(window.unacked, 0)
   assert_true(window.chunks.is_empty())
   // Duplicate and invented future acknowledgements cannot release anything.
   assert_false(window.acknowledge_through(17))
-  window.record(18, 16384)
+  assert_eq(window.record(16384), 18)
   assert_false(window.acknowledge_through(19))
   assert_eq(window.unacked, 16384)
 }
@@ -103,7 +113,6 @@ test "a later terminal acknowledgement advances the output window" {
 priv struct TerminalSession {
   pty : @pty.Pty
   output : TerminalOutputWindow
-  mut next_output_sequence : Int
   /// Wakes the session's read loop when acknowledgements drain the debt or
   /// the session starts closing.
   cond : @cond_var.Cond
