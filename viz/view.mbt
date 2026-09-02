@@ -1582,7 +1582,8 @@ fn prompt_rail(
     for mark in marks => {
       let preview : Array[@html.Html] = [
         @html.div(class="rail-preview-text") <| truncate(
-          one_line(mark.text), 220,
+          one_line(mark.text),
+          220,
         ),
       ]
       if !mark.time.is_empty() {
@@ -1596,7 +1597,8 @@ fn prompt_rail(
       if !mark.reply.is_blank() {
         preview.push(
           @html.blockquote(class="rail-preview-reply") <| truncate(
-            one_line(mark.reply), 180,
+            one_line(mark.reply),
+            180,
           ),
         )
       }
@@ -1609,7 +1611,9 @@ fn prompt_rail(
   @html.nav(
     class="prompt-rail",
     attrs=@html.Attrs::build().aria_label("User prompts"),
-  ) <| [@html.div(class="rail-marks") <| items]
+  ) <| [
+    @html.div(class="rail-marks") <| items,
+  ]
 }
 
 ///|
