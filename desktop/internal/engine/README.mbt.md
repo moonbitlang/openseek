@@ -205,9 +205,9 @@ lifecycle boundaries cannot overtake the durable events they delimit.
 
 `EventSink` is deliberately not `async`: an event handed to the sink is public
 the moment the call returns, which is what lets lifecycle transitions and
-their announcements be one uninterruptible step. The real sink fans out with
-per-subscriber buffers and evicts a wedged reader rather than backpressuring
-lifecycle code.
+their announcements be one uninterruptible step. The real sink appends to a
+bounded broadcast log and lets a wedged reader lag out of it rather than
+backpressuring lifecycle code.
 
 ## The session follower
 

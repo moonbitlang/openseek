@@ -1,21 +1,23 @@
 // The fan-out point between the engine's EventSink and every connected
-// client. Notifications are pushed to each subscriber's bounded queue; a
-// subscriber that cannot keep up is dropped, per the protocol's
-// reconnect-equals-resync contract (docs/remote-protocol.md) — the client
-// reconnects and rebuilds state through `session.list` + `agent.runs`.
+// client. Notifications are appended to one bounded broadcast log that every
+// subscriber reads through its own cursor. A subscriber that falls further
+// behind than the log retains has lagged: its next read says so instead of
+// handing over a stream with a hole in it, and the transport applies the
+// protocol's reconnect-equals-resync contract (docs/remote-protocol.md) —
+// the client rebuilds state through `session.list` + `agent.runs`.
 
 ///|
-/// A subscriber queue's bound. Generous — the desktop webview and a healthy
-/// browser drain far faster than the engine produces — so hitting it means
-/// the connection is wedged, and the protocol's answer to a wedged
-/// connection is to close it.
-const SubscriberQueueCapacity = 1024
+/// How many notifications the log retains behind its head. Generous — the
+/// desktop webview and a healthy browser drain far faster than the engine
+/// produces — so a subscriber this far behind is a wedged connection, and
+/// the protocol's answer to a wedged connection is to resync it.
+const NotificationLogCapacity = 1024
 
 ///|
 /// The hub is owned by `ApiState`; transports reach it through
-/// `ApiState::subscribe`/`unsubscribe`.
+/// `ApiState::subscribe`.
 priv struct Hub {
-  subscribers : Array[@async.Queue[@protocol.Notification]]
+  notifications : @broadcast.Channel[@protocol.Notification]
   // The typed `agent.started` payload of every run still in flight, keyed by run
   // id — the source for `agent.runs`, which is how a client that joins (or
   // reconnects) mid-run learns the run's identity. Insertion order is
@@ -42,7 +44,7 @@ priv struct Hub {
 ///|
 fn Hub::Hub() -> Hub {
   {
-    subscribers: [],
+    notifications: Channel(capacity=NotificationLogCapacity),
     active_starts: Map([]),
     settlements: Map([]),
     pending_approvals: Map([]),
@@ -109,13 +111,10 @@ fn Hub::record_finished(
 }
 
 ///|
-/// Push one notification to every live subscriber. `try_put` never
-/// suspends, so the order every subscriber sees is the publish order. A
-/// full queue marks its subscriber dead: the queue is closed (ending the
-/// connection's writer) and dropped. Only the hub ever closes a subscribed
-/// queue, and it removes the queue from `subscribers` in the same breath,
-/// so `try_put` on a closed queue cannot happen — `try!` turns that
-/// invariant into a hard stop instead of a silent discard.
+/// Record the notification's effect on the live-run tables, then append it
+/// to the log. Publishing never suspends, so the order every subscriber sees
+/// is the publish order. The hub keeps no list of subscribers: one that has
+/// fallen behind learns so on its own next read.
 fn Hub::publish(self : Hub, notification : @protocol.Notification) -> Unit {
   match notification {
     AgentStarted(payload) => self.active_starts[payload.run_id] = payload
@@ -134,17 +133,7 @@ fn Hub::publish(self : Hub, notification : @protocol.Notification) -> Unit {
     AgentEvent(payload) => self.track_approval(payload)
     _ => ()
   }
-  let wedged : Array[Int] = []
-  for index, queue in self.subscribers {
-    if !(try! queue.try_put(notification)) {
-      wedged.push(index)
-    }
-  }
-  // Back to front, so the collected indices stay valid while removing.
-  for cursor in wedged.rev_iter() {
-    let queue = self.subscribers.remove(cursor)
-    queue.close()
-  }
+  self.notifications.publish(notification)
 }
 
 ///|
@@ -197,29 +186,13 @@ fn Hub::forget_run_approvals(self : Hub, run_id : String) -> Unit {
 }
 
 ///|
-fn Hub::subscribe(self : Hub) -> @async.Queue[@protocol.Notification] {
-  let queue : @async.Queue[@protocol.Notification] = Queue(
-    kind=Blocking(SubscriberQueueCapacity),
-  )
-  self.subscribers.push(queue)
-  queue
-}
-
-///|
-/// Drop a subscriber by queue identity and close its queue, waking a writer
-/// blocked on `get`. Unsubscribing twice is fine; so is unsubscribing a
-/// queue the hub already kicked.
-fn Hub::unsubscribe(
+/// A cursor at the log's head: it yields every notification published from
+/// now on. The hub keeps no record of it, so dropping it is the whole of
+/// unsubscribing.
+fn Hub::subscribe(
   self : Hub,
-  queue : @async.Queue[@protocol.Notification],
-) -> Unit {
-  for index, candidate in self.subscribers {
-    if physical_equal(candidate, queue) {
-      ignore(self.subscribers.remove(index))
-      queue.close()
-      break
-    }
-  }
+) -> @broadcast.Subscription[@protocol.Notification] {
+  self.notifications.subscribe()
 }
 
 ///|
@@ -337,14 +310,70 @@ test "a real engine connection retires old active runs before readiness" {
   guard hub.runs().runs is [] else {
     fail("old active run survived a new engine pump")
   }
-  guard subscriber.try_get() is Some(started) else {
+  guard subscriber.try_next() is Some(started) else {
     fail("missing started notification")
   }
   assert_eq(started.wire_name(), "agent.started")
-  guard subscriber.try_get() is Some(connected) else {
+  guard subscriber.try_next() is Some(connected) else {
     fail("missing connected notification")
   }
   assert_eq(connected.wire_name(), "agent.connected")
+}
+
+///|
+test "a lagged subscriber learns what it missed and can still replay the finish" {
+  let hub = Hub::Hub()
+  let subscriber = hub.subscribe()
+  hub.publish(
+    AgentStarted(
+      @json.from_json({
+        "run_id": "r-overflow",
+        "session": "s-overflow",
+        "submission_id": "sub-overflow",
+      }),
+    ),
+  )
+  // Let the log roll past the subscriber without draining it. The terminal
+  // notification is the first one to push the start out of the window,
+  // reproducing a renderer that fell behind during a long, high-volume turn.
+  for _ in 1..<NotificationLogCapacity {
+    hub.publish(AgentConnected({ stage: Serving, }))
+  }
+  hub.publish(
+    AgentFinished(
+      @json.from_json({
+        "run_id": "r-overflow",
+        "status": "finished",
+        "exit_code": 0,
+      }),
+    ),
+  )
+  // The read reports exactly what was overwritten — the start — and resumes
+  // at the oldest retained notification. Whether that partial stream is
+  // worth rendering is the transport's decision; the finish itself is
+  // recoverable through `agent.runs` either way.
+  let missed = try subscriber.try_next() catch {
+    Lagged(missed~) => Some(missed)
+  } noraise {
+    _ => None
+  }
+  assert_eq(missed, Some(1))
+  guard subscriber.try_next() is Some(retained) else {
+    fail("the retained window was not readable after the lag")
+  }
+  assert_eq(retained.wire_name(), "agent.connected")
+  guard hub.runs(known=[
+      {
+        session: "s-overflow",
+        run_id: Some("r-overflow"),
+        submission_id: Some("sub-overflow"),
+      },
+    ]).settled
+    is [settlement] else {
+    fail("the missed finish was not retained for lifecycle resync")
+  }
+  assert_eq(settlement.status, "finished")
+  assert_eq(settlement.exit_code, Some(0))
 }
 
 ///|

@@ -16,13 +16,14 @@ priv enum Outgoing {
 }
 
 ///|
-/// The two queues that make one remote subscription. Opening them also
-/// installs the readiness frame: because the fresh bounded outbound queue is
-/// empty, that `put` cannot suspend, so no hub publisher can run between
-/// subscribe and readiness. Forwarders may only start after this returns.
+/// The outbound queue and hub subscription that make one remote client.
+/// Opening them also installs the readiness frame: because the fresh bounded
+/// outbound queue is empty, that `put` cannot suspend, so no hub publisher
+/// can run between subscribe and readiness. Forwarders may only start after
+/// this returns.
 priv struct ClientSubscription {
   out : @async.Queue[Outgoing]
-  notifications : @async.Queue[@protocol.Notification]
+  notifications : @broadcast.Subscription[@protocol.Notification]
 }
 
 ///|
@@ -87,7 +88,8 @@ const PingIntervalMs = 30_000
 /// How many outbound frames may queue before writers suspend. This is also
 /// the slow-client limit: a socket that stalls long enough to fill it gets
 /// the connection torn down (the pump must not block on a full queue — a
-/// blocked `put` cannot be woken by the hub closing the subscription).
+/// pump parked in `put` would never get back to its subscription to notice
+/// that it lagged).
 const OutboundQueueCapacity = 64
 
 ///|
@@ -153,8 +155,8 @@ async fn WsClientActor::run(self : WsClientActor) -> Unit {
 }
 
 ///|
-/// Serve the actor's connected socket until it closes (or the hub kicks it
-/// for not draining notifications).
+/// Serve the actor's connected socket until it closes (or its hub
+/// subscription lags for want of draining).
 async fn WsClientActor::serve(
   self : WsClientActor,
   conn : @websocket.Conn,
@@ -169,7 +171,6 @@ async fn WsClientActor::serve(
   // Endpoint closures capture this connection's watch and PTY ownership once;
   // every request only performs a name lookup in the stable catalog.
   let endpoints = @api.endpoints(self.state, self.host_connection)
-  defer self.state.unsubscribe(notifications)
   @async.with_task_group(group => {
     group.spawn_bg(() => {
       for ;; {
@@ -187,12 +188,23 @@ async fn WsClientActor::serve(
     })
     group.spawn_bg(() => {
       // Tears the connection down either way it ends — the client
-      // reconnects into a resync: the hub kicking this subscriber (queue
-      // closed → `get` raises), or the outbound queue standing full (the
-      // socket has stalled for `OutboundQueueCapacity` frames, and the
-      // protocol promises a disconnect over a silent gap in the stream).
+      // reconnects into a resync: this subscription lagging behind the hub's
+      // log (`next` raises), or the outbound queue standing full (the socket
+      // has stalled for `OutboundQueueCapacity` frames, and the protocol
+      // promises a disconnect over a silent gap in the stream).
       for ;; {
-        let notification = notifications.get()
+        let notification = notifications.next() catch {
+          @broadcast.Lagged(missed~) as lagged => {
+            @xlog.warn(category="transport") <?
+              {
+                "event": "hub_subscription_lagged",
+                "transport": "remote",
+                "missed": missed,
+              }
+            raise lagged
+          }
+          error => raise error
+        }
         guard notification_for_client(notification) is Some(notification) else {
           continue
         }
@@ -426,7 +438,6 @@ fn error_envelope(id : Json, code : Int, message : String) -> Json {
 async test "readiness precedes the first forwarded hub notification" {
   let state = @api.ApiState(engine="unused")
   let subscription = WsClientActor::WsClientActor(state, "unused").open_subscription()
-  defer state.unsubscribe(subscription.notifications)
   state.publish(
     SessionEvent({
       session: "session-1",
@@ -439,7 +450,7 @@ async test "readiness precedes the first forwarded hub notification" {
       session_root: "/sessions/global",
     }),
   )
-  let notification = subscription.notifications.get()
+  let notification = subscription.notifications.next()
   assert_true(subscription.out.try_put(Notify(notification)))
   guard subscription.out.get() is Notify(readiness) else {
     fail("expected readiness notification")

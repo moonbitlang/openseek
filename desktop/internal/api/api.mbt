@@ -307,23 +307,16 @@ pub fn ApiState::sink(self : ApiState) -> @engine.EventSink {
 }
 
 ///|
-/// Register a notification subscriber: a bounded queue the hub pushes every
-/// notification into. The caller drains it with `get` and MUST `unsubscribe`
-/// when done (a defer next to the subscribe). A subscriber that stops
-/// draining is kicked by the hub: its queue is closed, which ends the
-/// drain loop.
+/// Open a notification subscription: a cursor into the hub's bounded log
+/// that yields, through `next`, every notification published from now on.
+/// Nothing is registered, so dropping it is the whole of unsubscribing. A
+/// subscriber that stops draining lags: `next` raises `@broadcast.Lagged`
+/// once the log has rolled past it and resumes at the oldest retained
+/// notification; the transport turns the lag into its resync boundary.
 pub fn ApiState::subscribe(
   self : ApiState,
-) -> @async.Queue[@protocol.Notification] {
+) -> @broadcast.Subscription[@protocol.Notification] {
   self.hub.subscribe()
-}
-
-///|
-pub fn ApiState::unsubscribe(
-  self : ApiState,
-  queue : @async.Queue[@protocol.Notification],
-) -> Unit {
-  self.hub.unsubscribe(queue)
 }
 
 ///|

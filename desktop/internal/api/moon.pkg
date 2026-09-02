@@ -2,6 +2,7 @@ import {
   // Imported for the engine event constructors the hub matches on.
   "bobzhang/openseek_protocol",
   "openseek_desktop/internal/auth",
+  "openseek_desktop/internal/broadcast",
   "openseek_desktop/internal/commands",
   "openseek_desktop/internal/codex",
   "openseek_desktop/internal/engine",

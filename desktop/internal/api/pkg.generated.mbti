@@ -2,8 +2,8 @@
 package "openseek_desktop/internal/api"
 
 import {
-  "moonbitlang/async/aqueue",
   "openseek_desktop/internal/auth",
+  "openseek_desktop/internal/broadcast",
   "openseek_desktop/internal/codex",
   "openseek_desktop/internal/endpoint",
   "openseek_desktop/internal/engine",
@@ -27,8 +27,7 @@ pub fn ApiState::host_state(Self) -> @host.HostState
 pub fn ApiState::manager(Self) -> @engine.EngineManager
 pub fn ApiState::publish(Self, @protocol.Notification) -> Unit
 pub fn ApiState::sink(Self) -> @engine.EventSink
-pub fn ApiState::subscribe(Self) -> @aqueue.Queue[@protocol.Notification]
-pub fn ApiState::unsubscribe(Self, @aqueue.Queue[@protocol.Notification]) -> Unit
+pub fn ApiState::subscribe(Self) -> @broadcast.Subscription[@protocol.Notification]
 
 // Type aliases
 

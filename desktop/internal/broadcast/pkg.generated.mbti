@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/broadcast"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub suberror Lagged {
+  Lagged(missed~ : Int)
+} derive(@debug.Debug)
+pub fn Lagged::output(Self, &Logger) -> Unit
+pub fn Lagged::to_repr(Self) -> @debug.Repr
+pub fn Lagged::to_string(Self) -> String
+pub impl Show for Lagged
+
+// Types and methods
+type Channel[T]
+pub fn[T] Channel::Channel(capacity~ : Int) -> Self[T]
+pub fn[T] Channel::publish(Self[T], T) -> Unit
+pub fn[T] Channel::subscribe(Self[T]) -> Subscription[T]
+
+type Subscription[T]
+pub async fn[T] Subscription::next(Self[T]) -> T
+pub fn[T] Subscription::skip_to_head(Self[T]) -> Unit
+pub fn[T] Subscription::try_next(Self[T]) -> T? raise Lagged
+
+// Type aliases
+
+// Traits

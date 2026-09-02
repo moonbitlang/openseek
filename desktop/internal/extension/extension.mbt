@@ -257,6 +257,11 @@ async fn PageEventTarget::emit(
 priv enum BridgeInput {
   Control(BridgeControl)
   Deliver(PageNotification)
+  // The hub's log rolled past this subscription's cursor: at least one
+  // notification is gone for good, so only the ordinary BridgeReady resync
+  // can restore truthful state. The actor has already skipped the retained
+  // remainder, which is no longer a complete stream.
+  SubscriptionLagged
 }
 
 ///|
@@ -382,11 +387,37 @@ pub async fn DesktopBridgeActor::window_closed(
 }
 
 ///|
+/// The next hub notification, or the lag that stands in for the ones this
+/// subscription missed. Remote clients reconnect their socket over a lag;
+/// the desktop bridge is process-local with no socket supervisor, so it
+/// reports the lag as input and resyncs the page instead of ending its
+/// app-lifetime actor. The notifications the log still retains are skipped
+/// too: once one is missing, rendering the rest only paints stale state
+/// before the resync replaces it.
+async fn next_hub_input(
+  notifications : @broadcast.Subscription[@protocol.Notification],
+) -> BridgeInput {
+  Deliver(Hub(notifications.next())) catch {
+    @broadcast.Lagged(missed~) => {
+      @xlog.warn(category="transport") <?
+        {
+          "event": "hub_subscription_lagged",
+          "transport": "desktop",
+          "missed": missed,
+        }
+      notifications.skip_to_head()
+      SubscriptionLagged
+    }
+    error => raise error
+  }
+}
+
+///|
 /// Prefer pending lifecycle/control work over another notification. Once neither
 /// lane is ready, race their blocking reads; `any` cancels the losing read.
 async fn DesktopBridgeActor::next_input(
   self : DesktopBridgeActor,
-  notifications : @async.Queue[@protocol.Notification],
+  notifications : @broadcast.Subscription[@protocol.Notification],
   host_notifications : @async.Queue[@protocol.Notification],
 ) -> BridgeInput {
   if self.controls.try_get() is Some(control) {
@@ -394,7 +425,7 @@ async fn DesktopBridgeActor::next_input(
   }
   @async.any([
     () => Control(self.controls.get()),
-    () => Deliver(Hub(notifications.get())),
+    () => next_hub_input(notifications),
     () => Deliver(Hub(host_notifications.get())),
     () => Deliver(BrowserEvent(self.browser_events.get())),
   ])
@@ -407,7 +438,6 @@ async fn DesktopBridgeActor::next_input(
 /// sender installed by Proton's lifecycle hook.
 pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
   let notifications = self.state.subscribe()
-  defer self.state.unsubscribe(notifications)
   let host_notifications : @async.Queue[@protocol.Notification] = Queue(
     kind=Blocking(64),
   )
@@ -456,17 +486,52 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
             }
           }
         Deliver(notification) =>
-          if connected {
-            if target is Some(target) {
-              target.emit(notification)
-            } else {
-              if pending.length() == PendingNotificationCapacity {
-                ignore(pending.remove(0))
-              }
-              pending.push(notification)
-            }
-          }
+          deliver_to_page(connected, target, pending, notification)
+        // Readiness is the frontend's resync boundary. The subscription
+        // already sits at the log's head, so every notification published
+        // from here on queues behind this boundary.
+        SubscriptionLagged =>
+          deliver_to_page(
+            connected,
+            target,
+            pending,
+            Hub(AgentConnected({ stage: Accepted, })),
+          )
       }
     }
   })
+}
+
+///|
+async fn deliver_to_page(
+  connected : Bool,
+  target : PageEventTarget?,
+  pending : Array[PageNotification],
+  notification : PageNotification,
+) -> Unit {
+  guard connected else { return }
+  if target is Some(target) {
+    target.emit(notification)
+  } else {
+    if pending.length() == PendingNotificationCapacity {
+      ignore(pending.remove(0))
+    }
+    pending.push(notification)
+  }
+}
+
+///|
+async test "a lagged hub subscription becomes a reconnect boundary" {
+  let channel : @broadcast.Channel[@protocol.Notification] = Channel(capacity=1)
+  let notifications = channel.subscribe()
+  channel.publish(AgentConnected({ stage: Serving, }))
+  channel.publish(AgentConnected({ stage: Serving, }))
+  assert_true(next_hub_input(notifications) is SubscriptionLagged)
+  // The retained Serving notification was skipped with the lag; the same
+  // subscription keeps serving from the head.
+  channel.publish(AgentConnected({ stage: Accepted, }))
+  assert_true(
+    next_hub_input(notifications)
+    is Deliver(Hub(AgentConnected({ stage: Accepted, }))),
+  )
 }
