@@ -1,0 +1,141 @@
+import {
+  "moonbitlang/async@0.21.1",
+  "bobzhang/workflow@0.1.2",
+  "bobzhang/workflow@0.1.2/spawn",
+}
+
+///|
+/// DEEP RESEARCH, watched live: three survey scouts fan out in
+/// parallel, a follow-up probe targets what the survey left open, and a
+/// synthesis agent — whose prompt embeds every prior answer — writes a
+/// design proposal. Each completion lands in the journal as it happens,
+/// so a concurrent `viz --watch` renders the run in real time, and the
+/// synthesis edges appear in the derived dataflow graph.
+///
+///   moon run workflow/viz -- deep-research.jsonl live.html --watch &
+///   moon run workflow/examples/deep-research.mbtx      (repo root)
+///
+/// Needs `openseek` on PATH and a provider key in the environment.
+async fn main {
+  research() catch {
+    error => println("workflow failed: \{error}")
+  }
+}
+
+///|
+let question : String = "How should the bobzhang/workflow library support human-in-the-loop waits (Golem-style promises: suspend until external input, at zero cost)?"
+
+///|
+async fn research() -> Unit {
+  let wf = @workflow.Workflow(
+    runner=@spawn.contract_runner(launch=call => {
+      // The step ceiling must ride ARGV: the envelope carries max_steps
+      // as data, but the engine child takes its enforced ceiling from
+      // the command line (a gap this example discovered the hard way —
+      // its first run's scouts sailed past their intended budgets).
+      let argv = ["subrun", call.kind]
+      if call.max_steps is Some(steps) {
+        argv.push("--max-steps")
+        argv.push("\{steps}")
+      }
+      { command: "openseek", args: argv, cwd: None, extra_env: None, deadline_ms: None }
+    }),
+    journal=@workflow.Journal::load("deep-research.jsonl"),
+    max_concurrent=3,
+    on_event=event => match event {
+      @workflow.PhaseStarted(title) => println("━━ phase: \{title}")
+      @workflow.AgentStarted(label~, ..) => println("  ▶ \{label}")
+      @workflow.AgentReplayed(label~, ..) => println("  ↺ \{label} (replayed)")
+      _ => ()
+    },
+  )
+
+  // ---- Phase 1: survey, in parallel ----
+  wf.phase("Survey")
+  let surveys = [
+    (
+      "journal",
+      "For \{question} — what would a PENDING wait look like as a journal entry? Study how outcomes/failures are recorded and replayed, and what a wait-entry must satisfy. Short paragraph + citations.",
+      "workflow/journal.mbt workflow/types.mbt",
+    ),
+    (
+      "events",
+      "For \{question} — how would a suspended wait surface in the event stream and the balanced start/finish brackets? Short paragraph + citations.",
+      "workflow/workflow.mbt",
+    ),
+    (
+      "contract",
+      "For \{question} — does the child contract need changes, or do waits live entirely above the Runner seam? Short paragraph + citations.",
+      "workflow/spawn/contract.mbt workflow/runner.mbt",
+    ),
+  ]
+  let found = @workflow.collect_ok(
+    @workflow.fan_out(surveys, survey => {
+      let (name, prompt, hints) = survey
+      wf.try_agent(prompt, kind="explore", hints~, label="survey:\{name}", max_steps=14)
+    }),
+    min_ok=2,
+  ) catch {
+    error => {
+      println("survey failed: \{error}")
+      return
+    }
+  }
+  let notes = found.map(report => clip(answer_of(report), 550))
+
+  // ---- Phase 2: probe the open question the survey exposes ----
+  wf.phase("Probe")
+  let probe = wf.try_agent(
+    "Given these findings on \{question} — \{notes.join(" ||| ")} — identify the SINGLE hardest unresolved design problem and investigate it in the code. Short paragraph + citations.",
+    kind="explore",
+    hints="workflow/",
+    label="probe:hardest",
+    max_steps=14,
+  )
+  let probe_note = match probe {
+    Ok(report) => clip(answer_of(report), 550)
+    Err(error) => {
+      println("  probe failed (\{error}) — synthesizing from the survey alone")
+      ""
+    }
+  }
+
+  // ---- Phase 3: synthesis embeds everything above ----
+  wf.phase("Synthesize")
+  match
+    wf.try_agent(
+      "Write a concrete design proposal for \{question} Base it ONLY on this research: \{notes.join(" ||| ")} ||| HARDEST: \{probe_note}. Give: the new API surface, the journal representation of a pending wait, and resume semantics. Be specific; cite files to change.",
+      kind="explore",
+      hints="workflow/",
+      label="synthesis",
+      max_steps=14,
+    ) {
+    Ok(report) => println("\n━━ PROPOSAL ━━\n\{answer_of(report)}")
+    Err(error) => println("synthesis failed: \{error}")
+  }
+  println(
+    "\n\{wf.calls_made()} live, \{wf.calls_replayed()} replayed, \{wf.tokens_spent()} fresh tokens",
+  )
+}
+
+///|
+fn answer_of(report : Json) -> String {
+  match report {
+    { "answer": String(text), .. } => text
+    other => other.stringify()
+  }
+}
+
+///|
+fn clip(text : String, limit : Int) -> String {
+  let out = StringBuilder()
+  let mut count = 0
+  for ch in text {
+    if count >= limit {
+      break
+    }
+    out.write_char(ch)
+    count += 1
+  }
+  out.to_string()
+}
