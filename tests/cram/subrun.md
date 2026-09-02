@@ -5,7 +5,9 @@ INTERNAL child mode end to end through the real binary: one JSON input line on
 stdin (the `sleep` holds the pipe open the way a parent runner does — stdin EOF
 is the cancel signal), standard JSONL events on stdout, and a final
 `{"subrun_report": ...}` line. The `echo` kind is modelless, so the suite needs
-no API key and makes no network calls. Timestamps and source locations vary, so
+no API key and makes no network calls. The contract itself is normative in
+the `moonbitlang/workflow` library (`docs/child-contract.md`); §7 there
+records this engine's side of it. Timestamps and source locations vary, so
 they are normalized with `sed`.
 
 ## Echo Kind: Events Then the Typed Report Line

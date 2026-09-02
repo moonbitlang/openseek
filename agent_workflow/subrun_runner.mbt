@@ -1,5 +1,5 @@
 ///|
-/// The openseek adapter for the engine-neutral `bobzhang/workflow`
+/// The openseek adapter for the engine-neutral `moonbitlang/workflow`
 /// library: fan its agent calls out to `openseek subrun <kind>` child
 /// processes over the `agent_subrun` contract — one JSON input line on
 /// stdin, JSONL events plus a final report line on stdout, stdin EOF as

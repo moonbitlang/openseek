@@ -1,6 +1,9 @@
 ///|
 /// `openseek subrun <kind>` — the INTERNAL child mode the engine spawns for
-/// one sub-run. Contract (see `agent_subrun`): the parent writes one JSON
+/// one sub-run. Contract (see `agent_subrun`, and the normative text in the
+/// `moonbitlang/workflow` library's docs/child-contract.md — §7 records what
+/// THIS engine honours: only `input` is read from the envelope; kind and the
+/// step ceiling ride argv): the parent writes one JSON
 /// input line on stdin and holds the pipe open; stdin EOF is the graceful
 /// cancel signal; this process emits its standard JSONL events on stdout
 /// and, when the kind produced a value, one final `{"subrun_report": ...}`

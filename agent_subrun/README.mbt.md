@@ -12,7 +12,7 @@ Layers:
 
 - `run_subrun` (parent side): the ENGINE's layer over the shared contract
   implementation — the spawn/drain/deadline/teardown machinery itself
-  lives in `bobzhang/workflow/spawn` (`contract_run`), and this wrapper
+  lives in `moonbitlang/workflow/spawn` (`contract_run`), and this wrapper
   adds subrun ids, lifecycle brackets, child sessions, and typed report
   re-checking. The wall deadline closes stdin and grants a grace window
   before terminating; a report arriving in the grace still counts.

@@ -1,7 +1,7 @@
 # agent_workflow
 
 The openseek adapter for the engine-neutral
-[`bobzhang/workflow`](../workflow/README.mbt.md) library. The dependency
+[`moonbitlang/workflow`](https://github.com/moonbitlang/workflow) library. The dependency
 points ENGINE → FRAMEWORK: the workflow module never learns openseek
 exists; this package hands it a `Runner`.
 
@@ -13,6 +13,9 @@ max_steps?, input}`, the pipe held open: EOF is graceful cancel), JSONL
 protocol events plus a final `{"subrun_report": ...}` line on stdout.
 `openseek subrun <kind>` speaks it natively (it is the engine's own
 subagent channel); ANY binary that speaks it plugs in unchanged. The
+contract in full — and what this engine reads from the envelope versus
+argv — is documented in the library's
+[docs/child-contract.md](https://github.com/moonbitlang/workflow/blob/main/docs/child-contract.md). The
 tests — and the block below, which compiles and runs with this package's
 test suite — drive everything with scripted `sh` children:
 

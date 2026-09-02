@@ -1,6 +1,6 @@
 import {
   "bobzhang/openseek/agent",
-  "bobzhang/workflow/spawn",
+  "moonbitlang/workflow/spawn",
   "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_session",
   "bobzhang/openseek/agent_tool",

@@ -2,16 +2,16 @@ import {
   "bobzhang/openseek/agent_subrun",
   "bobzhang/openseek/agent_subtask",
   "bobzhang/openseek/agent_worker",
-  "bobzhang/workflow",
-  "bobzhang/workflow/spawn",
+  "moonbitlang/workflow",
+  "moonbitlang/workflow/spawn",
   "moonbitlang/async",
   "moonbitlang/async/fs",
 }
 
 import {
   "bobzhang/openseek/agent_subtask",
-  "bobzhang/workflow",
-  "bobzhang/workflow/spawn",
+  "moonbitlang/workflow",
+  "moonbitlang/workflow/spawn",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",

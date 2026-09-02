@@ -3,8 +3,8 @@ package "bobzhang/openseek/agent_workflow"
 
 import {
   "bobzhang/openseek/agent_subtask",
-  "bobzhang/workflow",
-  "bobzhang/workflow/spawn",
+  "moonbitlang/workflow",
+  "moonbitlang/workflow/spawn",
 }
 
 // Values

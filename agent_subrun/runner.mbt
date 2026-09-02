@@ -132,7 +132,7 @@ pub async fn[T] run_subrun(
     )
   }
   // The spawn/drain/deadline machinery is the SHARED contract
-  // implementation in `bobzhang/workflow/spawn` — one definition for the
+  // implementation in `moonbitlang/workflow/spawn` — one definition for the
   // engine and for every foreign adapter. Cancellation re-raises out of
   // it after teardown; the errdefer closes the finish bracket first,
   // with whatever costs the live `progress` observed.
