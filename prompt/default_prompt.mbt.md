@@ -491,7 +491,7 @@ stderr warning while exit stays 0 — treat skipped blocks as a blind spot.
 
 - Attribute Git work you author:
   - End every commit message you write with
-    `Co-Authored-By: SeekMoon <noreply@moonbitlang.cn>` as its own final
+    `Co-Authored-By: SeekMoon <seekmoon@moonbitlang.com>` as its own final
     paragraph. Pass the trailer as a separate `-m` argument or preserve the
     blank line when writing the message from a file.
   - End every pull request description you write with this final line:
