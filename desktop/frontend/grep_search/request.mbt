@@ -231,21 +231,3 @@ fn State::search_subscription(
 #deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
 #doc(hidden)
 pub extend SearchRequestIdentity with Eq::{equal, not_equal}
-
-///|
-fn Page::pattern_repair_request_payload(
-  self : Page,
-  input : Input,
-) -> @protocol.PatternRepairPayload? {
-  guard self.mode is Semantic &&
-    self.pattern_repair_phase is PatternRepairRequested &&
-    input.root is Some(root) else {
-    return None
-  }
-  guard self.semantic.patterns.length() > 0 else { return None }
-  Some({
-    root: root.path,
-    pattern: self.semantic.patterns[0],
-    generation: self.generation,
-  })
-}
