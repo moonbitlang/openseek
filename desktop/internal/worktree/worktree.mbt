@@ -682,6 +682,27 @@ pub async fn list_codex_worktree_bindings() -> Array[CodexWorktreeBinding] {
 }
 
 ///|
+/// A fresh 16-hex-char salt from OS entropy (`@sys.rand`: the native
+/// runtime's source, WASI `random_get` on wasm). Every minted branch is
+/// salted so that two machines' independent `wt-N` counters can never mint
+/// the same branch name and collide on a shared remote; a missing entropy
+/// source refuses rather than minting a guessable name.
+fn fresh_branch_salt() -> String raise WorktreeError {
+  guard @sys.rand(8) is Some(bytes) else {
+    raise WorktreeError("no OS entropy available to mint a worktree branch")
+  }
+  let salt = StringBuilder()
+  for byte in bytes {
+    let value = byte.to_int()
+    if value < 0x10 {
+      salt.write_char('0')
+    }
+    salt.write_string(value.to_string(radix=16))
+  }
+  salt.to_string()
+}
+
+///|
 /// The smallest `wt-N` nobody holds: free in the registry, on disk, and as
 /// a branch. Branches survive removal, so the counter naturally skips past
 /// history instead of resurrecting an old branch.
@@ -701,13 +722,15 @@ async fn fresh_worktree_name(
     if occupied {
       continue
     }
+    // Salted branches survive removal as `openseek/<name>-<salt>`, so a
+    // name's history is a prefix match, not an exact ref.
     if @gitx.probe(dir, [
-        "show-ref",
-        "--verify",
-        "--quiet",
-        "refs/heads/\{WorktreeBranchPrefix}\{name}",
+        "for-each-ref",
+        "--format=%(refname)",
+        "refs/heads/\{WorktreeBranchPrefix}\{name}-*",
       ])
-      is Some(_) {
+      is Some(listing) &&
+      !listing.is_empty() {
       continue
     }
     return name
@@ -716,8 +739,9 @@ async fn fresh_worktree_name(
 }
 
 ///|
-/// Create a worktree `<workspace>/.worktrees/<name>` on a fresh branch
-/// `openseek/<name>` at the workspace's current HEAD, bound from birth to
+/// Create a worktree `<workspace>/.worktrees/<name>` on a fresh salted
+/// branch `openseek/<name>-<salt>` at the workspace's current HEAD, bound
+/// from birth to
 /// `owner` — creation IS the binding, so the start path never mutates the
 /// registry and a refused start cannot re-route a conversation. The owner id
 /// is the idempotency key: an owner that already holds a worktree gets that
@@ -870,7 +894,7 @@ pub async fn create(
       "\{target} already exists on disk; another tool may own it",
     )
   }
-  let branch = WorktreeBranchPrefix + name
+  let branch = WorktreeBranchPrefix + name + "-" + fresh_branch_salt()
   if @gitx.probe(dir, [
       "show-ref",
       "--verify",

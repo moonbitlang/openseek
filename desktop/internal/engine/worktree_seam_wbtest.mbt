@@ -466,9 +466,15 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
     @fsx.read_text(checkout.join("kept.txt").to_path()),
     "committed work",
   )
+  guard created.worktrees is [created_info] else {
+    fail("create must publish the one worktree it made")
+  }
+  // The minted branch is salted past the bare `openseek/wt`, and the repair
+  // restores that same branch — never a lookalike.
+  assert_true(created_info.branch.has_prefix("openseek/wt-"))
   assert_eq(
     @gitx.run(checkout, ["rev-parse", "--abbrev-ref", "HEAD"]),
-    "openseek/wt",
+    created_info.branch,
   )
   assert_eq(
     @worktree.run_dir(repo, "s-vanish").to_string(),
@@ -568,7 +574,10 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   assert_false(@fsx.exists(repo.join(".worktrees/wt-1").to_path()))
   assert_true(
     @gitx.probe(repo, [
-      "show-ref", "--verify", "--quiet", "refs/heads/openseek/wt-1",
+      "show-ref",
+      "--verify",
+      "--quiet",
+      "refs/heads/\{archived_worktree.branch}",
     ])
     is Some(_),
   )

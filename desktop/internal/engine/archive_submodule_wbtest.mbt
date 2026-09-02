@@ -90,18 +90,21 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   assert_false(@fsx.exists(clean_checkout.to_path()))
   // Branches and placements survive, and git's worktree bookkeeping is
   // pruned rather than left stale.
+  guard @worktree.list(repo.to_string()).worktrees is [first, second] else {
+    fail("both worktree placements must survive archive")
+  }
   assert_true(
     @gitx.probe(repo, [
-      "show-ref", "--verify", "--quiet", "refs/heads/openseek/wt-1",
+      "show-ref",
+      "--verify",
+      "--quiet",
+      "refs/heads/\{first.branch}",
     ])
     is Some(_),
   )
   assert_false(
     @gitx.run(repo, ["worktree", "list", "--porcelain"]).contains(".worktrees/"),
   )
-  guard @worktree.list(repo.to_string()).worktrees is [first, second] else {
-    fail("both worktree placements must survive archive")
-  }
   assert_false(first.present)
   assert_false(second.present)
   @fs.rmdir(root.to_string(), recursive=true)
