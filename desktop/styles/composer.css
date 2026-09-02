@@ -552,6 +552,13 @@
   min-width: 0;
 }
 
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
 /* The git chip. It deliberately does *not* establish a containing block: the
    popover anchors to `.composer-inner` instead, so its width is the
    composer's business rather than the chip's position along the row. See

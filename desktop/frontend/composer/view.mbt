@@ -632,7 +632,7 @@ fn MentionChip::render(self : MentionChip) -> @html.Html {
 
 ///|
 /// The component's final renderer-local view. It owns the textarea, mention
-/// tray, toolbar, primary action, stable DOM order, and surrounding chrome;
+/// tray, toolbar, action group, stable DOM order, and surrounding chrome;
 /// callers cannot construct it or pass rendered fragments through it.
 priv struct View {
   before_inner : Array[@html.Html]
@@ -643,7 +643,7 @@ priv struct View {
   input : @cmd.Emit[String]
   keyboard : KeyboardActions
   status : Array[@html.Html]
-  action : ActionButton
+  actions : Array[ActionButton]
   overlay : @html.Html?
 }
 
@@ -671,7 +671,10 @@ fn View::render(self : View) -> @html.Html {
     @html.div(class="composer-toolbar", [
       @html.div(class="composer-controls", [
         @html.div(class="composer-status", self.status),
-        self.action.render(),
+        @html.div(
+          class="composer-actions",
+          self.actions.map(action => action.render()),
+        ),
       ]),
     ]),
   ]

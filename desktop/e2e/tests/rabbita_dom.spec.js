@@ -698,6 +698,9 @@ test('composer sends a turn and stops the accepted run', async ({ page }) => {
       },
     });
 
+  await composer.fill('Steer without losing the interrupt control');
+  await expect(page.getByTitle('Stop', { exact: true })).toBeVisible();
+  await expect(page.getByTitle('Steer the running task', { exact: true })).toBeVisible();
   await page.getByTitle('Stop', { exact: true }).click();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'agent.cancel'))

@@ -87,14 +87,15 @@ commits remain the only permanent transcript source.
 
 Submitting while a turn runs steers it instead of starting a new prompt: the
 text rides the serve engine's lossless steering queue and is folded into the
-running turn at its next step boundary. The composer's button morphs while a
-turn runs — an empty composer shows the interrupt (■), typed text turns it
-into the steer submit (↑). Each steer waits in a panel docked above the
-composer until the engine settles it — `steer_applied` commits it into the
-transcript as a real user message, while `steer_dropped` (the steer raced
-the turn's end through the pipes) surfaces a notice asking to resubmit, so
-the text never vanishes silently. A turn that is being cancelled cannot be
-steered; the text stays in the composer.
+running turn at its next step boundary. The composer's action group grows
+while a turn runs — the interrupt (■) stays available throughout, and typed
+text adds the steer submit (↑) beside it, so steering never costs the ability
+to stop. Each steer waits in a panel docked above the composer until the
+engine settles it — `steer_applied` commits it into the transcript as a real
+user message, while `steer_dropped` (the steer raced the turn's end through
+the pipes) surfaces a notice asking to resubmit, so the text never vanishes
+silently. A turn that is being cancelled cannot be steered; the text stays in
+the composer.
 
 ## Skills
 

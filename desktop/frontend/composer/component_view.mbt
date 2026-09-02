@@ -154,26 +154,28 @@ fn GoalInput::view(
 }
 
 ///|
-fn Entry::view(
+fn Entry::action_buttons(
   self : Entry,
   emit : @cmd.Emit[Msg],
   action_emit : @cmd.Emit[Action],
   input : Input,
-  clock_ms~ : Double,
-) -> @html.Html {
+) -> Array[ActionButton] {
   let goal_mode = input.goal.draft is Some(_)
-  let action = if goal_mode {
-    ActionButton::{
-      id: "goal-set",
-      class_name: "icon-button send-button",
-      title: "Set the standing goal (Enter)",
-      disabled: self.goal_draft.unwrap_or("").is_blank(),
-      command: emit(SubmitRequested),
-      content: @icons.icon(@icons.icon_arrow_up),
-    }
-  } else {
-    match input.presentation.primary_action {
-      Send(available~) =>
+  if goal_mode {
+    return [
+      {
+        id: "goal-set",
+        class_name: "icon-button send-button",
+        title: "Set the standing goal (Enter)",
+        disabled: self.goal_draft.unwrap_or("").is_blank(),
+        command: emit(SubmitRequested),
+        content: @icons.icon(@icons.icon_arrow_up),
+      },
+    ]
+  }
+  match input.presentation.primary_action {
+    Send(available~) =>
+      [
         {
           id: "send",
           class_name: "icon-button send-button",
@@ -182,30 +184,45 @@ fn Entry::view(
           (self.draft.task.is_blank() && self.draft.mentions.is_empty()),
           command: emit(SubmitRequested),
           content: @icons.icon(@icons.icon_arrow_up),
-        }
-      Running(steer_available~, can_stop~) =>
-        if steer_available &&
-          (!self.draft.task.is_blank() || !self.draft.mentions.is_empty()) {
-          {
-            id: "send",
-            class_name: "icon-button send-button",
-            title: "Steer the running task",
-            disabled: false,
-            command: emit(SubmitRequested),
-            content: @icons.icon(@icons.icon_arrow_up),
-          }
-        } else {
-          {
-            id: "stop",
-            class_name: "icon-button stop-button",
-            title: "Stop",
-            disabled: !can_stop,
-            command: action_emit(StopRequested(identity=self.identity())),
-            content: @icons.icon(@icons.icon_debug_stop),
-          }
-        }
+        },
+      ]
+    Running(steer_available~, can_stop~) => {
+      let actions : Array[ActionButton] = [
+        {
+          id: "stop",
+          class_name: "icon-button stop-button",
+          title: "Stop",
+          disabled: !can_stop,
+          command: action_emit(StopRequested(identity=self.identity())),
+          content: @icons.icon(@icons.icon_debug_stop),
+        },
+      ]
+      if steer_available &&
+        (!self.draft.task.is_blank() || !self.draft.mentions.is_empty()) {
+        actions.push({
+          id: "send",
+          class_name: "icon-button send-button",
+          title: "Steer the running task",
+          disabled: false,
+          command: emit(SubmitRequested),
+          content: @icons.icon(@icons.icon_arrow_up),
+        })
+      }
+      actions
     }
   }
+}
+
+///|
+fn Entry::view(
+  self : Entry,
+  emit : @cmd.Emit[Msg],
+  action_emit : @cmd.Emit[Action],
+  input : Input,
+  clock_ms~ : Double,
+) -> @html.Html {
+  let goal_mode = input.goal.draft is Some(_)
+  let actions = self.action_buttons(emit, action_emit, input)
   let context : Array[@html.Html] = []
   for component in input.presentation.context {
     context.push(component.render(self.identity(), action_emit))
@@ -242,7 +259,7 @@ fn Entry::view(
     status: input.presentation.status.map(component => {
       component.render(self.identity(), action_emit)
     }),
-    action,
+    actions,
     overlay: if goal_mode {
       None
     } else {

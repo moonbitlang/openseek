@@ -41,6 +41,22 @@ fn Action::test_emit() -> @cmd.Emit[Action] {
 }
 
 ///|
+test "a running draft keeps Stop beside Steer" {
+  let base = Input::fixture("steer while running")
+  let input = {
+    ..base,
+    presentation: {
+      ..base.presentation,
+      primary_action: Running(steer_available=true, can_stop=true),
+    },
+  }
+  let actions = Model(input)
+    .active(input)
+    .action_buttons(Msg::test_emit(), Action::test_emit(), input)
+  assert_eq(actions.map(action => action.id), ["stop", "send"])
+}
+
+///|
 test "typing is local, pure, and idempotent" {
   let input = Input::fixture("")
   let initial = Model(input)
