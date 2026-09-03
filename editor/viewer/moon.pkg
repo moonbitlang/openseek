@@ -12,6 +12,7 @@ import {
   "moonbitlang/editor/viewer/common/diff",
   "moonbitlang/editor/viewer/common/model",
   "moonbitlang/editor/viewer/common/agent_feedback_api",
+  "moonbitlang/editor/viewer/common/code_lens_api",
   "moonbitlang/editor/viewer/common/navigation_api",
   "moonbitlang/editor/viewer/common/quick_diff_api",
   "moonbitlang/editor/internal/viewer/markdown" @markdown_core,

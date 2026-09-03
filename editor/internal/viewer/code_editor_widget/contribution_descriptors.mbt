@@ -13,6 +13,7 @@ priv enum CodeEditorContributionKind {
   ContextMenu
   Definition
   References
+  CodeLens
 } derive(Eq)
 
 ///|
@@ -53,6 +54,7 @@ pub fn CodeEditorContributionDescriptors::standalone() -> CodeEditorContribution
     ContextMenu,
     Definition,
     References,
+    CodeLens,
   ])
 }
 
@@ -64,7 +66,7 @@ pub fn CodeEditorContributionDescriptors::standalone() -> CodeEditorContribution
 /// Markdown-comment replacement remains installed so the diff coordinator can
 /// keep it live in both SideBySide panes and suppress only the clipped Inline
 /// original. Quick diff is excluded because a diff pane must not host a nested
-/// SCM diff.
+/// SCM diff; CodeLens is standalone-only in the initial feature slice.
 pub fn CodeEditorContributionDescriptors::diff_pane() -> CodeEditorContributionDescriptors {
   CodeEditorContributionDescriptors::from_enabled([
     AgentFeedbackInput,
@@ -81,8 +83,9 @@ pub fn CodeEditorContributionDescriptors::diff_pane() -> CodeEditorContributionD
 /// Embedded Definition/References Peek preview. The preview retains hover,
 /// context actions, and direct Go to Definition, but intentionally has no
 /// References controller, Markdown-comment replacement, quick diff, folding,
-/// or agent-feedback UI. In particular, Alt/Shift+F12 cannot recursively open
-/// another Peek because no References contribution exists in this kernel.
+/// CodeLens, or agent-feedback UI. In particular, Alt/Shift+F12 cannot
+/// recursively open another Peek because no References contribution exists in
+/// this kernel.
 pub fn CodeEditorContributionDescriptors::peek_preview() -> CodeEditorContributionDescriptors {
   CodeEditorContributionDescriptors::from_enabled([
     ContentHover,

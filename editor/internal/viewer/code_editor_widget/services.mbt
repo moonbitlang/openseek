@@ -11,6 +11,7 @@ struct CodeEditorServices {
   languages : @languages.LanguageHandle
   marker_decorations : @markers.MarkerDecorationsHandle
   agent_feedback : @agent_feedback_api.AgentFeedbackHandle
+  code_lens_command_executor : @code_lens_api.CodeLensCommandExecutorHandle?
   location_opener : @navigation_api.LocationOpenerHandle?
   text_model_resolver : @navigation_api.TextModelResolverHandle?
   quick_diff : @quick_diff_api.QuickDiffHandle
@@ -33,6 +34,7 @@ pub fn CodeEditorServices::CodeEditorServices(
   languages? : @languages.LanguageHandle,
   markers? : @markers.MarkerDecorationsSource,
   agent_feedback? : @agent_feedback_api.AgentFeedbackHandle,
+  code_lens_command_executor? : @code_lens_api.CodeLensCommandExecutorHandle,
   location_opener? : @navigation_api.LocationOpenerHandle,
   text_model_resolver? : @navigation_api.TextModelResolverHandle,
   quick_diff? : @quick_diff_api.QuickDiffHandle,
@@ -78,6 +80,7 @@ pub fn CodeEditorServices::CodeEditorServices(
     languages,
     marker_decorations,
     agent_feedback,
+    code_lens_command_executor,
     location_opener,
     text_model_resolver,
     quick_diff,

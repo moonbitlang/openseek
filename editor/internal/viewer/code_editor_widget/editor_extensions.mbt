@@ -55,6 +55,7 @@ priv enum EditorContributionInstance {
   ContextMenu(ContextMenuContributionState)
   Definition(DefinitionContributionState)
   References(ReferencesContributionState)
+  CodeLens(CodeLensContributionState)
 }
 
 ///|
@@ -213,6 +214,13 @@ fn EditorContributionEntry::dispose(
       self.listeners.clear()
     }
     References(state) => {
+      state.dispose(viewer)
+      for listener in self.listeners {
+        listener.dispose()
+      }
+      self.listeners.clear()
+    }
+    CodeLens(state) => {
       state.dispose(viewer)
       for listener in self.listeners {
         listener.dispose()
@@ -761,6 +769,7 @@ fn editor_registry() -> EditorContributionRegistry {
       register_context_menu_contribution(registry)
       register_definition_contribution(registry)
       register_references_contribution(registry)
+      register_code_lens_contribution(registry)
       register_cursor_navigation_commands(registry)
       editor_registry_holder.registry = Some(registry)
       registry
