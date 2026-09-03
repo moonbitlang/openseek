@@ -28,8 +28,6 @@ pub(all) struct Input {
 
 ///|
 pub(all) struct Actions {
-  toggle : @cmd.Cmd
-  new_chat : @cmd.Cmd
   update : @cmd.Cmd
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd
@@ -227,21 +225,10 @@ pub fn component(
       }
     }
     @html.aside([
-      @html.div(class="sidebar-header", [
-        @html.button(
-          class="topbar-toggle",
-          title="Hide sidebar",
-          on_click=actions.toggle,
-          @icons.icon(@icons.icon_layout_sidebar_left),
-        ),
-        @html.button(
-          class="topbar-toggle header-add-project",
-          title="Add a project",
-          on_click=actions.new_chat,
-          attrs=@html.Attrs::build().aria_label("Add a project"),
-          @icons.icon(@icons.icon_add),
-        ),
-      ]),
+      // Navigation actions live with the hierarchy they affect. This empty
+      // strip exists only under the macOS overlay titlebar, where it protects
+      // the traffic-light controls and remains a native drag region.
+      @html.div(class="sidebar-header", @html.nothing),
       @html.div(class="sidebar-main", [
         @html.div(class="sidebar-section sessions", rows),
       ]),

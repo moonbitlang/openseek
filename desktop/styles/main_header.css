@@ -28,17 +28,19 @@ main {
   align-items: center;
   gap: 10px;
   height: var(--topbar-height);
-  padding: 0 18px;
+  padding-block: 0;
+  padding-inline: var(--topbar-inline-padding);
   border-bottom: 1px solid var(--color-separator);
   background: var(--color-bg-surface);
 }
 
 .topbar-toggle {
+  flex: none;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  margin-left: -4px;
+  inline-size: var(--sidebar-toggle-size);
+  block-size: var(--sidebar-toggle-size);
+  margin-inline-start: var(--topbar-leading-toggle-offset);
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -52,16 +54,15 @@ main {
   color: var(--color-text-primary);
 }
 
-/* The sidebar toggle's fallback on screens without a topbar (Skills,
-   Settings): fixed at the exact screen position the sidebar-header
-   toggle holds while the sidebar is open (46px header, 18px padding,
-   -4px pull), shown only while the sidebar is closed. */
+/* Pages without a topbar float the same control at the live sidebar boundary. */
 .page-sidebar-toggle {
   position: fixed;
-  top: 9px;
-  left: 14px;
-  z-index: 5;
-  margin-left: 0;
+  inset-block-start: calc(
+    (var(--topbar-height) - var(--sidebar-toggle-size)) / 2
+  );
+  inset-inline-start: var(--sidebar-toggle-inline-start);
+  z-index: var(--z-titlebar-control);
+  margin-inline-start: 0;
 }
 
 .topbar-title {

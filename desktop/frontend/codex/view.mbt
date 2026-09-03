@@ -423,16 +423,20 @@ pub fn State::page(
   // Account actions (sign in/out, the pending sign-in page) live in the
   // Settings page's Codex group; the topbar keeps only the status label.
   let topbar : Array[@html.Html] = []
-  if !sidebar_open {
-    topbar.push(
-      @html.button(
-        class="topbar-toggle",
-        title="Show sidebar",
-        on_click=actions.toggle_sidebar,
-        icon(icon_layout_sidebar_left),
-      ),
-    )
+  let sidebar_toggle_label = if sidebar_open {
+    "Hide sidebar"
+  } else {
+    "Show sidebar"
   }
+  topbar.push(
+    @html.button(
+      class="topbar-toggle sidebar-boundary-toggle",
+      title=sidebar_toggle_label,
+      on_click=actions.toggle_sidebar,
+      attrs=@html.Attrs::build().aria_label(sidebar_toggle_label),
+      icon(icon_layout_sidebar_left),
+    ),
+  )
   let title = match self.selection {
     CodexDraftTask(_) => "New chat"
     CodexStoredTask(thread) => thread.title

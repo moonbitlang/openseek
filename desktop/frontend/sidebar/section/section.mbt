@@ -259,24 +259,27 @@ pub fn component(
     let heading : Array[@html.Html] = [
       @html.span(class="sidebar-label", input.label),
     ]
-    if input.action is Some(action) {
-      heading.push(
-        @html.button(
-          class="row-archive",
-          type_="button",
-          title=action.title,
-          disabled=action.disabled,
-          attrs=@html.Attrs::build().on_click(event => {
-            event.stop_propagation()
-            (actions.primary)(input.id)
-          }),
-          @icons.icon(@icons.icon_add),
-        ),
-      )
-    }
     let rows : Array[(String, @html.Html)] = [
       (input.id.key(), @html.div(class~, on_click=emit(Toggle), heading)),
     ]
+    if input.action is Some(action) {
+      rows.push(
+        (
+          "\{input.id.key()}:action",
+          @html.button(
+            class="section-primary-action",
+            type_="button",
+            title=action.title,
+            disabled=action.disabled,
+            on_click=(actions.primary)(input.id),
+            [
+              @html.span(class="sidebar-icon", @icons.icon(@icons.icon_add)),
+              @html.span(class="sidebar-label", action.title),
+            ],
+          ),
+        ),
+      )
+    }
     if !collapsed {
       for group in entry_rows {
         for row in group {

@@ -295,15 +295,31 @@ html {
      Component styles consume the dimension that matches their seam. */
   --resize-handle-width: 6px;
   --resize-handle-height: 6px;
+  --sidebar-column-width: clamp(220px, var(--sidebar-width, 264px), 480px);
+  --sidebar-drawer-width: min(320px, 86vw);
+  --sidebar-boundary-width: var(--sidebar-column-width);
+  --sidebar-toggle-size: 28px;
+  --topbar-inline-padding: 18px;
+  --topbar-leading-toggle-offset: -4px;
+  --sidebar-toggle-inline-inset: calc(
+    var(--topbar-inline-padding) + var(--topbar-leading-toggle-offset)
+  );
+  --sidebar-toggle-trailing-gap: 12px;
+  --sidebar-toggle-inline-start: min(
+    calc(var(--sidebar-boundary-width) + var(--sidebar-toggle-inline-inset)),
+    calc(100vw - var(--sidebar-toggle-size))
+  );
+  --sidebar-toggle-reserved-width: calc(
+    var(--sidebar-toggle-inline-inset) + var(--sidebar-toggle-size) +
+      var(--sidebar-toggle-trailing-gap)
+  );
   display: grid;
   /* The sidebar track reads `--sidebar-width`, set as the user drags the
      handle on the aside's right edge (see frontend/sidebar_resize.mbt); it
      defaults to the old fixed maximum and is clamped so the sidebar keeps
      at least 220px while the content column keeps the rest. The clamp also
      re-fits the panel on window resize without any script. */
-  grid-template-columns:
-    clamp(220px, var(--sidebar-width, 264px), 480px)
-    minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-column-width) minmax(0, 1fr);
   /* Track #app's content box (which already accounts for any scrollbar)
      rather than 100vh, so the two height bases can't disagree. */
   height: 100%;
@@ -316,6 +332,7 @@ html {
    takes the full width. The aside stays in the DOM (merely unmounted
    from layout) so reopening keeps its scroll position. */
 .app.sidebar-collapsed {
+  --sidebar-column-width: 0px;
   grid-template-columns: 0 minmax(0, 1fr);
 }
 .app.sidebar-collapsed > aside {
@@ -364,28 +381,17 @@ html {
   height: 46px;
 }
 
-/* macOS keeps its traffic-light controls in the top-left corner. Reserve that
-   native hit area only in the Apple desktop shell. The four rules cover the
-   same sidebar toggle in each place it can live: open sidebar, ordinary
-   collapsed topbar, Settings/Skills fallback, and expanded editor overlay. */
+/* macOS keeps its traffic-light controls in the top-left corner. The open
+   sidebar reserves them with its empty titlebar strip; once collapsed, the
+   main column reaches that corner and its visible chrome takes the inset. */
 .app.native-apple-titlebar {
   --native-titlebar-leading-inset: 88px;
 }
-.app.native-apple-titlebar .sidebar-header,
+.app.native-apple-titlebar.sidebar-collapsed {
+  --sidebar-toggle-inline-inset: var(--native-titlebar-leading-inset);
+}
 .app.native-apple-titlebar.sidebar-collapsed .topbar {
-  padding-left: var(--native-titlebar-leading-inset);
-}
-.app.native-apple-titlebar.sidebar-collapsed .page-sidebar-toggle,
-.app.native-apple-titlebar.sidebar-collapsed
-  .content.panel-expanded
-  .topbar
-  > .topbar-toggle {
-  left: var(--native-titlebar-leading-inset);
-}
-.app.native-apple-titlebar.sidebar-collapsed
-  .content.panel-expanded
-  .editor-tabsbar {
-  padding-left: calc(var(--native-titlebar-leading-inset) + 40px);
+  padding-inline-start: var(--native-titlebar-leading-inset);
 }
 
 /* Windows keeps its real minimize/maximize/close cluster in the top-right.
@@ -414,14 +420,6 @@ html {
   right: var(--native-titlebar-caption-inset);
   height: var(--native-titlebar-height);
 }
-.app.native-windows-titlebar.sidebar-collapsed .page-sidebar-toggle,
-.app.native-windows-titlebar.sidebar-collapsed
-  .content.panel-expanded
-  .topbar
-  > .topbar-toggle {
-  top: 6px;
-}
-
 /* The conversation (left) and the editor (right) live side by side as two
    independent parts. The editor track is zero-width until the panel
    opens, so the viewer host element stays in the DOM but takes no
@@ -472,20 +470,18 @@ html {
   grid-template-columns: 0 minmax(0, 1fr);
 }
 
-/* Expanded normally hides the zero-width conversation column behind the
-   editor. When that column owns the only sidebar reopen button, float the
-   button back to its normal window-edge position above the editor and reserve
-   the same space in the tab strip so open tabs never sit underneath it. */
-.app.sidebar-collapsed
-  .content.panel-expanded
-  .topbar
-  > .topbar-toggle {
+/* Expanded hides the zero-width conversation column behind the editor. Float
+   its sidebar control back to the boundary it owns and reserve matching room
+   in the tab strip so open tabs never sit underneath it. */
+.content.panel-expanded :where(.topbar > .sidebar-boundary-toggle) {
   position: fixed;
-  top: 9px;
-  left: 14px;
-  z-index: calc(var(--z-editor-overlay) + 1);
-  margin-left: 0;
+  inset-block-start: calc(
+    (var(--topbar-height) - var(--sidebar-toggle-size)) / 2
+  );
+  inset-inline-start: var(--sidebar-toggle-inline-start);
+  z-index: var(--z-editor-overlay-control);
+  margin-inline-start: 0;
 }
-.app.sidebar-collapsed .content.panel-expanded .editor-tabsbar {
-  padding-left: 54px;
+.content.panel-expanded .editor-tabsbar {
+  padding-inline-start: var(--sidebar-toggle-reserved-width);
 }

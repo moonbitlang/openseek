@@ -43,24 +43,16 @@ html.is-resizing .sidebar-resize-handle {
   background: var(--color-accent-soft);
 }
 
-/* The sidebar's own 46px header, matching the topbar so the sidebar
-   toggle sitting here (while the sidebar is open) lands at the same
-   screen position as the topbar's toggle (while it's closed), and the
-   bottom divider continues the topbar's across the two columns. */
+/* The hierarchy starts at the top of the sidebar. macOS alone keeps an empty
+   native-titlebar strip so project controls never sit beneath the traffic
+   lights; the main-column toggle owns the visible layout action. */
 .sidebar-header {
-  display: flex;
-  align-items: center;
+  display: none;
   height: 46px;
-  padding: 0 18px;
   border-bottom: 1px solid var(--color-separator);
 }
-
-/* Add project holds the header's right edge. The -4px mirrors the
-   toggle's left pull so both icons sit the same optical distance from
-   their window edge. */
-.sidebar-header .header-add-project {
-  margin-left: auto;
-  margin-right: -4px;
+.app.native-apple-titlebar .sidebar-header {
+  display: block;
 }
 
 .sidebar-main {
@@ -78,8 +70,13 @@ html.is-resizing .sidebar-resize-handle {
      off the edge on its own; an overlay bar (macOS) floats above the content
      and reserves nothing, so there the whole inset has to be real padding.
      `--scrollbar-lane` is the measured width of the gutter the bar claims. */
+  padding-top: 12px;
   padding-right: max(0px, var(--sidebar-inset) - var(--scrollbar-lane));
   scrollbar-gutter: stable;
+}
+.app.native-apple-titlebar .sidebar-main {
+  /* The titlebar strip already contributes the sidebar's leading rhythm. */
+  padding-top: 0;
 }
 
 .sidebar-section {
@@ -336,9 +333,8 @@ html.is-resizing .sidebar-resize-handle {
   visibility: visible;
 }
 
-/* The chat list's two section headings ("Workspaces", "Chats"): the
-   sidebar-heading type with a hover-revealed ＋ that adds to the
-   section, sharing the row-archive treatment. */
+/* Section headings disclose their hierarchy. A section-owned creation action
+   is a labeled row beneath its heading, not another ambiguous plus in chrome. */
 .section-heading {
   display: flex;
   align-items: center;
@@ -352,9 +348,6 @@ html.is-resizing .sidebar-resize-handle {
 .section-heading > .sidebar-label {
   flex: 1 1 auto;
 }
-.section-heading:hover .row-archive {
-  visibility: visible;
-}
 /* Every peer conversation section uses the same heading disclosure. */
 .section-heading.collapsible {
   cursor: pointer;
@@ -366,8 +359,35 @@ html.is-resizing .sidebar-resize-handle {
 .section-heading.collapsible.collapsed > .sidebar-label::after {
   content: " ▸";
 }
-.section-heading.active {
-  color: var(--color-accent-strong);
+.section-primary-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  margin: 0 0 4px;
+  padding: 0 8px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.section-primary-action:hover:not(:disabled) {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
+  color: var(--color-text-primary);
+}
+.section-primary-action:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+.section-primary-action:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 /* An attached workspace: a folder row whose main disclosure button folds its

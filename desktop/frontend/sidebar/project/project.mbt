@@ -244,6 +244,7 @@ pub fn component(
         ],
       ),
     ]
+    // Keep the action order aligned with the sidebar: menu first, new chat last.
     if input.managed {
       row_children.push(
         @html.button(
@@ -263,10 +264,12 @@ pub fn component(
           class="row-archive",
           type_="button",
           title="New conversation in this project",
-          attrs=@html.Attrs::build().on_click(event => {
-            event.stop_propagation()
-            (actions.new_conversation)(input.id)
-          }),
+          attrs=@html.Attrs::build()
+            .on_click(event => {
+              event.stop_propagation()
+              (actions.new_conversation)(input.id)
+            })
+            .aria_label("New conversation in this project"),
           @icons.icon(@icons.icon_new_chat),
         ),
       )

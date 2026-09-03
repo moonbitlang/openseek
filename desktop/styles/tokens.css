@@ -152,11 +152,16 @@
     );
 
   /* App-wide stacking order. Values inside a component's own stacking
-     context stay local because they do not compete with these surfaces. */
+     context stay local because they do not compete with these surfaces.
+     Controls that escape an overlay sit on the named layer immediately above
+     the surface they control. */
+  --z-titlebar-control: 5;
   --z-menu: 31;
   --z-editor-overlay: 45;
+  --z-editor-overlay-control: 46;
   --z-sidebar-backdrop: 51;
   --z-sidebar-drawer: 52;
+  --z-sidebar-drawer-control: 53;
   --z-notification: 55;
   --z-modal: 60;
   --z-quick-open: 70;

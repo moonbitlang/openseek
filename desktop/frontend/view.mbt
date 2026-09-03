@@ -1349,20 +1349,22 @@ fn topbar_view(
   conv : Conversation,
 ) -> @html.Html {
   let items : Array[@html.Html] = []
-  // The sidebar toggle rides the window's left edge. While the sidebar is open
-  // it lives in the sidebar's own header; only when the sidebar is closed does
-  // it fall back to the topbar's left, so it holds the same screen position
-  // either way (the same trick the right-panel toggle uses on the right edge).
-  if !model.sidebar_open {
-    items.push(
-      @html.button(
-        class="topbar-toggle",
-        title="Show sidebar",
-        on_click=dispatch(ToggleSidebar),
-        icon(icon_layout_sidebar_left),
-      ),
-    )
+  // The layout action sits at the boundary it controls: beside the sidebar
+  // while open, and at the window edge while collapsed.
+  let sidebar_toggle_label = if model.sidebar_open {
+    "Hide sidebar"
+  } else {
+    "Show sidebar"
   }
+  items.push(
+    @html.button(
+      class="topbar-toggle sidebar-boundary-toggle",
+      title=sidebar_toggle_label,
+      on_click=dispatch(ToggleSidebar),
+      attrs=@html.Attrs::build().aria_label(sidebar_toggle_label),
+      icon(icon_layout_sidebar_left),
+    ),
+  )
   items.push(
     @html.span(
       class="topbar-title",
@@ -1473,28 +1475,28 @@ fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-/// Skills and Settings have no topbar, so while the sidebar is closed they
-/// float their own reopen button at the sidebar toggle's screen position —
-/// without it the sidebar, their only way back to any other screen, would be
-/// unrecoverable.
+/// Skills and Settings have no topbar, so they float the layout control at the
+/// same sidebar boundary used by conversation topbars.
 fn page_with_toggle(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   page : @html.Html,
 ) -> Array[@html.Html] {
-  if model.sidebar_open {
-    [page]
+  let sidebar_toggle_label = if model.sidebar_open {
+    "Hide sidebar"
   } else {
-    [
-      @html.button(
-        class="topbar-toggle page-sidebar-toggle",
-        title="Show sidebar",
-        on_click=dispatch(ToggleSidebar),
-        icon(icon_layout_sidebar_left),
-      ),
-      page,
-    ]
+    "Show sidebar"
   }
+  [
+    @html.button(
+      class="topbar-toggle page-sidebar-toggle sidebar-boundary-toggle",
+      title=sidebar_toggle_label,
+      on_click=dispatch(ToggleSidebar),
+      attrs=@html.Attrs::build().aria_label(sidebar_toggle_label),
+      icon(icon_layout_sidebar_left),
+    ),
+    page,
+  ]
 }
 
 ///|

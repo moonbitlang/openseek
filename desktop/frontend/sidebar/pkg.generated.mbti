@@ -23,10 +23,11 @@ pub(all) struct Account {
   busy : Bool
   notice : String?
 } derive(Eq, @debug.Debug)
+pub fn Account::equal(Self, Self) -> Bool
+pub fn Account::not_equal(Self, Self) -> Bool
+pub fn Account::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Actions {
-  toggle : @cmd.Cmd
-  new_chat : @cmd.Cmd
   update : @cmd.Cmd
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd
@@ -44,6 +45,9 @@ pub(all) struct Input {
   settings_active : Bool
   account : Account?
 } derive(Eq, @debug.Debug)
+pub fn Input::equal(Self, Self) -> Bool
+pub fn Input::not_equal(Self, Self) -> Bool
+pub fn Input::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 
