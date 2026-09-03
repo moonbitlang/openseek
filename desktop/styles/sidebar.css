@@ -13,6 +13,7 @@ aside {
   gap: 14px;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   padding-bottom: 14px;
   border-right: 1px solid var(--color-separator);
   background: var(--color-bg-surface);
@@ -20,6 +21,8 @@ aside {
   /* The width-resize grab strip on the right edge positions against the
      aside itself. */
   position: relative;
+  visibility: visible;
+  transition: visibility 0s linear;
 }
 
 /* Drag-to-resize handle on the sidebar's right edge. A thin strip floated

@@ -42,6 +42,11 @@
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.6;
 
+  /* Drawer-like layout surfaces share one restrained motion curve. Their
+     direction still belongs to each component's edge and layout axis. */
+  --drawer-duration: 180ms;
+  --drawer-easing: cubic-bezier(0.2, 0, 0, 1);
+
   /* Icon sizes. A control declares `--icon-size` from this scale and `.icon`
      reads it, so no rule reaches into another element to size its glyph.
      Codicons are drawn on a 16px grid, so the steps are even: at odd sizes

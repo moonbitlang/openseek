@@ -3,21 +3,31 @@
 /* The emulator host remains mounted while hidden so each imperative xterm
    instance retains its screen and scrollback. */
 .terminal-panel {
-  display: none;
+  display: flex;
   position: relative;
   grid-row: 2;
   grid-column: 1;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   flex-direction: column;
   background: var(--color-bg-surface);
   border-top: 1px solid var(--color-separator);
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(100%);
+  transition:
+    transform var(--drawer-duration) var(--drawer-easing),
+    visibility 0s linear var(--drawer-duration);
 }
 /* The state remains open while Settings, Skills, or workspace settings are on
    screen. Require the root layout's page-aware class too, so those pages hide
    the persistent emulator without tearing down its tab or PTY. */
 .content.terminal-open > .terminal-panel.open {
-  display: flex;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+  transition-delay: 0s;
 }
 
 .terminal-resize-handle {

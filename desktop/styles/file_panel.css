@@ -42,6 +42,14 @@ button.panel-toggle:not(:disabled):hover {
      conversation column, never the other way around. */
   position: relative;
   z-index: 1;
+  visibility: visible;
+  transition: visibility 0s linear;
+}
+
+.content:not(.panel-open) > .editor {
+  visibility: hidden;
+  pointer-events: none;
+  transition-delay: var(--drawer-duration);
 }
 
 /* The editor's top bar, the same height as the topbar so the header
@@ -206,8 +214,8 @@ button.panel-toggle:not(:disabled):hover {
   display: none;
 }
 /* The file tree as a flat bottom panel, Emacs-window style: full
-   width, a 1px seam against the viewer, no chrome of its own, shown
-   and hidden instantly. Non-modal — the viewer above stays live.
+   width, a 1px seam against the viewer, no chrome of its own. Non-modal —
+   the viewer above stays live while its flex basis opens or closes.
    The height is `--tree-height`, set as the user drags the handle on
    the top seam (see tree_resize.mbt); it defaults to a third and is
    clamped so the panel floors at 96px while the viewer keeps at
@@ -222,9 +230,16 @@ button.panel-toggle:not(:disabled):hover {
   overflow: hidden;
   border-top: 1px solid var(--color-separator);
   background: var(--color-bg-surface);
+  visibility: visible;
+  transition:
+    flex-basis var(--drawer-duration) var(--drawer-easing),
+    visibility 0s linear;
 }
 .editor:not(.tree-open) .file-tree-pane {
-  display: none;
+  flex-basis: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition-delay: 0s, var(--drawer-duration);
 }
 
 /* The right-sidebar layout (a Settings choice): same DOM, the body
@@ -240,6 +255,9 @@ button.panel-toggle:not(:disabled):hover {
   min-width: 0;
   border-top: none;
   border-left: 1px solid var(--color-separator);
+}
+.editor.tree-right:not(.tree-open) .file-tree-pane {
+  flex-basis: 0;
 }
 
 /* Drag-to-resize handle on the panel's viewer-facing seam — the

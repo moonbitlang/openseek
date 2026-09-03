@@ -308,16 +308,20 @@ html {
      rather than 100vh, so the two height bases can't disagree. */
   height: 100%;
   min-height: 0;
+  transition: grid-template-columns var(--drawer-duration)
+    var(--drawer-easing);
 }
 
 /* Collapsed: the sidebar column folds to zero and the conversation
    takes the full width. The aside stays in the DOM (merely unmounted
    from layout) so reopening keeps its scroll position. */
 .app.sidebar-collapsed {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 0 minmax(0, 1fr);
 }
 .app.sidebar-collapsed > aside {
-  display: none;
+  visibility: hidden;
+  pointer-events: none;
+  transition-delay: var(--drawer-duration);
 }
 
 /* Proton's overlay titlebar lets the page palette paint the native chrome.
@@ -425,9 +429,12 @@ html {
 .content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 0;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 0;
   min-width: 0;
   min-height: 0;
+  transition:
+    grid-template-columns var(--drawer-duration) var(--drawer-easing),
+    grid-template-rows var(--drawer-duration) var(--drawer-easing);
 }
 
 /* Opening the terminal carves a resizable second row out of the conversation

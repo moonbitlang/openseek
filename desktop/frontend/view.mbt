@@ -1827,13 +1827,18 @@ fn view(
       terminal_html,
     ]),
   ]
-  // On the narrow layout the open sidebar is a drawer over the content; the
-  // backdrop dims the page behind it and a tap there closes it. Appended
-  // after the stable shell children so toggling never re-keys them.
-  if model.narrow && model.sidebar_open {
+  // On the narrow layout the sidebar's stable backdrop fades with the drawer;
+  // keeping it mounted lets the closing transition finish before it becomes
+  // inert. Appended after the stable shell children so toggling never re-keys
+  // them.
+  if model.narrow {
     children.push(
       @html.div(
-        class="sidebar-backdrop",
+        class=if model.sidebar_open {
+          "sidebar-backdrop open"
+        } else {
+          "sidebar-backdrop"
+        },
         on_click=dispatch(ToggleSidebar),
         @html.nothing,
       ),

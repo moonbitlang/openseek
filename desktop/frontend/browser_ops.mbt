@@ -193,11 +193,10 @@ fn measure_browser_pane(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 let browser_pane_watched : Ref[Bool] = Ref(false)
 
 ///|
-/// Watch the pane element's size, once. Size changes that never pass
-/// through the model — a window resize, the editor-width drag — reshape the
-/// pane without any message, so the element's own ResizeObserver is the
-/// signal; position-only shifts (the sidebar toggling) are model-driven and
-/// covered by the geometry signature in `sync_browser_view`.
+/// Watch the pane and its layout column once. The pane catches direct size
+/// changes; the content column catches a sliding sidebar even when a
+/// fixed-width pane only changes position. Both report the pane's current
+/// rectangle so a native Browser view follows CSS-driven drawer motion.
 fn watch_browser_pane(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
@@ -220,6 +219,14 @@ fn watch_browser_pane(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       let _ : @js.Value = observer.apply_with_string("observe", [
         @js.Value::cast_from(element),
       ])
+      match @dom.document().query_selector(".content").to_option() {
+        Some(content) => {
+          let _ : @js.Value = observer.apply_with_string("observe", [
+            @js.Value::cast_from(content),
+          ])
+        }
+        None => ()
+      }
     },
     kind=@cmd.after_render,
   )

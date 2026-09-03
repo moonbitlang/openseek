@@ -11,6 +11,18 @@
   inset: 0;
   z-index: var(--z-sidebar-backdrop);
   background: var(--color-backdrop);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--drawer-duration) var(--drawer-easing),
+    visibility 0s linear var(--drawer-duration);
+}
+.sidebar-backdrop.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
 }
 
 @media (max-width: 760px) {
@@ -38,12 +50,22 @@
   .app {
     grid-template-columns: minmax(0, 1fr);
   }
+  .app.sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .app > aside {
     position: fixed;
     inset: 0 auto 0 0;
     z-index: var(--z-sidebar-drawer);
     width: min(320px, 86vw);
     box-shadow: var(--shadow-overlay);
+    transform: translateX(0);
+    transition:
+      transform var(--drawer-duration) var(--drawer-easing),
+      visibility 0s linear;
+  }
+  .app.sidebar-collapsed > aside {
+    transform: translateX(-100%);
   }
 
   /* The topbar keeps only what a phone needs: the toggle, the title,
@@ -69,11 +91,19 @@
   .content.panel-open.panel-expanded {
     grid-template-columns: minmax(0, 1fr) 0;
   }
-  .content.panel-open .editor {
+  .content > .editor {
     position: fixed;
     inset: 0;
     z-index: var(--z-editor-overlay);
     border-left: 0;
+    transform: translateX(100%);
+    transition:
+      transform var(--drawer-duration) var(--drawer-easing),
+      visibility 0s linear var(--drawer-duration);
+  }
+  .content.panel-open > .editor {
+    transform: translateX(0);
+    transition-delay: 0s;
   }
   /* Drill-down: exactly one of tree/viewer shows. Opening a file
      closes the tree (the fileeditor's narrow Ctx flag); the
@@ -182,6 +212,10 @@
 /* Keep status changes visible without forcing motion on users who disable it
    at the operating-system level. Static shape and color still show each state. */
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --drawer-duration: 0ms;
+  }
+
   .pending-steer-state,
   .queued-input-state.pending,
   .subrun-mark,
