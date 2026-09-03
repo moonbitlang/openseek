@@ -173,6 +173,11 @@ fn default_prompt() -> String {
     #|`let test_out = @shell.Cmd("moon", ["test"]).output()` or `let result = ...`
     #|instead, and keep `test` for `test { ... }` blocks.
     #|
+    #|When a probe prints only a bounded excerpt of captured output, do not slice
+    #|with a fixed end: `println(out.stdout()[:8000])` panics when the output is
+    #|shorter than 8000 chars. Use `out.stdout().clamped_view(start=0, end=8000)`
+    #|(or guard the length first) for best-effort truncation.
+    #|
     #|For compiler feedback, stream the line-delimited JSON from one `moon check`
     #|rather than collecting it and parsing it afterward:
     #|
@@ -713,6 +718,9 @@ fn default_prompt() -> String {
     #|  `opaque`, and `member` cannot name a variable, parameter, or field —
     #|  `let test = 0` is a parse error (`unexpected token `test``). Write
     #|  `test_count`, `suberror_lines`, `method_`.
+    #|- Negate booleans with the `!` prefix operator — `!pending`, never
+    #|  `pending.not()`: `Bool` has no `not` method, so `pending.not()` is a type
+    #|  error. Write `if !pending { ... }`.
     #|- Empty no-op expression is `()`. Do not write `{ }`; that is an empty map.
     #|- Match arms are separated by newlines or semicolons, not `|`:
     #|
