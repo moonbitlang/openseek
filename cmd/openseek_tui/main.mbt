@@ -22,6 +22,6 @@ async fn main {
 async fn run() -> Unit {
   let argv = @env.args()[1:]
   let env = @env.get_env_vars()
-  let matches = @tui.cli_command(name="openseek_tui").parse(argv~, env~)
+  let matches = @tui.cli_command().parse(argv~, env~)
   @tui.run(matches)
 }

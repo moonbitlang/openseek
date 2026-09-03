@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn cli_command(name? : String) -> @argparse.Command
+pub fn cli_command() -> @argparse.Command
 
 pub async fn run(@argparse.Matches) -> Unit
 

@@ -9,7 +9,7 @@ natively by GitHub.
 ## System overview
 
 One shared engine, three frontends. `cmd/openseek` is the engine (headless
-automation: `run`/`serve`/`review`/`sessions`/`mcp`; the desktop app and the
+automation: `run`/`serve`/`review`/`subrun`/`mcp`/`sessions`; the desktop app and the
 viz server are separate executables that spawn or read from it): its `serve`
 mode reads JSONL commands on stdin and streams typed JSONL events
 (`bobzhang/openseek_protocol`) on stdout. The terminal UI (`openseek_tui`,

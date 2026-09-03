@@ -7,9 +7,11 @@ package that builds this package's `cli_command`); the headless engine is the
 separate `openseek` binary.
 
 The UI runs no agent code itself. It spawns the `openseek` engine — by default
-the `openseek` CLI binary, re-launched in `serve` mode (so the UI and engine can
-never drift out of sync), resolved from `argv[0]` when invoked by path (rewriting
-`openseek_tui` to `openseek`) and otherwise from `PATH`; override with `--engine`
+the `openseek` CLI binary in `serve` mode: when launched by path, the sibling
+next to the `openseek_tui` binary (only the basename is rewritten, plus the
+package directory inside Moon's build tree, so the UI and engine come from the
+same build), otherwise the `openseek` on `PATH`; a renamed copy of the UI also
+falls back to `PATH` rather than spawning itself. Override with `--engine`
 — **once per session** and drives it over stdin commands, rendering the engine's
 JSONL event stream: streamed thinking and answer text move live on the activity
 line, each turn's reasoning is kept as a dim `✻` transcript aside above its
@@ -26,6 +28,10 @@ oneshot would only lose steering for no gain).
 
 Because the UI takes over the terminal, launching it without a TTY (a pipe, CI
 log, or cron) is refused with a pointer to `openseek run` / `openseek serve`.
+
+From the source tree, `moon run cmd/openseek_tui` builds only the UI: build the
+engine it spawns first with `moon build cmd/openseek` (the preflight names this
+step when the sibling is missing from Moon's build tree).
 
 ## Sessions
 

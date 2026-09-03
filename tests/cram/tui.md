@@ -90,6 +90,25 @@ Pass --engine <path> or install the openseek binary.
 [1]
 ```
 
+## The Default Engine Is The Sibling `openseek`
+
+With no `--engine`, `openseek_tui` spawns the `openseek` CLI: the binary beside
+its own when launched by path, otherwise the `openseek` found on `PATH`. The cram
+sandbox exposes the engine only as `openseek.exe`, so symlinking it under the
+canonical name into a scratch directory on `PATH` simulates a real install. The
+default engine's preflight then succeeds and the launch reaches the non-TTY
+guard, proving the `openseek_tui` → `openseek` handoff.
+
+```mooncram
+$ sh <<'EOF'
+> bin=$(mktemp -d)
+> ln -s "$(command -v openseek.exe)" "$bin/openseek"
+> PATH="$bin:$PATH" env DEEPSEEK=test-key openseek_tui.exe 2>&1
+> rm -rf "$bin"
+> EOF
+error: the interactive UI needs a terminal; run a headless task with `openseek run "…"` (or `openseek serve` for the JSONL protocol).
+```
+
 ## An Initial Prompt Comes From `--prompt`
 
 `--prompt` supplies the first message. It parses and reaches the engine preflight

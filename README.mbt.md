@@ -224,8 +224,14 @@ above its answer.
 
 ```bash
 export DEEPSEEK=sk-...
+moon build cmd/openseek   # the engine the UI spawns; a separate executable
 moon run cmd/openseek_tui
 ```
+
+`moon run cmd/openseek_tui` builds only the UI. The engine it spawns is the
+sibling `cmd/openseek` executable, so build that first (once, or after engine
+changes); otherwise the launch preflight reports the missing sibling and points
+at this step.
 
 **Every launch converses in a durable session.** The engine only carries
 context between prompts through the session store, so the UI generates a session

@@ -558,7 +558,12 @@ test "bare parse is rejected (no default subcommand)" {
   } catch {
     e => "\{e}"
   }
-  assert_false(outcome == "parsed")
+  // Pin the reason, so an unrelated parse failure (say, a root option ever
+  // becoming `required`) cannot make this pass vacuously.
+  assert_true(
+    outcome.contains("required argument") && outcome.contains("'subcommand'"),
+    msg="expected the missing-subcommand error, got: \{outcome}",
+  )
 }
 
 ///|
