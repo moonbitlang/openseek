@@ -150,17 +150,29 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
   let assistant_name = input.source.assistant_name()
   let subrun_parent = input.subrun_parent()
   let blocks : Array[Block] = []
-  // OpenSeek numbers its model steps: every provider response that is not a
-  // checkpoint replay is one. Codex and legacy items carry no ordinal.
+  // OpenSeek already projects one provider response per model step. Codex
+  // projects its native items separately, so its adapter supplies a shared
+  // identity and only the first row in that inferred step carries the label.
   let mut steps = 0
+  let mut codex_step : String? = None
   for index, row in input.items {
     let item = row.item
-    let step_label = if input.source is OpenSeek &&
-      item.kind is Assistant(replay=false, ..) {
-      steps += 1
-      Some("#\{steps}")
-    } else {
-      None
+    let step_label = match input.source {
+      OpenSeek =>
+        if item.kind is Assistant(replay=false, ..) {
+          steps += 1
+          Some("#\{steps}")
+        } else {
+          None
+        }
+      Codex =>
+        if row.step_identity is Some(identity) && codex_step != Some(identity) {
+          codex_step = Some(identity)
+          steps += 1
+          Some("#\{steps}")
+        } else {
+          None
+        }
     }
     let anchor = if item.kind is User(_) {
       Some(@transcript_overview.TurnKey::of(item, index~).anchor())
@@ -194,11 +206,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
         prose=input.streaming_response,
         reasoning=input.streaming_reasoning,
         reasoning_complete=input.reasoning_complete,
-        step_label=if input.source is OpenSeek {
-          Some("#\{steps + 1}")
-        } else {
-          None
-        },
+        step_label=Some("#\{steps + 1}"),
         assistant_name~,
       ),
     })

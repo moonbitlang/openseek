@@ -75,7 +75,7 @@ pub(all) struct SidebarContext {
 }
 
 type State derive(Eq)
-pub fn State::State(loading? : Bool) -> Self
+pub fn State::State(loading? : Bool, client_namespace? : String) -> Self
 pub fn State::accepts_composer_identity(Self, @composer.Identity, @interop.ChannelId) -> Bool
 pub fn State::account_label(Self) -> String
 pub fn State::active_id(Self) -> String?
@@ -105,6 +105,7 @@ pub fn State::refresh(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Se
 pub fn State::sign_in_required(Self) -> Bool
 pub fn State::signed_in(Self) -> Bool
 pub fn State::transcript_items(Self) -> Array[@transcript.TranscriptItem]
+pub fn State::transcript_rows(Self) -> Array[@transcript.TranscriptRow]
 pub fn State::with_editor_comment(Self, String, @common.Range, String, String, side? : @mention_context.AnnotationSide) -> Self
 pub fn State::with_git_details_closed(Self) -> Self
 pub fn State::worktree_launch_workspace(Self, @interop.ChannelId) -> @common.Uri?

@@ -15,9 +15,13 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         active_session=self.codex.active_id().unwrap_or("none"),
         root=placement.bind(value => value.checkout_root()),
         submission_generation=0,
-        items=@transcript_component.VisibleRow::history(
-          self.codex.transcript_items(),
-        ),
+        items=self.codex
+          .transcript_rows()
+          .map(row => {
+            item: row.item,
+            identity: row.identity,
+            step_identity: row.step_identity,
+          }),
         streaming_response=None,
         streaming_identity="idle",
       )

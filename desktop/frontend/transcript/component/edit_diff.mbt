@@ -1,18 +1,17 @@
 // The `edit` and `multi_edit` tools' arguments, read back out of the
 // transcript as the change they describe.
 //
-// Their payload states a replacement as two separate fields — `old_string` and
-// `new_string` — and the generic rendering prints both, JSON-escaped, one
-// after the other. What the model actually did is the difference between them,
-// and reading it out of two escaped blobs is work a reader should not be
-// doing. The card below synthesizes the diff, the way `viz` does for the same
-// two tools, and states the anchors (`path`/`file`, `start_line`) as chips.
+// OpenSeek tool calls state a replacement as two separate fields —
+// `old_string` and `new_string` — while Codex app-server file-change items
+// record a unified `diff`. The generic rendering leaves either form buried in
+// JSON. The card below synthesizes the first form, reads the second verbatim,
+// and states the anchors (`path`/`file`, `start_line`) as chips.
 //
-// The diff is *derived*, not recorded: it is these two strings compared, not
-// what the tool wrote to the file. Whether the edit applied at all is the
-// paired result — a rejected call still renders, because the change it asked
-// for is what a reader is trying to see. The recorded payload stays a click
-// away in the shared Original JSON tab.
+// For an OpenSeek tool call the diff is derived from its recorded request and
+// the paired result says whether it applied. For Codex the diff itself is the
+// recorded file-change payload. A rejected OpenSeek call still renders the
+// change it requested, and both forms keep their exact payload a click away in
+// the shared Original JSON tab.
 
 ///|
 /// One edit's rendering: the chips that anchor it and the diff it describes.
@@ -29,9 +28,9 @@ priv struct EditDiff {
 const MAX_RENDERED_EDITS = 50
 
 ///|
-/// The card body for an `edit` call: the change it asked for as a diff, under
-/// the chips that anchor it. `None` when the payload is not a readable edit —
-/// it then keeps the generic JSON rendering, which clamps before parsing.
+/// The card body for an `edit` row: the requested or recorded change as a diff,
+/// under the chips that anchor it. `None` when the payload is not readable — it
+/// then keeps the generic JSON rendering, which clamps before parsing.
 fn edit_card(arguments : String) -> @html.Html? {
   guard card_fields(arguments) is Some(fields) else { return None }
   guard decode_edit(fields, path_key="path") is Some(edit) else { return None }
@@ -98,38 +97,52 @@ fn multi_edit_card(arguments : String) -> @html.Html? {
 
 ///|
 /// Decode one edit-shaped object — `edit`'s own arguments, or one entry of a
-/// `multi_edit` batch — into the chips that anchor it and the diff between its
-/// two strings. `None` when it is not an edit this card can show: no string
-/// pair, or a pair with no difference (which the tools reject anyway, and
-/// which would render as an empty change).
+/// `multi_edit` batch — into the chips that anchor it and its diff. OpenSeek's
+/// tools describe the change as `old_string` plus `new_string`; Codex app-server
+/// records the applied unified `diff` directly. Both are exact recorded
+/// semantics, so the shared card accepts either without attempting to derive
+/// one protocol from the other.
 fn decode_edit(fields : Map[String, Json], path_key~ : String) -> EditDiff? {
-  guard fields.get("old_string") is Some(String(old)) &&
-    fields.get("new_string") is Some(String(new)) &&
-    old != new else {
-    return None
+  let diff = match (fields.get("old_string"), fields.get("new_string")) {
+    (Some(String(old)), Some(String(new))) if old != new =>
+      @edit_diff.generate(old, new)
+    _ =>
+      match fields.get("diff") {
+        Some(String(diff)) if !diff.is_blank() => diff
+        _ => return None
+      }
+  }
+  let anchor_key = if fields.get(path_key) is Some(_) {
+    path_key
+  } else if fields.get("path") is Some(_) {
+    // Codex uses `path` for every entry, including a multi-file patch;
+    // OpenSeek's `multi_edit` calls use `file`.
+    "path"
+  } else {
+    path_key
   }
   let chips = scalar_chips(
     fields,
     // The order the tools' schemas list them in: what file, then where in it.
     known=[
-      path_key, "start_line", "end_line", "replace_all_preview", "revert_on_parse_errors",
+      anchor_key, "start_line", "end_line", "replace_all_preview", "revert_on_parse_errors",
     ],
-    dramatized=["old_string", "new_string"],
+    dramatized=["old_string", "new_string", "diff"],
   )
-  Some({ chips, diff: @edit_diff.generate(old, new), })
+  Some({ chips, diff, })
 }
 
 ///|
-/// A synthesized diff as colored lines: `+ ` added, `- ` removed, anything
-/// else context — including the skip marker `truncate_output` leaves behind in
-/// a long change, which is context about the diff itself.
+/// A synthesized or recorded diff as colored lines. `+++` and `---` unified
+/// headers remain context; other leading `+`/`-` lines are additions/removals.
+/// The skip marker `truncate_output` leaves in a long change is context too.
 fn diff_block(text : String) -> @html.Html {
   let lines : Array[@html.Html] = [
     for raw in truncate_output(text, line_prefix_width=2).split("\n") => {
       let line = raw.to_owned()
-      let cls = if line.has_prefix("+ ") {
+      let cls = if line.has_prefix("+") && !line.has_prefix("+++") {
         "diff-add"
-      } else if line.has_prefix("- ") {
+      } else if line.has_prefix("-") && !line.has_prefix("---") {
         "diff-del"
       } else {
         "diff-ctx"

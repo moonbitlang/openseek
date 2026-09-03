@@ -812,8 +812,8 @@ fn RunHeartbeat::label(self : RunHeartbeat, clock_ms~ : Double) -> String {
   if self.started_ms is Some(started) && clock_ms > started {
     detail.push(elapsed_label(clock_ms - started))
   }
-  if self.tokens > 0 {
-    detail.push("\{@labels.compact_count(self.tokens)} tokens")
+  if self.tokens is Some(tokens) {
+    detail.push("\{@labels.compact_count(tokens)} tokens")
   }
   if detail.is_empty() {
     stage

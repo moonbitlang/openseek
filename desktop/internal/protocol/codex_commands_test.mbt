@@ -34,6 +34,7 @@ test "Codex permission modes and turn payloads keep Desktop field names" {
   let start : @protocol.CodexTurnStartPayload = {
     thread_id: "thread-1",
     input: [{ "type": "text", "text": "hello" }],
+    client_user_message_id: Some("page-1-submission-1"),
     model: Some("gpt-test"),
     effort: Some("high"),
     cwd: None,
@@ -42,6 +43,7 @@ test "Codex permission modes and turn payloads keep Desktop field names" {
   @debug.assert_eq(start.to_json(), {
     "threadId": "thread-1",
     "input": [{ "type": "text", "text": "hello" }],
+    "clientUserMessageId": "page-1-submission-1",
     "model": "gpt-test",
     "effort": "high",
     "permissionMode": "fullAccess",
@@ -49,11 +51,24 @@ test "Codex permission modes and turn payloads keep Desktop field names" {
   let steer : @protocol.CodexTurnSteerPayload = {
     thread_id: "thread-1",
     input: [{ "type": "text", "text": "more" }],
+    client_user_message_id: Some("page-1-submission-2"),
     expected_turn_id: "turn-1",
   }
   @debug.assert_eq(steer.to_json(), {
     "threadId": "thread-1",
     "input": [{ "type": "text", "text": "more" }],
+    "clientUserMessageId": "page-1-submission-2",
+    "expectedTurnId": "turn-1",
+  })
+  let legacy_steer : @protocol.CodexTurnSteerPayload = @json.from_json({
+    "threadId": "thread-1",
+    "input": [{ "type": "text", "text": "legacy" }],
+    "expectedTurnId": "turn-1",
+  })
+  assert_eq(legacy_steer.client_user_message_id, None)
+  @debug.assert_eq(legacy_steer.to_json(), {
+    "threadId": "thread-1",
+    "input": [{ "type": "text", "text": "legacy" }],
     "expectedTurnId": "turn-1",
   })
 }

@@ -160,13 +160,37 @@ priv struct CodexArchiveConfirm {
 } derive(Eq)
 
 ///|
+/// One indexed reasoning section accumulated from app-server deltas. The
+/// index is optional only for compatibility with stored/live envelopes that
+/// predate the indexed protocol; it is never replaced with a sentinel number.
+priv struct CodexReasoningPart {
+  index : Int?
+  text : String
+} derive(Eq)
+
+///|
+/// Ordered reasoning sections. Summary and raw reasoning use separate values
+/// so receiving both streams can never interleave them into one document.
+priv struct CodexReasoningParts(Array[CodexReasoningPart]) derive(Eq)
+
+///|
 priv struct CodexItem {
   id : String
   kind : String
   value : Json
+  // Items without their own status (web search and hook prompts, for example)
+  // still need the notification boundary to say whether their shared tool row
+  // is pending. Thread snapshots contain settled history by default; live
+  // `item/started` and `item/completed` notifications override it exactly.
+  completed : Bool
+  // Live lifecycle notifications stamp an item exactly. Thread snapshots do
+  // not carry that field, so reloaded history remains honestly undated.
+  ts : Double?
   // Deltas are presentation-only. `item/completed` replaces `value` and
   // clears this field because the completed item is authoritative.
   streamed : String
+  reasoning_summary : CodexReasoningParts
+  reasoning_content : CodexReasoningParts
 } derive(Eq)
 
 ///|
@@ -178,6 +202,10 @@ priv struct CodexTurn {
   // live turn; it does not identify which process owns the writer.
   started_at : Int?
   completed_at : Int?
+  // The latest upstream model response, not this turn's cumulative usage.
+  // `None` means app-server has not reported it; an explicit zero remains a
+  // real report. `thread/tokenUsage/updated` replaces it by exact turn id.
+  latest_usage_tokens : Int?
   items : Array[CodexItem]
   // App-server's own statement of how complete `items` is: "full" is the
   // whole history, while "summary" (a `turn/completed` envelope drops the
@@ -270,10 +298,13 @@ priv struct CodexPendingRequest {
 /// App-server owns the durable `userMessage` item and its id. This local value
 /// is never inserted into `CodexTurn.items`, never used to retry a request, and
 /// disappears only on a definite request failure or when the corresponding
-/// canonical item is observed under the single-client FIFO rule documented in
-/// `State::with_observed_steer_item`.
+/// canonical item echoes its client user-message id. Older records without
+/// that field retain the compatibility rule documented by reconciliation.
 priv struct CodexSteerReceipt {
   submission_id : Int
+  // Echoed by the canonical User item's `clientId`. Production pages always
+  // supply one; `None` keeps imported tests and older snapshots explicit.
+  client_user_message_id : String?
   turn_id : String
   submitted : @composer.Draft
   known_user_item_ids : Array[String]
@@ -571,6 +602,11 @@ pub fn Msg::server_request(
 
 ///|
 struct State {
+  // An opaque id for this Desktop page instance, supplied by the root model.
+  // It is not a Codex task id or connection id. Combined with the accepted-
+  // submission counter, it prevents two open pages writing to the same task
+  // from generating the same `clientUserMessageId`.
+  client_namespace : String?
   connection : CodexConnection
   account : CodexAccount
   login_id : String?
@@ -609,10 +645,13 @@ struct State {
   // request construction continues to read `draft` and `mentions`, and no
   // retry or history read is derived from this field.
   submitted_first_prompt : @composer.Draft?
+  // The exact id sent beside `submitted_first_prompt`. It survives RPC
+  // acceptance so the later canonical User item can replace only its own row.
+  submitted_first_prompt_client_id : String?
   // Later inputs sent into an in-progress turn get the same immediate visual
   // receipt as the first prompt. These receipts remain separate from canonical
-  // turn items because app-server does not return the new user item id from
-  // `turn/steer`.
+  // turn items because `turn/steer` does not return the canonical item id;
+  // its later User item instead echoes our client user-message id.
   pending_steers : Array[CodexSteerReceipt]
   next_steer_submission_id : Int
   // The shared component advances only after app-server accepts a submission.
@@ -634,8 +673,12 @@ struct State {
 } derive(Eq)
 
 ///|
-pub fn State::State(loading? : Bool = false) -> State {
+pub fn State::State(
+  loading? : Bool = false,
+  client_namespace? : String,
+) -> State {
   {
+    client_namespace,
     connection: CodexStarting,
     account: CodexAccountUnknown,
     login_id: None,
@@ -659,6 +702,7 @@ pub fn State::State(loading? : Bool = false) -> State {
     draft: "",
     mentions: [],
     submitted_first_prompt: None,
+    submitted_first_prompt_client_id: None,
     pending_steers: [],
     next_steer_submission_id: 1,
     submission_sequence: 0,
@@ -697,7 +741,7 @@ fn State::registry_turn_cwd(self : State) -> String? {
 /// Permission changes are frozen while an operation is being accepted or a
 /// turn is active, so the visible choice always describes the next request.
 fn State::can_choose_permission(self : State) -> Bool {
-  self.foreground is None && self.active_turn_id() is None
+  self.foreground is None && !self.is_running()
 }
 
 ///|
@@ -1247,13 +1291,26 @@ pub fn State::with_editor_comment(
 }
 
 ///|
-fn CodexItem::decode(value : Json) -> CodexItem? {
+fn CodexItem::decode(
+  value : Json,
+  completed? : Bool = true,
+  ts? : Double,
+) -> CodexItem? {
   guard value is Object(fields) &&
     @jsonx.json_text(fields, "id") is Some(id) &&
     @jsonx.json_text(fields, "type") is Some(kind) else {
     return None
   }
-  Some({ id, kind, value, streamed: "", })
+  Some({
+    id,
+    kind,
+    value,
+    completed,
+    ts,
+    streamed: "",
+    reasoning_summary: CodexReasoningParts([]),
+    reasoning_content: CodexReasoningParts([]),
+  })
 }
 
 ///|
@@ -1278,6 +1335,7 @@ fn CodexTurn::decode(value : Json) -> CodexTurn? {
     status: @jsonx.json_text(fields, "status").unwrap_or("completed"),
     started_at: @jsonx.json_int(fields, "startedAt"),
     completed_at: @jsonx.json_int(fields, "completedAt"),
+    latest_usage_tokens: None,
     items,
     items_view: @jsonx.json_text(fields, "itemsView"),
     error,
@@ -1709,6 +1767,14 @@ fn State::with_thread_reply(
       notice: "Codex returned thread \{active.id} for requested thread \{requested}",
     }
   }
+  // A reconnect history read can race a token-usage notification for the
+  // selected task. Snapshot turns do not contain that notification-only
+  // field, so retain it before replacing the otherwise-authoritative thread.
+  let active = match self.active_thread() {
+    Some(previous) if previous.id == active.id =>
+      active.with_snapshot_usage_from(previous)
+    _ => active
+  }
   // Selecting a stored thread must not promote it to the top of the sidebar.
   // Replace its row in place; only `thread/start`, whose id is genuinely new,
   // is prepended until the authoritative catalog refresh arrives.
@@ -1768,6 +1834,11 @@ fn State::with_thread_reply(
       None
     } else {
       self.submitted_first_prompt
+    },
+    submitted_first_prompt_client_id: if requested_thread is Some(_) {
+      None
+    } else {
+      self.submitted_first_prompt_client_id
     },
     // A selected-history snapshot is authoritative for its visible transcript
     // and owns none of the previous task's local receipts. Thread creation has
@@ -1962,6 +2033,11 @@ fn State::without_thread(self : State, thread_id : String) -> State {
     } else {
       self.submitted_first_prompt
     },
+    submitted_first_prompt_client_id: if removing_active {
+      None
+    } else {
+      self.submitted_first_prompt_client_id
+    },
     pending_steers: if removing_active {
       []
     } else {
@@ -2001,8 +2077,12 @@ fn State::with_login(self : State, value : Json) -> State {
 }
 
 ///|
+/// Report whether the selected stored task is running from either ordered
+/// task-level activity or a loaded in-progress turn. Reconnect snapshots can
+/// expose the first fact before this page has received the turn body.
 fn State::is_running(self : State) -> Bool {
   guard self.active_thread() is Some(active) else { return false }
+  self.activity.is_running(active.id) ||
   active.turns.iter().any(turn => turn.is_running())
 }
 
@@ -2013,10 +2093,18 @@ fn CodexTurn::is_running(self : CodexTurn) -> Bool {
 
 ///|
 fn State::active_turn_id(self : State) -> String? {
+  self.active_turn().map(turn => turn.id)
+}
+
+///|
+/// The newest in-progress turn selected for Stop, steering, and composer
+/// status. Keeping one selection rule prevents those controls from describing
+/// different turns if an imported task contains more than one live envelope.
+fn State::active_turn(self : State) -> CodexTurn? {
   guard self.active_thread() is Some(active) else { return None }
   for index = active.turns.length() - 1; index >= 0; index = index - 1 {
     if active.turns[index].status == "inProgress" {
-      return Some(active.turns[index].id)
+      return Some(active.turns[index])
     }
   }
   None
@@ -2035,7 +2123,12 @@ fn CodexTurn::with_item(
       if completed {
         item
       } else {
-        { ..item, streamed: existing.streamed, }
+        {
+          ..item,
+          streamed: existing.streamed,
+          reasoning_summary: existing.reasoning_summary,
+          reasoning_content: existing.reasoning_content,
+        }
       }
     } else {
       existing
@@ -2066,11 +2159,154 @@ fn CodexTurn::with_delta(
 }
 
 ///|
+/// Ensure an indexed section exists without changing an already accumulated
+/// section. `summaryPartAdded` reaches this method before its text deltas.
+fn CodexReasoningParts::with_part(
+  self : CodexReasoningParts,
+  index : Int?,
+) -> CodexReasoningParts {
+  if self.0.iter().any(part => part.index == index) {
+    return self
+  }
+  CodexReasoningParts([..self.0, { index, text: "", }])
+}
+
+///|
+/// Append one delta to its indexed section while preserving the arrival order
+/// of sections. The copied array keeps prior Rabbita model snapshots immutable.
+fn CodexReasoningParts::with_delta(
+  self : CodexReasoningParts,
+  index : Int?,
+  delta : String,
+) -> CodexReasoningParts {
+  let mut found = false
+  let parts = self.0.map(part => {
+    if part.index == index {
+      found = true
+      { ..part, text: part.text + delta, }
+    } else {
+      part
+    }
+  })
+  if !found {
+    parts.push({ index, text: delta, })
+  }
+  CodexReasoningParts(parts)
+}
+
+///|
+/// Join section documents without exposing empty boundary notifications as
+/// blank cards. Two newlines preserve the section boundary in plain text and
+/// become separate paragraphs after the completed item renders as Markdown.
+fn CodexReasoningParts::text(self : CodexReasoningParts) -> String {
+  self.0
+  .filter(part => !part.text.is_blank())
+  .map(part => part.text)
+  .join("\n\n")
+}
+
+///|
+fn CodexTurn::with_reasoning_summary_part(
+  self : CodexTurn,
+  item_id : String,
+  summary_index : Int?,
+) -> CodexTurn {
+  {
+    ..self,
+    items: self.items.map(item => {
+      if item.id == item_id && item.kind == "reasoning" {
+        {
+          ..item,
+          reasoning_summary: item.reasoning_summary.with_part(summary_index),
+        }
+      } else {
+        item
+      }
+    }),
+  }
+}
+
+///|
+fn CodexTurn::with_reasoning_summary_delta(
+  self : CodexTurn,
+  item_id : String,
+  summary_index : Int?,
+  delta : String,
+) -> CodexTurn {
+  {
+    ..self,
+    items: self.items.map(item => {
+      if item.id == item_id && item.kind == "reasoning" {
+        {
+          ..item,
+          reasoning_summary: item.reasoning_summary.with_delta(
+            summary_index, delta,
+          ),
+        }
+      } else {
+        item
+      }
+    }),
+  }
+}
+
+///|
+fn CodexTurn::with_reasoning_content_delta(
+  self : CodexTurn,
+  item_id : String,
+  content_index : Int?,
+  delta : String,
+) -> CodexTurn {
+  {
+    ..self,
+    items: self.items.map(item => {
+      if item.id == item_id && item.kind == "reasoning" {
+        {
+          ..item,
+          reasoning_content: item.reasoning_content.with_delta(
+            content_index, delta,
+          ),
+        }
+      } else {
+        item
+      }
+    }),
+  }
+}
+
+///|
+/// Copy notification-only usage into a replacement snapshot by app-server
+/// turn id. Transcript and lifecycle fields remain owned by the new snapshot.
+fn CodexThread::with_snapshot_usage_from(
+  self : CodexThread,
+  previous : CodexThread,
+) -> CodexThread {
+  {
+    ..self,
+    turns: self.turns.map(turn => {
+      let mut latest_usage_tokens = turn.latest_usage_tokens
+      if latest_usage_tokens is None {
+        for existing in previous.turns {
+          if existing.id == turn.id {
+            latest_usage_tokens = existing.latest_usage_tokens
+            break
+          }
+        }
+      }
+      { ..turn, latest_usage_tokens, }
+    }),
+  }
+}
+
+///|
 fn CodexThread::with_turn(self : CodexThread, turn : CodexTurn) -> CodexThread {
   let mut found = false
   let turns = self.turns.map(existing => {
     if existing.id == turn.id {
       found = true
+      // Turn envelopes do not carry token usage. Preserve the latest
+      // notification when a lifecycle or history envelope updates this turn.
+      let turn = { ..turn, latest_usage_tokens: existing.latest_usage_tokens, }
       if turn.items_authoritative() {
         turn
       } else {
@@ -2087,13 +2323,42 @@ fn CodexThread::with_turn(self : CodexThread, turn : CodexTurn) -> CodexThread {
 }
 
 ///|
+/// Replace one turn's latest model-call usage. Unknown turn ids stay inert:
+/// accounting data must not invent transcript or Stop authority.
+fn CodexThread::with_latest_usage(
+  self : CodexThread,
+  turn_id : String,
+  tokens : Int,
+) -> CodexThread {
+  {
+    ..self,
+    turns: self.turns.map(turn => {
+      if turn.id == turn_id {
+        { ..turn, latest_usage_tokens: Some(tokens), }
+      } else {
+        turn
+      }
+    }),
+  }
+}
+
+///|
 /// Whether the app-server transcript has supplied the real presentation of
 /// the first submitted input. Item ids stay app-server-owned; the local
 /// preview needs only this semantic boundary and never tries to match text.
-fn CodexThread::has_user_item(self : CodexThread) -> Bool {
+fn CodexThread::has_user_item(
+  self : CodexThread,
+  client_user_message_id : String?,
+) -> Bool {
   for turn in self.turns {
-    if turn.items.iter().any(item => item.kind == "userMessage") {
-      return true
+    for item in turn.items {
+      if item.kind == "userMessage" {
+        match client_user_message_id {
+          Some(client_id) if item.client_id() == Some(client_id) => return true
+          None => return true
+          _ => ()
+        }
+      }
     }
   }
   false
@@ -2106,10 +2371,14 @@ fn CodexThread::has_user_item(self : CodexThread) -> Bool {
 fn State::with_observed_first_prompt(self : State) -> State {
   guard self.submitted_first_prompt is Some(_) &&
     self.active_thread() is Some(active) &&
-    active.has_user_item() else {
+    active.has_user_item(self.submitted_first_prompt_client_id) else {
     return self
   }
-  { ..self, submitted_first_prompt: None, }
+  {
+    ..self,
+    submitted_first_prompt: None,
+    submitted_first_prompt_client_id: None,
+  }
 }
 
 ///|
@@ -2117,7 +2386,24 @@ fn State::with_observed_first_prompt(self : State) -> State {
 /// first input locally and the composer should say `Starting…`.
 fn State::waiting_for_first_user_item(self : State) -> Bool {
   self.submitted_first_prompt is Some(_) &&
-  self.active_thread().map(thread => !thread.has_user_item()).unwrap_or(true)
+  self
+  .active_thread()
+  .map(thread => !thread.has_user_item(self.submitted_first_prompt_client_id))
+  .unwrap_or(true)
+}
+
+///|
+/// A partial turn envelope may repeat an item without the lifecycle timestamp
+/// delivered by its earlier item notification. The repeated payload remains
+/// authoritative; only an absent presentation timestamp is retained.
+fn CodexItem::merged_onto(self : CodexItem, existing : CodexItem) -> CodexItem {
+  {
+    ..self,
+    ts: match self.ts {
+      Some(ts) => Some(ts)
+      None => existing.ts
+    },
+  }
 }
 
 ///|
@@ -2136,7 +2422,7 @@ fn CodexTurn::merged_onto(self : CodexTurn, existing : CodexTurn) -> CodexTurn {
     let mut merged = item
     for incoming in self.items {
       if incoming.id == item.id {
-        merged = incoming
+        merged = incoming.merged_onto(item)
         break
       }
     }
@@ -2172,9 +2458,76 @@ fn CodexThread::with_item(
       status: "inProgress",
       started_at: None,
       completed_at: None,
+      latest_usage_tokens: None,
       items: [item],
       // Locally minted to hold an early item; the server never stated an
       // items view for it.
+      items_view: None,
+      error: None,
+    })
+  }
+  { ..self, turns, }
+}
+
+///|
+/// Convert app-server's structured standing-plan notification into the exact
+/// `{steps:[{title,status}]}` payload consumed by OpenSeek's shared plan card.
+/// The notification has no item id, so the client-local row is replaced and
+/// moved to the latest activity position on every update instead of inventing
+/// several durable calls. A malformed step rejects the whole update: showing a
+/// partial checklist would claim a plan Codex never reported.
+fn CodexThread::with_plan_update(
+  self : CodexThread,
+  turn_id : String,
+  fields : Map[String, Json],
+) -> CodexThread {
+  guard fields.get("plan") is Some(Array(entries)) else { return self }
+  let steps : Array[Json] = []
+  for entry in entries {
+    guard entry is Object(step) &&
+      @jsonx.json_text(step, "step") is Some(title) &&
+      @jsonx.json_text(step, "status") is Some(status) else {
+      return self
+    }
+    let status = if status == "inProgress" { "in_progress" } else { status }
+    steps.push({ "title": title, "status": status })
+  }
+  let id = "openseek-plan:\{turn_id}"
+  let value : Json = {
+    "id": id,
+    "type": "planUpdate",
+    "steps": Json::array(steps),
+    "explanation": fields.get("explanation").unwrap_or(Json::null()),
+  }
+  let item : CodexItem = {
+    id,
+    kind: "planUpdate",
+    value,
+    completed: true,
+    ts: None,
+    streamed: "",
+    reasoning_summary: CodexReasoningParts([]),
+    reasoning_content: CodexReasoningParts([]),
+  }
+  let mut found = false
+  let turns = self.turns.map(turn => {
+    if turn.id == turn_id {
+      found = true
+      let items = turn.items.filter(existing => existing.kind != "planUpdate")
+      items.push(item)
+      { ..turn, items, }
+    } else {
+      turn
+    }
+  })
+  if !found {
+    turns.push({
+      id: turn_id,
+      status: "inProgress",
+      started_at: None,
+      completed_at: None,
+      latest_usage_tokens: None,
+      items: [item],
       items_view: None,
       error: None,
     })
@@ -2194,6 +2547,102 @@ fn CodexThread::with_delta(
     turns: self.turns.map(turn => {
       if turn.id == turn_id {
         turn.with_delta(item_id, delta)
+      } else {
+        turn
+      }
+    }),
+  }
+}
+
+///|
+/// Preserve app-server's indexed reasoning summary boundaries on the owning
+/// turn. Unknown turn or item ids stay inert until their lifecycle item arrives.
+fn CodexThread::with_reasoning_summary_part(
+  self : CodexThread,
+  turn_id : String,
+  item_id : String,
+  summary_index : Int?,
+) -> CodexThread {
+  {
+    ..self,
+    turns: self.turns.map(turn => {
+      if turn.id == turn_id {
+        turn.with_reasoning_summary_part(item_id, summary_index)
+      } else {
+        turn
+      }
+    }),
+  }
+}
+
+///|
+fn CodexThread::with_reasoning_summary_delta(
+  self : CodexThread,
+  turn_id : String,
+  item_id : String,
+  summary_index : Int?,
+  delta : String,
+) -> CodexThread {
+  {
+    ..self,
+    turns: self.turns.map(turn => {
+      if turn.id == turn_id {
+        turn.with_reasoning_summary_delta(item_id, summary_index, delta)
+      } else {
+        turn
+      }
+    }),
+  }
+}
+
+///|
+fn CodexThread::with_reasoning_content_delta(
+  self : CodexThread,
+  turn_id : String,
+  item_id : String,
+  content_index : Int?,
+  delta : String,
+) -> CodexThread {
+  {
+    ..self,
+    turns: self.turns.map(turn => {
+      if turn.id == turn_id {
+        turn.with_reasoning_content_delta(item_id, content_index, delta)
+      } else {
+        turn
+      }
+    }),
+  }
+}
+
+///|
+/// Adopt app-server's authoritative live patch for one file-change item. The
+/// item id and all lifecycle fields stay untouched; only the `changes` payload
+/// that the shared diff card reads is replaced.
+fn CodexThread::with_file_changes(
+  self : CodexThread,
+  turn_id : String,
+  item_id : String,
+  changes : Json,
+) -> CodexThread {
+  {
+    ..self,
+    turns: self.turns.map(turn => {
+      if turn.id == turn_id {
+        {
+          ..turn,
+          items: turn.items.map(item => {
+            if item.id == item_id &&
+              item.kind == "fileChange" &&
+              item.value is Object(fields) {
+              let fields = fields.copy()
+              fields["changes"] = changes
+              { ..item, value: Json::object(fields), }
+            } else {
+              item
+            }
+          }),
+        }
       } else {
         turn
       }
@@ -2265,34 +2714,138 @@ fn State::with_notification(
       } else {
         observed
       }
-    "item/started" | "item/completed" =>
+    "thread/tokenUsage/updated" =>
       if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
-        fields.get("item") is Some(value) &&
-        CodexItem::decode(value) is Some(item) {
+        fields.get("tokenUsage") is Some(Object(usage)) &&
+        usage.get("last") is Some(Object(last)) &&
+        @jsonx.json_int(last, "totalTokens") is Some(tokens) &&
+        tokens >= 0 {
         {
           ..observed,
-          selection: CodexStoredTask(
-            active.with_item(
-              turn_id,
-              item,
-              completed=method_ == "item/completed",
+          selection: CodexStoredTask(active.with_latest_usage(turn_id, tokens)),
+        }
+      } else {
+        observed
+      }
+    "turn/plan/updated" =>
+      if @jsonx.json_text(fields, "turnId") is Some(turn_id) {
+        {
+          ..observed,
+          selection: CodexStoredTask(active.with_plan_update(turn_id, fields)),
+        }
+      } else {
+        observed
+      }
+    "item/started" | "item/completed" =>
+      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
+        fields.get("item") is Some(value) {
+        let completed = method_ == "item/completed"
+        let ts = match
+          fields.get(if completed { "completedAtMs" } else { "startedAtMs" }) {
+          Some(Number(value, ..)) => Some(value)
+          _ => None
+        }
+        if CodexItem::decode(value, completed~, ts?) is Some(item) {
+          {
+            ..observed,
+            selection: CodexStoredTask(
+              active.with_item(turn_id, item, completed~),
             ),
-          ),
+          }
+        } else {
+          observed
         }
       } else {
         observed
       }
     "item/agentMessage/delta"
     | "item/plan/delta"
-    | "item/reasoning/summaryTextDelta"
-    | "item/reasoning/textDelta"
-    | "item/commandExecution/outputDelta" =>
+    | "item/commandExecution/outputDelta"
+    | "item/fileChange/outputDelta" =>
       if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
         @jsonx.json_text(fields, "itemId") is Some(item_id) &&
         @jsonx.json_text(fields, "delta") is Some(delta) {
         {
           ..observed,
           selection: CodexStoredTask(active.with_delta(turn_id, item_id, delta)),
+        }
+      } else {
+        observed
+      }
+    "item/reasoning/summaryPartAdded" =>
+      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
+        @jsonx.json_text(fields, "itemId") is Some(item_id) {
+        {
+          ..observed,
+          selection: CodexStoredTask(
+            active.with_reasoning_summary_part(
+              turn_id,
+              item_id,
+              @jsonx.json_int(fields, "summaryIndex"),
+            ),
+          ),
+        }
+      } else {
+        observed
+      }
+    "item/reasoning/summaryTextDelta" =>
+      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
+        @jsonx.json_text(fields, "itemId") is Some(item_id) &&
+        @jsonx.json_text(fields, "delta") is Some(delta) {
+        {
+          ..observed,
+          selection: CodexStoredTask(
+            active.with_reasoning_summary_delta(
+              turn_id,
+              item_id,
+              @jsonx.json_int(fields, "summaryIndex"),
+              delta,
+            ),
+          ),
+        }
+      } else {
+        observed
+      }
+    "item/reasoning/textDelta" =>
+      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
+        @jsonx.json_text(fields, "itemId") is Some(item_id) &&
+        @jsonx.json_text(fields, "delta") is Some(delta) {
+        {
+          ..observed,
+          selection: CodexStoredTask(
+            active.with_reasoning_content_delta(
+              turn_id,
+              item_id,
+              @jsonx.json_int(fields, "contentIndex"),
+              delta,
+            ),
+          ),
+        }
+      } else {
+        observed
+      }
+    "item/mcpToolCall/progress" =>
+      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
+        @jsonx.json_text(fields, "itemId") is Some(item_id) &&
+        @jsonx.json_text(fields, "message") is Some(message) {
+        {
+          ..observed,
+          selection: CodexStoredTask(
+            active.with_delta(turn_id, item_id, "\{message}\n"),
+          ),
+        }
+      } else {
+        observed
+      }
+    "item/fileChange/patchUpdated" =>
+      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
+        @jsonx.json_text(fields, "itemId") is Some(item_id) &&
+        fields.get("changes") is Some(changes) {
+        {
+          ..observed,
+          selection: CodexStoredTask(
+            active.with_file_changes(turn_id, item_id, changes),
+          ),
         }
       } else {
         observed
@@ -2452,6 +3005,43 @@ fn CodexPendingRequest::response(
 }
 
 ///|
+fn CodexItem::reasoning_text(self : CodexItem) -> String {
+  let summary = self.reasoning_summary.text()
+  if !summary.is_empty() {
+    return summary
+  }
+  let content = self.reasoning_content.text()
+  if !content.is_empty() {
+    return content
+  }
+  guard self.value is Object(fields) else { return "" }
+  for field in ["summary", "content"] {
+    match fields.get(field) {
+      Some(String(text)) if !text.is_blank() => return text
+      Some(Array(parts)) => {
+        let text : Array[String] = []
+        for part in parts {
+          match part {
+            String(value) if !value.is_blank() => text.push(value)
+            Object(fields) =>
+              if @jsonx.json_text(fields, "text") is Some(value) &&
+                !value.is_blank() {
+                text.push(value)
+              }
+            _ => ()
+          }
+        }
+        if !text.is_empty() {
+          return text.join("\n\n")
+        }
+      }
+      _ => ()
+    }
+  }
+  ""
+}
+
+///|
 fn CodexItem::text(self : CodexItem) -> String {
   let streamed = self.streamed
   guard self.value is Object(fields) else { return self.value.stringify() }
@@ -2480,17 +3070,27 @@ fn CodexItem::text(self : CodexItem) -> String {
           } else if value is Object(input) &&
             @jsonx.json_text(input, "type") is Some("mention") &&
             @jsonx.json_text(input, "path") is Some(path) {
-            // This envelope is presentation-only. Codex still sends and
-            // stores native `UserInput::Mention` values; adapting them here
-            // lets the shared transcript rebuild the same chips its composer
-            // showed without changing the app-server payload.
-            mentions.push(
-              @mention_context.Symbol(
-                name=@jsonx.json_text(input, "name").unwrap_or(path),
-                file=path,
-                line=0,
-              ),
-            )
+            // The composer sends a File as app-server's native path-only
+            // mention. Restore that same kind: the native envelope carries no
+            // source line, so it must not become an unplaced Symbol with a
+            // fabricated numeric line.
+            mentions.push(@mention_context.File(path~))
+          } else if value is Object(input) &&
+            @jsonx.json_text(input, "type") is Some("skill") &&
+            @jsonx.json_text(input, "name") is Some(name) {
+            // Skills already have a native shared mention kind, so they can
+            // retain the same chip the composer showed instead of disappearing
+            // from the historical user message.
+            mentions.push(@mention_context.Skill(name~))
+          } else if value is Object(input) &&
+            (
+              @jsonx.json_text(input, "type") is Some("localImage") ||
+              @jsonx.json_text(input, "type") is Some("localAudio")
+            ) &&
+            @jsonx.json_text(input, "path") is Some(path) {
+            // The shared transcript does not own a media attachment card yet,
+            // but it can preserve a local attachment as a navigable file chip.
+            mentions.push(@mention_context.File(path~))
           }
         }
       }
@@ -2504,29 +3104,7 @@ fn CodexItem::text(self : CodexItem) -> String {
         text
       }
     }
-    "reasoning" =>
-      if !streamed.is_empty() {
-        streamed
-      } else {
-        match fields.get("summary") {
-          Some(String(text)) => text
-          Some(Array(parts)) => {
-            let text : Array[String] = []
-            for part in parts {
-              match part {
-                String(value) => text.push(value)
-                Object(fields) =>
-                  if @jsonx.json_text(fields, "text") is Some(value) {
-                    text.push(value)
-                  }
-                _ => ()
-              }
-            }
-            text.join("\n")
-          }
-          _ => ""
-        }
-      }
+    "reasoning" => self.reasoning_text()
     "commandExecution" => {
       let command = @jsonx.json_text(fields, "command").unwrap_or("Command")
       let output = @jsonx.json_text(fields, "aggregatedOutput").unwrap_or(
@@ -2558,27 +3136,28 @@ fn CodexItem::text(self : CodexItem) -> String {
 /// Convert one app-server semantic item into the display model consumed by
 /// OpenSeek's transcript renderer. This is the only place that knows both
 /// vocabularies; the shared view never switches on Codex JSON item names.
-fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
+fn CodexItem::transcript_item(
+  self : CodexItem,
+  final_answer? : Bool = false,
+  fallback_ts? : Double,
+) -> @transcript.TranscriptItem {
   // Every app-server item is one response-shaped item: prose, a thought, or
   // one tool call, each with the other two parts empty. Codex commits them
-  // separately, so they are never folded into one numbered step.
+  // separately; `CodexTurn::transcript_rows` retains their inferred shared
+  // step identity for the renderer.
   let response = (
     reasoning : String?,
     prose : String?,
     calls : Array[@transcript.ToolCall],
+    finished : Bool,
   ) => {
-    @transcript.Assistant(
-      reasoning~,
-      prose~,
-      calls~,
-      replay=false,
-      finished=false,
-    )
+    @transcript.Assistant(reasoning~, prose~, calls~, replay=false, finished~)
   }
   let kind = match self.kind {
     "userMessage" => @transcript.User(self.text())
-    "agentMessage" | "plan" => response(None, Some(self.text()), [])
-    "reasoning" => response(Some(self.text()), None, [])
+    "agentMessage" => response(None, Some(self.text()), [], final_answer)
+    "plan" => response(None, Some(self.text()), [], false)
+    "reasoning" => response(Some(self.text()), None, [], false)
     "contextCompaction" => @transcript.Summary(self.text())
     _ => {
       // A command still running may have streamed part of its output; the
@@ -2595,21 +3174,30 @@ fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
       } else {
         Pending(output=Some(output))
       }
-      response(None, None, [
-        {
-          call_id: self.id,
-          name: self.tool_name(),
-          arguments: self.tool_arguments(),
-          outcome,
-        },
-      ])
+      response(
+        None,
+        None,
+        [
+          {
+            call_id: self.id,
+            name: self.tool_name(),
+            arguments: self.tool_arguments(),
+            outcome,
+          },
+        ],
+        false,
+      )
     }
   }
   {
     kind,
-    // The current app-server item snapshot has no durable display timestamp.
-    // Leaving it absent is honest; the shared turn rule simply omits its clock.
-    ts: None,
+    // Live notifications carry exact item lifecycle stamps. Reloaded snapshots
+    // do not, so those items continue to omit the clock instead of borrowing a
+    // turn-level time that may belong to a different model step.
+    ts: match self.ts {
+      Some(ts) => Some(ts)
+      None => fallback_ts
+    },
     // App-server items have their own ids but no OpenSeek store sequence. The
     // transcript overview therefore derives a stable fallback turn key.
     sequence: None,
@@ -2617,12 +3205,81 @@ fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
 }
 
 ///|
+/// App-server labels only the response intended as the turn's final answer.
+/// Background delivery is not terminal transcript prose even if its phase is
+/// final-shaped, so it remains an ordinary Assistant row.
+fn CodexItem::is_explicit_final_answer(self : CodexItem) -> Bool {
+  guard self.kind == "agentMessage" && self.value is Object(fields) else {
+    return false
+  }
+  @jsonx.json_text(fields, "phase") is Some("final_answer") &&
+  @jsonx.json_text(fields, "delivery") != Some("async")
+}
+
+///|
+/// The canonical User item echoes the request's `clientUserMessageId` under
+/// `clientId`; keeping extraction on the item prevents text-based matching.
+fn CodexItem::client_id(self : CodexItem) -> String? {
+  guard self.kind == "userMessage" && self.value is Object(fields) else {
+    return None
+  }
+  @jsonx.json_text(fields, "clientId")
+}
+
+///|
+/// The app-server classifies simple file reads inside a command execution. Only
+/// that exact single-action shape becomes OpenSeek's `read`; pipelines and
+/// mixed commands remain `shell` rather than being summarized as a file read.
+fn CodexItem::command_read_action(self : CodexItem) -> Map[String, Json]? {
+  guard self.kind == "commandExecution" && self.value is Object(fields) else {
+    return None
+  }
+  guard fields.get("commandActions") is Some(Array(actions)) &&
+    actions is [Object(action)] &&
+    @jsonx.json_text(action, "type") is Some("read") else {
+    return None
+  }
+  Some(action)
+}
+
+///|
 /// Normalize app-server tool-like item names to the categories already used
-/// by OpenSeek's activity summary (read/edit/shell) where the meaning matches.
+/// by OpenSeek's activity summary and semantic cards where the meaning and
+/// payload agree. Dynamic tools retain their advertised tool name, which lets
+/// a Codex `run_moonbit`, `read`, or `edit` call reach the same shared card.
 fn CodexItem::tool_name(self : CodexItem) -> String {
+  guard self.value is Object(fields) else { return self.kind }
   match self.kind {
-    "commandExecution" => "shell"
-    "fileChange" => "edit"
+    "commandExecution" =>
+      if self.command_read_action() is Some(_) {
+        "read"
+      } else {
+        "shell"
+      }
+    "fileChange" =>
+      if fields.get("changes") is Some(Array(changes)) && changes.length() > 1 {
+        "multi_edit"
+      } else {
+        "edit"
+      }
+    "mcpToolCall" => {
+      let server = @jsonx.json_text(fields, "server").unwrap_or("")
+      let tool = @jsonx.json_text(fields, "tool").unwrap_or("tool")
+      if server.is_blank() {
+        tool
+      } else {
+        "mcp__\{server}__\{tool}"
+      }
+    }
+    "dynamicToolCall" => @jsonx.json_text(fields, "tool").unwrap_or("tool")
+    "collabAgentToolCall" => @jsonx.json_text(fields, "tool").unwrap_or("agent")
+    "subAgentActivity" => "subagent"
+    "hookPrompt" => "hook_prompt"
+    "webSearch" => "web_search"
+    "imageView" => "image_view"
+    "imageGeneration" => "image_generation"
+    "enteredReviewMode" | "exitedReviewMode" => "review"
+    "planUpdate" => "plan"
     other => other
   }
 }
@@ -2630,37 +3287,127 @@ fn CodexItem::tool_name(self : CodexItem) -> String {
 ///|
 /// Keep the operation input separate from its result so the shared expanded
 /// tool row can render Arguments before Output instead of one raw JSON blob.
+/// Optional app-server metadata stays absent from the projected object; an
+/// empty string, null, or empty collection can be a real supplied value and
+/// therefore must not be invented as a missing-field marker.
 fn CodexItem::tool_arguments(self : CodexItem) -> String? {
   guard self.value is Object(fields) else {
     return Some(self.value.stringify())
   }
   match self.kind {
     "commandExecution" => {
-      let arguments : Json = {
-        "command": @jsonx.json_text(fields, "command").unwrap_or(""),
+      // app-server omits metadata it does not know. Keep that absence in the
+      // shared arguments object instead of inventing empty-string values.
+      let arguments : Map[String, Json] = Map([])
+      if self.command_read_action() is Some(action) {
+        if @jsonx.json_text(action, "path") is Some(path) {
+          arguments["path"] = Json(path)
+        }
+        if @jsonx.json_text(action, "name") is Some(name) {
+          arguments["name"] = Json(name)
+        }
+        if @jsonx.json_text(action, "command") is Some(command) {
+          arguments["command"] = Json(command)
+        }
+      } else if @jsonx.json_text(fields, "command") is Some(command) {
+        arguments["command"] = Json(command)
       }
-      Some(arguments.stringify())
+      if @jsonx.json_text(fields, "cwd") is Some(cwd) {
+        arguments["cwd"] = Json(cwd)
+      }
+      Some(Json::object(arguments).stringify())
     }
     "fileChange" =>
-      match fields.get("changes") {
-        Some(changes) => {
-          let arguments : Json = { "changes": changes }
+      if fields.get("changes") is Some(Array(changes)) {
+        if changes.length() == 1 {
+          Some(changes[0].stringify())
+        } else {
+          let arguments : Json = { "edits": Json::array(changes) }
           Some(arguments.stringify())
         }
-        None => None
+      } else {
+        fields.get("changes").map(value => value.stringify())
       }
+    "mcpToolCall" | "dynamicToolCall" =>
+      fields.get("arguments").map(value => value.stringify())
+    "collabAgentToolCall" => {
+      let arguments : Map[String, Json] = Map([])
+      if @jsonx.json_text(fields, "tool") is Some(tool) {
+        arguments["tool"] = Json(tool)
+      }
+      for
+        key in [
+          "prompt", "model", "reasoningEffort", "senderThreadId", "receiverThreadIds",
+        ] {
+        if fields.get(key) is Some(value) {
+          arguments[key] = value
+        }
+      }
+      Some(Json::object(arguments).stringify())
+    }
+    "subAgentActivity" => {
+      let arguments : Map[String, Json] = Map([])
+      for key in ["agentPath", "agentThreadId", "kind"] {
+        if @jsonx.json_text(fields, key) is Some(value) {
+          arguments[key] = Json(value)
+        }
+      }
+      Some(Json::object(arguments).stringify())
+    }
+    "hookPrompt" =>
+      fields
+      .get("fragments")
+      .map(fragments => {
+        let arguments : Json = { "fragments": fragments }
+        arguments.stringify()
+      })
     "webSearch" => {
-      let arguments : Json = {
-        "query": @jsonx.json_text(fields, "query").unwrap_or(""),
+      let arguments : Map[String, Json] = Map([])
+      if @jsonx.json_text(fields, "query") is Some(query) {
+        arguments["query"] = Json(query)
       }
-      Some(arguments.stringify())
+      if fields.get("action") is Some(action) {
+        arguments["action"] = action
+      }
+      Some(Json::object(arguments).stringify())
     }
     "imageView" => {
-      let arguments : Json = {
-        "path": @jsonx.json_text(fields, "path").unwrap_or(""),
+      let arguments : Map[String, Json] = Map([])
+      if @jsonx.json_text(fields, "path") is Some(path) {
+        arguments["path"] = Json(path)
       }
-      Some(arguments.stringify())
+      Some(Json::object(arguments).stringify())
     }
+    "sleep" =>
+      fields
+      .get("durationMs")
+      .map(duration => {
+        let arguments : Json = { "durationMs": duration }
+        arguments.stringify()
+      })
+    "imageGeneration" => {
+      let arguments : Map[String, Json] = Map([])
+      for key in ["revisedPrompt", "transparentBackground"] {
+        if fields.get(key) is Some(value) {
+          arguments[key] = value
+        }
+      }
+      Some(Json::object(arguments).stringify())
+    }
+    "enteredReviewMode" | "exitedReviewMode" => {
+      let arguments : Map[String, Json] = Map([])
+      if @jsonx.json_text(fields, "review") is Some(review) {
+        arguments["review"] = Json(review)
+      }
+      Some(Json::object(arguments).stringify())
+    }
+    "planUpdate" =>
+      fields
+      .get("steps")
+      .map(steps => {
+        let arguments : Json = { "steps": steps }
+        arguments.stringify()
+      })
     _ => Some(self.value.stringify())
   }
 }
@@ -2670,10 +3417,10 @@ fn CodexItem::tool_arguments(self : CodexItem) -> String? {
 /// progress the shared row remains a pending call with any streamed output it
 /// has already received.
 fn CodexItem::tool_has_result(self : CodexItem) -> Bool {
-  guard self.value is Object(fields) else { return true }
+  guard self.value is Object(fields) else { return self.completed }
   match @jsonx.json_text(fields, "status") {
     Some("inProgress") | Some("pending") => false
-    _ => true
+    _ => self.completed
   }
 }
 
@@ -2687,7 +3434,10 @@ fn CodexItem::tool_failed(self : CodexItem) -> Bool {
     _ => false
   }
   failed_status ||
-  @jsonx.json_int(fields, "exitCode").map(code => code != 0).unwrap_or(false)
+  @jsonx.json_int(fields, "exitCode").map(code => code != 0).unwrap_or(false) ||
+  fields.get("success") is Some(False) ||
+  (fields.get("error") is Some(error) && !(error is Null)) ||
+  (fields.get("failure") is Some(failure) && !(failure is Null))
 }
 
 ///|
@@ -2698,10 +3448,99 @@ fn CodexItem::tool_output(self : CodexItem) -> String {
   match self.kind {
     "commandExecution" =>
       @jsonx.json_text(fields, "aggregatedOutput").unwrap_or(self.streamed)
-    "fileChange" => @jsonx.json_text(fields, "status").unwrap_or("")
+    "fileChange" =>
+      if self.streamed.is_empty() {
+        @jsonx.json_text(fields, "status").unwrap_or("")
+      } else {
+        self.streamed
+      }
+    "mcpToolCall" => {
+      if fields.get("error") is Some(Object(error)) &&
+        @jsonx.json_text(error, "message") is Some(message) {
+        return message
+      }
+      if fields.get("result") is Some(Object(result)) &&
+        result.get("content") is Some(Array(blocks)) {
+        let text : Array[String] = []
+        let mut text_only = true
+        for block in blocks {
+          if block is Object(content) &&
+            @jsonx.json_text(content, "type") is Some("text") &&
+            @jsonx.json_text(content, "text") is Some(value) {
+            text.push(value)
+          } else {
+            text_only = false
+          }
+        }
+        if text_only && !text.is_empty() {
+          return text.join("\n")
+        }
+      }
+      match fields.get("result") {
+        Some(Null) | None => self.streamed
+        Some(result) => result.stringify(indent=2)
+      }
+    }
+    "dynamicToolCall" => {
+      if fields.get("contentItems") is Some(Array(items)) {
+        let text : Array[String] = []
+        let mut text_only = true
+        for item in items {
+          if item is Object(content) &&
+            @jsonx.json_text(content, "type") is Some("inputText") &&
+            @jsonx.json_text(content, "text") is Some(value) {
+            text.push(value)
+          } else {
+            text_only = false
+          }
+        }
+        if text_only && !text.is_empty() {
+          return text.join("\n")
+        }
+        return Json::array(items).stringify(indent=2)
+      }
+      ""
+    }
+    "collabAgentToolCall" =>
+      fields
+      .get("agentsStates")
+      .map(value => value.stringify(indent=2))
+      .unwrap_or(@jsonx.json_text(fields, "status").unwrap_or(""))
+    "webSearch" =>
+      match fields.get("results") {
+        Some(Null) | None => ""
+        Some(results) => results.stringify(indent=2)
+      }
+    "imageGeneration" =>
+      match fields.get("failure") {
+        Some(failure) if !(failure is Null) => failure.stringify(indent=2)
+        _ => @jsonx.json_text(fields, "result").unwrap_or("")
+      }
+    "hookPrompt" => {
+      let text : Array[String] = []
+      if fields.get("fragments") is Some(Array(fragments)) {
+        for fragment in fragments {
+          if fragment is Object(fragment) &&
+            @jsonx.json_text(fragment, "text") is Some(value) {
+            text.push(value)
+          }
+        }
+      }
+      text.join("\n")
+    }
     "enteredReviewMode" | "exitedReviewMode" =>
       @jsonx.json_text(fields, "review").unwrap_or("")
-    _ => ""
+    "planUpdate" => @jsonx.json_text(fields, "explanation").unwrap_or("")
+    _ => {
+      for key in ["output", "result", "content"] {
+        match fields.get(key) {
+          Some(String(value)) => return value
+          Some(value) if !(value is Null) => return value.stringify(indent=2)
+          _ => ()
+        }
+      }
+      ""
+    }
   }
 }
 
@@ -2713,74 +3552,259 @@ fn CodexItem::tool_brief(self : CodexItem) -> String? {
   Some(
     match self.kind {
       "commandExecution" =>
-        @jsonx.json_text(fields, "command").unwrap_or("Command")
-      "fileChange" => "Changed files"
-      "webSearch" => "Searched the web"
-      "imageView" => "Viewed image"
+        if self.command_read_action() is Some(action) {
+          "read " + @jsonx.json_text(action, "path").unwrap_or("file")
+        } else {
+          @jsonx.json_text(fields, "command").unwrap_or("command")
+        }
+      "fileChange" =>
+        if fields.get("changes") is Some(Array(changes)) {
+          if changes is [Object(change)] &&
+            @jsonx.json_text(change, "path") is Some(path) {
+            "changed \{path}"
+          } else {
+            "changed \{changes.length()} files"
+          }
+        } else {
+          "changed files"
+        }
+      "mcpToolCall" => {
+        let server = @jsonx.json_text(fields, "server").unwrap_or("MCP")
+        let tool = @jsonx.json_text(fields, "tool").unwrap_or("tool")
+        "\{server} · \{tool}"
+      }
+      "dynamicToolCall" => {
+        let tool = @jsonx.json_text(fields, "tool").unwrap_or("tool")
+        match @jsonx.json_text(fields, "namespace") {
+          Some(namespace_) if !namespace_.is_blank() =>
+            "\{namespace_} · \{tool}"
+          _ => tool
+        }
+      }
+      "collabAgentToolCall" =>
+        @jsonx.json_text(fields, "tool").unwrap_or("agent")
+      "subAgentActivity" => {
+        let kind = @jsonx.json_text(fields, "kind").unwrap_or("activity")
+        let path = @jsonx.json_text(fields, "agentPath").unwrap_or("agent")
+        "\{kind} \{path}"
+      }
+      "hookPrompt" => "hook prompt"
+      "webSearch" =>
+        "searched " + @jsonx.json_text(fields, "query").unwrap_or("the web")
+      "imageView" =>
+        "viewed " + @jsonx.json_text(fields, "path").unwrap_or("image")
+      "sleep" =>
+        @jsonx.json_int(fields, "durationMs")
+        .map(duration => "slept \{duration} ms")
+        .unwrap_or("slept")
+      "imageGeneration" =>
+        match @jsonx.json_text(fields, "savedPath") {
+          Some(path) if !path.is_blank() => "generated \{path}"
+          _ => "generated image"
+        }
       "enteredReviewMode" => "Entered review mode"
       "exitedReviewMode" => "Exited review mode"
+      "planUpdate" => {
+        let mut completed = 0
+        let mut total = 0
+        let mut current : String? = None
+        if fields.get("steps") is Some(Array(steps)) {
+          total = steps.length()
+          for step in steps {
+            if step is Object(step) {
+              match @jsonx.json_text(step, "status") {
+                Some("completed") => completed = completed + 1
+                Some("in_progress") => current = @jsonx.json_text(step, "title")
+                _ => ()
+              }
+            }
+          }
+        }
+        let progress = "plan \{completed}/\{total}"
+        current.map(title => progress + " · " + title).unwrap_or(progress)
+      }
       other => other
     },
   )
 }
 
 ///|
-/// The root shell consumes this display-only snapshot with the same transcript
+/// Whether this item participates in one numbered model step. User inputs and
+/// context checkpoints remain independent rows; every other Codex item maps to
+/// response prose, reasoning, or tool activity in the shared renderer.
+fn CodexItem::participates_in_step(self : CodexItem) -> Bool {
+  self.kind != "userMessage" && self.kind != "contextCompaction"
+}
+
+///|
+fn CodexItem::is_tool_item(self : CodexItem) -> Bool {
+  self.participates_in_step() &&
+  self.kind != "agentMessage" &&
+  self.kind != "plan" &&
+  self.kind != "reasoning"
+}
+
+///|
+/// Older app-server snapshots omitted `phase`. On a successfully completed
+/// turn only, the last synchronous unphased agent message is the conservative
+/// fallback final answer. An explicit final-answer phase always wins.
+fn CodexTurn::fallback_final_answer_id(self : CodexTurn) -> String? {
+  if self.status != "completed" ||
+    self.items.iter().any(item => item.is_explicit_final_answer()) {
+    return None
+  }
+  for index = self.items.length() - 1; index >= 0; index = index - 1 {
+    let item = self.items[index]
+    if item.kind == "agentMessage" &&
+      item.value is Object(fields) &&
+      (fields.get("phase") is None || fields.get("phase") is Some(Null)) &&
+      @jsonx.json_text(fields, "delivery") != Some("async") {
+      return Some(item.id)
+    }
+  }
+  None
+}
+
+///|
+/// Project one Codex turn while retaining its native item identity and a
+/// deterministic model-step grouping. A reasoning item starts a step; tools
+/// remain with the prose/reasoning before them; prose after tool activity starts
+/// the next step. This matches Codex's ordered item stream without inventing an
+/// OpenSeek integer sequence.
+fn CodexTurn::transcript_rows(
+  self : CodexTurn,
+) -> Array[@transcript.TranscriptRow] {
+  let rows : Array[@transcript.TranscriptRow] = []
+  let fallback_final = self.fallback_final_answer_id()
+  let completion_ts = self.completed_at.map(seconds => {
+    seconds.to_double() * 1000.0
+  })
+  let mut step_number = 0
+  let mut current_step : String? = None
+  let mut step_has_tool = false
+  for item in self.items {
+    if item.kind == "userMessage" || item.kind == "contextCompaction" {
+      current_step = None
+      step_has_tool = false
+    } else if item.participates_in_step() {
+      let starts_step = current_step is None ||
+        item.kind == "reasoning" ||
+        ((item.kind == "agentMessage" || item.kind == "plan") && step_has_tool)
+      if starts_step {
+        step_number += 1
+        current_step = Some("turn\u{0}\{self.id}\u{0}step\u{0}\{step_number}")
+        step_has_tool = false
+      }
+    }
+    let final_answer = item.is_explicit_final_answer() ||
+      fallback_final == Some(item.id)
+    let transcript_item = if final_answer && completion_ts is Some(ts) {
+      item.transcript_item(final_answer~, fallback_ts=ts)
+    } else {
+      item.transcript_item(final_answer~)
+    }
+    // GPT can commit a reasoning item whose only payload is encrypted. Keep
+    // the semantic item in state so a later summary delta can reveal it, but
+    // avoid an empty Thought card in the display projection.
+    let blank_thought = transcript_item.kind
+      is @transcript.Assistant(
+        reasoning=Some(summary),
+        prose=None,
+        calls=[],
+        ..
+      ) &&
+      summary.is_blank()
+    if !blank_thought {
+      rows.push({
+        item: transcript_item,
+        identity: "turn\u{0}\{self.id}\u{0}item\u{0}\{item.id}",
+        step_identity: if item.participates_in_step() {
+          current_step
+        } else {
+          None
+        },
+      })
+    }
+    if item.is_tool_item() {
+      step_has_tool = true
+    }
+  }
+  rows
+}
+
+///|
+/// The root shell consumes these display-only rows with the same transcript
 /// view used for OpenSeek. Notices and per-turn failures become ordinary
 /// danger messages, so Codex does not need a parallel banner/message layout.
-pub fn State::transcript_items(
-  self : State,
-) -> Array[@transcript.TranscriptItem] {
-  let items : Array[@transcript.TranscriptItem] = []
+pub fn State::transcript_rows(self : State) -> Array[@transcript.TranscriptRow] {
+  let rows : Array[@transcript.TranscriptRow] = []
   if !self.notice.is_empty() {
-    items.push({
-      kind: @transcript.Failure(self.notice),
-      ts: None,
-      sequence: None,
+    rows.push({
+      item: {
+        kind: @transcript.Failure(self.notice),
+        ts: None,
+        sequence: None,
+      },
+      identity: "codex-notice",
+      step_identity: None,
     })
   }
   if self.waiting_for_first_user_item() &&
     self.submitted_first_prompt is Some(submitted) {
-    items.push({
-      kind: @transcript.User(submitted.prompt()),
-      ts: None,
-      sequence: None,
+    rows.push({
+      item: {
+        kind: @transcript.User(submitted.prompt()),
+        ts: None,
+        sequence: None,
+      },
+      identity: self.submitted_first_prompt_client_id
+      .map(client_id => "client\u{0}\{client_id}")
+      .unwrap_or("codex-first-prompt"),
+      step_identity: None,
     })
   }
   if self.active_thread() is Some(active) {
     for turn in active.turns {
-      for item in turn.items {
-        let transcript_item = item.transcript_item()
-        // GPT can commit a reasoning item whose only payload is encrypted:
-        // until app-server exposes summary text, there is nothing the
-        // transcript can display and an empty thought becomes a blank
-        // "Thought" card. Keep the semantic item in Codex state so a later
-        // summary delta can reveal it, but omit it from this display snapshot.
-        let blank_thought = transcript_item.kind
-          is @transcript.Assistant(reasoning=Some(summary), ..) &&
-          summary.is_blank()
-        if !blank_thought {
-          items.push(transcript_item)
-        }
+      for row in turn.transcript_rows() {
+        rows.push(row)
       }
       // A receipt belongs after the canonical items already observed in the
       // same turn. The app-server User item removes it before the next render,
       // so this projection never shows both representations of one steer.
       for receipt in self.pending_steers {
         if receipt.turn_id == turn.id {
-          items.push(receipt.transcript_item())
+          rows.push({
+            item: receipt.transcript_item(),
+            identity: receipt.client_user_message_id
+            .map(client_id => "client\u{0}\{client_id}")
+            .unwrap_or("steer\u{0}\{receipt.submission_id}"),
+            step_identity: None,
+          })
         }
       }
       if turn.error is Some(message) {
-        items.push({
-          kind: @transcript.Failure(message),
-          ts: None,
-          sequence: None,
+        rows.push({
+          item: {
+            kind: @transcript.Failure(message),
+            ts: None,
+            sequence: None,
+          },
+          identity: "turn\u{0}\{turn.id}\u{0}error",
+          step_identity: None,
         })
       }
     }
   }
-  items
+  rows
+}
+
+///|
+/// Compatibility projection for callers that need only semantic items. The
+/// shared component consumes `transcript_rows` so it can preserve row/step ids.
+pub fn State::transcript_items(
+  self : State,
+) -> Array[@transcript.TranscriptItem] {
+  self.transcript_rows().map(row => row.item)
 }
 
 ///|
@@ -2795,6 +3819,7 @@ test "Codex completed items replace streamed presentation state" {
     status: "inProgress",
     started_at: None,
     completed_at: None,
+    latest_usage_tokens: None,
     items: [started],
     items_view: None,
     error: None,
@@ -2821,7 +3846,7 @@ test "Codex reasoning summaries render text instead of JSON syntax" {
       { "type": "summary_text", "text": "Second" },
     ],
   }).unwrap()
-  assert_eq(item.text(), "First\nSecond")
+  assert_eq(item.text(), "First\n\nSecond")
 }
 
 ///|

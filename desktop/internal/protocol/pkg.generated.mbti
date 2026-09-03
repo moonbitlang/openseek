@@ -694,6 +694,7 @@ pub impl @json.FromJson for CodexTurnReply
 pub(all) struct CodexTurnStartPayload {
   thread_id : String
   input : Array[Json]
+  client_user_message_id : String?
   model : String?
   effort : String?
   cwd : String?
@@ -710,6 +711,7 @@ pub impl @json.FromJson for CodexTurnStartPayload
 pub(all) struct CodexTurnSteerPayload {
   thread_id : String
   input : Array[Json]
+  client_user_message_id : String?
   expected_turn_id : String
 } derive(Eq, @debug.Debug)
 pub fn CodexTurnSteerPayload::equal(Self, Self) -> Bool

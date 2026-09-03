@@ -119,6 +119,7 @@ pub(all) struct CodexReviewStartPayload {
 pub(all) struct CodexTurnStartPayload {
   thread_id : String
   input : Array[Json]
+  client_user_message_id : String?
   model : String?
   effort : String?
   cwd : String?
@@ -129,6 +130,7 @@ pub(all) struct CodexTurnStartPayload {
 pub(all) struct CodexTurnSteerPayload {
   thread_id : String
   input : Array[Json]
+  client_user_message_id : String?
   expected_turn_id : String
 } derive(Debug, Eq)
 
@@ -528,6 +530,7 @@ pub impl FromJson for CodexTurnStartPayload with fn from_json(json, path) {
   {
     thread_id: object.required_string("threadId"),
     input: object.required_array("input"),
+    client_user_message_id: object.optional_string("clientUserMessageId"),
     model: object.optional_string("model"),
     effort: object.optional_string("effort"),
     cwd: object.optional_string("cwd"),
@@ -553,6 +556,9 @@ pub impl ToJson for CodexTurnStartPayload with fn to_json(self) {
   if self.cwd is Some(cwd) {
     fields["cwd"] = Json(cwd)
   }
+  if self.client_user_message_id is Some(client_id) {
+    fields["clientUserMessageId"] = Json(client_id)
+  }
   fields["permissionMode"] = ToJson::to_json(self.permission_mode)
   Json(fields)
 }
@@ -563,17 +569,22 @@ pub impl FromJson for CodexTurnSteerPayload with fn from_json(json, path) {
   {
     thread_id: object.required_string("threadId"),
     input: object.required_array("input"),
+    client_user_message_id: object.optional_string("clientUserMessageId"),
     expected_turn_id: object.required_string("expectedTurnId"),
   }
 }
 
 ///|
 pub impl ToJson for CodexTurnSteerPayload with fn to_json(self) {
-  {
+  let fields : Map[String, Json] = {
     "threadId": Json(self.thread_id),
     "input": Json(self.input),
     "expectedTurnId": Json(self.expected_turn_id),
   }
+  if self.client_user_message_id is Some(client_id) {
+    fields["clientUserMessageId"] = Json(client_id)
+  }
+  Json(fields)
 }
 
 ///|

@@ -150,6 +150,7 @@ pub fn update(
           draft: "",
           mentions: [],
           submitted_first_prompt: None,
+          submitted_first_prompt_client_id: None,
           pending_steers: [],
           placement: @composer.LocalCheckout,
           foreground: None,
@@ -189,6 +190,7 @@ pub fn update(
             draft: "",
             mentions: [],
             submitted_first_prompt: None,
+            submitted_first_prompt_client_id: None,
             pending_steers: [],
             notice: "",
           }.begin_foreground(CodexThreadReply(thread_id, activity_frontier)),
@@ -459,7 +461,11 @@ pub fn update(
           kind is CodexTurnStartReply(_) ||
           kind is CodexWorktreeTurnReply(_, _)
         ) {
-        { ..settled, submitted_first_prompt: None, }
+        {
+          ..settled,
+          submitted_first_prompt: None,
+          submitted_first_prompt_client_id: None,
+        }
       } else {
         settled
       }
@@ -1135,6 +1141,93 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
   assert_eq(items.length(), 3)
   assert_true(items.iter().all(item => item.kind is @transcript.User(_)))
   assert_true(items.iter().all(item => item.text() == Some("same text")))
+}
+
+///|
+test "Codex steer receipt consumes only its echoed client user-message id" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let open_external = (_ : String) => @cmd.none
+  let state = {
+    ..State::from_thread_snapshot({
+      "thread": {
+        "id": "thread-1",
+        "turns": [
+          {
+            "id": "turn-1",
+            "status": "inProgress",
+            "items": [
+              {
+                "id": "initial-user",
+                "type": "userMessage",
+                "clientId": "another-page-submission-1",
+                "content": [{ "type": "text", "text": "initial" }],
+              },
+            ],
+          },
+        ],
+      },
+    }),
+    client_namespace: Some("page-a"),
+    connection: CodexReady,
+  }
+  let (_, sending) = update(
+    dispatch,
+    ComposerAction(
+      @composer.DraftSubmitted(
+        identity=state.composer_identity(@interop.ChannelId::Local),
+        draft={ task: "same text", mentions: [], },
+      ),
+    ),
+    state,
+    @interop.ChannelId::Local,
+    open_external,
+  )
+  assert_eq(
+    sending.pending_steers[0].client_user_message_id,
+    Some("page-a-codex-submission-1"),
+  )
+  let (_, foreign) = update(
+    dispatch,
+    Notification(
+      method_="item/started",
+      params={
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "item": {
+          "id": "foreign-user",
+          "type": "userMessage",
+          "clientId": "page-b-codex-submission-1",
+          "content": [{ "type": "text", "text": "same text" }],
+        },
+      },
+      generation=1,
+    ),
+    sending,
+    @interop.ChannelId::Local,
+    open_external,
+  )
+  assert_eq(foreign.pending_steers.length(), 1)
+  let (_, own) = update(
+    dispatch,
+    Notification(
+      method_="item/started",
+      params={
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "item": {
+          "id": "own-user",
+          "type": "userMessage",
+          "clientId": "page-a-codex-submission-1",
+          "content": [{ "type": "text", "text": "same text" }],
+        },
+      },
+      generation=2,
+    ),
+    foreign,
+    @interop.ChannelId::Local,
+    open_external,
+  )
+  assert_true(own.pending_steers.is_empty())
 }
 
 ///|
@@ -1989,6 +2082,30 @@ test "Codex observed running task steers without resume" {
     @interop.ChannelId::Local,
   )
   assert_true(steering.owns_foreground(CodexTurnSteerReply("thread-1")))
+}
+
+///|
+test "Codex status-only running task waits for its turn id" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let observed = {
+    ..State::from_thread_snapshot({
+      "thread": {
+        "id": "thread-1",
+        "status": { "type": "active", "activeFlags": [] },
+        "turns": [],
+      },
+    }),
+    connection: CodexReady,
+    draft: "follow up",
+  }
+  assert_true(observed.is_running())
+  let (_, once) = observed.submit_composer(dispatch, @interop.ChannelId::Local)
+  let (_, twice) = observed.submit_composer(dispatch, @interop.ChannelId::Local)
+  assert_true(once == twice)
+  assert_false(once.owns_foreground(CodexResumeReply("thread-1")))
+  assert_false(once.owns_foreground(CodexTurnStartReply("thread-1")))
+  assert_false(once.owns_foreground(CodexTurnSteerReply("thread-1")))
+  assert_eq(once.draft, "follow up")
 }
 
 ///|
