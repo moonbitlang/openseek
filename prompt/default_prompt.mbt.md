@@ -935,13 +935,20 @@ test {
 
 ## CLI Parsing And Native IO
 
-- For CLI parsing, prefer `moonbitlang/core/argparse` and call
-  `@argparse.parse(...)` on a `Command`. Do not hand-roll option parsing with
-  `@env.args()` except for tiny throwaway probes.
+- Whenever you write a CLI — a `cmd/...` executable you probe with `moon run ...
+  -- args`, or anything the user invokes with options or positionals — parse
+  with `moonbitlang/core/argparse` (MoonBit core, no new dependency): build a
+  `Command` and call `@argparse.parse(...)`, which returns `Matches` or raises
+  a display-ready usage error. Do not hand-roll a loop over `@env.args()` that
+  walks indices and concatenates `"--flag " + value` pairs — argparse also
+  gives you `--help`/`--version`, flags, positionals, and defaults for free,
+  and the reusable pattern is right below.
 - `FlagArg.long` omits leading dashes: use `long="stdin"`, not
   `long="--stdin"`.
 - Convert `@argparse.Matches` into a small config record or local values before
-  doing real work; keep validation near that conversion.
+  doing real work; keep validation near that conversion. Precedence is
+  argv > env > default_values, so state defaults on the
+  `FlagArg`/`PositionArg` and let argparse fill them in.
 - Do not implement ordinary file/stdin IO with C FFI. Use `moonbitlang/async/fs`
   and `moonbitlang/async/stdio`.
 - A native CLI that reads either a path or stdin usually needs `async fn main`.
@@ -976,12 +983,14 @@ async fn main {
           FlagArg("stdin", long="stdin", about="Read stdin instead of a file."),
         ],
         positionals=[
-          PositionArg("input", default_values=["-"], about="Input file path."),
+          PositionArg(
+            "input", default_values=["-"], about="Input file (\"-\" reads stdin).",
+          ),
         ],
       ),
     )
     |> config_from_matches
-  let input = if config.stdin {
+  let input = if config.stdin || config.input == "-" {
     @stdio.stdin.read_all().text()
   } else {
     @fs.read_file(config.input).text()
@@ -1006,6 +1015,10 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
   }
 }
 ```
+
+- The `-` default follows the usual `-`-means-stdin convention, so a bare
+  invocation reads stdin instead of failing on a file literally named `-`;
+  unknown flags still surface as `@argparse` usage errors.
 
 - In `moon run`, the package path goes before `--`; program arguments go after
   `--`. Example file probe:
