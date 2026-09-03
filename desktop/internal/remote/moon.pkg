@@ -13,6 +13,7 @@ import {
   "moonbitlang/async/websocket",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
+  "openseek_desktop/internal/platform",
   "tonyfettes/xlog",
 }
 

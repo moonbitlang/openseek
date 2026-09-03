@@ -814,21 +814,32 @@ pub impl FromJson for ConnectedStage with fn from_json(json, path) {
 ///|
 /// `agent.connected` is a signal rather than a description: every client
 /// answers it by re-reading its state. `stage` says how much of the host is
-/// up, which is all a client can act on beyond that.
+/// up. `windows` is the one fact stated rather than fetched — whether the
+/// host machine itself uses Windows path semantics. It is immutable for the
+/// host process's life, so it can never go stale the way a described state
+/// could, and stating it here means a client holds it from the moment the
+/// connection exists instead of racing a query for it.
 pub(all) struct ConnectedPayload {
   stage : ConnectedStage
+  windows : Bool
 } derive(Debug, Eq)
 
 ///|
 pub impl ToJson for ConnectedPayload with fn to_json(self) {
-  { "stage": ToJson::to_json(self.stage) }
+  let fields : Map[String, Json] = { "stage": ToJson::to_json(self.stage) }
+  if self.windows {
+    fields["windows"] = self.windows.to_json()
+  }
+  Json(fields)
 }
 
 ///|
-/// `stage` is the whole payload: a notification carrying none, or one this
-/// build cannot read, says nothing a client can act on, so it is refused
-/// rather than guessed at — `Notification::from_wire` drops it. Fields this
-/// build does not know are ignored, leaving the wire room to grow.
+/// `stage` is the payload's one required field: a notification carrying
+/// none, or one this build cannot read, says nothing a client can act on, so
+/// it is refused rather than guessed at — `Notification::from_wire` drops
+/// it. `windows` is absent from hosts predating the field (and from POSIX
+/// hosts, keeping the legacy shape); both read as POSIX. Fields this build
+/// does not know are ignored, leaving the wire room to grow.
 pub impl FromJson for ConnectedPayload with fn from_json(json, path) {
   guard json is Object(fields) else {
     raise JsonDecodeError((path, "expected connected payload"))
@@ -836,7 +847,15 @@ pub impl FromJson for ConnectedPayload with fn from_json(json, path) {
   guard fields.get("stage") is Some(stage) else {
     raise JsonDecodeError((path.add_key("stage"), "missing required field"))
   }
-  { stage: @json.from_json(stage, path=path.add_key("stage")), }
+  let windows = match fields.get("windows") {
+    Some(True) => true
+    Some(False) | None => false
+    Some(_) =>
+      raise JsonDecodeError(
+        (path.add_key("windows"), "windows must be a boolean"),
+      )
+  }
+  { stage: @json.from_json(stage, path=path.add_key("stage")), windows, }
 }
 
 ///|
@@ -1067,36 +1086,11 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 }
 
 ///|
-/// Immutable identity of the installed desktop package and its host: facts
-/// fixed for the life of the process, fetched once per connection, never an
-/// editable engine setting. The native host reads `version` from
-/// `proton-package.json`; `windows` is whether the host machine itself uses
-/// Windows path semantics — the client's own platform says nothing about a
-/// remote device's.
+/// Immutable identity of the installed desktop package. The native host reads
+/// this from `proton-package.json`; it is not an editable engine setting.
 pub(all) struct AppInfoReply {
   version : String
-  windows : Bool
-} derive(Debug, Eq)
-
-///|
-pub impl FromJson for AppInfoReply with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "app info reply")
-  {
-    version: object.required_string("version"),
-    // Absent from hosts predating the field; they degrade to POSIX path
-    // semantics rather than failing the whole reply.
-    windows: object.optional_bool("windows").unwrap_or(false),
-  }
-}
-
-///|
-pub impl ToJson for AppInfoReply with fn to_json(self) {
-  let fields : Map[String, Json] = { "version": self.version.to_json() }
-  if self.windows {
-    fields["windows"] = self.windows.to_json()
-  }
-  Json(fields)
-}
+} derive(Debug, Eq, FromJson, ToJson)
 
 ///|
 pub(all) struct UpdateDownloadProgressPayload {

@@ -287,11 +287,11 @@ test "agent connected names how much of the host is up" {
     is None,
   )
   @debug.assert_eq(
-    ({ stage: Serving, } : @protocol.ConnectedPayload).to_json(),
+    ({ stage: Serving, windows: false, } : @protocol.ConnectedPayload).to_json(),
     { "stage": "serving" },
   )
   @debug.assert_eq(
-    ({ stage: Accepted, } : @protocol.ConnectedPayload).to_json(),
+    ({ stage: Accepted, windows: false, } : @protocol.ConnectedPayload).to_json(),
     { "stage": "accepted" },
   )
 }
@@ -778,16 +778,30 @@ test "browse replies keep success compatible and carry refusals" {
 }
 
 ///|
-test "app info states the host platform and tolerates hosts predating it" {
-  // A host predating the field reads as POSIX rather than failing.
-  let legacy : @protocol.AppInfoReply = @json.from_json({ "version": "0.3.1" })
-  @debug.assert_eq(legacy, { version: "0.3.1", windows: false, })
-  // A POSIX host keeps the legacy shape on the wire.
-  @debug.assert_eq(legacy.to_json(), { "version": "0.3.1" })
-  let windows : @protocol.AppInfoReply = { version: "0.3.1", windows: true, }
-  @debug.assert_eq(windows.to_json(), { "version": "0.3.1", "windows": true })
-  let decoded : @protocol.AppInfoReply = @json.from_json(windows.to_json())
+test "agent connected states the host platform and tolerates its absence" {
+  // A Windows host says so in the readiness signal itself, and the flag
+  // survives the round trip.
+  let windows : @protocol.ConnectedPayload = { stage: Serving, windows: true, }
+  @debug.assert_eq(windows.to_json(), { "stage": "serving", "windows": true })
+  let decoded : @protocol.ConnectedPayload = @json.from_json(windows.to_json())
   @debug.assert_eq(decoded, windows)
+  // Hosts predating the field — and POSIX hosts, whose encoding omits it —
+  // read as POSIX rather than dropping the connect.
+  guard @protocol.Notification::from_wire("agent.connected", {
+      "stage": "serving",
+    })
+    is Some(AgentConnected(legacy)) else {
+    fail("a connect without the platform field was dropped")
+  }
+  assert_false(legacy.windows)
+  // A malformed value is refused like any other unreadable payload.
+  assert_true(
+    @protocol.Notification::from_wire("agent.connected", {
+      "stage": "serving",
+      "windows": "yes",
+    })
+    is None,
+  )
 }
 
 ///|

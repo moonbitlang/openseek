@@ -2938,6 +2938,7 @@ fn update_msg(
       (disconnect_remote(dispatch), { ..model, remote_error: None, })
     RemoteDisconnectFailed(message) =>
       (@cmd.none, { ..model, remote_error: Some(message), })
+    AppInfoLoaded(version) => (@cmd.none, { ..model, app_version: version, })
     CheckForUpdates =>
       // A user-initiated check; never stacks on an in-flight one, and never
       // interrupts a download already underway.
@@ -4980,17 +4981,6 @@ fn update_device_msg(
     return (@cmd.none, model)
   }
   match msg {
-    AppInfoLoaded(version~, windows~) => {
-      let model = model.replace_device({ ..dev, windows_host: windows, })
-      // The version row names the page's own installed desktop package;
-      // a remote device's package version is that device's, not this
-      // page's.
-      if channel is Local {
-        (@cmd.none, { ..model, app_version: version, })
-      } else {
-        (@cmd.none, model)
-      }
-    }
     InstalledSkillsLoaded(items) =>
       if channel == model.focused {
         (@cmd.none, { ..model, installed_skills: items, })
@@ -5049,7 +5039,7 @@ fn update_device_msg(
         // device is refreshed when focus moves to it.
         (@cmd.none, model)
       }
-    BridgeReady => {
+    BridgeReady(windows~) => {
       let connection_generation = dev.connection_generation + 1
       let sessions_request_generation = dev.sessions_request_generation + 1
       let archived_request_generation = dev.archived_request_generation + 1
@@ -5072,9 +5062,6 @@ fn update_device_msg(
         fetch_projects(
           dispatch, channel, connection_generation, projects_request_generation,
         ),
-        // The host's immutable self-description (package version, platform).
-        // Per-channel: a remote device's platform is its own, not the page's.
-        fetch_app_info(dispatch, channel),
       ]
       // The focused-scoped half: the host-settings mirror and installed
       // skills (they feed the composer's `$` completion, so
@@ -5098,6 +5085,7 @@ fn update_device_msg(
         // materializes there. The startup update check rides here so it
         // only runs once the bridge can carry it.
         if model.is_desktop {
+          commands.push(model.fetch_app_info(dispatch))
           commands.push(check_for_updates(dispatch, explicit=false))
           commands.push(fetch_remote_status(dispatch))
         }
@@ -5125,6 +5113,7 @@ fn update_device_msg(
         bridge: Connected,
         reconnect_failures: 0,
         connection_generation,
+        windows_host: windows,
         sessions_request_generation,
         archived_request_generation,
         projects_request_generation,
@@ -9272,7 +9261,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
     messages: [{ kind: User, content: "kept", ts: None, sequence: None, }],
     watermark: 1,
   })
-  let (_, refreshing) = update_dev(dispatch, BridgeReady, model)
+  let (_, refreshing) = update_dev(dispatch, BridgeReady(windows=false), model)
   guard refreshing.active().sync is Reloading(generation=1, attempt=1, ..) else {
     fail("expected the first reconnect refresh")
   }
@@ -9287,7 +9276,11 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
     ),
     refreshing,
   )
-  let (_, reconnected_again) = update_dev(dispatch, BridgeReady, buffered)
+  let (_, reconnected_again) = update_dev(
+    dispatch,
+    BridgeReady(windows=false),
+    buffered,
+  )
   guard reconnected_again.active().sync
     is Reloading(generation=1, attempt=1, buffered=commits, ..) else {
     fail("a second reconnect started another generation")
@@ -9326,7 +9319,7 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
   let model = test_model()
     .replace_conversation(active)
     .replace_conversation(background)
-  let (_, next) = update_dev(dispatch, BridgeReady, model)
+  let (_, next) = update_dev(dispatch, BridgeReady(windows=false), model)
   for conv in next.conversations {
     assert_eq(conv.turn.streaming_response, None)
     assert_true(conv.compaction is NotCompacting)
@@ -9344,7 +9337,7 @@ test "BridgeReady clears focused host settings until the refetch lands" {
     setup_api_key: "old-key",
     host_settings_revision: 7,
   }
-  let (_, next) = update_dev(dispatch, BridgeReady, model)
+  let (_, next) = update_dev(dispatch, BridgeReady(windows=false), model)
   assert_false(next.host_settings_loaded())
   assert_true(next.api_provider is Deepseek)
   inspect(next.custom_api_url, content="")
@@ -9400,7 +9393,7 @@ test "a reconnect retires the file index watcher until placement returns" {
     file_ctx(model),
   )
   let model = { ..model, file_panel: ready, }
-  let (_, reconnected) = update_dev(dispatch, BridgeReady, model)
+  let (_, reconnected) = update_dev(dispatch, BridgeReady(windows=false), model)
   // A reconnect drops the worktree mirror, so this conversation's placement
   // is unknown again. Both the watcher and the index retire rather than keep
   // addressing a root the new connection has not confirmed.
@@ -9506,7 +9499,11 @@ test "BridgeReady resets only conversations owned by its channel" {
     active_session: "shared",
     conversations: [local_conv, remote],
   }
-  let (_, next) = update(dispatch, FromDevice(background, BridgeReady), model)
+  let (_, next) = update(
+    dispatch,
+    FromDevice(background, BridgeReady(windows=false)),
+    model,
+  )
   guard next.find_conversation(@interop.ChannelId::Local, "shared")
     is Some(kept) &&
     next.find_conversation(background, "shared") is Some(reset) else {
@@ -9570,7 +9567,11 @@ test "BridgeReady resets the reconnect failure count" {
     ],
     focused: channel,
   }
-  let (_, next) = update(dispatch, FromDevice(channel, BridgeReady), model)
+  let (_, next) = update(
+    dispatch,
+    FromDevice(channel, BridgeReady(windows=false)),
+    model,
+  )
   inspect(next.dev().reconnect_failures, content="0")
   assert_true(next.bridge_state() is Connected)
 }
@@ -9654,7 +9655,11 @@ test "an explicit rejected fresh start does not force reconnect reloads" {
     test_model().replace_conversation(conv),
   )
   inspect(rejected.active().pending_steers.length(), content="0")
-  let (_, reconnected) = update_dev(dispatch, BridgeReady, rejected)
+  let (_, reconnected) = update_dev(
+    dispatch,
+    BridgeReady(windows=false),
+    rejected,
+  )
   assert_true(reconnected.active().sync is Synced)
   inspect(reconnected.transcript_request_generation, content="0")
 }
@@ -11142,7 +11147,7 @@ test "reconnect runs snapshot settles only its captured Starting submission" {
   )
   let (_, bridged) = update_dev(
     dispatch,
-    BridgeReady,
+    BridgeReady(windows=false),
     test_model().replace_conversation(conv),
   )
   // The gap ended the entry: no receipt can cross it.
@@ -11161,7 +11166,11 @@ test "reconnect runs snapshot settles only its captured Starting submission" {
 ///|
 test "an old empty runs snapshot cannot close a start sent after reconnect" {
   let dispatch = test_dispatch()
-  let (_, bridged) = update_dev(dispatch, BridgeReady, test_model())
+  let (_, bridged) = update_dev(
+    dispatch,
+    BridgeReady(windows=false),
+    test_model(),
+  )
   // A reconnect clears the host-settings mirror; the refetch that follows
   // restores the saved key (the BYOK fixture is a ready app).
   let (_, ready) = update_dev(
@@ -11253,7 +11262,11 @@ test "a Started racing ahead of an older runs response stays open" {
 ///|
 test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
   let dispatch = test_dispatch()
-  let (_, generation_one) = update_dev(dispatch, BridgeReady, test_model())
+  let (_, generation_one) = update_dev(
+    dispatch,
+    BridgeReady(windows=false),
+    test_model(),
+  )
   let stale = RunsLoaded(
     runs=[
       {
@@ -11271,7 +11284,11 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
     frontier=generation_one.run_snapshot_frontier(@interop.ChannelId::Local),
     connection_generation=generation_one.dev().connection_generation,
   )
-  let (_, generation_two) = update_dev(dispatch, BridgeReady, generation_one)
+  let (_, generation_two) = update_dev(
+    dispatch,
+    BridgeReady(windows=false),
+    generation_one,
+  )
   // The current generation's empty answer wins first. The delayed older
   // answer must then be rejected whole, before replaying its Started row.
   let (_, current) = update_dev(
@@ -11723,7 +11740,11 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
   )
   assert_true(direct.active().messages[0].ts is Some(1781144351123))
   // The same stamp survives the buffer a reconnect drains commits through.
-  let (_, reconnecting) = update_dev(dispatch, BridgeReady, running_model())
+  let (_, reconnecting) = update_dev(
+    dispatch,
+    BridgeReady(windows=false),
+    running_model(),
+  )
   let (_, buffered) = update_dev(
     dispatch,
     stamped("desktop-test", 1, 1781144352000),
@@ -15134,7 +15155,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
     .replace_conversation(archived),
     active_session: item.id,
   }
-  let (_, ready) = update_dev(dispatch, BridgeReady, model)
+  let (_, ready) = update_dev(dispatch, BridgeReady(windows=false), model)
   inspect(ready.dev().connection_generation, content="1")
   inspect(ready.dev().archive_overrides.length(), content="0")
   let (_, live) = update_dev(
@@ -16883,29 +16904,33 @@ test "CompactRejected clears the queued notice and reports the error" {
 }
 
 ///|
-test "AppInfoLoaded records the version and host platform idempotently" {
+test "AppInfoLoaded replaces the displayed package version idempotently" {
   let dispatch = test_dispatch()
-  let info = AppInfoLoaded(version="0.2.0", windows=true)
-  let (_, once) = update(
-    dispatch,
-    FromDevice(@interop.ChannelId::Local, info),
-    test_model(),
-  )
-  let (_, twice) = update(
-    dispatch,
-    FromDevice(@interop.ChannelId::Local, info),
-    once,
-  )
+  let (_, once) = update(dispatch, AppInfoLoaded("0.2.0"), test_model())
+  let (_, twice) = update(dispatch, AppInfoLoaded("0.2.0"), once)
   assert_eq(once.app_version, "0.2.0")
+  assert_eq(twice.app_version, once.app_version)
+  assert_eq(twice.notification_seq, once.notification_seq)
+}
+
+///|
+test "BridgeReady records the platform the host stated in its connect" {
+  let dispatch = test_dispatch()
+  let (_, once) = update_dev(dispatch, BridgeReady(windows=true), test_model())
   assert_true(
     once.device_state(@interop.ChannelId::Local)
     is Some({ windows_host: true, .. }),
   )
-  assert_true(twice == once)
+  // Every re-fire restates the immutable fact.
+  let (_, again) = update_dev(dispatch, BridgeReady(windows=true), once)
+  assert_true(
+    again.device_state(@interop.ChannelId::Local)
+    is Some({ windows_host: true, .. }),
+  )
 }
 
 ///|
-test "a remote device's app info never renames the page's own package" {
+test "a device's stated platform is its own, not its neighbors'" {
   let dispatch = test_dispatch()
   let channel = @interop.ChannelId::Remote("d_b")
   let base = {
@@ -16917,10 +16942,9 @@ test "a remote device's app info never renames the page's own package" {
   }
   let (_, next) = update(
     dispatch,
-    FromDevice(channel, AppInfoLoaded(version="9.9.9", windows=true)),
+    FromDevice(channel, BridgeReady(windows=true)),
     base,
   )
-  assert_eq(next.app_version, base.app_version)
   assert_true(next.device_state(channel) is Some({ windows_host: true, .. }))
   assert_true(
     next.device_state(@interop.ChannelId::Local)

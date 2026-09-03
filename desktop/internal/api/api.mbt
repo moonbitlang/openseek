@@ -514,7 +514,6 @@ pub fn endpoints(
     }),
     @endpoint.Endpoint::remote_sync(@commands.app_info, _ => {
       version: state.app_version,
-      windows: @sysplatform.win32 || @sysplatform.win64,
     }),
     @endpoint.Endpoint::remote(@commands.settings_set, async fn(payload) {
       // The store commit and its broadcast are one finite cancellation-

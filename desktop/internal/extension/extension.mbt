@@ -435,7 +435,10 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
             PageConnected(context, reply) => {
               // Serialize readiness before subsequent delivery so the
               // frontend can use it as the resync boundary.
-              context.emit(connected_event, { stage: Accepted, })
+              context.emit(connected_event, {
+                stage: Accepted,
+                windows: @platform.is_windows(),
+              })
               connected = true
               reply.put(())
             }

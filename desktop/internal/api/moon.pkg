@@ -15,7 +15,6 @@ import {
   "openseek_desktop/internal/worktree",
   "moonbitlang/async",
   "moonbitlang/core/json",
-  "tonyfettes/platform" @sysplatform,
   "tonyfettes/xlog",
 }
 

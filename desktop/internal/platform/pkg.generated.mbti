@@ -4,6 +4,8 @@ package "openseek_desktop/internal/platform"
 // Values
 pub fn is_darwin() -> Bool
 
+pub fn is_windows() -> Bool
+
 pub async fn machine_hostname() -> String?
 
 pub async fn open_path(String) -> Int

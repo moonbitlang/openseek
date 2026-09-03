@@ -1185,12 +1185,12 @@ priv struct DeviceState {
   // captured when their request was issued, so a reply from a dead connection
   // cannot overwrite the lists rebuilt after reconnect.
   connection_generation : Int
-  // Whether this channel's host machine is Windows, from the `app.info`
-  // reply fetched at every BridgeReady. Immutable for the life of the host
-  // process, so a reconnect's refetch merely restates it; false until the
-  // first reply (and forever against hosts predating the field), degrading
-  // to POSIX path semantics. The project picker's drive-letter handling
-  // reads it.
+  // Whether this channel's host machine is Windows, stated by the host in
+  // the `agent.connected` push that raises BridgeReady — held from the
+  // moment the connection exists, never queried. Immutable for the host
+  // process's life, so every re-fire restates it; false against hosts
+  // predating the field, degrading to POSIX path semantics. The project
+  // picker's drive-letter handling reads it.
   windows_host : Bool
   // Page-lifetime request tokens for the independently fetched sidebar
   // collections. Connection generation rejects dead sockets; these reject an
@@ -1719,6 +1719,8 @@ priv enum Msg {
   // as `RemoteStatusLoaded` via the op's reply).
   RemoteDisconnectClicked
   RemoteDisconnectFailed(String)
+  // Proton package metadata returned by the native host.
+  AppInfoLoaded(String)
   // A `check_update` reply (or its failure, folded into `Unreachable`).
   // `explicit` says a user asked, which is what decides how loudly each
   // outcome shows.
@@ -1988,7 +1990,11 @@ priv enum Msg {
 /// `FromDevice(channel, ...)`; messages that back page-global or
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
-  BridgeReady
+  // The host's `agent.connected`: this connection is live, re-read your
+  // state. `windows` is the host's self-stated platform riding the signal;
+  // it is immutable for the host process's life, so every re-fire restates
+  // the same value.
+  BridgeReady(windows~ : Bool)
   BridgeUnavailable(String)
   // The channel's WebSocket closed (or failed to open). The handler counts
   // the loss and schedules `ReconnectDue`, making the model's device list
@@ -2019,11 +2025,6 @@ priv enum DeviceMsg {
     connection_generation~ : Int,
     cleans_legacy~ : Bool
   )
-  // The host's immutable self-description from `app.info`, fetched at every
-  // BridgeReady: its package version and whether its machine is Windows.
-  // Both facts are fixed for the host process's life, so no generation
-  // fences the reply — a reconnect's refetch restates the same values.
-  AppInfoLoaded(version~ : String, windows~ : Bool)
   // A `skills.installed` reply is channel-scoped just like the invalidation
   // that prompted it. Only the currently focused host may replace the
   // page's library mirror.

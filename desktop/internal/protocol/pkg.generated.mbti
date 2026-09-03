@@ -64,15 +64,12 @@ pub impl @json.FromJson for AgentStreamEvent
 
 pub(all) struct AppInfoReply {
   version : String
-  windows : Bool
-} derive(Eq, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn AppInfoReply::equal(Self, Self) -> Bool
 pub fn AppInfoReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AppInfoReply::not_equal(Self, Self) -> Bool
 pub fn AppInfoReply::to_json(Self) -> Json
 pub fn AppInfoReply::to_repr(Self) -> @debug.Repr
-pub impl ToJson for AppInfoReply
-pub impl @json.FromJson for AppInfoReply
 
 pub(all) struct AppTitlebarThemePayload {
   dark : Bool
@@ -737,6 +734,7 @@ pub fn CompactReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ConnectedPayload {
   stage : ConnectedStage
+  windows : Bool
 } derive(Eq, @debug.Debug)
 pub fn ConnectedPayload::equal(Self, Self) -> Bool
 pub fn ConnectedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
