@@ -199,17 +199,16 @@ async fn assert_answer_main_unchanged(
 }
 
 ///|
-/// Assert `result` is the pre-execution source-write refusal: an error
-/// Respond carrying the `marker` phrase plus the shared feedback line (and,
-/// when `line_anchored`, the edit-tool redirection hint).
+/// Assert `output` is the pre-execution source-write refusal: an error
+/// Respond carrying the blocked-operation marker plus the shared feedback line
+/// (and, when `line_anchored`, the edit-tool redirection hint).
 #cfg(not(platform="windows"))
 fn expect_source_write_blocked(
   output : @agent_tool.ToolOutput,
-  marker? : String = "source tree operation is blocked",
   line_anchored? : Bool = false,
 ) -> Unit raise {
   assert_true(output.is_error)
-  assert_true(output.content.contains(marker))
+  assert_true(output.content.contains("source tree operation is blocked"))
   assert_true(
     output.content.contains("source file writes from shell are blocked"),
   )

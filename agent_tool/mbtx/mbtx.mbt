@@ -1018,7 +1018,8 @@ async fn refusal_guidance(
 ) -> String? {
   async fn shows(reports : (String) -> Bool) -> Bool {
     match log_path {
-      Some(path) => log_shows_denial(path, reports)
+      Some(path) =>
+        log_shows_denial(path, reports, budget_bytes=DenialScanBudgetBytes)
       None => reports(head)
     }
   }
@@ -1096,16 +1097,17 @@ const DenialScanBudgetBytes : Int = 16_777_216
 /// one. Detection must not be bounded by the 48KB display cap (a snippet can
 /// flood past it before the denied access), but it must stay bounded in bytes
 /// and time: a log larger
-/// than twice `DenialScanBudgetBytes` is scanned at its head and tail only. An
+/// than twice `budget_bytes` is scanned at its head and tail only. An
 /// uncaught denial crashes the snippet, so its OSError line is the log's tail;
 /// a caught-and-printed denial lands where it happened, inside the head for
 /// realistic probes. Only a denial buried in the MIDDLE of a >32MB flood is
-/// missed — the price of a bounded scan. `budget_bytes` is parameterized for
-/// tests only.
+/// missed — the price of a bounded scan. Production passes
+/// `DenialScanBudgetBytes` as `budget_bytes`; tests pass a small budget to
+/// exercise the head/tail split.
 async fn log_shows_denial(
   path : String,
   reports_denial : (String) -> Bool,
-  budget_bytes? : Int = DenialScanBudgetBytes,
+  budget_bytes~ : Int,
 ) -> Bool {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return false }
   defer file.close()

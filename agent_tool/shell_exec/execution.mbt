@@ -413,10 +413,10 @@ pub fn ShellExecution::seq(self : ShellExecution) -> Int {
 
 ///|
 /// Poll an execution until it reaches a terminal status, failing after a bounded
-/// deadline so a hung child can never hang the test.
+/// deadline (200 ticks of 25ms) so a hung child can never hang the test.
 #cfg(not(platform="windows"))
-async fn poll_exec_terminal(exec : ShellExecution, ticks? : Int = 200) -> Unit {
-  for _ in 0..<ticks {
+async fn poll_exec_terminal(exec : ShellExecution) -> Unit {
+  for _ in 0..<200 {
     if exec.status().is_terminal() {
       return
     }
