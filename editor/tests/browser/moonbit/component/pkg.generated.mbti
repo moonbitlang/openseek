@@ -4,6 +4,8 @@ package "moonbitlang/editor/tests/browser/moonbit/component"
 // Values
 pub fn run_browser_geometry_test() -> Unit
 
+pub fn run_code_lens_test() -> Unit
+
 pub fn run_cursor_input_events_test() -> Unit
 
 pub fn run_diff_editor_lifecycle_test() -> Unit

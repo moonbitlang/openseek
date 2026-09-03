@@ -364,6 +364,23 @@ pub fn ContentWidgets::set_widget_position(
 }
 
 ///|
+/// Monaco `ViewContentWidgets.removeWidget`: forget the widget, detach its DOM
+/// node, clear the visibility marker, and schedule the remaining widgets for
+/// layout. This is required by model-scoped CodeLens widgets; persistent hover
+/// widgets continue to be owned by their existing per-View teardown path.
+pub fn ContentWidgets::remove_widget(
+  self : ContentWidgets,
+  actual : ContentWidgetHandle,
+) -> Unit {
+  let id = (actual.get_id)()
+  guard self.widgets.get(id) is Some(widget) else { return }
+  self.widgets.remove(id)
+  @base_browser.remove_element(widget.dom_node)
+  widget.dom_node.remove_attribute("monaco-visible-content-widget")
+  self.should_render = true
+}
+
+///|
 /// Monaco `ViewContentWidgets.onConfigurationChanged` (`:56-62`) delegates
 /// to every retained widget. Each inner handler rereads layout caches only for
 /// the `layoutInfo` option identity (`Widget.onConfigurationChanged`, :250-258).

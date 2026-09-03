@@ -59,6 +59,7 @@
      the Modern themes do not override it. */
   --vscode-editorWhitespace-foreground: #e3e4e229;
   --vscode-editorLink-activeForeground: #4e94ce;
+  --vscode-editorCodeLens-foreground: #999999;
   --vscode-editorWarning-foreground: #cca700;
   --vscode-editorError-foreground: #f14c4c;
   --vscode-editorInfo-foreground: #59a4f9;
@@ -213,6 +214,7 @@
   /* See the Dark Modern block above (light registry default). */
   --vscode-editorWhitespace-foreground: #33333333;
   --vscode-editorLink-activeForeground: #0000ff;
+  --vscode-editorCodeLens-foreground: #919191;
   --vscode-editorWarning-foreground: #bf8803;
   --vscode-editorError-foreground: #e51400;
   --vscode-editorInfo-foreground: #0063d3;

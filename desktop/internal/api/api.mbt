@@ -733,6 +733,7 @@ test "remote endpoint catalog has one entry per command name" {
   assert_true(names.contains("fs.search_text"))
   assert_true(names.contains("fs.cancel_search_text"))
   assert_true(names.contains("moonide.references"))
+  assert_true(names.contains("moonide.codelens"))
   assert_false(names.contains("host.connect"))
   assert_false(names.contains("shell.open_external"))
 }

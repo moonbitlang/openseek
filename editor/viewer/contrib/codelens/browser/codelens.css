@@ -1,0 +1,51 @@
+/* CodeLens row presentation, adapted from the pinned VS Code
+   codelensWidget.css. Geometry is supplied through per-Viewer custom
+   properties by the CodeLens contribution. */
+.monaco-editor .codelens-decoration {
+  overflow: hidden;
+  display: inline-flex !important;
+  align-items: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vscode-editorCodeLens-foreground);
+  line-height: var(--vscode-editorCodeLens-lineHeight);
+  font-size: var(--vscode-editorCodeLens-fontSize);
+  padding-right: calc(var(--vscode-editorCodeLens-fontSize) * 0.5);
+  font-feature-settings: var(--vscode-editorCodeLens-fontFeatureSettings);
+  font-family: var(--vscode-editorCodeLens-fontFamily);
+}
+
+.monaco-editor .codelens-decoration > span,
+.monaco-editor .codelens-decoration > a {
+  user-select: none;
+  -webkit-user-select: none;
+  white-space: nowrap;
+  vertical-align: sub;
+  display: inline-flex;
+  align-items: center;
+}
+
+.monaco-editor .codelens-decoration > a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.monaco-editor .codelens-decoration > a:hover,
+.monaco-editor .codelens-decoration > a:focus-visible {
+  cursor: pointer;
+  color: var(--vscode-editorLink-activeForeground) !important;
+  outline: none;
+}
+
+@keyframes moonbit-viewer-codelens-fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.monaco-editor .codelens-decoration[data-code-lens-has-commands="true"] {
+  animation: moonbit-viewer-codelens-fadein 0.1s linear;
+}

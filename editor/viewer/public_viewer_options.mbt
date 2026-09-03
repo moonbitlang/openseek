@@ -28,6 +28,9 @@ pub fn ViewerOptions::ViewerOptions(
   smooth_scrolling? : Bool = false,
   show_unused? : Bool = true,
   show_deprecated? : Bool = true,
+  code_lens? : Bool = true,
+  code_lens_font_family? : String,
+  code_lens_font_size? : Double,
   font_family? : String = @config.editor_font_defaults.font_family,
   font_weight? : String = @config.editor_font_defaults.font_weight,
   font_size? : Double = @config.editor_font_defaults.font_size,
@@ -56,6 +59,9 @@ pub fn ViewerOptions::ViewerOptions(
       smooth_scrolling~,
       show_unused~,
       show_deprecated~,
+      code_lens~,
+      code_lens_font_family?,
+      code_lens_font_size?,
       font_family~,
       font_weight~,
       font_size~,
@@ -100,6 +106,30 @@ pub fn ViewerOptions::with_font_size(
   value : Double,
 ) -> ViewerOptions {
   { inner: self.inner.with_font_size(value), }
+}
+
+///|
+pub fn ViewerOptions::with_code_lens(
+  self : ViewerOptions,
+  value : Bool,
+) -> ViewerOptions {
+  { inner: self.inner.with_code_lens(value), }
+}
+
+///|
+pub fn ViewerOptions::with_code_lens_font_family(
+  self : ViewerOptions,
+  value : String?,
+) -> ViewerOptions {
+  { inner: self.inner.with_code_lens_font_family(value), }
+}
+
+///|
+pub fn ViewerOptions::with_code_lens_font_size(
+  self : ViewerOptions,
+  value : Double?,
+) -> ViewerOptions {
+  { inner: self.inner.with_code_lens_font_size(value), }
 }
 
 ///|

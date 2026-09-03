@@ -17,6 +17,7 @@ test "contributions instantiate centrally in the reviewed order and expose every
     context_menu_contribution_id,
     definition_contribution_id,
     references_contribution_id,
+    code_lens_contribution_id,
   ]
   let actual : Array[String] = []
   for id, entry in viewer.contributions.instances {
@@ -31,6 +32,7 @@ test "contributions instantiate centrally in the reviewed order and expose every
       ("editor.contrib.contextmenu", ContextMenu(_)) => ()
       ("editor.contrib.definition", Definition(_)) => ()
       ("editor.contrib.referencesController", References(_)) => ()
+      ("css.editor.codeLens", CodeLens(_)) => ()
       _ => fail("contribution id and concrete variant diverged: \{id}")
     }
   }
@@ -50,6 +52,15 @@ test "contributions instantiate centrally in the reviewed order and expose every
   assert_true(viewer.context_menu_contribution() is Some(_))
   assert_true(viewer.definition_contribution() is Some(_))
   assert_true(viewer.references_contribution() is Some(_))
+  assert_true(viewer.code_lens_contribution() is Some(_))
+  let mut code_lens_after_first_render = false
+  for description in editor_registry().contributions {
+    if description.id == code_lens_contribution_id {
+      code_lens_after_first_render = description.instantiation
+        is AfterFirstRender
+    }
+  }
+  assert_true(code_lens_after_first_render)
 
   // Every typed accessor validates both its fixed id and the enum variant.
   // Temporarily put a valid but mismatched payload under quick diff's id.
@@ -91,6 +102,7 @@ test "diff pane descriptors keep markdown comments and navigation but exclude fo
   assert_true(viewer.references_contribution() is Some(_))
   assert_true(viewer.markdown_comment_contribution() is Some(_))
   assert_true(viewer.quick_diff_contribution() is None)
+  assert_true(viewer.code_lens_contribution() is None)
 
   viewer.dispose()
   viewer.dispose()
@@ -119,6 +131,7 @@ test "peek preview descriptors cannot recursively create references markdown or 
   assert_true(viewer.folding_controller() is None)
   assert_true(viewer.agent_feedback_input_contribution() is None)
   assert_true(viewer.agent_feedback_widget_contribution() is None)
+  assert_true(viewer.code_lens_contribution() is None)
   assert_false(viewer.references_peek_available())
 
   viewer.dispose()
@@ -228,7 +241,7 @@ test "direct entry disposal retires typed lookup without removing the row early"
 }
 
 ///|
-test "viewer disposes all nine real rows once in order while the map stays installed" {
+test "viewer disposes all ten real rows once in order while the map stays installed" {
   let viewer = CodeEditorWidget::CodeEditorWidget()
   let expected_ids = [
     "agentFeedback.editorInputContribution",
@@ -240,6 +253,7 @@ test "viewer disposes all nine real rows once in order while the map stays insta
     context_menu_contribution_id,
     definition_contribution_id,
     references_contribution_id,
+    code_lens_contribution_id,
   ]
   let order : Array[String] = []
   let map_stayed_installed = Ref(true)
@@ -269,6 +283,7 @@ test "viewer disposes all nine real rows once in order while the map stays insta
         "contextMenu" => viewer.context_menu_contribution() is Some(_)
         "definition" => viewer.definition_contribution() is Some(_)
         "references" => viewer.references_contribution() is Some(_)
+        "codeLens" => viewer.code_lens_contribution() is Some(_)
         _ => false
       }
       if !available {
@@ -299,11 +314,14 @@ test "viewer disposes all nine real rows once in order while the map stays insta
   viewer.contributions.instances[references_contribution_id].listeners.push(
     track("references"),
   )
+  viewer.contributions.instances[code_lens_contribution_id].listeners.push(
+    track("codeLens"),
+  )
   viewer.dispose()
   viewer.dispose()
   assert_eq(order, [
     "input", "widget", "folding", "markdown", "hover", "quickDiff", "contextMenu",
-    "definition", "references",
+    "definition", "references", "codeLens",
   ])
   assert_true(map_stayed_installed.val)
   assert_true(typed_row_stayed_available.val)
@@ -318,7 +336,7 @@ test "contribution wrapper retires lookup between behavior and retained-resource
   let hover_state = viewer.content_hover_contribution().unwrap()
   viewer.contributions.dispose_behavior(viewer)
   assert_true(viewer.contributions.lifecycle == ContributionsDisposing)
-  assert_eq(viewer.contributions.instances.length(), 9)
+  assert_eq(viewer.contributions.instances.length(), 10)
   assert_true(viewer.content_hover_contribution() is None)
   assert_true(
     viewer.contributions.lookup("editor.contrib.contentHover") is None,
@@ -361,6 +379,8 @@ test "two viewers isolate mutable contribution state and disposal owners" {
   let second_definition = second.definition_contribution().unwrap()
   let first_references = first.references_contribution().unwrap()
   let second_references = second.references_contribution().unwrap()
+  let first_code_lens = first.code_lens_contribution().unwrap()
+  let second_code_lens = second.code_lens_contribution().unwrap()
   assert_false(physical_equal(first_input, second_input))
   assert_false(physical_equal(first_widgets, second_widgets))
   assert_false(physical_equal(first_folding, second_folding))
@@ -370,6 +390,7 @@ test "two viewers isolate mutable contribution state and disposal owners" {
   assert_false(physical_equal(first_context_menu, second_context_menu))
   assert_false(physical_equal(first_definition, second_definition))
   assert_false(physical_equal(first_references, second_references))
+  assert_false(physical_equal(first_code_lens, second_code_lens))
 
   // Give every concrete controller/state a CodeEditorWidget-specific mutable witness.
   // These values deliberately differ so an accidental shared carrier or
@@ -388,6 +409,8 @@ test "two viewers isolate mutable contribution state and disposal owners" {
   first_hover.hover_notified_token = 11
   second_hover.hover_ignore_mouse_events = true
   second_hover.hover_notified_token = 22
+  first_code_lens.widget_id_pool = 101
+  second_code_lens.widget_id_pool = 202
 
   let first_disposals : Array[String] = []
   let second_disposals : Array[String] = []
@@ -445,6 +468,12 @@ test "two viewers isolate mutable contribution state and disposal owners" {
   second.contributions.instances[references_contribution_id].listeners.push(
     @base_common.Disposable::from(() => second_disposals.push("references")),
   )
+  first.contributions.instances[code_lens_contribution_id].listeners.push(
+    @base_common.Disposable::from(() => first_disposals.push("codeLens")),
+  )
+  second.contributions.instances[code_lens_contribution_id].listeners.push(
+    @base_common.Disposable::from(() => second_disposals.push("codeLens")),
+  )
   let second_folding_listener_count = second_folding.local_to_dispose.length()
   let second_markdown_listener_count = second_markdown.listeners.length()
   let second_quick_diff_listener_count = second_quick_diff.listeners.length()
@@ -461,6 +490,8 @@ test "two viewers isolate mutable contribution state and disposal owners" {
   assert_false(second_hover.hover_keep_open)
   assert_false(first_hover.hover_ignore_mouse_events)
   assert_true(second_hover.hover_ignore_mouse_events)
+  assert_eq(first_code_lens.widget_id_pool, 101)
+  assert_eq(second_code_lens.widget_id_pool, 202)
 
   first.dispose()
 
@@ -468,7 +499,7 @@ test "two viewers isolate mutable contribution state and disposal owners" {
   // same typed instances, mutable sentinels, and pending disposal handles.
   assert_eq(first_disposals, [
     "input", "widget", "folding", "markdown", "hover", "quickDiff", "contextMenu",
-    "definition", "references",
+    "definition", "references", "codeLens",
   ])
   assert_eq(second_disposals, [])
   // Markdown teardown advances only First's stale-callback generation.
@@ -482,6 +513,7 @@ test "two viewers isolate mutable contribution state and disposal owners" {
   assert_true(first.context_menu_contribution() is None)
   assert_true(first.definition_contribution() is None)
   assert_true(first.references_contribution() is None)
+  assert_true(first.code_lens_contribution() is None)
   assert_true(
     physical_equal(
       second_input,
@@ -521,6 +553,9 @@ test "two viewers isolate mutable contribution state and disposal owners" {
   assert_true(
     physical_equal(second_references, second.references_contribution().unwrap()),
   )
+  assert_true(
+    physical_equal(second_code_lens, second.code_lens_contribution().unwrap()),
+  )
   assert_false(second_input.visible)
   assert_eq(second_input.hover_line_number, 22)
   assert_eq(second_widgets.widget_id_pool, 202)
@@ -544,20 +579,22 @@ test "two viewers isolate mutable contribution state and disposal owners" {
   second_widgets.reply_drafts["second"] = "updated second draft"
   second_markdown.generation = 203
   second_hover.hover_notified_token = 23
+  second_code_lens.widget_id_pool = 203
   assert_eq(first_input.hover_line_number, 11)
   assert_eq(first_widgets.widget_id_pool, 101)
   assert_eq(first_widgets.reply_drafts.get("first"), Some("first draft"))
   assert_eq(first_markdown.generation, 102)
   assert_eq(first_hover.hover_notified_token, 11)
+  assert_eq(first_code_lens.widget_id_pool, 101)
 
   second.dispose()
   assert_eq(second_disposals, [
     "input", "widget", "folding", "markdown", "hover", "quickDiff", "contextMenu",
-    "definition", "references",
+    "definition", "references", "codeLens",
   ])
   assert_eq(first_disposals, [
     "input", "widget", "folding", "markdown", "hover", "quickDiff", "contextMenu",
-    "definition", "references",
+    "definition", "references", "codeLens",
   ])
 }
 
@@ -573,6 +610,7 @@ test "model removal and reattach preserve central contribution identities" {
   let context_menu = viewer.context_menu_contribution().unwrap()
   let definition = viewer.definition_contribution().unwrap()
   let references = viewer.references_contribution().unwrap()
+  let code_lens = viewer.code_lens_contribution().unwrap()
   let markdown_listener_disposed = Ref(false)
   markdown.listeners.push(
     @base_common.Disposable::from(() => markdown_listener_disposed.val = true),
@@ -610,6 +648,9 @@ test "model removal and reattach preserve central contribution identities" {
   )
   assert_true(
     physical_equal(references, viewer.references_contribution().unwrap()),
+  )
+  assert_true(
+    physical_equal(code_lens, viewer.code_lens_contribution().unwrap()),
   )
   viewer.dispose()
   assert_true(markdown_listener_disposed.val)

@@ -22,6 +22,7 @@
 @import url("../../editor/viewer/contrib/contextmenu/browser/contextmenu.css");
 @import url("../../editor/viewer/contrib/definition/browser/definition.css");
 @import url("../../editor/viewer/contrib/references/browser/references.css");
+@import url("../../editor/viewer/contrib/codelens/browser/codelens.css");
 @import url("../../editor/viewer/contrib/hover/hover.css");
 @import url("../../editor/viewer/contrib/quick_diff/browser/quick_diff.css");
 @import url("../../editor/viewer/contrib/agent_feedback/browser/agent_feedback.css");

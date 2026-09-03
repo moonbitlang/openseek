@@ -507,6 +507,7 @@ pub fn CodeEditorWidget::update_options(
   end_view_event_batch(event_batch)
   self.emit_layout_change_if_needed(previous_configuration.layout)
   self.refresh_managed_overview_rulers()
+  self.code_lens_on_configuration_changed(previous)
   self.schedule_render()
 }
 
@@ -548,6 +549,7 @@ fn CodeEditorWidget::attach(
   let placeholder = PlaceholderDom(self.configuration.snapshot().options.theme)
   host.append_child(placeholder.root.as_node())
   self.mount = Mounted(MountedViewer(host, placeholder))
+  self.apply_code_lens_style_and_height()
   // Public construction is synchronous: the returned CodeEditorWidget already reports
   // the host client box even when it has no model and before any animation
   // frame. The constructor supplied the same fact before contributions; this
@@ -679,6 +681,7 @@ pub fn CodeEditorWidget::handle_initialized(self : CodeEditorWidget) -> Unit {
 /// and hand back the outgoing model for the owner-id decoration sweep.
 fn CodeEditorWidget::detach_model(self : CodeEditorWidget) -> @model.TextModel? {
   guard self.model_slot.current is Some(_) else { return None }
+  self.clear_code_lens_model_state()
   self.close_definition_peek(restore_focus=false)
   guard self.model_slot.invalidate_current_for_detach() is Some(model_data) else {
     return None

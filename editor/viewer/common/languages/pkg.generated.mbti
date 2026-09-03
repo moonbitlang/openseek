@@ -32,6 +32,10 @@ pub fn CharacterPair::equal(Self, Self) -> Bool
 pub fn CharacterPair::not_equal(Self, Self) -> Bool
 pub fn CharacterPair::to_repr(Self) -> @debug.Repr
 
+type CodeLensItem
+pub fn CodeLensItem::has_resolver(Self) -> Bool
+pub fn CodeLensItem::lens(Self) -> @language.CodeLens
+
 pub(all) struct CommentRule {
   line_comment : LineCommentRule?
   block_comment : CharacterPair?
@@ -56,17 +60,22 @@ pub(all) struct LanguageConfiguration {
 }
 
 type LanguageHandle
+pub async fn LanguageHandle::code_lenses(Self, @model.TextModel, token? : @language.CancellationToken, run_tasks? : async (Array[async () -> Unit]) -> Unit) -> Array[CodeLensItem] noraise
 pub async fn LanguageHandle::definition_at(Self, @model.TextModel, Int, token? : @language.CancellationToken, run_tasks? : async (Array[async () -> Unit]) -> Unit) -> Array[@language.Location] noraise
 pub fn LanguageHandle::get_language_configuration(Self, String) -> LanguageConfiguration
+pub fn LanguageHandle::has_code_lens_provider(Self, @model.TextModel) -> Bool
 pub fn LanguageHandle::has_definition_provider(Self, @model.TextModel) -> Bool
 pub fn LanguageHandle::has_references_provider(Self, @model.TextModel) -> Bool
 pub async fn LanguageHandle::hover_at(Self, @model.TextModel, Int, token? : @language.CancellationToken) -> @language.Hover? noraise
 pub fn LanguageHandle::markdown_comment_provider_render_result(Self, @model.TextModel) -> MarkdownCommentProviderResult?
+pub fn LanguageHandle::on_did_change_code_lenses(Self, () -> Unit) -> @common.Disposable
 pub async fn LanguageHandle::references_at(Self, @model.TextModel, Int, token? : @language.CancellationToken, run_tasks? : async (Array[async () -> Unit]) -> Unit) -> Array[@language.Location] noraise
+pub async fn LanguageHandle::resolve_code_lens(Self, @model.TextModel, CodeLensItem, @language.CodeLens, token? : @language.CancellationToken) -> @language.CodeLens? noraise
 
 type Languages
 pub fn Languages::Languages() -> Self
 pub fn Languages::language_handle(Self, @log.LogHandle) -> LanguageHandle
+pub fn Languages::register_code_lens_provider(Self, @language.LanguageSelector, &@language.CodeLensProvider, resolver? : &@language.CodeLensResolver, on_did_change? : (() -> Unit) -> @common.Disposable) -> @common.Disposable
 pub fn Languages::register_definition_provider(Self, @language.LanguageSelector, &@language.DefinitionProvider) -> @common.Disposable
 pub fn Languages::register_document_symbol_provider(Self, @language.LanguageSelector, &@language.DocumentSymbolProvider) -> @common.Disposable
 pub fn Languages::register_hover_provider(Self, @language.LanguageSelector, &@language.HoverProvider) -> @common.Disposable

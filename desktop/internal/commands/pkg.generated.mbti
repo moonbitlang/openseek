@@ -165,6 +165,8 @@ pub let lsp_open : Command[@protocol.LspOpenPayload, @protocol.LspDiagnosticsRep
 
 pub let lsp_workspace_symbols : Command[@protocol.WorkspaceSymbolsPayload, @protocol.WorkspaceSymbolsReply]
 
+pub let moonide_codelens : Command[@protocol.MoonIdeCodeLensPayload, @protocol.MoonIdeCodeLensReply]
+
 pub let moonide_definition : Command[@protocol.MoonIdeNavigationPayload, @protocol.MoonIdeLocationsReply]
 
 pub let moonide_references : Command[@protocol.MoonIdeNavigationPayload, @protocol.MoonIdeLocationsReply]

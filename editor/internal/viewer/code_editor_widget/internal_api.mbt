@@ -20,6 +20,13 @@ pub fn CodeEditorServices::agent_feedback(
 }
 
 ///|
+pub fn CodeEditorServices::code_lens_command_executor(
+  self : CodeEditorServices,
+) -> @code_lens_api.CodeLensCommandExecutorHandle? {
+  self.code_lens_command_executor
+}
+
+///|
 pub fn CodeEditorServices::location_opener(
   self : CodeEditorServices,
 ) -> @navigation_api.LocationOpenerHandle? {
