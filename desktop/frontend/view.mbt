@@ -1670,7 +1670,7 @@ fn conversation_load_failed_view(
     @html.strong("Could not load conversation"),
     @html.span(class="conversation-load-state-message", message),
     @html.button(
-      class="secondary",
+      class="button secondary",
       type_="button",
       on_click=dispatch(RetrySelectedConversation),
       "Retry",
