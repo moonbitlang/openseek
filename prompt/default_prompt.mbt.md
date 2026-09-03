@@ -855,6 +855,10 @@ fn main raise {
 
 - String interpolation uses `\{expr}`. Keep interpolation expressions simple.
   Do not write `\(expr)`; that is not MoonBit interpolation.
+- Build strings with interpolation rather than `+`: `"stderr: \{err}"` compiles
+  whenever `err` implements `Show`, while `"stderr: " + err` requires `err` to
+  be a `String` — with an `Int` (or any non-`String`) the `+` form is a type
+  error. Interpolation also avoids allocating an intermediate joined string.
 - Multi-line raw strings use `#|`. Multi-line interpolated strings use `$|` and
   interpolation as `\{...}`:
 
