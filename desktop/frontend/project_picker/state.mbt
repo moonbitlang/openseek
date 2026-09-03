@@ -27,9 +27,10 @@ struct State {
   location : Location?
   entries : Array[String]
   loading : Bool
-  // Whether the host that produced the current listing said it is Windows.
-  // Chooses where a drive-letter draft completes from; false until a
-  // listing arrives.
+  // Whether the browsed host itself is Windows — the shell's per-device
+  // fact, learned once from `app.info` when the channel connected and fixed
+  // for the picker's life. Chooses where a drive-letter draft completes
+  // from; never guessed from path shapes.
   windows_host : Bool
   // `Some` renders the inline new-folder composer. Its value stays present
   // across a failed create so the user can correct it without retyping.
@@ -96,13 +97,11 @@ pub(all) enum Msg {
   Navigate(String)
   // One location's listing came back from the host — a directory, or the
   // Windows drive list; `generation` names the browse request it answers,
-  // so a stale reply is dropped. `windows` is the listing host's own word
-  // on its platform (a drive list always says so), never a guess.
+  // so a stale reply is dropped.
   Loaded(
     channel~ : @interop.ChannelId,
     location~ : Location,
     entries~ : Array[String],
-    windows~ : Bool,
     generation~ : Int
   )
   // A browse or create failed; the shell pops the message as a toast and the
@@ -170,10 +169,12 @@ fn State::actionable_directory(self : State) -> String? {
 
 ///|
 /// Open a fresh picker against one device's host, browsing from that host's
-/// home directory.
+/// home directory. `windows` is that host's own platform, from the shell's
+/// per-device `app.info` fact.
 pub fn State::open(
   channel : @interop.ChannelId,
   emit : @cmd.Emit[Msg],
+  windows~ : Bool,
 ) -> (@cmd.Cmd, State) {
   let generation = fresh_request_generation()
   let picker : State = {
@@ -181,7 +182,7 @@ pub fn State::open(
     location: None,
     entries: [],
     loading: true,
-    windows_host: false,
+    windows_host: windows,
     new_folder: None,
     path_draft: None,
     path_selection: 0,
@@ -202,7 +203,7 @@ pub fn State::handle(
 ) -> (@cmd.Cmd, State?, Outcome?) {
   match msg {
     Navigate(path) => self.navigate_to(emit, path)
-    Loaded(channel~, location~, entries~, windows~, generation~) =>
+    Loaded(channel~, location~, entries~, generation~) =>
       // A listing for a picker the user already closed — or one answering
       // a navigation that has since been superseded — is dropped.
       if channel == self.channel && generation == self.generation {
@@ -211,7 +212,6 @@ pub fn State::handle(
           location: Some(location),
           entries,
           loading: false,
-          windows_host: windows,
           new_folder: None,
           completion_browse: None,
           // A completion browse keeps editing with the canonical path the
