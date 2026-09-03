@@ -2459,13 +2459,21 @@ pub fn update(
       }
       (@cmd.none, next)
     }
-    ReviewActiveHunkChanged(change~, review_generation~, hunk~) =>
+    ReviewActiveHunkChanged(
+      change~,
+      review_generation~,
+      hunk~,
+      file_changes~,
+      position~
+    ) =>
       (
         @cmd.none,
         state.accept_active_review_hunk(
           change,
           review_generation,
           hunk,
+          file_changes,
+          position,
           ctx.active_file,
         ),
       )

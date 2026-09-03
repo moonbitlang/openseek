@@ -451,7 +451,7 @@ pub(all) struct State {
   history_docs : Map[String, HistoryDiffDoc]
   history_generation : Int
   // Exact changed rows and their shared Line/Token/Tree review coverage.
-  // Complete is an explicit file-level decision; hunk toggles stay partial.
+  // Complete may come from the file control or full hunk coverage.
   review_progress : Array[ChangedFileReview]
   // Only the currently focused or navigated hunk is retained for the toolbar.
   // Its exact row and review generation fence callbacks from older inputs.
@@ -885,7 +885,9 @@ pub(all) enum Msg {
   ReviewActiveHunkChanged(
     change~ : ChangedFile,
     review_generation~ : Int,
-    hunk~ : ReviewHunk?
+    hunk~ : ReviewHunk?,
+    file_changes~ : ReviewHunk?,
+    position~ : ReviewHunkPosition?
   )
   ToggleActiveReviewHunk
   // One `git.original_file` request settled. `path` is always the current

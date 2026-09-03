@@ -55,6 +55,9 @@ fn activate_review_hunk(
   ctx : Ctx,
   selected : ChangedFile,
   hunk : ReviewHunk,
+  file_changes : ReviewHunk,
+  index : Int,
+  total : Int,
 ) -> State {
   update(
     test_emit(),
@@ -62,6 +65,8 @@ fn activate_review_hunk(
       change=selected,
       review_generation=1,
       hunk=Some(hunk),
+      file_changes=Some(file_changes),
+      position=ReviewHunkPosition::from_zero_based(Some(index), total),
     ),
     state,
     ctx,
@@ -96,11 +101,14 @@ test "review hunk normalizes unions and subtraction" {
 }
 
 ///|
-test "hunk toggles keep partial and one-sided coverage without completing file" {
+test "hunk and file review progress stay linked in both directions" {
   let (state, ctx, selected) = review_progress_state()
   let inserted = review_test_hunk(1, 1, 3, 5)
   let deleted = review_test_hunk(8, 10, 1, 1)
-  let inserted_active = activate_review_hunk(state, ctx, selected, inserted)
+  let file_changes = inserted.union(deleted)
+  let inserted_active = activate_review_hunk(
+    state, ctx, selected, inserted, file_changes, 0, 2,
+  )
   let (_, inserted_viewed) = update(
     test_emit(),
     ToggleActiveReviewHunk,
@@ -111,7 +119,7 @@ test "hunk toggles keep partial and one-sided coverage without completing file" 
     inserted_viewed.review_hunk_state(selected, inserted) is ReviewHunkViewed,
   )
   let deleted_active = activate_review_hunk(
-    inserted_viewed, ctx, selected, deleted,
+    inserted_viewed, ctx, selected, deleted, file_changes, 1, 2,
   )
   let (_, both_viewed) = update(
     test_emit(),
@@ -122,39 +130,76 @@ test "hunk toggles keep partial and one-sided coverage without completing file" 
   assert_true(
     both_viewed.review_hunk_state(selected, deleted) is ReviewHunkViewed,
   )
+  assert_true(both_viewed.changed_file_review_state(selected) is ReviewComplete)
   assert_true(
-    both_viewed.changed_file_review_state(selected) is ReviewInProgress,
+    both_viewed.review_hunk_state(selected, inserted) is ReviewHunkViewed,
+  )
+
+  let inserted_active = activate_review_hunk(
+    both_viewed, ctx, selected, inserted, file_changes, 0, 2,
+  )
+  let (_, one_unviewed) = update(
+    test_emit(),
+    ToggleActiveReviewHunk,
+    inserted_active,
+    ctx,
+  )
+  assert_true(
+    one_unviewed.changed_file_review_state(selected) is ReviewInProgress,
+  )
+  assert_true(
+    one_unviewed.review_hunk_state(selected, inserted) is ReviewHunkUnviewed,
+  )
+  assert_true(
+    one_unviewed.review_hunk_state(selected, deleted) is ReviewHunkViewed,
   )
   let overlapping = ReviewHunk(old_ranges=[@common.LineRange(9, 12)], new_ranges=[])
   assert_true(
-    both_viewed.review_hunk_state(selected, overlapping) is ReviewHunkPartial,
+    one_unviewed.review_hunk_state(selected, overlapping) is ReviewHunkPartial,
   )
 
-  let (_, complete) = update(
+  let (_, file_complete) = update(
     test_emit(),
     ToggleReviewProgress,
-    both_viewed,
+    one_unviewed,
     ctx,
   )
-  let (_, unchanged) = update(
+  assert_true(
+    file_complete.review_hunk_state(selected, inserted) is ReviewHunkViewed,
+  )
+  assert_true(
+    file_complete.review_hunk_state(selected, deleted) is ReviewHunkViewed,
+  )
+  let (_, file_unviewed) = update(
     test_emit(),
-    ToggleActiveReviewHunk,
-    complete,
+    ToggleReviewProgress,
+    file_complete,
     ctx,
   )
-  assert_true(unchanged == complete)
+  assert_true(
+    file_unviewed.changed_file_review_state(selected) is ReviewUnviewed,
+  )
+  assert_true(
+    file_unviewed.review_hunk_state(selected, inserted) is ReviewHunkUnviewed,
+  )
+  assert_true(
+    file_unviewed.review_hunk_state(selected, deleted) is ReviewHunkUnviewed,
+  )
 }
 
 ///|
 test "active hunk requires the exact changed row and review generation" {
   let (state, ctx, selected) = review_progress_state()
   let hunk = review_test_hunk(2, 4, 2, 4)
+  let position = ReviewHunkPosition::from_zero_based(Some(0), 1)
   let (_, stale_generation) = update(
     test_emit(),
     ReviewActiveHunkChanged(
       change=selected,
       review_generation=0,
       hunk=Some(hunk),
+      file_changes=Some(hunk),
+      position~,
     ),
     state,
     ctx,
@@ -163,7 +208,13 @@ test "active hunk requires the exact changed row and review generation" {
   let other = { ..selected, index_status: "M", worktree_status: " ", }
   let (_, stale_row) = update(
     test_emit(),
-    ReviewActiveHunkChanged(change=other, review_generation=1, hunk=Some(hunk)),
+    ReviewActiveHunkChanged(
+      change=other,
+      review_generation=1,
+      hunk=Some(hunk),
+      file_changes=Some(hunk),
+      position~,
+    ),
     state,
     ctx,
   )
@@ -172,13 +223,26 @@ test "active hunk requires the exact changed row and review generation" {
     ..ctx,
     active_file: Some(@pathx.Relative("src/other.mbt")),
   }
-  let inactive = activate_review_hunk(state, inactive_ctx, selected, hunk)
+  let inactive = activate_review_hunk(
+    state, inactive_ctx, selected, hunk, hunk, 0, 1,
+  )
   assert_true(inactive.review_active_hunk is None)
-  let current = activate_review_hunk(state, ctx, selected, hunk)
+  let current = activate_review_hunk(state, ctx, selected, hunk, hunk, 0, 1)
   assert_true(
     current.active_review_hunk(ctx.active_file)
-    is Some({ change, review_generation: 1, hunk: current_hunk, }) &&
+    is Some(
+      {
+        change,
+        review_generation: 1,
+        hunk: current_hunk,
+        file_changes: Some(current_file_changes),
+        position: Some(current_position),
+      }
+    ) &&
     change == selected &&
-    current_hunk == hunk,
+    current_hunk == hunk &&
+    current_file_changes == hunk &&
+    current_position.current == 1 &&
+    current_position.total == 1,
   )
 }

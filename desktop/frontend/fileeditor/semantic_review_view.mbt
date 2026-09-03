@@ -1275,6 +1275,7 @@ fn create_semantic_review_editor(
   // below and do not wait for these compatibility layout frames.
   let diff_subscription = editor.on_did_update_diff(() => {
     schedule_semantic_review_scroll_width_update()
+    publish_current_semantic_review_active_hunk(input)
   })
   let active_hunk_subscription = editor.on_did_change_active_hunk(active_index => {
     publish_semantic_review_active_hunk(
@@ -1410,6 +1411,44 @@ fn semantic_review_navigation_index(current : String?) -> Int {
   guard current is Some(current) else { return 0 }
   let index = semantic_review_order.search(current)
   index.unwrap_or(0)
+}
+
+///|
+fn semantic_review_hunk_position(
+  key : String,
+  active_index : Int?,
+) -> ReviewHunkPosition? {
+  guard active_index is Some(active_index) else { return None }
+  let mut current : Int? = None
+  let mut total = 0
+  for section_key in semantic_review_order {
+    let count = semantic_review_editors
+      .get(section_key)
+      .map(entry => entry.editor.get_hunks().length())
+      .unwrap_or(0)
+    if section_key == key && active_index >= 0 && active_index < count {
+      current = Some(total + active_index)
+    }
+    total += count
+  }
+  ReviewHunkPosition::from_zero_based(current, total)
+}
+
+///|
+fn publish_current_semantic_review_active_hunk(
+  input : SemanticReviewInput,
+) -> Unit {
+  guard semantic_review_active_key.val is Some(key) &&
+    semantic_review_editors.get(key) is Some(entry) else {
+    return
+  }
+  publish_semantic_review_active_hunk(
+    input,
+    key,
+    entry.editor,
+    entry.section,
+    entry.editor.get_active_hunk_index(),
+  )
 }
 
 ///|

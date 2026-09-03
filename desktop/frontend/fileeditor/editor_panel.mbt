@@ -494,10 +494,11 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
               ReviewDiffNavigationAvailabilityChanged(navigation_available),
             ),
           )
+          publish_line_review_hunk_context(diff_editor)
         })
         |> ignore
-        diff_editor.on_did_change_active_hunk(active_index => {
-          publish_line_review_active_hunk(diff_editor, active_index)
+        diff_editor.on_did_change_active_hunk(_active_index => {
+          publish_line_review_hunk_context(diff_editor)
         })
         |> ignore
         viewer_state.diff_editor = Some(diff_editor)

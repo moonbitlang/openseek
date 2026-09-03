@@ -2241,37 +2241,54 @@ fn review_diff_navigation(
   }
   let enabled = full_diff_ready(state, ctx) &&
     review_diff_navigation_enabled(state, ctx)
+  let position = state
+    .active_review_hunk(ctx.active_file)
+    .bind(active => active.position)
+  let controls : Array[@html.Html] = [
+    @html.button(
+      type_="button",
+      class="review-nav-button",
+      title="Previous change (Shift+F7)",
+      disabled=!enabled,
+      on_click=dispatch(RevealPreviousReviewDiffChange),
+      attrs=@html.Attrs::build()
+        .data_set("action", "previous-diff-change")
+        .aria_label("Previous change")
+        .aria_keyshortcuts("Shift+F7"),
+      @icons.icon(@icons.icon_arrow_up),
+    ),
+  ]
+  if position is Some(position) {
+    controls.push(
+      @html.span(
+        class="review-hunk-position",
+        attrs=@html.Attrs::build()
+          .aria_label("Hunk \{position.current} of \{position.total}")
+          .aria_live("polite"),
+        "\{position.current} of \{position.total}",
+      ),
+    )
+  }
+  controls.push(
+    @html.button(
+      type_="button",
+      class="review-nav-button",
+      title="Next change (F7)",
+      disabled=!enabled,
+      on_click=dispatch(RevealNextReviewDiffChange),
+      attrs=@html.Attrs::build()
+        .data_set("action", "next-diff-change")
+        .aria_label("Next change")
+        .aria_keyshortcuts("F7"),
+      @icons.icon(@icons.icon_arrow_down),
+    ),
+  )
   @html.div(
     class="review-diff-navigation",
     attrs=@html.Attrs::build()
       .role("group")
       .aria_label("Diff change navigation"),
-    [
-      @html.button(
-        type_="button",
-        class="review-nav-button",
-        title="Previous change (Shift+F7)",
-        disabled=!enabled,
-        on_click=dispatch(RevealPreviousReviewDiffChange),
-        attrs=@html.Attrs::build()
-          .data_set("action", "previous-diff-change")
-          .aria_label("Previous change")
-          .aria_keyshortcuts("Shift+F7"),
-        @icons.icon(@icons.icon_arrow_up),
-      ),
-      @html.button(
-        type_="button",
-        class="review-nav-button",
-        title="Next change (F7)",
-        disabled=!enabled,
-        on_click=dispatch(RevealNextReviewDiffChange),
-        attrs=@html.Attrs::build()
-          .data_set("action", "next-diff-change")
-          .aria_label("Next change")
-          .aria_keyshortcuts("F7"),
-        @icons.icon(@icons.icon_arrow_down),
-      ),
-    ],
+    controls,
   )
 }
 
@@ -2279,7 +2296,7 @@ fn review_diff_navigation(
 fn review_hunk_toggle_button(
   dispatch : @cmd.Emit[Msg],
   hunk_state : ReviewHunkState,
-  file_complete : Bool,
+  disabled : Bool,
 ) -> @html.Html {
   let viewed = hunk_state is ReviewHunkViewed
   @html.button(
@@ -2289,18 +2306,18 @@ fn review_hunk_toggle_button(
     } else {
       "review-badge review-progress"
     },
-    title=if file_complete {
+    title=if disabled {
       "File is marked reviewed"
     } else if viewed {
       "Mark this hunk unviewed"
     } else {
       "Mark this hunk viewed"
     },
-    disabled=file_complete,
+    disabled~,
     on_click=dispatch(ToggleActiveReviewHunk),
     attrs=@html.Attrs::build()
       .aria_label(
-        if file_complete {
+        if disabled {
           "Hunk viewed"
         } else if viewed {
           "Unmark hunk viewed"
@@ -2336,7 +2353,7 @@ fn review_hunk_toggle(
   review_hunk_toggle_button(
     dispatch,
     hunk_state,
-    state.is_change_reviewed(active.change),
+    state.is_change_reviewed(active.change) && active.file_changes is None,
   )
 }
 

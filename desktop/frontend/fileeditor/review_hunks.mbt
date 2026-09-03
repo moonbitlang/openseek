@@ -114,7 +114,26 @@ pub(all) struct ReviewActiveHunk {
   priv change : ChangedFile
   priv review_generation : Int
   priv hunk : ReviewHunk
+  // The complete Line diff is the file-level review universe. Semantic hunks
+  // project into it, but never redefine it when filters or grouping change.
+  priv file_changes : ReviewHunk?
+  priv position : ReviewHunkPosition?
 } derive(Eq)
+
+///|
+pub(all) struct ReviewHunkPosition {
+  priv current : Int
+  priv total : Int
+} derive(Eq)
+
+///|
+fn ReviewHunkPosition::from_zero_based(
+  index : Int?,
+  total : Int,
+) -> ReviewHunkPosition? {
+  guard index is Some(index) && index >= 0 && index < total else { return None }
+  Some({ current: index + 1, total, })
+}
 
 ///|
 fn normalize_review_line_ranges(
@@ -331,6 +350,8 @@ fn State::accept_active_review_hunk(
   change : ChangedFile,
   review_generation : Int,
   hunk : ReviewHunk?,
+  file_changes : ReviewHunk?,
+  position : ReviewHunkPosition?,
   active_file : @pathx.Relative?,
 ) -> State {
   guard self.current_review_generation(change, active_file) ==
@@ -339,7 +360,13 @@ fn State::accept_active_review_hunk(
   }
   {
     ..self,
-    review_active_hunk: hunk.map(hunk => { change, review_generation, hunk, }),
+    review_active_hunk: hunk.map(hunk => {
+      change,
+      review_generation,
+      hunk,
+      file_changes,
+      position,
+    }),
   }
 }
 
@@ -366,9 +393,21 @@ fn State::toggle_active_review_hunk(
     return self
   }
   match self.review_file_progress(active.change) {
-    // Complete belongs to the explicit file-level control. Without the full
-    // hunk universe, a single-hunk action cannot reconstruct its complement.
-    Some(ReviewFileComplete) => self
+    Some(ReviewFileComplete) => {
+      // File completion projects to every hunk. Once the full Line universe is
+      // known, unmarking one hunk keeps every other hunk viewed and naturally
+      // returns the file to partial progress.
+      guard active.file_changes is Some(file_changes) else { return self }
+      let next = file_changes.subtract(active.hunk)
+      self.set_review_file_progress(
+        active.change,
+        if next.is_empty() {
+          None
+        } else {
+          Some(ReviewFileInProgress(next))
+        },
+      )
+    }
     Some(ReviewFileInProgress(coverage)) => {
       let next = if coverage.contains(active.hunk) {
         coverage.subtract(active.hunk)
@@ -379,6 +418,9 @@ fn State::toggle_active_review_hunk(
         active.change,
         if next.is_empty() {
           None
+        } else if active.file_changes is Some(file_changes) &&
+          next.contains(file_changes) {
+          Some(ReviewFileComplete)
         } else {
           Some(ReviewFileInProgress(next))
         },
@@ -387,7 +429,12 @@ fn State::toggle_active_review_hunk(
     None =>
       self.set_review_file_progress(
         active.change,
-        Some(ReviewFileInProgress(active.hunk)),
+        if active.file_changes is Some(file_changes) &&
+          active.hunk.contains(file_changes) {
+          Some(ReviewFileComplete)
+        } else {
+          Some(ReviewFileInProgress(active.hunk))
+        },
       )
   }
 }
@@ -412,3 +459,6 @@ pub extend ChangedFileReview with Eq::{equal, not_equal}
 
 ///|
 pub extend ReviewActiveHunk with Eq::{equal, not_equal}
+
+///|
+pub extend ReviewHunkPosition with Eq::{equal, not_equal}

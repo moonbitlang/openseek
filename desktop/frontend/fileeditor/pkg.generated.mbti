@@ -271,7 +271,7 @@ pub(all) enum Msg {
   RevealSemanticReviewSectionChange(String, Bool)
   ToggleReviewProgress
   MbtiViewModeSelected(MbtiViewMode)
-  ReviewActiveHunkChanged(change~ : ChangedFile, review_generation~ : Int, hunk~ : ReviewHunk?)
+  ReviewActiveHunkChanged(change~ : ChangedFile, review_generation~ : Int, hunk~ : ReviewHunk?, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)
   ToggleActiveReviewHunk
   GitOriginalLoaded(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, original~ : @protocol.GitOriginalFileReply)
   GitOriginalFailed(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, message~ : String)
@@ -345,6 +345,12 @@ pub(all) struct ReviewHunk {
 } derive(Eq)
 pub fn ReviewHunk::equal(Self, Self) -> Bool
 pub fn ReviewHunk::not_equal(Self, Self) -> Bool
+
+pub(all) struct ReviewHunkPosition {
+  // private fields
+} derive(Eq)
+pub fn ReviewHunkPosition::equal(Self, Self) -> Bool
+pub fn ReviewHunkPosition::not_equal(Self, Self) -> Bool
 
 pub(all) struct ReviewState {
   generation : Int
