@@ -878,6 +878,9 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await secondWorkspaceMenu.focus();
   await page.keyboard.press('Enter');
   menu = page.getByRole('menu', { name: 'Workspace actions' });
+  await expect(menu).toBeFocused();
+  await expect(menu.getByRole('menuitem').first()).not.toBeFocused();
+  await page.keyboard.press('ArrowDown');
   await expect(menu.getByRole('menuitem').first()).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
