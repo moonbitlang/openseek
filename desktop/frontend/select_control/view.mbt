@@ -72,16 +72,6 @@ fn Presentation::menu_class(self : Presentation) -> String {
 }
 
 ///|
-/// The initial direction prevents a misplaced first frame before the opened
-/// menu has been measured. Its AfterRender command may flip this value.
-fn Presentation::initial_placement(self : Presentation) -> String {
-  match self {
-    Composer(_, _) => "up"
-    Setting => "down"
-  }
-}
-
-///|
 fn Presentation::trigger_contents(
   self : Presentation,
   selected_label : String,
@@ -144,78 +134,29 @@ fn Control::focus(
 }
 
 ///|
-/// Prefer placing an opened menu below its trigger. It flips upward only when
-/// the rendered menu does not fit below and the upper side has more room. The
-/// viewport is intersected with every clipping ancestor, so a select inside
-/// the scrolling Settings page or setup modal reacts to that surface rather
-/// than assuming the whole window is available.
-fn Control::position_menu(self : Control) -> @cmd.Cmd {
+/// Lift the menu into CEF's top layer after Rabbita commits it. CSS anchor
+/// positioning keeps it attached to the trigger and chooses the side that
+/// fits, so opening a select needs no geometry measurement or clipping-parent
+/// traversal in application code.
+fn Control::show_menu(self : Control) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
-      guard @dom.document().get_element_by_id(self.root_id()).to_option()
-        is Some(root) &&
-        @dom.document().get_element_by_id(self.id).to_option() is Some(trigger) &&
-        @dom.document().get_element_by_id(self.menu_id()).to_option()
-        is Some(menu) else {
+      guard @dom.document().get_element_by_id(self.menu_id()).to_option()
+        is Some(element) &&
+        element.to_html_element() is Some(menu) else {
         return
       }
-      let window = @dom.window()
-      let mut visible_top = 0.0
-      let mut visible_bottom = window.inner_height().to_double()
-      if window.get_visual_viewport() is Some(viewport) {
-        visible_top = viewport.get_offset_top()
-        visible_bottom = visible_top + viewport.get_height()
-      }
-      let mut parent = root.get_parent_element()
-      while parent is Some(ancestor) {
-        let overflow = window
-          .get_computed_style(ancestor)
-          .get_property_value("overflow-y")
-        if overflow == "auto" ||
-          overflow == "scroll" ||
-          overflow == "hidden" ||
-          overflow == "clip" {
-          let rect = ancestor.get_bounding_client_rect()
-          let top = rect.get_top() + ancestor.get_client_top()
-          let bottom = top + ancestor.get_client_height()
-          if top > visible_top {
-            visible_top = top
-          }
-          if bottom < visible_bottom {
-            visible_bottom = bottom
-          }
-        }
-        parent = ancestor.get_parent_element()
-      }
-      let trigger_rect = trigger.get_bounding_client_rect()
-      let gap = 6.0
-      let above = trigger_rect.get_top() - visible_top - gap
-      let below = visible_bottom - trigger_rect.get_bottom() - gap
-      let menu_height = menu.get_bounding_client_rect().get_height()
-      let (placement, available) = if below >= menu_height || below >= above {
-        ("down", below)
-      } else {
-        ("up", above)
-      }
-      menu.set_attribute("data-placement", placement)
-      let height = if available > 0.0 { available } else { 0.0 }
-      let style : @js.Value = @js.Value::cast_from(menu).get_with_string(
-        "style",
-      )
-      let _ : @js.Value = style.apply_with_string("setProperty", [
-        @js.Value::cast_from("--custom-select-available-height"),
-        @js.Value::cast_from("\{height.to_int()}px"),
-      ])
+      menu.show_popover()
     },
     kind=@cmd.after_render,
   )
 }
 
 ///|
-/// Toggling changes whether the menu exists, so placement is measured only
-/// after Rabbita has committed that render.
+/// Toggling changes whether the menu exists, so it enters the browser's top
+/// layer only after Rabbita has committed that render.
 fn Control::toggle_menu(self : Control) -> @cmd.Cmd {
-  @cmd.batch([self.toggle, self.position_menu()])
+  @cmd.batch([self.toggle, self.show_menu()])
 }
 
 ///|
@@ -397,7 +338,7 @@ pub fn Control::render(self : Control) -> @html.Html {
           .id(self.menu_id())
           .role("listbox")
           .aria_label(self.aria_label)
-          .data_set("placement", self.presentation.initial_placement()),
+          .popover("manual"),
         menu,
       ),
     )

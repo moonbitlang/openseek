@@ -862,10 +862,10 @@
   transform: rotate(45deg);
 }
 
-/* Container units keep the menu inside a chat column narrowed by the editor
-   panel. Shared select placement prefers below and flips when needed. */
+/* Container units keep the top-layer menu sized to a chat column narrowed by
+   the editor panel. Shared anchor positioning prefers below and flips when
+   needed. */
 .composer-picker-menu {
-  left: 0;
   width: max-content;
   min-width: min(170px, calc(100cqi - 20px));
   max-width: min(340px, calc(100cqi - 20px));
@@ -874,8 +874,7 @@
 /* The reasoning chip follows the model chip. Right anchoring makes its short
    menu grow back toward the composer's safe left edge on narrow layouts. */
 .composer-picker-right .composer-picker-menu {
-  right: 0;
-  left: auto;
+  position-area: block-end span-inline-start;
 }
 
 .composer-picker .custom-select-option {

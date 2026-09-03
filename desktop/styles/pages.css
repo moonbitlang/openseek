@@ -365,13 +365,11 @@ h2 {
   pointer-events: none;
 }
 
-/* Settings menus retain the row's exact width while shared select placement
-   prefers below and flips when needed. */
+/* Settings menus retain the trigger's exact width while the top-layer menu
+   remains free of the page or setup modal's clipping. */
 .setting-select-menu {
-  right: 0;
-  left: 0;
-  width: 100%;
-  min-width: min(220px, 100%);
+  width: anchor-size(width);
+  min-width: min(220px, anchor-size(width));
 }
 
 /* ---------- skills page ---------- */
