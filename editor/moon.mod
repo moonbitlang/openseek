@@ -20,7 +20,7 @@ warnings = "+prefer_readonly_array+implicit_impl_as_method"
 
 import {
   "moonbit-community/cmark@0.4.5",
-  "moonbit-community/moondiff@0.0.6",
+  "moonbit-community/moondiff@0.0.7",
   "moonbitlang/async@0.21.0",
   "moonbit-community/rabbita@0.15.4",
   "Milky2018/diago@0.3.0",
