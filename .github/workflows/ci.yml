@@ -385,6 +385,31 @@ jobs:
               viz viz_export cmd/viz_app
             arguments: ""
             proton: false
+          - area: 5c - MCP stdio suite
+            working-directory: .
+            roots: ""
+            arguments: mcp/stdio
+            proton: false
+          - area: 5c.0 - MCP stdio pipe
+            working-directory: .
+            roots: ""
+            arguments: mcp/stdio/stdio_wbtest.mbt --index 0
+            proton: false
+          - area: 5c.1 - MCP stdio subprocess recv
+            working-directory: .
+            roots: ""
+            arguments: mcp/stdio/stdio_wbtest.mbt --index 1
+            proton: false
+          - area: 5c.2 - MCP stdio spawn failure
+            working-directory: .
+            roots: ""
+            arguments: mcp/stdio/stdio_wbtest.mbt --index 2
+            proton: false
+          - area: 5c.3 - MCP stdio handshake timeout
+            working-directory: .
+            roots: ""
+            arguments: mcp/stdio/stdio_wbtest.mbt --index 3
+            proton: false
           - area: 6 - editor module
             working-directory: .
             roots: editor
