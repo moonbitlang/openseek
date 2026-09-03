@@ -56,17 +56,22 @@ test "Codex adapts app-server items to the shared transcript model" {
       ),
     ],
   )
-  assert_true(items[1].kind is @transcript.Assistant(is_danger=false))
+  assert_true(
+    items[1].kind is @transcript.Assistant(reasoning=None, calls=[], ..),
+  )
   assert_eq(items[1].content, "**Working on it.**")
-  guard items[2].kind
-    is @transcript.Tool(name~, arguments=Some(arguments), is_error~, ..) else {
-    fail("expected commandExecution to become a shared tool item")
+  guard items[2].kind is @transcript.Assistant(reasoning=None, calls=[call], ..) else {
+    fail("expected commandExecution to become one shared tool call")
   }
-  assert_eq(name, "shell")
+  assert_eq(call.name, "shell")
+  guard call.arguments is Some(arguments) else {
+    fail("expected the command as the call's arguments")
+  }
   assert_true(arguments.contains("moon test"))
-  assert_true(is_error)
-  assert_eq(items[2].content, "test failed")
-  assert_true(items[3].kind is @transcript.Assistant(is_danger=true))
+  assert_true(call.is_error)
+  assert_eq(call.content, "test failed")
+  assert_eq(items[2].content, "")
+  assert_true(items[3].kind is @transcript.Failure)
   assert_eq(items[3].content, "turn failed")
 }
 
@@ -106,8 +111,14 @@ test "Codex omits reasoning without visible summary text" {
   })
   let items = state.transcript_items()
   assert_eq(items.length(), 2)
-  assert_true(items[0].kind is @transcript.Reasoning)
-  assert_eq(items[0].content, "Inspecting the fix")
-  assert_true(items[1].kind is @transcript.Assistant(is_danger=false))
+  guard items[0].kind
+    is @transcript.Assistant(reasoning=Some(thought), calls=[], ..) else {
+    fail("expected the visible thought as its own response")
+  }
+  assert_eq(thought, "Inspecting the fix")
+  assert_eq(items[0].content, "")
+  assert_true(
+    items[1].kind is @transcript.Assistant(reasoning=None, calls=[], ..),
+  )
   assert_eq(items[1].content, "Done.")
 }

@@ -653,6 +653,16 @@
   color: var(--bg, var(--color-on-accent));
 }
 
+/* One provider response: its thought fold, its prose, and its tool rows, in
+   the order the model produced them. The same grid and gap as the stream, so
+   a response's parts space exactly as separate stream children would. */
+.step {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
 /* One model step's work: a heading (or thought fold) carrying the ordinal
    and commit instant, then every tool call on display as its own row. Flush
    with the agent's prose, not indented: the work is the agent's, and an
@@ -816,7 +826,7 @@
 }
 
 /* Reasoning inside the work log — and the live stream before it commits
-   (`reasoning_view`): full-width muted prose, never a labelled
+   (`assistant_view`): full-width muted prose, never a labelled
    "Thinking" row of its own. */
 .activity-thinking {
   color: var(--color-text-secondary);

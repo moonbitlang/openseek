@@ -35,12 +35,11 @@ pub fn card(steps : Array[Step]) -> @html.Html {
 }
 
 ///|
-/// The meter for a run of activity, showing the plan as that run left it —
-/// riding the `plan` call's own row, so the checklist reads as it fills up
-/// without unfolding anything. `nothing` when the run carries no applied
-/// plan.
-pub fn fold_progress(items : Array[@transcript.TranscriptItem]) -> @html.Html {
-  guard latest(items) is Some(steps) else { return @html.nothing }
+/// The meter riding a `plan` call's own row, showing the plan as that call
+/// left it, so the checklist reads as it fills up without unfolding anything.
+/// `nothing` for every other call, and for a plan call that did not apply.
+pub fn fold_progress(call : @transcript.ToolCall) -> @html.Html {
+  guard latest([call]) is Some(steps) else { return @html.nothing }
   progress_view(steps, mini=true)
 }
 

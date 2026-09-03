@@ -30,14 +30,9 @@ pub fn VisibleRow::history(
   items : Array[@transcript.TranscriptItem],
 ) -> Array[VisibleRow] {
   let rows : Array[VisibleRow] = []
-  let ordinals : Map[Int, Int] = Map([])
   for index, item in items {
     let identity = match item.sequence {
-      Some(sequence) => {
-        let ordinal = ordinals.get(sequence).unwrap_or(0)
-        ordinals.set(sequence, ordinal + 1)
-        "s\{sequence}\u{0}o\{ordinal}"
-      }
+      Some(sequence) => "s\{sequence}"
       None => "l\{index}"
     }
     rows.push({ item, identity, })
@@ -63,7 +58,7 @@ struct Input {
   // rows are the durable record and this is not durable yet.
   streaming_response : String?
   // Live reasoning is likewise provisional. It is plain text until complete;
-  // the durable reasoning row replaces it and renders Markdown once.
+  // the durable response replaces it and renders Markdown once.
   streaming_reasoning : String?
   reasoning_complete : Bool
   streaming_identity : String

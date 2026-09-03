@@ -8,38 +8,30 @@ fn plan_call(
   arguments : String,
   is_error? : Bool = false,
   has_result? : Bool = true,
-) -> @transcript.TranscriptItem {
+) -> @transcript.ToolCall {
   {
-    kind: Tool(
-      call_id=id,
-      name="plan",
-      arguments=Some(arguments),
-      has_result~,
-      is_error~,
-      brief=None,
-    ),
+    call_id: id,
+    name: "plan",
+    arguments: Some(arguments),
+    has_result,
+    is_error,
+    brief: None,
     content: "",
-    ts: None,
-    sequence: None,
   }
 }
 
 ///|
-/// A successful `plan` result the loader could not pair back to its call, as
-/// `apply_session_item` records one: no arguments, but a result.
-fn unpaired_result() -> @transcript.TranscriptItem {
+/// A completed `plan` call whose source recorded no arguments, the way a
+/// Codex item without a payload reaches the transcript: a result, no call.
+fn unpaired_result() -> @transcript.ToolCall {
   {
-    kind: Tool(
-      call_id="c9",
-      name="plan",
-      arguments=None,
-      has_result=true,
-      is_error=false,
-      brief=None,
-    ),
+    call_id: "c9",
+    name: "plan",
+    arguments: None,
+    has_result: true,
+    is_error: false,
+    brief: None,
     content: "Plan updated.",
-    ts: None,
-    sequence: None,
   }
 }
 
@@ -134,17 +126,13 @@ test "classify names every state a plan call can be observed in" {
   // Not a plan call at all, and a plan call this build declines to decode.
   assert_true(
     @plan.classify({
-      kind: Tool(
-        call_id="c1",
-        name="shell",
-        arguments=Some("{}"),
-        has_result=true,
-        is_error=false,
-        brief=None,
-      ),
+      call_id: "c1",
+      name: "shell",
+      arguments: Some("{}"),
+      has_result: true,
+      is_error: false,
+      brief: None,
       content: "",
-      ts: None,
-      sequence: None,
     })
     is None,
   )
@@ -159,8 +147,8 @@ test "classify names every state a plan call can be observed in" {
     @plan.classify(plan_call("c1", "not json", has_result=false))
     is Some(Unreadable(applied=false)),
   )
-  // A successful result the loader could not pair back to its call keeps no
-  // arguments, and is still evidence that a plan call ran.
+  // A completed call recorded without its arguments is still evidence that a
+  // plan call ran.
   assert_true(
     @plan.classify(unpaired_result()) is Some(Unreadable(applied=true)),
   )
@@ -192,8 +180,8 @@ test "an unreadable plan call reports no plan instead of an older one" {
     fail("expected the plan recorded after the unreadable one")
   }
   assert_eq(steps[0].title, "two")
-  // A successful result with no recorded arguments is the same wall: the call
-  // ran, and its payload is simply not in the log.
+  // A completed call with no recorded arguments is the same wall: the call
+  // ran, and its payload is simply not in the record.
   assert_true(
     @plan.latest([plan_call("c1", readable), unpaired_result()]) is None,
   )

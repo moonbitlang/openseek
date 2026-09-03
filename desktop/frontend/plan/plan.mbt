@@ -122,31 +122,27 @@ pub enum Call {
 }
 
 ///|
-/// Classify a transcript item as a `plan` call, or `None` when it is not one:
-/// another tool, or a legacy row with no recorded arguments.
+/// Classify a tool call as a `plan` call, or `None` when it is another tool.
 ///
-/// A plan row this build cannot read is `Unreadable`, never `None`. The
-/// difference matters to `latest`: "this row is not a plan call" is something
+/// A plan call this build cannot read is `Unreadable`, never `None`. The
+/// difference matters to `latest`: "this call is not a plan call" is something
 /// to scan past, while "a plan call landed here and its content is not
 /// available" may be a wall.
-pub fn classify(item : @transcript.TranscriptItem) -> Call? {
-  guard item.kind is Tool(name="plan", arguments~, has_result~, is_error~, ..) else {
-    return None
-  }
-  if is_error {
+pub fn classify(call : @transcript.ToolCall) -> Call? {
+  guard call.name == "plan" else { return None }
+  if call.is_error {
     return Some(Rejected)
   }
-  // Absent arguments are a result the loader could not pair back to its call
-  // — an older log, or an id it could not match. The payload is gone, but the
-  // recorded result is still evidence the call ran.
-  guard arguments is Some(arguments) && decode(arguments) is Some(steps) else {
-    return Some(Unreadable(applied=has_result))
+  // Absent arguments are a call whose source recorded no payload. The payload
+  // is gone, but the recorded call is still evidence it ran.
+  guard call.arguments is Some(arguments) && decode(arguments) is Some(steps) else {
+    return Some(Unreadable(applied=call.has_result))
   }
-  Some(if has_result { Applied(steps) } else { Pending(steps) })
+  Some(if call.has_result { Applied(steps) } else { Pending(steps) })
 }
 
 ///|
-/// The steps of the last applied `plan` call in `items`, or `None` when there
+/// The steps of the last applied `plan` call in `calls`, or `None` when there
 /// is none — including when the last one cleared the plan, which is the
 /// model saying the checklist no longer applies.
 ///
@@ -166,9 +162,9 @@ pub fn classify(item : @transcript.TranscriptItem) -> Call? {
 /// meter there would flicker on every one of them.
 ///
 /// Over one run of activity this is the plan as that run left it.
-pub fn latest(items : Array[@transcript.TranscriptItem]) -> Array[Step]? {
-  for item in items.rev_iter() {
-    match classify(item) {
+pub fn latest(calls : Array[@transcript.ToolCall]) -> Array[Step]? {
+  for call in calls.rev_iter() {
+    match classify(call) {
       Some(Applied(steps)) =>
         return if steps.is_empty() { None } else { Some(steps) }
       Some(Unreadable(applied=true)) => return None

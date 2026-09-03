@@ -8601,8 +8601,11 @@ test "a matching durable commit de-duplicates without mutating the preview" {
     Some({ content: "think", complete: true, }),
   )
   assert_eq(committed.active().reasoning_for_render(), (None, true))
-  assert_eq(committed.active().messages.length(), 2)
-  assert_true(committed.active().messages[0].kind is Reasoning)
+  assert_eq(committed.active().messages.length(), 1)
+  assert_true(
+    committed.active().messages[0].kind
+    is Assistant(reasoning=Some("think"), ..),
+  )
 }
 
 ///|
@@ -8686,13 +8689,12 @@ test "a later run does not confuse identical historical reasoning for its commit
     ..running_conversation(),
     messages: [
       {
-        kind: Reasoning,
-        content: "shared opening",
-        ts: None,
-        sequence: Some(2),
-      },
-      {
-        kind: Assistant(is_danger=false),
+        kind: Assistant(
+          reasoning=Some("shared opening"),
+          calls=[],
+          replay=false,
+          finished=false,
+        ),
         content: "older answer",
         ts: None,
         sequence: Some(2),
@@ -8728,8 +8730,13 @@ test "a new model step advances past identical reasoning from the prior step" {
     ..running_conversation(),
     messages: [
       {
-        kind: Reasoning,
-        content: "shared opening",
+        kind: Assistant(
+          reasoning=Some("shared opening"),
+          calls=[],
+          replay=false,
+          finished=false,
+        ),
+        content: "",
         ts: None,
         sequence: Some(2),
       },
@@ -8963,7 +8970,12 @@ test "finished run reloads the named durable session for an old host" {
       items=[
         { kind: User, content: "question", ts: None, sequence: None, },
         {
-          kind: Assistant(is_danger=false),
+          kind: Assistant(
+            reasoning=None,
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
           content: "done",
           ts: None,
           sequence: None,
@@ -10276,7 +10288,12 @@ test "same-id session loads are fenced by channel owner" {
         session="shared",
         items=[
           {
-            kind: Assistant(is_danger=false),
+            kind: Assistant(
+              reasoning=None,
+              calls=[],
+              replay=false,
+              finished=false,
+            ),
             content: "remote loaded",
             ts: None,
             sequence: None,
@@ -10345,7 +10362,12 @@ test "reselecting a synced active session reloads idle external writes" {
       session="desktop-test",
       items=[
         {
-          kind: Assistant(is_danger=false),
+          kind: Assistant(
+            reasoning=None,
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
           content: "written elsewhere",
           ts: None,
           sequence: None,
@@ -10816,7 +10838,7 @@ test "session loaded swaps the active conversation onto the stored session" {
   let items : Array[@transcript.TranscriptItem] = [
     { kind: User, content: "stored question", ts: None, sequence: None, },
     {
-      kind: Assistant(is_danger=false),
+      kind: Assistant(reasoning=None, calls=[], replay=false, finished=false),
       content: "stored answer",
       ts: None,
       sequence: None,
@@ -11404,7 +11426,12 @@ test "an accepted start response opens the run without Started" {
       items=[
         { kind: User, content: "external prompt", ts: None, sequence: None, },
         {
-          kind: Assistant(is_danger=false),
+          kind: Assistant(
+            reasoning=None,
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
           content: "external answer",
           ts: None,
           sequence: None,
@@ -12484,7 +12511,12 @@ test "a foreign background run schedules one causal read after Started" {
       session~,
       items=[
         {
-          kind: Assistant(is_danger=false),
+          kind: Assistant(
+            reasoning=None,
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
           content: "previous answer",
           ts: None,
           sequence: None,
@@ -14683,7 +14715,12 @@ test "switching same-id archived stores fences the first transcript load" {
       session=first_item.id,
       items=[
         {
-          kind: Assistant(is_danger=false),
+          kind: Assistant(
+            reasoning=None,
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
           content: "first store answer",
           ts: None,
           sequence: Some(1),
@@ -14704,7 +14741,12 @@ test "switching same-id archived stores fences the first transcript load" {
       session=second_item.id,
       items=[
         {
-          kind: Assistant(is_danger=false),
+          kind: Assistant(
+            reasoning=None,
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
           content: "second store answer",
           ts: None,
           sequence: Some(1),
@@ -14767,7 +14809,12 @@ test "an archived snapshot stays open across archived-list reconciliation" {
       session=item.id,
       items=[
         {
-          kind: Assistant(is_danger=false),
+          kind: Assistant(
+            reasoning=None,
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
           content: "archived answer",
           ts: None,
           sequence: Some(1),
@@ -14799,7 +14846,7 @@ test "unarchiving an open transcript fences its archived snapshot" {
     record: ArchivedRecord,
     messages: [
       {
-        kind: Assistant(is_danger=false),
+        kind: Assistant(reasoning=None, calls=[], replay=false, finished=false),
         content: "visible archived answer",
         ts: None,
         sequence: Some(1),
@@ -14835,7 +14882,12 @@ test "unarchiving an open transcript fences its archived snapshot" {
       session=item.id,
       items=[
         {
-          kind: Assistant(is_danger=false),
+          kind: Assistant(
+            reasoning=None,
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
           content: "late archived answer",
           ts: None,
           sequence: Some(1),
@@ -15616,7 +15668,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
     record: ArchivedRecord,
     messages: [
       {
-        kind: Assistant(is_danger=false),
+        kind: Assistant(reasoning=None, calls=[], replay=false, finished=false),
         content: "cached archived answer",
         ts: None,
         sequence: Some(1),
@@ -15668,7 +15720,12 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
       session=item.id,
       items=[
         {
-          kind: Assistant(is_danger=false),
+          kind: Assistant(
+            reasoning=None,
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
           content: "late archived answer",
           ts: None,
           sequence: Some(1),
@@ -17800,7 +17857,12 @@ test "a snapshot drains buffered commits in sequence order" {
       items=[
         { kind: User, content: "one", ts: None, sequence: None, },
         {
-          kind: Assistant(is_danger=false),
+          kind: Assistant(
+            reasoning=None,
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
           content: "two",
           ts: None,
           sequence: None,
@@ -18074,12 +18136,26 @@ test "tool decode semantics wait for their durable error tool result" {
     ToolCallDecodeError(tool_name="edit", reason="invalid arguments"),
     session=None,
   )
-  let commit = SessionCommitted(
+  // The engine records the response with its undecodable call, then the
+  // error result that closes it; the semantic event is only news.
+  let call = SessionCommitted(
     session="desktop-test",
     sequence=1,
     ts=None,
+    item=@protocol.Assistant({
+      content: "",
+      tool_calls: Some([{ id: "c1", name: "edit", arguments: "{", }]),
+      reasoning_content: None,
+      is_replay: None,
+    }),
+    session_root=@interop.ChannelId::Local.test_store_root(),
+  )
+  let result = SessionCommitted(
+    session="desktop-test",
+    sequence=2,
+    ts=None,
     item=@protocol.ToolResult({
-      tool_call_id: "",
+      tool_call_id: "c1",
       tool_name: "edit",
       content: "invalid arguments",
       is_error: true,
@@ -18089,17 +18165,16 @@ test "tool decode semantics wait for their durable error tool result" {
   )
   let (_, semantic_first) = update_dev(dispatch, semantic, running_model())
   inspect(semantic_first.active().messages.length(), content="0")
-  let (_, committed_after) = update_dev(dispatch, commit, semantic_first)
+  let (_, called) = update_dev(dispatch, call, semantic_first)
+  let (_, committed_after) = update_dev(dispatch, result, called)
   inspect(committed_after.active().messages.length(), content="1")
-  guard committed_after.active().messages[0].kind
-    is Tool(name="edit", is_error=true, ..) else {
-    fail("expected the canonical error tool result")
+  guard committed_after.active().messages[0].kind is Assistant(calls=[edit], ..) else {
+    fail("expected the response carrying the failed call")
   }
-  inspect(
-    committed_after.active().messages[0].content,
-    content="invalid arguments",
-  )
-  let (_, committed_first) = update_dev(dispatch, commit, running_model())
+  assert_true(edit.is_error)
+  inspect(edit.content, content="invalid arguments")
+  let (_, called_first) = update_dev(dispatch, call, running_model())
+  let (_, committed_first) = update_dev(dispatch, result, called_first)
   let (_, semantic_after) = update_dev(dispatch, semantic, committed_first)
   inspect(semantic_after.active().messages.length(), content="1")
 }
@@ -18134,8 +18209,13 @@ test "assistant semantic events wait for their durable commit" {
     ),
     answered,
   )
-  // One durable item projects as reasoning + answer exactly once.
-  inspect(committed.active().messages.length(), content="2")
+  // One durable item projects as one response, thought and answer together.
+  inspect(committed.active().messages.length(), content="1")
+  assert_true(
+    committed.active().messages[0].kind
+    is Assistant(reasoning=Some("think"), ..),
+  )
+  inspect(committed.active().messages[0].content, content="answer")
   inspect(committed.active().watermark, content="1")
 }
 
@@ -18165,7 +18245,12 @@ test "a committed tool result visibly changes its existing call row" {
   )
   assert_true(changed)
   inspect(completed.messages.length(), content="1")
-  inspect(completed.messages[0].content, content="module contents")
+  guard completed.messages[0].kind is Assistant(calls=[call], ..) else {
+    fail("expected the response to keep its one call")
+  }
+  assert_true(call.has_result)
+  inspect(call.content, content="module contents")
+  assert_true(call.brief is Some("read moon.mod"))
 }
 
 ///|
@@ -18272,7 +18357,7 @@ test "commit-first assistant semantics do not append again" {
     Engine(Some("r7"), AssistantMessage("answer"), session=None),
     thought,
   )
-  inspect(answered.active().messages.length(), content="2")
+  inspect(answered.active().messages.length(), content="1")
   inspect(answered.active().watermark, content="1")
   assert_eq(answered.active().turn.streaming_response, None)
 }
@@ -19436,8 +19521,13 @@ test "a sub-run's progress refreshes the child transcript on screen" {
       session="desktop-test-sr-1",
       items=[
         {
-          kind: Reasoning,
-          content: "child thought",
+          kind: Assistant(
+            reasoning=Some("child thought"),
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
+          content: "",
           ts: None,
           sequence: Some(5),
         },

@@ -16,8 +16,6 @@ pub fn decode_engine_event(@protocol.AgentStreamEvent) -> EngineEvent?
 
 pub fn goal_marker(String) -> GoalMarker?
 
-pub fn parse_runtime_update(String) -> RuntimeUpdateView
-
 pub fn session_from_reply(@protocol.LoadSessionReply) -> SessionLoadView
 
 pub fn session_tree(Array[SessionListItem]) -> Array[SessionTreeRow]
@@ -39,7 +37,7 @@ pub(all) enum EngineEvent {
   ReasoningDelta(String)
   ReasoningMessage(String)
   AssistantMessage(String)
-  RuntimeUpdate(String)
+  BackgroundNotice(String)
   Usage(prompt_tokens~ : Int, completion_tokens~ : Int)
   ToolResult(tool_name~ : String, is_error~ : Bool, content~ : String, brief~ : String?)
   ToolCallDecodeError(tool_name~ : String, reason~ : String)
@@ -79,20 +77,14 @@ pub fn GoalStanding::not_equal(Self, Self) -> Bool
 
 pub(all) enum ItemKind {
   User
-  Assistant(is_danger~ : Bool)
-  AssistantReplay
-  TerminalAnswer
-  Reasoning
-  Tool(call_id~ : String, name~ : String, arguments~ : String?, has_result~ : Bool, is_error~ : Bool, brief~ : String?)
+  Assistant(reasoning~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool)
+  Answer
+  Failure
+  Notice(label~ : String, brief~ : String?, is_error~ : Bool)
   Summary
 } derive(Eq)
 pub fn ItemKind::equal(Self, Self) -> Bool
 pub fn ItemKind::not_equal(Self, Self) -> Bool
-
-pub struct RuntimeUpdateView {
-  status : String?
-  diagnostics : Array[String]
-}
 
 pub(all) struct SessionListItem {
   id : String
@@ -117,6 +109,18 @@ pub struct SessionTreeRow {
 } derive(Eq)
 pub fn SessionTreeRow::equal(Self, Self) -> Bool
 pub fn SessionTreeRow::not_equal(Self, Self) -> Bool
+
+pub(all) struct ToolCall {
+  call_id : String
+  name : String
+  arguments : String?
+  has_result : Bool
+  is_error : Bool
+  brief : String?
+  content : String
+} derive(Eq)
+pub fn ToolCall::equal(Self, Self) -> Bool
+pub fn ToolCall::not_equal(Self, Self) -> Bool
 
 pub(all) struct TranscriptItem {
   kind : ItemKind

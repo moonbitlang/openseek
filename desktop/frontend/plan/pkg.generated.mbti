@@ -10,13 +10,13 @@ import {
 // Values
 pub fn card(Array[Step]) -> @html.Html
 
-pub fn classify(@transcript.TranscriptItem) -> Call?
+pub fn classify(@transcript.ToolCall) -> Call?
 
 pub fn decode(String) -> Array[Step]?
 
-pub fn fold_progress(Array[@transcript.TranscriptItem]) -> @html.Html
+pub fn fold_progress(@transcript.ToolCall) -> @html.Html
 
-pub fn latest(Array[@transcript.TranscriptItem]) -> Array[Step]?
+pub fn latest(Array[@transcript.ToolCall]) -> Array[Step]?
 
 // Errors
 

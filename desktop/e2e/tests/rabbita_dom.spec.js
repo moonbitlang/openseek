@@ -541,7 +541,10 @@ test('transcript overview previews failed turns and jumps among mounted messages
       ts: 1_781_144_352_123,
       item: {
         kind: 'assistant',
-        payload: { content: 'First answer recovered after the tool failed.' },
+        payload: {
+          content: 'First answer recovered after the tool failed.',
+          tool_calls: [{ id: 'failed-after-answer', name: 'shell', arguments: '{}' }],
+        },
       },
     },
     {
@@ -715,6 +718,56 @@ test('runtime notices keep the compact result-row presentation', async ({ page }
   await expect(result).not.toHaveAttribute('open', '');
   await result.locator('.tool-result-summary').click();
   await expect(result).toContainText('background job bg-1 finished (exit=0)');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a model step shows its thought, then its prose, then its tool rows', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = [
+    {
+      sequence: 1,
+      item: {
+        kind: 'user',
+        payload: { content: 'Show the browser fixture model step' },
+      },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'assistant',
+        payload: {
+          content: 'I will inspect the project.',
+          reasoning_content: 'first thought',
+          tool_calls: [{ id: 'c1', name: 'read', arguments: '{"path":"moon.mod"}' }],
+        },
+      },
+    },
+    {
+      sequence: 3,
+      item: {
+        kind: 'tool_result',
+        payload: {
+          tool_call_id: 'c1',
+          tool_name: 'read',
+          content: 'module contents',
+          is_error: false,
+          brief: 'read moon.mod',
+        },
+      },
+    },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+
+  // One durable response is one step, whose parts keep the model's order:
+  // the thought it had, the prose it said, then the calls that prose announced.
+  const step = page.locator('.step');
+  await expect(step).toHaveCount(1);
+  await expect(step.locator(':scope > *')).toHaveClass(['activity-row', 'msg', 'activity-row']);
+  await expect(step.locator('.activity-row').first().locator('.activity-text')).toHaveText('#1 · Thought');
+  await expect(step.locator('.msg .msg-content.markdown')).toContainText('I will inspect the project.');
+  await expect(step.locator('.activity-row').last().locator('.tool-call-text')).toHaveText('read moon.mod');
   expect(app.pageErrors).toEqual([]);
 });
 

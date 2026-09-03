@@ -1,20 +1,18 @@
 ///|
-/// Stable identity for one visible transcript row. Durable events may expand
-/// into several rows, so their event sequence alone is not unique; the ordinal
-/// is the row's position within that event. Old fixtures without a sequence use
-/// their durable-array position.
+/// Stable identity for one visible transcript row: the durable event it came
+/// from, which projects to at most one row. Old fixtures without a sequence
+/// use their durable-array position.
 priv enum TranscriptRowIdentity {
-  DurableTranscriptRow(sequence~ : Int, ordinal~ : Int)
+  DurableTranscriptRow(Int)
   LegacyTranscriptRow(Int)
 }
 
 ///|
-/// Serialize a row identity for Rabbita's keyed-children map. NUL is an
-/// internal field separator already used by the frontend's composite keys; the
-/// result is renderer-private and is never emitted as a DOM id or attribute.
+/// Serialize a row identity for Rabbita's keyed-children map. The result is
+/// renderer-private and is never emitted as a DOM id or attribute.
 fn TranscriptRowIdentity::wire(self : TranscriptRowIdentity) -> String {
   match self {
-    DurableTranscriptRow(sequence~, ordinal~) => "s\{sequence}\u{0}o\{ordinal}"
+    DurableTranscriptRow(sequence) => "s\{sequence}"
     LegacyTranscriptRow(index) => "l\{index}"
   }
 }
@@ -27,14 +25,9 @@ fn Conversation::visible_transcript_rows(
   self : Conversation,
 ) -> Array[@transcript_component.VisibleRow] {
   let durable : Array[@transcript_component.VisibleRow] = []
-  let ordinals : Map[Int, Int] = Map([])
   for index, item in self.messages {
     let identity = match item.sequence {
-      Some(sequence) => {
-        let ordinal = ordinals.get(sequence).unwrap_or(0)
-        ordinals.set(sequence, ordinal + 1)
-        DurableTranscriptRow(sequence~, ordinal~)
-      }
+      Some(sequence) => DurableTranscriptRow(sequence)
       None => LegacyTranscriptRow(index)
     }
     durable.push({ item, identity: identity.wire(), })
@@ -73,10 +66,10 @@ fn Conversation::reasoning_for_render(self : Conversation) -> (String?, Bool) {
     let mut index = self.messages.length()
     while index > 0 {
       index -= 1
-      if self.messages[index].kind is Reasoning {
+      if self.messages[index].kind is Assistant(reasoning=Some(thought), ..) {
         if self.messages[index].sequence is Some(sequence) &&
           sequence > self.turn.reasoning_frontier &&
-          self.messages[index].content.trim() == candidate {
+          thought.trim() == candidate {
           return (None, live.complete)
         }
         break
@@ -87,21 +80,21 @@ fn Conversation::reasoning_for_render(self : Conversation) -> (String?, Bool) {
 }
 
 ///|
-test "transcript row identities include event ordinals" {
+test "transcript row identities key by event sequence" {
   let conv = {
     ..test_conversation(),
     messages: [
       { kind: User, content: "question", ts: None, sequence: Some(41), },
       {
-        kind: Assistant(is_danger=false),
+        kind: Assistant(reasoning=None, calls=[], replay=false, finished=false),
         content: "answer",
         ts: None,
-        sequence: Some(41),
+        sequence: Some(42),
       },
       // A fixture from before events carried sequences falls back to its
       // position, which cannot collide with any `s<n>` key.
       {
-        kind: Assistant(is_danger=false),
+        kind: Assistant(reasoning=None, calls=[], replay=false, finished=false),
         content: "old",
         ts: None,
         sequence: None,
@@ -109,6 +102,6 @@ test "transcript row identities include event ordinals" {
     ],
   }
   assert_eq(conv.visible_transcript_rows().map(row => row.identity), [
-    "s41\u{0}o0", "s41\u{0}o1", "l2",
+    "s41", "s42", "l2",
   ])
 }
