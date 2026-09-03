@@ -1,10 +1,31 @@
 ///|
+/// The durable/UI origin of one sidebar conversation row.
+pub(all) enum ConversationSource {
+  OpenSeekLive
+  OpenSeekArchived
+  CodexLive
+  CodexArchived
+  CodexDraft
+} derive(Debug, Eq, Hash)
+
+///|
+fn ConversationSource::key(self : ConversationSource) -> String {
+  match self {
+    OpenSeekLive => "openseek.live"
+    OpenSeekArchived => "openseek.archived"
+    CodexLive => "codex.live"
+    CodexArchived => "codex.archived"
+    CodexDraft => "codex.draft"
+  }
+}
+
+///|
 /// Stable identity for one conversation component. `source` prevents two
 /// sidebar sections that list the same channel-local id — a live chat and an
 /// archived record, or another conversation source entirely — from sharing
 /// Rabbita state.
 pub(all) struct Id {
-  source : String
+  source : ConversationSource
   channel : String
   conversation : String
   root : String?
@@ -12,7 +33,7 @@ pub(all) struct Id {
 
 ///|
 pub fn Id::Id(
-  source~ : String,
+  source~ : ConversationSource,
   channel~ : String,
   conversation~ : String,
   root? : String,
@@ -21,7 +42,7 @@ pub fn Id::Id(
 }
 
 ///|
-pub fn Id::source(self : Id) -> String {
+pub fn Id::source(self : Id) -> ConversationSource {
   self.source
 }
 
@@ -46,7 +67,7 @@ pub fn Id::root(self : Id) -> String? {
 /// own element when neighbouring rows appear or leave — never positionally.
 pub fn Id::key(self : Id) -> String {
   let root = self.root.unwrap_or("")
-  "conversation:\{self.source}:\{self.channel}:\{self.conversation}:\{root}"
+  "conversation:\{self.source.key()}:\{self.channel}:\{self.conversation}:\{root}"
 }
 
 ///|
@@ -71,6 +92,7 @@ pub(all) enum TrailingAction {
 pub(all) struct RenameInput {
   draft : String
   saving : Bool
+  error : String?
 } derive(Debug, Eq)
 
 ///|
@@ -147,7 +169,8 @@ fn Actions::command(
 ///|
 priv enum MenuKind {
   LiveMenu
-  ArchivedMenu
+  OpenSeekArchivedMenu
+  CodexArchivedMenu
 }
 
 ///|
@@ -156,9 +179,10 @@ fn Input::menu_kind(self : Input) -> MenuKind? {
     return None
   }
   match self.id.source() {
-    "openseek.live" | "codex.live" => Some(LiveMenu)
-    "openseek.archived" | "codex.archived" => Some(ArchivedMenu)
-    _ => None
+    OpenSeekLive | CodexLive => Some(LiveMenu)
+    OpenSeekArchived => Some(OpenSeekArchivedMenu)
+    CodexArchived => Some(CodexArchivedMenu)
+    CodexDraft => None
   }
 }
 
@@ -215,7 +239,7 @@ fn Input::menu_entries_for_kind(
           command: (actions.archive)(self.id),
         }),
       ]
-    ArchivedMenu =>
+    OpenSeekArchivedMenu =>
       [
         Action({
           label: "Restore",
@@ -237,6 +261,17 @@ fn Input::menu_entries_for_kind(
           enabled: delete_enabled,
           destructive: true,
           command: (actions.delete)(self.id),
+        }),
+      ]
+    CodexArchivedMenu =>
+      [
+        Action({
+          label: "Restore",
+          title: "Restore conversation",
+          icon: Some(@icons.icon(@icons.icon_arrow_up)),
+          enabled: true,
+          destructive: false,
+          command: (actions.restore)(self.id),
         }),
       ]
   }
@@ -406,6 +441,16 @@ pub fn component(
             "Cancel",
           ),
         ]
+        let editor_children : Array[@html.Html] = [input_node, ..buttons]
+        if rename.error is Some(error) {
+          editor_children.push(
+            @html.span(
+              class="conversation-rename-error",
+              attrs=@html.Attrs::build().role("alert"),
+              error,
+            ),
+          )
+        }
         children.push(
           @html.span(
             id=RenameEditorId,
@@ -419,7 +464,7 @@ pub fn component(
                 event.stop_propagation()
                 @cmd.none
               }),
-            [input_node, ..buttons],
+            editor_children,
           ),
         )
       }
@@ -548,6 +593,15 @@ pub fn component(
     rows
   })
 }
+
+///|
+pub extend ConversationSource with Debug::{to_repr}
+
+///|
+pub extend ConversationSource with Eq::{equal, not_equal}
+
+///|
+pub extend ConversationSource with Hash::{hash, hash_combine}
 
 ///|
 pub extend Id with Debug::{to_repr}

@@ -620,38 +620,43 @@ fn dismiss_subscription(
 
 ///|
 priv suberror FocusSubscription {
-  FocusSubscription(String, Array[Int], @cmd.Emit[Unit])
+  FocusSubscription(String, Array[Int]?, @cmd.Emit[Unit])
 }
 
 ///|
-/// If current input disables the focused source entry, move to the next
-/// enabled entry, falling back to the previous one.
+/// Close when the open target is no longer actionable. Otherwise, if current
+/// input disables the focused entry, move to the next enabled entry and fall
+/// back to the previous one.
 fn focus_subscription(
   target : String,
-  enabled : Array[Int],
+  enabled : Array[Int]?,
   close : @cmd.Emit[Unit],
 ) -> @sub.Sub {
   @sub.custom_sub(
-    "action-menu-focus",
+    "action-menu-focus:\{target}",
     Local,
     FocusSubscription(target, enabled, close),
     (payload, scheduler) => {
       guard payload is FocusSubscription(target, enabled, close) else {
         return None
       }
-      let mut previous = enabled
+      let mut previous = enabled.unwrap_or([])
       let mut close = close
+      if enabled is None || previous.is_empty() {
+        scheduler.add(close(()))
+      }
       Some({
         unload: _ => (),
         update_tagger: payload => {
-          guard payload is FocusSubscription(next_target, next, next_close) &&
+          guard payload
+            is FocusSubscription(next_target, next_enabled, next_close) &&
             next_target == target else {
             return
           }
           close = next_close
-          if next.is_empty() {
+          guard next_enabled is Some(next) && !next.is_empty() else {
             scheduler.add(close(()))
-            previous = next
+            previous = []
             return
           }
           guard focused_element_id() is Some(focused) else {
@@ -740,27 +745,28 @@ pub fn[Input : Eq] component(
     subscriptions=(state, input, emit) => {
       let open = open_subscription(emit.map(open => Msg::Open(open)))
       guard state.menu is Some(menu) else { return open }
-      guard resolve(input, menu.target) is Some(definition) else {
-        return @sub.batch([open, @sub.every(1, emit(Close))])
-      }
-      let enabled = definition.enabled_indices()
-      if enabled.is_empty() {
-        return @sub.batch([open, @sub.every(1, emit(Close))])
+      let enabled = resolve(input, menu.target).map(definition => {
+        definition.enabled_indices()
+      })
+      let focus = focus_subscription(
+        menu.target,
+        enabled,
+        emit.map((_ : Unit) => Msg::Close),
+      )
+      guard enabled is Some(enabled) && !enabled.is_empty() else {
+        return @sub.batch([open, focus])
       }
       @sub.batch([
         open,
         dismiss_subscription(menu.target, emit.map((_ : Unit) => Msg::Close)),
-        focus_subscription(
-          menu.target,
-          enabled,
-          emit.map((_ : Unit) => Msg::Close),
-        ),
+        focus,
       ])
     },
   )
   state.map2(input, (state, input) => {
     guard state.menu is Some(open) &&
-      resolve(input, open.target) is Some(definition) else {
+      resolve(input, open.target) is Some(definition) &&
+      !definition.enabled_indices().is_empty() else {
       return @html.nothing
     }
     render_menu(open, definition, emit(Close))

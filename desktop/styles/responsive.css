@@ -195,6 +195,8 @@
   .msg.streaming .msg-content::after,
   .activity-row,
   .browser-nav-button.loading .icon svg,
+  .conversation-load-spinner,
+  .conversation-load-state-spinner,
   .run-dot.pulse,
   .run-dot.running {
     animation: none;

@@ -940,6 +940,17 @@ test('shared WebView action menu supports context position, keyboard, and rename
         title: 'Renamed in WebView',
       },
     });
+
+  app.rpcErrors.set('session.rename', 'fixture rename unavailable');
+  await liveRow.click({ button: 'right', position: { x: 18, y: 18 } });
+  await page.getByRole('menuitem', { name: 'Rename…' }).click();
+  await input.fill('Rename that will fail');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'Rename failed: fixture rename unavailable',
+  );
+  await expect(input).toHaveValue('Rename that will fail');
+  await expect(input).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -973,10 +984,54 @@ test('sidebar menu dismissal and pending selection follow the clicked row', asyn
   await expect(first).not.toHaveClass(/active/);
   await expect(second.getByRole('status', { name: 'Loading conversation' })).toBeVisible();
   await expect(page.getByText('Loading conversation…', { exact: true })).toBeVisible();
+  const rowSpinner = second.locator('.conversation-load-spinner');
+  const panelSpinner = page.locator('.conversation-load-state-spinner');
+  await expect(rowSpinner).toHaveCSS('animation-name', 'conversation-load-spin');
+  await expect(panelSpinner).toHaveCSS('animation-name', 'conversation-load-spin');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(rowSpinner).toHaveCSS('animation-name', 'none');
+  await expect(panelSpinner).toHaveCSS('animation-name', 'none');
   await expect(page.getByText('Browser result', { exact: true })).toHaveCount(0);
   await expect.poll(() => app.requests.some(request =>
     request.method === 'session.load' && request.params?.session === 'session-2'))
     .toBe(true);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('removing a pending selection exits its loading state', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.liveSessions.push({
+    id: 'session-2',
+    title: 'Second browser fixture',
+    updated_at_ms: 2,
+  });
+  await app.install();
+  await app.goto();
+
+  app.rpcDelays.set('session.load', 10000);
+  const pending = page.locator('.conversation-row[title="session-2"]');
+  await pending.click();
+  await expect(pending).toHaveClass(/active/);
+  await expect(page.getByText('Loading conversation…', { exact: true })).toBeVisible();
+  await pending.click({ button: 'right', position: { x: 18, y: 18 } });
+  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
+
+  app.liveSessions = app.liveSessions.filter(session => session.id !== 'session-2');
+  app.archivedSessions.push({
+    id: 'session-2',
+    title: 'Second browser fixture',
+    updated_at_ms: 2,
+  });
+  app.notify('session.changed', {
+    change: 'archived',
+    session: 'session-2',
+    workspace: '/workspace',
+  });
+
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(page.getByText('Loading conversation…', { exact: true })).toHaveCount(0);
+  await expect(page.locator('#task')).toBeVisible();
+  await expect(page.locator('.conversation-row', { hasText: 'New chat' })).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 

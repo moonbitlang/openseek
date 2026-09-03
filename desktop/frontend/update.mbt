@@ -217,21 +217,14 @@ fn open_session_on(
 }
 
 ///|
-fn Model::live_selection_id(
+fn Model::live_selection(
   self : Model,
   channel : @interop.ChannelId,
   session : String,
-) -> @conversation.Id? {
+) -> ConversationSelection? {
   self
   .session_project(channel, session)
-  .map(workspace => {
-    @conversation.Id(
-      source="openseek.live",
-      channel=channel.uri_authority(),
-      conversation=session,
-      root=workspace.path,
-    )
-  })
+  .map(workspace => { channel, session, workspace, record: LiveRecord, })
 }
 
 ///|
@@ -385,9 +378,10 @@ fn adopt_projects(
       (Some(target), { ..model, pending_project_adoption: None, })
     _ => (None, model)
   }
-  let active_detached = channel == model.focused &&
-    model.find_conversation(channel, model.active_session) is Some(active) &&
-    !paths.contains(active.project())
+  let selected_detached = channel == model.focused &&
+    model.conversation_selection() is Some(selected) &&
+    selected.channel == channel &&
+    !paths.contains(selected.workspace)
   let active_project = if dev.active_project is None ||
     (dev.active_project is Some(active) && paths.contains(active)) {
     dev.active_project
@@ -466,7 +460,7 @@ fn adopt_projects(
     },
   })
   commands.push(refresh_cmd)
-  if active_detached {
+  if selected_detached {
     if focus_target is Some(project) {
       // This snapshot both removed the active conversation's project and
       // carries the row the user just added: the explicit add-and-focus
@@ -485,6 +479,8 @@ fn adopt_projects(
         {
           ..focused,
           active_session: "",
+          selected_conversation: None,
+          conversation_load_failure: None,
           loading_conversation: None,
           screen: Chat,
         },
@@ -534,7 +530,14 @@ fn adopt_projects(
     }
     return (
       @cmd.batch(commands),
-      { ..next, active_session: "", loading_conversation: None, screen: Chat, },
+      {
+        ..next,
+        active_session: "",
+        selected_conversation: None,
+        conversation_load_failure: None,
+        loading_conversation: None,
+        screen: Chat,
+      },
     )
   }
   if focus_target is Some(project) {
@@ -631,8 +634,8 @@ fn retry_session_snapshot(
           loading_conversation: None,
           conversation_load_failure: match next.selected_conversation {
             Some(target) if blocking_failure &&
-              target.channel() == channel.uri_authority() &&
-              target.conversation() == session => Some({ target, message, })
+              target.channel == channel &&
+              target.session == session => Some({ target, message, })
             _ => None
           },
         },
@@ -1565,27 +1568,41 @@ fn sync_browser_view(
 }
 
 ///|
-/// Leave an archived active session immediately, carrying only resubmittable
-/// composer state into the supplied fresh id. This is shared by list replies
-/// and identity notifications because either can win their delivery race.
-fn replace_archived_active(
+/// Replace a selected record that disappeared while it was active or loading,
+/// carrying only its resubmittable composer state into the supplied fresh id.
+/// List replies and identity notifications share this transition because either
+/// can win their delivery race.
+fn replace_removed_selection(
   model : Model,
   channel : @interop.ChannelId,
   session : String,
   fresh_session : String,
   workspace : @common.Uri,
+  record : ConversationRecord,
 ) -> Model {
   guard channel == model.focused &&
-    model.active_session == session &&
-    model.find_conversation(channel, session) is Some(archived_conv) else {
+    model.conversation_selection() is Some(selected) &&
+    selected.matches_record(channel, session, workspace, record) &&
+    model.conversations
+    .iter()
+    .find_first(conv => {
+      conv.device == channel &&
+      conv.session_id == session &&
+      conv.project() == workspace &&
+      conv.is_archived_read_only() == (record is ArchivedRecord)
+    })
+    is Some(removed_conv) else {
     return model
   }
-  let salvaged = archived_conv.archive_salvage()
+  let salvaged = removed_conv.archive_salvage()
   let restored_task = salvaged.task
   let restored_mentions = salvaged.mentions
   let pending_initial = salvaged.pending_initial
   let conversations = model.conversations.filter(conv => {
-    conv.device != channel || conv.session_id != session
+    conv.device != channel ||
+    conv.session_id != session ||
+    conv.project() != workspace ||
+    conv.is_archived_read_only() != (record is ArchivedRecord)
   })
   let activated = { ..model, conversations, }.activate(
     channel, fresh_session, workspace,
@@ -1615,7 +1632,7 @@ fn replace_archived_active(
     mentions,
     // The component still owns the text, but this bit keeps the replacement
     // reachable until that local entry is submitted or cleared.
-    composer_draft_present: archived_conv.composer_draft_present ||
+    composer_draft_present: removed_conv.composer_draft_present ||
     fresh.composer_draft_present,
     workspace: Project(root=workspace),
     worktree_mode: model.default_worktree_mode(channel, workspace),
@@ -1639,6 +1656,7 @@ fn replace_archived_active(
     ..activated.replace_conversation(fresh).with_active_project(Some(workspace)),
     screen: Chat,
     loading_conversation: None,
+    conversation_load_failure: None,
     composer_entry_replacements,
   }
 }
@@ -4136,12 +4154,17 @@ fn update_msg(
       )
     }
     ConversationRenameRequested(id~, label~) =>
-      if id.source() == "openseek.live" || id.source() == "codex.live" {
+      if id.source() is (@conversation.OpenSeekLive | @conversation.CodexLive) {
         (
           focus_conversation_rename(),
           {
             ..model,
-            conversation_rename: Some({ id, draft: label, saving: false, }),
+            conversation_rename: Some({
+              id,
+              draft: label,
+              saving: false,
+              error: None,
+            }),
           },
         )
       } else {
@@ -4152,7 +4175,10 @@ fn update_msg(
         Some(rename) if rename.id == id && !rename.saving =>
           (
             @cmd.none,
-            { ..model, conversation_rename: Some({ ..rename, draft: value, }), },
+            {
+              ..model,
+              conversation_rename: Some({ ..rename, draft: value, error: None, }),
+            },
           )
         _ => (@cmd.none, model)
       }
@@ -4161,7 +4187,7 @@ fn update_msg(
         Some(rename) if rename.id == id &&
           !rename.saving &&
           !rename.draft.trim().is_empty() => {
-          let saving = { ..rename, saving: true, }
+          let saving = { ..rename, saving: true, error: None, }
           (
             rename_conversation(dispatch, saving),
             { ..model, conversation_rename: Some(saving), },
@@ -4184,9 +4210,16 @@ fn update_msg(
     ConversationRenameFailed(id~, message~) =>
       match model.conversation_rename {
         Some(rename) if rename.id == id =>
-          { ..model, conversation_rename: Some({ ..rename, saving: false, }), }.notify_error(
-            dispatch,
-            "Rename failed: " + message,
+          (
+            @cmd.none,
+            {
+              ..model,
+              conversation_rename: Some({
+                ..rename,
+                saving: false,
+                error: Some("Rename failed: " + message),
+              }),
+            },
           )
         _ => (@cmd.none, model)
       }
@@ -4224,7 +4257,7 @@ fn update_msg(
           return (@cmd.none, model)
         }
         let (focus_cmd, model) = focus_channel(dispatch, model, channel)
-        guard model.live_selection_id(channel, session_id) is Some(target) else {
+        guard model.live_selection(channel, session_id) is Some(target) else {
           return (@cmd.none, model)
         }
         let model = {
@@ -4238,29 +4271,22 @@ fn update_msg(
       }
     RetrySelectedConversation =>
       match model.selected_conversation {
-        Some(id) if id.source() == "openseek.live" =>
-          update_msg(dispatch, OpenSession(model.focused, id.conversation()), {
-            ..model,
-            conversation_load_failure: None,
-          })
-        Some(id) if id.source() == "openseek.archived" =>
-          match id.root() {
-            Some(root) =>
-              match @resource.of_path(model.focused, root) {
-                Some(workspace) =>
-                  update_msg(
-                    dispatch,
-                    OpenArchivedSession(
-                      model.focused,
-                      session=id.conversation(),
-                      workspace~,
-                    ),
-                    { ..model, conversation_load_failure: None, },
-                  )
-                None => (@cmd.none, model)
-              }
-            None => (@cmd.none, model)
-          }
+        Some(selection) if selection.record is LiveRecord =>
+          update_msg(
+            dispatch,
+            OpenSession(selection.channel, selection.session),
+            { ..model, conversation_load_failure: None, },
+          )
+        Some(selection) if selection.record is ArchivedRecord =>
+          update_msg(
+            dispatch,
+            OpenArchivedSession(
+              selection.channel,
+              session=selection.session,
+              workspace=selection.workspace,
+            ),
+            { ..model, conversation_load_failure: None, },
+          )
         _ => (@cmd.none, model)
       }
     OpenArchivedSession(channel, session~, workspace~) => {
@@ -4278,14 +4304,12 @@ fn update_msg(
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
       let model = {
         ..model.cancel_unsubmitted_conversation_rename(),
-        selected_conversation: Some(
-          @conversation.Id(
-            source="openseek.archived",
-            channel=channel.uri_authority(),
-            conversation=session,
-            root=workspace.path,
-          ),
-        ),
+        selected_conversation: Some({
+          channel,
+          session,
+          workspace,
+          record: ArchivedRecord,
+        }),
         conversation_load_failure: None,
         screen: Chat,
       }
@@ -6264,20 +6288,19 @@ fn update_device_msg(
       let archived_now = (id : String, workspace : @common.Uri) => {
         items.iter().any(item => item.id == id && item.workspace == workspace)
       }
-      // The active conversation lives on the focused channel; another
-      // device's archived list must not displace it. Its own placement also
-      // owns the store identity: a same-id sidebar row may belong to another
-      // project and must not hide this archived record from the check.
-      if channel == next.focused &&
-        next.find_conversation(channel, next.active_session) is Some(active) &&
-        archived_now(next.active_session, active.project()) &&
-        !active.is_archived_read_only() {
-        next = replace_archived_active(
+      // The selected row may still be loading while another conversation is
+      // active. Its exact store-qualified identity, not `active_session`, owns
+      // the fallback when an archive reply removes it.
+      if next.conversation_selection() is Some(selected) &&
+        selected.record is LiveRecord &&
+        archived_now(selected.session, selected.workspace) {
+        next = replace_removed_selection(
           next,
           channel,
-          next.active_session,
+          selected.session,
           fresh_session,
-          active.project(),
+          selected.workspace,
+          LiveRecord,
         )
       }
       let conversations = next.conversations.filter(conv => {
@@ -6322,22 +6345,20 @@ fn update_device_msg(
           ArchiveDeleted,
         )
       }
-      // Deleting the conversation currently on screen must also replace its
-      // send target. Otherwise `Model::active` synthesizes a writable empty
-      // conversation under the permanently deleted id. Read the open
-      // conversation's own workspace: same-id live rows in another store do
-      // not own this transcript.
-      if channel == tombstoned.focused &&
-        sessions.contains(tombstoned.active_session) &&
-        tombstoned.find_conversation(channel, tombstoned.active_session)
-        is Some(active) &&
-        active.project() == key.workspace {
-        tombstoned = replace_archived_active(
+      // The selected archived row may still be loading. Replace that exact
+      // selection before removing its backing conversation.
+      if tombstoned.conversation_selection() is Some(selected) &&
+        selected.record is ArchivedRecord &&
+        selected.channel == channel &&
+        selected.workspace == key.workspace &&
+        sessions.contains(selected.session) {
+        tombstoned = replace_removed_selection(
           tombstoned,
           channel,
-          tombstoned.active_session,
+          selected.session,
           fresh_session,
           key.workspace,
+          ArchivedRecord,
         )
       }
       if tombstoned.device_state(channel) is Some(ndev) {
@@ -6412,19 +6433,17 @@ fn update_device_msg(
         return (commands, model)
       }
       if change == "deleted" {
-        let mut changed = model
-        if channel == changed.focused &&
-          changed.active_session == key.session &&
-          changed.find_conversation(channel, key.session) is Some(active) &&
-          active.project() == key.workspace &&
-          fresh_session is Some(fresh) {
-          changed = replace_archived_active(
-            changed,
+        let changed = if fresh_session is Some(fresh) {
+          replace_removed_selection(
+            model,
             channel,
             key.session,
             fresh,
             key.workspace,
+            ArchivedRecord,
           )
+        } else {
+          model
         }
         let sessions = dev.sessions.filter(item => !key.matches(item))
         let archived = dev.archived.filter(item => !key.matches(item))
@@ -6463,20 +6482,15 @@ fn update_device_msg(
           .replace_device({ ..dev, sessions, archived, })
           .with_archive_override(channel, key, ArchiveLive)
         let next = match next.selected_conversation {
-          Some(selected) if selected.source() == "openseek.archived" &&
-            selected.channel() == channel.uri_authority() &&
-            selected.conversation() == key.session &&
-            selected.root() == Some(key.workspace.path) =>
+          Some(selected) if selected.matches_record(
+              channel,
+              key.session,
+              key.workspace,
+              ArchivedRecord,
+            ) =>
             {
               ..next,
-              selected_conversation: Some(
-                @conversation.Id(
-                  source="openseek.live",
-                  channel=channel.uri_authority(),
-                  conversation=key.session,
-                  root=key.workspace.path,
-                ),
-              ),
+              selected_conversation: Some({ ..selected, record: LiveRecord, }),
             }
           _ => next
         }
@@ -6557,30 +6571,26 @@ fn update_device_msg(
         Some(ndev) => overridden.replace_device({ ..ndev, sessions, archived, })
         None => overridden
       }
-      // The open conversation, not the first same-id sidebar row, says which
-      // store is losing its active send target.
-      let active_archived = channel == model.focused &&
-        model.active_session == key.session &&
-        model.find_conversation(channel, key.session) is Some(active) &&
-        active.project() == key.workspace &&
-        !active.is_archived_read_only()
+      let selected_archived = model.conversation_selection() is Some(selected) &&
+        selected.matches_record(channel, key.session, key.workspace, LiveRecord)
       let next = {
         ..overridden,
-        conversations: if active_archived {
+        conversations: if selected_archived {
           model.conversations
         } else {
           conversations
         },
       }
-      if active_archived && fresh_session is Some(fresh) {
+      if selected_archived && fresh_session is Some(fresh) {
         (
           commands,
-          replace_archived_active(
+          replace_removed_selection(
             next,
             channel,
             key.session,
             fresh,
             key.workspace,
+            LiveRecord,
           ),
         )
       } else {
@@ -12986,7 +12996,7 @@ test "Codex threads share the Projects section's project rows" {
   assert_eq(order, [
     "desktop-test", "desktop-newer", "codex-thread-1", "desktop-older",
   ])
-  assert_true(project.conversations[2].id.source() == "codex.live")
+  assert_true(project.conversations[2].id.source() is @conversation.CodexLive)
   assert_true(project.conversations[2].nested)
   // With the Codex page on screen, its active task claims the activation.
   assert_eq(sections[0].activation, Some("codex-thread-1"))

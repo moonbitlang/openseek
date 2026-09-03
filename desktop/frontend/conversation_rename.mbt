@@ -7,6 +7,7 @@ priv struct ConversationRename {
   id : @conversation.Id
   draft : String
   saving : Bool
+  error : String?
 } derive(Eq)
 
 ///|
@@ -15,20 +16,19 @@ fn Model::decorate_conversation_input(
   input : @conversation.Input,
 ) -> @conversation.Input {
   let openseek = match input.id.source() {
-    "openseek.live" | "openseek.archived" => true
+    @conversation.OpenSeekLive | @conversation.OpenSeekArchived => true
     _ => false
   }
   let selected = match input.id.source() {
-    "openseek.live" | "openseek.archived" =>
-      match self.selected_conversation {
-        Some(id) => id == input.id
-        None => input.active
-      }
+    @conversation.OpenSeekLive | @conversation.OpenSeekArchived =>
+      self
+      .conversation_selection()
+      .map_or(false, selection => selection.matches_id(input.id))
     _ => input.active
   }
   let load_failed = selected &&
     self.conversation_load_failure is Some(failure) &&
-    failure.target == input.id
+    failure.target.matches_id(input.id)
   let loading = openseek &&
     selected &&
     !self.selected_conversation_loaded() &&
@@ -38,6 +38,7 @@ fn Model::decorate_conversation_input(
       Some(@conversation.RenameInput::{
         draft: rename.draft,
         saving: rename.saving,
+        error: rename.error,
       })
     _ => None
   }
@@ -95,7 +96,7 @@ fn rename_conversation(
       }
       let title = rename.draft.trim().to_owned()
       match rename.id.source() {
-        "openseek.live" => {
+        @conversation.OpenSeekLive => {
           guard rename.id.root() is Some(workspace) else {
             scheduler.add(
               dispatch(
@@ -125,7 +126,7 @@ fn rename_conversation(
             }
           }
         }
-        "codex.live" => {
+        @conversation.CodexLive => {
           let _ : @protocol.EmptyReply = @interop.codex_request(
             channel,
             @commands.codex_thread_rename,

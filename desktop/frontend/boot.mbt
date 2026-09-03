@@ -167,8 +167,9 @@ fn SidebarDispatcher::conversation_open(
     return self.unroutable("open", "channel \{id.channel()}")
   }
   match id.source() {
-    "openseek.live" => self.emit(OpenSession(channel, id.conversation()))
-    "openseek.archived" => {
+    @conversation.OpenSeekLive =>
+      self.emit(OpenSession(channel, id.conversation()))
+    @conversation.OpenSeekArchived => {
       // The row carries the store its record lives in; without one the click
       // would name a session id in no particular store.
       guard id.root() is Some(root) &&
@@ -179,9 +180,9 @@ fn SidebarDispatcher::conversation_open(
         OpenArchivedSession(channel, session=id.conversation(), workspace~),
       )
     }
-    "codex.live" => self.emit(CodexOpenThread(id.conversation()))
-    "codex.draft" => self.emit(OpenCodex)
-    source => self.unroutable("open", "source \{source}")
+    @conversation.CodexLive => self.emit(CodexOpenThread(id.conversation()))
+    @conversation.CodexDraft => self.emit(OpenCodex)
+    source => self.unroutable("open", "source \{Repr(source)}")
   }
 }
 
@@ -194,9 +195,10 @@ fn SidebarDispatcher::conversation_archive(
     return self.unroutable("archive", "channel \{id.channel()}")
   }
   match id.source() {
-    "openseek.live" => self.emit(ArchiveSession(channel, id.conversation()))
-    "codex.live" => self.emit(CodexArchiveThread(id.conversation()))
-    source => self.unroutable("archive", "\{source}@\{id.channel()}")
+    @conversation.OpenSeekLive =>
+      self.emit(ArchiveSession(channel, id.conversation()))
+    @conversation.CodexLive => self.emit(CodexArchiveThread(id.conversation()))
+    source => self.unroutable("archive", "\{Repr(source)}@\{id.channel()}")
   }
 }
 
@@ -209,10 +211,11 @@ fn SidebarDispatcher::conversation_restore(
     return self.unroutable("restore", "channel \{id.channel()}")
   }
   match id.source() {
-    "openseek.archived" =>
+    @conversation.OpenSeekArchived =>
       self.emit(UnarchiveSession(channel, id.conversation()))
-    "codex.archived" => self.emit(CodexUnarchiveThread(id.conversation()))
-    source => self.unroutable("restore", "\{source}@\{id.channel()}")
+    @conversation.CodexArchived =>
+      self.emit(CodexUnarchiveThread(id.conversation()))
+    source => self.unroutable("restore", "\{Repr(source)}@\{id.channel()}")
   }
 }
 
@@ -224,10 +227,10 @@ fn SidebarDispatcher::conversation_delete(
   // The row carries the store its record lives in; a delete that could not
   // name one would address every same-id record at once.
   guard @interop.ChannelId::from_uri_authority(id.channel()) is Some(channel) &&
-    id.source() == "openseek.archived" &&
+    id.source() is @conversation.OpenSeekArchived &&
     id.root() is Some(root) &&
     @resource.of_path(channel, root) is Some(workspace) else {
-    return self.unroutable("delete", "\{id.source()}@\{id.channel()}")
+    return self.unroutable("delete", "\{Repr(id.source())}@\{id.channel()}")
   }
   self.emit(
     DeleteArchivedSession(channel, { session: id.conversation(), workspace, }),

@@ -121,7 +121,7 @@ fn session_component_input(
     // project stores, and without it two same-id rows would collide on one
     // key in the sidebar's keyed container.
     id: @conversation.Id(
-      source="openseek.live",
+      source=@conversation.OpenSeekLive,
       channel=channel.uri_authority(),
       conversation=session_id,
       root?,
@@ -480,7 +480,7 @@ fn Model::sidebar_component_sections(
       @section.Conversation(
         self.decorate_conversation_input({
           id: @conversation.Id(
-            source="openseek.archived",
+            source=@conversation.OpenSeekArchived,
             channel~,
             conversation=item.id,
             root=item.workspace.path,
@@ -1641,19 +1641,17 @@ fn Model::terminal_panel_visible(self : Model) -> Bool {
 /// A selected row is loaded only when the active transcript has the same
 /// durable identity, including live-vs-archived placement and workspace.
 fn Model::selected_conversation_loaded(self : Model) -> Bool {
-  guard self.selected_conversation is Some(selected) &&
-    self.active_conversation() is Some(active) else {
-    return self.selected_conversation is None
-  }
-  let source = if active.is_archived_read_only() {
-    "openseek.archived"
+  guard self.conversation_selection() is Some(selected) else { return true }
+  guard self.active_conversation() is Some(active) else { return false }
+  let record = if active.is_archived_read_only() {
+    ArchivedRecord
   } else {
-    "openseek.live"
+    LiveRecord
   }
-  selected.source() == source &&
-  selected.channel() == active.device.uri_authority() &&
-  selected.conversation() == active.session_id &&
-  selected.root() == Some(active.project().path)
+  selected.channel == active.device &&
+  selected.session == active.session_id &&
+  selected.workspace == active.project() &&
+  selected.record == record
 }
 
 ///|

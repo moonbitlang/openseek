@@ -38,7 +38,7 @@ fn test_conversations(
     let id = index.to_string()
     conversations.push({
       id: @conversation.Id(
-        source="openseek.projects",
+        source=@conversation.OpenSeekLive,
         channel="local",
         conversation=id,
       ),

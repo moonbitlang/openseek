@@ -47,8 +47,10 @@ It contains no remaining design questions.
 - Workspace rows keep their existing ellipsis.
 - Live session/task rows keep the existing direct Archive button and do not
   gain an ellipsis.
-- Archived session/task rows keep the existing direct Restore/Delete buttons
-  and do not gain an ellipsis.
+- Archived OpenSeek session rows keep the existing direct Restore/Delete
+  buttons and do not gain an ellipsis.
+- Archived Codex task rows keep their existing direct Restore button and do
+  not gain an ellipsis. Codex exposes no permanent-delete operation here.
 - Any row that already has an ellipsis must also provide an equivalent context
   menu.
 - A left click on a direct Archive/Restore/Delete button executes that direct
@@ -58,7 +60,8 @@ It contains no remaining design questions.
 - Subagent/sub-run rows do not provide a menu.
 - Non-durable `New chat` drafts, placeholders, and empty-state rows do not
   provide a menu.
-- Codex tasks follow the same menu rules as OpenSeek sessions.
+- Live Codex tasks follow the same menu rules as live OpenSeek sessions.
+- Archived Codex tasks expose Restore only.
 
 ## Pointer interaction
 
@@ -132,7 +135,7 @@ It contains no remaining design questions.
 - `Archive` is disabled while running and explains that the run must be
   stopped first.
 
-### Archived OpenSeek session or Codex task
+### Archived OpenSeek session
 
 1. `Restore`
 2. Separator
@@ -140,6 +143,13 @@ It contains no remaining design questions.
 
 - `Delete…` enters the existing confirmation flow; it never deletes directly
   from the menu.
+
+### Archived Codex task
+
+1. `Restore`
+
+- No Delete item is shown because this Desktop integration does not expose a
+  permanent Codex task deletion operation.
 
 ### Workspace
 
@@ -177,9 +187,10 @@ It contains no remaining design questions.
 - Removing a row that is not selected does not change the current selection.
 - Restoring a selected archived session/task preserves selection as the row
   moves into the live section.
-- Archiving or deleting the selected session/task selects the newest available
-  live item in the same workspace. If none exists, the workspace enters
-  `New chat`.
+- Archiving or deleting the selected OpenSeek session creates and selects a
+  fresh `New chat` in the same workspace.
+- Archiving the selected Codex task leaves the Codex page with no selected
+  task; it does not select an unrelated task automatically.
 - Detaching the selected workspace selects the next available workspace and
   its most recent session/task; if it has none, it enters `New chat`.
 - If no workspace remains, the app enters its existing no-workspace empty

@@ -45,15 +45,8 @@ pub(all) enum Entry {
 ///|
 fn Entry::key(self : Entry) -> String {
   match self {
-    Project(project) => {
-      let id = project.id()
-      "project:\{id.source()}:\{id.channel()}:\{id.root()}"
-    }
-    Conversation(conversation) => {
-      let id = conversation.id()
-      let root = id.root().unwrap_or("")
-      "conversation:\{id.source()}:\{id.channel()}:\{id.conversation()}:\{root}"
-    }
+    Project(project) => project.id().key()
+    Conversation(conversation) => conversation.id().key()
     Placeholder(row) => "placeholder:\{row.id}"
   }
 }

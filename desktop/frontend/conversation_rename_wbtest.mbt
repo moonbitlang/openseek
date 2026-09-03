@@ -1,7 +1,7 @@
 ///|
 fn test_conversation_id() -> @conversation.Id {
   @conversation.Id(
-    source="openseek.live",
+    source=@conversation.OpenSeekLive,
     channel=@interop.ChannelId::Local.uri_authority(),
     conversation="chat-1",
     root="/work/project",

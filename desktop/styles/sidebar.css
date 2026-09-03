@@ -168,6 +168,7 @@ html.is-resizing .sidebar-resize-handle {
   align-items: center;
   gap: 4px;
   min-width: 0;
+  flex-wrap: wrap;
 }
 .conversation-rename-editor > .conversation-rename {
   flex: 1 1 auto;
@@ -198,6 +199,12 @@ html.is-resizing .sidebar-resize-handle {
   color: var(--color-text-muted);
   cursor: default;
   opacity: 0.6;
+}
+.conversation-rename-error {
+  flex: 0 0 100%;
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tight);
 }
 
 .conversation-row:hover {
