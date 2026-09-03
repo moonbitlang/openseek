@@ -183,6 +183,13 @@ test "read-only guard blocks mutating moon anywhere; allows read-only commands" 
   )
   assert_true(
     review_read_only_blocks(
+      @shell_parse.parse_for_policy("moon test -u; true"),
+      base_cwd=".",
+      scratch_dir=None,
+    ),
+  )
+  assert_true(
+    review_read_only_blocks(
       @shell_parse.parse_for_policy("FOO=bar moon fmt"),
       base_cwd=".",
       scratch_dir=None,

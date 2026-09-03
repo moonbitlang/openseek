@@ -16,10 +16,18 @@ test "sandbox trusts only narrow moon source-writing commands" {
   assert_true(mode_for("moon fmt >/dev/null") is TrustedSourceWrite)
   assert_true(mode_for("moon info > /tmp/log") is TrustedSourceWrite)
   assert_true(mode_for("moon test --update 2>/tmp/err") is TrustedSourceWrite)
+  assert_true(mode_for("moon test -u 2>/tmp/err") is TrustedSourceWrite)
   assert_true(mode_for("moon fmt > out.log") is TrustedSourceWrite)
   assert_true(mode_for("moon check") is TrustedSourceWrite)
   assert_true(mode_for("moon build") is TrustedSourceWrite)
   assert_true(mode_for("moon test") is TrustedSourceWrite)
+  assert_true(
+    mode_for("moon test cfront/build -u 2>&1 | head -30") is TrustedSourceWrite,
+  )
+  assert_true(
+    mode_for("moon test cfront/build --update 2>&1 | head -n 40")
+    is TrustedSourceWrite,
+  )
   assert_true(mode_for("moon run cmd/main") is TrustedSourceWrite)
   assert_true(mode_for("moon run cmd/main -- --help") is TrustedSourceWrite)
   assert_true(mode_for("moon run cmd/main -- -u") is TrustedSourceWrite)
@@ -46,6 +54,21 @@ test "sandbox trusts only narrow moon source-writing commands" {
   assert_true(mode_for("cd ./pkg && moon fmt > main.mbt") is SourceReadOnly)
   assert_true(mode_for("moon fmt 2>&1") is TrustedSourceWrite)
   assert_true(mode_for("sed -i '' 's/a/b/' *.mbt") is SourceReadOnly)
+}
+
+///|
+test "sandbox trusts only read-only consumers after moon output pipes" {
+  assert_true(mode_for("moon test 2>&1 | head -30") is TrustedSourceWrite)
+  assert_true(
+    mode_for("moon test -u 2>&1 | head -40 | head -20") is TrustedSourceWrite,
+  )
+  for
+    cmd in [
+      "moon test -u | tee snapshots.txt", "moon test -u | sh", "moon test -u | moon fmt",
+      "env LIMIT=30 head -30 | moon test -u",
+    ] {
+    assert_true(mode_for(cmd) is SourceReadOnly)
+  }
 }
 
 ///|

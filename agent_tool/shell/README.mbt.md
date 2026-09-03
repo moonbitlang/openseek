@@ -57,7 +57,7 @@ workspace root, respecting `moon -C <dir>` and explicit cwd changes such as
 `cd ./dir && moon ...`. Bare relative `cd dir` is skipped because `CDPATH` can
 change which directory the shell enters. This covers commands such as
 `moon add`, `moon remove`, `moon update`, `moon fmt`, `moon info`,
-`moon test --update`, and `moon ide rename ... --apply`. Read-only variants
+`moon test -u`/`moon test --update`, and `moon ide rename ... --apply`. Read-only variants
 such as dry-run commands and `moon fmt --check` are left alone, as are Moon
 invocations with per-command environment overrides such as `FOO=bar moon` or
 `env FOO=bar moon`. Follow-up checks are skipped when `timeout_ms` is set and
@@ -96,12 +96,15 @@ source paths are indirect, as in `while read f; do sed -i ... "$f"; done`.
 Too-complex commands with visible MoonBit source creation or tree transfer
 markers are also rejected before execution.
 
-Narrowly recognized Moon commands that are expected to write source or package
-metadata run outside the source-write sandbox: `moon fmt`, `moon info`,
-`moon add`, `moon remove`, `moon update`, `moon test --update`, and
-`moon ide rename ... --apply`. Compounds are conservative; `moon fmt &&
-moon check` is trusted, while a broad script or source rewrite through shell is
-not.
+Recognized Moon commands that can run pre-build hooks or intentionally update
+source and package metadata run outside the source-write sandbox. This includes
+`moon check`, `moon build`, `moon test`, package-based `moon run`, `moon fmt`,
+`moon info`, `moon add`, `moon remove`, `moon update`, `moon test -u`/`moon test
+--update`, and `moon ide rename ... --apply`. Compounds are conservative; `moon
+fmt && moon check` is trusted. A trusted writer may pipe output through the
+read-only `head` limiter, so commands such as `moon test -u 2>&1 | head -40` can
+update snapshots while bounding output. Other pipeline consumers, broad scripts,
+and source rewrites through shell remain sandboxed.
 
 Recognized first-party Git porcelain composes outside the source-write sandbox.
 This lets ordinary workflows such as `git fetch && git rebase`, `git pull

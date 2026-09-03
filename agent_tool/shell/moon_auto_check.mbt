@@ -517,6 +517,7 @@ test "detect moon commands that should trigger follow-up check" {
     ),
   )
   assert_true(should_auto_check_moon_command("moon test --update"))
+  assert_true(should_auto_check_moon_command("moon test -u"))
   assert_true(should_auto_check_moon_command("command moon fmt"))
   assert_true(should_auto_check_moon_command("command -- moon fmt"))
   assert_true(should_auto_check_moon_command("command -p moon fmt"))

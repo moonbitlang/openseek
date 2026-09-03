@@ -181,10 +181,17 @@ fn commands_are_trusted_source_writes(
 ) -> Bool {
   let mut has_trusted_write = false
   for index, command in commands {
-    if command.separator_before is Some("|" | "||") {
-      return false
+    let command_class = trusted_command_class(command, commands, index)
+    match command.separator_before {
+      Some("||") => return false
+      // A trusted source-writing command may feed a read-only output consumer
+      // such as `head`. Never trust a writer after a pipe: that would make the
+      // whole shell run unsandboxed for a command shape that is not needed for
+      // validation output limiting.
+      Some("|") if !(command_class is TrustedCommandRead) => return false
+      _ => ()
     }
-    match trusted_command_class(command, commands, index) {
+    match command_class {
       TrustedCommandWrite => has_trusted_write = true
       TrustedCommandNeutral | TrustedCommandRead => ()
       UntrustedCommand => return false
@@ -220,9 +227,26 @@ fn trusted_command_class(
           }
         "moon" => trusted_moon_command_class(command, command_index)
         "git" => trusted_git_command_class(command, command_index)
+        "head" => trusted_head_command_class(command, command_index)
         _ => UntrustedCommand
       }
     _ => UntrustedCommand
+  }
+}
+
+///|
+/// `head` is a read-only output limiter used to keep compiler and test output
+/// bounded (`moon test ... 2>&1 | head -30`). Trust only the direct command
+/// without environment wrappers; source-path redirects are rejected before
+/// this classifier runs.
+fn trusted_head_command_class(
+  command : @shell_parse.SimpleCommand,
+  head_index : Int,
+) -> TrustedCommandClass {
+  if head_index == 0 && !command_has_custom_environment(command) {
+    TrustedCommandRead
+  } else {
+    UntrustedCommand
   }
 }
 
