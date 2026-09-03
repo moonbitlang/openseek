@@ -16,7 +16,7 @@ import {
   "moonbit-community/proton_ext@0.2.6",
   "tonyfettes/platform@0.1.1",
   "tonyfettes/xlog@0.4.0",
-  "moonbitlang/editor@0.4.4",
+  "moonbitlang/editor@0.4.5",
   "moonbit-community/proton_contract@0.2.6",
   "bobzhang/openseek@0.2.2",
   "moonbit-community/proton_cefsetup@0.2.6",

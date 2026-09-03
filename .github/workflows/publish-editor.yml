@@ -1,0 +1,55 @@
+name: publish-editor
+
+# Publishes the `moonbitlang/editor` module (the `editor/` directory) to
+# mooncakes. Manual: bump `version` in editor/moon.mod first. The module is
+# published under the moonbitlang namespace, so it uses the organization's
+# mooncakes token, not a personal one. `bobzhang/openseek` (the root module)
+# depends on it, so a root publish that needs new editor packages must be
+# preceded by a run of this workflow.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish-editor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        # The editor's scoped moon.work keeps Proton setup out of this job,
+        # mirroring the editor CI gate.
+        working-directory: editor
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: install moon
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: post install
+        run: |
+          moon version --all
+          moon update
+
+      - name: prepublish check
+        run: |
+          moon check --target all --warn-list +73 --deny-warn
+          moon test --target all
+
+      - name: publish
+        env:
+          SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "Error: MOONCAKES_MOONBITLANG_TOKEN secret is not set."
+            echo "Please contact an admin to grant access to this secret."
+            exit 1
+          fi
+          echo "$SECRET" > ~/.moon/credentials.json
+          moon publish
+          rm ~/.moon/credentials.json
