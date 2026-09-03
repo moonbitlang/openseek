@@ -432,6 +432,7 @@ fn CodexRequestInput::render(
                 answer=value,
               )
             }),
+            attrs=@html.Attrs::build().data_set("focus-owner", ""),
           ),
         )
         body.push(@html.div(class="codex-question", controls))
@@ -466,6 +467,7 @@ fn CodexRequestInput::render(
               answer=value,
             )
           }),
+          attrs=@html.Attrs::build().data_set("focus-owner", ""),
           "",
         ),
       )

@@ -593,12 +593,7 @@
   background: transparent;
   padding: 6px 6px 2px;
   resize: none;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-md);
   line-height: var(--line-height-relaxed);
-}
-.composer textarea::placeholder {
-  color: var(--color-text-muted);
 }
 
 .composer-toolbar {

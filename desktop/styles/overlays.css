@@ -346,18 +346,12 @@
 }
 
 .quick-open-input-wrap input {
-  min-width: 0;
   flex: 1 1 auto;
   padding: 13px 0;
   border: 0;
   background: transparent;
-  color: var(--color-text-primary);
   font: var(--font-weight-regular) var(--font-size-md) /
     var(--line-height-normal) var(--font-family-sans);
-}
-
-.quick-open-input-wrap input::placeholder {
-  color: var(--color-text-muted);
 }
 
 .quick-open-group-label {

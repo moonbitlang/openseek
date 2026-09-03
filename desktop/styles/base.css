@@ -54,6 +54,35 @@ button {
   }
 }
 
+/* App-owned text-entry controls share one content and state contract. Their
+   existing focus markers also keep this rule out of embedded Viewer content;
+   no second opt-in class is required. Components may replace frame geometry
+   when a field lives inside a composite surface. */
+:where(
+  input[data-focus-owner],
+  input[data-focus-target],
+  textarea[data-focus-owner],
+  textarea[data-focus-target]
+) {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+
+  &::placeholder {
+    color: var(--color-text-muted);
+    opacity: 1;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+}
+
 /* Code-bearing content follows the same stack as the editor and terminal,
    while ordinary application controls continue to inherit the sans stack. */
 code,

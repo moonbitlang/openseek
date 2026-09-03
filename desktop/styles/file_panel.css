@@ -477,13 +477,7 @@ html.is-resizing * {
 }
 .browser-address {
   flex: 1 1 auto;
-  min-width: 0;
   padding: 5px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-subtle);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-md);
 }
 .browser-failure {
   flex: 0 0 auto;
@@ -534,12 +528,7 @@ html.is-resizing * {
   min-width: 80px;
   height: 28px;
   padding: 4px 8px;
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-xs);
-  outline: none;
-  background: var(--color-bg-subtle);
-  color: var(--color-text-primary);
-  font: inherit;
   font-size: var(--font-size-sm);
 }
 .search-option {
@@ -689,15 +678,9 @@ html.is-resizing * {
   font-size: var(--font-size-xs);
 }
 .search-details input {
-  min-width: 0;
   height: 26px;
   padding: 3px 7px;
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-xs);
-  outline: none;
-  background: var(--color-bg-subtle);
-  color: var(--color-text-primary);
-  font: inherit;
   font-size: var(--font-size-sm);
 }
 .search-query-row > .search-mode {
