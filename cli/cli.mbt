@@ -1,10 +1,13 @@
 ///|
-/// Shared helpers for the command mains (`cmd/openseek`, `cmd/tui`, the `eval`
-/// harness mains): accessors over `@argparse.Matches`, and the sanitizer every
+/// Shared helpers for the command mains (`cmd/openseek`, the `eval` harness
+/// mains, and the out-of-tree `openseek_tui` binary): accessors over
+/// `@argparse.Matches`, the shared agent options, and the sanitizer every
 /// command runs untrusted text through before printing it. Each main used to
 /// carry its own byte-identical copies; keeping one copy here removes the risk
 /// of the copies drifting apart. Error messages are part of each command's
-/// contract and must not change when helpers move.
+/// contract and must not change when helpers move. This package is public (not
+/// `internal`) because the terminal UI lives in its own module,
+/// `moonbitlang/openseek_tui`, and imports it.
 
 ///|
 /// Parse `input` as a strictly positive integer; `label` names the offending
@@ -82,8 +85,9 @@ test "terminal_safe_line collapses whitespace, drops controls, elides at limit" 
 /// Normalize a raised error's text for a one-line stderr report. argparse
 /// already prefixes its own errors with `error: `, and some Moon failures carry
 /// a `FAILED: ` marker, so strip those to avoid `error: error: …`. This is the
-/// single sanitizer both command mains (`cmd/openseek`,
-/// `cmd/openseek_tui`) run untrusted failure text through.
+/// single sanitizer both command mains (`cmd/openseek` here and the
+/// `openseek_tui` binary in `moonbitlang/openseek_tui`) run untrusted failure
+/// text through.
 pub fn failure_message(error_text : String) -> String {
   lexmatch error_text {
     (re"^error: ", after=message) => message.to_owned()

@@ -1,6 +1,6 @@
 ///|
 /// Agent-facing API-key resolution for the command mains that launch or resume
-/// agent runs (`cmd/openseek`, `cmd/tui`). This lived in `internal/agentcli`
+/// agent runs (`cmd/openseek`, the `openseek_tui` binary). This lived in `internal/agentcli`
 /// because the resolution order was duplicated byte-for-byte across the mains,
 /// and silent drift between the copies — one main learning a new provider
 /// fallback and the other not — is the hazard the shared definition removes.

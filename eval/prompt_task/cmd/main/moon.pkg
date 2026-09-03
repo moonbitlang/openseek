@@ -3,7 +3,7 @@ import {
   "bobzhang/openseek/eval/prompt_task/harness",
   "moonbitlang/async",
   "moonbitlang/core/argparse",
-  "bobzhang/openseek/internal/cli",
+  "bobzhang/openseek/cli",
 }
 
 warnings = "+unnecessary_annotation"

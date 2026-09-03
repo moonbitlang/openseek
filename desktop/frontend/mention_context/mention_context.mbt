@@ -6,9 +6,10 @@
 // one place and neither end can drift from the other. Rendering (chip glyphs,
 // jump wiring) stays with the caller — this package only owns the wire form.
 //
-// The pattern mirrors the TUI's `<user_shell_command>` envelope
-// (cmd/tui/internal/command_context): element bodies remain verbatim because
-// the envelope is read by the *model* as natural tagged context. Attribute
+// The pattern mirrors the TUI's `<user_shell_command>` envelope (the terminal
+// UI's command_context package in moonbitlang/openseek_tui): element bodies
+// remain verbatim because the envelope is read by the *model* as natural
+// tagged context. Attribute
 // values use the ordinary XML entities for structural characters and line
 // breaks, then `parse` decodes them back into the exact chip value. The typed
 // task comes first (the engine titles a session by its first prompt's first

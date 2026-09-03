@@ -1,3 +1,0 @@
-import {
-  "moonbit-community/tty/color" @tty/color,
-}

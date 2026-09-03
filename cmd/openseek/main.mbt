@@ -1213,17 +1213,18 @@ async test "environment section names the cwd and appends the layout outline" {
   // Normalise the machine-specific CWD so the snapshot is portable across
   // local dev and CI, while still asserting a stable contiguous layout block.
   let portable = section.replace_all(old=cwd, new="{cwd}")
-  assert_true(
-    portable.contains(
-      (
-        #|Project layout (directories; hidden, build, and vendored dirs omitted):
-        #|cmd/
-        #|  tui/
-        #|    internal/
-        #|  viz_app/
-      ),
-    ),
-  )
+  // Sibling order follows the directory walk, so pin the header and the
+  // nesting (indentation) rather than the order of `cmd/`'s children.
+  for
+    needle in [
+      "Project layout (directories; hidden, build, and vendored dirs omitted):\n",
+      "\ncmd/\n", "\n  openseek/\n", "\n  viz_app/\n    e2e/\n",
+    ] {
+    assert_true(
+      portable.contains(needle),
+      msg="missing \{needle.escape()} in layout outline:\n\{portable}",
+    )
+  }
 }
 
 ///|

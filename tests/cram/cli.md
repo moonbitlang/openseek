@@ -6,7 +6,7 @@ on `PATH` as `openseek.exe`.
 
 `openseek` is the headless automation CLI: a subcommand tree under `run`,
 `serve`, `review`, `subrun`, `mcp`, and `sessions` (the interactive terminal UI
-is the separate `openseek_tui` binary, documented in [`tui.md`](tui.md)). Every
+is the separate `openseek_tui` binary, maintained in its own repository). Every
 command here is offline: it either prints help or fails argument validation
 before the agent contacts DeepSeek, so the suite needs no API key and makes no
 network calls. The live, API-backed examples live in
@@ -46,7 +46,7 @@ Options:
 The root carries the engine-shared options (`--api-key`, `--model`, …) as
 globals, so any subcommand sees them. The interactive UI's own options
 (`--prompt`, `--engine`, `--continue`) live on the separate `openseek_tui`
-binary (see [`tui.md`](tui.md)).
+binary (its own repository, `moonbitlang/openseek_tui`).
 
 ## A Misspelled Subcommand Is An Error, Not A Prompt
 

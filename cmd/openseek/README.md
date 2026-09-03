@@ -2,8 +2,8 @@
 
 This package is the native-only automation entry point for OpenSeek — the
 `openseek` binary. It is a subcommand tree for the headless engine (the
-interactive terminal UI is the separate `openseek_tui` binary; see
-[`cmd/tui`](../tui/README.md)). It parses arguments with
+interactive terminal UI is the separate `openseek_tui` binary, maintained in
+[moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui)). It parses arguments with
 `moonbitlang/core/argparse`, reads defaults from environment variables, and
 drives turns through `bobzhang/openseek/agent.run_turn_in_scope` (both one-shot
 `run` and durable sessions; fleet mode's independent attempts use
@@ -155,9 +155,10 @@ moon run cmd/openseek -- run --concurrency 3 --dir myproject "fix the failing te
 This package should stay thin: subcommand dispatch, argument parsing,
 environment-backed defaults, model parsing, prompt override file loading,
 session-store setup, and delegation to the agent package. The interactive UI is
-the `cmd/tui` library, launched via the separate `openseek_tui` binary; the
-prompt package owns built-in prompt selection; the agent package owns tool
-definitions and the execution loop.
+the separate `openseek_tui` binary ([moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui)),
+which consumes this module from mooncakes; the prompt package owns built-in
+prompt selection; the agent package owns tool definitions and the execution
+loop.
 
 Run the package tests with:
 
