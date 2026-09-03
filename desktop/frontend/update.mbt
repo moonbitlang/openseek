@@ -11835,7 +11835,11 @@ test "reconnect recovers a Finished notification dropped behind a slow page" {
   let dispatch = test_dispatch()
   // The host has already finished r7, but this page missed that one live
   // notification and still presents the run as open.
-  let (_, bridged) = update_dev(dispatch, BridgeReady, running_model())
+  let (_, bridged) = update_dev(
+    dispatch,
+    BridgeReady(windows=false),
+    running_model(),
+  )
   let frontier = bridged.run_snapshot_frontier(@interop.ChannelId::Local)
   let (_, recovered) = update_dev(
     dispatch,

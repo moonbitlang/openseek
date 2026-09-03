@@ -284,7 +284,7 @@ test('a tilde-named child completes locally instead of going to the host', async
 
 test('an alias of the listed directory is asked again after canonicalization', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  app.windowsHost = true;
+  app.hostPlatform = 'windows';
   const canonical = { path: '/C:/', entries: ['Users'] };
   app.browseTree = {
     '': { path: '/C:/', entries: ['Users'] },
@@ -324,7 +324,7 @@ test('an alias of the listed directory is asked again after canonicalization', a
 
 test('the Windows drive list lists drives and refuses Add project', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  app.windowsHost = true;
+  app.hostPlatform = 'windows';
   app.browseTree = {
     '': { path: '/C:/Users/test', parent: '/C:/Users', entries: ['code'] },
     '/': { drives: ['C:', 'D:'] },

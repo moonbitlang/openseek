@@ -490,7 +490,7 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
               // frontend can use it as the resync boundary.
               context.emit(connected_event, {
                 stage: Accepted,
-                windows: @platform.is_windows(),
+                platform: Some(@platform.host_platform()),
               })
               connected = true
               reply.put(())
@@ -523,7 +523,12 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
             connected,
             target,
             pending,
-            Hub(AgentConnected({ stage: Accepted, })),
+            Hub(
+              AgentConnected({
+                stage: Accepted,
+                platform: Some(@platform.host_platform()),
+              }),
+            ),
           )
       }
     }
@@ -552,14 +557,14 @@ async fn deliver_to_page(
 async test "a lagged hub subscription becomes a reconnect boundary" {
   let channel : @broadcast.Channel[@protocol.Notification] = Channel(capacity=1)
   let notifications = channel.subscribe()
-  channel.publish(AgentConnected({ stage: Serving, }))
-  channel.publish(AgentConnected({ stage: Serving, }))
+  channel.publish(AgentConnected({ stage: Serving, platform: None, }))
+  channel.publish(AgentConnected({ stage: Serving, platform: None, }))
   assert_true(next_hub_input(notifications) is SubscriptionLagged)
   // The retained Serving notification was skipped with the lag; the same
   // subscription keeps serving from the head.
-  channel.publish(AgentConnected({ stage: Accepted, }))
+  channel.publish(AgentConnected({ stage: Accepted, platform: None, }))
   assert_true(
     next_hub_input(notifications)
-    is Deliver(Hub(AgentConnected({ stage: Accepted, }))),
+    is Deliver(Hub(AgentConnected({ stage: Accepted, .. }))),
   )
 }
