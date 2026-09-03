@@ -9,6 +9,14 @@ pub fn is_darwin() -> Bool {
 }
 
 ///|
+/// Whether the host is Windows, decided at compile time. The one platform
+/// fact clients care about too: it rides `agent.connected` so a remote
+/// client learns the device's path semantics without asking.
+pub fn is_windows() -> Bool {
+  @sys.win32 || @sys.win64
+}
+
+///|
 /// Hand one UTF-16 target to the native opener. The C stub calls
 /// `ShellExecuteW` on Windows and returns failure elsewhere; the public
 /// wrappers only select it on Windows. MoonBit strings are NUL-terminated
