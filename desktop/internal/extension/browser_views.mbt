@@ -23,7 +23,7 @@ pub fn BrowserViews::window_ready(
   window : @proton.WindowHandle,
 ) -> Unit {
   self.window = Some(window)
-  let dark = (window.state().theme == "dark") catch { _ => false }
+  let dark = (window.state().theme == Dark) catch { _ => false }
   let _ = @platform.set_titlebar_dark_mode(dark)
 }
 
