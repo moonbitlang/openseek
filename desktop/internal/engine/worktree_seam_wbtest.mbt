@@ -469,8 +469,8 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
   guard created.worktrees is [created_info] else {
     fail("create must publish the one worktree it made")
   }
-  // The minted branch is salted past the bare `openseek/wt`, and the repair
-  // restores that same branch — never a lookalike.
+  // The repair restores the very branch create minted (`openseek/wt-<salt>`),
+  // never a lookalike.
   assert_true(created_info.branch.has_prefix("openseek/wt-"))
   assert_eq(
     @gitx.run(checkout, ["rev-parse", "--abbrev-ref", "HEAD"]),

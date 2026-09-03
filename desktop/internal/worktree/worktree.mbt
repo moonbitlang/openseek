@@ -682,31 +682,9 @@ pub async fn list_codex_worktree_bindings() -> Array[CodexWorktreeBinding] {
 }
 
 ///|
-/// A fresh 8-hex-char salt from OS entropy (`@sys.rand`). Every minted
-/// branch is salted so that two machines' independent `wt-N` counters can
-/// never mint the same branch name and collide on a shared remote; 32 bits
-/// is plenty for that, and anything longer only clutters the branch chip
-/// and pull-request heads. A missing entropy source refuses rather than
-/// minting a guessable name.
-fn fresh_branch_salt() -> String raise WorktreeError {
-  guard @sys.rand(4) is Some(bytes) else {
-    raise WorktreeError("no OS entropy available to mint a worktree branch")
-  }
-  let salt = StringBuilder()
-  for byte in bytes {
-    let value = byte.to_int()
-    if value < 0x10 {
-      salt.write_char('0')
-    }
-    salt.write_string(value.to_string(radix=16))
-  }
-  salt.to_string()
-}
-
-///|
 /// The smallest `wt-N` nobody holds: free in the registry, on disk, and as
-/// a branch. Branches survive removal, so the counter naturally skips past
-/// history instead of resurrecting an old branch.
+/// a branch. Branches survive removal, so the counter moves past history
+/// instead of pairing a reused name with a lookalike of an old branch.
 async fn fresh_worktree_name(
   dir : @pathx.Absolute,
   entries : Array[WorktreeEntry],
@@ -744,12 +722,11 @@ async fn fresh_worktree_name(
 ///|
 /// Create a worktree `<workspace>/.worktrees/<name>` on a fresh salted
 /// branch `openseek/<name>-<salt>` at the workspace's current HEAD, bound
-/// from birth to
-/// `owner` — creation IS the binding, so the start path never mutates the
-/// registry and a refused start cannot re-route a conversation. The owner id
-/// is the idempotency key: an owner that already holds a worktree gets that
-/// binding back instead of a second checkout, which is what
-/// makes a lost create reply safe to retry. The name is host-generated
+/// from birth to `owner` — creation IS the binding, so the start path never
+/// mutates the registry and a refused start cannot re-route a conversation.
+/// The owner id is the idempotency key: an owner that already holds a
+/// worktree gets that binding back instead of a second checkout, which is
+/// what makes a lost create reply safe to retry. The name is host-generated
 /// (`wt-N`); the wire op takes none — `name?` exists for tests, which need
 /// deterministic fixtures and keep the holder-naming refusals covered.
 /// The whole op runs under `workspace_lifecycle_lock` (like removal), so
@@ -897,7 +874,15 @@ pub async fn create(
       "\{target} already exists on disk; another tool may own it",
     )
   }
-  let branch = WorktreeBranchPrefix + name + "-" + fresh_branch_salt()
+  // Salted so that two machines' independent `wt-N` counters can never mint
+  // the same branch name and collide on a shared remote; 32 bits is plenty
+  // for that, and anything longer only clutters the branch chip and
+  // pull-request heads. No OS entropy is a hard failure, never weak
+  // randomness.
+  guard @entropy.random_hex(4) is Some(salt) else {
+    raise WorktreeError("no OS entropy available to mint a worktree branch")
+  }
+  let branch = "\{WorktreeBranchPrefix}\{name}-\{salt}"
   @workspaces.exclude_from_git(dir, WorktreesDirName)
   let base = @gitx.run(dir, ["rev-parse", "HEAD"])
   // The branch comes first, on its own: our locks are in-process only, so
@@ -1409,8 +1394,7 @@ async test "worktree create provisions checkout, branch, registry, exclusion" {
   assert_eq(reply.name, "fix-auth")
   guard reply.worktrees is [info] else { fail("expected one worktree") }
   assert_eq(info.name, "fix-auth")
-  // The branch is minted salted past the bare name (`openseek/<name>-<salt>`)
-  // so machine-local counters can never collide on a shared remote.
+  // The minted branch is `openseek/<name>-<8 hex chars of salt>`.
   assert_true(info.branch.has_prefix("openseek/fix-auth-"))
   assert_eq(info.branch.length(), "openseek/fix-auth-".length() + 8)
   assert_eq(info.base, @gitx.run(repo, ["rev-parse", "HEAD"]))

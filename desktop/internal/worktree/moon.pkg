@@ -1,5 +1,6 @@
 import {
   "moonbitlang/core/env" @sys,
+  "openseek_desktop/internal/entropy",
   "openseek_desktop/internal/fsx",
   "openseek_desktop/internal/gitx",
   "openseek_desktop/internal/pathx",
