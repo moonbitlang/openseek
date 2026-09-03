@@ -11,7 +11,7 @@
 /// desktop webview and a healthy browser drain far faster than the engine
 /// produces — so a subscriber this far behind is a wedged connection, and
 /// the protocol's answer to a wedged connection is to resync it.
-const NotificationLogCapacity = 1024
+const NotificationLogCapacity = 4096
 
 ///|
 /// The hub is owned by `ApiState`; transports reach it through
