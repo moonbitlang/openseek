@@ -11,10 +11,13 @@ async test "package download streams to disk and reports byte progress" {
       }
       error => raise error
     }
-    // Closing the listener lets the background run_forever task leave before
-    // the task group waits for it during either success or assertion failure.
-    defer server.close()
+    // The listener is closed from the task that owns `run_forever`: the
+    // background task keeps accepting until `run_forever` returns on
+    // cancellation, and only then runs this deferred close. Closing from the
+    // test body instead races the accept loop against the close (use-after-
+    // free on the live handle) and hangs the test on Windows.
     group.spawn_bg(no_wait=true) <| () => {
+      defer server.close()
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
