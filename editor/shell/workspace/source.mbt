@@ -5,7 +5,8 @@ pub fn infer_language_id(path_or_name : String) -> String {
   if is_moon_config_path(path_or_name) {
     "moonbit-config"
   } else if path_or_name.has_suffix(".mbt") ||
-    path_or_name.has_suffix(".mbt.md") {
+    path_or_name.has_suffix(".mbt.md") ||
+    path_or_name.has_suffix(".mbtx") {
     "moonbit"
   } else if path_or_name.has_suffix(".js") || path_or_name.has_suffix(".mjs") {
     "javascript"

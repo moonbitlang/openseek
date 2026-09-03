@@ -389,6 +389,7 @@ test "language_id maps known extensions and falls back to plain text" {
   assert_eq(language_id("main.mbt"), "moonbit")
   assert_eq(language_id("pkg.generated.mbti"), "moonbit")
   assert_eq(language_id("README.mbt.md"), "moonbit")
+  assert_eq(language_id("run.mbtx"), "mbtx")
   assert_eq(language_id("bundle.js"), "javascript")
   assert_eq(language_id("config.mjs"), "javascript")
   assert_eq(language_id("moon.mod.json"), "json")

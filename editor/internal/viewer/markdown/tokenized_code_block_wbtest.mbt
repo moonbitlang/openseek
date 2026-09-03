@@ -37,6 +37,34 @@ test "shared tokenized code override emits editor classes and threads active lan
 }
 
 ///|
+test "mbtx fences share the moonbit tokenizer with mbt fences" {
+  register_shared_markdown_test_tokenizer()
+  let mbt = render_markdown(
+    (
+      #|```mbt
+      #|let answer = 42
+      #|```
+    ),
+    code_block_renderer=render_tokenized_code_block,
+  )
+  let mbtx = render_markdown(
+    (
+      #|```mbtx
+      #|let answer = 42
+      #|```
+    ),
+    code_block_renderer=render_tokenized_code_block,
+  )
+  assert_true(mbtx.has_code_block)
+  assert_true(mbtx.html.contains("monaco-tokenized-source"))
+  assert_true(mbtx.html.contains("class=\"mtk3\""))
+  // Same program text, same tokenizer: an mbtx fence is an mbt fence, and
+  // the only extra construct mbtx adds — its `import` block — is already a
+  // MoonBit keyword in that shared tokenizer.
+  assert_eq(mbtx.html, mbt.html)
+}
+
+///|
 test "shared tokenized code override keeps unknown-language source as safe default tokens" {
   let rendered = render_markdown(
     (

@@ -263,3 +263,16 @@ test "extend and var classify as keywords" {
     ),
   )
 }
+
+///|
+test "import classifies as a keyword in script import blocks" {
+  inspect(
+    render_tokens("import { \"moonbitlang/async\" }"),
+    content=(
+      #|0-6 Keyword import
+      #|7-8 Delimiter {
+      #|9-28 String "moonbitlang/async"
+      #|29-30 Delimiter }
+    ),
+  )
+}

@@ -49,6 +49,7 @@ fn markdown_code_language(
   }
   match language {
     "mbt" => "moonbit"
+    "mbtx" => "moonbit"
     "js" => "javascript"
     "ts" => "typescript"
     _ => language

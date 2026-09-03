@@ -83,6 +83,7 @@ test "infers language ids from source names" {
   assert_eq(@workspace.infer_language_id("src\\moon.mod"), "moonbit-config")
   assert_eq(@workspace.infer_language_id("main.mbt"), "moonbit")
   assert_eq(@workspace.infer_language_id("README.mbt.md"), "moonbit")
+  assert_eq(@workspace.infer_language_id("run.mbtx"), "moonbit")
   assert_eq(@workspace.infer_language_id("main.js"), "javascript")
   assert_eq(@workspace.infer_language_id("main.mjs"), "javascript")
   assert_eq(@workspace.infer_language_id("main.ts"), "typescript")
