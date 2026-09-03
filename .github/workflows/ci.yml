@@ -245,7 +245,7 @@ jobs:
   check-windows:
     name: check (windows, native)
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     permissions:
       contents: read
     defaults:
@@ -325,12 +325,129 @@ jobs:
             ~/.proton/helpers
           key: ${{ steps.cef-cache.outputs.cache-primary-key }}
 
-      # Full native test suite: the root module and every workspace member
-      # (editor, desktop, inspect, protocol, workflow). Nothing here
-      # initializes CEF or opens a window, so only the headers are needed.
-      - name: Test native target
-        run: moon test --target native
+      # Keep the full parallel suite as a control for the area probes below.
+      # Verbose mode prints each test executable before it starts, and the
+      # step timeout avoids another hour-long silent runner.
+      - name: Probe full native suite in parallel
+        timeout-minutes: 10
+        run: moon test --target native -v
 
       # The cram suite is POSIX shell (`sh` heredocs, `sed`, `mktemp`); the
       # Linux job owns it. A Windows port would need PowerShell-flavored
       # blocks.
+
+  # Diagnose the hosted-Windows-only native test hang independently of the
+  # full-suite control above. Each area gets its own runner, so a failure or
+  # timeout cannot prevent the remaining areas from reporting. Tests within
+  # an area run sequentially to distinguish a package-local hang from a race
+  # caused by full-workspace parallelism.
+  probe-windows-tests:
+    name: probe windows (${{ matrix.area }})
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - area: 3 - CLI and agent core
+            working-directory: .
+            roots: >-
+              agent agent_explore agent_review agent_runtime agent_session
+              agent_skill agent_subrun agent_subtask agent_worker
+              agent_workflow cli cmd/openseek
+            arguments: ""
+            proton: false
+          - area: 4 - agent tools
+            working-directory: .
+            roots: agent_tool
+            arguments: ""
+            proton: false
+          - area: 5a - root package
+            working-directory: .
+            roots: ""
+            arguments: -p bobzhang/openseek
+            proton: false
+          - area: 5b - miscellaneous root packages
+            working-directory: .
+            roots: >-
+              eval inspect internal jsonrpc prompt protocol scripts testkit
+              viz viz_export cmd/viz_app
+            arguments: ""
+            proton: false
+          - area: 6 - editor module
+            working-directory: editor
+            roots: ""
+            arguments: ""
+            proton: false
+          - area: 7 - desktop member
+            working-directory: desktop
+            roots: ""
+            arguments: ""
+            proton: true
+    steps:
+      - name: Pin Git line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit (stable)
+        run: |
+          Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          "$HOME\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Show MoonBit version
+        run: moon version --all
+
+      - name: Update MoonBit package registry
+        run: moon update
+
+      - name: Resolve pinned Proton version
+        if: ${{ matrix.proton }}
+        id: proton
+        run: |
+          $version = (Select-String -Path desktop/moon.mod -Pattern '"moonbit-community/proton@([^"]*)"').Matches[0].Groups[1].Value
+          if (-not $version) { throw "proton version not found in desktop/moon.mod" }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Restore Proton runtime
+        if: ${{ matrix.proton }}
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
+
+      - name: Assemble Proton CEF runtime
+        if: ${{ matrix.proton }}
+        run: >-
+          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
+          cef setup
+
+      - name: Test ${{ matrix.area }} sequentially
+        working-directory: ${{ matrix.working-directory }}
+        timeout-minutes: 10
+        run: |
+          $roots = '${{ matrix.roots }}'.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)
+          if ($roots.Length -gt 0) {
+            $packageDirs = git ls-files -- '*/moon.pkg' |
+              ForEach-Object { $_ -replace '/moon\.pkg$', '' } |
+              Where-Object {
+                $dir = $_
+                $roots.Where({ $dir -eq $_ -or $dir.StartsWith("$_/") }).Count -gt 0
+              }
+            if ($packageDirs.Count -eq 0) {
+              throw "no MoonBit packages found for roots: $roots"
+            }
+            moon test --target native --no-parallelize -v $packageDirs
+          } else {
+            moon test --target native --no-parallelize -v ${{ matrix.arguments }}
+          }
