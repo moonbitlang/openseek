@@ -76,12 +76,12 @@ pub fn GoalStanding::equal(Self, Self) -> Bool
 pub fn GoalStanding::not_equal(Self, Self) -> Bool
 
 pub(all) enum ItemKind {
-  User
-  Assistant(reasoning~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool)
-  Answer
-  Failure
-  Notice(label~ : String, brief~ : String?, is_error~ : Bool)
-  Summary
+  User(String)
+  Assistant(reasoning~ : String?, prose~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool)
+  Answer(String)
+  Failure(String)
+  Notice(label~ : String, brief~ : String?, is_error~ : Bool, body~ : String?)
+  Summary(String)
 } derive(Eq)
 pub fn ItemKind::equal(Self, Self) -> Bool
 pub fn ItemKind::not_equal(Self, Self) -> Bool
@@ -114,22 +114,26 @@ pub(all) struct ToolCall {
   call_id : String
   name : String
   arguments : String?
-  has_result : Bool
-  is_error : Bool
-  brief : String?
-  content : String
+  outcome : ToolOutcome
 } derive(Eq)
 pub fn ToolCall::equal(Self, Self) -> Bool
 pub fn ToolCall::not_equal(Self, Self) -> Bool
 
+pub(all) enum ToolOutcome {
+  Pending(output~ : String?)
+  Done(content~ : String, is_error~ : Bool, brief~ : String?)
+} derive(Eq)
+pub fn ToolOutcome::equal(Self, Self) -> Bool
+pub fn ToolOutcome::not_equal(Self, Self) -> Bool
+
 pub(all) struct TranscriptItem {
   kind : ItemKind
-  content : String
   ts : Double?
   sequence : Int?
 } derive(Eq)
 pub fn TranscriptItem::equal(Self, Self) -> Bool
 pub fn TranscriptItem::not_equal(Self, Self) -> Bool
+pub fn TranscriptItem::text(Self) -> String?
 
 // Type aliases
 

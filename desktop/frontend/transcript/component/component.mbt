@@ -669,7 +669,7 @@ test "local pinned transitions are pure" {
       ..input,
       items: [
         {
-          item: { kind: User, content: "new turn", ts: None, sequence: None, },
+          item: { kind: User("new turn"), ts: None, sequence: None, },
           identity: "l0",
         },
       ],

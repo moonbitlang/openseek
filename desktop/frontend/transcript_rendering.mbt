@@ -84,18 +84,28 @@ test "transcript row identities key by event sequence" {
   let conv = {
     ..test_conversation(),
     messages: [
-      { kind: User, content: "question", ts: None, sequence: Some(41), },
+      { kind: User("question"), ts: None, sequence: Some(41), },
       {
-        kind: Assistant(reasoning=None, calls=[], replay=false, finished=false),
-        content: "answer",
+        kind: Assistant(
+          reasoning=None,
+          prose=Some("answer"),
+          calls=[],
+          replay=false,
+          finished=false,
+        ),
         ts: None,
         sequence: Some(42),
       },
       // A fixture from before events carried sequences falls back to its
       // position, which cannot collide with any `s<n>` key.
       {
-        kind: Assistant(reasoning=None, calls=[], replay=false, finished=false),
-        content: "old",
+        kind: Assistant(
+          reasoning=None,
+          prose=Some("old"),
+          calls=[],
+          replay=false,
+          finished=false,
+        ),
         ts: None,
         sequence: None,
       },

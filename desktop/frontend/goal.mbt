@@ -1157,9 +1157,7 @@ test "a goal on an unbound worktree conversation creates the worktree first" {
   assert_true(
     {
       ..unbound,
-      messages: [
-        { kind: User, content: "already talking", ts: None, sequence: None, },
-      ],
+      messages: [{ kind: User("already talking"), ts: None, sequence: None, }],
     }.goal_creates_worktree()
     is None,
   )

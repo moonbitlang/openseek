@@ -13,10 +13,11 @@ fn plan_call(
     call_id: id,
     name: "plan",
     arguments: Some(arguments),
-    has_result,
-    is_error,
-    brief: None,
-    content: "",
+    outcome: if has_result {
+      Done(content="", is_error~, brief=None)
+    } else {
+      Pending(output=None)
+    },
   }
 }
 
@@ -28,10 +29,7 @@ fn unpaired_result() -> @transcript.ToolCall {
     call_id: "c9",
     name: "plan",
     arguments: None,
-    has_result: true,
-    is_error: false,
-    brief: None,
-    content: "Plan updated.",
+    outcome: Done(content="Plan updated.", is_error=false, brief=None),
   }
 }
 
@@ -129,10 +127,7 @@ test "classify names every state a plan call can be observed in" {
       call_id: "c1",
       name: "shell",
       arguments: Some("{}"),
-      has_result: true,
-      is_error: false,
-      brief: None,
-      content: "",
+      outcome: Done(content="", is_error=false, brief=None),
     })
     is None,
   )

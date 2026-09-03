@@ -26,7 +26,7 @@ fn assistant_view(
   calls? : Array[@transcript.ToolCall] = [],
   sequence? : Int,
   ts? : Double,
-  step_label? : String = "",
+  step_label? : String,
   assistant_name? : String = "OpenSeek",
   finished? : Bool = false,
   live? : Bool = false,
@@ -41,8 +41,8 @@ fn assistant_view(
   // nothing variable-width sits between its entries and their anchor.
   let header : Array[@html.Html] = []
   let stamp = step_stamp(ts?)
-  if !step_label.is_empty() {
-    header.push(@html.span(class="activity-step", step_label))
+  if step_label is Some(label) {
+    header.push(@html.span(class="activity-step", label))
     // A real space, not a CSS margin, and only when the instant follows it: the
     // gap has to exist in the text as well, or the accessible name and anything
     // copied out of the row read "#1Committed 14:32:10".
@@ -145,7 +145,7 @@ fn notice_view(
   label : String,
   brief : String?,
   is_error : Bool,
-  content : String,
+  body : String?,
   ts? : Double,
   sequence? : Int,
 ) -> @html.Html {
@@ -153,16 +153,16 @@ fn notice_view(
   if step_stamp(ts?) is Some(stamp) {
     rows.push(@html.div(class="activity-heading", [stamp]))
   }
-  let call : @transcript.ToolCall = {
-    call_id: "",
-    name: label,
-    arguments: None,
-    has_result: true,
-    is_error,
-    brief,
-    content,
-  }
-  rows.push(@html.div(class="activity-work", tool_run_views([call], sequence?)))
+  let row = result_row_view(
+    label,
+    None,
+    pending=false,
+    is_error~,
+    brief~,
+    body,
+    tool_call_tabs_key(label, sequence),
+  )
+  rows.push(@html.div(class="activity-work", { "notice": row }))
   @html.div(class="activity-row", rows)
 }
 
@@ -226,8 +226,7 @@ fn tool_run_row_key(
   index : Int,
   side : String,
 ) -> String {
-  let identity = if call.call_id.is_empty() { call.name } else { call.call_id }
-  "\{side}\u{0}\{identity}\u{0}\{index}"
+  "\{side}\u{0}\{call.call_id}\u{0}\{index}"
 }
 
 ///|
@@ -263,11 +262,14 @@ fn subrun_chip(child : String, open : (String) -> @cmd.Cmd) -> @html.Html {
 
 ///|
 /// A completed result always gets its own row, including an empty one. Codex
-/// command items can also accumulate output while still in progress; surface
-/// that stream immediately, but let `has_result` keep the row labelled pending
-/// until the completed item arrives.
+/// command items can also stream output while still in progress; surface that
+/// stream immediately, with the row still labelled pending until the
+/// completed item arrives.
 fn tool_result_row_is_visible(call : @transcript.ToolCall) -> Bool {
-  call.has_result || !call.content.is_blank()
+  match call.outcome {
+    Done(..) => true
+    Pending(output~) => output is Some(_)
+  }
 }
 
 ///|
@@ -281,8 +283,11 @@ fn tool_request_view(
 ) -> @html.Html {
   guard call.arguments is Some(arguments) else { return @html.nothing }
   let name = call.name
-  let brief = call.brief
-  let is_error = call.is_error
+  // A pending call has no result to be wrong about, and no brief yet.
+  let (is_error, brief) = match call.outcome {
+    Done(is_error~, brief~, ..) => (is_error, brief)
+    Pending(..) => (false, None)
+  }
   let label = if brief is Some(brief) && !brief.is_blank() {
     brief
   } else {
@@ -375,21 +380,62 @@ fn tool_result_view(
   sequence? : Int,
   subrun? : SubrunLink,
 ) -> @html.Html {
-  let name = call.name
-  let arguments = call.arguments
-  let has_result = call.has_result
-  let is_error = call.is_error
-  let brief = call.brief
-  let label = match (arguments, brief, has_result) {
+  let key = tool_call_tabs_key(call.call_id, sequence)
+  match call.outcome {
+    Pending(output~) =>
+      result_row_view(
+        call.name,
+        call.arguments,
+        pending=true,
+        is_error=false,
+        brief=None,
+        output,
+        key,
+        subrun?,
+      )
+    Done(content~, is_error~, brief~) =>
+      result_row_view(
+        call.name,
+        call.arguments,
+        pending=false,
+        is_error~,
+        brief~,
+        // An empty result still gets its row; it just has nothing to expand.
+        if content.is_blank() {
+          None
+        } else {
+          Some(content)
+        },
+        key,
+        subrun?,
+      )
+  }
+}
+
+///|
+/// The result row itself: a tool result's, or a runtime notice's, which wears
+/// the same compact completed-result shape. `output` is the body the row
+/// expands to, when there is one.
+fn result_row_view(
+  name : String,
+  arguments : String?,
+  pending~ : Bool,
+  is_error~ : Bool,
+  brief~ : String?,
+  output : String?,
+  key : String,
+  subrun? : SubrunLink,
+) -> @html.Html {
+  let label = match (arguments, brief, pending) {
     (None, Some(brief), _) if !brief.is_blank() => brief
     (None, _, _) => name
-    (_, _, false) => "Tool output · \{name}"
+    (_, _, true) => "Tool output · \{name}"
     _ if is_error => "Tool error · \{name}"
     _ => "Tool result · \{name}"
   }
   let error_class = (if is_error { " error" } else { "" }) +
     failure_stage_class(name, brief, is_error, arguments)
-  let pending_class = if has_result { "" } else { " pending" }
+  let pending_class = if pending { " pending" } else { "" }
   let line : Array[@html.Html] = [
     @html.span(class="tool-flow", "←"),
     @html.span(class="tool-result-text", label),
@@ -420,9 +466,8 @@ fn tool_result_view(
       body.push(subrun_chip(child, link.open))
     }
   }
-  if !call.content.is_blank() {
-    let key = tool_call_tabs_key(call.call_id, sequence)
-    let output = tool_output_tabs(name, arguments, call.content)
+  if output is Some(text) {
+    let output = tool_output_tabs(name, arguments, text)
     if output is [tab] {
       body.push(
         @html.div(class="tool-call-section", [
@@ -760,57 +805,52 @@ fn turn_rule_view(ts? : Double) -> @html.Html {
 ///|
 /// One transcript item as its own stream child. `step_label` is the ordinal an
 /// OpenSeek provider response carries ("#3"); every other source and kind
-/// leaves it empty.
+/// has none.
 fn transcript_item_view(
   item : @transcript.TranscriptItem,
   on_open : (String) -> @cmd.Cmd,
   anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
   assistant_name? : String = "OpenSeek",
-  step_label? : String = "",
+  step_label? : String,
   subrun? : SubrunLink,
 ) -> @html.Html {
   match item.kind {
-    User => user_message_view(item.content, anchor?, on_jump?)
-    Assistant(reasoning~, calls~, replay=_, finished~) =>
+    User(prompt) => user_message_view(prompt, anchor?, on_jump?)
+    Assistant(reasoning~, prose~, calls~, replay=_, finished~) =>
       assistant_view(
         on_open,
-        prose?=if item.content.is_empty() { None } else { Some(item.content) },
+        prose?,
         reasoning?,
         calls~,
         sequence?=item.sequence,
         ts?=item.ts,
-        step_label~,
+        step_label?,
         assistant_name~,
         finished~,
         subrun?,
       )
-    Answer =>
+    Answer(text) =>
       assistant_message_view(
-        item.content,
+        text,
         on_open,
         assistant_name,
         is_danger=false,
         completed_at?=item.ts,
         show_actions=true,
       )
-    Failure =>
-      assistant_message_view(
-        item.content,
-        on_open,
-        assistant_name,
-        is_danger=true,
-      )
-    Notice(label~, brief~, is_error~) =>
+    Failure(text) =>
+      assistant_message_view(text, on_open, assistant_name, is_danger=true)
+    Notice(label~, brief~, is_error~, body~) =>
       notice_view(
         label,
         brief,
         is_error,
-        item.content,
+        body,
         ts?=item.ts,
         sequence?=item.sequence,
       )
-    Summary => summary_card_view(item.content, on_open)
+    Summary(text) => summary_card_view(text, on_open)
   }
 }
 

@@ -42,10 +42,10 @@ fn SelectMenu::setting_control(
 fn conversation_title(conv : Conversation) -> String {
   // Titles follow the committed user transcript.
   for item in conv.messages {
-    if item.kind is User {
+    if item.kind is User(prompt) {
       // A prompt sent with chips titles by what was typed (or, chips alone,
       // by their labels) — never by the raw `<user_mentions>` envelope.
-      let title = user_display_text(item.content).trim().to_owned()
+      let title = user_display_text(prompt).trim().to_owned()
       if !title.is_empty() {
         return title
       }

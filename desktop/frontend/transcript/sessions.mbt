@@ -338,7 +338,7 @@ pub fn apply_session_item(
     @desktop_protocol.User(payload) => {
       let content = payload.content.trim().to_owned()
       if !content.is_empty() {
-        items.push({ kind: User, content, ts, sequence, })
+        items.push({ kind: User(content), ts, sequence, })
       }
     }
     @desktop_protocol.Assistant(payload) => {
@@ -354,7 +354,12 @@ pub fn apply_session_item(
       } else {
         None
       }
-      let content = payload.content.trim().to_owned()
+      // The store writes an empty string for a response that said nothing.
+      let prose = if payload.content.is_blank() {
+        None
+      } else {
+        Some(payload.content.trim().to_owned())
+      }
       // Tool calls stay in the exact order the model emitted them. Their
       // results arrive as later durable events and fill them in by id.
       let calls : Array[ToolCall] = []
@@ -367,16 +372,18 @@ pub fn apply_session_item(
             call.name
           },
           arguments: Some(call.arguments),
-          has_result: false,
-          is_error: false,
-          brief: None,
-          content: "",
+          outcome: Pending(output=None),
         })
       }
-      if reasoning is Some(_) || !content.is_empty() || !calls.is_empty() {
+      if reasoning is Some(_) || prose is Some(_) || !calls.is_empty() {
         items.push({
-          kind: Assistant(reasoning~, calls~, replay=is_replay, finished=false),
-          content,
+          kind: Assistant(
+            reasoning~,
+            prose~,
+            calls~,
+            replay=is_replay,
+            finished=false,
+          ),
           ts,
           sequence,
         })
@@ -391,11 +398,11 @@ pub fn apply_session_item(
       while index > 0 {
         index -= 1
         guard items[index].kind
-          is Assistant(reasoning~, calls~, replay~, finished~) else {
+          is Assistant(reasoning~, prose~, calls~, replay~, finished~) else {
           continue
         }
         guard calls.search_by(call => {
-            call.call_id == payload.tool_call_id && !call.has_result
+            call.call_id == payload.tool_call_id && call.outcome is Pending(..)
           })
           is Some(position) else {
           continue
@@ -411,14 +418,15 @@ pub fn apply_session_item(
           } else {
             payload.tool_name
           },
-          has_result: true,
-          is_error: payload.is_error,
-          brief: payload.brief,
-          content: payload.content,
+          outcome: Done(
+            content=payload.content,
+            is_error=payload.is_error,
+            brief=payload.brief,
+          ),
         }
         items[index] = {
           ..items[index],
-          kind: Assistant(reasoning~, calls=filled, replay~, finished~),
+          kind: Assistant(reasoning~, prose~, calls=filled, replay~, finished~),
         }
         updated_existing = true
         break
@@ -437,8 +445,8 @@ pub fn apply_session_item(
                 label="goal",
                 brief=Some(goal_brief("Goal set", text)),
                 is_error=false,
+                body=goal_body(text),
               ),
-              content: goal_body(text),
               ts,
               sequence,
             })
@@ -448,8 +456,8 @@ pub fn apply_session_item(
                 label="goal",
                 brief=Some("Goal cleared"),
                 is_error=false,
+                body=None,
               ),
-              content: "",
               ts,
               sequence,
             })
@@ -459,8 +467,8 @@ pub fn apply_session_item(
                 label="goal",
                 brief=Some(goal_brief("Goal blocked", reason)),
                 is_error=true,
+                body=goal_body(reason),
               ),
-              content: goal_body(reason),
               ts,
               sequence,
             })
@@ -470,8 +478,8 @@ pub fn apply_session_item(
                 label="goal",
                 brief=Some("Goal resumed"),
                 is_error=false,
+                body=None,
               ),
-              content: "",
               ts,
               sequence,
             })
@@ -484,8 +492,12 @@ pub fn apply_session_item(
                 // Runtime notices keep the compact completed-result row used
                 // by the old projection, but the generic label no longer
                 // claims every background event came from `moon_check`.
-                kind: Notice(label="runtime notice", brief=None, is_error=false),
-                content: payload.content,
+                kind: Notice(
+                  label="runtime notice",
+                  brief=None,
+                  is_error=false,
+                  body=Some(payload.content),
+                ),
                 ts,
                 sequence,
               })
@@ -495,7 +507,7 @@ pub fn apply_session_item(
     @desktop_protocol.Summary(payload) => {
       let content = payload.content.trim().to_owned()
       if !content.is_empty() {
-        items.push({ kind: Summary, content, ts, sequence, })
+        items.push({ kind: Summary(content), ts, sequence, })
       }
     }
     @desktop_protocol.Terminal(terminal) =>
@@ -536,29 +548,42 @@ fn SessionTerminalProjection::append_to(
       if !message.is_empty() &&
         items is [.., last] &&
         last.kind
-        is Assistant(reasoning~, calls=[], replay=false, finished=false) &&
-        last.content == message {
+        is Assistant(
+          reasoning~,
+          prose=Some(prose),
+          calls=[],
+          replay=false,
+          finished=false
+        ) &&
+        prose == message {
         items[items.length() - 1] = {
           ..last,
-          kind: Assistant(reasoning~, calls=[], replay=false, finished=true),
+          kind: Assistant(
+            reasoning~,
+            prose=Some(prose),
+            calls=[],
+            replay=false,
+            finished=true,
+          ),
         }
         true
       } else {
         if !message.is_empty() {
           // A differing terminal message, such as a completion-tool answer,
           // remains a new final bubble.
-          items.push({ kind: Answer, content: message, ts, sequence, })
+          items.push({ kind: Answer(message), ts, sequence, })
         }
         false
       }
     "aborted" => {
       items.push({
-        kind: Failure,
-        content: if message.is_empty() {
-          "aborted"
-        } else {
-          "aborted: \{message}"
-        },
+        kind: Failure(
+          if message.is_empty() {
+            "aborted"
+          } else {
+            "aborted: \{message}"
+          },
+        ),
         ts,
         sequence,
       })
@@ -566,12 +591,13 @@ fn SessionTerminalProjection::append_to(
     }
     "interrupted" => {
       items.push({
-        kind: Failure,
-        content: if message.is_empty() {
-          "cancelled"
-        } else {
-          "cancelled: \{message}"
-        },
+        kind: Failure(
+          if message.is_empty() {
+            "cancelled"
+          } else {
+            "cancelled: \{message}"
+          },
+        ),
         ts,
         sequence,
       })
@@ -579,12 +605,7 @@ fn SessionTerminalProjection::append_to(
     }
     "failed" => {
       items.push({
-        kind: Failure,
-        content: if message.is_empty() {
-          "failed"
-        } else {
-          message
-        },
+        kind: Failure(if message.is_empty() { "failed" } else { message }),
         ts,
         sequence,
       })
@@ -606,13 +627,13 @@ fn goal_brief(label : String, text : String) -> String {
 }
 
 ///|
-/// A single-line goal is fully carried by its brief — an empty body keeps
-/// the card a plain label instead of an expandable fold around a duplicate.
-fn goal_body(text : String) -> String {
+/// A single-line goal is fully carried by its brief — with no body the card
+/// stays a plain label instead of an expandable fold around a duplicate.
+fn goal_body(text : String) -> String? {
   if text.contains("\n") {
-    text
+    Some(text)
   } else {
-    ""
+    None
   }
 }
 
@@ -925,8 +946,7 @@ test "projected rows carry their event's stamp, tool rows the call's own" {
   guard items[1].kind is Assistant(calls=[call], ..) else {
     fail("expected the response with its one call")
   }
-  assert_true(call.has_result)
-  inspect(call.content, content="out")
+  assert_true(call.outcome is Done(content="out", ..))
   assert_true(items[1].ts is Some(1781144352000))
   assert_true(items[1].sequence is Some(2))
 }
@@ -960,8 +980,8 @@ test "session load keeps unknown items without hiding known transcript" {
   let view = session_from_reply(reply)
   inspect(view.watermark, content="3")
   inspect(view.items.length(), content="2")
-  inspect(view.items[0].content, content="question")
-  inspect(view.items[1].content, content="answer")
+  assert_eq(view.items[0].text(), Some("question"))
+  assert_eq(view.items[1].text(), Some("answer"))
 }
 
 ///|
@@ -986,14 +1006,20 @@ test "transcript mapping replays a finished conversation" {
   let items = transcript_from_session(session_reply(events))
   // The result at sequence 2 answers no recorded call and is dropped.
   inspect(items.length(), content="2")
-  guard items[0].kind is User else { fail("expected user item") }
-  inspect(items[0].content, content="question")
+  guard items[0].kind is User(_) else { fail("expected user item") }
+  assert_eq(items[0].text(), Some("question"))
   guard items[1].kind
-    is Assistant(reasoning=Some(thought), calls=[], replay=false, finished=true) else {
+    is Assistant(
+      reasoning=Some(thought),
+      prose=Some(_),
+      calls=[],
+      replay=false,
+      finished=true
+    ) else {
     fail("expected the terminal-confirmed answer with its reasoning")
   }
   inspect(thought, content="thought")
-  inspect(items[1].content, content="answer")
+  assert_eq(items[1].text(), Some("answer"))
   // The confirming terminal leaves the response its own stamp and sequence.
   assert_true(items[1].ts is Some(1000))
   assert_true(items[1].sequence is Some(3))
@@ -1012,12 +1038,12 @@ test "a finished turn marks only its last assistant message as final" {
   guard items[1].kind is Assistant(calls=[call], finished=false, ..) else {
     fail("expected tool-prefacing narration to stay non-final")
   }
-  inspect(items[1].content, content="I will inspect it.")
-  assert_true(call.has_result)
+  assert_eq(items[1].text(), Some("I will inspect it."))
+  assert_true(call.outcome is Done(..))
   guard items[2].kind is Assistant(calls=[], finished=true, ..) else {
     fail("expected only the last answer to be terminal-confirmed")
   }
-  inspect(items[2].content, content="Done.")
+  assert_eq(items[2].text(), Some("Done."))
   assert_true(items[2].ts is Some(2000))
 }
 
@@ -1030,7 +1056,7 @@ test "checkpoint assistant provenance projects without duplicate reasoning" {
   guard items[0].kind is Assistant(reasoning=None, replay=true, ..) else {
     fail("expected a checkpoint replay without its reasoning")
   }
-  inspect(items[0].content, content="kept answer")
+  assert_eq(items[0].text(), Some("kept answer"))
 }
 
 ///|
@@ -1048,16 +1074,21 @@ test "tool results fill calls by id without changing call order" {
   inspect(read.call_id, content="c1")
   inspect(read.name, content="read")
   assert_true(read.arguments is Some("{\"path\":\"moon.mod\"}"))
-  assert_true(read.has_result)
-  assert_false(read.is_error)
-  assert_true(read.brief is Some("read moon.mod"))
-  inspect(read.content, content="module contents")
+  assert_true(
+    read.outcome
+    is Done(
+      content="module contents",
+      is_error=false,
+      brief=Some("read moon.mod")
+    ),
+  )
   inspect(shell.call_id, content="c2")
   inspect(shell.name, content="shell")
   assert_true(shell.arguments is Some("{\"cmd\":\"moon test\"}"))
-  assert_true(shell.has_result)
-  assert_true(shell.brief is Some("ran moon test"))
-  inspect(shell.content, content="tests passed")
+  assert_true(
+    shell.outcome
+    is Done(content="tests passed", is_error=false, brief=Some("ran moon test")),
+  )
 }
 
 ///|
@@ -1074,8 +1105,7 @@ test "a result no recorded call is waiting for changes nothing" {
   guard items[0].kind is Assistant(calls=[call], ..) else {
     fail("expected the recorded call with its first result")
   }
-  assert_true(call.has_result)
-  inspect(call.content, content="one")
+  assert_true(call.outcome is Done(content="one", ..))
 }
 
 ///|
@@ -1095,10 +1125,10 @@ test "transcript mapping renders non-finished terminals as error bubbles" {
     #|{"sequence":3,"item":{"kind":"terminal","payload":{"kind":"failed","message":"engine error"}}}
   let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="3")
-  guard items[0].kind is Failure else { fail("expected error bubble") }
-  inspect(items[0].content, content="cancelled")
-  inspect(items[1].content, content="aborted: the agent gave up")
-  inspect(items[2].content, content="engine error")
+  guard items[0].kind is Failure(_) else { fail("expected error bubble") }
+  assert_eq(items[0].text(), Some("cancelled"))
+  assert_eq(items[1].text(), Some("aborted: the agent gave up"))
+  assert_eq(items[2].text(), Some("engine error"))
 }
 
 ///|
@@ -1109,12 +1139,12 @@ test "transcript mapping keeps summaries and background notices" {
     #|{"sequence":3,"item":{"kind":"runtime_notice","payload":{"content":""}}}
   let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="2")
-  guard items[0].kind is Summary else { fail("expected summary") }
+  guard items[0].kind is Summary(_) else { fail("expected summary") }
   guard items[1].kind
-    is Notice(label="runtime notice", brief=None, is_error=false) else {
+    is Notice(label="runtime notice", brief=None, is_error=false, ..) else {
     fail("expected runtime notice row")
   }
-  inspect(items[1].content, content="background job bg-1 finished (exit=0)")
+  assert_eq(items[1].text(), Some("background job bg-1 finished (exit=0)"))
 }
 
 ///|
@@ -1127,14 +1157,14 @@ test "transcript mapping renders goal markers as cards and reduces the standing 
   let view = session_from_reply(session_reply(events))
   inspect(view.items.length(), content="2")
   guard view.items[0].kind
-    is Notice(label="goal", is_error=false, brief=Some(set_brief)) else {
+    is Notice(label="goal", is_error=false, brief=Some(set_brief), ..) else {
     fail("expected the set card")
   }
   inspect(set_brief, content="Goal set: ship the feature")
   // A single-line goal is fully carried by its brief; no expandable body.
-  inspect(view.items[0].content, content="")
+  assert_true(view.items[0].text() is None)
   guard view.items[1].kind
-    is Notice(label="goal", is_error=true, brief=Some(blocked_brief)) else {
+    is Notice(label="goal", is_error=true, brief=Some(blocked_brief), ..) else {
     fail("expected the blocked card")
   }
   inspect(blocked_brief, content="Goal blocked: needs a decision")
@@ -1166,10 +1196,10 @@ test "transcript mapping drops the plan reminder instead of carding it" {
   let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="1")
   guard items[0].kind
-    is Notice(label="runtime notice", brief=None, is_error=false) else {
+    is Notice(label="runtime notice", brief=None, is_error=false, ..) else {
     fail("expected only the runtime notice row")
   }
-  inspect(items[0].content, content="background job bg-2 finished (exit=1)")
+  assert_eq(items[0].text(), Some("background job bg-2 finished (exit=1)"))
 }
 
 ///|
@@ -1184,8 +1214,11 @@ test "a cleared goal leaves cards but no standing goal" {
   }
   // A multi-line goal folds to its first line and expands to the full text.
   inspect(set_brief, content="Goal set: line one …")
+  guard view.items[0].text() is Some(body) else {
+    fail("expected the full goal text as the card's body")
+  }
   inspect(
-    view.items[0].content,
+    body,
     content=(
       #|line one
       #|line two
@@ -1205,10 +1238,12 @@ test "transcript mapping replays a context checkpoint and yield guidance" {
     #|{"sequence":2,"item":{"kind":"terminal","payload":{"kind":"finished","message":"[context ceiling] continue in a new turn"}}}
   let items = transcript_from_session(session_reply(events))
   inspect(items.length(), content="2")
-  guard items[0].kind is Summary else { fail("expected checkpoint summary") }
-  inspect(items[0].content, content="checkpoint recap")
-  guard items[1].kind is Answer else { fail("expected context-yield guidance") }
-  inspect(items[1].content, content="[context ceiling] continue in a new turn")
+  guard items[0].kind is Summary(_) else { fail("expected checkpoint summary") }
+  assert_eq(items[0].text(), Some("checkpoint recap"))
+  guard items[1].kind is Answer(_) else {
+    fail("expected context-yield guidance")
+  }
+  assert_eq(items[1].text(), Some("[context ceiling] continue in a new turn"))
 }
 
 ///|

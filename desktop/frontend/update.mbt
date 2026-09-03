@@ -8691,11 +8691,11 @@ test "a later run does not confuse identical historical reasoning for its commit
       {
         kind: Assistant(
           reasoning=Some("shared opening"),
+          prose=Some("older answer"),
           calls=[],
           replay=false,
           finished=false,
         ),
-        content: "older answer",
         ts: None,
         sequence: Some(2),
       },
@@ -8732,11 +8732,11 @@ test "a new model step advances past identical reasoning from the prior step" {
       {
         kind: Assistant(
           reasoning=Some("shared opening"),
+          prose=None,
           calls=[],
           replay=false,
           finished=false,
         ),
-        content: "",
         ts: None,
         sequence: Some(2),
       },
@@ -8968,15 +8968,15 @@ test "finished run reloads the named durable session for an old host" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "question", ts: None, sequence: None, },
+        { kind: User("question"), ts: None, sequence: None, },
         {
           kind: Assistant(
             reasoning=None,
+            prose=Some("done"),
             calls=[],
             replay=false,
             finished=false,
           ),
-          content: "done",
           ts: None,
           sequence: None,
         },
@@ -8987,7 +8987,7 @@ test "finished run reloads the named durable session for an old host" {
     finished,
   )
   inspect(loaded.active().messages.length(), content="2")
-  inspect(loaded.active().messages[1].content, content="done")
+  assert_eq(loaded.active().messages[1].text(), Some("done"))
   inspect(loaded.active().watermark, content="3")
   assert_true(loaded.active().sync is Synced)
 }
@@ -9172,7 +9172,7 @@ test "session rotation activates a fresh conversation, keeping the old one" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..running_conversation(),
-    messages: [{ kind: User, content: "hi", ts: None, sequence: None, }],
+    messages: [{ kind: User("hi"), ts: None, sequence: None, }],
   })
   let (_, next) = update(
     dispatch,
@@ -9652,7 +9652,7 @@ test "sessions failure pops a toast without touching the transcript" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "hi", ts: None, sequence: None, }],
+    messages: [{ kind: User("hi"), ts: None, sequence: None, }],
   })
   let (_, next) = update_dev(dispatch, SessionsFailed("engine exploded"), model)
   inspect(next.notifications.length(), content="1")
@@ -9685,9 +9685,7 @@ test "open session keeps live state on screen while re-reading the store" {
       @interop.ChannelId::Local.test_project(),
     ),
     run: Open(run_id="r9", stage=Opened),
-    messages: [
-      { kind: User, content: "background task", ts: None, sequence: None, },
-    ],
+    messages: [{ kind: User("background task"), ts: None, sequence: None, }],
     turn: {
       ..empty_conversation(
         @interop.ChannelId::Local,
@@ -9731,7 +9729,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "kept", ts: None, sequence: None, }],
+    messages: [{ kind: User("kept"), ts: None, sequence: None, }],
     watermark: 1,
   })
   let (_, refreshing) = update_dev(dispatch, BridgeReady, model)
@@ -10144,7 +10142,7 @@ test "open session tracks the latest load and ignores stale replies" {
     is Some({ channel: Local, session: "desktop-b", }),
   )
   let a_items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "old selection", ts: None, sequence: None, },
+    { kind: User("old selection"), ts: None, sequence: None, },
   ]
   let (_, after_a) = update_dev(
     dispatch,
@@ -10164,7 +10162,7 @@ test "open session tracks the latest load and ignores stale replies" {
     is Some({ channel: Local, session: "desktop-b", }),
   )
   let b_items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "latest selection", ts: None, sequence: None, },
+    { kind: User("latest selection"), ts: None, sequence: None, },
   ]
   let (_, after_b) = update_dev(
     dispatch,
@@ -10180,7 +10178,7 @@ test "open session tracks the latest load and ignores stale replies" {
   )
   inspect(after_b.active_session, content="desktop-b")
   assert_true(after_b.loading_conversation is None)
-  inspect(after_b.active().messages[0].content, content="latest selection")
+  assert_eq(after_b.active().messages[0].text(), Some("latest selection"))
 }
 
 ///|
@@ -10249,11 +10247,11 @@ test "same-id session loads are fenced by channel owner" {
       "shared",
       @interop.ChannelId::Local.test_project(),
     ),
-    messages: [{ kind: User, content: "local", ts: None, sequence: None, }],
+    messages: [{ kind: User("local"), ts: None, sequence: None, }],
   }
   let remote_conv = {
     ..empty_conversation(remote, "shared", remote.test_project()),
-    messages: [{ kind: User, content: "remote", ts: None, sequence: None, }],
+    messages: [{ kind: User("remote"), ts: None, sequence: None, }],
   }
   let model = {
     ..test_model(),
@@ -10290,11 +10288,11 @@ test "same-id session loads are fenced by channel owner" {
           {
             kind: Assistant(
               reasoning=None,
+              prose=Some("remote loaded"),
               calls=[],
               replay=false,
               finished=false,
             ),
-            content: "remote loaded",
             ts: None,
             sequence: None,
           },
@@ -10306,7 +10304,7 @@ test "same-id session loads are fenced by channel owner" {
     loading_local,
   )
   assert_true(remote_reply.focused is Local)
-  inspect(remote_reply.active().messages[0].content, content="local")
+  assert_eq(remote_reply.active().messages[0].text(), Some("local"))
   assert_true(
     remote_reply.loading_conversation
     is Some({ channel: Local, session: "shared", }),
@@ -10314,7 +10312,7 @@ test "same-id session loads are fenced by channel owner" {
   guard remote_reply.find_conversation(remote, "shared") is Some(loaded) else {
     fail("remote conversation disappeared")
   }
-  inspect(loaded.messages[0].content, content="remote loaded")
+  assert_eq(loaded.messages[0].text(), Some("remote loaded"))
 }
 
 ///|
@@ -10364,11 +10362,11 @@ test "reselecting a synced active session reloads idle external writes" {
         {
           kind: Assistant(
             reasoning=None,
+            prose=Some("written elsewhere"),
             calls=[],
             replay=false,
             finished=false,
           ),
-          content: "written elsewhere",
           ts: None,
           sequence: None,
         },
@@ -10379,7 +10377,7 @@ test "reselecting a synced active session reloads idle external writes" {
     still_single_flight,
   )
   inspect(loaded.active().messages.length(), content="1")
-  inspect(loaded.active().messages[0].content, content="written elsewhere")
+  assert_eq(loaded.active().messages[0].text(), Some("written elsewhere"))
   inspect(loaded.active().watermark, content="1")
   assert_true(loaded.active().sync is Synced)
 }
@@ -10444,9 +10442,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
       goal=None,
       goal_markers=[],
       session="desktop-pruned",
-      items=[
-        { kind: User, content: "late old snapshot", ts: None, sequence: None, },
-      ],
+      items=[{ kind: User("late old snapshot"), ts: None, sequence: None, }],
       watermark=9,
       generation=1,
     ),
@@ -10469,16 +10465,14 @@ test "pruning and reopening cannot reuse a transcript request token" {
       goal=None,
       goal_markers=[],
       session="desktop-pruned",
-      items=[
-        { kind: User, content: "fresh snapshot", ts: None, sequence: None, },
-      ],
+      items=[{ kind: User("fresh snapshot"), ts: None, sequence: None, }],
       watermark=1,
       generation=2,
     ),
     stale,
   )
   inspect(fresh.active_session, content="desktop-pruned")
-  inspect(fresh.active().messages[0].content, content="fresh snapshot")
+  assert_eq(fresh.active().messages[0].text(), Some("fresh snapshot"))
 }
 
 ///|
@@ -10521,12 +10515,7 @@ test "archive removal and reopening cannot reuse a transcript request token" {
       goal_markers=[],
       session="desktop-archived",
       items=[
-        {
-          kind: User,
-          content: "late archived snapshot",
-          ts: None,
-          sequence: None,
-        },
+        { kind: User("late archived snapshot"), ts: None, sequence: None, },
       ],
       watermark=4,
       generation=1,
@@ -10809,7 +10798,7 @@ test "session loaded swaps the active conversation onto the stored session" {
   let model = test_model()
     .replace_conversation({
       ..test_conversation(),
-      messages: [{ kind: User, content: "old chat", ts: None, sequence: None, }],
+      messages: [{ kind: User("old chat"), ts: None, sequence: None, }],
       turn: {
         ..test_conversation().turn,
         usage_tokens: 42,
@@ -10836,10 +10825,15 @@ test "session loaded swaps the active conversation onto the stored session" {
     model,
   )
   let items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "stored question", ts: None, sequence: None, },
+    { kind: User("stored question"), ts: None, sequence: None, },
     {
-      kind: Assistant(reasoning=None, calls=[], replay=false, finished=false),
-      content: "stored answer",
+      kind: Assistant(
+        reasoning=None,
+        prose=Some("stored answer"),
+        calls=[],
+        replay=false,
+        finished=false,
+      ),
       ts: None,
       sequence: None,
     },
@@ -10870,7 +10864,7 @@ test "session loaded swaps the active conversation onto the stored session" {
   )
   inspect(once.active_session, content="desktop-stored")
   inspect(once.active().messages.length(), content="2")
-  inspect(once.active().messages[0].content, content="stored question")
+  assert_eq(once.active().messages[0].text(), Some("stored question"))
   assert_eq(once.active().turn.streaming_response, None)
   inspect(once.active().turn.usage_tokens, content="0")
   assert_eq(
@@ -10886,7 +10880,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
   let dispatch = test_dispatch()
   let model = running_model().with_listed(["desktop-stored"])
   let items : Array[@transcript.TranscriptItem] = [
-    { kind: User, content: "stored", ts: None, sequence: None, },
+    { kind: User("stored"), ts: None, sequence: None, },
   ]
   // The active conversation runs; loading some other stored session is fine.
   let (_, loading_other) = update(
@@ -10942,7 +10936,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
     loading_same,
   )
   inspect(same.active().messages.length(), content="1")
-  inspect(same.active().messages[0].content, content="stored")
+  assert_eq(same.active().messages[0].text(), Some("stored"))
   inspect(same.active().is_running(), content="true")
   assert_eq(same.active().turn.streaming_response, Some("mid-step"))
 }
@@ -11249,7 +11243,7 @@ test "a repeated started id is idempotent" {
   }
   assert_eq(next.active().turn.streaming_response, Some("current fragment"))
   inspect(next.active().pending_steers.length(), content="1")
-  inspect(next.active().pending_steers[0].content, content="current steer")
+  assert_eq(next.active().pending_steers[0].content, "current steer")
   inspect(next.transcript_request_generation, content="0")
   assert_true(next.active().sync is Synced)
 }
@@ -11424,19 +11418,19 @@ test "an accepted start response opens the run without Started" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "external prompt", ts: None, sequence: None, },
+        { kind: User("external prompt"), ts: None, sequence: None, },
         {
           kind: Assistant(
             reasoning=None,
+            prose=Some("external answer"),
             calls=[],
             replay=false,
             finished=false,
           ),
-          content: "external answer",
           ts: None,
           sequence: None,
         },
-        { kind: User, content: "prompt", ts: None, sequence: None, },
+        { kind: User("prompt"), ts: None, sequence: None, },
       ],
       watermark=4,
       generation=1,
@@ -12073,9 +12067,7 @@ test "a background run finishes without disturbing the conversation on screen" {
       @interop.ChannelId::Local.test_project(),
     ),
     run: Open(run_id="r8", stage=Opened),
-    messages: [
-      { kind: User, content: "background ask", ts: None, sequence: None, },
-    ],
+    messages: [{ kind: User("background ask"), ts: None, sequence: None, }],
   }
   let model = running_model().replace_conversation(second)
   let (_, next) = update_dev(
@@ -12105,7 +12097,7 @@ test "send while running queues a steer instead of a prompt" {
   let (_, twice) = update(dispatch, Send, model)
   inspect(once.active().task, content="")
   inspect(once.active().pending_steers.length(), content="1")
-  inspect(once.active().pending_steers[0].content, content="focus on the tests")
+  assert_eq(once.active().pending_steers[0].content, "focus on the tests")
   // The steer is pending, not part of the transcript yet.
   inspect(once.active().messages.length(), content="0")
   inspect(once.active().is_running(), content="true")
@@ -12278,7 +12270,7 @@ test "a snapshot never settles a local steer by text" {
   let conv = with_pending_steers(
     {
       ..running_conversation(),
-      messages: [{ kind: User, content: "same", ts: None, sequence: None, }],
+      messages: [{ kind: User("same"), ts: None, sequence: None, }],
       watermark: 1,
       sync: test_reloading([]),
     },
@@ -12291,7 +12283,7 @@ test "a snapshot never settles a local steer by text" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "same", ts: None, sequence: None, }],
+      items=[{ kind: User("same"), ts: None, sequence: None, }],
       watermark=1,
       generation=1,
     ),
@@ -12337,7 +12329,7 @@ test "an identical-text settle removes exactly one pending entry" {
     model,
   )
   inspect(next.active().pending_steers.length(), content="1")
-  inspect(next.active().pending_steers[0].content, content="again")
+  assert_eq(next.active().pending_steers[0].content, "again")
   inspect(next.active().pending_steers[0].submission_id, content="test-steer-1")
 }
 
@@ -12513,15 +12505,15 @@ test "a foreign background run schedules one causal read after Started" {
         {
           kind: Assistant(
             reasoning=None,
+            prose=Some("previous answer"),
             calls=[],
             replay=false,
             finished=false,
           ),
-          content: "previous answer",
           ts: None,
           sequence: None,
         },
-        { kind: User, content: "current question", ts: None, sequence: None, },
+        { kind: User("current question"), ts: None, sequence: None, },
       ],
       watermark=4,
       goal=None,
@@ -14717,11 +14709,11 @@ test "switching same-id archived stores fences the first transcript load" {
         {
           kind: Assistant(
             reasoning=None,
+            prose=Some("first store answer"),
             calls=[],
             replay=false,
             finished=false,
           ),
-          content: "first store answer",
           ts: None,
           sequence: Some(1),
         },
@@ -14743,11 +14735,11 @@ test "switching same-id archived stores fences the first transcript load" {
         {
           kind: Assistant(
             reasoning=None,
+            prose=Some("second store answer"),
             calls=[],
             replay=false,
             finished=false,
           ),
-          content: "second store answer",
           ts: None,
           sequence: Some(1),
         },
@@ -14760,9 +14752,9 @@ test "switching same-id archived stores fences the first transcript load" {
     stale_first,
   )
   inspect(loaded_second.active().messages.length(), content="1")
-  inspect(
-    loaded_second.active().messages[0].content,
-    content="second store answer",
+  assert_eq(
+    loaded_second.active().messages[0].text(),
+    Some("second store answer"),
   )
 }
 
@@ -14811,11 +14803,11 @@ test "an archived snapshot stays open across archived-list reconciliation" {
         {
           kind: Assistant(
             reasoning=None,
+            prose=Some("archived answer"),
             calls=[],
             replay=false,
             finished=false,
           ),
-          content: "archived answer",
           ts: None,
           sequence: Some(1),
         },
@@ -14826,11 +14818,11 @@ test "an archived snapshot stays open across archived-list reconciliation" {
     loading,
   )
   assert_true(loaded.active().record is ArchivedRecord)
-  inspect(loaded.active().messages[0].content, content="archived answer")
+  assert_eq(loaded.active().messages[0].text(), Some("archived answer"))
   let (_, reconciled) = update(dispatch, archived_loaded([item]), loaded)
   inspect(reconciled.active_session, content="desktop-archived")
   assert_true(reconciled.active().record is ArchivedRecord)
-  inspect(reconciled.active().messages[0].content, content="archived answer")
+  assert_eq(reconciled.active().messages[0].text(), Some("archived answer"))
 }
 
 ///|
@@ -14846,8 +14838,13 @@ test "unarchiving an open transcript fences its archived snapshot" {
     record: ArchivedRecord,
     messages: [
       {
-        kind: Assistant(reasoning=None, calls=[], replay=false, finished=false),
-        content: "visible archived answer",
+        kind: Assistant(
+          reasoning=None,
+          prose=Some("visible archived answer"),
+          calls=[],
+          replay=false,
+          finished=false,
+        ),
         ts: None,
         sequence: Some(1),
       },
@@ -14884,11 +14881,11 @@ test "unarchiving an open transcript fences its archived snapshot" {
         {
           kind: Assistant(
             reasoning=None,
+            prose=Some("late archived answer"),
             calls=[],
             replay=false,
             finished=false,
           ),
-          content: "late archived answer",
           ts: None,
           sequence: Some(1),
         },
@@ -14899,7 +14896,7 @@ test "unarchiving an open transcript fences its archived snapshot" {
     restoring,
   )
   assert_true(stale.active().record is LiveRecord)
-  inspect(stale.active().messages[0].content, content="visible archived answer")
+  assert_eq(stale.active().messages[0].text(), Some("visible archived answer"))
 }
 
 ///|
@@ -15251,7 +15248,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
   assert_true(
     recreated.messages
     .iter()
-    .any(message => message.content == "new incarnation"),
+    .any(message => message.text() == Some("new incarnation")),
   )
 }
 
@@ -15589,11 +15586,11 @@ test "a background archive removes only its channel's same-id conversation" {
       "shared",
       @interop.ChannelId::Local.test_project(),
     ),
-    messages: [{ kind: User, content: "local", ts: None, sequence: None, }],
+    messages: [{ kind: User("local"), ts: None, sequence: None, }],
   }
   let remote_conv = {
     ..empty_conversation(remote, "shared", remote.test_project()),
-    messages: [{ kind: User, content: "remote", ts: None, sequence: None, }],
+    messages: [{ kind: User("remote"), ts: None, sequence: None, }],
   }
   let model = {
     ..test_model(),
@@ -15623,7 +15620,7 @@ test "a background archive removes only its channel's same-id conversation" {
     is Some(kept) else {
     fail("the focused same-id conversation was removed")
   }
-  inspect(kept.messages[0].content, content="local")
+  assert_eq(kept.messages[0].text(), Some("local"))
   assert_true(next.find_conversation(remote, "shared") is None)
 }
 
@@ -15668,8 +15665,13 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
     record: ArchivedRecord,
     messages: [
       {
-        kind: Assistant(reasoning=None, calls=[], replay=false, finished=false),
-        content: "cached archived answer",
+        kind: Assistant(
+          reasoning=None,
+          prose=Some("cached archived answer"),
+          calls=[],
+          replay=false,
+          finished=false,
+        ),
         ts: None,
         sequence: Some(1),
       },
@@ -15722,11 +15724,11 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
         {
           kind: Assistant(
             reasoning=None,
+            prose=Some("late archived answer"),
             calls=[],
             replay=false,
             finished=false,
           ),
-          content: "late archived answer",
           ts: None,
           sequence: Some(1),
         },
@@ -15737,9 +15739,9 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
     live,
   )
   assert_true(stale_archived.active().record is LiveRecord)
-  inspect(
-    stale_archived.active().messages[0].content,
-    content="cached archived answer",
+  assert_eq(
+    stale_archived.active().messages[0].text(),
+    Some("cached archived answer"),
   )
   let (_, live_again) = update_dev(
     dispatch,
@@ -16895,8 +16897,11 @@ test "Codex original-side diff feedback queues in the Codex draft" {
   )
   let queued = applied.codex.transcript_items()
   assert_eq(queued.length(), 1)
-  assert_true(queued[0].content.contains("side=\"original\""))
-  assert_true(queued[0].content.contains("keep this removal"))
+  guard queued[0].kind is @transcript.User(prompt) else {
+    fail("expected the queued feedback as a user prompt")
+  }
+  assert_true(prompt.contains("side=\"original\""))
+  assert_true(prompt.contains("keep this removal"))
 }
 
 ///|
@@ -16995,9 +17000,11 @@ test "Codex ApplyAllFeedback steers the running task through its composer" {
   )
   let queued = applied.codex.transcript_items()
   assert_eq(queued.length(), 1)
-  assert_true(queued[0].kind is @transcript.User)
-  assert_true(queued[0].content.contains("<user_mentions>"))
-  assert_true(queued[0].content.contains("rename this"))
+  guard queued[0].kind is @transcript.User(prompt) else {
+    fail("expected the queued comment as a user prompt")
+  }
+  assert_true(prompt.contains("<user_mentions>"))
+  assert_true(prompt.contains("rename this"))
 }
 
 ///|
@@ -17744,7 +17751,7 @@ test "send does not show a prompt until its commit lands" {
     sent,
   )
   inspect(committed.active().messages.length(), content="1")
-  guard committed.active().messages[0].kind is User else {
+  guard committed.active().messages[0].kind is User(_) else {
     fail("expected a user item")
   }
   inspect(committed.active().watermark, content="1")
@@ -17755,9 +17762,7 @@ test "a replayed commit at or below the watermark is dropped" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [
-      { kind: User, content: "already there", ts: None, sequence: None, },
-    ],
+    messages: [{ kind: User("already there"), ts: None, sequence: None, }],
     watermark: 2,
   })
   let (_, next) = update_dev(
@@ -17855,15 +17860,15 @@ test "a snapshot drains buffered commits in sequence order" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "one", ts: None, sequence: None, },
+        { kind: User("one"), ts: None, sequence: None, },
         {
           kind: Assistant(
             reasoning=None,
+            prose=Some("two"),
             calls=[],
             replay=false,
             finished=false,
           ),
-          content: "two",
           ts: None,
           sequence: None,
         },
@@ -17874,8 +17879,8 @@ test "a snapshot drains buffered commits in sequence order" {
     model,
   )
   inspect(next.active().messages.length(), content="4")
-  inspect(next.active().messages[2].content, content="three")
-  inspect(next.active().messages[3].content, content="four")
+  assert_eq(next.active().messages[2].text(), Some("three"))
+  assert_eq(next.active().messages[3].text(), Some("four"))
   inspect(next.active().watermark, content="4")
   assert_true(next.active().sync is Synced)
 }
@@ -17900,8 +17905,8 @@ test "a snapshot already containing the buffered commits drops them" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User, content: "one", ts: None, sequence: None, },
-        { kind: User, content: "dup", ts: None, sequence: None, },
+        { kind: User("one"), ts: None, sequence: None, },
+        { kind: User("dup"), ts: None, sequence: None, },
       ],
       watermark=2,
       generation=1,
@@ -17932,7 +17937,7 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "one", ts: None, sequence: None, }],
+      items=[{ kind: User("one"), ts: None, sequence: None, }],
       watermark=2,
       generation=1,
     ),
@@ -17951,7 +17956,7 @@ test "background retries preserve buffered commits until a later success" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "kept", ts: None, sequence: None, }],
+    messages: [{ kind: User("kept"), ts: None, sequence: None, }],
     watermark: 1,
     sync: test_reloading([
       {
@@ -18002,15 +18007,15 @@ test "background retries preserve buffered commits until a later success" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "kept", ts: None, sequence: None, }],
+      items=[{ kind: User("kept"), ts: None, sequence: None, }],
       watermark=1,
       generation=2,
     ),
     retrying,
   )
   inspect(healed.active().messages.length(), content="3")
-  inspect(healed.active().messages[1].content, content="next")
-  inspect(healed.active().messages[2].content, content="x")
+  assert_eq(healed.active().messages[1].text(), Some("next"))
+  assert_eq(healed.active().messages[2].text(), Some("x"))
   inspect(healed.active().watermark, content="3")
   assert_true(healed.active().sync is Synced)
 }
@@ -18020,7 +18025,7 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User, content: "kept", ts: None, sequence: None, }],
+    messages: [{ kind: User("kept"), ts: None, sequence: None, }],
     watermark: 1,
     sync: ReloadFailed(generation=1, buffered=[
       {
@@ -18051,7 +18056,7 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User, content: "kept", ts: None, sequence: None, }],
+      items=[{ kind: User("kept"), ts: None, sequence: None, }],
       watermark=1,
       generation=2,
     ),
@@ -18070,7 +18075,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
   let model = test_model().replace_conversation({
     ..test_conversation(),
     workspace: Project(root=current_root),
-    messages: [{ kind: User, content: "current", ts: None, sequence: None, }],
+    messages: [{ kind: User("current"), ts: None, sequence: None, }],
     watermark: 5,
     sync: Reloading(
       generation=2,
@@ -18091,15 +18096,13 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[
-        { kind: User, content: "stale generation", ts: None, sequence: None, },
-      ],
+      items=[{ kind: User("stale generation"), ts: None, sequence: None, }],
       watermark=9,
       generation=1,
     ),
     model,
   )
-  inspect(stale.active().messages[0].content, content="current")
+  assert_eq(stale.active().messages[0].text(), Some("current"))
   inspect(stale.active().watermark, content="5")
   assert_eq(stale.active().workspace, Project(root=current_root))
   guard stale.active().sync is Reloading(generation=2, attempt=1, ..) else {
@@ -18111,15 +18114,13 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[
-        { kind: User, content: "older snapshot", ts: None, sequence: None, },
-      ],
+      items=[{ kind: User("older snapshot"), ts: None, sequence: None, }],
       watermark=4,
       generation=2,
     ),
     stale,
   )
-  inspect(lower.active().messages[0].content, content="current")
+  assert_eq(lower.active().messages[0].text(), Some("current"))
   inspect(lower.active().watermark, content="5")
   assert_eq(lower.active().workspace, Project(root=current_root))
   guard lower.active().sync is Reloading(generation=2, attempt=2, buffered~, ..) else {
@@ -18171,8 +18172,9 @@ test "tool decode semantics wait for their durable error tool result" {
   guard committed_after.active().messages[0].kind is Assistant(calls=[edit], ..) else {
     fail("expected the response carrying the failed call")
   }
-  assert_true(edit.is_error)
-  inspect(edit.content, content="invalid arguments")
+  assert_true(
+    edit.outcome is Done(content="invalid arguments", is_error=true, ..),
+  )
   let (_, called_first) = update_dev(dispatch, call, running_model())
   let (_, committed_first) = update_dev(dispatch, result, called_first)
   let (_, semantic_after) = update_dev(dispatch, semantic, committed_first)
@@ -18215,7 +18217,7 @@ test "assistant semantic events wait for their durable commit" {
     committed.active().messages[0].kind
     is Assistant(reasoning=Some("think"), ..),
   )
-  inspect(committed.active().messages[0].content, content="answer")
+  assert_eq(committed.active().messages[0].text(), Some("answer"))
   inspect(committed.active().watermark, content="1")
 }
 
@@ -18248,9 +18250,10 @@ test "a committed tool result visibly changes its existing call row" {
   guard completed.messages[0].kind is Assistant(calls=[call], ..) else {
     fail("expected the response to keep its one call")
   }
-  assert_true(call.has_result)
-  inspect(call.content, content="module contents")
-  assert_true(call.brief is Some("read moon.mod"))
+  assert_true(
+    call.outcome
+    is Done(content="module contents", brief=Some("read moon.mod"), ..),
+  )
 }
 
 ///|
@@ -18298,9 +18301,7 @@ test "a delayed terminal commit never clears a newer live delta" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
-    messages: [
-      { kind: User, content: "older prompt", ts: None, sequence: None, },
-    ],
+    messages: [{ kind: User("older prompt"), ts: None, sequence: None, }],
     watermark: 1,
     turn: {
       ..running_conversation().turn,
@@ -18383,7 +18384,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
     fail("unknown commit did not materialize its session")
   }
   inspect(hidden.messages.length(), content="1")
-  inspect(hidden.messages[0].content, content="hi")
+  assert_eq(hidden.messages[0].text(), Some("hi"))
   inspect(hidden.watermark, content="1")
   inspect(next.dev().sessions_request_generation, content="1")
   let (_, repeated) = update_dev(
@@ -19523,11 +19524,11 @@ test "a sub-run's progress refreshes the child transcript on screen" {
         {
           kind: Assistant(
             reasoning=Some("child thought"),
+            prose=None,
             calls=[],
             replay=false,
             finished=false,
           ),
-          content: "",
           ts: None,
           sequence: Some(5),
         },

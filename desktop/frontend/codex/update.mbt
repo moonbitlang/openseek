@@ -666,8 +666,8 @@ test "Codex project add stays local until the first prompt" {
   assert_true(submitting.waiting_for_first_user_item())
   let starting_items = submitting.transcript_items()
   assert_eq(starting_items.length(), 1)
-  assert_true(starting_items[0].kind is @transcript.User)
-  assert_eq(starting_items[0].content, "inspect this")
+  assert_true(starting_items[0].kind is @transcript.User(_))
+  assert_eq(starting_items[0].text(), Some("inspect this"))
   let (_, adopted) = update(
     dispatch,
     Reply(kind=CodexDraftThreadReply("desktop-draft-1"), value={
@@ -756,10 +756,10 @@ test "Codex project add stays local until the first prompt" {
   let observed_items = observed.transcript_items()
   assert_eq(observed.pending_steers.length(), 1)
   assert_eq(observed_items.length(), 2)
-  assert_true(observed_items[0].kind is @transcript.User)
-  assert_eq(observed_items[0].content, "inspect this")
-  assert_true(observed_items[1].kind is @transcript.User)
-  assert_eq(observed_items[1].content, "steer early")
+  assert_true(observed_items[0].kind is @transcript.User(_))
+  assert_eq(observed_items[0].text(), Some("inspect this"))
+  assert_true(observed_items[1].kind is @transcript.User(_))
+  assert_eq(observed_items[1].text(), Some("steer early"))
 
   let (_, steered) = update(
     dispatch,
@@ -859,8 +859,8 @@ test "Codex full steer replies replace their local receipt" {
   assert_true(once.pending_steers.is_empty())
   let items = once.transcript_items()
   assert_eq(items.length(), 2)
-  assert_eq(items[0].content, "initial")
-  assert_eq(items[1].content, "steer once")
+  assert_eq(items[0].text(), Some("initial"))
+  assert_eq(items[1].text(), Some("steer once"))
 }
 
 ///|
@@ -1133,8 +1133,8 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
   assert_true(observed_second.pending_steers.is_empty())
   let items = observed_second.transcript_items()
   assert_eq(items.length(), 3)
-  assert_true(items.iter().all(item => item.kind is @transcript.User))
-  assert_true(items.iter().all(item => item.content == "same text"))
+  assert_true(items.iter().all(item => item.kind is @transcript.User(_)))
+  assert_true(items.iter().all(item => item.text() == Some("same text")))
 }
 
 ///|

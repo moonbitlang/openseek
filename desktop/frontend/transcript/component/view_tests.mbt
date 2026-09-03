@@ -4,14 +4,16 @@ test "transcript stream children use stable typed keys in display order" {
     call_id: "c1",
     name: "shell",
     arguments: Some("{}"),
-    has_result: false,
-    is_error: false,
-    brief: None,
-    content: "",
+    outcome: Pending(output=None),
   }
   let response : @transcript.TranscriptItem = {
-    kind: Assistant(reasoning=None, calls=[call], replay=false, finished=false),
-    content: "I will check it.",
+    kind: Assistant(
+      reasoning=None,
+      prose=Some("I will check it."),
+      calls=[call],
+      replay=false,
+      finished=false,
+    ),
     ts: None,
     sequence: Some(42),
   }
@@ -23,7 +25,7 @@ test "transcript stream children use stable typed keys in display order" {
     submission_generation=1,
     items=[
       {
-        item: { kind: User, content: "question", ts: None, sequence: Some(41), },
+        item: { kind: User("question"), ts: None, sequence: Some(41), },
         identity: "s41",
       },
       { item: response, identity: "s42", },
@@ -51,7 +53,13 @@ test "transcript stream children use stable typed keys in display order" {
           ..response,
           kind: Assistant(
             reasoning=Some("thinking"),
-            calls=[{ ..call, has_result: true, content: "output", }],
+            prose=Some("I will check it."),
+            calls=[
+              {
+                ..call,
+                outcome: Done(content="output", is_error=false, brief=None),
+              },
+            ],
             replay=false,
             finished=false,
           ),
@@ -71,7 +79,7 @@ test "transcript stream children use stable typed keys in display order" {
 ///|
 test "the live response is one node, replaced by the durable one" {
   let user : VisibleRow = {
-    item: { kind: User, content: "question", ts: None, sequence: Some(1), },
+    item: { kind: User("question"), ts: None, sequence: Some(1), },
     identity: "s1",
   }
   let live_input = Input(
@@ -113,11 +121,11 @@ test "the live response is one node, replaced by the durable one" {
           item: {
             kind: Assistant(
               reasoning=Some("next thought"),
+              prose=Some("answer"),
               calls=[],
               replay=false,
               finished=false,
             ),
-            content: "answer",
             ts: None,
             sequence: Some(2),
           },

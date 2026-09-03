@@ -142,11 +142,11 @@ fn TranscriptRenderer::stream_children(
     let step_label = if self.input.source is OpenSeek &&
       item.kind is Assistant(replay=false, ..) {
       steps += 1
-      "#\{steps}"
+      Some("#\{steps}")
     } else {
-      ""
+      None
     }
-    let anchor = if item.kind is User {
+    let anchor = if item.kind is User(_) {
       Some(@transcript_overview.TurnKey::of(item, index~).anchor())
     } else {
       None
@@ -159,11 +159,11 @@ fn TranscriptRenderer::stream_children(
         anchor?,
         on_jump=self.on_jump,
         assistant_name=self.assistant_name(),
-        step_label~,
+        step_label?,
         subrun?=self.subrun_link(),
       ),
     )
-    if item.kind is User {
+    if item.kind is User(_) {
       items.set(
         TranscriptRenderKey::turn_rule(row.identity).wire(),
         turn_rule_view(ts?=item.ts),
@@ -183,10 +183,10 @@ fn TranscriptRenderer::stream_children(
         self.on_open,
         prose?=self.input.streaming_response,
         reasoning?=self.input.streaming_reasoning,
-        step_label=if self.input.source is OpenSeek {
-          "#\{steps + 1}"
+        step_label?=if self.input.source is OpenSeek {
+          Some("#\{steps + 1}")
         } else {
-          ""
+          None
         },
         assistant_name=self.assistant_name(),
         live=true,

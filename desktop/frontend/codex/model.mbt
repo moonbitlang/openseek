@@ -2562,33 +2562,51 @@ fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
   // Every app-server item is one response-shaped item: prose, a thought, or
   // one tool call, each with the other two parts empty. Codex commits them
   // separately, so they are never folded into one numbered step.
-  let response = (reasoning : String?, calls : Array[@transcript.ToolCall]) => {
-    @transcript.Assistant(reasoning~, calls~, replay=false, finished=false)
+  let response = (
+    reasoning : String?,
+    prose : String?,
+    calls : Array[@transcript.ToolCall],
+  ) => {
+    @transcript.Assistant(
+      reasoning~,
+      prose~,
+      calls~,
+      replay=false,
+      finished=false,
+    )
   }
-  let (kind, content) = match self.kind {
-    "userMessage" => (@transcript.User, self.text())
-    "agentMessage" | "plan" => (response(None, []), self.text())
-    "reasoning" => (response(Some(self.text()), []), "")
-    "contextCompaction" => (@transcript.Summary, self.text())
-    _ =>
-      (
-        response(None, [
-          {
-            call_id: self.id,
-            name: self.tool_name(),
-            arguments: self.tool_arguments(),
-            has_result: self.tool_has_result(),
-            is_error: self.tool_failed(),
-            brief: self.tool_brief(),
-            content: self.tool_output(),
-          },
-        ]),
-        "",
-      )
+  let kind = match self.kind {
+    "userMessage" => @transcript.User(self.text())
+    "agentMessage" | "plan" => response(None, Some(self.text()), [])
+    "reasoning" => response(Some(self.text()), None, [])
+    "contextCompaction" => @transcript.Summary(self.text())
+    _ => {
+      // A command still running may have streamed part of its output; the
+      // app-server reports nothing at all as an empty string.
+      let output = self.tool_output()
+      let outcome : @transcript.ToolOutcome = if self.tool_has_result() {
+        Done(
+          content=output,
+          is_error=self.tool_failed(),
+          brief=self.tool_brief(),
+        )
+      } else if output.is_empty() {
+        Pending(output=None)
+      } else {
+        Pending(output=Some(output))
+      }
+      response(None, None, [
+        {
+          call_id: self.id,
+          name: self.tool_name(),
+          arguments: self.tool_arguments(),
+          outcome,
+        },
+      ])
+    }
   }
   {
     kind,
-    content,
     // The current app-server item snapshot has no durable display timestamp.
     // Leaving it absent is honest; the shared turn rule simply omits its clock.
     ts: None,
@@ -2716,8 +2734,7 @@ pub fn State::transcript_items(
   let items : Array[@transcript.TranscriptItem] = []
   if !self.notice.is_empty() {
     items.push({
-      kind: @transcript.Failure,
-      content: self.notice,
+      kind: @transcript.Failure(self.notice),
       ts: None,
       sequence: None,
     })
@@ -2725,8 +2742,7 @@ pub fn State::transcript_items(
   if self.waiting_for_first_user_item() &&
     self.submitted_first_prompt is Some(submitted) {
     items.push({
-      kind: @transcript.User,
-      content: submitted.prompt(),
+      kind: @transcript.User(submitted.prompt()),
       ts: None,
       sequence: None,
     })
@@ -2757,8 +2773,7 @@ pub fn State::transcript_items(
       }
       if turn.error is Some(message) {
         items.push({
-          kind: @transcript.Failure,
-          content: message,
+          kind: @transcript.Failure(message),
           ts: None,
           sequence: None,
         })

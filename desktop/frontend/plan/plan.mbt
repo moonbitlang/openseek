@@ -130,15 +130,17 @@ pub enum Call {
 /// available" may be a wall.
 pub fn classify(call : @transcript.ToolCall) -> Call? {
   guard call.name == "plan" else { return None }
-  if call.is_error {
-    return Some(Rejected)
+  let applied = match call.outcome {
+    @transcript.ToolOutcome::Done(is_error=true, ..) => return Some(Rejected)
+    @transcript.ToolOutcome::Done(..) => true
+    @transcript.ToolOutcome::Pending(..) => false
   }
   // Absent arguments are a call whose source recorded no payload. The payload
   // is gone, but the recorded call is still evidence it ran.
   guard call.arguments is Some(arguments) && decode(arguments) is Some(steps) else {
-    return Some(Unreadable(applied=call.has_result))
+    return Some(Unreadable(applied~))
   }
-  Some(if call.has_result { Applied(steps) } else { Pending(steps) })
+  Some(if applied { Applied(steps) } else { Pending(steps) })
 }
 
 ///|

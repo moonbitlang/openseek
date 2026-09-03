@@ -84,7 +84,7 @@ pub fn entries(
 ) -> Array[Entry] {
   let result : Array[Entry] = []
   for index, item in items {
-    guard item.kind is User else { continue }
+    guard item.kind is User(prompt) else { continue }
     // The turn's answer is the first prose the agent said — a response that
     // only thought or only ran tools is not an answer yet. An abort/failure
     // bubble counts: it is what the turn got.
@@ -96,26 +96,24 @@ pub fn entries(
     let mut failed = false
     for cursor in (index + 1)..<items.length() {
       let item = items[cursor]
-      if item.kind is User {
+      if item.kind is User(_) {
         break
       }
       match item.kind {
         Assistant(calls~, ..) =>
-          if calls.iter().any(call => call.is_error) {
+          if calls.iter().any(call => call.outcome is Done(is_error=true, ..)) {
             failed = true
           }
         Notice(is_error=true, ..) => failed = true
         _ => ()
       }
-      if reply is None &&
-        item.kind is (Assistant(..) | Answer | Failure) &&
-        !item.content.is_empty() {
-        reply = Some(item.content)
+      if reply is None && item.kind is (Assistant(..) | Answer(_) | Failure(_)) {
+        reply = item.text()
       }
     }
     result.push({
       key: TurnKey::of(item, index~),
-      text: display(item.content),
+      text: display(prompt),
       ts: item.ts,
       reply,
       failed,
