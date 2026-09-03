@@ -1246,7 +1246,21 @@ button.row-twisty:hover {
   color: var(--color-text-primary);
 }
 
-button.sidebar-button:not(:disabled):hover {
+button:where(.sidebar-button):not(:disabled):hover {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
+}
+
+.sidebar-button-accent {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+
+  & .sidebar-icon {
+    color: var(--color-on-accent);
+  }
+
+  &:not(:disabled):hover {
+    background: var(--color-accent-strong);
+    color: var(--color-on-accent);
+  }
 }

@@ -134,36 +134,6 @@
   gap: 8px;
   margin-top: 16px;
 }
-.modal-actions button {
-  padding: 6px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
-  color: var(--color-text-primary);
-  cursor: pointer;
-}
-.modal-actions button:hover {
-  background: var(--color-bg-subtle);
-}
-/* Re-assert the accent fill: the generic .modal-actions button rule
-   above outranks button.primary by document order. */
-.modal-actions button.primary {
-  border-color: var(--color-accent);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-}
-.modal-actions button.primary:hover {
-  background: var(--color-accent-strong);
-  border-color: var(--color-accent-strong);
-}
-.modal-actions button.danger {
-  border-color: var(--color-danger-border);
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-}
-.modal-actions button.danger:hover {
-  background: color-mix(in srgb, var(--color-danger-soft) 75%, var(--color-danger));
-}
 /* The standing-goal banner above the composer input (the compaction
    notice's slot) and the composer's goal-editing mode. */
 .composer-goal {

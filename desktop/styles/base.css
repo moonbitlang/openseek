@@ -39,6 +39,21 @@ textarea {
   font: inherit;
 }
 
+/* Every app button starts from the same neutral chrome. Feature styles add
+   their own geometry and intent; the shared action variants live in pages.css. */
+button {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+}
+
 /* Code-bearing content follows the same stack as the editor and terminal,
    while ordinary application controls continue to inherit the sans stack. */
 code,

@@ -1917,7 +1917,11 @@ fn update_confirm_modal(
         "A conversation is still running. Updating restarts the app and interrupts it; the transcript so far is saved.",
       ),
       @html.div(class="modal-actions", [
-        @html.button(on_click=dispatch(CancelUpdateRestart), "Keep working"),
+        @html.button(
+          class="secondary",
+          on_click=dispatch(CancelUpdateRestart),
+          "Keep working",
+        ),
         @html.button(
           class="primary",
           on_click=dispatch(ConfirmUpdateRestart),
@@ -1955,7 +1959,11 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.div(class="modal-title", title),
         @html.div(class="setup-modal-form", api_settings_rows(dispatch, model)),
         @html.div(class="modal-actions", [
-          @html.button(on_click=dispatch(DismissApiSetup), "Not now"),
+          @html.button(
+            class="secondary",
+            on_click=dispatch(DismissApiSetup),
+            "Not now",
+          ),
         ]),
       ],
     ),

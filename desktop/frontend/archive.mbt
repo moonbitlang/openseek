@@ -205,7 +205,11 @@ fn archived_delete_modal(
           "“\{confirm.title}” and all of its archived subagent history will be permanently deleted. This cannot be undone. Project files and Git branches will remain.",
         ),
         @html.div(class="modal-actions", [
-          @html.button(on_click=dispatch(CancelDeleteArchivedSession), "Cancel"),
+          @html.button(
+            class="secondary",
+            on_click=dispatch(CancelDeleteArchivedSession),
+            "Cancel",
+          ),
           @html.button(
             class="danger",
             on_click=dispatch(ConfirmDeleteArchivedSession),

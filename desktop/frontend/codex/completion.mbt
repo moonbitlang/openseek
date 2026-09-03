@@ -258,7 +258,7 @@ fn CodexPermissionPicker::confirmation_dialog(
             "Codex will be able to access the internet and read or modify any file on this computer without asking. Approve for me is safer because it keeps the workspace sandbox in place.",
           ),
           @html.div(class="modal-actions", [
-            @html.button(on_click=cancel, "Cancel"),
+            @html.button(class="secondary", on_click=cancel, "Cancel"),
             @html.button(
               class="danger",
               on_click=dispatch(ConfirmFullAccess),

@@ -1,85 +1,74 @@
 
-/* ---------- generic buttons ---------- */
-/* `button` below is the app-wide reset (colors only). `.secondary` /
-   `.primary` are the settings pages' opt-in button system and DO carry
-   metrics (padding, font-size) at element+class specificity — a new
-   component must define its own classes, never reuse these modifier names
-   next to its own (that ambush is how the worktree confirm buttons once
-   came out two sizes). */
-button {
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-primary);
-  cursor: pointer;
-}
-button:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-/* These opt-in app controls have no enclosing focus surface, so they draw the
-   shared keyboard ring themselves. Component controls define theirs locally. */
-button.secondary:focus-visible,
-button.primary:focus-visible,
-a.setting-link:focus-visible {
+/* ---------- shared action buttons ---------- */
+/* Action roles provide the ordinary dialog/settings geometry and palette.
+   `:where()` keeps that default below a feature class, so a specialized
+   control can opt into an intent without inheriting accidental dimensions. */
+:where(button.secondary, button.primary, button.danger, a.setting-link):focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
-button.secondary {
-  border-color: var(--color-border);
-  background: var(--color-bg-surface);
-  color: var(--color-text-primary);
+button:where(.secondary, .primary, .danger),
+a:where(.setting-link) {
   padding: 6px 12px;
   font-size: var(--font-size-sm);
 }
-button.secondary:not(:disabled):hover {
+
+button:where(.secondary),
+a:where(.setting-link) {
+  border-color: var(--color-border);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+}
+
+button:where(.secondary):not(:disabled):hover,
+a:where(.setting-link):hover {
   background: var(--color-bg-subtle);
 }
 
 /* A Device page is navigation, so it remains an anchor while matching the
    secondary controls beside it. The desktop's delegated link handler opens it
    in the system browser instead of navigating the app frame. */
-a.setting-link {
+a:where(.setting-link) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
-  color: var(--color-text-primary);
-  padding: 6px 12px;
-  font-size: var(--font-size-sm);
   line-height: 1.2;
   text-decoration: none;
 }
-a.setting-link:hover {
-  background: var(--color-bg-subtle);
-}
-/* The accent-filled call to action, button.secondary's counterpart:
-   Save API key, the self-update controls, modal confirms. As a
-   sidebar-button it keeps the sidebar's geometry, only the fill. */
-button.primary {
+
+/* The accent-filled call to action, button.secondary's counterpart: Save API
+   key, self-update controls, and modal confirmations. */
+button:where(.primary) {
   border-color: var(--color-accent);
   background: var(--color-accent);
   color: var(--color-on-accent);
+
+  &:not(:disabled):hover {
+    border-color: var(--color-accent-strong);
+    background: var(--color-accent-strong);
+    color: var(--color-on-accent);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
 }
-button.primary:not(.sidebar-button) {
-  padding: 6px 12px;
-  font-size: var(--font-size-sm);
-}
-button.primary .sidebar-icon {
-  color: var(--color-on-accent);
-}
-button.primary:not(:disabled):hover {
-  background: var(--color-accent-strong);
-  border-color: var(--color-accent-strong);
-  color: var(--color-on-accent);
-}
-button.primary:disabled {
-  opacity: 0.7;
-  cursor: default;
+
+button:where(.danger) {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+
+  &:not(:disabled):hover {
+    background: color-mix(
+      in srgb,
+      var(--color-danger-soft) 75%,
+      var(--color-danger)
+    );
+  }
 }
 
 /* ---------- onboarding (no conversation on screen) ---------- */

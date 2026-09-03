@@ -162,10 +162,10 @@
     top: 4px;
   }
   button.secondary,
-  button.primary:not(.sidebar-button),
+  button.primary,
+  button.danger,
   a.setting-link,
-  .portal-button-link,
-  .modal-actions button {
+  .portal-button-link {
     min-height: 44px;
     padding-top: 10px;
     padding-bottom: 10px;
