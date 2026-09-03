@@ -15,6 +15,7 @@ main {
   /* Descendants use the live main-pane height to keep the composer inside the
      conversation row while the terminal is resized. */
   container-type: size;
+  container-name: main-pane;
   min-width: 0;
   min-height: 0;
   overflow: hidden;

@@ -370,7 +370,9 @@
   font-size: 11px;
 }
 
-@media (max-width: 720px) {
+/* These controls belong to the conversation pane, whose width can change
+   independently when the sidebar or file panel is resized. */
+@container main-pane (max-width: 720px) {
   .codex-request-action {
     min-height: 44px;
     padding-top: 10px;

@@ -5,6 +5,24 @@ concatenates the same files in the same order, so every application style must
 live in one of the listed sources. Viewer styles are separate and must not be
 targeted through global element selectors.
 
+## Browser baseline
+
+The Desktop's pinned Proton 0.2.5 runtime bundles CEF 150.0.19, based on
+Chromium 150.0.7871.252. The canonical version comes from the resolved
+`proton_cefsetup` package's `requirements.json`; update this section when the
+Proton dependencies change. `.proton/runtime.json` describes only the locally
+prepared runtime and may lag until setup runs again.
+
+Prefer the strongest stable CSS feature available in that Chromium baseline
+when it makes layout ownership clearer, removes JavaScript measurement, or
+replaces a hand-built browser primitive. No fallback for older browsers is
+needed. Examples include container queries for resizable panes and CSS anchor
+positioning with the Popover API for floating controls.
+
+Using a newer feature is not itself a design goal. Keep application state such
+as persisted user-resized dimensions in the model, and do not add motion or
+visual treatment merely because the engine supports it.
+
 ## Tokens
 
 Define shared semantic values in `tokens.css`: palette roles, the small type
