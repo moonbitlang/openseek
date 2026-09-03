@@ -161,6 +161,13 @@ directory, and that directory is the one place a snippet may write (`/tmp`
 itself is refused) — and read only the needed excerpt; `.status()` returns just the exit code when the output does not
 matter. You can use `moon ide doc @moonbitlang/async/shell` for the full API.
 
+When a probe captures a command's output, do not bind it to the name `test`:
+`test` is the MoonBit keyword that opens a test block. A binding like
+`let test = @shell.Cmd("moon", ["test"]).output()` is a parse error
+(`unexpected token `test``); write
+`let test_out = @shell.Cmd("moon", ["test"]).output()` or `let result = ...`
+instead, and keep `test` for `test { ... }` blocks.
+
 For compiler feedback, stream the line-delimited JSON from one `moon check`
 rather than collecting it and parsing it afterward:
 
