@@ -92,10 +92,13 @@ samp,
   position-anchor: --custom-select-trigger;
   position-visibility: anchors-visible;
   position-area: block-end span-inline-end;
+  position-try-order: most-block-size;
   position-try-fallbacks: flip-block;
   inset: auto;
   z-index: var(--z-menu);
-  max-height: min(360px, calc(100dvh - 24px));
+  /* 100% is the chosen position-area block, keeping overflow on one side of
+     the trigger instead of shifting the anchored box across it. */
+  max-height: min(360px, calc(100dvh - 24px), calc(100% - 12px));
   margin: 6px 0 0;
   overflow-x: hidden;
   overflow-y: auto;

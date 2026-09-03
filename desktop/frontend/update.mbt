@@ -1460,6 +1460,7 @@ fn sync_file_panel(
 /// this predicate forgets renders with the browser pane punched through it,
 /// swallowing the clicks that land there.
 fn covering_overlay(model : Model) -> Bool {
+  (model.narrow && model.sidebar_open) ||
   model.project_picker is Some(_) ||
   model.archive_confirm is Some(_) ||
   model.archived_delete_confirm is Some(_) ||
@@ -1491,7 +1492,6 @@ fn desired_browser_view(model : Model) -> Int? {
     !model.right_panel_menu_open &&
     model.select_menu is None &&
     !git_details_open &&
-    !(model.narrow && model.sidebar_open) &&
     !covering_overlay(model) else {
     return None
   }
@@ -1683,6 +1683,13 @@ fn update(
       composer_context_generation: previous.composer_context_generation + 1,
       select_menu: None,
     }
+  } else {
+    model
+  }
+  // Manual popovers sit above ordinary fixed backdrops in the browser's top
+  // layer, so a newly covering surface must retire the root-owned select.
+  let model = if !covering_overlay(previous) && covering_overlay(model) {
+    { ..model, select_menu: None, }
   } else {
     model
   }
@@ -14406,6 +14413,19 @@ test "custom select menus switch and dismiss deterministically" {
     open_before_switch,
   )
   assert_true(context_switched.select_menu is None)
+}
+
+///|
+test "a covering overlay dismisses an open custom select" {
+  let dispatch = test_dispatch()
+  let base = { ..test_model(), select_menu: Some(OpenSeekModelMenu), }
+  let (_, lost) = update(
+    dispatch,
+    FromDevice(Local, BridgeUnavailable("bridge stopped")),
+    base,
+  )
+  assert_true(lost.bridge_state() is BridgeLost(_))
+  assert_true(lost.select_menu is None)
 }
 
 ///|
