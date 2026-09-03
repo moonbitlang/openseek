@@ -734,7 +734,7 @@ pub fn CompactReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ConnectedPayload {
   stage : ConnectedStage
-  windows : Bool
+  platform : HostPlatform?
 } derive(Eq, @debug.Debug)
 pub fn ConnectedPayload::equal(Self, Self) -> Bool
 pub fn ConnectedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1186,6 +1186,17 @@ pub fn GoalReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecode
 pub fn GoalReply::not_equal(Self, Self) -> Bool
 pub fn GoalReply::to_json(Self) -> Json
 pub fn GoalReply::to_repr(Self) -> @debug.Repr
+
+pub(all) enum HostPlatform {
+  Windows
+  MacOS
+  Linux
+} derive(Eq, @debug.Debug)
+pub fn HostPlatform::equal(Self, Self) -> Bool
+pub fn HostPlatform::not_equal(Self, Self) -> Bool
+pub fn HostPlatform::to_json(Self) -> Json
+pub fn HostPlatform::to_repr(Self) -> @debug.Repr
+pub impl ToJson for HostPlatform
 
 pub(all) struct InstallSkillPayload {
   module_name : String

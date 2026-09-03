@@ -437,7 +437,7 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
               // frontend can use it as the resync boundary.
               context.emit(connected_event, {
                 stage: Accepted,
-                windows: @platform.is_windows(),
+                platform: Some(@platform.host_platform()),
               })
               connected = true
               reply.put(())

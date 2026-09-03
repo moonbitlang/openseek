@@ -1,7 +1,13 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/internal/platform"
 
+import {
+  "openseek_desktop/internal/protocol",
+}
+
 // Values
+pub fn host_platform() -> @protocol.HostPlatform
+
 pub fn is_darwin() -> Bool
 
 pub fn is_windows() -> Bool

@@ -55,7 +55,10 @@ async fn WsClientActor::open_subscription(
   // outbound frame even if the hub publishes immediately after subscribe.
   out.put(
     Notify(
-      AgentConnected({ stage: Accepted, windows: @platform.is_windows(), }),
+      AgentConnected({
+        stage: Accepted,
+        platform: Some(@platform.host_platform()),
+      }),
     ),
   )
   { out, notifications, }

@@ -34,11 +34,11 @@ export class DesktopBrowserHarness {
     this.browseTree = {
       '': { path: '/Users/test', parent: '/Users', entries: ['Projects', 'Workspace'] },
     };
-    // The host's own platform, stated by the host itself in the
+    // The host's own operating system, stated by the host itself in the
     // `agent.connected` push that opens every connection. Windows-host specs
-    // set it before `goto()`; it is what lets drive-letter drafts complete
-    // natively in the picker.
-    this.windowsHost = false;
+    // set it to 'windows' before `goto()`; that is what lets drive-letter
+    // drafts complete natively in the picker.
+    this.hostPlatform = 'macos';
     this.textSearchMatches = [];
     this.textSearchMatchCount = undefined;
     this.textSearchLimitHit = false;
@@ -516,7 +516,7 @@ export class DesktopBrowserHarness {
       socket.send(JSON.stringify({
         jsonrpc: '2.0',
         method: 'agent.connected',
-        params: { stage: 'serving', windows: this.windowsHost },
+        params: { stage: 'serving', platform: this.hostPlatform },
       }));
     });
   }
