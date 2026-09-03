@@ -18,6 +18,7 @@ pub impl Show for ToolchainUnavailable
 pub struct ResolvedToolchain {
   bin_dir : @pathx.Absolute
   moon : @pathx.Absolute
+  references : @pathx.Absolute?
 }
 pub fn ResolvedToolchain::apply_to_env(Self, Map[String, String]) -> Unit
 pub fn ResolvedToolchain::tool_env(Self) -> Map[String, String]

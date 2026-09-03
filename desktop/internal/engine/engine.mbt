@@ -1393,10 +1393,22 @@ async fn add_moonbit_path_for_native_engine(
   // naming the cause now.
   let toolchain = @moonbit.resolve_toolchain(config.engine, runtime_dir?)
   toolchain.apply_to_env(env)
+  // The prepared payload also carries the seed's `docs/` (the moonbit-docs
+  // markdown build), which the engine advertises to the model as its MoonBit
+  // reference. Durable session prompts embed the path, and the payload lives
+  // in the per-user runtime directory, so it survives bundle moves and
+  // AppImage relaunches. A toolchain without docs — an external one, or a
+  // seed staged without them — advertises none, and the ambient value is
+  // scrubbed so the child never names docs the host did not resolve.
+  match toolchain.references {
+    Some(docs) => env["OPENSEEK_REFERENCES"] = docs.to_string()
+    None => env.remove("OPENSEEK_REFERENCES")
+  }
   @xlog.debug() <?
     {
       "event": "desktop_engine_moonbit_path",
       "bin_dir": toolchain.bin_dir.to_string(),
+      "references": toolchain.references.map(docs => docs.to_string()),
       "path_prefix": first_path_entry(path_env_value(env)),
     }
 }
@@ -2764,6 +2776,19 @@ async test "native engine env has one authoritative bundled moon path" {
   let env = engine_process_env(config, Some(runtime))
   assert_eq(env["OPENSEEK_THINKING"], "high")
   assert_eq(env["DEEPSEEK"], "k")
+  // This payload carries no `docs/` yet: the engine env must not invent an
+  // OPENSEEK_REFERENCES the host did not resolve.
+  assert_true(env.get("OPENSEEK_REFERENCES") is None)
+  // The moonbit-docs markdown build travels inside the seed and therefore
+  // inside the prepared payload, so the engine is pointed at the runtime
+  // copy — the durable prompt embeds this path, and it must never name a
+  // bundle location that unmounts when the app exits.
+  write_fake_file(moon_home.join("docs/language/index.md"))
+  let env_with_references = engine_process_env(config, Some(runtime))
+  assert_eq(
+    env_with_references["OPENSEEK_REFERENCES"],
+    moon_home.join("docs").to_string(),
+  )
   // A GLM run's key travels in GLM, and the resolved variable — not a
   // hardcoded DEEPSEEK — is what the process env honors.
   let glm_env = engine_process_env(

@@ -113,6 +113,13 @@ fn moonbit_bin_dir(moon_home : @pathx.Path) -> @pathx.Path {
 }
 
 ///|
+/// The moonbit-docs markdown build packaging stages inside the seed, so the
+/// prepared payload carries the docs describing exactly its toolchain.
+fn moonbit_docs_dir(moon_home : @pathx.Path) -> @pathx.Path {
+  moon_home.join("docs")
+}
+
+///|
 #cfg(platform="windows")
 const ExecutableSuffix : String = ".exe"
 

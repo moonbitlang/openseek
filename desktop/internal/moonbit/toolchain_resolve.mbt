@@ -10,6 +10,11 @@
 pub struct ResolvedToolchain {
   bin_dir : @pathx.Absolute
   moon : @pathx.Absolute
+  /// The MoonBit reference docs shipped with this toolchain, when it carries
+  /// them: the bundled payload's `docs/`, the moonbit-docs markdown build the
+  /// packager stages into the seed. An external toolchain never has any. The
+  /// engine advertises the directory to the model as `OPENSEEK_REFERENCES`.
+  references : @pathx.Absolute?
 }
 
 ///|
@@ -23,7 +28,7 @@ pub struct ResolvedToolchain {
 async fn toolchain_at(bin_dir : @pathx.Absolute) -> ResolvedToolchain? {
   let moon = bin_dir.join("moon" + ExecutableSuffix)
   guard @fsx.is_executable_file(moon.to_path()) else { return None }
-  Some({ bin_dir, moon, })
+  Some({ bin_dir, moon, references: None, })
 }
 
 ///|
@@ -62,7 +67,12 @@ pub async fn resolve_toolchain(
       toolchain_at(bin_dir) is Some(toolchain) else {
       fail("bundled MoonBit toolchain payload is not a complete toolchain")
     }
-    return toolchain
+    // The seed's `docs/` came along in the payload copy, so the reference
+    // path is exactly as stable as `moon` itself: the per-user runtime
+    // directory, never the bundle (an AppImage mounts afresh per launch).
+    let docs = moonbit_docs_dir(payload)
+    let references = if @fsx.is_dir(docs) { docs.to_absolute() } else { None }
+    return { ..toolchain, references, }
   }
   external_toolchain(path_env?=@env.get("PATH"), home_dir?=@home.dir())
 }
