@@ -1,29 +1,68 @@
 
 /* ---------- shared action buttons ---------- */
-/* Action roles provide the ordinary dialog/settings geometry and palette.
-   `:where()` keeps that default below a feature class, so a specialized
-   control can opt into an intent without inheriting accidental dimensions. */
-:where(button.secondary, button.primary, button.danger, a.setting-link):focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
+/* The base owns ordinary labeled-action geometry. Intent classes only paint a
+   recognized action, so an icon control may use `danger` without inheriting
+   this component's dimensions. */
+.button {
+  --button-color: var(--color-text-primary);
+  --button-border-color: transparent;
+  --button-background: transparent;
+  --button-hover-color: var(--button-color);
+  --button-hover-border-color: var(--button-border-color);
+  --button-hover-background: var(--button-background);
+  --button-disabled-opacity: 0.5;
 
-button:where(.secondary, .primary, .danger),
-a:where(.setting-link) {
   padding: 6px 12px;
+  border: 1px solid var(--button-border-color);
+  border-radius: var(--radius-sm);
+  background: var(--button-background);
+  color: var(--button-color);
   font-size: var(--font-size-sm);
-}
+  line-height: var(--line-height-normal);
+  cursor: pointer;
 
-button:where(.secondary),
-a:where(.setting-link) {
-  border-color: var(--color-border);
-  background: var(--color-bg-surface);
-  color: var(--color-text-primary);
-}
+  &:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
 
-button:where(.secondary):not(:disabled):hover,
-a:where(.setting-link):hover {
-  background: var(--color-bg-subtle);
+  &:not(:disabled):hover {
+    border-color: var(--button-hover-border-color);
+    background: var(--button-hover-background);
+    color: var(--button-hover-color);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: var(--button-disabled-opacity);
+  }
+
+  &:where(.secondary) {
+    --button-border-color: var(--color-border);
+    --button-background: var(--color-bg-surface);
+    --button-hover-background: var(--color-bg-subtle);
+  }
+
+  &:where(.primary) {
+    --button-color: var(--color-on-accent);
+    --button-border-color: var(--color-accent);
+    --button-background: var(--color-accent);
+    --button-hover-color: var(--color-on-accent);
+    --button-hover-border-color: var(--color-accent-strong);
+    --button-hover-background: var(--color-accent-strong);
+    --button-disabled-opacity: 0.7;
+  }
+
+  &:where(.danger) {
+    --button-color: var(--color-danger);
+    --button-border-color: var(--color-danger-border);
+    --button-background: var(--color-danger-soft);
+    --button-hover-background: color-mix(
+      in srgb,
+      var(--color-danger-soft) 75%,
+      var(--color-danger)
+    );
+  }
 }
 
 /* A Device page is navigation, so it remains an anchor while matching the
@@ -34,41 +73,7 @@ a:where(.setting-link) {
   align-items: center;
   gap: 6px;
   border-radius: var(--radius-sm);
-  line-height: 1.2;
   text-decoration: none;
-}
-
-/* The accent-filled call to action, button.secondary's counterpart: Save API
-   key, self-update controls, and modal confirmations. */
-button:where(.primary) {
-  border-color: var(--color-accent);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-
-  &:not(:disabled):hover {
-    border-color: var(--color-accent-strong);
-    background: var(--color-accent-strong);
-    color: var(--color-on-accent);
-  }
-
-  &:disabled {
-    cursor: default;
-    opacity: 0.7;
-  }
-}
-
-button:where(.danger) {
-  border-color: var(--color-danger-border);
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-
-  &:not(:disabled):hover {
-    background: color-mix(
-      in srgb,
-      var(--color-danger-soft) 75%,
-      var(--color-danger)
-    );
-  }
 }
 
 /* ---------- onboarding (no conversation on screen) ---------- */
@@ -412,6 +417,10 @@ h2 {
   font-size: var(--font-size-sm);
   white-space: nowrap;
   flex-shrink: 0;
+
+  &:where(.ok) {
+    color: var(--color-success);
+  }
 }
 
 .skill-avatar {
@@ -722,6 +731,10 @@ h2 {
 .skills-notice {
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
+
+  &:where(.danger) {
+    color: var(--color-danger);
+  }
 }
 
 .settings-group-card .skills-empty {
@@ -736,14 +749,4 @@ h2 {
   color: var(--color-text-faint);
   font-size: var(--font-size-xs);
   white-space: nowrap;
-}
-
-.ok {
-  color: var(--color-success);
-}
-.warn {
-  color: var(--color-warning);
-}
-.danger {
-  color: var(--color-danger);
 }

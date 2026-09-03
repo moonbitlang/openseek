@@ -161,10 +161,7 @@
     > .topbar-toggle {
     top: 4px;
   }
-  button.secondary,
-  button.primary,
-  button.danger,
-  a.setting-link,
+  .button,
   .portal-button-link {
     min-height: 44px;
     padding-top: 10px;

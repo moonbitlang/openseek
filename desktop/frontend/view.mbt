@@ -658,7 +658,7 @@ fn codex_account_rows(
         "Account",
         [
           @html.button(
-            class="secondary",
+            class="button secondary",
             disabled=codex.is_busy(),
             on_click=dispatch(Codex(channel~, @codex.Msg::logout())),
             "Sign out",
@@ -673,7 +673,7 @@ fn codex_account_rows(
         "Sign in",
         [
           @html.button(
-            class="primary",
+            class="button primary",
             disabled=codex.is_busy(),
             on_click=dispatch(Codex(channel~, @codex.Msg::login())),
             "Sign in with ChatGPT",
@@ -691,14 +691,14 @@ fn codex_account_rows(
           // The shared external-link listener keeps the desktop webview in
           // place and hands this URL to the system browser.
           @html.a(
-            class="setting-link",
+            class="button secondary setting-link",
             href=url,
             target=Blank,
             rel="noopener noreferrer",
             [icon(icon_link_external), @html.span("Open")],
           ),
           @html.button(
-            class="secondary",
+            class="button secondary",
             disabled=codex.is_busy(),
             on_click=dispatch(Codex(channel~, @codex.Msg::cancel_login())),
             "Cancel sign-in",
@@ -713,7 +713,7 @@ fn codex_account_rows(
       "Configuration",
       [
         @html.button(
-          class="secondary",
+          class="button secondary",
           on_click=dispatch(OpenCodexConfig),
           "Open config.toml",
         ),
@@ -756,7 +756,7 @@ fn remote_access_rows(
             "Signed in as",
             [
               @html.button(
-                class="secondary",
+                class="button secondary",
                 on_click=dispatch(RemoteDisconnectClicked),
                 "Disconnect",
               ),
@@ -773,7 +773,7 @@ fn remote_access_rows(
                 // The shared external-link listener keeps the desktop webview
                 // in place and hands this URL to the system browser.
                 @html.a(
-                  class="setting-link",
+                  class="button secondary setting-link",
                   href=url,
                   target=Blank,
                   rel="noopener noreferrer",
@@ -793,7 +793,7 @@ fn remote_access_rows(
         }
         let controls : Array[@html.Html] = [
           @html.button(
-            class="primary",
+            class="button primary",
             disabled=model.remote_connecting,
             on_click=dispatch(RemoteConnectClicked),
             if model.remote_connecting {
@@ -808,7 +808,7 @@ fn remote_access_rows(
         if model.remote_connecting {
           controls.push(
             @html.button(
-              class="secondary",
+              class="button secondary",
               on_click=dispatch(RemoteCancelClicked),
               "Cancel",
             ),
@@ -842,7 +842,7 @@ fn update_check_controls(
       if installable {
         controls.push(
           @html.button(
-            class="primary",
+            class="button primary",
             on_click=dispatch(UpdateClicked),
             "Update to \{version}",
           ),
@@ -858,7 +858,9 @@ fn update_check_controls(
     ConfirmingRestart(version~) =>
       // The interrupt modal is up over this row; keep the button visible
       // behind it so the row does not blink while the user decides.
-      controls.push(@html.button(class="primary", "Update to \{version}"))
+      controls.push(
+        @html.button(class="button primary", "Update to \{version}"),
+      )
     DownloadingUpdate(version~, progress~) => {
       let (fill_class, fill_style) = match progress.percentage() {
         Some(percent) =>
@@ -886,7 +888,7 @@ fn update_check_controls(
   }
   controls.push(
     @html.button(
-      class="secondary",
+      class="button secondary",
       disabled=model.update_ux
         is (CheckingForUpdate | DownloadingUpdate(..) | RestartingForUpdate(..)),
       on_click=dispatch(CheckForUpdates),
@@ -950,7 +952,7 @@ fn byok_setup_guide(provider : ApiProvider) -> @html.Html {
       ..if provider is Deepseek {
         [
           @html.a(
-            class="setting-link",
+            class="button secondary setting-link",
             href="https://platform.deepseek.com/api_keys",
             target=Blank,
             rel="noopener noreferrer",
@@ -964,7 +966,7 @@ fn byok_setup_guide(provider : ApiProvider) -> @html.Html {
       ..if provider is Glm {
         [
           @html.a(
-            class="setting-link",
+            class="button secondary setting-link",
             href="https://z.ai/manage-apikey/apikey-list",
             target=Blank,
             rel="noopener noreferrer",
@@ -1067,7 +1069,7 @@ fn api_settings_rows(
             // The id is layout only (grid placement); the fill is the
             // shared primary style.
             id="saveApiKey",
-            class="primary",
+            class="button primary",
             disabled=!settings_loaded || model.setup_api_key.is_blank(),
             on_click=dispatch(SaveApiKey),
             "Save API key",
@@ -1431,7 +1433,7 @@ fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       )
       card.push(
         @html.button(
-          class="primary",
+          class="button primary",
           type_="button",
           on_click=dispatch(PickProject(dev.channel)),
           "Add a project",
@@ -1497,7 +1499,7 @@ fn console_gate_view(
         if console.notice is Some(_) {
           card.push(
             @html.button(
-              class="primary",
+              class="button primary",
               on_click=dispatch(Console(RefreshClicked)),
               "Try again",
             ),
@@ -1523,7 +1525,7 @@ fn console_gate_view(
             card.push(@html.p(message))
             card.push(
               @html.button(
-                class="primary",
+                class="button primary",
                 on_click=dispatch(Console(RefreshClicked)),
                 "Try again",
               ),
@@ -1555,7 +1557,7 @@ fn console_gate_view(
             }
             card.push(
               @html.button(
-                class="primary",
+                class="button primary",
                 on_click=dispatch(Console(RefreshClicked)),
                 "Refresh",
               ),
@@ -1576,7 +1578,7 @@ fn console_gate_view(
   if console.auth is AuthSignedIn(..) {
     card.push(
       @html.button(
-        class="secondary",
+        class="button secondary",
         disabled=console.busy,
         on_click=dispatch(Console(SignOutClicked)),
         if console.busy {
@@ -1918,12 +1920,12 @@ fn update_confirm_modal(
       ),
       @html.div(class="modal-actions", [
         @html.button(
-          class="secondary",
+          class="button secondary",
           on_click=dispatch(CancelUpdateRestart),
           "Keep working",
         ),
         @html.button(
-          class="primary",
+          class="button primary",
           on_click=dispatch(ConfirmUpdateRestart),
           "Update and restart",
         ),
@@ -1960,7 +1962,7 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.div(class="setup-modal-form", api_settings_rows(dispatch, model)),
         @html.div(class="modal-actions", [
           @html.button(
-            class="secondary",
+            class="button secondary",
             on_click=dispatch(DismissApiSetup),
             "Not now",
           ),

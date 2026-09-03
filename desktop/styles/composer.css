@@ -363,7 +363,7 @@
 }
 /* The notice's own text/action split, used by the vanished-worktree banner:
    the sentence takes the slack so the actions stay right-aligned. Metrics
-   live here rather than on `.secondary` — see the generic-buttons note. */
+   live here because this compact inline control is not an ordinary `.button`. */
 .composer-notice-text {
   flex: 1;
   min-width: 0;
@@ -564,6 +564,10 @@
   padding: 0;
   color: var(--color-text-muted);
   cursor: pointer;
+
+  &:where(.danger):hover {
+    color: var(--color-danger);
+  }
 }
 .queued-input-action:hover,
 .queued-input-action.active {
@@ -572,9 +576,6 @@
 }
 .queued-input-action.active {
   color: var(--color-accent-strong);
-}
-.queued-input-action.danger:hover {
-  color: var(--color-danger);
 }
 .queued-input-action:focus-visible {
   outline: 1px solid var(--color-focus-ring);

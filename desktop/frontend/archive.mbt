@@ -206,12 +206,12 @@ fn archived_delete_modal(
         ),
         @html.div(class="modal-actions", [
           @html.button(
-            class="secondary",
+            class="button secondary",
             on_click=dispatch(CancelDeleteArchivedSession),
             "Cancel",
           ),
           @html.button(
-            class="danger",
+            class="button danger",
             on_click=dispatch(ConfirmDeleteArchivedSession),
             "Delete permanently",
           ),

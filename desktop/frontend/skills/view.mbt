@@ -44,7 +44,7 @@ fn installed_row(
     children.push(
       @html.div(class="skill-actions", [
         @html.button(
-          class="secondary skill-action",
+          class="button secondary skill-action",
           disabled=busy,
           on_click=emit(Uninstall(skill.id)),
           if busy {
@@ -90,7 +90,7 @@ fn market_row(
   } else {
     @html.div(class="skill-actions", [
       @html.button(
-        class="secondary skill-action",
+        class="button secondary skill-action",
         disabled=busy,
         on_click=emit(Install(item)),
         if busy {
@@ -181,7 +181,7 @@ fn detail_shell(
   @html.section(class="skills-page", [
     @html.div(class="skills-page-inner skill-detail-page", [
       @html.button(
-        class="secondary skill-back",
+        class="button secondary skill-back",
         on_click=emit(BackToList),
         "← Back to skills",
       ),
@@ -197,7 +197,7 @@ fn detail_shell(
           match state.preview {
             Ready(content~, ..) =>
               @html.button(
-                class="secondary skill-copy-button",
+                class="button secondary skill-copy-button",
                 attrs=@html.Attrs::build().aria_label("Copy SKILL.md"),
                 on_click=copy_content(content),
                 "Copy",
@@ -252,7 +252,7 @@ fn detail_action(
         @html.span(class="skill-check ok", "✓ Installed")
       } else {
         @html.button(
-          class="primary skill-detail-action",
+          class="button primary skill-detail-action",
           disabled=busy,
           on_click=emit(Install(item)),
           if busy {
@@ -269,7 +269,7 @@ fn detail_action(
       } else {
         let busy = state.busy.contains(item.id)
         @html.button(
-          class="secondary skill-detail-action",
+          class="button secondary skill-detail-action",
           disabled=busy,
           on_click=emit(Uninstall(item.id)),
           if busy {
@@ -387,7 +387,7 @@ fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html 
         icon(icon_package),
         @html.h2("Mooncakes registry"),
         @html.button(
-          class="secondary skills-refresh",
+          class="button secondary skills-refresh",
           disabled=catalog_loading,
           on_click=emit(RefreshCatalog),
           if catalog_loading {

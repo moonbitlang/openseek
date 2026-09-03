@@ -151,7 +151,7 @@ pub fn component(
     if input.update_label is Some(label) {
       footer.push(
         @html.button(
-          class="sidebar-button sidebar-button-accent",
+          class="sidebar-button primary",
           disabled=!input.update_enabled,
           on_click=actions.update,
           [

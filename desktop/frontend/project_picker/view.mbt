@@ -352,13 +352,13 @@ fn picker_footer(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
     current_location(picker),
     @html.div(class="modal-actions", [
       @html.button(
-        class="secondary",
+        class="button secondary",
         type_="button",
         on_click=emit(Close),
         "Cancel",
       ),
       @html.button(
-        class="primary",
+        class="button primary",
         type_="button",
         disabled=!can_confirm,
         on_click=emit(Confirm),

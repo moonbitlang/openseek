@@ -60,3 +60,20 @@ attributes, so Desktop focus rules cannot restyle them.
 Buttons, links, and other discrete actions are not form fields. They may use a
 component-appropriate `:focus-visible` indicator because they often have no
 persistent border to recolor.
+
+## Button ownership
+
+A button's geometry belongs to a recognized component base, while short intent
+classes only choose that component's appearance:
+
+- `.button` owns the padding, type size, focus ring, and responsive target size
+  of ordinary labeled actions.
+- Specialized controls such as `.sidebar-button`, `.icon-button`, and
+  `.queued-input-action` own their own geometry.
+- `primary`, `secondary`, and `danger` may be nested variants of those bases,
+  but must not define dimensions on their own or through a global selector such
+  as `button.danger`.
+
+This contract makes stylesheet order irrelevant to component geometry: adding
+`danger` to an icon action may change its semantic color, but cannot turn it
+into a labeled action button.

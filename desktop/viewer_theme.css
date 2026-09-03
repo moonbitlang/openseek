@@ -152,7 +152,7 @@
   /* Forms inside viewer widgets mirror the app controls: bordered surface
      inputs, accent-filled primary button, subtle-filled secondary. The
      shared button border stays transparent so the accent fill reads like
-     button.primary. */
+     .button.primary. */
   --vscode-input-background: var(--color-bg-surface);
   --vscode-input-foreground: var(--color-text-primary);
   --vscode-input-border: var(--color-border);

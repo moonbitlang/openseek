@@ -660,9 +660,13 @@ pub fn WorktreeArchiveDialog::render(
       @html.div(class="modal-title", "Archive this \{self.conversation_noun}?"),
       @html.div(class="modal-body", self.message()),
       @html.div(class="modal-actions", [
-        @html.button(class="secondary", on_click=self.cancel, "Keep working"),
         @html.button(
-          class="primary",
+          class="button secondary",
+          on_click=self.cancel,
+          "Keep working",
+        ),
+        @html.button(
+          class="button primary",
           on_click=self.confirm,
           "Discard local changes and archive",
         ),
