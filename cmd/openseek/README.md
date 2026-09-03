@@ -1,33 +1,29 @@
 # OpenSeek CLI
 
-This package is the native-only entry point for OpenSeek — the single `openseek`
-binary. It is a subcommand tree: the interactive terminal UI is the **default**
-(see [`cmd/tui`](../tui/README.md)), and the headless engine lives under named
-subcommands. It parses arguments with `moonbitlang/core/argparse`, reads defaults
-from environment variables, and drives turns through
-`bobzhang/openseek/agent.run_turn_in_scope` (both one-shot `run` and durable
-sessions; fleet mode's independent attempts use `agent.run_turn_with_append`).
+This package is the native-only automation entry point for OpenSeek — the
+`openseek` binary. It is a subcommand tree for the headless engine (the
+interactive terminal UI is the separate `openseek_tui` binary; see
+[`cmd/tui`](../tui/README.md)). It parses arguments with
+`moonbitlang/core/argparse`, reads defaults from environment variables, and
+drives turns through `bobzhang/openseek/agent.run_turn_in_scope` (both one-shot
+`run` and durable sessions; fleet mode's independent attempts use
+`agent.run_turn_with_append`).
 
 ```
-openseek [--prompt "…"]        interactive UI (default)
-openseek tui [--prompt "…"]    the UI, explicitly
 openseek run [options] TASK    run one task headlessly; JSONL events on stdout
 openseek serve                 JSONL command server (stdin: prompt/steer/cancel/compact)
 openseek review [--base REF]   read-only code review of REF...HEAD → one JSON report
+openseek mcp                   list configured MCP servers and their tools
 openseek sessions list|show <id>|compact <id> …   manage durable sessions
 ```
 
-The whole CLI is **one `moonbitlang/core/argparse` command tree**: the root's
-default action is the interactive UI, and `tui`/`run`/`serve`/`review`/`sessions`
-are subcommands (argparse owns parsing, `--help`, and rejecting unknown
-subcommands). There is **no free-form top-level prompt** — a bare word that is
-not a subcommand is rejected by the parser rather than silently opening the UI
-with that word. (argparse does not yet suggest a near-miss subcommand the way it
-does for options; that gap is tracked upstream in `moonbitlang/core`.) Only the
-options shared with the engine (`--api-key`, `--model`, …) sit on the root, as
-globals; the UI's own options (`--prompt`, `--engine`, `--continue`) live on the
-`tui` subcommand, so launch the UI with an initial prompt via `openseek tui
---prompt "fix the bug"`.
+The whole CLI is **one `moonbitlang/core/argparse` command tree**:
+`run`/`serve`/`review`/`subrun`/`mcp`/`sessions` are subcommands (argparse owns
+parsing, `--help`, and rejecting unknown or missing subcommands). There is **no
+free-form top-level prompt** and **no default action** — a bare `openseek` is
+rejected; launch the UI with `openseek_tui`. The options shared with the engine
+(`--api-key`, `--model`, …) sit on the root as globals; the UI's own options
+(`--prompt`, `--engine`, `--continue`) live on the `openseek_tui` binary.
 
 ## `openseek run`
 
@@ -159,9 +155,9 @@ moon run cmd/openseek -- run --concurrency 3 --dir myproject "fix the failing te
 This package should stay thin: subcommand dispatch, argument parsing,
 environment-backed defaults, model parsing, prompt override file loading,
 session-store setup, and delegation to the agent package. The interactive UI is
-the `cmd/tui` library, launched via the `tui` subcommand; the prompt package owns
-built-in prompt selection; the agent package owns tool definitions and the
-execution loop.
+the `cmd/tui` library, launched via the separate `openseek_tui` binary; the
+prompt package owns built-in prompt selection; the agent package owns tool
+definitions and the execution loop.
 
 Run the package tests with:
 

@@ -77,3 +77,30 @@ test "terminal_safe_line collapses whitespace, drops controls, elides at limit" 
   assert_eq(terminal_safe_line("abcdef", limit=3), "abc…")
   assert_eq(terminal_safe_line("   "), "")
 }
+
+///|
+/// Normalize a raised error's text for a one-line stderr report. argparse
+/// already prefixes its own errors with `error: `, and some Moon failures carry
+/// a `FAILED: ` marker, so strip those to avoid `error: error: …`. This is the
+/// single sanitizer both command mains (`cmd/openseek`,
+/// `cmd/openseek_tui`) run untrusted failure text through.
+pub fn failure_message(error_text : String) -> String {
+  lexmatch error_text {
+    (re"^error: ", after=message) => message.to_owned()
+    // `(.|\n)*` is greedy across lines, so the remainder follows the LAST
+    // marker occurrence — the same piece the split-and-take-last form chose.
+    (re"^(.|\n)* FAILED: ", after=last) =>
+      last.strip_suffix(")").unwrap_or(last).to_owned()
+    _ => error_text
+  }
+}
+
+///|
+test "failure_message avoids duplicating argparse error prefix" {
+  assert_eq(
+    failure_message(
+      "error: unexpected argument '--xxy' found\n\nUsage: openseek",
+    ),
+    "unexpected argument '--xxy' found\n\nUsage: openseek",
+  )
+}

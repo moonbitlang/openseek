@@ -218,7 +218,7 @@ async fn run_one_attempt(
         dir: run_dir,
         session: id.value(),
         status: "error",
-        detail: failure_message("\{error}"),
+        detail: @cli.failure_message("\{error}"),
         ok: false,
       }
   }

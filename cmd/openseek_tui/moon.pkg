@@ -1,0 +1,14 @@
+import {
+  "bobzhang/openseek/cmd/tui",
+  "bobzhang/openseek/internal/cli",
+  "moonbitlang/async",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/env",
+  "moonbitlang/x/sys",
+}
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+native"
+
+pkgtype(kind: "executable")

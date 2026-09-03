@@ -1,105 +1,14 @@
 ///|
-/// Options shared by the UI and the headless engine (`--api-key`, `--model`, …).
-/// `cmd/openseek` installs these on the root command with `global=true`, so they
-/// read the same value in any position — bare `openseek`, `openseek --api-key k
-/// tui`, `openseek tui --api-key k` — and the engine subcommands inherit them
-/// rather than redeclaring (redeclaring a global is a build error). `--api-key`
-/// is not argparse-`required`: argparse enforces a parent's required options for
-/// *every* subcommand, which would wrongly block key-free subcommands like
-/// `sessions list`; presence is enforced in `parse_config`. `global` is a
-/// parameter so tests can build a standalone (non-global) `tui` command.
-pub fn tui_shared_options(global? : Bool = false) -> Array[@argparse.OptionArg] {
-  [
-    OptionArg(
-      "api-key",
-      long="api-key",
-      default_values=[""],
-      global~,
-      about="API key for the selected chat provider.",
-    ),
-    OptionArg(
-      "deepseek-api-key",
-      long="deepseek-api-key",
-      env="DEEPSEEK",
-      default_values=[""],
-      global~,
-      hidden=true,
-    ),
-    OptionArg(
-      "kimi-api-key",
-      long="kimi-api-key",
-      env="KIMI",
-      default_values=[""],
-      global~,
-      hidden=true,
-    ),
-    OptionArg(
-      "glm-api-key",
-      long="glm-api-key",
-      env="GLM",
-      default_values=[""],
-      global~,
-      hidden=true,
-    ),
-    OptionArg(
-      "model",
-      long="model",
-      env="OPENSEEK_MODEL",
-      default_values=[@deepseek.Deepseek(V4Flash).to_string()],
-      global~,
-      about="Chat model: deepseek-v4-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash.",
-    ),
-    OptionArg(
-      "api-url",
-      long="api-url",
-      env="OPENSEEK_API_URL",
-      default_values=[""],
-      global~,
-      about="OpenAI-compatible chat completions endpoint.",
-    ),
-    OptionArg(
-      "max-steps",
-      long="max-steps",
-      env="OPENSEEK_MAX_STEPS",
-      global~,
-      about="Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next).",
-    ),
-    OptionArg(
-      "thinking",
-      long="thinking",
-      env="OPENSEEK_THINKING",
-      default_values=["high"],
-      global~,
-      about="Model thinking mode: no, high, or max; GLM maps no to low effort.",
-    ),
-    OptionArg(
-      "session",
-      long="session",
-      global~,
-      about="Create or resume this durable session id.",
-    ),
-    OptionArg(
-      "session-root",
-      long="session-root",
-      default_values=[".openseek"],
-      global~,
-      about="Directory containing durable OpenSeek sessions.",
-    ),
-  ]
-}
-
-///|
-/// UI-only options — meaningless to the headless engine, so they live ONLY on
-/// the `tui` subcommand (not the root, not global). This keeps them out of the
-/// engine subcommands' help and, crucially, makes `openseek --prompt x run` a
-/// clean error instead of a silent no-op. Bare `openseek` (which re-dispatches
-/// through `tui`) still honors their env bindings; set them via `openseek tui …`.
+/// UI-only options — meaningless to the headless `openseek` engine, so they live
+/// only on the `openseek_tui` command (never on the engine CLI). This keeps them
+/// out of `openseek`'s help and makes `openseek --prompt x run` a clean error
+/// instead of a silent no-op.
 pub fn tui_ui_options() -> Array[@argparse.OptionArg] {
   [
     OptionArg(
       "engine",
       long="engine",
-      about="Agent engine to spawn (default: this openseek binary); reads its JSONL event stream from stdout.",
+      about="Agent engine to spawn (default: the openseek CLI binary); reads its JSONL event stream from stdout.",
     ),
     OptionArg(
       "engine-mode",
@@ -128,15 +37,15 @@ pub fn tui_ui_flags() -> Array[@argparse.FlagArg] {
 }
 
 ///|
-/// A standalone `tui` command with every UI option declared directly
-/// (non-global), for unit tests that parse the UI in isolation. Production wires
-/// the shared options onto the root as globals and gives the `tui` subcommand only
-/// the UI-only ones (see `cmd/openseek`).
-fn cli_command() -> @argparse.Command {
+/// A standalone `openseek_tui` command with the shared agent options declared
+/// directly (non-global) alongside the UI-only ones. `cmd/openseek_tui` builds
+/// this command for its single-binary entry point; unit tests parse the same
+/// shape in isolation.
+pub fn cli_command(name? : String = "tui") -> @argparse.Command {
   Command(
-    "tui",
+    name,
     about="OpenSeek terminal UI.",
-    options=[..tui_shared_options(), ..tui_ui_options()],
+    options=[..@cli.agent_shared_options(), ..tui_ui_options()],
     flags=tui_ui_flags(),
   )
 }
@@ -252,8 +161,8 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
   } else {
     Some(engine_input)
   }
-  // `--engine-mode` is a UI-only option on the `tui` subcommand; a bare
-  // `openseek` (no subcommand) never has it, so read it gracefully.
+  // `--engine-mode` is a UI-only option; read it gracefully because `cli_command`
+  // always declares a default, and tests may parse a command without it.
   let engine_mode = EngineMode::parse(engine_mode_input)
   // `oneshot` only makes sense for a custom/replay engine that cannot speak the
   // persistent `serve` protocol; re-launching ourselves in oneshot buys nothing
@@ -263,7 +172,7 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
       "--engine-mode oneshot requires an explicit --engine (it is for replay/custom engines)",
     )
   }
-  // Enforced here rather than via argparse `required`: see `tui_shared_options`.
+  // Enforced here rather than via argparse `required`: see `@cli.agent_shared_options`.
   let model = @deepseek.Model::parse(model_input)
   guard model.api_key(matches.values) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
@@ -308,11 +217,17 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
 /// `-run <source.c>`.
 fn default_engine(args : ArrayView[String]) -> (String, Array[String]) {
   match args {
-    [argv0, ..] if argv0.contains("/") || argv0.contains("\\") =>
-      match moon_native_tcc_run_args(argv0) {
+    [argv0, ..] if argv0.contains("/") || argv0.contains("\\") => {
+      // The TUI binary is `openseek_tui`; the engine it spawns is the sibling
+      // automation `openseek` binary. Rewrite the TUI's own path (including the
+      // debug TCC source/response-file layout, whose package directory and
+      // basename both carry the `openseek_tui` name) to the engine's.
+      let engine_argv0 = argv0.replace_all(old="openseek_tui", new="openseek")
+      match moon_native_tcc_run_args(engine_argv0) {
         Some(args_prefix) => ("tcc", args_prefix)
-        None => (argv0, [])
+        None => (engine_argv0, [])
       }
+    }
     _ => ("openseek", [])
   }
 }
@@ -426,9 +341,8 @@ async fn engine_command_launchable(
 }
 
 ///|
-/// Run the interactive UI from already-parsed argparse `matches` — the top-level
-/// `openseek` command (in `cmd/openseek`) owns parsing and dispatches here for
-/// both the default (no subcommand) and the explicit `tui` subcommand.
+/// Run the interactive UI from already-parsed argparse `matches` — the
+/// `openseek_tui` command (in `cmd/openseek_tui`) owns parsing and calls here.
 pub async fn run(matches : @argparse.Matches) -> Unit {
   let mut config = parse_config(matches)
   if continue_requested(matches) {
@@ -678,8 +592,8 @@ test "default_engine re-launches a path argv0 and falls back to PATH otherwise" 
 }
 
 ///|
-async test "engine defaults to this binary; --engine overrides it" {
-  // No --engine: fall through to re-launching this binary.
+async test "engine defaults to the openseek CLI binary; --engine overrides it" {
+  // No --engine: fall through to re-launching the openseek engine binary.
   let default_cfg = parse_config(
     cli_command().parse(argv=[], env={ "DEEPSEEK": "k" }),
   )
@@ -738,4 +652,39 @@ async test "engine_launchable accepts an engine whose --help exits 0" {
   // every platform the tests run on (including Windows native), so this stays
   // cross-platform.
   assert_true(engine_command_launchable("moon", []))
+}
+
+///|
+test "default_engine maps a tui argv0 to the sibling openseek engine" {
+  @debug.assert_eq(
+    default_engine(["/usr/local/bin/openseek_tui"]),
+    ("/usr/local/bin/openseek", []),
+  )
+  @debug.assert_eq(default_engine(["./openseek_tui"]), ("./openseek", []))
+  @debug.assert_eq(
+    default_engine(["target/native/openseek_tui.exe"]),
+    ("target/native/openseek.exe", []),
+  )
+  @debug.assert_eq(
+    default_engine([
+      "/repo/_build/native/debug/build/bobzhang/openseek/cmd/openseek_tui/openseek_tui.c",
+    ]),
+    (
+      "tcc",
+      [
+        "@/repo/_build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.rspfile",
+      ],
+    ),
+  )
+  @debug.assert_eq(
+    default_engine([
+      "C:\\repo\\_build\\native\\debug\\build\\bobzhang\\openseek\\cmd\\openseek_tui\\openseek_tui.c",
+    ]),
+    (
+      "tcc",
+      [
+        "@C:\\repo\\_build\\native\\debug\\build\\bobzhang\\openseek\\cmd\\openseek\\openseek.rspfile",
+      ],
+    ),
+  )
 }

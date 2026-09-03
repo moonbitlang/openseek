@@ -6,9 +6,9 @@ import {
 }
 
 // Values
-pub async fn run(@argparse.Matches) -> Unit
+pub fn cli_command(name? : String) -> @argparse.Command
 
-pub fn tui_shared_options(global? : Bool) -> Array[@argparse.OptionArg]
+pub async fn run(@argparse.Matches) -> Unit
 
 pub fn tui_ui_flags() -> Array[@argparse.FlagArg]
 

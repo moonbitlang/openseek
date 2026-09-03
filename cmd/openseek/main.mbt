@@ -1,15 +1,14 @@
 ///|
-/// Single-binary entry point. `openseek` is one argparse command tree: the
-/// interactive TUI is the default action (bare `openseek`) and also the explicit
-/// `tui` subcommand, while the headless engine lives under
-/// `run`/`serve`/`review`/`sessions`. argparse owns parsing, `--help`, and
-/// error reporting (including rejecting unknown subcommands); we only dispatch on
-/// the parsed result. Engine stdout-JSONL logging is installed per subcommand in
-/// the run/serve handlers, never on the UI path.
+/// Automation entry point. `openseek` is the headless engine CLI: one argparse
+/// command tree under `run`/`serve`/`review`/`subrun`/`mcp`/`sessions`. The
+/// interactive terminal UI is a separate binary, `openseek_tui`. argparse owns
+/// parsing, `--help`, and error reporting (including rejecting unknown or missing
+/// subcommands); we only dispatch on the parsed result. Engine stdout-JSONL
+/// logging is installed per subcommand in the run/serve handlers.
 async fn main {
   dispatch() catch {
     error => {
-      @stdio.stderr.write("error: \{failure_message("\{error}")}\n") catch {
+      @stdio.stderr.write("error: \{@cli.failure_message("\{error}")}\n") catch {
         _ => ()
       }
       @sys.exit(1)
@@ -19,34 +18,23 @@ async fn main {
 
 ///|
 /// Parse the whole `openseek` command tree and dispatch on the chosen subcommand.
-/// No subcommand (or the explicit `tui`) runs the interactive UI; the others are
-/// the headless engine.
+/// The command tree requires a subcommand, so the parser rejects a bare
+/// `openseek` (headless automation has no default action).
 async fn dispatch() -> Unit {
   let argv = @env.args()[1:]
   let env = @env.get_env_vars()
   let matches = root_command().parse(argv~, env~)
   match matches.subcommand {
-    Some(("tui", m)) => @tui.run(m)
     Some(("run", m)) => run_task_command(m)
     Some(("serve", m)) => run_serve_command(m)
     Some(("review", m)) => run_review_command(m)
     Some(("subrun", m)) => run_subrun_command(m)
     Some(("mcp", m)) => run_mcp_command(m)
     Some(("sessions", m)) => run_sessions_command(m)
-    // argparse rejects unknown subcommands during parse, so this is unreachable.
+    // argparse rejects unknown and missing subcommands during parse, so this is
+    // unreachable.
     Some((name, _)) => fail("unhandled subcommand: \{name}")
-    // Bare `openseek` IS `openseek tui`: re-parse through the `tui` subcommand so
-    // its own options apply to the default UI, not only to an explicit `tui`.
-    // The first parse
-    // already accepted `argv` at the root, and `tui` inherits the root globals,
-    // so this re-parse cannot newly fail.
-    None => {
-      guard root_command().parse(argv=["tui", ..argv], env~).subcommand
-        is Some((_, m)) else {
-        fail("failed to initialize the interactive UI")
-      }
-      @tui.run(m)
-    }
+    None => fail("missing subcommand (argparse should have rejected this)")
   }
 }
 
@@ -549,28 +537,6 @@ async fn random_salt() -> String {
 }
 
 ///|
-fn failure_message(error_text : String) -> String {
-  lexmatch error_text {
-    (re"^error: ", after=message) => message.to_owned()
-    // `(.|\n)*` is greedy across lines, so the remainder follows the LAST
-    // marker occurrence — the same piece the split-and-take-last form chose.
-    (re"^(.|\n)* FAILED: ", after=last) =>
-      last.strip_suffix(")").unwrap_or(last).to_owned()
-    _ => error_text
-  }
-}
-
-///|
-test "failure_message avoids duplicating argparse error prefix" {
-  assert_eq(
-    failure_message(
-      "error: unexpected argument '--xxy' found\n\nUsage: openseek",
-    ),
-    "unexpected argument '--xxy' found\n\nUsage: openseek",
-  )
-}
-
-///|
 test "root command rejects an unknown subcommand" {
   // argparse owns this now (no hand-rolled dispatch): a bare non-subcommand word
   // is refused rather than silently opening the UI as a free-form prompt.
@@ -585,17 +551,14 @@ test "root command rejects an unknown subcommand" {
 }
 
 ///|
-test "bare parse selects no subcommand (the UI default)" {
-  let m = root_command().parse(argv=[], env={ "DEEPSEEK": "k" })
-  assert_true(m.subcommand is None)
-}
-
-///|
-test "tui is an explicit subcommand" {
-  guard root_command().parse(argv=["tui"], env={ "DEEPSEEK": "k" }).subcommand
-    is Some(("tui", _)) else {
-    fail("expected tui subcommand")
+test "bare parse is rejected (no default subcommand)" {
+  let outcome = try {
+    root_command().parse(argv=[], env={ "DEEPSEEK": "k" }) |> ignore
+    "parsed"
+  } catch {
+    e => "\{e}"
   }
+  assert_false(outcome == "parsed")
 }
 
 ///|
@@ -648,34 +611,24 @@ fn agent_options() -> Array[@argparse.OptionArg] {
 }
 
 ///|
-/// The whole `openseek` command tree. The interactive UI's options sit on the
-/// root (its default action, so bare `openseek` / `openseek --prompt "…"` open
-/// the UI) and on the explicit `tui` subcommand; the headless engine is under
-/// `run`/`serve`/`review`/`sessions`. `subcommand_required=false` lets the bare
-/// command fall through to the UI; `disable_help_subcommand` keeps a `help` word
-/// from shadowing the parse. Each subcommand keeps its own `--help`. Parsed once
-/// in `dispatch`.
+/// The whole `openseek` command tree: the headless engine under
+/// `run`/`serve`/`review`/`subrun`/`mcp`/`sessions`. The shared agent options
+/// (`--api-key`, `--model`, …) sit on the root as globals, so every engine
+/// subcommand inherits them in any position (`openseek --api-key k run`,
+/// `openseek run --api-key k`). `subcommand_required=true` makes a bare
+/// `openseek` an error — automation has no default action; the interactive UI is
+/// the separate `openseek_tui` binary. `disable_help_subcommand` keeps a `help`
+/// word from shadowing the parse. Parsed once in `dispatch`.
 fn root_command() -> @argparse.Command {
   Command(
     "openseek",
-    about="DeepSeek-backed MoonBit coding agent — runs the interactive UI by default.",
-    // Only the shared options (--api-key, --model, …) live on the root, as
-    // globals: every subcommand either uses them (run/serve/review, and the UI
-    // default) or harmlessly inherits them, and they resolve in any position
-    // (`openseek --api-key k tui`, bare `openseek`). UI-only options
-    // (--engine/--engine-mode/--prompt/--continue) live ONLY on the `tui`
-    // subcommand, so they neither leak into the engine subcommands' help nor get
-    // silently accepted-and-ignored before one (`openseek --prompt x run` is an
-    // error, not a no-op). Bare `openseek` reads UI-only options at their
-    // defaults; use `openseek tui --prompt "…"` to set them.
-    options=@tui.tui_shared_options(global=true),
+    about="DeepSeek-backed MoonBit coding agent (headless automation CLI).",
+    // The shared agent options (--api-key, --model, …) live on the root as
+    // globals, so every engine subcommand either uses them (run/serve/review) or
+    // harmlessly inherits them, and they resolve in any position
+    // (`openseek --api-key k run`, `openseek run --api-key k`).
+    options=@cli.agent_shared_options(global=true),
     subcommands=[
-      Command(
-        "tui",
-        about="OpenSeek terminal UI.",
-        options=@tui.tui_ui_options(),
-        flags=@tui.tui_ui_flags(),
-      ),
       Command(
         "run",
         about="Run one task headlessly; stream JSONL events on stdout.",
@@ -803,7 +756,7 @@ fn root_command() -> @argparse.Command {
         ],
       ),
     ],
-    subcommand_required=false,
+    subcommand_required=true,
     disable_help_subcommand=true,
   )
 }

@@ -51,7 +51,7 @@ async fn run_trial(
   // isolated trial workspace. This keeps launcher-relative paths stable while
   // ensuring the agent's session store and tool cwd live under the workspace.
   let repo_root = @fs.realpath(config.repo_root)
-  // `run` is the headless one-shot subcommand of the single `openseek` binary.
+  // `run` is the headless one-shot subcommand of the `openseek` binary.
   let (program, args) = if config.engine != "" {
     (@fs.realpath(config.engine), ["run"])
   } else {

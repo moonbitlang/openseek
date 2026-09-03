@@ -71,8 +71,9 @@ git submodule update --init editor/vscode     # opt-in performance suite
 | `bobzhang/openseek_protocol/emit` | Native-only writer for that stream: owns each event's log level. | `protocol/emit/README.mbt.md` |
 | `bobzhang/openseek/agent` | Native-only OpenSeek agent loop and local tool dispatch. | `agent/README.mbt.md` |
 | `bobzhang/openseek/agent_review` | Read-only, compiler-grounded code-review engine behind `openseek review`. | `agent_review/README.mbt.md` |
-| `bobzhang/openseek/cmd/openseek` | Native-only command-line entry point. | `cmd/openseek/README.md` |
-| `bobzhang/openseek/cmd/tui` | Native-only terminal UI library, the default mode of `openseek` (and `openseek tui`). | `cmd/tui/README.md` |
+| `bobzhang/openseek/cmd/openseek` | Native-only headless automation CLI (`openseek`). | `cmd/openseek/README.md` |
+| `bobzhang/openseek/cmd/openseek_tui` | Native-only interactive terminal UI binary (`openseek_tui`). | `cmd/tui/README.md` |
+| `bobzhang/openseek/cmd/tui` | Native-only terminal UI library, launched by `openseek_tui`. | `cmd/tui/README.md` |
 | `bobzhang/openseek/tui` | Reusable terminal-UI framework (transcript, composer, rendering) the OpenSeek TUI builds on. | `tui/README.md` |
 | `bobzhang/openseek/viz` | Browser viewer for durable session logs (JS). | `viz/README.md` |
 | `bobzhang/inspect` (in `inspect/`, own module) | HTTP server (native or wasm) that serves the visualizer over recorded sessions. | `inspect/README.md` |
@@ -127,10 +128,10 @@ filesystem, and process APIs.
 
 ## Agent CLI
 
-The `cmd/openseek` package is the single-binary entry point — a subcommand tree
-(default: the terminal UI; `run`/`serve`/`review`/`sessions` for the headless
-engine; `mcp` to validate MCP configuration). `openseek run` parses arguments
-and runs the agent package. The agent sends DeepSeek native function tools and
+The `cmd/openseek` package is the headless automation entry point — a subcommand
+tree (`run`/`serve`/`review`/`subrun`/`mcp`/`sessions`). The interactive terminal
+UI is the separate `cmd/openseek_tui` binary. `openseek run` parses arguments and
+runs the agent package. The agent sends DeepSeek native function tools and
 supports eleven local tools: `mbtx` — both the scripting surface and the
 command runner, spawning processes through the shell-free
 `moonbitlang/async/shell` API, with
@@ -214,16 +215,16 @@ agent reads the file before applying it. See `agent_skill/README.mbt.md`.
 
 ## Terminal UI
 
-The terminal UI is the **default** mode of the single `openseek` binary (the
-`cmd/tui` library, also reachable as `openseek tui`): a scrolling transcript with
-a live composer. It spawns the `openseek` engine (by default this same binary in
-`serve` mode) and renders its JSONL event stream — streamed answer text appears
-live on the activity line, and each turn's reasoning is kept as a dim `✻`
-transcript aside above its answer.
+The terminal UI is the dedicated `openseek_tui` binary (the `cmd/tui` library,
+packaged by `cmd/openseek_tui`): a scrolling transcript with a live composer. It
+spawns the `openseek` engine (by default the `openseek` CLI in `serve` mode) and
+renders its JSONL event stream — streamed answer text appears live on the
+activity line, and each turn's reasoning is kept as a dim `✻` transcript aside
+above its answer.
 
 ```bash
 export DEEPSEEK=sk-...
-moon run cmd/openseek -- tui
+moon run cmd/openseek_tui
 ```
 
 **Every launch converses in a durable session.** The engine only carries
@@ -232,8 +233,8 @@ id per launch (`tui-YYYYMMDD-HHMMSS-mmm`, named in the startup banner) and store
 the conversation under `--session-root` (default `.openseek/`). Follow-up prompts
 remember earlier ones, and a conversation outlives the process:
 
-- `moon run cmd/openseek -- tui --continue` resumes the most recently active session.
-- `moon run cmd/openseek -- tui --session <id>` resumes (or creates) a specific one.
+- `moon run cmd/openseek_tui -- --continue` resumes the most recently active session.
+- `moon run cmd/openseek_tui -- --session <id>` resumes (or creates) a specific one.
 - `moon run cmd/openseek -- sessions list` shows what is resumable —
   tab-separated id, last-activity time, and the session's first prompt,
   newest first.
@@ -250,7 +251,7 @@ and exposes each on `PATH` as `<name>.exe` (e.g. `openseek.exe`).
 - [`tests/cram/cli.md`](tests/cram/cli.md) — offline `openseek` subcommand
   examples (top-level and `run` help, and the `run`/`serve`/`sessions` behaviors).
   They make no network calls and run in CI via `moon cram test tests/cram`.
-- [`tests/cram/tui.md`](tests/cram/tui.md) — offline `openseek tui` examples (the
+- [`tests/cram/tui.md`](tests/cram/tui.md) — offline `openseek_tui` examples (the
   help banner and the missing-API-key error). The argument parser runs before the
   terminal UI starts, so these need no API key and no TTY.
 - [`tests/cram/subrun.md`](tests/cram/subrun.md) — the offline internal child-mode

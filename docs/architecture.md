@@ -8,18 +8,19 @@ natively by GitHub.
 
 ## System overview
 
-One shared engine, three frontends. `cmd/openseek` is the engine (the TUI
-and headless modes live in the same binary; the desktop app and the viz
-server are separate executables that spawn or read from it): its `serve` mode
-reads JSONL commands on stdin and streams typed JSONL events
-(`bobzhang/openseek_protocol`) on stdout. The terminal UI, the desktop app,
-and headless `run` all drive that same engine and event stream. Durable state
-lives in append-only session files that the visualizer reads directly.
+One shared engine, three frontends. `cmd/openseek` is the engine (headless
+automation: `run`/`serve`/`review`/`sessions`/`mcp`; the desktop app and the
+viz server are separate executables that spawn or read from it): its `serve`
+mode reads JSONL commands on stdin and streams typed JSONL events
+(`bobzhang/openseek_protocol`) on stdout. The terminal UI (`openseek_tui`,
+built on `cmd/tui`), the desktop app, and headless `run` all drive that same
+engine and event stream. Durable state lives in append-only session files that
+the visualizer reads directly.
 
 ```mermaid
 flowchart LR
   subgraph frontends [Frontends]
-    TUI["cmd/tui — terminal UI<br/>(built on the tui framework)"]
+    TUI["openseek_tui — terminal UI<br/>(cmd/tui, built on the tui framework)"]
     DESKTOP["openseek_desktop — desktop app<br/>(CEF shell + JS frontend)"]
     VIZ["inspect + viz —<br/>session visualizer (browser)"]
   end

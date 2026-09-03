@@ -16,7 +16,6 @@ import {
   "bobzhang/openseek/agent_session",
   "bobzhang/openseek/agent_session/store",
   "bobzhang/openseek/agent_session/compact",
-  "bobzhang/openseek/cmd/tui",
   "bobzhang/openseek/deepseek",
   "bobzhang/openseek/prompt",
   "bobzhang/openseek_protocol" @protocol,

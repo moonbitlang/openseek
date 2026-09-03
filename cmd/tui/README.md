@@ -2,27 +2,27 @@
 
 The OpenSeek terminal UI: a scrolling transcript with a live composer, built on
 the reusable [`tui`](../../tui/README.md) controller package. It ships as a
-library launched by the single `openseek` binary — it is the **default** mode
-(bare `openseek`, or with an initial prompt via `openseek tui --prompt "…"`) and the
-explicit `openseek tui` subcommand. There is no separate `tui` executable.
+library launched by the dedicated `openseek_tui` binary (a thin executable
+package that builds this package's `cli_command`); the headless engine is the
+separate `openseek` binary.
 
 The UI runs no agent code itself. It spawns the `openseek` engine — by default
-this same binary, re-launched in `serve` mode (so the UI and engine can never
-drift out of sync), resolved from `argv[0]` when invoked by path and otherwise
-from `PATH`; override with `--engine` — **once per session**
-and drives it over stdin commands, rendering the engine's JSONL event stream:
-streamed thinking and answer text move live on the activity line, each turn's
-reasoning is kept as a dim `✻` transcript aside above its answer, and tool
-results land as `⏺` blocks. Pressing Enter while a task runs steers it mid-turn;
-Ctrl-C cancels the turn (a second Ctrl-C kills the engine, and the next prompt
-respawns it on the same session).
+the `openseek` CLI binary, re-launched in `serve` mode (so the UI and engine can
+never drift out of sync), resolved from `argv[0]` when invoked by path (rewriting
+`openseek_tui` to `openseek`) and otherwise from `PATH`; override with `--engine`
+— **once per session** and drives it over stdin commands, rendering the engine's
+JSONL event stream: streamed thinking and answer text move live on the activity
+line, each turn's reasoning is kept as a dim `✻` transcript aside above its
+answer, and tool results land as `⏺` blocks. Pressing Enter while a task runs
+steers it mid-turn; Ctrl-C cancels the turn (a second Ctrl-C kills the engine,
+and the next prompt respawns it on the same session).
 
 A custom or recorded-stream engine that only speaks the original
 one-process-per-prompt protocol works with `--engine-mode oneshot`; it spawns
 `<engine> run --session=<id>
 --session-root=<root> -- <task>` per prompt, steering is unavailable, and it
-requires an explicit `--engine` (re-launching this binary in oneshot would only
-lose steering for no gain).
+requires an explicit `--engine` (re-launching the `openseek_tui` binary in
+oneshot would only lose steering for no gain).
 
 Because the UI takes over the terminal, launching it without a TTY (a pipe, CI
 log, or cron) is refused with a pointer to `openseek run` / `openseek serve`.

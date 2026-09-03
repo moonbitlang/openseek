@@ -1,4 +1,5 @@
 import {
+  "bobzhang/openseek/deepseek",
   "moonbitlang/core/argparse",
   "moonbitlang/core/string",
 }

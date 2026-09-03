@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub fn agent_shared_options(global? : Bool) -> Array[@argparse.OptionArg]
+
+pub fn failure_message(String) -> String
+
 pub fn parse_positive_int(String, String) -> Int raise
 
 pub fn terminal_safe_line(String, limit? : Int) -> String

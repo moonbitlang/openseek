@@ -49,7 +49,7 @@ time; a conversation that is still running keeps going in the background.
 Sessions are stored under the `session_root` start-payload field, falling back
 to `~/.openseek` (absolute, so a packaged app whose working directory is `/`
 still works). They are interoperable with the CLI/TUI stores: resume one with
-`openseek tui --session-root ~/.openseek --session <id>`.
+`openseek_tui --session-root ~/.openseek --session <id>`.
 
 Each conversation also gets its own workspace directory, used as the engine's
 working directory: `Documents/OpenSeek/<session-id>` (Documents as the
