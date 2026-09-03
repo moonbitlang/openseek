@@ -90,8 +90,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
 
       # Proton 0.2 installs its immutable runtime and versioned helper in the
       # shared user-level store selected by the dependency in desktop/moon.mod.
@@ -252,7 +250,6 @@ jobs:
         shell: bash
         run: |
           moon -C desktop run package/macos --target native -- \
-            --ci \
             --release \
             --no-open \
             --target dmg \
@@ -277,7 +274,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          moon -C desktop run package/browser --target native -- --ci --release
+          moon -C desktop run package/browser --target native -- --release
           test -f desktop/dist/browser/index.html
           test -f desktop/dist/browser/browser.js
           COPYFILE_DISABLE=1 tar \

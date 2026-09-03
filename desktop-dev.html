@@ -13,12 +13,11 @@
     <link rel="stylesheet" href="/desktop/dev/viewer.css" />
     <link rel="stylesheet" href="/desktop/app.css" />
     <link rel="stylesheet" href="/desktop/target/web/xterm.css" />
-    <!-- Mermaid is loaded directly from the exact npm package selected by
-         desktop/package-lock.json. -->
+    <!-- The build program stages Mermaid's pinned browser distribution here. -->
     <script type="importmap">
       {
         "imports": {
-          "https://proton.localhost/mermaid/": "/desktop/node_modules/mermaid/dist/"
+          "https://proton.localhost/mermaid/": "/desktop/target/web/mermaid/"
         }
       }
     </script>

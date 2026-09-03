@@ -180,9 +180,11 @@ package.
 
 The desktop frontend imports the `moonbitlang/editor` workspace member from
 `../editor`. Packaging reads its reusable CSS and codicon font from that same
-checkout. `desktop/package-lock.json` pins Mermaid, xterm, and esbuild; every
-desktop and browser package copies those locked local files beside the
-frontend bundle, so end users never fetch Mermaid from a CDN.
+checkout. The shared build program downloads fixed Mermaid and xterm browser
+distributions plus a standalone esbuild executable and verifies their
+checked-in SHA-256 digests; every desktop and browser package copies the local
+outputs beside the frontend bundle, so end users never fetch Mermaid from a
+CDN.
 `viewer_theme.css` supplies the desktop-owned theme variables; the editor's
 reference-shell theme remains development-only.
 
@@ -197,9 +199,9 @@ What still needs preparing, beyond the MoonBit packages:
 
 ## Build
 
-Moon compiles programs, npm builds browser assets, one sequential Node program
-stages `seekmoon/`, and Proton owns the final package. Check the shared program
-and all Moon compatibility entries with:
+Moon compiles programs, one sequential Node program assembles browser assets
+and stages `seekmoon/`, and Proton owns the final package. Check the shared
+program and all Moon compatibility entries with:
 
 ```sh
 just desktop-build-scripts-check
@@ -234,9 +236,9 @@ path or build-mode arguments and contains no build or launch implementation.
 Development does not use Moon's `data_dir` and does not assemble a package
 asset directory. `desktop-dev.html` is served with the repository as its asset
 root: it loads the frontend straight from `_build`, the application's source
-CSS, and the npm-built xterm bundle under `desktop/target/web/`. Mermaid loads
-from the locked local npm package. Production uses the same npm build outputs
-and copies them into the fixed package resource tree.
+CSS, and the generated xterm files under `desktop/target/web/`. Mermaid loads
+from the verified distribution staged under that same directory. Production
+copies those outputs into the fixed package resource tree.
 
 Desktop CSS conventions, including token scope and the single-owner form focus
 contract, live in [`styles/README.md`](styles/README.md).
@@ -252,9 +254,8 @@ resolver as production: a bundled seed when one exists, otherwise `moon` on
 
 The shared build program remains the release-layout test. The `just` recipe
 builds debug artifacts; release automation passes `--release` through the same
-platform command. Package commands use `npm install` locally so an existing
-`node_modules` is reused; automation passes `--ci` for a clean `npm ci`
-installation from `package-lock.json`.
+platform command. Package commands cache verified upstream archives below
+`desktop/target/vendor-web/cache`; they do not require npm or `node_modules`.
 
 ## Test policy
 

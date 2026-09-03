@@ -83,8 +83,10 @@ moon run ./desktop/package/linux
 moon run ./desktop/package/windows
 ```
 
-These commands use `npm install` for local builds. Pass `--ci` after `--` in
-automation to replace it with a clean `npm ci` installation.
+These commands download fixed Mermaid and xterm browser distributions plus a
+standalone esbuild executable, verify their checked-in SHA-256 digests, and
+cache only the archives below `desktop/target/vendor-web/cache`. They do not
+require npm.
 
 Inspect the installed copy, not the extraction directory:
 

@@ -1,5 +1,5 @@
-// npm pins these browser modules; esbuild turns them into the single global
-// script consumed by both the packaged app and the browser console.
+// build.mjs stages the pinned packages and invokes a verified standalone
+// esbuild binary to expose one shape shared by Desktop and Browser.
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";

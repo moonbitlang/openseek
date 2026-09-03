@@ -58,9 +58,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            desktop/package-lock.json
-            desktop/e2e/package-lock.json
+          cache-dependency-path: desktop/e2e/package-lock.json
 
       - name: Update MoonBit dependencies
         working-directory: desktop
@@ -106,7 +104,7 @@ jobs:
         working-directory: desktop
         # The Moon entrypoint remains a compatibility CLI. CI can call the same
         # build program directly because the job already prepared Proton.
-        run: node package/build.mjs browser --ci
+        run: node package/build.mjs browser
 
       - name: Run Desktop E2E tests
         working-directory: desktop/e2e

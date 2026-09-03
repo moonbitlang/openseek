@@ -2,14 +2,13 @@
 
 The Desktop build has one sequential implementation:
 `package/build.mjs`. It runs on Node 22 and uses only Node's standard library
-plus the project tools already required by the build (`npm`, `moon`, `moonx`,
-`curl`, and `tar`).
+plus the project tools already required by the build (`moon`, `moonx`, `curl`,
+and `tar`).
 
 | Owner | Responsibility |
 | --- | --- |
 | Moon | Compile the host, engine, and JavaScript frontends. |
-| npm + esbuild | Pin Mermaid/xterm/esbuild and generate browser assets. |
-| `package/build.mjs` | Download verified native inputs and stage SeekMoon resources. |
+| `package/build.mjs` | Download verified browser/native inputs, generate browser assets, and stage SeekMoon resources. |
 | Proton | Run development CEF, create packages, sign, and notarize. |
 
 The packages at `package/macos`, `package/windows`, `package/linux`,
@@ -58,9 +57,10 @@ moon run ./desktop/package/browser -- --release
 moon run ./desktop/package/dev
 ```
 
-Commands use `npm install` by default so repeated local builds reuse
-`node_modules`. CI passes `--ci` to request a clean `npm ci` installation from
-the committed lockfile.
+Browser inputs and the standalone esbuild executable are fixed-version
+upstream distributions with checked-in SHA-256 digests. Builds cache only
+their downloaded archives; extraction and generated files are recreated on
+every run.
 
 `--notarize` requires `--sign` and `--target dmg`. `--sign` requires a
 distribution target (`dmg` or `zip`). A failed ripgrep SHA-256 check deletes
@@ -70,7 +70,7 @@ the invalid archive and stops immediately.
 
 Package commands perform these steps:
 
-1. `npm install` locally, or `npm ci` with `--ci`, followed by the esbuild asset build;
+1. download and verify pinned Mermaid/xterm and standalone esbuild archives, then build the browser assets;
 2. Moon frontend, viz, host, and engine builds;
 3. Proton CEF setup;
 4. ripgrep download and SHA-256 verification;
@@ -118,7 +118,7 @@ On macOS, native package objects use `target/moonbuild/macos-12.0` so
 `MACOSX_DEPLOYMENT_TARGET=12.0` cannot reuse an incompatible Moon cache entry.
 On Windows, only the staged engine copy has its PE subsystem changed to GUI.
 
-Downloaded archives stay under `desktop/target/`. Generated npm assets are
+Downloaded archives stay under `desktop/target/`. Generated browser assets are
 written below `desktop/target/web/`; source entrypoints live under
 `desktop/frontend/build/`.
 

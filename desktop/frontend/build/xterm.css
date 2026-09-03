@@ -1,2 +1,2 @@
-/* esbuild resolves xterm's package-owned stylesheet from the npm lockfile. */
+/* The build program stages this pinned package before invoking esbuild. */
 @import "@xterm/xterm/css/xterm.css";

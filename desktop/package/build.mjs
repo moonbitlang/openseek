@@ -11,16 +11,54 @@ const Hosts = {
     command: "macos", platform: "macos-arm64", moonbit: "darwin-aarch64",
     ripgrep: "aarch64-apple-darwin",
     sha: "378e973289176ca0c6054054ee7f631a065874a352bf43f0fa60ef079b6ba715",
+    esbuild: { package: "darwin-arm64", binary: "bin/esbuild",
+      sha: "5d64cc9bc527d598450b5f8d47ff293eb9f3aea38dd9eff67fd55d228c5ccb43" },
   },
   linux: {
     command: "linux", platform: "linux-x64", moonbit: "linux-x86_64",
     ripgrep: "x86_64-unknown-linux-musl",
     sha: "1c9297be4a084eea7ecaedf93eb03d058d6faae29bbc57ecdaf5063921491599",
+    esbuild: { package: "linux-x64", binary: "bin/esbuild",
+      sha: "9ed00ab5330c94386f3273eda99a1fb0e8f37cfd6cb5270e4ad2fe3527da3546" },
   },
   win32: {
     command: "windows", platform: "windows-x64", moonbit: "windows-x86_64",
     ripgrep: "x86_64-pc-windows-msvc",
     sha: "124510b94b6baa3380d051fdf4650eaa80a302c876d611e9dba0b2e18d87493a",
+    esbuild: { package: "win32-x64", binary: "esbuild.exe",
+      sha: "5c5d62da7572b57ddc1fa3caedc36c1218b5d8d02ce9c7ee70e3339fce4453c4" },
+  },
+};
+
+const EsbuildVersion = "0.28.1";
+
+// These archives already contain browser-ready distributions. Fetching the
+// exact tarballs avoids installing a package manager or recreating its
+// dependency graph during an application build.
+const WebArchives = {
+  xterm: {
+    filename: "xterm-5.5.0.tgz",
+    url: "https://registry.npmjs.org/@xterm/xterm/-/xterm-5.5.0.tgz",
+    sha: "bd954fa721872170188cc5d7e83e88db3c83c9a18a4e8d24c2783d26491f59d2",
+    path: "node_modules/@xterm/xterm",
+  },
+  fit: {
+    filename: "addon-fit-0.10.0.tgz",
+    url: "https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.10.0.tgz",
+    sha: "917ac44972453d5eed52edc1e50260c76398ce48cf2290c2e60671102bba0b33",
+    path: "node_modules/@xterm/addon-fit",
+  },
+  webLinks: {
+    filename: "addon-web-links-0.11.0.tgz",
+    url: "https://registry.npmjs.org/@xterm/addon-web-links/-/addon-web-links-0.11.0.tgz",
+    sha: "cad54687a1447f87cd8dd9ce454d4d657d18cc7179e9179908f391b4512f74a0",
+    path: "node_modules/@xterm/addon-web-links",
+  },
+  mermaid: {
+    filename: "mermaid-11.16.0.tgz",
+    url: "https://registry.npmjs.org/mermaid/-/mermaid-11.16.0.tgz",
+    sha: "ff48c94a0a0458b377a5187ad01407184d2a182e6476c2015b7068ff58355fae",
+    path: "mermaid",
   },
 };
 
@@ -47,24 +85,12 @@ class Build {
     if (result.status !== 0) throw new Error(`${program} exited with ${result.status ?? result.signal}`);
   }
 
-  npmRun(args) {
-    // npm is installed as a .cmd launcher on Windows, which Node cannot spawn
-    // directly without a command interpreter. Keep commandRun shell-free and
-    // route only these two trusted npm commands through the system cmd.exe.
-    if (process.platform === "win32") {
-      return this.commandRun(process.env.ComSpec || "cmd.exe",
-        ["/d", "/s", "/c", "npm.cmd", ...args]);
-    }
-    return this.commandRun("npm", args);
-  }
-
   commandOutput(program, args) {
     return execFileSync(program, args, { cwd: this.desktop, encoding: "utf8" });
   }
 
   parse() {
     const options = { help: { type: "boolean", short: "h" } };
-    options.ci = { type: "boolean" };
     if (this.command !== "dev") options.release = { type: "boolean" };
     if (this.command === "macos" || this.command === "windows") {
       options.target = { type: "string", multiple: true };
@@ -77,10 +103,10 @@ class Build {
     const { values } = parseArgs({ args: this.argv, options, strict: true });
     if (values.help) {
       const suffix = this.command === "macos"
-        ? "[--ci] [--release] [--target app|dmg|zip] [--sign IDENTITY] [--notarize PROFILE] [--no-open]"
+        ? "[--release] [--target app|dmg|zip] [--sign IDENTITY] [--notarize PROFILE] [--no-open]"
         : this.command === "windows"
-          ? "[--ci] [--release] [--target app|zip|installer]"
-          : this.command === "linux" || this.command === "browser" ? "[--ci] [--release]" : "[--ci]";
+          ? "[--release] [--target app|zip|installer]"
+          : this.command === "linux" || this.command === "browser" ? "[--release]" : "";
       console.log(`Usage: moon run ./desktop/package/${this.command} -- ${suffix}`.trim());
       return null;
     }
@@ -98,7 +124,7 @@ class Build {
     if (values.sign && !targets.some(target => target === "dmg" || target === "zip")) {
       throw new Error("--sign requires a distribution target (--target dmg or --target zip)");
     }
-    return { ci: values.ci ?? false, release: values.release ?? false, targets, sign: values.sign,
+    return { release: values.release ?? false, targets, sign: values.sign,
       notarize: values.notarize, open: !values["no-open"] };
   }
 
@@ -132,11 +158,65 @@ class Build {
     }
   }
 
-  async web(profile, browser = false, ci = false) {
-    // Local installs preserve node_modules for quick repeat builds. CI requests
-    // a clean, lockfile-only install explicitly through the shared CLI.
-    await this.npmRun([ci ? "ci" : "install"]);
-    await this.npmRun(["run", "build"]);
+  async webAssets() {
+    if (!this.host) throw new Error(`browser assets cannot build on ${process.platform}/${process.arch}`);
+    const vendor = join(this.desktop, "target/vendor-web");
+    const work = join(vendor, "work");
+    const output = join(this.desktop, "target/web");
+
+    // Cache only verified archives. Extraction and generated outputs are
+    // recreated so an interrupted build cannot leave a partial asset tree.
+    await rm(work, { recursive: true, force: true });
+    await rm(output, { recursive: true, force: true });
+    await mkdir(work, { recursive: true });
+    await mkdir(output, { recursive: true });
+    for (const archive of Object.values(WebArchives)) {
+      const cached = join(vendor, "cache", archive.filename);
+      await this.download(archive.url, cached, archive.sha);
+      const extracted = join(work, archive.path);
+      await mkdir(extracted, { recursive: true });
+      await this.commandRun("tar", ["-xf", cached, "-C", extracted, "--strip-components=1"]);
+    }
+
+    const esbuild = this.host.esbuild;
+    const esbuildArchive = join(vendor, "cache", `esbuild-${esbuild.package}-${EsbuildVersion}.tgz`);
+    await this.download(
+      `https://registry.npmjs.org/@esbuild/${esbuild.package}/-/${esbuild.package}-${EsbuildVersion}.tgz`,
+      esbuildArchive,
+      esbuild.sha,
+    );
+    const esbuildRoot = join(work, "esbuild");
+    await mkdir(esbuildRoot, { recursive: true });
+    await this.commandRun("tar", ["-xf", esbuildArchive, "-C", esbuildRoot, "--strip-components=1"]);
+    const esbuildBinary = join(esbuildRoot, esbuild.binary);
+    if (process.platform !== "win32") await chmod(esbuildBinary, 0o755);
+
+    // esbuild remains the authority for CSS imports, URL handling, and the
+    // xterm module graph. It is a verified standalone tool, not an npm install.
+    for (const [entry, name] of [
+      [join(this.desktop, "app.css"), "app.css"],
+      [join(this.desktop, "frontend/build/viewer.css"), "viewer.css"],
+    ]) {
+      await this.commandRun(esbuildBinary, [entry, "--bundle", "--external:*.ttf",
+        "--external:*.woff2", `--outfile=${join(output, name)}`]);
+    }
+    await cp(join(this.desktop, "frontend/build/xterm-entry.js"), join(work, "xterm-entry.js"));
+    await cp(join(this.desktop, "frontend/build/xterm.css"), join(work, "xterm.css"));
+    await this.commandRun(esbuildBinary, [join(work, "xterm-entry.js"), "--bundle",
+      "--format=iife", "--platform=browser", "--minify",
+      `--outfile=${join(output, "xterm.js")}`]);
+    await this.commandRun(esbuildBinary, [join(work, "xterm.css"), "--bundle", "--minify",
+      `--outfile=${join(output, "xterm.css")}`]);
+
+    const mermaid = join(output, "mermaid");
+    await mkdir(join(mermaid, "chunks"), { recursive: true });
+    await cp(join(work, "mermaid/dist/mermaid.esm.min.mjs"), join(mermaid, "mermaid.esm.min.mjs"));
+    await cp(join(work, "mermaid/dist/chunks/mermaid.esm.min"), join(mermaid, "chunks/mermaid.esm.min"), { recursive: true });
+    await cp(join(work, "mermaid/LICENSE"), join(mermaid, "LICENSE"));
+  }
+
+  async web(profile, browser = false) {
+    await this.webAssets();
     const release = profile === "release" ? ["--release"] : [];
     if (browser) {
       await this.commandRun("moon", ["build", "frontend/browser", "--target", "js", ...release]);
@@ -159,11 +239,7 @@ class Build {
     }
     await cp(join(this.repo, "editor/viewer/browser/view/codicon/codicon.ttf"), join(output, "codicon.ttf"));
     await cp(join(this.desktop, "fonts"), join(output, "fonts"), { recursive: true });
-    const mermaid = join(this.desktop, "node_modules/mermaid");
-    await mkdir(join(output, "mermaid/chunks"), { recursive: true });
-    await cp(join(mermaid, "dist/mermaid.esm.min.mjs"), join(output, "mermaid/mermaid.esm.min.mjs"));
-    await cp(join(mermaid, "dist/chunks/mermaid.esm.min"), join(output, "mermaid/chunks/mermaid.esm.min"), { recursive: true });
-    await cp(join(mermaid, "LICENSE"), join(output, "mermaid/LICENSE"));
+    await cp(join(generated, "mermaid"), join(output, "mermaid"), { recursive: true });
   }
 
   async native(profile) {
@@ -275,7 +351,7 @@ class Build {
       throw new Error(`${this.command} packaging does not support ${process.arch}`);
     }
     const profile = options.release ? "release" : "debug";
-    await this.web(profile, false, options.ci);
+    await this.web(profile);
     const engine = await this.native(profile);
     const vendors = await this.vendors();
     await this.stage(profile, engine, vendors);
@@ -311,9 +387,9 @@ class Build {
     }
     const options = this.parse();
     if (!options) return;
-    if (this.command === "browser") return await this.web(options.release ? "release" : "debug", true, options.ci);
+    if (this.command === "browser") return await this.web(options.release ? "release" : "debug", true);
     if (this.command === "dev") {
-      await this.web("debug", false, options.ci);
+      await this.web("debug");
       await this.commandRun("moon", ["build", "cmd/openseek", "--target", "native"], { cwd: this.repo });
       return await this.proton(["-C", ".", "dev", "--config", "proton.project.json", "--no-frontend", "--setup"]);
     }
