@@ -682,13 +682,14 @@ pub async fn list_codex_worktree_bindings() -> Array[CodexWorktreeBinding] {
 }
 
 ///|
-/// A fresh 16-hex-char salt from OS entropy (`@sys.rand`: the native
-/// runtime's source, WASI `random_get` on wasm). Every minted branch is
-/// salted so that two machines' independent `wt-N` counters can never mint
-/// the same branch name and collide on a shared remote; a missing entropy
-/// source refuses rather than minting a guessable name.
+/// A fresh 8-hex-char salt from OS entropy (`@sys.rand`). Every minted
+/// branch is salted so that two machines' independent `wt-N` counters can
+/// never mint the same branch name and collide on a shared remote; 32 bits
+/// is plenty for that, and anything longer only clutters the branch chip
+/// and pull-request heads. A missing entropy source refuses rather than
+/// minting a guessable name.
 fn fresh_branch_salt() -> String raise WorktreeError {
-  guard @sys.rand(8) is Some(bytes) else {
+  guard @sys.rand(4) is Some(bytes) else {
     raise WorktreeError("no OS entropy available to mint a worktree branch")
   }
   let salt = StringBuilder()
@@ -722,11 +723,13 @@ async fn fresh_worktree_name(
     if occupied {
       continue
     }
-    // Salted branches survive removal as `openseek/<name>-<salt>`, so a
-    // name's history is a prefix match, not an exact ref.
+    // Salted branches survive removal as `openseek/<name>-<salt>`, and
+    // branches minted before salting as the bare `openseek/<name>`, so a
+    // name's history is the exact ref plus the prefix match.
     if @gitx.probe(dir, [
         "for-each-ref",
         "--format=%(refname)",
+        "refs/heads/\{WorktreeBranchPrefix}\{name}",
         "refs/heads/\{WorktreeBranchPrefix}\{name}-*",
       ])
       is Some(listing) &&
@@ -878,9 +881,9 @@ pub async fn create(
     Some(name) => name
     None => fresh_worktree_name(dir, entries)
   }
-  // Refusals name the holder: the registry entry, the directory (a subtask
-  // slice can own `.worktrees/<name>` without any registry entry), or the
-  // branch.
+  // Refusals name the holder: the registry entry or the directory (a subtask
+  // slice can own `.worktrees/<name>` without any registry entry). The branch
+  // is freshly salted, so nothing can hold it ahead of us.
   if entries.iter().any(entry => entry.name == name) {
     raise WorktreeError("worktree \{name} already exists in this workspace")
   }
@@ -895,17 +898,6 @@ pub async fn create(
     )
   }
   let branch = WorktreeBranchPrefix + name + "-" + fresh_branch_salt()
-  if @gitx.probe(dir, [
-      "show-ref",
-      "--verify",
-      "--quiet",
-      "refs/heads/\{branch}",
-    ])
-    is Some(_) {
-    raise WorktreeError(
-      "branch \{branch} already exists; delete it or pick another name",
-    )
-  }
   @workspaces.exclude_from_git(dir, WorktreesDirName)
   let base = @gitx.run(dir, ["rev-parse", "HEAD"])
   // The branch comes first, on its own: our locks are in-process only, so
@@ -1420,7 +1412,7 @@ async test "worktree create provisions checkout, branch, registry, exclusion" {
   // The branch is minted salted past the bare name (`openseek/<name>-<salt>`)
   // so machine-local counters can never collide on a shared remote.
   assert_true(info.branch.has_prefix("openseek/fix-auth-"))
-  assert_eq(info.branch.length(), "openseek/fix-auth-".length() + 16)
+  assert_eq(info.branch.length(), "openseek/fix-auth-".length() + 8)
   assert_eq(info.base, @gitx.run(repo, ["rev-parse", "HEAD"]))
   // Creation IS the binding: the entry carries its conversation from birth.
   assert_eq(info.session, Some("s-fix-auth"))
@@ -1537,6 +1529,10 @@ async test "worktree names are host-generated and skip surviving branches" {
   }
   assert_eq(a.name, "wt-2")
   assert_eq(b.name, "wt-3")
+  // A bare `openseek/wt-4` left behind by a build that minted unsalted
+  // branches is history too: the counter moves past it instead of pairing
+  // the directory with a lookalike salted branch.
+  ignore(@gitx.run(repo, ["branch", "openseek/wt-4"]))
   // Codex uses the same registry, name allocator, and idempotency contract,
   // but its owner remains in a distinct field from OpenSeek sessions.
   let codex = create(host, repo.to_string(), WorktreeOwner::codex("thread-1"), fn(
@@ -1544,15 +1540,15 @@ async test "worktree names are host-generated and skip surviving branches" {
   ) {
 
   })
-  assert_eq(codex.name, "wt-4")
+  assert_eq(codex.name, "wt-5")
   let codex_replay = create(
     host,
     repo.to_string(),
     WorktreeOwner::codex("thread-1"),
     fn(_) {  },
   )
-  assert_eq(codex_replay.name, "wt-4")
-  guard codex_replay.worktrees.iter().find_first(info => info.name == "wt-4")
+  assert_eq(codex_replay.name, "wt-5")
+  guard codex_replay.worktrees.iter().find_first(info => info.name == "wt-5")
     is Some(codex_info) else {
     fail("expected Codex-owned worktree row")
   }
