@@ -1172,6 +1172,20 @@ async fn skills_prompt_section_for_cwd(
 }
 
 ///|
+async fn get_references_path() -> String? {
+  let path = @path.Path(@current_exe.current_exe())
+    .dirname()
+    .join("references")
+    .normalize()
+    .to_string()
+  if @fs.exists(path) {
+    Some(path)
+  } else {
+    None
+  }
+}
+
+///|
 /// The runtime environment block appended to every system prompt — including
 /// a `--system-prompt-file` override, since grounding describes the process,
 /// not the prompt content. Without it the model has no idea where it is and
@@ -1195,7 +1209,7 @@ async fn environment_prompt_section(workspace_root? : String = ".") -> String {
         sb <+ "(empty directory): use `moon new` to create a new project here"
     }
   }
-  (
+  let environment =
     $|## Environment
     $|
     $|Working directory: \{cwd}
@@ -1203,7 +1217,15 @@ async fn environment_prompt_section(workspace_root? : String = ".") -> String {
     $|Parent and sibling directories belong to other projects. Never pass a cwd you have not verified exists.
     $|Project layout (directories; hidden, build, and vendored dirs omitted):
     $|\{sb=>layout(sb)}
-  )
+  if get_references_path() is Some(path) {
+    (
+      $|\{environment}
+      $|
+      $|Language references is located at \{path}.
+    )
+  } else {
+    environment
+  }
 }
 
 ///|

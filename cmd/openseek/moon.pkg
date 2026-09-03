@@ -23,6 +23,7 @@ import {
   "bobzhang/openseek/testkit/filesystem" @vfs,
   "bobzhang/openseek/internal/cli",
   "bobzhang/openseek/internal/workspace_path",
+  "bobzhang/openseek/internal/current_exe",
   "moonbitlang/async",
   "moonbitlang/async/aqueue",
   "moonbitlang/async/fs",
