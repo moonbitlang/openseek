@@ -184,3 +184,69 @@ test "tool output truncation keeps the head and tail around a skip marker" {
   assert_true(bounded.has_suffix("x".repeat(8_000)))
   assert_true(bounded.contains("10000 UTF-16 code units skipped"))
 }
+
+///|
+test "blocks for a streaming delta differ only in the live block" {
+  let call : @transcript.ToolCall = {
+    call_id: "c1",
+    name: "shell",
+    arguments: Some("{}"),
+    outcome: Pending(output=None),
+  }
+  let response : @transcript.TranscriptItem = {
+    kind: Assistant(
+      reasoning=None,
+      prose=Some("I will check it."),
+      calls=[call],
+      replay=false,
+      finished=false,
+    ),
+    ts: None,
+    sequence: Some(42),
+  }
+  let input = Input(
+    source=OpenSeek,
+    focused=@interop.ChannelId::Local,
+    active_session="desktop-test",
+    root=None,
+    submission_generation=1,
+    items=[
+      {
+        item: { kind: User("question"), ts: None, sequence: Some(41), },
+        identity: "s41",
+      },
+      { item: response, identity: "s42", },
+    ],
+    streaming_response=Some("part"),
+    streaming_identity="r7",
+  )
+  let renderer : TranscriptRenderer = {
+    input,
+    on_open: _ => @cmd.none,
+    on_jump: _ => @cmd.none,
+    on_open_session: _ => @cmd.none,
+  }
+  let before = renderer.blocks()
+  let after = {
+    ..renderer,
+    input: { ..input, streaming_response: Some("partial"), },
+  }.blocks()
+  assert_eq(
+    [
+      for index in 0..<before.length() => before.at(index).key
+    ],
+    [
+      for index in 0..<after.length() => after.at(index).key
+    ],
+  )
+  let changed : Array[Int] = []
+  for index in 0..<before.length() {
+    if before.at(index) != after.at(index) {
+      changed.push(index)
+    }
+  }
+  // Only the live response changed; the durable rows — and the Markdown
+  // parses their render owns — are Eq-stable across the delta.
+  assert_eq(changed, [before.length() - 1])
+  assert_true(before.at(before.length() - 1).key.has_prefix("live\u{0}"))
+}

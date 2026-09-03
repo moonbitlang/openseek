@@ -9,6 +9,7 @@ import {
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",
   "moonbitlang/core/debug",
+  "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
   "moonbitlang/editor/viewer/html" @syntax_html,

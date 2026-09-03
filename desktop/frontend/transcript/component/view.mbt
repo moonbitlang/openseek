@@ -855,6 +855,92 @@ fn transcript_item_view(
 }
 
 ///|
+/// Render one block with the component's callbacks. Subrun links are rebuilt
+/// from `subrun_parent` because `SubrunLink` holds a callback and therefore
+/// never lives in the `Eq` block itself.
+fn Block::render(
+  self : Block,
+  on_open : (String) -> @cmd.Cmd,
+  on_jump : (@mention_context.Target) -> @cmd.Cmd,
+  on_open_session : (String) -> @cmd.Cmd,
+) -> @html.Html {
+  match self.kind {
+    Item(item) =>
+      transcript_item_view(
+        item,
+        on_open,
+        anchor?=self.anchor,
+        on_jump~,
+        assistant_name=self.assistant_name(),
+        step_label?=self.step_label,
+        subrun?=self.subrun(on_open_session),
+      )
+    Rule(ts~) => turn_rule_view(ts?)
+    Live(prose~, reasoning~, reasoning_complete~) =>
+      assistant_view(
+        on_open,
+        prose?,
+        reasoning?,
+        step_label?=self.step_label,
+        assistant_name=self.assistant_name(),
+        live=true,
+        reasoning_complete~,
+      )
+    Empty => empty_stream_view(self.source)
+  }
+}
+
+///|
+fn Block::assistant_name(self : Block) -> String {
+  match self.source {
+    OpenSeek => "OpenSeek"
+    Codex => "Codex"
+  }
+}
+
+///|
+/// The sub-run link this block's tool results can offer, rebuilt from the
+/// session the block was produced under. `None` for every transcript source
+/// that has no sub-runs, which is also what keeps the chip out of rendering
+/// tests that do not supply one.
+fn Block::subrun(
+  self : Block,
+  on_open_session : (String) -> @cmd.Cmd,
+) -> SubrunLink? {
+  match self.subrun_parent {
+    Some(parent) => Some({ parent, open: on_open_session, })
+    None => None
+  }
+}
+
+///|
+/// The transcript's empty state: the badge and copy for whichever source owns
+/// the stream. One block, so a session that gains its first row replaces this
+/// single node instead of diffing a list.
+fn empty_stream_view(source : Source) -> @html.Html {
+  @html.div(class="empty", [
+    @html.div(class="empty-badge", [
+      @icons.icon(
+        match source {
+          OpenSeek => @icons.icon_logo
+          Codex => @icons.icon_sparkle
+        },
+      ),
+    ]),
+    @html.div(class="empty-title", "What should we build?"),
+    @html.div(
+      class="empty-sub",
+      match source {
+        OpenSeek =>
+          "SeekMoon plans the work, edits files across your workspace, runs your tests, and hands back a reviewable result."
+        Codex =>
+          "Codex inspects, edits, and runs this workspace with its own account, sandbox, and approvals."
+      },
+    ),
+  ])
+}
+
+///|
 /// The agent's prose. A bubble still `streaming` is the in-flight answer
 /// rendered live from the engine's deltas: the partial text is re-parsed as
 /// markdown on every delta, and an unterminated construct (an open code
@@ -964,6 +1050,7 @@ fn transcript_view(
   on_jump : (@mention_context.Target) -> @cmd.Cmd,
   on_open_session : (String) -> @cmd.Cmd,
   on_jump_latest~ : @cmd.Cmd,
+  stream_children? : Map[String, @html.Html],
 ) -> @html.Html {
   let renderer : TranscriptRenderer = {
     input,
@@ -971,8 +1058,16 @@ fn transcript_view(
     on_jump,
     on_open_session,
   }
+  let stream_children = match stream_children {
+    Some(children) => children
+    None => renderer.stream_children()
+  }
   let children = renderer.section_children(
-    pinned, overview, overview_emit, on_jump_latest,
+    pinned,
+    overview,
+    overview_emit,
+    on_jump_latest,
+    stream_children~,
   )
   // These identity attributes make conversation and root changes observable
   // even when the rendered children stay identical. The component subscription

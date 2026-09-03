@@ -230,6 +230,14 @@ fn Model::update(
 
 ///|
 /// Build the transcript state and return its independently updating Html.
+///
+/// The stream's rows are rendered behind Rabbita's `assoc_by`: each input
+/// snapshot is reduced to a pure, `Eq` block list, one incremental branch per
+/// key owns its row's Html, and a branch recomputes — reparsing the row's
+/// Markdown — only when that row's block actually changed. A streaming delta
+/// therefore re-renders just the live row; the historical rows' Html is reused
+/// as-is. Branches are plain `Val::map`, never stateful, and are keyed under
+/// the stream's own scope key so two conversations never share a branch.
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
@@ -255,16 +263,62 @@ pub fn component(
     update=(state, input, msg, emit) => state.update(input, msg, emit),
     subscriptions=(_, _, emit) => transcript_subscription(emit),
   )
-  state.view2(input, (state, input) => {
+  // The row callbacks are captured by the branch closures below, never stored
+  // in a `Block`, so `Block` stays `Eq`.
+  let on_open = path => (actions.open)(path)
+  let on_jump = target => (actions.jump)(target)
+  let on_open_session = session => (actions.open_session)(session)
+  // One pure block list per input snapshot. The stream's section key scopes
+  // the assoc keys, so switching conversations never reuses a branch whose
+  // wire key happens to match.
+  let rows = input.map(input => {
+    let renderer : TranscriptRenderer = {
+      input,
+      on_open,
+      on_jump,
+      on_open_session,
+    }
+    let scope = TranscriptSectionKey::stream(input).wire()
+    renderer.blocks().map(block => (scope, block))
+  })
+  let rendered = rows.assoc_by(
+    (_, row) => {
+      row.map(row => {
+        match row {
+          (_, block) => block.render(on_open, on_jump, on_open_session)
+        }
+      })
+    },
+    by=row => {
+      match row {
+        (scope, block) => "\{scope}\u{0}\{block.key}"
+      }
+    },
+  )
+  state.view3(input, rendered, (state, input, rendered) => {
+    let renderer : TranscriptRenderer = {
+      input,
+      on_open,
+      on_jump,
+      on_open_session,
+    }
+    // `rendered` follows the source block list in order, so the same
+    // snapshot's keys zip it back into the keyed map `#stream` diffs.
+    let blocks = renderer.blocks()
+    let stream_children : Map[String, @html.Html] = Map([])
+    for index in 0..<rendered.length() {
+      stream_children.set(blocks.at(index).key, rendered.at(index))
+    }
     transcript_view(
       input,
       pinned=state.pinned,
       overview=state.overview,
       overview_emit=emit.map(msg => Overview(msg)),
-      path => (actions.open)(path),
-      target => (actions.jump)(target),
-      session => (actions.open_session)(session),
+      on_open,
+      on_jump,
+      on_open_session,
       on_jump_latest=emit(JumpToLatest),
+      stream_children~,
     )
   })
 }
