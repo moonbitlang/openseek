@@ -245,7 +245,7 @@ jobs:
   check-windows:
     name: check (windows, native)
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
     defaults:
@@ -325,6 +325,12 @@ jobs:
             ~/.proton/helpers
           key: ${{ steps.cef-cache.outputs.cache-primary-key }}
 
+      # Keep compilation outside the timed execution probe: on a cold Windows
+      # runner, linking the native test executables takes most of ten minutes.
+      - name: Build full native test suite
+        timeout-minutes: 10
+        run: moon test --target native --build-only
+
       # Keep the full parallel suite as a control for the area probes below.
       # Verbose mode prints each test executable before it starts, and the
       # step timeout avoids another hour-long silent runner.
@@ -344,7 +350,7 @@ jobs:
   probe-windows-tests:
     name: probe windows (${{ matrix.area }})
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
     defaults:
@@ -380,13 +386,13 @@ jobs:
             arguments: ""
             proton: false
           - area: 6 - editor module
-            working-directory: editor
-            roots: ""
+            working-directory: .
+            roots: editor
             arguments: ""
             proton: false
           - area: 7 - desktop member
-            working-directory: desktop
-            roots: ""
+            working-directory: .
+            roots: desktop
             arguments: ""
             proton: true
     steps:
@@ -431,6 +437,29 @@ jobs:
         run: >-
           moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
           cef setup
+
+      # Build separately so the execution timeout measures tests rather than
+      # cold MSVC compilation. Explicit package paths also keep nested modules
+      # from expanding back to every member of the top-level moon.work.
+      - name: Build ${{ matrix.area }} tests
+        working-directory: ${{ matrix.working-directory }}
+        timeout-minutes: 10
+        run: |
+          $roots = '${{ matrix.roots }}'.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)
+          if ($roots.Length -gt 0) {
+            $packageDirs = git ls-files -- '*/moon.pkg' |
+              ForEach-Object { $_ -replace '/moon\.pkg$', '' } |
+              Where-Object {
+                $dir = $_
+                $roots.Where({ $dir -eq $_ -or $dir.StartsWith("$_/") }).Count -gt 0
+              }
+            if ($packageDirs.Count -eq 0) {
+              throw "no MoonBit packages found for roots: $roots"
+            }
+            moon test --target native --build-only $packageDirs
+          } else {
+            moon test --target native --build-only ${{ matrix.arguments }}
+          }
 
       - name: Test ${{ matrix.area }} sequentially
         working-directory: ${{ matrix.working-directory }}
