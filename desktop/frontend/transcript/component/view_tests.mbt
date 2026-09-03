@@ -1,4 +1,9 @@
 ///|
+fn stream_keys(input : Input) -> Array[String] {
+  stream_blocks(input).to_array().map(block => block.key.wire())
+}
+
+///|
 test "transcript stream children use stable typed keys in display order" {
   let call : @transcript.ToolCall = {
     call_id: "c1",
@@ -33,13 +38,7 @@ test "transcript stream children use stable typed keys in display order" {
     streaming_response=Some("partial answer"),
     streaming_identity="r7",
   )
-  let renderer : TranscriptRenderer = {
-    input,
-    on_open: _ => @cmd.none,
-    on_jump: _ => @cmd.none,
-    on_open_session: _ => @cmd.none,
-  }
-  let keys = renderer.stream_children().to_array().map(pair => pair.0)
+  let keys = stream_keys(input)
   assert_eq(keys, ["row\u{0}s41", "rule\u{0}s41", "row\u{0}s42", "live\u{0}r7"])
   // The result filling the call, and the durable reasoning the same event
   // turns out to carry, change the response's node, never its identity: the
@@ -68,12 +67,7 @@ test "transcript stream children use stable typed keys in display order" {
       },
     ],
   }
-  let settled_renderer = { ..renderer, input: settled, }
-  let settled_keys = settled_renderer
-    .stream_children()
-    .to_array()
-    .map(pair => pair.0)
-  assert_eq(settled_keys, keys)
+  assert_eq(stream_keys(settled), keys)
 }
 
 ///|
@@ -93,51 +87,80 @@ test "the live response is one node, replaced by the durable one" {
     streaming_reasoning="next thought",
     streaming_identity="r7",
   )
-  let renderer : TranscriptRenderer = {
-    input: live_input,
-    on_open: _ => @cmd.none,
-    on_jump: _ => @cmd.none,
-    on_open_session: _ => @cmd.none,
-  }
-  let live_keys = renderer.stream_children().to_array().map(pair => pair.0)
+  let live_keys = stream_keys(live_input)
   assert_eq(live_keys, ["row\u{0}s1", "rule\u{0}s1", "live\u{0}r7"])
   // The answer streaming after the thought joins the same node.
-  let answering = {
-    ..renderer,
-    input: { ..live_input, streaming_response: Some("partial"), },
-  }
-  assert_eq(
-    answering.stream_children().to_array().map(pair => pair.0),
-    live_keys,
-  )
+  let answering = { ..live_input, streaming_response: Some("partial"), }
+  assert_eq(stream_keys(answering), live_keys)
   // The durable commit is its own node; the preview is gone with the run.
   let settled = {
-    ..renderer,
-    input: {
-      ..live_input,
-      items: [
-        user,
-        {
-          item: {
-            kind: Assistant(
-              reasoning=Some("next thought"),
-              prose=Some("answer"),
-              calls=[],
-              replay=false,
-              finished=false,
-            ),
-            ts: None,
-            sequence: Some(2),
-          },
-          identity: "s2",
+    ..live_input,
+    items: [
+      user,
+      {
+        item: {
+          kind: Assistant(
+            reasoning=Some("next thought"),
+            prose=Some("answer"),
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
+          ts: None,
+          sequence: Some(2),
         },
-      ],
-      streaming_reasoning: None,
-    },
+        identity: "s2",
+      },
+    ],
+    streaming_reasoning: None,
   }
-  assert_eq(settled.stream_children().to_array().map(pair => pair.0), [
-    "row\u{0}s1", "rule\u{0}s1", "row\u{0}s2",
-  ])
+  assert_eq(stream_keys(settled), ["row\u{0}s1", "rule\u{0}s1", "row\u{0}s2"])
+}
+
+///|
+test "a streaming delta changes only the live block" {
+  let input = Input(
+    source=OpenSeek,
+    focused=@interop.ChannelId::Local,
+    active_session="desktop-test",
+    root=None,
+    submission_generation=1,
+    items=[
+      {
+        item: { kind: User("question"), ts: Some(1.0e12), sequence: Some(1), },
+        identity: "s1",
+      },
+      {
+        item: {
+          kind: Assistant(
+            reasoning=Some("thinking"),
+            prose=Some("I will check it."),
+            calls=[],
+            replay=false,
+            finished=false,
+          ),
+          ts: None,
+          sequence: Some(2),
+        },
+        identity: "s2",
+      },
+    ],
+    streaming_response=Some("partial"),
+    streaming_identity="r7",
+  )
+  let before = stream_blocks(input).to_array()
+  let after = stream_blocks({
+    ..input,
+    streaming_response: Some("partial answer"),
+  }).to_array()
+  assert_eq(after.length(), before.length())
+  let changed : Array[String] = []
+  for index, block in before {
+    if block != after[index] {
+      changed.push(block.key.wire())
+    }
+  }
+  assert_eq(changed, ["live\u{0}r7"])
 }
 
 ///|
@@ -164,6 +187,15 @@ test "transcript stream section key scopes equal session ids by channel" {
     TranscriptSectionKey::stream(remote).wire(),
     "stream\u{0}openseek\u{0}remote.device-a\u{0}desktop-test",
   )
+  // A block's memoized branch is scoped the same way: the same key in another
+  // stream is another branch.
+  assert_eq(
+    stream_blocks(local_input).to_array().map(block => block.branch_key()),
+    ["stream\u{0}openseek\u{0}local\u{0}desktop-test\u{0}empty"],
+  )
+  assert_eq(stream_blocks(remote).to_array().map(block => block.branch_key()), [
+    "stream\u{0}openseek\u{0}remote.device-a\u{0}desktop-test\u{0}empty",
+  ])
 }
 
 ///|
@@ -183,70 +215,4 @@ test "tool output truncation keeps the head and tail around a skip marker" {
   assert_true(bounded.has_prefix("x".repeat(12_000)))
   assert_true(bounded.has_suffix("x".repeat(8_000)))
   assert_true(bounded.contains("10000 UTF-16 code units skipped"))
-}
-
-///|
-test "blocks for a streaming delta differ only in the live block" {
-  let call : @transcript.ToolCall = {
-    call_id: "c1",
-    name: "shell",
-    arguments: Some("{}"),
-    outcome: Pending(output=None),
-  }
-  let response : @transcript.TranscriptItem = {
-    kind: Assistant(
-      reasoning=None,
-      prose=Some("I will check it."),
-      calls=[call],
-      replay=false,
-      finished=false,
-    ),
-    ts: None,
-    sequence: Some(42),
-  }
-  let input = Input(
-    source=OpenSeek,
-    focused=@interop.ChannelId::Local,
-    active_session="desktop-test",
-    root=None,
-    submission_generation=1,
-    items=[
-      {
-        item: { kind: User("question"), ts: None, sequence: Some(41), },
-        identity: "s41",
-      },
-      { item: response, identity: "s42", },
-    ],
-    streaming_response=Some("part"),
-    streaming_identity="r7",
-  )
-  let renderer : TranscriptRenderer = {
-    input,
-    on_open: _ => @cmd.none,
-    on_jump: _ => @cmd.none,
-    on_open_session: _ => @cmd.none,
-  }
-  let before = renderer.blocks()
-  let after = {
-    ..renderer,
-    input: { ..input, streaming_response: Some("partial"), },
-  }.blocks()
-  assert_eq(
-    [
-      for index in 0..<before.length() => before.at(index).key
-    ],
-    [
-      for index in 0..<after.length() => after.at(index).key
-    ],
-  )
-  let changed : Array[Int] = []
-  for index in 0..<before.length() {
-    if before.at(index) != after.at(index) {
-      changed.push(index)
-    }
-  }
-  // Only the live response changed; the durable rows — and the Markdown
-  // parses their render owns — are Eq-stable across the delta.
-  assert_eq(changed, [before.length() - 1])
-  assert_true(before.at(before.length() - 1).key.has_prefix("live\u{0}"))
 }
