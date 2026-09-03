@@ -92,7 +92,9 @@ It contains no remaining design questions.
 
 - Use complete standard keyboard-menu behavior rather than the old WebView
   menu's browser-default button behavior.
-- Opening by either entry point focuses the first enabled item.
+- Pointer invocation focuses the menu surface without highlighting an item;
+  the first arrow-key press moves focus to the first or last enabled item.
+- Keyboard invocation focuses the first enabled item immediately.
 - `ArrowUp` and `ArrowDown` cycle through enabled items.
 - `Home` and `End` focus the first and last enabled items.
 - `Enter` and `Space` execute the focused item.

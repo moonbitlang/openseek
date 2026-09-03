@@ -863,23 +863,40 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await firstWorkspace.hover();
   await firstWorkspaceMenu.click();
   await expect(firstWorkspaceMenu).toHaveAttribute('aria-expanded', 'true');
+  let menu = page.getByRole('menu', { name: 'Workspace actions' });
+  await expect(menu).toBeFocused();
+  await expect(menu.getByRole('menuitem').first()).not.toBeFocused();
   await secondWorkspace.hover();
   await secondWorkspaceMenu.click();
   await expect(firstWorkspaceMenu).toHaveAttribute('aria-expanded', 'false');
   await expect(secondWorkspaceMenu).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.getByRole('menu', { name: 'Workspace actions' })).toBeVisible();
+  menu = page.getByRole('menu', { name: 'Workspace actions' });
+  await expect(menu).toBeFocused();
   await secondWorkspaceMenu.click();
   await expect(page.getByRole('menu')).toHaveCount(0);
+
+  await secondWorkspaceMenu.focus();
+  await page.keyboard.press('Enter');
+  menu = page.getByRole('menu', { name: 'Workspace actions' });
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(secondWorkspaceMenu).toBeFocused();
 
   const liveRow = page.locator('.conversation-row[title="session-1"]');
   const archiveButton = liveRow.getByTitle(/Archive —/);
   await liveRow.hover();
   await archiveButton.focus();
   await liveRow.click({ button: 'right', position: { x: 18, y: 18 } });
-  const menu = page.getByRole('menu', { name: 'Conversation actions' });
+  menu = page.getByRole('menu', { name: 'Conversation actions' });
   await expect(menu).toBeVisible();
   const rename = menu.getByRole('menuitem', { name: 'Rename…' });
   const archive = menu.getByRole('menuitem', { name: 'Archive' });
+  await expect(menu).toBeFocused();
+  await expect(rename).not.toBeFocused();
+  await expect(rename).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+
+  await page.keyboard.press('ArrowDown');
   await expect(rename).toBeFocused();
 
   const bounds = await menu.boundingBox();

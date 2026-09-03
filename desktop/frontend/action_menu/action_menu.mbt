@@ -30,9 +30,16 @@ priv enum Anchor {
 } derive(Eq)
 
 ///|
+priv enum InitialFocus {
+  MenuSurface
+  FirstEnabledItem
+} derive(Eq)
+
+///|
 priv struct Open {
   target : String
   anchor : Anchor
+  initial_focus : InitialFocus
   restore_focus_id : String?
 } derive(Eq)
 
@@ -74,6 +81,19 @@ fn focused_element_id() -> String? {
 }
 
 ///|
+/// Browser-generated pointer events carry a non-empty `pointerType`; keyboard
+/// activation and programmatic clicks do not. Keep that input distinction in
+/// the shared menu so callers only provide targets and entries.
+fn is_pointer_event(event : @dom.MouseEvent) -> Bool {
+  let pointer_type : @js.Value = @js.Value::cast_from(event).get_with_string(
+    "pointerType",
+  )
+  guard pointer_type.is_string() else { return false }
+  let pointer_type : String = pointer_type.cast()
+  pointer_type != ""
+}
+
+///|
 fn remember_context_focus(event : @dom.MouseEvent) -> @cmd.Cmd {
   guard event.get_button() == 2 &&
     event.current_target().to_option() is Some(target) &&
@@ -109,6 +129,10 @@ fn dispatch_open(open : Open) -> @cmd.Cmd {
         detail["y"] = y
       }
     }
+    detail["initialFocus"] = match open.initial_focus {
+      MenuSurface => "menu"
+      FirstEnabledItem => "first-item"
+    }
     if open.restore_focus_id is Some(id) {
       detail["restoreFocusId"] = id
     }
@@ -134,6 +158,11 @@ pub fn button_attrs(target : String) -> @html.Attrs {
     dispatch_open({
       target,
       anchor: Button,
+      initial_focus: if is_pointer_event(event) {
+        MenuSurface
+      } else {
+        FirstEnabledItem
+      },
       restore_focus_id: focused_element_id(),
     })
   })
@@ -150,6 +179,11 @@ pub fn context_attrs(target : String) -> @html.Attrs {
     dispatch_open({
       target,
       anchor: Pointer(event.get_client_x(), event.get_client_y()),
+      initial_focus: if is_pointer_event(event) {
+        MenuSurface
+      } else {
+        FirstEnabledItem
+      },
       restore_focus_id: remembered_context_focus(event),
     })
   })
@@ -161,7 +195,10 @@ fn parse_open(event : @dom.Event) -> Open? {
   let detail = event.get_detail()
   let target : @js.Value = detail.get_with_string("target")
   let anchor : @js.Value = detail.get_with_string("anchor")
-  guard target.is_string() && anchor.is_string() else { return None }
+  let initial_focus : @js.Value = detail.get_with_string("initialFocus")
+  guard target.is_string() && anchor.is_string() && initial_focus.is_string() else {
+    return None
+  }
   let anchor = match anchor.cast() {
     "button" => Button
     "pointer" => {
@@ -172,10 +209,16 @@ fn parse_open(event : @dom.Event) -> Open? {
     }
     _ => return None
   }
+  let initial_focus = match initial_focus.cast() {
+    "menu" => MenuSurface
+    "first-item" => FirstEnabledItem
+    _ => return None
+  }
   let restore : @js.Value = detail.get_with_string("restoreFocusId")
   Some({
     target: target.cast(),
     anchor,
+    initial_focus,
     restore_focus_id: if restore.is_string() {
       Some(restore.cast())
     } else {
@@ -453,6 +496,7 @@ fn render_menu(
       .id(menu_id(open.target))
       .role("menu")
       .aria_label(definition.label)
+      .tabindex(-1)
       .data_set("action-menu-surface", open.target)
       .data_set("positioned", "false")
       .on_click(event => {
@@ -463,6 +507,33 @@ fn render_menu(
         event.prevent_default()
         event.stop_propagation()
         @cmd.none
+      })
+      .on_keydown(event => {
+        guard focused_element_id() == Some(menu_id(open.target)) else {
+          return @cmd.none
+        }
+        let destination = match event.key() {
+          "ArrowDown" | "Home" => Some(enabled[0])
+          "ArrowUp" | "End" => Some(enabled[enabled.length() - 1])
+          _ => None
+        }
+        if destination is Some(destination) {
+          event.prevent_default()
+          focus_element(item_id(open.target, destination), false)
+        } else if event.key() == "Escape" {
+          event.prevent_default()
+          @cmd.batch([
+            dismiss,
+            match open.restore_focus_id {
+              Some(id) => focus_element(id, true)
+              None => @cmd.none
+            },
+          ])
+        } else if event.key() == "Tab" {
+          @cmd.delay(dismiss, 0)
+        } else {
+          @cmd.none
+        }
       }),
     rows,
   )
@@ -696,7 +767,11 @@ pub fn[Input : Eq] component(
               close_previous,
               set_trigger_open(next.target, true),
               position(next.target, next.anchor),
-              focus_element(item_id(next.target, first), true),
+              match next.initial_focus {
+                MenuSurface => focus_element(menu_id(next.target), true)
+                FirstEnabledItem =>
+                  focus_element(item_id(next.target, first), true)
+              },
             ]),
           )
         }
