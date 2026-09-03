@@ -3,6 +3,27 @@
 
    Keep only app-wide visual decisions here. Component geometry, such as the
    topbar height or editor resize handle width, stays with its component. */
+/* xterm consumes these three tokens through getComputedStyle rather than a CSS
+   declaration. Registering their color type makes the CSSOM expose the
+   resolved light-dark() color instead of its unevaluated token stream. */
+@property --color-bg-surface {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ffffff;
+}
+
+@property --color-text-primary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #121418;
+}
+
+@property --color-text-selection {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #eef2fe;
+}
+
 :root {
   color-scheme: light dark;
 
@@ -31,15 +52,15 @@
   --icon-lg: 16px;
 
   /* Surfaces and text */
-  --color-bg-canvas: #fbfbf9;
-  --color-bg-surface: #ffffff;
-  --color-bg-subtle: #f6f6f3;
-  --color-text-primary: #121418;
-  --color-text-secondary: #5c5f66;
-  --color-text-muted: #9a9da4;
-  --color-text-faint: #a8aab0;
-  --color-border: #e9e8e3;
-  --color-border-subtle: #f0efea;
+  --color-bg-canvas: light-dark(#fbfbf9, #16181d);
+  --color-bg-surface: light-dark(#ffffff, #1c1f26);
+  --color-bg-subtle: light-dark(#f6f6f3, #23272f);
+  --color-text-primary: light-dark(#121418, #f1f3f7);
+  --color-text-secondary: light-dark(#5c5f66, #a3a8b4);
+  --color-text-muted: light-dark(#9a9da4, #6f7480);
+  --color-text-faint: light-dark(#a8aab0, #656b76);
+  --color-border: light-dark(#e9e8e3, #2c313b);
+  --color-border-subtle: light-dark(#f0efea, #262b33);
 
   /* Structural seams should recede behind content. Persistent control
      grouping comes from a quiet fill; the stronger border remains available
@@ -55,24 +76,24 @@
     transparent
   );
 
-  --color-accent: #3b6ef5;
-  --color-accent-strong: #2a55cc;
+  --color-accent: light-dark(#3b6ef5, #5b8cff);
+  --color-accent-strong: light-dark(#2a55cc, #9db8ff);
   --color-on-accent: #fff;
-  --color-on-accent-strong: #fff;
-  --color-accent-soft: #eef2fe;
-  --color-accent-border: #d6e0fd;
+  --color-on-accent-strong: light-dark(#fff, #10131a);
+  --color-accent-soft: light-dark(#eef2fe, #1e2740);
+  --color-accent-border: light-dark(#d6e0fd, #2f3e63);
   /* Text selection is shared by normal DOM text, the editor, and xterm.
      xterm paints it on a canvas, so keep this opaque in both themes. */
-  --color-text-selection: #eef2fe;
+  --color-text-selection: light-dark(#eef2fe, #344a78);
 
   /* Status colors */
-  --color-success: #1f8a5b;
-  --color-danger: #c0453b;
-  --color-danger-soft: #fcefed;
-  --color-danger-border: #f2d4cf;
-  --color-warning: #b7791f;
+  --color-success: light-dark(#1f8a5b, #3fd089);
+  --color-danger: light-dark(#c0453b, #ff8a80);
+  --color-danger-soft: light-dark(#fcefed, #2a1b1b);
+  --color-danger-border: light-dark(#f2d4cf, #4a2f2f);
+  --color-warning: light-dark(#b7791f, #e3b341);
 
-  --color-code: #20242b;
+  --color-code: light-dark(#20242b, #edf0f5);
 
   /* Keyboard focus must be obvious without turning every interactive surface
      into another accent claim. Blue remains for selection and primary action. */
@@ -114,9 +135,16 @@
   --radius-md: 9px;
   --radius-lg: 14px;
   --radius-pill: 999px;
-  --shadow-surface: 0 1px 2px rgba(20, 23, 26, 0.04),
-    0 6px 22px -10px rgba(20, 23, 26, 0.1);
-  --shadow-overlay: 0 8px 30px -8px rgba(20, 23, 26, 0.22);
+  --shadow-surface:
+    0 1px 2px light-dark(rgba(20, 23, 26, 0.04), rgba(0, 0, 0, 0.3)),
+    0 6px 22px -10px light-dark(
+      rgba(20, 23, 26, 0.1),
+      rgba(0, 0, 0, 0.5)
+    );
+  --shadow-overlay: 0 8px 30px -8px light-dark(
+      rgba(20, 23, 26, 0.22),
+      rgba(0, 0, 0, 0.6)
+    );
 
   /* App-wide stacking order. Values inside a component's own stacking
      context stay local because they do not compete with these surfaces. */
@@ -191,104 +219,14 @@
   --ui-font-size: var(--font-size-sm);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg-canvas: #16181d;
-    --color-bg-surface: #1c1f26;
-    --color-bg-subtle: #23272f;
-    --color-text-primary: #f1f3f7;
-    --color-text-secondary: #a3a8b4;
-    --color-text-muted: #6f7480;
-    --color-text-faint: #656b76;
-    --color-border: #2c313b;
-    --color-border-subtle: #262b33;
-
-    --color-accent: #5b8cff;
-    --color-accent-strong: #9db8ff;
-    --color-on-accent-strong: #10131a;
-    --color-accent-soft: #1e2740;
-    --color-accent-border: #2f3e63;
-    --color-text-selection: #344a78;
-
-    --color-success: #3fd089;
-    --color-danger: #ff8a80;
-    --color-danger-soft: #2a1b1b;
-    --color-danger-border: #4a2f2f;
-    --color-warning: #e3b341;
-
-    --color-code: #edf0f5;
-
-    --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.3),
-      0 6px 22px -10px rgba(0, 0, 0, 0.5);
-    --shadow-overlay: 0 8px 30px -8px rgba(0, 0, 0, 0.6);
-  }
-}
-
-/* A user selection wins over the host media query. The explicit blocks repeat
-   every theme-owned color and shadow, so the shell, forms, overlays, editor
-   chrome, and terminal never split themes. */
+/* A user selection narrows the available color scheme, so the same
+   light-dark() palette follows the override instead of the host preference. */
 :root[data-theme="light"] {
   color-scheme: light;
-
-  --color-bg-canvas: #fbfbf9;
-  --color-bg-surface: #ffffff;
-  --color-bg-subtle: #f6f6f3;
-  --color-text-primary: #121418;
-  --color-text-secondary: #5c5f66;
-  --color-text-muted: #9a9da4;
-  --color-text-faint: #a8aab0;
-  --color-border: #e9e8e3;
-  --color-border-subtle: #f0efea;
-
-  --color-accent: #3b6ef5;
-  --color-accent-strong: #2a55cc;
-  --color-on-accent-strong: #fff;
-  --color-accent-soft: #eef2fe;
-  --color-accent-border: #d6e0fd;
-  --color-text-selection: #eef2fe;
-
-  --color-success: #1f8a5b;
-  --color-danger: #c0453b;
-  --color-danger-soft: #fcefed;
-  --color-danger-border: #f2d4cf;
-  --color-warning: #b7791f;
-
-  --color-code: #20242b;
-  --shadow-surface: 0 1px 2px rgba(20, 23, 26, 0.04),
-    0 6px 22px -10px rgba(20, 23, 26, 0.1);
-  --shadow-overlay: 0 8px 30px -8px rgba(20, 23, 26, 0.22);
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-
-  --color-bg-canvas: #16181d;
-  --color-bg-surface: #1c1f26;
-  --color-bg-subtle: #23272f;
-  --color-text-primary: #f1f3f7;
-  --color-text-secondary: #a3a8b4;
-  --color-text-muted: #6f7480;
-  --color-text-faint: #656b76;
-  --color-border: #2c313b;
-  --color-border-subtle: #262b33;
-
-  --color-accent: #5b8cff;
-  --color-accent-strong: #9db8ff;
-  --color-on-accent-strong: #10131a;
-  --color-accent-soft: #1e2740;
-  --color-accent-border: #2f3e63;
-  --color-text-selection: #344a78;
-
-  --color-success: #3fd089;
-  --color-danger: #ff8a80;
-  --color-danger-soft: #2a1b1b;
-  --color-danger-border: #4a2f2f;
-  --color-warning: #e3b341;
-
-  --color-code: #edf0f5;
-  --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.3),
-    0 6px 22px -10px rgba(0, 0, 0, 0.5);
-  --shadow-overlay: 0 8px 30px -8px rgba(0, 0, 0, 0.6);
 }
 
 * {
