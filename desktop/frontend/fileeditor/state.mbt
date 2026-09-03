@@ -453,8 +453,13 @@ pub(all) struct State {
   // Exact changed rows and their shared Line/Token/Tree review coverage.
   // Complete may come from the file control or full hunk coverage.
   review_progress : Array[ChangedFileReview]
+  // Monotonic identity of the visible hunk surface. Mode, filter, collapse,
+  // source/diff, and document transitions advance it so a callback queued by
+  // an older surface cannot restore its active hunk after the transition.
+  review_hunk_surface_generation : Int
   // Only the currently focused or navigated hunk is retained for the toolbar.
-  // Its exact row and review generation fence callbacks from older inputs.
+  // Its exact row, diff generation, and surface generation fence callbacks
+  // from older inputs.
   review_active_hunk : ReviewActiveHunk?
   // Monotonic request token retained across conversation re-roots and advanced
   // across same-owner placement changes. Owner plus this generation rejects an
@@ -569,6 +574,7 @@ pub fn State::empty() -> State {
     history_docs: Map([]),
     history_generation: 0,
     review_progress: [],
+    review_hunk_surface_generation: 0,
     review_active_hunk: None,
     changes_generation: 0,
     request_epoch: 0,
@@ -881,10 +887,11 @@ pub(all) enum Msg {
   // history comparisons, and non-MBTI documents ignore the action.
   MbtiViewModeSelected(MbtiViewMode)
   // The visible DiffEditor publishes only its current projected hunk. The
-  // reducer validates both exact row identity and review generation.
+  // reducer validates exact row, diff generation, and surface generation.
   ReviewActiveHunkChanged(
     change~ : ChangedFile,
     review_generation~ : Int,
+    surface_generation~ : Int,
     hunk~ : ReviewHunk?,
     file_changes~ : ReviewHunk?,
     position~ : ReviewHunkPosition?

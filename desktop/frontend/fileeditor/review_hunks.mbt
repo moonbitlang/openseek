@@ -113,6 +113,7 @@ priv enum ReviewCompletionState {
 pub(all) struct ReviewActiveHunk {
   priv change : ChangedFile
   priv review_generation : Int
+  priv surface_generation : Int
   priv hunk : ReviewHunk
   // The complete Line diff is the file-level review universe. Semantic hunks
   // project into it, but never redefine it when filters or grouping change.
@@ -349,13 +350,15 @@ fn State::accept_active_review_hunk(
   self : State,
   change : ChangedFile,
   review_generation : Int,
+  surface_generation : Int,
   hunk : ReviewHunk?,
   file_changes : ReviewHunk?,
   position : ReviewHunkPosition?,
   active_file : @pathx.Relative?,
 ) -> State {
   guard self.current_review_generation(change, active_file) ==
-    Some(review_generation) else {
+    Some(review_generation) &&
+    self.review_hunk_surface_generation == surface_generation else {
     return self
   }
   {
@@ -363,6 +366,7 @@ fn State::accept_active_review_hunk(
     review_active_hunk: hunk.map(hunk => {
       change,
       review_generation,
+      surface_generation,
       hunk,
       file_changes,
       position,
@@ -377,7 +381,8 @@ fn State::active_review_hunk(
 ) -> ReviewActiveHunk? {
   guard self.review_active_hunk is Some(active) &&
     self.current_review_generation(active.change, active_file) ==
-    Some(active.review_generation) else {
+    Some(active.review_generation) &&
+    self.review_hunk_surface_generation == active.surface_generation else {
     return None
   }
   Some(active)
@@ -444,7 +449,16 @@ fn State::clear_review_active_hunk(self : State) -> State {
   if self.review_active_hunk is None {
     self
   } else {
-    { ..self, review_active_hunk: None, }
+    self.invalidate_review_hunk_surface()
+  }
+}
+
+///|
+fn State::invalidate_review_hunk_surface(self : State) -> State {
+  {
+    ..self,
+    review_hunk_surface_generation: self.review_hunk_surface_generation + 1,
+    review_active_hunk: None,
   }
 }
 

@@ -64,6 +64,7 @@ fn activate_review_hunk(
     ReviewActiveHunkChanged(
       change=selected,
       review_generation=1,
+      surface_generation=state.review_hunk_surface_generation,
       hunk=Some(hunk),
       file_changes=Some(file_changes),
       position=ReviewHunkPosition::from_zero_based(Some(index), total),
@@ -188,7 +189,7 @@ test "hunk and file review progress stay linked in both directions" {
 }
 
 ///|
-test "active hunk requires the exact changed row and review generation" {
+test "active hunk requires exact row, diff generation, and surface generation" {
   let (state, ctx, selected) = review_progress_state()
   let hunk = review_test_hunk(2, 4, 2, 4)
   let position = ReviewHunkPosition::from_zero_based(Some(0), 1)
@@ -197,6 +198,7 @@ test "active hunk requires the exact changed row and review generation" {
     ReviewActiveHunkChanged(
       change=selected,
       review_generation=0,
+      surface_generation=state.review_hunk_surface_generation,
       hunk=Some(hunk),
       file_changes=Some(hunk),
       position~,
@@ -211,6 +213,7 @@ test "active hunk requires the exact changed row and review generation" {
     ReviewActiveHunkChanged(
       change=other,
       review_generation=1,
+      surface_generation=state.review_hunk_surface_generation,
       hunk=Some(hunk),
       file_changes=Some(hunk),
       position~,
@@ -228,21 +231,51 @@ test "active hunk requires the exact changed row and review generation" {
   )
   assert_true(inactive.review_active_hunk is None)
   let current = activate_review_hunk(state, ctx, selected, hunk, hunk, 0, 1)
+  let surface_generation = state.review_hunk_surface_generation
   assert_true(
     current.active_review_hunk(ctx.active_file)
     is Some(
       {
         change,
         review_generation: 1,
+        surface_generation: active_surface_generation,
         hunk: current_hunk,
         file_changes: Some(current_file_changes),
         position: Some(current_position),
       }
     ) &&
     change == selected &&
+    active_surface_generation == surface_generation &&
     current_hunk == hunk &&
     current_file_changes == hunk &&
     current_position.current == 1 &&
     current_position.total == 1,
   )
+  let (_, token_surface) = update(
+    test_emit(),
+    ReviewDiffModeSelected(ReviewDiffToken),
+    current,
+    ctx,
+  )
+  let (_, line_surface) = update(
+    test_emit(),
+    ReviewDiffModeSelected(ReviewDiffLine),
+    token_surface,
+    ctx,
+  )
+  assert_eq(line_surface.review_hunk_surface_generation, surface_generation + 2)
+  let (_, late_surface) = update(
+    test_emit(),
+    ReviewActiveHunkChanged(
+      change=selected,
+      review_generation=1,
+      surface_generation~,
+      hunk=Some(hunk),
+      file_changes=Some(hunk),
+      position~,
+    ),
+    line_surface,
+    ctx,
+  )
+  assert_true(late_surface.review_active_hunk is None)
 }

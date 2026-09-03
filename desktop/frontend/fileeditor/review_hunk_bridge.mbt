@@ -11,6 +11,7 @@ priv enum ReviewHunkBridgeSurface {
 priv struct ReviewHunkBridgeTarget {
   change : ChangedFile
   review_generation : Int
+  surface_generation : Int
   surface : ReviewHunkBridgeSurface
   semantic_input : SemanticReviewInput?
   active_hunk : ReviewHunk?
@@ -42,6 +43,7 @@ fn current_review_hunk_bridge_target(
   Some({
     change: review.selected,
     review_generation,
+    surface_generation: state.review_hunk_surface_generation,
     surface: if state.semantic_review_input is Some(_) {
       ReviewSemanticSurface
     } else {
@@ -131,6 +133,7 @@ fn publish_review_active_hunk(
     ReviewActiveHunkChanged(
       change=target.change,
       review_generation=target.review_generation,
+      surface_generation=target.surface_generation,
       hunk~,
       file_changes~,
       position~,

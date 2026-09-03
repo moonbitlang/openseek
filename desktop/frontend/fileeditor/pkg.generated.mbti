@@ -271,7 +271,7 @@ pub(all) enum Msg {
   RevealSemanticReviewSectionChange(String, Bool)
   ToggleReviewProgress
   MbtiViewModeSelected(MbtiViewMode)
-  ReviewActiveHunkChanged(change~ : ChangedFile, review_generation~ : Int, hunk~ : ReviewHunk?, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)
+  ReviewActiveHunkChanged(change~ : ChangedFile, review_generation~ : Int, surface_generation~ : Int, hunk~ : ReviewHunk?, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)
   ToggleActiveReviewHunk
   GitOriginalLoaded(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, original~ : @protocol.GitOriginalFileReply)
   GitOriginalFailed(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, message~ : String)
@@ -417,6 +417,7 @@ pub(all) struct State {
   history_docs : Map[String, HistoryDiffDoc]
   history_generation : Int
   review_progress : Array[ChangedFileReview]
+  review_hunk_surface_generation : Int
   review_active_hunk : ReviewActiveHunk?
   changes_generation : Int
   request_epoch : Int

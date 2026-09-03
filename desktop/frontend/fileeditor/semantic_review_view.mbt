@@ -106,6 +106,7 @@ fn State::sync_semantic_review(self : State, ctx : Ctx) -> State {
   if input == self.semantic_review_input {
     return self
   }
+  let self = self.invalidate_review_hunk_surface()
   let plan = input.bind(input => {
     @moon_diff_provider.compute_sectioned_semantic_review_plan(
       input.old_source,
