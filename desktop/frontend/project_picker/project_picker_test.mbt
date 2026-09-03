@@ -15,7 +15,7 @@ fn listed(
   location~ : @project_picker.Location,
   entries~ : Array[String],
 ) -> @project_picker.State raise {
-  let (_, opening) = @project_picker.State::open(channel, emit())
+  let (_, opening) = @project_picker.State::open(channel, emit(), windows=false)
   let (_, loaded, outcome) = @project_picker.State::handle(
     opening,
     emit(),
@@ -23,7 +23,6 @@ fn listed(
       channel~,
       location~,
       entries~,
-      windows=false,
       generation=opening.request_generation(),
     ),
   )
@@ -37,6 +36,7 @@ test "a picker refuses to confirm before any listing" {
   let (_, opening) = @project_picker.State::open(
     @interop.ChannelId::Local,
     emit(),
+    windows=false,
   )
   let (_, held, outcome) = @project_picker.State::handle(
     opening,
@@ -82,7 +82,6 @@ test "a listing for another channel is dropped" {
       channel=@interop.ChannelId::Remote("d_b"),
       location=@project_picker.Location::Directory("/from-b"),
       entries=["wrong"],
-      windows=false,
       generation=picker.request_generation(),
     ),
   )
@@ -118,7 +117,6 @@ test "a stale listing leaves the picker untouched" {
       channel=@interop.ChannelId::Local,
       location=@project_picker.Location::Directory("/elsewhere"),
       entries=["wrong"],
-      windows=false,
       generation=picker.request_generation(),
     ),
   )

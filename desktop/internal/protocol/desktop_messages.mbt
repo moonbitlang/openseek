@@ -1067,11 +1067,36 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 }
 
 ///|
-/// Immutable identity of the installed desktop package. The native host reads
-/// this from `proton-package.json`; it is not an editable engine setting.
+/// Immutable identity of the installed desktop package and its host: facts
+/// fixed for the life of the process, fetched once per connection, never an
+/// editable engine setting. The native host reads `version` from
+/// `proton-package.json`; `windows` is whether the host machine itself uses
+/// Windows path semantics — the client's own platform says nothing about a
+/// remote device's.
 pub(all) struct AppInfoReply {
   version : String
-} derive(Debug, Eq, FromJson, ToJson)
+  windows : Bool
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for AppInfoReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "app info reply")
+  {
+    version: object.required_string("version"),
+    // Absent from hosts predating the field; they degrade to POSIX path
+    // semantics rather than failing the whole reply.
+    windows: object.optional_bool("windows").unwrap_or(false),
+  }
+}
+
+///|
+pub impl ToJson for AppInfoReply with fn to_json(self) {
+  let fields : Map[String, Json] = { "version": self.version.to_json() }
+  if self.windows {
+    fields["windows"] = self.windows.to_json()
+  }
+  Json(fields)
+}
 
 ///|
 pub(all) struct UpdateDownloadProgressPayload {

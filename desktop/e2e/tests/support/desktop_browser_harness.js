@@ -34,6 +34,10 @@ export class DesktopBrowserHarness {
     this.browseTree = {
       '': { path: '/Users/test', parent: '/Users', entries: ['Projects', 'Workspace'] },
     };
+    // The host's own platform, stated once in the `app.info` reply fetched
+    // when the bridge connects. Windows-host specs set it before `goto()`;
+    // it is what lets drive-letter drafts complete natively in the picker.
+    this.windowsHost = false;
     this.textSearchMatches = [];
     this.textSearchMatchCount = undefined;
     this.textSearchLimitHit = false;
@@ -545,6 +549,8 @@ export class DesktopBrowserHarness {
       }
       case 'settings.get':
         return this.hostSettings;
+      case 'app.info':
+        return { version: '0.0.0-e2e', windows: this.windowsHost };
       case 'settings.set': {
         const patch = request.params || {};
         for (const key of [

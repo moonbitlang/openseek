@@ -25,7 +25,7 @@ pub fn Location::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
   Navigate(String)
-  Loaded(channel~ : @interop.ChannelId, location~ : Location, entries~ : Array[String], windows~ : Bool, generation~ : Int)
+  Loaded(channel~ : @interop.ChannelId, location~ : Location, entries~ : Array[String], generation~ : Int)
   Failed(channel~ : @interop.ChannelId, message~ : String, generation~ : Int)
   EditPath
   PathChanged(String)
@@ -53,7 +53,7 @@ type State derive(Eq)
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self?, Outcome?)
 pub fn State::not_equal(Self, Self) -> Bool
-pub fn State::open(@interop.ChannelId, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)
+pub fn State::open(@interop.ChannelId, @cmd.Emit[Msg], windows~ : Bool) -> (@cmd.Cmd, Self)
 pub fn State::request_generation(Self) -> Int
 
 // Type aliases

@@ -745,35 +745,17 @@ test "worktree creation results keep success compatible and carry refusals" {
 
 ///|
 test "browse replies keep success compatible and carry refusals" {
-  let rooted : @protocol.BrowseDirectoryReply = Listing(
-    path="/",
-    parent=None,
-    entries=["home"],
-    windows=false,
-  )
-  // A root listing omits `parent`, matching the retired struct encoding;
-  // a POSIX host also omits `windows`, keeping the legacy shape.
+  let rooted : @protocol.BrowseDirectoryReply = Listing(path="/", parent=None, entries=[
+    "home",
+  ])
+  // A root listing omits `parent`, matching the retired struct encoding.
   @debug.assert_eq(rooted.to_json(), { "path": "/", "entries": ["home"] })
   let nested : @protocol.BrowseDirectoryReply = Listing(
     path="/home/u",
     parent=Some("/home"),
     entries=[],
-    windows=false,
   )
-  // A Windows host says so in the reply, and the flag survives the trip.
-  let windows : @protocol.BrowseDirectoryReply = Listing(
-    path="/C:/Users",
-    parent=Some("/C:/"),
-    entries=["me"],
-    windows=true,
-  )
-  @debug.assert_eq(windows.to_json(), {
-    "path": "/C:/Users",
-    "entries": ["me"],
-    "parent": "/C:/",
-    "windows": true,
-  })
-  for reply in [rooted, nested, windows] {
+  for reply in [rooted, nested] {
     let decoded : @protocol.BrowseDirectoryReply = @json.from_json(
       reply.to_json(),
     )
@@ -793,6 +775,19 @@ test "browse replies keep success compatible and carry refusals" {
     drives.to_json(),
   )
   @debug.assert_eq(decoded_drives, drives)
+}
+
+///|
+test "app info states the host platform and tolerates hosts predating it" {
+  // A host predating the field reads as POSIX rather than failing.
+  let legacy : @protocol.AppInfoReply = @json.from_json({ "version": "0.3.1" })
+  @debug.assert_eq(legacy, { version: "0.3.1", windows: false, })
+  // A POSIX host keeps the legacy shape on the wire.
+  @debug.assert_eq(legacy.to_json(), { "version": "0.3.1" })
+  let windows : @protocol.AppInfoReply = { version: "0.3.1", windows: true, }
+  @debug.assert_eq(windows.to_json(), { "version": "0.3.1", "windows": true })
+  let decoded : @protocol.AppInfoReply = @json.from_json(windows.to_json())
+  @debug.assert_eq(decoded, windows)
 }
 
 ///|

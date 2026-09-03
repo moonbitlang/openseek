@@ -1459,15 +1459,7 @@ pub impl FromJson for StatFilesReply with fn from_json(json, path) {
 /// body as `{error:"..."}` because the local bridge summarizes raised
 /// handler errors down to "op <name> failed".
 pub(all) enum BrowseDirectoryReply {
-  // `windows` is the listing host's own platform, so the picker lets
-  // drive-letter spellings complete natively exactly where they are native.
-  // Encoded only when true, keeping the legacy success shape elsewhere.
-  Listing(
-    path~ : String,
-    parent~ : String?,
-    entries~ : Array[String],
-    windows~ : Bool
-  )
+  Listing(path~ : String, parent~ : String?, entries~ : Array[String])
   // Windows only: the virtual level above the drive roots, reached by
   // browsing the resource-path root "/". Entries are drive spellings such
   // as "C:"; the drive root itself is the resource path "/C:/".
@@ -1478,16 +1470,13 @@ pub(all) enum BrowseDirectoryReply {
 ///|
 pub impl ToJson for BrowseDirectoryReply with fn to_json(self) {
   match self {
-    Listing(path~, parent~, entries~, windows~) => {
+    Listing(path~, parent~, entries~) => {
       let fields : Map[String, Json] = {
         "path": path.to_json(),
         "entries": entries.to_json(),
       }
       if parent is Some(parent) {
         fields["parent"] = parent.to_json()
-      }
-      if windows {
-        fields["windows"] = windows.to_json()
       }
       Json(fields)
     }
@@ -1525,15 +1514,7 @@ pub impl FromJson for BrowseDirectoryReply with fn from_json(json, path) {
       guard fields.get("entries") is Some(entries) else {
         raise JsonDecodeError((path, "expected directory entries"))
       }
-      let windows = match fields.get("windows") {
-        Some(True) => true
-        Some(False) | None => false
-        Some(_) =>
-          raise JsonDecodeError(
-            (path.add_key("windows"), "windows must be a boolean"),
-          )
-      }
-      Listing(path=listed, parent~, entries=@json.from_json(entries), windows~)
+      Listing(path=listed, parent~, entries=@json.from_json(entries))
     }
   }
 }

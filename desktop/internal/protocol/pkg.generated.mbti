@@ -64,12 +64,15 @@ pub impl @json.FromJson for AgentStreamEvent
 
 pub(all) struct AppInfoReply {
   version : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  windows : Bool
+} derive(Eq, @debug.Debug)
 pub fn AppInfoReply::equal(Self, Self) -> Bool
 pub fn AppInfoReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AppInfoReply::not_equal(Self, Self) -> Bool
 pub fn AppInfoReply::to_json(Self) -> Json
 pub fn AppInfoReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for AppInfoReply
+pub impl @json.FromJson for AppInfoReply
 
 pub(all) struct AppTitlebarThemePayload {
   dark : Bool
@@ -185,7 +188,7 @@ pub fn BrowseDirectoryPayload::to_json(Self) -> Json
 pub fn BrowseDirectoryPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) enum BrowseDirectoryReply {
-  Listing(path~ : String, parent~ : String?, entries~ : Array[String], windows~ : Bool)
+  Listing(path~ : String, parent~ : String?, entries~ : Array[String])
   Drives(entries~ : Array[String])
   BrowseError(String)
 } derive(Eq, @debug.Debug)

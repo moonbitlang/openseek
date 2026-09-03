@@ -1185,6 +1185,13 @@ priv struct DeviceState {
   // captured when their request was issued, so a reply from a dead connection
   // cannot overwrite the lists rebuilt after reconnect.
   connection_generation : Int
+  // Whether this channel's host machine is Windows, from the `app.info`
+  // reply fetched at every BridgeReady. Immutable for the life of the host
+  // process, so a reconnect's refetch merely restates it; false until the
+  // first reply (and forever against hosts predating the field), degrading
+  // to POSIX path semantics. The project picker's drive-letter handling
+  // reads it.
+  windows_host : Bool
   // Page-lifetime request tokens for the independently fetched sidebar
   // collections. Connection generation rejects dead sockets; these reject an
   // older reply from the same connection after a newer request was issued.
@@ -1235,6 +1242,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     reconnect_attempt: 0,
     reconnect_failures: 0,
     connection_generation: 0,
+    windows_host: false,
     sessions_request_generation: 0,
     archived_request_generation: 0,
     projects_request_generation: 0,
@@ -1711,8 +1719,6 @@ priv enum Msg {
   // as `RemoteStatusLoaded` via the op's reply).
   RemoteDisconnectClicked
   RemoteDisconnectFailed(String)
-  // Proton package metadata returned by the native host.
-  AppInfoLoaded(String)
   // A `check_update` reply (or its failure, folded into `Unreachable`).
   // `explicit` says a user asked, which is what decides how loudly each
   // outcome shows.
@@ -2013,6 +2019,11 @@ priv enum DeviceMsg {
     connection_generation~ : Int,
     cleans_legacy~ : Bool
   )
+  // The host's immutable self-description from `app.info`, fetched at every
+  // BridgeReady: its package version and whether its machine is Windows.
+  // Both facts are fixed for the host process's life, so no generation
+  // fences the reply — a reconnect's refetch restates the same values.
+  AppInfoLoaded(version~ : String, windows~ : Bool)
   // A `skills.installed` reply is channel-scoped just like the invalidation
   // that prompted it. Only the currently focused host may replace the
   // page's library mirror.

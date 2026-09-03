@@ -2938,7 +2938,6 @@ fn update_msg(
       (disconnect_remote(dispatch), { ..model, remote_error: None, })
     RemoteDisconnectFailed(message) =>
       (@cmd.none, { ..model, remote_error: Some(message), })
-    AppInfoLoaded(version) => (@cmd.none, { ..model, app_version: version, })
     CheckForUpdates =>
       // A user-initiated check; never stacks on an in-flight one, and never
       // interrupts a download already underway.
@@ -3721,7 +3720,7 @@ fn update_msg(
     PickProject(channel) => {
       // Focus moves for the surrounding UI, while the picker itself keeps
       // `channel` as its owner through every later navigation and confirm.
-      guard model.device_state(channel) is Some(_) else {
+      guard model.device_state(channel) is Some(dev) else {
         return (@cmd.none, model)
       }
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
@@ -3734,6 +3733,7 @@ fn update_msg(
       let (browse_cmd, picker) = @project_picker.State::open(
         channel,
         dispatch.map(msg => ProjectPicker(msg)),
+        windows=dev.windows_host,
       )
       (
         @cmd.batch([focus_cmd, quick_open_cmd, browse_cmd]),
@@ -4980,6 +4980,17 @@ fn update_device_msg(
     return (@cmd.none, model)
   }
   match msg {
+    AppInfoLoaded(version~, windows~) => {
+      let model = model.replace_device({ ..dev, windows_host: windows, })
+      // The version row names the page's own installed desktop package;
+      // a remote device's package version is that device's, not this
+      // page's.
+      if channel is Local {
+        (@cmd.none, { ..model, app_version: version, })
+      } else {
+        (@cmd.none, model)
+      }
+    }
     InstalledSkillsLoaded(items) =>
       if channel == model.focused {
         (@cmd.none, { ..model, installed_skills: items, })
@@ -5061,6 +5072,9 @@ fn update_device_msg(
         fetch_projects(
           dispatch, channel, connection_generation, projects_request_generation,
         ),
+        // The host's immutable self-description (package version, platform).
+        // Per-channel: a remote device's platform is its own, not the page's.
+        fetch_app_info(dispatch, channel),
       ]
       // The focused-scoped half: the host-settings mirror and installed
       // skills (they feed the composer's `$` completion, so
@@ -5084,7 +5098,6 @@ fn update_device_msg(
         // materializes there. The startup update check rides here so it
         // only runs once the bridge can carry it.
         if model.is_desktop {
-          commands.push(model.fetch_app_info(dispatch))
           commands.push(check_for_updates(dispatch, explicit=false))
           commands.push(fetch_remote_status(dispatch))
         }
@@ -16870,13 +16883,49 @@ test "CompactRejected clears the queued notice and reports the error" {
 }
 
 ///|
-test "AppInfoLoaded replaces the displayed package version idempotently" {
+test "AppInfoLoaded records the version and host platform idempotently" {
   let dispatch = test_dispatch()
-  let (_, once) = update(dispatch, AppInfoLoaded("0.2.0"), test_model())
-  let (_, twice) = update(dispatch, AppInfoLoaded("0.2.0"), once)
+  let info = AppInfoLoaded(version="0.2.0", windows=true)
+  let (_, once) = update(
+    dispatch,
+    FromDevice(@interop.ChannelId::Local, info),
+    test_model(),
+  )
+  let (_, twice) = update(
+    dispatch,
+    FromDevice(@interop.ChannelId::Local, info),
+    once,
+  )
   assert_eq(once.app_version, "0.2.0")
-  assert_eq(twice.app_version, once.app_version)
-  assert_eq(twice.notification_seq, once.notification_seq)
+  assert_true(
+    once.device_state(@interop.ChannelId::Local)
+    is Some({ windows_host: true, .. }),
+  )
+  assert_true(twice == once)
+}
+
+///|
+test "a remote device's app info never renames the page's own package" {
+  let dispatch = test_dispatch()
+  let channel = @interop.ChannelId::Remote("d_b")
+  let base = {
+    ..test_model(),
+    devices: [
+      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected, },
+      { ..empty_device_state(channel), bridge: Connected, },
+    ],
+  }
+  let (_, next) = update(
+    dispatch,
+    FromDevice(channel, AppInfoLoaded(version="9.9.9", windows=true)),
+    base,
+  )
+  assert_eq(next.app_version, base.app_version)
+  assert_true(next.device_state(channel) is Some({ windows_host: true, .. }))
+  assert_true(
+    next.device_state(@interop.ChannelId::Local)
+    is Some({ windows_host: false, .. }),
+  )
 }
 
 ///|

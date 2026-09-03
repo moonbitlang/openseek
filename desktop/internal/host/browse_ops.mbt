@@ -101,12 +101,7 @@ async fn browse_directory_listing(
     }
     Some(parent.resource_path())
   }
-  Listing(
-    path=encoded_dir,
-    parent~,
-    entries~,
-    windows=@sysplatform.win32 || @sysplatform.win64,
-  )
+  Listing(path=encoded_dir, parent~, entries~)
 }
 
 ///|
@@ -226,7 +221,7 @@ async test "directory creation makes and enters one direct child" {
       parent: parent.resource_path(),
       name: "new project",
     })
-    is Listing(path~, parent=listed_parent, entries~, ..) else {
+    is Listing(path~, parent=listed_parent, entries~) else {
     fail("expected the created directory to be listed")
   }
   assert_eq(

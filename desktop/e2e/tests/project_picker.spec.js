@@ -284,9 +284,10 @@ test('a tilde-named child completes locally instead of going to the host', async
 
 test('an alias of the listed directory is asked again after canonicalization', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  const canonical = { path: '/C:/', entries: ['Users'], windows: true };
+  app.windowsHost = true;
+  const canonical = { path: '/C:/', entries: ['Users'] };
   app.browseTree = {
-    '': { path: '/C:/', entries: ['Users'], windows: true },
+    '': { path: '/C:/', entries: ['Users'] },
     '/': { drives: ['C:', 'D:'] },
     '/C:': canonical,
     '/c:': canonical,
@@ -323,8 +324,9 @@ test('an alias of the listed directory is asked again after canonicalization', a
 
 test('the Windows drive list lists drives and refuses Add project', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
+  app.windowsHost = true;
   app.browseTree = {
-    '': { path: '/C:/Users/test', parent: '/C:/Users', entries: ['code'], windows: true },
+    '': { path: '/C:/Users/test', parent: '/C:/Users', entries: ['code'] },
     '/': { drives: ['C:', 'D:'] },
   };
   await app.install();
@@ -346,8 +348,8 @@ test('the Windows drive list lists drives and refuses Add project', async ({ pag
   await expect(input).toHaveValue('/C');
   // A native drive-letter spelling is the host's to resolve, never a child
   // of the listed directory.
-  app.browseTree['C:'] = { path: '/C:/', entries: ['Users'], windows: true };
-  app.browseTree['C:/Users'] = { path: '/C:/Users', parent: '/C:/', entries: ['test'], windows: true };
+  app.browseTree['C:'] = { path: '/C:/', entries: ['Users'] };
+  app.browseTree['C:/Users'] = { path: '/C:/Users', parent: '/C:/', entries: ['test'] };
   await selectAll(page);
   app.hold('fs.browse');
   await page.keyboard.type('C:/Users/');

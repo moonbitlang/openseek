@@ -108,12 +108,11 @@ fn reply_message(
   drives~ : Bool,
 ) -> Msg {
   match reply {
-    Listing(path~, entries~, windows~, ..) =>
+    Listing(path~, entries~, ..) =>
       Loaded(
         channel~,
         location=Directory(path),
         entries=entries.filter(name => !name.is_empty()),
-        windows~,
         generation~,
       )
     Drives(entries~) if drives =>
@@ -121,8 +120,6 @@ fn reply_message(
         channel~,
         location=DriveList,
         entries=entries.filter(name => !name.is_empty()),
-        // Only a Windows host has a drive list.
-        windows=true,
         generation~,
       )
     Drives(_) =>
