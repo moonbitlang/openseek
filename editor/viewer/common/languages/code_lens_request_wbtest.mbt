@@ -157,7 +157,7 @@ async test "CodeLens query rejects cancelled and disposed registrations" {
 async test "CodeLens resolver and change event retain the captured registration lifetime" {
   let languages = Languages()
   let model = test_model()
-  let changes : @base_common.Emitter[Unit] = @base_common.Emitter()
+  let changes : @base_common.Emitter[Unit] = Emitter()
   let delivered = Ref(0)
   let handle = languages.language_handle(@log.LogService().log_handle())
   let listener = handle.on_did_change_code_lenses(() => delivered.val += 1)
