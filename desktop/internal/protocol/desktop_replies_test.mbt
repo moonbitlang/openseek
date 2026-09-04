@@ -960,8 +960,10 @@ test "language payload codecs require every routing coordinate" {
 ///|
 test "Moon IDE CodeLens reply preserves explicit action tags" {
   let reply : @protocol.MoonIdeCodeLensReply = @json.from_json({
+    "future_metadata": true,
     "lenses": [
       {
+        "future_metadata": true,
         "range": {
           "start": { "line": 1, "character": 2 },
           "end": { "line": 1, "character": 8 },
@@ -1030,6 +1032,63 @@ test "Moon IDE CodeLens reply preserves explicit action tags" {
     ],
   })
   let malformed_payloads : Array[Json] = [
+    null,
+    {},
+    { "lenses": null },
+    { "lenses": "not an array" },
+    {
+      "lenses": [
+        {
+          "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 1 },
+          },
+          "action": {
+            "kind": "outside",
+            "position": { "line": 0, "character": 0 },
+          },
+        },
+      ],
+    },
+    {
+      "lenses": [
+        {
+          "range": null,
+          "title": "Outside",
+          "action": {
+            "kind": "outside",
+            "position": { "line": 0, "character": 0 },
+          },
+        },
+      ],
+    },
+    {
+      "lenses": [
+        {
+          "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 1 },
+          },
+          "title": null,
+          "action": {
+            "kind": "outside",
+            "position": { "line": 0, "character": 0 },
+          },
+        },
+      ],
+    },
+    {
+      "lenses": [
+        {
+          "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 1 },
+          },
+          "title": "Outside",
+          "action": null,
+        },
+      ],
+    },
     {
       "lenses": [
         {

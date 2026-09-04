@@ -198,7 +198,7 @@ pub fn run_code_lens_test() -> Unit {
   let mode = Ref(0)
   let provider_calls = Ref(0)
   let resolve_calls : Array[String] = []
-  let changes : @base_common.Emitter[Unit] = @base_common.Emitter()
+  let changes : @base_common.Emitter[Unit] = Emitter()
   languages.register_code_lens_provider(
     LanguageId("codelens-main"),
     BrowserCodeLensProvider::{ mode, calls: provider_calls, },

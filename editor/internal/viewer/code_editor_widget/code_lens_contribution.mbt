@@ -426,9 +426,9 @@ fn CodeEditorWidget::create_code_lens_row(
     guard line >= 1 && line <= model.get_line_count() else { return None }
     let first_non_whitespace = model.get_line_first_non_whitespace_column(line)
     let position : @view.ContentWidgetPosition = {
-      position: Some(@base_common.Position(line, first_non_whitespace.max(1))),
+      position: Some(Position(line, first_non_whitespace.max(1))),
       secondary_position: None,
-      preference: Some([@view.Above]),
+      preference: Some([Above]),
       position_affinity: None,
     }
     Some(position)

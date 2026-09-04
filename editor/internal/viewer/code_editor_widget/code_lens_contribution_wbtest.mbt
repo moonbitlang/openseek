@@ -179,7 +179,7 @@ async test "CodeLens contribution fences model replacement and option-disable st
   let backings = CodeLensContributionTestBackings()
   let lenses = [contribution_code_lens(1, "live")]
   let calls = Ref(0)
-  let changes : @base_common.Emitter[Unit] = @base_common.Emitter()
+  let changes : @base_common.Emitter[Unit] = Emitter()
   let first_started = @async.Semaphore(1, initial_value=0)
   let release_first = @async.Semaphore(1, initial_value=0)
   let registration = backings.languages.register_code_lens_provider(

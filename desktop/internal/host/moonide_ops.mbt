@@ -540,6 +540,20 @@ async fn moonide_references_op(
 }
 
 ///|
+fn moonide_codelens_failure_text(
+  code : Int,
+  stream : String,
+  data : &@io.Data,
+) -> String raise HostError {
+  data.text() catch {
+    error =>
+      raise HostError(
+        "moon ide codelens exited with code \{code}, but \{stream} was not valid UTF-8: \{error}",
+      )
+  }
+}
+
+///|
 async fn moonide_codelens_op(
   state : HostState,
   payload : MoonIdeCodeLensPayload,
@@ -558,8 +572,12 @@ async fn moonide_codelens_op(
     error => raise HostError("could not run moon ide codelens: \{error}")
   }
   if code != 0 {
-    let stderr = (stderr.text() catch { _ => "" }).trim().to_owned()
-    let stdout = (stdout.text() catch { _ => "" }).trim().to_owned()
+    let stderr = moonide_codelens_failure_text(code, "stderr", stderr)
+      .trim()
+      .to_owned()
+    let stdout = moonide_codelens_failure_text(code, "stdout", stdout)
+      .trim()
+      .to_owned()
     let detail = if !stderr.is_empty() { stderr } else { stdout }
     raise HostError(
       if detail.is_empty() {
@@ -593,6 +611,30 @@ test "Moon IDE commands use relative one-based locations without a shell" {
   assert_eq(moonide_codelens_args("src/main.mbt", true), [
     "ide", "codelens", "src/main.mbt", "--json", "--no-check",
   ])
+}
+
+///|
+test "Moon IDE CodeLens failure keeps output decoding errors distinct" {
+  let mut stdout_failure : String? = None
+  ignore(moonide_codelens_failure_text(17, "stdout", b"\xff")) catch {
+    HostError(detail) => stdout_failure = Some(detail)
+  }
+  guard stdout_failure is Some(stdout_message) else {
+    fail("invalid stdout did not raise HostError")
+  }
+  assert_true(stdout_message.contains("exited with code 17"))
+  assert_true(stdout_message.contains("stdout"))
+  assert_true(stdout_message.contains("UTF-8"))
+  let mut stderr_failure : String? = None
+  ignore(moonide_codelens_failure_text(17, "stderr", b"\xff")) catch {
+    HostError(detail) => stderr_failure = Some(detail)
+  }
+  guard stderr_failure is Some(stderr_message) else {
+    fail("invalid stderr did not raise HostError")
+  }
+  assert_true(stderr_message.contains("exited with code 17"))
+  assert_true(stderr_message.contains("stderr"))
+  assert_true(stderr_message.contains("UTF-8"))
 }
 
 ///|

@@ -1664,12 +1664,49 @@ pub(all) struct MoonIdeCodeLens {
   range : LspRange
   title : String
   action : MoonIdeCodeLensAction
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for MoonIdeCodeLens with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "Moon IDE CodeLens")
+  {
+    range: @json.from_json(
+      object.required_json("range"),
+      path=path.add_key("range"),
+    ),
+    title: object.required_string("title"),
+    action: @json.from_json(
+      object.required_json("action"),
+      path=path.add_key("action"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for MoonIdeCodeLens with fn to_json(self) {
+  { "range": self.range, "title": self.title, "action": self.action }
+}
 
 ///|
 pub(all) struct MoonIdeCodeLensReply {
   lenses : Array[MoonIdeCodeLens]
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for MoonIdeCodeLensReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "Moon IDE CodeLens reply")
+  {
+    lenses: @json.from_json(
+      object.required_json("lenses"),
+      path=path.add_key("lenses"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for MoonIdeCodeLensReply with fn to_json(self) {
+  { "lenses": self.lenses }
+}
 
 ///|
 pub(all) struct LspDiagnostic {
