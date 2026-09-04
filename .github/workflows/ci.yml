@@ -47,9 +47,9 @@ jobs:
       # Proton comes from the registry, so the version it is pinned to lives in
       # desktop/moon.mod and nowhere else. Read it back here rather than
       # repeating it, and reuse it for both the CEF cache key and the CLI.
-      # Desktop is native-only, so the wasm row never reaches Proton: it skips
-      # this and the three Proton steps below rather than paying for a runtime
-      # nothing in that row links.
+      # The wasm row links nothing from Proton, so it needs no CEF runtime and
+      # skips this and the two store steps below. It does still need the
+      # development packages further down — see that step.
       - name: Resolve pinned Proton version
         if: matrix.target != 'wasm'
         id: proton
@@ -105,8 +105,12 @@ jobs:
       # Proton's Linux prebuild queries GTK and X11 while producing its native
       # link configuration. The shared libraries are on the runner image, but
       # their pkg-config metadata and headers come from the development packages.
+      # Every row needs them, wasm included: `moon test` runs each workspace
+      # module's prebuild whatever the target is, so Proton's runs — and fails
+      # without pkg-config metadata — even in a row that links none of it.
+      # `moon check` does not run prebuilds, which is why only the test step
+      # ever saw this.
       - name: Install Proton Linux dependencies
-        if: matrix.target != 'wasm'
         run: |
           sudo apt-get update
           sudo apt-get install --yes libgtk-3-dev libx11-dev
