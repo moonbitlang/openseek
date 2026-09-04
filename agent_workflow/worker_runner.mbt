@@ -239,6 +239,7 @@ async fn run_worker_slice(
     steps_used: result.steps_used(),
     prompt_tokens: result.prompt_tokens(),
     completion_tokens: result.completion_tokens(),
+    cost_usd: result.cost_usd(),
   }
   // Evidence comes from git regardless of how the child ended: a
   // truncated child's mergeable edits still commit — as SALVAGE in the

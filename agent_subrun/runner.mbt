@@ -32,6 +32,7 @@ struct SubrunResult[T] {
   steps_used : Int
   prompt_tokens : Int
   completion_tokens : Int
+  cost_usd : Double?
   subrun_id : String
 } derive(Debug)
 
@@ -51,6 +52,14 @@ pub fn[T] SubrunResult::terminal(self : SubrunResult[T]) -> SubrunTerminal {
 /// Model requests the child actually made.
 pub fn[T] SubrunResult::steps_used(self : SubrunResult[T]) -> Int {
   self.steps_used
+}
+
+///|
+/// The child's own money figure for the run, summed from the `usage.cost_usd`
+/// its event stream reported. `None` means unknown, never free: an engine
+/// that prices nothing leaves it absent.
+pub fn[T] SubrunResult::cost_usd(self : SubrunResult[T]) -> Double? {
+  self.cost_usd
 }
 
 ///|
@@ -175,6 +184,7 @@ pub async fn[T] run_subrun(
     steps_used: contract.steps_used,
     prompt_tokens: contract.prompt_tokens,
     completion_tokens: contract.completion_tokens,
+    cost_usd: contract.cost_usd,
     subrun_id: id,
   }
 }

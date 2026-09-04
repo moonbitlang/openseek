@@ -44,7 +44,9 @@ async test "drive a scripted engine through the adapter" {
       map_launch=(spec, _) => { ..spec, command: "sh", args: ["-c", script], },
     ),
   )
-  assert_eq(wf.agent("what is the answer?", kind="echo"), { "answer": 42 })
+  assert_eq(wf.agent(prompt="what is the answer?", kind="echo"), {
+    "answer": 42,
+  })
   assert_eq(wf.tokens_spent(), 10)
 }
 ```

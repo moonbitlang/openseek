@@ -37,6 +37,7 @@ pub fn SubrunBudget::reset_turn(Self) -> Unit
 
 type SubrunResult[T] derive(@debug.Debug)
 pub fn[T] SubrunResult::completion_tokens(Self[T]) -> Int
+pub fn[T] SubrunResult::cost_usd(Self[T]) -> Double?
 pub fn[T] SubrunResult::prompt_tokens(Self[T]) -> Int
 pub fn[T] SubrunResult::steps_used(Self[T]) -> Int
 pub fn[T] SubrunResult::subrun_id(Self[T]) -> String

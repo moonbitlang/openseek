@@ -22,7 +22,7 @@ async fn main {
   // ---- Phase 1: the scout finds something worth fixing ----
   wf.phase("Scout")
   let finding = wf.agent(
-    "Read the 'Known limits' section of agent_workflow/README.mbt.md and the code each limit describes. Pick the ONE limit whose wording is least precise, and draft a sharper version of that sentence, justified by a specific code line. Reply with: the file path, the EXACT current sentence, and the improved sentence (a one-line edit).",
+    prompt="Read the 'Known limits' section of agent_workflow/README.mbt.md and the code each limit describes. Pick the ONE limit whose wording is least precise, and draft a sharper version of that sentence, justified by a specific code line. Reply with: the file path, the EXACT current sentence, and the improved sentence (a one-line edit).",
     kind="explore",
     max_steps=24,
     label="scout:defect",

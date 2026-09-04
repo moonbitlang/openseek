@@ -32,7 +32,7 @@ async test "a scripted child's report and cost flow into the workflow" {
     #|printf '{"subrun_report": {"answer": "forty-two"}}\n'
   let journal = @workflow.Journal::in_memory()
   let wf = @workflow.Workflow(runner=scripted_subrun(script), journal~)
-  assert_eq(wf.agent("q", kind="explore"), { "answer": "forty-two" })
+  assert_eq(wf.agent(prompt="q", kind="explore"), { "answer": "forty-two" })
   assert_eq(wf.tokens_spent(), 100)
   assert_eq(wf.calls_made(), 1)
   // The journalled attempt carries the exact accounting, not just totals.
@@ -68,7 +68,7 @@ async test "the call's input IS the child's input line" {
     #|read line
     #|printf '{"subrun_report": %s}\n' "$line"
   let wf = @workflow.Workflow(runner=scripted_subrun(script))
-  guard wf.agent("hello", kind="explore", hints="look here")
+  guard wf.agent(prompt="hello", kind="explore", hints="look here")
     is {
       "workflow_contract": 1,
       "kind": "explore",
@@ -99,7 +99,7 @@ async test "the seam sees the canonical argv it may transform" {
     },
   )
   let wf = @workflow.Workflow(runner~)
-  let _ = wf.agent("q", kind="explore", max_steps=42)
+  let _ = wf.agent(prompt="q", kind="explore", max_steps=42)
   guard seen.val is Some(spec) else {
     fail("the seam never saw the canonical launch spec")
   }
@@ -120,7 +120,7 @@ async test "a child that dies without a report fails typed WITH its cost" {
     #|read line
     #|printf '{"event":"usage","usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90}}\n'
   let wf = @workflow.Workflow(runner=scripted_subrun(script))
-  guard wf.try_agent("q", kind="explore")
+  guard @workflow.attempt(() => wf.agent(prompt="q", kind="explore"))
     is Err(@workflow.AgentFailed(failure=NoReport, ..)) else {
     fail("expected a typed NoReport failure")
   }
@@ -139,7 +139,7 @@ async test "an observed step exhaustion maps to MaxSteps" {
     #|read line
     #|printf '{"event":"max_steps_exhausted"}\n'
   let wf = @workflow.Workflow(runner=scripted_subrun(script))
-  guard wf.try_agent("q", kind="explore")
+  guard @workflow.attempt(() => wf.agent(prompt="q", kind="explore"))
     is Err(@workflow.AgentFailed(failure=MaxSteps, ..)) else {
     fail("expected a typed MaxSteps failure")
   }
@@ -154,7 +154,7 @@ async test "a spawn failure maps to Failed with a zero-cost attempt" {
     ),
     journal=@workflow.Journal::in_memory(),
   )
-  match wf.try_agent("q", kind="explore") {
+  match @workflow.attempt(() => wf.agent(prompt="q", kind="explore")) {
     Err(@workflow.AgentFailed(failure=Failed(_), ..)) => ()
     // Some sandboxes surface spawn refusal as an immediate empty exit:
     // accept NoReport there, but never a success or a crash.
@@ -180,7 +180,7 @@ async test "journal replay spares the child process entirely" {
     runner=scripted_subrun(live),
     journal=@workflow.Journal::load(path),
   )
-  let first = wf1.agent("q", kind="explore")
+  let first = wf1.agent(prompt="q", kind="explore")
   // Generation 2's child would report a DIFFERENT value if it ever ran;
   // replay must serve generation 1's report without spawning.
   let poisoned =
@@ -190,7 +190,7 @@ async test "journal replay spares the child process entirely" {
     runner=scripted_subrun(poisoned),
     journal=@workflow.Journal::load(path),
   )
-  assert_eq(wf2.agent("q", kind="explore"), first)
+  assert_eq(wf2.agent(prompt="q", kind="explore"), first)
   assert_eq(wf2.calls_made(), 0)
   assert_eq(wf2.calls_replayed(), 1)
 }

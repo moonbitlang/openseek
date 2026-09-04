@@ -92,6 +92,7 @@ fn outcome_of(
     steps_used: result.steps_used(),
     prompt_tokens: result.prompt_tokens(),
     completion_tokens: result.completion_tokens(),
+    cost_usd: result.cost_usd(),
   }
   match result.terminal() {
     Captured =>
