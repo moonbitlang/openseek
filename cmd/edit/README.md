@@ -35,6 +35,26 @@ A malformed allowlist fails the run rather than silently widening to the whole
 root: a confinement that cannot be built is not a confinement. The scope
 resolves symlinks and `..` before deciding, so neither can smuggle a write out.
 
+## Who May Spawn This
+
+The environment is the confinement, so whoever spawns this program decides its
+bound. That is sound when the spawner is the engine, which sets the variables
+itself. It is **not** sound when the spawner is a model-authored `mbtx` snippet:
+`@process.run` takes `extra_env` and `inherit_env`, so a snippet can start this
+program with any environment it likes, including none.
+
+That is why this binary is **not** on the mbtx spawn allowlist. A snippet today
+cannot write the workspace at all — moonrun's `fs` rules grant it only its temp
+directory and a read-only role's scratch lab, deliberately, so that a snippet
+cannot route around `remove`'s provenance check. Admitting an editor that takes
+its scope from a caller-supplied environment would hand back exactly that reach.
+
+Wiring this up for program tool calls therefore needs a confinement the caller
+cannot choose. The workable shape is discovery rather than instruction: the
+engine writes the policy inside the workspace, and this program finds it by
+walking up from the file it is about to modify. A snippet cannot plant a
+competing policy there, because it cannot write there.
+
 ## What This Does Not Carry
 
 Provenance. The engine's `FileStateMap` records which files the agent created or
