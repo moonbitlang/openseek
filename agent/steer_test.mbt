@@ -290,16 +290,17 @@ async test "blank steering input is dropped at the boundary" {
 }
 
 ///|
-/// Pop every line the in-process protocol sink is holding into `entries` as
+/// Every line the in-process protocol sink is holding, popped and parsed as
 /// JSON. The engine writes only valid JSON, so an unparsable line fails the
 /// test. (`poll_line` is the sink's in-process read side, live only between
 /// `open` and `close`; the CLI drains to stdout instead, so a process uses
 /// only one.)
-fn drain_emitted(entries : Array[Json]) -> Unit raise {
-  for ;; {
-    guard @emit.poll_line() is Some(line) else { return }
+fn drain_emitted() -> Array[Json] raise {
+  let entries = []
+  while @emit.poll_line() is Some(line) {
     entries.push(@json.parse(line))
   }
+  entries
 }
 
 ///|
@@ -356,7 +357,7 @@ async test "streaming reasoning deltas are always emitted and stay transient" {
     // below is exactly this turn's events.
     @emit.open()
     defer @emit.close()
-    drain_emitted([])
+    ignore(drain_emitted())
     let session = @agent_session.Session(
       SessionId("reasoning-log-test"),
       system_prompt="system",
@@ -382,8 +383,7 @@ async test "streaming reasoning deltas are always emitted and stay transient" {
       fail("expected a completed one-step turn")
     }
     // The events this turn reported, read back off the protocol sink.
-    let entries : Array[Json] = []
-    drain_emitted(entries)
+    let entries = drain_emitted()
     let event_names = entries.map(log_event)
     assert_true(event_names.contains("reasoning_message"))
     assert_true(event_names.contains("assistant_delta"))
