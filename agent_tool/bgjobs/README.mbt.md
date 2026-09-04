@@ -7,17 +7,18 @@ ids, session-visible metadata, spill-file placement, exit watchers, and
 push-completion hooks — it adds no second execution or output pipeline.
 
 One `BgJobRuntime` is created per session (by `@agent.build_tools`) and shared
-by the `shell` (`run_in_background`), `shell_output`, and `shell_stop` tools, so
-a job started in one turn is visible in every later turn of the session.
+by `mbtx` (auto-adopted after its foreground grace period) and the `job_output`
+and `job_stop` tools, so a job started in one turn is visible in every later
+turn of the session. The registry carries no shell tool family.
 
 ## Lifecycle
 
 ```mermaid
 flowchart LR
-  rib["shell run_in_background"] -->|"start()"| job["BgJob (id bg-N)"]
+  rib["mbtx (auto-adopt)"] -->|"start()"| job["BgJob (id bg-N)"]
   timeout["foreground timeout"] -->|"background() + adopt()"| job
-  job -->|"snapshot()/read_output_tail()"| out["shell_output"]
-  job -->|"stop()"| stop["shell_stop"]
+  job -->|"snapshot()/read_output_tail()"| out["job_output"]
+  job -->|"stop()"| stop["job_stop"]
   job -->|"natural exit / watchdog kill"| watcher["exit watcher"]
   watcher -->|"on_job_exit(snapshot)"| notice["completion notice\n(SteerInput::Notice + idle wake)"]
 ```
@@ -26,7 +27,7 @@ flowchart LR
   its spill file never diverge).
 - `adopt` registers an *already running* execution — this is detach-on-timeout:
   a foreground command that outlived its `timeout_ms` is flipped to
-  `Backgrounded` and adopted, so `shell_output`/`shell_stop` and the completion
+  `Backgrounded` and adopted, so `job_output`/`job_stop` and the completion
   notice see it like any explicitly backgrounded job. The launch's sandbox
   metadata rides along so a source-write denial is still detected when the
   job's output is read later.
@@ -37,7 +38,7 @@ flowchart LR
 ## Output retention
 
 Jobs use the sink's file-backed model: an inline preview up to the budget
-(`max_output_chars`, matching the shell tool's foreground default so a command
+(`max_output_chars`, matching the foreground default so a command
 reads the same either way), full output in a per-job spill file under the
 session's spill directory, a thirty-minute wall-clock lifetime cap (a reaped
 job reports `killed_by_time_limit`, measured from process start so adopted
@@ -52,7 +53,7 @@ memory-only jobs (bounded preview, rest dropped).
 The per-job watcher awaits the execution and calls `on_job_exit` exactly once
 when the job ends *on its own* — a natural exit, the output watchdog, or the
 wall-clock reaper. A
-requested stop (`shell_stop`, session teardown) fires nothing: it is already
+requested stop (`job_stop`, session teardown) fires nothing: it is already
 user-visible. The `agent` package wires `on_job_exit` to queue a
 `SteerInput::Notice` (lossless) and poke the serve loop, which is what makes
 job completion *push* into the conversation instead of requiring the model to
@@ -62,8 +63,9 @@ exactly that workflow.
 ## Snapshots
 
 Consumers only ever see `BgJobSnapshot`, an immutable view carrying the status
-(`Running`/`Exited(code)`/`Stopped`), the inline output preview, size and
-sequence counters for change detection, and the error-semantics flags
+(`Running`/`Exited(code)`/`Stopped`), the inline output preview, the `size`
+counter for change detection, and the error-semantics flags
 (`had_invalid_utf8`, sandbox metadata, `killed_by_output_limit`) that let
-`shell_output` report a background job with exactly the foreground path's error
-behavior.
+`job_output` report a background job with exactly the foreground path's error
+behavior. The sink's own sequence number stays private and is not copied into
+the snapshot.

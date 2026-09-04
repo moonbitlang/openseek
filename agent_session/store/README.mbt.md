@@ -16,6 +16,7 @@ Each session lives under:
 <root>/sessions/<session-id>/
   openseek_session-<session-id>.jsonl
   session.lock
+  session-title            (only once a user title is set)
 ```
 
 `openseek_session-<session-id>.jsonl` is the whole durable session: its first
@@ -290,9 +291,9 @@ them up. `latest` uses loadability as the resume gate.
 
 ## File Path Helpers
 
-`session_file` exposes the absolute path of a session's file for read-only
-tooling such as the visualizer server. It still validates the session id before
-constructing the path.
+`session_file` exposes the path of a session's file for read-only tooling such
+as the visualizer server — root-joined, so it is relative whenever the store
+root is. It still validates the session id before constructing the path.
 
 ```mbt nocheck
 ///|
@@ -301,8 +302,9 @@ let path = store.session_file(@agent_session.SessionId("demo"))
 
 ## Failure Model
 
-The whole session is one file, so there is no cross-file consistency to
-maintain:
+The whole transcript is one file, so there is no cross-file consistency to
+maintain (the optional `session-title` sidecar is replaced atomically under the
+same lock):
 
 - `append` is a single `O_APPEND` write of one event line. The first durable
   write for a session (no file yet) writes the header line and the first event

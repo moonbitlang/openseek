@@ -12,7 +12,8 @@ package.
 
 ## API Shape
 
-- `EditInput(path, old_string, new_string, replace_all, start_line, end_line)`:
+- `EditInput(path, old_string, new_string, replace_all, replace_all_preview,
+  start_line, end_line, revert_on_parse_errors)`:
   the normalized edit request.
 - `decode(arguments)`: accepts a JSON object and returns `EditInput`, or raises
   when required fields are missing or have invalid types.
@@ -27,8 +28,10 @@ package.
 | `replace_all` | boolean | no | Legacy field. Defaults to `false`; `true` is rejected by `agent_tool/edit` with guidance to use `multi_edit`. |
 | `start_line` | integer | yes | Required positive 1-based inclusive search start. |
 | `end_line` | integer | no | Optional positive 1-based inclusive range end; when present, it must be greater than or equal to `start_line`. |
+| `replace_all_preview` | boolean | no | Defaults to `false`. When `true`, `agent_tool/edit` reports every match in the line range as a reviewable `multi_edit` array instead of applying the edit. |
+| `revert_on_parse_errors` | boolean | no | Defaults to `true`. Honored by `agent_tool/edit` as the parse gate on the written result. |
 
-Extra fields are ignored. Non-object JSON values raise `object arguments`.
+Unrecognized keys are ignored. Non-object JSON values raise `object arguments`.
 
 The decoder does not reject empty `old_string`, identical replacements,
 `replace_all=true`, missing files, missing matches, or manifest edits. Those

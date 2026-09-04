@@ -203,8 +203,11 @@ compaction rules are applied:
 - `Assistant` events preserve visible content, reasoning content, and native
   tool calls.
 - `Tool` events are emitted only when they answer a pending assistant tool call.
-- `Terminal(Finished(...))` becomes a final assistant message when non-empty;
-  failed, aborted, and interrupted terminals become assistant-status messages.
+- `Terminal(Finished(...))` becomes a final assistant message when non-empty,
+  unless it is a context-yield notice (carrying `ContextYieldAnswerPrefix`) or
+  repeats the immediately preceding Assistant message — either is dropped from
+  the model-facing projection. Failed, aborted, and interrupted terminals
+  become assistant-status messages.
 - A dangling assistant tool call is closed with a synthetic tool error before
   the next non-tool event, keeping the protocol-valid replay shape.
 

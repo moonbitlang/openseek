@@ -318,8 +318,10 @@ improving:
   another explicit validation command.
 - Use `mbtx` for exact end-to-end MoonBit command validation beyond
   compiler feedback, especially `moon test`, `moon run`, and README command
-  checks. Source-writing commands (`moon fmt`, `moon info`) are denied by the
-  snippet sandbox and belong to the caller, not the agent.
+  checks. Source-writing commands (`moon fmt`, `moon info`, `git checkout`) run
+  normally inside snippets — the sandbox bounds which commands exist, not
+  whether they write source. Only a `read_only` subrun takes a profile that
+  denies source writes.
 - For snapshot updates, run plain `moon test` first and only run
   `moon test --update` after deciding the failure is a stale snapshot or
   intentional output change, not a behavior bug.
