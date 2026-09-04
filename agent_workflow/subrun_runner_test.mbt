@@ -171,6 +171,7 @@ async test "journal replay spares the child process entirely" {
     return
   }
   let dir = @fs.tmpdir(prefix="workflow-subrun-journal-")
+  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
   let path = "\{dir}/journal.jsonl"
   let live =
     #|read line
@@ -192,7 +193,4 @@ async test "journal replay spares the child process entirely" {
   assert_eq(wf2.agent("q", kind="explore"), first)
   assert_eq(wf2.calls_made(), 0)
   assert_eq(wf2.calls_replayed(), 1)
-  @fs.rmdir(dir, recursive=true) catch {
-    _ => ()
-  }
 }

@@ -57,6 +57,7 @@ async test "a worker slice commits, integrates, and lands in the repo" {
     return
   }
   let repo = init_repo()
+  defer (@fs.rmdir(repo, recursive=true) catch { _ => () })
   let wf = worker_workflow(repo, edit_script)
   let outcome = @agent_workflow.worker(
     wf,
@@ -86,9 +87,6 @@ async test "a worker slice commits, integrates, and lands in the repo" {
     fail("expected the committed slice to integrate")
   }
   assert_eq(@fs.read_file("\{repo}/src/a.txt").text(), "two\n")
-  @fs.rmdir(repo, recursive=true) catch {
-    _ => ()
-  }
 }
 
 ///|
@@ -98,6 +96,7 @@ async test "an out-of-bounds edit is not mergeable and can be discarded" {
     return
   }
   let repo = init_repo()
+  defer (@fs.rmdir(repo, recursive=true) catch { _ => () })
   let rogue =
     #|read line
     #|printf 'rogue\n' > outside.txt
@@ -119,9 +118,6 @@ async test "an out-of-bounds edit is not mergeable and can be discarded" {
     is Ok(_) else {
     fail("expected the failed slice to be discardable")
   }
-  @fs.rmdir(repo, recursive=true) catch {
-    _ => ()
-  }
 }
 
 ///|
@@ -131,6 +127,7 @@ async test "overlapping slices are refused before any child spawns" {
     return
   }
   let repo = init_repo()
+  defer (@fs.rmdir(repo, recursive=true) catch { _ => () })
   let wf = worker_workflow(repo, edit_script)
   let _ = @agent_workflow.worker(wf, name="first", task="edit src", allowed_paths=[
     "src/",
@@ -145,9 +142,6 @@ async test "overlapping slices are refused before any child spawns" {
   assert_true(reason.contains("provision"))
   // A refused launch spent nothing beyond the first slice's child.
   assert_eq(wf.calls_made(), 2)
-  @fs.rmdir(repo, recursive=true) catch {
-    _ => ()
-  }
 }
 
 ///|
@@ -157,7 +151,9 @@ async test "a journalled worker slice replays without provisioning" {
     return
   }
   let repo = init_repo()
+  defer (@fs.rmdir(repo, recursive=true) catch { _ => () })
   let dir = @fs.tmpdir(prefix="workflow-worker-journal-")
+  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
   let path = "\{dir}/journal.jsonl"
   let wf1 = worker_workflow(
     repo,
@@ -190,12 +186,6 @@ async test "a journalled worker slice replays without provisioning" {
   assert_eq(second, first)
   assert_eq(wf2.calls_made(), 0)
   assert_eq(wf2.calls_replayed(), 1)
-  @fs.rmdir(dir, recursive=true) catch {
-    _ => ()
-  }
-  @fs.rmdir(repo, recursive=true) catch {
-    _ => ()
-  }
 }
 
 ///|
@@ -205,7 +195,9 @@ async test "a discarded slice does not replay: the veto reruns it live" {
     return
   }
   let repo = init_repo()
+  defer (@fs.rmdir(repo, recursive=true) catch { _ => () })
   let dir = @fs.tmpdir(prefix="workflow-worker-veto-")
+  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
   let path = "\{dir}/journal.jsonl"
   let wf1 = worker_workflow(
     repo,
@@ -239,12 +231,6 @@ async test "a discarded slice does not replay: the veto reruns it live" {
   }
   assert_eq(wf2.calls_made(), 1)
   assert_eq(wf2.calls_replayed(), 0)
-  @fs.rmdir(dir, recursive=true) catch {
-    _ => ()
-  }
-  @fs.rmdir(repo, recursive=true) catch {
-    _ => ()
-  }
 }
 
 ///|
@@ -254,6 +240,7 @@ async test "a dead child cannot become a clean-tree success" {
     return
   }
   let repo = init_repo()
+  defer (@fs.rmdir(repo, recursive=true) catch { _ => () })
   // No argv seam: the missing binary is really spawned and really dies.
   let wf = @workflow.Workflow(
     runner=@agent_workflow.openseek_runner(
@@ -268,9 +255,6 @@ async test "a dead child cannot become a clean-tree success" {
     is Err(@workflow.AgentFailed(..)) else {
     fail("a spawn failure must never look like a completed slice")
   }
-  @fs.rmdir(repo, recursive=true) catch {
-    _ => ()
-  }
 }
 
 ///|
@@ -280,6 +264,7 @@ async test "blank tasks and empty allowed_paths are refused pre-provision" {
     return
   }
   let repo = init_repo()
+  defer (@fs.rmdir(repo, recursive=true) catch { _ => () })
   let wf = worker_workflow(repo, edit_script)
   guard @agent_workflow.try_worker(wf, name="blank", task="  ", allowed_paths=[
       "src/",
@@ -298,9 +283,6 @@ async test "blank tasks and empty allowed_paths are refused pre-provision" {
     fail("expected a readable registry")
   }
   assert_eq(entries.length(), 0)
-  @fs.rmdir(repo, recursive=true) catch {
-    _ => ()
-  }
 }
 
 ///|
@@ -310,6 +292,7 @@ async test "names are reusable and lifecycle binds to the active generation" {
     return
   }
   let repo = init_repo()
+  defer (@fs.rmdir(repo, recursive=true) catch { _ => () })
   let wf = worker_workflow(repo, edit_script)
   let _ = @agent_workflow.worker(
     wf,
@@ -351,9 +334,6 @@ async test "names are reusable and lifecycle binds to the active generation" {
     .map(entry => Json(entry.state))
   assert_true(states.contains(Json("Integrated")))
   assert_true(states.contains(Json("Discarded")))
-  @fs.rmdir(repo, recursive=true) catch {
-    _ => ()
-  }
 }
 
 ///|
@@ -363,6 +343,7 @@ async test "an invalid report shape fails the slice at the trust boundary" {
     return
   }
   let repo = init_repo()
+  defer (@fs.rmdir(repo, recursive=true) catch { _ => () })
   // Edits land, but the report violates the contract (no schema_version,
   // unknown status): git salvage stays in the registry, the slice fails.
   let garbled =
@@ -377,9 +358,6 @@ async test "an invalid report shape fails the slice at the trust boundary" {
     fail("expected the garbled report to fail the slice")
   }
   assert_true(reason.contains("salvaged commit"))
-  @fs.rmdir(repo, recursive=true) catch {
-    _ => ()
-  }
 }
 
 ///|
@@ -389,6 +367,7 @@ async test "a clean no-op the child disclaims is a failure" {
     return
   }
   let repo = init_repo()
+  defer (@fs.rmdir(repo, recursive=true) catch { _ => () })
   let gave_up =
     #|read line
     #|printf '{"subrun_report": {"schema_version": 1, "status": "failed", "summary": "could not do it", "verification": "nothing ran"}}\n'
@@ -400,9 +379,6 @@ async test "a clean no-op the child disclaims is a failure" {
     fail("expected the disclaimed no-op to be a failure")
   }
   assert_true(reason.contains("reported failure"))
-  @fs.rmdir(repo, recursive=true) catch {
-    _ => ()
-  }
 }
 
 ///|
@@ -412,6 +388,7 @@ async test "a typed terminal with salvage names the salvaged commit" {
     return
   }
   let repo = init_repo()
+  defer (@fs.rmdir(repo, recursive=true) catch { _ => () })
   // The child makes a mergeable edit, then dies at its step ceiling
   // without a report: the failure must SAY a salvaged commit exists
   // rather than hiding it behind the bare terminal.
@@ -430,9 +407,6 @@ async test "a typed terminal with salvage names the salvaged commit" {
   assert_true(reason.contains("exhausted its steps"))
   // The message names the real branch, not a placeholder.
   assert_true(reason.contains("openseek/truncated"))
-  @fs.rmdir(repo, recursive=true) catch {
-    _ => ()
-  }
 }
 
 ///|
