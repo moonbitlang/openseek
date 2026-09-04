@@ -72,6 +72,7 @@ git submodule update --init editor/vscode     # opt-in performance suite
 | `bobzhang/openseek/agent` | Native-only OpenSeek agent loop and local tool dispatch. | `agent/README.mbt.md` |
 | `bobzhang/openseek/agent_review` | Read-only, compiler-grounded code-review engine behind `openseek review`. | `agent_review/README.mbt.md` |
 | `bobzhang/openseek/cmd/openseek` | Native-only headless automation CLI (`openseek`). | `cmd/openseek/README.md` |
+| `bobzhang/openseek/cmd/edit` | Native-only standalone `edit` binary: the edit tool as a program, for programmatic composition from `mbtx`. | `cmd/edit/README.md` |
 | `bobzhang/openseek/cli` | Shared command-main helpers: the agent options (`--api-key`, `--model`, …) and failure-text sanitizer used by `openseek` and the out-of-tree `openseek_tui`. | — |
 | `bobzhang/openseek/viz` | Browser viewer for durable session logs (JS). | `viz/README.md` |
 | `bobzhang/inspect` (in `inspect/`, own module) | HTTP server (native or wasm) that serves the visualizer over recorded sessions. | `inspect/README.md` |
@@ -233,6 +234,9 @@ and exposes each on `PATH` as `<name>.exe` (e.g. `openseek.exe`).
 - [`tests/cram/cli.md`](tests/cram/cli.md) — offline `openseek` subcommand
   examples (top-level and `run` help, and the `run`/`serve`/`sessions` behaviors).
   They make no network calls and run in CI via `moon cram test tests/cram`.
+- [`tests/cram/edit.md`](tests/cram/edit.md) — offline `edit` examples: a
+  successful edit, stdin input, a failed match, the parse gate, and the
+  environment-supplied write confinement.
 - [`tests/cram/subrun.md`](tests/cram/subrun.md) — the offline internal child-mode
   wire contract: JSON input on stdin, JSONL events on stdout, typed reports, and
   failure-event delivery. It uses the modelless `echo` kind and needs no API key.

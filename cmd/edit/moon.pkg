@@ -1,0 +1,16 @@
+import {
+  "bobzhang/openseek/agent_tool",
+  "bobzhang/openseek/agent_tool/edit" @edit_tool,
+  "bobzhang/openseek/agent_tool/write_scope",
+  "moonbitlang/async",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/x/sys",
+}
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+native"
+
+pkgtype(kind: "executable")
