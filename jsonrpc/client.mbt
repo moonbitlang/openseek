@@ -312,9 +312,9 @@ async fn Client::dispatch(self : Client, message : Json) -> Unit {
 ///|
 /// Mark the client closed, close the transport (unblocking a parked reader/
 /// writer) and the outbox, and fail every outstanding request with `Closed`.
-/// Idempotent, and never suspends (unbounded `put`, synchronous transport
-/// `close`), so it is safe to run during cancellation unwind.
-async fn Client::close(self : Client) -> Unit {
+/// Idempotent and synchronous (transport and queue `close` never suspend), so
+/// it is safe to run during cancellation unwind.
+pub fn Client::close(self : Client) -> Unit {
   if self.closed {
     return
   }
@@ -322,6 +322,6 @@ async fn Client::close(self : Client) -> Unit {
   self.transport.close()
   self.outbox.close()
   for _, inbox in self.pending {
-    inbox.put(Err(Closed))
+    inbox.close(error=Closed)
   }
 }

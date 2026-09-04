@@ -154,10 +154,9 @@ pub(all) enum Event {
   McpToolRenamed(from~ : String, to~ : String)
   McpToolsCapped(server~ : String, kept~ : Int)
   McpServerSkippedOverCap(server~ : String)
-  /// `error` is always written, `null` when the connection produced no error
-  /// value (the server simply yielded nothing) — same uniformity rule as
-  /// `ToolResult::brief`.
-  McpConnectFailed(server~ : String, error~ : String?)
+  /// `error` is the connect failure's text: the spawn or transport error, a
+  /// handshake error, or the handshake timeout.
+  McpConnectFailed(server~ : String, error~ : String)
   McpListToolsFailed(server~ : String, error~ : String)
   McpListToolsTimeout(server~ : String)
   McpNoTools(server~ : String)

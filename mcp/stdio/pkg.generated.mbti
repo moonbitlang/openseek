@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub async fn[X] connect(@async.TaskGroup[X], command~ : String, args~ : Array[String], env? : Map[String, String], cwd? : String, client_name~ : String, client_version~ : String, handshake_timeout_ms? : Int) -> StdioConnection?
+pub async fn[X] connect(@async.TaskGroup[X], command~ : String, args~ : Array[String], env? : Map[String, String], cwd? : String, client_name~ : String, client_version~ : String, handshake_timeout_ms? : Int) -> StdioConnection
 
 // Errors
 

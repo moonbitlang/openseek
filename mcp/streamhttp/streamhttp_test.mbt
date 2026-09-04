@@ -143,17 +143,22 @@ async test "http connect handshakes, lists tools over SSE, and echoes session he
 }
 
 ///|
-async test "http connect returns None for an unreachable endpoint" {
+async test "http connect raises for an unreachable endpoint" {
   @async.with_task_group() <| group => {
-    let conn = @streamhttp.connect(
-      group,
-      // A localhost port from the dynamic range with nothing listening.
-      url="http://127.0.0.1:1/mcp",
-      client_name="openseek",
-      client_version="0.1",
-      handshake_timeout_ms=3000,
-    )
-    assert_true(conn is None)
+    try
+      @streamhttp.connect(
+        group,
+        // A localhost port from the dynamic range with nothing listening.
+        url="http://127.0.0.1:1/mcp",
+        client_name="openseek",
+        client_version="0.1",
+        handshake_timeout_ms=3000,
+      )
+    catch {
+      _ => ()
+    } noraise {
+      _ => fail("expect http connect to raise for an unavailable endpoint")
+    }
   }
 }
 
@@ -332,26 +337,23 @@ async test "tools/list waits for the initialized notification to complete" {
     assert_true(list_saw_initialized.val)
     conn.shutdown()
   }
-} ///|
-/// Connect to a mock endpoint, failing the test rather than returning None.
-/// Every test but the unreachable-endpoint one wants exactly this.
+}
 
 ///|
+/// Connect to a mock endpoint with the test defaults; a failure raises and so
+/// fails the test. Every test but the unreachable-endpoint one wants exactly
+/// this.
 async fn connect_or_fail(
   group : @async.TaskGroup[Unit],
   url : String,
 ) -> @streamhttp.HttpConnection {
-  guard @streamhttp.connect(
-      group,
-      url~,
-      client_name="openseek",
-      client_version="0.1",
-      handshake_timeout_ms=10000,
-    )
-    is Some(conn) else {
-    fail("expected the http connect to succeed")
-  }
-  conn
+  @streamhttp.connect(
+    group,
+    url~,
+    client_name="openseek",
+    client_version="0.1",
+    handshake_timeout_ms=10000,
+  )
 }
 
 ///|

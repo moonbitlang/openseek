@@ -292,10 +292,15 @@ pub fn parse(line : Json) -> Event? {
     }
     "mcp_server_skipped_over_cap" =>
       text(fields, "server").map(server => McpServerSkippedOverCap(server~))
-    // `error` is null when the connection yielded no error value.
+    // Engines before 2026-09-04 wrote `error` as null when the connection
+    // yielded no error value (a failed spawn or a handshake timeout); those
+    // records still decode, under a placeholder text.
     "mcp_connect_failed" =>
       text(fields, "server").map(server => {
-        McpConnectFailed(server~, error=text(fields, "error"))
+        McpConnectFailed(
+          server~,
+          error=text(fields, "error").unwrap_or("unknown error"),
+        )
       })
     "mcp_list_tools_failed" => {
       guard text(fields, "server") is Some(server) &&

@@ -187,9 +187,9 @@ async fn[X] connect_server(
   discovery_timeout_ms~ : Int,
 ) -> Array[@agent_tool.AgentToolDefinition] {
   let name = server.name()
-  // A connected server, normalized across transports: the initialized client
-  // plus its idempotent teardown.
-  let connection : (@mcp.McpClient, () -> Unit)? = try {
+  // A connected server, normalized across transports: the initialized client;
+  // closing it tears the transport (and, for stdio, the process) down.
+  let client : @mcp.McpClient = try {
     match server {
       // A stdio server runs in the agent's workspace, not openseek's invocation
       // directory, so cwd-sensitive servers and relative args target the same
@@ -203,7 +203,7 @@ async fn[X] connect_server(
           cwd?=workspace_root,
           client_name~,
           client_version~,
-        ).map(conn => (conn.client(), () => conn.shutdown()))
+        ).client()
       @config.Http(url~, headers~, ..) =>
         @streamhttp.connect(
           scope.group(),
@@ -211,39 +211,36 @@ async fn[X] connect_server(
           headers~,
           client_name~,
           client_version~,
-        ).map(conn => (conn.client(), () => conn.shutdown()))
+        ).client()
     }
   } catch {
     error if @async.is_being_cancelled() => raise error
     error => {
-      @emit.emit(McpConnectFailed(server=name, error=Some("\{error}")))
+      @emit.emit(McpConnectFailed(server=name, error="\{error}"))
       return []
     }
   }
-  guard connection is Some((client, shutdown)) else {
-    @emit.emit(McpConnectFailed(server=name, error=None))
-    return []
-  }
-  let discovered = @async.with_timeout_opt(discovery_timeout_ms, () => {
-    tools_for_client(name, client)
-  }) catch {
+  let discovered = try {
+    errdefer client.close()
+    @async.with_timeout(discovery_timeout_ms) <| () => {
+      tools_for_client(name, client)
+    }
+  } catch {
     error if @async.is_being_cancelled() => raise error
+    @async.TimeoutError => {
+      @emit.emit(McpListToolsTimeout(server=name))
+      return []
+    }
     error => {
       @emit.emit(McpListToolsFailed(server=name, error="\{error}"))
-      shutdown()
       return []
     }
-  }
-  guard discovered is Some(discovered) else {
-    @emit.emit(McpListToolsTimeout(server=name))
-    shutdown()
-    return []
   }
   // A server with nothing to offer is useless for the rest of the session:
   // release its process and tasks instead of holding them on the scope.
   if discovered.is_empty() {
     @emit.emit(McpNoTools(server=name))
-    shutdown()
+    client.close()
   }
   discovered
 }

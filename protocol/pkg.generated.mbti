@@ -78,7 +78,7 @@ pub(all) enum Event {
   McpToolRenamed(from~ : String, to~ : String)
   McpToolsCapped(server~ : String, kept~ : Int)
   McpServerSkippedOverCap(server~ : String)
-  McpConnectFailed(server~ : String, error~ : String?)
+  McpConnectFailed(server~ : String, error~ : String)
   McpListToolsFailed(server~ : String, error~ : String)
   McpListToolsTimeout(server~ : String)
   McpNoTools(server~ : String)
