@@ -33,7 +33,7 @@ async test "drive a scripted engine through the adapter" {
   // canned answer after one accounted usage event.
   let script =
     #|read line
-    #|printf '{"level":"INFO","event":"usage","usage":{"prompt_tokens":7,"completion_tokens":3,"total_tokens":10,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":7}}\n'
+    #|printf '{"event":"usage","usage":{"prompt_tokens":7,"completion_tokens":3,"total_tokens":10,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":7}}\n'
     #|printf '{"subrun_report": {"answer": 42}}\n'
   let wf = @workflow.Workflow(
     runner=@agent_workflow.subrun_runner(

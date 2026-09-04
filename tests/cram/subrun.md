@@ -8,16 +8,16 @@ is the cancel signal), standard JSONL events on stdout, and a final
 no API key and makes no network calls. The contract itself is normative in
 the `moonbitlang/workflow` library (`docs/child-contract.md`); §7 there
 records this engine's side of it. Event lines carry no log envelope — they are
-written straight to stdout by the protocol writer (`level` plus the event's own
-fields), never through the process logger — so nothing varies between runs and
-no normalization is needed.
+written straight to stdout by the protocol writer (the event's own fields and
+nothing else), never through the process logger — so nothing varies between
+runs and no normalization is needed.
 
 ## Echo Kind: Events Then the Typed Report Line
 
 ```mooncram
 $ (printf '{"probe": 42}\n'; sleep 1) | openseek.exe subrun echo
-{"level":"INFO","event":"agent_step","step":1}
-{"level":"INFO","event":"usage","usage":{"prompt_tokens":7,"completion_tokens":3,"total_tokens":10,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":7}}
+{"event":"agent_step","step":1}
+{"event":"usage","usage":{"prompt_tokens":7,"completion_tokens":3,"total_tokens":10,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":7}}
 {"subrun_report":{"probe":42}}
 ```
 
@@ -29,7 +29,7 @@ asynchronously drained queue.
 
 ```mooncram
 $ (printf '{}\n'; sleep 1) | openseek.exe subrun nope
-{"level":"ERROR","event":"command_error","error":"unknown subrun kind: nope"}
+{"event":"command_error","error":"unknown subrun kind: nope"}
 ```
 
 ## Worker Kind: Malformed Input Reports Its Exact Defect, Keyless
@@ -39,5 +39,5 @@ a miswired controller gets the precise defect rather than a key complaint.
 
 ```mooncram
 $ (printf '{"task": "fix things"}\n'; sleep 1) | openseek.exe subrun worker
-{"level":"ERROR","event":"command_error","error":"subrun worker: worker input requires an absolute `worker_root`"}
+{"event":"command_error","error":"subrun worker: worker input requires an absolute `worker_root`"}
 ```

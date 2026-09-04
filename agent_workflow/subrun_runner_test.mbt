@@ -27,8 +27,8 @@ async test "a scripted child's report and cost flow into the workflow" {
   }
   let script =
     #|read line
-    #|printf '{"level":"INFO","event":"agent_step","step":1}\n'
-    #|printf '{"level":"INFO","event":"usage","usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90}}\n'
+    #|printf '{"event":"agent_step","step":1}\n'
+    #|printf '{"event":"usage","usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90}}\n'
     #|printf '{"subrun_report": {"answer": "forty-two"}}\n'
   let journal = @workflow.Journal::in_memory()
   let wf = @workflow.Workflow(runner=scripted_subrun(script), journal~)
@@ -118,7 +118,7 @@ async test "a child that dies without a report fails typed WITH its cost" {
   }
   let script =
     #|read line
-    #|printf '{"level":"INFO","event":"usage","usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90}}\n'
+    #|printf '{"event":"usage","usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90}}\n'
   let wf = @workflow.Workflow(runner=scripted_subrun(script))
   guard wf.try_agent("q", kind="explore")
     is Err(@workflow.AgentFailed(failure=NoReport, ..)) else {
@@ -137,7 +137,7 @@ async test "an observed step exhaustion maps to MaxSteps" {
   }
   let script =
     #|read line
-    #|printf '{"level":"INFO","event":"max_steps_exhausted"}\n'
+    #|printf '{"event":"max_steps_exhausted"}\n'
   let wf = @workflow.Workflow(runner=scripted_subrun(script))
   guard wf.try_agent("q", kind="explore")
     is Err(@workflow.AgentFailed(failure=MaxSteps, ..)) else {

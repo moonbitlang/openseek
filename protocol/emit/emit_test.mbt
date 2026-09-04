@@ -28,7 +28,7 @@ test "emits are dropped unless the sink is open" {
   inspect(
     line,
     content=(
-      #|{"level":"INFO","event":"agent_step","step":2}
+      #|{"event":"agent_step","step":2}
     ),
   )
   @emit.close()
@@ -55,14 +55,10 @@ fn usage_sample() -> @protocol.Usage {
 /// One sample per `Event` variant. `derive(Eq)` plus the round-trip test below
 /// makes this list the encoder/decoder contract.
 ///
-/// Two gaps this list does not close, both worth knowing before adding a
-/// variant. Exhaustiveness covers `to_json` and `parse` — `emit` itself matches
-/// nothing, it delegates — but nothing forces a new variant to be added *here*,
-/// so one added without a sample is silently untested. And `level`'s `_ => Info`
-/// catch-all means nothing forces it a severity either: a new event that should
-/// warn ships at `Info` with no error. One variant still cannot hold two levels,
-/// which is what this package set out to stop; being made to choose one is a
-/// weaker promise than the comment here used to imply.
+/// One gap this list does not close, worth knowing before adding a variant.
+/// Exhaustiveness covers `to_json` and `parse` — `emit` itself matches nothing,
+/// it delegates — but nothing forces a new variant to be added *here*, so one
+/// added without a sample is silently untested.
 fn all_events() -> Array[@protocol.Event] {
   [
     AgentSetupFailed(error="boom"),
@@ -178,30 +174,6 @@ test "every event round-trips through emit and parse" {
 }
 
 ///|
-/// Each variant owns its level, so the same event can never be reported at two
-/// severities the way `compaction_failed` was before this package.
-test "levels are a property of the event" {
-  inspect(
-    wire(AgentStep(step=1)),
-    content=(
-      #|{"level":"INFO","event":"agent_step","step":1}
-    ),
-  )
-  inspect(
-    wire(AgentAborted(reason="interrupted")),
-    content=(
-      #|{"level":"WARN","event":"agent_aborted","reason":"interrupted"}
-    ),
-  )
-  inspect(
-    wire(CompactionFailed(error="cancelled")),
-    content=(
-      #|{"level":"ERROR","event":"compaction_failed","error":"cancelled"}
-    ),
-  )
-}
-
-///|
 /// `brief` and `mcp_connect_failed`'s `error` are always written, `null` when
 /// absent. Every decoder reads them with a lookup that rejects a non-string, so
 /// a null and a missing key are the same value downstream — the uniform shape
@@ -218,7 +190,7 @@ test "optional payload fields are written as null, never omitted" {
       ),
     ),
     content=(
-      #|{"level":"INFO","event":"tool_result","tool_call_id":"call_2","tool_name":"shell","is_error":true,"content":"exit 1","brief":null}
+      #|{"event":"tool_result","tool_call_id":"call_2","tool_name":"shell","is_error":true,"content":"exit 1","brief":null}
     ),
   )
   // A present value is the bare string. MoonBit's own `Some(v)` encoding is the
@@ -234,19 +206,19 @@ test "optional payload fields are written as null, never omitted" {
       ),
     ),
     content=(
-      #|{"level":"INFO","event":"tool_result","tool_call_id":"call_1","tool_name":"read","is_error":false,"content":"file body","brief":"read moon.mod"}
+      #|{"event":"tool_result","tool_call_id":"call_1","tool_name":"read","is_error":false,"content":"file body","brief":"read moon.mod"}
     ),
   )
   inspect(
     wire(McpConnectFailed(server="fs", error=None)),
     content=(
-      #|{"level":"WARN","event":"mcp_connect_failed","server":"fs","error":null}
+      #|{"event":"mcp_connect_failed","server":"fs","error":null}
     ),
   )
   inspect(
     wire(GoalUpdated(goal=None)),
     content=(
-      #|{"level":"INFO","event":"goal_updated","goal":null}
+      #|{"event":"goal_updated","goal":null}
     ),
   )
 }
@@ -260,7 +232,7 @@ test "usage carries the protocol struct verbatim" {
   inspect(
     wire(Usage(usage=usage_sample())),
     content=(
-      #|{"level":"INFO","event":"usage","usage":{"prompt_tokens":11,"completion_tokens":22,"total_tokens":33,"prompt_cache_hit_tokens":4,"prompt_cache_miss_tokens":7}}
+      #|{"event":"usage","usage":{"prompt_tokens":11,"completion_tokens":22,"total_tokens":33,"prompt_cache_hit_tokens":4,"prompt_cache_miss_tokens":7}}
     ),
   )
 }
@@ -281,23 +253,24 @@ test "session_started still writes workspace_root as a bare string" {
       ),
     ),
     content=(
-      #|{"level":"INFO","event":"session_started","session":"cli-1","session_root":".openseek","workspace_root":"/w"}
+      #|{"event":"session_started","session":"cli-1","session_root":".openseek","workspace_root":"/w"}
     ),
   )
 }
 
 ///|
 /// The wire line carries no log envelope: events do not pass through `@xlog`,
-/// so the keys its handler added (`timestamp`, `source`, `category`) are gone
-/// from every line. `level` remains because the writer labels severity itself.
+/// so the keys its handler added (`timestamp`, `level`, `source`, `category`)
+/// are gone from every line. No reader ever consulted `level`; a client that
+/// wants a severity derives it from the variant it decoded.
 test "the wire line has no log envelope" {
   for event in all_events() {
     guard @json.parse(wire(event)) is Object(fields) else {
       fail("expected an object")
     }
     assert_false(fields.contains("timestamp"))
+    assert_false(fields.contains("level"))
     assert_false(fields.contains("source"))
     assert_false(fields.contains("category"))
-    assert_true(fields.contains("level"))
   }
 }

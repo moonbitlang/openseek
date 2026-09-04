@@ -11,7 +11,7 @@ portable:
 | Package | Contents | Targets | Deps |
 | --- | --- | --- | --- |
 | `bobzhang/openseek_protocol` | `Event`, `Usage`, `Command`, `SteerKind`, `to_json`, `parse` | js, wasm, wasm-gc, native | `core/json` |
-| `bobzhang/openseek_protocol/emit` | `emit` (severity label + `to_json` + stdout writer) | native | `async`, above |
+| `bobzhang/openseek_protocol/emit` | `emit` (`to_json` + stdout writer) | native | `async`, above |
 
 Only the *writer* does I/O, and only a native process can write fd 1
 asynchronously. Keeping it in its own package means a client that reads the
@@ -29,11 +29,11 @@ stdout through its own sink — no logger in between — so a line is the event
 itself:
 
 ```json
-{"level":"INFO","event":"assistant_delta","content":"Hel"}
+{"event":"assistant_delta","content":"Hel"}
 ```
 
-`level` is the event's own severity label (the only envelope key that remains);
-content that is genuinely a log stays in `@xlog` and never reaches this stream.
+There is no envelope at all — no timestamp, no severity, no source. Content
+that is genuinely a log stays in `@xlog` and never reaches this stream.
 
 ## Why it exists
 
@@ -46,9 +46,10 @@ directions together, and they had drifted:
   from another.
 - `compaction_failed` was reported at `warn` from one site and `error` from two.
 
-`Event` closes that by construction: one variant per event, owning its payload
-**and its level**, with `to_json` the only author of the shape and `parse` its
-inverse. Every reader — the TUI, the desktop host, the desktop frontend —
+`Event` closes that by construction: one variant per event, owning its payload,
+with `to_json` the only author of the shape and `parse` its inverse. There is
+no severity for a call site to pick — the line is the event and nothing else;
+a client that wants to rank events does so from the variant it decoded. Every reader — the TUI, the desktop host, the desktop frontend —
 matches on the same enum, so adding a variant is a compile error at each one:
 ignoring an event is a decision someone wrote down, not a `_ => None` nobody
 noticed.
@@ -68,7 +69,7 @@ What that caught, once the readers were made exhaustive:
 ## API
 
 ```mbt nocheck
-// Report an event. The level comes from the variant, never the call site.
+// Report an event. The line is `to_json`, nothing more.
 @emit.emit(AssistantDelta(content="Hel"))
 @emit.emit(AgentAborted(reason="interrupted"))
 

@@ -395,7 +395,7 @@ async test "a typed terminal with salvage names the salvaged commit" {
   let truncated =
     #|read line
     #|printf 'two\n' > src/a.txt
-    #|printf '{"level":"INFO","event":"max_steps_exhausted"}\n'
+    #|printf '{"event":"max_steps_exhausted"}\n'
   let wf = worker_workflow(repo, truncated)
   guard @agent_workflow.try_worker(wf, name="truncated", task="edit src", allowed_paths=[
       "src/",

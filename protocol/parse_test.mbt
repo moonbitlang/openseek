@@ -14,7 +14,7 @@ test "decodes a streaming delta" {
   debug_inspect(
     decode(
       (
-        #|{"timestamp":"t","level":"INFO","source":"s","event":"assistant_delta","content":"Hel"}
+        #|{"event":"assistant_delta","content":"Hel"}
       ),
     ),
     content=(
@@ -28,7 +28,7 @@ test "decodes a reasoning delta" {
   debug_inspect(
     decode(
       (
-        #|{"timestamp":"t","level":"INFO","source":"s","event":"reasoning_delta","content":"thinking"}
+        #|{"event":"reasoning_delta","content":"thinking"}
       ),
     ),
     content=(
@@ -178,11 +178,29 @@ test "a fractional usage counter is rejected, not truncated" {
 }
 
 ///|
+/// Keys the decoder does not know are ignored. An engine older than this
+/// package wrote every event through `@xlog`, so its lines carry the logger's
+/// envelope (`timestamp`, `level`, `source`); a client built against the
+/// current wire still reads them.
+test "extra keys on a line are ignored" {
+  debug_inspect(
+    decode(
+      (
+        #|{"timestamp":"t","level":"INFO","source":"s","event":"assistant_delta","content":"Hel"}
+      ),
+    ),
+    content=(
+      #|Some(AssistantDelta(content="Hel"))
+    ),
+  )
+}
+
+///|
 /// A line from a newer engine, or one that is not an event at all, is ignored
 /// rather than failing the reader.
 test "unknown and malformed lines are ignored" {
   assert_eq(@openseek_protocol.parse(Json("not an object")), None)
-  assert_eq(@openseek_protocol.parse({ "level": "INFO" }), None)
+  assert_eq(@openseek_protocol.parse({ "hello": "world" }), None)
   assert_eq(@openseek_protocol.parse({ "event": "from_a_newer_engine" }), None)
   // `agent_step` without its required payload.
   assert_eq(@openseek_protocol.parse({ "event": "agent_step" }), None)

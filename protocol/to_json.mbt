@@ -17,8 +17,8 @@ fn or_null(value : String?) -> Json {
 /// flat.
 ///
 /// This is the wire shape, and the only place it is written. `emit` writes it
-/// (under the event's `level` label); the desktop host forwards it for a
-/// compaction its engine died before reporting. Two writers of the same event
+/// as the whole line; the desktop host forwards it for a compaction its engine
+/// died before reporting. Two writers of the same event
 /// must not spell it two ways — they did once, and nothing noticed until a
 /// decoder was asked to be exhaustive.
 ///

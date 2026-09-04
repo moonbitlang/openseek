@@ -358,8 +358,7 @@ stdout. The command surface is testable offline — a malformed command is
 reported as a `command_error` event rather than killing the server, an idle
 `cancel` is a no-op, and stdin EOF shuts the server down cleanly (exit 0)
 without ever touching the network. The `grep -o` keeps only the stable event
-tag, since a line also carries the severity label and the event's payload
-fields.
+tag, since a line also carries the event's payload fields.
 
 ```mooncram
 $ printf '{"command":"reboot"}\n{"command":"cancel"}\n' | env DEEPSEEK=test-key openseek.exe serve 2>/dev/null | grep -o '"event":"command_error"'

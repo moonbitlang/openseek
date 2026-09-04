@@ -12,8 +12,7 @@ is pure and portable, this one is native-only and does the I/O.
 @emit.emit(MaxStepsExhausted)
 ```
 
-That is the whole reporting API. There is no level argument — see below. The
-other public functions are plumbing the stdout sink: `open` starts accepting
+That is the whole reporting API. The other public functions are plumbing the stdout sink: `open` starts accepting
 events, `drain_stdout` is the one task that writes the queue to fd 1, `close`
 ends the stream at run teardown, and `poll_line` is the in-process read side
 for a test that owns no fd 1. Until `open`, and again after `close`, `emit`
@@ -37,14 +36,8 @@ So the split runs along the effect, not along the data:
 
 ## What this package owns
 
-Exactly one thing the parent cannot: **the severity label and the sink**.
-
-`level` maps each `Event` to the label its line carries. It lives here only
-because the writer is native-only — conceptually it belongs beside the variant,
-and it behaves as if it does: a call site cannot choose it. That is the point.
-`compaction_failed` was once logged at `warn` from one place and `error` from
-two, which no reader could see and no test could catch, because severity was
-whatever the author typed that day.
+Exactly one thing the parent cannot: **the sink** — the queue, the drain task
+that owns fd 1, and the open/close lifecycle around a run.
 
 The shape is *not* owned here. `emit` serializes through `Event::to_json` in the
 parent package, so this is not a second encoder that can drift from the first.
@@ -55,11 +48,14 @@ under a comment claiming otherwise, and only one decoder's leniency hid it.
 
 `emit` is not a logger. Events used to travel through the process-wide `@xlog`
 logger — the stream doubled as the process log — so every line carried the
-envelope its handler added (`timestamp`, `level`, `source`), and a logging
-environment variable could silence the whole stream. None of that is true
-anymore: the line is exactly the `level` label plus the event's own fields,
-written straight to stdout, and genuine log content stays in `@xlog` in the CLI
-where it belongs.
+envelope its handler added (`timestamp`, `level`, `source`), a logging
+environment variable could silence the whole stream, and each call site chose a
+severity: `compaction_failed` was once logged at `warn` from one place and
+`error` from two, which no reader could see and no test could catch. None of
+that is true anymore: the line is exactly the event's own `to_json` fields,
+written straight to stdout, with no severity on it at all — no reader ever
+consulted one, and a client that wants to rank events does so from the variant
+it decoded. Genuine log content stays in `@xlog` in the CLI where it belongs.
 
 ## What `emit` does
 
@@ -70,23 +66,18 @@ task, spawned by the CLI for the run, owns every write to stdout:
 ///|
 fn emit(event : Event) -> Unit {
   guard sink.val is Some(queue) else { return }
-  guard event.to_json() is Object(fields) else { return }
-  let object : Map[String, Json] = { "level": Json::string(level(event)) }
-  for key, value in fields {
-    object[key] = value
-  }
-  ignore(queue.try_put(Json::object(object).stringify()))
+  ignore(queue.try_put(event.to_json().stringify()))
 }
 ```
 
 Four properties are load-bearing:
 
-- **The line is the protocol's, with no log envelope.** It is the event's
-  severity label plus its flat `to_json` fields. `timestamp`, `source`, and
-  `category` were the `@xlog` handler's; events no longer go through the logger,
-  so none of them appear.
-- **Nothing can filter or silence an open stream.** There is no level check and
-  no environment variable between a call site and the queue (`MOON_XLOG`
+- **The line is the protocol's, with no log envelope.** It is exactly the
+  event's flat `to_json` fields. `timestamp`, `level`, `source`, and `category`
+  were the `@xlog` handler's; events no longer go through the logger, so none of
+  them appear.
+- **Nothing can filter or silence an open stream.** There is no severity filter
+  and no environment variable between a call site and the queue (`MOON_XLOG`
   configures only `@xlog`, which the CLI pins to discard). Every event emitted
   while the sink is open reaches stdout.
 - **Order and line integrity come from the single drain task.** `emit` is
@@ -104,11 +95,10 @@ Four properties are load-bearing:
   promise the drain runs before the body's first `emit`.
 
 ```json
-{"level":"INFO","event":"assistant_delta","content":"Hel"}
+{"event":"assistant_delta","content":"Hel"}
 ```
 
-`parse` in the parent package reads the top level, so the `level` label is
-ignored by every client that decodes events.
+`parse` in the parent package reads exactly these fields back.
 
 ## Tests
 

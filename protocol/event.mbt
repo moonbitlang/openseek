@@ -4,15 +4,13 @@
 /// the desktop host, and any script consuming `run`'s stdout).
 ///
 /// The stream is a protocol, not a log. `emit` (in `openseek_protocol/emit`)
-/// writes each event's line — its `level` label plus its flat `to_json` fields
-/// — straight to stdout through its own writer, never through the process
-/// logger. Content that is genuinely a log stays in `@xlog` (a file or
-/// discarded) and never reaches this stream, so a client reading stdout sees
-/// only events.
+/// writes each event's line — exactly its flat `to_json` fields — straight to
+/// stdout through its own writer, never through the process logger. Content
+/// that is genuinely a log stays in `@xlog` (discarded in the CLI) and never
+/// reaches this stream, so a client reading stdout sees only events.
 ///
-/// Every variant owns its severity label, so a call site cannot report the
-/// same event at two severities. `emit` is the only writer; `parse` is its
-/// inverse.
+/// There is no severity on the line: a client that wants one derives it from
+/// the variant it decoded. `emit` is the only writer; `parse` is its inverse.
 pub(all) enum Event {
   // ── agent loop ─────────────────────────────────────────────────────────
   AgentSetupFailed(error~ : String)
@@ -99,9 +97,8 @@ pub(all) enum Event {
     to_sequence~ : Int,
     summary~ : String
   )
-  /// Reported at `Error` even when the cause was cancellation: no decoder
-  /// reads the envelope's level, so one severity per event costs nothing and
-  /// keeps the level a property of the event rather than of the call site.
+  /// Also reported when the cause was cancellation; how loudly to show it is
+  /// the client's call, made from the variant.
   CompactionFailed(error~ : String)
   AutoCompactionStarted(from_sequence~ : Int, to_sequence~ : Int)
   AutoCompactionFinished(

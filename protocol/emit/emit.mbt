@@ -1,39 +1,4 @@
 ///|
-/// The severity the event's wire line is labelled with.
-///
-/// A property of the event, not of the call site: `compaction_failed` was once
-/// logged at `warn` from one place and `error` from two, which no reader could
-/// see and nothing could catch. The label lives here rather than beside `Event`
-/// because the writer is native-only and the decoder has to stay portable.
-fn level(event : @protocol.Event) -> String {
-  match event {
-    AgentSetupFailed(_)
-    | TurnFailed(_)
-    | ToolCallDecodeError(..)
-    | CompactionFailed(_)
-    | SessionError(_)
-    | CommandError(_) => "ERROR"
-    AgentAborted(_)
-    | MaxStepsExhausted
-    | SteerDropped(_)
-    | GoalBudgetExhausted(_)
-    | AutoCompactionFailed(_)
-    | McpConfigIgnored(_)
-    | McpConfigUnreadable(..)
-    | McpConfigInvalid(..)
-    | McpToolDuplicate(..)
-    | McpToolRenamed(..)
-    | McpToolsCapped(..)
-    | McpServerSkippedOverCap(_)
-    | McpConnectFailed(..)
-    | McpListToolsFailed(..)
-    | McpListToolsTimeout(_)
-    | McpNoTools(_) => "WARN"
-    _ => "INFO"
-  }
-}
-
-///|
 /// The stdout sink: the queue every emitted line waits in for the drain, or
 /// `None` while no run is streaming, in which case `emit` drops the event.
 ///
@@ -68,26 +33,19 @@ pub fn open() -> Unit {
 ///
 /// This is the protocol writer, not a logger. Nothing here filters by a
 /// severity or an environment variable (`MOON_XLOG` cannot silence an event),
-/// stamps a timestamp, or records a call site — the line is the event's own
-/// fields under its `level` label. Content that is genuinely a log goes
-/// through `@xlog` in the CLI and never reaches this stream.
+/// stamps a timestamp, labels a severity, or records a call site — the line is
+/// exactly the event's own fields. Content that is genuinely a log goes through
+/// `@xlog` in the CLI and never reaches this stream.
 ///
-/// The payload is `Event::to_json` — the one encoder — so the engine and the
+/// The line is `Event::to_json` — the one encoder — so the engine and the
 /// desktop host, which forwards a synthesized event of its own, cannot spell
-/// the same event two ways. They did once. `to_json` always yields an object
-/// (the round-trip test pins it per variant); were it ever not to, nothing is
-/// written rather than a line no reader could decode.
+/// the same event two ways. They did once.
 pub fn emit(event : @protocol.Event) -> Unit {
   guard sink.val is Some(queue) else { return }
-  guard event.to_json() is Object(fields) else { return }
-  let object : Map[String, Json] = { "level": Json::string(level(event)) }
-  for key, value in fields {
-    object[key] = value
-  }
   // `try_put` raises only on a closed queue, and `close` uninstalls the queue
   // before closing it, so the sink never holds one; the catch satisfies the
   // signature.
-  ignore(queue.try_put(Json::object(object).stringify()) catch { _ => false })
+  ignore(queue.try_put(event.to_json().stringify()) catch { _ => false })
 }
 
 ///|

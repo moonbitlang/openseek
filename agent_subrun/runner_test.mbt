@@ -76,11 +76,11 @@ async test "a spawn failure folds into Failed" {
 async test "events and the report line are drained and accounted" {
   let script =
     #|read line
-    #|printf '{"level":"INFO","event":"agent_step","step":1}\n'
+    #|printf '{"event":"agent_step","step":1}\n'
     #|printf 'not json at all\n'
-    #|printf '{"level":"INFO","event":"usage","usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90}}\n'
-    #|printf '{"level":"INFO","event":"agent_step","step":2}\n'
-    #|printf '{"level":"INFO","event":"usage","usage":{"prompt_tokens":95,"completion_tokens":5,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":95}}\n'
+    #|printf '{"event":"usage","usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90}}\n'
+    #|printf '{"event":"agent_step","step":2}\n'
+    #|printf '{"event":"usage","usage":{"prompt_tokens":95,"completion_tokens":5,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":95}}\n'
     #|printf '{"subrun_report": {"answer": "forty-two"}}\n'
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
@@ -98,7 +98,7 @@ async test "events and the report line are drained and accounted" {
 async test "a clean exit without a report is NoReport" {
   let script =
     #|read line
-    #|printf '{"level":"INFO","event":"agent_step","step":1}\n'
+    #|printf '{"event":"agent_step","step":1}\n'
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
     return
@@ -116,7 +116,7 @@ async test "a clean exit without a report is NoReport" {
 async test "an observed step exhaustion without a report is MaxSteps" {
   let script =
     #|read line
-    #|printf '{"level":"INFO","event":"max_steps_exhausted"}\n'
+    #|printf '{"event":"max_steps_exhausted"}\n'
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
     return
@@ -266,8 +266,8 @@ async test "a run emits a matched started/finished bracket pair" {
   }
   let script =
     #|read line
-    #|printf '{"level":"INFO","event":"agent_step","step":2}\n'
-    #|printf '{"level":"INFO","event":"usage","usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90}}\n'
+    #|printf '{"event":"agent_step","step":2}\n'
+    #|printf '{"event":"usage","usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90}}\n'
     #|printf '{"subrun_report": {"answer": "forty-two"}}\n'
   let events : Array[@protocol.Event] = []
   let result = run_script(script, emit_event=bracket_collector(events))
@@ -372,7 +372,7 @@ async test "an observed context yield closes with its status" {
   }
   let script =
     #|read line
-    #|printf '{"level":"INFO","event":"context_yield","to_sequence":9,"answer":"partial"}\n'
+    #|printf '{"event":"context_yield","to_sequence":9,"answer":"partial"}\n'
   let events : Array[@protocol.Event] = []
   let result = run_script(script, emit_event=bracket_collector(events))
   debug_inspect(result.terminal(), content="ContextYield")
