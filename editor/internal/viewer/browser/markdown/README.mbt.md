@@ -40,9 +40,7 @@ removed by default and, when enabled, are limited to HTTP(S).
 `RenderedMarkdown.projection` is the exact DOM-free
 `MarkdownDocumentProjection` produced by the same cmark parse and configuration
 as its installed HTML. Browser consumers must retain this value instead of
-parsing source again. `open_external_link` is the shared action-handler
-capability for already-sanitized links; it opens with
-`noopener,noreferrer` and clears the returned window's opener.
+parsing source again.
 
 Scrollable diagram wrappers retain native wheel scrolling while they can
 consume the current delta. When neither axis can consume it, the event is

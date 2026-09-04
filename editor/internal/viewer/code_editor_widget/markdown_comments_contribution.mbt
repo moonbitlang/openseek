@@ -315,12 +315,13 @@ fn render_markdown_comment_body(
   on_size_changed : () -> Unit,
   mermaid_theme : @browser_markdown.MermaidTheme,
 ) -> @browser_markdown.RenderedMarkdown {
+  // Preserve native anchors so the embedding host can distinguish ordinary
+  // activation from modified and middle clicks before choosing a destination.
   @browser_markdown.render_markdown(
     markdown,
     options=MarkdownRenderOptions(
       language_id=model.get_language_id(),
       base_uri=model.uri,
-      action_handler=@browser_markdown.open_external_link,
       code_block_renderer=render_markdown_comment_code_block,
       on_size_changed~,
       allow_remote_images=true,

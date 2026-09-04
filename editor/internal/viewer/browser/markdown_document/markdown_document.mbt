@@ -266,12 +266,14 @@ fn render_markdown_document(
   article : @rdom.Element,
   on_size_changed : () -> Unit,
 ) -> @browser_markdown.RenderedMarkdown {
+  // Keep sanitized links as native anchors. Desktop captures ordinary clicks
+  // and routes them to its dock, while Chromium retains modified and middle
+  // clicks so the embedding browser can apply its new-window policy.
   @browser_markdown.render_markdown(
     source,
     options=MarkdownRenderOptions(
       language_id~,
       base_uri~,
-      action_handler=@browser_markdown.open_external_link,
       code_block_renderer=(code_block, active_language_id) => {
         render_markdown_document_code_block(
           code_block, active_language_id, resource_kind,

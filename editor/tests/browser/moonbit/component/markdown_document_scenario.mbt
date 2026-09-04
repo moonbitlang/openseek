@@ -119,7 +119,7 @@ fn markdown_document_source() -> String {
   (
     #|# Readonly Markdown document
     #|
-    #|The original source model remains the document of record. 🪐
+    #|The original source model remains the document of record. 🪐 [fixture link](https://example.test/docs)
     #|
     #|- [ ] this checkbox stays readonly
     #|

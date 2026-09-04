@@ -201,6 +201,10 @@ test('uses the workbench type scale and Markdown layout contract', async ({
   const firstHeading = page.locator(`${article} > h1`).first();
   const firstParagraph = page.locator(`${article} > p`).first();
   const quote = page.locator(`${article} > blockquote`).first();
+  const link = firstParagraph.getByRole('link', { name: 'fixture link' });
+  await expect(link).toHaveAttribute('href', 'https://example.test/docs');
+  await expect(link).toHaveAttribute('target', '_blank');
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(firstHeading).toHaveCSS('margin-top', '0px');
   await expect(firstHeading).toHaveCSS('margin-bottom', '12px');
   await expect(firstParagraph).toHaveCSS('margin-bottom', '16px');

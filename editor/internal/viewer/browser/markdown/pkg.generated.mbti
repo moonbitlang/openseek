@@ -8,8 +8,6 @@ import {
 }
 
 // Values
-pub fn open_external_link(String) -> Unit
-
 pub fn render_markdown(String, options? : MarkdownRenderOptions, target? : @dom.Element) -> RenderedMarkdown
 
 // Errors

@@ -120,13 +120,6 @@ async function mountMarkdownComments(
       body: fakeMermaidModule,
     }),
   );
-  await page.addInitScript(() => {
-    globalThis.__markdownCommentOpened = [];
-    globalThis.open = (...args) => {
-      globalThis.__markdownCommentOpened.push(args);
-      return { opener: {} };
-    };
-  });
   const reporter = await installMoonBitReporter(page);
   await gotoBrowserScenario(page, 'markdown-comments');
   await page.waitForFunction(() => Boolean(globalThis.__markdownCommentsControls));
@@ -521,9 +514,11 @@ test('public Viewer replaces whole-line source with themed Markdown while model 
     // the shared container remains presentation-only.
     const link = zones.nth(0).locator('a');
     await expect(link).toHaveText('fixture link');
-    await expect(link).toHaveAttribute('role', 'link');
-    await expect(link).toHaveAttribute('tabindex', '0');
-    await expect(link).not.toHaveAttribute('href', /.+/);
+    await expect(link).toHaveAttribute('href', 'https://example.test/docs');
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(link).not.toHaveAttribute('role');
+    await expect(link).not.toHaveAttribute('tabindex');
     await expect(zones.nth(0).locator(content)).toHaveCSS(
       'user-select',
       'text',
@@ -687,34 +682,16 @@ test('public Viewer replaces whole-line source with themed Markdown while model 
 
     await page.evaluate(() => document.getSelection()?.removeAllRanges());
     const selectionBeforeLink = (await state(page)).selection;
-    await link.click();
     await link.focus();
     await page.keyboard.press('ArrowLeft');
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Space');
     await settle(page);
     expect((await state(page)).selection).toEqual(selectionBeforeLink);
-    expect(await page.evaluate(() => globalThis.__markdownCommentOpened)).toEqual([
-      ['https://example.test/docs', '_blank', 'noopener,noreferrer'],
-      ['https://example.test/docs', '_blank', 'noopener,noreferrer'],
-      ['https://example.test/docs', '_blank', 'noopener,noreferrer'],
-    ]);
     const keyLog = await control(page, 'keys');
-    expect(keyLog.slice(-3)).toEqual([
+    expect(keyLog.slice(-1)).toEqual([
       expect.objectContaining({
         key: 'ArrowLeft',
         defaultPrevented: false,
-        targetRole: 'link',
-      }),
-      expect.objectContaining({
-        key: 'Enter',
-        defaultPrevented: true,
-        targetRole: 'link',
-      }),
-      expect.objectContaining({
-        key: ' ',
-        defaultPrevented: true,
-        targetRole: 'link',
+        targetRole: '',
       }),
     ]);
   } finally {
