@@ -140,12 +140,12 @@ async test "no toolchain anywhere raises ToolchainUnavailable" {
 ///|
 /// Reference docs ship only inside the bundled seed's payload; a toolchain
 /// found on the path or under `~/.moon` never advertises any, even with a
-/// `docs` directory sitting beside its `bin`.
+/// `share/doc/moonbit` reference tree sitting beside its `bin`.
 async test "an external toolchain carries no reference docs" {
   with_toolchain_test_tree(async fn(root) {
     let moon_root = root.join("home").join(".moon")
     @fs.mkdir(moon_root.join("bin").to_string(), recursive=true)
-    @fs.mkdir(moon_root.join("docs").to_string(), recursive=true)
+    @fs.mkdir(moon_root.join("share/doc/moonbit").to_string(), recursive=true)
     touch_fake_toolchain(moon_root.join("bin"))
     let toolchain = external_toolchain(home_dir=root.join("home").to_path())
     assert_eq(toolchain.bin_dir.to_string(), moon_root.join("bin").to_string())

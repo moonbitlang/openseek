@@ -12,12 +12,20 @@ const MoonbitSeedVersionFile : String = ".openseek-moonbit-seed-version"
 
 ///|
 /// The moonbit-docs `markdown-build` commit whose generated Markdown pages
-/// ship inside every toolchain seed as `docs/`. The engine advertises that
-/// tree to the model as its MoonBit reference (`OPENSEEK_REFERENCES`), so it
-/// rides with the toolchain it documents: the runtime mirrors the whole seed
-/// into the per-user runtime directory, and a bump here refreshes that mirror
-/// through the seed version stamp exactly like a compiler bump does.
+/// ship inside every toolchain seed at `share/doc/moonbit/` (FHS-style under
+/// the toolchain prefix). The engine advertises that tree to the model as its
+/// MoonBit reference (`OPENSEEK_REFERENCES`), so it rides with the toolchain
+/// it documents: the runtime mirrors the whole seed into the per-user runtime
+/// directory, and a bump here refreshes that mirror through the seed version
+/// stamp exactly like a compiler bump does.
 const MoonbitDocsCommit : String = "750cc5a41679256441a3efa75487420028cff2e1"
+
+///|
+/// The seed-relative path that carries the moonbit-docs tree. Runtime
+/// resolution mirrors this layout through `MoonbitDocsRelDir` in
+/// `desktop/internal/moonbit/toolchain_paths.mbt`; the two must stay in step,
+/// or a seed ships docs the resolver never advertises as references.
+const MoonbitDocsRelDir : String = "share/doc/moonbit"
 
 ///|
 /// The pinned commit's source archive, fetched from codeload directly:
@@ -34,10 +42,11 @@ fn moonbit_docs_cache_path() -> String {
 }
 
 ///|
-/// The seed version stamp names both pins: the runtime compares it whole
-/// against its mirror's stamp, so a docs-only bump rebuilds the mirror too.
+/// The seed version stamp names every seed-content pin: the runtime compares
+/// it whole against its mirror's stamp, so a docs-only bump — or a change to
+/// where the docs tree sits in the seed — rebuilds the mirror too.
 fn moonbit_seed_version(version : String) -> String {
-  version + " docs=" + MoonbitDocsCommit
+  version + " docs=" + MoonbitDocsCommit + " docsdir=" + MoonbitDocsRelDir
 }
 
 ///|
@@ -300,8 +309,9 @@ async fn compiler_version(
 }
 
 ///|
-/// Stage the pinned moonbit-docs markdown build as the seed's `docs/` tree.
-/// Only the archive is reused across runs; the tree is re-extracted every
+/// Stage the pinned moonbit-docs markdown build as the seed's
+/// `share/doc/moonbit/` tree. Only the archive is reused across runs; the
+/// tree is re-extracted every
 /// time so a stale partial extraction cannot ship. The Sphinx theme assets
 /// the build carries are dropped: the references are the Markdown pages.
 async fn stage_moonbit_docs(
@@ -326,8 +336,10 @@ async fn stage_moonbit_docs(
 
 ///|
 /// Download and stage a platform-specific MoonBit toolchain seed into a
-/// package directory, with the pinned moonbit-docs as its `docs/`. The seed
-/// is intentionally not bundled in place; runtime initialization copies it to
+/// package directory, with the pinned moonbit-docs as its
+/// `share/doc/moonbit/`. The
+/// seed is intentionally not bundled in place; runtime initialization copies
+/// it to
 /// the per-user writable runtime directory first.
 pub async fn stage_moonbit_toolchain_seed(
   ws : @packaging.Workspace,
@@ -358,7 +370,7 @@ pub async fn stage_moonbit_toolchain_seed(
       "downloaded MoonBit version \{actual_version}, expected \{version}",
     )
   }
-  stage_moonbit_docs(ws, payload_dir + "/docs")
+  stage_moonbit_docs(ws, payload_dir + "/" + MoonbitDocsRelDir)
   @packaging.write_text(
     ws.at(payload_dir + "/" + MoonbitSeedVersionFile),
     moonbit_seed_version(version),
