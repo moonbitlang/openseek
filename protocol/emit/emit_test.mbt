@@ -155,8 +155,7 @@ fn all_events() -> Array[@protocol.Event] {
     McpToolRenamed(from="read", to="fs_read"),
     McpToolsCapped(server="fs", kept=64),
     McpServerSkippedOverCap(server="fs"),
-    McpConnectFailed(server="fs", error=Some("spawn failed")),
-    McpConnectFailed(server="fs", error=None),
+    McpConnectFailed(server="fs", error="spawn failed"),
     McpListToolsFailed(server="fs", error="timeout"),
     McpListToolsTimeout(server="fs"),
     McpNoTools(server="fs"),
@@ -174,7 +173,7 @@ test "every event round-trips through emit and parse" {
 }
 
 ///|
-/// `brief` and `mcp_connect_failed`'s `error` are always written, `null` when
+/// Optional payload fields such as `brief` are always written, `null` when
 /// absent. Every decoder reads them with a lookup that rejects a non-string, so
 /// a null and a missing key are the same value downstream — the uniform shape
 /// costs nothing and keeps one variant per event.
@@ -207,12 +206,6 @@ test "optional payload fields are written as null, never omitted" {
     ),
     content=(
       #|{"event":"tool_result","tool_call_id":"call_1","tool_name":"read","is_error":false,"content":"file body","brief":"read moon.mod"}
-    ),
-  )
-  inspect(
-    wire(McpConnectFailed(server="fs", error=None)),
-    content=(
-      #|{"event":"mcp_connect_failed","server":"fs","error":null}
     ),
   )
   inspect(

@@ -117,35 +117,42 @@ async test "recv reads a JSON-RPC line from a real subprocess" {
 }
 
 ///|
-async test "connect returns None when the command cannot start" {
+async test "connect raises when the command cannot start" {
   @async.with_task_group(group => {
-    let conn = connect(
-      group,
-      command="openseek-no-such-mcp-server-xyz",
-      args=[],
-      client_name="openseek",
-      client_version="0.1",
-    )
-    assert_true(conn is None)
+    try
+      connect(
+        group,
+        command="openseek-no-such-mcp-server-xyz",
+        args=[],
+        client_name="openseek",
+        client_version="0.1",
+      )
+    catch {
+      _ => ()
+    } noraise {
+      _ => fail("expected connect to raise when the command cannot start")
+    }
   })
 }
 
 ///|
 /// A child that starts but never answers `initialize` must not hang connect: it
-/// returns None at the deadline (and tears the process down).
+/// raises at the deadline (and tears the process down).
 async test "connect times out a server that never handshakes" {
   @async.with_task_group(group => {
-    let conn = connect(
-      group,
-      command="sh",
-      args=["-c", "sleep 30"],
-      client_name="openseek",
-      client_version="0.1",
-      handshake_timeout_ms=500,
-    ) catch {
-      // Spawning is forbidden in this sandbox: skip.
-      _ => return
+    try
+      connect(
+        group,
+        command="sh",
+        args=["-c", "sleep 30"],
+        client_name="openseek",
+        client_version="0.1",
+        handshake_timeout_ms=500,
+      )
+    catch {
+      _ => ()
+    } noraise {
+      _ => fail("connect should timeout a server that never handshakes")
     }
-    assert_true(conn is None)
   })
 }

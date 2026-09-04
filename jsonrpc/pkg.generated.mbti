@@ -15,6 +15,7 @@ pub impl Show for ResponseError
 // Types and methods
 type Client
 pub fn[T : Transport] Client::Client(T) -> Self
+pub fn Client::close(Self) -> Unit
 pub fn Client::is_closed(Self) -> Bool
 pub async fn Client::notify(Self, method_~ : String, params~ : Json) -> Unit
 pub async fn Client::request(Self, method_~ : String, params~ : Json) -> Json
