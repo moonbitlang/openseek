@@ -3,7 +3,7 @@ name = "bobzhang/openseek_protocol"
 version = "0.1.0"
 
 import {
-  "tonyfettes/xlog@0.4.0",
+  "moonbitlang/async@0.21.2",
 }
 
 readme = "README.mbt.md"

@@ -1,18 +1,4 @@
 ///|
-/// A logging handler that drops every entry. Review mode installs it so the
-/// agent's progress JSONL does not pollute stdout, which must carry exactly one
-/// JSON `ReviewReport`.
-priv struct DiscardLog {}
-
-///|
-impl @xlog.Handler for DiscardLog with fn handle(
-  _self : DiscardLog,
-  _entry : @xlog.Entry,
-) -> Unit raise {
-
-}
-
-///|
 /// Handle `--review`: run a read-only review of `base...HEAD` and print a single
 /// JSON `ReviewReport` to stdout. Exit code: 0 (clean or non-blocking findings),
 /// 1 (the review failed to produce a report), 2 (blocker findings present).

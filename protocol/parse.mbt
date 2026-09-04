@@ -3,8 +3,9 @@
 ///
 /// The inverse of `emit`: `parse(json) == Some(event)` for every line `emit`
 /// writes, which `emit/emit_test.mbt` pins per variant — it needs both halves,
-/// so it lives with the writer. Fields are read from the
-/// top level, matching the hoisting `@xlog`'s handler performs.
+/// so it lives with the writer. Fields are read from the top level: `emit`
+/// writes each event's fields flat, under its `level` label, so there is no
+/// nesting (and no log envelope — events do not go through `@xlog`).
 ///
 /// `None` means "not an event this engine emits" — an unknown `event` name, a
 /// missing `event` key, or a payload whose required fields are absent or

@@ -1,12 +1,12 @@
 import {
   "bobzhang/openseek_protocol" @protocol,
+  "moonbitlang/async",
+  "moonbitlang/async/stdio",
   "moonbitlang/core/json",
-  "tonyfettes/xlog",
 }
 
 import {
   "moonbitlang/core/json",
-  "tonyfettes/xlog",
 } for "test"
 
 supported_targets = "+native"

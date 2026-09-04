@@ -66,9 +66,9 @@ async fn[X] resolve_mcp_tools(
 /// match a real run) and print it grouped by server, so a user can validate an
 /// mcp.json without starting a session. A missing, unreadable, or invalid
 /// configuration raises, exiting nonzero — the command is usable as a
-/// validation gate. Logs are discarded: stdout carries only the summary.
+/// validation gate. Stdout carries only the summary, so the command never opens
+/// the event sink and an event the tool build reports is dropped.
 async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
-  @xlog.global().set_handler(DiscardLog::{ })
   let path = mcp_config_path(matches)
   if path == "" {
     fail(

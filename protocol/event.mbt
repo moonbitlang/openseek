@@ -3,14 +3,16 @@
 /// `openseek run`/`openseek serve` and every client that reads them (the TUI,
 /// the desktop host, and any script consuming `run`'s stdout).
 ///
-/// The stream doubles as the process log: `emit` routes through `@xlog`, whose
-/// handler serializes an `Entry` per line as
-/// `{"timestamp":…,"level":…,"source":…,<fields>}` — structured fields are
-/// hoisted to the top level, so an event's own fields sit alongside the
-/// envelope rather than nested under it.
+/// The stream is a protocol, not a log. `emit` (in `openseek_protocol/emit`)
+/// writes each event's line — its `level` label plus its flat `to_json` fields
+/// — straight to stdout through its own writer, never through the process
+/// logger. Content that is genuinely a log stays in `@xlog` (a file or
+/// discarded) and never reaches this stream, so a client reading stdout sees
+/// only events.
 ///
-/// Every variant owns its log level, so a call site cannot report the same
-/// event at two severities. `emit` is the only writer; `parse` is its inverse.
+/// Every variant owns its severity label, so a call site cannot report the
+/// same event at two severities. `emit` is the only writer; `parse` is its
+/// inverse.
 pub(all) enum Event {
   // ── agent loop ─────────────────────────────────────────────────────────
   AgentSetupFailed(error~ : String)

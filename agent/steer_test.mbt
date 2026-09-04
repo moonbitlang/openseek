@@ -290,16 +290,16 @@ async test "blank steering input is dropped at the boundary" {
 }
 
 ///|
-struct MemoryLogHandler {
-  entries : Array[Json]
-}
-
-///|
-impl @xlog.Handler for MemoryLogHandler with fn handle(
-  self : MemoryLogHandler,
-  entry : @xlog.Entry,
-) -> Unit {
-  self.entries.push(entry.to_json())
+/// Pop every line the in-process protocol sink is holding into `entries` as
+/// JSON. The engine writes only valid JSON, so an unparsable line fails the
+/// test. (`poll_line` is the sink's in-process read side, live only between
+/// `open` and `close`; the CLI drains to stdout instead, so a process uses
+/// only one.)
+fn drain_emitted(entries : Array[Json]) -> Unit raise {
+  for ;; {
+    guard @emit.poll_line() is Some(line) else { return }
+    entries.push(@json.parse(line))
+  }
 }
 
 ///|
@@ -350,14 +350,13 @@ async fn reasoning_log_test_server(group : @async.TaskGroup[Unit]) -> String? {
 async test "streaming reasoning deltas are always emitted and stay transient" {
   @async.with_task_group() <| group => {
     guard reasoning_log_test_server(group) is Some(url) else { return }
-    let entries : Array[Json] = []
-    let logger = @xlog.global()
-    defer {
-      logger.set_handler(@xlog.Stdout())
-      logger.set_config(Config())
-    }
-    logger.set_handler(MemoryLogHandler::{ entries, })
-    logger.set_level(Info)
+    // The sink is process-global and drops events until opened: open it for
+    // this turn and close it after, so the other tests in this binary never
+    // accumulate lines. Drop whatever an earlier open left, so the capture
+    // below is exactly this turn's events.
+    @emit.open()
+    defer @emit.close()
+    drain_emitted([])
     let session = @agent_session.Session(
       SessionId("reasoning-log-test"),
       system_prompt="system",
@@ -382,6 +381,9 @@ async test "streaming reasoning deltas are always emitted and stay transient" {
     guard events[2].item() is Terminal(Finished("done")) else {
       fail("expected a completed one-step turn")
     }
+    // The events this turn reported, read back off the protocol sink.
+    let entries : Array[Json] = []
+    drain_emitted(entries)
     let event_names = entries.map(log_event)
     assert_true(event_names.contains("reasoning_message"))
     assert_true(event_names.contains("assistant_delta"))

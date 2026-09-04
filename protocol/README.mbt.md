@@ -11,28 +11,29 @@ portable:
 | Package | Contents | Targets | Deps |
 | --- | --- | --- | --- |
 | `bobzhang/openseek_protocol` | `Event`, `Usage`, `Command`, `SteerKind`, `to_json`, `parse` | js, wasm, wasm-gc, native | `core/json` |
-| `bobzhang/openseek_protocol/emit` | `emit` (level + `to_json` + log) | native | `xlog`, above |
+| `bobzhang/openseek_protocol/emit` | `emit` (severity label + `to_json` + stdout writer) | native | `async`, above |
 
-Only the *writer* needs `@xlog`, which is native-only. Keeping it in its own
-package means a client that reads the stream does not have to be a native
-binary — `desktop/frontend` compiles to js, and its decoder can now be the same
-`match` the engine's encoder is checked against.
+Only the *writer* does I/O, and only a native process can write fd 1
+asynchronously. Keeping it in its own package means a client that reads the
+stream does not have to be a native binary — `desktop/frontend` compiles to
+js, and its decoder can now be the same `match` the engine's encoder is
+checked against.
 
 Being a module rather than a package is what lets a *different* module consume
 it: `desktop/moon.work` can list `"../protocol"` as a member and bind the
 working tree (a `moon.work` member wins over the registry, so there is no stale
 mooncakes snapshot).
 
-The stream doubles as the process log. `emit` routes through `@xlog`, whose
-handler writes one `Entry` per line and **hoists** structured fields to the top
-level, so a line looks like:
+The stream is a protocol, not a log. `emit` writes each event's line straight to
+stdout through its own sink — no logger in between — so a line is the event
+itself:
 
 ```json
-{"timestamp":"…","level":"INFO","source":"agent/turn_loop.mbt:392:9","event":"assistant_delta","content":"Hel"}
+{"level":"INFO","event":"assistant_delta","content":"Hel"}
 ```
 
-The envelope (`timestamp`, `level`, `source`) is `@xlog`'s; everything from
-`event` on is this package's.
+`level` is the event's own severity label (the only envelope key that remains);
+content that is genuinely a log stays in `@xlog` and never reaches this stream.
 
 ## Why it exists
 
@@ -83,8 +84,9 @@ match @protocol.parse(line) {
 }
 ```
 
-`emit` carries `#callsite(autofill(loc))` and forwards `loc` to `@xlog`, so each
-line's `source` still points at the reporting code rather than at `emit.mbt`.
+`emit` writes each line without a `source`: events are not log entries, so no
+line points back at reporting code. Real log entries (which keep their own
+call-site `source`) belong to `@xlog` and go elsewhere.
 
 ## When a field may be absent
 
@@ -156,8 +158,8 @@ contract too.
 
 ## Known gaps
 
-- **The stream still has no identity apart from the log.** Every reasoning delta
-  passes through the process logger because there is no separate transport
-  sink. The engine pins its own level so `MOON_XLOG`
-  cannot silence the protocol, but a full separation would give the protocol its
-  own sink.
+- **The stream has no clock.** `timestamp` and `source` were the log envelope's;
+events are not log entries, so a line does not say when it was written or where
+it was emitted. A client that needs ordering uses stream order (the engine
+writes events in order), and one that needs an authoritative time uses the
+durable session record.

@@ -257,7 +257,7 @@ compacted session demo events 1..2; last_sequence=3
 exactly as if `--session` had been passed — "what did the agent do?" is usually
 asked after the run, when an unrecorded answer is gone for good. The run
 announces the recording with a `session_started` event on stdout, so the id is
-in the log stream (and any `OPENSEEK_LOG_FILE` mirror); afterwards the run is
+in the event stream; afterwards the run is
 visible to `sessions list`, `sessions show`, the viz server, and `--session
 <id>` resumption.
 
@@ -279,11 +279,12 @@ exit-non-zero
 cli-<stamp>
 ```
 
-The stdout stream is a protocol, not a log, so a logging environment variable
-must not be able to silence it. `@xlog`'s root level comes from `MOON_XLOG`, and
-every event is info/warn/error — so `MOON_XLOG=warn` once dropped the whole
-stream, and a TUI attached to that engine rendered nothing with no error to
-explain it. The engine pins its own level instead.
+The stdout stream is a protocol, not a log: events are written straight to
+stdout by their own writer and never pass through `@xlog`, so a logging
+environment variable cannot silence them. `MOON_XLOG` configures only `@xlog`,
+which the engine pins to discard; once, `MOON_XLOG=warn` dropped the whole
+stream and a TUI attached to that engine rendered nothing with no error to
+explain it.
 
 ```mooncram
 $ sh <<'EOF'
@@ -357,7 +358,8 @@ stdout. The command surface is testable offline — a malformed command is
 reported as a `command_error` event rather than killing the server, an idle
 `cancel` is a no-op, and stdin EOF shuts the server down cleanly (exit 0)
 without ever touching the network. The `grep -o` keeps only the stable event
-tag, since event lines carry timestamps.
+tag, since a line also carries the severity label and the event's payload
+fields.
 
 ```mooncram
 $ printf '{"command":"reboot"}\n{"command":"cancel"}\n' | env DEEPSEEK=test-key openseek.exe serve 2>/dev/null | grep -o '"event":"command_error"'

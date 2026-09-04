@@ -16,13 +16,14 @@ fn or_null(value : String?) -> Json {
 /// The event as one line's worth of JSON: its `"event"` name plus its payload,
 /// flat.
 ///
-/// This is the wire shape, and the only place it is written. `emit` logs this;
-/// the desktop host forwards it for a compaction its engine died before
-/// reporting. Two writers of the same event must not spell it two ways — they
-/// did once, and nothing noticed until a decoder was asked to be exhaustive.
+/// This is the wire shape, and the only place it is written. `emit` writes it
+/// (under the event's `level` label); the desktop host forwards it for a
+/// compaction its engine died before reporting. Two writers of the same event
+/// must not spell it two ways — they did once, and nothing noticed until a
+/// decoder was asked to be exhaustive.
 ///
-/// Flat, not nested under a payload key, because `@xlog`'s handler hoists an
-/// entry's structured fields to the top level; `parse` reads them from there.
+/// Flat, not nested under a payload key, because the writer emits each event's
+/// own fields as one line; `parse` reads them from the top level.
 pub fn Event::to_json(self : Event) -> Json {
   match self {
     AgentSetupFailed(error~) =>
