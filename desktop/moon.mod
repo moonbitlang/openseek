@@ -12,15 +12,15 @@ import {
   "moonbit-community/rabbita@0.15.4",
   "moonbitlang/x@0.4.50",
   "moonbitlang/async@0.21.0",
-  "moonbit-community/proton@0.2.7",
-  "moonbit-community/proton_ext@0.2.7",
+  "moonbit-community/proton@0.2.8",
+  "moonbit-community/proton_ext@0.2.8",
   "tonyfettes/platform@0.1.1",
   "tonyfettes/xlog@0.4.0",
   "moonbitlang/editor@0.4.5",
-  "moonbit-community/proton_contract@0.2.7",
+  "moonbit-community/proton_contract@0.2.8",
   "bobzhang/openseek@0.2.2",
-  "moonbit-community/proton_cefsetup@0.2.7",
-  "moonbit-community/proton_config@0.2.7",
+  "moonbit-community/proton_cefsetup@0.2.8",
+  "moonbit-community/proton_config@0.2.8",
 }
 
 readme = "README.md"

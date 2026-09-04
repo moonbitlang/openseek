@@ -8,6 +8,11 @@
     "product_name": "SeekMoon",
     "version": "0.1.5",
     "formats": ["app", "zip"],
+    "platforms": {
+      "windows": {
+        "nsis_install_mode": "perMachine"
+      }
+    },
     "icons": [
       "package/macos/AppIcon.icns",
       "package/linux/appicon.png"
