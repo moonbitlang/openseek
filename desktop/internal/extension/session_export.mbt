@@ -39,7 +39,7 @@ async fn export_session(
   state : @api.ApiState,
   payload : @protocol.SessionExportPayload,
 ) -> @protocol.SessionExportReply {
-  let assets = state.host_state().viz_assets()
+  let assets = @host.viz_assets()
   let (shell, bundle) = assets.read()
   let html = @engine.export_session_html(
     state.manager(),

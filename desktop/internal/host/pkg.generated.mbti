@@ -27,6 +27,8 @@ pub async fn prepared_runtime_dir(String) -> @pathx.Path?
 
 pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (@protocol.Notification) -> Unit) -> Unit
 
+pub async fn viz_assets() -> VizAssets
+
 // Errors
 pub(all) suberror HostError {
   HostError(String)
@@ -45,7 +47,6 @@ pub fn HostConnection::close_terminals(Self) -> Unit
 pub async fn HostConnection::run(Self, async (@protocol.Notification) -> Unit, async (@protocol.Notification) -> Unit) -> Unit
 
 type HostState
-pub async fn HostState::viz_assets(Self) -> VizAssets
 
 type PackagedTools
 pub fn PackagedTools::apply_to_process_env(Self) -> Unit

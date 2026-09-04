@@ -8,6 +8,22 @@ const PackagedRipgrepPath = "seekmoon/bin/rg"
 const PackagedMoongrepPath = "seekmoon/bin/moongrep"
 
 ///|
+const PackagedVizDir = "seekmoon/web/viz"
+
+///|
+/// The checkout-relative visualizer shell used during development. The
+/// development launcher declares `desktop/` as Proton's resource directory,
+/// so the shell sits one level above it, in the same place
+/// `package/build.mjs` reads it from when staging a package.
+const DevelopmentVizShellPath = "web/index.html"
+
+///|
+/// The development visualizer bundle. `package/build.mjs` builds the JS
+/// targets at `debug` for the development launcher, the same profile
+/// `engine_command` resolves for the development engine.
+const DevelopmentVizBundlePath = "_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js"
+
+///|
 #cfg(platform="windows")
 const PackagedExecutableSuffix = ".exe"
 
@@ -25,24 +41,26 @@ pub struct VizAssets {
 ///|
 /// Locate the visualizer assets belonging to this exact host build.
 ///
-/// Development uses the recognized Moon build layout. Installed applications
-/// load the `viz` directory beside their packaged frontend, so a missing
-/// package input fails instead of silently embedding a checkout artifact.
-pub async fn HostState::viz_assets(self : HostState) -> VizAssets {
-  guard self.executable is Some(executable) else {
-    raise HostError(
-      "cannot locate session visualizer assets without the host executable",
-    )
-  }
-  let assets = match @development.Layout::detect(executable) {
-    Some(layout) => { shell: layout.viz_shell(), bundle: layout.viz_bundle(), }
-    None => {
-      let frontend = frontend_entry_path()
-      let viz = @pathx.Path(frontend).dirname().join("viz")
-      {
-        shell: viz.join("index.html").normalize().to_string(),
-        bundle: viz.join("viz_app.js").normalize().to_string(),
-      }
+/// Both branches read Proton's resource directory, exactly like
+/// `frontend_entry_path`: an installed application resolves the canonical
+/// `seekmoon/` tree, while the development launcher declares `desktop/` and
+/// the checkout above it holds the shell and the bundle. Resolving both
+/// entries the same way keeps them from disagreeing about which layout is
+/// running. A missing asset fails instead of silently embedding an unrelated
+/// artifact.
+pub async fn viz_assets() -> VizAssets {
+  let resource_dir : @pathx.Path = @proton.resource_dir()
+  let assets : VizAssets = if @proton.is_packaged() {
+    let viz = resource_dir.join(PackagedVizDir)
+    {
+      shell: viz.join("index.html").normalize().to_string(),
+      bundle: viz.join("viz_app.js").normalize().to_string(),
+    }
+  } else {
+    let checkout = resource_dir.dirname()
+    {
+      shell: checkout.join(DevelopmentVizShellPath).normalize().to_string(),
+      bundle: checkout.join(DevelopmentVizBundlePath).normalize().to_string(),
     }
   }
   guard @fs.exists(assets.shell) else {
@@ -57,7 +75,7 @@ pub async fn HostState::viz_assets(self : HostState) -> VizAssets {
 }
 
 ///|
-/// Read the visualizer shell and bundle selected by `HostState::viz_assets`.
+/// Read the visualizer shell and bundle selected by `viz_assets`.
 pub async fn VizAssets::read(self : VizAssets) -> (String, String) {
   let shell = @fs.read_file(self.shell).text() catch {
     error =>

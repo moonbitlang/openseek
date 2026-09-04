@@ -40,7 +40,6 @@ impl Show for PayloadError with fn output(self, logger) {
 /// because two clients may watch different workspaces at the same time.
 struct HostState {
   engine : String
-  executable : String?
   runtime_dir : @pathx.Path?
   moon : MoonCliState
   updates : SelfUpdate
@@ -71,9 +70,11 @@ pub fn HostConnection::HostConnection() -> HostConnection {
 
 ///|
 /// `engine` is the engine executable (the language services resolve the
-/// bundled `moon` next to it); `executable` is the host's own binary. Absent
-/// paths retain development fallbacks but disable installed-only work. Proton
-/// owns resource-directory resolution directly in the operations that need it.
+/// bundled `moon` next to it); `executable` is the host's own binary, which
+/// only self-update needs, because replacing the running application is the
+/// one job whose meaning depends on this exact process. Absent paths retain
+/// development fallbacks but disable installed-only work. Proton owns
+/// resource-directory resolution directly in the operations that need it.
 pub fn new_host_state(
   engine : String,
   runtime_dir? : @pathx.Path,
@@ -82,7 +83,6 @@ pub fn new_host_state(
 ) -> HostState {
   {
     engine,
-    executable,
     runtime_dir,
     moon: MoonCliState(engine, runtime_dir?),
     updates: SelfUpdate(runtime_dir, executable, app_version~),
