@@ -259,6 +259,7 @@ async test "a store-backed append_item persists the child transcript" {
     }
     guard child_test_server(group, handle) is Some(url) else { return }
     let store = @store.SessionStore(@fs.tmpdir(prefix="openseek-subrun-child-"))
+    defer @fs.rmdir(store.root(), recursive=true)
     let value = @agent_subrun.execute_kind(
       session_id="parent-sr-1",
       system_prompt="You are a test subagent.",
@@ -290,6 +291,5 @@ async test "a store-backed append_item persists the child transcript" {
     assert_eq(loaded.system_prompt(), "You are a test subagent.")
     // The durable transcript holds the whole turn, not just a header.
     assert_true(loaded.events().length() >= 3)
-    @fs.rmdir(store.root(), recursive=true)
   }
 }
