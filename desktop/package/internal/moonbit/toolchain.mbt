@@ -42,10 +42,11 @@ fn moonbit_docs_cache_path() -> String {
 }
 
 ///|
-/// The seed version stamp names both pins: the runtime compares it whole
-/// against its mirror's stamp, so a docs-only bump rebuilds the mirror too.
+/// The seed version stamp names every seed-content pin: the runtime compares
+/// it whole against its mirror's stamp, so a docs-only bump — or a change to
+/// where the docs tree sits in the seed — rebuilds the mirror too.
 fn moonbit_seed_version(version : String) -> String {
-  version + " docs=" + MoonbitDocsCommit
+  version + " docs=" + MoonbitDocsCommit + " docsdir=" + MoonbitDocsRelDir
 }
 
 ///|
