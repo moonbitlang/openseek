@@ -1,0 +1,14 @@
+import {
+  "moonbitlang/async/io",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/io",
+} for "test"
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+native+wasm"
