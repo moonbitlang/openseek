@@ -193,7 +193,6 @@ test "generated source matches dev_build output shape" {
       #|  )
       #|}
       #|
-
     ),
   )
 }
@@ -218,7 +217,6 @@ test "generated source preserves missing final newline" {
       #|  )
       #|}
       #|
-
     ),
   )
 }
@@ -289,7 +287,6 @@ test "generated source filters markdown comments" {
       #|  )
       #|}
       #|
-
     ),
   )
 }
@@ -314,7 +311,6 @@ test "generated source filters multiline inline comments" {
       #|  )
       #|}
       #|
-
     ),
   )
 }

@@ -137,7 +137,7 @@ fn push_loc_range(ranges : Array[SourceRange], meta : @cmark_base.Meta) -> Unit 
   if loc_is_absent(loc) {
     return
   }
-  ranges.push({ first: loc.first_ccode, last_exclusive: loc.last_ccode + 1 })
+  ranges.push({ first: loc.first_ccode, last_exclusive: loc.last_ccode + 1, })
 }
 
 ///|
@@ -158,7 +158,7 @@ fn push_html_comment_ranges(
       is Some(last_exclusive) else {
       break
     }
-    ranges.push({ first, last_exclusive })
+    ranges.push({ first, last_exclusive, })
     cursor = last_exclusive
   }
 }

@@ -11,4 +11,3 @@ pub fn without_comments(String) -> String
 // Type aliases
 
 // Traits
-
