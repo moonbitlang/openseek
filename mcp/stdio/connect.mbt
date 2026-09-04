@@ -95,27 +95,28 @@ pub async fn[X] connect(
       return None
     }
   }
-  // Idempotent teardown, wired once the reader/writer tasks exist. Cancelling the
-  // tasks is what unblocks a reader/writer parked in the pipe — closing an fd
-  // does not wake a coroutine suspended on it. Closing stdin lets a well-behaved
-  // server exit on EOF; `process.cancel()` is the backstop. Caveat: cancel signals
-  // only the direct child, so a launcher that forks (e.g. `npx`) and ignores
-  // stdin EOF may leave descendants running — an upstream group-kill gap.
-  let torn_down : Ref[Bool] = { val: false, }
-  // Seeded with pipe + process cleanup so teardown is complete even if it fires
-  // before the task handles exist; once they exist it is upgraded to also cancel
-  // the tasks (which is what unblocks a parked reader/writer).
-  let teardown_action : Ref[() -> Unit] = {
-    val: () => {
-      stdout_reader.close()
-      stdin_writer.close()
-      process.cancel()
-    },
-  }
+  // The pump and writer tasks own their respective parent pipe ends and close
+  // them in defer blocks. Teardown cancels the owner tasks instead of closing a
+  // handle from another task while an async read/write is still pending (which
+  // can hang on Windows).
+  let mut torn_down = false
+  let mut pump_task : @async.Task[Unit]? = None
+  let mut writer_task : @async.Task[Unit]? = None
   let teardown = () => {
-    if !torn_down.val {
-      torn_down.val = true
-      (teardown_action.val)()
+    if !torn_down {
+      torn_down = true
+      if pump_task is Some(task) {
+        task.cancel()
+      }
+      if writer_task is Some(task) {
+        task.cancel()
+      }
+      // Cancelling the writer closes stdin, letting a well-behaved server exit
+      // on EOF; `process.cancel()` is the backstop. Caveat: cancellation only
+      // signals the direct child, so a launcher that forks (e.g. `npx`) and
+      // ignores stdin EOF may leave descendants running — an upstream
+      // group-kill gap.
+      process.cancel()
     }
   }
   let transport = NdjsonTransport::NdjsonTransport(
@@ -124,25 +125,28 @@ pub async fn[X] connect(
     on_close=teardown,
   )
   let client = @jsonrpc.Client(transport)
-  // Cancellable (so teardown stops them) and `no_wait` (so they do not hold the
-  // group open); a failed send / EOF still closes the client via the transport.
+  // `no_wait` keeps these standing tasks from delaying normal group completion;
+  // it does not stop them while the group is still running. Teardown cancels
+  // them for immediate shutdown; a failed send / EOF still closes the client
+  // via the transport.
   let pump = group.spawn(
-    () => client.run_message_pump(),
+    () => {
+      defer stdout_reader.close()
+      client.run_message_pump()
+    },
     no_wait=true,
     allow_failure=true,
   )
+  pump_task = Some(pump)
   let writer = group.spawn(
-    () => client.run_writer(),
+    () => {
+      defer stdin_writer.close()
+      client.run_writer()
+    },
     no_wait=true,
     allow_failure=true,
   )
-  teardown_action.val = () => {
-    pump.cancel()
-    writer.cancel()
-    stdout_reader.close()
-    stdin_writer.close()
-    process.cancel()
-  }
+  writer_task = Some(writer)
   let mcp_client = @mcp.McpClient(client)
   let init = @async.with_timeout_opt(handshake_timeout_ms, () => {
     mcp_client.initialize(client_name~, client_version~)
