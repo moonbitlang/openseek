@@ -23,6 +23,7 @@ async test "package download streams to disk and reports byte progress" {
       )
     }
     let dir = @fs.tmpdir(prefix="openseek-update-download-")
+    defer @fs.rmdir(dir, recursive=true)
     let destination = "\{dir}/package.zip"
     let progress : Array[(Int, Int?)] = []
     download(
@@ -39,6 +40,5 @@ async test "package download streams to disk and reports byte progress" {
     let last = progress[progress.length() - 1]
     assert_eq(last.0, 6)
     assert_eq(last.1, Some(6))
-    @fs.rmdir(dir, recursive=true)
   }
 }

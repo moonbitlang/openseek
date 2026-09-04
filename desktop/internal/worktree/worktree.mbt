@@ -1238,6 +1238,7 @@ test "worktree names are one branch-safe path component" {
 ///|
 async test "worktree registry decode drops malformed entries" {
   let root = worktree_test_root("openseek-worktree-decode-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @fsx.ensure_dir(@workspaces.store_root(root).to_path())
   @fsx.write_text(worktrees_file(root).to_path(), "{ not json")
   assert_eq(read_worktrees_unlocked(root).length(), 0)
@@ -1284,12 +1285,12 @@ async test "worktree registry decode drops malformed entries" {
   assert_eq(entries[2].name, "blank")
   assert_true(entries[2].session is None)
   assert_true(entries[2].codex_thread is None)
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
 async test "failed worktree registry staging preserves every live row" {
   let root = worktree_test_root("openseek-worktree-atomic-write-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   let retained : WorktreeEntry = {
     name: "retained",
     branch: "openseek/retained",
@@ -1317,7 +1318,6 @@ async test "failed worktree registry staging preserves every live row" {
   assert_eq(after.branch, retained.branch)
   assert_eq(after.base, retained.base)
   assert_eq(after.session, retained.session)
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -1340,6 +1340,7 @@ async test "attach refuses a linked worktree, keeps main and non-git attachable"
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-attach-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let repo = root.join("repo")
@@ -1366,7 +1367,6 @@ async test "attach refuses a linked worktree, keeps main and non-git attachable"
   let plain = root.join("plain")
   @fsx.ensure_dir(plain.to_path())
   assert_true(@workspaces.add(plain.to_string(), fn(_) {  }).contains(plain))
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -1376,6 +1376,7 @@ async test "worktree create provisions checkout, branch, registry, exclusion" {
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-create-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let repo = root.join("repo")
@@ -1429,7 +1430,6 @@ async test "worktree create provisions checkout, branch, registry, exclusion" {
   }
   assert_eq(listed.name, "fix-auth")
   assert_true(listed.present)
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -1439,6 +1439,7 @@ async test "explicit registry removal can prune a vanished worktree" {
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-release-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let repo = root.join("repo")
@@ -1462,7 +1463,6 @@ async test "explicit registry removal can prune a vanished worktree" {
   assert_eq(reply.worktrees.length(), 0)
   // Unbound, the conversation runs in the workspace again — no refusal.
   assert_eq(run_dir(repo, "s-release").to_string(), repo.to_string())
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -1472,6 +1472,7 @@ async test "worktree names are host-generated and skip surviving branches" {
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-autoname-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let repo = root.join("repo")
@@ -1538,7 +1539,6 @@ async test "worktree names are host-generated and skip surviving branches" {
   }
   assert_eq(codex_info.session, None)
   assert_eq(codex_info.codex_thread, Some("thread-1"))
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -1574,6 +1574,7 @@ async test "worktree create names the holder in every refusal" {
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-refuse-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let repo = root.join("repo")
@@ -1679,7 +1680,6 @@ async test "worktree create names the holder in every refusal" {
       "repository subdirectory",
     ),
   )
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -1707,6 +1707,7 @@ async test "worktree remove enforces the dirty check and keeps the branch" {
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-remove-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let repo = root.join("repo")
@@ -1773,7 +1774,6 @@ async test "worktree remove enforces the dirty check and keeps the branch" {
     ])
     is Some(_),
   )
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -1783,6 +1783,7 @@ async test "worktree remove prunes an externally deleted checkout" {
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-prune-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let repo = root.join("repo")
@@ -1810,7 +1811,6 @@ async test "worktree remove prunes an externally deleted checkout" {
       ".worktrees/gone",
     ),
   )
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|

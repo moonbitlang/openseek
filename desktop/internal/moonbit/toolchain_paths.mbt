@@ -203,6 +203,7 @@ async fn write_fake_seed(root : @pathx.Absolute) -> Unit {
 /// never spawns — `resolve_toolchain` raises before it.
 async test "the seed is found beside the engine and one level above it" {
   let tmp = @pathx.Path(@fs.tmpdir(prefix="openseek-moonbit-seed-layout-")).resolve()
+  defer (@fs.rmdir(tmp.to_string(), recursive=true) catch { _ => () })
   // macOS: `<input>/bin/openseek` with `<input>/toolchains/…`.
   let bundle = tmp.join("proton-package-input")
   let bundle_seed = bundle.join("toolchains/moonbit/macos-arm64")
@@ -219,9 +220,6 @@ async test "the seed is found beside the engine and one level above it" {
       dir.to_string()
     },
   )
-  @fs.rmdir(tmp.to_string(), recursive=true) catch {
-    _ => ()
-  }
   assert_eq(bundle_found, Some(bundle_seed.normalize().to_string()))
   assert_eq(flat_found, Some(flat_seed.normalize().to_string()))
 }

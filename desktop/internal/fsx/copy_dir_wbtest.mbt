@@ -5,6 +5,7 @@
 #cfg(not(platform="windows"))
 async test "copy_dir reproduces a nested tree over what is already there" {
   let dir = @fs.tmpdir(prefix="openseek-copy-dir-")
+  defer @fs.rmdir(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let source = root.join("source")
   ensure_dir(source.join("events"))
@@ -20,5 +21,4 @@ async test "copy_dir reproduces a nested tree over what is already there" {
   assert_eq(read_text(destination.join("only-here.json")), "kept")
   // The source stays: the caller decides when — and whether — to erase it.
   assert_eq(read_text(source.join("meta.json")), "{}")
-  @fs.rmdir(dir, recursive=true)
 }

@@ -262,6 +262,7 @@ async test "ripgrep resolution uses only packaged or recognized development layo
 ///|
 async test "packaged frontend wins before the matching checkout document" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-development-frontend-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   let command_dir = root.join("_build/native/debug/build/openseek_desktop")
   @fs.mkdir(command_dir.to_string(), recursive=true)
   let host = command_dir.join("openseek_desktop.exe").to_string()
@@ -273,7 +274,6 @@ async test "packaged frontend wins before the matching checkout document" {
   let packaged = assets.join("index.html").to_string()
   @fs.write_file(packaged, "packaged", create_mode=CreateOrTruncate)
   assert_eq(frontend_entry_path(host), packaged)
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|

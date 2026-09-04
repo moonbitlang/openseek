@@ -149,6 +149,7 @@ async test "session commit persists before memory and wakes each local transitio
   assert_true(store.wakeups().try_get() is Some(_))
 
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-auth-fail-"))
+  defer @fs.rmdir(root.to_string(), recursive=true)
   let unavailable = root.join("missing")
   let failing = AuthStore::load(runtime_dir=unavailable)
   failing.session = Some({
@@ -170,7 +171,6 @@ async test "session commit persists before memory and wakes each local transitio
   assert_true(failing.session_server() is Some("https://old.example"))
   assert_true(failing.connected)
   assert_true(failing.wakeups().try_get() is None)
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|

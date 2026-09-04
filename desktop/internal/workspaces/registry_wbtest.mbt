@@ -25,6 +25,7 @@ async test "the default workspace is attached once and never re-attached" {
   registry_env_test_lock.acquire()
   defer registry_env_test_lock.release()
   let dir = @fs.tmpdir(prefix="openseek-default-workspace-")
+  defer @fs.rmdir(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
@@ -47,7 +48,6 @@ async test "the default workspace is attached once and never re-attached" {
   assert_eq(registered(), [])
   assert_true(initialize() is None)
   assert_eq(registered(), [])
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -60,6 +60,7 @@ async test "a registry without the marker still receives the default workspace" 
   registry_env_test_lock.acquire()
   defer registry_env_test_lock.release()
   let dir = @fs.tmpdir(prefix="openseek-legacy-registry-")
+  defer @fs.rmdir(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
@@ -82,7 +83,6 @@ async test "a registry without the marker still receives the default workspace" 
   assert_eq(registered.length(), 2)
   assert_eq(registered[1], attached)
   assert_true(initialize() is None)
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|

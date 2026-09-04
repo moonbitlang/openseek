@@ -1,6 +1,7 @@
 ///|
 async test "Moon native host layout identifies checkout-local development paths" {
   let root : @path.Path = @fs.tmpdir(prefix="openseek-development-layout-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   let command_dir = root.join("_build/native/debug/build/openseek_desktop")
   @fs.mkdir(command_dir.to_string(), recursive=true)
   let executable = command_dir.join("openseek_desktop.exe").to_string()
@@ -28,5 +29,4 @@ async test "Moon native host layout identifies checkout-local development paths"
   assert_true(
     @development.Layout::detect(root.join("installed/app").to_string()) is None,
   )
-  @fs.rmdir(root.to_string(), recursive=true)
 }

@@ -75,6 +75,7 @@ test "codex home is a codex subdirectory of the runtime dir" {
 ///|
 async test "prepared codex home creates the directory" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-codex-home-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   let home = prepared_home(root)
   guard home is Some(home) else { fail("codex home was not prepared") }
   assert_eq(home, home_dir(root))
@@ -84,5 +85,4 @@ async test "prepared codex home creates the directory" {
   guard prepared_home(root) is Some(_) else {
     fail("codex home was not prepared again")
   }
-  @fs.rmdir(root.to_string(), recursive=true)
 }
