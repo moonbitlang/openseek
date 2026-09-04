@@ -72,10 +72,10 @@ fn viewer_css_sources() -> Array[String] {
     "viewer/browser/view_parts/view_lines/tokens.css", "viewer/browser/view_parts/view_lines/markers.css",
     "viewer/browser/diff_editor/diff_editor.css", "viewer/contrib/folding/browser/folding.css",
     "viewer/contrib/contextmenu/browser/contextmenu.css", "viewer/contrib/definition/browser/definition.css",
-    "viewer/contrib/references/browser/references.css", "viewer/contrib/hover/hover.css",
-    "viewer/contrib/quick_diff/browser/quick_diff.css", "viewer/contrib/agent_feedback/browser/agent_feedback.css",
-    "viewer/browser/diagram_viewport/diagram_viewport.css", "viewer/contrib/markdown_comments/browser/markdown_comments.css",
-    "internal/viewer/browser/markdown_document/markdown_document.css",
+    "viewer/contrib/references/browser/references.css", "viewer/contrib/codelens/browser/codelens.css",
+    "viewer/contrib/hover/hover.css", "viewer/contrib/quick_diff/browser/quick_diff.css",
+    "viewer/contrib/agent_feedback/browser/agent_feedback.css", "viewer/browser/diagram_viewport/diagram_viewport.css",
+    "viewer/contrib/markdown_comments/browser/markdown_comments.css", "internal/viewer/browser/markdown_document/markdown_document.css",
   ]
 }
 
@@ -779,6 +779,9 @@ async test "viewer stylesheet assembles from the editor workspace member" {
     css.contains(
       "/* viewer/contrib/markdown_comments/browser/markdown_comments.css */",
     ),
+  )
+  assert_true(
+    css.contains("/* viewer/contrib/codelens/browser/codelens.css */"),
   )
   assert_true(css.contains("/* viewer/browser/diff_editor/diff_editor.css */"))
   let font = ws.repo_at("\{EditorDepRoot}/\{CodiconFontSource}")

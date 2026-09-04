@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/editor/viewer/common/code_lens_api"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/editor/base/common",
+  "moonbitlang/editor/language",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type CodeLensCommandExecutorHandle
+pub fn CodeLensCommandExecutorHandle::CodeLensCommandExecutorHandle(execute~ : async (CodeLensCommandRequest) -> Bool noraise) -> Self
+pub async fn CodeLensCommandExecutorHandle::execute(Self, CodeLensCommandRequest) -> Bool noraise
+
+pub(all) struct CodeLensCommandRequest {
+  source_viewer_id : String
+  resource : @common.Uri
+  range : @common.Range
+  command : @language.CodeLensCommand
+} derive(@debug.Debug)
+pub fn CodeLensCommandRequest::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

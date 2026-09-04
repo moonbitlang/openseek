@@ -1370,6 +1370,55 @@ pub fn MarketSkill::not_equal(Self, Self) -> Bool
 pub fn MarketSkill::to_json(Self) -> Json
 pub fn MarketSkill::to_repr(Self) -> @debug.Repr
 
+pub(all) struct MoonIdeCodeLens {
+  range : LspRange
+  title : String
+  action : MoonIdeCodeLensAction
+} derive(Eq, @debug.Debug)
+pub fn MoonIdeCodeLens::equal(Self, Self) -> Bool
+pub fn MoonIdeCodeLens::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn MoonIdeCodeLens::not_equal(Self, Self) -> Bool
+pub fn MoonIdeCodeLens::to_json(Self) -> Json
+pub fn MoonIdeCodeLens::to_repr(Self) -> @debug.Repr
+pub impl ToJson for MoonIdeCodeLens
+pub impl @json.FromJson for MoonIdeCodeLens
+
+pub(all) enum MoonIdeCodeLensAction {
+  Local(position~ : LspPosition, locations~ : Array[MoonIdeLocation])
+  Outside(position~ : LspPosition)
+} derive(Eq, @debug.Debug)
+pub fn MoonIdeCodeLensAction::equal(Self, Self) -> Bool
+pub fn MoonIdeCodeLensAction::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn MoonIdeCodeLensAction::not_equal(Self, Self) -> Bool
+pub fn MoonIdeCodeLensAction::to_json(Self) -> Json
+pub fn MoonIdeCodeLensAction::to_repr(Self) -> @debug.Repr
+pub impl ToJson for MoonIdeCodeLensAction
+pub impl @json.FromJson for MoonIdeCodeLensAction
+
+pub(all) struct MoonIdeCodeLensPayload {
+  session : String
+  root : String
+  path : String
+} derive(Eq, @debug.Debug)
+pub fn MoonIdeCodeLensPayload::equal(Self, Self) -> Bool
+pub fn MoonIdeCodeLensPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn MoonIdeCodeLensPayload::not_equal(Self, Self) -> Bool
+pub fn MoonIdeCodeLensPayload::to_json(Self) -> Json
+pub fn MoonIdeCodeLensPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for MoonIdeCodeLensPayload
+pub impl @json.FromJson for MoonIdeCodeLensPayload
+
+pub(all) struct MoonIdeCodeLensReply {
+  lenses : Array[MoonIdeCodeLens]
+} derive(Eq, @debug.Debug)
+pub fn MoonIdeCodeLensReply::equal(Self, Self) -> Bool
+pub fn MoonIdeCodeLensReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn MoonIdeCodeLensReply::not_equal(Self, Self) -> Bool
+pub fn MoonIdeCodeLensReply::to_json(Self) -> Json
+pub fn MoonIdeCodeLensReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for MoonIdeCodeLensReply
+pub impl @json.FromJson for MoonIdeCodeLensReply
+
 pub(all) struct MoonIdeLocation {
   path : String
   start_line : Int

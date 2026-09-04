@@ -840,6 +840,34 @@ pub impl ToJson for MoonIdeNavigationPayload with fn to_json(self) {
 }
 
 ///|
+/// Request the reference CodeLens rows for one current checkout source file.
+/// Unlike navigation, no cursor position is needed: Moon IDE scans the whole
+/// authorized file and returns zero-based LSP ranges for every lens.
+pub(all) struct MoonIdeCodeLensPayload {
+  session : String
+  root : String
+  path : String
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for MoonIdeCodeLensPayload with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected Moon IDE CodeLens payload"))
+  }
+  let object = JsonObject::of(fields, path)
+  {
+    session: object.required_string("session"),
+    root: object.required_string("root"),
+    path: object.required_string("path"),
+  }
+}
+
+///|
+pub impl ToJson for MoonIdeCodeLensPayload with fn to_json(self) {
+  { "session": self.session, "root": self.root, "path": self.path }
+}
+
+///|
 pub(all) struct ExternalLinkPayload {
   url : String
 } derive(Debug, Eq, FromJson, ToJson)
@@ -1780,6 +1808,18 @@ pub extend MoonIdeNavigationPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend MoonIdeNavigationPayload with ToJson::{to_json}
+
+///|
+pub extend MoonIdeCodeLensPayload with Debug::{to_repr}
+
+///|
+pub extend MoonIdeCodeLensPayload with FromJson::{from_json}
+
+///|
+pub extend MoonIdeCodeLensPayload with Eq::{equal, not_equal}
+
+///|
+pub extend MoonIdeCodeLensPayload with ToJson::{to_json}
 
 ///|
 pub extend OpenSeekThinking with Debug::{to_repr}

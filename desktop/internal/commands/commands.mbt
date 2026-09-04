@@ -533,6 +533,12 @@ pub let moonide_references : Command[
 ] = Command("moonide.references")
 
 ///|
+pub let moonide_codelens : Command[
+  @protocol.MoonIdeCodeLensPayload,
+  @protocol.MoonIdeCodeLensReply,
+] = Command("moonide.codelens")
+
+///|
 pub let skills_catalog : Command[
   @protocol.EmptyPayload,
   @protocol.SkillsCatalogReply,

@@ -21,6 +21,23 @@ test "viewer wheel ownership is a live non-layout option" {
 }
 
 ///|
+test "CodeLens defaults and optional font overrides are immutable non-layout options" {
+  let defaults = CodeEditorOptions::default()
+  assert_true(defaults.code_lens)
+  assert_true(defaults.code_lens_font_family is None)
+  assert_true(defaults.code_lens_font_size is None)
+  let updated = defaults
+    .with_code_lens(false)
+    .with_code_lens_font_family(Some("Lens Mono"))
+    .with_code_lens_font_size(Some(11.5))
+  assert_false(updated.code_lens)
+  assert_eq(updated.code_lens_font_family, Some("Lens Mono"))
+  assert_eq(updated.code_lens_font_size, Some(11.5))
+  assert_true(defaults.code_lens)
+  assert_true(defaults.same_layout_options(updated))
+}
+
+///|
 test "viewer options derive soft wrap columns from measured glyphs" {
   let options = CodeEditorOptions(soft_wrap=true, tab_size=4)
   assert_eq(options.soft_wrap_column_for_content_width(72.0, 7.2), 10)

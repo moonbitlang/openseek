@@ -911,6 +911,17 @@ test "language payload codecs require every routing coordinate" {
     "line": 8,
     "column": 13,
   })
+  let codelens : @protocol.MoonIdeCodeLensPayload = @json.from_json({
+    "session": "thread-1",
+    "root": "/work/project",
+    "path": "src/main.mbt",
+    "future_metadata": true,
+  })
+  @debug.assert_eq(codelens.to_json(), {
+    "session": "thread-1",
+    "root": "/work/project",
+    "path": "src/main.mbt",
+  })
   let missing_root = try {
     let _ : @protocol.LspOpenPayload = @json.from_json({
       "session": "thread-1",
@@ -934,6 +945,190 @@ test "language payload codecs require every routing coordinate" {
     _ => true
   }
   assert_true(malformed_position)
+  let missing_codelens_path = try {
+    let _ : @protocol.MoonIdeCodeLensPayload = @json.from_json({
+      "session": "thread-1",
+      "root": "/work/project",
+    })
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(missing_codelens_path)
+}
+
+///|
+test "Moon IDE CodeLens reply preserves explicit action tags" {
+  let reply : @protocol.MoonIdeCodeLensReply = @json.from_json({
+    "future_metadata": true,
+    "lenses": [
+      {
+        "future_metadata": true,
+        "range": {
+          "start": { "line": 1, "character": 2 },
+          "end": { "line": 1, "character": 8 },
+        },
+        "title": "Local: 1 reference",
+        "action": {
+          "kind": "local",
+          "position": { "line": 1, "character": 4 },
+          "locations": [
+            {
+              "path": "/work/project/src/main.mbt",
+              "start_line": 2,
+              "start_column": 5,
+              "end_line": 2,
+              "end_column": 9,
+            },
+          ],
+        },
+      },
+      {
+        "range": {
+          "start": { "line": 3, "character": 0 },
+          "end": { "line": 3, "character": 4 },
+        },
+        "title": "Outside",
+        "action": {
+          "kind": "outside",
+          "position": { "line": 3, "character": 1 },
+        },
+      },
+    ],
+  })
+  @debug.assert_eq(reply.to_json(), {
+    "lenses": [
+      {
+        "range": {
+          "start": { "line": 1, "character": 2 },
+          "end": { "line": 1, "character": 8 },
+        },
+        "title": "Local: 1 reference",
+        "action": {
+          "kind": "local",
+          "position": { "line": 1, "character": 4 },
+          "locations": [
+            {
+              "path": "/work/project/src/main.mbt",
+              "start_line": 2,
+              "start_column": 5,
+              "end_line": 2,
+              "end_column": 9,
+            },
+          ],
+        },
+      },
+      {
+        "range": {
+          "start": { "line": 3, "character": 0 },
+          "end": { "line": 3, "character": 4 },
+        },
+        "title": "Outside",
+        "action": {
+          "kind": "outside",
+          "position": { "line": 3, "character": 1 },
+        },
+      },
+    ],
+  })
+  let malformed_payloads : Array[Json] = [
+    null,
+    {},
+    { "lenses": null },
+    { "lenses": "not an array" },
+    {
+      "lenses": [
+        {
+          "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 1 },
+          },
+          "action": {
+            "kind": "outside",
+            "position": { "line": 0, "character": 0 },
+          },
+        },
+      ],
+    },
+    {
+      "lenses": [
+        {
+          "range": null,
+          "title": "Outside",
+          "action": {
+            "kind": "outside",
+            "position": { "line": 0, "character": 0 },
+          },
+        },
+      ],
+    },
+    {
+      "lenses": [
+        {
+          "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 1 },
+          },
+          "title": null,
+          "action": {
+            "kind": "outside",
+            "position": { "line": 0, "character": 0 },
+          },
+        },
+      ],
+    },
+    {
+      "lenses": [
+        {
+          "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 1 },
+          },
+          "title": "Outside",
+          "action": null,
+        },
+      ],
+    },
+    {
+      "lenses": [
+        {
+          "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 1 },
+          },
+          "title": "Unknown",
+          "action": {
+            "kind": "renamed",
+            "position": { "line": 0, "character": 0 },
+          },
+        },
+      ],
+    },
+    {
+      "lenses": [
+        {
+          "range": {
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 1 },
+          },
+          "title": "Local",
+          "action": {
+            "kind": "local",
+            "position": { "line": 0, "character": 0 },
+          },
+        },
+      ],
+    },
+  ]
+  for malformed in malformed_payloads {
+    let rejected = try {
+      let _ : @protocol.MoonIdeCodeLensReply = @json.from_json(malformed)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
 }
 
 ///|

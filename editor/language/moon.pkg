@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/json",
   "moonbitlang/editor/base/common" @base_common,
   "moonbitlang/editor/viewer/common/model",
 }

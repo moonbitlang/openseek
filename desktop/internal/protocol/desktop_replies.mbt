@@ -1634,6 +1634,99 @@ pub(all) struct LspRange {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// The two reference actions emitted by the supported Moon IDE CodeLens
+/// command. `position` remains zero-based LSP coordinates. Local locations
+/// have already been canonicalized by the host and carry the navigation
+/// protocol's one-based numeric ranges.
+pub(all) enum MoonIdeCodeLensAction {
+  Local(position~ : LspPosition, locations~ : Array[MoonIdeLocation])
+  Outside(position~ : LspPosition)
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for MoonIdeCodeLensAction with fn to_json(self) {
+  match self {
+    Local(position~, locations~) =>
+      { "kind": "local", "position": position, "locations": locations }
+    Outside(position~) => { "kind": "outside", "position": position }
+  }
+}
+
+///|
+pub impl FromJson for MoonIdeCodeLensAction with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "Moon IDE CodeLens action")
+  let position : LspPosition = @json.from_json(
+    object.required_json("position"),
+    path=path.add_key("position"),
+  )
+  match object.required_string("kind") {
+    "local" => {
+      let locations : Array[MoonIdeLocation] = @json.from_json(
+        object.required_json("locations"),
+        path=path.add_key("locations"),
+      )
+      Local(position~, locations~)
+    }
+    "outside" => Outside(position~)
+    _ =>
+      raise JsonDecodeError(
+        (path.add_key("kind"), "unknown Moon IDE CodeLens action kind"),
+      )
+  }
+}
+
+///|
+/// One source CodeLens. Its anchor range and action position retain Moon
+/// IDE's zero-based LSP coordinates until the Viewer provider projects them.
+pub(all) struct MoonIdeCodeLens {
+  range : LspRange
+  title : String
+  action : MoonIdeCodeLensAction
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for MoonIdeCodeLens with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "Moon IDE CodeLens")
+  {
+    range: @json.from_json(
+      object.required_json("range"),
+      path=path.add_key("range"),
+    ),
+    title: object.required_string("title"),
+    action: @json.from_json(
+      object.required_json("action"),
+      path=path.add_key("action"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for MoonIdeCodeLens with fn to_json(self) {
+  { "range": self.range, "title": self.title, "action": self.action }
+}
+
+///|
+pub(all) struct MoonIdeCodeLensReply {
+  lenses : Array[MoonIdeCodeLens]
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for MoonIdeCodeLensReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "Moon IDE CodeLens reply")
+  {
+    lenses: @json.from_json(
+      object.required_json("lenses"),
+      path=path.add_key("lenses"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for MoonIdeCodeLensReply with fn to_json(self) {
+  { "lenses": self.lenses }
+}
+
+///|
 pub(all) struct LspDiagnostic {
   range : LspRange
   message : String
@@ -2366,6 +2459,42 @@ pub extend MoonIdeLocationsReply with Eq::{equal, not_equal}
 
 ///|
 pub extend MoonIdeLocationsReply with ToJson::{to_json}
+
+///|
+pub extend MoonIdeCodeLensAction with Debug::{to_repr}
+
+///|
+pub extend MoonIdeCodeLensAction with FromJson::{from_json}
+
+///|
+pub extend MoonIdeCodeLensAction with Eq::{equal, not_equal}
+
+///|
+pub extend MoonIdeCodeLensAction with ToJson::{to_json}
+
+///|
+pub extend MoonIdeCodeLens with Debug::{to_repr}
+
+///|
+pub extend MoonIdeCodeLens with FromJson::{from_json}
+
+///|
+pub extend MoonIdeCodeLens with Eq::{equal, not_equal}
+
+///|
+pub extend MoonIdeCodeLens with ToJson::{to_json}
+
+///|
+pub extend MoonIdeCodeLensReply with Debug::{to_repr}
+
+///|
+pub extend MoonIdeCodeLensReply with FromJson::{from_json}
+
+///|
+pub extend MoonIdeCodeLensReply with Eq::{equal, not_equal}
+
+///|
+pub extend MoonIdeCodeLensReply with ToJson::{to_json}
 
 ///|
 pub extend OpenExternalReply with Debug::{to_repr}

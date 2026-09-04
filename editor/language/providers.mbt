@@ -69,6 +69,26 @@ pub(all) struct DocumentSymbol {
 } derive(Debug)
 
 ///|
+/// Host-executable command attached to a CodeLens. Arguments remain JSON so
+/// the generic editor API does not acquire a dependency on any language or
+/// workbench command model.
+pub(all) struct CodeLensCommand {
+  id : String
+  title : String
+  tooltip : String?
+  arguments : Array[Json]
+} derive(Debug)
+
+///|
+/// One inline command row anchored to a source range. `command=None` denotes
+/// a lens that may be completed by its registration's optional resolver.
+pub(all) struct CodeLens {
+  range : @base_common.Range
+  id : String?
+  command : CodeLensCommand?
+} derive(Debug)
+
+///|
 /// Asynchronous hover provider for a readonly text model and the repository's
 /// one-based UTF-16 `Position`.
 pub(open) trait HoverProvider {
@@ -97,6 +117,26 @@ pub(open) trait DocumentSymbolProvider {
   async fn provide_document_symbols(Self, @model.TextModel, CancellationToken) -> Array[
     DocumentSymbol,
   ]
+}
+
+///|
+/// Asynchronous CodeLens provider for a readonly text model.
+pub(open) trait CodeLensProvider {
+  async fn provide_code_lenses(Self, @model.TextModel, CancellationToken) -> Array[
+    CodeLens,
+  ]
+}
+
+///|
+/// Optional completion capability registered beside a CodeLens provider.
+/// Keeping it separate lets simple providers implement only the eager path.
+pub(open) trait CodeLensResolver {
+  async fn resolve_code_lens(
+    Self,
+    @model.TextModel,
+    CodeLens,
+    CancellationToken,
+  ) -> CodeLens?
 }
 
 ///|
@@ -130,6 +170,12 @@ pub fn DiagnosticTag::label(self : DiagnosticTag) -> String {
 
 ///|
 pub extend Diagnostic with Debug::{to_repr}
+
+///|
+pub extend CodeLens with Debug::{to_repr}
+
+///|
+pub extend CodeLensCommand with Debug::{to_repr}
 
 ///|
 pub extend Diagnostic with Eq::{equal, not_equal}

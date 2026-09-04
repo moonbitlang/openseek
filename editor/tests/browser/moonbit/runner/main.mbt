@@ -12,6 +12,7 @@ fn run_scenario(scenario : String) -> Unit {
     "agent-feedback" => @agent_feedback.run_agent_feedback_test()
     "base-browser" => @base_browser_scenario.run_base_browser_test()
     "browser-geometry" => @component.run_browser_geometry_test()
+    "code-lens" => @component.run_code_lens_test()
     "cursor-input-events" => @component.run_cursor_input_events_test()
     "definition-navigation" => @definition.run_definition_browser_test()
     "diff-editor-lifecycle" => @component.run_diff_editor_lifecycle_test()

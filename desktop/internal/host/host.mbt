@@ -300,6 +300,9 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.moonide_references, async fn(payload) {
       moonide_references_op(state, payload)
     }),
+    @endpoint.Endpoint::remote(@commands.moonide_codelens, async fn(payload) {
+      moonide_codelens_op(state, payload)
+    }),
     @endpoint.Endpoint::remote(@commands.skills_catalog, async fn(_) {
       skills_catalog_op()
     }),

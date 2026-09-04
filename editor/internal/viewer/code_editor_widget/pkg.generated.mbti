@@ -8,6 +8,7 @@ import {
   "moonbitlang/editor/language",
   "moonbitlang/editor/platform/log",
   "moonbitlang/editor/viewer/common/agent_feedback_api",
+  "moonbitlang/editor/viewer/common/code_lens_api",
   "moonbitlang/editor/viewer/common/config",
   "moonbitlang/editor/viewer/common/core",
   "moonbitlang/editor/viewer/common/editor_api",
@@ -67,13 +68,16 @@ pub fn CodeEditorModelLineHeight::not_equal(Self, Self) -> Bool
 pub fn CodeEditorModelLineHeight::to_repr(Self) -> @debug.Repr
 
 type CodeEditorOptions derive(Eq, @debug.Debug)
-pub fn CodeEditorOptions::CodeEditorOptions(soft_wrap? : Bool, tab_size? : Int, wrapping_indent? : @editor_api.WrappingIndent, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, render_line_highlight? : @editor_api.RenderLineHighlight, render_line_highlight_only_when_focus? : Bool, render_validation_decorations? : @editor_api.RenderValidationDecorations, theme? : String, placeholder? : String, line_decorations_width? : Int, line_numbers_min_chars? : Int, folding? : Bool, show_folding_controls? : @editor_api.ShowFoldingControls, folding_highlight? : Bool, folding_maximum_regions? : Int, unfold_on_click_after_end_of_line? : Bool, smooth_scrolling? : Bool, handle_mouse_wheel? : Bool, show_unused? : Bool, show_deprecated? : Bool, font_family? : String, font_weight? : String, font_size? : Double, line_height? : Double, letter_spacing? : Double) -> Self
+pub fn CodeEditorOptions::CodeEditorOptions(soft_wrap? : Bool, tab_size? : Int, wrapping_indent? : @editor_api.WrappingIndent, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, render_line_highlight? : @editor_api.RenderLineHighlight, render_line_highlight_only_when_focus? : Bool, render_validation_decorations? : @editor_api.RenderValidationDecorations, theme? : String, placeholder? : String, line_decorations_width? : Int, line_numbers_min_chars? : Int, folding? : Bool, show_folding_controls? : @editor_api.ShowFoldingControls, folding_highlight? : Bool, folding_maximum_regions? : Int, unfold_on_click_after_end_of_line? : Bool, smooth_scrolling? : Bool, handle_mouse_wheel? : Bool, show_unused? : Bool, show_deprecated? : Bool, code_lens? : Bool, code_lens_font_family? : String, code_lens_font_size? : Double, font_family? : String, font_weight? : String, font_size? : Double, line_height? : Double, letter_spacing? : Double) -> Self
 pub fn CodeEditorOptions::default() -> Self
 pub fn CodeEditorOptions::equal(Self, Self) -> Bool
 pub fn CodeEditorOptions::line_height(Self) -> Double
 pub fn CodeEditorOptions::not_equal(Self, Self) -> Bool
 pub fn CodeEditorOptions::soft_wrap(Self) -> Bool
 pub fn CodeEditorOptions::with_additional_line_decorations_width(Self, Int) -> Self
+pub fn CodeEditorOptions::with_code_lens(Self, Bool) -> Self
+pub fn CodeEditorOptions::with_code_lens_font_family(Self, String?) -> Self
+pub fn CodeEditorOptions::with_code_lens_font_size(Self, Double?) -> Self
 pub fn CodeEditorOptions::with_folding(Self, Bool) -> Self
 pub fn CodeEditorOptions::with_font_family(Self, String) -> Self
 pub fn CodeEditorOptions::with_font_size(Self, Double) -> Self
@@ -175,8 +179,9 @@ pub fn CodeEditorScrollContentFacts::not_equal(Self, Self) -> Bool
 pub fn CodeEditorScrollContentFacts::to_repr(Self) -> @debug.Repr
 
 type CodeEditorServices
-pub fn CodeEditorServices::CodeEditorServices(languages? : @languages.LanguageHandle, markers? : @markers.MarkerDecorationsSource, agent_feedback? : @agent_feedback_api.AgentFeedbackHandle, location_opener? : @navigation_api.LocationOpenerHandle, text_model_resolver? : @navigation_api.TextModelResolverHandle, quick_diff? : @quick_diff_api.QuickDiffHandle, log_service? : @log.LogHandle) -> Self
+pub fn CodeEditorServices::CodeEditorServices(languages? : @languages.LanguageHandle, markers? : @markers.MarkerDecorationsSource, agent_feedback? : @agent_feedback_api.AgentFeedbackHandle, code_lens_command_executor? : @code_lens_api.CodeLensCommandExecutorHandle, location_opener? : @navigation_api.LocationOpenerHandle, text_model_resolver? : @navigation_api.TextModelResolverHandle, quick_diff? : @quick_diff_api.QuickDiffHandle, log_service? : @log.LogHandle) -> Self
 pub fn CodeEditorServices::agent_feedback(Self) -> @agent_feedback_api.AgentFeedbackHandle
+pub fn CodeEditorServices::code_lens_command_executor(Self) -> @code_lens_api.CodeLensCommandExecutorHandle?
 pub fn CodeEditorServices::dispose(Self) -> Unit
 pub fn CodeEditorServices::languages(Self) -> @languages.LanguageHandle
 pub fn CodeEditorServices::location_opener(Self) -> @navigation_api.LocationOpenerHandle?
