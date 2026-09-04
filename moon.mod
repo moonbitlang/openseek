@@ -5,7 +5,7 @@ version = "0.3.0"
 import {
   "moonbitlang/async@0.21.1",
   "moonbitlang/x@0.4.50",
-  "bobzhang/jsonl@0.2.0",
+  "moonbitlang/jsonl@0.2.0",
   "bobzhang/openseek_protocol@0.1.0",
   "moonbit-community/rabbita@0.15.4",
   "moonbitlang/editor@0.4.5",

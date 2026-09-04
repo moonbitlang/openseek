@@ -239,7 +239,7 @@ and exposes each on `PATH` as `<name>.exe` (e.g. `openseek.exe`).
 - [`tests/live/deepseek.md`](tests/live/deepseek.md) — a real, non-mock DeepSeek
   round trip. It is opt-in (`DEEPSEEK=sk-... moon cram test tests/live`) and
   parses the agent's JSONL log with MoonBit itself: a `moon run -e` script reads
-  the stream through the published [`bobzhang/jsonl`](https://mooncakes.io/docs/bobzhang/jsonl)
+  the stream through the published [`moonbitlang/jsonl`](https://mooncakes.io/docs/moonbitlang/jsonl)
   package and asserts on typed `Json` values — no `jq` — without pinning
   nondeterministic content such as token counts or model phrasing.
 

@@ -1,5 +1,5 @@
 import {
-  "bobzhang/jsonl",
+  "moonbitlang/jsonl",
   "bobzhang/openseek/agent",
   "bobzhang/openseek/agent_explore",
   "bobzhang/openseek/agent_subrun",

@@ -11,10 +11,10 @@ moon cram test tests/live
 
 The agent streams one JSON object per line (JSONL) to stdout. Instead of an
 external tool such as `jq`, we parse that log with MoonBit itself: the published
-[`bobzhang/jsonl`](https://mooncakes.io/docs/bobzhang/jsonl) package reads stdin
+[`moonbitlang/jsonl`](https://mooncakes.io/docs/moonbitlang/jsonl) package reads stdin
 and hands back typed `Json` values, so the assertions are plain MoonBit `is`
 pattern matches. Its `read_stdin` helper encapsulates `moonbitlang/async/stdio`,
-so each script imports only `bobzhang/jsonl` plus `moonbitlang/async` — the
+so each script imports only `moonbitlang/jsonl` plus `moonbitlang/async` — the
 latter is unavoidable because `async fn main` requires it. The `grep '='` only
 drops `moon`'s own dependency-resolution chatter, not any log content.
 
@@ -39,7 +39,7 @@ count, and a `=~ re"…"` regex match for the answer text.
 ```mooncram
 $ openseek.exe run --model deepseek-v4-flash --max-steps 3 "Call the finish tool immediately with the answer DONE. Use no other tool." 2>/dev/null \
 >   | moon run --target native -e 'import {
->   "bobzhang/jsonl@0.2.0",
+>   "moonbitlang/jsonl@0.2.0",
 >   "moonbitlang/async",
 > }
 > 
@@ -73,7 +73,7 @@ event kind.
 ```mooncram
 $ openseek.exe run --model deepseek-v4-flash --max-steps 3 "Call the finish tool immediately with the answer DONE. Use no other tool." 2>/dev/null \
 >   | moon run --target native -e 'import {
->   "bobzhang/jsonl@0.2.0",
+>   "moonbitlang/jsonl@0.2.0",
 >   "moonbitlang/async",
 > }
 > 
@@ -100,7 +100,7 @@ of the log — here it is exactly what we asked the model to finish with.
 ```mooncram
 $ openseek.exe run --model deepseek-v4-flash --max-steps 3 "Call the finish tool immediately with the answer DONE. Use no other tool." 2>/dev/null \
 >   | moon run --target native -e 'import {
->   "bobzhang/jsonl@0.2.0",
+>   "moonbitlang/jsonl@0.2.0",
 >   "moonbitlang/async",
 > }
 > 
@@ -126,7 +126,7 @@ ran and its output flowed back.
 ```mooncram
 $ openseek.exe run --model deepseek-v4-flash --max-steps 6 "Use the shell tool to run exactly: echo openseek-cram. Then call finish with the word done." 2>/dev/null \
 >   | moon run --target native -e 'import {
->   "bobzhang/jsonl@0.2.0",
+>   "moonbitlang/jsonl@0.2.0",
 >   "moonbitlang/async",
 > }
 > 

@@ -3,7 +3,7 @@ name = "openseek_desktop"
 version = "0.1.5"
 
 import {
-  "bobzhang/jsonl@0.2.0",
+  "moonbitlang/jsonl@0.2.0",
   "bobzhang/openseek_protocol@0.1.0",
   "moonbit-community/cmark@0.4.5",
   "moonbit-community/pty@0.4.1",

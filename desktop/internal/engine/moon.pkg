@@ -3,7 +3,7 @@ import {
   "bobzhang/openseek/agent_session/store",
   "bobzhang/openseek/viz_export",
   "bobzhang/openseek_protocol" @wire,
-  "bobzhang/jsonl",
+  "moonbitlang/jsonl",
   "openseek_desktop/internal/env",
   "openseek_desktop/internal/fsx",
   "openseek_desktop/internal/home",
