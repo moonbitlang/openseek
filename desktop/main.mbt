@@ -131,9 +131,11 @@ async fn main {
     .debug_level(1)
     // Rabbita consumes ordinary left-click navigation for the dock Browser,
     // but deliberately leaves Ctrl/Cmd-click and middle-click to Chromium.
-    // Proton reports those new-tab dispositions here: cancel its embedded tab
-    // and hand only user-initiated browser URLs to the system opener. Scripted
-    // `window.open` calls remain denied instead of escaping the application.
+    // Proton 0.2.6 reports those new-window requests here without their target
+    // disposition, so `user_gesture` is temporarily the closest available
+    // signal. This also includes a page calling `window.open` during a click;
+    // deny the embedded window in every case, and send user-initiated URLs to
+    // the system opener until Proton exposes the disposition.
     .on_new_window_request(async fn(_, request) noraise {
       if request.user_gesture {
         ignore(
