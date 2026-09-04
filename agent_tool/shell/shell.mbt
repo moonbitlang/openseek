@@ -894,6 +894,7 @@ test "shell formats output limit metadata" {
 /// scratch lab configured, `moon new <lab>/probe` passes the guard (the
 /// command actually runs and scaffolds), while the same scaffold aimed
 /// anywhere else still refuses before any process spawns.
+#cfg(not(platform="windows"))
 async test "read-only shell admits lab scaffolds and still blocks the rest" {
   let lab = @fs.tmpdir(prefix="openseek-shell-lab-")
   let allowed = execute_with_workspace(

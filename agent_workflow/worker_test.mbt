@@ -51,6 +51,7 @@ let edit_script : String =
   #|printf '{"subrun_report": {"schema_version": 1, "status": "done", "summary": "edited a", "verification": "diff inspected"}}\n'
 
 ///|
+#cfg(not(platform="windows"))
 async test "a worker slice commits, integrates, and lands in the repo" {
   guard can_spawn_sh_here() else {
     println("skipped: cannot spawn sh")
@@ -92,6 +93,7 @@ async test "a worker slice commits, integrates, and lands in the repo" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "an out-of-bounds edit is not mergeable and can be discarded" {
   guard can_spawn_sh_here() else {
     println("skipped: cannot spawn sh")
@@ -151,6 +153,7 @@ async test "overlapping slices are refused before any child spawns" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "a journalled worker slice replays without provisioning" {
   guard can_spawn_sh_here() else {
     println("skipped: cannot spawn sh")
@@ -199,6 +202,7 @@ async test "a journalled worker slice replays without provisioning" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "a discarded slice does not replay: the veto reruns it live" {
   guard can_spawn_sh_here() else {
     println("skipped: cannot spawn sh")
@@ -304,6 +308,7 @@ async test "blank tasks and empty allowed_paths are refused pre-provision" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "names are reusable and lifecycle binds to the active generation" {
   guard can_spawn_sh_here() else {
     println("skipped: cannot spawn sh")

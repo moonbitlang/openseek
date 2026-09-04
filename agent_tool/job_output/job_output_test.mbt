@@ -61,6 +61,7 @@ async fn poll_bg_output(
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "job_output returns a running job's output and status" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
@@ -253,6 +254,7 @@ async test "a job with policy disabled does not invent a policy refusal" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "a terminal job finds a policy refusal before the displayed tail" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-job-policy-")

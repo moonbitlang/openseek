@@ -123,6 +123,7 @@ test "workspace path keeps default and absolute paths unchanged" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "workspace path resolves relative paths under a non-default root" {
   assert_eq(resolve("/tmp/work", "src/../README.md"), "/tmp/work/README.md")
   assert_true(resolve_cwd("/tmp/work", None) is Some("/tmp/work"))

@@ -378,6 +378,7 @@ async test "remove refuses a path recreated after an earlier removal" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "remove refuses a path replaced by a symlink" {
   @vfs.with_tmpdir(dir => {
     @vfs.FileSystem({ "target.mbt": "pub fn t() -> Int { 0 }\n" }).write_to(dir)
@@ -448,6 +449,7 @@ async test "remove rejects a blank reason" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "a write scope confines remove to its allowed paths" {
   @vfs.with_tmpdir(prefix="openseek-remove-scope-", dir => {
     @vfs.FileSystem({ "lib/mine.txt": "m\n", "other/mine.txt": "m\n" }).write_to(

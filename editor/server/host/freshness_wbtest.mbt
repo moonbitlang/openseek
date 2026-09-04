@@ -255,7 +255,11 @@ fn check_test_file_output(
   relative : String,
   message : String,
 ) -> String {
-  "{\"$message_type\":\"diagnostic\",\"level\":\"warning\",\"path\":\"\{root}/\{relative}\",\"loc\":\"1:1-1:4\",\"message\":\"\{message}\"}"
+  // JSON-escape the path: on Windows the tmpdir root contains backslashes,
+  // which are invalid raw inside a JSON string. The real `moon check
+  // --output-json` escapes paths the same way.
+  let path = Json::string("\{root}/\{relative}").stringify()
+  "{\"$message_type\":\"diagnostic\",\"level\":\"warning\",\"path\":\{path},\"loc\":\"1:1-1:4\",\"message\":\"\{message}\"}"
 }
 
 ///|

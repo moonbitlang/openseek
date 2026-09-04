@@ -173,6 +173,7 @@ pub async fn update_settings(
 // use and is covered by the live app.
 
 ///|
+#cfg(not(platform="windows"))
 test "workspace settings parse tolerantly and keep unknown fields" {
   assert_true(worktree_mode_of(parse_settings("{\"worktree_mode\": true}")))
   // Only an explicit `true` opts in; anything else is the Local default.

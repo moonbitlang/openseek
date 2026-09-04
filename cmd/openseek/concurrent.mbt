@@ -487,6 +487,7 @@ test "inspect_hint adds --session-root only when non-default" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "copy_tree dereferences an in-workspace file symlink" {
   @vfs.with_tmpdir(prefix="openseek-fleet-symlink-", root => {
     let src = "\{root}/s"

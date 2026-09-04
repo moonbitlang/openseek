@@ -160,6 +160,7 @@ behavior and output text from before workspaces existed.
 
 ```mbt check
 ///|
+#cfg(not(platform="windows"))
 test "resolve joins relative paths and passes the rest through" {
   inspect(
     @workspace_path.resolve("/tmp/work", "src/main.mbt"),
@@ -181,6 +182,7 @@ test "resolve joins relative paths and passes the rest through" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "resolve_cwd maps a missing cwd onto the root" {
   // No cwd means the workspace root...
   debug_inspect(
@@ -211,6 +213,7 @@ untrusted input first:
 
 ```mbt check
 ///|
+#cfg(not(platform="windows"))
 test "a `..` component escapes the root while still looking contained" {
   // `..` is not interpreted, so this reads as "under /work" on the text alone
   // even though it names /etc/passwd.

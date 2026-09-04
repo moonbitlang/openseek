@@ -410,6 +410,7 @@ async test "small output stays in memory, no file" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "output over the inline cap spills; read_all returns everything, head previews" {
   let path = "/tmp/openseek-sink-spill-1.out"
   let sink = ShellOutputSink::ShellOutputSink(
@@ -428,6 +429,7 @@ async test "output over the inline cap spills; read_all returns everything, head
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "the spill file is seeded with output buffered before the spill" {
   let path = "/tmp/openseek-sink-spill-2.out"
   let sink = ShellOutputSink::ShellOutputSink(

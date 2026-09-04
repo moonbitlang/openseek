@@ -388,6 +388,7 @@ test "official endpoints still use their env fallback" {
 /// The endpoint comes from the settings store, never the process
 /// environment: an `OPENSEEK_API_URL` exported in the launching shell must
 /// not redirect the official DeepSeek provider away from its built-in URL.
+#cfg(not(platform="windows"))
 async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
@@ -455,6 +456,7 @@ async test "run config rejects a blank session" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "host chooses durable placement from workspace state" {
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()

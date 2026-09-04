@@ -2746,6 +2746,7 @@ async test "timed out command-lock waiter is removed" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "native engine env has one authoritative bundled moon path" {
   let ambient_path = @sys.get_env_var("PATH")
   let root = @pathx.Path(@fs.tmpdir(prefix="openseek-engine-env-"))

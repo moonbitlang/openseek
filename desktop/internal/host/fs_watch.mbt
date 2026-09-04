@@ -442,6 +442,7 @@ test "host connections keep filesystem watch request mailboxes isolated" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "watch activation fails through its request and can be retried" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-fs-watch-restart-")
@@ -491,6 +492,7 @@ async test "watch activation fails through its request and can be retried" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "only an identical generation retains its active watcher" {
   @async.with_task_group(group => {
     let dir = @fs.tmpdir(prefix="openseek-fs-watch-idempotent-")

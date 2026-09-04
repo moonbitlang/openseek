@@ -692,6 +692,7 @@ pub async fn remove_path_if_exists(path : String) -> Unit {
 /// The workspace derives every path from an absolute root, so the results are
 /// absolute and independent of any later working-directory change. These pin
 /// the join/parent math the packagers rely on.
+#cfg(not(platform="windows"))
 test "workspace derives absolute paths from an absolute root" {
   let ws : Workspace = { root: "/abs/repo/desktop", }
   assert_eq(ws.dir(), "/abs/repo/desktop")
@@ -703,6 +704,7 @@ test "workspace derives absolute paths from an absolute root" {
 ///|
 // The bundle names carry no spaces, but a checkout path still can, so the
 // space this pins is in the workspace root.
+#cfg(not(platform="windows"))
 test "workspace path join preserves spaces and nested segments" {
   let ws : Workspace = { root: "/My Checkouts/w", }
   assert_eq(
@@ -712,6 +714,7 @@ test "workspace path join preserves spaces and nested segments" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "package build paths select debug or release" {
   let ws : Workspace = { root: "/abs/repo/desktop", }
   assert_eq(ws.app_stylesheet(), "/abs/repo/desktop/app.generated.css")

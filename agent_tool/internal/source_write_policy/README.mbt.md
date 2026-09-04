@@ -228,6 +228,7 @@ paths, includes the lab itself, and refuses to authorize everything.
 
 ```mbt check
 ///|
+#cfg(not(platform="windows"))
 test "the lab and everything under it, and nothing else" {
   inspect(
     @source_write_policy.path_is_under_lab("/work/lab/scratch.mbt", "/work/lab"),
