@@ -573,6 +573,7 @@ pub fn boot() -> Unit {
         open_external_link: url => open_external_link(emit, url),
         open_file: path => emit(OpenFile(path)),
         reveal_file: path => emit(RevealFile(path)),
+        edit_failed: message => emit(HostActionFailed(message)),
       },
     )
     let skills_html = @skills.component(

@@ -1,4 +1,5 @@
 import {
+  "moonbit-community/proton_ext/clipboard",
   "moonbitlang/async",
   "moonbit-community/proton",
   "moonbit-community/proton_ext/notification",

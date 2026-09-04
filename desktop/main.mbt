@@ -151,13 +151,14 @@ async fn main {
     )
   }
   let app = app
-    // Both command extensions are deliberately granted to the configured
+    // Command extensions are deliberately granted to the configured
     // entry page; registering backend handlers alone does not grant renderer
     // access.
     .capability(@extension.openseek_capability(state, bridge, views))
     // System notifications are an ordinary generated extension now: the
     // frontend posts them and receives `notification.click` with the run id.
     .capability(@notification.capability())
+    .capability(@clipboard.capability())
     // The connect request proves the page can issue commands; this paired
     // lifecycle supplies the window-owned event destination that remains
     // valid after that request returns — and the window handle the browser

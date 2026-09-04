@@ -28,6 +28,7 @@ pub(all) struct ContextActions {
   open_external_link : (String) -> @cmd.Cmd
   open_file : (String) -> @cmd.Cmd
   reveal_file : (String) -> @cmd.Cmd
+  edit_failed : (String) -> @cmd.Cmd
 }
 
 ///|
@@ -36,6 +37,7 @@ priv enum ContextTarget {
   WebLink(String)
   EmailLink(url~ : String, address~ : String)
   FileLink(String)
+  TextInput(TextEdit)
 } derive(Eq)
 
 ///|
@@ -67,225 +69,255 @@ priv enum ContextMsg {
 const GlobalContextTarget : String = "app-context-menu"
 
 ///|
-fn context_string_field(value : @js.Value, key : String) -> String? {
-  let field : @js.Value = value.get_with_string(key)
-  if field.is_string() {
-    Some(field.cast())
+fn ContextRequest::finish(self : ContextRequest) -> @cmd.Cmd {
+  match self.target {
+    TextInput(edit) => @cmd.custom_cmd(_ => edit.finish())
+    _ => @cmd.none
+  }
+}
+
+///|
+fn event_element(event : @dom.Event) -> @dom.Element? {
+  match event.target().to_element() {
+    Some(element) => Some(element)
+    None => event.target().to_node().bind(node => node.get_parent_element())
+  }
+}
+
+///|
+fn is_context_surface(element : @dom.Element?) -> Bool {
+  element.bind(element => {
+    element.closest("[data-action-menu-surface=\"app-context-menu\"]")
+  })
+  is Some(_)
+}
+
+///|
+fn selected_at(
+  element : @dom.Element,
+  x : Int,
+  y : Int,
+  keyboard : Bool,
+) -> String? {
+  guard browser_selection().to_option() is Some(selection) &&
+    !selection.collapsed() &&
+    selection.count() > 0 else {
+    return None
+  }
+  let text = selection.text()
+  guard !text.is_empty() else { return None }
+  for index in 0..<selection.count() {
+    let range = selection.range(index)
+    if keyboard && range.intersects(element) {
+      return Some(text)
+    }
+    for rect in range.rects() {
+      if x.to_double() >= rect.get_left() &&
+        x.to_double() <= rect.get_right() &&
+        y.to_double() >= rect.get_top() &&
+        y.to_double() <= rect.get_bottom() {
+        return Some(text)
+      }
+    }
+  }
+  None
+}
+
+///|
+fn keyboard_anchor(element : @dom.Element, use_selection : Bool) -> (Int, Int) {
+  let rect = if use_selection &&
+    browser_selection().to_option() is Some(selection) &&
+    selection.count() > 0 {
+    let rect = selection.range(0).bounds()
+    if rect.get_width() > 0 || rect.get_height() > 0 {
+      rect
+    } else {
+      element.get_bounding_client_rect()
+    }
   } else {
-    None
+    element.get_bounding_client_rect()
   }
+  (
+    @math.round(rect.get_left()).to_int(),
+    @math.round(rect.get_bottom()).to_int(),
+  )
 }
 
 ///|
-fn context_target(value : @js.Value) -> Result[ContextTarget, Unit] {
-  if value.is_null() {
-    return Ok(NoTarget)
+fn element_context(element : @dom.Element) -> ContextTarget {
+  if element.closest("[data-context-file]") is Some(file) &&
+    file.get_attribute("data-context-file") is Some(path) {
+    return FileLink(path)
   }
-  if value.is_undefined() {
-    return Err(())
+  guard element.closest("a[href]") is Some(anchor) &&
+    !anchor.has_attribute("download") else {
+    return NoTarget
   }
-  guard context_string_field(value, "kind") is Some(kind) else {
-    return Err(())
-  }
-  match kind {
-    "web" =>
-      match context_string_field(value, "url") {
-        Some(url) => Ok(WebLink(url))
-        None => Err(())
+  match anchor_protocol(anchor).to_lower() {
+    "http:" | "https:" => WebLink(anchor_href(anchor))
+    "mailto:" => {
+      let href = anchor.get_attribute("href").unwrap_or(anchor_href(anchor))
+      let raw = href[7:].split("?").next().unwrap_or(href[7:]).to_owned()
+      let address = @js.Error_::wrap(() => {
+        @js.Value::cast_from(decode_uri_component(raw))
+      }) catch {
+        _ => raw
       }
-    "email" =>
-      match
-        (
-          context_string_field(value, "url"),
-          context_string_field(value, "address"),
-        ) {
-        (Some(url), Some(address)) => Ok(EmailLink(url~, address~))
-        _ => Err(())
-      }
-    "file" =>
-      match context_string_field(value, "path") {
-        Some(path) => Ok(FileLink(path))
-        None => Err(())
-      }
-    _ => Err(())
+      EmailLink(url=anchor_href(anchor), address~)
+    }
+    _ => NoTarget
   }
 }
 
 ///|
-fn optional_context_string(value : @js.Value) -> Result[String?, Unit] {
-  if value.is_null() {
-    Ok(None)
-  } else if value.is_string() {
-    Ok(Some(value.cast()))
-  } else {
-    Err(())
+fn discard_temporary_focus(element : @dom.Element?) -> Unit {
+  if element is Some(element) &&
+    element.get_attribute("id") is Some(id) &&
+    element.get_attribute(TemporaryFocusAttribute) == Some(id) {
+    element.remove_attribute(TemporaryFocusAttribute)
+    element.remove_attribute("id")
   }
 }
 
 ///|
-fn context_request(
-  target : @js.Value,
-  selected_text : @js.Value,
-) -> ContextRequest? {
-  match (context_target(target), optional_context_string(selected_text)) {
-    (Ok(target), Ok(selected_text)) => Some({ target, selected_text, })
-    _ => None
-  }
-}
-
-///|
-extern "js" fn install_context_menu_listener(
+fn install_context_menu_listener(
   close : () -> Unit,
-  open : (@js.Value, @js.Value, @js.Value, Int, Int) -> Unit,
-) -> @js.Value =
-  #| (close, open) => {
-  #|   let rememberedSelection = null;
-  #|   let temporaryFocus = null;
-  #|   let nextFocusId = 0;
-  #|
-  #|   const discardTemporaryFocus = () => {
-  #|     if (temporaryFocus &&
-  #|         temporaryFocus.getAttribute("data-action-menu-temporary-focus") === temporaryFocus.id) {
-  #|       temporaryFocus.removeAttribute("data-action-menu-temporary-focus");
-  #|       temporaryFocus.removeAttribute("id");
-  #|     }
-  #|     temporaryFocus = null;
-  #|   };
-  #|
-  #|   const rememberFocus = () => {
-  #|     discardTemporaryFocus();
-  #|     const active = document.activeElement;
-  #|     if (!(active instanceof HTMLElement) || active === document.body) return null;
-  #|     if (active.id) return active.id;
-  #|     const id = `app-context-focus:${++nextFocusId}`;
-  #|     active.id = id;
-  #|     active.setAttribute("data-action-menu-temporary-focus", id);
-  #|     temporaryFocus = active;
-  #|     return id;
-  #|   };
-  #|
-  #|   const eventElement = (event) => {
-  #|     const target = event.target;
-  #|     if (target instanceof Element) return target;
-  #|     return target?.parentElement ?? null;
-  #|   };
-  #|
-  #|   const editable = (element) => {
-  #|     const control = element?.closest?.("input, textarea, select, [contenteditable]");
-  #|     if (!control) return false;
-  #|     return control.getAttribute("contenteditable") !== "false";
-  #|   };
-  #|
-  #|   const selectedAt = (element, x, y, keyboard) => {
-  #|     const selection = document.getSelection?.();
-  #|     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
-  #|     const text = selection.toString();
-  #|     if (text.length === 0) return null;
-  #|     for (let index = 0; index < selection.rangeCount; index += 1) {
-  #|       const range = selection.getRangeAt(index);
-  #|       if (keyboard) {
-  #|         try {
-  #|           if (element && range.intersectsNode(element)) return text;
-  #|         } catch (_) {}
-  #|       }
-  #|       for (const rect of range.getClientRects()) {
-  #|         if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-  #|           return text;
-  #|         }
-  #|       }
-  #|     }
-  #|     return null;
-  #|   };
-  #|
-  #|   const onMouseDown = (event) => {
-  #|     if (event.button !== 2) return;
-  #|     const element = eventElement(event);
-  #|     rememberedSelection = {
-  #|       x: event.clientX,
-  #|       y: event.clientY,
-  #|       text: selectedAt(element, event.clientX, event.clientY, false),
-  #|     };
-  #|   };
-  #|
-  #|   // Closing in capture means an editor-owned menu that stops propagation
-  #|   // still dismisses this surface. An unhandled event reopens it in the
-  #|   // bubble listener below, after every more-specific owner had a chance.
-  #|   const onContextCapture = () => {
-  #|     discardTemporaryFocus();
-  #|     close();
-  #|   };
-  #|
-  #|   const onContextMenu = (event) => {
-  #|     if (event.defaultPrevented) return;
-  #|     const element = eventElement(event);
-  #|     if (!element || editable(element)) return;
-  #|
-  #|     event.preventDefault();
-  #|     const keyboard = event.clientX === 0 && event.clientY === 0;
-  #|     let selected = selectedAt(element, event.clientX, event.clientY, keyboard);
-  #|     if (!selected && rememberedSelection &&
-  #|         Math.abs(rememberedSelection.x - event.clientX) <= 2 &&
-  #|         Math.abs(rememberedSelection.y - event.clientY) <= 2) {
-  #|       selected = rememberedSelection.text;
-  #|     }
-  #|     rememberedSelection = null;
-  #|
-  #|     let target = null;
-  #|     const file = element.closest?.("[data-context-file]");
-  #|     if (file) {
-  #|       const path = file.getAttribute("data-context-file");
-  #|       if (path !== null) target = { kind: "file", path };
-  #|     } else {
-  #|       const anchor = element.closest?.("a[href]");
-  #|       if (anchor && !anchor.hasAttribute("download")) {
-  #|         const protocol = anchor.protocol.toLowerCase();
-  #|         if (protocol === "http:" || protocol === "https:") {
-  #|           target = { kind: "web", url: anchor.href };
-  #|         } else if (protocol === "mailto:") {
-  #|           const raw = anchor.getAttribute("href")?.slice(7).split("?")[0] ?? "";
-  #|           let address = raw;
-  #|           try { address = decodeURIComponent(raw); } catch (_) {}
-  #|           target = { kind: "email", url: anchor.href, address };
-  #|         }
-  #|       }
-  #|     }
-  #|
-  #|     let x = event.clientX;
-  #|     let y = event.clientY;
-  #|     if (keyboard) {
-  #|       const selection = document.getSelection?.();
-  #|       const rangeRect = selection && selection.rangeCount > 0
-  #|         ? selection.getRangeAt(0).getBoundingClientRect()
-  #|         : null;
-  #|       const rect = rangeRect && (rangeRect.width > 0 || rangeRect.height > 0)
-  #|         ? rangeRect
-  #|         : element.getBoundingClientRect();
-  #|       x = rect.left;
-  #|       y = rect.bottom;
-  #|     }
-  #|     open(
-  #|       target,
-  #|       selected,
-  #|       rememberFocus(),
-  #|       Math.round(x),
-  #|       Math.round(y),
-  #|     );
-  #|   };
-  #|
-  #|   document.addEventListener("mousedown", onMouseDown, true);
-  #|   document.addEventListener("contextmenu", onContextCapture, true);
-  #|   document.addEventListener("contextmenu", onContextMenu);
-  #|   return { onMouseDown, onContextCapture, onContextMenu, discardTemporaryFocus };
-  #| }
-
-///|
-extern "js" fn remove_context_menu_listener(listeners : @js.Value) -> Unit =
-  #| (listeners) => {
-  #|   document.removeEventListener("mousedown", listeners.onMouseDown, true);
-  #|   document.removeEventListener("contextmenu", listeners.onContextCapture, true);
-  #|   document.removeEventListener("contextmenu", listeners.onContextMenu);
-  #|   listeners.discardTemporaryFocus();
-  #| }
+  open : (ContextRequest, String?, Int, Int) -> Unit,
+) -> () -> Unit {
+  let document = @dom.document()
+  let mut remembered_selection : (Int, Int, String?)? = None
+  let mut temporary_focus : @dom.Element? = None
+  let mut next_focus_id = 0
+  let remember_focus = () => {
+    discard_temporary_focus(temporary_focus)
+    temporary_focus = None
+    guard document.get_active_element() is Some(active) &&
+      active.to_html_element() is Some(_) &&
+      !active.matches("body") else {
+      return None
+    }
+    if active.get_attribute("id") is Some(id) && !id.is_empty() {
+      return Some(id)
+    }
+    next_focus_id += 1
+    let id = "app-context-focus:\{next_focus_id}"
+    active.set_attribute("id", id)
+    active.set_attribute(TemporaryFocusAttribute, id)
+    temporary_focus = Some(active)
+    Some(id)
+  }
+  let on_mouse_down : @dom.Listener = event => {
+    guard event.to_mouse_event() is Some(mouse) &&
+      mouse.get_button() == 2 &&
+      event_element(event) is Some(element) else {
+      return
+    }
+    let x = mouse.get_client_x()
+    let y = mouse.get_client_y()
+    remembered_selection = Some((x, y, selected_at(element, x, y, false)))
+  }
+  // Capture dismisses the previous surface even when an editor handles the
+  // event. App-owned text controls also run here, ahead of row handlers.
+  let on_context_capture : @dom.Listener = event => {
+    guard event_element(event) is Some(element) else { return }
+    if element.closest("[data-action-menu-surface]") is Some(_) {
+      return
+    }
+    discard_temporary_focus(temporary_focus)
+    temporary_focus = None
+    close()
+    guard element.closest("input, textarea") is Some(element) &&
+      element.closest(".monaco-editor, .xterm") is None &&
+      TextControl::from_element(element).to_option() is Some(input) &&
+      input.kind()
+      is ("text"
+      | "search"
+      | "url"
+      | "tel"
+      | "email"
+      | "password"
+      | "number"
+      | "textarea") &&
+      event.to_mouse_event() is Some(mouse) else {
+      return
+    }
+    event.prevent_default()
+    event.stop_propagation()
+    if input.disabled() {
+      return
+    }
+    focus_without_scroll(input.element())
+    let (x, y) = if mouse.get_client_x() == 0 && mouse.get_client_y() == 0 {
+      keyboard_anchor(element, false)
+    } else {
+      (mouse.get_client_x(), mouse.get_client_y())
+    }
+    let restore = remember_focus()
+    open(
+      { target: TextInput(capture_text_edit(input)), selected_text: None, },
+      restore,
+      x,
+      y,
+    )
+  }
+  // Other owners get first refusal through ordinary DOM bubbling.
+  let on_context_menu : @dom.Listener = event => {
+    guard !event.get_default_prevented() &&
+      event_element(event) is Some(element) &&
+      event.to_mouse_event() is Some(mouse) else {
+      return
+    }
+    if element.closest("input, textarea, select, [contenteditable]")
+      is Some(control) &&
+      control.get_attribute("contenteditable") != Some("false") {
+      return
+    }
+    event.prevent_default()
+    let x = mouse.get_client_x()
+    let y = mouse.get_client_y()
+    let keyboard = x == 0 && y == 0
+    let mut selected_text = selected_at(element, x, y, keyboard)
+    if selected_text is None &&
+      remembered_selection is Some((old_x, old_y, text)) &&
+      (old_x - x).abs() <= 2 &&
+      (old_y - y).abs() <= 2 {
+      selected_text = text
+    }
+    remembered_selection = None
+    let (x, y) = if keyboard { keyboard_anchor(element, true) } else { (x, y) }
+    open(
+      { target: element_context(element), selected_text, },
+      remember_focus(),
+      x,
+      y,
+    )
+  }
+  document.add_event_listener_with_options(
+    "mousedown",
+    on_mouse_down,
+    capture=true,
+  )
+  document.add_event_listener_with_options(
+    "contextmenu",
+    on_context_capture,
+    capture=true,
+  )
+  document.add_event_listener("contextmenu", on_context_menu)
+  () => {
+    document.remove_event_listener_with_options(
+      "mousedown",
+      on_mouse_down,
+      capture=true,
+    )
+    document.remove_event_listener_with_options(
+      "contextmenu",
+      on_context_capture,
+      capture=true,
+    )
+    document.remove_event_listener("contextmenu", on_context_menu)
+    discard_temporary_focus(temporary_focus)
+  }
+}
 
 ///|
 priv suberror ContextMenuSubscription {
@@ -300,22 +332,14 @@ fn context_menu_subscription(emit : @cmd.Emit[ContextMsg]) -> @sub.Sub {
   ) => {
     guard payload is ContextMenuSubscription(emit) else { return None }
     let mut emit = emit
-    let listeners = install_context_menu_listener(
+    let unload = install_context_menu_listener(
       () => scheduler.add(emit(CloseContext)),
-      (target, selected_text, restore_focus, x, y) => {
-        match
-          (
-            context_request(target, selected_text),
-            optional_context_string(restore_focus),
-          ) {
-          (Some(request), Ok(restore_focus_id)) =>
-            scheduler.add(emit(Requested(request, x, y, restore_focus_id)))
-          _ => ()
-        }
+      (request, restore, x, y) => {
+        scheduler.add(emit(Requested(request, x, y, restore)))
       },
     )
     Some({
-      unload: _ => remove_context_menu_listener(listeners),
+      unload: _ => unload(),
       update_tagger: payload => {
         guard payload is ContextMenuSubscription(next) else { return }
         emit = next
@@ -365,6 +389,8 @@ fn context_definition(
   let navigation : Array[Entry] = []
   let clipboard : Array[Entry] = []
   match request.target {
+    TextInput(edit) =>
+      return Some(text_edit_definition(edit, actions.edit_failed))
     NoTarget => ()
     WebLink(url) => {
       if input.platform is Web {
@@ -474,12 +500,12 @@ pub fn context_component(
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
     init=(_, _) => ({ open_context: None, }, @cmd.none),
-    update=(_state, input, msg, _) => {
+    update=(state, input, msg, _) => {
       match msg {
         Requested(request, x, y, restore_focus_id) => {
           guard context_definition(input, request, actions) is Some(definition) &&
             definition.enabled_indices() is [_, ..] else {
-            return ({ open_context: None, }, @cmd.none)
+            return ({ open_context: None, }, request.finish())
           }
           let open : ContextOpen = { request, x, y, restore_focus_id, }
           (
@@ -490,7 +516,13 @@ pub fn context_component(
             ]),
           )
         }
-        CloseContext => ({ open_context: None, }, @cmd.none)
+        CloseContext => {
+          let finish = match state.open_context {
+            Some(open) => open.request.finish()
+            _ => @cmd.none
+          }
+          ({ open_context: None, }, finish)
+        }
       }
     },
     subscriptions=(state, input, emit) => {

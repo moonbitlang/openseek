@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/math",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/clipboard",
   "moonbit-community/rabbita/cmd",
@@ -7,6 +8,7 @@ import {
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",
   "openseek_desktop/frontend/icons",
+  "openseek_desktop/frontend/interop",
 }
 
 supported_targets = "js"
