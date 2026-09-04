@@ -107,10 +107,6 @@ extern "js" fn TextControl::set_selection(
   #| (input, start, end, direction) => input.setSelectionRange(start, end, direction)
 
 ///|
-extern "js" fn TextControl::select_all(self : TextControl) -> Unit =
-  #| input => input.select()
-
-///|
 extern "js" fn focus_without_scroll(element : @dom.HTMLElement) -> Unit =
   #| element => element.focus({ preventScroll: true })
 
@@ -128,10 +124,6 @@ extern "js" fn browser_edit_command(
   text : @js.Nullable[String],
 ) -> Bool =
   #| (command, text) => document.execCommand(command, false, text)
-
-///|
-extern "js" fn browser_edit_enabled(command : String) -> Bool =
-  #| command => document.queryCommandEnabled(command)
 
 ///|
 extern "js" fn anchor_href(anchor : @dom.Element) -> String =

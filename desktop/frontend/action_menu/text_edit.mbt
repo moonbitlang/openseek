@@ -16,12 +16,9 @@ fn TextControl::selection(self : TextControl) -> TextSelection? {
 
 ///|
 priv enum EditAction {
-  Undo
-  Redo
   Cut
   Copy
   Paste
-  SelectAll
 } derive(Eq)
 
 ///|
@@ -51,12 +48,6 @@ fn capture_text_edit(input : TextControl) -> TextEdit {
   let readable = !input.disabled() && input.kind() != "password"
   let selected = selection is Some({ start, end, .. }) && start != end
   let enabled : Array[EditAction] = []
-  if writable && browser_edit_enabled("undo") {
-    enabled.push(Undo)
-  }
-  if writable && browser_edit_enabled("redo") {
-    enabled.push(Redo)
-  }
   if writable && readable && selected {
     enabled.push(Cut)
   }
@@ -65,9 +56,6 @@ fn capture_text_edit(input : TextControl) -> TextEdit {
   }
   if writable {
     enabled.push(Paste)
-  }
-  if !input.disabled() && !value.is_empty() {
-    enabled.push(SelectAll)
   }
   let on_blur : @dom.Listener = event => {
     guard event.to_focus_event() is Some(focus) else { return }
@@ -259,9 +247,6 @@ async fn TextEdit::execute(self : TextEdit, action : EditAction) -> Unit {
         self.apply("insertText", text~)
       }
     }
-    SelectAll => self.input.select_all()
-    Undo => self.apply("undo")
-    Redo => self.apply("redo")
   }
 }
 
@@ -271,19 +256,8 @@ fn text_edit_definition(
   failed : (String) -> @cmd.Cmd,
 ) -> Definition {
   let entries : Array[Entry] = []
-  for
-    pair in [
-      (Undo, "Undo"),
-      (Redo, "Redo"),
-      (Cut, "Cut"),
-      (Copy, "Copy"),
-      (Paste, "Paste"),
-      (SelectAll, "Select All"),
-    ] {
+  for pair in [(Cut, "Cut"), (Copy, "Copy"), (Paste, "Paste")] {
     let (action, label) = pair
-    if action is (Cut | SelectAll) {
-      entries.push(Separator)
-    }
     entries.push(
       Action({
         label,
