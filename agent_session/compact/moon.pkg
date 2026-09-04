@@ -16,4 +16,4 @@ import {
   "moonbitlang/async",
 } for "wbtest"
 
-supported_targets = "+native"
+supported_targets = "+wasm+native"

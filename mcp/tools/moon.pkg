@@ -22,4 +22,4 @@ import {
   "moonbitlang/core/json",
 } for "test"
 
-supported_targets = "+native"
+supported_targets = "+wasm+native"

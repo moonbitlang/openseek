@@ -15,7 +15,7 @@ import {
 
 warnings = "+unnecessary_annotation"
 
-supported_targets = "+native"
+supported_targets = "+wasm+native"
 
 import {
   "moonbitlang/async",

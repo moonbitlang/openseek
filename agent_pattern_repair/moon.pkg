@@ -5,7 +5,7 @@ import {
   "moonbitlang/core/json",
 }
 
-supported_targets = "+native"
+supported_targets = "+wasm+native"
 
 dev_build(
   rule: "md_to_mbt_string",

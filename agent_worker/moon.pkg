@@ -30,4 +30,4 @@ dev_build(
 
 warnings = "+unnecessary_annotation"
 
-supported_targets = "+native"
+supported_targets = "+wasm+native"

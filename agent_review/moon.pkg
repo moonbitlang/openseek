@@ -20,4 +20,4 @@ dev_build(
   output: "generated_audit_system_prompt.mbt",
 )
 
-supported_targets = "+native"
+supported_targets = "+wasm+native"

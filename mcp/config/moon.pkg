@@ -1,1 +1,1 @@
-supported_targets = "+native"
+supported_targets = "+wasm+native"
