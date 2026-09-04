@@ -1137,6 +1137,7 @@ async test "a discarded command answers its sender" {
 #cfg(not(platform="windows"))
 async test "setup failure retires the writer before an immediate next start" {
   let dir = @fs.tmpdir(prefix="openseek-setup-failed-seam-")
+  defer @fs.rmdir(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   // A run is handed the global skills library under `HOME`. Own it, so this
   // test neither races one that moves `HOME` nor reads the developer's own.
@@ -1240,7 +1241,6 @@ async test "setup failure retires the writer before an immediate next start" {
     assert_eq(first_finishes, 1)
     group.return_immediately(())
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
