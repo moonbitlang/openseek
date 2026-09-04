@@ -1301,7 +1301,20 @@ fn CodexItem::decode(
     @jsonx.json_text(fields, "type") is Some(kind) else {
     return None
   }
-  Some({
+  Some(CodexItem(id, kind, value, completed~, ts?))
+}
+
+///|
+/// A freshly observed item: nothing streamed yet, and its reasoning sections
+/// still empty until their deltas arrive.
+fn CodexItem::CodexItem(
+  id : String,
+  kind : String,
+  value : Json,
+  completed? : Bool = true,
+  ts? : Double,
+) -> CodexItem {
+  {
     id,
     kind,
     value,
@@ -1310,7 +1323,7 @@ fn CodexItem::decode(
     streamed: "",
     reasoning_summary: CodexReasoningParts([]),
     reasoning_content: CodexReasoningParts([]),
-  })
+  }
 }
 
 ///|
@@ -2141,24 +2154,6 @@ fn CodexTurn::with_item(
 }
 
 ///|
-fn CodexTurn::with_delta(
-  self : CodexTurn,
-  item_id : String,
-  delta : String,
-) -> CodexTurn {
-  {
-    ..self,
-    items: self.items.map(item => {
-      if item.id == item_id {
-        { ..item, streamed: item.streamed + delta, }
-      } else {
-        item
-      }
-    }),
-  }
-}
-
-///|
 /// Ensure an indexed section exists without changing an already accumulated
 /// section. `summaryPartAdded` reaches this method before its text deltas.
 fn CodexReasoningParts::with_part(
@@ -2206,72 +2201,70 @@ fn CodexReasoningParts::text(self : CodexReasoningParts) -> String {
 }
 
 ///|
-fn CodexTurn::with_reasoning_summary_part(
-  self : CodexTurn,
-  item_id : String,
-  summary_index : Int?,
-) -> CodexTurn {
+/// Apply one change to the turn with this id. Unknown turn ids stay inert: a
+/// notification-only fact must not invent a turn, its transcript, or Stop
+/// authority.
+fn CodexThread::update_turn(
+  self : CodexThread,
+  turn_id : String,
+  f : (CodexTurn) -> CodexTurn,
+) -> CodexThread {
   {
     ..self,
-    items: self.items.map(item => {
-      if item.id == item_id && item.kind == "reasoning" {
-        {
-          ..item,
-          reasoning_summary: item.reasoning_summary.with_part(summary_index),
-        }
+    turns: self.turns.map(turn => {
+      if turn.id == turn_id {
+        f(turn)
       } else {
-        item
+        turn
       }
     }),
   }
 }
 
 ///|
-fn CodexTurn::with_reasoning_summary_delta(
-  self : CodexTurn,
+/// Apply one change to the item with this id inside the turn with that id.
+/// Unknown turn or item ids stay inert until their lifecycle item arrives.
+fn CodexThread::update_item(
+  self : CodexThread,
+  turn_id : String,
   item_id : String,
-  summary_index : Int?,
-  delta : String,
-) -> CodexTurn {
-  {
-    ..self,
-    items: self.items.map(item => {
-      if item.id == item_id && item.kind == "reasoning" {
-        {
-          ..item,
-          reasoning_summary: item.reasoning_summary.with_delta(
-            summary_index, delta,
-          ),
-        }
+  f : (CodexItem) -> CodexItem,
+) -> CodexThread {
+  self.update_turn(turn_id, turn => {
+    ..turn,
+    items: turn.items.map(item => {
+      if item.id == item_id {
+        f(item)
       } else {
         item
       }
     }),
-  }
+  })
 }
 
 ///|
-fn CodexTurn::with_reasoning_content_delta(
-  self : CodexTurn,
-  item_id : String,
-  content_index : Int?,
-  delta : String,
-) -> CodexTurn {
-  {
-    ..self,
-    items: self.items.map(item => {
-      if item.id == item_id && item.kind == "reasoning" {
-        {
-          ..item,
-          reasoning_content: item.reasoning_content.with_delta(
-            content_index, delta,
-          ),
-        }
-      } else {
-        item
-      }
-    }),
+/// Apply one change to the turn with this id, minting a local in-progress
+/// turn first when an item arrives before its lifecycle envelope. The server
+/// never stated an items view for a minted turn.
+fn CodexThread::update_or_mint_turn(
+  self : CodexThread,
+  turn_id : String,
+  f : (CodexTurn) -> CodexTurn,
+) -> CodexThread {
+  if self.turns.iter().any(turn => turn.id == turn_id) {
+    return self.update_turn(turn_id, f)
   }
+  let minted : CodexTurn = {
+    id: turn_id,
+    status: "inProgress",
+    started_at: None,
+    completed_at: None,
+    latest_usage_tokens: None,
+    items: [],
+    items_view: None,
+    error: None,
+  }
+  { ..self, turns: [..self.turns, f(minted)], }
 }
 
 ///|
@@ -2320,26 +2313,6 @@ fn CodexThread::with_turn(self : CodexThread, turn : CodexTurn) -> CodexThread {
     turns.push(turn)
   }
   { ..self, turns, }
-}
-
-///|
-/// Replace one turn's latest model-call usage. Unknown turn ids stay inert:
-/// accounting data must not invent transcript or Stop authority.
-fn CodexThread::with_latest_usage(
-  self : CodexThread,
-  turn_id : String,
-  tokens : Int,
-) -> CodexThread {
-  {
-    ..self,
-    turns: self.turns.map(turn => {
-      if turn.id == turn_id {
-        { ..turn, latest_usage_tokens: Some(tokens), }
-      } else {
-        turn
-      }
-    }),
-  }
 }
 
 ///|
@@ -2443,30 +2416,7 @@ fn CodexThread::with_item(
   item : CodexItem,
   completed~ : Bool,
 ) -> CodexThread {
-  let mut found = false
-  let turns = self.turns.map(turn => {
-    if turn.id == turn_id {
-      found = true
-      turn.with_item(item, completed~)
-    } else {
-      turn
-    }
-  })
-  if !found {
-    turns.push({
-      id: turn_id,
-      status: "inProgress",
-      started_at: None,
-      completed_at: None,
-      latest_usage_tokens: None,
-      items: [item],
-      // Locally minted to hold an early item; the server never stated an
-      // items view for it.
-      items_view: None,
-      error: None,
-    })
-  }
-  { ..self, turns, }
+  self.update_or_mint_turn(turn_id, turn => turn.with_item(item, completed~))
 }
 
 ///|
@@ -2493,46 +2443,19 @@ fn CodexThread::with_plan_update(
     steps.push({ "title": title, "status": status })
   }
   let id = "openseek-plan:\{turn_id}"
-  let value : Json = {
+  let item = CodexItem(id, "planUpdate", {
     "id": id,
     "type": "planUpdate",
     "steps": Json::array(steps),
     "explanation": fields.get("explanation").unwrap_or(Json::null()),
-  }
-  let item : CodexItem = {
-    id,
-    kind: "planUpdate",
-    value,
-    completed: true,
-    ts: None,
-    streamed: "",
-    reasoning_summary: CodexReasoningParts([]),
-    reasoning_content: CodexReasoningParts([]),
-  }
-  let mut found = false
-  let turns = self.turns.map(turn => {
-    if turn.id == turn_id {
-      found = true
-      let items = turn.items.filter(existing => existing.kind != "planUpdate")
-      items.push(item)
-      { ..turn, items, }
-    } else {
-      turn
-    }
   })
-  if !found {
-    turns.push({
-      id: turn_id,
-      status: "inProgress",
-      started_at: None,
-      completed_at: None,
-      latest_usage_tokens: None,
-      items: [item],
-      items_view: None,
-      error: None,
-    })
-  }
-  { ..self, turns, }
+  self.update_or_mint_turn(turn_id, turn => {
+    ..turn,
+    items: [
+      ..turn.items.filter(existing => existing.kind != "planUpdate"),
+      item,
+    ],
+  })
 }
 
 ///|
@@ -2542,112 +2465,10 @@ fn CodexThread::with_delta(
   item_id : String,
   delta : String,
 ) -> CodexThread {
-  {
-    ..self,
-    turns: self.turns.map(turn => {
-      if turn.id == turn_id {
-        turn.with_delta(item_id, delta)
-      } else {
-        turn
-      }
-    }),
-  }
-}
-
-///|
-/// Preserve app-server's indexed reasoning summary boundaries on the owning
-/// turn. Unknown turn or item ids stay inert until their lifecycle item arrives.
-fn CodexThread::with_reasoning_summary_part(
-  self : CodexThread,
-  turn_id : String,
-  item_id : String,
-  summary_index : Int?,
-) -> CodexThread {
-  {
-    ..self,
-    turns: self.turns.map(turn => {
-      if turn.id == turn_id {
-        turn.with_reasoning_summary_part(item_id, summary_index)
-      } else {
-        turn
-      }
-    }),
-  }
-}
-
-///|
-fn CodexThread::with_reasoning_summary_delta(
-  self : CodexThread,
-  turn_id : String,
-  item_id : String,
-  summary_index : Int?,
-  delta : String,
-) -> CodexThread {
-  {
-    ..self,
-    turns: self.turns.map(turn => {
-      if turn.id == turn_id {
-        turn.with_reasoning_summary_delta(item_id, summary_index, delta)
-      } else {
-        turn
-      }
-    }),
-  }
-}
-
-///|
-fn CodexThread::with_reasoning_content_delta(
-  self : CodexThread,
-  turn_id : String,
-  item_id : String,
-  content_index : Int?,
-  delta : String,
-) -> CodexThread {
-  {
-    ..self,
-    turns: self.turns.map(turn => {
-      if turn.id == turn_id {
-        turn.with_reasoning_content_delta(item_id, content_index, delta)
-      } else {
-        turn
-      }
-    }),
-  }
-}
-
-///|
-/// Adopt app-server's authoritative live patch for one file-change item. The
-/// item id and all lifecycle fields stay untouched; only the `changes` payload
-/// that the shared diff card reads is replaced.
-fn CodexThread::with_file_changes(
-  self : CodexThread,
-  turn_id : String,
-  item_id : String,
-  changes : Json,
-) -> CodexThread {
-  {
-    ..self,
-    turns: self.turns.map(turn => {
-      if turn.id == turn_id {
-        {
-          ..turn,
-          items: turn.items.map(item => {
-            if item.id == item_id &&
-              item.kind == "fileChange" &&
-              item.value is Object(fields) {
-              let fields = fields.copy()
-              fields["changes"] = changes
-              { ..item, value: Json::object(fields), }
-            } else {
-              item
-            }
-          }),
-        }
-      } else {
-        turn
-      }
-    }),
-  }
+  self.update_item(turn_id, item_id, item => {
+    ..item,
+    streamed: item.streamed + delta,
+  })
 }
 
 ///|
@@ -2700,164 +2521,139 @@ fn State::with_notification(
     thread_id.unwrap_or(active.id) == active.id else {
     return observed
   }
-  let next = match method_ {
-    "thread/name/updated" =>
+  // Every per-turn notification below lands in the selected stored task.
+  let with_active = (thread : CodexThread) => {
+    ..observed,
+    selection: CodexStoredTask(thread),
+  }
+  let turn_id = @jsonx.json_text(fields, "turnId")
+  let item_id = @jsonx.json_text(fields, "itemId")
+  let delta = @jsonx.json_text(fields, "delta")
+  let next = match (method_, turn_id, item_id) {
+    ("thread/name/updated", _, _) =>
       if @jsonx.json_text(fields, "name") is Some(title) {
-        { ..observed, selection: CodexStoredTask({ ..active, title, }), }
+        with_active({ ..active, title, })
       } else {
         observed
       }
-    "turn/started" | "turn/completed" =>
+    ("turn/started" | "turn/completed", _, _) =>
       if fields.get("turn") is Some(value) &&
         CodexTurn::decode(value) is Some(turn) {
-        { ..observed, selection: CodexStoredTask(active.with_turn(turn)), }
+        with_active(active.with_turn(turn))
       } else {
         observed
       }
-    "thread/tokenUsage/updated" =>
-      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
-        fields.get("tokenUsage") is Some(Object(usage)) &&
+    ("thread/tokenUsage/updated", Some(turn_id), _) =>
+      if fields.get("tokenUsage") is Some(Object(usage)) &&
         usage.get("last") is Some(Object(last)) &&
         @jsonx.json_int(last, "totalTokens") is Some(tokens) &&
         tokens >= 0 {
-        {
-          ..observed,
-          selection: CodexStoredTask(active.with_latest_usage(turn_id, tokens)),
-        }
+        with_active(
+          active.update_turn(turn_id, turn => {
+            ..turn,
+            latest_usage_tokens: Some(tokens),
+          }),
+        )
       } else {
         observed
       }
-    "turn/plan/updated" =>
-      if @jsonx.json_text(fields, "turnId") is Some(turn_id) {
-        {
-          ..observed,
-          selection: CodexStoredTask(active.with_plan_update(turn_id, fields)),
-        }
+    ("turn/plan/updated", Some(turn_id), _) =>
+      with_active(active.with_plan_update(turn_id, fields))
+    ("item/started" | "item/completed", Some(turn_id), _) => {
+      let completed = method_ == "item/completed"
+      let ts = match
+        fields.get(if completed { "completedAtMs" } else { "startedAtMs" }) {
+        Some(Number(value, ..)) => Some(value)
+        _ => None
+      }
+      if fields.get("item") is Some(value) &&
+        CodexItem::decode(value, completed~, ts?) is Some(item) {
+        with_active(active.with_item(turn_id, item, completed~))
       } else {
         observed
       }
-    "item/started" | "item/completed" =>
-      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
-        fields.get("item") is Some(value) {
-        let completed = method_ == "item/completed"
-        let ts = match
-          fields.get(if completed { "completedAtMs" } else { "startedAtMs" }) {
-          Some(Number(value, ..)) => Some(value)
-          _ => None
-        }
-        if CodexItem::decode(value, completed~, ts?) is Some(item) {
-          {
-            ..observed,
-            selection: CodexStoredTask(
-              active.with_item(turn_id, item, completed~),
-            ),
-          }
-        } else {
-          observed
-        }
+    }
+    (
+      "item/agentMessage/delta"
+      | "item/plan/delta"
+      | "item/commandExecution/outputDelta"
+      | "item/fileChange/outputDelta",
+      Some(turn_id),
+      Some(item_id),
+    ) =>
+      if delta is Some(delta) {
+        with_active(active.with_delta(turn_id, item_id, delta))
       } else {
         observed
       }
-    "item/agentMessage/delta"
-    | "item/plan/delta"
-    | "item/commandExecution/outputDelta"
-    | "item/fileChange/outputDelta" =>
-      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
-        @jsonx.json_text(fields, "itemId") is Some(item_id) &&
-        @jsonx.json_text(fields, "delta") is Some(delta) {
-        {
-          ..observed,
-          selection: CodexStoredTask(active.with_delta(turn_id, item_id, delta)),
-        }
+    ("item/mcpToolCall/progress", Some(turn_id), Some(item_id)) =>
+      if @jsonx.json_text(fields, "message") is Some(message) {
+        with_active(active.with_delta(turn_id, item_id, "\{message}\n"))
       } else {
         observed
       }
-    "item/reasoning/summaryPartAdded" =>
-      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
-        @jsonx.json_text(fields, "itemId") is Some(item_id) {
-        {
-          ..observed,
-          selection: CodexStoredTask(
-            active.with_reasoning_summary_part(
-              turn_id,
-              item_id,
-              @jsonx.json_int(fields, "summaryIndex"),
-            ),
+    // Indexed reasoning sections accumulate on the item; the summary and raw
+    // streams stay separate so neither can interleave into the other.
+    ("item/reasoning/summaryPartAdded", Some(turn_id), Some(item_id)) =>
+      with_active(
+        active.update_item(turn_id, item_id, item => {
+          ..item,
+          reasoning_summary: item.reasoning_summary.with_part(
+            @jsonx.json_int(fields, "summaryIndex"),
           ),
-        }
-      } else {
-        observed
-      }
-    "item/reasoning/summaryTextDelta" =>
-      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
-        @jsonx.json_text(fields, "itemId") is Some(item_id) &&
-        @jsonx.json_text(fields, "delta") is Some(delta) {
-        {
-          ..observed,
-          selection: CodexStoredTask(
-            active.with_reasoning_summary_delta(
-              turn_id,
-              item_id,
+        }),
+      )
+    ("item/reasoning/summaryTextDelta", Some(turn_id), Some(item_id)) =>
+      if delta is Some(delta) {
+        with_active(
+          active.update_item(turn_id, item_id, item => {
+            ..item,
+            reasoning_summary: item.reasoning_summary.with_delta(
               @jsonx.json_int(fields, "summaryIndex"),
               delta,
             ),
-          ),
-        }
+          }),
+        )
       } else {
         observed
       }
-    "item/reasoning/textDelta" =>
-      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
-        @jsonx.json_text(fields, "itemId") is Some(item_id) &&
-        @jsonx.json_text(fields, "delta") is Some(delta) {
-        {
-          ..observed,
-          selection: CodexStoredTask(
-            active.with_reasoning_content_delta(
-              turn_id,
-              item_id,
+    ("item/reasoning/textDelta", Some(turn_id), Some(item_id)) =>
+      if delta is Some(delta) {
+        with_active(
+          active.update_item(turn_id, item_id, item => {
+            ..item,
+            reasoning_content: item.reasoning_content.with_delta(
               @jsonx.json_int(fields, "contentIndex"),
               delta,
             ),
-          ),
-        }
+          }),
+        )
       } else {
         observed
       }
-    "item/mcpToolCall/progress" =>
-      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
-        @jsonx.json_text(fields, "itemId") is Some(item_id) &&
-        @jsonx.json_text(fields, "message") is Some(message) {
-        {
-          ..observed,
-          selection: CodexStoredTask(
-            active.with_delta(turn_id, item_id, "\{message}\n"),
-          ),
-        }
+    // App-server's live patch is authoritative for the `changes` payload the
+    // shared diff card reads; the item id and lifecycle fields stay untouched.
+    ("item/fileChange/patchUpdated", Some(turn_id), Some(item_id)) =>
+      if fields.get("changes") is Some(changes) {
+        with_active(
+          active.update_item(turn_id, item_id, item => {
+            guard item.value is Object(value) else { return item }
+            let value = value.copy()
+            value["changes"] = changes
+            { ..item, value: Json::object(value), }
+          }),
+        )
       } else {
         observed
       }
-    "item/fileChange/patchUpdated" =>
-      if @jsonx.json_text(fields, "turnId") is Some(turn_id) &&
-        @jsonx.json_text(fields, "itemId") is Some(item_id) &&
-        fields.get("changes") is Some(changes) {
-        {
-          ..observed,
-          selection: CodexStoredTask(
-            active.with_file_changes(turn_id, item_id, changes),
-          ),
-        }
-      } else {
-        observed
-      }
-    "error" =>
+    ("error", _, _) =>
       if fields.get("error") is Some(Object(error)) &&
         @jsonx.json_text(error, "message") is Some(message) {
         { ..observed, notice: message, }
       } else {
         observed
       }
-    "warning" =>
+    ("warning", _, _) =>
       if @jsonx.json_text(fields, "message") is Some(message) {
         { ..observed, notice: message, }
       } else {
@@ -3296,24 +3092,13 @@ fn CodexItem::tool_arguments(self : CodexItem) -> String? {
   }
   match self.kind {
     "commandExecution" => {
-      // app-server omits metadata it does not know. Keep that absence in the
-      // shared arguments object instead of inventing empty-string values.
-      let arguments : Map[String, Json] = Map([])
-      if self.command_read_action() is Some(action) {
-        if @jsonx.json_text(action, "path") is Some(path) {
-          arguments["path"] = Json(path)
-        }
-        if @jsonx.json_text(action, "name") is Some(name) {
-          arguments["name"] = Json(name)
-        }
-        if @jsonx.json_text(action, "command") is Some(command) {
-          arguments["command"] = Json(command)
-        }
-      } else if @jsonx.json_text(fields, "command") is Some(command) {
-        arguments["command"] = Json(command)
+      let arguments = if self.command_read_action() is Some(action) {
+        supplied(action, ["path", "name", "command"])
+      } else {
+        supplied(fields, ["command"])
       }
-      if @jsonx.json_text(fields, "cwd") is Some(cwd) {
-        arguments["cwd"] = Json(cwd)
+      if fields.get("cwd") is Some(cwd) {
+        arguments["cwd"] = cwd
       }
       Some(Json::object(arguments).stringify())
     }
@@ -3330,85 +3115,79 @@ fn CodexItem::tool_arguments(self : CodexItem) -> String? {
       }
     "mcpToolCall" | "dynamicToolCall" =>
       fields.get("arguments").map(value => value.stringify())
-    "collabAgentToolCall" => {
-      let arguments : Map[String, Json] = Map([])
-      if @jsonx.json_text(fields, "tool") is Some(tool) {
-        arguments["tool"] = Json(tool)
-      }
-      for
-        key in [
-          "prompt", "model", "reasoningEffort", "senderThreadId", "receiverThreadIds",
-        ] {
-        if fields.get(key) is Some(value) {
-          arguments[key] = value
-        }
-      }
-      Some(Json::object(arguments).stringify())
-    }
-    "subAgentActivity" => {
-      let arguments : Map[String, Json] = Map([])
-      for key in ["agentPath", "agentThreadId", "kind"] {
-        if @jsonx.json_text(fields, key) is Some(value) {
-          arguments[key] = Json(value)
-        }
-      }
-      Some(Json::object(arguments).stringify())
-    }
+    "collabAgentToolCall" =>
+      Some(
+        Json::object(
+          supplied(fields, [
+            "tool", "prompt", "model", "reasoningEffort", "senderThreadId", "receiverThreadIds",
+          ]),
+        ).stringify(),
+      )
+    "subAgentActivity" =>
+      Some(
+        Json::object(supplied(fields, ["agentPath", "agentThreadId", "kind"])).stringify(),
+      )
     "hookPrompt" =>
       fields
       .get("fragments")
-      .map(fragments => {
-        let arguments : Json = { "fragments": fragments }
-        arguments.stringify()
-      })
-    "webSearch" => {
-      let arguments : Map[String, Json] = Map([])
-      if @jsonx.json_text(fields, "query") is Some(query) {
-        arguments["query"] = Json(query)
-      }
-      if fields.get("action") is Some(action) {
-        arguments["action"] = action
-      }
-      Some(Json::object(arguments).stringify())
-    }
-    "imageView" => {
-      let arguments : Map[String, Json] = Map([])
-      if @jsonx.json_text(fields, "path") is Some(path) {
-        arguments["path"] = Json(path)
-      }
-      Some(Json::object(arguments).stringify())
-    }
+      .map(fragments => Json::object({ "fragments": fragments }).stringify())
+    "webSearch" =>
+      Some(Json::object(supplied(fields, ["query", "action"])).stringify())
+    "imageView" => Some(Json::object(supplied(fields, ["path"])).stringify())
     "sleep" =>
       fields
       .get("durationMs")
-      .map(duration => {
-        let arguments : Json = { "durationMs": duration }
-        arguments.stringify()
-      })
-    "imageGeneration" => {
-      let arguments : Map[String, Json] = Map([])
-      for key in ["revisedPrompt", "transparentBackground"] {
-        if fields.get(key) is Some(value) {
-          arguments[key] = value
-        }
-      }
-      Some(Json::object(arguments).stringify())
-    }
-    "enteredReviewMode" | "exitedReviewMode" => {
-      let arguments : Map[String, Json] = Map([])
-      if @jsonx.json_text(fields, "review") is Some(review) {
-        arguments["review"] = Json(review)
-      }
-      Some(Json::object(arguments).stringify())
-    }
+      .map(duration => Json::object({ "durationMs": duration }).stringify())
+    "imageGeneration" =>
+      Some(
+        Json::object(
+          supplied(fields, ["revisedPrompt", "transparentBackground"]),
+        ).stringify(),
+      )
+    "enteredReviewMode" | "exitedReviewMode" =>
+      Some(Json::object(supplied(fields, ["review"])).stringify())
     "planUpdate" =>
       fields
       .get("steps")
-      .map(steps => {
-        let arguments : Json = { "steps": steps }
-        arguments.stringify()
-      })
+      .map(steps => Json::object({ "steps": steps }).stringify())
     _ => Some(self.value.stringify())
+  }
+}
+
+///|
+/// The listed keys app-server actually supplied, in that order. Absent
+/// metadata stays absent: an empty string, null, or empty collection can be a
+/// real supplied value and must not be invented as a missing-field marker.
+fn supplied(
+  fields : Map[String, Json],
+  keys : Array[String],
+) -> Map[String, Json] {
+  let picked : Map[String, Json] = Map([])
+  for key in keys {
+    if fields.get(key) is Some(value) {
+      picked[key] = value
+    }
+  }
+  picked
+}
+
+///|
+/// The joined text of a content list whose every block is text of this type,
+/// or `None` when any block is something the shared row must show as JSON.
+fn text_blocks(blocks : Array[Json], type_ : String) -> String? {
+  let text : Array[String] = []
+  for block in blocks {
+    guard block is Object(content) &&
+      @jsonx.json_text(content, "type") == Some(type_) &&
+      @jsonx.json_text(content, "text") is Some(value) else {
+      return None
+    }
+    text.push(value)
+  }
+  if text.is_empty() {
+    None
+  } else {
+    Some(text.join("\n"))
   }
 }
 
@@ -3460,47 +3239,23 @@ fn CodexItem::tool_output(self : CodexItem) -> String {
         return message
       }
       if fields.get("result") is Some(Object(result)) &&
-        result.get("content") is Some(Array(blocks)) {
-        let text : Array[String] = []
-        let mut text_only = true
-        for block in blocks {
-          if block is Object(content) &&
-            @jsonx.json_text(content, "type") is Some("text") &&
-            @jsonx.json_text(content, "text") is Some(value) {
-            text.push(value)
-          } else {
-            text_only = false
-          }
-        }
-        if text_only && !text.is_empty() {
-          return text.join("\n")
-        }
+        result.get("content") is Some(Array(blocks)) &&
+        text_blocks(blocks, "text") is Some(text) {
+        return text
       }
       match fields.get("result") {
         Some(Null) | None => self.streamed
         Some(result) => result.stringify(indent=2)
       }
     }
-    "dynamicToolCall" => {
+    "dynamicToolCall" =>
       if fields.get("contentItems") is Some(Array(items)) {
-        let text : Array[String] = []
-        let mut text_only = true
-        for item in items {
-          if item is Object(content) &&
-            @jsonx.json_text(content, "type") is Some("inputText") &&
-            @jsonx.json_text(content, "text") is Some(value) {
-            text.push(value)
-          } else {
-            text_only = false
-          }
-        }
-        if text_only && !text.is_empty() {
-          return text.join("\n")
-        }
-        return Json::array(items).stringify(indent=2)
+        text_blocks(items, "inputText").unwrap_or_else(() => {
+          Json::array(items).stringify(indent=2)
+        })
+      } else {
+        ""
       }
-      ""
-    }
     "collabAgentToolCall" =>
       fields
       .get("agentsStates")
@@ -3814,17 +3569,16 @@ test "Codex completed items replace streamed presentation state" {
     "type": "agentMessage",
     "text": "",
   }).unwrap()
-  let turn : CodexTurn = {
+  let streamed : CodexTurn = {
     id: "turn-1",
     status: "inProgress",
     started_at: None,
     completed_at: None,
     latest_usage_tokens: None,
-    items: [started],
+    items: [{ ..started, streamed: "partial", }],
     items_view: None,
     error: None,
   }
-  let streamed = turn.with_delta("item-1", "partial")
   assert_eq(streamed.items[0].text(), "partial")
   let completed = CodexItem::decode({
     "id": "item-1",
