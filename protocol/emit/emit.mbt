@@ -34,8 +34,8 @@ pub fn open() -> Unit {
 /// This is the protocol writer, not a logger. Nothing here filters by a
 /// severity or an environment variable (`MOON_XLOG` cannot silence an event),
 /// stamps a timestamp, labels a severity, or records a call site — the line is
-/// exactly the event's own fields. Content that is genuinely a log goes through
-/// `@xlog` in the CLI and never reaches this stream.
+/// exactly the event's own fields. Nothing that is a log belongs on this
+/// stream, and the CLI links no logger.
 ///
 /// The line is `Event::to_json` — the one encoder — so the engine and the
 /// desktop host, which forwards a synthesized event of its own, cannot spell

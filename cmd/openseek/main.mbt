@@ -3,10 +3,12 @@
 /// command tree under `run`/`serve`/`review`/`subrun`/`mcp`/`sessions`. The
 /// interactive terminal UI is a separate binary, `openseek_tui`. argparse owns
 /// parsing, `--help`, and error reporting (including rejecting unknown or missing
-/// subcommands); we only dispatch on the parsed result. `dispatch` pins `@xlog`
-/// to discard for every subcommand; the engine's stdout-JSONL event sink is
-/// opened and drained per subcommand in the run/serve/subrun handlers
-/// (`with_jsonl_stdout`), and stays closed — dropping events — everywhere else.
+/// subcommands); we only dispatch on the parsed result. The engine's
+/// stdout-JSONL event sink is opened and drained per subcommand in the
+/// run/serve/subrun handlers (`with_jsonl_stdout`), and stays closed — dropping
+/// events — everywhere else. There is no logger in this binary: nothing linked
+/// into it logs, so stdout carries only the event stream or the command's own
+/// output.
 async fn main {
   dispatch() catch {
     error => {
@@ -26,9 +28,6 @@ async fn dispatch() -> Unit {
   let argv = @env.args()[1:]
   let env = @env.get_env_vars()
   let matches = root_command().parse(argv~, env~)
-  // Pin `@xlog` to discard before any subcommand runs, so a stray log line can
-  // never reach stdout; see `configure_logging`.
-  configure_logging()
   match matches.subcommand {
     Some(("run", m)) => run_task_command(m)
     Some(("serve", m)) => run_serve_command(m)

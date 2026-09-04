@@ -55,7 +55,7 @@ severity: `compaction_failed` was once logged at `warn` from one place and
 that is true anymore: the line is exactly the event's own `to_json` fields,
 written straight to stdout, with no severity on it at all — no reader ever
 consulted one, and a client that wants to rank events does so from the variant
-it decoded. Genuine log content stays in `@xlog` in the CLI where it belongs.
+it decoded. The CLI links no logger at all anymore.
 
 ## What `emit` does
 
@@ -78,8 +78,8 @@ Four properties are load-bearing:
   them appear.
 - **Nothing can filter or silence an open stream.** There is no severity filter
   and no environment variable between a call site and the queue (`MOON_XLOG`
-  configures only `@xlog`, which the CLI pins to discard). Every event emitted
-  while the sink is open reaches stdout.
+  configures `@xlog`, which the CLI no longer links). Every event emitted while
+  the sink is open reaches stdout.
 - **Order and line integrity come from the single drain task.** `emit` is
   synchronous (agent internals call it) while `@stdio.stdout` writes are
   asynchronous; concurrent emitters could interleave writes, so the drain is the
@@ -116,9 +116,9 @@ every backend.
 ## The protocol has its own sink
 
 The stream's identity is no longer borrowed from a logger: `emit` writes
-directly to stdout, and `@xlog` in the CLI is left with content that is truly a
-log. `MOON_XLOG` cannot silence an event, and a reader never has to strip a log
-envelope — every line on the stream is an event.
+directly to stdout, and the CLI links no logger at all. `MOON_XLOG` cannot
+silence an event, and a reader never has to strip a log envelope — every line
+on the stream is an event.
 
 The desktop host opts into presenting `reasoning_delta` while other consumers
 ignore it; the writer does not care, because it does not log — it streams.

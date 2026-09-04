@@ -280,11 +280,11 @@ cli-<stamp>
 ```
 
 The stdout stream is a protocol, not a log: events are written straight to
-stdout by their own writer and never pass through `@xlog`, so a logging
-environment variable cannot silence them. `MOON_XLOG` configures only `@xlog`,
-which the engine pins to discard; once, `MOON_XLOG=warn` dropped the whole
-stream and a TUI attached to that engine rendered nothing with no error to
-explain it.
+stdout by their own writer, and the engine links no logger at all, so a logging
+environment variable cannot silence them. This case guards against the stream
+ever being routed back through one: once, events went through `@xlog`, and
+`MOON_XLOG=warn` dropped the whole stream — a TUI attached to that engine
+rendered nothing with no error to explain it.
 
 ```mooncram
 $ sh <<'EOF'

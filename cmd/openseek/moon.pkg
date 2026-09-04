@@ -37,7 +37,6 @@ import {
   "moonbitlang/x/path",
   "moonbitlang/x/sys",
   "moonbitlang/x/time",
-  "tonyfettes/xlog",
 }
 
 warnings = "+unnecessary_annotation"

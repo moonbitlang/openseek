@@ -32,8 +32,8 @@ itself:
 {"event":"assistant_delta","content":"Hel"}
 ```
 
-There is no envelope at all — no timestamp, no severity, no source. Content
-that is genuinely a log stays in `@xlog` and never reaches this stream.
+There is no envelope at all — no timestamp, no severity, no source — and the
+CLI links no logger, so nothing but events can reach this stream.
 
 ## Why it exists
 
@@ -86,8 +86,8 @@ match @protocol.parse(line) {
 ```
 
 `emit` writes each line without a `source`: events are not log entries, so no
-line points back at reporting code. Real log entries (which keep their own
-call-site `source`) belong to `@xlog` and go elsewhere.
+line points back at reporting code. A process that wants a log keeps one
+separately; the engine CLI has none.
 
 ## When a field may be absent
 

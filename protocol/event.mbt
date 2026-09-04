@@ -5,9 +5,8 @@
 ///
 /// The stream is a protocol, not a log. `emit` (in `openseek_protocol/emit`)
 /// writes each event's line — exactly its flat `to_json` fields — straight to
-/// stdout through its own writer, never through the process logger. Content
-/// that is genuinely a log stays in `@xlog` (discarded in the CLI) and never
-/// reaches this stream, so a client reading stdout sees only events.
+/// stdout through its own writer, never through a logger — the CLI links none
+/// — so a client reading stdout sees only events.
 ///
 /// There is no severity on the line: a client that wants one derives it from
 /// the variant it decoded. `emit` is the only writer; `parse` is its inverse.
