@@ -152,6 +152,7 @@ fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? 
     ("KeyO", false) => Some(AddProjectRequested)
     ("KeyB", false) => Some(ToggleSidebar)
     ("KeyB", true) => Some(ToggleRightPanel)
+    ("KeyJ", false) if is_apple => Some(Terminal(@terminal.ToggleTerminal))
     ("KeyF", true) => Some(ExplorerRequested(ExplorerSearch))
     _ => None
   }
