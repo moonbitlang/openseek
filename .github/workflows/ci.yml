@@ -19,11 +19,11 @@ jobs:
       contents: read
     strategy:
       # Run stable targets independently (fail-fast: false), while the
-      # native/JS split lets the two test suites run in parallel.
+      # native/JS/wasm split lets the three test suites run in parallel.
       fail-fast: false
       matrix:
         moonbit-channel: [stable]
-        target: [native, js]
+        target: [native, js, wasm]
         include:
           - moonbit-channel: stable
             moonbit-version: latest
@@ -47,7 +47,11 @@ jobs:
       # Proton comes from the registry, so the version it is pinned to lives in
       # desktop/moon.mod and nowhere else. Read it back here rather than
       # repeating it, and reuse it for both the CEF cache key and the CLI.
+      # Desktop is native-only, so the wasm row never reaches Proton: it skips
+      # this and the three Proton steps below rather than paying for a runtime
+      # nothing in that row links.
       - name: Resolve pinned Proton version
+        if: matrix.target != 'wasm'
         id: proton
         run: |
           version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/moon.mod)"
@@ -59,6 +63,7 @@ jobs:
       # Proton 0.2 stores the immutable runtime and versioned helper here. The
       # module prebuild resolves this store for both native and JS tests.
       - name: Restore Proton runtime
+        if: matrix.target != 'wasm'
         id: cef-cache
         uses: actions/cache/restore@v4
         with:
@@ -101,16 +106,18 @@ jobs:
       # link configuration. The shared libraries are on the runner image, but
       # their pkg-config metadata and headers come from the development packages.
       - name: Install Proton Linux dependencies
+        if: matrix.target != 'wasm'
         run: |
           sudo apt-get update
           sudo apt-get install --yes libgtk-3-dev libx11-dev
 
       # `cef setup` installs the release-selected runtime and subprocess helper
       # into Proton's user-level immutable store. Moon invokes Proton's module
-      # prebuild for both test targets, so both matrix rows need the store even
-      # though JS tests never open a native window. Setup is idempotent after a
-      # cache hit.
+      # prebuild for the native and JS test targets, so both of those rows need
+      # the store even though JS tests never open a native window. Setup is
+      # idempotent after a cache hit.
       - name: Assemble Proton CEF runtime
+        if: matrix.target != 'wasm'
         run: >-
           moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
           cef setup
@@ -143,6 +150,14 @@ jobs:
         # create Proton windows and therefore do not need Xvfb.
         if: matrix.target == 'js'
         run: moon test --target js
+
+      - name: Test wasm target
+        # The portability gate for every package carrying `+wasm` in its
+        # `supported_targets`. Nothing here links Proton or native FFI, so what
+        # this row proves is that the workspace's own portable logic behaves
+        # under moonrun exactly as it does natively.
+        if: matrix.target == 'wasm'
+        run: moon test --target wasm
 
       - name: Cram (offline CLI docs)
         if: matrix.target == 'native'

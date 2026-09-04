@@ -25,3 +25,13 @@ import {
 import {
   "bobzhang/openseek/testkit/filesystem" @vfs,
 } for "wbtest"
+
+options(
+  // Every test here compiles and runs a real snippet through `moon`, and the
+  // tool bounds that BUILD phase at 10s. Run unbounded, dozens of toolchain
+  // builds compete for the same machine and the slower ones — the snippets
+  // that import `moonbitlang/async` — cross that deadline, so the suite fails
+  // on contention rather than on behaviour. Two at a time keeps every build
+  // inside the budget on both backends, and the suite finishes faster for it.
+  "max-concurrent-tests": 2,
+)
