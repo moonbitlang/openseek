@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek_protocol/emit"
+
+import {
+  "bobzhang/openseek_protocol",
+}
+
+// Values
+pub fn close() -> Unit
+
+pub async fn drain_stdout() -> Unit
+
+pub fn emit(@openseek_protocol.Event) -> Unit
+
+pub fn open() -> Unit
+
+pub fn poll_line() -> String?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
