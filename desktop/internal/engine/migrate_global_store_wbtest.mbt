@@ -21,6 +21,7 @@ async test "the migration relocates live and archived records one by one" {
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let dir = @fs.tmpdir(prefix="openseek-migrate-global-")
+  defer @fs.rmdir(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", root.join("home").to_string())
@@ -87,7 +88,6 @@ async test "the migration relocates live and archived records one by one" {
   assert_false(@fsx.exists(destination.join(StagingDirName).to_path()))
   // A second launch finds nothing to do rather than repeating itself.
   assert_eq(migrate_global_store(), 0)
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -98,6 +98,7 @@ async test "the migration relocates live and archived records one by one" {
 #cfg(not(platform="windows"))
 async test "copying a record across filesystems leaves the destination whole" {
   let dir = @fs.tmpdir(prefix="openseek-migrate-copy-")
+  defer @fs.rmdir(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   guard root.to_absolute() is Some(root) else { fail("expected \{root}") }
   let record = root.join("global/sessions/chat")
@@ -114,7 +115,6 @@ async test "copying a record across filesystems leaves the destination whole" {
   assert_eq(@fsx.read_text(destination.join("meta.json").to_path()), "{}")
   assert_false(@fsx.exists(record.to_path()))
   assert_false(@fsx.exists(staging.to_path()))
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|

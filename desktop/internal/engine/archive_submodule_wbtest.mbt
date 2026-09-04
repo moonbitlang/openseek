@@ -9,6 +9,7 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-sub-archive-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   @fsx.ensure_dir(root.join("global").to_path())
@@ -107,7 +108,6 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
   )
   assert_false(first.present)
   assert_false(second.present)
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -117,6 +117,7 @@ async test "worktree deletion refuses a replaced checkout" {
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-replaced-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   @fsx.ensure_dir(root.join("global").to_path())
@@ -181,5 +182,4 @@ async test "worktree deletion refuses a replaced checkout" {
   // The unrelated repository survives untouched, registry entry and all.
   assert_true(@fsx.is_dir(target.join(".git").to_path()))
   assert_eq(@worktree.list(repo.to_string()).worktrees.length(), 1)
-  @fs.rmdir(root.to_string(), recursive=true)
 }

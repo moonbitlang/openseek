@@ -70,6 +70,7 @@ async test "session workspace dir follows the worktree mapping while it exists" 
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-seam-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let ws = root.join("ws")
@@ -127,7 +128,6 @@ async test "session workspace dir follows the worktree mapping while it exists" 
   assert_true(
     @work_dir.resolve_in_workspace("s-wt", "", workspace=ws_resource) is None,
   )
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -137,6 +137,7 @@ async test "attached workspace dir resolves registered worktree paths" {
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-attached-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let ws = root.join("ws")
@@ -182,7 +183,6 @@ async test "attached workspace dir resolves registered worktree paths" {
     }),
     Some(ws.to_string()),
   )
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -192,6 +192,7 @@ async test "a bound session routes every start through its checkout" {
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-route-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   // BYOK: the default provider needs a key. Set one here so worktree
@@ -246,7 +247,6 @@ async test "a bound session routes every start through its checkout" {
     resumed.session_root.map(dir => dir.to_string()),
     Some(ws.join(".openseek").to_string()),
   )
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -256,6 +256,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-busy-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   let engine = root.join("bin/engine.sh")
   let runtime = root.join("runtime")
   @sys.set_env_var("HOME", root.join("global").to_string())
@@ -336,7 +337,6 @@ async test "worktree remove refuses a running conversation without unmapping it"
     assert_eq(info.session, Some("s-wt-run"))
     group.return_immediately(())
   })
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -346,6 +346,7 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-vanished-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   // BYOK: the default provider needs a key. Set one here so the vanished
@@ -501,7 +502,6 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
   assert_eq(replayed_info.name, repaired.name)
   assert_eq(replayed_info.session, Some("s-vanish"))
   assert_true(replayed_info.present)
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -511,6 +511,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-archive-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   @fsx.ensure_dir(root.join("global").to_path())
@@ -661,7 +662,6 @@ async test "archive keeps worktree placement for explicit repair after unarchive
     fail("Codex archive must retain its registry placement")
   }
   assert_false(codex_archived.present)
-  @fs.rmdir(root.to_string(), recursive=true)
 }
 
 ///|
@@ -672,6 +672,7 @@ async test "permanent archived deletion drops placement but keeps files and bran
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let root = worktree_test_root("openseek-archive-delete-worktree-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   let global = root.join("global")
   let workspace = root.join("workspace")
   @sys.set_env_var("HOME", global.to_string())
@@ -721,5 +722,4 @@ async test "permanent archived deletion drops placement but keeps files and bran
       "openseek/chat",
     ),
   )
-  @fs.rmdir(root.to_string(), recursive=true)
 }

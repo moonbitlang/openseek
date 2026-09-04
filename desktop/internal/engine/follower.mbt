@@ -680,6 +680,7 @@ fn follower_test_config(
 #cfg(not(platform="windows"))
 async test "a follower barrier broadcasts the durable tail before returning" {
   let dir = @fs.tmpdir(prefix="openseek-follower-barrier-")
+  defer @fs.rmdir(dir, recursive=true)
   let engine = dir + "/engine.sh"
   let session = "s-barrier"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
@@ -707,7 +708,6 @@ async test "a follower barrier broadcasts the durable tail before returning" {
     stop_follower(manager, session, writer_exited=true)
     group.return_immediately(())
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -719,6 +719,7 @@ async test "a follower barrier broadcasts the durable tail before returning" {
 #cfg(not(platform="windows"))
 async test "an unreadable existing record refuses the spawn baseline" {
   let dir = @fs.tmpdir(prefix="openseek-follower-baseline-")
+  defer @fs.rmdir(dir, recursive=true)
   let engine = dir + "/engine.sh"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
   let manager = new_engine_manager(engine)
@@ -762,13 +763,13 @@ async test "an unreadable existing record refuses the spawn baseline" {
     assert_true(manager.followers.get("s-baseline") is None)
     group.return_immediately(())
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
 #cfg(not(platform="windows"))
 async test "failed final scan keeps the follower active and propagates" {
   let dir = @fs.tmpdir(prefix="openseek-follower-stop-")
+  defer @fs.rmdir(dir, recursive=true)
   let engine = dir + "/engine.sh"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
   // The record must be readable while the follower baselines — a spawn over
@@ -806,7 +807,6 @@ async test "failed final scan keeps the follower active and propagates" {
     assert_false(follower.stopping)
     group.return_immediately(())
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -817,6 +817,7 @@ async test "failed final scan keeps the follower active and propagates" {
 #cfg(not(platform="windows"))
 async test "an absent record retires as an empty drain" {
   let dir = @fs.tmpdir(prefix="openseek-follower-durable-absent-")
+  defer @fs.rmdir(dir, recursive=true)
   let engine = dir + "/engine.sh"
   let session = "s-durable-absent"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
@@ -840,13 +841,13 @@ async test "an absent record retires as an empty drain" {
     assert_true(manager.followers.get(session) is None)
     group.return_immediately(())
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
 #cfg(not(platform="windows"))
 async test "the drain that finally succeeds broadcasts what it could not read" {
   let dir = @fs.tmpdir(prefix="openseek-follower-durable-tail-")
+  defer @fs.rmdir(dir, recursive=true)
   let engine = dir + "/engine.sh"
   let session = "s-durable-tail"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
@@ -889,7 +890,6 @@ async test "the drain that finally succeeds broadcasts what it could not read" {
     assert_eq(session_root, root.resource_path())
     group.return_immediately(())
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -900,6 +900,7 @@ async test "the drain that finally succeeds broadcasts what it could not read" {
 #cfg(not(platform="windows"))
 async test "a committed terminal does not settle a run the stream never ended" {
   let dir = @fs.tmpdir(prefix="openseek-eof-durable-close-")
+  defer @fs.rmdir(dir, recursive=true)
   let session = "s-eof-close"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
   write_session_record(root, session, [])
@@ -966,13 +967,13 @@ async test "a committed terminal does not settle a run the stream never ended" {
     assert_eq(settlements, 1)
     group.return_immediately(())
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
 #cfg(not(platform="windows"))
 async test "abrupt EOF leaves a failed drain for a later caller to retry" {
   let dir = @fs.tmpdir(prefix="openseek-follower-abrupt-eof-")
+  defer @fs.rmdir(dir, recursive=true)
   let engine_path = dir + "/engine.sh"
   let session = "s-abrupt-eof"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
@@ -1044,7 +1045,6 @@ async test "abrupt EOF leaves a failed drain for a later caller to retry" {
     assert_true(follower.retired)
     group.return_immediately(())
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -1054,6 +1054,7 @@ async test "workspace detach drains an orphaned pending follower before commit" 
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   let dir = @fs.tmpdir(prefix="openseek-detach-orphan-follower-")
+  defer @fs.rmdir(dir, recursive=true)
   let global_root : @pathx.Absolute = @pathx.Path(dir + "/global").resolve()
   let workspace : @pathx.Absolute = @pathx.Path(dir + "/workspace").resolve()
   let root = @workspaces.store_root(workspace)
@@ -1104,13 +1105,13 @@ async test "workspace detach drains an orphaned pending follower before commit" 
     assert_true(manager.followers.get(session) is None)
     group.return_immediately(())
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
 #cfg(not(platform="windows"))
 async test "workspace detach refuses an idle engine whose follower cannot drain" {
   let dir = @fs.tmpdir(prefix="openseek-detach-follower-stop-")
+  defer @fs.rmdir(dir, recursive=true)
   let workspace : @pathx.Absolute = @pathx.Path(dir + "/workspace").resolve()
   let root = @workspaces.store_root(workspace)
   let engine_path = dir + "/engine.sh"
@@ -1177,13 +1178,13 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
     discard_follower_startup(manager, follower)
     group.return_immediately(())
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
 #cfg(not(platform="windows"))
 async test "record stat failure is not mistaken for an empty final drain" {
   let dir = @fs.tmpdir(prefix="openseek-follower-stat-")
+  defer @fs.rmdir(dir, recursive=true)
   let engine = dir + "/engine.sh"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
   // Opening the pinned record beneath a regular file deterministically raises
@@ -1234,13 +1235,13 @@ async test "record stat failure is not mistaken for an empty final drain" {
     discard_follower_startup(manager, follower)
     group.return_immediately(())
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
 #cfg(not(platform="windows"))
 async test "root change retires the old follower before installing another" {
   let dir = @fs.tmpdir(prefix="openseek-follower-root-")
+  defer @fs.rmdir(dir, recursive=true)
   let engine = dir + "/engine.sh"
   let manager = new_engine_manager(engine)
   let sink = EventSink(fn(_) { () })
@@ -1277,13 +1278,13 @@ async test "root change retires the old follower before installing another" {
     assert_eq(second.root.to_string(), root_b.to_string())
     discard_follower_startup(manager, second)
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
 #cfg(not(platform="windows"))
 async test "one Load control message answers a bounded request batch" {
   let dir = @fs.tmpdir(prefix="openseek-follower-load-")
+  defer @fs.rmdir(dir, recursive=true)
   let engine = dir + "/engine.sh"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
   write_session_record(root, "s-load", [session_user_event(1, "hello")])
@@ -1323,7 +1324,6 @@ async test "one Load control message answers a bounded request batch" {
     assert_eq(session_max_sequence(document), 1)
     discard_follower_startup(manager, follower)
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -1407,6 +1407,7 @@ async test "identity-scoped stop never retires a successor" {
 #cfg(not(platform="windows"))
 async test "cancelling follower baseline removes its startup identity" {
   let dir = @fs.tmpdir(prefix="openseek-follower-cancel-")
+  defer @fs.rmdir(dir, recursive=true)
   let engine = dir + "/engine.sh"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
   // A record long enough that its baseline spans many reads, so the cancel
@@ -1444,7 +1445,6 @@ async test "cancelling follower baseline removes its startup identity" {
     assert_true(manager.followers.get("s-cancel") is None)
     group.return_immediately(())
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|

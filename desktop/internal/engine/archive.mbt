@@ -665,6 +665,7 @@ async test "archive refuses a durable record while the pump is stopped" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-stopped-")
+  defer @fs.rmdir(dir, recursive=true)
   @sys.set_env_var("HOME", dir + "/global")
   ignore(attach_run_workspace(Path(dir)))
   let store = dir + "/ws/.openseek"
@@ -687,7 +688,6 @@ async test "archive refuses a durable record while the pump is stopped" {
   assert_false(committed.val)
   assert_true(@fsx.is_dir(Path(store + "/sessions/s-stopped")))
   assert_false(@fsx.is_dir(Path(store + "/archived/sessions/s-stopped")))
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -698,6 +698,7 @@ async test "archive publishes its move before a cancelled listing reply" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-commit-")
+  defer @fs.rmdir(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
   let marker = dir + "/listing-started"
   let engine = dir + "/engine.sh"
@@ -740,7 +741,6 @@ async test "archive publishes its move before a cancelled listing reply" {
   assert_false(@fsx.is_dir(store.join("sessions/s-commit")))
   assert_true(@fsx.is_dir(store.join("archived/sessions/s-commit")))
   assert_true(manager.record_guards.get("s-commit") is None)
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -751,6 +751,7 @@ async test "archive and restore move a subagent session family together" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-family-")
+  defer @fs.rmdir(dir, recursive=true)
   @sys.set_env_var("HOME", dir + "/global")
   ignore(attach_run_workspace(Path(dir)))
   let store = dir + "/ws/.openseek"
@@ -794,7 +795,6 @@ async test "archive and restore move a subagent session family together" {
     assert_false(@fsx.is_dir(Path(archived + session_id)))
   }
   assert_true(manager.record_guards.is_empty())
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -805,6 +805,7 @@ async test "permanent deletion removes one archived session family only" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-family-")
+  defer @fs.rmdir(dir, recursive=true)
   let home = dir + "/home"
   let global_root = home + "/.openseek"
   let workspace = dir + "/workspace"
@@ -844,7 +845,6 @@ async test "permanent deletion removes one archived session family only" {
     assert_false(@fsx.exists(Path(store + "/archived/deleting/" + session_id)))
   }
   assert_true(manager.record_guards.is_empty())
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -855,6 +855,7 @@ async test "permanent deletion uses the selected archived store" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-selected-store-")
+  defer @fs.rmdir(dir, recursive=true)
   let home = dir + "/home"
   let global_root = home + "/.openseek"
   let workspace = dir + "/workspace"
@@ -882,7 +883,6 @@ async test "permanent deletion uses the selected archived store" {
     @fsx.exists(Path(workspace + "/.openseek/archived/sessions/chat")),
   )
   assert_eq(deleted_workspaces, [workspace_token])
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -893,6 +893,7 @@ async test "permanent deletion refuses a live twin in the selected store" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-live-twin-")
+  defer @fs.rmdir(dir, recursive=true)
   let home = dir + "/home"
   let global_root = home + "/.openseek"
   let workspace = dir + "/workspace"
@@ -925,7 +926,6 @@ async test "permanent deletion refuses a live twin in the selected store" {
   assert_true(
     @fsx.is_dir(Path(workspace + "/.openseek/archived/sessions/chat")),
   )
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -936,6 +936,7 @@ async test "startup sweep erases condemned records" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-sweep-")
+  defer @fs.rmdir(dir, recursive=true)
   @sys.set_env_var("HOME", dir + "/global")
   ignore(attach_run_workspace(Path(dir)))
   let store = dir + "/ws/.openseek"
@@ -949,7 +950,6 @@ async test "startup sweep erases condemned records" {
   assert_false(@fsx.exists(Path(store + "/archived/deleting/.chat")))
   assert_false(@fsx.exists(Path(store + "/archived/deleting/chat-sr-1")))
   assert_true(@fsx.is_dir(Path(store + "/archived/sessions/other")))
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -960,6 +960,7 @@ async test "selected archived store is revalidated after detachment" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-delete-detached-selection-")
+  defer @fs.rmdir(dir, recursive=true)
   let home = dir + "/home"
   let global_root = home + "/.openseek"
   let workspace = @pathx.Path(dir + "/workspace").resolve()
@@ -993,7 +994,6 @@ async test "selected archived store is revalidated after detachment" {
   assert_true(
     @fsx.is_dir(workspace.join(".openseek/archived/sessions/chat").to_path()),
   )
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -1004,6 +1004,7 @@ async test "a claimed child prevents a partial family archive" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-family-busy-")
+  defer @fs.rmdir(dir, recursive=true)
   @sys.set_env_var("HOME", dir + "/global")
   ignore(attach_run_workspace(Path(dir)))
   let store = dir + "/ws/.openseek"
@@ -1031,5 +1032,4 @@ async test "a claimed child prevents a partial family archive" {
   assert_true(@fsx.is_dir(Path(store + "/sessions/chat-sr-1")))
   assert_false(@fsx.exists(Path(store + "/archived/sessions")))
   assert_true(manager.record_guards.is_empty())
-  @fs.rmdir(dir, recursive=true)
 }

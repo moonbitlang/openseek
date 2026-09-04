@@ -12,6 +12,7 @@ async test "archive names the missing store after a workspace detach" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-detach-")
+  defer @fs.rmdir(dir, recursive=true)
   let workspace = dir + "/ws"
   let home = dir + "/home"
   let global_root = home + "/.openseek"
@@ -67,7 +68,6 @@ async test "archive names the missing store after a workspace detach" {
       #|"no durable record for this conversation in the global store or any attached workspace"
     ),
   )
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -78,6 +78,7 @@ async test "archive reports a workspace record whose directory vanished" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-gone-")
+  defer @fs.rmdir(dir, recursive=true)
   let workspace = dir + "/ws"
   let home = dir + "/home"
   let global_root = home + "/.openseek"
@@ -108,7 +109,6 @@ async test "archive reports a workspace record whose directory vanished" {
       #|"no durable record for this conversation in the global store or any attached workspace"
     ),
   )
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -119,6 +119,7 @@ async test "loading a conversation from a detached workspace names that state" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-load-detached-")
+  defer @fs.rmdir(dir, recursive=true)
   let workspace = dir + "/ws"
   let home = dir + "/home"
   let global_root = home + "/.openseek"
@@ -151,7 +152,6 @@ async test "loading a conversation from a detached workspace names that state" {
       #|"no attached workspace holds this conversation; attach its project first"
     ),
   )
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|
@@ -162,6 +162,7 @@ async test "archiving an already-archived conversation names that state" {
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
   let dir = @fs.tmpdir(prefix="openseek-archive-again-")
+  defer @fs.rmdir(dir, recursive=true)
   @sys.set_env_var("HOME", dir + "/global")
   ignore(attach_run_workspace(Path(dir)))
   let store = dir + "/ws/.openseek"
@@ -183,5 +184,4 @@ async test "archiving an already-archived conversation names that state" {
     ),
   )
   assert_true(@fsx.is_dir(Path(store + "/archived/sessions/s-done")))
-  @fs.rmdir(dir, recursive=true)
 }

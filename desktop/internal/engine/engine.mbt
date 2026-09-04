@@ -2881,6 +2881,7 @@ async fn write_fake_executable(path : @pathx.Path) -> Unit {
 #cfg(not(platform="windows"))
 async test "engine startup rolls back follower on pre-spawn failure" {
   let dir = @fs.tmpdir(prefix="openseek-engine-startup-")
+  defer @fs.rmdir(dir, recursive=true)
   let baseline_engine = dir + "/baseline.sh"
   @fs.write_file(
     baseline_engine,
@@ -2916,7 +2917,6 @@ async test "engine startup rolls back follower on pre-spawn failure" {
     assert_true(manager.followers.get("s-startup-failure") is None)
     assert_true(slot.engine is None)
   })
-  @fs.rmdir(dir, recursive=true)
 }
 
 ///|

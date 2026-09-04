@@ -58,6 +58,7 @@ pub async fn engine_command(framework_command : String) -> String {
 ///|
 async test "packaged sibling wins before the matching Moon build engine" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-development-engine-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
   let build = root.join("_build/native/debug/build")
   let command_dir = build.join("openseek_desktop")
   let host = command_dir.join("openseek_desktop.exe").to_string()
@@ -70,5 +71,4 @@ async test "packaged sibling wins before the matching Moon build engine" {
   let bundled = command_dir.join("openseek").to_string()
   @fs.write_file(bundled, "bundled", create_mode=CreateOrTruncate)
   assert_eq(engine_command(host), bundled)
-  @fs.rmdir(root.to_string(), recursive=true)
 }
