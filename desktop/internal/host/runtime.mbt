@@ -85,9 +85,11 @@ async test "platform_app_data_dir uses %LOCALAPPDATA% on Windows, falls back to 
   let dir = @fs.tmpdir(prefix="openseek-runtime-test-")
   defer @fs.rmdir(dir, recursive=true)
   let previous_local = @sys.get_env_var("LOCALAPPDATA")
-  let previous_userprofile = @sys.get_env_var("USERPROFILE")
   @sys.set_env_var("LOCALAPPDATA", dir + "\\AppData\\Local")
+  defer restore_env("LOCALAPPDATA", previous_local)
+  let previous_userprofile = @sys.get_env_var("USERPROFILE")
   @sys.set_env_var("USERPROFILE", dir)
+  defer restore_env("USERPROFILE", previous_userprofile)
   guard platform_app_data_dir() is Some(app_data) else {
     fail("platform_app_data_dir returned None")
   }
@@ -97,8 +99,6 @@ async test "platform_app_data_dir uses %LOCALAPPDATA% on Windows, falls back to 
     fail("platform_app_data_dir returned None after unsetting LOCALAPPDATA")
   }
   assert_eq(app_data.to_string(), dir + "\\AppData\\Local")
-  restore_env("LOCALAPPDATA", previous_local)
-  restore_env("USERPROFILE", previous_userprofile)
 }
 
 ///|
@@ -114,9 +114,11 @@ async test "platform_app_data_dir uses XDG_DATA_HOME on Linux, falls back to ~/.
   let dir = @fs.tmpdir(prefix="openseek-runtime-test-")
   defer @fs.rmdir(dir, recursive=true)
   let previous_xdg = @sys.get_env_var("XDG_DATA_HOME")
-  let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("XDG_DATA_HOME", dir + "/xdg-data")
+  defer restore_env("XDG_DATA_HOME", previous_xdg)
+  let previous_home = @sys.get_env_var("HOME")
   @sys.set_env_var("HOME", dir)
+  defer restore_env("HOME", previous_home)
   guard platform_app_data_dir() is Some(app_data) else {
     fail("platform_app_data_dir returned None with XDG_DATA_HOME set")
   }
@@ -126,8 +128,6 @@ async test "platform_app_data_dir uses XDG_DATA_HOME on Linux, falls back to ~/.
     fail("platform_app_data_dir returned None after unsetting XDG_DATA_HOME")
   }
   assert_eq(app_data.to_string(), dir + "/.local/share")
-  restore_env("XDG_DATA_HOME", previous_xdg)
-  restore_env("HOME", previous_home)
 }
 
 ///|
