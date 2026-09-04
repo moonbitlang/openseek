@@ -4,10 +4,13 @@ package "openseek_desktop/internal/extension"
 import {
   "moonbit-community/proton",
   "openseek_desktop/internal/api",
+  "openseek_desktop/internal/protocol",
 }
 
 // Values
 pub fn browser_view_id(String) -> Int?
+
+pub async fn open_external(@protocol.ExternalLinkPayload) -> @protocol.OpenExternalReply
 
 pub fn openseek_capability(@api.ApiState, DesktopBridgeActor, BrowserViews) -> @moonbit-community/proton/extension.RendererCapability
 

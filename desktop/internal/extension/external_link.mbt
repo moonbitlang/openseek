@@ -15,7 +15,7 @@ impl Show for OpenExternalError with fn output(self, logger) {
 }
 
 ///|
-/// The frontend resolves links through `URL` before sending them, so a strict
+/// The frontend and Proton both provide resolved URLs here, so a strict
 /// lowercase allowlist is both sufficient and intentionally rejects every
 /// local, app-owned, executable, or otherwise unknown scheme.
 fn allowed_external_url(url : String) -> Bool {
@@ -31,7 +31,10 @@ fn allowed_external_url(url : String) -> Bool {
 }
 
 ///|
-async fn open_external(
+/// Hand a browser URL to the system opener. Both the renderer command and
+/// Proton's native new-window policy use this boundary so they cannot drift on
+/// which schemes are allowed.
+pub async fn open_external(
   payload : @protocol.ExternalLinkPayload,
 ) -> @protocol.OpenExternalReply {
   guard allowed_external_url(payload.url) else {
