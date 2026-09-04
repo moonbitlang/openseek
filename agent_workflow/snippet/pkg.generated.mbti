@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/agent_workflow/snippet"
+
+import {
+  "moonbitlang/core/ref",
+  "moonbitlang/workflow",
+  "moonbitlang/workflow/spawn",
+}
+
+// Values
+pub fn injected() -> Injected?
+
+pub async fn[T] run(Injected, async (@workflow.Workflow) -> T, max_concurrent? : Int) -> T
+
+pub fn runner(Injected, phase~ : @ref.Ref[String?], emit_line? : async (String, Json) -> Unit, map_launch? : (@spawn.LaunchSpec, @workflow.AgentCall) -> @spawn.LaunchSpec) -> @workflow.Runner
+
+// Errors
+
+// Types and methods
+pub struct Injected {
+  // private fields
+}
+pub fn Injected::Injected(exe~ : String, session_root~ : String, parent~ : String, base~ : Int, limit~ : Int, journal_path~ : String, events_path~ : String, model? : String, api_url? : String) -> Self
+pub fn Injected::journal_path(Self) -> String
+
+// Type aliases
+
+// Traits

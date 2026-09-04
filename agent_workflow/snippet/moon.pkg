@@ -1,0 +1,18 @@
+import {
+  "moonbitlang/workflow",
+  "moonbitlang/workflow/spawn",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+}
+
+import {
+  "moonbitlang/workflow",
+  "moonbitlang/workflow/spawn",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
+} for "test"
+
+supported_targets = "native+wasm"
