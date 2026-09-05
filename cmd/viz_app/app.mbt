@@ -998,10 +998,7 @@ fn resolve_session_key(sessions : Array[SessionRow], value : String) -> String? 
   if sessions.iter().any(row => row.key == value) {
     return Some(value)
   }
-  match sessions.iter().find_first(row => row.id == value) {
-    Some(row) => Some(row.key)
-    None => None
-  }
+  sessions.iter().find_first(row => row.id == value).map(row => row.key)
 }
 
 ///|
@@ -1763,6 +1760,52 @@ fn session_view_class(model : Model) -> String {
 }
 
 ///|
+/// The shape the three "find X" toolbars share: an optional count chip, a
+/// filter toggle that reads `<label>: on` while active, and prev/next jumps.
+/// `kind` is the CSS prefix the three sets of rules are already keyed on
+/// (`error`, `escalated`, `build-error`). Each caller keeps its own
+/// visibility test, because those genuinely differ.
+fn filter_bar(
+  emit : @cmd.Emit[Msg],
+  count : Int,
+  kind~ : String,
+  active~ : Bool,
+  count_label~ : String,
+  toggle_title~ : String,
+  toggle_label~ : String,
+  toggle~ : Msg,
+  jump~ : (Int) -> Msg,
+  jump_noun~ : String,
+) -> @html.Html {
+  let children : Array[@html.Html] = [
+    ..if count > 0 {
+      [@html.span(class="\{kind}-count") <| count_label]
+    },
+    @html.button(
+      class=class_with("\{kind}-toggle", "active", active),
+      title=toggle_title,
+      on_click=emit(toggle),
+    ) <| (if active { "\{toggle_label}: on" } else { toggle_label }),
+    // Jumps only make sense when there is something to jump to.
+    ..if count > 0 {
+      [
+        @html.button(
+          class="\{kind}-jump",
+          title="Scroll to the previous \{jump_noun}",
+          on_click=emit(jump(-1)),
+        ) <| "↑ prev",
+        @html.button(
+          class="\{kind}-jump",
+          title="Scroll to the next \{jump_noun}",
+          on_click=emit(jump(1)),
+        ) <| "↓ next",
+      ]
+    },
+  ]
+  @html.div(class="\{kind}-bar") <| children
+}
+
+///|
 /// The "find failures" toolbar: a count, an errors-only filter toggle, and
 /// prev/next jumps. Hidden when the view has no failures AND the filter is off,
 /// so a clean session shows no chrome — but if the filter is on it stays visible
@@ -1772,38 +1815,18 @@ fn error_bar(emit : @cmd.Emit[Msg], model : Model, count : Int) -> @html.Html {
   if count == 0 && !model.errors_only {
     return @html.nothing
   }
-  let toggle_class = class_with("error-toggle", "active", model.errors_only)
-  let children : Array[@html.Html] = []
-  if count > 0 {
-    children.push(
-      @html.span(class="error-count") <| "🚩 \{count} tool error\{plural_s(count)}",
-    )
-  }
-  children.push(
-    @html.button(
-      class=toggle_class,
-      title="Show only failed tool results",
-      on_click=emit(ToggleErrorsOnly),
-    ) <| (if model.errors_only { "Errors only: on" } else { "Errors only" }),
+  filter_bar(
+    emit,
+    count,
+    kind="error",
+    active=model.errors_only,
+    count_label="🚩 \{count} tool error\{plural_s(count)}",
+    toggle_title="Show only failed tool results",
+    toggle_label="Errors only",
+    toggle=ToggleErrorsOnly,
+    jump=n => JumpToError(n),
+    jump_noun="failure",
   )
-  // Jumps only make sense when there is something to jump to.
-  if count > 0 {
-    children.push(
-      @html.button(
-        class="error-jump",
-        title="Scroll to the previous failure",
-        on_click=emit(JumpToError(-1)),
-      ) <| "↑ prev",
-    )
-    children.push(
-      @html.button(
-        class="error-jump",
-        title="Scroll to the next failure",
-        on_click=emit(JumpToError(1)),
-      ) <| "↓ next",
-    )
-  }
-  @html.div(class="error-bar") <| children
 }
 
 ///|
@@ -1818,45 +1841,18 @@ fn escalated_bar(
   if count == 0 && !model.escalated_only {
     return @html.nothing
   }
-  let toggle_class = class_with(
-    "escalated-toggle",
-    "active",
-    model.escalated_only,
+  filter_bar(
+    emit,
+    count,
+    kind="escalated",
+    active=model.escalated_only,
+    count_label="🔓 \{count} escalated tool call\{plural_s(count)}",
+    toggle_title="Show only tool calls with escalated: true and their results",
+    toggle_label="Escalated only",
+    toggle=ToggleEscalatedOnly,
+    jump=n => JumpToEscalated(n),
+    jump_noun="escalated tool call",
   )
-  let children : Array[@html.Html] = []
-  if count > 0 {
-    children.push(
-      @html.span(class="escalated-count") <| "🔓 \{count} escalated tool call\{plural_s(count)}",
-    )
-  }
-  children.push(
-    @html.button(
-      class=toggle_class,
-      title="Show only tool calls with escalated: true and their results",
-      on_click=emit(ToggleEscalatedOnly),
-    ) <| (if model.escalated_only {
-      "Escalated only: on"
-    } else {
-      "Escalated only"
-    }),
-  )
-  if count > 0 {
-    children.push(
-      @html.button(
-        class="escalated-jump",
-        title="Scroll to the previous escalated tool call",
-        on_click=emit(JumpToEscalated(-1)),
-      ) <| "↑ prev",
-    )
-    children.push(
-      @html.button(
-        class="escalated-jump",
-        title="Scroll to the next escalated tool call",
-        on_click=emit(JumpToEscalated(1)),
-      ) <| "↓ next",
-    )
-  }
-  @html.div(class="escalated-bar") <| children
 }
 
 ///|
@@ -1878,45 +1874,18 @@ fn build_error_bar(
   if !present && count == 0 && !model.build_errors_only {
     return @html.nothing
   }
-  let toggle_class = class_with(
-    "build-error-toggle",
-    "active",
-    model.build_errors_only,
+  filter_bar(
+    emit,
+    count,
+    kind="build-error",
+    active=model.build_errors_only,
+    count_label="🔨 \{count} build error\{plural_s(count)}",
+    toggle_title="Show only mbtx calls whose build failed, with their results",
+    toggle_label="Build errors only",
+    toggle=ToggleBuildErrorsOnly,
+    jump=n => JumpToBuildError(n),
+    jump_noun="build error",
   )
-  let children : Array[@html.Html] = []
-  if count > 0 {
-    children.push(
-      @html.span(class="build-error-count") <| "🔨 \{count} build error\{plural_s(count)}",
-    )
-  }
-  children.push(
-    @html.button(
-      class=toggle_class,
-      title="Show only mbtx calls whose build failed, with their results",
-      on_click=emit(ToggleBuildErrorsOnly),
-    ) <| (if model.build_errors_only {
-      "Build errors only: on"
-    } else {
-      "Build errors only"
-    }),
-  )
-  if count > 0 {
-    children.push(
-      @html.button(
-        class="build-error-jump",
-        title="Scroll to the previous build error",
-        on_click=emit(JumpToBuildError(-1)),
-      ) <| "↑ prev",
-    )
-    children.push(
-      @html.button(
-        class="build-error-jump",
-        title="Scroll to the next build error",
-        on_click=emit(JumpToBuildError(1)),
-      ) <| "↓ next",
-    )
-  }
-  @html.div(class="build-error-bar") <| children
 }
 
 ///|

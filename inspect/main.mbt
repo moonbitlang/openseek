@@ -787,23 +787,21 @@ async fn SessionCatalog::rows(self : SessionCatalog) -> Array[SessionListRow] {
   let rows : Array[SessionListRow] = []
   for root in self.roots {
     for path in session_files_under(root.scan_path, root.recursive) {
-      match session_id_from_file_name(path_tail(path)) {
-        Some(id) => {
-          let (last_active, last_active_nanoseconds) = session_file_stamp(path)
-          rows.push({
-            key: stable_session_key(path),
-            id,
-            root: root.path,
-            root_label: root.label,
-            is_marker: root.is_marker,
-            path,
-            last_active,
-            last_active_nanoseconds,
-            first_prompt: first_prompt_in_log(path),
-          })
-        }
-        None => ()
+      guard session_id_from_file_name(path_tail(path)) is Some(id) else {
+        continue
       }
+      let (last_active, last_active_nanoseconds) = session_file_stamp(path)
+      rows.push({
+        key: stable_session_key(path),
+        id,
+        root: root.path,
+        root_label: root.label,
+        is_marker: root.is_marker,
+        path,
+        last_active,
+        last_active_nanoseconds,
+        first_prompt: first_prompt_in_log(path),
+      })
     }
   }
   rows.sort_by(compare_session_list_rows)
