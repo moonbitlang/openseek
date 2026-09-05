@@ -158,6 +158,14 @@ async fn moon_check_cwd(path : String) -> String? {
 
 ///|
 fn is_relevant_moonbit_path(path : String) -> Bool {
+  // A path that ends in a separator names a DIRECTORY, never a manifest, and
+  // `path_basename` strips that separator before reporting the last component
+  // — so "pkg/moon.pkg/" would come back as "moon.pkg". Rule those out first
+  // to keep this predicate's domain exactly what it was when the manifest
+  // names were matched as whole final components.
+  if path.has_suffix("/") || path.has_suffix("\\") {
+    return false
+  }
   // `path_basename` treats backslashes as separators, so the manifest names
   // match on Windows too; the source suffixes below contain no separator and
   // so are unaffected by them.
@@ -182,6 +190,12 @@ fn containing_dir(path : String) -> String {
 
 ///|
 test "relevant path detection covers MoonBit source and manifests" {
+  // A trailing separator makes it a directory, not a manifest: the predicate
+  // must answer the same here as it did before `path_basename` (which strips
+  // that separator) was introduced.
+  assert_false(is_relevant_moonbit_path("x/moon.pkg/"))
+  assert_false(is_relevant_moonbit_path("moon.mod/"))
+  assert_false(is_relevant_moonbit_path("x\\moon.work\\"))
   assert_true(is_relevant_moonbit_path("moon.mod"))
   assert_true(is_relevant_moonbit_path("lib/moon.pkg"))
   assert_true(is_relevant_moonbit_path("moon.work"))
