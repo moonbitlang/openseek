@@ -174,7 +174,10 @@ pub fn child_opened(
     let child = "\{run.session}-\{id}"
     match run.rows.search_by(row => row.child == child) {
       // Seen already (an entry outran the bracket, or a replay): keep what
-      // is known, just make sure it reads as running again if it was not.
+      // is known. The bracket is authoritative for the child's kind and
+      // label; its status is not touched — an entry that arrived first
+      // means the child has already resolved, and a replayed open must not
+      // make it look live again.
       Some(index) => {
         let rows = run.rows.copy()
         rows[index] = { ..rows[index], kind, label, }

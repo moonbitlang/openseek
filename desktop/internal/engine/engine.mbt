@@ -1782,7 +1782,11 @@ async fn ServeEngine::consume(
           Some(
             WorkflowStarted(id~, journal~, events~, first_child~, child_count~)
           ) =>
-            if engine.session_root is Some(root) && tails.get(id) is None {
+            // The bracket names both files by absolute path, so the tail
+            // needs no store root; only the per-child PROBE does (it locates
+            // the child's transcript under the store), and an engine without
+            // one still gets its lanes and ledger rows, just no live activity.
+            if tails.get(id) is None {
               tails[id] = group.spawn(no_wait=true, allow_failure=true, () => {
                 @workflow.follow_run(
                   workflow=id,
@@ -1820,7 +1824,8 @@ async fn ServeEngine::consume(
                         event: { event, submission_id, },
                       }),
                     )
-                    if probes.get(sr) is None {
+                    if engine.session_root is Some(root) &&
+                      probes.get(sr) is None {
                       probes[sr] = group.spawn(
                         no_wait=true,
                         allow_failure=true,
