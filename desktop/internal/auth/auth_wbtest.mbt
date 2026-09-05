@@ -3,6 +3,20 @@
 // signin.mbt is built from.
 
 ///|
+/// The one signed-in session every codec and store test below uses. The avatar
+/// is the only field any of them varies, so it stays an explicit argument.
+fn sample_session(avatar~ : String) -> AuthSession {
+  {
+    server_url: "https://relay.example",
+    device_token: "odt_secret",
+    device_id: "d_abc",
+    device_name: "My Mac",
+    user_login: "octocat",
+    user_avatar_url: avatar,
+  }
+}
+
+///|
 test "pkce challenge is the verifier's unpadded base64url sha256" {
   // Cross-checked against RFC 7636 S256 (python:
   // urlsafe_b64encode(sha256(b"test-verifier")).rstrip("=")) — and against
@@ -86,14 +100,7 @@ test "url derivations" {
 
 ///|
 test "auth.json codec round-trips and reads corruption as signed out" {
-  let session : AuthSession = {
-    server_url: "https://relay.example",
-    device_token: "odt_secret",
-    device_id: "d_abc",
-    device_name: "My Mac",
-    user_login: "octocat",
-    user_avatar_url: "https://avatars.example/1",
-  }
+  let session = sample_session(avatar="https://avatars.example/1")
   let json = session_to_json(session)
   guard session_from_json(json) is Some(reloaded) else {
     fail("round-trip lost the session")
@@ -108,14 +115,7 @@ test "auth.json codec round-trips and reads corruption as signed out" {
 async test "auth.json persists 0600 and deletes cleanly" {
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-auth-"))
   let body = async fn() {
-    let session : AuthSession = {
-      server_url: "https://relay.example",
-      device_token: "odt_secret",
-      device_id: "d_abc",
-      device_name: "My Mac",
-      user_login: "octocat",
-      user_avatar_url: "",
-    }
+    let session = sample_session(avatar="")
     save_session_file(dir, session)
     guard load_session_file(dir) is Some(reloaded) else {
       fail("persisted session did not load")
@@ -130,14 +130,7 @@ async test "auth.json persists 0600 and deletes cleanly" {
 
 ///|
 async test "session commit persists before memory and wakes each local transition" {
-  let session : AuthSession = {
-    server_url: "https://relay.example",
-    device_token: "odt_secret",
-    device_id: "d_abc",
-    device_name: "My Mac",
-    user_login: "octocat",
-    user_avatar_url: "",
-  }
+  let session = sample_session(avatar="")
   let store = AuthStore::empty()
   store.commit_session(session)
   assert_true(store.session_server() is Some("https://relay.example"))
@@ -178,14 +171,7 @@ test "store transitions dedup their auth.changed edges" {
   let store = AuthStore::empty()
   assert_true(store.desired_connector() is None)
   // Signed-in session drives the connector config.
-  store.session = Some({
-    server_url: "https://relay.example",
-    device_token: "odt_secret",
-    device_id: "d_abc",
-    device_name: "My Mac",
-    user_login: "octocat",
-    user_avatar_url: "",
-  })
+  store.session = Some(sample_session(avatar=""))
   guard store.desired_connector() is Some(config) else {
     fail("signed-in store offered no connector config")
   }
@@ -200,14 +186,7 @@ test "store transitions dedup their auth.changed edges" {
 ///|
 async test "a terminal refusal clears a session but only parks an override" {
   let store = AuthStore::empty()
-  store.session = Some({
-    server_url: "https://relay.example",
-    device_token: "odt_secret",
-    device_id: "d_abc",
-    device_name: "My Mac",
-    user_login: "octocat",
-    user_avatar_url: "",
-  })
+  store.session = Some(sample_session(avatar=""))
   store.connected = true
   store.handle_refusal()
   assert_true(store.session is None)
@@ -246,14 +225,7 @@ test "status shapes" {
   let configured = store.status(server_url="https://relay.example")
   assert_false(configured.connected)
   assert_eq(configured.server_url, Some("https://relay.example"))
-  store.session = Some({
-    server_url: "https://relay.example",
-    device_token: "odt_secret",
-    device_id: "d_abc",
-    device_name: "My Mac",
-    user_login: "octocat",
-    user_avatar_url: "https://avatars.example/1",
-  })
+  store.session = Some(sample_session(avatar="https://avatars.example/1"))
   store.connected = true
   let status = store.status()
   assert_true(status.connected)

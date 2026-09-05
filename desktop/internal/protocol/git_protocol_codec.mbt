@@ -74,10 +74,7 @@ pub impl ToJson for GitHistoryRef with fn to_json(self) {
 ///|
 pub impl FromJson for GitHistorySnapshot with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "Git history snapshot")
-  let refs : Array[GitHistoryRef] = []
-  for index, raw in object.required_array("refs") {
-    refs.push(@json.from_json(raw, path=path.add_key("refs").add_index(index)))
-  }
+  let refs : Array[GitHistoryRef] = object.required_array_of("refs")
   {
     head: object.optional_string("head"),
     branch: object.optional_string("branch"),
@@ -131,12 +128,7 @@ pub impl FromJson for GitHistoryReply with fn from_json(json, path) {
     object.required_json("snapshot"),
     path=path.add_key("snapshot"),
   )
-  let commits : Array[GitHistoryCommit] = []
-  for index, raw in object.required_array("commits") {
-    commits.push(
-      @json.from_json(raw, path=path.add_key("commits").add_index(index)),
-    )
-  }
+  let commits : Array[GitHistoryCommit] = object.required_array_of("commits")
   {
     repository: object.required_bool("repository"),
     snapshot,
@@ -182,12 +174,7 @@ pub impl ToJson for GitHistoricalChange with fn to_json(self) {
 ///|
 pub impl FromJson for GitCommitChangesReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "Git commit-changes reply")
-  let changes : Array[GitHistoricalChange] = []
-  for index, raw in object.required_array("changes") {
-    changes.push(
-      @json.from_json(raw, path=path.add_key("changes").add_index(index)),
-    )
-  }
+  let changes : Array[GitHistoricalChange] = object.required_array_of("changes")
   {
     commit: object.required_string("commit"),
     parent: object.optional_string("parent"),

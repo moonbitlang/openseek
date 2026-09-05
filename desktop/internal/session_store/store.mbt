@@ -53,11 +53,9 @@ pub fn deleting_root(root : @pathx.Absolute) -> @pathx.Absolute {
 /// hints are optional and cannot be trusted to identify where an existing
 /// record lives.
 pub async fn known_roots() -> Array[@pathx.Absolute] {
-  let roots : Array[@pathx.Absolute] = []
-  for path in @workspaces.registered() {
-    roots.push(@workspaces.store_root(path))
-  }
-  roots
+  [
+    for path in @workspaces.registered() => @workspaces.store_root(path)
+  ]
 }
 
 ///|

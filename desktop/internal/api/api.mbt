@@ -176,10 +176,7 @@ fn CodexWorktreeCatalog::annotate_thread(
     is Some(binding) else {
     return value
   }
-  let annotated : Map[String, Json] = Map([])
-  for key, field in thread {
-    annotated[key] = field
-  }
+  let annotated = thread.copy()
   // The registry retains the owning project even after its checkout is gone;
   // Git cannot recover that relationship from a deleted cwd.
   annotated["projectRoot"] = Json(binding.workspace)
@@ -193,16 +190,11 @@ fn CodexWorktreeCatalog::annotate(
   reply : Json,
 ) -> Json {
   guard reply is Object(fields) else { return reply }
-  let annotated : Map[String, Json] = Map([])
-  for key, field in fields {
-    annotated[key] = field
-  }
+  let annotated = fields.copy()
   if fields.get("data") is Some(Array(threads)) {
-    let data : Array[Json] = []
-    for thread in threads {
-      data.push(self.annotate_thread(thread))
-    }
-    annotated["data"] = Json(data)
+    annotated["data"] = Json(
+      threads.map(thread => self.annotate_thread(thread)),
+    )
   }
   if fields.get("thread") is Some(thread) {
     annotated["thread"] = self.annotate_thread(thread)
@@ -805,15 +797,9 @@ async fn ApiState::codex_thread_history(
       _ => break
     }
   }
-  let thread : Map[String, Json] = Map([])
-  for key, value in thread_fields {
-    thread[key] = value
-  }
+  let thread = thread_fields.copy()
   thread["turns"] = Json(turns)
-  let reply : Map[String, Json] = Map([])
-  for key, value in reply_fields {
-    reply[key] = value
-  }
+  let reply = reply_fields.copy()
   reply["thread"] = Json(thread)
   @json.from_json(Json(reply))
 }
@@ -1086,10 +1072,7 @@ async fn ApiState::codex_request(
     // Preserve the caller's source filter (or Codex's interactive default)
     // instead of hiding threads that OpenSeek itself just created.
     ("codex.thread.list", Object(fields)) => {
-      let scoped : Map[String, Json] = Map([])
-      for key, value in fields {
-        scoped[key] = value
-      }
+      let scoped = fields.copy()
       // JSONL scan-and-repair can exceed the Proton request deadline on a
       // long-lived Codex home. The Desktop catalog is an interactive state
       // query, so read the app-server state database without that repair pass.
@@ -1100,10 +1083,7 @@ async fn ApiState::codex_request(
     // The dedicated thread/start endpoint has already reduced this object to
     // cwd, model, and Desktop's fixed service name.
     ("codex.thread.start", Object(fields)) => {
-      let scoped : Map[String, Json] = Map([])
-      for key, value in fields {
-        scoped[key] = value
-      }
+      let scoped = fields.copy()
       scoped["serviceName"] = "openseek_desktop"
       Json(scoped)
     }

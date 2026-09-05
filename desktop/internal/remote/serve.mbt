@@ -547,6 +547,18 @@ fn expect_notification(
 }
 
 ///|
+/// One run-scoped agent event as `notification_for_client` sees it.
+fn client_frame(event : @wire.Event) -> @protocol.Notification? {
+  notification_for_client(
+    AgentEvent({
+      run_id: None,
+      session: "session-1",
+      event: { event, submission_id: None, },
+    }),
+  )
+}
+
+///|
 test "remote delivery omits only canonical transcript duplicates" {
   let events : Array[@wire.Event] = [
     ToolResult(
@@ -561,16 +573,7 @@ test "remote delivery omits only canonical transcript duplicates" {
     ContextYield(to_sequence=2, answer="answer"),
   ]
   for event in events {
-    assert_true(
-      notification_for_client(
-        AgentEvent({
-          run_id: None,
-          session: "session-1",
-          event: { event, submission_id: None, },
-        }),
-      )
-      is None,
-    )
+    assert_true(client_frame(event) is None)
   }
 }
 
@@ -604,16 +607,7 @@ test "remote delivery retains streaming runtime and error events" {
     CompactionFailed(error="compact failed"),
   ]
   for event in events {
-    assert_true(
-      notification_for_client(
-        AgentEvent({
-          run_id: None,
-          session: "session-1",
-          event: { event, submission_id: None, },
-        }),
-      )
-      is Some(_),
-    )
+    assert_true(client_frame(event) is Some(_))
   }
   assert_true(
     notification_for_client(
@@ -664,19 +658,12 @@ test "remote lifecycle frames keep state without transcript text" {
     "answer": "large answer",
   })
   let compacted = expect_notification(
-    notification_for_client(
-      AgentEvent({
-        run_id: None,
-        session: "session-1",
-        event: {
-          event: CompactionFinished(
-            from_sequence=1,
-            to_sequence=2,
-            summary="large summary",
-          ),
-          submission_id: None,
-        },
-      }),
+    client_frame(
+      CompactionFinished(
+        from_sequence=1,
+        to_sequence=2,
+        summary="large summary",
+      ),
     ),
   )
   assert_eq(compacted.params(), {
@@ -693,15 +680,7 @@ test "remote lifecycle frames keep state without transcript text" {
     AssistantMessage(content="large content"),
   ]
   for event in settled_events {
-    let settled = expect_notification(
-      notification_for_client(
-        AgentEvent({
-          run_id: None,
-          session: "session-1",
-          event: { event, submission_id: None, },
-        }),
-      ),
-    )
+    let settled = expect_notification(client_frame(event))
     let event_name = match event {
       ReasoningMessage(..) => "reasoning_message"
       AssistantMessage(..) => "assistant_message"

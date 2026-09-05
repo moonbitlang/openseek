@@ -174,15 +174,9 @@ fn Hub::track_approval(
 ///|
 /// Drop every question belonging to `run_id`.
 fn Hub::forget_run_approvals(self : Hub, run_id : String) -> Unit {
-  let doomed : Array[String] = []
-  for session, approval in self.pending_approvals {
-    if approval.run_id is Some(owner) && owner == run_id {
-      doomed.push(session)
-    }
-  }
-  for session in doomed {
-    self.pending_approvals.remove(session)
-  }
+  self.pending_approvals.retain((_, approval) => {
+    !(approval.run_id is Some(owner) && owner == run_id)
+  })
 }
 
 ///|
@@ -204,10 +198,7 @@ fn Hub::runs(
   self : Hub,
   known? : Array[KnownRunPayload],
 ) -> @protocol.RunsReply {
-  let runs : Array[@protocol.StartedPayload] = []
-  for _, payload in self.active_starts {
-    runs.push(payload)
-  }
+  let runs = self.active_starts.values().to_array()
   let settled : Array[@protocol.RunSettlementPayload] = []
   if known is Some(selectors) {
     for _, settlement in self.settlements {
@@ -220,10 +211,7 @@ fn Hub::runs(
   // client only wants for runs it owns, while a standing question is a turn
   // stopped RIGHT NOW that anyone looking at that session should be able to
   // answer.
-  let approvals : Array[@protocol.PendingApprovalPayload] = []
-  for _, approval in self.pending_approvals {
-    approvals.push(approval)
-  }
+  let approvals = self.pending_approvals.values().to_array()
   { runs, settled, approvals, }
 }
 

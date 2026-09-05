@@ -1,26 +1,26 @@
 ///|
+/// A host-absolute fixture spelling, failing the test when this host does not
+/// classify it as absolute. `loc` is autofilled so the report names the call
+/// site rather than this helper.
+#callsite(autofill(loc))
+fn absolute_fixture(text : String, loc~ : SourceLoc) -> @pathx.Absolute raise {
+  guard @pathx.Path(text).to_absolute() is Some(absolute) else {
+    fail("test fixture \{text} was not absolute", loc~)
+  }
+  absolute
+}
+
+///|
 #cfg(not(platform="windows"))
 test "contains normalizes POSIX paths before comparing them" {
-  guard @pathx.Path("/ws/proj").to_absolute() is Some(root) else {
-    fail("test root was not absolute")
-  }
-  guard @pathx.Path("/ws/proj/tmp/../src/a.mbt").to_absolute() is Some(file) else {
-    fail("test file was not absolute")
-  }
-  guard @pathx.Path("/ws/project/a.mbt").to_absolute() is Some(sibling) else {
-    fail("test sibling was not absolute")
-  }
+  let root = absolute_fixture("/ws/proj")
+  let file = absolute_fixture("/ws/proj/tmp/../src/a.mbt")
+  let sibling = absolute_fixture("/ws/project/a.mbt")
   assert_true(root.contains(file))
   assert_true(root.contains(root))
   assert_false(root.contains(sibling))
-  guard @pathx.Path("/ws/proj/dir\\name/a.mbt").to_absolute()
-    is Some(backslash_name) else {
-    fail("test backslash filename was not absolute")
-  }
-  guard @pathx.Path("/ws/proj/dir/name/a.mbt").to_absolute()
-    is Some(nested_name) else {
-    fail("test nested name was not absolute")
-  }
+  let backslash_name = absolute_fixture("/ws/proj/dir\\name/a.mbt")
+  let nested_name = absolute_fixture("/ws/proj/dir/name/a.mbt")
   assert_true(root.contains(backslash_name))
   assert_false(backslash_name.contains(nested_name))
 }
@@ -28,16 +28,9 @@ test "contains normalizes POSIX paths before comparing them" {
 ///|
 #cfg(platform="windows")
 test "contains normalizes Windows paths before comparing them" {
-  guard @pathx.Path("C:\\ws\\proj").to_absolute() is Some(root) else {
-    fail("test root was not absolute")
-  }
-  guard @pathx.Path("C:\\ws\\proj\\tmp\\..\\src\\a.mbt").to_absolute()
-    is Some(file) else {
-    fail("test file was not absolute")
-  }
-  guard @pathx.Path("C:/ws/project/a.mbt").to_absolute() is Some(sibling) else {
-    fail("test sibling was not absolute")
-  }
+  let root = absolute_fixture("C:\\ws\\proj")
+  let file = absolute_fixture("C:\\ws\\proj\\tmp\\..\\src\\a.mbt")
+  let sibling = absolute_fixture("C:/ws/project/a.mbt")
   assert_true(root.contains(file))
   assert_true(root.contains(root))
   assert_false(root.contains(sibling))
@@ -106,9 +99,7 @@ test "Path::resolve returns a host-absolute path" {
 ///|
 #cfg(not(platform="windows"))
 test "Absolute::relative_to normalizes POSIX paths" {
-  guard @pathx.Path("/ws").to_absolute() is Some(root) else {
-    fail("test root was not absolute")
-  }
+  let root = absolute_fixture("/ws")
   assert_true(
     @pathx.Path("/ws/tmp/../src/a.mbt").to_absolute() is Some(path) &&
     path.relative_to(root~) == Some(Relative("src/a.mbt")),
@@ -128,9 +119,7 @@ test "Absolute::relative_to normalizes POSIX paths" {
     path.relative_to(root~) is None,
   )
   // A trailing slash on the root reads the same as none.
-  guard @pathx.Path("/ws/").to_absolute() is Some(root_with_slash) else {
-    fail("test root with slash was not absolute")
-  }
+  let root_with_slash = absolute_fixture("/ws/")
   assert_true(
     @pathx.Path("/ws/a.mbt").to_absolute() is Some(path) &&
     path.relative_to(root=root_with_slash) == Some(Relative("a.mbt")),
@@ -140,9 +129,7 @@ test "Absolute::relative_to normalizes POSIX paths" {
 ///|
 #cfg(platform="windows")
 test "Absolute::relative_to normalizes Windows paths" {
-  guard @pathx.Path("C:\\ws").to_absolute() is Some(root) else {
-    fail("test root was not absolute")
-  }
+  let root = absolute_fixture("C:\\ws")
   assert_true(
     @pathx.Path("C:\\ws\\tmp\\..\\src\\a.mbt").to_absolute() is Some(path) &&
     path.relative_to(root~) == Some(Relative("src/a.mbt")),
@@ -192,13 +179,9 @@ test "normalize uses POSIX host rules" {
     @pathx.Relative("dir\\name/./file").normalize() ==
     Relative("dir\\name/file"),
   )
-  guard @pathx.Path("/a/./b/../c").to_absolute() is Some(absolute) else {
-    fail("test path was not absolute")
-  }
+  let absolute = absolute_fixture("/a/./b/../c")
   assert_true(absolute.normalize() is Absolute("/a/c"))
-  guard @pathx.Path("/dir\\name/./file").to_absolute() is Some(backslash_name) else {
-    fail("test backslash filename was not absolute")
-  }
+  let backslash_name = absolute_fixture("/dir\\name/./file")
   assert_true(backslash_name.normalize() is Absolute("/dir\\name/file"))
 }
 
@@ -210,9 +193,7 @@ test "normalize uses Windows host rules and typed paths use forward slashes" {
     @pathx.Relative("src\\tmp\\..\\main.mbt").normalize() ==
     Relative("src/main.mbt"),
   )
-  guard @pathx.Path("C:\\a\\.\\b\\..\\c").to_absolute() is Some(absolute) else {
-    fail("test path was not absolute")
-  }
+  let absolute = absolute_fixture("C:\\a\\.\\b\\..\\c")
   assert_true(absolute.normalize() is Absolute("C:/a/c"))
 }
 
@@ -220,9 +201,7 @@ test "normalize uses Windows host rules and typed paths use forward slashes" {
 #cfg(not(platform="windows"))
 test "other host path operations keep POSIX spellings" {
   assert_eq(@pathx.Path("a").join(Relative("b")).0, "a/b")
-  guard @pathx.Path("/a").to_absolute() is Some(root) else {
-    fail("test root was not absolute")
-  }
+  let root = absolute_fixture("/a")
   assert_true(root.join(Relative("b/../c")) is Absolute("/a/c"))
   assert_eq(@pathx.Path("a/b.txt").dirname().0, "a")
   assert_eq(@pathx.Path("a/b.txt").basename().to_owned(), "b.txt")
@@ -233,9 +212,7 @@ test "other host path operations keep POSIX spellings" {
 #cfg(platform="windows")
 test "other host path operations keep Windows spellings" {
   assert_eq(@pathx.Path("a").join(Relative("b")).0, "a\\b")
-  guard @pathx.Path("C:\\a").to_absolute() is Some(root) else {
-    fail("test root was not absolute")
-  }
+  let root = absolute_fixture("C:\\a")
   assert_true(root.join(Relative("b/../c")) is Absolute("C:\\a\\c"))
   assert_eq(@pathx.Path("a\\b.txt").dirname().0, "a")
   assert_eq(@pathx.Path("a\\b.txt").basename().to_owned(), "b.txt")
@@ -245,9 +222,7 @@ test "other host path operations keep Windows spellings" {
 ///|
 #cfg(not(platform="windows"))
 test "POSIX absolute paths round-trip through URI paths" {
-  guard @pathx.Path("/work/a b/#file.mbt").to_absolute() is Some(absolute) else {
-    fail("expected an absolute POSIX fixture")
-  }
+  let absolute = absolute_fixture("/work/a b/#file.mbt")
   assert_eq(absolute.to_uri_path(), Some("/work/a b/#file.mbt"))
   assert_eq(
     @pathx.Absolute::from_uri_path("/work/a b/#file.mbt"),
@@ -258,9 +233,7 @@ test "POSIX absolute paths round-trip through URI paths" {
 ///|
 #cfg(not(platform="windows"))
 test "resource URI conversion rejects double-rooted POSIX paths" {
-  guard @pathx.Path("//server/share/a.mbt").to_absolute() is Some(absolute) else {
-    fail("expected an absolute POSIX fixture")
-  }
+  let absolute = absolute_fixture("//server/share/a.mbt")
   assert_true(absolute.to_uri_path() is None)
   assert_true(@pathx.Absolute::from_uri_path("//server/share/a.mbt") is None)
 }
@@ -268,9 +241,7 @@ test "resource URI conversion rejects double-rooted POSIX paths" {
 ///|
 #cfg(platform="windows")
 test "Windows drive paths round-trip through URI paths" {
-  guard @pathx.Path("C:\\work\\a b\\#file.mbt").to_absolute() is Some(absolute) else {
-    fail("expected an absolute Windows fixture")
-  }
+  let absolute = absolute_fixture("C:\\work\\a b\\#file.mbt")
   assert_eq(absolute.to_uri_path(), Some("/C:/work/a b/#file.mbt"))
   assert_true(
     @pathx.Absolute::from_uri_path("/C:/work/a b/#file.mbt") is Some(decoded) &&
@@ -282,10 +253,7 @@ test "Windows drive paths round-trip through URI paths" {
 #cfg(platform="windows")
 test "resource URI conversion rejects UNC and root-relative Windows paths" {
   for path in ["\\\\server\\share\\a.mbt", "\\rooted\\a.mbt"] {
-    guard @pathx.Path(path).to_absolute() is Some(absolute) else {
-      fail("expected an absolute Windows fixture")
-    }
-    assert_true(absolute.to_uri_path() is None)
+    assert_true(absolute_fixture(path).to_uri_path() is None)
   }
   assert_true(@pathx.Absolute::from_uri_path("//server/share/a.mbt") is None)
   assert_true(@pathx.Absolute::from_uri_path("/rooted/a.mbt") is None)

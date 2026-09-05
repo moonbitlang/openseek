@@ -212,9 +212,6 @@ async test "prepared payload dir accepts existing toolchain root" {
     seed_dir=runtime.join("seed").join("macos-arm64").resolve(),
     runtime_dir=runtime,
   )
-  let actual = match result {
-    Some(path) => path.to_string()
-    None => "<none>"
-  }
+  let actual = result.map(path => path.to_string()).unwrap_or("<none>")
   assert_eq(actual, expected)
 }
