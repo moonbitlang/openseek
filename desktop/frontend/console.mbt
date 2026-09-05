@@ -224,17 +224,11 @@ fn apply_roster(
   // roster no longer grants, drops its state and conversations and disposes
   // its PTYs. Removing the device also removes its root subscription, whose
   // unload closes the socket before update's commands run.
-  let devices : Array[DeviceState] = []
-  for dev in model.devices {
-    let granted = if dev.channel is Remote(id) {
-      metas.iter().any(meta => meta.id == id)
-    } else {
-      false
-    }
-    if Some(dev.channel) == page_channel && granted {
-      devices.push(dev)
-    }
-  }
+  let devices = model.devices.filter(dev => {
+    Some(dev.channel) == page_channel &&
+    dev.channel is Remote(id) &&
+    metas.iter().any(meta => meta.id == id)
+  })
   let conversations = model.conversations.filter(conv => {
     devices.iter().any(dev => dev.channel == conv.device)
   })

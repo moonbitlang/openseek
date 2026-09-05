@@ -35,27 +35,21 @@ fn notification_msg(
       let changes : Array[@fileeditor.FileChange]? = if payload.baseline {
         None
       } else {
-        let decoded : Array[@fileeditor.FileChange] = []
-        for item in payload.events {
+        let decoded = payload.events.filter_map(item => {
           match item.kind_ {
-            "modify" =>
-              decoded.push(@fileeditor.Modified(@pathx.Relative(item.path)))
-            "create" =>
-              decoded.push(@fileeditor.Created(@pathx.Relative(item.path)))
-            "remove" =>
-              decoded.push(@fileeditor.Removed(@pathx.Relative(item.path)))
+            "modify" => Some(@fileeditor.Modified(@pathx.Relative(item.path)))
+            "create" => Some(@fileeditor.Created(@pathx.Relative(item.path)))
+            "remove" => Some(@fileeditor.Removed(@pathx.Relative(item.path)))
             "rename" =>
-              if item.old_path is Some(old) {
-                decoded.push(
-                  @fileeditor.Renamed(
-                    old=@pathx.Relative(old),
-                    new=@pathx.Relative(item.path),
-                  ),
+              item.old_path.map(old => {
+                @fileeditor.Renamed(
+                  old=@pathx.Relative(old),
+                  new=@pathx.Relative(item.path),
                 )
-              }
-            _ => ()
+              })
+            _ => None
           }
-        }
+        })
         Some(decoded)
       }
       Some(
@@ -578,20 +572,13 @@ fn fetch_runs(
       ) catch {
         _ => return
       }
-      let live : Array[String] = []
-      let recovered : Array[RecoveredRun] = []
-      for item in reply.runs {
-        live.push(item.run_id)
-        if RecoveredRun::from_started(channel, item) is Some(run) {
-          recovered.push(run)
-        }
-      }
-      let recovered_settlements : Array[RecoveredSettlement] = []
-      for item in reply.settled {
-        if RecoveredSettlement::from_reply(item) is Some(settlement) {
-          recovered_settlements.push(settlement)
-        }
-      }
+      let live = reply.runs.map(item => item.run_id)
+      let recovered = reply.runs.filter_map(item => {
+        RecoveredRun::from_started(channel, item)
+      })
+      let recovered_settlements = reply.settled.filter_map(
+        RecoveredSettlement::from_reply,
+      )
       // Standing questions come back unfiltered: unlike a settlement, which is
       // history only its owner wants, a blocked turn is stopped right now and
       // whoever is looking at that session should be able to unblock it.

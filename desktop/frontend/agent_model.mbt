@@ -137,13 +137,10 @@ fn openseek_model_group(
     Glm => [Glm53, Glm53Flash]
     Custom => [DsPro, DsFlash, Glm53, Glm53Flash]
   }
-  let options : Array[@composer.ModelOption] = []
-  for model in listed {
-    options.push({
-      value: ModelChoice::OpenSeekModel(model).wire(),
-      label: model.label(),
-    })
-  }
+  let options = listed.map(model => @composer.ModelOption::{
+    value: ModelChoice::OpenSeekModel(model).wire(),
+    label: model.label(),
+  })
   if !listed.contains(selected) {
     options.push({
       value: ModelChoice::OpenSeekModel(selected).wire(),
@@ -179,13 +176,10 @@ test "the model group follows the configured provider" {
 fn Model::codex_model_group(self : Model) -> @composer.ModelGroup {
   match self.codex.model_listing() {
     CodexModels(options, selected=_) => {
-      let prefixed : Array[@composer.ModelOption] = []
-      for option in options {
-        prefixed.push({
-          value: ModelChoice::CodexModel(option.value).wire(),
-          label: option.label,
-        })
-      }
+      let prefixed = options.map(option => @composer.ModelOption::{
+        value: ModelChoice::CodexModel(option.value).wire(),
+        label: option.label,
+      })
       { label: "Codex", options: prefixed, }
     }
     CodexModelsUnavailable(label) =>
