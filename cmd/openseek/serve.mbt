@@ -471,78 +471,36 @@ test "an unblocked goal resumes auto-continuation at the boundary" {
 }
 
 ///|
+/// Test helper: `should_auto_continue` with every input defaulted to its
+/// continuing value, so a case reads as the one condition it flips.
+fn auto_continues(
+  auto? : Bool = true,
+  finished? : Bool = true,
+  idle? : Bool = true,
+  shutting_down? : Bool = false,
+  goal_standing? : Bool = true,
+  turns_remaining? : Int = 1,
+) -> Bool {
+  should_auto_continue(
+    auto~,
+    finished~,
+    idle~,
+    shutting_down~,
+    goal_standing~,
+    turns_remaining~,
+  )
+}
+
+///|
 test "auto-continue requires a finished idle serving turn with budget" {
-  assert_true(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=true,
-      shutting_down=false,
-      goal_standing=true,
-      turns_remaining=1,
-    ),
-  )
+  assert_true(auto_continues())
   // Any single condition failing pauses for the controller.
-  assert_false(
-    should_auto_continue(
-      auto=false,
-      finished=true,
-      idle=true,
-      shutting_down=false,
-      goal_standing=true,
-      turns_remaining=1,
-    ),
-  )
-  assert_false(
-    should_auto_continue(
-      auto=true,
-      finished=false,
-      idle=true,
-      shutting_down=false,
-      goal_standing=true,
-      turns_remaining=1,
-    ),
-  )
-  assert_false(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=false,
-      shutting_down=false,
-      goal_standing=true,
-      turns_remaining=1,
-    ),
-  )
-  assert_false(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=true,
-      shutting_down=true,
-      goal_standing=true,
-      turns_remaining=1,
-    ),
-  )
-  assert_false(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=true,
-      shutting_down=false,
-      goal_standing=false,
-      turns_remaining=1,
-    ),
-  )
-  assert_false(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=true,
-      shutting_down=false,
-      goal_standing=true,
-      turns_remaining=0,
-    ),
-  )
+  assert_false(auto_continues(auto=false))
+  assert_false(auto_continues(finished=false))
+  assert_false(auto_continues(idle=false))
+  assert_false(auto_continues(shutting_down=true))
+  assert_false(auto_continues(goal_standing=false))
+  assert_false(auto_continues(turns_remaining=0))
 }
 
 ///|

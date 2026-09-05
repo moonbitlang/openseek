@@ -295,6 +295,19 @@ fn ApprovalDesk::standing(self : ApprovalDesk) -> String? {
 }
 
 ///|
+/// Test helper: block until the asker has registered its pending entry. It
+/// registers before it blocks, so wait for that rather than assuming the
+/// spawn already ran.
+async fn await_standing(desk : ApprovalDesk) -> Unit {
+  for _ in 0..<200 {
+    if desk.standing() is Some(_) {
+      break
+    }
+    @async.sleep(5)
+  }
+}
+
+///|
 async test "an answered question resolves to the controller's decision" {
   let desk = ApprovalDesk::ApprovalDesk(now_ms=0)
   @async.with_task_group(group => {
@@ -305,14 +318,7 @@ async test "an answered question resolves to the controller's decision" {
         body: Some("fn main { println(1) }"),
       })
     })
-    // The asker registers its pending entry before it blocks; wait for it
-    // rather than assuming the spawn already ran.
-    for _ in 0..<200 {
-      if desk.standing() is Some(_) {
-        break
-      }
-      @async.sleep(5)
-    }
+    await_standing(desk)
     guard desk.standing() is Some(id) else { fail("no question was announced") }
     desk.settle(id, true)
     assert_true(asked.wait() is AllowedOnce)
@@ -331,12 +337,7 @@ async test "a refused question resolves to rejected" {
         body: Some("fn main { println(1) }"),
       })
     })
-    for _ in 0..<200 {
-      if desk.standing() is Some(_) {
-        break
-      }
-      @async.sleep(5)
-    }
+    await_standing(desk)
     guard desk.standing() is Some(id) else { fail("no question was announced") }
     desk.settle(id, false)
     assert_true(asked.wait() is Rejected)
@@ -354,12 +355,7 @@ async test "a decision for a settled question is discarded" {
     let asking = group.spawn(() => {
       desk.ask({ tool_name: "mbtx", detail: "escalate", body: None, })
     })
-    for _ in 0..<200 {
-      if desk.pending.length() > 0 {
-        break
-      }
-      @async.sleep(5)
-    }
+    await_standing(desk)
     asking.cancel()
   })
   assert_eq(desk.pending.length(), 0)
@@ -398,12 +394,7 @@ async test "an interrupted wait still retires its question" {
         body: Some("fn main { println(1) }"),
       })
     })
-    for _ in 0..<200 {
-      if desk.pending.length() > 0 {
-        break
-      }
-      @async.sleep(5)
-    }
+    await_standing(desk)
     // The pending entry proves a tool is blocked here right now.
     assert_eq(desk.pending.length(), 1)
     asking.cancel()
@@ -426,12 +417,7 @@ async test "closing the command stream withdraws a standing question" {
     let asking = group.spawn(() => {
       desk.ask({ tool_name: "mbtx", detail: "escalate", body: None, })
     })
-    for _ in 0..<200 {
-      if desk.pending.length() > 0 {
-        break
-      }
-      @async.sleep(5)
-    }
+    await_standing(desk)
     desk.withdraw_all()
     assert_true(asking.wait() is Cancelled)
   })
