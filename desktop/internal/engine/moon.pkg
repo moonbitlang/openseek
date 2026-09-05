@@ -14,6 +14,7 @@ import {
   "openseek_desktop/internal/session_record",
   "openseek_desktop/internal/session_store",
   "openseek_desktop/internal/subrun",
+  "openseek_desktop/internal/workflow",
   "openseek_desktop/internal/uuid",
   "openseek_desktop/internal/worktree",
   "openseek_desktop/internal/workspaces",

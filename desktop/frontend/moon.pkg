@@ -36,6 +36,7 @@ import {
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/subrun",
+  "openseek_desktop/frontend/workflow",
   "openseek_desktop/frontend/project_picker",
   "openseek_desktop/frontend/preview",
   "openseek_desktop/frontend/resource",

@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/internal/workflow"
+
+import {
+  "moonbitlang/core/debug",
+  "openseek_desktop/internal/protocol",
+}
+
+// Values
+pub fn display_label(String) -> String
+
+pub async fn follow_run(workflow~ : String, session~ : String, journal~ : String, events~ : String, on_child_started~ : async (ChildStarted) -> Unit, on_child_finished~ : async (ChildFinished) -> Unit, on_entry~ : async (@protocol.WorkflowEntryPayload) -> Unit) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) struct ChildFinished {
+  child : String
+  status : String
+  steps : Int
+  tokens : Int
+} derive(Eq, @debug.Debug)
+pub fn ChildFinished::equal(Self, Self) -> Bool
+pub fn ChildFinished::not_equal(Self, Self) -> Bool
+pub fn ChildFinished::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ChildStarted {
+  child : String
+  kind : String
+  label : String
+} derive(Eq, @debug.Debug)
+pub fn ChildStarted::equal(Self, Self) -> Bool
+pub fn ChildStarted::not_equal(Self, Self) -> Bool
+pub fn ChildStarted::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

@@ -625,7 +625,7 @@ html.is-resizing * {
   border-radius: var(--radius-xs);
 }
 .search-semantic-hit:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-bg-hover, var(--color-bg-surface));
 }
 .search-semantic-meta {
   display: flex;
@@ -1769,7 +1769,7 @@ button.git-history-file.selected {
 
 .history-commit-crumb {
   color: var(--color-text-secondary);
-  font-family: var(--font-mono);
+  font-family: var(--font-mono, ui-monospace, monospace);
 }
 
 .file-panel-empty {
@@ -2642,4 +2642,132 @@ button.git-history-file.selected {
 .semantic-review-host .semantic-diff-editor-host .scrollbar.vertical,
 .semantic-review-host .semantic-diff-editor-host .scrollbar.horizontal {
   display: none !important;
+}
+
+/* The workflows tab. Like the browser and launcher modes, the file chrome is
+   hidden while it is active and its own body is shown; the body is always
+   mounted, so the panel's child order stays structural. */
+.editor .workflow-panel {
+  display: none;
+}
+.editor.mode-workflows .viewer-breadcrumb,
+.editor.mode-workflows .editor-body,
+.editor.mode-workflows .browser-chrome {
+  display: none;
+}
+.editor.mode-workflows .workflow-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px;
+}
+.workflow-empty {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+.workflow-run {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.workflow-run-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 2px 4px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+.workflow-run-id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--color-text);
+}
+.workflow-run-state {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--font-size-xs);
+}
+.workflow-run-state-running {
+  color: var(--color-accent);
+}
+.workflow-run-tokens,
+.workflow-run-cost,
+.workflow-run-count {
+  color: var(--color-text-muted);
+}
+.workflow-rows {
+  display: flex;
+  flex-direction: column;
+}
+/* A row is a button: clicking it opens the child's transcript. It shares the
+   lane dock's baseline grid so a child reads the same way in both places. */
+.workflow-row {
+  display: grid;
+  grid-template-columns: 6px auto 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.workflow-row:hover,
+.workflow-row:focus-visible {
+  background: var(--color-bg-hover, var(--color-bg-surface));
+  outline: none;
+}
+.workflow-row-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-secondary);
+}
+.workflow-row-running .workflow-row-mark {
+  animation: lane-pulse 1.6s ease-in-out infinite;
+}
+.workflow-row-done .workflow-row-mark {
+  background: var(--color-success, var(--color-text-secondary));
+  animation: none;
+}
+.workflow-row-failed .workflow-row-mark {
+  background: var(--color-danger, var(--color-text-secondary));
+  animation: none;
+}
+.workflow-row-kind {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+.workflow-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+.workflow-row-status {
+  color: var(--color-text-muted);
+}
+.workflow-row-detail {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+.workflow-row-detail:empty {
+  display: none;
 }

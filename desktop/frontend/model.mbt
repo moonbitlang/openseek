@@ -811,6 +811,11 @@ priv struct Conversation {
   // engine events arrive stamped with this id once the run phase is already
   // back to `NoRun`; routing them needs the retained id.
   last_run_id : String?
+  // Workflows this conversation's snippets announced, one row per subagent.
+  // Live-only, like the lanes: the run's journal and the children's own
+  // transcripts in the store are the record, and a reload rebuilds nothing
+  // here until the next bracket or entry arrives.
+  workflows : Array[@workflow.Run]
   // Where this conversation's compaction stands; see `CompactionPhase`.
   compaction : CompactionPhase
   // A run finished while this conversation was off screen and the user has
@@ -2052,6 +2057,8 @@ priv enum Msg {
   // menu; all inventories share this one shell transition.
   BrowserTabRequested
   ExplorerRequested(@fileeditor.ExplorerMode)
+  // Open the Workflows tab in the right panel.
+  WorkflowsRequested
   // The browser toolbar, acting on whatever Browser tab is active — the
   // messages carry no id so a stale click cannot outlive a tab switch.
   BrowserAddressEdited(String)
@@ -2229,6 +2236,10 @@ priv enum DeviceMsg {
     steps~ : Int,
     activity~ : String
   )
+  // The host's `workflow.entry` broadcast: one resolved call of a workflow a
+  // snippet is running, read from the run's journal. Routed to the parent
+  // conversation by the entry's own session, like sub-run progress.
+  WorkflowEntryArrived(@interop.ChannelId, @workflow.Entry)
   // The registered projects — the reply to `workspace.list`. Both
   // generations are required: reconnect rejects a dead socket, while request
   // generation rejects an older reply from the current connection.
@@ -2495,6 +2506,7 @@ fn empty_conversation(
     task: "",
     mentions: [],
     composer_draft_present: false,
+    workflows: [],
     run: NoRun(ended=None),
     last_run_id: None,
     compaction: NotCompacting,

@@ -122,6 +122,11 @@ pub(all) enum EngineEvent {
   /// brackets on the raw stream own the sub-run's start and end, and this
   /// only refreshes what it is doing in between.
   SubrunProgress(@protocol.SubrunProgressPayload)
+  /// One resolved call of a workflow a snippet is running, read from the
+  /// run's journal. Not lifecycle and not durable here: the journal is the
+  /// record, and the `workflow_started`/`workflow_finished` brackets on the
+  /// raw stream own the run's start and end.
+  WorkflowEntry(@protocol.WorkflowEntryPayload)
 }
 
 ///|

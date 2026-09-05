@@ -1745,6 +1745,12 @@ async fn ServeEngine::consume(
   // never arrives cannot outlive the engine that launched it.
   @async.with_task_group() <| group => {
     let probes : Map[String, @async.Task[Unit]] = Map([])
+    // Workflow tails likewise: one per run a snippet announced, spawned at
+    // its `workflow_started` bracket and cancelled at the finish. A tail
+    // turns the run's sidecar into the SAME sub-run brackets an `explore`
+    // child gets — so the lane dock and the child's own probe need no new
+    // path — and its journal into `workflow.entry` pushes.
+    let tails : Map[String, @async.Task[Unit]] = Map([])
     for ;; {
       guard reader.read_until("\n") is Some(line) else { break }
       for json in @jsonl.parse(line) {
@@ -1772,6 +1778,99 @@ async fn ServeEngine::consume(
             if probes.get(id) is Some(probe) {
               probes.remove(id)
               probe.cancel()
+            }
+          Some(WorkflowStarted(id~, journal~, events~, ..)) =>
+            if engine.session_root is Some(root) && tails.get(id) is None {
+              tails[id] = group.spawn(no_wait=true, allow_failure=true, () => {
+                @workflow.follow_run(
+                  workflow=id,
+                  session=engine.session_key,
+                  journal~,
+                  events~,
+                  on_child_started=started => {
+                    // The child's session id is `<parent>-sr-N`; its bracket
+                    // id is the `sr-N` suffix, exactly as `run_subrun` names
+                    // the children it launches itself.
+                    guard @wire.split_child_session_id(started.child)
+                      is Some((_, ordinal)) else {
+                      return
+                    }
+                    let sr = "sr-\{ordinal}"
+                    let event : @wire.Event = SubrunStarted(
+                      id=sr,
+                      kind=started.kind,
+                      label=@workflow.display_label(started.label),
+                    )
+                    let (run_id, submission_id) = engine.steer_runs.route_event(
+                      Some(event),
+                      engine.phase.latest_run(),
+                    )
+                    emit(
+                      sink,
+                      StreamEvent({
+                        run_id,
+                        session: engine.session_key,
+                        event: { event, submission_id, },
+                      }),
+                    )
+                    if probes.get(sr) is None {
+                      probes[sr] = group.spawn(
+                        no_wait=true,
+                        allow_failure=true,
+                        () => {
+                          @subrun.follow_progress(
+                            root~,
+                            parent_session=engine.session_key,
+                            id=sr,
+                            publish=payload => {
+                              emit(sink, SubrunProgress(payload))
+                            },
+                          )
+                        },
+                      )
+                    }
+                  },
+                  on_child_finished=finished => {
+                    guard @wire.split_child_session_id(finished.child)
+                      is Some((_, ordinal)) else {
+                      return
+                    }
+                    let sr = "sr-\{ordinal}"
+                    // The sidecar reports the spend as one figure; the
+                    // bracket wants it split, and the lane only ever shows
+                    // the sum.
+                    let event : @wire.Event = SubrunFinished(
+                      id=sr,
+                      status=finished.status,
+                      steps=finished.steps,
+                      prompt_tokens=finished.tokens,
+                      completion_tokens=0,
+                    )
+                    let (run_id, submission_id) = engine.steer_runs.route_event(
+                      Some(event),
+                      engine.phase.latest_run(),
+                    )
+                    emit(
+                      sink,
+                      StreamEvent({
+                        run_id,
+                        session: engine.session_key,
+                        event: { event, submission_id, },
+                      }),
+                    )
+                    if probes.get(sr) is Some(probe) {
+                      probes.remove(sr)
+                      probe.cancel()
+                    }
+                  },
+                  on_entry=entry => emit(sink, WorkflowEntry(entry)),
+                )
+              })
+            }
+          Some(WorkflowFinished(id~)) =>
+            if tails.get(id) is Some(tail) {
+              tails.remove(id)
+              tail.cancel()
             }
           _ => ()
         }

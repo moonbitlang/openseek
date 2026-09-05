@@ -108,6 +108,20 @@ pub fn open_picker(state : State) -> State {
 }
 
 ///|
+/// Open the workflows tab, re-activating the existing one — at most one
+/// lives in the strip.
+pub fn open_workflows(state : State) -> State {
+  let tabs = if tab_index(state, Workflows) is Some(_) {
+    state.tabs
+  } else {
+    let tabs = state.tabs.copy()
+    tabs.push(Workflows)
+    tabs
+  }
+  { ..state, tabs, active: Some(Workflows), }
+}
+
+///|
 /// A file was picked while the picker tab is in the strip: the picker is
 /// replaced in place by that file's tab — unless the file is already open,
 /// in which case its existing tab activates and the picker closes. Without

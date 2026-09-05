@@ -80,6 +80,7 @@ pub(all) enum EngineEvent {
   Finished(@protocol.FinishedPayload)
   SessionCommit(@protocol.SessionCommitPayload)
   SubrunProgress(@protocol.SubrunProgressPayload)
+  WorkflowEntry(@protocol.WorkflowEntryPayload)
 }
 
 type EngineManager

@@ -13,6 +13,7 @@ pub(all) enum NotificationKind {
   AgentFinished
   SessionEvent
   SubrunProgress
+  WorkflowEntry
   SessionChanged
   WorkspaceChanged
   WorkspaceSettingsChanged
@@ -45,6 +46,7 @@ pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
     AgentFinished => "agent.finished"
     SessionEvent => "session.event"
     SubrunProgress => "subrun.progress"
+    WorkflowEntry => "workflow.entry"
     SessionChanged => "session.changed"
     WorkspaceChanged => "workspace.changed"
     WorkspaceSettingsChanged => "workspace.settings_changed"
@@ -78,6 +80,7 @@ pub fn NotificationKind::all() -> Array[NotificationKind] {
     AgentFinished,
     SessionEvent,
     SubrunProgress,
+    WorkflowEntry,
     SessionChanged,
     WorkspaceChanged,
     WorkspaceSettingsChanged,
@@ -112,6 +115,7 @@ pub(all) enum Notification {
   AgentFinished(FinishedPayload)
   SessionEvent(SessionCommitPayload)
   SubrunProgress(SubrunProgressPayload)
+  WorkflowEntry(WorkflowEntryPayload)
   SessionChanged(SessionChangedPayload)
   WorkspaceChanged(WorkspacesChangedPayload)
   WorkspaceSettingsChanged(WorkspaceSettingsPayload)
@@ -157,6 +161,8 @@ pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
       Some(SessionEvent(@json.from_json(params) catch { _ => return None }))
     "subrun.progress" =>
       Some(SubrunProgress(@json.from_json(params) catch { _ => return None }))
+    "workflow.entry" =>
+      Some(WorkflowEntry(@json.from_json(params) catch { _ => return None }))
     "session.changed" =>
       Some(SessionChanged(@json.from_json(params) catch { _ => return None }))
     "workspace.changed" =>
@@ -226,6 +232,7 @@ pub fn Notification::kind(self : Notification) -> NotificationKind {
     AgentFinished(_) => AgentFinished
     SessionEvent(_) => SessionEvent
     SubrunProgress(_) => SubrunProgress
+    WorkflowEntry(_) => WorkflowEntry
     SessionChanged(_) => SessionChanged
     WorkspaceChanged(_) => WorkspaceChanged
     WorkspaceSettingsChanged(_) => WorkspaceSettingsChanged
@@ -265,6 +272,7 @@ pub fn Notification::params(self : Notification) -> Json {
     AgentFinished(payload) => ToJson::to_json(payload)
     SessionEvent(payload) => ToJson::to_json(payload)
     SubrunProgress(payload) => ToJson::to_json(payload)
+    WorkflowEntry(payload) => ToJson::to_json(payload)
     SessionChanged(payload) => ToJson::to_json(payload)
     WorkspaceChanged(payload) => ToJson::to_json(payload)
     WorkspaceSettingsChanged(payload) => ToJson::to_json(payload)
@@ -377,3 +385,35 @@ pub extend NotificationKind with Eq::{equal, not_equal}
 
 ///|
 pub extend NotificationKind with Hash::{hash, hash_combine}
+
+///|
+test "a workflow entry round-trips at the wire edge" {
+  let params : Json = {
+    "workflow": "wf-5",
+    "session": "run7",
+    "child": "run7-sr-5",
+    "kind": "explore",
+    "label": "scout:x",
+    "phase": "survey",
+    "status": "captured",
+    "steps": 12,
+    "prompt_tokens": 3000,
+    "completion_tokens": 400,
+    "started_at": 1788535817640,
+    "finished_at": 1788535817648,
+  }
+  // `cost_usd` is absent, not null: an optional field that is not there
+  // decodes as None, and encodes back to nothing — the round trip below
+  // pins that the params come back exactly as sent.
+  guard Notification::from_wire("workflow.entry", params) is Some(event) else {
+    fail("known notification was rejected")
+  }
+  assert_eq(event.wire_name(), "workflow.entry")
+  assert_eq(event.kind(), WorkflowEntry)
+  guard event is WorkflowEntry(payload) else { fail("wrong case") }
+  assert_eq(payload.child, "run7-sr-5")
+  assert_eq(payload.phase, Some("survey"))
+  assert_eq(payload.cost_usd, None)
+  assert_eq(payload.finished_at, Some(1788535817648.0))
+  assert_eq(event.params(), params)
+}

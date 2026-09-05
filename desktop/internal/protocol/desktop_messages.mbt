@@ -1083,6 +1083,35 @@ pub(all) struct SubrunProgressPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// One resolved call of a workflow a snippet is running, read by the host from
+/// the run's journal and broadcast as `workflow.entry`. Nothing downstream
+/// persists it: the journal itself is the record, and a client that arrives
+/// late rebuilds its view from the next entries it sees. `child` is the
+/// subagent's own session id (`<parent>-sr-N`), the same string its transcript
+/// is named by — a reader can open it directly. `phase`, `cost_usd` and the
+/// timestamps are absent when the journal did not carry them.
+pub(all) struct WorkflowEntryPayload {
+  /// The run, as `workflow_started` named it (`wf-N`).
+  workflow : String
+  /// The parent session the run belongs to.
+  session : String
+  child : String
+  kind : String
+  label : String
+  phase : String?
+  /// The contract's snake_case terminal: `captured`, `no_report`,
+  /// `max_steps`, `context_yield`, `timed_out`, `skipped`, `failed`.
+  status : String
+  steps : Int
+  prompt_tokens : Int
+  completion_tokens : Int
+  cost_usd : Double?
+  /// Milliseconds since the epoch, as plain JSON numbers.
+  started_at : Double?
+  finished_at : Double?
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
 /// One exact store-qualified session changed placement or display metadata.
 /// Current change values are `archived`, `unarchived`, `deleted`, and
 /// `renamed`; clients still treat unknown values as list invalidations.
@@ -2002,6 +2031,18 @@ pub extend SubrunProgressPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend SubrunProgressPayload with ToJson::{to_json}
+
+///|
+pub extend WorkflowEntryPayload with Debug::{to_repr}
+
+///|
+pub extend WorkflowEntryPayload with FromJson::{from_json}
+
+///|
+pub extend WorkflowEntryPayload with Eq::{equal, not_equal}
+
+///|
+pub extend WorkflowEntryPayload with ToJson::{to_json}
 
 ///|
 pub extend TerminalAckPayload with Debug::{to_repr}

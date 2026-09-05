@@ -39,6 +39,13 @@ fn panel_view(
         }
         { tab, label, title, missing: false, }
       }
+      Workflows =>
+        {
+          tab,
+          label: "Workflows",
+          title: "Subagents this conversation delegated to",
+          missing: false,
+        }
       FilePicker =>
         match input.file_panel.explorer_mode {
           ExplorerChanges =>
@@ -75,6 +82,7 @@ fn panel_view(
     search: @cmd.batch([actions.search, actions.close_menu]),
     files: @cmd.batch([actions.files, actions.close_menu]),
     review: @cmd.batch([actions.review, actions.close_menu]),
+    workflows: @cmd.batch([actions.workflows, actions.close_menu]),
   }
   // Every body remains mounted and CSS selects the active kind. This preserves
   // the imperative Viewer and native browser attachment points.
@@ -88,6 +96,7 @@ fn panel_view(
     Some(FilePicker) => "mode-picker"
     Some(File(_)) => "mode-file"
     Some(GitDiff(_)) => "mode-history"
+    Some(Workflows) => "mode-workflows"
   }
   let active_page : @preview.PageState = match
     @dock.active_browser(input.dock) {
@@ -142,6 +151,7 @@ fn panel_view(
           ([] : Array[@html.Html]),
         ),
       ]),
+      @workflow.panel(input.workflows, { open_child: actions.open_child, }),
       @dock.launcher_pane(launcher),
     ],
   )

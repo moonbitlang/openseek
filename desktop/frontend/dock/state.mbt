@@ -34,6 +34,10 @@ pub(all) enum DockTab {
   // The transient open-a-file tab (at most one): the file view's tree with
   // a pick-a-file placeholder. Picking a file replaces it in place.
   FilePicker
+  // The subagent viewer this enum's comment anticipated: every workflow the
+  // conversation's snippets announced, one row per subagent, each a click
+  // from that child's own transcript. At most one lives in the strip.
+  Workflows
 } derive(Eq)
 
 ///|

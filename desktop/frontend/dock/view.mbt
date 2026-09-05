@@ -111,6 +111,25 @@ fn icon_review() -> @html.Html {
 }
 
 ///|
+/// One node fanning out to three: the launcher's Workflows row.
+fn icon_workflows() -> @html.Html {
+  @svg.svg(
+    width=16,
+    height=16,
+    view_box="0 0 16 16",
+    attrs=@svg.Attrs::build()
+      .fill("none")
+      .stroke("currentColor")
+      .stroke_linecap("round"),
+    [
+      @svg.path(d="M2.5 8h4"),
+      @svg.path(d="M6.5 8c2 0 2-4.5 4-4.5M6.5 8c2 0 2 4.5 4 4.5M6.5 8h4"),
+      @svg.path(d="M10.5 3.5h3M10.5 8h3M10.5 12.5h3"),
+    ],
+  )
+}
+
+///|
 /// An icon in a fixed-size span. Icons are functions, not shared constants:
 /// each render site gets its own virtual-DOM value, so no Props instance is
 /// ever aliased between two mounted elements.
@@ -142,6 +161,7 @@ pub(all) struct LauncherActions {
   search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
+  workflows : @cmd.Cmd
 }
 
 ///|
@@ -177,6 +197,16 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
       icon(icon_review),
       @html.span(class="dock-launcher-name", "Review"),
       @html.span(class="dock-launcher-hint", "Review changed files and diffs"),
+    ]),
+  )
+  rows.push(
+    @html.button(class="dock-launcher-row", on_click=actions.workflows, [
+      icon(icon_workflows),
+      @html.span(class="dock-launcher-name", "Workflows"),
+      @html.span(
+        class="dock-launcher-hint",
+        "Subagents this conversation delegated to",
+      ),
     ]),
   )
   rows

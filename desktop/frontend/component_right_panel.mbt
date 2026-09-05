@@ -9,5 +9,9 @@ fn Model::right_panel_input(self : Model) -> @right_panel.Input {
     is_desktop=self.is_desktop,
     menu_open=self.right_panel_menu_open,
     expanded=self.right_panel_expanded,
+    workflows=self
+      .active_conversation()
+      .map(conv => conv.workflows)
+      .unwrap_or([]),
   )
 }

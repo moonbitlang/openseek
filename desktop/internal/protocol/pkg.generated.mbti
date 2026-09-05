@@ -1426,6 +1426,7 @@ pub(all) enum Notification {
   AgentFinished(FinishedPayload)
   SessionEvent(SessionCommitPayload)
   SubrunProgress(SubrunProgressPayload)
+  WorkflowEntry(WorkflowEntryPayload)
   SessionChanged(SessionChangedPayload)
   WorkspaceChanged(WorkspacesChangedPayload)
   WorkspaceSettingsChanged(WorkspaceSettingsPayload)
@@ -1462,6 +1463,7 @@ pub(all) enum NotificationKind {
   AgentFinished
   SessionEvent
   SubrunProgress
+  WorkflowEntry
   SessionChanged
   WorkspaceChanged
   WorkspaceSettingsChanged
@@ -2480,6 +2482,27 @@ pub fn WatchWorkspacePayload::from_json(Json, @json.JsonPath) -> Self raise @jso
 pub fn WatchWorkspacePayload::not_equal(Self, Self) -> Bool
 pub fn WatchWorkspacePayload::to_json(Self) -> Json
 pub fn WatchWorkspacePayload::to_repr(Self) -> @debug.Repr
+
+pub(all) struct WorkflowEntryPayload {
+  workflow : String
+  session : String
+  child : String
+  kind : String
+  label : String
+  phase : String?
+  status : String
+  steps : Int
+  prompt_tokens : Int
+  completion_tokens : Int
+  cost_usd : Double?
+  started_at : Double?
+  finished_at : Double?
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn WorkflowEntryPayload::equal(Self, Self) -> Bool
+pub fn WorkflowEntryPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn WorkflowEntryPayload::not_equal(Self, Self) -> Bool
+pub fn WorkflowEntryPayload::to_json(Self) -> Json
+pub fn WorkflowEntryPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorkspacePayload {
   path : String

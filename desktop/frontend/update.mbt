@@ -831,7 +831,8 @@ fn reveal_local_directory(
 ) -> (@cmd.Cmd, Model) {
   let dock = match model.dock.active {
     Some(File(_)) | Some(FilePicker) => model.dock
-    None | Some(Browser(_)) | Some(GitDiff(_)) => @dock.open_picker(model.dock)
+    None | Some(Browser(_)) | Some(GitDiff(_)) | Some(Workflows) =>
+      @dock.open_picker(model.dock)
   }
   let model = {
     ..model,
@@ -1173,13 +1174,27 @@ fn apply_engine_event(
     // id (a reconnect replaying the bracket) refreshes rather than doubles.
     // The lane docks above the composer, so opening one does not grow the
     // transcript and must not drag a pinned conversation down.
-    // A workflow's brackets. Nothing renders for them YET: what a workflow
-    // needs is a tail of its journal and sidecar on the host side, feeding
-    // the same lane dock the sub-run brackets feed, and a panel for its
-    // phases and ledger on top. Both are the next change. Until then the
-    // brackets are consumed here deliberately, so that a snippet running a
-    // workflow neither breaks this reducer nor leaves a stray notice.
-    WorkflowOpened(..) | WorkflowClosed(..) => (None, conv)
+    // A workflow's brackets. The run is recorded for the Workflows tab; its
+    // children arrive through the sub-run brackets the host synthesizes from
+    // the run's sidecar (below), and resolve through `WorkflowEntryArrived`.
+    // Nothing is dropped on close: a finished run is exactly what a reader
+    // looks back over.
+    WorkflowOpened(id~, first_child~, child_count~, ..) =>
+      (
+        None,
+        {
+          ..conv,
+          workflows: @workflow.opened(
+            conv.workflows,
+            id~,
+            session=conv.session_id,
+            first_child~,
+            child_count~,
+          ),
+        },
+      )
+    WorkflowClosed(id~) =>
+      (None, { ..conv, workflows: @workflow.closed(conv.workflows, id~), })
     SubrunOpened(id~, kind~, label~) => {
       let subruns = conv.turn.subruns.filter(lane => lane.id != id)
       subruns.push({
@@ -1190,7 +1205,16 @@ fn apply_engine_event(
         activity: "",
         run: event_run_id,
       })
-      (None, { ..conv, turn: { ..conv.turn, subruns, }, })
+      (
+        None,
+        {
+          ..conv,
+          turn: { ..conv.turn, subruns, },
+          // A child of a known workflow gets its row here, from the same
+          // bracket that opened its lane.
+          workflows: @workflow.child_opened(conv.workflows, id~, kind~, label~),
+        },
+      )
     }
     // Closed: always drop the lane. A captured sub-run already settles as the
     // durable tool brief, so repeating its status here would leave two
@@ -1207,6 +1231,13 @@ fn apply_engine_event(
           ..conv.turn,
           subruns: conv.turn.subruns.filter(lane => lane.id != id),
         },
+        workflows: @workflow.child_closed(
+          conv.workflows,
+          id~,
+          status~,
+          steps~,
+          tokens~,
+        ),
       }
       if status == "captured" {
         (None, conv)
@@ -1376,7 +1407,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
   }
   let file_body_visible = match model.dock.active {
     Some(File(_)) | Some(GitDiff(_)) | Some(FilePicker) => true
-    None | Some(Browser(_)) => false
+    None | Some(Browser(_)) | Some(Workflows) => false
   }
   {
     // Keep the real identity even while placement is unresolved or missing.
@@ -4883,7 +4914,9 @@ fn update_msg(
                   (@cmd.batch(cmds), model)
                 }
               }
-              FilePicker =>
+              // Neither tab owns a document: closing one while active hands
+              // focus to a neighbouring file or diff, and otherwise nothing.
+              FilePicker | Workflows =>
                 if was_active && next_file is Some(path) {
                   let (cmd, panel) = @fileeditor.activate(
                     femit,
@@ -4945,6 +4978,18 @@ fn update_msg(
       )
     }
     ExplorerRequested(mode) => open_explorer(dispatch, model, mode)
+    // The Workflows tab: opened like the explorer inventories, keeping the
+    // right panel on screen with its launcher menu closed.
+    WorkflowsRequested =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          dock: @dock.open_workflows(model.dock),
+          right_panel_open: true,
+          right_panel_menu_open: false,
+        },
+      )
     BrowserAddressEdited(value) =>
       match @dock.active_browser(model.dock) {
         Some(id) =>
@@ -5400,6 +5445,20 @@ fn update_device_msg(
     // whose parent conversation is gone must not suppress the refresh of a
     // child on screen, and a child nobody is viewing must not suppress the
     // lane.
+    // A resolved call of a workflow: refines the row its brackets created, or
+    // creates one when they were missed. Routed like sub-run progress, by the
+    // parent session the entry names; a conversation that is gone drops it.
+    WorkflowEntryArrived(channel, entry) => {
+      let model = match model.find_conversation(channel, entry.session) {
+        Some(conv) =>
+          model.replace_conversation({
+            ..conv,
+            workflows: @workflow.entry(conv.workflows, entry),
+          })
+        None => model
+      }
+      (@cmd.none, model)
+    }
     SubrunProgressed(id~, session~, steps~, activity~) => {
       // Route by the CHILD session id, not by the sub-run id: `sr-N` is only
       // unique within its parent engine, so two conversations can both have
@@ -19739,4 +19798,119 @@ test "a sub-run's finish refreshes the child transcript one last time" {
   guard subrun_child_of(next).sync is Reloading(..) else {
     fail("expected the finish to catch the child transcript up")
   }
+}
+
+///|
+/// A workflow's brackets record the run, and the sub-run brackets the host
+/// synthesizes from its sidecar give the run its rows — the SAME bracket that
+/// opens a child's lane. A sub-run outside the run's reserved block is an
+/// ordinary child and touches no row.
+test "a workflow's brackets and its children's brackets build the run's rows" {
+  let conv = { ..test_conversation(), run: Open(run_id="r1", stage=Opened), }
+  let (_, opened) = apply_engine_event(
+    conv,
+    WorkflowOpened(
+      id="wf-5",
+      journal="/store/run-wf-5/journal.jsonl",
+      events="/store/run-wf-5/events.jsonl",
+      first_child=5,
+      child_count=32,
+    ),
+    Some("r1"),
+  )
+  inspect(opened.workflows.length(), content="1")
+  let (_, child) = apply_engine_event(
+    opened,
+    SubrunOpened(id="sr-5", kind="explore", label="scout:x"),
+    Some("r1"),
+  )
+  inspect(child.visible_subruns().length(), content="1")
+  inspect(child.workflows[0].rows.length(), content="1")
+  inspect(child.workflows[0].running(), content="1")
+  let (_, other) = apply_engine_event(
+    child,
+    SubrunOpened(id="sr-2", kind="explore", label="elsewhere"),
+    Some("r1"),
+  )
+  inspect(other.visible_subruns().length(), content="2")
+  inspect(other.workflows[0].rows.length(), content="1")
+  let (_, closed) = apply_engine_event(
+    other,
+    SubrunClosed(id="sr-5", status="captured", steps=12, tokens=3400),
+    Some("r1"),
+  )
+  inspect(closed.workflows[0].running(), content="0")
+  inspect(closed.workflows[0].rows[0].steps, content="12")
+  // The lane is gone, as for any captured sub-run; the row stays.
+  inspect(closed.visible_subruns().length(), content="1")
+  let (_, done) = apply_engine_event(
+    closed,
+    WorkflowClosed(id="wf-5"),
+    Some("r1"),
+  )
+  inspect(done.workflows[0].closed, content="true")
+  inspect(done.workflows[0].rows.length(), content="1")
+}
+
+///|
+/// A resolved call reaches the run through the parent session the entry
+/// names. A conversation this page does not hold gets nothing: only a bracket
+/// knows a run exists, and an entry is never a reason to invent one.
+test "a workflow entry refines the parent conversation's run" {
+  let base = running_conversation()
+  let parent = {
+    ..base,
+    workflows: @workflow.opened(
+      [],
+      id="wf-5",
+      session=base.session_id,
+      first_child=5,
+      child_count=32,
+    ),
+  }
+  let model = test_model().replace_conversation(parent)
+  let entry : @workflow.Entry = {
+    workflow: "wf-5",
+    session: base.session_id,
+    child: "\{base.session_id}-sr-5",
+    kind: "explore",
+    label: "scout:x",
+    phase: Some("survey"),
+    status: "captured",
+    steps: 12,
+    prompt_tokens: 3000,
+    completion_tokens: 400,
+    cost_usd: Some(0.01),
+    started_at: Some(1788535817640.0),
+    finished_at: Some(1788535817648.0),
+  }
+  let (_, next) = update_dev(
+    test_dispatch(),
+    WorkflowEntryArrived(@interop.ChannelId::Local, entry),
+    model,
+  )
+  guard next.find_conversation(@interop.ChannelId::Local, base.session_id)
+    is Some(conv) else {
+    fail("expected the parent conversation")
+  }
+  inspect(conv.workflows[0].rows.length(), content="1")
+  inspect(conv.workflows[0].rows[0].ordinal, content="5")
+  debug_inspect(conv.workflows[0].rows[0].phase, content="Some(\"survey\")")
+  debug_inspect(conv.workflows[0].cost_usd(), content="Some(0.01)")
+  let (_, same) = update_dev(
+    test_dispatch(),
+    WorkflowEntryArrived(@interop.ChannelId::Local, {
+      ..entry,
+      session: "elsewhere",
+    }),
+    next,
+  )
+  assert_true(
+    same.find_conversation(@interop.ChannelId::Local, "elsewhere") is None,
+  )
+  guard same.find_conversation(@interop.ChannelId::Local, base.session_id)
+    is Some(untouched) else {
+    fail("expected the parent conversation")
+  }
+  inspect(untouched.workflows[0].rows.length(), content="1")
 }

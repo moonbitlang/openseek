@@ -3,6 +3,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "openseek_desktop/frontend/dock",
+  "openseek_desktop/frontend/workflow",
   "openseek_desktop/frontend/fileeditor",
   "openseek_desktop/frontend/preview",
 }

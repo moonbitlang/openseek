@@ -1,0 +1,8 @@
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/labels",
+  "moonbitlang/core/debug",
+}
+
+supported_targets = "js"

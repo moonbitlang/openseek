@@ -528,6 +528,8 @@ pub fn boot() -> Unit {
       search: emit(ExplorerRequested(ExplorerSearch)),
       files: emit(ExplorerRequested(ExplorerFiles)),
       review: emit(ExplorerRequested(ExplorerChanges)),
+      workflows: emit(WorkflowsRequested),
+      open_child: child => emit(OpenSessionHere(child)),
       browser_input: emit.map(value => BrowserAddressEdited(value)),
       browser_submit: emit(BrowserNavigateSubmitted),
       browser_back: emit(BrowserBack),

@@ -9,6 +9,9 @@ struct Input {
   is_desktop : Bool
   menu_open : Bool
   expanded : Bool
+  // The workflows the active conversation's snippets announced, for the
+  // Workflows tab. Live-only state projected from the root's conversation.
+  workflows : Array[@workflow.Run]
 } derive(Eq)
 
 ///|
@@ -20,8 +23,18 @@ pub fn Input::Input(
   is_desktop~ : Bool,
   menu_open~ : Bool,
   expanded~ : Bool,
+  workflows~ : Array[@workflow.Run],
 ) -> Input {
-  { dock, file_panel, preview, file_ctx, is_desktop, menu_open, expanded, }
+  {
+    dock,
+    file_panel,
+    preview,
+    file_ctx,
+    is_desktop,
+    menu_open,
+    expanded,
+    workflows,
+  }
 }
 
 ///|
@@ -34,6 +47,10 @@ pub(all) struct Actions {
   search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
+  workflows : @cmd.Cmd
+  // Open one subagent's transcript: the child's session id, as its row
+  // carries it.
+  open_child : (String) -> @cmd.Cmd
   browser_input : @cmd.Emit[String]
   browser_submit : @cmd.Cmd
   browser_back : @cmd.Cmd

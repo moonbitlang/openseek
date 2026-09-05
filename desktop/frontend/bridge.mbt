@@ -196,6 +196,24 @@ fn device_msg(
           activity=payload.activity,
         ),
       )
+    WorkflowEntry(payload) =>
+      Some(
+        WorkflowEntryArrived(channel, {
+          workflow: payload.workflow,
+          session: payload.session,
+          child: payload.child,
+          kind: payload.kind,
+          label: payload.label,
+          phase: payload.phase,
+          status: payload.status,
+          steps: payload.steps,
+          prompt_tokens: payload.prompt_tokens,
+          completion_tokens: payload.completion_tokens,
+          cost_usd: payload.cost_usd,
+          started_at: payload.started_at,
+          finished_at: payload.finished_at,
+        }),
+      )
     SessionChanged(payload) => session_changed_msg(channel, payload)
     WorkspaceChanged(payload) => {
       let paths : Array[@common.Uri] = []
