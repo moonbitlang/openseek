@@ -747,7 +747,7 @@ fn error_count_label(after : @auto_check.CheckErrors) -> String {
 fn check_contiguity(edits : Array[ResolvedEdit]) -> String? {
   // Set of paths whose contiguous block has already ended, so the membership
   // test stays O(1) even for a large batch touching many files.
-  let ended : Map[String, Unit] = Map([])
+  let ended : Set[String] = Set([])
   let mut current : String? = None
   for edit in edits {
     let same = current is Some(path) && path == edit.path
@@ -758,7 +758,7 @@ fn check_contiguity(edits : Array[ResolvedEdit]) -> String? {
         )
       }
       if current is Some(path) {
-        ended[path] = ()
+        ended.add(path)
       }
       current = Some(edit.path)
     }
@@ -792,9 +792,8 @@ priv struct FileGroup {
 fn group_contiguous(edits : Array[ResolvedEdit]) -> Array[FileGroup] {
   let groups : Array[FileGroup] = []
   for edit in edits {
-    let count = groups.length()
-    if count > 0 && groups[count - 1].path == edit.path {
-      groups[count - 1].items.push(edit)
+    if groups is [.., last] && last.path == edit.path {
+      last.items.push(edit)
     } else {
       groups.push({ file: edit.file, path: edit.path, items: [edit], })
     }

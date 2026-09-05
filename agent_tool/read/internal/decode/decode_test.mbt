@@ -34,41 +34,32 @@ test "decode defaults optional limits" {
 }
 
 ///|
-test "decode rejects missing path" {
-  try @decode.decode(Json::empty_object()) catch {
-    error => assert_true("\{error}".contains("arguments.path"))
-  } noraise {
-    _ => fail("missing path decoded")
-  }
-}
-
-///|
-test "decode rejects paths array" {
-  try @decode.decode({ "paths": ["a.mbt", "b.mbt"] }) catch {
-    error =>
-      assert_true("\{error}".contains("arguments.paths is not supported"))
-  } noraise {
-    _ => fail("paths decoded")
-  }
-}
-
-///|
-test "decode rejects invalid limits" {
-  try @decode.decode({ "path": "file.mbt", "max_lines": 0 }) catch {
-    error =>
+/// Asserts that decoding `arguments` fails and the error message names the
+/// offending field.
+fn assert_decode_error(arguments : Json, expected : String) -> Unit raise {
+  let _ = @decode.decode(arguments) catch {
+    error => {
+      let message = "\{error}"
       assert_true(
-        "\{error}".contains("arguments.max_lines to be a positive number"),
+        message.contains(expected),
+        msg="\{message} should contain \{expected}",
       )
-  } noraise {
-    _ => fail("invalid max_lines decoded")
+      return
+    }
   }
+  fail("expected decode error naming \{expected}")
 }
 
 ///|
-test "decode rejects non-object arguments" {
-  try @decode.decode(Json::null()) catch {
-    error => assert_true("\{error}".contains("object arguments"))
-  } noraise {
-    _ => fail("non-object decoded")
-  }
+test "decode rejects malformed arguments and names the offending field" {
+  assert_decode_error(Json::empty_object(), "arguments.path")
+  assert_decode_error(
+    { "paths": ["a.mbt", "b.mbt"] },
+    "arguments.paths is not supported",
+  )
+  assert_decode_error(
+    { "path": "file.mbt", "max_lines": 0 },
+    "arguments.max_lines to be a positive number",
+  )
+  assert_decode_error(Json::null(), "object arguments")
 }

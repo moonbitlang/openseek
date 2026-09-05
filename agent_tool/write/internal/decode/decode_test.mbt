@@ -52,46 +52,29 @@ test "decode reads revert_on_parse_errors" {
 }
 
 ///|
-test "decode rejects non-boolean revert_on_parse_errors" {
-  try
-    @decode.decode({
-      "path": "/tmp/a.mbt",
-      "content": "x",
-      "revert_on_parse_errors": 1,
-    })
-  catch {
-    error =>
+/// Asserts that decoding `arguments` fails and the error message names the
+/// offending field.
+fn assert_decode_error(arguments : Json, expected : String) -> Unit raise {
+  let _ = @decode.decode(arguments) catch {
+    error => {
+      let message = "\{error}"
       assert_true(
-        "\{error}".contains("arguments.revert_on_parse_errors to be a boolean"),
+        message.contains(expected),
+        msg="\{message} should contain \{expected}",
       )
-  } noraise {
-    _ => fail("non-boolean flag decoded")
+      return
+    }
   }
+  fail("expected decode error naming \{expected}")
 }
 
 ///|
-test "decode rejects missing content" {
-  try @decode.decode({ "path": "/tmp/file.txt" }) catch {
-    error => assert_true("\{error}".contains("arguments.content"))
-  } noraise {
-    _ => fail("missing content decoded")
-  }
-}
-
-///|
-test "decode rejects missing path" {
-  try @decode.decode({ "content": "hello" }) catch {
-    error => assert_true("\{error}".contains("arguments.path"))
-  } noraise {
-    _ => fail("missing path decoded")
-  }
-}
-
-///|
-test "decode rejects non-object arguments" {
-  try @decode.decode(Json::null()) catch {
-    error => assert_true("\{error}".contains("object arguments"))
-  } noraise {
-    _ => fail("non-object decoded")
-  }
+test "decode rejects malformed arguments and names the offending field" {
+  assert_decode_error(
+    { "path": "/tmp/a.mbt", "content": "x", "revert_on_parse_errors": 1 },
+    "arguments.revert_on_parse_errors to be a boolean",
+  )
+  assert_decode_error({ "path": "/tmp/file.txt" }, "arguments.content")
+  assert_decode_error({ "content": "hello" }, "arguments.path")
+  assert_decode_error(Json::null(), "object arguments")
 }

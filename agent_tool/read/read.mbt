@@ -452,21 +452,6 @@ test "read description encourages batched reads and directory inspection" {
 }
 
 ///|
-test "read parses and caps optional limits" {
-  let input = @decode.decode({
-    "path": "file.mbt",
-    "start_line": 3,
-    "max_lines": 4,
-    "max_output_chars": 999999,
-  })
-  assert_eq(input.path, "file.mbt")
-  assert_eq(input.start_line, 3)
-  guard input.max_lines is Some(max_lines) else { fail("missing max_lines") }
-  assert_eq(max_lines, 4)
-  assert_eq(input.max_output_chars, @decode.hard_max_output_chars)
-}
-
-///|
 async test "read rejects paths array and explains batching" {
   let result = execute({ "paths": ["a.mbt", "b.mbt"] })
   guard result is Respond(output) else { fail("expected Respond") }
