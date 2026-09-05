@@ -847,14 +847,10 @@ fn validation_summary(report : EvalReport) -> String {
 ///|
 fn suite_combo_warnings(report : EvalReport) -> String {
   let warnings : Array[String] = []
-  let mut parse_errors = 0
-  let mut partial_tails = 0
-  for result in report.results {
-    parse_errors += result.parse_errors
-    if result.partial_tail {
-      partial_tails += 1
-    }
-  }
+  let parse_errors = report.results.fold(init=0, (total, result) => {
+    total + result.parse_errors
+  })
+  let partial_tails = report.results.count_if(result => result.partial_tail)
   if parse_errors > 0 {
     warnings.push("events decode errors \{parse_errors}")
   }

@@ -310,12 +310,11 @@ fn ReportRow::markdown_row(
 
 ///|
 fn ReportRow::metric_value(self : ReportRow, column : String) -> String {
-  for metric in self.metrics {
-    if metric.name == column {
-      return metric.value
-    }
-  }
-  ""
+  // `find_first` keeps the loop's first-match semantics for duplicate names.
+  self.metrics
+  .iter()
+  .find_first(metric => metric.name == column)
+  .map_or("", metric => metric.value)
 }
 
 ///|
@@ -355,12 +354,7 @@ fn detail_section_lines(rows : Array[ReportRow]) -> Array[String] {
 
 ///|
 fn has_detail_section(rows : Array[ReportRow]) -> Bool {
-  for row in rows {
-    if row.has_details() {
-      return true
-    }
-  }
-  false
+  rows.any(row => row.has_details())
 }
 
 ///|

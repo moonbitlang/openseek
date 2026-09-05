@@ -74,14 +74,18 @@ fn eval_session_for_test(session : @agent_session.Session) -> EvalResult {
 }
 
 ///|
-test "session summary counts typed events" {
+/// The analyzed sample session shared by the counter and rendering tests:
+/// both replay `sample_events()` through the log parser before analyzing.
+fn sample_eval_result() -> EvalResult {
   let parsed = @session_log.parse_events(sample_events())
-  let session = @session_log.session_from_parse(
-    parsed,
-    id="trial-01",
-    system_prompt="",
+  eval_session_for_test(
+    @session_log.session_from_parse(parsed, id="trial-01", system_prompt=""),
   )
-  let result = eval_session_for_test(session)
+}
+
+///|
+test "session summary counts typed events" {
+  let result = sample_eval_result()
   assert_true(result.finished)
   assert_eq(result.steps, 2)
   assert_eq(result.tool_results, 1)
@@ -93,13 +97,7 @@ test "session summary counts typed events" {
 
 ///|
 test "eval session produces standalone result" {
-  let parsed = @session_log.parse_events(sample_events())
-  let session = @session_log.session_from_parse(
-    parsed,
-    id="trial-01",
-    system_prompt="",
-  )
-  let result = eval_session_for_test(session)
+  let result = sample_eval_result()
   assert_true(result.success)
   assert_eq(result.session_id, "trial-01")
   assert_eq(result.steps, 2)
