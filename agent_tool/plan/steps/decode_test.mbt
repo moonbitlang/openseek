@@ -66,17 +66,50 @@ fn assert_decode_error(arguments : Json, expected : String) -> Unit raise {
       return
     }
   }
-  fail("expected decode error")
+  fail("expected decode error naming \{expected}")
 }
 
 ///|
-test "decode rejects missing steps" {
+/// One test for every malformed shape whose body was a single
+/// `assert_decode_error`: they differ only in the arguments and the rule the
+/// message must name. Cases needing computed input (the step and title caps)
+/// or their own scenario note stay in their own tests below.
+test "decode rejects malformed plans and names the broken rule" {
   assert_decode_error(Json::empty_object(), "arguments.steps to be an array")
-}
-
-///|
-test "decode rejects non-object arguments" {
   assert_decode_error(Json::null(), "arguments to be an object")
+  assert_decode_error(
+    { "steps": [], "note": "extra" },
+    "arguments to have only the steps field",
+  )
+  assert_decode_error(
+    { "steps": [{ "title": "one", "status": "pending", "id": 1 }] },
+    "arguments.steps[0] to have only title and status fields",
+  )
+  assert_decode_error(
+    { "steps": ["just a string"] },
+    "arguments.steps[0] to be an object",
+  )
+  assert_decode_error(
+    { "steps": [{ "status": "pending" }] },
+    "arguments.steps[0].title to be present",
+  )
+  assert_decode_error(
+    { "steps": [{ "title": "step" }] },
+    "arguments.steps[0].status to be present",
+  )
+  assert_decode_error(
+    { "steps": [{ "title": "step", "status": "active" }] },
+    "arguments.steps[0].status to be one of pending|in_progress|completed",
+  )
+  assert_decode_error(
+    {
+      "steps": [
+        { "title": "one", "status": "in_progress" },
+        { "title": "two", "status": "in_progress" },
+      ],
+    },
+    "at most one in_progress step",
+  )
 }
 
 ///|
@@ -90,22 +123,6 @@ test "decode accepts an empty plan as a clear" {
 }
 
 ///|
-test "decode rejects unknown argument fields" {
-  assert_decode_error(
-    { "steps": [], "note": "extra" },
-    "arguments to have only the steps field",
-  )
-}
-
-///|
-test "decode rejects unknown step fields" {
-  assert_decode_error(
-    { "steps": [{ "title": "one", "status": "pending", "id": 1 }] },
-    "arguments.steps[0] to have only title and status fields",
-  )
-}
-
-///|
 test "decode rejects more than MAX_STEPS steps" {
   let steps : Array[Json] = [
     for i in 0..<(@steps.MAX_STEPS + 1) => {
@@ -113,22 +130,6 @@ test "decode rejects more than MAX_STEPS steps" {
     }
   ]
   assert_decode_error({ "steps": steps.to_json() }, "at most 20 steps, got 21")
-}
-
-///|
-test "decode rejects a non-object step" {
-  assert_decode_error(
-    { "steps": ["just a string"] },
-    "arguments.steps[0] to be an object",
-  )
-}
-
-///|
-test "decode rejects a missing title" {
-  assert_decode_error(
-    { "steps": [{ "status": "pending" }] },
-    "arguments.steps[0].title to be present",
-  )
 }
 
 ///|
@@ -182,33 +183,4 @@ test "decode counts title length in code points, matching the schema" {
     "steps": [{ "title": title, "status": "pending" }],
   })
   assert_eq(input.steps[0].title.char_length(), 61)
-}
-
-///|
-test "decode rejects a missing status" {
-  assert_decode_error(
-    { "steps": [{ "title": "step" }] },
-    "arguments.steps[0].status to be present",
-  )
-}
-
-///|
-test "decode rejects an unknown status" {
-  assert_decode_error(
-    { "steps": [{ "title": "step", "status": "active" }] },
-    "arguments.steps[0].status to be one of pending|in_progress|completed",
-  )
-}
-
-///|
-test "decode rejects two in_progress steps and names the rule" {
-  assert_decode_error(
-    {
-      "steps": [
-        { "title": "one", "status": "in_progress" },
-        { "title": "two", "status": "in_progress" },
-      ],
-    },
-    "at most one in_progress step",
-  )
 }

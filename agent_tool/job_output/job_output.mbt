@@ -248,16 +248,6 @@ fn window_offset(arguments : Json) -> Result[Int?, String] {
 /// and `shown_chars` use, so the offsets a reader computes from them land
 /// where it expects.
 fn page_of(text : String, offset~ : Int, window~ : Int) -> String {
-  let out = StringBuilder()
-  let mut index = 0
-  for ch in text {
-    if index >= offset + window {
-      break
-    }
-    if index >= offset {
-      out.write_char(ch)
-    }
-    index += 1
-  }
-  out.to_string()
+  // `iter()` yields characters, so drop/take count characters, not code units.
+  String::from_iter(text.iter().drop(offset).take(window))
 }

@@ -161,17 +161,7 @@ fn WriteScope::prefix_admits(self : WriteScope, path : String) -> Bool {
     path.view(start_offset=root.length() + 1).to_owned()
   }
   let parts = relative.split("/").map(p => p.to_owned()).collect()
-  self.allowed.any(prefix => {
-    if parts.length() < prefix.length() {
-      return false
-    }
-    for index in 0..<prefix.length() {
-      if parts[index] != prefix[index] {
-        return false
-      }
-    }
-    true
-  })
+  self.allowed.any(prefix => parts.starts_with(prefix))
 }
 
 ///|

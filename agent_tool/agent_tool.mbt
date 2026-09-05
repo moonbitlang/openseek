@@ -194,16 +194,8 @@ pub fn brief_line(text : String, limit? : Int = 72) -> String {
   if one.length() <= limit {
     "\{one}"
   } else {
-    let kept = StringBuilder()
-    for ch in one; count = 0 {
-      if count >= limit {
-        break
-      }
-      kept.write_char(ch)
-      continue count + 1
-    }
-    kept.write_char('…')
-    kept.to_string()
+    // `iter()` yields characters, so `take` cuts on a character boundary.
+    "\{String::from_iter(one.iter().take(limit))}…"
   }
 }
 
@@ -362,34 +354,21 @@ test "ToolAction helpers build structured actions" {
 }
 
 ///|
-test "Tools::function_tools converts the registry to deepseek tool definitions" {
-  let tools = Tools([
-    {
-      name: "echo",
-      description: "Echo the input.",
-      schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => respond("ok")),
-      control: false,
-      concurrent_safe: false,
-    },
-  ])
-  let function_tools = tools.function_tools()
-  assert_eq(function_tools.length(), 1)
-  assert_eq(function_tools[0].name, "echo")
+/// One minimal registry entry for the dispatch tests. The privileges
+/// (`control`, `concurrent_safe`) are the constructor's own defaults, so no
+/// test below has to restate them just to build an ordinary tool.
+fn test_tool(
+  name? : String = "echo",
+  description? : String = "Echo.",
+  schema? : Json = { "type": "object" },
+  execute? : ToolExecutor = Sync(_args => respond("ok")),
+) -> AgentToolDefinition {
+  AgentToolDefinition(name~, description~, schema=JsonSchema(schema), execute~)
 }
 
 ///|
 test "Tools::find returns the registered definition by name" {
-  let tools = Tools([
-    {
-      name: "echo",
-      description: "Echo.",
-      schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => respond("ok")),
-      control: false,
-      concurrent_safe: false,
-    },
-  ])
+  let tools = Tools([test_tool()])
   guard tools.find("echo") is Some(definition) else { fail("missing echo") }
   assert_eq(definition.name, "echo")
   assert_true(tools.find("ghost") is None)
@@ -398,22 +377,8 @@ test "Tools::find returns the registered definition by name" {
 ///|
 test "Tools::Tools raises on duplicate tool names" {
   let _ = Tools([
-    {
-      name: "echo",
-      description: "First.",
-      schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => respond("first")),
-      control: false,
-      concurrent_safe: false,
-    },
-    {
-      name: "echo",
-      description: "Second.",
-      schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => respond("second")),
-      control: false,
-      concurrent_safe: false,
-    },
+    test_tool(description="First.", execute=Sync(_args => respond("first"))),
+    test_tool(description="Second.", execute=Sync(_args => respond("second"))),
   ]) catch {
     error => {
       assert_true("\{error}".contains("duplicate tool name: echo"))
@@ -437,19 +402,14 @@ async test "execute_tool_call reports unknown tool" {
 ///|
 async test "execute_tool_call dispatches to registered executor" {
   let tools = Tools([
-    {
-      name: "echo",
-      description: "Echo.",
-      schema: JsonSchema({ "type": "object" }),
-      execute: Sync(args => {
+    test_tool(
+      execute=Sync(args => {
         match args {
           { "value": String(v), .. } => respond(v)
           _ => respond("no value", is_error=true)
         }
       }),
-      control: false,
-      concurrent_safe: false,
-    },
+    ),
   ])
   let call = AgentToolCall(
     ToolCall(id="call_1", name="echo", arguments="{\"value\":\"hi\"}"),
@@ -472,14 +432,7 @@ async fn async_echo(args : Json) -> ToolAction {
 ///|
 async test "execute_tool_call dispatches to async executor" {
   let tools = Tools([
-    {
-      name: "echo",
-      description: "Async echo.",
-      schema: JsonSchema({ "type": "object" }),
-      execute: Async(async_echo),
-      control: false,
-      concurrent_safe: false,
-    },
+    test_tool(description="Async echo.", execute=Async(async_echo)),
   ])
   let call = AgentToolCall(
     ToolCall(id="call_1", name="echo", arguments="{\"value\":\"async-hi\"}"),
@@ -500,14 +453,11 @@ async test "execute_tool_call turns a tool failure into a recoverable error resu
   }
 
   let tools = Tools([
-    {
-      name: "boom",
-      description: "Always fails.",
-      schema: JsonSchema({ "type": "object" }),
-      execute: Async(async_boom),
-      control: false,
-      concurrent_safe: false,
-    },
+    test_tool(
+      name="boom",
+      description="Always fails.",
+      execute=Async(async_boom),
+    ),
   ])
   let call = AgentToolCall(ToolCall(id="call_1", name="boom", arguments="{}"))
   // The tool's failure is caught at the dispatch boundary and returned as an
@@ -521,19 +471,13 @@ async test "execute_tool_call turns a tool failure into a recoverable error resu
 ///|
 test "Tools::function_tools preserves description and schema" {
   let tools = Tools([
-    {
-      name: "echo",
-      description: "Echo what comes in.",
-      schema: JsonSchema({
-        "type": "object",
-        "properties": Json::empty_object(),
-      }),
-      execute: Sync(_args => respond("ok")),
-      control: false,
-      concurrent_safe: false,
-    },
+    test_tool(description="Echo what comes in.", schema={
+      "type": "object",
+      "properties": Json::empty_object(),
+    }),
   ])
   let function_tools = tools.function_tools()
+  assert_eq(function_tools.length(), 1)
   assert_eq(function_tools[0].name, "echo")
   assert_eq(function_tools[0].description, "Echo what comes in.")
   let text = function_tools[0].parameters.stringify()
@@ -551,30 +495,21 @@ test "Tools::Tools accepts an empty registry" {
 ///|
 test "Tools::function_tools yields one entry per definition" {
   let tools = Tools([
-    {
-      name: "first",
-      description: "First.",
-      schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => respond("1")),
-      control: false,
-      concurrent_safe: false,
-    },
-    {
-      name: "second",
-      description: "Second.",
-      schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => respond("2")),
-      control: false,
-      concurrent_safe: false,
-    },
-    {
-      name: "third",
-      description: "Third.",
-      schema: JsonSchema({ "type": "object" }),
-      execute: Sync(_args => respond("3")),
-      control: false,
-      concurrent_safe: false,
-    },
+    test_tool(
+      name="first",
+      description="First.",
+      execute=Sync(_args => respond("1")),
+    ),
+    test_tool(
+      name="second",
+      description="Second.",
+      execute=Sync(_args => respond("2")),
+    ),
+    test_tool(
+      name="third",
+      description="Third.",
+      execute=Sync(_args => respond("3")),
+    ),
   ])
   let function_tools = tools.function_tools()
   assert_eq(function_tools.length(), 3)

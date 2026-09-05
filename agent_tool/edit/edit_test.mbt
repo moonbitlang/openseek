@@ -734,25 +734,41 @@ async test "edit gates .mbt results through moonc before writing" {
 }
 
 ///|
-async test "edit gates a breaking edit made through a non-mbt symlink" {
-  @vfs.with_tmpdir(prefix="openseek-edit-gate-link-", dir => {
-    let src = "\{dir}/lib.mbt"
+/// Writes a valid `target` in a fresh tmpdir, points `link` at it, then edits
+/// THROUGH the link in a way that breaks the MoonBit source. Asserts the parse
+/// gate rejects it and the target is left byte-identical. The three symlink
+/// cases below differ only in how the two names are spelled.
+async fn assert_link_edit_gated(
+  prefix~ : String,
+  target~ : String,
+  link~ : String,
+) -> Unit {
+  @vfs.with_tmpdir(prefix~, dir => {
+    let target_path = "\{dir}/\{target}"
     let original = "///|\npub fn f() -> Int {\n  42\n}\n"
-    @fs.write_file(src, original, create_mode=CreateOrTruncate)
-    // alias.txt -> lib.mbt: the .txt spelling must not slip a broken result
-    // past the parse gate — the write lands in the .mbt target.
-    let link = "\{dir}/alias.txt"
-    @fs.symlink(target="lib.mbt", link)
+    @fs.write_file(target_path, original, create_mode=CreateOrTruncate)
+    @fs.symlink(target~, "\{dir}/\{link}")
     let out = run_edit({
-      "path": link,
+      "path": "\{dir}/\{link}",
       "old_string": "  42",
       "new_string": "  match 42 {",
       "start_line": 3,
     })
     assert_true(out.is_error)
     assert_true(out.content.contains("rejected: the edit would introduce"))
-    assert_eq(@fs.read_file(src).text(), original)
+    assert_eq(@fs.read_file(target_path).text(), original)
   })
+}
+
+///|
+/// alias.txt -> lib.mbt: the .txt spelling must not slip a broken result past
+/// the parse gate — the write lands in the .mbt target.
+async test "edit gates a breaking edit made through a non-mbt symlink" {
+  assert_link_edit_gated(
+    prefix="openseek-edit-gate-link-",
+    target="lib.mbt",
+    link="alias.txt",
+  )
 }
 
 ///|
@@ -761,22 +777,11 @@ async test "edit gates a breaking edit made through a non-mbt symlink" {
 /// not markdown. Parsing it as `.mbt.md` would ignore everything outside checked
 /// fences and let a broken edit to the real `.mbt` file slip through.
 async test "edit gates by the target kind through a .mbt.md-named symlink" {
-  @vfs.with_tmpdir(prefix="openseek-edit-gate-mdlink-", dir => {
-    let src = "\{dir}/lib.mbt"
-    let original = "///|\npub fn f() -> Int {\n  42\n}\n"
-    @fs.write_file(src, original, create_mode=CreateOrTruncate)
-    let link = "\{dir}/doc.mbt.md"
-    @fs.symlink(target="lib.mbt", link)
-    let out = run_edit({
-      "path": link,
-      "old_string": "  42",
-      "new_string": "  match 42 {",
-      "start_line": 3,
-    })
-    assert_true(out.is_error)
-    assert_true(out.content.contains("rejected: the edit would introduce"))
-    assert_eq(@fs.read_file(src).text(), original)
-  })
+  assert_link_edit_gated(
+    prefix="openseek-edit-gate-mdlink-",
+    target="lib.mbt",
+    link="doc.mbt.md",
+  )
 }
 
 ///|
@@ -787,22 +792,11 @@ async test "edit gates by the target kind through a .mbt.md-named symlink" {
 /// miss it — the gate must cover BOTH kinds. The target body is valid MoonBit
 /// source, so it parses clean under both kinds until the edit breaks it.
 async test "edit gates by the link kind through a .mbt-named symlink" {
-  @vfs.with_tmpdir(prefix="openseek-edit-gate-mbtlink-", dir => {
-    let target = "\{dir}/notes.mbt.md"
-    let original = "///|\npub fn f() -> Int {\n  42\n}\n"
-    @fs.write_file(target, original, create_mode=CreateOrTruncate)
-    let link = "\{dir}/link.mbt"
-    @fs.symlink(target="notes.mbt.md", link)
-    let out = run_edit({
-      "path": link,
-      "old_string": "  42",
-      "new_string": "  match 42 {",
-      "start_line": 3,
-    })
-    assert_true(out.is_error)
-    assert_true(out.content.contains("rejected: the edit would introduce"))
-    assert_eq(@fs.read_file(target).text(), original)
-  })
+  assert_link_edit_gated(
+    prefix="openseek-edit-gate-mbtlink-",
+    target="notes.mbt.md",
+    link="link.mbt",
+  )
 }
 
 ///|

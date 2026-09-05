@@ -851,19 +851,12 @@ fn select_edit_region(
 ///|
 /// How many lines `new_string` occupies once inserted: one per newline, plus
 /// one for a trailing fragment that does not end in a newline (that fragment
-/// shares its line with whatever follows the insertion point). `new_string`
-/// is non-empty on the insertion path — both-empty edits are rejected first.
+/// shares its line with whatever follows the insertion point). That is exactly
+/// `total_line_count`, whose only extra rule — empty content spans 0 lines —
+/// cannot apply here: `new_string` is non-empty on the insertion path, because
+/// both-empty edits are rejected first.
 fn inserted_line_span(new_string : String) -> Int {
-  let newlines = for ch in new_string; newlines = 0 {
-    continue if ch == '\n' { newlines + 1 } else { newlines }
-  } nobreak {
-    newlines
-  }
-  if new_string.has_suffix("\n") {
-    newlines
-  } else {
-    newlines + 1
-  }
+  total_line_count(new_string)
 }
 
 ///|
@@ -1005,7 +998,7 @@ fn normalize_whitespace(s : String) -> String {
   let result = StringBuilder()
   let mut in_ws = false
   for ch in s {
-    if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
+    if ch is (' ' | '\t' | '\n' | '\r') {
       if !in_ws {
         result.write_char(' ')
         in_ws = true
@@ -1046,20 +1039,14 @@ fn find_whitespace_normalized_candidates(
         // whitespace character in body (otherwise "a b" would match "ab").
         ni += 1
         let mut consumed_ws = false
-        while bi < body.length() &&
-              (
-                body[bi] == ' ' ||
-                body[bi] == '\t' ||
-                body[bi] == '\n' ||
-                body[bi] == '\r'
-              ) {
+        while bi < body.length() && body[bi] is (' ' | '\t' | '\n' | '\r') {
           bi += 1
           consumed_ws = true
         }
         if !consumed_ws {
           break
         }
-      } else if bc == ' ' || bc == '\t' || bc == '\n' || bc == '\r' {
+      } else if bc is (' ' | '\t' | '\n' | '\r') {
         // body has whitespace where norm_needle has non-space → mismatch
         break
       } else if nc != bc {
