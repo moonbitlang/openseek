@@ -9,6 +9,23 @@ For a picture of how the pieces fit together — module architecture, the core
 data model, and the life of one agent turn — see
 [`docs/architecture.md`](docs/architecture.md).
 
+## Running without a checkout
+
+`cmd/openseek` builds on both native and wasm, and mooncakes.io hosts a
+prebuilt wasm binary for every published version. `moonx` fetches and caches it,
+so the engine runs with no clone and no build:
+
+```sh
+moonx bobzhang/openseek/cmd/openseek --help
+DEEPSEEK=sk-... moonx bobzhang/openseek/cmd/openseek run --no-session 'summarize this repo'
+```
+
+The coordinate is the package path, not the module: `bobzhang/openseek` alone
+resolves to the root package, which is not an executable. Pin a release with
+`bobzhang/openseek/cmd/openseek@0.3.1`, or take the newest with `@latest`.
+Subprocesses, the filesystem, and HTTPS all work under `moonrun`, so the wasm
+binary drives the same tools as the native one.
+
 ## Monorepo development
 
 The root [`moon.work`](moon.work) develops OpenSeek, the desktop app, and the
@@ -56,8 +73,8 @@ git submodule update --init editor/vscode     # opt-in performance suite
 | --- | --- | --- |
 | `bobzhang/openseek` | Root package and module overview. | `README.mbt.md` |
 | `bobzhang/openseek/deepseek` | Pure chat data, provider-aware JSON encoding, and response decoding. | `deepseek/README.mbt.md` |
-| `bobzhang/openseek/deepseek/client` | Native-only HTTP transport for supported chat-completions providers. | `deepseek/client/README.mbt.md` |
-| `bobzhang/openseek/agent_runtime` | Native-only agent task-group and extensible runtime event queue. | `agent_runtime/README.mbt.md` |
+| `bobzhang/openseek/deepseek/client` | HTTP transport (native or wasm) for supported chat-completions providers. | `deepseek/client/README.mbt.md` |
+| `bobzhang/openseek/agent_runtime` | Agent task-group (native or wasm) and extensible runtime event queue. | `agent_runtime/README.mbt.md` |
 | `bobzhang/openseek/agent_session` | Typed durable conversation state and DeepSeek message projection. | `agent_session/README.mbt.md` |
 | `bobzhang/openseek/agent_session/store` | Native filesystem-backed append-only session store. | `agent_session/store/README.mbt.md` |
 | `bobzhang/openseek/agent_session/log` | Lenient session-file reader: header plus events, with per-line error capture. | — |
@@ -68,10 +85,10 @@ git submodule update --init editor/vscode     # opt-in performance suite
 | `bobzhang/openseek/mcp` (+ `config`, `stdio`, `streamhttp`, `tools`) | MCP client: `mcp.json` decoding, stdio and Streamable HTTP transports, and the bridge that namespaces server tools into the registry. | — |
 | `bobzhang/openseek/prompt` | Built-in system prompt text (generated from Markdown) and prompt-selection policy. | `prompt/README.mbt.md` |
 | `bobzhang/openseek_protocol` | Typed engine event stream (own module): the `openseek run`/`serve` stdout wire contract, decodable on every backend. | `protocol/README.mbt.md` |
-| `bobzhang/openseek_protocol/emit` | Native-only writer for that stream: owns each event's log level. | `protocol/emit/README.mbt.md` |
-| `bobzhang/openseek/agent` | Native-only OpenSeek agent loop and local tool dispatch. | `agent/README.mbt.md` |
+| `bobzhang/openseek_protocol/emit` | Writer for that stream (native or wasm): owns each event's log level. | `protocol/emit/README.mbt.md` |
+| `bobzhang/openseek/agent` | OpenSeek agent loop (native or wasm) and local tool dispatch. | `agent/README.mbt.md` |
 | `bobzhang/openseek/agent_review` | Read-only, compiler-grounded code-review engine behind `openseek review`. | `agent_review/README.mbt.md` |
-| `bobzhang/openseek/cmd/openseek` | Native-only headless automation CLI (`openseek`). | `cmd/openseek/README.md` |
+| `bobzhang/openseek/cmd/openseek` | Headless automation CLI (`openseek`), built for native or wasm. | `cmd/openseek/README.md` |
 | `bobzhang/openseek/cli` | Shared command-main helpers: the agent options (`--api-key`, `--model`, …) and failure-text sanitizer used by `openseek` and the out-of-tree `openseek_tui`. | — |
 | `bobzhang/openseek/viz` | Browser viewer for durable session logs (JS). | `viz/README.md` |
 | `bobzhang/inspect` (in `inspect/`, own module) | HTTP server (native or wasm) that serves the visualizer over recorded sessions. | `inspect/README.md` |
@@ -103,7 +120,7 @@ The `deepseek/client` subpackage exposes the HTTP client:
 - `Client(api_key~, model?, api_url?)`
 - `Client::chat(messages, tools?)`
 
-It depends on `moonbitlang/async/http` and is native-only.
+It depends on `moonbitlang/async/http` and builds on both native and wasm.
 
 The `agent_tool` package exposes the local tool registry and typed executor
 boundary. Tool executors return `ToolAction`: normal tools use
