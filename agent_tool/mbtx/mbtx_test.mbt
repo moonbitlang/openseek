@@ -6,18 +6,29 @@ async fn run(source : String) -> @agent_tool.ToolOutput {
 }
 
 ///|
+/// Dispatch `arguments` through a built definition and take the response it
+/// must produce. Every test here drives the tool this way; the two `fail`s
+/// name which half of that contract broke when one does not.
+async fn dispatch(
+  definition : @agent_tool.AgentToolDefinition,
+  arguments : Json,
+) -> @agent_tool.ToolOutput {
+  let action = match definition.execute {
+    Async(execute) => execute(arguments)
+    Sync(_) => fail("mbtx should be async")
+  }
+  guard action is Respond(output) else { fail("expected Respond") }
+  output
+}
+
+///|
 /// Run with an explicit `workspace_root` and raw arguments (for cwd / target /
 /// decode-failure cases).
 async fn run_in(
   workspace_root : String,
   arguments : Json,
 ) -> @agent_tool.ToolOutput {
-  let action = match @mbtx.definition(workspace_root~).execute {
-    Async(execute) => execute(arguments)
-    Sync(_) => fail("mbtx should be async")
-  }
-  guard action is Respond(output) else { fail("expected Respond") }
-  output
+  dispatch(@mbtx.definition(workspace_root~), arguments)
 }
 
 ///|
@@ -74,11 +85,7 @@ async test "diagnostic-shaped output with a clean exit stays unlabeled" {
 async test "a build that outlives its bound is reported as the build's" {
   @vfs.with_tmpdir(prefix="mbtx-build-bound-", ws => {
     let definition = @mbtx.definition(workspace_root=ws, build_timeout_ms=1)
-    let action = match definition.execute {
-      Async(execute) => execute({ "source": "fn main { println(1) }" })
-      Sync(_) => fail("mbtx should be async")
-    }
-    guard action is Respond(output) else { fail("expected Respond") }
+    let output = dispatch(definition, { "source": "fn main { println(1) }" })
     assert_true(output.is_error)
     assert_true(output.content.contains("BUILD did not finish"))
     assert_true(output.content.contains("never ran"))
@@ -104,11 +111,7 @@ async test "a run timeout carries build warnings and blames only the program" {
       #|  let unused = 1
       #|  @async.sleep(60_000)
       #|}
-    let action = match definition.execute {
-      Async(execute) => execute({ "source": source, "warning": "on" })
-      Sync(_) => fail("mbtx should be async")
-    }
-    guard action is Respond(output) else { fail("expected Respond") }
+    let output = dispatch(definition, { "source": source, "warning": "on" })
     assert_true(output.is_error)
     assert_true(output.content.contains("timed out"))
     assert_true(output.content.contains("the PROGRAM that did not finish"))
@@ -512,24 +515,19 @@ async test "read_only denies source writes with no scratch lab wired" {
       create_mode=CreateOrTruncate,
     )
     let definition = @mbtx.definition(workspace_root=ws, read_only=true)
-    let action = match definition.execute {
-      Async(execute) =>
-        execute({
-          "source": (
-            #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
-            #|
-            #|async fn main {
-            #|  let wrote = try {
-            #|    @fs.write_file("keep.mbt", "// CORRUPTED\n", create_mode=CreateOrTruncate)
-            #|    true
-            #|  } catch { _ => false }
-            #|  @stdio.stdout.write("workspace=\{wrote}\n")
-            #|}
-          ),
-        })
-      Sync(_) => fail("mbtx should be async")
-    }
-    guard action is Respond(output) else { fail("expected Respond") }
+    let output = dispatch(definition, {
+      "source": (
+        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/async/stdio" }
+        #|
+        #|async fn main {
+        #|  let wrote = try {
+        #|    @fs.write_file("keep.mbt", "// CORRUPTED\n", create_mode=CreateOrTruncate)
+        #|    true
+        #|  } catch { _ => false }
+        #|  @stdio.stdout.write("workspace=\{wrote}\n")
+        #|}
+      ),
+    })
     assert_true(output.content.contains("workspace=false"))
     assert_true(@fs.read_file("\{ws}/keep.mbt").text().contains("fn main {  }"))
   })
@@ -571,11 +569,7 @@ async test "a scratch lab is writable while workspace source stays denied" {
         #|  @stdio.stdout.write("lab=\{in_lab} workspace=\{in_workspace}\n")
         #|}
       ).replace_all(old="LAB_DIR", new=lab)
-      let action = match definition.execute {
-        Async(execute) => execute({ "source": source })
-        Sync(_) => fail("mbtx should be async")
-      }
-      guard action is Respond(output) else { fail("expected Respond") }
+      let output = dispatch(definition, { "source": source })
       assert_true(output.content.contains("lab=true"))
       assert_true(output.content.contains("workspace=false"))
       assert_true(
@@ -639,11 +633,7 @@ async test "a worker's snippet writes neither its own tree nor a sibling's" {
       #|  @stdio.stdout.write("mine=\{mine} theirs=\{theirs}\n")
       #|}
     ).replace_all(old="SIBLING", new=sibling)
-    let action = match definition.execute {
-      Async(execute) => execute({ "source": source })
-      Sync(_) => fail("mbtx should be async")
-    }
-    guard action is Respond(output) else { fail("expected Respond") }
+    let output = dispatch(definition, { "source": source })
     assert_true(output.content.contains("mine=false"))
     assert_true(output.content.contains("theirs=false"))
     // Untouched on disk, not merely reported as denied — both trees.
@@ -1044,11 +1034,7 @@ async test "a runtime-less run uses its foreground timeout, not the handoff grac
       #|  @async.sleep(100)
       #|  println("finished inline")
       #|}
-    let action = match definition.execute {
-      Async(execute) => execute({ "source": source })
-      Sync(_) => fail("mbtx should be async")
-    }
-    guard action is Respond(output) else { fail("expected Respond") }
+    let output = dispatch(definition, { "source": source })
     assert_false(output.is_error)
     assert_true(output.content.contains("finished inline"))
     assert_false(output.content.contains("moved to the background"))
@@ -1071,12 +1057,7 @@ async fn run_escalating(
         answer
       }),
     )
-    let action = match definition.execute {
-      Async(execute) => execute({ "source": source, "escalated": true })
-      Sync(_) => fail("mbtx should be async")
-    }
-    guard action is Respond(output) else { fail("expected Respond") }
-    output
+    dispatch(definition, { "source": source, "escalated": true })
   })
 }
 
@@ -1196,11 +1177,7 @@ async test "an ordinary call never asks for approval" {
         AllowedOnce
       }),
     )
-    let action = match definition.execute {
-      Async(execute) => execute({ "source": "fn main { println(6 * 7) }" })
-      Sync(_) => fail("mbtx should be async")
-    }
-    guard action is Respond(output) else { fail("expected Respond") }
+    let output = dispatch(definition, { "source": "fn main { println(6 * 7) }" })
     assert_true(output.content.contains("42"))
   })
   assert_eq(asked.length(), 0)
@@ -1224,12 +1201,7 @@ async test "a refusal names escalation when a channel is wired" {
       workspace_root=ws,
       approval=ApprovalChannel(_ => Rejected),
     )
-    let action = match definition.execute {
-      Async(execute) => execute({ "source": source })
-      Sync(_) => fail("mbtx should be async")
-    }
-    guard action is Respond(output) else { fail("expected Respond") }
-    output
+    dispatch(definition, { "source": source })
   })
   assert_true(asking.is_error)
   assert_true(asking.content.contains("spawn allowlist"))
@@ -1280,17 +1252,11 @@ async test "escalation is refused on a target that carries no policy" {
         AllowedOnce
       }),
     )
-    let action = match definition.execute {
-      Async(execute) =>
-        execute({
-          "source": "fn main { println(1) }",
-          "target": "js",
-          "escalated": true,
-        })
-      Sync(_) => fail("mbtx should be async")
-    }
-    guard action is Respond(output) else { fail("expected Respond") }
-    output
+    dispatch(definition, {
+      "source": "fn main { println(1) }",
+      "target": "js",
+      "escalated": true,
+    })
   })
   assert_true(out.is_error)
   assert_true(out.content.contains("applies to the wasm target"))
@@ -1326,12 +1292,7 @@ async test "an escalated run is not read as a policy refusal" {
       #|  } catch { error => "\{error}" }
       #|  println("child: \{refused}")
       #|}
-    let action = match definition.execute {
-      Async(execute) => execute({ "source": source, "escalated": true })
-      Sync(_) => fail("mbtx should be async")
-    }
-    guard action is Respond(output) else { fail("expected Respond") }
-    output
+    dispatch(definition, { "source": source, "escalated": true })
   })
   // Whatever the child did, this tool must not claim its own sandbox refused
   // something, nor tell the model to escalate again.
@@ -1366,12 +1327,10 @@ async fn run_hosted(
       base
     },
   )
-  let action = match @mbtx.definition(workspace_root~, subrun~).execute {
-    Async(execute) => execute({ "source": source, "subrun": true })
-    Sync(_) => fail("mbtx should be async")
-  }
-  guard action is Respond(output) else { fail("expected Respond") }
-  output
+  dispatch(@mbtx.definition(workspace_root~, subrun~), {
+    "source": source,
+    "subrun": true,
+  })
 }
 
 ///|
@@ -1499,23 +1458,18 @@ async test "a hosted session reserves nothing unless the snippet asks" {
           base
         },
       )
-      let action = match @mbtx.definition(workspace_root=ws, subrun~).execute {
-        Async(execute) =>
-          execute({
-            "source": (
-              #|import { "moonbitlang/core/env" }
-              #|
-              #|fn main {
-              #|  match @env.get_env_var("WORKFLOW_HOST") {
-              #|    Some(v) if !v.is_empty() => println("HANDOFF PRESENT")
-              #|    _ => println("no handoff")
-              #|  }
-              #|}
-            ),
-          })
-        Sync(_) => fail("mbtx should be async")
-      }
-      guard action is Respond(out) else { fail("expected Respond") }
+      let out = dispatch(@mbtx.definition(workspace_root=ws, subrun~), {
+        "source": (
+          #|import { "moonbitlang/core/env" }
+          #|
+          #|fn main {
+          #|  match @env.get_env_var("WORKFLOW_HOST") {
+          #|    Some(v) if !v.is_empty() => println("HANDOFF PRESENT")
+          #|    _ => println("no handoff")
+          #|  }
+          #|}
+        ),
+      })
       assert_false(out.is_error)
       assert_true(out.content.contains("no handoff"))
       assert_eq(issued.val, 0)
@@ -1557,11 +1511,7 @@ async fn run_hosted_with(
   first? : Int = 1,
 ) -> (@agent_tool.ToolOutput, Int) {
   let (subrun, issued) = hosted_injection(store, workspace_root, first~)
-  let action = match @mbtx.definition(workspace_root~, subrun~).execute {
-    Async(execute) => execute(arguments)
-    Sync(_) => fail("mbtx should be async")
-  }
-  guard action is Respond(output) else { fail("expected Respond") }
+  let output = dispatch(@mbtx.definition(workspace_root~, subrun~), arguments)
   (output, issued.val - (first - 1))
 }
 
@@ -1700,11 +1650,7 @@ async test "a hosted run is announced before it runs and closed on every exit" {
           #|  @async.sleep(400)
           #|  println("late")
           #|}
-        let action = match definition.execute {
-          Async(execute) => execute({ "source": source, "subrun": true })
-          Sync(_) => fail("mbtx should be async")
-        }
-        guard action is Respond(output) else { fail("expected Respond") }
+        let output = dispatch(definition, { "source": source, "subrun": true })
         assert_false(output.is_error, msg=output.content)
         assert_true(output.content.contains("moved to the background"))
         guard workflow_lines("wf-900")

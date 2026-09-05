@@ -351,10 +351,8 @@ fn wasm_policy_document(
 /// value fails the library's reader closed, so the snippet sees no handoff
 /// rather than someone else's.
 fn env_set(tmp_dir : String, inject : Map[String, String]) -> Map[String, Json] {
-  let set : Map[String, Json] = Map([])
-  for name, value in inject {
-    set[name] = value.to_json()
-  }
+  // A fresh map, so the policy writes below cannot leak back into `inject`.
+  let set = inject.map((_, value) => value.to_json())
   if !set.contains(HostHandoffVar) {
     set[HostHandoffVar] = "".to_json()
   }

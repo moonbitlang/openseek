@@ -455,17 +455,6 @@ test "format_parse_gate_errors caps at the display limit and handles bad locs" {
 }
 
 ///|
-test "loc_line_span reads spans, single points, and rejects junk" {
-  assert_true(loc_line_span("7:1-9:2") is Some((7, 9)))
-  assert_true(loc_line_span("7:1") is Some((7, 7)))
-  assert_true(loc_line_span("7") is Some((7, 7)))
-  // A reversed span clamps to the start line rather than going negative.
-  assert_true(loc_line_span("9:1-7:2") is Some((9, 9)))
-  assert_true(loc_line_span("") is None)
-  assert_true(loc_line_span("abc:1") is None)
-}
-
-///|
 /// Real-moonc round trips: unlike `moon check`, the standalone gate can run
 /// inside `moon test` safely (no project build lock is involved).
 async test "content_parse_errors gates real content through moonc" {
@@ -593,7 +582,9 @@ test "loc_line_span accepts every lenient loc form" {
   debug_inspect(loc_line_span("7:1-x"), content="Some((7, 7))")
   debug_inspect(loc_line_span("7:1-"), content="Some((7, 7))")
   debug_inspect(loc_line_span("9:2-7:1"), content="Some((9, 9))")
+  debug_inspect(loc_line_span("9:1-7:2"), content="Some((9, 9))")
   debug_inspect(loc_line_span("x"), content="None")
+  debug_inspect(loc_line_span("abc:1"), content="None")
   debug_inspect(loc_line_span(""), content="None")
   debug_inspect(loc_line_span(":1"), content="None")
 }
