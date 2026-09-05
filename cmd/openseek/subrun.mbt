@@ -59,6 +59,16 @@ async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
       }
       other => other
     }
+    // The envelope also carries the caller's step ceiling. That is where the
+    // workflow contract puts it — a hosted snippet's `wf.agent(max_steps=N)`
+    // arrives HERE, not on argv, because the library's argv is a template
+    // that cannot express an optional flag. The explicit `--max-steps` flag
+    // still wins when both are present: it is the operator's word.
+    let ceiling : Int? = match parsed {
+      { "workflow_contract": Number(1, ..), "max_steps": Number(steps, ..), .. } =>
+        Some(steps.to_int())
+      _ => None
+    }
     @async.with_task_group() <| group => {
       // Failures are caught INSIDE the task: a spawned task's failure
       // cancels the group body, so a catch around `work.wait()` observes
@@ -68,7 +78,7 @@ async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
       // parent classifies on, and the task completes normally.
       let work = group.spawn(() => {
         dispatch_kind(
-          kind, input, matches, model, thinking, api_url, workspace_root,
+          kind, input, ceiling, matches, model, thinking, api_url, workspace_root,
         ) catch {
           error if @async.is_being_cancelled() ||
             @async.is_cancellation_error(error) => raise error
@@ -197,10 +207,27 @@ async fn remove_scratch_lab(dir : String) -> Unit {
 }
 
 ///|
+/// The step ceiling for one child, by precedence: the explicit `--max-steps`
+/// flag (the operator's word), else the request envelope's `max_steps` (where
+/// the workflow contract carries a caller's per-call ceiling), else the
+/// kind's own default.
+fn step_ceiling(
+  matches : @argparse.Matches,
+  envelope : Int?,
+  default : Int,
+) -> Int raise {
+  match max_steps(matches) {
+    Some(steps) => steps
+    None => envelope.unwrap_or(default)
+  }
+}
+
+///|
 /// Run one kind in this process and return its report, if any.
 async fn dispatch_kind(
   kind : String,
   input : Json,
+  ceiling : Int?,
   matches : @argparse.Matches,
   model : @deepseek.Model,
   thinking : @deepseek.ThinkingMode,
@@ -213,6 +240,22 @@ async fn dispatch_kind(
   // items append as the turn runs. Without the flags the transcript stays
   // in-memory, exactly as before.
   let durable = child_durable_session(matches, workspace_root~)
+  // A child spawned from a hosted snippet inherits that snippet's handoff
+  // in its environment. One that arrives with the handoff but WITHOUT a
+  // reserved session was launched around the library — a hand-rolled
+  // spawn, not `@hosted.run` — and would run to completion leaving no
+  // transcript, invisible to every viewer. Refuse up front, so the model
+  // learns the one path that is visible instead of silently losing a child.
+  if durable is None &&
+    @env.get_env_var("WORKFLOW_HOST") is Some(handoff) &&
+    !handoff.is_empty() {
+    @emit.emit(
+      CommandError(
+        error="subrun was launched from a hosted workflow without a reserved --session; delegate through @hosted.run so the child gets a transcript",
+      ),
+    )
+    return None
+  }
   let session_id = durable.map(pair => pair.0)
   let append_item = durable.map(pair => {
     let store = @store.SessionStore(pair.1)
@@ -233,8 +276,8 @@ async fn dispatch_kind(
         input,
         api_key~,
         model~,
-        max_steps=max_steps(matches).unwrap_or(
-          @agent_explore.default_explore_max_steps,
+        max_steps=step_ceiling(
+          matches, ceiling, @agent_explore.default_explore_max_steps,
         ),
         thinking~,
         api_url?,
@@ -267,8 +310,8 @@ async fn dispatch_kind(
         baseline~,
         api_key~,
         model~,
-        max_steps=max_steps(matches).unwrap_or(
-          @agent_review.default_audit_max_steps,
+        max_steps=step_ceiling(
+          matches, ceiling, @agent_review.default_audit_max_steps,
         ),
         thinking~,
         api_url?,
@@ -298,8 +341,8 @@ async fn dispatch_kind(
           input,
           api_key~,
           model~,
-          max_steps=max_steps(matches).unwrap_or(
-            @agent_worker.default_worker_max_steps,
+          max_steps=step_ceiling(
+            matches, ceiling, @agent_worker.default_worker_max_steps,
           ),
           thinking~,
           api_url?,
@@ -337,7 +380,7 @@ async fn dispatch_kind(
         instruction,
         api_key~,
         model~,
-        max_steps=max_steps(matches).unwrap_or(8),
+        max_steps=step_ceiling(matches, ceiling, 8),
         thinking~,
         api_url?,
         workspace_root~,

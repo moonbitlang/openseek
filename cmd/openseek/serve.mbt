@@ -686,6 +686,13 @@ async fn run_serve(
       }
       None => None
     }
+    // The same coordinates, in the shape an mbtx snippet needs: a workflow it
+    // runs delegates to children that must be named from the SAME ordinal
+    // counter `run_subrun` uses, or a snippet's child and an `explore` child
+    // collide on one transcript file.
+    let mbtx_subrun = child_session.map(spec => {
+      spec.injection(exe~, workspace_root~, model="\{model}", api_url?)
+    })
     // The callable review tool audits against the LIVE standing goal: the
     // closure reads the loop-updated session at call time, never a
     // snapshot.
@@ -731,6 +738,7 @@ async fn run_serve(
         ignore(steps.try_put(BackgroundNotice) catch { _ => false })
       },
       extra_tools~,
+      mbtx_subrun?,
     )
     group.spawn_bg(no_wait=true) <| () => {
       @jsonl.each(@stdio.stdin, json => {

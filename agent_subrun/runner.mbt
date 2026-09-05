@@ -208,6 +208,20 @@ pub struct ChildSession {
 }
 
 ///|
+/// The session store the child's transcript is written into.
+pub fn ChildSession::root(self : ChildSession) -> String {
+  self.root
+}
+
+///|
+/// The lowest child ordinal no earlier engine process has persisted for this
+/// parent — the floor a second allocator must also respect if it is minting
+/// child sessions under the same parent.
+pub fn ChildSession::first_free(self : ChildSession) -> Int {
+  self.first_free
+}
+
+///|
 /// See `ChildSession`.
 pub fn ChildSession::ChildSession(
   root~ : String,
@@ -226,6 +240,29 @@ let subrun_ids : Ref[Int] = { val: 0, }
 fn next_subrun_id() -> String {
   subrun_ids.val += 1
   "sr-\{subrun_ids.val}"
+}
+
+///|
+/// Reserve `count` consecutive child ordinals from THIS process's counter and
+/// return the first.
+///
+/// Child sessions are named `<parent>-sr-N`, and `run_subrun` is no longer the
+/// only thing that mints one: an mbtx snippet running a workflow allocates its
+/// own children. Both must draw from the same counter, or a snippet's `sr-1`
+/// and an `explore` call's `sr-1` name the same file and the second child dies
+/// on its first append against the first's snapshot.
+///
+/// `first_free` is the same floor `ChildSession` carries — the lowest ordinal
+/// no earlier engine process persisted for this parent — applied here so a
+/// block reserved right after a resume cannot reuse a persisted id either.
+/// Monotonic: this can skip ordinals, never reuse one.
+pub fn reserve_subrun_ordinals(count : Int, first_free? : Int = 1) -> Int {
+  if subrun_ids.val < first_free - 1 {
+    subrun_ids.val = first_free - 1
+  }
+  let base = subrun_ids.val + 1
+  subrun_ids.val += if count > 0 { count } else { 1 }
+  base
 }
 
 ///|

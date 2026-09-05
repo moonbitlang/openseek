@@ -1343,3 +1343,183 @@ async test "an escalated run is not read as a policy refusal" {
   assert_false(out.content.contains("this tool's policy refusing"))
   assert_false(out.content.contains("escalated: true"))
 }
+
+///|
+/// Run `source` as a HOSTED snippet: one whose conversation has a durable
+/// session, so mbtx reserves child ordinals and a run directory and hands
+/// them to the guest as `WORKFLOW_HOST`. `store` stands in for the session
+/// store; ordinals come from a local counter, as the CLI's shared one would.
+async fn run_hosted(
+  workspace_root : String,
+  store : String,
+  source : String,
+) -> @agent_tool.ToolOutput {
+  let issued = Ref(0)
+  let subrun = @host.SubrunInjection(
+    exe="/unused/openseek",
+    session_root=store,
+    parent="run7",
+    workspace_root~,
+    reserve_ordinals=count => {
+      let base = issued.val + 1
+      issued.val += count
+      base
+    },
+  )
+  let action = match @mbtx.definition(workspace_root~, subrun~).execute {
+    Async(execute) => execute({ "source": source, "subrun": true })
+    Sync(_) => fail("mbtx should be async")
+  }
+  guard action is Respond(output) else { fail("expected Respond") }
+  output
+}
+
+///|
+async test "a hosted snippet may write its own run directory" {
+  @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
+    @vfs.with_tmpdir(prefix="mbtx-store-", store => {
+      // The guest reads the handoff the policy set and appends to the two
+      // paths it names. Under mbtx's REAL policy the session store is not a
+      // write root, so this passes only because the run's own directory was
+      // created before the policy named it and granted as one — the case a
+      // hand-written policy in an earlier end-to-end check silently hid.
+      let out = run_hosted(
+        ws,
+        store,
+        (
+          #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/core/env", "moonbitlang/core/json" }
+          #|
+          #|async fn main {
+          #|  guard @env.get_env_var("WORKFLOW_HOST") is Some(raw) else { println("NO HANDOFF"); return }
+          #|  guard @json.parse(raw) is { "journal": String(journal), "events": String(events), .. } else { println("BAD HANDOFF"); return }
+          #|  @fs.write_file(journal, "{\"e\":1}\n", append=true, create_mode=OpenOrCreate)
+          #|  @fs.write_file(events, "{\"event\":\"agent_started\"}\n", append=true, create_mode=OpenOrCreate)
+          #|  println("wrote")
+          #|}
+        ),
+      )
+      if out.is_error {
+        fail("hosted snippet failed:\n\{out.content}")
+      }
+      assert_true(out.content.contains("wrote"))
+      let journal = @fs.read_file("\{store}/run7-wf-1/journal.jsonl").text()
+      assert_true(journal.contains("{\"e\":1}"))
+      let events = @fs.read_file("\{store}/run7-wf-1/events.jsonl").text()
+      assert_true(events.contains("agent_started"))
+    })
+  })
+}
+
+///|
+async test "a hosted snippet may NOT write the rest of the session store" {
+  @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
+    @vfs.with_tmpdir(prefix="mbtx-store-", store => {
+      // Only the run's directory was granted. Writing beside another session's
+      // transcript in the store root is refused by the policy — and mbtx
+      // reports a refusal as an error, with its own advice, which is the
+      // contract this test also pins: a snippet that overreaches is TOLD so.
+      let out = run_hosted(
+        ws,
+        store,
+        (
+          #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/core/env", "moonbitlang/core/json" }
+          #|
+          #|async fn main {
+          #|  guard @env.get_env_var("WORKFLOW_HOST") is Some(raw) else { println("NO HANDOFF"); return }
+          #|  guard @json.parse(raw) is { "journal": String(journal), .. } else { println("BAD HANDOFF"); return }
+          #|  let dir = journal.rev_find("/").map(i => journal[:i].to_string()).unwrap_or("?")
+          #|  let store = dir.rev_find("/").map(i => dir[:i].to_string()).unwrap_or("?")
+          #|  @fs.write_file("\{store}/other-session.jsonl", "x", create_mode=OpenOrCreate) catch { _ => { println("store refused"); return } }
+          #|  println("STORE WRITABLE")
+          #|}
+        ),
+      )
+      assert_true(out.is_error)
+      assert_true(out.content.contains("store refused"))
+      assert_true(out.content.contains("Sandbox policy blocked"))
+      assert_false(out.content.contains("STORE WRITABLE"))
+      assert_false(@fs.exists("\{store}/other-session.jsonl"))
+    })
+  })
+}
+
+///|
+async test "an unhosted snippet sees no handoff, even one its host inherited" {
+  // The guest copies the host's environment, and this process may itself be
+  // a child of a hosted snippet. The policy therefore always DECIDES
+  // `WORKFLOW_HOST`: to the reservation when there is one, to nothing when
+  // there is not. A snippet with no durable session must never find a
+  // grandparent's handoff and mint child ids from a block that is not its own.
+  let out = run(
+    (
+      #|import { "moonbitlang/core/env" }
+      #|
+      #|fn main {
+      #|  match @env.get_env_var("WORKFLOW_HOST") {
+      #|    Some(v) if !v.is_empty() => println("LEAKED: \{v}")
+      #|    _ => println("clear")
+      #|  }
+      #|}
+    ),
+  )
+  assert_false(out.is_error)
+  assert_true(out.content.contains("clear"))
+  assert_false(out.content.contains("LEAKED"))
+}
+
+///|
+async test "asking to delegate on a session that cannot host is refused, and says why" {
+  // The capability is absent (no `subrun` injection); the model asks anyway.
+  // Running the snippet without the coordinates it expects would let its
+  // subagents vanish, so the answer is a refusal the model can act on.
+  let out = run_in(".", { "source": "fn main { println(1) }", "subrun": true })
+  assert_true(out.is_error)
+  assert_true(out.content.contains("no durable session"))
+  assert_true(out.content.contains("Retry without `subrun`"))
+}
+
+///|
+async test "a hosted session reserves nothing unless the snippet asks" {
+  @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
+    @vfs.with_tmpdir(prefix="mbtx-store-", store => {
+      // Same capability as `run_hosted`, but the snippet does not set the
+      // flag: no ordinals are reserved, no run directory is created, no
+      // handoff is written, and no engine enters the command vocabulary.
+      // Reserving children a script never starts would waste ids and announce
+      // a workflow that does not exist.
+      let issued = Ref(0)
+      let subrun = @host.SubrunInjection(
+        exe="/unused/openseek",
+        session_root=store,
+        parent="run7",
+        workspace_root=ws,
+        reserve_ordinals=count => {
+          let base = issued.val + 1
+          issued.val += count
+          base
+        },
+      )
+      let action = match @mbtx.definition(workspace_root=ws, subrun~).execute {
+        Async(execute) =>
+          execute({
+            "source": (
+              #|import { "moonbitlang/core/env" }
+              #|
+              #|fn main {
+              #|  match @env.get_env_var("WORKFLOW_HOST") {
+              #|    Some(v) if !v.is_empty() => println("HANDOFF PRESENT")
+              #|    _ => println("no handoff")
+              #|  }
+              #|}
+            ),
+          })
+        Sync(_) => fail("mbtx should be async")
+      }
+      guard action is Respond(out) else { fail("expected Respond") }
+      assert_false(out.is_error)
+      assert_true(out.content.contains("no handoff"))
+      assert_eq(issued.val, 0)
+      assert_false(@fs.exists("\{store}/run7-wf-1"))
+    })
+  })
+}

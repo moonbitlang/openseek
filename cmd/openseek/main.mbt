@@ -308,7 +308,13 @@ async fn run_task_turn(
       api_url?,
       child_session?,
     )
-    let tools = @agent.build_tools(runtime, scope, extra_tools~)
+    // A snippet's workflow delegates to children named from the SAME ordinal
+    // counter `run_subrun` uses, so a snippet's child and an `explore` child
+    // cannot collide on one transcript file.
+    let mbtx_subrun = child_session.map(spec => {
+      spec.injection(exe~, workspace_root~, model="\{model}", api_url?)
+    })
+    let tools = @agent.build_tools(runtime, scope, extra_tools~, mbtx_subrun?)
     let on_goal_met = if review_gate_enabled(matches) {
       Some(
         build_goal_met_gate(

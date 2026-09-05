@@ -3,6 +3,7 @@ package "bobzhang/openseek/agent_subrun"
 
 import {
   "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_subrun/host",
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/deepseek",
   "bobzhang/openseek_protocol",
@@ -17,6 +18,8 @@ pub async fn[T] execute_kind(session_id~ : String, system_prompt~ : String, task
 
 pub fn report_line(Json) -> String
 
+pub fn reserve_subrun_ordinals(Int, first_free? : Int) -> Int
+
 pub async fn[T] run_subrun(command~ : String, args~ : Array[String], input~ : Json, parse_report~ : (Json) -> Result[T, String], wall_deadline_ms~ : Int, kind~ : String, label~ : String, cwd? : String, child_session? : ChildSession, extra_env? : Map[String, String], emit_event? : (@openseek_protocol.Event) -> Unit) -> SubrunResult[T]
 
 pub fn[T] validated(Result[T, String], (T) -> Array[String]) -> Result[T, Array[String]]
@@ -29,6 +32,9 @@ pub struct ChildSession {
   // private fields
 }
 pub fn ChildSession::ChildSession(root~ : String, parent~ : String, first_free? : Int) -> Self
+pub fn ChildSession::first_free(Self) -> Int
+pub fn ChildSession::injection(Self, exe~ : String, workspace_root~ : String, model? : String, api_url? : String) -> @host.SubrunInjection
+pub fn ChildSession::root(Self) -> String
 
 type SubrunBudget
 pub fn SubrunBudget::SubrunBudget(max_calls_per_turn? : Int) -> Self

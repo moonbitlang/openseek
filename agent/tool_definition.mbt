@@ -51,6 +51,7 @@ pub async fn[X] build_tools(
   scope : @agent_runtime.AgentTaskScope[X],
   on_background_wake? : () -> Unit,
   extra_tools? : Array[@agent_tool.AgentToolDefinition] = [],
+  mbtx_subrun? : @host.SubrunInjection,
 ) -> @agent_tool.Tools {
   let workspace_root = runtime.workspace_root()
   // One session-scoped file-state map, shared by the file-writing tools so they
@@ -107,11 +108,17 @@ pub async fn[X] build_tools(
       // it is passed straight through rather than tested and rebuilt. What the
       // tool package receives is the channel and nothing else: it can ask, and
       // knows nothing about who answers.
+      // `mbtx_subrun`, when present, is what lets a snippet delegate to child
+      // agents that are VISIBLE: it carries the engine's own path plus the
+      // block of child session ids and journal paths this session reserved.
+      // Absent for a conversation with no durable session, where a child
+      // would have nowhere to leave a transcript.
       @mbtx.definition(
         workspace_root~,
         bg_runtime~,
         job_dir?=spill_dir,
         approval?=runtime.approval_channel(),
+        subrun?=mbtx_subrun,
       ),
       // Deliberately NOT told about escalation. It reports a job that already
       // ran — a policy refusal reaches it after minutes of real work — and the

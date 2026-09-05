@@ -1,0 +1,10 @@
+import {
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/workflow/hosted",
+  "moonbitlang/core/json",
+} for "test"
+
+supported_targets = "+wasm+native"

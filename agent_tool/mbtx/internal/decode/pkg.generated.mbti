@@ -17,6 +17,7 @@ pub struct MbtxInput {
   cwd : String?
   warning : Bool
   escalated : Bool
+  subrun : Bool
 } derive(@debug.Debug)
 
 // Type aliases

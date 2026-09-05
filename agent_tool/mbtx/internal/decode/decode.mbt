@@ -16,6 +16,15 @@ pub struct MbtxInput {
   /// the field, but a model that sends it anyway must be told what happened,
   /// not silently run confined while believing otherwise.
   escalated : Bool
+  /// Whether the snippet declares that it will DELEGATE — run a
+  /// `moonbitlang/workflow` workflow whose children must be visible. Only
+  /// then does the tool reserve child ordinals and a run directory and hand
+  /// the snippet a `WORKFLOW_HOST`; every other snippet gets none, so the
+  /// announcement of a workflow means one was asked for. Decoded whatever the
+  /// tool was built with, for the same reason as `escalated`: a model that
+  /// asks on a session that cannot host must be told, not quietly run
+  /// without its children.
+  subrun : Bool
 } derive(Debug)
 
 ///|
@@ -78,7 +87,13 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         { "escalated": _, .. } => fail("arguments.escalated to be a boolean")
         _ => false
       }
-      { source, target, cwd, warning, escalated, }
+      let subrun = match arguments {
+        { "subrun": True, .. } => true
+        { "subrun": False, .. } | { "subrun": Null, .. } => false
+        { "subrun": _, .. } => fail("arguments.subrun to be a boolean")
+        _ => false
+      }
+      { source, target, cwd, warning, escalated, subrun, }
     }
     Object(_) => fail("arguments.source")
     _ => fail("object arguments")

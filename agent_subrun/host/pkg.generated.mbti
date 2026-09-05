@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/agent_subrun/host"
+
+// Values
+pub let block_size : Int
+
+// Errors
+
+// Types and methods
+type SubrunInjection
+pub fn SubrunInjection::SubrunInjection(exe~ : String, session_root~ : String, parent~ : String, workspace_root~ : String, reserve_ordinals~ : (Int) -> Int, model? : String, api_url? : String) -> Self
+pub fn SubrunInjection::exe(Self) -> String
+pub fn SubrunInjection::reserve(Self) -> SubrunReservation
+
+type SubrunReservation
+pub fn SubrunReservation::base(Self) -> Int
+pub fn SubrunReservation::dir(Self) -> String
+pub fn SubrunReservation::env(Self) -> Map[String, String]
+pub fn SubrunReservation::events_path(Self) -> String
+pub fn SubrunReservation::journal_path(Self) -> String
+pub fn SubrunReservation::limit(Self) -> Int
+
+// Type aliases
+
+// Traits

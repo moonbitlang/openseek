@@ -1,5 +1,6 @@
 import {
   "bobzhang/openseek/agent_tool",
+  "bobzhang/openseek/agent_subrun/host",
   "bobzhang/openseek/agent_tool/bgjobs",
   "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_tool/mbtx/internal/decode",
@@ -19,6 +20,7 @@ supported_targets = "+wasm+native"
 
 import {
   "moonbitlang/async",
+  "bobzhang/openseek/agent_subrun/host",
   "bobzhang/openseek/testkit/filesystem" @vfs,
 } for "test"
 

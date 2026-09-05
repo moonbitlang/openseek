@@ -120,6 +120,7 @@ pub fn definition(
   foreground_timeout_ms? : Int = ForegroundTimeoutMs,
   build_timeout_ms? : Int = BuildTimeoutMs,
   approval? : @agent_runtime.ApprovalChannel,
+  subrun? : @host.SubrunInjection,
 ) -> @agent_tool.AgentToolDefinition {
   // Background snippet directories are numbered inside the caller's scratch
   // dir rather than created as fresh system temp dirs: a detached job outlives
@@ -131,11 +132,14 @@ pub fn definition(
     description=description(
       background=bg_runtime is Some(_),
       escalation=approval is Some(_),
+      hosting=subrun is Some(_),
       auto_background_after_ms~,
       foreground_timeout_ms~,
       build_timeout_ms~,
     ),
-    schema=JsonSchema(schema(escalation=approval is Some(_))),
+    schema=JsonSchema(
+      schema(escalation=approval is Some(_), hosting=subrun is Some(_)),
+    ),
     execute=Async(arguments => {
       execute(
         workspace_root,
@@ -150,6 +154,7 @@ pub fn definition(
         build_timeout_ms~,
         next_background~,
         approval?,
+        subrun?,
       )
     }),
   )
@@ -208,6 +213,7 @@ async fn execute(
   build_timeout_ms~ : Int,
   next_background~ : Ref[Int],
   approval? : @agent_runtime.ApprovalChannel,
+  subrun? : @host.SubrunInjection,
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
     error =>
@@ -421,9 +427,48 @@ async fn execute(
   // `cwd` is deliberately NOT a write root: naming where a program runs should
   // not also grant writing there, and reads are open, so a snippet can still
   // work in a directory it may not modify.
+  // Reserve this snippet's child ordinals and journal BEFORE it runs. The
+  // coordinates reach it as guest environment variables, never as argv it
+  // wrote: only values mbtx chose resolve to anything the host watches, so a
+  // snippet cannot name a session that was not reserved for it.
+  let reservation = if input.subrun {
+    match subrun {
+      Some(injection) => Some(injection.reserve())
+      // Asked, and cannot be served: say so. A snippet that believed it had a
+      // handoff would spawn children with no transcript, and the model would
+      // learn nothing until its subagents failed to appear anywhere.
+      None =>
+        return @agent_tool.respond(
+          "mbtx: `subrun` was requested, but this conversation has no durable session, so a workflow's children would have nowhere to leave a transcript. Retry without `subrun` and do the work in this snippet directly.",
+          is_error=true,
+          brief="mbtx (subrun unavailable)",
+        )
+    }
+  } else {
+    None
+  }
+  // The run's own directory, and the ONE place in the session store the
+  // snippet may write. It must exist before the policy names it — moonrun
+  // canonicalizes every root when it loads the document and refuses the whole
+  // file otherwise. Granting the store itself would let a snippet append to
+  // another session's transcript; the ledger gets a directory instead.
+  if reservation is Some(r) {
+    @fs.mkdir(r.dir()) catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => ()
+    }
+  }
   let policy = wasm_policy_document(
     tmp_dir=snippet_tmp,
-    extra_roots=[..scratch_dir.map(l => [l]).unwrap_or([])],
+    extra_roots=[
+      ..scratch_dir.map(l => [l]).unwrap_or([]),
+      ..reservation.map(r => [r.dir()]).unwrap_or([]),
+    ],
+    inject=reservation.map(r => r.env()).unwrap_or(Map([])),
+    spawnable=match (reservation, subrun) {
+      (Some(_), Some(injection)) => Some(injection.exe())
+      _ => None
+    },
   )
   @fs.write_file(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
   // Wrap each phase's command in sandbox-exec for the roles that need a rule
@@ -1210,7 +1255,7 @@ async fn read_capped(path : String) -> String {
 /// The `mbtx` argument schema. `escalation` adds `escalated` only when an
 /// approval channel is wired; otherwise every use would come back refused, and
 /// the cheapest way not to waste a turn is for the argument not to exist.
-fn schema(escalation~ : Bool) -> Json {
+fn schema(escalation~ : Bool, hosting~ : Bool) -> Json {
   {
     "type": "object",
     "properties": Json(
@@ -1262,6 +1307,25 @@ fn schema(escalation~ : Bool) -> Json {
               ),
             ]
           },
+          ..if hosting {
+            [
+              (
+                "subrun",
+                Json({
+                  "type": "boolean",
+                  "description": (
+                    #|Set true when this snippet DELEGATES: runs a `moonbitlang/workflow`
+                    #|workflow whose children are subagents (`import "moonbitlang/workflow/hosted"`,
+                    #|then `@hosted.context()` and `ctx.run(wf => ...)`). Only then are child
+                    #|sessions reserved and handed to the snippet, so its subagents get their own
+                    #|transcripts and appear in the desktop. Leave it unset for every other
+                    #|snippet: reserving children a script never starts wastes ids and announces
+                    #|a workflow that does not exist. A snippet may start at most 32 children.
+                  ),
+                }),
+              ),
+            ]
+          },
         ],
       ),
     ),
@@ -1294,6 +1358,7 @@ fn schema(escalation~ : Bool) -> Json {
 fn description(
   background~ : Bool,
   escalation~ : Bool,
+  hosting~ : Bool,
   auto_background_after_ms~ : Int,
   foreground_timeout_ms~ : Int,
   build_timeout_ms~ : Int,
@@ -1429,6 +1494,27 @@ fn description(
       $|for up to \{foreground_bound}; at that deadline it is cancelled and reported as a timeout.
     )
   }
+  // Delegation is described only where it can be granted. A session with no
+  // durable store has no argument to advertise, and telling the model about
+  // one it cannot use costs it a refused call to find that out.
+  let delegation = if hosting {
+    (
+      #|
+      #|## Delegating to subagents
+      #|
+      #|Set `subrun: true` when this snippet runs a `moonbitlang/workflow` workflow whose
+      #|children are subagents — and only then. Import "moonbitlang/workflow" and
+      #|"moonbitlang/workflow/hosted", then `guard @hosted.context() is Some(ctx)` and
+      #|`ctx.run(wf => ...)`; inside, `wf.agent(prompt=..., kind="explore")` runs one
+      #|scout, and `@workflow.parallel([...])` with `@workflow.attempt` fans several out
+      #|concurrently. The children get their own transcripts and appear in the desktop.
+      #|A snippet may start at most 32 children. Without the flag no child sessions are
+      #|reserved and the engine is not on the spawn allowlist: a workflow written
+      #|without it runs with no handoff and its subagents are refused.
+    )
+  } else {
+    ""
+  }
   // The blank `$|` line is the paragraph break: without it the section heading
   // runs onto the base text's last line and stops reading as a heading.
   (
@@ -1446,5 +1532,6 @@ fn description(
     $|polling: keep working and act on the notice. Read recent output with job_output
     $|(use one bounded wait_ms call only when the result is needed now), and cancel it
     $|with job_stop.
+    $|\{delegation}
   )
 }

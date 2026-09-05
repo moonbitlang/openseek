@@ -246,9 +246,21 @@ let spawnable_commands : Array[(String, Array[String])] = [
 /// which admits no shell, no interpreter, and no ad-hoc rewriter, and which
 /// refuses git's reconfiguring global options because they precede the
 /// subcommand.
+/// `inject` names variables written into the GUEST environment on top of the
+/// host's, and `spawnable` an extra program the snippet may start. Both exist
+/// for one caller: a snippet that runs a workflow needs the engine's own
+/// absolute path plus the coordinates mbtx reserved for it, and neither can
+/// come from the snippet — the whole point is that only values mbtx chose
+/// resolve to anything the host is watching. `spawnable` is an ABSOLUTE path
+/// for the same reason `explore` never resolves the engine through PATH:
+/// parent and child must be the same binary or the report's derived JSON
+/// codecs can drift. moonrun matches the entry exactly, so an absolute rule
+/// admits only that exact binary and no same-named one earlier in PATH.
 fn wasm_policy_document(
   tmp_dir~ : String,
   extra_roots~ : Array[String],
+  inject~ : Map[String, String],
+  spawnable~ : String?,
 ) -> Json {
   // A snippet writes NOTHING in the workspace. It does not need to: the file
   // tools make the edits, and the commands whose job is to rewrite source
@@ -277,6 +289,15 @@ fn wasm_policy_document(
     }
     allow.push(rule)
   }
+  // The engine itself, one verb only. `subrun` reads a JSON line and reports
+  // a child agent's result; the other verbs stay out, since a bare `openseek`
+  // starts an interactive agent. An admitted verb spawns children of its own
+  // — the sub-run IS an agent — which is the already-accepted `moon run`
+  // shape; what the prefix buys is that only the delegating FORM of this
+  // program exists in a snippet's vocabulary.
+  if spawnable is Some(exe) {
+    allow.push({ "program": exe, "args_prefix": json_strings(["subrun"]) })
+  }
   {
     // A policy run BUILDS the guest environment rather than inheriting one, so
     // an empty list means an empty environment — `moon` could not even be
@@ -296,7 +317,7 @@ fn wasm_policy_document(
     // run's files. A native child ignores it either way — moonbitlang/async's
     // `stub.c` hardcodes `/tmp` off Windows — but a child is outside this
     // policy, so its temp directory is not this policy's business.
-    "env": { "from_host": ["*"], "set": { "TMPDIR": tmp_dir } },
+    "env": { "from_host": ["*"], "set": Json(env_set(tmp_dir, inject)) },
     // `"*"` is moonrun's every-host-path wildcard — see the header for why
     // reads are open where writes are not.
     "fs": { "read": ["*"], "write": json_strings(write_roots) },
@@ -316,7 +337,125 @@ fn wasm_policy_document(
 }
 
 ///|
+/// The guest's `env.set` block: whatever the caller injects, then the two
+/// names whose values are POLICY DECISIONS rather than messages, written last
+/// so no injected variable can override them.
+///
+/// `TMPDIR` points the snippet's scratch space into the directory this run
+/// owns. `WORKFLOW_HOST` is always set — to the handoff when this run has one,
+/// and to NOTHING otherwise. The guest copies the host's environment
+/// (`from_host: ["*"]`), and this process may itself be a child of a hosted
+/// snippet, whose handoff it inherited: left alone, that handoff would reach
+/// this snippet, which would then mint child ids from a block that belongs to
+/// its grandparent and collide with the grandparent's own children. An empty
+/// value fails the library's reader closed, so the snippet sees no handoff
+/// rather than someone else's.
+fn env_set(tmp_dir : String, inject : Map[String, String]) -> Map[String, Json] {
+  let set : Map[String, Json] = Map([])
+  for name, value in inject {
+    set[name] = value.to_json()
+  }
+  if !set.contains(HostHandoffVar) {
+    set[HostHandoffVar] = "".to_json()
+  }
+  set["TMPDIR"] = tmp_dir.to_json()
+  set
+}
+
+///|
+/// The variable `moonbitlang/workflow/hosted` reads its handoff from.
+const HostHandoffVar = "WORKFLOW_HOST"
+
+///|
 /// A JSON array of strings, for the path lists the policy is mostly made of.
 fn json_strings(values : Array[String]) -> Json {
   Json([ for value in values => Json(value) ])
+}
+
+///|
+fn test_injection(issued : Ref[Int]) -> @host.SubrunInjection {
+  SubrunInjection(
+    exe="/opt/openseek",
+    session_root="/store",
+    parent="run7",
+    workspace_root="/ws",
+    reserve_ordinals=count => {
+      let base = issued.val + 1
+      issued.val += count
+      base
+    },
+  )
+}
+
+///|
+test "the reservation reaches the guest, and only its own directory is writable" {
+  let injection = test_injection(Ref(0))
+  let reservation = injection.reserve()
+  // A snippet that tried to redirect its own scratch space cannot: the policy
+  // writes TMPDIR last, so the one name here whose value is a policy decision
+  // rather than a message always wins.
+  let inject = reservation.env()
+  inject["TMPDIR"] = "/somewhere/else"
+  let policy = wasm_policy_document(
+    tmp_dir="/run/tmp",
+    extra_roots=[reservation.dir()],
+    inject~,
+    spawnable=Some(injection.exe()),
+  )
+  guard policy
+    is {
+      "env": { "set": Object(set), .. },
+      "fs": { "write": Array(write), .. },
+      "process": { "allow": Array(allow), .. },
+      ..
+    } else {
+    fail("policy lost its env, fs or process section")
+  }
+  assert_eq(set.get("TMPDIR"), Some(Json::string("/run/tmp")))
+  assert_true(set.get("WORKFLOW_HOST") is Some(String(_)))
+  // The run's directory is writable; the session store as a whole is not. A
+  // snippet can append its own ledger and nothing else's transcript.
+  assert_true(write.contains("/store/run7-wf-1"))
+  assert_false(write.contains("/store"))
+  // The engine is admitted by ABSOLUTE path and for one verb. moonrun matches
+  // the entry exactly, so this admits that binary and not a same-named one
+  // earlier in PATH — the same guarantee `explore` gets from never resolving
+  // the engine through PATH.
+  assert_true(
+    allow.contains({ "program": "/opt/openseek", "args_prefix": ["subrun"] }),
+  )
+}
+
+///|
+test "no injection clears any inherited handoff and admits no engine" {
+  let policy = wasm_policy_document(
+    tmp_dir="/run/tmp",
+    extra_roots=[],
+    inject=Map([]),
+    spawnable=None,
+  )
+  guard policy
+    is {
+      "env": { "set": Object(set), .. },
+      "process": { "allow": Array(allow), .. },
+      ..
+    } else {
+    fail("policy lost its env or process section")
+  }
+  // A conversation with no durable session gets no coordinates and no engine
+  // in its command vocabulary: there is nowhere to put a child transcript, so
+  // admitting the spawn would only produce invisible children.
+  //
+  // `WORKFLOW_HOST` is still SET — to nothing. The guest copies the host's
+  // environment, and this process may itself be a child of a hosted snippet,
+  // whose handoff it inherited. Left alone, that handoff would reach this
+  // snippet, which would mint child ids from a block that belongs to its
+  // grandparent. An empty value fails the library's reader closed.
+  assert_eq(set.length(), 2)
+  assert_true(set.get("TMPDIR") is Some(_))
+  assert_eq(set.get("WORKFLOW_HOST"), Some(Json::string("")))
+  for rule in allow {
+    guard rule is { "program": String(program), .. } else { continue }
+    assert_false(program.contains("openseek"))
+  }
 }

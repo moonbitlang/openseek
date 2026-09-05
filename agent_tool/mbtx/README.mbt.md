@@ -309,3 +309,29 @@ fn main {
   println(classify('7'))
 }
 ```
+
+## Hosting a workflow
+
+Two decisions, made by two parties.
+
+The CLI says whether this session CAN host: `definition(…, subrun?)` takes a
+`SubrunInjection` from `agent_subrun/host` — the engine path, the session store, the parent id, and the
+session's one child-ordinal allocator — when the conversation has a durable
+session, and nothing when it does not (a `--no-session` run, a read-only
+child's own snippets). That is a capability, not a switch.
+
+The model says whether this snippet WILL delegate: the `subrun: true` argument.
+Only then does the tool reserve a block of 32 child ordinals, create a run
+directory in the session store, write a `WORKFLOW_HOST` handoff into the guest
+environment for `moonbitlang/workflow/hosted` to read, admit the engine to the
+spawn allowlist (by absolute path, `subrun` only), grant the run directory as
+the one writable store path, and announce the run with `workflow_started`.
+Every other snippet gets none of that — reserving children a script never
+starts would waste ids and announce a workflow that does not exist.
+
+Asked on a session that cannot host, the call is refused with a result that
+says why, rather than running the snippet without the coordinates it expects
+and letting its subagents vanish. And whether or not the flag is set,
+`WORKFLOW_HOST` is always DECIDED by the policy — the handoff, or nothing — so
+a child engine's snippet can never inherit its grandparent's handoff and mint
+child ids from a block that is not its own.
