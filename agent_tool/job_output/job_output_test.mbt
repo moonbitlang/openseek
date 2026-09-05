@@ -280,3 +280,41 @@ async test "a terminal job finds a policy refusal before the displayed tail" {
     }
   })
 }
+
+///|
+async test "offset pages through retained output from the start" {
+  @async.with_task_group(group => {
+    let dir = @fs.tmpdir(prefix="openseek-test-")
+    let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir=dir)
+    let id = bg.start(
+      program="moonx",
+      args=[CLI_SEQ, "1", "20000"],
+      command="seq",
+      max_output_chars=100,
+    )
+    poll_bg_terminal(bg, id)
+    // The first page is the HEAD of the output, not the tail the default
+    // shows, and the footer says which window this is.
+    let head = run_job_output(bg, { "job_id": id, "offset": 0 })
+    assert_false(head.is_error)
+    assert_true(head.content.has_prefix("1\n2\n3\n"))
+    assert_true(head.content.contains("window_offset=0"))
+    assert_true(head.content.contains("truncated=true"))
+    assert_false(head.content.contains("\n20000\n"))
+    // The next page starts exactly where the first ended.
+    let next = run_job_output(bg, { "job_id": id, "offset": 12000 })
+    let full = bg.read_output(id).unwrap_or("")
+    let expected = full.view(start_offset=12000, end_offset=12040).to_owned()
+    assert_true(next.content.has_prefix(expected))
+    assert_true(next.content.contains("window_offset=12000"))
+    // Past the end: nothing but the footer. Negative: refused.
+    let past = run_job_output(bg, { "job_id": id, "offset": 10_000_000 })
+    assert_true(past.content.has_prefix("<system>"))
+    let bad = run_job_output(bg, { "job_id": id, "offset": -1 })
+    assert_true(bad.is_error)
+    // Without offset the tail is still what a poll gets.
+    let tail = run_job_output(bg, { "job_id": id })
+    assert_true(tail.content.contains("\n20000\n"))
+    assert_false(tail.content.contains("window_offset"))
+  })
+}

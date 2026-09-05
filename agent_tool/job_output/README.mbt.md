@@ -27,6 +27,12 @@ Output first, one `<system>` footer line last (the `read` tool convention):
   `stopped killed_at_output_cap=true` (or `killed_at_time_cap=true` for the
   wall-clock reaper) so the model does not read it as a
   requested stop.
+- Output beyond the window is **retained** (the spill file for a large job),
+  and `offset` reads the window that starts at that character offset from
+  the start instead of the tail; the footer then carries `window_offset=N`.
+  A reader pages through all of `total_chars` with offsets 0, 12000, 24000,
+  … — the case is a workflow snippet that prints several scouts' reports,
+  which do not fit one window.
 - Status is `running`, `exit=<code>`, or `stopped`; non-zero exits and stops
   are tool errors, matching what the same snippet would report in the
   foreground.

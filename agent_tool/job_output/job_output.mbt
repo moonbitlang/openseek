@@ -12,9 +12,11 @@ pub fn definition(
       #|a command moves to the background after its foreground grace period).
       #|Returns the most recent window of captured output (with truncation metadata naming
       #|the total size when output exceeds the window) and whether the job is still
-      #|running. If you need the job's result before you can continue and have no other
-      #|work to do, pass wait_ms to block until it finishes instead of checking
-      #|repeatedly.
+      #|running. Output beyond the window is retained: pass offset (a character offset
+      #|from the START) to read an earlier window instead — offsets 0, 12000, 24000, …
+      #|page through all of total_chars. If you need the job's result before you can
+      #|continue and have no other work to do, pass wait_ms to block until it finishes
+      #|instead of checking repeatedly.
     ),
     schema=JsonSchema({
       "type": "object",
@@ -26,6 +28,15 @@ pub fn definition(
             #|Wait up to this many milliseconds (capped at 120000) for the job to finish
             #|before reading. Use when you need the result now and have nothing else to
             #|do; never poll in a loop.
+          ),
+        },
+        "offset": {
+          "type": "number",
+          "description": (
+            #|Read the window that starts at this character offset from the START of the
+            #|captured output, instead of the most recent window. Use it to page through
+            #|output larger than one window: the footer's total_chars says how much there
+            #|is, so offsets 0, 12000, 24000, … cover all of it.
           ),
         },
       },
@@ -67,8 +78,20 @@ async fn execute(
   // Recent output, bounded to a window so a poll cannot flood the conversation
   // with a large job's full log. For output over the window, show the *tail*
   // (recent progress).
+  let page = match window_offset(arguments) {
+    Ok(page) => page
+    Err(message) => return @agent_tool.respond(message, is_error=true)
+  }
   let window = 12000
-  let raw_output = bg_runtime.read_output_tail(job_id, window).unwrap_or("")
+  // A page reads the retained log from the start — the spill file for a large
+  // job — so a result bigger than one window (a workflow's several reports)
+  // is reachable in full; the default stays the tail, which is what a poll on
+  // a running job wants.
+  let raw_output = match page {
+    Some(offset) =>
+      page_of(bg_runtime.read_output(job_id).unwrap_or(""), offset~, window~)
+    None => bg_runtime.read_output_tail(job_id, window).unwrap_or("")
+  }
   // Re-snapshot *after* the awaited read: the job may have appended more output
   // or exited while the read yielded, so size/status/binary/truncation in the
   // footer must reflect that post-read state, not a stale pre-read one — else a
@@ -135,7 +158,11 @@ async fn execute(
   } else {
     ""
   }
-  let footer = "<system>job=\{job_id} \{status_label}\{truncation}\{binary}</system>"
+  let paging = match page {
+    Some(offset) => " window_offset=\{offset}"
+    None => ""
+  }
+  let footer = "<system>job=\{job_id} \{status_label}\{truncation}\{paging}\{binary}</system>"
   // Assemble: output, then the source-write denial guidance (like the foreground
   // path), then the `<system>` footer LAST so it stays the trailing metadata line.
   let content = StringBuilder()
@@ -194,4 +221,43 @@ fn wait_ms(arguments : Json) -> Result[Int?, String] {
     { "wait_ms": _, .. } => Err("error: job_output wait_ms must be a number")
     _ => Ok(None)
   }
+}
+
+///|
+/// Decode the optional `offset` argument: a character offset from the start of
+/// the captured output, zero or more. Absent/null means the recent tail.
+fn window_offset(arguments : Json) -> Result[Int?, String] {
+  match arguments {
+    { "offset": Number(value, ..), .. } => {
+      let offset = value.to_int()
+      if offset < 0 {
+        Err("error: job_output offset must be zero or a positive number")
+      } else {
+        Ok(Some(offset))
+      }
+    }
+    { "offset": Null, .. } => Ok(None)
+    { "offset": _, .. } => Err("error: job_output offset must be a number")
+    _ => Ok(None)
+  }
+}
+
+///|
+/// The `window` characters of `text` starting at character `offset` — empty
+/// past the end. Counted in characters, the unit the footer's `total_chars`
+/// and `shown_chars` use, so the offsets a reader computes from them land
+/// where it expects.
+fn page_of(text : String, offset~ : Int, window~ : Int) -> String {
+  let out = StringBuilder()
+  let mut index = 0
+  for ch in text {
+    if index >= offset + window {
+      break
+    }
+    if index >= offset {
+      out.write_char(ch)
+    }
+    index += 1
+  }
+  out.to_string()
 }
