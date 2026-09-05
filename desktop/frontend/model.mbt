@@ -3127,7 +3127,20 @@ fn Model::session_project(
       return Some(item.workspace)
     }
   }
-  self.find_conversation(channel, session_id).map(conv => conv.project())
+  match self.find_conversation(channel, session_id) {
+    Some(conv) => Some(conv.project())
+    // A sub-run's child (`<parent>-sr-N`) lives in its parent's store by
+    // construction, and it is usually NOT listed while it runs: the inventory
+    // is refreshed at connect, archive and unarchive, not when a child record
+    // appears mid-run. A click on a workflow row must still open it, so it is
+    // placed where its parent is; the host reads the record by id, and the
+    // sub-run probe keeps it moving on screen.
+    None =>
+      match @transcript.subrun_parent(session_id) {
+        Some(parent) => self.session_project(channel, parent)
+        None => None
+      }
+  }
 }
 
 ///|

@@ -9820,6 +9820,44 @@ test "open session is a no-op for the current session" {
 }
 
 ///|
+test "a sub-run child opens through its parent before the store lists it" {
+  // The Workflows tab offers a click into a child the sidebar has not listed
+  // yet (the inventory refreshes at connect, archive and unarchive, not when
+  // a child appears mid-run). The child's session lives in its parent's
+  // store, so the parent's placement is its own.
+  let dispatch = test_dispatch()
+  let model = test_model()
+  assert_true(
+    model.session_project(@interop.ChannelId::Local, "desktop-test-sr-2")
+    is Some(_),
+  )
+  let (_, next) = update(dispatch, OpenSessionHere("desktop-test-sr-2"), model)
+  // The click selects the child and starts its first load; the view switches
+  // when the snapshot lands, as for any session opened from the sidebar.
+  guard next.selected_conversation is Some(selection) else {
+    fail("expected the child to be selected")
+  }
+  inspect(selection.session, content="desktop-test-sr-2")
+  assert_eq(selection.workspace, @interop.ChannelId::Local.test_project())
+  assert_true(
+    next.loading_conversation
+    is Some({ channel: Local, session: "desktop-test-sr-2", }),
+  )
+  guard next.find_conversation(@interop.ChannelId::Local, "desktop-test-sr-2")
+    is Some(child) else {
+    fail("expected the child conversation to exist, loading")
+  }
+  assert_true(child.sync is Reloading(..))
+  inspect(
+    next.transcript_request_generation,
+    content="\{model.transcript_request_generation + 1}",
+  )
+  // A child of a parent this page knows nothing about is still unplaceable.
+  let (_, same) = update(dispatch, OpenSessionHere("elsewhere-sr-2"), model)
+  inspect(same.active_session, content="desktop-test")
+}
+
+///|
 test "open session keeps live state on screen while re-reading the store" {
   let dispatch = test_dispatch()
   let background = {
