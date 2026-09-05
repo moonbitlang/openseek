@@ -72,6 +72,41 @@ pub fn[T] SubrunResult::subrun_id(self : SubrunResult[T]) -> String {
 }
 
 ///|
+/// How `command` actually gets launched.
+///
+/// A native build spawns its own binary directly. A wasm build cannot: there
+/// the parent's argv[0] is a `.wasm` module, which no OS will `exec`, so every
+/// sub-run under `moonx` died at spawn with `@process.spawn(): Permission
+/// denied` — taking the `explore`, `review`, and `subtask` tools and the
+/// `--review-gate` audit with it, while the parent turn itself worked fine.
+/// The module needs its runtime in front of it, `moonrun <module> --
+/// <args...>`, which is the same shape `moonx` used to start the parent.
+///
+/// The runtime is NAMED, not discovered, and that is the part worth
+/// justifying. Runtimes that host a program usually hand it a way back to
+/// themselves — Node has `process.execPath`, Python `sys.executable`, Ruby
+/// `RbConfig.ruby` — and self-respawn is supposed to go through that. wasm
+/// has no equivalent: a module cannot ask who is hosting it. There is also
+/// nothing to choose between, since `moonrun` is the only host supplying the
+/// FFI this binary needs (process spawn, sockets, filesystem) — a bare WASI
+/// runtime could not run the parent either, so it can never be the answer.
+///
+/// The suffix test reads the CHILD path, not the parent's own backend,
+/// deliberately: it stays right for a native parent pointed at a wasm engine,
+/// and leaves the scripted test children (`sh`, absolute paths, bare names)
+/// untouched.
+fn launch_argv(
+  command : String,
+  args : Array[String],
+) -> (String, Array[String]) {
+  if command.has_suffix(".wasm") {
+    ("moonrun", [command, "--", ..args])
+  } else {
+    (command, args)
+  }
+}
+
+///|
 /// Run one sub-run in a DEDICATED CHILD PROCESS and report what happened and
 /// what it cost.
 ///
@@ -125,6 +160,9 @@ pub async fn[T] run_subrun(
       [..args, "--session", "\{spec.parent}-\{id}", "--session-root", spec.root]
     None => args
   }
+  // Assembled argv in hand, decide how it actually gets launched: a wasm
+  // engine needs its runtime in front of it, a native one does not.
+  let (command, args) = launch_argv(command, args)
   emit_event(
     SubrunStarted(id~, kind~, label=@agent_tool.brief_line(label, limit=72)),
   )

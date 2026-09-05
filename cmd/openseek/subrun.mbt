@@ -374,6 +374,10 @@ async fn dispatch_kind(
 /// name stays PATH-resolved, matching however this process was launched.
 /// Never hardcode a name: parent and child must be the SAME binary, or the
 /// typed report channel's same-codec guarantee is gone.
+///
+/// On a wasm build this returns the `.wasm` module's own path, which is not
+/// executable on its own; `agent_subrun`'s `launch_argv` puts `moonrun` in
+/// front of it at the spawn boundary.
 async fn self_executable() -> String {
   let argv0 = match @env.args() {
     [first, ..] => first
