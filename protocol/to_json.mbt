@@ -108,6 +108,16 @@ pub fn Event::to_json(self : Event) -> Json {
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
       }
+    WorkflowStarted(id~, journal~, events~, first_child~, child_count~) =>
+      {
+        "event": "workflow_started",
+        "id": id,
+        "journal": journal,
+        "events": events,
+        "first_child": first_child,
+        "child_count": child_count,
+      }
+    WorkflowFinished(id~) => { "event": "workflow_finished", "id": id }
     AutoCompactionStarted(from_sequence~, to_sequence~) =>
       {
         "event": "auto_compaction_started",

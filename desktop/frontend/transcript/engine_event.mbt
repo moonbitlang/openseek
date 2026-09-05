@@ -27,6 +27,22 @@ pub(all) enum EngineEvent {
   // finish reports what it cost — the only place those numbers appear.
   SubrunOpened(id~ : String, kind~ : String, label~ : String)
   SubrunClosed(id~ : String, status~ : String, steps~ : Int, tokens~ : Int)
+  // A workflow's lifecycle brackets. A workflow is a run inside an `mbtx`
+  // snippet that delegates to child agents of its own; the engine has to
+  // announce it because the workflow library is generic and the parent sees
+  // only one opaque tool call, however many children it starts.
+  //
+  // `journal` and `events` are files the host tails: the ledger of resolved
+  // calls, and the sidecar that reports a launch when it starts. The ordinal
+  // range says which `<parent>-sr-N` transcripts belong to this run.
+  WorkflowOpened(
+    id~ : String,
+    journal~ : String,
+    events~ : String,
+    first_child~ : Int,
+    child_count~ : Int
+  )
+  WorkflowClosed(id~ : String)
   AgentFinished(String)
   // The current turn stopped at the model's context ceiling after attempting
   // an automatic checkpoint. It is run-terminal, but not task success.
@@ -138,6 +154,11 @@ pub fn decode_engine_event(
           tokens=prompt_tokens + completion_tokens,
         ),
       )
+    // A workflow's brackets, carried through unchanged: the host needs the
+    // paths to tail and the ordinal range to know whose children these are.
+    WorkflowStarted(id~, journal~, events~, first_child~, child_count~) =>
+      Some(WorkflowOpened(id~, journal~, events~, first_child~, child_count~))
+    WorkflowFinished(id~) => Some(WorkflowClosed(id~))
     // Not shown, and now each one a recorded decision rather than a line the
     // view drops unnoticed. `plan_reminder` and the goal reminders/checks are
     // model-directed text, not news for the user (the TUI drops them too);

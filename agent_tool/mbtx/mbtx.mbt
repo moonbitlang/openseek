@@ -481,6 +481,32 @@ async fn execute(
       _ => ()
     }
   }
+  // Announce the run before it can produce anything. A reader is TOLD where
+  // the ledger and its sidecar are, and which child ordinals belong to this
+  // run, because nothing about a snippet is otherwise visible: the parent
+  // sees one opaque tool call however many children it starts. The finish
+  // bracket is closed on every exit below, cancellation included, so nothing
+  // shows a workflow as running forever.
+  if reservation is Some(r) {
+    @emit.emit(
+      WorkflowStarted(
+        id="wf-\{r.base()}",
+        journal=r.journal_path(),
+        events=r.events_path(),
+        first_child=r.base(),
+        child_count=r.limit(),
+      ),
+    )
+  }
+  // Closed here only while this call still owns the run. A background
+  // handoff returns from this function with the snippet STILL RUNNING — the
+  // job then owns its lifecycle, and closes the bracket at terminal status
+  // instead (see `terminal_cleanup`), the same split `cleanup()` makes for
+  // the temp directory. Closing it here regardless would report a workflow
+  // finished the moment it was adopted.
+  defer (if reservation is Some(r) && !job_owns_cleanup {
+    @emit.emit(WorkflowFinished(id="wf-\{r.base()}"))
+  })
   let policy = wasm_policy_document(
     tmp_dir=snippet_tmp,
     extra_roots=[
@@ -679,6 +705,11 @@ async fn execute(
         dir
       }
       let terminal_cleanup : async () -> Unit = () => {
+        // The workflow bracket closes when the JOB ends — not when this call
+        // returned at adoption, which was while the run was still going.
+        if reservation is Some(r) {
+          @emit.emit(WorkflowFinished(id="wf-\{r.base()}"))
+        }
         @async.protect_from_cancel(() => {
           @fs.rmdir(terminal_cleanup_path, recursive=true) catch {
             _ => ()

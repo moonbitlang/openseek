@@ -210,3 +210,52 @@ test "unknown and malformed lines are ignored" {
     None,
   )
 }
+
+///|
+test "decodes a workflow's lifecycle brackets" {
+  // A workflow announces where it will write and which child ordinals it
+  // reserved: the reader is told, because a run inside an opaque `mbtx` call
+  // cannot be found by looking.
+  debug_inspect(
+    decode(
+      (
+        #|{"event":"workflow_started","id":"wf-5","journal":"/s/run7-wf-5.jsonl","events":"/s/run7-wf-5.events.jsonl","first_child":5,"child_count":32}
+      ),
+    ),
+    content=(
+      #|Some(
+      #|  WorkflowStarted(
+      #|    id="wf-5",
+      #|    journal="/s/run7-wf-5.jsonl",
+      #|    events="/s/run7-wf-5.events.jsonl",
+      #|    first_child=5,
+      #|    child_count=32,
+      #|  ),
+      #|)
+    ),
+  )
+  debug_inspect(
+    decode(
+      (
+        #|{"event":"workflow_finished","id":"wf-5"}
+      ),
+    ),
+    content=(
+      #|Some(WorkflowFinished(id="wf-5"))
+    ),
+  )
+}
+
+///|
+test "a workflow line missing any coordinate is not an event" {
+  // Fail closed: a half-read bracket would point a reader at a path that is
+  // not there, or at an ordinal range that is not this run's.
+  assert_eq(
+    decode(
+      (
+        #|{"event":"workflow_started","id":"wf-5","journal":"/s/j.jsonl","events":"/s/e.jsonl","first_child":5}
+      ),
+    ),
+    None,
+  )
+}

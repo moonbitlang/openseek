@@ -195,6 +195,20 @@ pub fn parse(line : Json) -> Event? {
         SubrunFinished(id~, status~, steps~, prompt_tokens~, completion_tokens~),
       )
     }
+    "workflow_started" => {
+      guard text(fields, "id") is Some(id) &&
+        text(fields, "journal") is Some(journal) &&
+        text(fields, "events") is Some(events) &&
+        int(fields, "first_child") is Some(first_child) &&
+        int(fields, "child_count") is Some(child_count) else {
+        return None
+      }
+      Some(WorkflowStarted(id~, journal~, events~, first_child~, child_count~))
+    }
+    "workflow_finished" => {
+      guard text(fields, "id") is Some(id) else { return None }
+      Some(WorkflowFinished(id~))
+    }
     "auto_compaction_started" => {
       guard sequences(fields) is Some((from_sequence, to_sequence)) else {
         return None

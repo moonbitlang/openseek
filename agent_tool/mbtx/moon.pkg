@@ -12,6 +12,8 @@ import {
   "moonbitlang/async/process",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
+  "bobzhang/openseek_protocol",
+  "bobzhang/openseek_protocol/emit",
 }
 
 warnings = "+unnecessary_annotation"

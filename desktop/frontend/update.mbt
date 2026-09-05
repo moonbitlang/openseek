@@ -1173,6 +1173,13 @@ fn apply_engine_event(
     // id (a reconnect replaying the bracket) refreshes rather than doubles.
     // The lane docks above the composer, so opening one does not grow the
     // transcript and must not drag a pinned conversation down.
+    // A workflow's brackets. Nothing renders for them YET: what a workflow
+    // needs is a tail of its journal and sidecar on the host side, feeding
+    // the same lane dock the sub-run brackets feed, and a panel for its
+    // phases and ledger on top. Both are the next change. Until then the
+    // brackets are consumed here deliberately, so that a snippet running a
+    // workflow neither breaks this reducer nor leaves a stray notice.
+    WorkflowOpened(..) | WorkflowClosed(..) => (None, conv)
     SubrunOpened(id~, kind~, label~) => {
       let subruns = conv.turn.subruns.filter(lane => lane.id != id)
       subruns.push({

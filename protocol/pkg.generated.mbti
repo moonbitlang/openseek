@@ -65,6 +65,8 @@ pub(all) enum Event {
   ContextYield(to_sequence~ : Int, answer~ : String)
   SubrunStarted(id~ : String, kind~ : String, label~ : String)
   SubrunFinished(id~ : String, status~ : String, steps~ : Int, prompt_tokens~ : Int, completion_tokens~ : Int)
+  WorkflowStarted(id~ : String, journal~ : String, events~ : String, first_child~ : Int, child_count~ : Int)
+  WorkflowFinished(id~ : String)
   SessionStarted(session~ : String, session_root~ : String, workspace_root~ : String?)
   SessionError(error~ : String)
   WorkspaceCreated(dir~ : String)

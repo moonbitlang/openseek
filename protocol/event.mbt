@@ -131,6 +131,39 @@ pub(all) enum Event {
     completion_tokens~ : Int
   )
 
+  // ── workflow ───────────────────────────────────────────────────────────
+  /// A `mbtx` snippet started a workflow: a run that delegates to child
+  /// agents of its own, through `moonbitlang/workflow`.
+  ///
+  /// The engine emits this because nothing else can. The workflow library is
+  /// generic — it never learns openseek exists — so a run inside a snippet
+  /// would otherwise be invisible: the parent sees one opaque `mbtx` tool
+  /// call, however many children it starts. What mbtx knows, and says here,
+  /// is where it told the run to write and which child ordinals it reserved
+  /// for it. Discovery is therefore not discovery; a reader is told where to
+  /// look, exactly as `SubrunStarted` tells it a sub-run began.
+  ///
+  /// `journal` is an append-only JSONL ledger of RESOLVED calls (phase,
+  /// timings, spend); `events` is the sidecar that reports a launch when it
+  /// STARTS, which the journal cannot — an entry carries an outcome, so it
+  /// lands only at completion. Both are absolute paths a reader tails.
+  ///
+  /// `first_child`/`child_count` bound the reserved ordinals: the child
+  /// sessions of this run are exactly `<parent>-sr-N` for N in
+  /// `[first_child, first_child + child_count)`, which is how a reader knows
+  /// which transcripts belong to it.
+  WorkflowStarted(
+    id~ : String,
+    journal~ : String,
+    events~ : String,
+    first_child~ : Int,
+    child_count~ : Int
+  )
+  /// The paired completion, emitted on every exit of the snippet that owns
+  /// the run — success, failure, and cancellation — so a reader never shows
+  /// a workflow as running forever.
+  WorkflowFinished(id~ : String)
+
   // ── session / workspace ────────────────────────────────────────────────
   /// `workspace_root` is optional because it postdates the event: engines
   /// between d11e04c2 (which added `session_started`) and d5d0b208 (which
