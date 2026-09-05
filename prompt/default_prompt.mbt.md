@@ -469,6 +469,62 @@ stderr warning while exit stays 0 — treat skipped blocks as a blind spot.
   one `moon ide doc` query or one focused file read can settle it. The scouts
   cannot edit, and their shared per-turn budget is bounded, so spot-check the
   returned citations and do not delegate overlapping questions.
+- Concurrent exploration through `mbtx`: when the `mbtx` tool offers a
+  `subrun` argument (it does only in a durable session), ONE snippet can fan
+  out several read-only scouts as one workflow and conclude over their answers
+  in code. The scouts get their own transcripts and appear in the desktop; you
+  see one tool result. Prefer this over separate `explore` calls when the
+  fan-out is wider than three, when a second wave of questions depends on the
+  first wave's answers, or when the conclusion is mechanical (compare, count,
+  cross-check). Set `subrun: true` on that one call and on no other: a snippet
+  without the flag gets no handoff, and `@hosted.context()` is `None`.
+
+    ```mbtx
+    import {
+      "moonbitlang/async",
+      "moonbitlang/workflow",
+      "moonbitlang/workflow/hosted",
+    }
+
+    async fn main {
+      guard @hosted.context() is Some(ctx) else {
+        println("no subagent handoff: call mbtx with subrun=true")
+        return
+      }
+      ctx.run(max_concurrent=3, wf => {
+        wf.phase("survey")
+        let found = @workflow.parallel([
+          () => @workflow.attempt(() => wf.agent(
+            prompt="Where is X constructed, and by whom? Cite file:line.",
+            kind="explore", label="scout:x")),
+          () => @workflow.attempt(() => wf.agent(
+            prompt="Who calls Y, and what do the callers pass? Cite file:line.",
+            kind="explore", label="scout:y")),
+          () => @workflow.attempt(() => wf.agent(
+            prompt="How does Z reach the network? Cite file:line.",
+            kind="explore", label="scout:z")),
+        ])
+        wf.phase("conclude")
+        // Each answer is that scout's report as JSON. Conclude in code when
+        // the conclusion is mechanical; otherwise print the reports and
+        // conclude yourself from the tool result.
+        for answer in @workflow.collect_ok(found, min_ok=2) {
+          println(answer.stringify())
+        }
+        println("scouts=\{wf.calls_made()} tokens=\{wf.tokens_spent()}")
+      })
+    }
+    ```
+
+  Each `wf.agent` call is one scout with ONE self-contained question
+  (`kind="explore"`, hints in the prompt). `@workflow.parallel` runs the calls
+  concurrently, `@workflow.attempt` turns a failed scout into an `Err` instead
+  of aborting the run, and `collect_ok` keeps the answers that arrived (it
+  raises if fewer than `min_ok` did). Leave `max_steps` unset: a scout
+  reads files and runs probes, and a real question takes it 20-60 steps —
+  a ceiling of 10 ends every scout in `max_steps` with no answer. A snippet
+  may start at most 32 scouts, and the same rule as `explore` applies: no
+  overlapping questions, and spot-check the citations.
 - `subtask` tool: parallelize LARGE partitionable work — three or more
   independent slices that each need real edit+verify cycles (fixing warnings
   by category, per-package sweeps, migration chunks). Each launch names a
