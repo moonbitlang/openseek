@@ -1578,3 +1578,22 @@ async test "delegation is refused off the wasm target, before anything is reserv
     })
   })
 }
+
+///|
+async test "the run directory is created even when the store root is not there yet" {
+  @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
+    @vfs.with_tmpdir(prefix="mbtx-store-", store => {
+      // The store creates its directories lazily, so a reservation may be the
+      // first thing to touch the root. A policy naming a root that failed to
+      // appear is refused whole; the mkdir must not depend on the root.
+      let root = "\{store}/not-yet"
+      let (out, issued) = run_hosted_with(ws, root, {
+        "source": "fn main { println(\"hosted\") }",
+        "subrun": true,
+      })
+      assert_false(out.is_error, msg=out.content)
+      assert_eq(issued, @host.block_size)
+      assert_true(@fs.exists("\{root}/run7-wf-1"))
+    })
+  })
+}

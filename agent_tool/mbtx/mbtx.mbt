@@ -472,8 +472,11 @@ async fn execute(
   // canonicalizes every root when it loads the document and refuses the whole
   // file otherwise. Granting the store itself would let a snippet append to
   // another session's transcript; the ledger gets a directory instead.
+  // Recursive, so the store root's own existence is not this call's problem:
+  // the store creates its directories lazily, and a policy naming a root that
+  // failed to appear would be refused whole, with nothing to say why.
   if reservation is Some(r) {
-    @fs.mkdir(r.dir()) catch {
+    @fs.mkdir(r.dir(), recursive=true) catch {
       error if @async.is_being_cancelled() => raise error
       _ => ()
     }

@@ -161,10 +161,12 @@ pub fn SubrunReservation::env(self : SubrunReservation) -> Map[String, String] {
 /// transcript viewer links to and the desktop's progress probe tails.
 pub fn SubrunInjection::reserve(self : SubrunInjection) -> SubrunReservation {
   let base = (self.reserve_ordinals)(block_size)
-  // The run's directory is a sibling of the child transcripts it describes, in
-  // the same store: `openseek sessions` and the viewer already walk this
-  // directory, and a run's ledger belongs beside the runs it accounts for
-  // rather than in a build directory that gets reclaimed.
+  // The run's directory lives in the session store's root, beside the store's
+  // own `sessions/` tree that holds the transcripts it accounts for — with the
+  // session data, not in a build directory that gets reclaimed. It is NOT
+  // inside the store's tree: this package is a leaf and does not know the
+  // store's private layout, and nothing enumerates the root itself, so the
+  // ledger is found only by the paths announced for it, never by walking.
   let dir = "\{self.session_root}/\{self.parent}-wf-\{base}"
   let journal_path = "\{dir}/journal.jsonl"
   let events_path = "\{dir}/events.jsonl"
