@@ -727,8 +727,10 @@ fn TranscriptObservers::disconnect(self : Self) -> Unit {
 }
 
 ///|
-test "local pinned transitions are pure" {
-  let input = Input(
+/// The neutral local-OpenSeek input the component tests below start from;
+/// each test names only the fields it varies, with struct update.
+fn base_input() -> Input {
+  Input(
     source=OpenSeek,
     focused=Local,
     active_session="desktop-test",
@@ -743,7 +745,12 @@ test "local pinned transitions are pure" {
     streaming_response=None,
     streaming_identity="idle",
   )
-  let state : Model = {
+}
+
+///|
+/// The mounted, pinned model matching `base_input()`.
+fn pinned_model(input : Input) -> Model {
+  {
     pinned: true,
     overview: @transcript_overview.State::empty(),
     source: OpenSeek,
@@ -754,6 +761,12 @@ test "local pinned transitions are pure" {
     submission_generation: 0,
     mounted: true,
   }
+}
+
+///|
+test "local pinned transitions are pure" {
+  let input = base_input()
+  let state = pinned_model(input)
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let (first, _) = state.update(input, Pinned(false), emit)
   let (second, _) = state.update(input, Pinned(false), emit)
@@ -794,32 +807,8 @@ test "local pinned transitions are pure" {
 ///|
 test "an overview click unpins and highlights inside the component" {
   let key = @transcript_overview.Durable(3)
-  let input = Input(
-    source=OpenSeek,
-    focused=Local,
-    active_session="desktop-test",
-    current_project=None,
-    projects=[],
-    can_choose_project=false,
-    project_menu_open=false,
-    project_query="",
-    root=None,
-    submission_generation=0,
-    items=[],
-    streaming_response=None,
-    streaming_identity="idle",
-  )
-  let state : Model = {
-    pinned: true,
-    overview: @transcript_overview.State::empty(),
-    source: OpenSeek,
-    focused: Local,
-    active_session: "desktop-test",
-    image_owner: input.image_owner(),
-    images: ImageCache::empty(),
-    submission_generation: 0,
-    mounted: true,
-  }
+  let input = base_input()
+  let state = pinned_model(input)
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let (next, _) = state.update(input, Overview(Clicked(key)), emit)
   assert_false(next.pinned)
@@ -828,22 +817,9 @@ test "an overview click unpins and highlights inside the component" {
 
 ///|
 test "a conversation switch clears component-owned overview state" {
-  let input = Input(
-    source=OpenSeek,
-    focused=Local,
-    active_session="desktop-test",
-    current_project=None,
-    projects=[],
-    can_choose_project=false,
-    project_menu_open=false,
-    project_query="",
-    root=None,
-    submission_generation=0,
-    items=[],
-    streaming_response=None,
-    streaming_identity="idle",
-  )
-  let state : Model = {
+  let input = base_input()
+  let state = {
+    ..pinned_model(input),
     pinned: false,
     overview: {
       hover: Some({
@@ -853,13 +829,6 @@ test "a conversation switch clears component-owned overview state" {
       }),
       active: Some(@transcript_overview.Durable(3)),
     },
-    source: OpenSeek,
-    focused: Local,
-    active_session: "desktop-test",
-    image_owner: input.image_owner(),
-    images: ImageCache::empty(),
-    submission_generation: 0,
-    mounted: true,
   }
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let (next, _) = state.update(

@@ -64,11 +64,7 @@ fn visible_file_groups(page : Page) -> Array[FileGroup] {
   let mut remaining = page.visible_lines.max(0)
   for group in grouped_matches(page.text.matches) {
     guard remaining > 0 else { break }
-    let rows : Array[@protocol.TextSearchMatch] = []
-    for result in group.matches {
-      guard rows.length() < remaining else { break }
-      rows.push(result)
-    }
+    let rows = group.matches.iter().take(remaining).to_array()
     visible.push({ ..group, matches: rows, })
     remaining -= rows.length()
   }
@@ -661,11 +657,7 @@ fn visible_semantic_file_groups(page : Page) -> Array[SemanticFileGroup] {
   let mut remaining = page.visible_lines.max(0)
   for group in semantic_grouped_hits(page.semantic.hits) {
     guard remaining > 0 else { break }
-    let rows : Array[@protocol.SemanticSearchHit] = []
-    for hit in group.hits {
-      guard rows.length() < remaining else { break }
-      rows.push(hit)
-    }
+    let rows = group.hits.iter().take(remaining).to_array()
     visible.push({ ..group, hits: rows, })
     remaining -= rows.length()
   }

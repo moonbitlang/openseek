@@ -74,13 +74,13 @@ pub fn State::empty() -> State {
 /// The strip's file paths, in strip order — the projection the root update
 /// hands to fileeditor's `Ctx` for its stat/watch/reload sweeps.
 pub fn file_paths(state : State) -> Array[@pathx.Relative] {
-  let paths : Array[@pathx.Relative] = []
-  for tab in state.tabs {
+  state.tabs.filter_map(tab => {
     if tab is File(path~) {
-      paths.push(path)
+      Some(path)
+    } else {
+      None
     }
-  }
-  paths
+  })
 }
 
 ///|
@@ -94,13 +94,13 @@ pub fn active_file(state : State) -> @pathx.Relative? {
 
 ///|
 pub fn history_diffs(state : State) -> Array[GitHistoryDiff] {
-  let diffs : Array[GitHistoryDiff] = []
-  for tab in state.tabs {
+  state.tabs.filter_map(tab => {
     if tab is GitDiff(diff~) {
-      diffs.push(diff)
+      Some(diff)
+    } else {
+      None
     }
-  }
-  diffs
+  })
 }
 
 ///|

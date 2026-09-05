@@ -218,11 +218,7 @@ pub fn subrun_child_sessions(
 /// differ, then by depth, so `sr-2` precedes `sr-10` and a child precedes
 /// its own grandchildren.
 fn compare_subrun_path(left : Array[Int], right : Array[Int]) -> Int {
-  let shared = if left.length() < right.length() {
-    left.length()
-  } else {
-    right.length()
-  }
+  let shared = left.length().min(right.length())
   for index in 0..<shared {
     if left[index] < right[index] {
       return -1

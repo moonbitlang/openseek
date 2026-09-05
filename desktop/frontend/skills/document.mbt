@@ -21,11 +21,7 @@ fn parse_skill_document(source : String) -> SkillDocument {
   } else {
     first
   }
-  let rest_array : Array[String] = []
-  for line in rest {
-    rest_array.push(line)
-  }
-  let rest = rest_array
+  let rest = rest.to_owned()
   guard first == "---" else { return { metadata: [], body: source, } }
   let closing = find_frontmatter_close(rest)
   guard closing is Some(index) else { return { metadata: [], body: source, } }
@@ -38,11 +34,7 @@ fn parse_skill_document(source : String) -> SkillDocument {
     guard !key.is_empty() else { continue }
     metadata.push((key, line[colon + 1:].trim().to_owned()))
   }
-  let body_lines : Array[String] = []
-  for body_line in rest[index + 1:] {
-    body_lines.push(body_line)
-  }
-  { metadata, body: lines_to_string(body_lines), }
+  { metadata, body: rest[index + 1:].join("\n"), }
 }
 
 ///|
@@ -54,18 +46,6 @@ fn find_frontmatter_close(lines : Array[String]) -> Int? {
     }
   }
   None
-}
-
-///|
-fn lines_to_string(lines : Array[String]) -> String {
-  let out = StringBuilder()
-  for index, line in lines {
-    if index > 0 {
-      out.write_char('\n')
-    }
-    out.write_string(line)
-  }
-  out.to_string()
 }
 
 ///|

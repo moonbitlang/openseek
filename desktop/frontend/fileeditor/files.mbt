@@ -40,12 +40,9 @@ fn read_directory(
           return
         }
       }
-      let entries : Array[FileEntry] = []
-      for entry in reply.entries {
-        if FileEntry::from_reply(entry, path) is Some(entry) {
-          entries.push(entry)
-        }
-      }
+      let entries = reply.entries.filter_map(entry => {
+        FileEntry::from_reply(entry, path)
+      })
       scheduler.add(dispatch(DirLoaded(owner~, epoch~, path~, entries~)))
     })
   })
