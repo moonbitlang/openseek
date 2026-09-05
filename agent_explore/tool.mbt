@@ -182,16 +182,9 @@ async fn execute(
 /// the line is same-binary JSON, but the parent still refuses an oversized
 /// or malformed report rather than rendering it.
 fn parse_child_report(json : Json) -> Result[ExploreReport, String] {
-  match ExploreReport::parse(json) {
-    Err(msg) => Err(msg)
-    Ok(report) => {
-      let problems = report.validate()
-      if problems.length() > 0 {
-        Err(problems.join("; "))
-      } else {
-        Ok(report)
-      }
-    }
+  match parse_submission(json) {
+    Err(problems) => Err(problems.join("; "))
+    Ok(report) => Ok(report)
   }
 }
 

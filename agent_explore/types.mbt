@@ -133,13 +133,8 @@ test "validate accepts a good report" {
 test "validate rejects empties and oversizes" {
   assert_true({ ..sample_report(), answer: "  ", }.validate().length() > 0)
   assert_true({ ..sample_report(), schema_version: 2, }.validate().length() > 0)
-  let long = StringBuilder()
-  for _ in 0..<(max_answer_chars + 1) {
-    long.write_char('a')
-  }
-  assert_true(
-    { ..sample_report(), answer: long.to_string(), }.validate().length() > 0,
-  )
+  let long = "a".repeat(max_answer_chars + 1)
+  assert_true({ ..sample_report(), answer: long, }.validate().length() > 0)
   let many : Array[Citation] = []
   for i in 0..<=max_citations {
     many.push({ file: "f\{i}.mbt", line: None, note: None, })
