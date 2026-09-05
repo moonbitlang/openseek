@@ -893,8 +893,15 @@ fn validate_edit(
       message: "old_string and new_string are identical",
     })
   }
-  let region = select_edit_region(content, item.start_line, item.end_line)
-  guard region.body.find(item.old_string) is Some(offset) else {
+  let (norm_content, offset_map) = @matching.normalize_content_for_matching(
+    content,
+  )
+  let region = select_edit_region(norm_content, item.start_line, item.end_line)
+  let match_offset = match region.body.find(item.old_string) {
+    Some(offset) => Some(offset)
+    None => @matching.find_quote_normalized_match(region.body, item.old_string)
+  }
+  guard match_offset is Some(offset) else {
     return Invalid({
       file,
       index: Some(index),
@@ -902,11 +909,17 @@ fn validate_edit(
       message: "old_string not found",
     })
   }
-  let start = region.start_offset + offset
+  let norm_global = region.start_offset + offset
+  let orig_start = offset_map[norm_global]
+  let orig_end = if norm_global + item.old_string.length() < offset_map.length() {
+    offset_map[norm_global + item.old_string.length()]
+  } else {
+    content.length()
+  }
   Valid({
     index,
-    start,
-    end: start + item.old_string.length(),
+    start: orig_start,
+    end: orig_end,
     new_string: item.new_string,
     range,
   })

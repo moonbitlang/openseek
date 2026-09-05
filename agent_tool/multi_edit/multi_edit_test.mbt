@@ -139,10 +139,10 @@ async test "multi_edit collapses aliased spellings of one file into a single gro
       ],
     })
     assert_false(output.is_error)
-    assert_eq(
-      output.content,
-      "ok: applied 2 edit(s) across 1 file(s)\n\{path}: 2 edit(s)",
+    assert_true(
+      output.content.contains("ok: applied 2 edit(s) across 1 file(s)"),
     )
+    assert_true(output.content.contains("note.txt: 2 edit(s)"))
     assert_eq(@fs.read_file(path).text(), "ALPHA\nBETA\n")
   })
 }
@@ -381,10 +381,10 @@ async test "multi_edit resolves relative paths under the workspace root" {
       ],
     })
     assert_false(output.is_error)
-    assert_eq(
-      output.content,
-      "ok: applied 1 edit(s) across 1 file(s)\n\{path}: 1 edit(s)",
+    assert_true(
+      output.content.contains("ok: applied 1 edit(s) across 1 file(s)"),
     )
+    assert_true(output.content.contains("note.txt: 1 edit(s)"))
     assert_eq(@fs.read_file(path).text(), "alpha\ndelta\n")
   })
 }

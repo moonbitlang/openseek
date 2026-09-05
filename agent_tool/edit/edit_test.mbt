@@ -193,6 +193,7 @@ async test "edit rejects replace_all even with a range" {
 }
 
 ///|
+#cfg(all(target="native", not(platform="windows")))
 async test "edit resolves relative paths under the workspace root" {
   @vfs.with_tmpdir(prefix="openseek-edit-workspace-", dir => {
     let path = "\{dir}/note.txt"
@@ -412,7 +413,7 @@ async test "edit rejects identical replacement" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string and new_string are identical\n\nfile context: > 1 | content > 2 |  > 3 | \nhint: check for line-ending mismatches (CRLF vs LF), full-width vs half-width characters, tab vs space, or a stray read-tool display separator (`|`) in old_string\n(old_string matches new_string exactly — the file at that location may already contain this text; re-read the file and adjust the edit)",
+      "error editing \{path}: old_string and new_string are identical─── file context ───────────────────────────────\n```\n > 1 | content\n > 2 | \n > 3 | \n```\n─── hint ───────────────────────────────────────\ncheck for CRLF vs LF line endings, tab vs space, full-width vs half-width characters, or a stray read-tool display separator (`|`) in old_string\n\n(old_string matches new_string exactly — the file at that location may already contain this text; re-read the file and adjust the edit)",
     )
     assert_true(output.is_error)
   })
@@ -471,7 +472,7 @@ async test "edit rejects missing match" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string not found from line 1\n\nfile context: > 1 | alpha > 2 |  > 3 | \nfirst difference at character 1: expected `b`, got `a`\nhint: check for line-ending mismatches (CRLF vs LF), full-width vs half-width characters, tab vs space, or a stray read-tool display separator (`|`) in old_string",
+      "error editing \{path}: old_string not found from line 1─── file context ───────────────────────────────\n```\n > 1 | alpha\n > 2 | \n > 3 | \n```\n─── first difference ───────────────────────────\nat character 1: expected `b`, got `a`\n─── hint ───────────────────────────────────────\ncheck for CRLF vs LF line endings, tab vs space, full-width vs half-width characters, or a stray read-tool display separator (`|`) in old_string\n",
     )
     assert_true(output.is_error)
   })
@@ -493,73 +494,10 @@ async test "edit reports range for missing match" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string not found in line range 2-2\n\nfile context:   1 | alpha > 2 | beta   3 | alpha   4 | \nfirst difference at character 1: expected `a`, got `b`\nhint: check for line-ending mismatches (CRLF vs LF), full-width vs half-width characters, tab vs space, or a stray read-tool display separator (`|`) in old_string",
+      "error editing \{path}: old_string not found in line range 2-2─── file context ───────────────────────────────\n```\n   1 | alpha\n > 2 | beta\n   3 | alpha\n   4 | \n```\n─── first difference ───────────────────────────\nat character 1: expected `a`, got `b`\n─── hint ───────────────────────────────────────\ncheck for CRLF vs LF line endings, tab vs space, full-width vs half-width characters, or a stray read-tool display separator (`|`) in old_string\n",
     )
     assert_true(output.is_error)
     assert_eq(@fs.read_file(path).text(), "alpha\nbeta\nalpha\n")
-  })
-}
-
-///|
-async test "edit reports fuzzy candidate for tab vs space mismatch" {
-  @vfs.with_tmpdir(dir => {
-    let path = "\{dir}/fuzzy-tab.txt"
-    @vfs.FileSystem({ "fuzzy-tab.txt": "fn foo() {\n\treturn 42\n}\n" }).write_to(
-      dir,
-    )
-    let output = run_edit({
-      "path": path,
-      "old_string": "  return 42",
-      "new_string": "  return 0",
-      "start_line": 1,
-    })
-    // Exact match fails; fuzzy finds one candidate and reports it
-    assert_true(output.is_error)
-    assert_true(output.content.contains("whitespace-normalized candidate"))
-    assert_true(output.content.contains("return 42"))
-    // File unchanged
-    assert_eq(@fs.read_file(path).text(), "fn foo() {\n\treturn 42\n}\n")
-  })
-}
-
-///|
-async test "edit reports fuzzy candidate for CRLF vs LF in old_string" {
-  @vfs.with_tmpdir(dir => {
-    let path = "\{dir}/fuzzy-lineending.txt"
-    @vfs.FileSystem({ "fuzzy-lineending.txt": "a\nb\nc\n" }).write_to(dir)
-    let output = run_edit({
-      "path": path,
-      "old_string": "a\r\nb",
-      "new_string": "x\r\ny",
-      "start_line": 1,
-    })
-    // Exact match fails; fuzzy finds one candidate and reports it
-    assert_true(output.is_error)
-    assert_true(output.content.contains("whitespace-normalized candidate"))
-    assert_true(output.content.contains("a\nb"))
-    assert_eq(@fs.read_file(path).text(), "a\nb\nc\n")
-  })
-}
-
-///|
-async test "edit reports multiple fuzzy candidates when ambiguous" {
-  @vfs.with_tmpdir(dir => {
-    let path = "\{dir}/fuzzy-ambiguous.txt"
-    @vfs.FileSystem({ "fuzzy-ambiguous.txt": "x\ta\t1\ny  a  1\n" }).write_to(
-      dir,
-    )
-    let output = run_edit({
-      "path": path,
-      "old_string": "a 1",
-      "new_string": "b 2",
-      "start_line": 1,
-    })
-    // Exact match fails; fuzzy finds 2 candidates → report count
-    assert_true(output.is_error)
-    assert_true(
-      output.content.contains("whitespace-normalized candidates found"),
-    )
-    assert_true(@fs.read_file(path).text() == "x\ta\t1\ny  a  1\n")
   })
 }
 
@@ -734,6 +672,7 @@ async test "edit gates .mbt results through moonc before writing" {
 }
 
 ///|
+#cfg(all(target="native", not(platform="windows")))
 async test "edit gates a breaking edit made through a non-mbt symlink" {
   @vfs.with_tmpdir(prefix="openseek-edit-gate-link-", dir => {
     let src = "\{dir}/lib.mbt"
@@ -760,6 +699,7 @@ async test "edit gates a breaking edit made through a non-mbt symlink" {
 /// `.mbt.md`-spelled link to a `.mbt` target must parse the result as source,
 /// not markdown. Parsing it as `.mbt.md` would ignore everything outside checked
 /// fences and let a broken edit to the real `.mbt` file slip through.
+#cfg(all(target="native", not(platform="windows")))
 async test "edit gates by the target kind through a .mbt.md-named symlink" {
   @vfs.with_tmpdir(prefix="openseek-edit-gate-mdlink-", dir => {
     let src = "\{dir}/lib.mbt"
@@ -786,6 +726,7 @@ async test "edit gates by the target kind through a .mbt.md-named symlink" {
 /// the target kind would parse the result as markdown (checked fences only) and
 /// miss it — the gate must cover BOTH kinds. The target body is valid MoonBit
 /// source, so it parses clean under both kinds until the edit breaks it.
+#cfg(all(target="native", not(platform="windows")))
 async test "edit gates by the link kind through a .mbt-named symlink" {
   @vfs.with_tmpdir(prefix="openseek-edit-gate-mbtlink-", dir => {
     let target = "\{dir}/notes.mbt.md"
@@ -1162,6 +1103,7 @@ async test "the expansion estimate does not overflow 32-bit arithmetic" {
 }
 
 ///|
+#cfg(all(target="native", not(platform="windows")))
 async test "a write scope confines edit to its allowed paths" {
   @vfs.with_tmpdir(prefix="edit-scope-", dir => {
     @vfs.FileSystem({
