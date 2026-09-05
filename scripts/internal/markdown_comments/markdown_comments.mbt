@@ -8,7 +8,7 @@ priv struct SourceRange {
 pub fn without_comments(markdown : String) -> String {
   let ranges = comment_ranges(markdown)
   guard !ranges.is_empty() else { markdown }
-  ranges.sort_by(fn(left, right) { left.first.compare(right.first) })
+  ranges.sort_by_key(range => range.first)
   remove_source_ranges(markdown, ranges)
 }
 

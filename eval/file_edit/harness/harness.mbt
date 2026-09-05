@@ -239,11 +239,7 @@ async fn evaluate_trial(
     write_successes: @metrics.count_occurrences(log_text, "ok: wrote "),
     validation_passed,
     marker_present: marker_ok,
-    warnings: if warnings.length() == 0 {
-      ""
-    } else {
-      warnings.join("; ")
-    },
+    warnings: warnings.join("; "),
   }
 }
 

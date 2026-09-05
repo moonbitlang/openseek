@@ -171,14 +171,18 @@ test "session analyzer counts typed events" {
 }
 
 ///|
+/// A final assistant/terminal pair, with or without reasoning content: the
+/// two shapes differ only in whether the assistant message carries reasoning.
+fn final_pair_session(reasoning_content? : String) -> @agent_session.Session {
+  @agent_session.Session(SessionId("reasoning-final"), system_prompt="")
+  .append(User(UserMessage("question")))
+  .append(Assistant(AssistantMessage("unique-answer", reasoning_content?)))
+  .append(Terminal(Finished("unique-answer")))
+}
+
+///|
 test "assistant final pair counts and indexes the answer once" {
-  let session = @agent_session.Session(
-      SessionId("reasoning-final"),
-      system_prompt="",
-    )
-    .append(User(UserMessage("question")))
-    .append(Assistant(AssistantMessage("unique-answer")))
-    .append(Terminal(Finished("unique-answer")))
+  let session = final_pair_session()
   let result = @session_analyzer.analyze_session(session)
   assert_eq(result.steps, 1)
   let transcript = @session_analyzer.transcript_text(session)
@@ -187,17 +191,7 @@ test "assistant final pair counts and indexes the answer once" {
 
 ///|
 test "reasoning-bearing final pair still counts and indexes the answer once" {
-  let session = @agent_session.Session(
-      SessionId("reasoning-final"),
-      system_prompt="",
-    )
-    .append(User(UserMessage("question")))
-    .append(
-      Assistant(
-        AssistantMessage("unique-answer", reasoning_content="unique-thought"),
-      ),
-    )
-    .append(Terminal(Finished("unique-answer")))
+  let session = final_pair_session(reasoning_content="unique-thought")
   let result = @session_analyzer.analyze_session(session)
   assert_eq(result.steps, 1)
   let transcript = @session_analyzer.transcript_text(session)
