@@ -17,6 +17,9 @@ extern "js" fn titlebar_test_element(
 
 ///|
 test "window zoom gesture accepts chrome and excludes controls and popups" {
+  // The chrome selector group includes `.window-titlebar-drag-strip`, so this
+  // accepting case also covers the explicit drag strip blank native pages
+  // provide.
   assert_true(
     is_window_titlebar_double_click_target(titlebar_test_element(true, false)),
   )
@@ -26,12 +29,6 @@ test "window zoom gesture accepts chrome and excludes controls and popups" {
   assert_false(
     is_window_titlebar_double_click_target(titlebar_test_element(false, false)),
   )
-}
-
-///|
-test "the explicit blank-page drag strip is titlebar chrome" {
-  let strip = titlebar_test_element(true, false)
-  assert_true(is_window_titlebar_double_click_target(strip))
 }
 
 ///|

@@ -242,12 +242,9 @@ fn Model::push_group_component_inputs(
       ),
     )
   }
-  let durable : Array[@transcript.SessionListItem] = []
-  for item in dev.sessions {
-    if item.workspace == workspace && !archived(item.id) {
-      durable.push(item)
-    }
-  }
+  let durable = dev.sessions.filter(item => {
+    item.workspace == workspace && !archived(item.id)
+  })
   // Sub-run transcripts fold under the conversation that launched them: they
   // are that turn's evidence, not conversations of their own. They ride the
   // parent's component input, so their disclosure state lives in the
@@ -346,10 +343,7 @@ fn RowStamp::rank(self : RowStamp) -> Int {
 fn ordered_by_recency(
   rows : Array[(RowStamp, @conversation.Input)],
 ) -> Array[@conversation.Input] {
-  let keyed : Array[(Int, RowStamp, @conversation.Input)] = []
-  for index, row in rows {
-    keyed.push((index, row.0, row.1))
-  }
+  let keyed = rows.mapi((index, row) => (index, row.0, row.1))
   keyed.sort_by((a, b) => {
     let (a_index, a_stamp, _) = a
     let (b_index, b_stamp, _) = b
@@ -398,12 +392,9 @@ fn Model::sidebar_component_sections(
   // root. Codex state mirrors the focused device only, so other devices'
   // rows are OpenSeek's alone.
   let codex_context : @codex.SidebarContext? = if dev.channel == self.focused {
-    let registered_projects : Array[String] = []
-    for project in dev.projects {
-      if @resource.path_for(project, dev.channel) is Some(path) {
-        registered_projects.push(path)
-      }
-    }
+    let registered_projects = dev.projects.filter_map(project => {
+      @resource.path_for(project, dev.channel)
+    })
     Some({
       channel: dev.channel,
       selected: self.screen is Codex,
