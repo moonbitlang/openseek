@@ -107,12 +107,9 @@ fn is_covered_by_later_summary(
   event : SessionEvent,
   events : @vector.Vector[SessionEvent],
 ) -> Bool {
-  for candidate in events {
-    if summary_covers_event(candidate, event.sequence()) {
-      return true
-    }
-  }
-  false
+  events
+  .iter()
+  .any(candidate => summary_covers_event(candidate, event.sequence()))
 }
 
 ///|
