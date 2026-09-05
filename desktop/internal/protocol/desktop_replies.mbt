@@ -192,14 +192,8 @@ pub impl FromJson for RunSettlementPayload with fn from_json(json, path) {
     run_id,
     session,
     status,
-    submission_id: match fields.get("submission_id") {
-      Some(String(value)) => Some(value)
-      _ => None
-    },
-    exit_code: match fields.get("exit_code") {
-      Some(Number(value, ..)) => Some(value.to_int())
-      _ => None
-    },
+    submission_id: lenient_string(fields, "submission_id"),
+    exit_code: lenient_int(fields, "exit_code"),
   }
 }
 
@@ -1513,12 +1507,7 @@ pub impl ToJson for StatFilesReply with fn to_json(self) {
 ///|
 pub impl FromJson for StatFilesReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "stat files reply")
-  let stats : Array[FileStat] = []
-  for index, raw in object.required_array("stats") {
-    stats.push(
-      @json.from_json(raw, path=path.add_key("stats").add_index(index)),
-    )
-  }
+  let stats : Array[FileStat] = object.required_array_of("stats")
   { stats, }
 }
 

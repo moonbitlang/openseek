@@ -48,18 +48,12 @@ async fn provision_initialized_submodules(
   // never relax the default on the app's own authority.
   if @gitx.probe(origin, ["config", "--get", "protocol.file.allow"])
     is Some("always") {
-    args.push("-c")
-    args.push("protocol.file.allow=always")
+    args.append(["-c", "protocol.file.allow=always"])
   }
-  args.push("submodule")
-  args.push("update")
-  args.push("--init")
-  args.push("--checkout")
-  args.push("--recursive")
-  args.push("--")
-  for path in initialized {
-    args.push(path)
-  }
+  args.append([
+    "submodule", "update", "--init", "--checkout", "--recursive", "--",
+  ])
+  args.append(initialized)
   guard @async.with_timeout_opt(timeout_seconds * 1_000, () => {
       @gitx.run(checkout, args)
     })

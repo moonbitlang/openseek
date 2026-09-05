@@ -109,10 +109,7 @@ async fn ProjectCatalog::annotate_thread(
   value : Json,
 ) -> Json {
   guard value is Object(thread) else { return value }
-  let annotated : Map[String, Json] = Map([])
-  for key, field in thread {
-    annotated[key] = field
-  }
+  let annotated = thread.copy()
   if thread.get("cwd") is Some(String(cwd)) &&
     !cwd.trim().is_empty() &&
     self.resolve(cwd) is Some(project) {
@@ -132,10 +129,7 @@ pub async fn ProjectCatalog::annotate(
   reply : Json,
 ) -> Json {
   guard reply is Object(fields) else { return reply }
-  let annotated : Map[String, Json] = Map([])
-  for key, field in fields {
-    annotated[key] = field
-  }
+  let annotated = fields.copy()
   if fields.get("data") is Some(Array(threads)) {
     let data : Array[Json] = []
     for thread in threads {

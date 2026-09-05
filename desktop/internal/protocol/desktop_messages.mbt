@@ -986,22 +986,10 @@ pub impl FromJson for AgentErrorPayload with fn from_json(json, path) {
     raise JsonDecodeError((path, "expected agent error payload"))
   }
   {
-    run_id: match fields.get("run_id") {
-      Some(String(value)) => Some(value)
-      _ => None
-    },
-    message: match fields.get("message") {
-      Some(String(value)) => Some(value)
-      _ => None
-    },
-    exit_code: match fields.get("exit_code") {
-      Some(Number(value, ..)) => Some(value.to_int())
-      _ => None
-    },
-    diagnostics: match fields.get("diagnostics") {
-      Some(String(value)) => Some(value)
-      _ => None
-    },
+    run_id: lenient_string(fields, "run_id"),
+    message: lenient_string(fields, "message"),
+    exit_code: lenient_int(fields, "exit_code"),
+    diagnostics: lenient_string(fields, "diagnostics"),
   }
 }
 
@@ -1046,14 +1034,8 @@ pub impl FromJson for FinishedPayload with fn from_json(json, path) {
   {
     run_id,
     status,
-    answer: match fields.get("answer") {
-      Some(String(value)) => Some(value)
-      _ => None
-    },
-    exit_code: match fields.get("exit_code") {
-      Some(Number(value, ..)) => Some(value.to_int())
-      _ => None
-    },
+    answer: lenient_string(fields, "answer"),
+    exit_code: lenient_int(fields, "exit_code"),
   }
 }
 

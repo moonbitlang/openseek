@@ -141,12 +141,9 @@ pub impl FromJson for SemanticSearchHit with fn from_json(json, path) {
     (end_line == start_line && end_column < start_column) {
     raise JsonDecodeError((path, "semantic-search hit range must be forward"))
   }
-  let context : Array[SemanticContextLine] = []
-  for index, raw in object.required_array("source_context") {
-    context.push(
-      @json.from_json(raw, path=path.add_key("source_context").add_index(index)),
-    )
-  }
+  let context : Array[SemanticContextLine] = object.required_array_of(
+    "source_context",
+  )
   let description = match object.fields.get("description") {
     Some(String(value)) => Some(value)
     Some(Null) | None => None
@@ -231,12 +228,7 @@ pub impl FromJson for SearchSemanticReply with fn from_json(json, path) {
     object.required_int("file_count"),
     path.add_key("file_count"),
   )
-  let hits : Array[SemanticSearchHit] = []
-  for index, raw in object.required_array("matches") {
-    hits.push(
-      @json.from_json(raw, path=path.add_key("matches").add_index(index)),
-    )
-  }
+  let hits : Array[SemanticSearchHit] = object.required_array_of("matches")
   let error_code = object.optional_string("error_code")
   let error_message = object.optional_string("error_message")
   let error = match (error_code, error_message) {
@@ -302,12 +294,7 @@ pub impl FromJson for SemanticSearchProgressPayload with fn from_json(
   let object = JsonObject::decode(
     json, path, "semantic-search progress payload",
   )
-  let matches : Array[SemanticSearchHit] = []
-  for index, raw in object.required_array("matches") {
-    matches.push(
-      @json.from_json(raw, path=path.add_key("matches").add_index(index)),
-    )
-  }
+  let matches : Array[SemanticSearchHit] = object.required_array_of("matches")
   {
     root: object.required_string("root"),
     session_key: object.required_string("session_key"),

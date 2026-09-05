@@ -4,6 +4,7 @@ import {
   "openseek_desktop/internal/session_record",
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/core/cmp",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
 }

@@ -111,12 +111,7 @@ pub impl FromJson for TextSearchMatch with fn from_json(json, path) {
       (path.add_key("preview_start_column"), "expected one-based column"),
     )
   }
-  let ranges : Array[TextSearchRange] = []
-  for index, raw in object.required_array("ranges") {
-    ranges.push(
-      @json.from_json(raw, path=path.add_key("ranges").add_index(index)),
-    )
-  }
+  let ranges : Array[TextSearchRange] = object.required_array_of("ranges")
   if ranges.is_empty() {
     raise JsonDecodeError(
       (path.add_key("ranges"), "expected at least one match range"),
@@ -157,12 +152,7 @@ pub impl FromJson for SearchTextReply with fn from_json(json, path) {
     object.required_int("file_count"),
     path.add_key("file_count"),
   )
-  let matches : Array[TextSearchMatch] = []
-  for index, raw in object.required_array("matches") {
-    matches.push(
-      @json.from_json(raw, path=path.add_key("matches").add_index(index)),
-    )
-  }
+  let matches : Array[TextSearchMatch] = object.required_array_of("matches")
   let error_code = object.optional_string("error_code")
   let error_message = object.optional_string("error_message")
   let error = match (error_code, error_message) {

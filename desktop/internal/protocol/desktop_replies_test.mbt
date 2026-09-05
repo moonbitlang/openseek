@@ -1,4 +1,16 @@
 ///|
+/// True when `decode` refuses its input. Every rejection assertion below is
+/// this shape; only the payload type and the JSON literal differ, so the
+/// try/catch/noraise scaffold lives here once.
+fn refused(decode : () -> Unit raise) -> Bool {
+  try decode() catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+}
+
+///|
 test "session list rows decode activity stamps and tolerate the engine's null" {
   let rows = @protocol.SessionListEntry::array_from_wire([
     { "id": "desktop-a", "title": "stamped", "updated_at_ms": 1500.0 },
@@ -440,38 +452,26 @@ test "worktree creation accepts exactly representable owner namespaces" {
     "futureMetadata": true,
   })
   assert_eq(nullable, codex)
-  let both_rejected = try {
+  let both_rejected = refused(() => {
     let _ : @protocol.WorktreeCreatePayload = @json.from_json({
       "workspace": "/work/project",
       "session": "session-1",
       "codex_thread": "thread-1",
     })
-  } catch {
-    _ => true
-  } noraise {
-    _ => false
-  }
+  })
   assert_true(both_rejected)
-  let missing_rejected = try {
+  let missing_rejected = refused(() => {
     let _ : @protocol.WorktreeCreatePayload = @json.from_json({
       "workspace": "/work/project",
     })
-  } catch {
-    _ => true
-  } noraise {
-    _ => false
-  }
+  })
   assert_true(missing_rejected)
-  let wrong_type_rejected = try {
+  let wrong_type_rejected = refused(() => {
     let _ : @protocol.WorktreeCreatePayload = @json.from_json({
       "workspace": "/work/project",
       "session": 7,
     })
-  } catch {
-    _ => true
-  } noraise {
-    _ => false
-  }
+  })
   assert_true(wrong_type_rejected)
 }
 
@@ -632,7 +632,7 @@ test "text search payload and UTF-16 reply round-trip at the JSON boundary" {
 
 ///|
 test "text search payload rejects missing and invalid required fields" {
-  let missing_rejected = try {
+  let missing_rejected = refused(() => {
     let _ : @protocol.SearchTextPayload = @json.from_json({
       "root": "/work/project",
       "query": "moon",
@@ -644,24 +644,16 @@ test "text search payload rejects missing and invalid required fields" {
       "generation": 1,
       "max_results": 20000,
     })
-  } catch {
-    _ => true
-  } noraise {
-    _ => false
-  }
+  })
   assert_true(missing_rejected)
-  let invalid_rejected = try {
+  let invalid_rejected = refused(() => {
     let _ : @protocol.CancelSearchTextPayload = @json.from_json({
       "session_key": 7,
       "generation": 1,
     })
-  } catch {
-    _ => true
-  } noraise {
-    _ => false
-  }
+  })
   assert_true(invalid_rejected)
-  let null_rejected = try {
+  let null_rejected = refused(() => {
     let _ : @protocol.SearchTextPayload = @json.from_json({
       "root": Json::null(),
       "query": "moon",
@@ -674,13 +666,9 @@ test "text search payload rejects missing and invalid required fields" {
       "generation": 1,
       "max_results": 20000,
     })
-  } catch {
-    _ => true
-  } noraise {
-    _ => false
-  }
+  })
   assert_true(null_rejected)
-  let half_error_rejected = try {
+  let half_error_rejected = refused(() => {
     let _ : @protocol.SearchTextReply = @json.from_json({
       "root": "/work/project",
       "generation": 1,
@@ -691,13 +679,9 @@ test "text search payload rejects missing and invalid required fields" {
       "cancelled": false,
       "error_code": "search_failed",
     })
-  } catch {
-    _ => true
-  } noraise {
-    _ => false
-  }
+  })
   assert_true(half_error_rejected)
-  let empty_error_sentinel_rejected = try {
+  let empty_error_sentinel_rejected = refused(() => {
     let _ : @protocol.SearchTextReply = @json.from_json({
       "root": "/work/project",
       "generation": 1,
@@ -709,11 +693,7 @@ test "text search payload rejects missing and invalid required fields" {
       "error_code": "",
       "error_message": "",
     })
-  } catch {
-    _ => true
-  } noraise {
-    _ => false
-  }
+  })
   assert_true(empty_error_sentinel_rejected)
 }
 
@@ -1452,13 +1432,9 @@ test "terminal input encodes and decodes exactly one data field" {
         { "id": "terminal-9", "data": null, "data_base64": null },
         { "id": "terminal-9", "data": "x", "data_base64": "eA==" },
       ] : Array[Json]) {
-    let rejected = try {
+    let rejected = refused(() => {
       let _ : @protocol.TerminalInputPayload = @json.from_json(invalid)
-    } catch {
-      _ => true
-    } noraise {
-      _ => false
-    }
+    })
     assert_true(rejected)
   }
 }
