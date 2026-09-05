@@ -81,16 +81,27 @@ priv struct SessionFamilyMove {
 }
 
 ///|
+/// Undo a family's holds in reverse acquisition order: engine claims first,
+/// then the record move guards.
+fn release_family_claims(
+  manager : EngineManager,
+  claims : Array[PendingClaim],
+  guards : Array[(String, SessionRecordGuard)],
+) -> Unit {
+  for claim in claims.rev_iter() {
+    claim.release(manager)
+  }
+  for entry in guards.rev_iter() {
+    let (record_key, record_state) = entry
+    manager.release_record_move(record_key, record_state)
+  }
+}
+
+///|
 fn SessionFamilyMove::release(self : SessionFamilyMove) -> Unit {
   guard self.active else { return }
   self.active = false
-  for claim in self.claims.rev_iter() {
-    claim.release(self.manager)
-  }
-  for entry in self.guards.rev_iter() {
-    let (record_key, record_state) = entry
-    self.manager.release_record_move(record_key, record_state)
-  }
+  release_family_claims(self.manager, self.claims, self.guards)
 }
 
 ///|
@@ -111,13 +122,7 @@ async fn EngineManager::claim_session_family_move(
   let mut handed_off = false
   defer {
     if !handed_off {
-      for claim in claims.rev_iter() {
-        claim.release(manager)
-      }
-      for entry in guards.rev_iter() {
-        let (record_key, record_state) = entry
-        manager.release_record_move(record_key, record_state)
-      }
+      release_family_claims(manager, claims, guards)
     }
     if placement_locked {
       manager.workspace_lifecycle_lock.release()

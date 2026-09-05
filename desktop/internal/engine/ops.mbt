@@ -931,6 +931,62 @@ async fn attach_run_workspace(root : @pathx.Path) -> String {
 }
 
 ///|
+/// Point the manager at a stub custom endpoint. Every run test needs a
+/// configured provider before `start_run` will spawn a child.
+#cfg(not(platform="windows"))
+async fn configure_custom_provider(manager : EngineManager) -> Unit {
+  ignore(
+    update_settings(manager, {
+      provider: Some("custom"),
+      custom_api_url: Some("https://example.invalid/chat/completions"),
+      deepseek_api_key: None,
+      glm_api_key: None,
+      custom_api_key: None,
+    }),
+  )
+}
+
+///|
+/// Serve `actor` in `group` and wait until its pump accepts commands: the
+/// first thing every run test does after building the manager.
+#cfg(not(platform="windows"))
+async fn[G] serve_until_pumping(
+  actor : EngineActor,
+  manager : EngineManager,
+  sink : EventSink,
+  group~ : @async.TaskGroup[G],
+) -> Unit {
+  group.spawn_bg(no_wait=true, allow_failure=true, () => {
+    actor.run(sink, fn(_) { () })
+  })
+  while manager.pump is Stopped {
+    @async.sleep(1)
+  }
+}
+
+///|
+/// The default `start.run` payload for these tests: only the task, the
+/// conversation and its workspace vary. The optional client knobs stay unset,
+/// so a run takes the host's own defaults.
+#cfg(not(platform="windows"))
+fn test_start_payload(
+  task : String,
+  session~ : String,
+  workspace~ : String,
+  submission_id? : String,
+) -> @protocol.StartPayload {
+  {
+    task,
+    submission_id,
+    model: None,
+    thinking: None,
+    max_steps: None,
+    session,
+    workspace: Some(workspace),
+  }
+}
+
+///|
 #cfg(not(platform="windows"))
 async test "start echoes the client submission id in Started" {
   let dir = @fs.tmpdir(prefix="openseek-start-submission-")
@@ -960,37 +1016,25 @@ async test "start echoes the client submission id in Started" {
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
-  ignore(
-    update_settings(manager, {
-      provider: Some("custom"),
-      custom_api_url: Some("https://example.invalid/chat/completions"),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      custom_api_key: None,
-    }),
-  )
+  configure_custom_provider(manager)
   let emitted : Array[EngineEvent] = []
   // Starts are durable now, so each test owns a fresh conversation record
   // instead of sharing a fixed id across test processes.
   let session = "s-" + mint_run_id()
   let sink = EventSink(fn(event) { emitted.push(event) })
   @async.with_task_group(group => {
-    group.spawn_bg(no_wait=true, allow_failure=true, () => {
-      actor.run(sink, fn(_) { () })
-    })
-    while manager.pump is Stopped {
-      @async.sleep(1)
-    }
+    serve_until_pumping(actor, manager, sink, group~)
     ignore(
-      start_run(sink, manager, {
-        task: "hello",
-        submission_id: Some("submission-start"),
-        model: None,
-        thinking: None,
-        max_steps: None,
-        session,
-        workspace: Some(workspace),
-      }),
+      start_run(
+        sink,
+        manager,
+        test_start_payload(
+          "hello",
+          session~,
+          workspace~,
+          submission_id="submission-start",
+        ),
+      ),
     )
     let mut echoed : String? = None
     for event in emitted {
@@ -1040,24 +1084,11 @@ async test "a goal is delivered only once its command is on the wire" {
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
-  ignore(
-    update_settings(manager, {
-      provider: Some("custom"),
-      custom_api_url: Some("https://example.invalid/chat/completions"),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      custom_api_key: None,
-    }),
-  )
+  configure_custom_provider(manager)
   let session = "s-" + mint_run_id()
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
-    group.spawn_bg(no_wait=true, allow_failure=true, () => {
-      actor.run(sink, fn(_) { () })
-    })
-    while manager.pump is Stopped {
-      @async.sleep(1)
-    }
+    serve_until_pumping(actor, manager, sink, group~)
     let delivered = goal_run(manager, {
       session,
       text: Some("keep the build green"),
@@ -1166,34 +1197,17 @@ async test "setup failure retires the writer before an immediate next start" {
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
-  ignore(
-    update_settings(manager, {
-      provider: Some("custom"),
-      custom_api_url: Some("https://example.invalid/chat/completions"),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      custom_api_key: None,
-    }),
-  )
+  configure_custom_provider(manager)
   let emitted : Array[EngineEvent] = []
   let session = "s-" + mint_run_id()
   let sink = EventSink(fn(event) { emitted.push(event) })
   @async.with_task_group(group => {
-    group.spawn_bg(no_wait=true, allow_failure=true, () => {
-      actor.run(sink, fn(_) { () })
-    })
-    while manager.pump is Stopped {
-      @async.sleep(1)
-    }
-    let first = start_run(sink, manager, {
-        task: "first",
-        submission_id: None,
-        model: None,
-        thinking: None,
-        max_steps: None,
-        session,
-        workspace: Some(workspace),
-      }).run_id
+    serve_until_pumping(actor, manager, sink, group~)
+    let first = start_run(
+        sink,
+        manager,
+        test_start_payload("first", session~, workspace~),
+      ).run_id
     assert_true(
       @async.with_timeout_opt(3000, () => {
         while !has_finished_run(emitted, first) {
@@ -1209,15 +1223,11 @@ async test "setup failure retires the writer before an immediate next start" {
       assert_true(slot.live() is None)
     }
     assert_true(cancel_run(manager, { run_id: Some(first), }).run_id is None)
-    let second = start_run(sink, manager, {
-      task: "second",
-      submission_id: None,
-      model: None,
-      thinking: None,
-      max_steps: None,
-      session,
-      workspace: Some(workspace),
-    })
+    let second = start_run(
+      sink,
+      manager,
+      test_start_payload("second", session~, workspace~),
+    )
     assert_eq(second.status, "accepted")
     assert_true(@fsx.exists(old_done))
     assert_false(@fsx.exists(overlapped))
@@ -1281,15 +1291,7 @@ async test "a prompt bigger than the pipe still settles exactly once" {
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
-  ignore(
-    update_settings(manager, {
-      provider: Some("custom"),
-      custom_api_url: Some("https://example.invalid/chat/completions"),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      custom_api_key: None,
-    }),
-  )
+  configure_custom_provider(manager)
   let emitted : Array[EngineEvent] = []
   let session = "s-" + mint_run_id()
   let started : Ref[String?] = Ref(None)
@@ -1300,22 +1302,13 @@ async test "a prompt bigger than the pipe still settles exactly once" {
     emitted.push(event)
   })
   @async.with_task_group(group => {
-    group.spawn_bg(no_wait=true, allow_failure=true, () => {
-      actor.run(sink, fn(_) { () })
-    })
-    while manager.pump is Stopped {
-      @async.sleep(1)
-    }
+    serve_until_pumping(actor, manager, sink, group~)
     // Returns without waiting for the 4MB to reach the child.
-    let reply = start_run(sink, manager, {
-      task: "x".repeat(4_000_000),
-      submission_id: None,
-      model: None,
-      thinking: None,
-      max_steps: None,
-      session,
-      workspace: Some(workspace),
-    })
+    let reply = start_run(
+      sink,
+      manager,
+      test_start_payload("x".repeat(4_000_000), session~, workspace~),
+    )
     assert_eq(reply.status, "accepted")
     assert_eq(started.val, Some(reply.run_id))
     let run_id = reply.run_id
@@ -1380,15 +1373,7 @@ async test "named session retries after its first prompt creates no record" {
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
-  ignore(
-    update_settings(manager, {
-      provider: Some("custom"),
-      custom_api_url: Some("https://example.invalid/chat/completions"),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      custom_api_key: None,
-    }),
-  )
+  configure_custom_provider(manager)
   let emitted : Array[EngineEvent] = []
   let started : Ref[String?] = Ref(None)
   let sink = EventSink(fn(event) {
@@ -1398,21 +1383,12 @@ async test "named session retries after its first prompt creates no record" {
     emitted.push(event)
   })
   @async.with_task_group(group => {
-    group.spawn_bg(no_wait=true, allow_failure=true, () => {
-      actor.run(sink, fn(_) { () })
-    })
-    while manager.pump is Stopped {
-      @async.sleep(1)
-    }
-    let first = start_run(sink, manager, {
-      task: "x".repeat(4_000_000),
-      submission_id: None,
-      model: None,
-      thinking: None,
-      max_steps: None,
-      session,
-      workspace: Some(workspace),
-    })
+    serve_until_pumping(actor, manager, sink, group~)
+    let first = start_run(
+      sink,
+      manager,
+      test_start_payload("x".repeat(4_000_000), session~, workspace~),
+    )
     assert_eq(first.status, "accepted")
     assert_eq(started.val, Some(first.run_id))
     assert_true(
@@ -1445,15 +1421,11 @@ async test "named session retries after its first prompt creates no record" {
       is Some(_),
     )
 
-    let second = start_run(sink, manager, {
-      task: "retry",
-      submission_id: None,
-      model: None,
-      thinking: None,
-      max_steps: None,
-      session,
-      workspace: Some(workspace),
-    })
+    let second = start_run(
+      sink,
+      manager,
+      test_start_payload("retry", session~, workspace~),
+    )
     assert_eq(second.status, "accepted")
     let second_run_id = second.run_id
     assert_true(
@@ -1614,33 +1586,20 @@ async test "workspace detach refuses a running conversation without hiding it" {
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
-  ignore(
-    update_settings(manager, {
-      provider: Some("custom"),
-      custom_api_url: Some("https://example.invalid/chat/completions"),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      custom_api_key: None,
-    }),
-  )
+  configure_custom_provider(manager)
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
-    group.spawn_bg(no_wait=true, allow_failure=true, () => {
-      actor.run(sink, fn(_) { () })
-    })
-    while manager.pump is Stopped {
-      @async.sleep(1)
-    }
+    serve_until_pumping(actor, manager, sink, group~)
     ignore(attach_workspace(workspace.to_string(), fn(_) { () }))
-    let reply = start_run(sink, manager, {
-      task: "keep running",
-      submission_id: None,
-      model: None,
-      thinking: None,
-      max_steps: None,
-      session: "s-detach-running",
-      workspace: Some(workspace.to_string()),
-    })
+    let reply = start_run(
+      sink,
+      manager,
+      test_start_payload(
+        "keep running",
+        session="s-detach-running",
+        workspace=workspace.to_string(),
+      ),
+    )
     assert_eq(reply.status, "accepted")
     let committed : Ref[Bool] = Ref(false)
     let detail = try {
@@ -1701,34 +1660,21 @@ async test "workspace detach drains an idle writer and its follower first" {
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
-  ignore(
-    update_settings(manager, {
-      provider: Some("custom"),
-      custom_api_url: Some("https://example.invalid/chat/completions"),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      custom_api_key: None,
-    }),
-  )
+  configure_custom_provider(manager)
   let events : Array[EngineEvent] = []
   let sink = EventSink(fn(event) { events.push(event) })
   @async.with_task_group(group => {
-    group.spawn_bg(no_wait=true, allow_failure=true, () => {
-      actor.run(sink, fn(_) { () })
-    })
-    while manager.pump is Stopped {
-      @async.sleep(1)
-    }
+    serve_until_pumping(actor, manager, sink, group~)
     ignore(attach_workspace(workspace.to_string(), fn(_) { () }))
-    let reply = start_run(sink, manager, {
-      task: "finish",
-      submission_id: None,
-      model: None,
-      thinking: None,
-      max_steps: None,
-      session: "s-detach-idle",
-      workspace: Some(workspace.to_string()),
-    })
+    let reply = start_run(
+      sink,
+      manager,
+      test_start_payload(
+        "finish",
+        session="s-detach-idle",
+        workspace=workspace.to_string(),
+      ),
+    )
     let run_id = reply.run_id
     assert_true(
       @async.with_timeout_opt(3000, () => {
