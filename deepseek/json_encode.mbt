@@ -168,6 +168,34 @@ test "tool definitions encode as native DeepSeek tools" {
 }
 
 ///|
+/// The `..if tool.strict` spread is the only thing standing between a tool
+/// entry and a stray `"strict": false` the API would have to ignore, and the
+/// wire order of the four keys is what a diff of a captured request is read
+/// against. Both are pinned here as bytes, not as a structural comparison,
+/// because a `Map` literal compares equal whatever order it was built in.
+test "tool definitions omit strict when unset and keep their key order" {
+  let plain = ToolDefinition("noop", "Does nothing.", { "type": "object" })
+  inspect(
+    ToJson::to_json(plain).stringify(),
+    content=(
+      #|{"type":"function","function":{"name":"noop","description":"Does nothing.","parameters":{"type":"object"}}}
+    ),
+  )
+  let strict = ToolDefinition(
+    "noop",
+    "Does nothing.",
+    { "type": "object" },
+    strict=true,
+  )
+  inspect(
+    ToJson::to_json(strict).stringify(),
+    content=(
+      #|{"type":"function","function":{"name":"noop","description":"Does nothing.","parameters":{"type":"object"},"strict":true}}
+    ),
+  )
+}
+
+///|
 test "assistant tool calls preserve reasoning content" {
   let body = ChatMessage(
     Assistant,

@@ -1641,6 +1641,10 @@ fn wall_clock_label(unix_ms : Int64) -> String {
 }
 
 ///|
+/// Two-digit zero padding for the civil-time fields `wall_clock_label`
+/// derives — month, day, hour and minute, so `n` is always in 0..=59. The
+/// domain matters: `pad_start` pads the rendered text, so a negative would
+/// come back as "-5" rather than a zero-padded field.
 fn pad2(n : Int) -> String {
   n.to_string().pad_start(2, '0')
 }
