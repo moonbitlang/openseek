@@ -268,6 +268,26 @@ async fn execute(
   // targets never had `--wasm-policy` passed to them in the first place — they
   // cannot spawn or touch files at all — so asking here would spend a person's
   // attention on a grant that changes nothing about the run.
+  // Delegation lives in the sandbox policy — the handoff is a policy `env.set`,
+  // the engine a policy `process.allow` entry, the run directory a policy write
+  // root — so it exists only where the policy applies: the wasm target, with
+  // the policy in force. Refuse anything else BEFORE a block is reserved or a
+  // run announced; the alternative is a snippet that finds no handoff while
+  // the desktop shows a workflow that never existed.
+  if input.subrun && input.target != "wasm" {
+    return @agent_tool.respond(
+      "mbtx: `subrun` applies to the wasm target, which is the one the sandbox policy binds — the handoff, the engine's spawn rule and the run's write root all live in that policy; `\{input.target}` runs none. Drop `target` to use wasm, or drop `subrun`.",
+      is_error=true,
+      brief="mbtx (subrun needs wasm)",
+    )
+  }
+  if input.subrun && input.escalated {
+    return @agent_tool.respond(
+      "mbtx: `subrun` and `escalated` exclude each other — escalation runs the snippet with NO sandbox policy, and the delegation handoff is delivered through that policy. Use `subrun` alone to delegate; the allowed programs already include the engine.",
+      is_error=true,
+      brief="mbtx (subrun with escalated)",
+    )
+  }
   if input.escalated && input.target != "wasm" {
     return @agent_tool.respond(
       "mbtx: `escalated` applies to the wasm target, which is the one the sandbox policy binds; `\{input.target}` runs no policy to lift and cannot spawn or touch files anyway. Drop `escalated`, or drop `target` to use wasm.",

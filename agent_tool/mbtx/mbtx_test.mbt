@@ -1523,3 +1523,58 @@ async test "a hosted session reserves nothing unless the snippet asks" {
     })
   })
 }
+
+///|
+async fn run_hosted_with(
+  workspace_root : String,
+  store : String,
+  arguments : Json,
+) -> (@agent_tool.ToolOutput, Int) {
+  let issued = Ref(0)
+  let subrun = @host.SubrunInjection(
+    exe="/unused/openseek",
+    session_root=store,
+    parent="run7",
+    workspace_root~,
+    reserve_ordinals=count => {
+      let base = issued.val + 1
+      issued.val += count
+      base
+    },
+  )
+  let action = match @mbtx.definition(workspace_root~, subrun~).execute {
+    Async(execute) => execute(arguments)
+    Sync(_) => fail("mbtx should be async")
+  }
+  guard action is Respond(output) else { fail("expected Respond") }
+  (output, issued.val)
+}
+
+///|
+async test "delegation is refused off the wasm target, before anything is reserved" {
+  @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
+    @vfs.with_tmpdir(prefix="mbtx-store-", store => {
+      // The handoff lives in the wasm policy; a js run has none to carry it.
+      let (out, issued) = run_hosted_with(ws, store, {
+        "source": "fn main { println(1) }",
+        "target": "js",
+        "subrun": true,
+      })
+      assert_true(out.is_error)
+      assert_true(out.content.contains("applies to the wasm target"))
+      assert_eq(issued, 0)
+      // Escalation lifts the policy the handoff is delivered through.
+      let (out, issued) = run_hosted_with(ws, store, {
+        "source": "fn main { println(1) }",
+        "subrun": true,
+        "escalated": true,
+      })
+      assert_true(out.is_error)
+      assert_true(out.content.contains("exclude each other"))
+      assert_eq(issued, 0)
+      // Neither refusal created a run directory: the desktop must never be
+      // told about a workflow that was refused.
+      assert_false(@fs.exists("\{store}/run7-wf-1"))
+    })
+  })
+}
