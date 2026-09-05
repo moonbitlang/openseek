@@ -287,11 +287,11 @@ test "agent connected names how much of the host is up" {
     is None,
   )
   @debug.assert_eq(
-    ({ stage: Serving, } : @protocol.ConnectedPayload).to_json(),
+    ({ stage: Serving, platform: None, } : @protocol.ConnectedPayload).to_json(),
     { "stage": "serving" },
   )
   @debug.assert_eq(
-    ({ stage: Accepted, } : @protocol.ConnectedPayload).to_json(),
+    ({ stage: Accepted, platform: None, } : @protocol.ConnectedPayload).to_json(),
     { "stage": "accepted" },
   )
 }
@@ -787,6 +787,56 @@ test "browse replies keep success compatible and carry refusals" {
     drives.to_json(),
   )
   @debug.assert_eq(decoded_drives, drives)
+}
+
+///|
+test "agent connected states the host platform and tolerates its absence" {
+  // A host names its platform in the readiness signal itself, and each
+  // spelling survives the round trip.
+  for
+    platform in (
+      [(Windows, "windows"), (MacOS, "macos"), (Linux, "linux")] :
+      Array[(@protocol.HostPlatform, String)]) {
+    let (stated, spelling) = platform
+    let payload : @protocol.ConnectedPayload = {
+      stage: Serving,
+      platform: Some(stated),
+    }
+    @debug.assert_eq(payload.to_json(), {
+      "stage": "serving",
+      "platform": Json::string(spelling),
+    })
+    let decoded : @protocol.ConnectedPayload = @json.from_json(
+      payload.to_json(),
+    )
+    @debug.assert_eq(decoded, payload)
+  }
+  // Hosts predating the field leave the platform unstated rather than
+  // dropping the connect, and a platform this build has no name for reads
+  // the same way — the field is advisory, unlike `stage`.
+  guard @protocol.Notification::from_wire("agent.connected", {
+      "stage": "serving",
+    })
+    is Some(AgentConnected(legacy)) else {
+    fail("a connect without the platform field was dropped")
+  }
+  assert_true(legacy.platform is None)
+  guard @protocol.Notification::from_wire("agent.connected", {
+      "stage": "serving",
+      "platform": "beos",
+    })
+    is Some(AgentConnected(unnamed)) else {
+    fail("an unrecognized platform dropped the connect")
+  }
+  assert_true(unnamed.platform is None)
+  // A malformed value is refused like any other unreadable payload.
+  assert_true(
+    @protocol.Notification::from_wire("agent.connected", {
+      "stage": "serving",
+      "platform": 7,
+    })
+    is None,
+  )
 }
 
 ///|

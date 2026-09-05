@@ -306,7 +306,7 @@ test "a real engine connection retires old active runs before readiness" {
   guard hub.runs().runs is [_] else {
     fail("expected one active run before reconnect")
   }
-  hub.engine_connected({ stage: Serving, })
+  hub.engine_connected({ stage: Serving, platform: None, })
   guard hub.runs().runs is [] else {
     fail("old active run survived a new engine pump")
   }
@@ -674,7 +674,7 @@ test "a question does not outlive the engine that asked it" {
   // with the old one, so replaying it would offer an answer with nowhere to
   // go.
   hub.publish(ask)
-  hub.engine_connected({ stage: Serving, })
+  hub.engine_connected({ stage: Serving, platform: None, })
   guard hub.runs().approvals is [] else {
     fail("a question outlived the engine that asked it")
   }

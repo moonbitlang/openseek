@@ -610,7 +610,11 @@ test "a reconnect clears the settings mirror until fresh reads land" {
   // client may have flipped the default while this page was away, so a
   // chat created before the re-read lands must fall back to Local rather
   // than copy the pre-gap value.
-  let (_, reconnected) = update_dev(dispatch, BridgeReady, loaded)
+  let (_, reconnected) = update_dev(
+    dispatch,
+    BridgeReady(windows=false),
+    loaded,
+  )
   assert_false(reconnected.default_worktree_mode(Local, workspace))
   assert_true(reconnected.dev().workspace_settings.is_empty())
 }

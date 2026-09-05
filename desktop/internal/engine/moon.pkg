@@ -25,6 +25,7 @@ import {
   "moonbitlang/core/env" @sys,
   "moonbitlang/core/json",
   "moonbitlang/core/string",
+  "openseek_desktop/internal/platform",
   "tonyfettes/xlog",
 }
 

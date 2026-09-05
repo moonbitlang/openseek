@@ -1218,6 +1218,13 @@ priv struct DeviceState {
   // captured when their request was issued, so a reply from a dead connection
   // cannot overwrite the lists rebuilt after reconnect.
   connection_generation : Int
+  // Whether this channel's host machine is Windows, stated by the host in
+  // the `agent.connected` push that raises BridgeReady — held from the
+  // moment the connection exists, never queried. Immutable for the host
+  // process's life, so every re-fire restates it; false against hosts
+  // predating the field, degrading to POSIX path semantics. The project
+  // picker's drive-letter handling reads it.
+  windows_host : Bool
   // Page-lifetime request tokens for the independently fetched sidebar
   // collections. Connection generation rejects dead sockets; these reject an
   // older reply from the same connection after a newer request was issued.
@@ -1268,6 +1275,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     reconnect_attempt: 0,
     reconnect_failures: 0,
     connection_generation: 0,
+    windows_host: false,
     sessions_request_generation: 0,
     archived_request_generation: 0,
     projects_request_generation: 0,
@@ -2093,7 +2101,11 @@ priv enum Msg {
 /// `FromDevice(channel, ...)`; messages that back page-global or
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
-  BridgeReady
+  // The host's `agent.connected`: this connection is live, re-read your
+  // state. `windows` is the host's self-stated platform riding the signal;
+  // it is immutable for the host process's life, so every re-fire restates
+  // the same value.
+  BridgeReady(windows~ : Bool)
   BridgeUnavailable(String)
   // The channel's WebSocket closed (or failed to open). The handler counts
   // the loss and schedules `ReconnectDue`, making the model's device list

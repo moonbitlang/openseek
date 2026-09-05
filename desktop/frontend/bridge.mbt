@@ -180,8 +180,13 @@ fn device_msg(
 ) -> DeviceMsg? {
   match notification {
     // The payload's stage says how much of the host is up; every stage asks
-    // this client for the same resync, so the signal alone is the message.
-    AgentConnected(_) => Some(BridgeReady)
+    // this client for the same resync, so the stage itself goes no further.
+    // The host also states its platform here; what this client acts on is
+    // whether that platform is Windows, projected out at this decode
+    // boundary so the device state holds the fact from the moment the
+    // connection exists. An unstated platform reads as POSIX.
+    AgentConnected(payload) =>
+      Some(BridgeReady(windows=payload.platform is Some(Windows)))
     AgentStarted(payload) => started_msg(channel, payload)
     AgentEvent(payload) => engine_msg(payload)
     AgentError(payload) => error_msg(payload)

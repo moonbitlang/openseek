@@ -9,6 +9,26 @@ pub fn is_darwin() -> Bool {
 }
 
 ///|
+/// Whether the host is Windows, decided at compile time.
+pub fn is_windows() -> Bool {
+  @sys.win32 || @sys.win64
+}
+
+///|
+/// This host's platform in the protocol's vocabulary. It rides
+/// `agent.connected` so a remote client learns the device's operating
+/// system — and with it the path semantics — without asking.
+pub fn host_platform() -> @protocol.HostPlatform {
+  if is_windows() {
+    Windows
+  } else if is_darwin() {
+    MacOS
+  } else {
+    Linux
+  }
+}
+
+///|
 /// Hand one UTF-16 target to the native opener. The C stub calls
 /// `ShellExecuteW` on Windows and returns failure elsewhere; the public
 /// wrappers only select it on Windows. MoonBit strings are NUL-terminated

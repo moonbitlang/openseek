@@ -1,3 +1,15 @@
+// The picker requests directories with and without their trailing separator
+// ('/Users/test/' from a typed path, '/Users/test' from a breadcrumb); one
+// fixture key serves both. '' (home) and '/' (the level above the roots)
+// are their own locations.
+function browseKey(path) {
+  const trimmed = path.trim();
+  if (trimmed === '' || trimmed === '/') {
+    return trimmed;
+  }
+  return trimmed.replace(/\/+$/, '');
+}
+
 export class DesktopBrowserHarness {
   constructor(page) {
     this.page = page;
@@ -8,6 +20,25 @@ export class DesktopBrowserHarness {
     // failed, and retry states without replacing its Rabbita update logic.
     this.rpcErrors = new Map();
     this.rpcDelays = new Map();
+    // Held methods queue their responses until the test releases them, so a
+    // spec can interleave user input with an in-flight RPC deterministically
+    // (stale-reply and fence coverage) instead of racing real timers.
+    this.heldMethods = new Set();
+    this.heldResponses = [];
+    // Path-keyed project-picker fixtures. `fs.browse` answers with the entry
+    // whose key equals the requested path once trailing separators are
+    // trimmed ('' is the home browse, '/' the level above the roots); a
+    // missing key answers the way a real host refuses a directory it cannot
+    // list. Keys are exact spellings, so an alias fixture lists each
+    // spelling against one canonical listing.
+    this.browseTree = {
+      '': { path: '/Users/test', parent: '/Users', entries: ['Projects', 'Workspace'] },
+    };
+    // The host's own operating system, stated by the host itself in the
+    // `agent.connected` push that opens every connection. Windows-host specs
+    // set it to 'windows' before `goto()`; that is what lets drive-letter
+    // drafts complete natively in the picker.
+    this.hostPlatform = 'macos';
     this.textSearchMatches = [];
     this.textSearchMatchCount = undefined;
     this.textSearchLimitHit = false;
@@ -470,6 +501,13 @@ export class DesktopBrowserHarness {
               id: request.id,
               error: { code: -32000, message: errorMessage },
             };
+        if (this.heldMethods.has(request.method)) {
+          this.heldResponses.push({
+            method: request.method,
+            send: () => socket.send(JSON.stringify(response)),
+          });
+          return;
+        }
         const delay = this.rpcDelays.get(request.method) || 0;
         if (delay > 0) {
           setTimeout(() => socket.send(JSON.stringify(response)), delay);
@@ -480,7 +518,7 @@ export class DesktopBrowserHarness {
       socket.send(JSON.stringify({
         jsonrpc: '2.0',
         method: 'agent.connected',
-        params: { stage: 'serving' },
+        params: { stage: 'serving', platform: this.hostPlatform },
       }));
     });
   }
@@ -768,11 +806,19 @@ export class DesktopBrowserHarness {
       case 'fs.read_file':
         return this.readWorkingFile(request.params || {});
       case 'fs.browse':
-        return {
-          path: '/Users/test',
-          parent: '/Users',
-          entries: ['Projects', 'Workspace'],
+        return this.browseListing(request.params?.path ?? '');
+      case 'fs.create_directory': {
+        const parent = this.browseTree[browseKey(request.params?.parent ?? '')];
+        const name = request.params?.name ?? '';
+        const created = `${parent.path.replace(/\/+$/, '')}/${name}`;
+        parent.entries = [...parent.entries, name];
+        this.browseTree[browseKey(created)] = {
+          path: created,
+          parent: parent.path,
+          entries: [],
         };
+        return this.browseTree[browseKey(created)];
+      }
       case 'fs.search_files':
         return {
           files: [...this.searchFiles],
@@ -870,6 +916,40 @@ export class DesktopBrowserHarness {
       checkout_submodules: false,
       submodule_checkout_timeout_seconds: 30,
     };
+  }
+
+  browseListing(requested) {
+    const listing = this.browseTree[browseKey(requested)];
+    return listing ?? { error: `no such directory: ${requested}` };
+  }
+
+  // Queue responses for `method` instead of sending them.
+  hold(method) {
+    this.heldMethods.add(method);
+  }
+
+  // Deliver every response held for `method` — every held response when the
+  // method is omitted — in arrival order, and stop holding it. Returns how
+  // many were sent, so a test can assert what was actually in flight.
+  releaseHeld(method) {
+    if (method === undefined) {
+      this.heldMethods.clear();
+    } else {
+      this.heldMethods.delete(method);
+    }
+    const releasing = this.heldResponses.filter(
+      held => method === undefined || held.method === method);
+    this.heldResponses = this.heldResponses.filter(
+      held => !(method === undefined || held.method === method));
+    for (const held of releasing) {
+      held.send();
+    }
+    return releasing.length;
+  }
+
+  heldCount(method) {
+    return this.heldResponses.filter(
+      held => method === undefined || held.method === method).length;
   }
 
   notify(method, params) {
