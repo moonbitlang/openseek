@@ -2,6 +2,7 @@ import {
   "bobzhang/openseek/agent_tool/internal/manifest_path",
   "bobzhang/openseek/agent_tool/internal/moon_check",
   "bobzhang/openseek/agent_tool/shell",
+  "bobzhang/openseek/internal/workspace_path",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/json",

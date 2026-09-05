@@ -155,58 +155,28 @@ test "decode defaults warning to off and reads on/off" {
 }
 
 ///|
-test "decode rejects an unknown warning value" {
-  let failed = try {
-    decode({ "source": "x", "warning": "loud" }) |> ignore
-    false
-  } catch {
-    _ => true
+/// Argument shapes `decode` must refuse. Only the refusal itself is pinned
+/// here; the two tests above stay separate because they also pin the wording
+/// the model is supposed to read.
+test "decode rejects malformed arguments" {
+  let malformed : Array[Json] = [
+    // An unknown warning value, a non-string cwd, an unknown target, a
+    // missing source, and arguments that are not an object at all.
+    { "source": "x", "warning": "loud" },
+    { "source": "x", "cwd": 3 },
+    { "source": "x", "target": "banana" },
+    { "code": "x" },
+    Json("x"),
+  ]
+  for arguments in malformed {
+    let failed = try {
+      decode(arguments) |> ignore
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(failed, msg="accepted \{arguments.stringify()}")
   }
-  assert_true(failed)
-}
-
-///|
-test "decode rejects a non-string cwd" {
-  let failed = try {
-    decode({ "source": "x", "cwd": 3 }) |> ignore
-    false
-  } catch {
-    _ => true
-  }
-  assert_true(failed)
-}
-
-///|
-test "decode rejects an unknown target" {
-  let failed = try {
-    decode({ "source": "x", "target": "banana" }) |> ignore
-    false
-  } catch {
-    _ => true
-  }
-  assert_true(failed)
-}
-
-///|
-test "decode rejects a missing source" {
-  let failed = try {
-    decode({ "code": "x" }) |> ignore
-    false
-  } catch {
-    _ => true
-  }
-  assert_true(failed)
-}
-
-///|
-test "decode rejects non-object arguments" {
-  let failed = try {
-    decode(Json("x")) |> ignore
-    false
-  } catch {
-    _ => true
-  }
-  assert_true(failed)
 }
 
 ///|

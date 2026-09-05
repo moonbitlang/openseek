@@ -779,11 +779,7 @@ async fn execute(
     } else {
       body
     }
-    let body = if sandbox_denied is Some(guidance) {
-      "\{body}\n\n\{guidance}"
-    } else {
-      body
-    }
+    let body = with_denial_guidance(body, sandbox_denied)
     return @agent_tool.respond(
       body,
       is_error=exit_code != 0 ||
@@ -829,11 +825,7 @@ async fn execute(
         build_notes,
         finished_body(text, exit_code, staged~),
       )
-      let body = if sandbox_denied is Some(guidance) {
-        "\{body}\n\n\{guidance}"
-      } else {
-        body
-      }
+      let body = with_denial_guidance(body, sandbox_denied)
       @agent_tool.respond(
         body,
         is_error=exit_code != 0 || sandbox_denied is Some(_),
@@ -852,11 +844,7 @@ async fn execute(
       } else {
         "\{head}\n[partial output before the timeout]\n\{partial}"
       }
-      let body = if sandbox_denied is Some(guidance) {
-        "\{body}\n\n\{guidance}"
-      } else {
-        body
-      }
+      let body = with_denial_guidance(body, sandbox_denied)
       // Requested compiler warnings live only in the build phase's capture, so
       // a run that never finished must still carry them out.
       @agent_tool.respond(
@@ -1080,6 +1068,21 @@ fn timeout_head(foreground_timeout_ms : Int, staged~ : Bool) -> String {
     "mbtx: timed out after \{bound} and was cancelled — the build had already succeeded, so it is the PROGRAM that did not finish (an infinite loop, or waiting on something that never arrived)."
   } else {
     "mbtx: timed out after \{bound} and was cancelled — the program did not finish (an infinite loop, or a build that never completed)."
+  }
+}
+
+///|
+/// Append a confinement refusal's guidance to a report, when there is one. The
+/// three exit paths that report on a run's output — a run that finished inside
+/// the handoff grace on a job runtime, a finished foreground run, and a
+/// foreground timeout — append it the same way, after the body the run itself
+/// produced. The background handoff carries none: its program is still
+/// running, so there is no output to scan for a refusal yet.
+fn with_denial_guidance(body : String, guidance : String?) -> String {
+  if guidance is Some(text) {
+    "\{body}\n\n\{text}"
+  } else {
+    body
   }
 }
 

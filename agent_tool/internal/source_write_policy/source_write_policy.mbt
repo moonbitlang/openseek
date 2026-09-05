@@ -78,14 +78,18 @@ pub fn is_protected_source_path(path : String) -> Bool {
   path.has_suffix(".mbt.md") ||
   path.has_suffix(".mbt") ||
   path.has_suffix(".mbti") ||
-  path == "moon.mod" ||
-  path.has_suffix("/moon.mod") ||
-  path == "moon.pkg" ||
-  path.has_suffix("/moon.pkg") ||
-  path == "moon.mod.json" ||
-  path.has_suffix("/moon.mod.json") ||
-  path == "moon.pkg.json" ||
-  path.has_suffix("/moon.pkg.json") ||
-  path == "moon.work" ||
-  path.has_suffix("/moon.work")
+  // A bare basename and a full path are both accepted, so each manifest name
+  // is matched either whole or as the last component. Deliberately NOT via
+  // `path_basename`: that strips a trailing slash, and callers hand this raw
+  // shell arguments where `pkg/moon.pkg/` names a directory, not the manifest.
+  protected_manifest_names.any(name => {
+    path == name || path.has_suffix("/\{name}")
+  })
 }
+
+///|
+/// The manifest filenames `is_protected_source_path` guards, current and
+/// legacy-JSON spellings alike.
+let protected_manifest_names : Array[String] = [
+  "moon.mod", "moon.pkg", "moon.work", "moon.mod.json", "moon.pkg.json",
+]

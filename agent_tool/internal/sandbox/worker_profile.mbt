@@ -76,16 +76,13 @@ fn worker_write_profile_data(
     $|(version 1)
     $|(allow default)
     $|
-  let denial_subjects : Array[String] = []
+  // Same path-then-basename subjects the source-write profile names, in the
+  // same order; the `.git` literal below still appends after them.
+  let denial_subjects = source_write_denial_subjects(deny_roots)
   for root in deny_roots {
     profile <+
       $|(deny file-write* (subpath "\{sbpl_string_escape(root)}"))
       $|
-    denial_subjects.push(root)
-    let base = @workspace_path.path_basename(root)
-    if base != root {
-      denial_subjects.push(base)
-    }
   }
   profile <+
     $|(allow file-write* (subpath "\{sbpl_string_escape(worker_root)}"))

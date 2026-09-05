@@ -1,30 +1,19 @@
 ///|
 test "protected workspace source policy" {
-  assert_true(
-    @source_write_policy.is_protected_workspace_source_path(
-      "/workspace", "/workspace/moon.mod",
-    ),
-  )
-  assert_true(
-    @source_write_policy.is_protected_workspace_source_path(
-      "/workspace", "/workspace/pkg/moon.pkg",
-    ),
-  )
-  assert_true(
-    @source_write_policy.is_protected_workspace_source_path(
-      "/workspace", "/workspace/pkg/main.mbt",
-    ),
-  )
-  assert_true(
-    @source_write_policy.is_protected_workspace_source_path(
-      "/workspace", "/workspace/pkg/_build.mbt",
-    ),
-  )
-  assert_true(
-    @source_write_policy.is_protected_workspace_source_path(
-      "/workspace", "/workspace/.mooncakes.mbt",
-    ),
-  )
+  // The last two are files whose names merely START with a generated
+  // directory's: only a whole path COMPONENT is treated as moon-managed.
+  for
+    guarded in [
+      "/workspace/moon.mod", "/workspace/pkg/moon.pkg", "/workspace/pkg/main.mbt",
+      "/workspace/pkg/_build.mbt", "/workspace/.mooncakes.mbt",
+    ] {
+    assert_true(
+      @source_write_policy.is_protected_workspace_source_path(
+        "/workspace", guarded,
+      ),
+      msg=guarded,
+    )
+  }
   assert_false(
     @source_write_policy.is_protected_workspace_source_path(
       "/workspace", "/workspace/backup-moon.mod",
