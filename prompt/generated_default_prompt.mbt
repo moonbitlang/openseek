@@ -931,6 +931,11 @@ fn default_prompt() -> String {
     #|  `Json::empty_object()` for an empty object. Do not create JSON with
     #|  `Json::Object(...)`, `Json::String(...)`, or `Json::True`; use variants
     #|  mainly for pattern matching.
+    #|- `Json::number(x)` keeps `NaN` and `Infinity` as numeric JSON tokens, while
+    #|  `Json(x)` for a `Double` goes through `Double::to_json` and encodes them as
+    #|  the strings `"NaN"`/`"Infinity"`. Keep `Json::number(x)` for an unguarded
+    #|  `Double`; use `Json(x)` only when the value is known to be finite or is not
+    #|  a `Double`.
     #|- For integer JSON numbers, use `Json::number(n.to_double(), repr=text.to_owned())`
     #|  when you need output to preserve integer spelling.
     #|- For JSON CLI stdout and tests, use `json.stringify()` or inspect
