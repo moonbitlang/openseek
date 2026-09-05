@@ -282,36 +282,23 @@ async test "worktree remove refuses a running conversation without unmapping it"
     runtime_dir=runtime.to_path(),
   )
   let manager = actor.manager()
-  ignore(
-    update_settings(manager, {
-      provider: Some("custom"),
-      custom_api_url: Some("https://example.invalid/chat/completions"),
-      deepseek_api_key: None,
-      glm_api_key: None,
-      custom_api_key: None,
-    }),
-  )
+  configure_custom_provider(manager)
   let sink = EventSink(fn(_) {  })
   @async.with_task_group(group => {
-    group.spawn_bg(no_wait=true, allow_failure=true, () => {
-      actor.run(sink, fn(_) {  })
-    })
-    while manager.pump is Stopped {
-      @async.sleep(1)
-    }
+    serve_until_pumping(actor, manager, sink, group~)
     ignore(@workspaces.add(ws.to_string(), fn(_) {  }))
     stage_worktree_placements(ws, [
       ("wt", "openseek/wt", Some("s-wt-run"), None),
     ])
-    let reply = start_run(sink, manager, {
-      task: "keep running",
-      submission_id: None,
-      model: None,
-      thinking: None,
-      max_steps: None,
-      session: "s-wt-run",
-      workspace: Some(ws.to_string()),
-    })
+    let reply = start_run(
+      sink,
+      manager,
+      test_start_payload(
+        "keep running",
+        session="s-wt-run",
+        workspace=ws.to_string(),
+      ),
+    )
     assert_eq(reply.status, "accepted")
     let committed : Ref[Bool] = Ref(false)
     let detail = try {

@@ -454,13 +454,7 @@ fn parse_numstat(output : String) -> GitDiffStat {
 /// command that failed reads as None rather than an empty string, so a caller
 /// whose empty output means "nothing changed" can tell the two apart.
 async fn git_output_opt(dir : String, args : Array[String]) -> String? {
-  let (code, stdout, _) = @processx.collect_output_no_stdin(
-    "git",
-    args,
-    cwd=dir,
-    extra_env=git_environment(),
-    inherit_env=false,
-  ) catch {
+  let (code, stdout, _) = git_collect(dir, args) catch {
     error if @async.is_being_cancelled() => raise error
     _ => return None
   }
@@ -497,13 +491,7 @@ fn git_environment() -> Map[String, String] {
 
 ///|
 async fn git_output(dir : String, args : Array[String]) -> String {
-  let (code, stdout, _) = @processx.collect_output_no_stdin(
-    "git",
-    args,
-    cwd=dir,
-    extra_env=git_environment(),
-    inherit_env=false,
-  ) catch {
+  let (code, stdout, _) = git_collect(dir, args) catch {
     error if @async.is_being_cancelled() => raise error
     _ => return ""
   }
@@ -1900,6 +1888,16 @@ test "Git single-line output preserves significant path whitespace" {
 }
 
 ///|
+/// Best-effort removal of a test repository. Cancellation stays observable;
+/// any other rmdir failure is the test's own tmpdir and is ignored.
+async fn git_test_cleanup(dir : String) -> Unit {
+  @fs.rmdir(dir, recursive=true) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => ()
+  }
+}
+
+///|
 async fn git_test_run(dir : String, args : Array[String]) -> Unit {
   let (code, _, stderr) = git_collect(dir, args)
   guard code == 0 else {
@@ -1919,14 +1917,8 @@ async fn git_test_commit(dir : String, message : String) -> Unit {
 ///|
 async test "Git history pages stay pinned and commit changes use first parent" {
   let dir = @fs.tmpdir(prefix="openseek-git-history-")
-  async fn cleanup() {
-    @fs.rmdir(dir, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => ()
-    }
-  }
   let _ = {
-    defer cleanup()
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
     @fs.write_file("\{dir}/old.mbt", "first\n", create_mode=CreateOrTruncate)
     git_test_run(dir, ["add", "old.mbt"])
@@ -2080,14 +2072,8 @@ async test "Git history pages stay pinned and commit changes use first parent" {
 ///|
 async test "Git history paginates fifty commits and describes detached HEAD" {
   let dir = @fs.tmpdir(prefix="openseek-git-history-page-")
-  async fn cleanup() {
-    @fs.rmdir(dir, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => ()
-    }
-  }
   let _ = {
-    defer cleanup()
+    defer git_test_cleanup(dir)
     git_test_run(dir, ["init", "--quiet"])
     let unborn = capture_git_history_snapshot(dir, None)
     assert_eq(unborn.head, None)
@@ -2119,13 +2105,7 @@ async test "Git history paginates fifty commits and describes detached HEAD" {
 ///|
 async test "Git recognizes only origin HEAD's branch as the default" {
   let dir = @fs.tmpdir(prefix="openseek-git-default-branch-")
-  async fn cleanup() {
-    @fs.rmdir(dir, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => ()
-    }
-  }
-  defer cleanup()
+  defer git_test_cleanup(dir)
   git_test_run(dir, ["init", "--quiet"])
   @fs.write_file("\{dir}/tracked.txt", "first\n", create_mode=CreateOrTruncate)
   git_test_run(dir, ["add", "tracked.txt"])
@@ -2147,13 +2127,7 @@ async test "Git recognizes only origin HEAD's branch as the default" {
 ///|
 async test "ordinary checkout reviews retain committed branch changes" {
   let dir = @fs.tmpdir(prefix="openseek-git-root-review-")
-  async fn cleanup() {
-    @fs.rmdir(dir, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => ()
-    }
-  }
-  defer cleanup()
+  defer git_test_cleanup(dir)
   git_test_run(dir, ["init", "--quiet"])
   @fs.write_file("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
   git_test_run(dir, ["add", "review.txt"])
@@ -2201,13 +2175,7 @@ async test "ordinary checkout reviews retain committed branch changes" {
 ///|
 async test "Git snapshots pair status with HEAD and supplied revisions stay pinned" {
   let dir = @fs.tmpdir(prefix="openseek-git-review-")
-  async fn cleanup() {
-    @fs.rmdir(dir, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => ()
-    }
-  }
-  defer cleanup()
+  defer git_test_cleanup(dir)
   git_test_run(dir, ["init", "--quiet"])
   assert_eq(git_revision_commit(dir, "HEAD"), None)
   @fs.mkdir("\{dir}/desktop", recursive=true)

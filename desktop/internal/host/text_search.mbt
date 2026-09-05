@@ -264,14 +264,9 @@ async fn TextSearchService::run(self : TextSearchService) -> Unit {
 /// VS Code's Search view uses `splitGlobAware` rather than a glob parser: only
 /// commas outside brace alternatives and character classes split the input.
 fn split_text_search_globs(value : String) -> Array[String] {
-  let globs : Array[String] = []
-  for part in split_text_search_glob_aware(value, ',') {
-    let glob = part.trim().to_owned()
-    if !glob.is_empty() {
-      globs.push(glob)
-    }
-  }
-  globs
+  split_text_search_glob_aware(value, ',')
+  .map(part => part.trim().to_owned())
+  .filter(glob => !glob.is_empty())
 }
 
 ///|
