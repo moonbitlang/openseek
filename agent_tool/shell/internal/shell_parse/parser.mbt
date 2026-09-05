@@ -152,17 +152,11 @@ fn render_source(
   argv : Array[String],
   redirects : Array[Redirect],
 ) -> String {
-  let parts : Array[String] = []
-  for assignment in env {
-    parts.push("\{assignment.name}=\{assignment.value}")
-  }
-  for arg in argv {
-    parts.push(arg)
-  }
-  for redirect in redirects {
-    parts.push("\{redirect.op} \{redirect.target}")
-  }
-  parts.join(" ")
+  [
+    ..env.map(assignment => "\{assignment.name}=\{assignment.value}"),
+    ..argv,
+    ..redirects.map(redirect => "\{redirect.op} \{redirect.target}"),
+  ].join(" ")
 }
 
 ///|

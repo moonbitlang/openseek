@@ -772,13 +772,7 @@ async fn read_output_prefix(
   let byte_budget = max_output_chars * 4 + 4
   for ;; {
     let remaining_budget = byte_budget - buffer.length()
-    let chunk_limit = if remaining_budget <= 0 {
-      1
-    } else if remaining_budget < 1024 {
-      remaining_budget
-    } else {
-      1024
-    }
+    let chunk_limit = remaining_budget.clamp(min=1, max=1024)
     match reader.read_some(max_len=chunk_limit) {
       None =>
         return {

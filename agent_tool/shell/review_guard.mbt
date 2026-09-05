@@ -131,115 +131,33 @@ fn mutating_moon_blocked(
 
 ///|
 test "read-only guard blocks mutating moon anywhere; allows read-only commands" {
+  fn blocks(cmd : String) -> Bool {
+    review_read_only_blocks(
+      @shell_parse.parse_for_policy(cmd),
+      base_cwd=".",
+      scratch_dir=None,
+    )
+  }
+
   // mutating moon — plain, chained either way, and env-prefixed (all bypasses)
-  assert_true(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("moon fmt"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
-  assert_true(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("moon new app"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
-  assert_true(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("moon new -- --help"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
-  assert_true(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("moon info"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
-  assert_true(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("moon fmt && git diff"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
-  assert_true(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("git diff && moon fmt"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
-  assert_true(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("moon test --update; true"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
-  assert_true(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("FOO=bar moon fmt"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
+  assert_true(blocks("moon fmt"))
+  assert_true(blocks("moon new app"))
+  assert_true(blocks("moon new -- --help"))
+  assert_true(blocks("moon info"))
+  assert_true(blocks("moon fmt && git diff"))
+  assert_true(blocks("git diff && moon fmt"))
+  assert_true(blocks("moon test --update; true"))
+  assert_true(blocks("FOO=bar moon fmt"))
   // a pipe segment that mutates is still caught (pipes parse as Simple)
-  assert_true(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("moon fmt | tee out"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
+  assert_true(blocks("moon fmt | tee out"))
   // a read-only pipe is allowed (no mutating segment)
-  assert_false(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("git diff | head"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
+  assert_false(blocks("git diff | head"))
   // read-only commands — allowed
-  assert_false(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("moon check"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
-  assert_false(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("moon check --target all"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
-  assert_false(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("moon test"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
-  assert_false(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("moon fmt --check"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
-  assert_false(
-    review_read_only_blocks(
-      @shell_parse.parse_for_policy("git diff origin/main"),
-      base_cwd=".",
-      scratch_dir=None,
-    ),
-  )
+  assert_false(blocks("moon check"))
+  assert_false(blocks("moon check --target all"))
+  assert_false(blocks("moon test"))
+  assert_false(blocks("moon fmt --check"))
+  assert_false(blocks("git diff origin/main"))
 }
 
 ///|

@@ -70,16 +70,8 @@ fn ShellOutputSink::ShellOutputSink(
     file: None,
     file_bytes: 0,
     spill_path,
-    inline_cap: if inline_cap > 0 {
-      inline_cap
-    } else {
-      1
-    },
-    hard_cap: if hard_cap > 0 {
-      hard_cap
-    } else {
-      1
-    },
+    inline_cap: inline_cap.max(1),
+    hard_cap: hard_cap.max(1),
   }
 }
 
@@ -293,11 +285,7 @@ async fn ShellOutputSink::read_tail(self : ShellOutputSink, n : Int) -> String {
       // becomes a replacement char, dropped when we keep the last `n`), then keep
       // the last `n` characters.
       let want = n.to_int64() * 4 + 4
-      let start = if self.file_bytes > want {
-        self.file_bytes - want
-      } else {
-        0
-      }
+      let start = (self.file_bytes - want).max(0)
       let len = (self.file_bytes - start).to_int()
       let bytes = file.read_exactly_at(len, position=start) catch {
         _ => return self.head.to_string()
@@ -352,7 +340,7 @@ fn split_valid_utf8(bytes : Bytes) -> (String, Bytes, Bool) {
 ///|
 fn incomplete_suffix_len(bytes : Bytes) -> Int {
   let len = bytes.length()
-  let lookback = if len < 3 { len } else { 3 }
+  let lookback = len.min(3)
   for i in 0..<lookback {
     let pos = len - 1 - i
     let b = bytes[pos].to_int()
