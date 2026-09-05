@@ -182,11 +182,7 @@ test "sanitize_name neutralizes control chars and caps length" {
   )
   assert_eq(sanitize_name("a\tb\r"), "a?b?")
   // Over-long names are truncated with an ellipsis.
-  let sb = StringBuilder()
-  for _ in 0..<100 {
-    sb.write_char('x')
-  }
-  let capped = sanitize_name(sb.to_string())
+  let capped = sanitize_name("x".repeat(100))
   assert_eq(capped.length(), 65)
   assert_true(capped.has_suffix("…"))
 }

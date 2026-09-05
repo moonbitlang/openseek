@@ -114,15 +114,7 @@ fn StandaloneExport::escape_json_for_html(
   json : String,
 ) -> String {
   let _ = self
-  let builder = StringBuilder()
-  for char in json {
-    if char == '<' {
-      builder <+ "\\u003c"
-    } else {
-      builder.write_char(char)
-    }
-  }
-  builder.to_string()
+  json.replace_all(old="<", new="\\u003c")
 }
 
 ///|
@@ -157,15 +149,7 @@ fn StandaloneExport::is_script_close_tail(
   let tail = ['/', 's', 'c', 'r', 'i', 'p', 't']
   guard index + tail.length() <= chars.length() else { return false }
   for offset in 0..<tail.length() {
-    let actual = chars[index + offset]
-    let expected = tail[offset]
-    let matches = actual == expected ||
-      (
-        expected >= 'a' &&
-        expected <= 'z' &&
-        actual.to_int() == expected.to_int() - 32
-      )
-    if !matches {
+    if chars[index + offset].to_ascii_lowercase() != tail[offset] {
       return false
     }
   }

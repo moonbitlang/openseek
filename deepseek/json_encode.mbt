@@ -72,20 +72,18 @@ impl ToJson for ChatMessage with fn to_json(message : ChatMessage) -> Json {
 ///|
 /// Encodes a `ToolDefinition` as a DeepSeek `tools[]` entry.
 impl ToJson for ToolDefinition with fn to_json(tool : ToolDefinition) -> Json {
-  let function : Json = if tool.strict {
-    {
-      "name": tool.name,
-      "description": tool.description,
-      "parameters": tool.parameters,
-      "strict": true,
-    }
-  } else {
-    {
-      "name": tool.name,
-      "description": tool.description,
-      "parameters": tool.parameters,
-    }
-  }
+  let function = Json(
+    Map(
+      [
+        ("name", Json(tool.name)),
+        ("description", Json(tool.description)),
+        ("parameters", tool.parameters),
+        ..if tool.strict {
+          [("strict", Json(true))]
+        },
+      ],
+    ),
+  )
   { "type": "function", "function": function }
 }
 

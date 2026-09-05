@@ -1642,11 +1642,7 @@ fn wall_clock_label(unix_ms : Int64) -> String {
 
 ///|
 fn pad2(n : Int) -> String {
-  if n < 10 {
-    "0\{n}"
-  } else {
-    "\{n}"
-  }
+  n.to_string().pad_start(2, '0')
 }
 
 ///|
@@ -2180,10 +2176,7 @@ fn raw_failed_call_ids(session : @agent_session.Session) -> Map[String, Unit] {
 /// the runtime for escalation.
 fn tool_call_is_escalated(call : @deepseek.ToolCall) -> Bool {
   let json = @json.parse(call.arguments) catch { _ => return false }
-  match json {
-    Object(fields) => fields.get("escalated") is Some(True)
-    _ => false
-  }
+  json is { "escalated": True, .. }
 }
 
 ///|
@@ -2234,14 +2227,7 @@ fn tool_call_is_run_failed(
     return false
   }
   let json = @json.parse(call.arguments) catch { _ => return false }
-  match json {
-    Object(fields) =>
-      match fields.get("target") {
-        None | Some(String("wasm")) | Some(Null) => true
-        _ => false
-      }
-    _ => false
-  }
+  json is { "target"? : None | Some(String("wasm") | Null), .. }
 }
 
 ///|
@@ -2578,15 +2564,13 @@ pub fn rendered_build_error_count(
   mode : ViewMode,
 ) -> Int {
   match mode {
-    RawLog => {
-      let mut count = 0
-      for event in session.events() {
-        if event.item() is Tool(result) && result_is_build_failed(result) {
-          count += 1
-        }
-      }
-      count
-    }
+    RawLog =>
+      session
+      .events()
+      .iter()
+      .count_if(event => {
+        event.item() is Tool(result) && result_is_build_failed(result)
+      })
     ModelView => {
       let tool_results = tool_results_by_id(session)
       session
@@ -2606,17 +2590,17 @@ pub fn rendered_build_error_count(
 /// mbtx work but no build failures, so the toolbar shows whenever mbtx was in
 /// play, and only a session with no mbtx activity stays chrome-free.
 pub fn session_has_mbtx_activity(session : @agent_session.Session) -> Bool {
-  for event in session.events() {
+  session
+  .events()
+  .iter()
+  .any(event => {
     match event.item() {
       Assistant(message) =>
-        if message.tool_calls().any(call => call.name == "mbtx") {
-          return true
-        }
-      Tool(result) => if result.tool_name() == "mbtx" { return true }
-      _ => ()
+        message.tool_calls().any(call => call.name == "mbtx")
+      Tool(result) => result.tool_name() == "mbtx"
+      _ => false
     }
-  }
-  false
+  })
 }
 
 ///|
