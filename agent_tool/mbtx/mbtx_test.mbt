@@ -1525,13 +1525,17 @@ async test "a hosted session reserves nothing unless the snippet asks" {
 }
 
 ///|
-async fn run_hosted_with(
-  workspace_root : String,
+/// An injection over a local counter that starts at `first`, so a test can
+/// pick the ordinal block — and therefore the run id, `wf-<first>` — its
+/// lines will carry. The protocol sink is shared by every test in the
+/// process, so a test that reads it must be able to tell its own run apart.
+fn hosted_injection(
   store : String,
-  arguments : Json,
-) -> (@agent_tool.ToolOutput, Int) {
-  let issued = Ref(0)
-  let subrun = @host.SubrunInjection(
+  workspace_root : String,
+  first~ : Int,
+) -> (@host.SubrunInjection, Ref[Int]) {
+  let issued = Ref(first - 1)
+  let injection = @host.SubrunInjection(
     exe="/unused/openseek",
     session_root=store,
     parent="run7",
@@ -1542,12 +1546,23 @@ async fn run_hosted_with(
       base
     },
   )
+  (injection, issued)
+}
+
+///|
+async fn run_hosted_with(
+  workspace_root : String,
+  store : String,
+  arguments : Json,
+  first? : Int = 1,
+) -> (@agent_tool.ToolOutput, Int) {
+  let (subrun, issued) = hosted_injection(store, workspace_root, first~)
   let action = match @mbtx.definition(workspace_root~, subrun~).execute {
     Async(execute) => execute(arguments)
     Sync(_) => fail("mbtx should be async")
   }
   guard action is Respond(output) else { fail("expected Respond") }
-  (output, issued.val)
+  (output, issued.val - (first - 1))
 }
 
 ///|
@@ -1594,6 +1609,128 @@ async test "the run directory is created even when the store root is not there y
       assert_false(out.is_error, msg=out.content)
       assert_eq(issued, @host.block_size)
       assert_true(@fs.exists("\{root}/run7-wf-1"))
+    })
+  })
+}
+
+///|
+/// The workflow bracket lines for run `id` that the in-process protocol sink
+/// is holding, in order. Everything else queued is discarded: other tests'
+/// hosted runs announce runs of their own into the same sink.
+fn workflow_lines(id : String) -> Array[Json] raise {
+  let lines = []
+  while @emit.poll_line() is Some(line) {
+    let entry = @json.parse(line)
+    if entry is { "event": String(event), "id": String(entry_id), .. } &&
+      event.has_prefix("workflow_") &&
+      entry_id == id {
+      lines.push(entry)
+    }
+  }
+  lines
+}
+
+///|
+/// One test, not four: the protocol sink is process-global and a drain takes
+/// every queued line, so two tests reading it concurrently would steal each
+/// other's brackets. The sink is opened and left open — closing it while
+/// another test's hosted run is announcing would drop that run's lines.
+async test "a hosted run is announced before it runs and closed on every exit" {
+  @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
+    @vfs.with_tmpdir(prefix="mbtx-store-", store => {
+      @emit.open()
+      ignore(workflow_lines(""))
+      // A run that completes: one open, one close, the coordinates a reader
+      // needs — where to tail, and which child ordinals are this run's.
+      let (out, _) = run_hosted_with(
+        ws,
+        store,
+        { "source": "fn main { println(\"hosted\") }", "subrun": true },
+        first=700,
+      )
+      assert_false(out.is_error, msg=out.content)
+      guard workflow_lines("wf-700")
+        is [
+          {
+            "event": String("workflow_started"),
+            "journal": String(journal),
+            "events": String(events),
+            "first_child": Number(700, ..),
+            "child_count": Number(32, ..),
+            ..
+          },
+          { "event": String("workflow_finished"), .. },
+        ] else {
+        fail("expected one open and one close for wf-700")
+      }
+      assert_eq(journal, "\{store}/run7-wf-700/journal.jsonl")
+      assert_eq(events, "\{store}/run7-wf-700/events.jsonl")
+      // A run that never starts — the build fails — still closes its bracket,
+      // or a reader would show a workflow running forever.
+      let (out, _) = run_hosted_with(
+        ws,
+        store,
+        { "source": "fn main { let _x : Int = \"nope\" }", "subrun": true },
+        first=800,
+      )
+      assert_true(out.is_error)
+      guard workflow_lines("wf-800")
+        is [
+          { "event": String("workflow_started"), .. },
+          { "event": String("workflow_finished"), .. },
+        ] else {
+        fail("a failed build must still close wf-800")
+      }
+      // A run adopted into the background returns from the call while the
+      // snippet is STILL RUNNING. Its bracket must stay open until the job
+      // ends, not close at adoption.
+      @async.with_task_group() <| group => {
+        let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
+        let (subrun, _) = hosted_injection(store, ws, first=900)
+        let definition = @mbtx.definition(
+          workspace_root=ws,
+          bg_runtime=bg,
+          auto_background_after_ms=1,
+          subrun~,
+        )
+        let source =
+          #|import { "moonbitlang/async" }
+          #|
+          #|async fn main {
+          #|  @async.sleep(400)
+          #|  println("late")
+          #|}
+        let action = match definition.execute {
+          Async(execute) => execute({ "source": source, "subrun": true })
+          Sync(_) => fail("mbtx should be async")
+        }
+        guard action is Respond(output) else { fail("expected Respond") }
+        assert_false(output.is_error, msg=output.content)
+        assert_true(output.content.contains("moved to the background"))
+        guard workflow_lines("wf-900")
+          is [{ "event": String("workflow_started"), .. }] else {
+          fail("at adoption the run is announced and still open")
+        }
+        let mut closed = false
+        for _ in 0..<200 {
+          if workflow_lines("wf-900")
+            is [{ "event": String("workflow_finished"), .. }] {
+            closed = true
+            break
+          }
+          @async.sleep(50)
+        }
+        assert_true(closed, msg="the job's terminal must close wf-900")
+      }
+      // A run that does not delegate announces nothing.
+      let (out, _) = run_hosted_with(
+        ws,
+        store,
+        { "source": "fn main { println(1) }" },
+        first=950,
+      )
+      assert_false(out.is_error)
+      assert_eq(workflow_lines("wf-950").length(), 0)
     })
   })
 }

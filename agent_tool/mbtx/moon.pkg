@@ -22,8 +22,12 @@ supported_targets = "+wasm+native"
 
 import {
   "moonbitlang/async",
+  "moonbitlang/core/json",
+  "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_subrun/host",
+  "bobzhang/openseek/agent_tool/bgjobs",
   "bobzhang/openseek/testkit/filesystem" @vfs,
+  "bobzhang/openseek_protocol/emit",
 } for "test"
 
 import {

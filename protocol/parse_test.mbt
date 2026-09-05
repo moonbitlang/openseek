@@ -259,3 +259,20 @@ test "a workflow line missing any coordinate is not an event" {
     None,
   )
 }
+
+///|
+test "a workflow's brackets survive the wire unchanged" {
+  // `to_json` is the one encoder and `parse` the one decoder; a field the
+  // encoder writes under a name the decoder does not read would make an
+  // announced run unfindable, silently.
+  let started : @openseek_protocol.Event = WorkflowStarted(
+    id="wf-5",
+    journal="/s/run7-wf-5/journal.jsonl",
+    events="/s/run7-wf-5/events.jsonl",
+    first_child=5,
+    child_count=32,
+  )
+  assert_eq(@openseek_protocol.parse(started.to_json()), Some(started))
+  let finished : @openseek_protocol.Event = WorkflowFinished(id="wf-5")
+  assert_eq(@openseek_protocol.parse(finished.to_json()), Some(finished))
+}
