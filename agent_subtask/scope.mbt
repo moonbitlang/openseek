@@ -75,21 +75,11 @@ fn scope_violations(
   changes : Array[Change],
   allowed_paths : Array[String],
 ) -> Array[String] {
-  let allowed = allowed_paths.map(prefix => {
-    prefix.split("/").map(part => part.to_owned()).collect()
-  })
+  let allowed = allowed_paths.map(components)
   let violations : Array[String] = []
   for change in changes {
-    let parts = change.path.split("/").map(part => part.to_owned()).collect()
-    let admitted = allowed.any(prefix => {
-      guard parts.length() >= prefix.length() else { return false }
-      for index in 0..<prefix.length() {
-        if parts[index] != prefix[index] {
-          return false
-        }
-      }
-      true
-    })
+    let parts = components(change.path)
+    let admitted = allowed.any(prefix => one_covers(prefix, parts))
     if !admitted && !violations.contains(change.path) {
       violations.push(change.path)
     }

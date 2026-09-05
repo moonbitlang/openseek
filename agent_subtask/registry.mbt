@@ -137,23 +137,29 @@ pub async fn load_entries(
 }
 
 ///|
+/// A path split into its slash-separated components. Path containment here
+/// is always component-wise, never textual: `src` must not cover `src2`.
+fn components(prefix : String) -> Array[String] {
+  prefix.split("/").map(part => part.to_owned()).collect()
+}
+
+///|
+/// Whether `shorter` is a component-wise prefix of `longer` (equal counts as
+/// covered).
+fn one_covers(shorter : Array[String], longer : Array[String]) -> Bool {
+  guard shorter.length() <= longer.length() else { return false }
+  for index in 0..<shorter.length() {
+    if shorter[index] != longer[index] {
+      return false
+    }
+  }
+  true
+}
+
+///|
 /// Component-wise prefix overlap between two allowed-path sets: `src`
 /// overlaps `src/lexer` and `src`, never `src2`.
 fn paths_overlap(a : Array[String], b : Array[String]) -> Bool {
-  fn components(prefix : String) -> Array[String] {
-    prefix.split("/").map(part => part.to_owned()).collect()
-  }
-
-  fn one_covers(shorter : Array[String], longer : Array[String]) -> Bool {
-    guard shorter.length() <= longer.length() else { return false }
-    for index in 0..<shorter.length() {
-      if shorter[index] != longer[index] {
-        return false
-      }
-    }
-    true
-  }
-
   a.any(left => {
     b.any(right => {
       let l = components(left)

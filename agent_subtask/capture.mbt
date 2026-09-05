@@ -88,12 +88,7 @@ pub async fn capture(
   if changes.is_empty() {
     // Terminal means undiscoverable by lifecycle actions, so the worktree
     // and branch must go NOW or they leak (and block reusing the name).
-    @fs.rmdir(entry.worker_root, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => ()
-    }
-    let _ = git_run(["worktree", "prune"], cwd=geometry.origin_root)
-    let _ = git_run(["branch", "-D", entry.branch], cwd=geometry.origin_root)
+    remove_worktree_and_branch(geometry.origin_root, entry, force=true)
     let entry = { ..entry, state: NoChanges, }
     let _ = save_entry(geometry.common_git_dir, entry)
     evidence.push("no changes in the worker tree; worktree and branch removed")

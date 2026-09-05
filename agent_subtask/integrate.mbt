@@ -200,14 +200,7 @@ async fn integrate_locked(
     let _ = save_entry(geometry.common_git_dir, entry)
     // The branch's content now lives in origin history: the worktree and
     // branch are provably redundant — the one auto-clean that is safe.
-    // (`git worktree remove` refuses ANY worktree in repos with tracked
-    // submodules, so removal is rm + prune by design.)
-    @fs.rmdir(entry.worker_root, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => ()
-    }
-    let _ = git_run(["worktree", "prune"], cwd=origin)
-    let _ = git_run(["branch", "-d", entry.branch], cwd=origin)
+    remove_worktree_and_branch(origin, entry, force=false)
     return {
       entry,
       result: "integrated",
@@ -337,12 +330,7 @@ async fn integrate_continue_locked(
   }
   let entry = { ..entry, state: Integrated, }
   let _ = save_entry(geometry.common_git_dir, entry)
-  @fs.rmdir(entry.worker_root, recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => ()
-  }
-  let _ = git_run(["worktree", "prune"], cwd=origin)
-  let _ = git_run(["branch", "-d", entry.branch], cwd=origin)
+  remove_worktree_and_branch(origin, entry, force=false)
   { entry, result: "integrated", detail: ["conflict resolution committed"], }
 }
 
@@ -430,12 +418,7 @@ pub async fn discard(
       return Err("a merge of this subtask is in progress; abort it first")
     }
   }
-  @fs.rmdir(entry.worker_root, recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => ()
-  }
-  let _ = git_run(["worktree", "prune"], cwd=origin)
-  let _ = git_run(["branch", "-D", entry.branch], cwd=origin)
+  remove_worktree_and_branch(origin, entry, force=true)
   let entry = { ..entry, state: Discarded, }
   let _ = save_entry(geometry.common_git_dir, entry)
   Ok(())
