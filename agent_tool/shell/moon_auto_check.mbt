@@ -48,13 +48,7 @@ fn insert_before_system_footer(content : String, block : String) -> String {
 ///|
 fn moon_check_output_budget(content : String, max_output_chars : Int) -> Int {
   let remaining = max_output_chars - content.char_length() - 1
-  if remaining <= 0 {
-    0
-  } else if remaining < @moon_check.MaxOutputChars {
-    remaining
-  } else {
-    @moon_check.MaxOutputChars
-  }
+  remaining.clamp(min=0, max=@moon_check.MaxOutputChars)
 }
 
 ///|
@@ -609,158 +603,68 @@ test "do not trigger follow-up check for read-only moon commands or data" {
 ///|
 #cfg(not(platform="windows"))
 test "detect moon command check cwd from -C option" {
+  fn cwd_for(cmd : String, base : String) -> String? {
+    moon_auto_check_start_cwd(cmd, Some(base))
+  }
+
+  assert_true(cwd_for("moon fmt", "/repo") is Some("/repo"))
+  assert_true(cwd_for("moon -C pkg fmt", "/repo") is Some("/repo/pkg"))
+  assert_true(cwd_for("moon -Cpkg fmt", "/repo") is Some("/repo/pkg"))
+  assert_true(cwd_for("moon -C=pkg fmt", "/repo") is Some("/repo/pkg"))
   assert_true(
-    moon_auto_check_start_cwd("moon fmt", Some("/repo")) is Some("/repo"),
+    cwd_for("moon -C ../other info", "/repo/pkg") is Some("/repo/other"),
+  )
+  assert_true(cwd_for("moon -C /tmp/mod fmt", "/repo") is Some("/tmp/mod"))
+  assert_true(
+    cwd_for("moon --target-dir=/tmp/moonbuild fmt", "/repo") is Some("/repo"),
+  )
+  assert_true(cwd_for("cd project && moon fmt", "/repo") is None)
+  assert_true(
+    cwd_for("cd ./project && moon fmt", "/repo") is Some("/repo/project"),
   )
   assert_true(
-    moon_auto_check_start_cwd("moon -C pkg fmt", Some("/repo"))
-    is Some("/repo/pkg"),
+    cwd_for("cd ./project &&\nmoon fmt", "/repo") is Some("/repo/project"),
   )
+  assert_true(cwd_for("env cd ./project && moon fmt", "/repo") is Some("/repo"))
   assert_true(
-    moon_auto_check_start_cwd("moon -Cpkg fmt", Some("/repo"))
-    is Some("/repo/pkg"),
+    cwd_for("env -i cd ./project && moon fmt", "/repo") is Some("/repo"),
   )
+  assert_true(cwd_for("cd -- project && moon fmt", "/repo") is None)
   assert_true(
-    moon_auto_check_start_cwd("moon -C=pkg fmt", Some("/repo"))
-    is Some("/repo/pkg"),
+    cwd_for("cd -- ./project && moon fmt", "/repo") is Some("/repo/project"),
   )
+  assert_true(cwd_for("command cd project && moon fmt", "/repo") is None)
   assert_true(
-    moon_auto_check_start_cwd("moon -C ../other info", Some("/repo/pkg"))
-    is Some("/repo/other"),
-  )
-  assert_true(
-    moon_auto_check_start_cwd("moon -C /tmp/mod fmt", Some("/repo"))
-    is Some("/tmp/mod"),
-  )
-  assert_true(
-    moon_auto_check_start_cwd(
-      "moon --target-dir=/tmp/moonbuild fmt",
-      Some("/repo"),
-    )
-    is Some("/repo"),
-  )
-  assert_true(
-    moon_auto_check_start_cwd("cd project && moon fmt", Some("/repo")) is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd("cd ./project && moon fmt", Some("/repo"))
+    cwd_for("command cd ./project && moon fmt", "/repo")
     is Some("/repo/project"),
   )
+  assert_true(cwd_for("command -- cd project && moon fmt", "/repo") is None)
   assert_true(
-    moon_auto_check_start_cwd("cd ./project &&\nmoon fmt", Some("/repo"))
+    cwd_for("command -- cd ./project && moon fmt", "/repo")
     is Some("/repo/project"),
   )
+  assert_true(cwd_for("builtin cd project && moon fmt", "/repo") is None)
   assert_true(
-    moon_auto_check_start_cwd("env cd ./project && moon fmt", Some("/repo"))
-    is Some("/repo"),
-  )
-  assert_true(
-    moon_auto_check_start_cwd("env -i cd ./project && moon fmt", Some("/repo"))
-    is Some("/repo"),
-  )
-  assert_true(
-    moon_auto_check_start_cwd("cd -- project && moon fmt", Some("/repo"))
-    is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd("cd -- ./project && moon fmt", Some("/repo"))
+    cwd_for("builtin cd ./project && moon fmt", "/repo")
     is Some("/repo/project"),
   )
+  assert_true(cwd_for("cd && moon fmt", "/repo") is None)
+  assert_true(cwd_for("cd - && moon fmt", "/repo") is None)
+  assert_true(cwd_for("cd -P project && moon fmt", "/repo") is None)
+  assert_true(cwd_for("pushd project && moon fmt", "/repo") is None)
+  assert_true(cwd_for("cd project && moon -C nested info", "/repo") is None)
   assert_true(
-    moon_auto_check_start_cwd("command cd project && moon fmt", Some("/repo"))
-    is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd("command cd ./project && moon fmt", Some("/repo"))
-    is Some("/repo/project"),
-  )
-  assert_true(
-    moon_auto_check_start_cwd(
-      "command -- cd project && moon fmt",
-      Some("/repo"),
-    )
-    is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd(
-      "command -- cd ./project && moon fmt",
-      Some("/repo"),
-    )
-    is Some("/repo/project"),
-  )
-  assert_true(
-    moon_auto_check_start_cwd("builtin cd project && moon fmt", Some("/repo"))
-    is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd("builtin cd ./project && moon fmt", Some("/repo"))
-    is Some("/repo/project"),
-  )
-  assert_true(
-    moon_auto_check_start_cwd("cd && moon fmt", Some("/repo")) is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd("cd - && moon fmt", Some("/repo")) is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd("cd -P project && moon fmt", Some("/repo"))
-    is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd("pushd project && moon fmt", Some("/repo"))
-    is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd(
-      "cd project && moon -C nested info",
-      Some("/repo"),
-    )
-    is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd(
-      "cd ./project && moon -C nested info",
-      Some("/repo"),
-    )
+    cwd_for("cd ./project && moon -C nested info", "/repo")
     is Some("/repo/project/nested"),
   )
+  assert_true(cwd_for("moon check && cd project && moon fmt", "/repo") is None)
   assert_true(
-    moon_auto_check_start_cwd(
-      "moon check && cd project && moon fmt",
-      Some("/repo"),
-    )
-    is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd(
-      "moon check && cd ./project && moon fmt",
-      Some("/repo"),
-    )
+    cwd_for("moon check && cd ./project && moon fmt", "/repo")
     is Some("/repo/project"),
   )
-  assert_true(
-    moon_auto_check_start_cwd(
-      "moon check && cd project; moon fmt",
-      Some("/repo"),
-    )
-    is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd(
-      "cd missing; cd project && moon fmt",
-      Some("/repo"),
-    )
-    is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd("moon check; moon fmt", Some("/repo"))
-    is Some("/repo"),
-  )
-  assert_true(
-    moon_auto_check_start_cwd("moon fmt; true", Some("/repo")) is None,
-  )
-  assert_true(
-    moon_auto_check_start_cwd("echo ok; moon fmt", Some("/repo"))
-    is Some("/repo"),
-  )
+  assert_true(cwd_for("moon check && cd project; moon fmt", "/repo") is None)
+  assert_true(cwd_for("cd missing; cd project && moon fmt", "/repo") is None)
+  assert_true(cwd_for("moon check; moon fmt", "/repo") is Some("/repo"))
+  assert_true(cwd_for("moon fmt; true", "/repo") is None)
+  assert_true(cwd_for("echo ok; moon fmt", "/repo") is Some("/repo"))
 }

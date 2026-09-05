@@ -18,32 +18,10 @@ pub struct Invocation {
 /// to a value option, or an unrecognized `-option` (fail closed). Aliases are not
 /// resolved, so e.g. `git co` reports subcommand `co`.
 pub fn parse(argv : Array[String], arg_start : Int) -> Invocation? {
-  let mut index = arg_start
-  while index < argv.length() {
-    let arg = argv[index]
-    if arg == "--" || arg == "--help" || arg == "-h" {
-      return None
-    }
-    if arg == "-C" || arg == "--work-tree" || global_option_consumes_next(arg) {
-      if index + 1 >= argv.length() {
-        return None
-      }
-      index += 2
-      continue
-    }
-    if attached_cwd_option(arg) is Some(_) ||
-      attached_work_tree_option(arg) is Some(_) ||
-      global_option_with_attached_value(arg) ||
-      global_no_arg_option(arg) {
-      index += 1
-      continue
-    }
-    if arg.has_prefix("-") && arg != "-" {
-      return None
-    }
-    return Some({ subcommand: arg, subcommand_index: index, })
+  guard text_subcommand_index(argv, arg_start, argv.length()) is Some(index) else {
+    return None
   }
-  None
+  Some({ subcommand: argv[index], subcommand_index: index, })
 }
 
 ///|
@@ -541,8 +519,11 @@ fn clean_arg_is_exclude(arg : String) -> Bool {
 }
 
 ///|
-/// Find the git subcommand's index in a flat `words` list (the TooComplex text
-/// path), scanning `[start, end)` and skipping global options. Mirrors `parse`.
+/// Find the git subcommand's index in a flat `words` list, scanning
+/// `[start, end)` and skipping global options. The scanner behind both the
+/// TooComplex text path and `parse`. An explicit `--` is rejected by the
+/// trailing unrecognized-option arm, and a value option with no argument runs
+/// `index` past `end` and so falls out as `None`.
 fn text_subcommand_index(words : Array[String], start : Int, end : Int) -> Int? {
   let mut index = start
   while index < end {
