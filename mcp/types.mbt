@@ -126,13 +126,7 @@ fn decode_tool(entry : Json) -> McpTool raise {
 /// `isError` defaults to false.
 fn decode_call_result(result : Json) -> CallToolResult raise {
   let content = match result {
-    { "content": Array(blocks), .. } => {
-      let decoded = []
-      for block in blocks {
-        decoded.push(decode_content_block(block))
-      }
-      decoded
-    }
+    { "content": Array(blocks), .. } => blocks.map(decode_content_block)
     _ => []
   }
   let structured_content = match result {
@@ -173,25 +167,20 @@ fn decode_content_block(block : Json) -> ContentBlock raise {
 /// output is never lost). The caller applies any size budget and metadata
 /// footer. Empty content and no structured output yields "".
 pub fn CallToolResult::render_text(self : CallToolResult) -> String {
-  let out = StringBuilder()
-  let mut first = true
-  for block in self.content {
-    if !first {
-      out.write_string("\n")
-    }
-    first = false
-    match block {
-      Text(text) => out.write_string(text)
-      Image(mime_type~) => out.write_string("[image: \{mime_type}]")
-      Resource(uri~, text~) =>
-        match text {
-          Some(text) => out.write_string("[resource \{uri}]\n\{text}")
-          None => out.write_string("[resource: \{uri}]")
-        }
-      Other(kind~) => out.write_string("[unsupported content: \{kind}]")
-    }
-  }
-  let text = out.to_string()
+  let text = self.content
+    .map(block => {
+      match block {
+        Text(text) => text
+        Image(mime_type~) => "[image: \{mime_type}]"
+        Resource(uri~, text~) =>
+          match text {
+            Some(text) => "[resource \{uri}]\n\{text}"
+            None => "[resource: \{uri}]"
+          }
+        Other(kind~) => "[unsupported content: \{kind}]"
+      }
+    })
+    .join("\n")
   // Preserve structured output. A conformant server mirrors it into a text
   // block (then `text` already contains it — don't duplicate); when it does not
   // (empty content, or a bare status) append the serialized structure.

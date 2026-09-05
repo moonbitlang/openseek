@@ -458,18 +458,12 @@ async fn run_worker_slice(
         "base_oid": entry.base_oid,
       }
   }
-  let args = [
-    "subrun",
+  let args = subrun_args(
     "worker",
-    "--model",
-    "\{env.model}",
-    "--max-steps",
-    "\{granted_steps}",
-  ]
-  if env.api_url is Some(url) {
-    args.push("--api-url")
-    args.push(url)
-  }
+    model=env.model,
+    max_steps=granted_steps,
+    api_url=env.api_url,
+  )
   let result = @agent_subrun.run_subrun(
     command=env.self_exe,
     args~,

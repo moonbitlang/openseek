@@ -1,4 +1,30 @@
 ///|
+/// The child argv every subrun spawn shares — the parent half of the contract
+/// `run_subrun_command` below reads: the subcommand and its kind, the
+/// inherited model and step ceiling, plus `--api-url` only when one is
+/// configured (absent, the child falls back to its own default endpoint).
+fn subrun_args(
+  kind : String,
+  model~ : @deepseek.Model,
+  max_steps~ : Int,
+  api_url~ : String?,
+) -> Array[String] {
+  let args = [
+    "subrun",
+    kind,
+    "--model",
+    "\{model}",
+    "--max-steps",
+    "\{max_steps}",
+  ]
+  if api_url is Some(url) {
+    args.push("--api-url")
+    args.push(url)
+  }
+  args
+}
+
+///|
 /// `openseek subrun <kind>` — the INTERNAL child mode the engine spawns for
 /// one sub-run. Contract (see `agent_subrun`, and the normative text in the
 /// `moonbitlang/workflow` library's docs/child-contract.md — §7 records what
