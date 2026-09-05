@@ -1072,10 +1072,12 @@ fn timeout_head(foreground_timeout_ms : Int, staged~ : Bool) -> String {
 }
 
 ///|
-/// Append a confinement refusal's guidance to a report, when there is one. All
-/// three exit paths that can carry a denial — the background handoff, a
-/// finished run, and a timeout — append it the same way, after the body the
-/// run itself produced.
+/// Append a confinement refusal's guidance to a report, when there is one. The
+/// three exit paths that report on a run's output — a run that finished inside
+/// the handoff grace on a job runtime, a finished foreground run, and a
+/// foreground timeout — append it the same way, after the body the run itself
+/// produced. The background handoff carries none: its program is still
+/// running, so there is no output to scan for a refusal yet.
 fn with_denial_guidance(body : String, guidance : String?) -> String {
   if guidance is Some(text) {
     "\{body}\n\n\{text}"
