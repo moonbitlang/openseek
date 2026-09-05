@@ -30,27 +30,36 @@ test "Codex activity accepts idle catalog evidence without a run mark" {
 }
 
 ///|
-test "Codex activity rejects active snapshot older than completion" {
+/// Take a frontier, let `mutate` record newer evidence on the ledger, then
+/// reconcile a one-thread snapshot carrying `status` against that now-stale
+/// frontier — the shared shape of the four fencing tests below.
+fn stale_snapshot_mark(
+  mutate : (CodexActivityLedger) -> CodexActivityLedger,
+  status : CodexThreadRuntime,
+) -> @conversation.RunMark {
   let activity = CodexActivityLedger::empty()
   let frontier = activity.frontier()
-  let completed = activity.started("thread-1").completed("thread-1")
-  let reconciled = completed.reconcile_snapshot(
-    [("thread-1", Some(ThreadActive))],
-    frontier,
+  mutate(activity)
+  .reconcile_snapshot([("thread-1", Some(status))], frontier)
+  .presentation("thread-1")
+}
+
+///|
+test "Codex activity rejects active snapshot older than completion" {
+  let mark = stale_snapshot_mark(
+    activity => activity.started("thread-1").completed("thread-1"),
+    ThreadActive,
   )
-  assert_true(reconciled.presentation("thread-1") is @conversation.NoRunMark)
+  assert_true(mark is @conversation.NoRunMark)
 }
 
 ///|
 test "Codex activity rejects active snapshot older than idle notification" {
-  let activity = CodexActivityLedger::empty()
-  let frontier = activity.frontier()
-  let idle = activity.status_changed("thread-1", Some(ThreadInactive))
-  let reconciled = idle.reconcile_snapshot(
-    [("thread-1", Some(ThreadActive))],
-    frontier,
+  let mark = stale_snapshot_mark(
+    activity => activity.status_changed("thread-1", Some(ThreadInactive)),
+    ThreadActive,
   )
-  assert_true(reconciled.presentation("thread-1") is @conversation.NoRunMark)
+  assert_true(mark is @conversation.NoRunMark)
 }
 
 ///|
@@ -99,24 +108,18 @@ test "failed newer Codex snapshot does not fence older catalog evidence" {
 
 ///|
 test "Codex activity rejects idle snapshot older than start" {
-  let activity = CodexActivityLedger::empty()
-  let frontier = activity.frontier()
-  let running = activity.started("thread-1")
-  let reconciled = running.reconcile_snapshot(
-    [("thread-1", Some(ThreadInactive))],
-    frontier,
+  let mark = stale_snapshot_mark(
+    activity => activity.started("thread-1"),
+    ThreadInactive,
   )
-  assert_true(reconciled.presentation("thread-1") is @conversation.RunningMark)
+  assert_true(mark is @conversation.RunningMark)
 }
 
 ///|
 test "Codex activity rejects snapshots from an earlier connection" {
-  let activity = CodexActivityLedger::empty()
-  let frontier = activity.frontier()
-  let reconnected = activity.disconnected()
-  let reconciled = reconnected.reconcile_snapshot(
-    [("thread-1", Some(ThreadActive))],
-    frontier,
+  let mark = stale_snapshot_mark(
+    activity => activity.disconnected(),
+    ThreadActive,
   )
-  assert_true(reconciled.presentation("thread-1") is @conversation.NoRunMark)
+  assert_true(mark is @conversation.NoRunMark)
 }

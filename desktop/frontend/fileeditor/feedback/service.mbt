@@ -125,14 +125,7 @@ fn DesktopFeedbackService::items_for(
   self : DesktopFeedbackService,
   resource : @common.Uri,
 ) -> Array[@agent_feedback_api.AgentFeedback] {
-  let key = resource.to_string()
-  if self.items_by_resource.get(key) is Some(items) {
-    items
-  } else {
-    let created : Array[@agent_feedback_api.AgentFeedback] = []
-    self.items_by_resource.set(key, created)
-    created
-  }
+  self.items_by_resource.get_or_init(resource.to_string(), () => [])
 }
 
 ///|

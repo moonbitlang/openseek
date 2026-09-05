@@ -106,16 +106,7 @@ fn MarkdownRender::heading(
 
 ///|
 fn lines_text(lines : @cmark.Seq[@cmark.Node[String]]) -> String {
-  let buf = StringBuilder()
-  let mut first = true
-  for line in lines.iter() {
-    if !first {
-      buf.write_char('\n')
-    }
-    buf.write_string(line.v)
-    first = false
-  }
-  buf.to_string()
+  lines.iter().map(line => line.v).join("\n")
 }
 
 ///|

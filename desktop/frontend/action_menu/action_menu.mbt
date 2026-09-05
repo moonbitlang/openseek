@@ -231,17 +231,6 @@ fn set_style(element : @dom.Element, key : String, value : String) -> Unit {
 }
 
 ///|
-fn clamp(value : Double, low : Double, high : Double) -> Double {
-  if value < low {
-    low
-  } else if value > high {
-    high
-  } else {
-    value
-  }
-}
-
-///|
 fn position(target : String, anchor : Anchor) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
@@ -285,26 +274,14 @@ fn position(target : String, anchor : Anchor) -> @cmd.Cmd {
         }
       }
       let margin = 4.0
+      let min_left = viewport_left + margin
+      let min_top = viewport_top + margin
       let max_left = viewport_left + viewport_width - menu_width - margin
       let max_top = viewport_top + viewport_height - menu_height - margin
-      let left = clamp(
-        wanted_left,
-        viewport_left + margin,
-        if max_left < viewport_left + margin {
-          viewport_left + margin
-        } else {
-          max_left
-        },
-      )
-      let top = clamp(
-        wanted_top,
-        viewport_top + margin,
-        if max_top < viewport_top + margin {
-          viewport_top + margin
-        } else {
-          max_top
-        },
-      )
+      // A menu taller or wider than the viewport pins to the near edge: the
+      // `.max(min_*)` keeps the clamp window non-empty.
+      let left = wanted_left.clamp(min=min_left, max=max_left.max(min_left))
+      let top = wanted_top.clamp(min=min_top, max=max_top.max(min_top))
       set_style(menu, "left", "\{left.to_int()}px")
       set_style(menu, "top", "\{top.to_int()}px")
       menu.set_attribute("data-positioned", "true")
@@ -326,12 +303,7 @@ fn Definition::enabled_indices(self : Definition) -> Array[Int] {
 
 ///|
 fn enabled_position(indices : Array[Int], index : Int) -> Int? {
-  for position, candidate in indices {
-    if candidate == index {
-      return Some(position)
-    }
-  }
-  None
+  indices.search(index)
 }
 
 ///|

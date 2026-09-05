@@ -506,12 +506,7 @@ fn graph_ref_color(
 
 ///|
 fn find_graph_lane(lanes : Array[GraphLane], id : String) -> Int? {
-  for index in 0..<lanes.length() {
-    if lanes[index].id == id {
-      return Some(index)
-    }
-  }
-  None
+  lanes.search_by(lane => lane.id == id)
 }
 
 ///|
@@ -549,18 +544,12 @@ fn graph_rows(
     let first_unprocessed_parent = if first_parent_added { 1 } else { 0 }
     for parent_index in first_unprocessed_parent..<commit.parent_ids.length() {
       let parent = commit.parent_ids[parent_index]
-      let mut semantic_color = if parent_index == 0 {
+      let semantic_color = if parent_index == 0 {
         graph_ref_color(snapshot, commit.id)
+      } else if commits.any(item => item.id == parent) {
+        graph_ref_color(snapshot, parent)
       } else {
         None
-      }
-      if parent_index > 0 {
-        for item in commits {
-          if item.id == parent {
-            semantic_color = graph_ref_color(snapshot, parent)
-            break
-          }
-        }
       }
       let color = match semantic_color {
         Some(color) => color

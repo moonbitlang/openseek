@@ -1587,12 +1587,7 @@ fn reviewable_changes(state : State) -> Array[ChangedFile] {
 ///|
 fn change_row_index(state : State, selected : ChangedFile) -> Int? {
   guard state.changes is ChangeListReady(files~, ..) else { return None }
-  for index in 0..<files.length() {
-    if files[index] == selected {
-      return Some(index)
-    }
-  }
-  None
+  files.search_by(change => change == selected)
 }
 
 ///|
@@ -1604,16 +1599,10 @@ fn review_neighbor(
   delta : Int,
 ) -> ChangedFile? {
   let changes = reviewable_changes(state)
-  for index in 0..<changes.length() {
-    if changes[index] == selected {
-      let destination = index + delta
-      if destination >= 0 && destination < changes.length() {
-        return Some(changes[destination])
-      }
-      return None
-    }
+  guard changes.search_by(change => change == selected) is Some(index) else {
+    return None
   }
-  None
+  changes.get(index + delta)
 }
 
 ///|
@@ -1639,12 +1628,9 @@ fn active_review_position(state : State, ctx : Ctx) -> (ChangedFile, Int, Int)? 
     return None
   }
   let changes = reviewable_changes(state)
-  for index in 0..<changes.length() {
-    if changes[index] == review.selected {
-      return Some((review.selected, index, changes.length()))
-    }
-  }
-  None
+  changes
+  .search_by(change => change == review.selected)
+  .map(index => (review.selected, index, changes.length()))
 }
 
 ///|
@@ -1668,18 +1654,11 @@ fn ChangedFile::is_selected(
 /// Split a relative path into its non-empty segments, e.g.
 /// `"cef/runtime.mbt"` → `["cef", "runtime.mbt"]`.
 fn path_segments(path : @pathx.Relative) -> Array[String] {
-  let segments : Array[String] = []
-  let mut rest = path.0
-  while rest.split_once("/") is Some((head, tail)) {
-    if !head.is_empty() {
-      segments.push(head.to_owned())
+  [
+    for segment in path.0.split("/") if !segment.is_empty() => {
+      segment.to_owned()
     }
-    rest = tail.to_owned()
-  }
-  if !rest.is_empty() {
-    segments.push(rest)
-  }
-  segments
+  ]
 }
 
 ///|

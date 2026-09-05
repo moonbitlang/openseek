@@ -125,14 +125,7 @@ pub fn is_loopback(url : String) -> Bool {
 /// Whether the text is one or more digits — the shape that distinguishes a
 /// `localhost:5173` port from a `mailto:someone` scheme.
 fn all_digits(text : StringView) -> Bool {
-  let mut seen_digit = false
-  for ch in text {
-    if ch < '0' || ch > '9' {
-      return false
-    }
-    seen_digit = true
-  }
-  seen_digit
+  !text.is_empty() && text.all(ch => ch.is_ascii_digit())
 }
 
 ///|

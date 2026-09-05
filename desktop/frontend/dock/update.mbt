@@ -48,10 +48,9 @@ pub fn update(msg : Msg, state : State) -> State {
 }
 
 ///|
-/// Open `path`'s file tab (appending one if it is not in the strip yet) and
-/// make it active — the strip half of a tree click or a chip jump.
-pub fn open_file(state : State, path : @pathx.Relative) -> State {
-  let tab = DockTab::File(path~)
+/// Append `tab` unless the strip already holds it, then make it active — the
+/// shared body of the `open_*` entry points below.
+fn open_tab(state : State, tab : DockTab) -> State {
   let tabs = if tab_index(state, tab) is Some(_) {
     state.tabs
   } else {
@@ -63,18 +62,17 @@ pub fn open_file(state : State, path : @pathx.Relative) -> State {
 }
 
 ///|
+/// Open `path`'s file tab (appending one if it is not in the strip yet) and
+/// make it active — the strip half of a tree click or a chip jump.
+pub fn open_file(state : State, path : @pathx.Relative) -> State {
+  open_tab(state, DockTab::File(path~))
+}
+
+///|
 /// Open one immutable historical comparison. Equality includes the commit, so
 /// the same path at two revisions stays independently inspectable.
 pub fn open_history_diff(state : State, diff : GitHistoryDiff) -> State {
-  let tab = DockTab::GitDiff(diff~)
-  let tabs = if tab_index(state, tab) is Some(_) {
-    state.tabs
-  } else {
-    let tabs = state.tabs.copy()
-    tabs.push(tab)
-    tabs
-  }
-  { ..state, tabs, active: Some(tab), }
+  open_tab(state, DockTab::GitDiff(diff~))
 }
 
 ///|
@@ -82,43 +80,21 @@ pub fn open_history_diff(state : State, diff : GitHistoryDiff) -> State {
 /// yet) and make it active. The caller owns the id: allocating the page and
 /// asking the host for its native view are the browser subsystem's business.
 pub fn open_browser(state : State, id : Int) -> State {
-  let tab = DockTab::Browser(id~)
-  let tabs = if tab_index(state, tab) is Some(_) {
-    state.tabs
-  } else {
-    let tabs = state.tabs.copy()
-    tabs.push(tab)
-    tabs
-  }
-  { ..state, tabs, active: Some(tab), }
+  open_tab(state, DockTab::Browser(id~))
 }
 
 ///|
 /// Open the transient file-picker tab, re-activating the existing one — at
 /// most one lives in the strip.
 pub fn open_picker(state : State) -> State {
-  let tabs = if tab_index(state, FilePicker) is Some(_) {
-    state.tabs
-  } else {
-    let tabs = state.tabs.copy()
-    tabs.push(FilePicker)
-    tabs
-  }
-  { ..state, tabs, active: Some(FilePicker), }
+  open_tab(state, FilePicker)
 }
 
 ///|
 /// Open the workflows tab, re-activating the existing one — at most one
 /// lives in the strip.
 pub fn open_workflows(state : State) -> State {
-  let tabs = if tab_index(state, Workflows) is Some(_) {
-    state.tabs
-  } else {
-    let tabs = state.tabs.copy()
-    tabs.push(Workflows)
-    tabs
-  }
-  { ..state, tabs, active: Some(Workflows), }
+  open_tab(state, Workflows)
 }
 
 ///|

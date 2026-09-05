@@ -111,11 +111,7 @@ pub fn page_label(page : PageState) -> String {
     return page.title
   }
   match page.url {
-    Some(url) =>
-      match host_of(url) {
-        Some(host) => host
-        None => url
-      }
+    Some(url) => host_of(url).unwrap_or(url)
     None => "New Tab"
   }
 }
