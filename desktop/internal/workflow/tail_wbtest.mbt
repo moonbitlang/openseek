@@ -137,3 +137,19 @@ async test "follow_run reports launches, finishes and ledger rows in file order"
     "started run7-sr-6", "finished run7-sr-6 captured", "entry run7-sr-6 captured",
   ])
 }
+
+///|
+test "only ordinals inside the announced block are the run's children" {
+  assert_true(in_block(5, first_child=5, child_count=32))
+  assert_true(in_block(36, first_child=5, child_count=32))
+  assert_false(in_block(37, first_child=5, child_count=32))
+  assert_false(in_block(4, first_child=5, child_count=32))
+  // An explore child of the same conversation, named by a sidecar line: not
+  // this run's, whatever the line says.
+  assert_false(in_block(1, first_child=5, child_count=32))
+}
+
+///|
+test "the drain grace covers at least one full poll after the bracket" {
+  assert_true(drain_grace_ms >= 2 * WorkflowTailIntervalMs)
+}

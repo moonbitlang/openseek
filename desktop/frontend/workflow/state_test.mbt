@@ -140,3 +140,44 @@ test "rows read in launch order and a closed run keeps them" {
   inspect(runs[0].closed, content="true")
   inspect(runs[0].rows.length(), content="3")
 }
+
+///|
+test "a row still running after the run closed reads as unresolved" {
+  let runs = @workflow.child_opened(
+    announced(),
+    id="sr-5",
+    kind="explore",
+    label="a",
+  )
+  let row = runs[0].rows[0]
+  debug_inspect(
+    @workflow.row_status(row, closed=false),
+    content="(\"running\", \"running\")",
+  )
+  debug_inspect(
+    @workflow.row_status(row, closed=true),
+    content="(\"unresolved\", \"failed\")",
+  )
+  let done = @workflow.child_closed(
+    runs,
+    id="sr-5",
+    status="captured",
+    steps=1,
+    tokens=1,
+  )
+  debug_inspect(
+    @workflow.row_status(done[0].rows[0], closed=true),
+    content="(\"done\", \"done\")",
+  )
+  let timed = @workflow.child_closed(
+    runs,
+    id="sr-5",
+    status="timed_out",
+    steps=1,
+    tokens=1,
+  )
+  debug_inspect(
+    @workflow.row_status(timed[0].rows[0], closed=true),
+    content="(\"timed out\", \"failed\")",
+  )
+}

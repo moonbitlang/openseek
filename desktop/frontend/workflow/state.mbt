@@ -109,6 +109,14 @@ fn ordinal_of(id : String) -> Int? {
 
 ///|
 /// Whether `ordinal` is one this run reserved.
+///
+/// Attribution by RANGE is the one place a reader keys on ordinals rather
+/// than an explicit id, and it is sound only because of two invariants the
+/// engine holds: blocks are allocated parent-side from one counter (so two
+/// runs never overlap) and the host refuses sidecar children outside the
+/// announced block (so nothing outside a run ever wears its ordinals). The
+/// synthesized bracket carries `sr-N` and no run id; carrying one would let
+/// this be explicit, and is the natural next protocol change.
 fn Run::owns(self : Run, ordinal : Int) -> Bool {
   ordinal >= self.first_child && ordinal < self.first_child + self.child_count
 }
@@ -343,4 +351,22 @@ pub fn Run::cost_usd(self : Run) -> Double? {
     }
   }
   total
+}
+
+///|
+/// What a row's status cell says, and the class that styles it. A row still
+/// running after its run CLOSED never got its finish — the snippet died, or
+/// the finish was lost — and is shown as unresolved rather than pulsing
+/// forever; a run's close is the last word its brackets will say.
+pub fn row_status(row : Row, closed~ : Bool) -> (String, String) {
+  match row.status {
+    None =>
+      if closed {
+        ("unresolved", "failed")
+      } else {
+        ("running", "running")
+      }
+    Some("captured") => ("done", "done")
+    Some(other) => (other.replace_all(old="_", new=" "), "failed")
+  }
 }

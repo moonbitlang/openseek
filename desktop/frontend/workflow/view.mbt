@@ -66,17 +66,16 @@ fn run_view(run : Run, actions : Actions) -> @html.Html {
   }
   @html.section(class="workflow-run workflow-run-\{state}", [
     @html.header(class="workflow-run-head", summary),
-    @html.div(class="workflow-rows", rows.map(row => row_view(row, actions))),
+    @html.div(
+      class="workflow-rows",
+      rows.map(row => row_view(row, closed=run.closed, actions)),
+    ),
   ])
 }
 
 ///|
-fn row_view(row : Row, actions : Actions) -> @html.Html {
-  let (status, status_class) = match row.status {
-    None => ("running", "running")
-    Some("captured") => ("done", "done")
-    Some(other) => (other.replace_all(old="_", new=" "), "failed")
-  }
+fn row_view(row : Row, closed~ : Bool, actions : Actions) -> @html.Html {
+  let (status, status_class) = row_status(row, closed~)
   let detail : Array[@html.Html] = []
   if row.phase is Some(phase) {
     detail.push(@html.span(class="workflow-row-phase", phase))

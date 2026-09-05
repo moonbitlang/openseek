@@ -9,7 +9,11 @@ import {
 // Values
 pub fn display_label(String) -> String
 
+pub let drain_grace_ms : Int
+
 pub async fn follow_run(workflow~ : String, session~ : String, journal~ : String, events~ : String, on_child_started~ : async (ChildStarted) -> Unit, on_child_finished~ : async (ChildFinished) -> Unit, on_entry~ : async (@protocol.WorkflowEntryPayload) -> Unit) -> Unit
+
+pub fn in_block(Int, first_child~ : Int, child_count~ : Int) -> Bool
 
 // Errors
 

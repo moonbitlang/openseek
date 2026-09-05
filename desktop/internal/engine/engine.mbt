@@ -1779,7 +1779,9 @@ async fn ServeEngine::consume(
               probes.remove(id)
               probe.cancel()
             }
-          Some(WorkflowStarted(id~, journal~, events~, ..)) =>
+          Some(
+            WorkflowStarted(id~, journal~, events~, first_child~, child_count~)
+          ) =>
             if engine.session_root is Some(root) && tails.get(id) is None {
               tails[id] = group.spawn(no_wait=true, allow_failure=true, () => {
                 @workflow.follow_run(
@@ -1791,8 +1793,13 @@ async fn ServeEngine::consume(
                     // The child's session id is `<parent>-sr-N`; its bracket
                     // id is the `sr-N` suffix, exactly as `run_subrun` names
                     // the children it launches itself.
+                    // Only a child inside the announced block is this run's:
+                    // the sidecar is the snippet's own writing, and a line
+                    // naming an `explore` child's id must not open a second
+                    // lane for it.
                     guard @wire.split_child_session_id(started.child)
-                      is Some((_, ordinal)) else {
+                      is Some((_, ordinal)) &&
+                      @workflow.in_block(ordinal, first_child~, child_count~) else {
                       return
                     }
                     let sr = "sr-\{ordinal}"
@@ -1832,7 +1839,8 @@ async fn ServeEngine::consume(
                   },
                   on_child_finished=finished => {
                     guard @wire.split_child_session_id(finished.child)
-                      is Some((_, ordinal)) else {
+                      is Some((_, ordinal)) &&
+                      @workflow.in_block(ordinal, first_child~, child_count~) else {
                       return
                     }
                     let sr = "sr-\{ordinal}"
@@ -1870,7 +1878,16 @@ async fn ServeEngine::consume(
           Some(WorkflowFinished(id~)) =>
             if tails.get(id) is Some(tail) {
               tails.remove(id)
-              tail.cancel()
+              // Not cancelled on the bracket: the snippet wrote its last
+              // sidecar lines and journal entries just before exiting, and
+              // the tail's next poll may be a whole interval away. The grace
+              // guarantees one full poll over the final files, so a child
+              // that finished is never left showing as running.
+              group.spawn(no_wait=true, allow_failure=true, () => {
+                @async.sleep(@workflow.drain_grace_ms)
+                tail.cancel()
+              })
+              |> ignore
             }
           _ => ()
         }

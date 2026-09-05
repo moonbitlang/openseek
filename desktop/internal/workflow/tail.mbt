@@ -32,6 +32,25 @@
 // treated as a fresh file and re-read from the head.
 
 ///|
+/// How long a tail is kept alive after the run's finish bracket. The snippet
+/// writes its last sidecar lines and journal entries just before it exits,
+/// and the bracket can arrive up to a whole interval before the next poll —
+/// cancelling on the bracket would lose exactly those lines, leaving a child
+/// that finished showing as running. Two intervals guarantee one full poll
+/// over the final state of both files.
+pub let drain_grace_ms : Int = 2 * WorkflowTailIntervalMs
+
+///|
+/// Whether `ordinal` is one the run was announced with. The host synthesizes
+/// a sub-run bracket for every child the sidecar names, and the sidecar is
+/// written by the snippet — a buggy or hostile one could name an ordinary
+/// `explore` child's id and collide with a real lane. The announced block is
+/// the host's own knowledge; a child outside it is not this run's.
+pub fn in_block(ordinal : Int, first_child~ : Int, child_count~ : Int) -> Bool {
+  ordinal >= first_child && ordinal < first_child + child_count
+}
+
+///|
 /// How often the tail re-checks its files. Nothing kicks it: a snippet's
 /// appends do not reach this process as events, so this interval IS the
 /// update rate. The same cadence as the sub-run probe, for the same reason.
