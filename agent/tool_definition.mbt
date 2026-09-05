@@ -133,6 +133,41 @@ pub async fn[X] build_tools(
 }
 
 ///|
+/// The mbtx fixture these tests share: a session temp dir, a job runtime that
+/// spills into it, and an mbtx bound to both. The handoff bound is injected so
+/// a test does not have to outwait the real one.
+async fn[X] mbtx_fixture(
+  group : @async.TaskGroup[X],
+  prefix~ : String,
+  auto_background_after_ms~ : Int,
+  approval? : @agent_runtime.ApprovalChannel,
+) -> (String, @bgjobs.BgJobRuntime, @agent_tool.AgentToolDefinition) {
+  let spill_dir = @fs.tmpdir(prefix~)
+  let bg_runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir~)
+  let mbtx = @mbtx.definition(
+    workspace_root=".",
+    bg_runtime~,
+    job_dir=spill_dir,
+    auto_background_after_ms~,
+    approval?,
+  )
+  (spill_dir, bg_runtime, mbtx)
+}
+
+///|
+/// Run a tool definition's async executor, failing the test when the tool was
+/// registered with a synchronous one.
+async fn run_async_tool(
+  tool : @agent_tool.AgentToolDefinition,
+  arguments : Json,
+) -> @agent_tool.ToolAction {
+  match tool.execute {
+    Async(execute) => execute(arguments)
+    Sync(_) => fail("\{tool.name} should be async")
+  }
+}
+
+///|
 async test "agent registers the expected tool names" {
   @async.with_task_group() <| group => {
     let tools = build_tools(AgentRuntime(), AgentTaskScope(group))
@@ -188,22 +223,14 @@ async test "the registry has no shell tool family" {
 /// the throwaway path rewritten to `source:LINE:COL`.
 async test "a compile error reached inside the grace reports inline" {
   @async.with_task_group(group => {
-    let spill_dir = @fs.tmpdir(prefix="openseek-compile-inline-")
-    let bg_runtime = @bgjobs.BgJobRuntime::BgJobRuntime(
-      AgentTaskScope(group),
-      spill_dir~,
-    )
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
+    let (spill_dir, _, mbtx) = mbtx_fixture(
+      group,
+      prefix="openseek-compile-inline-",
       auto_background_after_ms=60_000,
     )
-    let action = match mbtx.execute {
-      Async(execute) =>
-        execute({ "source": "fn main { let _x : Int = \"nope\" }" })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, {
+      "source": "fn main { let _x : Int = \"nope\" }",
+    })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_false(output.content.contains("moved to the background"))
@@ -223,12 +250,9 @@ async test "a compile error reached inside the grace reports inline" {
 /// later nonzero exit reads as the program's own.
 async test "a handoff carries build warnings and the build-ok label" {
   @async.with_task_group(group => {
-    let spill_dir = @fs.tmpdir(prefix="openseek-handoff-warn-")
-    let bg_runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir~)
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
+    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+      group,
+      prefix="openseek-handoff-warn-",
       auto_background_after_ms=1500,
     )
     let source =
@@ -238,10 +262,7 @@ async test "a handoff carries build warnings and the build-ok label" {
       #|  let unused = 1
       #|  @async.sleep(60_000)
       #|}
-    let action = match mbtx.execute {
-      Async(execute) => execute({ "source": source, "warning": "on" })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, { "source": source, "warning": "on" })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_true(output.content.contains("moved to the background"))
@@ -266,22 +287,14 @@ async test "a handoff carries build warnings and the build-ok label" {
 /// adopts is always a running program.
 async test "a compile error never becomes a job, whatever the grace" {
   @async.with_task_group(group => {
-    let spill_dir = @fs.tmpdir(prefix="openseek-compile-job-")
-    let bg_runtime = @bgjobs.BgJobRuntime::BgJobRuntime(
-      AgentTaskScope(group),
-      spill_dir~,
-    )
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
+    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+      group,
+      prefix="openseek-compile-job-",
       auto_background_after_ms=1,
     )
-    let action = match mbtx.execute {
-      Async(execute) =>
-        execute({ "source": "fn main { let _x : Int = \"nope\" }" })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, {
+      "source": "fn main { let _x : Int = \"nope\" }",
+    })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_false(output.content.contains("moved to the background"))
@@ -302,12 +315,9 @@ async test "a compile error never becomes a job, whatever the grace" {
 /// deleting that result before the completion notice can be acted on.
 async test "a handed-off job cleans builds but keeps result files until teardown" {
   @async.with_task_group(group => {
-    let spill_dir = @fs.tmpdir(prefix="openseek-job-result-")
-    let bg_runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir~)
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
+    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+      group,
+      prefix="openseek-job-result-",
       auto_background_after_ms=1,
     )
     let result_path = "\{spill_dir}/snippet-0/tmp/report.txt"
@@ -319,17 +329,14 @@ async test "a handed-off job cleans builds but keeps result files until teardown
       #|  println("RESULT_PATH")
       #|}
     ).replace_all(old="RESULT_PATH", new=result_path)
-    let action = match mbtx.execute {
-      Async(execute) => execute({ "source": source })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, { "source": source })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.content.contains("moved to the background"))
     guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
-    let read = match @job_output.definition(bg_runtime).execute {
-      Async(execute) => execute({ "job_id": job.id, "wait_ms": 120_000 })
-      Sync(_) => fail("job_output should be async")
-    }
+    let read = run_async_tool(@job_output.definition(bg_runtime), {
+      "job_id": job.id,
+      "wait_ms": 120_000,
+    })
     guard read is Respond(result) else { fail("expected Respond") }
     assert_false(result.is_error)
     assert_eq(@fs.read_file(result_path).text(), "kept")
@@ -358,15 +365,9 @@ async test "a handed-off job cleans builds but keeps result files until teardown
 /// as a refusal from a policy that was not present.
 async test "an escalated handed-off job does not invent a policy refusal" {
   @async.with_task_group(group => {
-    let spill_dir = @fs.tmpdir(prefix="openseek-escalated-job-")
-    let bg_runtime = @bgjobs.BgJobRuntime::BgJobRuntime(
-      AgentTaskScope(group),
-      spill_dir~,
-    )
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
+    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+      group,
+      prefix="openseek-escalated-job-",
       auto_background_after_ms=1,
       approval=ApprovalChannel(_ => AllowedOnce),
     )
@@ -377,17 +378,14 @@ async test "an escalated handed-off job does not invent a policy refusal" {
       #|  @async.sleep(100)
       #|  println("Sandbox policy blocked file write: example")
       #|}
-    let action = match mbtx.execute {
-      Async(execute) => execute({ "source": source, "escalated": true })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, { "source": source, "escalated": true })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.content.contains("moved to the background"))
     guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
-    let read = match @job_output.definition(bg_runtime).execute {
-      Async(execute) => execute({ "job_id": job.id, "wait_ms": 30_000 })
-      Sync(_) => fail("job_output should be async")
-    }
+    let read = run_async_tool(@job_output.definition(bg_runtime), {
+      "job_id": job.id,
+      "wait_ms": 30_000,
+    })
     guard read is Respond(result) else { fail("expected Respond") }
     assert_false(result.is_error)
     assert_true(result.content.contains("Sandbox policy blocked"))
@@ -404,32 +402,23 @@ async test "an escalated handed-off job does not invent a policy refusal" {
 /// of a policy that was never active.
 async test "a non-wasm handed-off job does not invent a policy refusal" {
   @async.with_task_group(group => {
-    let spill_dir = @fs.tmpdir(prefix="openseek-js-job-")
-    let bg_runtime = @bgjobs.BgJobRuntime::BgJobRuntime(
-      AgentTaskScope(group),
-      spill_dir~,
-    )
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
+    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+      group,
+      prefix="openseek-js-job-",
       auto_background_after_ms=1,
     )
     let source =
       #|fn main {
       #|  println("Sandbox policy blocked file write: example")
       #|}
-    let action = match mbtx.execute {
-      Async(execute) => execute({ "source": source, "target": "js" })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, { "source": source, "target": "js" })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.content.contains("moved to the background"))
     guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
-    let read = match @job_output.definition(bg_runtime).execute {
-      Async(execute) => execute({ "job_id": job.id, "wait_ms": 30_000 })
-      Sync(_) => fail("job_output should be async")
-    }
+    let read = run_async_tool(@job_output.definition(bg_runtime), {
+      "job_id": job.id,
+      "wait_ms": 30_000,
+    })
     guard read is Respond(result) else { fail("expected Respond") }
     assert_false(result.is_error)
     assert_true(result.content.contains("Sandbox policy blocked"))
@@ -446,23 +435,16 @@ async test "a non-wasm handed-off job does not invent a policy refusal" {
 /// classified.
 async test "a non-wasm inline run does not invent a policy refusal" {
   @async.with_task_group(group => {
-    let spill_dir = @fs.tmpdir(prefix="openseek-js-inline-")
-    let bg_runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir~)
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
+    let (spill_dir, _, mbtx) = mbtx_fixture(
+      group,
+      prefix="openseek-js-inline-",
       auto_background_after_ms=60_000,
     )
     assert_true(mbtx.description.contains("up to 60s"))
-    let action = match mbtx.execute {
-      Async(execute) =>
-        execute({
-          "source": "fn main { println(\"Sandbox policy blocked file write: example\") }",
-          "target": "js",
-        })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, {
+      "source": "fn main { println(\"Sandbox policy blocked file write: example\") }",
+      "target": "js",
+    })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_false(output.content.contains("moved to the background"))
@@ -480,15 +462,9 @@ async test "a non-wasm inline run does not invent a policy refusal" {
 /// before continuing as a job.
 async test "an automatically handed-off snippet reads EOF on stdin" {
   @async.with_task_group(group => {
-    let spill_dir = @fs.tmpdir(prefix="openseek-jobs-stdin-")
-    let bg_runtime = @bgjobs.BgJobRuntime::BgJobRuntime(
-      AgentTaskScope(group),
-      spill_dir~,
-    )
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
+    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+      group,
+      prefix="openseek-jobs-stdin-",
       auto_background_after_ms=1500,
     )
     let source =
@@ -499,10 +475,7 @@ async test "an automatically handed-off snippet reads EOF on stdin" {
       #|  @stdio.stdout.write("got=\{line is Some(_)}\n")
       #|  @async.sleep(60_000)
       #|}
-    let action = match mbtx.execute {
-      Async(execute) => execute({ "source": source })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, { "source": source })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_true(output.content.contains("moved to the background"))
@@ -520,10 +493,9 @@ async test "an automatically handed-off snippet reads EOF on stdin" {
       @async.sleep(25)
     }
     assert_true(saw_eof)
-    let read = match @job_output.definition(bg_runtime).execute {
-      Async(execute) => execute({ "job_id": job.id })
-      Sync(_) => fail("job_output should be async")
-    }
+    let read = run_async_tool(@job_output.definition(bg_runtime), {
+      "job_id": job.id,
+    })
     guard read is Respond(job) else { fail("expected Respond") }
     assert_true(job.content.contains("got=false"))
     let _ = bg_runtime.stop(bg_runtime.list()[0].id)
@@ -540,13 +512,9 @@ async test "an automatically handed-off snippet reads EOF on stdin" {
 /// so the test does not have to outwait the real one.
 async test "a foreground run past its deadline becomes a job instead of dying" {
   @async.with_task_group(group => {
-    let scope = @agent_runtime.AgentTaskScope(group)
-    let spill_dir = @fs.tmpdir(prefix="openseek-jobs-test-")
-    let bg_runtime = @bgjobs.BgJobRuntime(scope, spill_dir~)
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
+    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+      group,
+      prefix="openseek-jobs-test-",
       auto_background_after_ms=1500,
     )
     let source =
@@ -556,10 +524,7 @@ async test "a foreground run past its deadline becomes a job instead of dying" {
       #|  println("started")
       #|  @async.sleep(60_000)
       #|}
-    let action = match mbtx.execute {
-      Async(execute) => execute({ "source": source })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, { "source": source })
     guard action is Respond(output) else { fail("expected Respond") }
     // Not an error, and not a corpse: it is a job the model can still watch.
     assert_false(output.is_error)
@@ -581,14 +546,11 @@ async test "a foreground run past its deadline becomes a job instead of dying" {
 /// tool waits out the real exit and says the rendering was lossy.
 async test "binary output waits for the real exit instead of abandoning it" {
   @async.with_task_group(group => {
-    let spill_dir = @fs.tmpdir(prefix="openseek-binary-inline-")
-    let bg_runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir~)
     // This test is about waiting for the real exit, not the production 5s
     // handoff threshold. Keep cold dependency builds safely inside its premise.
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
+    let (spill_dir, _, mbtx) = mbtx_fixture(
+      group,
+      prefix="openseek-binary-inline-",
       auto_background_after_ms=60_000,
     )
     // Emit an invalid UTF-8 byte, then keep working briefly before exiting 3.
@@ -601,10 +563,7 @@ async test "binary output waits for the real exit instead of abandoning it" {
       #|  println("done")
       #|  @sys.exit(3)
       #|}
-    let action = match mbtx.execute {
-      Async(execute) => execute({ "source": source })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, { "source": source })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     // The real exit code, not the -1 an abandoned execution would report.
@@ -623,21 +582,14 @@ async test "binary output waits for the real exit instead of abandoning it" {
 /// the recovery must also say to read the reduced result inside that snippet.
 async test "the inline output cap gives actionable retry guidance" {
   @async.with_task_group(group => {
-    let spill_dir = @fs.tmpdir(prefix="openseek-inline-cap-")
-    let bg_runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir~)
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
+    let (spill_dir, _, mbtx) = mbtx_fixture(
+      group,
+      prefix="openseek-inline-cap-",
       auto_background_after_ms=60_000,
     )
-    let action = match mbtx.execute {
-      Async(execute) =>
-        execute({
-          "source": "fn main { for _ in 0..<50_000 { println(\"x\") } }",
-        })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, {
+      "source": "fn main { for _ in 0..<50_000 { println(\"x\") } }",
+    })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("fixed 48000-byte inline limit"))
@@ -658,13 +610,9 @@ async test "the inline output cap gives actionable retry guidance" {
 /// expiry detaches like any other long run.
 async test "binary output does not escape the deadline" {
   @async.with_task_group(group => {
-    let scope = @agent_runtime.AgentTaskScope(group)
-    let spill_dir = @fs.tmpdir(prefix="openseek-jobs-binary-")
-    let bg_runtime = @bgjobs.BgJobRuntime(scope, spill_dir~)
-    let mbtx = @mbtx.definition(
-      workspace_root=".",
-      bg_runtime~,
-      job_dir=spill_dir,
+    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+      group,
+      prefix="openseek-jobs-binary-",
       auto_background_after_ms=1500,
     )
     let source =
@@ -674,10 +622,7 @@ async test "binary output does not escape the deadline" {
       #|  @stdio.stdout.write(b"\xff\xfe")
       #|  @async.sleep(60_000)
       #|}
-    let action = match mbtx.execute {
-      Async(execute) => execute({ "source": source })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, { "source": source })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.content.contains("moved to the background as job"))
     guard bg_runtime.list() is [job, ..] else { fail("no job was registered") }
@@ -709,10 +654,7 @@ async test "a finished background job queues a notice and wakes the controller" 
       #|  @async.sleep(5_500)
       #|  println(1)
       #|}
-    let action = match mbtx.execute {
-      Async(execute) => execute({ "source": source })
-      Sync(_) => fail("mbtx should be async")
-    }
+    let action = run_async_tool(mbtx, { "source": source })
     guard action is Respond(output) else {
       fail("expected the run to hand off")
     }
