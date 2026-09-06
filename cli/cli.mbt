@@ -87,14 +87,17 @@ test "terminal_safe_line collapses whitespace, drops controls, elides at limit" 
 /// a `FAILED: ` marker, so strip those to avoid `error: error: …`. This is the
 /// single sanitizer both command mains (`cmd/openseek` here and the
 /// `openseek_tui` binary in `moonbitlang/openseek_tui`) run untrusted failure
-/// text through.
-pub fn failure_message(error_text : String) -> String {
+/// text through. The result is a `StringView` that borrows `error_text` — the
+/// matched arms strip prefixes without copying; callers that need owned text
+/// (or pass a temporary whose lifetime ends before the view is used) call
+/// `.to_owned()`.
+pub fn failure_message(error_text : StringView) -> StringView {
   lexmatch error_text {
-    (re"^error: ", after=message) => message.to_owned()
+    (re"^error: ", after=message) => message
     // `(.|\n)*` is greedy across lines, so the remainder follows the LAST
     // marker occurrence — the same piece the split-and-take-last form chose.
     (re"^(.|\n)* FAILED: ", after=last) =>
-      last.strip_suffix(")").unwrap_or(last).to_owned()
+      last.strip_suffix(")").unwrap_or(last)
     _ => error_text
   }
 }
