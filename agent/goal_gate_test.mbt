@@ -29,14 +29,13 @@ fn gate_final_payload(text : String) -> String {
 
 ///|
 fn review_notice_count(session : @agent_session.Session) -> Int {
-  let mut count = 0
-  for event in session.events() {
-    if event.item() is Runtime(notice) &&
-      notice.content().has_prefix("[review]") {
-      count += 1
-    }
-  }
-  count
+  session
+  .events()
+  .iter()
+  .filter(event => {
+    event.item() is Runtime(notice) && notice.content().has_prefix("[review]")
+  })
+  .count()
 }
 
 ///|
@@ -159,14 +158,15 @@ async test "a failing gate folds into an unavailable notice" {
       on_goal_met=(_goal, _baseline) => fail("reviewer exploded"),
     )
     assert_eq(review_notice_count(result), 1)
-    let mut unavailable = false
-    for event in result.events() {
-      if event.item() is Runtime(notice) &&
-        notice.content().has_prefix("[review] unavailable") {
-        unavailable = true
-      }
-    }
-    assert_true(unavailable)
+    assert_true(
+      result
+      .events()
+      .iter()
+      .any(event => {
+        event.item() is Runtime(notice) &&
+        notice.content().has_prefix("[review] unavailable")
+      }),
+    )
     assert_true(finished_answer(result).contains("done anyway"))
   }
 }

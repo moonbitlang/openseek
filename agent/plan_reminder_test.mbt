@@ -26,48 +26,41 @@ async fn plan_test_server(
   plan_calls~ : Int,
   record_first~ : Bool,
 ) -> String? {
-  guard bind_test_server(
-      "local TCP bind unavailable; skipping plan reminder test",
-    )
-    is Some(server) else {
-    return None
-  }
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (_request, body, conn) => {
-        bodies.push(body.read_all().text())
-        conn.send_response(200, "OK", extra_headers={
-          "Content-Type": "text/event-stream",
-        })
-        if record_first && bodies.length() == 1 {
-          conn.write(
-            (
-              #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_plan","function":{"name":"plan","arguments":"{\"steps\":[{\"title\":\"fix the parser\",\"status\":\"in_progress\"}]}"}}]}}]}
-            ),
-          )
-          conn.write("\n\n")
-        } else if bodies.length() <= plan_calls {
-          conn.write(
-            (
-              #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_plan","function":{"name":"plan","arguments":"{\"steps\":[{\"title\":\"step\",\"status\":\"doing\"}]}"}}]}}]}
-            ),
-          )
-          conn.write("\n\n")
-        } else {
-          conn.write(
-            (
-              #|data: {"choices":[{"delta":{"content":"done"}}]}
-              #|
-              #|
-            ),
-          )
-        }
-        conn.write("data: [DONE]\n\n")
-      },
-      max_connections=2,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+  serve_chat_completions(
+    group,
+    "local TCP bind unavailable; skipping plan reminder test",
+    max_connections=2,
+    (_request, body, conn) => {
+      bodies.push(body)
+      conn.send_response(200, "OK", extra_headers={
+        "Content-Type": "text/event-stream",
+      })
+      if record_first && bodies.length() == 1 {
+        conn.write(
+          (
+            #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_plan","function":{"name":"plan","arguments":"{\"steps\":[{\"title\":\"fix the parser\",\"status\":\"in_progress\"}]}"}}]}}]}
+          ),
+        )
+        conn.write("\n\n")
+      } else if bodies.length() <= plan_calls {
+        conn.write(
+          (
+            #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_plan","function":{"name":"plan","arguments":"{\"steps\":[{\"title\":\"step\",\"status\":\"doing\"}]}"}}]}}]}
+          ),
+        )
+        conn.write("\n\n")
+      } else {
+        conn.write(
+          (
+            #|data: {"choices":[{"delta":{"content":"done"}}]}
+            #|
+            #|
+          ),
+        )
+      }
+      conn.write("data: [DONE]\n\n")
+    },
+  )
 }
 
 ///|

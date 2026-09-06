@@ -9,46 +9,46 @@ async fn goal_test_server(
   bodies : Array[String],
   probe_calls~ : Int,
 ) -> String? {
-  guard bind_test_server(
-      "local TCP bind unavailable; skipping goal reminder test",
-    )
-    is Some(server) else {
-    return None
-  }
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (_request, body, conn) => {
-        bodies.push(body.read_all().text())
-        conn.send_response(200, "OK", extra_headers={
-          "Content-Type": "text/event-stream",
-        })
-        if bodies.length() <= probe_calls {
-          conn.write(
-            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_\{bodies.length()}\",\"function\":{\"name\":\"probe\",\"arguments\":\"{}\"}}]}}]}\n\n",
-          )
-        } else {
-          conn.write(
-            "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n",
-          )
-        }
-        conn.write("data: [DONE]\n\n")
-      },
-      max_connections=2,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+  serve_chat_completions(
+    group,
+    "local TCP bind unavailable; skipping goal reminder test",
+    max_connections=2,
+    (_request, body, conn) => {
+      bodies.push(body)
+      conn.send_response(200, "OK", extra_headers={
+        "Content-Type": "text/event-stream",
+      })
+      if bodies.length() <= probe_calls {
+        conn.write(
+          "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_\{bodies.length()}\",\"function\":{\"name\":\"probe\",\"arguments\":\"{}\"}}]}}]}\n\n",
+        )
+      } else {
+        conn.write(
+          "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n",
+        )
+      }
+      conn.write("data: [DONE]\n\n")
+    },
+  )
+}
+
+///|
+/// A no-op probe tool answering `result`: the filler call scripted turns use
+/// to keep a batch or a turn alive.
+fn probe_definition(
+  result? : String = "probe-result",
+) -> @agent_tool.AgentToolDefinition {
+  AgentToolDefinition(
+    name="probe",
+    description="Probe tool.",
+    schema=JsonSchema({ "type": "object" }),
+    execute=Sync(_args => @agent_tool.respond(result)),
+  )
 }
 
 ///|
 fn goal_probe_tools() -> @agent_tool.Tools raise {
-  Tools([
-    AgentToolDefinition(
-      name="probe",
-      description="Probe tool.",
-      schema=JsonSchema({ "type": "object" }),
-      execute=Sync(_args => @agent_tool.respond("probe-result")),
-    ),
-  ])
+  Tools([probe_definition()])
 }
 
 ///|
