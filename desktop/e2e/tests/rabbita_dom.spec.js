@@ -189,7 +189,8 @@ test('Review loads changed files and preserves its interactive diff workflow', a
 
   const progress = page.getByRole('button', { name: 'Mark file reviewed' });
   await progress.click();
-  await expect(progress).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Mark file unreviewed' }))
+    .toHaveAttribute('aria-pressed', 'true');
   await expect(changes.locator('.review-progress-summary')).toHaveText(
     '1 of 2 reviewable files reviewed',
   );
@@ -201,6 +202,104 @@ test('Review loads changed files and preserves its interactive diff workflow', a
     request.params?.path === 'src/lib.mbt' &&
     request.params?.revision === app.gitBaseline))
     .toBeTruthy();
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Review links hunk and file progress and reports the active hunk', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = [
+    'fn main {',
+    '  println("baseline")',
+    '}',
+    '',
+    'fn spacer_one {',
+    '  println("same one")',
+    '}',
+    '',
+    'fn spacer_two {',
+    '  println("same two")',
+    '}',
+    '',
+    'fn tail {',
+    '  println("baseline tail")',
+    '}',
+    '',
+  ].join('\n');
+  app.workingFiles['src/main.mbt'] = [
+    'fn main {',
+    '  println("working tree")',
+    '}',
+    '',
+    'fn spacer_one {',
+    '  println("same one")',
+    '}',
+    '',
+    'fn spacer_two {',
+    '  println("same two")',
+    '}',
+    '',
+    'fn tail {',
+    '  println("working tail")',
+    '}',
+    '',
+  ].join('\n');
+
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  const changes = page.locator('#review-changes-body');
+  await changes.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+
+  const navigation = page.getByRole('group', { name: 'Diff change navigation' });
+  const position = navigation.locator('.review-hunk-position');
+  await expect(position).toHaveText('1 of 2');
+  await expect(page.getByRole('button', { name: 'Mark hunk viewed' }))
+    .toHaveAttribute('aria-pressed', 'false');
+
+  await page.getByRole('button', { name: 'Mark hunk viewed' }).click();
+  await expect(page.getByRole('button', { name: 'Mark file reviewed' }))
+    .toHaveAttribute('aria-pressed', 'mixed');
+  await navigation.getByRole('button', { name: 'Next change' }).click();
+  await expect(position).toHaveText('2 of 2');
+  await page.getByRole('button', { name: 'Mark hunk viewed' }).click();
+  await expect(page.getByRole('button', { name: 'Mark file unreviewed' }))
+    .toHaveAttribute('aria-pressed', 'true');
+  await expect(changes.locator('.review-progress-summary')).toHaveText(
+    '1 of 2 reviewable files reviewed',
+  );
+
+  // Clearing the file clears every hunk; marking it again projects Viewed back
+  // onto every hunk without depending on the currently selected group.
+  await page.getByRole('button', { name: 'Mark file unreviewed' }).click();
+  await expect(page.getByRole('button', { name: 'Mark hunk viewed' }))
+    .toHaveAttribute('aria-pressed', 'false');
+  await navigation.getByRole('button', { name: 'Previous change' }).click();
+  await expect(position).toHaveText('1 of 2');
+  await expect(page.getByRole('button', { name: 'Mark hunk viewed' }))
+    .toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Mark file reviewed' }).click();
+  await expect(page.getByRole('button', { name: 'Unmark hunk viewed' }))
+    .toHaveAttribute('aria-pressed', 'true');
+  await navigation.getByRole('button', { name: 'Next change' }).click();
+  await expect(position).toHaveText('2 of 2');
+  await expect(page.getByRole('button', { name: 'Unmark hunk viewed' }))
+    .toHaveAttribute('aria-pressed', 'true');
+
+  // Semantic review is a MultiDiff surface. Its counter is global across the
+  // section-local editors, while file completion still projects into each
+  // section's current hunk.
+  const reviewToolbar = page.getByRole('toolbar', { name: 'Review mode' });
+  await reviewToolbar.getByRole('button', { name: 'Token diff' }).click();
+  await expect(reviewToolbar.getByRole('button', { name: 'Token diff' }))
+    .toHaveAttribute('aria-pressed', 'true');
+  await expect(position).toHaveText('1 of 2');
+  await expect(page.getByRole('button', { name: 'Unmark hunk viewed' }))
+    .toHaveAttribute('aria-pressed', 'true');
+  await navigation.getByRole('button', { name: 'Next change' }).click();
+  await expect(position).toHaveText('2 of 2');
+  await expect(page.getByRole('button', { name: 'Unmark hunk viewed' }))
+    .toHaveAttribute('aria-pressed', 'true');
   expect(app.pageErrors).toEqual([]);
 });
 

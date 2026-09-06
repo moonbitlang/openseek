@@ -21,6 +21,18 @@ pub(all) struct DiffEditorRevealEvent {
 } derive(Eq, Debug)
 
 ///|
+/// One F7/Shift+F7 hunk, retaining only its real changed mappings. Joined
+/// unchanged context remains an internal navigation detail.
+pub(all) struct DiffHunk {
+  members : Array[@diff.DetailedLineRangeMapping]
+}
+
+///|
+fn DiffHunk::from_internal(hunk : @diff_editor.DiffHunk) -> DiffHunk {
+  { members: hunk.members.copy(), }
+}
+
+///|
 pub(all) enum DiffEditorLayout {
   SideBySide
   Inline
@@ -315,6 +327,24 @@ pub fn DiffEditor::on_did_update_diff(
   listener : () -> Unit,
 ) -> @base_common.Disposable {
   self.widget.on_did_update_diff(listener)
+}
+
+///|
+pub fn DiffEditor::get_hunks(self : DiffEditor) -> Array[DiffHunk] {
+  self.widget.get_hunks().map(DiffHunk::from_internal)
+}
+
+///|
+pub fn DiffEditor::get_active_hunk_index(self : DiffEditor) -> Int? {
+  self.widget.get_active_hunk_index()
+}
+
+///|
+pub fn DiffEditor::on_did_change_active_hunk(
+  self : DiffEditor,
+  listener : (Int?) -> Unit,
+) -> @base_common.Disposable {
+  self.widget.on_did_change_active_hunk(listener)
 }
 
 ///|

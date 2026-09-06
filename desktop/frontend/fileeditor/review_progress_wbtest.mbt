@@ -29,111 +29,253 @@ fn review_progress_state() -> (State, Ctx, ChangedFile) raise {
 }
 
 ///|
-test "review progress toggles only the active exact change" {
-  let (state, ctx, selected) = review_progress_state()
-  let (_, reviewed) = update(test_emit(), ToggleReviewProgress, state, ctx)
-  assert_true(reviewed.reviewed_changes == [selected])
-  let (_, unreviewed) = update(test_emit(), ToggleReviewProgress, reviewed, ctx)
-  assert_true(unreviewed.reviewed_changes.is_empty())
-
-  let ordinary_docs = state.docs.copy()
-  ordinary_docs[selected.path] = {
-    ..ordinary_docs.get(selected.path).unwrap(),
-    review: None,
-  }
-  let ordinary = { ..state, docs: ordinary_docs, }
-  let (_, unchanged) = update(test_emit(), ToggleReviewProgress, ordinary, ctx)
-  assert_true(unchanged == ordinary)
+fn review_test_hunk(
+  old_start : Int,
+  old_end : Int,
+  new_start : Int,
+  new_end : Int,
+) -> ReviewHunk {
+  ReviewHunk(
+    old_ranges=if old_start < old_end {
+      [@common.LineRange(old_start, old_end)]
+    } else {
+      []
+    },
+    new_ranges=if new_start < new_end {
+      [@common.LineRange(new_start, new_end)]
+    } else {
+      []
+    },
+  )
 }
 
 ///|
-test "a final changes refresh invalidates progress when the row changes" {
-  let (state, ctx, selected) = review_progress_state()
-  let (_, reviewed) = update(test_emit(), ToggleReviewProgress, state, ctx)
-  let changed_again = { ..selected, index_status: "M", worktree_status: " ", }
-  let refreshing = {
-    ..reviewed,
-    changes: ChangeListReady(
-      repository=true,
-      files=[selected],
-      refreshing=true,
-      refresh_again=false,
-    ),
-  }
-  let (_, settled) = update(
+fn activate_review_hunk(
+  state : State,
+  ctx : Ctx,
+  selected : ChangedFile,
+  hunk : ReviewHunk,
+  file_changes : ReviewHunk,
+  index : Int,
+  total : Int,
+) -> State {
+  update(
     test_emit(),
-    ChangesLoaded(
-      owner=ctx.owner,
-      generation=refreshing.changes_generation,
-      repository=true,
-      head=None,
-      files=[changed_again],
+    ReviewActiveHunkChanged(
+      change=selected,
+      review_generation=1,
+      surface_generation=state.review_hunk_surface_generation,
+      hunk=Some(hunk),
+      file_changes=Some(file_changes),
+      position=ReviewHunkPosition::from_zero_based(Some(index), total),
     ),
-    refreshing,
+    state,
     ctx,
-  )
-  assert_true(settled.reviewed_changes.is_empty())
-
-  let same_row_refresh = {
-    ..reviewed,
-    changes: ChangeListReady(
-      repository=true,
-      files=[selected],
-      refreshing=true,
-      refresh_again=false,
-    ),
-    changes_head: Some("old-head"),
-    changes_head_known: true,
-  }
-  let (_, moved_head) = update(
-    test_emit(),
-    ChangesLoaded(
-      owner=ctx.owner,
-      generation=same_row_refresh.changes_generation,
-      repository=true,
-      head=Some("new-head"),
-      files=[selected],
-    ),
-    same_row_refresh,
-    ctx,
-  )
-  assert_true(moved_head.reviewed_changes.is_empty())
+  ).1
 }
 
 ///|
-test "file events and run completion invalidate stale review progress" {
+test "review hunk normalizes unions and subtraction" {
+  let coverage = ReviewHunk(
+    old_ranges=[
+      @common.LineRange(4, 7),
+      @common.LineRange(1, 3),
+      @common.LineRange(3, 5),
+      @common.LineRange(8, 8),
+    ],
+    new_ranges=[@common.LineRange(10, 13)],
+  )
+  assert_eq(coverage.old_ranges, [@common.LineRange(1, 7)])
+  let removed = ReviewHunk(old_ranges=[@common.LineRange(2, 4)], new_ranges=[
+    @common.LineRange(11, 12),
+  ])
+  let retained = coverage.subtract(removed)
+  assert_eq(retained.old_ranges, [
+    @common.LineRange(1, 2),
+    @common.LineRange(4, 7),
+  ])
+  assert_eq(retained.new_ranges, [
+    @common.LineRange(10, 11),
+    @common.LineRange(12, 13),
+  ])
+  assert_true(retained.union(removed) == coverage)
+}
+
+///|
+test "hunk and file review progress stay linked in both directions" {
   let (state, ctx, selected) = review_progress_state()
-  let (_, reviewed) = update(test_emit(), ToggleReviewProgress, state, ctx)
-  let (_, unrelated) = update(
+  let inserted = review_test_hunk(1, 1, 3, 5)
+  let deleted = review_test_hunk(8, 10, 1, 1)
+  let file_changes = inserted.union(deleted)
+  let inserted_active = activate_review_hunk(
+    state, ctx, selected, inserted, file_changes, 0, 2,
+  )
+  let (_, inserted_viewed) = update(
     test_emit(),
-    FsChanged(
-      root=ctx.test_root(),
-      generation=ctx.watch_identity(state.watch_generation),
-      changes=Some([Modified(@pathx.Relative("README.md"))]),
-    ),
-    reviewed,
+    ToggleActiveReviewHunk,
+    inserted_active,
     ctx,
   )
-  assert_true(unrelated.reviewed_changes == [selected])
+  assert_true(
+    inserted_viewed.review_hunk_state(selected, inserted) is ReviewHunkViewed,
+  )
+  let deleted_active = activate_review_hunk(
+    inserted_viewed, ctx, selected, deleted, file_changes, 1, 2,
+  )
+  let (_, both_viewed) = update(
+    test_emit(),
+    ToggleActiveReviewHunk,
+    deleted_active,
+    ctx,
+  )
+  assert_true(
+    both_viewed.review_hunk_state(selected, deleted) is ReviewHunkViewed,
+  )
+  assert_true(both_viewed.changed_file_review_state(selected) is ReviewComplete)
+  assert_true(
+    both_viewed.review_hunk_state(selected, inserted) is ReviewHunkViewed,
+  )
 
-  let (_, touched) = update(
+  let inserted_active = activate_review_hunk(
+    both_viewed, ctx, selected, inserted, file_changes, 0, 2,
+  )
+  let (_, one_unviewed) = update(
     test_emit(),
-    FsChanged(
-      root=ctx.test_root(),
-      generation=ctx.watch_identity(state.watch_generation),
-      changes=Some([Modified(selected.path)]),
-    ),
-    unrelated,
+    ToggleActiveReviewHunk,
+    inserted_active,
     ctx,
   )
-  assert_true(touched.reviewed_changes.is_empty())
+  assert_true(
+    one_unviewed.changed_file_review_state(selected) is ReviewInProgress,
+  )
+  assert_true(
+    one_unviewed.review_hunk_state(selected, inserted) is ReviewHunkUnviewed,
+  )
+  assert_true(
+    one_unviewed.review_hunk_state(selected, deleted) is ReviewHunkViewed,
+  )
+  let overlapping = ReviewHunk(old_ranges=[@common.LineRange(9, 12)], new_ranges=[])
+  assert_true(
+    one_unviewed.review_hunk_state(selected, overlapping) is ReviewHunkPartial,
+  )
 
-  let (_, remarked) = update(test_emit(), ToggleReviewProgress, touched, ctx)
-  let (_, settled) = update(
+  let (_, file_complete) = update(
     test_emit(),
-    RunSettled(owner=ctx.owner),
-    remarked,
+    ToggleReviewProgress,
+    one_unviewed,
     ctx,
   )
-  assert_true(settled.reviewed_changes.is_empty())
+  assert_true(
+    file_complete.review_hunk_state(selected, inserted) is ReviewHunkViewed,
+  )
+  assert_true(
+    file_complete.review_hunk_state(selected, deleted) is ReviewHunkViewed,
+  )
+  let (_, file_unviewed) = update(
+    test_emit(),
+    ToggleReviewProgress,
+    file_complete,
+    ctx,
+  )
+  assert_true(
+    file_unviewed.changed_file_review_state(selected) is ReviewUnviewed,
+  )
+  assert_true(
+    file_unviewed.review_hunk_state(selected, inserted) is ReviewHunkUnviewed,
+  )
+  assert_true(
+    file_unviewed.review_hunk_state(selected, deleted) is ReviewHunkUnviewed,
+  )
+}
+
+///|
+test "active hunk requires exact row, diff generation, and surface generation" {
+  let (state, ctx, selected) = review_progress_state()
+  let hunk = review_test_hunk(2, 4, 2, 4)
+  let position = ReviewHunkPosition::from_zero_based(Some(0), 1)
+  let (_, stale_generation) = update(
+    test_emit(),
+    ReviewActiveHunkChanged(
+      change=selected,
+      review_generation=0,
+      surface_generation=state.review_hunk_surface_generation,
+      hunk=Some(hunk),
+      file_changes=Some(hunk),
+      position~,
+    ),
+    state,
+    ctx,
+  )
+  assert_true(stale_generation.review_active_hunk is None)
+  let other = { ..selected, index_status: "M", worktree_status: " ", }
+  let (_, stale_row) = update(
+    test_emit(),
+    ReviewActiveHunkChanged(
+      change=other,
+      review_generation=1,
+      surface_generation=state.review_hunk_surface_generation,
+      hunk=Some(hunk),
+      file_changes=Some(hunk),
+      position~,
+    ),
+    state,
+    ctx,
+  )
+  assert_true(stale_row.review_active_hunk is None)
+  let inactive_ctx = {
+    ..ctx,
+    active_file: Some(@pathx.Relative("src/other.mbt")),
+  }
+  let inactive = activate_review_hunk(
+    state, inactive_ctx, selected, hunk, hunk, 0, 1,
+  )
+  assert_true(inactive.review_active_hunk is None)
+  let current = activate_review_hunk(state, ctx, selected, hunk, hunk, 0, 1)
+  let surface_generation = state.review_hunk_surface_generation
+  assert_true(
+    current.active_review_hunk(ctx.active_file)
+    is Some(
+      {
+        change,
+        review_generation: 1,
+        surface_generation: active_surface_generation,
+        hunk: current_hunk,
+        file_changes: Some(current_file_changes),
+        position: Some(current_position),
+      }
+    ) &&
+    change == selected &&
+    active_surface_generation == surface_generation &&
+    current_hunk == hunk &&
+    current_file_changes == hunk &&
+    current_position.current == 1 &&
+    current_position.total == 1,
+  )
+  let (_, token_surface) = update(
+    test_emit(),
+    ReviewDiffModeSelected(ReviewDiffToken),
+    current,
+    ctx,
+  )
+  let (_, line_surface) = update(
+    test_emit(),
+    ReviewDiffModeSelected(ReviewDiffLine),
+    token_surface,
+    ctx,
+  )
+  assert_eq(line_surface.review_hunk_surface_generation, surface_generation + 2)
+  let (_, late_surface) = update(
+    test_emit(),
+    ReviewActiveHunkChanged(
+      change=selected,
+      review_generation=1,
+      surface_generation~,
+      hunk=Some(hunk),
+      file_changes=Some(hunk),
+      position~,
+    ),
+    line_surface,
+    ctx,
+  )
+  assert_true(late_surface.review_active_hunk is None)
 }

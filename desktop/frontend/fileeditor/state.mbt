@@ -450,10 +450,17 @@ pub(all) struct State {
   // watcher/LSP projections. Keys combine commit and current path.
   history_docs : Map[String, HistoryDiffDoc]
   history_generation : Int
-  // Exact changed rows the user has marked reviewed in the current checkout.
-  // Watcher events and run boundaries invalidate affected progress; a final
-  // Git refresh also drops rows whose status or rename identity changed.
-  reviewed_changes : Array[ChangedFile]
+  // Exact changed rows and their shared Line/Token/Tree review coverage.
+  // Complete may come from the file control or full hunk coverage.
+  review_progress : Array[ChangedFileReview]
+  // Monotonic identity of the visible hunk surface. Mode, filter, collapse,
+  // source/diff, and document transitions advance it so a callback queued by
+  // an older surface cannot restore its active hunk after the transition.
+  review_hunk_surface_generation : Int
+  // Only the currently focused or navigated hunk is retained for the toolbar.
+  // Its exact row, diff generation, and surface generation fence callbacks
+  // from older inputs.
+  review_active_hunk : ReviewActiveHunk?
   // Monotonic request token retained across conversation re-roots and advanced
   // across same-owner placement changes. Owner plus this generation rejects an
   // old A→B→A reply or one from an earlier checkout incarnation.
@@ -566,7 +573,9 @@ pub fn State::empty() -> State {
     git_graph_collapsed: false,
     history_docs: Map([]),
     history_generation: 0,
-    reviewed_changes: [],
+    review_progress: [],
+    review_hunk_surface_generation: 0,
+    review_active_hunk: None,
     changes_generation: 0,
     request_epoch: 0,
     file_link_generation: 0,
@@ -877,6 +886,17 @@ pub(all) enum Msg {
   // Select the ordinary `.mbti` tab's rendered diagram or source. Reviews,
   // history comparisons, and non-MBTI documents ignore the action.
   MbtiViewModeSelected(MbtiViewMode)
+  // The visible DiffEditor publishes only its current projected hunk. The
+  // reducer validates exact row, diff generation, and surface generation.
+  ReviewActiveHunkChanged(
+    change~ : ChangedFile,
+    review_generation~ : Int,
+    surface_generation~ : Int,
+    hunk~ : ReviewHunk?,
+    file_changes~ : ReviewHunk?,
+    position~ : ReviewHunkPosition?
+  )
+  ToggleActiveReviewHunk
   // One `git.original_file` request settled. `path` is always the current
   // changed path (the dock/document key), even when the host read its rename
   // source from `original_path`.

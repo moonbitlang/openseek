@@ -2227,7 +2227,8 @@ button.git-history-file.selected {
   cursor: default;
   opacity: 0.45;
 }
-.review-nav-position {
+.review-nav-position,
+.review-hunk-position {
   min-width: 38px;
   color: var(--color-text-faint);
   font-size: var(--font-size-xs);

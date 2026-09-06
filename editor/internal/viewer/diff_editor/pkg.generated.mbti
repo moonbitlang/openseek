@@ -155,18 +155,22 @@ pub struct DiffEditorWidget {
   mut pending_modified_scroll_top_echo : Double?
   mut pending_modified_scroll_left_echo : Double?
   mut disposed : Bool
+  // private fields
 }
 pub fn DiffEditorWidget::create(@dom.Element, services? : @code_editor_widget.CodeEditorServices, editor_options? : @code_editor_widget.CodeEditorOptions, options? : DiffEditorOptions, &@diff.DocumentDiffProvider) -> Self
 pub fn DiffEditorWidget::dispose(Self) -> Unit
 pub fn DiffEditorWidget::focus(Self) -> Unit
+pub fn DiffEditorWidget::get_active_hunk_index(Self) -> Int?
 pub fn DiffEditorWidget::get_content_height(Self) -> Double
 pub fn DiffEditorWidget::get_diff(Self) -> @diff.DocumentDiff?
+pub fn DiffEditorWidget::get_hunks(Self) -> Array[DiffHunk]
 pub fn DiffEditorWidget::get_layout(Self) -> DiffEditorLayout
 pub fn DiffEditorWidget::get_max_scroll_left(Self) -> Double
 pub fn DiffEditorWidget::get_model(Self) -> DiffEditorModelData?
 pub fn DiffEditorWidget::get_modified_vertical_reveal_bounds(Self, @common.Range) -> (Double, Double)?
 pub fn DiffEditorWidget::is_diff_up_to_date(Self) -> Bool
 pub fn DiffEditorWidget::layout(Self) -> Unit
+pub fn DiffEditorWidget::on_did_change_active_hunk(Self, (Int?) -> Unit) -> @common.Disposable
 pub fn DiffEditorWidget::on_did_change_content_height(Self, (Double) -> Unit) -> @common.Disposable
 pub fn DiffEditorWidget::on_did_reveal_change(Self, (DiffEditorRevealEvent) -> Unit) -> @common.Disposable
 pub fn DiffEditorWidget::on_did_update_diff(Self, () -> Unit) -> @common.Disposable
@@ -180,6 +184,11 @@ pub fn DiffEditorWidget::set_diff_provider(Self, &@diff.DocumentDiffProvider) ->
 pub fn DiffEditorWidget::set_model(Self, DiffEditorModelData?) -> DiffEditorModelData?
 pub fn DiffEditorWidget::set_scroll_left(Self, Double) -> Unit
 pub fn DiffEditorWidget::update_options(Self, @code_editor_widget.CodeEditorOptions, DiffEditorOptions) -> Unit
+
+pub(all) struct DiffHunk {
+  members : Array[@diff.DetailedLineRangeMapping]
+  // private fields
+}
 
 pub struct DiffMapping {
   line_range_mapping : @diff.DetailedLineRangeMapping

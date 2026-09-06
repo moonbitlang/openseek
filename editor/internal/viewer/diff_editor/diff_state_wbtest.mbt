@@ -46,6 +46,17 @@ test "Accessible F7 groups mappings whose three-line contexts overlap" {
 }
 
 ///|
+test "product hunk members exclude unchanged joined gaps" {
+  let first = diff_state_test_change(2, 3, 2, 3)
+  let second = diff_state_test_change(7, 8, 7, 8)
+  let hunk = DiffState::from_diff_result({
+      changes: [first, second],
+      additional_alignments: [],
+    }).hunks()[0]
+  assert_eq(hunk.members, [first, second])
+}
+
+///|
 test "Accessible F7 keeps mappings separate at an exact six-line gap" {
   let state = DiffState::from_diff_result({
     changes: [

@@ -102,6 +102,12 @@ pub(all) struct ChangedFile {
 pub fn ChangedFile::equal(Self, Self) -> Bool
 pub fn ChangedFile::not_equal(Self, Self) -> Bool
 
+pub(all) struct ChangedFileReview {
+  // private fields
+} derive(Eq)
+pub fn ChangedFileReview::equal(Self, Self) -> Bool
+pub fn ChangedFileReview::not_equal(Self, Self) -> Bool
+
 pub(all) struct Ctx {
   owner : @interop.ConversationKey
   request_epoch : Int
@@ -265,6 +271,8 @@ pub(all) enum Msg {
   RevealSemanticReviewSectionChange(String, Bool)
   ToggleReviewProgress
   MbtiViewModeSelected(MbtiViewMode)
+  ReviewActiveHunkChanged(change~ : ChangedFile, review_generation~ : Int, surface_generation~ : Int, hunk~ : ReviewHunk?, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)
+  ToggleActiveReviewHunk
   GitOriginalLoaded(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, original~ : @protocol.GitOriginalFileReply)
   GitOriginalFailed(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, message~ : String)
   HistoryBlobLoaded(owner~ : @interop.ConversationKey, key~ : String, generation~ : Int, side~ : HistoryDiffSide, blob~ : @protocol.GitOriginalFileReply)
@@ -295,6 +303,12 @@ pub fn ReconciledPlacement::is_parked(Self) -> Bool
 pub fn ReconciledPlacement::not_equal(Self, Self) -> Bool
 pub fn ReconciledPlacement::reconcile(Self, @interop.CheckoutPlacement?) -> Self
 
+pub(all) struct ReviewActiveHunk {
+  // private fields
+} derive(Eq)
+pub fn ReviewActiveHunk::equal(Self, Self) -> Bool
+pub fn ReviewActiveHunk::not_equal(Self, Self) -> Bool
+
 pub(all) enum ReviewBaseline {
   ReviewLoading
   ReviewContent(String)
@@ -318,6 +332,25 @@ pub(all) enum ReviewDiffMode {
   ReviewDiffToken
   ReviewDiffTree
 } derive(Eq, @debug.Debug)
+
+pub(all) enum ReviewFileProgress {
+  ReviewFileInProgress(ReviewHunk)
+  ReviewFileComplete
+} derive(Eq)
+pub fn ReviewFileProgress::equal(Self, Self) -> Bool
+pub fn ReviewFileProgress::not_equal(Self, Self) -> Bool
+
+pub(all) struct ReviewHunk {
+  // private fields
+} derive(Eq)
+pub fn ReviewHunk::equal(Self, Self) -> Bool
+pub fn ReviewHunk::not_equal(Self, Self) -> Bool
+
+pub(all) struct ReviewHunkPosition {
+  // private fields
+} derive(Eq)
+pub fn ReviewHunkPosition::equal(Self, Self) -> Bool
+pub fn ReviewHunkPosition::not_equal(Self, Self) -> Bool
 
 pub(all) struct ReviewState {
   generation : Int
@@ -383,7 +416,9 @@ pub(all) struct State {
   git_graph_collapsed : Bool
   history_docs : Map[String, HistoryDiffDoc]
   history_generation : Int
-  reviewed_changes : Array[ChangedFile]
+  review_progress : Array[ChangedFileReview]
+  review_hunk_surface_generation : Int
+  review_active_hunk : ReviewActiveHunk?
   changes_generation : Int
   request_epoch : Int
   file_link_generation : Int
