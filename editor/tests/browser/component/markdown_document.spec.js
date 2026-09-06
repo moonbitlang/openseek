@@ -215,37 +215,136 @@ test('uses the workbench type scale and Markdown layout contract', async ({
     '0px',
   );
 
-  await page.evaluate(() =>
-    globalThis.__markdownDocumentControls.resizeHost(1000),
-  );
-  const measure = await page.locator(article).evaluate((articleNode) => {
-    const articleRect = articleNode.getBoundingClientRect();
-    const style = getComputedStyle(articleNode);
-    const contentLeft =
-      articleRect.left + Number.parseFloat(style.paddingLeft);
-    const contentWidth =
-      articleRect.width -
-      Number.parseFloat(style.paddingLeft) -
-      Number.parseFloat(style.paddingRight);
-    const paragraph = articleNode
-      .querySelector(':scope > p')
-      .getBoundingClientRect();
-    const code = articleNode
-      .querySelector(':scope > .moonbit-viewer-markdown-code-block')
-      .getBoundingClientRect();
-    return {
-      contentLeft,
-      contentWidth,
-      paragraphLeft: paragraph.left,
-      paragraphWidth: paragraph.width,
-      codeLeft: code.left,
-      codeWidth: code.width,
-    };
+  await page.locator(article).evaluate((articleNode) => {
+    const table = document.createElement('table');
+    table.dataset.layoutProbe = 'table';
+    table.style.width = '100%';
+    articleNode.appendChild(table);
+
+    // cmark emits an image-only Markdown block as <p><img></p>.
+    const imageParagraph = document.createElement('p');
+    imageParagraph.dataset.layoutProbe = 'image-paragraph';
+    imageParagraph.dataset.markdownImageOnly = 'true';
+    const image = document.createElement('img');
+    image.alt = 'wide layout probe';
+    image.src =
+      'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+    image.style.width = '2000px';
+    imageParagraph.appendChild(image);
+    articleNode.appendChild(imageParagraph);
+
+    const mixedImageParagraph = document.createElement('p');
+    mixedImageParagraph.dataset.layoutProbe = 'mixed-image-paragraph';
+    const mixedImage = image.cloneNode();
+    mixedImage.alt = 'prose layout probe';
+    mixedImageParagraph.append(mixedImage, ' caption');
+    articleNode.appendChild(mixedImageParagraph);
+
+    const diagram = document.createElement('div');
+    diagram.className = 'moonbit-viewer-markdown-diagram';
+    diagram.dataset.layoutProbe = 'diagram';
+    diagram.style.width = '100%';
+    articleNode.appendChild(diagram);
   });
-  expect(measure.paragraphLeft).toBeCloseTo(measure.contentLeft, 1);
-  expect(measure.paragraphWidth).toBeLessThan(measure.contentWidth - 200);
-  expect(measure.codeLeft).toBeCloseTo(measure.contentLeft, 1);
-  expect(measure.codeWidth).toBeCloseTo(measure.contentWidth, 1);
+  const measureLayout = () =>
+    page.locator(article).evaluate((articleNode) => {
+      const articleRect = articleNode.getBoundingClientRect();
+      const style = getComputedStyle(articleNode);
+      const contentLeft =
+        articleRect.left + Number.parseFloat(style.paddingLeft);
+      const contentWidth =
+        articleRect.width -
+        Number.parseFloat(style.paddingLeft) -
+        Number.parseFloat(style.paddingRight);
+      const paragraph = articleNode
+        .querySelector(':scope > p')
+        .getBoundingClientRect();
+      const code = articleNode
+        .querySelector(':scope > .moonbit-viewer-markdown-code-block')
+        .getBoundingClientRect();
+      const table = articleNode
+        .querySelector('[data-layout-probe="table"]')
+        .getBoundingClientRect();
+      const imageParagraph = articleNode
+        .querySelector('[data-layout-probe="image-paragraph"]')
+        .getBoundingClientRect();
+      const image = articleNode
+        .querySelector('[data-layout-probe="image-paragraph"] > img')
+        .getBoundingClientRect();
+      const mixedImageParagraph = articleNode
+        .querySelector('[data-layout-probe="mixed-image-paragraph"]')
+        .getBoundingClientRect();
+      const mixedImage = articleNode
+        .querySelector('[data-layout-probe="mixed-image-paragraph"] > img')
+        .getBoundingClientRect();
+      const diagram = articleNode
+        .querySelector('[data-layout-probe="diagram"]')
+        .getBoundingClientRect();
+      return {
+        contentLeft,
+        contentWidth,
+        paragraphLeft: paragraph.left,
+        paragraphWidth: paragraph.width,
+        codeLeft: code.left,
+        codeWidth: code.width,
+        tableWidth: table.width,
+        imageParagraphWidth: imageParagraph.width,
+        imageWidth: image.width,
+        mixedImageParagraphWidth: mixedImageParagraph.width,
+        mixedImageWidth: mixedImage.width,
+        diagramWidth: diagram.width,
+      };
+    });
+
+  await page.evaluate(() =>
+    globalThis.__markdownDocumentControls.resizeHost(1280),
+  );
+  const workbenchMeasure = await measureLayout();
+  expect(workbenchMeasure.contentWidth).toBeGreaterThan(960);
+  expect(workbenchMeasure.paragraphLeft).toBeCloseTo(
+    workbenchMeasure.contentLeft,
+    1,
+  );
+  expect(workbenchMeasure.paragraphWidth).toBeCloseTo(640, 1);
+  expect(workbenchMeasure.mixedImageParagraphWidth).toBeCloseTo(640, 1);
+  expect(workbenchMeasure.mixedImageWidth).toBeCloseTo(640, 1);
+  expect(workbenchMeasure.codeLeft).toBeCloseTo(
+    workbenchMeasure.contentLeft,
+    1,
+  );
+  for (const [name, width] of Object.entries({
+    code: workbenchMeasure.codeWidth,
+    table: workbenchMeasure.tableWidth,
+    imageParagraph: workbenchMeasure.imageParagraphWidth,
+    image: workbenchMeasure.imageWidth,
+    diagram: workbenchMeasure.diagramWidth,
+  })) {
+    expect(width, `${name} should use the workbench width`).toBeCloseTo(
+      workbenchMeasure.contentWidth,
+      1,
+    );
+  }
+
+  await page.evaluate(() =>
+    globalThis.__markdownDocumentControls.resizeHost(1600),
+  );
+  const ultrawideMeasure = await measureLayout();
+  expect(ultrawideMeasure.contentWidth).toBeGreaterThan(1440);
+  expect(ultrawideMeasure.paragraphWidth).toBeCloseTo(640, 1);
+  expect(ultrawideMeasure.mixedImageParagraphWidth).toBeCloseTo(640, 1);
+  expect(ultrawideMeasure.mixedImageWidth).toBeCloseTo(640, 1);
+  for (const [name, width] of Object.entries({
+    code: ultrawideMeasure.codeWidth,
+    table: ultrawideMeasure.tableWidth,
+    imageParagraph: ultrawideMeasure.imageParagraphWidth,
+    image: ultrawideMeasure.imageWidth,
+    diagram: ultrawideMeasure.diagramWidth,
+  })) {
+    expect(width, `${name} should retain the ultrawide cap`).toBeCloseTo(
+      1440,
+      1,
+    );
+  }
 
   await page.locator('.markdown-document-shell').evaluate((shell) => {
     shell.style.setProperty('--ui-font-size', '12px');

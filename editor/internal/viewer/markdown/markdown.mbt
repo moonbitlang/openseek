@@ -63,8 +63,17 @@ pub fn render_markdown(
     locs=true,
   )
   let projection = markdown_document_projection(doc)
-  let code_override = @cmark_renderer.Renderer::new(block=fn(ctx, block) {
+  let render_overrides = @cmark_renderer.Renderer::new(block=fn(
+    ctx,
+    block,
+  ) raise {
     match block {
+      Paragraph(node) if markdown_paragraph_is_image_only(node.v.inline) => {
+        ctx.string("<p data-markdown-image-only=\"true\">")
+        ctx.inline(node.v.inline)
+        ctx.string("</p>\n")
+        true
+      }
       CodeBlock(node) => {
         saw_code_block.val = true
         guard markdown_offset_range(node.meta.loc) is Some(source_range) &&
@@ -93,8 +102,45 @@ pub fn render_markdown(
     }
   })
   markdown_conversion_result(markdown, saw_code_block, projection, () => {
-    @cmark_html.renderer(safe=true).compose(code_override).doc_to_string(doc)
+    @cmark_html.renderer(safe=true).compose(render_overrides).doc_to_string(doc)
   })
+}
+
+///|
+/// Returns the meaningful top-level inline nodes, flattening cmark's sequence
+/// wrapper and ignoring layout-only whitespace.
+fn markdown_meaningful_inlines(inline : @cmark.Inline) -> Array[@cmark.Inline] {
+  let result : Array[@cmark.Inline] = []
+  append_markdown_meaningful_inlines(inline, result)
+  result
+}
+
+///|
+fn append_markdown_meaningful_inlines(
+  inline : @cmark.Inline,
+  result : Array[@cmark.Inline],
+) -> Unit {
+  match inline {
+    Inlines(node) =>
+      for child in node.v.to_array() {
+        append_markdown_meaningful_inlines(child, result)
+      }
+    Text(node) if node.v.trim().is_empty() => ()
+    child => result.push(child)
+  }
+}
+
+///|
+/// cmark represents Markdown images as inline nodes inside a paragraph. Mark
+/// the direct and linked image-only shapes while that structure is explicit,
+/// rather than recovering it from browser DOM after rendering.
+fn markdown_paragraph_is_image_only(inline : @cmark.Inline) -> Bool {
+  guard markdown_meaningful_inlines(inline) is [child] else { return false }
+  match child {
+    Image(_) => true
+    Link(node) => markdown_meaningful_inlines(node.v.text) is [Image(_)]
+    _ => false
+  }
 }
 
 ///|
