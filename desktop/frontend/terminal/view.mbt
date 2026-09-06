@@ -5,22 +5,17 @@
 
 ///|
 fn tab_view(dispatch : @cmd.Emit[Msg], tab : Tab, active : Bool) -> @html.Html {
-  let classes = StringBuilder()
-  classes.write_string("terminal-tab")
-  if active {
-    classes.write_string(" active")
-  }
   let title = match tab.status {
     TabOpening => "starting…"
     TabRunning => tab.workspace_label
     TabFailed(message~) => message
   }
-  let status : Array[@html.Html] = []
-  match tab.status {
-    TabFailed(..) => status.push(@html.span(class="terminal-tab-failed", "!"))
-    TabOpening | TabRunning => ()
+  let status : Array[@html.Html] = if tab.status is TabFailed(..) {
+    [@html.span(class="terminal-tab-failed", "!")]
+  } else {
+    []
   }
-  @html.div(class=classes.to_string(), [
+  @html.div(class=if active { "terminal-tab active" } else { "terminal-tab" }, [
     @html.button(
       class="terminal-tab-select",
       title~,

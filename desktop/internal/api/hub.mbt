@@ -81,13 +81,9 @@ fn Hub::record_finished(
   self : Hub,
   payload : @protocol.FinishedPayload,
 ) -> Unit {
-  let mut session = ""
-  let mut submission_id : String? = None
-  if self.active_starts.get(payload.run_id) is Some(started) {
-    session = started.session
-    if started.submission_id is Some(value) {
-      submission_id = Some(value)
-    }
+  let (session, submission_id) = match self.active_starts.get(payload.run_id) {
+    Some(started) => (started.session, started.submission_id)
+    None => ("", None)
   }
   if self.settlements.get(payload.run_id) is Some(existing) {
     if existing.session.is_empty() && !session.is_empty() {

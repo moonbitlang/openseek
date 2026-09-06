@@ -63,11 +63,9 @@ fn Conversation::reasoning_for_render(self : Conversation) -> (String?, Bool) {
   }
   let candidate = live.content.trim()
   if live.complete && !candidate.is_empty() {
-    let mut index = self.messages.length()
-    while index > 0 {
-      index -= 1
-      if self.messages[index].kind is Assistant(reasoning=Some(thought), ..) {
-        if self.messages[index].sequence is Some(sequence) &&
+    for message in self.messages.rev_iter() {
+      if message.kind is Assistant(reasoning=Some(thought), ..) {
+        if message.sequence is Some(sequence) &&
           sequence > self.turn.reasoning_frontier &&
           thought.trim() == candidate {
           return (None, live.complete)

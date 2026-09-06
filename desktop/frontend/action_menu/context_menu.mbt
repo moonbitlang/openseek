@@ -354,24 +354,17 @@ fn context_definition(
             (actions.open_link)(url),
           ),
         )
-      } else if input.open_web_links_in_app {
-        navigation.push(
-          context_item(
-            "Open",
-            "Open",
-            @icons.icon_link_external(),
-            (actions.open_link)(url),
-          ),
-        )
-        navigation.push(
-          context_item(
-            "Open in Default Browser",
-            "Open in the system default browser",
-            @icons.icon_link_external(),
-            (actions.open_external_link)(url),
-          ),
-        )
       } else {
+        if input.open_web_links_in_app {
+          navigation.push(
+            context_item(
+              "Open",
+              "Open",
+              @icons.icon_link_external(),
+              (actions.open_link)(url),
+            ),
+          )
+        }
         navigation.push(
           context_item(
             "Open in Default Browser",

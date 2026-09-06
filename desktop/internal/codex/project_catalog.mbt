@@ -63,11 +63,9 @@ async fn ProjectCatalog::resolve(
   ) catch {
     error if @async.is_being_cancelled() => raise error
     _ => {
-      let root = if @fs.exists(cwd) { Some(cwd) } else { None }
-      if root is Some(root) {
-        self.roots[cwd] = root
-      }
-      return root
+      guard @fs.exists(cwd) else { return None }
+      self.roots[cwd] = cwd
+      return Some(cwd)
     }
   }
   if code == 0 {
@@ -76,11 +74,9 @@ async fn ProjectCatalog::resolve(
       return Some(project)
     }
   }
-  let root = if @fs.exists(cwd) { Some(cwd) } else { None }
-  if root is Some(root) {
-    self.roots[cwd] = root
-  }
-  root
+  guard @fs.exists(cwd) else { return None }
+  self.roots[cwd] = cwd
+  Some(cwd)
 }
 
 ///|

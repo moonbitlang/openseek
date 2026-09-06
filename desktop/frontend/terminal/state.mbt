@@ -162,35 +162,22 @@ fn State::active_tab(self : State, ctx : Ctx) -> Tab? {
   guard !visible.is_empty() else { return None }
   guard workspace_key(ctx) is Some(group) else { return None }
   for entry in self.active {
-    if entry.0 == group {
-      for tab in visible {
-        if tab.key == entry.1 {
-          return Some(tab)
-        }
-      }
+    guard entry.0 == group else { continue }
+    if visible.iter().find_first(tab => tab.key == entry.1) is Some(tab) {
+      return Some(tab)
     }
   }
-  visible.get(visible.length() - 1)
+  visible.last()
 }
 
 ///|
 fn State::tab_by_key(self : State, key : String) -> Tab? {
-  for tab in self.tabs {
-    if tab.key == key {
-      return Some(tab)
-    }
-  }
-  None
+  self.tabs.iter().find_first(tab => tab.key == key)
 }
 
 ///|
 fn State::tab_by_id(self : State, id : String) -> Tab? {
-  for tab in self.tabs {
-    if tab.id is Some(tab_id) && tab_id == id {
-      return Some(tab)
-    }
-  }
-  None
+  self.tabs.iter().find_first(tab => tab.id is Some(tab_id) && tab_id == id)
 }
 
 ///|

@@ -147,11 +147,10 @@ fn skill_document_view(source : String) -> @html.Html {
   let document = parse_skill_document(source)
   let nodes : Array[@html.Html] = []
   if !document.metadata.is_empty() {
-    let rows : Array[@html.Html] = []
-    for entry in document.metadata {
+    let rows = document.metadata.map(entry => {
       let (key, value) = entry
-      rows.push(@html.tr([@html.th(key), @html.td(value)]))
-    }
+      @html.tr([@html.th(key), @html.td(value)])
+    })
     nodes.push(
       @html.div(class="skill-metadata", [
         @html.div(class="skill-metadata-title", "Metadata"),
@@ -288,15 +287,7 @@ fn detail_action(
 /// (case-insensitive).
 fn matches(query : String, fields : Array[String]) -> Bool {
   let query = query.trim().to_owned().to_lower()
-  if query.is_empty() {
-    return true
-  }
-  for field in fields {
-    if field.to_lower().contains(query) {
-      return true
-    }
-  }
-  false
+  query.is_empty() || fields.any(field => field.to_lower().contains(query))
 }
 
 ///|

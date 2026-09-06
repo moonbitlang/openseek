@@ -57,15 +57,9 @@ pub fn rail(
   // The hover's enter-time anchor replaces the tick position it can no
   // longer inherit.
   let children : Array[@html.Html] = [@html.div(class="overview-rail", ticks)]
-  if state.hover is Some(hover) {
-    for entry in entries {
-      if entry.key == hover.key {
-        children.push(
-          preview(entry, clock, flip=hover.flip, anchor=hover.anchor),
-        )
-        break
-      }
-    }
+  if state.hover is Some(hover) &&
+    entries.iter().find_first(entry => entry.key == hover.key) is Some(entry) {
+    children.push(preview(entry, clock, flip=hover.flip, anchor=hover.anchor))
   }
   @html.nav(
     class="transcript-overview",

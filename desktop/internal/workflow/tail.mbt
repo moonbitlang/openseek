@@ -205,11 +205,7 @@ fn parse_journal(
   guard entry.get("outcome") is Some(Array([String(tag), Object(body)])) else {
     return None
   }
-  let attempt = match body.get("attempt") {
-    Some(Object(attempt)) => Some(attempt)
-    _ => None
-  }
-  guard attempt is Some(attempt) &&
+  guard body.get("attempt") is Some(Object(attempt)) &&
     attempt.get("attempt_id") is Some(String(child)) else {
     // A call that never launched (a refused or skipped one) has no child and
     // nothing for a per-subagent view to point at; the sidecar did not report

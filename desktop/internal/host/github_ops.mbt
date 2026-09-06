@@ -384,10 +384,7 @@ fn encode_url_path(path : String) -> String {
 ///|
 /// RFC 3986's unreserved set, plus the separator a branch path uses.
 fn is_url_path_plain(char : Char) -> Bool {
-  (char >= 'a' && char <= 'z') ||
-  (char >= 'A' && char <= 'Z') ||
-  (char >= '0' && char <= '9') ||
-  ['-', '.', '_', '~', '/'].contains(char)
+  char is ('a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '.' | '_' | '~' | '/')
 }
 
 ///|

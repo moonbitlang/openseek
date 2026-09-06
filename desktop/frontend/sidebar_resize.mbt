@@ -107,24 +107,11 @@ fn on_sidebar_resize_move(event : @dom.Event) -> Unit {
 ///|
 /// Clamp the dragged width into the sidebar's allowed range.
 fn drag_width(raw : Double, ceiling~ : Double) -> Int {
-  let ceiling = if ceiling > MaxSidebarWidth.to_double() {
-    MaxSidebarWidth.to_double()
-  } else {
-    ceiling
-  }
-  let ceiling = if ceiling < MinSidebarWidth.to_double() {
-    MinSidebarWidth.to_double()
-  } else {
-    ceiling
-  }
-  let width = if raw < MinSidebarWidth.to_double() {
-    MinSidebarWidth.to_double()
-  } else if raw > ceiling {
-    ceiling
-  } else {
-    raw
-  }
-  width.to_int()
+  let ceiling = ceiling.clamp(
+    min=MinSidebarWidth.to_double(),
+    max=MaxSidebarWidth.to_double(),
+  )
+  raw.clamp(min=MinSidebarWidth.to_double(), max=ceiling).to_int()
 }
 
 ///|

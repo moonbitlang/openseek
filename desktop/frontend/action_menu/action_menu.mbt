@@ -647,31 +647,19 @@ fn focus_subscription(
             previous = next
             return
           }
-          let mut old_index : Int? = None
-          for index in previous {
-            if focused == item_id(target, index) {
-              old_index = Some(index)
-            }
-          }
+          let old_index = previous
+            .iter()
+            .find_first(index => focused == item_id(target, index))
           if old_index is Some(old_index) &&
             enabled_position(next, old_index) is None {
-            let mut replacement : Int? = None
-            for index in next {
-              if replacement is None && index > old_index {
-                replacement = Some(index)
-              }
-            }
-            if replacement is None {
-              replacement = Some(next[next.length() - 1])
-            }
-            if replacement is Some(index) {
-              let _ = @dom.window().set_timeout(
-                () => {
-                  scheduler.add(focus_element(item_id(target, index), false))
-                },
-                0,
-              )
-            }
+            let index = next
+              .iter()
+              .find_first(index => index > old_index)
+              .unwrap_or(next[next.length() - 1])
+            let _ = @dom.window().set_timeout(
+              () => scheduler.add(focus_element(item_id(target, index), false)),
+              0,
+            )
           }
           previous = next
         },

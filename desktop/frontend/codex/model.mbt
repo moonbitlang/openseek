@@ -734,16 +734,14 @@ fn State::with_selected_model(self : State, id : String) -> State {
     // Startup restores preferences before model/list settles.
     return { ..self, selected_model: id, }
   }
-  for model in self.models {
-    if model.id == id {
-      return {
-        ..self,
-        selected_model: id,
-        selected_effort: model.reasoning_effort(self.selected_effort),
-      }
-    }
+  guard self.models.iter().find_first(model => model.id == id) is Some(model) else {
+    return self
   }
-  self
+  {
+    ..self,
+    selected_model: id,
+    selected_effort: model.reasoning_effort(self.selected_effort),
+  }
 }
 
 ///|
@@ -763,12 +761,7 @@ fn State::with_selected_effort(self : State, effort : String) -> State {
 
 ///|
 fn State::selected_model_option(self : State) -> CodexModelOption? {
-  for model in self.models {
-    if model.id == self.selected_model {
-      return Some(model)
-    }
-  }
-  None
+  self.models.iter().find_first(model => model.id == self.selected_model)
 }
 
 ///|
@@ -802,10 +795,10 @@ pub enum CodexModelListing {
 ///|
 pub fn State::model_listing(self : State) -> CodexModelListing {
   if !self.models.is_empty() {
-    let options : Array[@composer.ModelOption] = []
-    for model in self.models {
-      options.push({ value: model.id, label: model.label, })
-    }
+    let options = self.models.map(model => @composer.ModelOption::{
+      value: model.id,
+      label: model.label,
+    })
     // `with_models` never leaves an empty selection beside a non-empty
     // catalog, so this selected id names a real option.
     return CodexModels(options, selected=self.selected_model)
@@ -931,25 +924,14 @@ fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
     CodexThreadReply(thread_id, frontier) =>
       frontier.connection_epoch == self.activity.connection_epoch &&
       self.accepts_thread_reply(thread_id)
-    CodexResumeReply(thread_id) =>
-      self
-      .active_thread()
-      .map(thread => thread.id == thread_id)
-      .unwrap_or(false)
-    CodexDraftThreadReply(draft_id) =>
-      self.active_draft().map(draft => draft.id == draft_id).unwrap_or(false)
-    CodexTurnStartReply(thread_id)
+    CodexResumeReply(thread_id)
+    | CodexTurnStartReply(thread_id)
     | CodexTurnSteerReply(thread_id)
-    | CodexWorktreeTurnReply(thread_id, _) =>
-      self
-      .active_thread()
-      .map(thread => thread.id == thread_id)
-      .unwrap_or(false)
-    CodexWorktreeRepairReply(thread_id, _) =>
-      self
-      .active_thread()
-      .map(thread => thread.id == thread_id)
-      .unwrap_or(false)
+    | CodexWorktreeTurnReply(thread_id, _)
+    | CodexWorktreeRepairReply(thread_id, _) =>
+      self.active_thread() is Some(thread) && thread.id == thread_id
+    CodexDraftThreadReply(draft_id) =>
+      self.active_draft() is Some(draft) && draft.id == draft_id
     _ => true
   }
 }
@@ -1261,13 +1243,9 @@ fn CodexTurn::decode(value : Json) -> CodexTurn? {
   guard value is Object(fields) && @jsonx.json_text(fields, "id") is Some(id) else {
     return None
   }
-  let items : Array[CodexItem] = []
-  if fields.get("items") is Some(Array(values)) {
-    for value in values {
-      if CodexItem::decode(value) is Some(item) {
-        items.push(item)
-      }
-    }
+  let items = match fields.get("items") {
+    Some(Array(values)) => values.filter_map(CodexItem::decode)
+    _ => []
   }
   let error = match fields.get("error") {
     Some(Object(error)) => @jsonx.json_text(error, "message")
@@ -1331,13 +1309,9 @@ fn CodexThread::decode(value : Json) -> CodexThread? {
   guard value is Object(fields) && @jsonx.json_text(fields, "id") is Some(id) else {
     return None
   }
-  let turns : Array[CodexTurn] = []
-  if fields.get("turns") is Some(Array(values)) {
-    for value in values {
-      if CodexTurn::decode(value) is Some(turn) {
-        turns.push(turn)
-      }
-    }
+  let turns = match fields.get("turns") {
+    Some(Array(values)) => values.filter_map(CodexTurn::decode)
+    _ => []
   }
   let runtime = match CodexThreadRuntime::decode(fields.get("status")) {
     Some(runtime) => Some(runtime)
@@ -1418,18 +1392,10 @@ fn CodexThreadRow::title(fields : Map[String, Json]) -> String {
 /// final answer. The host's later `git.pull_request` request re-reads HEAD and
 /// replaces this label if the checkout moved since the thread was created.
 fn CodexThreadRow::branch(fields : Map[String, Json]) -> String? {
-  match fields.get("gitInfo") {
-    Some(Object(git)) =>
-      @jsonx.json_text(git, "branch").bind(branch => {
-        let branch = branch.trim().to_owned()
-        if branch.is_empty() {
-          None
-        } else {
-          Some(branch)
-        }
-      })
-    _ => None
-  }
+  guard fields.get("gitInfo") is Some(Object(git)) else { return None }
+  @jsonx.json_text(git, "branch")
+  .map(branch => branch.trim().to_owned())
+  .filter(branch => !branch.is_empty())
 }
 
 ///|
@@ -1557,12 +1523,7 @@ fn State::with_threads(
   guard value is Object(fields) && fields.get("data") is Some(Array(values)) else {
     return { ..self, notice: "Malformed Codex thread list", }
   }
-  let threads : Array[CodexThreadRow] = []
-  for value in values {
-    if CodexThreadRow::decode(value) is Some(thread) {
-      threads.push(thread)
-    }
-  }
+  let threads = values.filter_map(CodexThreadRow::decode)
   if archived {
     // The archived catalog is authoritative even when its notification was
     // missed while disconnected. Remove matching live rows in either reply
@@ -1597,13 +1558,10 @@ fn State::with_threads(
     // The list snapshot has no stamp for this thread; carry the one its
     // previous row held (the `thread/start` reply's), so the fresh thread
     // does not sink below stamped history until the next refresh.
-    let mut carried_ms : Double? = None
-    for existing in self.threads {
-      if existing.id == active.id {
-        carried_ms = existing.updated_at_ms
-        break
-      }
-    }
+    let carried_ms = self.threads
+      .iter()
+      .find_first(existing => existing.id == active.id)
+      .bind(existing => existing.updated_at_ms)
     let visible : Array[CodexThreadRow] = [
       {
         id: active.id,
@@ -1676,13 +1634,11 @@ fn State::with_requests(self : State, value : Json) -> State {
     // Preserve edits for a request already shown while replacing the list
     // with the actor's exact live ownership snapshot.
     let key = request_id.stringify()
-    let mut answers : Map[String, String] = Map([])
-    for existing in self.pending_requests {
-      if existing.request_id.stringify() == key {
-        answers = existing.answers
-        break
-      }
-    }
+    let answers = self.pending_requests
+      .iter()
+      .find_first(existing => existing.request_id.stringify() == key)
+      .map(existing => existing.answers)
+      .unwrap_or(Map([]))
     pending_requests.push({ ..decoded, answers, })
   }
   { ..self, pending_requests, request_generation: generation, }
@@ -1729,33 +1685,21 @@ fn State::with_thread_reply(
     runtime: active.runtime,
     updated_at_ms: reply_stamp_ms,
   }
-  let threads : Array[CodexThreadRow] = []
-  let mut replaced = false
-  for existing in self.threads {
+  let replaced = self.threads.iter().any(existing => existing.id == active.id)
+  let threads = self.threads.map(existing => {
     if existing.id == active.id {
       // A reply without a stamp must not erase the catalog's; keep the row
       // where the list already had it.
-      threads.push(
-        if reply_stamp_ms is Some(_) {
-          row
-        } else {
-          { ..row, updated_at_ms: existing.updated_at_ms, }
-        },
-      )
-      replaced = true
+      if reply_stamp_ms is Some(_) {
+        row
+      } else {
+        { ..row, updated_at_ms: existing.updated_at_ms, }
+      }
     } else {
-      threads.push(existing)
+      existing
     }
-  }
-  let visible = if replaced {
-    threads
-  } else {
-    let visible : Array[CodexThreadRow] = [row]
-    for thread in threads {
-      visible.push(thread)
-    }
-    visible
-  }
+  })
+  let visible = if replaced { threads } else { [row, ..threads] }
   let next = {
     ..self,
     threads: visible,
@@ -2014,12 +1958,10 @@ fn CodexTurn::is_running(self : CodexTurn) -> Bool {
 ///|
 fn State::active_turn_id(self : State) -> String? {
   guard self.active_thread() is Some(active) else { return None }
-  for index = active.turns.length() - 1; index >= 0; index = index - 1 {
-    if active.turns[index].status == "inProgress" {
-      return Some(active.turns[index].id)
-    }
-  }
-  None
+  active.turns
+  .rev_iter()
+  .find_first(turn => turn.is_running())
+  .map(turn => turn.id)
 }
 
 ///|
@@ -2091,12 +2033,9 @@ fn CodexThread::with_turn(self : CodexThread, turn : CodexTurn) -> CodexThread {
 /// the first submitted input. Item ids stay app-server-owned; the local
 /// preview needs only this semantic boundary and never tries to match text.
 fn CodexThread::has_user_item(self : CodexThread) -> Bool {
-  for turn in self.turns {
-    if turn.items.iter().any(item => item.kind == "userMessage") {
-      return true
-    }
-  }
-  false
+  self.turns
+  .iter()
+  .any(turn => turn.items.iter().any(item => item.kind == "userMessage"))
 }
 
 ///|
@@ -2131,17 +2070,12 @@ fn State::waiting_for_first_user_item(self : State) -> Bool {
 /// view holding only the agent message — replacing wholesale erased the
 /// user's own bubble from the transcript.
 fn CodexTurn::merged_onto(self : CodexTurn, existing : CodexTurn) -> CodexTurn {
-  let items : Array[CodexItem] = []
-  for item in existing.items {
-    let mut merged = item
-    for incoming in self.items {
-      if incoming.id == item.id {
-        merged = incoming
-        break
-      }
-    }
-    items.push(merged)
-  }
+  let items = existing.items.map(item => {
+    self.items
+    .iter()
+    .find_first(incoming => incoming.id == item.id)
+    .unwrap_or(item)
+  })
   for incoming in self.items {
     if !existing.items.iter().any(item => item.id == incoming.id) {
       items.push(incoming)
@@ -2510,20 +2444,16 @@ fn CodexItem::text(self : CodexItem) -> String {
       } else {
         match fields.get("summary") {
           Some(String(text)) => text
-          Some(Array(parts)) => {
-            let text : Array[String] = []
-            for part in parts {
+          Some(Array(parts)) =>
+            parts
+            .filter_map(part => {
               match part {
-                String(value) => text.push(value)
-                Object(fields) =>
-                  if @jsonx.json_text(fields, "text") is Some(value) {
-                    text.push(value)
-                  }
-                _ => ()
+                String(value) => Some(value)
+                Object(fields) => @jsonx.json_text(fields, "text")
+                _ => None
               }
-            }
-            text.join("\n")
-          }
+            })
+            .join("\n")
           _ => ""
         }
       }
@@ -2634,35 +2564,21 @@ fn CodexItem::tool_arguments(self : CodexItem) -> String? {
   guard self.value is Object(fields) else {
     return Some(self.value.stringify())
   }
-  match self.kind {
-    "commandExecution" => {
-      let arguments : Json = {
-        "command": @jsonx.json_text(fields, "command").unwrap_or(""),
-      }
-      Some(arguments.stringify())
-    }
+  let arguments : Json? = match self.kind {
+    "commandExecution" =>
+      Some({ "command": @jsonx.json_text(fields, "command").unwrap_or("") })
     "fileChange" =>
       match fields.get("changes") {
-        Some(changes) => {
-          let arguments : Json = { "changes": changes }
-          Some(arguments.stringify())
-        }
+        Some(changes) => Some({ "changes": changes })
         None => None
       }
-    "webSearch" => {
-      let arguments : Json = {
-        "query": @jsonx.json_text(fields, "query").unwrap_or(""),
-      }
-      Some(arguments.stringify())
-    }
-    "imageView" => {
-      let arguments : Json = {
-        "path": @jsonx.json_text(fields, "path").unwrap_or(""),
-      }
-      Some(arguments.stringify())
-    }
-    _ => Some(self.value.stringify())
+    "webSearch" =>
+      Some({ "query": @jsonx.json_text(fields, "query").unwrap_or("") })
+    "imageView" =>
+      Some({ "path": @jsonx.json_text(fields, "path").unwrap_or("") })
+    _ => Some(self.value)
   }
+  arguments.map(value => value.stringify())
 }
 
 ///|

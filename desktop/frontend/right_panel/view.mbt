@@ -46,30 +46,15 @@ fn panel_view(
           title: "Subagents this conversation delegated to",
           missing: false,
         }
-      FilePicker =>
-        match input.file_panel.explorer_mode {
+      FilePicker => {
+        let (label, title) = match input.file_panel.explorer_mode {
           ExplorerChanges =>
-            {
-              tab,
-              label: "Review Changes",
-              title: "Review changed files and diffs",
-              missing: false,
-            }
-          ExplorerSearch =>
-            {
-              tab,
-              label: "Search",
-              title: "Search across files",
-              missing: false,
-            }
-          ExplorerFiles =>
-            {
-              tab,
-              label: "Open File",
-              title: "Open a workspace file",
-              missing: false,
-            }
+            ("Review Changes", "Review changed files and diffs")
+          ExplorerSearch => ("Search", "Search across files")
+          ExplorerFiles => ("Open File", "Open a workspace file")
         }
+        { tab, label, title, missing: false, }
+      }
     }
   })
   let launcher : @dock.LauncherActions = {

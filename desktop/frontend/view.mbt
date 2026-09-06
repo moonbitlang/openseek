@@ -1050,18 +1050,14 @@ fn api_settings_rows(
   // The key lives on the host and is never echoed back — the page only
   // knows one is saved; saving a new one overwrites it.
   {
-    let key_saved = match model.api_provider {
-      Deepseek => model.deepseek_key_saved
-      Glm => model.glm_key_saved
-      Custom => model.custom_key_saved
+    let (key_label, key_saved) = match model.api_provider {
+      Deepseek => ("DeepSeek API key", model.deepseek_key_saved)
+      Glm => ("GLM API key", model.glm_key_saved)
+      Custom => ("Custom API key", model.custom_key_saved)
     }
     rows.push(
       @settings.row(
-        match model.api_provider {
-          Deepseek => "DeepSeek API key"
-          Glm => "GLM API key"
-          Custom => "Custom API key"
-        },
+        key_label,
         [
           @html.input(
             input_type=@html.InputType::Password,
@@ -1528,13 +1524,9 @@ fn console_gate_view(
             )
           }
           RosterReady => {
-            let mut selected : DeviceMeta? = None
-            for meta in console.roster {
-              if meta.id == id {
-                selected = Some(meta)
-                break
-              }
-            }
+            let selected = console.roster
+              .iter()
+              .find_first(meta => meta.id == id)
             if selected is Some(meta) {
               if meta.online {
                 card.push(@html.h2("Connecting to \{meta.name}…"))
