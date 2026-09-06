@@ -43,7 +43,7 @@ fn parse_fields(fields : Map[String, Json]) -> ShellInput raise {
     cmd,
     cwd,
     timeout_ms,
-    max_output_chars: cap_max_output_chars(max_output_chars),
+    max_output_chars: max_output_chars.min(hard_max_output_chars),
     run_in_background,
   }
 }
@@ -91,11 +91,6 @@ fn optional_positive_int(
     Some(Null) | None => None
     _ => fail("arguments.\{name} to be a number")
   }
-}
-
-///|
-fn cap_max_output_chars(value : Int) -> Int {
-  value.min(hard_max_output_chars)
 }
 
 ///|

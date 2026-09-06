@@ -30,7 +30,7 @@ pub fn moonbit_output(arguments : String, content : String) -> @rhtml.Html? {
 
 ///|
 /// Render a numbered result when `path` has a MoonBit source extension.
-fn moonbit_output_for_path(path : String, content : String) -> @rhtml.Html? {
+fn moonbit_output_for_path(path : StringView, content : String) -> @rhtml.Html? {
   // The read body is capped by its canonical decoder. Leave room for the
   // short status footer; older unbounded records use the host's plain fallback.
   guard is_moonbit_source(path) &&
@@ -78,14 +78,14 @@ pub fn moonbit_output_for_brief(
 ) -> @rhtml.Html? {
   guard brief.strip_prefix("read ") is Some(path_view) else { return None }
   let path = path_view.strip_suffix(" (truncated)").unwrap_or(path_view)
-  moonbit_output_for_path(path.to_owned(), content)
+  moonbit_output_for_path(path, content)
 }
 
 ///|
 /// Source/interface/script extensions tokenized by the MoonBit lexer. Markdown
 /// files such as `.mbt.md` deliberately stay plain: their outer grammar is
 /// Markdown even though fenced snippets may contain MoonBit.
-fn is_moonbit_source(path : String) -> Bool {
+fn is_moonbit_source(path : StringView) -> Bool {
   let lower = path.to_lower()
   lower.has_suffix(".mbt") ||
   lower.has_suffix(".mbti") ||

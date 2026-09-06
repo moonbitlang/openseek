@@ -144,13 +144,6 @@ fn components(prefix : String) -> Array[String] {
 }
 
 ///|
-/// Whether `shorter` is a component-wise prefix of `longer` (equal counts as
-/// covered).
-fn one_covers(shorter : Array[String], longer : Array[String]) -> Bool {
-  longer.starts_with(shorter)
-}
-
-///|
 /// Component-wise prefix overlap between two allowed-path sets: `src`
 /// overlaps `src/lexer` and `src`, never `src2`.
 fn paths_overlap(a : Array[String], b : Array[String]) -> Bool {
@@ -158,7 +151,9 @@ fn paths_overlap(a : Array[String], b : Array[String]) -> Bool {
     b.any(right => {
       let l = components(left)
       let r = components(right)
-      one_covers(l, r) || one_covers(r, l)
+      // Either component list being a prefix of the other is an overlap;
+      // equal lists count as covered.
+      r.starts_with(l) || l.starts_with(r)
     })
   })
 }

@@ -51,7 +51,7 @@ pub async fn resolve_geometry(
   let worktree_roots : Array[String] = []
   for record in listing.output.split("\u{0}") {
     if record.strip_prefix("worktree ") is Some(root) {
-      worktree_roots.push(canonical(root.to_owned()))
+      worktree_roots.push(canonical(root))
     }
   }
   guard !worktree_roots.is_empty() else {
@@ -84,10 +84,10 @@ pub fn Geometry::is_integration_target_for(
 ///|
 /// realpath when possible; lexical normalization otherwise (a nonexistent
 /// path cannot be part of live geometry, but error messages still read).
-async fn canonical(path : String) -> String {
+async fn canonical(path : StringView) -> String {
   let real = @fs.realpath(path) catch {
     error if @async.is_being_cancelled() => raise error
-    _ => path
+    _ => path.to_owned()
   }
   @workspace_path.strip_trailing_slash(real)
 }
