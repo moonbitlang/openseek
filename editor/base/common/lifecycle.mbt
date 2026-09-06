@@ -62,9 +62,7 @@ pub fn[T] Emitter::event(
   self.listeners.push({ id, listener, active, })
   Disposable::from(() => {
     active.val = false
-    let retained = self.listeners.filter(cell => cell.id != id)
-    self.listeners.clear()
-    self.listeners.append(retained)
+    self.listeners.retain(cell => cell.id != id)
   })
 }
 
@@ -72,12 +70,7 @@ pub fn[T] Emitter::event(
 /// Whether any active listener is registered, `Emitter.hasListeners`
 /// (`event.ts`).
 pub fn[T] Emitter::has_listeners(self : Emitter[T]) -> Bool {
-  for cell in self.listeners {
-    if cell.active.val {
-      return true
-    }
-  }
-  false
+  self.listeners.any(cell => cell.active.val)
 }
 
 ///|

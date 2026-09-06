@@ -180,23 +180,13 @@ pub fn DiffEditor::create(
       (provider, Some(line))
     }
   }
-  let widget = match services {
-    Some(services) =>
-      @diff_editor.DiffEditorWidget::create(
-        host,
-        provider,
-        services=services.code_services(),
-        editor_options=options.editor_options.code_options(),
-        options=options.internal(),
-      )
-    None =>
-      @diff_editor.DiffEditorWidget::create(
-        host,
-        provider,
-        editor_options=options.editor_options.code_options(),
-        options=options.internal(),
-      )
-  }
+  let widget = @diff_editor.DiffEditorWidget::create(
+    host,
+    provider,
+    services?=services.map(services => services.code_services()),
+    editor_options=options.editor_options.code_options(),
+    options=options.internal(),
+  )
   { widget, owned_line_provider, }
 }
 

@@ -274,19 +274,8 @@ pub fn EditorMouseEventFactory::on_pointer_down(
   target : @rdom.Element,
   callback : (EditorDomMouseEvent, Int) -> Unit,
 ) -> @base_common.Disposable {
-  let handler = (event : @rdom.Event) => {
-    match event.to_mouse_event() {
-      Some(mouse) =>
-        callback(
-          EditorDomMouseEvent(mouse, false, self.editor_view_dom_node),
-          @base_browser.mouse_event_pointer_id(mouse),
-        )
-      None => ()
-    }
-  }
-  target.add_event_listener("pointerdown", handler)
-  @base_common.Disposable::from(() => {
-    target.remove_event_listener("pointerdown", handler)
+  self.listen(target, "pointerdown", event => {
+    callback(event, @base_browser.mouse_event_pointer_id(event.browser_event))
   })
 }
 
@@ -335,9 +324,8 @@ pub fn GlobalEditorPointerMoveMonitor::GlobalEditorPointerMoveMonitor(
 fn GlobalEditorPointerMoveMonitor::dispose_keydown_listener(
   self : GlobalEditorPointerMoveMonitor,
 ) -> Unit {
-  match self.keydown_listener {
-    Some(listener) => listener.dispose()
-    None => ()
+  if self.keydown_listener is Some(listener) {
+    listener.dispose()
   }
   self.keydown_listener = None
 }
