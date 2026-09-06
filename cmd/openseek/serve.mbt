@@ -646,7 +646,7 @@ async fn run_serve(
     }
     // The same coordinates, in the shape an mbtx snippet needs: a workflow it
     // runs delegates to children that must be named from the SAME ordinal
-    // counter `run_subrun` uses, or a snippet's child and an `explore` child
+    // counter `run_subrun` uses, or a snippet's child and a `review` child
     // collide on one transcript file.
     let mbtx_subrun = child_session.map(spec => {
       spec.injection(exe~, workspace_root~, model="\{model}", api_url?)
@@ -907,7 +907,7 @@ async fn run_serve(
       submission_id : String?,
     ) -> @async.Task[Unit] {
       // Each turn refills the shared subrun allowance; the registry (and the
-      // budget object the explore tool holds) lives across turns.
+      // budget objects the review and subtask tools hold) lives across turns.
       subrun_budget.reset_turn()
       group.spawn() <| () => {
         let _ = @agent.run_turn_in_scope(

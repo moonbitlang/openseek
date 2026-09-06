@@ -56,8 +56,8 @@ fn review_subrun_input(
 ///
 /// The gate does NOT draw from the shared `SubrunBudget`: that allowance
 /// meters MODEL-initiated delegation, while the gate is engine-initiated
-/// and fires at most once per met claim. Sharing let a turn's explore
-/// calls starve the audit into an underpowered run that died at its step
+/// and fires at most once per met claim. Sharing let a turn's model-initiated
+/// subrun calls starve the audit into an underpowered run that died at its step
 /// ceiling unreported (ccomp-run10) — the one subrun that must not be
 /// shortchanged is the one auditing the claim everything else rests on.
 fn build_goal_met_gate(

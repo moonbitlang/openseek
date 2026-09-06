@@ -462,27 +462,26 @@ fn default_prompt() -> String {
     #|  returns severity-tagged findings with file:line citations. A blocker
     #|  finding means the claim does not hold yet. Costs a bounded subagent run;
     #|  for small changes, validate directly instead.
-    #|- `explore` tool: use read-only scouts EARLY when unfamiliar work crosses
-    #|  packages, needs a fan-out search, or needs an end-to-end trace. Each call
-    #|  delegates ONE self-contained question and returns a bounded conclusion with
-    #|  file:line citations, keeping the scout's file reads out of your context.
-    #|  Default to one scout for one broad trace. When a task has TWO OR MORE
-    #|  independent discovery tracks (for example entry points, runtime flow,
-    #|  callers/tests, or API surface), issue 2-3 non-overlapping `explore` calls in
-    #|  the SAME step BEFORE tracing those tracks yourself; they run concurrently.
-    #|  Include known paths or symbols as hints. Do a direct lookup yourself when
-    #|  one `moon ide doc` query or one focused file read can settle it. The scouts
-    #|  cannot edit, and their shared per-turn budget is bounded, so spot-check the
-    #|  returned citations and do not delegate overlapping questions.
-    #|- Concurrent exploration through `mbtx`: when the `mbtx` tool offers a
-    #|  `subrun` argument (it does only in a durable session), ONE snippet can fan
-    #|  out several read-only scouts as one workflow and conclude over their answers
-    #|  in code. The scouts get their own transcripts and appear in the desktop; you
-    #|  see one tool result. Prefer this over separate `explore` calls when the
-    #|  fan-out is wider than three, when a second wave of questions depends on the
-    #|  first wave's answers, or when the conclusion is mechanical (compare, count,
-    #|  cross-check). Set `subrun: true` on that one call and on no other: a snippet
-    #|  without the flag gets no handoff, and `@hosted.context()` is `None`.
+    #|- Read-only scouts through `mbtx`: use scouts EARLY when unfamiliar work
+    #|  crosses packages, needs a fan-out search, or needs an end-to-end trace.
+    #|  When the `mbtx` tool offers a `subrun` argument (it does only in a durable
+    #|  session), ONE snippet with `subrun: true` runs a `moonbitlang/workflow`
+    #|  workflow whose `wf.agent` calls are scouts. Each scout gets ONE
+    #|  self-contained question (it sees nothing else of this conversation, so put
+    #|  known paths and symbols in the prompt as hints), reads and probes the
+    #|  workspace with no edit tools, and returns a bounded answer with file:line
+    #|  citations. The scouts run concurrently, get their own transcripts, and
+    #|  appear in the desktop; you see one tool result — the reports the snippet
+    #|  prints — so their file reads never enter your context. Default to one
+    #|  scout for one broad trace. When a task has TWO OR MORE independent
+    #|  discovery tracks (for example entry points, runtime flow, callers/tests,
+    #|  or API surface), fan out 2-3 non-overlapping scouts in the same snippet
+    #|  BEFORE tracing those tracks yourself; when a second wave of questions
+    #|  depends on the first wave's answers, or the conclusion is mechanical
+    #|  (compare, count, cross-check), conclude in code. Do a direct lookup
+    #|  yourself when one `moon ide doc` query or one focused file read can settle
+    #|  it. Set `subrun: true` on that one call and on no other: a snippet without
+    #|  the flag gets no handoff, and `@hosted.context()` is `None`.
     #|
     #|    ```mbtx
     #|    import {
@@ -528,8 +527,8 @@ fn default_prompt() -> String {
     #|  raises if fewer than `min_ok` did). Leave `max_steps` unset: a scout
     #|  reads files and runs probes, and a real question takes it 20-60 steps —
     #|  a ceiling of 10 ends every scout in `max_steps` with no answer. A snippet
-    #|  may start at most 32 scouts, and the same rule as `explore` applies: no
-    #|  overlapping questions, and spot-check the citations.
+    #|  may start at most 32 scouts. Do not delegate overlapping questions, and
+    #|  spot-check the returned citations.
     #|- `subtask` tool: parallelize LARGE partitionable work — three or more
     #|  independent slices that each need real edit+verify cycles (fixing warnings
     #|  by category, per-package sweeps, migration chunks). Each launch names a

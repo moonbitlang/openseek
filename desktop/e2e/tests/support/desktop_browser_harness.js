@@ -320,9 +320,9 @@ export class DesktopBrowserHarness {
             content: '',
             tool_calls: [
               {
-                id: 'explore-1',
-                name: 'explore',
-                arguments: JSON.stringify({ query: 'find the API' }),
+                id: 'review-1',
+                name: 'review',
+                arguments: JSON.stringify({ focus: 'find the API' }),
               },
             ],
           },
@@ -333,11 +333,11 @@ export class DesktopBrowserHarness {
         item: {
           kind: 'tool_result',
           payload: {
-            tool_call_id: 'explore-1',
-            tool_name: 'explore',
+            tool_call_id: 'review-1',
+            tool_name: 'review',
             content: 'Answer: use the browser fixture.',
             is_error: false,
-            brief: 'explore sr-2 (1 citation(s), 7 step(s))',
+            brief: 'review sr-2 (2 finding(s), 7 step(s))',
           },
         },
       },
