@@ -70,16 +70,24 @@ the caller's original `aria-hidden` state.
 contribution owns one model-scoped viewport-width observer and invalidates all
 live comment size observers when that width changes. Resize notifications and
 explicit viewport/renderer/image invalidations are coalesced through the
-realm-global `base/browser` animation-frame coordinator. A connected offscreen
-ViewZone is temporarily laid out invisibly using its already pinned
-viewport-safe width and horizontal offset; measurement never replaces
-`width` or `left`, and every touched inline style and priority is restored
-before its integer height is reported. The returned
-`MarkdownCommentSizeObserver` exposes `request_measure` and idempotent
-`dispose`; zero-size restore notifications cannot create a feedback loop.
-Disposal disconnects observation, cancels queued frame work, and makes late
-notifications inert. The root contribution remains responsible for the shared
-viewport observer, geometry lease, generation, and zone-id freshness.
+caller-owned `MarkdownCommentMeasureBatch`, which runs one measurement pass
+per animation frame for every zone of its owner (scheduled through the
+realm-global `base/browser` animation-frame coordinator). A pass reads every
+directly measurable height first, then shows every still-hidden connected
+ViewZone invisibly at once, reads all of their heights, restores their styles,
+and only then reports the changed integer heights before calling
+`on_pass_complete` once. Separating the writes from the reads keeps a document
+with thousands of doc comments at a constant number of forced layouts per
+pass instead of one per zone. Hidden measurement uses the zone's already
+pinned viewport-safe width and horizontal offset; it never replaces `width`
+or `left`, and every touched inline style and priority is restored before
+any height is reported. The returned `MarkdownCommentSizeObserver` exposes
+`request_measure` and idempotent `dispose`; zero-size restore notifications
+cannot create a feedback loop. Disposal disconnects observation and makes late
+notifications inert; disposing the batch cancels its queued frame work. The
+root contribution remains responsible for the shared viewport observer,
+geometry lease, generation, zone-id freshness, and for publishing the
+reported heights in one ViewZone transaction at pass completion.
 
 The shared `DiagramViewports` lifetime owns every successfully
 rendered direct Diago, UML, or Mermaid SVG viewport inside one Markdown-comment

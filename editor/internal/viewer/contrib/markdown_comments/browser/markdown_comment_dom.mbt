@@ -314,74 +314,211 @@ pub fn MarkdownCommentDom::expose_accessible_content(
 }
 
 ///|
+/// One zone's coalesced measurement request inside a
+/// `MarkdownCommentMeasureBatch`.
+priv struct MarkdownCommentMeasureEntry {
+  dom : MarkdownCommentDom
+  on_height_changed : (Int) -> Unit
+  mut last_height : Int
+  mut force_hidden : Bool
+  mut queued : Bool
+  mut disposed : Bool
+}
+
+///|
+/// Coalesces every comment zone's size measurement of one owner into a
+/// single animation-frame pass. A pass first reads every directly measurable
+/// content height, then lays out all still-hidden zones invisibly at once,
+/// reads their heights, restores their styles, and only then reports the
+/// changed heights. Grouping the DOM writes ahead of the reads keeps the
+/// browser at a constant number of forced layouts per pass instead of one
+/// per zone; measuring each zone on its own is what made opening a large
+/// MoonBit file stall for seconds. `on_pass_complete` runs once after a
+/// pass's height callbacks so the owner can publish every changed zone in one
+/// ViewZone transaction.
+struct MarkdownCommentMeasureBatch {
+  mut pending : Array[MarkdownCommentMeasureEntry]
+  mut frame : @base_common.Disposable?
+  mut frame_scheduled : Bool
+  mut in_pass : Bool
+  mut disposed : Bool
+  on_pass_complete : () -> Unit
+}
+
+///|
+/// Creates an empty batch owned by one root contribution.
+pub fn MarkdownCommentMeasureBatch::MarkdownCommentMeasureBatch(
+  on_pass_complete~ : () -> Unit,
+) -> MarkdownCommentMeasureBatch {
+  {
+    pending: [],
+    frame: None,
+    frame_scheduled: false,
+    in_pass: false,
+    disposed: false,
+    on_pass_complete,
+  }
+}
+
+///|
+/// Whether a measurement pass is reporting heights right now. Height callbacks
+/// use it to defer their ViewZone relayout to `on_pass_complete`.
+pub fn MarkdownCommentMeasureBatch::in_pass(
+  self : MarkdownCommentMeasureBatch,
+) -> Bool {
+  self.in_pass
+}
+
+///|
+/// Cancels queued frame work and makes every later request inert. The
+/// per-zone observer lifetimes remain caller-owned.
+pub fn MarkdownCommentMeasureBatch::dispose(
+  self : MarkdownCommentMeasureBatch,
+) -> Unit {
+  if self.disposed {
+    return
+  }
+  self.disposed = true
+  match self.frame {
+    Some(registration) => registration.dispose()
+    None => ()
+  }
+  self.frame = None
+  self.frame_scheduled = false
+  for entry in self.pending {
+    entry.queued = false
+  }
+  self.pending = []
+}
+
+///|
+fn MarkdownCommentMeasureBatch::enqueue(
+  self : MarkdownCommentMeasureBatch,
+  entry : MarkdownCommentMeasureEntry,
+  force_hidden : Bool,
+) -> Unit {
+  if self.disposed || entry.disposed {
+    return
+  }
+  entry.force_hidden = entry.force_hidden || force_hidden
+  if entry.queued {
+    return
+  }
+  entry.queued = true
+  self.pending.push(entry)
+  if self.frame_scheduled {
+    return
+  }
+  self.frame_scheduled = true
+  let registration = @base_browser.schedule_at_next_animation_frame(() => {
+    self.run_pass()
+  })
+  // Native requestAnimationFrame is asynchronous, but retaining this branch
+  // makes the owner correct under a synchronous test/browser shim too.
+  if self.frame_scheduled {
+    self.frame = Some(registration)
+  } else {
+    registration.dispose()
+  }
+}
+
+///|
+/// One frame's measurement pass: direct reads, then one invisible layout of
+/// every hidden zone, then the reports.
+fn MarkdownCommentMeasureBatch::run_pass(
+  self : MarkdownCommentMeasureBatch,
+) -> Unit {
+  self.frame_scheduled = false
+  self.frame = None
+  if self.disposed {
+    return
+  }
+  let entries = self.pending
+  self.pending = []
+  // Phase 1: direct reads. Visible content reports immediately; the first
+  // read may force one layout, later reads reuse it.
+  let hidden : Array[MarkdownCommentMeasureEntry] = []
+  let measured : Array[(MarkdownCommentMeasureEntry, Int)] = []
+  for entry in entries {
+    entry.queued = false
+    if entry.disposed || !@base_browser.element_is_connected(entry.dom.content) {
+      continue
+    }
+    let allow_hidden = entry.force_hidden || entry.last_height == 0
+    entry.force_hidden = false
+    let direct = @base_browser.element_offset_height(entry.dom.content).to_int()
+    if direct > 0 || !allow_hidden {
+      measured.push((entry, direct))
+    } else {
+      hidden.push(entry)
+    }
+  }
+  // Phase 2: writes. Every hidden zone is laid out invisibly at once.
+  let saved = hidden.map(entry => {
+    begin_hidden_markdown_comment_measure(entry.dom.outer)
+  })
+  // Phase 3: reads, all sharing the one layout the first read forces.
+  for entry in hidden {
+    measured.push(
+      (
+        entry,
+        read_hidden_markdown_comment_height(entry.dom.outer, entry.dom.content),
+      ),
+    )
+  }
+  // Phase 4: restore every touched inline style and priority.
+  for index, entry in hidden {
+    end_hidden_markdown_comment_measure(entry.dom.outer, saved[index])
+  }
+  // Phase 5: report. A callback may dispose a later entry, so re-check each.
+  self.in_pass = true
+  defer {
+    self.in_pass = false
+  }
+  for pair in measured {
+    let (entry, height) = pair
+    if entry.disposed || height <= 0 || height == entry.last_height {
+      continue
+    }
+    entry.last_height = height
+    (entry.on_height_changed)(height)
+  }
+  (self.on_pass_complete)()
+}
+
+///|
 /// Observes the inner Markdown content and reports its first/changed positive
-/// integer height after one shared animation-frame boundary. Explicit requests
-/// cover renderer replacement, image load, and model-scoped viewport-width
-/// changes while a zone is offscreen. The root callback owns generation and
-/// zone-id stale checks before relayout.
+/// integer height through `batch`, after one shared animation-frame boundary.
+/// Explicit requests cover renderer replacement, image load, and model-scoped
+/// viewport-width changes while a zone is offscreen. The root callback owns
+/// generation and zone-id stale checks before relayout.
 pub fn MarkdownCommentDom::observe_size(
   self : MarkdownCommentDom,
+  batch : MarkdownCommentMeasureBatch,
   on_height_changed : (Int) -> Unit,
 ) -> MarkdownCommentSizeObserver {
-  let disposed = Ref(false)
-  let frame_scheduled = Ref(false)
-  let force_hidden_measure = Ref(false)
-  let pending_frame : Ref[@base_common.Disposable?] = Ref(None)
-  let last_height = Ref(0)
-  let measure = () => {
-    frame_scheduled.val = false
-    pending_frame.val = None
-    if disposed.val || !@base_browser.element_is_connected(self.content) {
-      return
-    }
-    let allow_hidden = force_hidden_measure.val || last_height.val == 0
-    force_hidden_measure.val = false
-    let height = markdown_comment_measured_height(
-      self.outer,
-      self.content,
-      allow_hidden,
-    )
-    if height <= 0 || height == last_height.val {
-      return
-    }
-    last_height.val = height
-    on_height_changed(height)
-  }
-  let schedule_measure = (force_hidden : Bool) => {
-    if disposed.val {
-      return
-    }
-    force_hidden_measure.val = force_hidden_measure.val || force_hidden
-    if frame_scheduled.val {
-      return
-    }
-    frame_scheduled.val = true
-    let registration = @base_browser.schedule_at_next_animation_frame(measure)
-    // Native requestAnimationFrame is asynchronous, but retaining this branch
-    // makes the owner correct under a synchronous test/browser shim too.
-    if frame_scheduled.val {
-      pending_frame.val = Some(registration)
-    } else {
-      registration.dispose()
-    }
+  let entry : MarkdownCommentMeasureEntry = {
+    dom: self,
+    on_height_changed,
+    last_height: 0,
+    force_hidden: false,
+    queued: false,
+    disposed: false,
   }
   let observer = @base_browser.observe_element_resize(self.content, () => {
-    schedule_measure(false)
+    batch.enqueue(entry, false)
   })
   let lifetime = @base_common.Disposable::from(() => {
-    disposed.val = true
+    if entry.disposed {
+      return
+    }
+    entry.disposed = true
     match observer {
       Some(observer) => observer.dispose()
       None => ()
     }
-    match pending_frame.val {
-      Some(registration) => registration.dispose()
-      None => ()
-    }
-    pending_frame.val = None
-    frame_scheduled.val = false
   })
-  { request_measure_: () => schedule_measure(true), lifetime, }
+  { request_measure_: () => batch.enqueue(entry, true), lifetime, }
 }
 
 ///|
@@ -523,26 +660,17 @@ fn restore_markdown_comment_style(
 }
 
 ///|
-/// Reads visible content directly. For a connected `display:none` ViewZone,
-/// temporarily lays out the caller-owned outer node invisibly without replacing
-/// its viewport-pinned `left` or `width`, then restores every touched inline
-/// declaration and priority before returning. A later zero-size ResizeObserver
-/// notification is not allowed to repeat this hidden path unless the shared
-/// viewport observer or renderer explicitly invalidated it.
-fn markdown_comment_measured_height(
+/// Prepares a connected `display:none` ViewZone for an invisible layout: the
+/// caller-owned outer node is shown hidden at `top: 0` without replacing its
+/// viewport-pinned `left` or `width`. Returns every touched inline declaration
+/// and priority for `end_hidden_markdown_comment_measure`. A later zero-size
+/// ResizeObserver notification is not allowed to repeat this hidden path unless
+/// the shared viewport observer or renderer explicitly invalidated it.
+fn begin_hidden_markdown_comment_measure(
   outer : @rdom.Element,
-  content : @rdom.Element,
-  allow_hidden : Bool,
-) -> Int {
-  let direct = @base_browser.element_offset_height(content).to_int()
-  if direct > 0 || !allow_hidden || !@base_browser.element_is_connected(content) {
-    return direct
-  }
+) -> Array[MarkdownCommentSavedStyle] {
   let saved = ["display", "visibility", "pointer-events", "height", "top"].map(name => {
     save_markdown_comment_style(outer, name)
-  })
-  defer (for declaration in saved {
-    restore_markdown_comment_style(outer, declaration)
   })
   @base_browser.set_style_property_with_priority(
     outer, "display", "block", "important",
@@ -559,6 +687,16 @@ fn markdown_comment_measured_height(
   @base_browser.set_style_property_with_priority(
     outer, "top", "0px", "important",
   )
+  saved
+}
+
+///|
+/// Reads the invisibly laid out content height, or zero while the zone has no
+/// usable width yet.
+fn read_hidden_markdown_comment_height(
+  outer : @rdom.Element,
+  content : @rdom.Element,
+) -> Int {
   let rect_width = outer.get_bounding_client_rect().get_width()
   let width = if rect_width > 0.0 {
     rect_width
@@ -569,4 +707,15 @@ fn markdown_comment_measured_height(
     return 0
   }
   @base_browser.element_offset_height(content).to_int()
+}
+
+///|
+/// Restores the declarations captured by `begin_hidden_markdown_comment_measure`.
+fn end_hidden_markdown_comment_measure(
+  outer : @rdom.Element,
+  saved : Array[MarkdownCommentSavedStyle],
+) -> Unit {
+  for declaration in saved {
+    restore_markdown_comment_style(outer, declaration)
+  }
 }

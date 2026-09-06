@@ -420,7 +420,13 @@ fn TokenizerWithStateStoreAndTextModel::tokenize_heuristically(
   end_line_number : Int,
 ) -> HeuristicTokenizationResult {
   let first_invalid = self.base.store.get_first_invalid_end_state_line_number_or_max()
-  if end_line_number <= first_invalid {
+  // Deviation from the source's `endLineNumber <= firstInvalid` no-op: that
+  // form leaves a requested range whose last line is exactly the frontier
+  // untokenized, which shows as a plain first line whenever the first visible
+  // model range is a single line (a lone header comment followed by a hidden
+  // doc-comment block) and the background worker's idle turn is far away.
+  // Only ranges that end strictly before the frontier are already accurate.
+  if end_line_number < first_invalid {
     return { heuristic_tokens: false, }
   }
   if start_line_number <= first_invalid {
