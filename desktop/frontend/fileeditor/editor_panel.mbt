@@ -327,6 +327,18 @@ fn markdown_resource_kind(name : String) -> @viewer.MarkdownResourceKind {
 }
 
 ///|
+/// The language for diff-editor models. Markdown documents diff as
+/// unhighlighted source: tokenizing them as code (e.g. `.mbt.md` as MoonBit)
+/// would paint prose like source code.
+fn diff_language_id(name : String) -> String {
+  if uses_markdown_presentation(name) {
+    "markdown"
+  } else {
+    language_id(name)
+  }
+}
+
+///|
 /// Create the viewer in its host element after the next paint, once (the
 /// tokenizers and hover provider register with it). A no-op if already
 /// mounted or the host element is not in the DOM yet.
@@ -763,7 +775,7 @@ fn show_diff_comparison(
     services.feedback.clear_feedback(previous.original.uri)
   }
   let model_version = viewer_state.version
-  let language = language_id(name)
+  let language = diff_language_id(name)
   let original_model = @model.TextModel(
     original_uri,
     name,
@@ -855,7 +867,7 @@ fn show_history_diff_in_viewer(
     viewer_state.version += 1
     let version = viewer_state.version
     let name = basename(diff.path)
-    let language = language_id(name)
+    let language = diff_language_id(name)
     let original_model = @model.TextModel(
       original_uri,
       name,
