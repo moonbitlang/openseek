@@ -23,7 +23,7 @@ fn JsonObject::required_non_negative_int(
 ///|
 /// Both search boundaries carry a failure as a code/message pair that is
 /// wholly present or wholly absent, and refuse a blank half of one.
-fn required_error_pair(
+fn optional_error_pair(
   object : JsonObject,
 ) -> (String, String)? raise @json.JsonDecodeError {
   let error_code = object.optional_string("error_code")
@@ -173,7 +173,7 @@ pub impl FromJson for SearchTextReply with fn from_json(json, path) {
   let match_count = object.required_non_negative_int("match_count")
   let file_count = object.required_non_negative_int("file_count")
   let matches : Array[TextSearchMatch] = object.required_array_of("matches")
-  let error : TextSearchError? = match required_error_pair(object) {
+  let error : TextSearchError? = match optional_error_pair(object) {
     Some((code, message)) => Some({ code, message, })
     None => None
   }

@@ -351,7 +351,7 @@ fn starts_with_ignore_case_impl(str : String, candidate : String) -> Bool {
 /// `"` alone, matching Monaco's `_tokenizeToString`; use `escape_html` for text
 /// that can also land in an attribute value.
 pub fn escape(text : String) -> String {
-  escape_into(text, quote=false)
+  escape_impl(text, quote=false)
 }
 
 ///|
@@ -359,13 +359,13 @@ pub fn escape(text : String) -> String {
 /// three characters plus `"`. Callers that build markup by concatenation and
 /// may quote the result need this variant.
 pub fn escape_html(text : String) -> String {
-  escape_into(text, quote=true)
+  escape_impl(text, quote=true)
 }
 
 ///|
 /// Shared body of `escape` and `escape_html`; `quote` adds the
 /// attribute-value `"` escape.
-fn escape_into(text : String, quote~ : Bool) -> String {
+fn escape_impl(text : String, quote~ : Bool) -> String {
   let sb = StringBuilder()
   for ch in text {
     match ch {

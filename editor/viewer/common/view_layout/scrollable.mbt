@@ -925,10 +925,10 @@ pub fn EditorScrollable::dispose(self : EditorScrollable) -> Unit {
 ///|
 fn truncate_double(value : Double) -> Double {
   // JavaScript's `value | 0` performs ToInt32, not a saturating Double->Int
-  // conversion. Keep the modulo/wrap explicit so the common package has the
-  // same result on every MoonBit target, including the signed-32-bit edges.
-  // NaN and both infinities become zero under ToInt32. Normalize negative zero
-  // too, so the retained dimensions have one canonical zero representation.
+  // conversion. `javascript_to_int32` keeps that modulo/wrap explicit, so the
+  // common package has the same result on every MoonBit target, including the
+  // signed-32-bit edges: NaN and both infinities become zero, and negative zero
+  // is normalized, so the retained dimensions have one canonical zero.
   javascript_to_int32(value).to_double()
 }
 

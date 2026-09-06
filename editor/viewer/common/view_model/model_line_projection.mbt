@@ -521,7 +521,7 @@ fn view_line_data_for_segment_with_injections(
 /// A run of `n` spaces — the leading indent prepended to a wrapped continuation
 /// line. Monaco's `spaces(count)`.
 fn spaces(n : Int) -> String {
-  " ".repeat(n)
+  " ".repeat(n.max(0))
 }
 
 ///|

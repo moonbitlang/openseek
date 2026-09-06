@@ -5,8 +5,8 @@
 
 ///|
 /// `text` without a trailing `suffix`, or `text` unchanged when it does not
-/// end with one. Every URL derivation here joins its own path onto a server
-/// origin whose trailing slash is optional.
+/// end with one. Callers strip either the optional trailing slash from a
+/// server origin, or the `/v1/tunnel` path from a relay URL.
 fn without_suffix(text : String, suffix : StringView) -> String {
   match text.strip_suffix(suffix) {
     Some(rest) => rest.to_owned()

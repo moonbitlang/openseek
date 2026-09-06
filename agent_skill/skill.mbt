@@ -135,8 +135,8 @@ pub fn merge_skills(
 /// use a skill: read the listed file first, then follow it.
 pub fn skills_prompt_section(skills : Array[Skill]) -> String? {
   guard skills.length() > 0 else { return None }
-  // The `$|` separator supplies the newline before the first entry, so each
-  // entry only needs a leading newline once another already precedes it.
+  // Entries are joined with newlines; the `$|` block below supplies the one
+  // before the first entry.
   let listing = [
     for skill in skills => {
       let description = if skill.description() == "" {

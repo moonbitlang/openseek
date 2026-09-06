@@ -72,8 +72,10 @@ fn[X] spawn_client(group : @async.TaskGroup[X], client : Client) -> Unit {
 }
 
 ///|
-/// The client every test below starts from: a queue transport plus the two
+/// The client most tests below start from: a queue transport plus the two
 /// standing tasks (reader and writer) the client requires, spawned on `group`.
+/// Tests that must install a handler before the reader starts, or that own the
+/// pump handle themselves, build their client inline instead.
 fn[X] new_client(group : @async.TaskGroup[X]) -> (FakeTransport, Client) {
   let transport = new_transport()
   let client = Client::Client(transport)

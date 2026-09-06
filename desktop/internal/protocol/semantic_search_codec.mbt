@@ -178,7 +178,7 @@ pub impl FromJson for SearchSemanticReply with fn from_json(json, path) {
   let match_count = object.required_non_negative_int("match_count")
   let file_count = object.required_non_negative_int("file_count")
   let hits : Array[SemanticSearchHit] = object.required_array_of("matches")
-  let error : SemanticSearchError? = match required_error_pair(object) {
+  let error : SemanticSearchError? = match optional_error_pair(object) {
     Some((code, message)) => Some({ code, message, })
     None => None
   }

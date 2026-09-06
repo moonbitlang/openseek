@@ -1,6 +1,6 @@
 ///|
 test "path activation follows the target shell's syntax" {
-  let posix_quoted = ["/tmp/it's moon/bin", "/tmp/packaged tools/bin"]
+  let posix_dirs = ["/tmp/it's moon/bin", "/tmp/packaged tools/bin"]
   let windows_dirs = [
     "C:\\Users\\Moon User\\toolchain\\bin", "C:\\Program Files\\SeekMoon\\bin",
   ]
@@ -21,10 +21,10 @@ test "path activation follows the target shell's syntax" {
       "set -gx PATH '/tmp/it\\'s\\\\moon/bin' '/tmp/packaged tools/bin' $PATH\r",
     ),
     (
-      "/bin/tcsh", posix_quoted, false, "setenv PATH '/tmp/it'\\''s moon/bin':'/tmp/packaged tools/bin':\"$PATH\"\r",
+      "/bin/tcsh", posix_dirs, false, "setenv PATH '/tmp/it'\\''s moon/bin':'/tmp/packaged tools/bin':\"$PATH\"\r",
     ),
     (
-      "/usr/local/bin/pwsh", posix_quoted, false, "$env:PATH = '/tmp/it''s moon/bin:/tmp/packaged tools/bin:' + $env:PATH\r",
+      "/usr/local/bin/pwsh", posix_dirs, false, "$env:PATH = '/tmp/it''s moon/bin:/tmp/packaged tools/bin:' + $env:PATH\r",
     ),
     (
       "C:/Program Files/PowerShell/pwsh.exe", windows_dirs, true, "$env:Path = 'C:\\Users\\Moon User\\toolchain\\bin;C:\\Program Files\\SeekMoon\\bin;' + $env:Path\r",

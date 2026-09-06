@@ -625,16 +625,13 @@ pub fn open_changed_document(
     )
   }
   if change.has_working_tree_file() {
-    // Clear a previous review baseline immediately while keeping the cached
-    // working document and view state; the new HEAD side fills in later.
-    // The tagged read below is the sole refresh owner, so this command only
-    // displays the cached document instead of scheduling a duplicate reload.
-    //
-    // The Viewer can still contain the previously active reviewed document.
-    // The dock has already switched to this uncached path, so clear the
-    // outgoing document while its tagged working-tree read is pending. Use
-    // the same review-loading presentation path as later activations so the
-    // old source, navigation context, and gutter all disappear together.
+    // Show the review-loading presentation for this path whether or not a
+    // working document is already cached. Either way the previous review
+    // baseline clears at once and the new HEAD side fills in later, and the
+    // Viewer stops showing the outgoing document while its tagged working-tree
+    // read is pending, so the old source, navigation context and gutter
+    // disappear together. The tagged read below is the sole refresh owner, so
+    // this command only presents; it never schedules a duplicate reload.
     cmds.push(
       show_pending_review(
         dispatch,
@@ -3426,14 +3423,10 @@ pub fn update(
         ) -> Int {
           let (review, next_generation) = match doc.review {
             Some(review) if review.selected.has_working_tree_file() =>
-              // The missing signature is newer than any tagged read
-              // that was already in flight. Advance its token so an
-              // older successful read cannot resurrect deleted working
-              // text.
-              //
-              // Like a deletion, the failure is newer than any tagged
-              // read still in flight: an older success must not settle
-              // text the host can no longer vouch for.
+              // A missing or unreadable stat is newer than any tagged
+              // read still in flight. Advance its token so an older
+              // successful read cannot resurrect working text the host
+              // can no longer vouch for.
               (
                 Some({ ..review, working_generation: generation + 1, }),
                 generation + 1,
