@@ -218,7 +218,9 @@ async fn run_one_attempt(
         dir: run_dir,
         session: id.value(),
         status: "error",
-        detail: @cli.failure_message("\{error}"),
+        // `failure_message` returns a view; `detail` is an owned String that
+        // outlives the temporary `"\{error}"` it borrows, so own it here.
+        detail: @cli.failure_message("\{error}").to_owned(),
         ok: false,
       }
   }
