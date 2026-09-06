@@ -9,59 +9,33 @@ import {
 }
 
 // Values
-pub let current_schema_version : Int
-
 pub let default_audit_max_steps : Int
 
 pub async fn run_goal_audit(goal~ : String, baseline~ : @agent_session.GoalBaseline?, api_key~ : String, model~ : @deepseek.Model, max_steps~ : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, workspace_root? : String, session_id? : String, append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, scratch_dir? : String) -> ReviewReport?
 
 pub async fn run_review(String, @deepseek.Model, String, workspace_root? : String, max_steps? : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, scratch_dir? : String) -> ReviewReport
 
-pub fn severities() -> Array[String]
-
 // Errors
-pub suberror ReviewError {
-  ReviewError(String)
-}
 
 // Types and methods
 pub struct Finding {
   severity : String
   // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn Finding::equal(Self, Self) -> Bool
-pub fn Finding::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn Finding::not_equal(Self, Self) -> Bool
-pub fn Finding::to_json(Self) -> Json
-pub fn Finding::to_repr(Self) -> @debug.Repr
 
 pub struct ReviewReport {
   findings : Array[Finding]
   // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ReviewReport::digest(Self) -> String
-pub fn ReviewReport::equal(Self, Self) -> Bool
-pub fn ReviewReport::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn ReviewReport::not_equal(Self, Self) -> Bool
 pub fn ReviewReport::parse(Json) -> Result[Self, String]
 pub fn ReviewReport::to_json(Self) -> Json
 pub fn ReviewReport::to_json_string(Self) -> String
-pub fn ReviewReport::to_repr(Self) -> @debug.Repr
 pub fn ReviewReport::validate(Self) -> Array[String]
 
 type ReviewScope derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn ReviewScope::equal(Self, Self) -> Bool
-pub fn ReviewScope::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn ReviewScope::not_equal(Self, Self) -> Bool
-pub fn ReviewScope::to_json(Self) -> Json
-pub fn ReviewScope::to_repr(Self) -> @debug.Repr
 
 type ReviewStats derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn ReviewStats::equal(Self, Self) -> Bool
-pub fn ReviewStats::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn ReviewStats::not_equal(Self, Self) -> Bool
-pub fn ReviewStats::to_json(Self) -> Json
-pub fn ReviewStats::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 
