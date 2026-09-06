@@ -53,13 +53,9 @@ pub fn is_moon_managed_workspace_path(root : String, path : String) -> Bool {
     return false
   }
   let relative_start = if root == "/" { 1 } else { root.length() + 1 }
-  let relative = path[relative_start:].to_owned()
-  for part in relative.split("/") {
-    if part == "_build" || part == ".mooncakes" {
-      return true
-    }
-  }
-  false
+  path[relative_start:]
+  .split("/")
+  .any(part => part is ("_build" | ".mooncakes"))
 }
 
 ///|

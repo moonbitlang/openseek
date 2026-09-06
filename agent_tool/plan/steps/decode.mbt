@@ -78,10 +78,8 @@ pub fn decode(arguments : Json) -> PlanInput raise {
   guard arguments is Object(fields) else {
     fail("arguments to be an object with a steps array")
   }
-  for key, _ in fields {
-    if key != "steps" {
-      fail("arguments to have only the steps field")
-    }
+  if fields.keys().any(key => key != "steps") {
+    fail("arguments to have only the steps field")
   }
   guard fields is { "steps": Array(items), .. } else {
     fail("arguments.steps to be an array of steps")
@@ -110,10 +108,8 @@ fn decode_step(index : Int, item : Json) -> PlanStep raise {
   guard item is Object(fields) else {
     fail("arguments.steps[\{index}] to be an object")
   }
-  for key, _ in fields {
-    if key != "title" && key != "status" {
-      fail("arguments.steps[\{index}] to have only title and status fields")
-    }
+  if fields.keys().any(key => !(key is ("title" | "status"))) {
+    fail("arguments.steps[\{index}] to have only title and status fields")
   }
   let raw_title = match fields {
     { "title": String(value), .. } => value
