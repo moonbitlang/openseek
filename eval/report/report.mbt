@@ -84,20 +84,17 @@ pub fn Report::markdown(self : Report) -> String {
   for row in self.rows {
     lines.push(row.markdown_row(self.metric_columns))
   }
-  let detail_lines = detail_section_lines(self.rows)
-  if detail_lines.length() > 0 {
-    lines.push("")
-    lines.push("## Trial Details")
-    lines.push("")
-    lines.append(detail_lines)
+  fn section(title : String, body : Array[String]) -> Unit {
+    if body.length() > 0 {
+      lines.push("")
+      lines.push("## \{title}")
+      lines.push("")
+      lines.append(body)
+    }
   }
-  let log_lines = log_section_lines(self.rows)
-  if log_lines.length() > 0 {
-    lines.push("")
-    lines.push("## Logs")
-    lines.push("")
-    lines.append(log_lines)
-  }
+
+  section("Trial Details", detail_section_lines(self.rows))
+  section("Logs", log_section_lines(self.rows))
   "\{lines.join("\n")}\n"
 }
 

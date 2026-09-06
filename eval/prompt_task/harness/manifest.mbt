@@ -193,23 +193,18 @@ fn TrialArtifact::to_json(self : TrialArtifact) -> Json {
 ///|
 fn RunManifest::from_json(json : Json) -> RunManifest raise {
   let fields = object_fields(json, "manifest")
-  let validation_probes : Array[ValidationProbeSpec] = match
-    fields.get("validation_probes") {
-    Some(Array(items)) =>
-      [
-        for item in items => ValidationProbeSpec::from_json(item)
-      ]
-    Some(_) => fail("manifest.validation_probes must be an array")
-    None => fail("manifest.validation_probes is missing")
-  }
-  let trials : Array[TrialArtifact] = match fields.get("trials") {
-    Some(Array(items)) =>
-      [
-        for item in items => TrialArtifact::from_json(item)
-      ]
-    Some(_) => fail("manifest.trials must be an array")
-    None => fail("manifest.trials is missing")
-  }
+  let validation_probes = array_field(
+    fields,
+    "validation_probes",
+    "manifest.validation_probes",
+    ValidationProbeSpec::from_json,
+  )
+  let trials = array_field(
+    fields,
+    "trials",
+    "manifest.trials",
+    TrialArtifact::from_json,
+  )
   {
     model: string_field(fields, "model"),
     problem_id: string_field(fields, "problem_id"),
@@ -228,19 +223,12 @@ fn RunManifest::from_json(json : Json) -> RunManifest raise {
 ///|
 fn ValidationProbeSpec::from_json(json : Json) -> ValidationProbeSpec raise {
   let fields = object_fields(json, "validation probe")
-  let command : Array[String] = match fields.get("command") {
-    Some(Array(items)) =>
-      [
-        for item in items => {
-          match item {
-            String(value) => value
-            _ => fail("validation probe command entries must be strings")
-          }
-        }
-      ]
-    Some(_) => fail("validation probe command must be an array")
-    None => fail("validation probe command is missing")
-  }
+  let command = array_field(fields, "command", "validation probe command", item => {
+    match item {
+      String(value) => value
+      _ => fail("validation probe command entries must be strings")
+    }
+  })
   guard command.length() > 0 else {
     fail("validation probe command must not be empty")
   }
@@ -276,6 +264,22 @@ fn object_fields(json : Json, label : String) -> Map[String, Json] raise {
   match json {
     Object(fields) => fields
     _ => fail("\{label} must be a JSON object")
+  }
+}
+
+///|
+/// Decode the JSON array at `key`, mapping every element through `parse`.
+/// `label` names the field in the two shape errors an array field reports.
+fn[T] array_field(
+  fields : Map[String, Json],
+  key : String,
+  label : String,
+  parse : (Json) -> T raise,
+) -> Array[T] raise {
+  match fields.get(key) {
+    Some(Array(items)) => [ for item in items => parse(item) ]
+    Some(_) => fail("\{label} must be an array")
+    None => fail("\{label} is missing")
   }
 }
 

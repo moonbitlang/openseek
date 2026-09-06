@@ -51,10 +51,7 @@ async fn scenario_overlap(engine : Engine) -> Unit {
     event is { "event": String("agent_finished"), .. }
   })
   let wall_s = (@env.now().reinterpret_as_int64() - started_ms) / 1000
-  let backgrounded = seen.search_by(event => {
-    event is { "event": String("tool_result"), "content": String(content), .. } &&
-    content.contains("moved to the background")
-  })
+  let backgrounded = seen.search_by(moved_to_background)
   // The marker inside a plain `mbtx` result means the slow program ran
   // (and blocked) in the foreground.
   let blocked_foreground = seen
@@ -131,13 +128,7 @@ async fn scenario_fire_and_forget(engine : Engine) -> Unit {
     event is { "event": String("agent_finished"), .. }
   })
   let wall_s = (@env.now().reinterpret_as_int64() - started_ms) / 1000
-  let backgrounded = seen
-    .iter()
-    .any(event => {
-      event
-      is { "event": String("tool_result"), "content": String(content), .. } &&
-      content.contains("moved to the background")
-    })
+  let backgrounded = seen.any(moved_to_background)
   report("S2 automatically handed off the slow run", backgrounded)
   report(
     "S2 finished well before the 45s job (did not block)",
@@ -153,6 +144,14 @@ async fn scenario_fire_and_forget(engine : Engine) -> Unit {
     "S2 completion later surfaced as an idle notice",
     idle_notice is Some(_),
   )
+}
+
+///|
+/// A tool result whose text says the engine moved the command to the
+/// background — the automatic-handoff marker both scenarios look for.
+fn moved_to_background(event : Json) -> Bool {
+  event is { "event": String("tool_result"), "content": String(content), .. } &&
+  content.contains("moved to the background")
 }
 
 ///|
