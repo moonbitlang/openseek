@@ -641,7 +641,14 @@ async fn first_prompt_in_log(path : String) -> String {
 fn[T] stamped_newest_first(a : (T, Int64, Int), b : (T, Int64, Int)) -> Int {
   let (_, a_seconds, a_nanoseconds) = a
   let (_, b_seconds, b_nanoseconds) = b
-  (b_seconds, b_nanoseconds).compare((a_seconds, a_nanoseconds))
+  // Compared field by field rather than as a tuple: this is a `sort_by`
+  // comparator, so it runs O(n log n) times per listing and must not build a
+  // pair on every call.
+  if b_seconds != a_seconds {
+    b_seconds.compare(a_seconds)
+  } else {
+    b_nanoseconds.compare(a_nanoseconds)
+  }
 }
 
 ///|
