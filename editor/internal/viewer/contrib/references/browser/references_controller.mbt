@@ -726,13 +726,15 @@ fn ReferencesController::schedule_preview(
   model : @model.TextModel,
   reference : @navigation_api.TextModelReference?,
 ) -> Unit {
+  let dispose_reference = () => {
+    if reference is Some(current) {
+      current.dispose()
+    }
+  }
   guard !model.is_disposed() &&
     self.session_is_current(generation) &&
     self.preview_generation == preview_generation else {
-    match reference {
-      Some(reference) => reference.dispose()
-      None => ()
-    }
+    dispose_reference()
     return
   }
   let task = self.launch_async_task
@@ -748,34 +750,30 @@ fn ReferencesController::schedule_preview(
         result_model,
         widget,
       ) else {
-      match reference {
-        Some(reference) => reference.dispose()
-        None => ()
-      }
+      dispose_reference()
       return
+    }
+    let commit_is_current = () => {
+      self.preview_commit_is_current(
+        generation,
+        preview_generation,
+        location.uri.to_string(),
+        model,
+        result_model,
+        widget,
+      )
     }
     let restore_preview_focus = self.clear_installed_preview()
-    guard self.preview_commit_is_current(
-      generation,
-      preview_generation,
-      location.uri.to_string(),
-      model,
-      result_model,
-      widget,
-    ) else {
-      match reference {
-        Some(reference) => reference.dispose()
-        None => ()
-      }
+    guard commit_is_current() else {
+      dispose_reference()
       return
     }
-    let matches : Array[@base_common.Range] = []
     let uri = model.uri.to_string()
-    for item in result_model.references {
-      if item.uri_string == uri {
-        matches.push(model.validate_range(item.range))
+    let matches : Array[@base_common.Range] = [
+      for item in result_model.references if item.uri_string == uri => {
+        model.validate_range(item.range)
       }
-    }
+    ]
     let preview = (self.preview_factory.create)(
       widget.get_preview_host(),
       model,
@@ -784,62 +782,29 @@ fn ReferencesController::schedule_preview(
       mode,
     )
     guard preview is Some(preview) else {
-      match reference {
-        Some(reference) => reference.dispose()
-        None => ()
-      }
+      dispose_reference()
       self.show_preview_unavailable(
         generation, preview_generation, "No preview available",
       )
       return
     }
-    if !self.preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    if !commit_is_current() {
       preview.dispose()
-      match reference {
-        Some(reference) => reference.dispose()
-        None => ()
-      }
+      dispose_reference()
       return
     }
     widget.show_preview_ready()
-    if !self.preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    if !commit_is_current() {
       preview.dispose()
-      match reference {
-        Some(reference) => reference.dispose()
-        None => ()
-      }
+      dispose_reference()
       return
     }
     if restore_preview_focus {
       preview.focus()
     }
-    if !self.preview_commit_is_current(
-        generation,
-        preview_generation,
-        location.uri.to_string(),
-        model,
-        result_model,
-        widget,
-      ) {
+    if !commit_is_current() {
       preview.dispose()
-      match reference {
-        Some(reference) => reference.dispose()
-        None => ()
-      }
+      dispose_reference()
       return
     }
     self.preview = Some(preview)

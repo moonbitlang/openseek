@@ -279,13 +279,9 @@ pub fn ContentHoverComputer::create_loading_message(
   anchor : HoverAnchor,
 ) -> HoverPart? {
   for participant in self.participants {
-    match participant.create_loading_message {
-      Some(create_loading_message) =>
-        match create_loading_message(anchor) {
-          Some(message) => return Some(message)
-          None => ()
-        }
-      None => ()
+    if participant.create_loading_message is Some(create_loading_message) &&
+      create_loading_message(anchor) is Some(message) {
+      return Some(message)
     }
   }
   None
@@ -407,25 +403,17 @@ fn computed_hover_from_parts(
     return None
   }
   let sorted = sort_hover_parts_stably(parts)
-  let range = for part in sorted; range = fallback_range {
-    continue union_range(range, hover_part_range(part))
-  } nobreak {
-    range
-  }
-  Some({ range, parts: sorted, })
+  Some({ range: hover_parts_range(sorted, fallback_range), parts: sorted, })
 }
 
 ///|
-/// JavaScript's source sort is stable while MoonBit's `Array::sort_by` is not.
-/// Carry the arrival index as the final comparator key so equal participant
-/// ordinal/range-start parts retain provider completion order on every target.
-fn sort_hover_parts_stably(parts : Array[HoverPart]) -> Array[HoverPart] {
-  let indexed : Array[(Int, HoverPart)] = []
-  for index, part in parts {
-    indexed.push((index, part))
-  }
+/// Stable sort over an unstable `Array::sort_by`: decorate with the arrival
+/// index and use it as the final comparator key, so equal-key items retain
+/// input order on every target.
+fn[T] sort_stably(items : Array[T], compare : (T, T) -> Int) -> Array[T] {
+  let indexed : Array[(Int, T)] = [ for index, item in items => (index, item) ]
   indexed.sort_by((left, right) => {
-    let order = compare_hover_parts(left.1, right.1)
+    let order = compare(left.1, right.1)
     if order != 0 {
       order
     } else {
@@ -433,6 +421,14 @@ fn sort_hover_parts_stably(parts : Array[HoverPart]) -> Array[HoverPart] {
     }
   })
   indexed.map(item => item.1)
+}
+
+///|
+/// JavaScript's source sort is stable while MoonBit's `Array::sort_by` is not.
+/// Carry the arrival index as the final comparator key so equal participant
+/// ordinal/range-start parts retain provider completion order on every target.
+fn sort_hover_parts_stably(parts : Array[HoverPart]) -> Array[HoverPart] {
+  sort_stably(parts, compare_hover_parts)
 }
 
 ///|

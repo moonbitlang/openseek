@@ -93,24 +93,20 @@ fn ReferenceResultsTree::set_results(
     return
   }
   self.model = Some(model)
-  self.previews = []
-  self.expanded_groups = []
-  self.requested_groups = []
-  self.group_rows = []
-  self.group_children = []
-  self.reference_rows = []
-  for group in model.groups {
-    let group_previews : Array[@references.ReferenceRowPreview] = []
-    for reference in group.references {
-      group_previews.push(LocationFallback(reference.fallback_label()))
-      self.reference_rows.push(None)
+  self.previews = [
+    for group in model.groups => {
+      [
+        for reference in group.references => {
+          LocationFallback(reference.fallback_label())
+        }
+      ]
     }
-    self.previews.push(group_previews)
-    self.expanded_groups.push(false)
-    self.requested_groups.push(false)
-    self.group_rows.push(None)
-    self.group_children.push(None)
-  }
+  ]
+  self.expanded_groups = Array::make(model.groups.length(), false)
+  self.requested_groups = Array::make(model.groups.length(), false)
+  self.group_rows = Array::make(model.groups.length(), None)
+  self.group_children = Array::make(model.groups.length(), None)
+  self.reference_rows = Array::make(model.references.length(), None)
   let selected_item = match selected {
     Some(item) if self.contains_reference(item) => Some(item)
     _ => model.references.get(0)
@@ -163,22 +159,15 @@ fn ReferenceResultsTree::set_group_previews(
       _ => false
     })
   self.previews[group_index] = previews.copy()
-  match self.group_reference_container(group_index) {
-    Some(container) => {
-      self.render_group_references(group_index, container)
-      self.update_row_states()
-      if restore_row_focus {
-        match self.roving {
-          Some(row) =>
-            match self.row_node(row) {
-              Some(node) => @base_browser.focus_prevent_scroll(node)
-              None => ()
-            }
-          None => ()
-        }
-      }
-    }
-    None => ()
+  guard self.group_reference_container(group_index) is Some(container) else {
+    return
+  }
+  self.render_group_references(group_index, container)
+  self.update_row_states()
+  if restore_row_focus &&
+    self.roving is Some(row) &&
+    self.row_node(row) is Some(node) {
+    @base_browser.focus_prevent_scroll(node)
   }
 }
 
@@ -659,24 +648,17 @@ fn ReferenceResultsTree::focus_row(
   }
   self.roving = Some(row)
   self.update_row_states()
-  match self.row_node(row) {
-    Some(node) => {
-      if reveal {
-        self.reveal_row(node)
-      }
-      @base_browser.focus_prevent_scroll(node)
+  if self.row_node(row) is Some(node) {
+    if reveal {
+      self.reveal_row(node)
     }
-    None => ()
+    @base_browser.focus_prevent_scroll(node)
   }
-  if selection_changed && notify_selection {
-    match row {
-      ReferenceRow(flat_index) =>
-        match self.reference_at(flat_index) {
-          Some(reference) => (self.callbacks.on_select)(reference)
-          None => ()
-        }
-      GroupRow(_) => ()
-    }
+  if selection_changed &&
+    notify_selection &&
+    row is ReferenceRow(flat_index) &&
+    self.reference_at(flat_index) is Some(reference) {
+    (self.callbacks.on_select)(reference)
   }
 }
 
@@ -955,12 +937,7 @@ fn reference_results_row_index(
   rows : Array[ReferenceResultsTreeRow],
   target : ReferenceResultsTreeRow,
 ) -> Int {
-  for index, row in rows {
-    if row == target {
-      return index
-    }
-  }
-  -1
+  rows.search(target).unwrap_or(-1)
 }
 
 ///|

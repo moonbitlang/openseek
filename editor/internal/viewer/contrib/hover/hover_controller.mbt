@@ -24,13 +24,7 @@ fn filter_hover_parts(
   parts : Array[HoverPart],
   anchor : HoverAnchor,
 ) -> Array[HoverPart] {
-  let kept : Array[HoverPart] = []
-  for part in parts {
-    if hover_part_valid_for_anchor(part, anchor) {
-      kept.push(part)
-    }
-  }
-  kept
+  parts.filter(part => hover_part_valid_for_anchor(part, anchor))
 }
 
 ///|
@@ -481,38 +475,26 @@ pub fn HoverController::start_showing_or_update_hover(
     )
   }
   // A hover is shown. The new anchor equals the shown one: keep it untouched.
-  let visible_result_anchor = match self.current_anchor {
-    Some(anchor) => Some(anchor)
-    None =>
-      if content_hover_is_visible {
-        match self.operation.options {
-          Some(options) => Some(options.anchor)
-          None => None
-        }
-      } else {
-        None
-      }
+  let visible_result_anchor = match
+    (self.current_anchor, self.operation.options) {
+    (Some(anchor), _) => Some(anchor)
+    (None, Some(options)) => Some(options.anchor)
+    (None, None) => None
   }
-  match visible_result_anchor {
-    Some(current) =>
-      if hover_anchor_equals(current, anchor) {
-        return (HoverNoEffect, self)
-      }
-    None => ()
+  if visible_result_anchor is Some(current) &&
+    hover_anchor_equals(current, anchor) {
+    return (HoverNoEffect, self)
   }
   let compatible = match visible_result_anchor {
     Some(current) => {
-      let shown_position = match show_at_position {
-        Some(position) => position
-        None =>
-          match self.view {
-            Some(view) => view.range.get_start_position()
-            None => current.range().get_start_position()
-          }
+      let shown_position = match (show_at_position, self.view) {
+        (Some(position), _) => position
+        (None, Some(view)) => view.range.get_start_position()
+        (None, None) => current.range().get_start_position()
       }
       hover_anchor_can_adopt_at(anchor, current, shown_position)
     }
-    _ => false
+    None => false
   }
   if !compatible {
     // Hide the incompatible hover, then start a fresh operation.

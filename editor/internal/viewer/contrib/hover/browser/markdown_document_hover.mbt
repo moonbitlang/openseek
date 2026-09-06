@@ -568,16 +568,11 @@ fn markdown_sorted_hover_parts(
   sync_parts : Array[@hover.HoverPart],
   async_parts : Array[@hover.HoverPart],
 ) -> Array[@hover.HoverPart] {
-  let indexed : Array[(Int, @hover.HoverPart)] = []
-  let mut arrival = 0
-  for part in sync_parts {
-    indexed.push((arrival, part))
-    arrival += 1
-  }
-  for part in async_parts {
-    indexed.push((arrival, part))
-    arrival += 1
-  }
+  let merged = sync_parts.copy()
+  merged.append(async_parts)
+  let indexed : Array[(Int, @hover.HoverPart)] = [
+    for index, part in merged => (index, part)
+  ]
   indexed.sort_by((left, right) => {
     let order = @hover.compare_hover_parts(left.1, right.1)
     if order != 0 {
@@ -663,14 +658,12 @@ fn MarkdownDocumentHoverBridge::start_pointer_request(
         guard self.request_pending && self.stamp_is_current(stamp) else {
           return
         }
-        match self.computer.create_loading_message(anchor) {
-          Some(loading) =>
-            self.accept_parts(
-              stamp,
-              hit,
-              markdown_sorted_hover_parts(sync_parts, [loading]),
-            )
-          None => ()
+        if self.computer.create_loading_message(anchor) is Some(loading) {
+          self.accept_parts(
+            stamp,
+            hit,
+            markdown_sorted_hover_parts(sync_parts, [loading]),
+          )
         }
       },
       loading_delay_ms,
@@ -1150,10 +1143,7 @@ fn MarkdownDocumentHoverBridge::refresh_diagnostics(
             line.line_index == item.line_index else {
             continue
           }
-          let mut class_name = "moonbit-viewer-markdown-diagnostic"
-          if resolved.options.class_name != "" {
-            class_name = "\{class_name} \{resolved.options.class_name}"
-          }
+          let class_name = "moonbit-viewer-markdown-diagnostic \{resolved.options.class_name}"
           self.append_projected_span(
             line,
             item.displayed_range,
