@@ -36,6 +36,12 @@ pub fn McpClient::McpClient(rpc : @jsonrpc.Client) -> McpClient {
 }
 
 ///|
+/// Close the underlying JSON-RPC client and its transport. Idempotent.
+pub fn McpClient::close(self : McpClient) -> Unit {
+  self.rpc.close()
+}
+
+///|
 /// Run the MCP handshake: send `initialize` with our client identity, then the
 /// `notifications/initialized` notification once the server has answered.
 /// Returns the server's negotiated protocol version and identity. Raises on

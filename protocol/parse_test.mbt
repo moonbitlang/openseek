@@ -163,6 +163,24 @@ test "an older engine's session_started still decodes" {
 }
 
 ///|
+/// Engines before 2026-09-04 wrote `mcp_connect_failed` with `error: null`
+/// when the connection yielded no error value. Those session records must keep
+/// decoding, so a null (or absent) `error` reads as a placeholder text instead
+/// of dropping the line.
+test "an older engine's mcp_connect_failed still decodes" {
+  debug_inspect(
+    decode(
+      (
+        #|{"event":"mcp_connect_failed","server":"fs","error":null}
+      ),
+    ),
+    content=(
+      #|Some(McpConnectFailed(server="fs", error="unknown error"))
+    ),
+  )
+}
+
+///|
 /// A token counter is an integer. `Usage`'s derived `FromJson` would read `1.5`
 /// as `1`; every other integer on the wire is rejected instead of truncated, and
 /// a fabricated count is worse than a dropped line.

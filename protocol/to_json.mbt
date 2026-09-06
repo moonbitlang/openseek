@@ -169,11 +169,7 @@ pub fn Event::to_json(self : Event) -> Json {
     McpServerSkippedOverCap(server~) =>
       { "event": "mcp_server_skipped_over_cap", "server": server }
     McpConnectFailed(server~, error~) =>
-      {
-        "event": "mcp_connect_failed",
-        "server": server,
-        "error": or_null(error),
-      }
+      { "event": "mcp_connect_failed", "server": server, "error": error }
     McpListToolsFailed(server~, error~) =>
       { "event": "mcp_list_tools_failed", "server": server, "error": error }
     McpListToolsTimeout(server~) =>
