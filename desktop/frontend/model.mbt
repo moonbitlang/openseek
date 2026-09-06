@@ -2677,12 +2677,7 @@ fn Model::device_state(
   self : Model,
   channel : @interop.ChannelId,
 ) -> DeviceState? {
-  for dev in self.devices {
-    if dev.channel == channel {
-      return Some(dev)
-    }
-  }
-  None
+  self.devices.iter().find_first(dev => dev.channel == channel)
 }
 
 ///|
@@ -2996,12 +2991,9 @@ fn Model::find_conversation(
   channel : @interop.ChannelId,
   session_id : String,
 ) -> Conversation? {
-  for conv in self.conversations {
-    if conv.device == channel && conv.session_id == session_id {
-      return Some(conv)
-    }
-  }
-  None
+  self.conversations
+  .iter()
+  .find_first(conv => conv.device == channel && conv.session_id == session_id)
 }
 
 ///|
@@ -3190,12 +3182,10 @@ fn DeviceState::archive_override(
   self : DeviceState,
   key : ArchiveRecordKey,
 ) -> ArchiveDisposition? {
-  for fact in self.archive_overrides {
-    if fact.key == key {
-      return Some(fact.disposition)
-    }
-  }
-  None
+  self.archive_overrides
+  .iter()
+  .find_first(fact => fact.key == key)
+  .map(fact => fact.disposition)
 }
 
 ///|
@@ -3271,12 +3261,10 @@ fn Model::remembered_model(
   session : String,
 ) -> EngineModel? {
   let key = conversation_model_key(channel, session)
-  for entry in self.conversation_models {
-    if entry.key == key {
-      return Some(entry.model)
-    }
-  }
-  None
+  self.conversation_models
+  .iter()
+  .find_first(entry => entry.key == key)
+  .map(entry => entry.model)
 }
 
 ///|
@@ -3401,12 +3389,9 @@ fn Model::conversation_is_new_chat(self : Model, conv : Conversation) -> Bool {
     return false
   }
   guard self.device_state(conv.device) is Some(dev) else { return true }
-  for item in dev.sessions {
-    if item.id == conv.session_id && item.workspace == conv.project() {
-      return false
-    }
-  }
-  true
+  !dev.sessions
+  .iter()
+  .any(item => item.id == conv.session_id && item.workspace == conv.project())
 }
 
 ///|
@@ -3432,12 +3417,13 @@ fn Model::conversation_by_run(
   channel : @interop.ChannelId,
   run_id : String,
 ) -> Conversation? {
-  for conv in self.conversations.filter(conv => conv.device == channel) {
-    if conv.run is Open(run_id=active, ..) && active == run_id {
-      return Some(conv)
-    }
-  }
-  None
+  self.conversations
+  .iter()
+  .find_first(conv => {
+    conv.device == channel &&
+    conv.run is Open(run_id=active, ..) &&
+    active == run_id
+  })
 }
 
 ///|
@@ -3449,12 +3435,11 @@ fn Model::conversation_by_last_run(
   channel : @interop.ChannelId,
   run_id : String,
 ) -> Conversation? {
-  for conv in self.conversations.filter(conv => conv.device == channel) {
-    if conv.last_run_id is Some(last) && last == run_id {
-      return Some(conv)
-    }
-  }
-  None
+  self.conversations
+  .iter()
+  .find_first(conv => {
+    conv.device == channel && conv.last_run_id is Some(last) && last == run_id
+  })
 }
 
 ///|
@@ -4057,45 +4042,27 @@ fn Model::begin_transcript_reload(
   self : Model,
   conv : Conversation,
 ) -> (Model, Int?) {
-  match conv.sync {
-    Reloading(..) => (self.replace_conversation(conv), None)
-    Synced => {
-      let generation = self.transcript_request_generation + 1
-      (
-        {
-          ..self.replace_conversation({
-            ..conv,
-            sync: Reloading(
-              generation~,
-              attempt=1,
-              buffered=[],
-              reload_after_current=false,
-            ),
-          }),
-          transcript_request_generation: generation,
-        },
-        Some(generation),
-      )
-    }
-    ReloadFailed(buffered~, ..) => {
-      let generation = self.transcript_request_generation + 1
-      (
-        {
-          ..self.replace_conversation({
-            ..conv,
-            sync: Reloading(
-              generation~,
-              attempt=1,
-              buffered=buffered.copy(),
-              reload_after_current=false,
-            ),
-          }),
-          transcript_request_generation: generation,
-        },
-        Some(generation),
-      )
-    }
+  let buffered : Array[BufferedCommit] = match conv.sync {
+    Reloading(..) => return (self.replace_conversation(conv), None)
+    Synced => []
+    ReloadFailed(buffered~, ..) => buffered.copy()
   }
+  let generation = self.transcript_request_generation + 1
+  (
+    {
+      ..self.replace_conversation({
+        ..conv,
+        sync: Reloading(
+          generation~,
+          attempt=1,
+          buffered~,
+          reload_after_current=false,
+        ),
+      }),
+      transcript_request_generation: generation,
+    },
+    Some(generation),
+  )
 }
 
 ///|
