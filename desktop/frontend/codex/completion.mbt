@@ -53,31 +53,18 @@ priv struct CodexContext {
 
 ///|
 fn State::active_context(self : State) -> CodexContext? {
-  match self.selection {
-    CodexDraftTask(draft) =>
-      match draft.project_root {
-        Some(project_root) => {
-          let cwd = project_root.trim().to_owned()
-          if cwd.is_empty() {
-            None
-          } else {
-            Some({ thread_id: draft.id, cwd, })
-          }
-        }
-        None => None
-      }
-    CodexStoredTask(thread) => {
-      guard !self.has_missing_worktree() && thread.cwd is Some(raw_cwd) else {
-        return None
-      }
-      let cwd = raw_cwd.trim().to_owned()
-      if cwd.is_empty() {
-        None
-      } else {
-        Some({ thread_id: thread.id, cwd, })
-      }
-    }
-    CodexNoTask => None
+  let (thread_id, raw_cwd) = match self.selection {
+    CodexDraftTask(draft) if draft.project_root is Some(project_root) =>
+      (draft.id, project_root)
+    CodexStoredTask(thread) if !self.has_missing_worktree() &&
+      thread.cwd is Some(raw_cwd) => (thread.id, raw_cwd)
+    _ => return None
+  }
+  let cwd = raw_cwd.trim().to_owned()
+  if cwd.is_empty() {
+    None
+  } else {
+    Some({ thread_id, cwd, })
   }
 }
 

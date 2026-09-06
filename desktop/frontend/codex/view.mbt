@@ -45,10 +45,10 @@ pub fn State::reasoning_effort_chip(
   }
   let selected = model.reasoning_effort(self.selected_effort)
   guard !selected.is_empty() else { return None }
-  let options : Array[@composer.ModelOption] = []
-  for option in model.reasoning_efforts {
-    options.push({ value: option.value, label: option.value, })
-  }
+  let options = model.reasoning_efforts.map(option => @composer.ModelOption::{
+    value: option.value,
+    label: option.value,
+  })
   let description = model.reasoning_efforts
     .iter()
     .find_first(option => option.value == selected)
@@ -174,16 +174,14 @@ pub fn State::project_conversations(
   // them even if a caller passes one.
   guard context.project_registered(root) else { return [] }
   let project = CodexProject(root)
-  let conversations : Array[CodexProjectRow] = []
-  for thread in self.threads {
-    if thread.project_key() == Some(project) {
-      conversations.push({
+  [
+    for thread in self.threads if thread.project_key() == Some(project) => {
+      CodexProjectRow::{
         input: thread.sidebar_input(self, context, true),
         updated_at_ms: thread.updated_at_ms,
-      })
+      }
     }
-  }
-  conversations
+  ]
 }
 
 ///|
@@ -295,17 +293,10 @@ fn CodexThreadRow::archived_sidebar_input(
 /// worktree could no longer be resolved. Keep those records together instead
 /// of promoting an opaque worktree directory into a project row.
 fn CodexThreadRow::project_key(self : CodexThreadRow) -> CodexProject? {
-  match self.project_root {
-    Some(root) => {
-      let project = root.trim().to_owned()
-      if project.is_empty() {
-        None
-      } else {
-        Some(CodexProject(project))
-      }
-    }
-    None => None
-  }
+  self.project_root
+  .map(root => root.trim().to_owned())
+  .filter(project => !project.is_empty())
+  .map(project => CodexProject(project))
 }
 
 ///|

@@ -218,42 +218,28 @@ fn Input::completion(
     return None
   }
   match kind {
-    SlashCommands => {
-      let items = CompletionItem::slash_commands(self.slash_commands).filter(item => {
-        trigger.matches([item.label])
-      })
-      if items.is_empty() {
-        None
+    SlashCommands | SkillMentions => {
+      let items = if kind is SlashCommands {
+        CompletionItem::slash_commands(self.slash_commands).filter(item => {
+          trigger.matches([item.label])
+        })
       } else {
-        Some({
-          kind: SlashCommands,
-          menu: Menu(
-            items,
-            loading=false,
-            draft_without_token=trigger.draft_without_token(),
-          ),
+        self.installed_skills
+        .filter(skill => trigger.matches([skill.name, skill.description]))
+        .map(skill => CompletionItem::{
+          label: "$\{skill.name}",
+          detail: skill.description,
+          command: "",
+          insert: "\{skill.name} ",
+          path: None,
+          range: None,
         })
       }
-    }
-    SkillMentions => {
-      let items : Array[CompletionItem] = []
-      for skill in self.installed_skills {
-        if trigger.matches([skill.name, skill.description]) {
-          items.push({
-            label: "$\{skill.name}",
-            detail: skill.description,
-            command: "",
-            insert: "\{skill.name} ",
-            path: None,
-            range: None,
-          })
-        }
-      }
       if items.is_empty() {
         None
       } else {
         Some({
-          kind: SkillMentions,
+          kind,
           menu: Menu(
             items,
             loading=false,
