@@ -147,7 +147,7 @@ pub async fn run_child(
   // it: remove's created-only gate and edit's rebind detection only work
   // when all four tools share the record.
   let file_state = @agent_tool.FileStateMap()
-  let report = @agent_subrun.execute_kind(
+  let report = @agent_kind.execute_kind(
     session_id~,
     append_item?,
     system_prompt=worker_system_prompt(),

@@ -6,7 +6,7 @@
 fn submit_answer_tool(
   captured : Ref[ExploreReport?],
 ) -> @agent_tool.AgentToolDefinition {
-  @agent_subrun.capture_tool(
+  @agent_kind.capture_tool(
     name="submit_answer",
     description=(
       #|Submit the final explore report and end the run. Call this exactly once, when the
@@ -24,7 +24,7 @@ fn submit_answer_tool(
 
 ///|
 fn parse_submission(args : Json) -> Result[ExploreReport, Array[String]] {
-  @agent_subrun.validated(ExploreReport::parse(args), ExploreReport::validate)
+  @agent_kind.validated(ExploreReport::parse(args), ExploreReport::validate)
 }
 
 ///|

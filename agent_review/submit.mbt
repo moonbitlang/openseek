@@ -13,7 +13,7 @@
 fn submit_review_tool(
   captured : Ref[ReviewReport?],
 ) -> @agent_tool.AgentToolDefinition {
-  @agent_subrun.capture_tool(
+  @agent_kind.capture_tool(
     name="submit_review",
     description=(
       #|Submit the final structured code-review report and end the review. Call this
@@ -34,7 +34,7 @@ fn submit_review_tool(
 /// violations both reject, so the model retries instead of finishing with no
 /// report.
 fn parse_submission(args : Json) -> Result[ReviewReport, Array[String]] {
-  @agent_subrun.validated(ReviewReport::parse(args), ReviewReport::validate)
+  @agent_kind.validated(ReviewReport::parse(args), ReviewReport::validate)
 }
 
 ///|

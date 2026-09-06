@@ -37,7 +37,7 @@ fn PatternRepairReport::validate(self : PatternRepairReport) -> Array[String] {
 
 ///|
 /// Decode only. The contract check is `validate`, applied by the one caller
-/// through `@agent_subrun.validated`, exactly as the sibling report packages
+/// through `@agent_kind.validated`, exactly as the sibling report packages
 /// do it.
 fn PatternRepairReport::parse(
   json : Json,

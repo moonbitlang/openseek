@@ -1,26 +1,21 @@
 import {
+  "bobzhang/openseek/agent",
+  "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_session",
-  "bobzhang/openseek/agent_kind",
-  "bobzhang/openseek/agent_subrun",
   "bobzhang/openseek/agent_tool",
-  "bobzhang/openseek/agent_tool/read",
-  "bobzhang/openseek/agent_tool/mbtx",
   "bobzhang/openseek/deepseek",
-  "moonbitlang/core/json",
+  "moonbitlang/async",
 }
 
 import {
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_session/store",
   "bobzhang/openseek/agent_tool",
   "moonbitlang/async",
+  "moonbitlang/async/fs",
   "moonbitlang/async/http",
   "moonbitlang/async/socket",
   "moonbitlang/core/json",
 } for "test"
-
-dev_build(
-  rule: "md_to_mbt_string",
-  input: "explore_system_prompt.mbt.md",
-  output: "generated_explore_system_prompt.mbt",
-)
 
 supported_targets = "+wasm+native"
