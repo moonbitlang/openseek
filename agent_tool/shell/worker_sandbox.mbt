@@ -1,6 +1,6 @@
 ///|
 /// The write confinement of a worker subagent's shell, carried from the
-/// subtask controller (which computes the canonical geometry at provision
+/// worker controller (which computes the canonical geometry at provision
 /// time) into every launch. When present, shell classification is bypassed:
 /// every command — including classes the normal registry trusts to run
 /// unsandboxed — launches under the worker write profile, which denies the

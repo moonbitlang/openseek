@@ -8,7 +8,7 @@ let min_useful_subrun_steps : Int = 8
 
 ///|
 /// The per-turn subrun call allowance shared by every MODEL-initiated
-/// subrun tool in a session (callable review, subtask).
+/// subrun tool in a session (the callable review).
 ///
 /// This is a runaway backstop, not a cost scheduler. Each child is already
 /// individually bounded by its kind's step ceiling and wall deadline; what

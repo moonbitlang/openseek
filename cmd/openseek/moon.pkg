@@ -5,7 +5,6 @@ import {
   "bobzhang/openseek/agent_subrun",
   "bobzhang/openseek/agent_review",
   "bobzhang/openseek/agent_worker",
-  "bobzhang/openseek/agent_subtask" @subtask,
   "bobzhang/openseek/agent_pattern_repair",
   "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_tool",

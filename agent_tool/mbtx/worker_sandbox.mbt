@@ -1,6 +1,6 @@
 ///|
 /// The write confinement of a worker subagent's snippets, carried from the
-/// subtask controller (which computes the canonical geometry at provision
+/// worker controller (which computes the canonical geometry at provision
 /// time) into every launch. When present, the snippet — and every process it
 /// spawns — runs under the worker write profile, which denies the repository's
 /// shared surfaces (`deny_roots`: the canonical common git dir plus every
@@ -15,7 +15,7 @@
 /// runs unconfined — the same best-effort posture as the rest of the sandbox
 /// stack there. What still holds on every platform is the file tools'
 /// `write_scope` (their paths are checked against the worker's `allowed_paths`)
-/// and the subtask controller's git-evidence validation before anything is
+/// and the worker controller's git-evidence validation before anything is
 /// merged; the profile is the layer that also keeps a worker's *commands* out
 /// of its siblings' trees.
 pub(all) struct WorkerSandbox {

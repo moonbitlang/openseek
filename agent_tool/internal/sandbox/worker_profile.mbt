@@ -100,7 +100,7 @@ fn worker_write_profile_data(
 /// Prepare `command` under a worker write profile, or `None` when this
 /// process cannot enforce one (same availability contract as
 /// `create_if_available`). All paths must already be canonical: the caller
-/// (the subtask controller) realpaths them at provision time, and the kernel
+/// (the worker controller) realpaths them at provision time, and the kernel
 /// matches rules against realpaths.
 pub async fn SandboxedCommand::create_worker_if_available(
   command : Command,

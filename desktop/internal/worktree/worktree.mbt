@@ -544,7 +544,7 @@ pub async fn drop_placements(
 ///|
 /// The tree root an absolute in-workspace `path` belongs to: the registered
 /// worktree containing it when one does, otherwise the workspace itself. A
-/// `.worktrees` path with no registry entry (a subtask slice, say) keeps
+/// `.worktrees` path with no registry entry (a worker slice, say) keeps
 /// resolving to the workspace root.
 pub async fn owner_dir(
   workspace : @pathx.Absolute,
@@ -854,7 +854,7 @@ pub async fn create(
     Some(name) => name
     None => fresh_worktree_name(dir, entries)
   }
-  // Refusals name the holder: the registry entry or the directory (a subtask
+  // Refusals name the holder: the registry entry or the directory (a worker
   // slice can own `.worktrees/<name>` without any registry entry). The branch
   // is freshly salted, so nothing can hold it ahead of us.
   if entries.iter().any(entry => entry.name == name) {

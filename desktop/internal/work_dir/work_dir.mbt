@@ -247,7 +247,7 @@ pub async fn attached_workspace_dir(path : @pathx.Absolute) -> @pathx.Absolute? 
   guard best is Some(workspace) else { return None }
   // A path under a registered worktree belongs to that checkout, not the
   // workspace root: language ops routed by path alone must answer from the
-  // worktree's own tree. An unregistered `.worktrees` path (a subtask
+  // worktree's own tree. An unregistered `.worktrees` path (a worker
   // slice) keeps resolving to the workspace root.
   let dir = @worktree.owner_dir(workspace, resolved_absolute)
   // Reject an absolute path whose real target — following symlinks — escapes
