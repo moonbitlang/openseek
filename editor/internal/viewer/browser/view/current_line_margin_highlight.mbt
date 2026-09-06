@@ -38,10 +38,7 @@ fn prepare_current_line_margin_render(
   render_line_highlight_only_when_focus : Bool,
   width : Double,
 ) -> Array[String] {
-  let render_data : Array[String] = []
-  for _ in 0..<viewport.lines.length() {
-    render_data.push("")
-  }
+  let render_data = Array::make(viewport.lines.length(), "")
   guard cursor_view_line is Some(cursor_line) else { return render_data }
   let in_margin = @view_layout.should_render_line_highlight_in_margin(
     render_line_highlight, render_line_highlight_only_when_focus, editor_has_focus,
