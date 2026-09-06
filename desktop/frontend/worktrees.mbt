@@ -398,17 +398,9 @@ fn worktree_rows(
     guard !info.name.is_empty() else { continue }
     rows.push({
       name: info.name,
-      session: if info.session is Some(id) && !id.is_empty() {
-        Some(id)
-      } else {
-        None
-      },
+      session: info.session.filter(id => !id.is_empty()),
       path: @resource.of_path(channel, info.path),
-      codex_thread: if info.codex_thread is Some(id) && !id.is_empty() {
-        Some(id)
-      } else {
-        None
-      },
+      codex_thread: info.codex_thread.filter(id => !id.is_empty()),
       present: info.present,
     })
   }
@@ -549,12 +541,11 @@ fn DeviceState::worktree_generation(
   self : DeviceState,
   project : @common.Uri,
 ) -> Int {
-  for group in self.worktrees {
-    if group.project == project {
-      return group.generation
-    }
-  }
-  -1
+  self.worktrees
+  .iter()
+  .find_first(group => group.project == project)
+  .map(group => group.generation)
+  .unwrap_or(-1)
 }
 
 ///|

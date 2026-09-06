@@ -235,16 +235,12 @@ fn apply_roster(
   // Connect only the query-selected target when the roster reports it online.
   // A held target keeps its reconnect loop when the advisory `online` flag
   // drops; a page first opened while it is offline waits for a later refresh.
-  if console.page_device is Some(id) {
-    for meta in metas {
-      if meta.id == id && meta.online {
-        let channel : @interop.ChannelId = Remote(id)
-        if !devices.iter().any(dev => dev.channel == channel) {
-          websocket_epoch += 1
-          devices.push({ ..empty_device_state(channel), websocket_epoch, })
-        }
-        break
-      }
+  if console.page_device is Some(id) &&
+    metas.iter().any(meta => meta.id == id && meta.online) {
+    let channel : @interop.ChannelId = Remote(id)
+    if !devices.iter().any(dev => dev.channel == channel) {
+      websocket_epoch += 1
+      devices.push({ ..empty_device_state(channel), websocket_epoch, })
     }
   }
   // The browser's inert Local default is restored whenever its pinned target
@@ -274,14 +270,9 @@ fn apply_roster(
   }
   // The deferred boot half runs once the pinned device can take focus; if it
   // disappears and later returns, refocusing re-rotates onto that same device.
-  let mut booted = console.booted
-  if focus_held {
-    if !booted {
-      booted = true
-      commands.push(rotate_session(dispatch, focused))
-    } else if refocused {
-      commands.push(rotate_session(dispatch, focused))
-    }
+  let booted = console.booted || focus_held
+  if focus_held && (!console.booted || refocused) {
+    commands.push(rotate_session(dispatch, focused))
   }
   let reconciled = {
     ..model,
