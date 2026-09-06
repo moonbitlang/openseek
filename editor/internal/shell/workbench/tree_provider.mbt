@@ -106,33 +106,26 @@ async fn first_moonbit_file(
     return None
   }
   budget.val -= 1
-  match workspace_tree_provider.resolve(uri) {
-    WorkspaceResolved(stat) =>
-      match stat.children {
-        Some(children) => {
-          for child in children {
-            if child.kind == File {
-              if child.name.has_suffix(".mbt") {
-                return Some(child.uri)
-              }
-              if first_file.val is None {
-                first_file.val = Some(child.uri)
-              }
-            }
-          }
-          for child in children {
-            if child.kind == Directory {
-              match
-                first_moonbit_file(child.uri, budget, depth + 1, first_file) {
-                Some(found) => return Some(found)
-                None => ()
-              }
-            }
-          }
-          None
-        }
-        None => None
-      }
-    WorkspaceResolveError(_) => None
+  guard workspace_tree_provider.resolve(uri)
+    is WorkspaceResolved({ children: Some(children), .. }) else {
+    return None
   }
+  for child in children {
+    if child.kind == File {
+      if child.name.has_suffix(".mbt") {
+        return Some(child.uri)
+      }
+      if first_file.val is None {
+        first_file.val = Some(child.uri)
+      }
+    }
+  }
+  for child in children {
+    if child.kind == Directory &&
+      first_moonbit_file(child.uri, budget, depth + 1, first_file)
+      is Some(found) {
+      return Some(found)
+    }
+  }
+  None
 }

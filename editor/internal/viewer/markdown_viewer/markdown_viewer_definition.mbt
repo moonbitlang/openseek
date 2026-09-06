@@ -55,21 +55,19 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
 ) -> MarkdownViewerWidgetDefinitionBridge {
   let bridge_slot : Ref[MarkdownViewerWidgetDefinitionBridge?] = Ref(None)
   let anchor_is_current = anchor => {
-    match bridge_slot.val {
-      Some(bridge) => bridge.anchor_is_current(anchor)
-      None => false
-    }
+    bridge_slot.val.map_or(false, bridge => bridge.anchor_is_current(anchor))
   }
   let navigation_action = @goto_symbol.SymbolNavigationAction(
     viewer.services.languages(),
     {
       prepare_navigation: () => {
-        match bridge_slot.val {
-          Some(bridge) => bridge.prepare_navigation()
-          None => ()
+        if bridge_slot.val is Some(bridge) {
+          bridge.prepare_navigation()
         }
       },
       is_anchor_current: anchor_is_current,
+      // `open_location` is async, so its body stays a match rather than moving
+      // into a non-async `map_or` closure.
       open_location: (_anchor, location, mode, _source) => {
         match bridge_slot.val {
           Some(bridge) => bridge.open_location(location, mode)
@@ -77,15 +75,13 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
         }
       },
       open_in_peek: (anchor, mode, locations) => {
-        match bridge_slot.val {
-          Some(bridge) => bridge.open_in_peek(anchor, mode, locations)
-          None => false
-        }
+        bridge_slot.val.map_or(false, bridge => {
+          bridge.open_in_peek(anchor, mode, locations)
+        })
       },
       show_message: (_anchor, message) => {
-        match bridge_slot.val {
-          Some(bridge) => bridge.show_message(message)
-          None => ()
+        if bridge_slot.val is Some(bridge) {
+          bridge.show_message(message)
         }
       },
     },
@@ -96,45 +92,40 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
     is_anchor_current=anchor_is_current,
     markdown_navigation_run_provider_tasks,
   )
-  let controller = match viewer.services.preview_factory() {
-    None => None
-    Some(preview_factory) =>
-      Some(
-        @references_browser.ReferencesController(
-          {
-            is_anchor_current: anchor_is_current,
-            mount: (root, anchor) => {
-              match bridge_slot.val {
-                Some(bridge) => bridge.mount_peek(root, anchor)
-                None => None
-              }
-            },
-            reveal_anchor: anchor => {
-              match bridge_slot.val {
-                Some(bridge) => bridge.reveal_anchor(anchor)
-                None => ()
-              }
-            },
-            restore_source_focus: () => viewer.focus(),
-            open_location: (location, mode, _source) => {
-              match bridge_slot.val {
-                Some(bridge) => bridge.open_location(location, mode)
-                None => false
-              }
-            },
-            show_message: (_anchor, message) => {
-              match bridge_slot.val {
-                Some(bridge) => bridge.show_message(message)
-                None => ()
-              }
-            },
+  let controller = viewer.services
+    .preview_factory()
+    .map(preview_factory => {
+      @references_browser.ReferencesController(
+        {
+          is_anchor_current: anchor_is_current,
+          mount: (root, anchor) => {
+            bridge_slot.val.bind(bridge => bridge.mount_peek(root, anchor))
           },
-          preview_factory,
-          resolver?=viewer.services.text_model_resolver(),
-          task => viewer.services.launch_async_task(task),
-        ),
+          reveal_anchor: anchor => {
+            if bridge_slot.val is Some(bridge) {
+              bridge.reveal_anchor(anchor)
+            }
+          },
+          restore_source_focus: () => viewer.focus(),
+          // `open_location` is async, so its body stays a match rather than
+          // moving into a non-async `map_or` closure.
+          open_location: (location, mode, _source) => {
+            match bridge_slot.val {
+              Some(bridge) => bridge.open_location(location, mode)
+              None => false
+            }
+          },
+          show_message: (_anchor, message) => {
+            if bridge_slot.val is Some(bridge) {
+              bridge.show_message(message)
+            }
+          },
+        },
+        preview_factory,
+        resolver?=viewer.services.text_model_resolver(),
+        task => viewer.services.launch_async_task(task),
       )
-  }
+    })
   let bridge : MarkdownViewerWidgetDefinitionBridge = {
     viewer,
     view,
@@ -438,9 +429,8 @@ fn MarkdownViewerWidgetDefinitionBridge::get_or_create_context_menu(
 fn MarkdownViewerWidgetDefinitionBridge::hide_context_menu(
   self : MarkdownViewerWidgetDefinitionBridge,
 ) -> Unit {
-  match self.context_menu {
-    Some(widget) => widget.hide(was_cancelled=true)
-    None => ()
+  if self.context_menu is Some(widget) {
+    widget.hide(was_cancelled=true)
   }
 }
 
@@ -748,9 +738,8 @@ fn MarkdownViewerWidgetDefinitionBridge::before_projection_replaced(
   self.surface_generation += 1
   self.navigation_action.cancel()
   self.link_resolver.cancel()
-  match self.controller {
-    Some(controller) => controller.close(restore_focus=false)
-    None => ()
+  if self.controller is Some(controller) {
+    controller.close(restore_focus=false)
   }
   self.reset_link()
   self.hide_context_menu()
@@ -784,14 +773,12 @@ fn MarkdownViewerWidgetDefinitionBridge::dispose(
   self.active = false
   self.navigation_action.dispose()
   self.link_resolver.dispose()
-  match self.controller {
-    Some(controller) => controller.dispose()
-    None => ()
+  if self.controller is Some(controller) {
+    controller.dispose()
   }
   self.reset_link()
-  match self.context_menu {
-    Some(widget) => widget.dispose()
-    None => ()
+  if self.context_menu is Some(widget) {
+    widget.dispose()
   }
   self.context_menu = None
   while self.listeners.length() > 0 {

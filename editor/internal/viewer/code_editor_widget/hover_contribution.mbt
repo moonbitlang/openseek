@@ -86,27 +86,20 @@ fn CodeEditorWidget::with_hover_widget(
   self : CodeEditorWidget,
   f : (@hover_browser.ContentHoverWidget) -> Unit,
 ) -> Unit {
-  match self.content_hover_contribution() {
-    Some(state) =>
-      match state.widget {
-        Some(widget) => f(widget)
-        None => ()
-      }
-    None => ()
+  guard self.content_hover_contribution() is Some(state) &&
+    state.widget is Some(widget) else {
+    return
   }
+  f(widget)
 }
 
 ///|
 /// The `EditorContextKeys.hoverFocused` context key as a live predicate:
 /// whether the document's active element sits inside the hover widget.
 fn CodeEditorWidget::is_hover_focused(self : CodeEditorWidget) -> Bool {
-  match self.content_hover_contribution() {
-    Some(state) =>
-      match state.widget {
-        Some(widget) =>
-          @base_browser.element_contains_active_element(widget.wrapper)
-        None => false
-      }
-    None => false
+  guard self.content_hover_contribution() is Some(state) &&
+    state.widget is Some(widget) else {
+    return false
   }
+  @base_browser.element_contains_active_element(widget.wrapper)
 }

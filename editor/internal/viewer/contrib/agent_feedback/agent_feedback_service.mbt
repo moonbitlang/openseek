@@ -139,15 +139,7 @@ fn AgentFeedbackService::items_for(
   self : AgentFeedbackService,
   resource : @base_common.Uri,
 ) -> Array[@agent_feedback_api.AgentFeedback] {
-  let key = resource.to_string()
-  match self.items_by_resource.get(key) {
-    Some(items) => items
-    None => {
-      let created : Array[@agent_feedback_api.AgentFeedback] = []
-      self.items_by_resource.set(key, created)
-      created
-    }
-  }
+  self.items_by_resource.get_or_init(resource.to_string(), () => [])
 }
 
 ///|
@@ -158,12 +150,9 @@ fn AgentFeedbackService::replace_item(
   updated : @agent_feedback_api.AgentFeedback,
 ) -> Unit {
   let items = self.items_for(resource)
-  match items.search_by(item => item.id == updated.id) {
-    Some(index) => {
-      items[index] = updated
-      self.handle_items_changed(resource)
-    }
-    None => ()
+  if items.search_by(item => item.id == updated.id) is Some(index) {
+    items[index] = updated
+    self.handle_items_changed(resource)
   }
 }
 
@@ -288,24 +277,20 @@ fn AgentFeedbackService::remove_feedback(
   feedback_id : String,
 ) -> Unit {
   let key = resource.to_string()
-  match self.navigation_anchor_by_resource.get(key) {
-    Some(anchor) =>
-      if anchor == feedback_id ||
-        anchor == to_session_editor_comment_id(feedback_id) {
-        self.navigation_anchor_by_resource.remove(key)
-      }
-    None => ()
+  if self.navigation_anchor_by_resource.get(key) is Some(anchor) &&
+    (
+      anchor == feedback_id ||
+      anchor == to_session_editor_comment_id(feedback_id)
+    ) {
+    self.navigation_anchor_by_resource.remove(key)
   }
   let items = self.items_for(resource)
-  match items.search_by(item => item.id == feedback_id) {
-    Some(index) => {
-      items.remove(index) |> ignore
-      if items.is_empty() {
-        self.items_by_resource.remove(key)
-      }
-      self.handle_items_changed(resource)
+  if items.search_by(item => item.id == feedback_id) is Some(index) {
+    items.remove(index) |> ignore
+    if items.is_empty() {
+      self.items_by_resource.remove(key)
     }
-    None => ()
+    self.handle_items_changed(resource)
   }
 }
 

@@ -222,10 +222,5 @@ fn line_decorations_for_line(
 
 ///|
 fn is_basic_ascii(text : String) -> Bool {
-  for unit in text.code_units() {
-    if unit > 127 {
-      return false
-    }
-  }
-  true
+  text.code_units().all(unit => unit <= 127)
 }

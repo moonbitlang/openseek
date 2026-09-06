@@ -55,21 +55,24 @@ fn is_moonbit_outline_identifier_continue(code : Int) -> Bool {
 /// `is_moonbit_leading_continuation_line` catches those when a run is
 /// flushed.
 fn is_moonbit_expression_continuation_code(code : Int) -> Bool {
-  code == '=' ||
-  code == '+' ||
-  code == '-' ||
-  code == '*' ||
-  code == '/' ||
-  code == '%' ||
-  code == '<' ||
-  code == '>' ||
-  code == '&' ||
-  code == '|' ||
-  code == '^' ||
-  code == ':' ||
-  code == ',' ||
-  code == '.' ||
-  code == '!'
+  match code {
+    '='
+    | '+'
+    | '-'
+    | '*'
+    | '/'
+    | '%'
+    | '<'
+    | '>'
+    | '&'
+    | '|'
+    | '^'
+    | ':'
+    | ','
+    | '.'
+    | '!' => true
+    _ => false
+  }
 }
 
 ///|

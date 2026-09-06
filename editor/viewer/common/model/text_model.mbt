@@ -254,15 +254,10 @@ pub fn TextModel::on_before_attached(
   scheduler? : TokenizationScheduler,
 ) -> AttachedViewImpl {
   let mut installed_late_scheduler = false
-  if self.tokenization_state.scheduler.val is None {
-    match scheduler {
-      Some(scheduler) => {
-        self.tokenization_state.scheduler.val = Some(scheduler)
-        installed_late_scheduler = self.tokenization_state.attached_count.val >
-          0
-      }
-      None => ()
-    }
+  if self.tokenization_state.scheduler.val is None &&
+    scheduler is Some(scheduler) {
+    self.tokenization_state.scheduler.val = Some(scheduler)
+    installed_late_scheduler = self.tokenization_state.attached_count.val > 0
   }
   if installed_late_scheduler {
     self.tokenization.handle_did_change_attached()
@@ -429,11 +424,9 @@ pub fn TextModel::get_line_content(
 /// Every line's content, EOLs excluded. Mirrors `getLinesContent`
 /// (`textModel.ts:869`).
 pub fn TextModel::get_lines_content(self : TextModel) -> Array[String] {
-  let lines : Array[String] = []
-  for line in 0..<self.snapshot.line_count() {
-    lines.push(self.snapshot.line_text(line))
-  }
-  lines
+  [
+    for line in 0..<self.snapshot.line_count() => self.snapshot.line_text(line)
+  ]
 }
 
 ///|

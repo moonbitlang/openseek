@@ -15,18 +15,11 @@ fn CodeEditorWidget::editor_context(
     typical_halfwidth_character_width: self.configuration.snapshot().font_info.typical_halfwidth_character_width,
     mouse_posx,
     mouse_posy,
-    show_at_position: match self.content_hover_contribution() {
-      Some(state) =>
-        match state.widget {
-          Some(widget) =>
-            match widget.rendered_hover {
-              Some(rendered) => Some(rendered.show_at_position)
-              None => None
-            }
-          None => None
-        }
-      None => None
-    },
+    show_at_position: self
+    .content_hover_contribution()
+    .bind(state => state.widget)
+    .bind(widget => widget.rendered_hover)
+    .map(rendered => rendered.show_at_position),
     content_hover_visible: self.content_hover_visible(),
   }
 }
@@ -55,10 +48,7 @@ fn CodeEditorWidget::content_hover_contribution(
 fn CodeEditorWidget::content_hover_controller(
   self : CodeEditorWidget,
 ) -> @hover_browser.ContentHoverController? {
-  match self.content_hover_contribution() {
-    Some(state) => Some(state.controller)
-    None => None
-  }
+  self.content_hover_contribution().map(state => state.controller)
 }
 
 ///|

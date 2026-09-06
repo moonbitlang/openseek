@@ -43,15 +43,10 @@ fn markdown_code_language(
   code_block : MarkdownCodeBlock,
   active_language_id : String?,
 ) -> String {
-  let language = match code_block.language_id {
-    Some(language) => language
-    None => active_language_id.unwrap_or("")
-  }
-  match language {
-    "mbt" => "moonbit"
-    "mbtx" => "moonbit"
+  match code_block.language_id.unwrap_or(active_language_id.unwrap_or("")) {
+    "mbt" | "mbtx" => "moonbit"
     "js" => "javascript"
     "ts" => "typescript"
-    _ => language
+    language => language
   }
 }

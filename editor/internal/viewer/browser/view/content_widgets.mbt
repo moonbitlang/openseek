@@ -70,10 +70,9 @@ pub fn ContentWidgetHandle::ContentWidgetHandle(
   allow_editor_overflow? : Bool = false,
   after_render? : (ContentWidgetPositionPreference?) -> Unit raise,
 ) -> ContentWidgetHandle {
-  let after_render_with_coordinate = match after_render {
-    Some(callback) => Some((position, _coordinate) => callback(position))
-    None => None
-  }
+  let after_render_with_coordinate = after_render.map(callback => {
+    (position, _coordinate) => callback(position)
+  })
   ContentWidgetHandle::with_render_callbacks(
     get_id,
     get_dom_node,
@@ -324,26 +323,14 @@ pub fn ContentWidgets::set_widget_position(
   actual : ContentWidgetHandle,
 ) -> Unit {
   let widget = self.widgets[(actual.get_id)()]
-  match (actual.get_position)() {
-    Some(position) => {
-      widget.affinity = position.position_affinity
-      widget.set_anchor_positions(
-        position.position,
-        position.secondary_position,
-        self.model_position_to_valid_view_position,
-      )
-      widget.preference = position.preference
-    }
-    None => {
-      widget.affinity = None
-      widget.set_anchor_positions(
-        None,
-        None,
-        self.model_position_to_valid_view_position,
-      )
-      widget.preference = None
-    }
-  }
+  let placement = (actual.get_position)()
+  widget.affinity = placement.bind(position => position.position_affinity)
+  widget.set_anchor_positions(
+    placement.bind(position => position.position),
+    placement.bind(position => position.secondary_position),
+    self.model_position_to_valid_view_position,
+  )
+  widget.preference = placement.bind(position => position.preference)
   let display = match widget.preference {
     Some(preferences) =>
       if !widget.use_display_none &&
@@ -399,11 +386,9 @@ fn ContentWidgets::update_anchors_view_positions(self : ContentWidgets) -> Unit 
 /// moment that id is visited. A reentrant callback can mutate the live map but
 /// cannot change the phase's key traversal.
 fn ContentWidgets::widget_ids_snapshot(self : ContentWidgets) -> Array[String] {
-  let widget_ids : Array[String] = []
-  for widget_id, _ in self.widgets {
-    widget_ids.push(widget_id)
-  }
-  widget_ids
+  [
+    for widget_id, _ in self.widgets => widget_id
+  ]
 }
 
 ///|
@@ -633,10 +618,9 @@ fn Widget::prepare_render_widget(
   }
   if self.cached_dom_node_offset_width == -1.0 ||
     self.cached_dom_node_offset_height == -1.0 {
-    let preferred_dimensions = match self.actual.before_render {
-      Some(before_render) => safe_invoke_before_render(before_render)
-      None => None
-    }
+    let preferred_dimensions = self.actual.before_render.bind(
+      safe_invoke_before_render,
+    )
     match preferred_dimensions {
       Some(dimensions) => {
         self.cached_dom_node_offset_width = dimensions.width
@@ -747,24 +731,14 @@ fn Widget::anchors_coordinates(
       height: (ctx.line_height_for_line)(position.line_number),
     })
   }
-  let primary = match primary_view {
-    Some(position) => coordinate(position)
-    None => None
-  }
+  let primary = primary_view.bind(coordinate)
   let secondary_view = match
     (self.secondary_anchor.view_position, primary_view) {
-    (Some(secondary), Some(primary)) =>
-      if secondary.line_number == primary.line_number {
-        Some(secondary)
-      } else {
-        None
-      }
+    (Some(secondary), Some(primary)) if secondary.line_number ==
+      primary.line_number => Some(secondary)
     _ => None
   }
-  let secondary = match secondary_view {
-    Some(position) => coordinate(position)
-    None => None
-  }
+  let secondary = secondary_view.bind(coordinate)
   (primary, secondary)
 }
 

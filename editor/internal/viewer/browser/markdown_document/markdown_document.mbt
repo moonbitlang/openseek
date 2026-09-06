@@ -167,45 +167,23 @@ pub fn MarkdownDocumentView::MarkdownDocumentView(
     if target.closest(".moonbit-viewer-markdown-toc-toggle") is Some(_) {
       let expanded = view.toc_nav.get_attribute("data-toc-expanded") ==
         Some("true")
-      view.toc_nav.set_attribute(
-        "data-toc-expanded",
-        if expanded {
-          "false"
-        } else {
-          "true"
-        },
-      )
-      view.toc_toggle.set_attribute(
-        "aria-expanded",
-        if expanded {
-          "false"
-        } else {
-          "true"
-        },
-      )
+      let next = if expanded { "false" } else { "true" }
+      view.toc_nav.set_attribute("data-toc-expanded", next)
+      view.toc_toggle.set_attribute("aria-expanded", next)
       return
     }
-    match target.closest("[data-toc-offset]") {
-      Some(row) =>
-        match row.get_attribute("data-toc-offset") {
-          Some(raw) =>
-            match markdown_parse_section_index(raw) {
-              Some(offset) => {
-                // Row activation is a completed navigation, so return the
-                // TOC to its compact state before reveal math runs. Otherwise
-                // the expanded overlay can cover the heading aligned to the
-                // viewport start edge.
-                @base_browser.focus_prevent_scroll(view.toc_toggle)
-                view.toc_nav.set_attribute("data-toc-expanded", "false")
-                view.toc_toggle.set_attribute("aria-expanded", "false")
-                (view.on_toc_navigate)(offset)
-                view.scroll_toc_entry_into_view(offset)
-              }
-              None => ()
-            }
-          None => ()
-        }
-      None => ()
+    if target.closest("[data-toc-offset]") is Some(row) &&
+      row.get_attribute("data-toc-offset") is Some(raw) &&
+      markdown_parse_section_index(raw) is Some(offset) {
+      // Row activation is a completed navigation, so return the
+      // TOC to its compact state before reveal math runs. Otherwise
+      // the expanded overlay can cover the heading aligned to the
+      // viewport start edge.
+      @base_browser.focus_prevent_scroll(view.toc_toggle)
+      view.toc_nav.set_attribute("data-toc-expanded", "false")
+      view.toc_toggle.set_attribute("aria-expanded", "false")
+      (view.on_toc_navigate)(offset)
+      view.scroll_toc_entry_into_view(offset)
     }
   })
   view.listen(viewport, "scroll", _event => if !view.disposed { on_scroll() })
@@ -772,39 +750,22 @@ pub fn MarkdownDocumentView::install_section_fold_controls(
             button
           }
         }
+        let (collapsed, expanded, label) = if control.collapsed {
+          ("true", "false", "Expand section")
+        } else {
+          ("false", "true", "Collapse section")
+        }
         button.set_attribute(
           "data-markdown-fold-section",
           control.section_index.to_string(),
         )
-        button.set_attribute(
-          "data-collapsed",
-          if control.collapsed {
-            "true"
-          } else {
-            "false"
-          },
-        )
-        button.set_attribute(
-          "aria-expanded",
-          if control.collapsed {
-            "false"
-          } else {
-            "true"
-          },
-        )
-        button.set_attribute(
-          "aria-label",
-          if control.collapsed {
-            "Expand section"
-          } else {
-            "Collapse section"
-          },
-        )
+        button.set_attribute("data-collapsed", collapsed)
+        button.set_attribute("aria-expanded", expanded)
+        button.set_attribute("aria-label", label)
       }
       None =>
-        match existing {
-          Some(button) => child.as_node().remove_child(button.as_node())
-          None => ()
+        if existing is Some(button) {
+          child.as_node().remove_child(button.as_node())
         }
     }
   }
@@ -969,12 +930,11 @@ fn MarkdownDocumentView::element_for_source_offset(
   for block in self.rendered.projection.code_blocks {
     if block.block_source_range.contains(source_offset) ||
       source_offset == block.block_source_range.end_exclusive {
-      match
-        self.article.query_selector(
+      if self.article.query_selector(
           "[data-markdown-code-block=\"\{block.block_index}\"]",
-        ) {
-        Some(element) => return Some(element)
-        None => ()
+        )
+        is Some(element) {
+        return Some(element)
       }
     }
   }

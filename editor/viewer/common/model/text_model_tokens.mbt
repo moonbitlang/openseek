@@ -148,14 +148,7 @@ fn RangePriorityQueueImpl::delete(
   self : RangePriorityQueueImpl,
   value : Int,
 ) -> Unit {
-  let index = for i, range in self.ranges {
-    if range.contains(value) {
-      break i
-    }
-  } nobreak {
-    -1
-  }
-  if index == -1 {
+  guard self.ranges.search_by(range => range.contains(value)) is Some(index) else {
     return
   }
   let range = self.ranges[index]

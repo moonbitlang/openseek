@@ -245,11 +245,7 @@ pub fn ConstantTimePrefixSumComputer::get_index_of(
   // A faithful re-build always fills [0, totalSum), so an out-of-range sum is
   // the "undefined entry" case in the upstream sparse array.
   if sum < 0 || sum >= self.index_by_sum.length() {
-    let last_idx = if self.values.length() - 1 > 0 {
-      self.values.length() - 1
-    } else {
-      0
-    }
+    let last_idx = (self.values.length() - 1).max(0)
     let last_prefix_sum = if last_idx > 0 {
       self.prefix_sum[last_idx - 1]
     } else {
@@ -268,13 +264,8 @@ pub fn ConstantTimePrefixSumComputer::remove_values(
   start : Int,
   delete_count : Int,
 ) -> Unit {
-  let next : Array[Int] = []
-  for i in 0..<self.values.length() {
-    if i < start || i >= start + delete_count {
-      next.push(self.values[i])
-    }
-  }
-  self.values = next
+  let delete_end = start + delete_count
+  self.values = [ for i, v in self.values if i < start || i >= delete_end => v ]
   self.invalidate(start)
 }
 
@@ -284,17 +275,11 @@ pub fn ConstantTimePrefixSumComputer::insert_values(
   insert_index : Int,
   insert_arr : Array[Int],
 ) -> Unit {
-  let next : Array[Int] = []
-  for i in 0..<insert_index {
-    next.push(self.values[i])
-  }
-  for v in insert_arr {
-    next.push(v)
-  }
-  for i in insert_index..<self.values.length() {
-    next.push(self.values[i])
-  }
-  self.values = next
+  self.values = [
+    ..self.values[:insert_index],
+    ..insert_arr,
+    ..self.values[insert_index:],
+  ]
   self.invalidate(insert_index)
 }
 
@@ -326,11 +311,7 @@ fn ConstantTimePrefixSumComputer::ensure_valid(self : Self) -> Unit {
   }
   let len = self.values.length()
   let prefix_sum = Array::make(len, 0)
-  let total = for value in self.values; total = 0 {
-    continue total + value
-  } nobreak {
-    total
-  }
+  let total = self.values.fold(init=0, (sum, value) => sum + value)
   let index_by_sum = Array::make(total, 0)
   for i in 0..<len {
     let value = self.values[i]

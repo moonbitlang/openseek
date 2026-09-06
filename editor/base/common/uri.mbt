@@ -707,16 +707,7 @@ fn uri_to_fs_path_impl(uri : Uri, keep_drive_letter_casing : Bool) -> String {
     // unc path: file://shares/c$/far/boo
     value = "//\{uri.authority}\{uri.path}"
   } else if char_code_at(uri.path, 0) == char_forward_slash &&
-    (
-      (
-        char_code_at(uri.path, 1) >= 'A'.to_int() &&
-        char_code_at(uri.path, 1) <= 'Z'.to_int()
-      ) ||
-      (
-        char_code_at(uri.path, 1) >= 'a'.to_int() &&
-        char_code_at(uri.path, 1) <= 'z'.to_int()
-      )
-    ) &&
+    is_windows_device_root(char_code_at(uri.path, 1)) &&
     char_code_at(uri.path, 2) == char_colon {
     if !keep_drive_letter_casing {
       // windows drive letter: file:///c:/far/boo

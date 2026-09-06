@@ -118,27 +118,19 @@ fn paired_inner_changes(
   if original_ranges.is_empty() && modified_ranges.is_empty() {
     return Some([])
   }
-  let mappings : Array[@diff.RangeMapping] = []
   let count = original_ranges.length().max(modified_ranges.length())
   let original_anchor = line_end_anchor(original)
   let modified_anchor = line_end_anchor(modified)
-  for index in 0..<count {
-    mappings.push(
-      RangeMapping(
-        if index < original_ranges.length() {
-          original_ranges[index]
-        } else {
-          original_anchor
-        },
-        if index < modified_ranges.length() {
-          modified_ranges[index]
-        } else {
-          modified_anchor
-        },
-      ),
-    )
-  }
-  Some(mappings)
+  Some(
+    [
+      for index in 0..<count => {
+        RangeMapping(
+          original_ranges.get(index).unwrap_or(original_anchor),
+          modified_ranges.get(index).unwrap_or(modified_anchor),
+        )
+      }
+    ],
+  )
 }
 
 ///|

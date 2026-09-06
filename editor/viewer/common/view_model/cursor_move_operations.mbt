@@ -407,17 +407,14 @@ fn cursor_vertical(
       tab_size,
     )
   }
-  match normalization_affinity {
-    Some(affinity) => {
-      let new_position = model.normalize_position(
-        Position(line_number, column),
-        affinity,
-      )
-      leftover_visible_columns += column - new_position.column
-      line_number = new_position.line_number
-      column = new_position.column
-    }
-    None => ()
+  if normalization_affinity is Some(affinity) {
+    let new_position = model.normalize_position(
+      Position(line_number, column),
+      affinity,
+    )
+    leftover_visible_columns += column - new_position.column
+    line_number = new_position.line_number
+    column = new_position.column
   }
   { line_number, column, leftover_visible_columns, }
 }

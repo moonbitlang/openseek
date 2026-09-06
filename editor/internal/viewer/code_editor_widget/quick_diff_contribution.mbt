@@ -47,12 +47,9 @@ fn register_quick_diff_contribution(
       // scoped to this editor's resource.
       state.listeners.push(
         viewer.services.quick_diff.on_did_change_original(resource => {
-          match viewer.get_model() {
-            Some(model) =>
-              if model.uri.to_string() == resource.to_string() {
-                viewer.quick_diff_update(state.collection)
-              }
-            None => ()
+          if viewer.get_model() is Some(model) &&
+            model.uri.to_string() == resource.to_string() {
+            viewer.quick_diff_update(state.collection)
           }
         }),
       )

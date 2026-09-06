@@ -386,16 +386,12 @@ fn LinesLayout::commit_pending_changes(
       if to_remove.contains(whitespace.id) {
         continue
       }
-      match to_change.get(whitespace.id) {
-        Some(change) => {
-          whitespace.after_line_number = change.new_after_line_number
-          whitespace.height = change.new_height
-          match change.new_min_width {
-            Some(min_width) => whitespace.min_width = min_width
-            None => ()
-          }
+      if to_change.get(whitespace.id) is Some(change) {
+        whitespace.after_line_number = change.new_after_line_number
+        whitespace.height = change.new_height
+        if change.new_min_width is Some(min_width) {
+          whitespace.min_width = min_width
         }
-        None => ()
       }
       result.push(whitespace)
     }
@@ -412,25 +408,14 @@ fn LinesLayout::commit_pending_changes(
   for index, whitespace in result {
     original_sequence[whitespace.id] = index
   }
-  result.sort_by(fn(a, b) {
-    if a.after_line_number < b.after_line_number {
-      -1
-    } else if a.after_line_number > b.after_line_number {
-      1
-    } else if a.ordinal < b.ordinal {
-      -1
-    } else if a.ordinal > b.ordinal {
-      1
-    } else {
-      let a_sequence = original_sequence[a.id]
-      let b_sequence = original_sequence[b.id]
-      if a_sequence < b_sequence {
-        -1
-      } else if a_sequence > b_sequence {
-        1
-      } else {
-        0
-      }
+  result.sort_by((a, b) => {
+    match a.after_line_number.compare(b.after_line_number) {
+      0 =>
+        match a.ordinal.compare(b.ordinal) {
+          0 => original_sequence[a.id].compare(original_sequence[b.id])
+          ordinal_order => ordinal_order
+        }
+      line_order => line_order
     }
   })
   self.arr = result
@@ -455,13 +440,7 @@ fn LinesLayout::insert_whitespace(
 
 ///|
 fn LinesLayout::find_whitespace_index(self : LinesLayout, id : String) -> Int {
-  let arr = self.arr
-  for i in 0..<arr.length() {
-    if arr[i].id == id {
-      return i
-    }
-  }
-  -1
+  self.arr.search_by(whitespace => whitespace.id == id).unwrap_or(-1)
 }
 
 ///|
@@ -480,13 +459,9 @@ fn LinesLayout::change_one_whitespace(
     self.arr[index].height = new_height
     self.prefix_sum_valid_index = self.prefix_sum_valid_index.min(index - 1)
   }
-  match new_min_width {
-    Some(min_width) =>
-      if self.arr[index].min_width != min_width {
-        self.arr[index].min_width = min_width
-        self.min_width = -1
-      }
-    None => ()
+  if new_min_width is Some(min_width) && self.arr[index].min_width != min_width {
+    self.arr[index].min_width = min_width
+    self.min_width = -1
   }
   if self.arr[index].after_line_number != new_after_line_number {
     // `afterLineNumber` changed: removing then re-inserting may reorder it.
@@ -710,12 +685,9 @@ pub fn LinesLayout::has_whitespace(self : LinesLayout) -> Bool {
 /// The maximum min width over all whitespaces.
 pub fn LinesLayout::get_whitespace_min_width(self : LinesLayout) -> Int {
   if self.min_width == -1 {
-    let min_width = for whitespace in self.arr; min_width = 0 {
-      continue min_width.max(whitespace.min_width)
-    } nobreak {
-      min_width
-    }
-    self.min_width = min_width
+    self.min_width = self.arr.fold(init=0, (widest, whitespace) => {
+      widest.max(whitespace.min_width)
+    })
   }
   self.min_width
 }

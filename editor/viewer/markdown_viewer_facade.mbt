@@ -119,26 +119,16 @@ pub fn MarkdownViewer::create(
   services? : ViewerServices,
   options? : MarkdownViewerOptions = MarkdownViewerOptions::default(),
 ) -> MarkdownViewer {
-  match services {
-    Some(services) => {
-      let markdown_services = services.markdown_services(options)
-      {
-        widget: @markdown_viewer.MarkdownViewerWidget::create(
-          host,
-          services=markdown_services,
-          options=options.internal(),
-        ),
-        borrowed_services: Some(markdown_services),
-      }
-    }
-    None =>
-      {
-        widget: @markdown_viewer.MarkdownViewerWidget::create(
-          host,
-          options=options.internal(),
-        ),
-        borrowed_services: None,
-      }
+  let markdown_services = services.map(services => {
+    services.markdown_services(options)
+  })
+  {
+    widget: @markdown_viewer.MarkdownViewerWidget::create(
+      host,
+      services?=markdown_services,
+      options=options.internal(),
+    ),
+    borrowed_services: markdown_services,
   }
 }
 
@@ -320,9 +310,8 @@ pub fn MarkdownViewer::has_text_focus(self : MarkdownViewer) -> Bool {
 ///|
 pub fn MarkdownViewer::dispose(self : MarkdownViewer) -> Unit {
   self.widget.dispose()
-  match self.borrowed_services {
-    Some(services) => services.dispose()
-    None => ()
+  if self.borrowed_services is Some(services) {
+    services.dispose()
   }
 }
 

@@ -76,13 +76,8 @@ pub fn SourcePath::normalize_root_relative_path(
       segments.push(segment)
     }
   }
-  guard segments is [first, ..] else { return SourcePathError(InvalidPath) }
-  let normalized = for i in 1..<segments.length(); normalized = first {
-    continue "\{normalized}/\{segments[i]}"
-  } nobreak {
-    normalized
-  }
-  ParsedSourcePath({ value: normalized, })
+  guard segments is [_, ..] else { return SourcePathError(InvalidPath) }
+  ParsedSourcePath({ value: segments.join("/"), })
 }
 
 ///|

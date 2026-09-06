@@ -84,11 +84,9 @@ pub fn CursorState::from_model_selection(
 pub fn CursorState::from_model_selections(
   selections : Array[@core.Selection],
 ) -> Array[PartialCursorState] {
-  let result : Array[PartialCursorState] = []
-  for selection in selections {
-    result.push(CursorState::from_model_selection(selection))
-  }
-  result
+  [
+    for selection in selections => CursorState::from_model_selection(selection)
+  ]
 }
 
 ///|

@@ -15,10 +15,9 @@ fn CodeEditorWidget::sync_content_hover_widget(self : CodeEditorWidget) -> Unit 
   guard self.content_hover_contribution() is Some(state) else { return }
   let hc = state.controller
   let loading_message = if hc.hover.operation.shows_loading_message() {
-    match hc.hover.anchor {
-      Some(anchor) => self.make_hover_computer().create_loading_message(anchor)
-      None => None
-    }
+    hc.hover.anchor.bind(anchor => {
+      self.make_hover_computer().create_loading_message(anchor)
+    })
   } else {
     None
   }
@@ -86,13 +85,10 @@ fn CodeEditorWidget::rendered_content_hover(
   self : CodeEditorWidget,
   view : @hover.HoverWidgetView,
 ) -> @hover_browser.RenderedContentHover {
-  let placement_parts : Array[@hover.HoverPositionPart] = []
-  for part in view.parts {
-    placement_parts.push({
-      range: @hover.hover_part_range(part),
-      force_show_at_range: false,
-    })
-  }
+  let placement_parts : Array[@hover.HoverPositionPart] = view.parts.map(part => {
+    range: @hover.hover_part_range(part),
+    force_show_at_range: false,
+  })
   // `startColumnBoundary` (`contentHoverRendered.ts:127-133`): the anchor view
   // line's minimum column, converted back to model space — under wrapping this
   // is the wrapped row's first model column.

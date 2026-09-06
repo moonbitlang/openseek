@@ -42,15 +42,13 @@ fn TokenizationTextModelPart::TokenizationTextModelPart(
     model_state,
     attached_views,
     language_id => {
-      match @syntax.tokenization_registry.get(language_id) {
-        Some(tokenizer) =>
-          Some(
-            public_tokenizer_adapter(
-              tokenizer, @services.language_id_codec, language_id,
-            ),
-          )
-        None => None
-      }
+      @syntax.tokenization_registry
+      .get(language_id)
+      .map(tokenizer => {
+        public_tokenizer_adapter(
+          tokenizer, @services.language_id_codec, language_id,
+        )
+      })
     },
     subscribe_registry=true,
   )

@@ -214,14 +214,9 @@ fn ViewModelLinesFromProjectedModel::rebuild_prefix_sums(
 pub fn ViewModelLinesFromProjectedModel::get_hidden_areas(
   self : ViewModelLinesFromProjectedModel,
 ) -> Array[@base_common.Range] {
-  let ranges : Array[@base_common.Range] = []
-  for decoration_id in self.hidden_areas_decoration_ids {
-    match self.model.get_decoration_range(decoration_id) {
-      Some(range) => ranges.push(range)
-      None => ()
-    }
-  }
-  ranges
+  self.hidden_areas_decoration_ids.filter_map(decoration_id => {
+    self.model.get_decoration_range(decoration_id)
+  })
 }
 
 ///|
@@ -241,17 +236,8 @@ pub fn ViewModelLinesFromProjectedModel::set_hidden_areas(
   old_ranges.sort_by((a, b) => {
     @base_common.Range::compare_ranges_using_starts(a, b)
   })
-  if new_ranges.length() == old_ranges.length() {
-    let mut has_difference = false
-    for i in 0..<new_ranges.length() {
-      if new_ranges[i] != old_ranges[i] {
-        has_difference = true
-        break
-      }
-    }
-    if !has_difference {
-      return false
-    }
+  if new_ranges == old_ranges {
+    return false
   }
   let new_decorations : Array[@model.ModelDeltaDecoration] = new_ranges.map(r => {
     range: r,
@@ -805,33 +791,26 @@ fn line_injected_text_from_decorations(
   }
   let entries : Array[(Int, Int, Int, @model.InjectedTextOptions)] = []
   for decoration in model.get_injected_text_decorations() {
-    match decoration.options.before {
-      Some(before) =>
-        if before.content().length() > 0 {
-          entries.push(
-            (
-              decoration.range.start_line_number,
-              decoration.range.start_column,
-              0,
-              before,
-            ),
-          )
-        }
-      None => ()
+    if decoration.options.before is Some(before) &&
+      before.content().length() > 0 {
+      entries.push(
+        (
+          decoration.range.start_line_number,
+          decoration.range.start_column,
+          0,
+          before,
+        ),
+      )
     }
-    match decoration.options.after {
-      Some(after) =>
-        if after.content().length() > 0 {
-          entries.push(
-            (
-              decoration.range.end_line_number,
-              decoration.range.end_column,
-              1,
-              after,
-            ),
-          )
-        }
-      None => ()
+    if decoration.options.after is Some(after) && after.content().length() > 0 {
+      entries.push(
+        (
+          decoration.range.end_line_number,
+          decoration.range.end_column,
+          1,
+          after,
+        ),
+      )
     }
   }
   entries.sort_by((left, right) => {
@@ -880,29 +859,23 @@ fn injected_text_for_model_line(
   )
   let entries : Array[(Int, Int, @model.InjectedTextOptions)] = []
   for decoration in model.get_injected_text_decorations() {
-    match decoration.options.before {
-      Some(before) =>
-        if before.content().length() > 0 &&
-          (decoration.range.start_line_number - 1).clamp(
-            min=0,
-            max=snapshot.line_count() - 1,
-          ) ==
-          target_line0 {
-          entries.push((decoration.range.start_column, 0, before))
-        }
-      None => ()
+    if decoration.options.before is Some(before) &&
+      before.content().length() > 0 &&
+      (decoration.range.start_line_number - 1).clamp(
+        min=0,
+        max=snapshot.line_count() - 1,
+      ) ==
+      target_line0 {
+      entries.push((decoration.range.start_column, 0, before))
     }
-    match decoration.options.after {
-      Some(after) =>
-        if after.content().length() > 0 &&
-          (decoration.range.end_line_number - 1).clamp(
-            min=0,
-            max=snapshot.line_count() - 1,
-          ) ==
-          target_line0 {
-          entries.push((decoration.range.end_column, 1, after))
-        }
-      None => ()
+    if decoration.options.after is Some(after) &&
+      after.content().length() > 0 &&
+      (decoration.range.end_line_number - 1).clamp(
+        min=0,
+        max=snapshot.line_count() - 1,
+      ) ==
+      target_line0 {
+      entries.push((decoration.range.end_column, 1, after))
     }
   }
   entries.sort_by((left, right) => {

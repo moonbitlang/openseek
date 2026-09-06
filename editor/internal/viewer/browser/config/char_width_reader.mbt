@@ -68,11 +68,7 @@ fn read_char_widths(
     // Repeat the character 256 (2^8) times; a space measures as NBSP so
     // the test span doesn't collapse.
     let chr = if request.chr == " " { "\u{a0}" } else { request.chr }
-    let test_string = for _ in 0..<8; test_string = chr {
-      continue test_string + test_string
-    } nobreak {
-      test_string
-    }
+    let test_string = chr.repeat(256)
     test_element.append_child(document.create_text_node(test_string).as_node())
     parent.append_child(test_element.as_node())
     test_elements.push(test_element)

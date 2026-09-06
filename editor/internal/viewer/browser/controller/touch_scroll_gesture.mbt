@@ -68,12 +68,9 @@ fn TouchScrollGesture::TouchScrollGesture(
 
 ///|
 fn TouchScrollGesture::cancel_inertia(self : TouchScrollGesture) -> Unit {
-  match self.inertia_frame {
-    Some(frame) => {
-      self.inertia_frame = None
-      frame.dispose()
-    }
-    None => ()
+  if self.inertia_frame is Some(frame) {
+    self.inertia_frame = None
+    frame.dispose()
   }
 }
 
@@ -144,11 +141,8 @@ fn TouchScrollGesture::end_touch(
     return false
   }
   guard self.active_touches.get(identifier) is Some(data) else { return false }
-  guard data.rolling_page_x.last() is Some(final_x) else {
-    self.active_touches.remove(identifier)
-    return true
-  }
-  guard data.rolling_page_y.last() is Some(final_y) else {
+  guard (data.rolling_page_x.last(), data.rolling_page_y.last())
+    is (Some(final_x), Some(final_y)) else {
     self.active_touches.remove(identifier)
     return true
   }

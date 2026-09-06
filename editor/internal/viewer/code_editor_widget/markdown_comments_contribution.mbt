@@ -545,10 +545,7 @@ fn CodeEditorWidget::refresh_markdown_comments(
   for block in blocks {
     next.set(markdown_comment_key(block), block)
   }
-  let old_keys : Array[String] = []
-  for key, _ in state.rendered {
-    old_keys.push(key)
-  }
+  let old_keys : Array[String] = [ for key, _entry in state.rendered => key ]
   self.change_view_zones(accessor => {
     // Renderer and observer lifetimes end before their caller-owned zone DOM
     // leaves the retained ViewZones registry.
@@ -794,10 +791,9 @@ fn CodeEditorWidget::clear_markdown_comment_model_state(
   // Stop model-wide invalidation first. Per-comment content/renderer
   // lifetimes follow, then structural zones, and finally ViewLines geometry.
   state.dispose_viewport_observer()
-  let entries : Array[RenderedMarkdownComment] = []
-  for _, entry in state.rendered {
-    entries.push(entry)
-  }
+  let entries : Array[RenderedMarkdownComment] = [
+    for _key, entry in state.rendered => entry
+  ]
   // Dispose before structural removal so late image/ResizeObserver callbacks
   // cannot reach a zone while the outgoing View is being torn down.
   for entry in entries {

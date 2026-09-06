@@ -56,24 +56,17 @@ const COLOR_ID_INVALID : Int = 13
 /// colors under different class names.
 fn tag_foreground_color_id(tag : @syntax.HighlightTag) -> Int {
   match tag {
-    Keyword => COLOR_ID_KEYWORD
-    Identifier => COLOR_ID_VARIABLE
+    Keyword | Constant | Tag => COLOR_ID_KEYWORD
+    Identifier | Variable | Attribute => COLOR_ID_VARIABLE
     String => COLOR_ID_STRING
     Number => COLOR_ID_NUMBER
-    Comment => COLOR_ID_COMMENT
-    Punctuation => COLOR_ID_PUNCTUATION
+    Comment | CommentDoc => COLOR_ID_COMMENT
+    Punctuation | Operator | Delimiter => COLOR_ID_PUNCTUATION
     Plain => @common_tokens.COLOR_ID_DEFAULT_FOREGROUND
-    Operator => COLOR_ID_PUNCTUATION
-    Delimiter => COLOR_ID_PUNCTUATION
     Type => COLOR_ID_TYPE
     Function => COLOR_ID_FUNCTION
-    Variable => COLOR_ID_VARIABLE
-    Constant => COLOR_ID_KEYWORD
     StringEscape => COLOR_ID_STRING_ESCAPE
-    CommentDoc => COLOR_ID_COMMENT
     Regexp => COLOR_ID_REGEXP
-    Tag => COLOR_ID_KEYWORD
-    Attribute => COLOR_ID_VARIABLE
     Invalid => COLOR_ID_INVALID
   }
 }
