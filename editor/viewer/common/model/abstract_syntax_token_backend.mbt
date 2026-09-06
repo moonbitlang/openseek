@@ -139,14 +139,7 @@ fn AttachedViews::detach_view(
   self : AttachedViews,
   view : AttachedViewImpl,
 ) -> Unit {
-  let found = for i, candidate in self.views {
-    if candidate.same(view) {
-      break i
-    }
-  } nobreak {
-    -1
-  }
-  if found >= 0 {
+  if self.views.search_by(candidate => candidate.same(view)) is Some(found) {
     self.views.remove(found) |> ignore
   }
   self.did_change_visible_ranges.fire({ view, state: None, })
@@ -309,15 +302,7 @@ fn line_range_arrays_equal(
   left : ArrayView[@base_common.LineRange],
   right : ArrayView[@base_common.LineRange],
 ) -> Bool {
-  if left.length() != right.length() {
-    return false
-  }
-  for i in 0..<left.length() {
-    if !left[i].equals(right[i]) {
-      return false
-    }
-  }
-  true
+  left == right
 }
 
 ///|

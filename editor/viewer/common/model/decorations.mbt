@@ -61,11 +61,7 @@ pub(all) struct ModelDecorationMinimapOptions {
 fn clean_class_name(class_name : String) -> String {
   let sb = StringBuilder()
   for unit in class_name.code_units() {
-    if (unit >= 'a' && unit <= 'z') ||
-      (unit >= 'A' && unit <= 'Z') ||
-      (unit >= '0' && unit <= '9') ||
-      unit == '-' ||
-      unit == '_' {
+    if unit is ('a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_') {
       sb.write_char(unit.to_int().unsafe_to_char())
     } else {
       sb.write_char(' ')

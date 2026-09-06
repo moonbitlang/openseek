@@ -73,28 +73,18 @@ fn Languages::set_language_configuration_impl(
   language_id : String,
   configuration : LanguageConfiguration,
 ) -> Unit {
-  match configuration.comments {
-    Some(comments) => {
-      match comments.line_comment {
-        Some(rule) =>
-          if rule.comment == "" {
-            abort("line comment delimiter must not be empty")
-          }
-        None => ()
+  if configuration.comments is Some(comments) {
+    if comments.line_comment is Some(rule) && rule.comment == "" {
+      abort("line comment delimiter must not be empty")
+    }
+    if comments.block_comment is Some(pair) {
+      if pair.open == "" {
+        abort("block comment opening delimiter must not be empty")
       }
-      match comments.block_comment {
-        Some(pair) => {
-          if pair.open == "" {
-            abort("block comment opening delimiter must not be empty")
-          }
-          if pair.close == "" {
-            abort("block comment closing delimiter must not be empty")
-          }
-        }
-        None => ()
+      if pair.close == "" {
+        abort("block comment closing delimiter must not be empty")
       }
     }
-    None => ()
   }
   self.language_configurations[language_id] = configuration
 }

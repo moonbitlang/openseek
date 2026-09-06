@@ -50,16 +50,26 @@ pub fn tokenize_line_to_html(
         char_index += 1
         continue
       }
-      if char_code == 9 { // Tab
-        let remainder = width % tab_size
-        let insert_spaces_count = if remainder == 0 {
-          tab_size
-        } else {
-          tab_size - remainder
+      match char_code {
+        9 => { // Tab
+          let remainder = width % tab_size
+          let insert_spaces_count = if remainder == 0 {
+            tab_size
+          } else {
+            tab_size - remainder
+          }
+          width += insert_spaces_count
+          for _ in 0..<insert_spaces_count {
+            if use_nbsp && prev_is_space {
+              part.write_string("&#160;")
+              prev_is_space = false
+            } else {
+              part.write_string(" ")
+              prev_is_space = true
+            }
+          }
         }
-        width += insert_spaces_count
-        let mut spaces_remaining = insert_spaces_count
-        while spaces_remaining > 0 {
+        32 => // Space
           if use_nbsp && prev_is_space {
             part.write_string("&#160;")
             prev_is_space = false
@@ -67,41 +77,21 @@ pub fn tokenize_line_to_html(
             part.write_string(" ")
             prev_is_space = true
           }
-          spaces_remaining -= 1
-        }
-      } else if char_code == 60 { // <
-        part.write_string("&lt;")
-        prev_is_space = false
-      } else if char_code == 62 { // >
-        part.write_string("&gt;")
-        prev_is_space = false
-      } else if char_code == 38 { // &
-        part.write_string("&amp;")
-        prev_is_space = false
-      } else if char_code == 0 { // Null
-        part.write_string("&#00;")
-        prev_is_space = false
-      } else if char_code == 65279 ||
-        char_code == 8232 ||
-        char_code == 8233 ||
-        char_code == 133 {
-        // UTF8_BOM, LINE_SEPARATOR, PARAGRAPH_SEPARATOR, NEXT_LINE
-        part.write_string("\u{FFFD}")
-        prev_is_space = false
-      } else if char_code == 13 { // CarriageReturn (zero-width space)
-        part.write_string("&#8203")
-        prev_is_space = false
-      } else if char_code == 32 { // Space
-        if use_nbsp && prev_is_space {
-          part.write_string("&#160;")
+        _ => {
+          part.write_string(
+            match char_code {
+              60 => "&lt;" // <
+              62 => "&gt;" // >
+              38 => "&amp;" // &
+              0 => "&#00;" // Null
+              // UTF8_BOM, LINE_SEPARATOR, PARAGRAPH_SEPARATOR, NEXT_LINE
+              65279 | 8232 | 8233 | 133 => "\u{FFFD}"
+              13 => "&#8203" // CarriageReturn (zero-width space)
+              _ => text[char_index:char_index + 1].to_owned()
+            },
+          )
           prev_is_space = false
-        } else {
-          part.write_string(" ")
-          prev_is_space = true
         }
-      } else {
-        part.write_string(text[char_index:char_index + 1].to_owned())
-        prev_is_space = false
       }
       char_index += 1
     }

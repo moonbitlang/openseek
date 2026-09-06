@@ -80,11 +80,7 @@ pub fn visible_column_from_column(
   column : Int,
   tab_size : Int,
 ) -> Int {
-  let text_len = if column - 1 < line_content.length() {
-    column - 1
-  } else {
-    line_content.length()
-  }
+  let text_len = (column - 1).min(line_content.length())
   for offset = 0, result = 0; offset < text_len; {
     let code_point = get_next_code_point(line_content, text_len, offset)
     continue offset + code_point_utf16_length(code_point),
@@ -102,11 +98,7 @@ pub fn to_statusbar_column(
   column : Int,
   tab_size : Int,
 ) -> Int {
-  let text_len = if column - 1 < line_content.length() {
-    column - 1
-  } else {
-    line_content.length()
-  }
+  let text_len = (column - 1).min(line_content.length())
   let result = for offset = 0, result = 0; offset < text_len; {
     let code_point = get_next_code_point(line_content, text_len, offset)
     let result = if code_point == 9 {

@@ -128,22 +128,14 @@ fn ContiguousTokensStore::massage_tokens(
     top_level_language_id,
   )
   if line_text_length == 0 {
-    let has_different_language_id = match tokens {
-      Some(words) if words.length() > 1 =>
-        TokenMetadata(words[1]).get_language_id() != encoded_language_id
-      _ => false
-    }
+    let has_different_language_id = tokens is Some([_, second, ..]) &&
+      TokenMetadata(second).get_language_id() != encoded_language_id
     if !has_different_language_id {
       return Empty
     }
   }
   match tokens {
-    None =>
-      Words([
-        line_text_length.reinterpret_as_uint(),
-        self.default_metadata(top_level_language_id),
-      ])
-    Some(words) if words.length() == 0 =>
+    None | Some([]) =>
       Words([
         line_text_length.reinterpret_as_uint(),
         self.default_metadata(top_level_language_id),
@@ -204,17 +196,7 @@ fn syntactic_line_tokens_equal(
 ) -> Bool {
   match (left, right) {
     (Missing, Missing) | (Empty, Empty) => true
-    (Words(left_words), Words(right_words)) => {
-      if left_words.length() != right_words.length() {
-        return false
-      }
-      for index in 0..<left_words.length() {
-        if left_words[index] != right_words[index] {
-          return false
-        }
-      }
-      true
-    }
+    (Words(left_words), Words(right_words)) => left_words == right_words
     _ => false
   }
 }
