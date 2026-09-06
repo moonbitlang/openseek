@@ -262,27 +262,21 @@ pub fn ProjectedTextLine::injected_text_index_at_projected_column(
 
 ///|
 fn identity_projected_text_line(line_text : String) -> ProjectedTextLine {
-  let model_columns : Array[Int] = []
-  let injected_text_indices : Array[Int] = []
-  let model_to_projected_columns : Array[Int] = []
-  for column in 0..<=line_text.length() {
-    model_columns.push(column)
-    model_to_projected_columns.push(column)
-    if column < line_text.length() {
-      injected_text_indices.push(-1)
-    }
-  }
+  let length = line_text.length()
+  let model_columns = Array::makei(length + 1, column => column)
+  let injected_text_indices = Array::make(length, -1)
+  let model_to_projected_columns = Array::makei(length + 1, column => column)
   let parts : Array[ProjectedLinePart] = []
-  if line_text.length() > 0 {
+  if length > 0 {
     parts.push({
       start: 0,
-      end: line_text.length(),
-      kind: SourceSegment(model_start=0, model_end=line_text.length()),
+      end: length,
+      kind: SourceSegment(model_start=0, model_end=length),
     })
   }
   {
     text: line_text,
-    model_line_length: line_text.length(),
+    model_line_length: length,
     model_columns,
     injected_text_indices,
     model_to_projected_columns,
@@ -314,10 +308,7 @@ fn normalize_injected_text(
 
 ///|
 fn initial_model_to_projected_columns(line_length : Int) -> Array[Int] {
-  let columns : Array[Int] = []
-  for _ in 0..<=line_length {
-    columns.push(-1)
-  }
+  let columns = Array::make(line_length + 1, -1)
   columns[0] = 0
   columns
 }
