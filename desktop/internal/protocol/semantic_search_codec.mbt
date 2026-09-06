@@ -7,27 +7,19 @@
 //|
 
 ///|
-fn sem_one_based_line(
-  value : Int,
-  path : @json.JsonPath,
+/// A one-based coordinate, refused at the field's own path. `noun` names what
+/// the field is — "line" or "column" — which is all the two spellings of this
+/// check ever differed by.
+fn JsonObject::required_one_based(
+  self : JsonObject,
   name : String,
+  noun : String,
 ) -> Int raise @json.JsonDecodeError {
+  let value = self.required_int(name)
   if value < 1 {
-    raise JsonDecodeError((path.add_key(name), "expected one-based line"))
-  }
-  value
-}
-
-//|
-
-///|
-fn sem_one_based_column(
-  value : Int,
-  path : @json.JsonPath,
-  name : String,
-) -> Int raise @json.JsonDecodeError {
-  if value < 1 {
-    raise JsonDecodeError((path.add_key(name), "expected one-based column"))
+    raise JsonDecodeError(
+      (self.path.add_key(name), "expected one-based " + noun),
+    )
   }
   value
 }
@@ -43,14 +35,8 @@ pub impl FromJson for SearchSemanticPayload with fn from_json(json, path) {
     include_glob: object.required_string("include_glob"),
     exclude_glob: object.required_string("exclude_glob"),
     session_key: object.required_string("session_key"),
-    generation: require_text_search_non_negative(
-      object.required_int("generation"),
-      path.add_key("generation"),
-    ),
-    max_results: require_text_search_non_negative(
-      object.required_int("max_results"),
-      path.add_key("max_results"),
-    ),
+    generation: object.required_non_negative_int("generation"),
+    max_results: object.required_non_negative_int("max_results"),
   }
 }
 
@@ -78,10 +64,7 @@ pub impl FromJson for CancelSearchSemanticPayload with fn from_json(json, path) 
   )
   {
     session_key: object.required_string("session_key"),
-    generation: require_text_search_non_negative(
-      object.required_int("generation"),
-      path.add_key("generation"),
-    ),
+    generation: object.required_non_negative_int("generation"),
   }
 }
 
@@ -97,7 +80,7 @@ pub impl ToJson for CancelSearchSemanticPayload with fn to_json(self) {
 ///|
 pub impl FromJson for SemanticContextLine with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "semantic-search context line")
-  let line = sem_one_based_line(object.required_int("line"), path, "line")
+  let line = object.required_one_based("line", "line")
   {
     line,
     text: object.required_string("text"),
@@ -117,26 +100,10 @@ pub impl ToJson for SemanticContextLine with fn to_json(self) {
 ///|
 pub impl FromJson for SemanticSearchHit with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "semantic-search hit")
-  let start_line = sem_one_based_line(
-    object.required_int("start_line"),
-    path,
-    "start_line",
-  )
-  let start_column = sem_one_based_column(
-    object.required_int("start_column"),
-    path,
-    "start_column",
-  )
-  let end_line = sem_one_based_line(
-    object.required_int("end_line"),
-    path,
-    "end_line",
-  )
-  let end_column = sem_one_based_column(
-    object.required_int("end_column"),
-    path,
-    "end_column",
-  )
+  let start_line = object.required_one_based("start_line", "line")
+  let start_column = object.required_one_based("start_column", "column")
+  let end_line = object.required_one_based("end_line", "line")
+  let end_column = object.required_one_based("end_column", "column")
   if end_line < start_line ||
     (end_line == start_line && end_column < start_column) {
     raise JsonDecodeError((path, "semantic-search hit range must be forward"))
@@ -144,14 +111,7 @@ pub impl FromJson for SemanticSearchHit with fn from_json(json, path) {
   let context : Array[SemanticContextLine] = object.required_array_of(
     "source_context",
   )
-  let description = match object.fields.get("description") {
-    Some(String(value)) => Some(value)
-    Some(Null) | None => None
-    Some(_) =>
-      raise JsonDecodeError(
-        (path.add_key("description"), "expected string or null"),
-      )
-  }
+  let description = object.optional_string("description")
   {
     path: object.required_string("path"),
     rule_id: object.required_string("rule_id"),
@@ -179,9 +139,7 @@ pub impl ToJson for SemanticSearchHit with fn to_json(self) {
     "matched_source": self.matched_source.to_json(),
     "source_context": self.source_context.to_json(),
   }
-  if self.description is Some(description) {
-    fields["description"] = description.to_json()
-  }
+  set_optional(fields, "description", self.description)
   Json(fields)
 }
 
@@ -216,41 +174,13 @@ pub impl ToJson for SemanticSearchError with fn to_json(self) {
 ///|
 pub impl FromJson for SearchSemanticReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "semantic-search reply")
-  let generation = require_text_search_non_negative(
-    object.required_int("generation"),
-    path.add_key("generation"),
-  )
-  let match_count = require_text_search_non_negative(
-    object.required_int("match_count"),
-    path.add_key("match_count"),
-  )
-  let file_count = require_text_search_non_negative(
-    object.required_int("file_count"),
-    path.add_key("file_count"),
-  )
+  let generation = object.required_non_negative_int("generation")
+  let match_count = object.required_non_negative_int("match_count")
+  let file_count = object.required_non_negative_int("file_count")
   let hits : Array[SemanticSearchHit] = object.required_array_of("matches")
-  let error_code = object.optional_string("error_code")
-  let error_message = object.optional_string("error_message")
-  let error = match (error_code, error_message) {
-    (None, None) => None
-    (Some(code), Some(message)) => {
-      if code.is_empty() {
-        raise JsonDecodeError(
-          (path.add_key("error_code"), "expected non-empty error code"),
-        )
-      }
-      if message.is_empty() {
-        raise JsonDecodeError(
-          (path.add_key("error_message"), "expected non-empty error message"),
-        )
-      }
-      let pair : SemanticSearchError = { code, message, }
-      Some(pair)
-    }
-    _ =>
-      raise JsonDecodeError(
-        (path, "error_code and error_message must be present together"),
-      )
+  let error : SemanticSearchError? = match optional_error_pair(object) {
+    Some((code, message)) => Some({ code, message, })
+    None => None
   }
   {
     root: object.required_string("root"),
@@ -298,19 +228,10 @@ pub impl FromJson for SemanticSearchProgressPayload with fn from_json(
   {
     root: object.required_string("root"),
     session_key: object.required_string("session_key"),
-    generation: require_text_search_non_negative(
-      object.required_int("generation"),
-      path.add_key("generation"),
-    ),
+    generation: object.required_non_negative_int("generation"),
     matches,
-    match_count: require_text_search_non_negative(
-      object.required_int("match_count"),
-      path.add_key("match_count"),
-    ),
-    file_count: require_text_search_non_negative(
-      object.required_int("file_count"),
-      path.add_key("file_count"),
-    ),
+    match_count: object.required_non_negative_int("match_count"),
+    file_count: object.required_non_negative_int("file_count"),
   }
 }
 

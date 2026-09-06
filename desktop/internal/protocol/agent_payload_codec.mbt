@@ -4,24 +4,13 @@
 // at their exact path instead of silently changing the engine configuration.
 
 ///|
-fn JsonObject::optional_thinking(
-  self : JsonObject,
-  name : String,
-) -> OpenSeekThinking? raise @json.JsonDecodeError {
-  match self.fields.get(name) {
-    Some(Null) | None => None
-    Some(value) => Some(@json.from_json(value, path=self.path.add_key(name)))
-  }
-}
-
-///|
 pub impl FromJson for StartPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "agent.start payload")
   {
     task: object.required_string("task"),
     submission_id: object.optional_string("submission_id"),
     model: object.optional_string("model"),
-    thinking: object.optional_thinking("thinking"),
+    thinking: object.optional_of("thinking"),
     max_steps: object.optional_int("max_steps"),
     session: object.required_string("session"),
     workspace: object.optional_string("workspace"),
@@ -34,21 +23,11 @@ pub impl ToJson for StartPayload with fn to_json(self) {
     "task": self.task.to_json(),
     "session": self.session.to_json(),
   }
-  if self.submission_id is Some(submission_id) {
-    fields["submission_id"] = submission_id.to_json()
-  }
-  if self.model is Some(model) {
-    fields["model"] = model.to_json()
-  }
-  if self.thinking is Some(thinking) {
-    fields["thinking"] = thinking.to_json()
-  }
-  if self.max_steps is Some(max_steps) {
-    fields["max_steps"] = max_steps.to_json()
-  }
-  if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
-  }
+  set_optional(fields, "submission_id", self.submission_id)
+  set_optional(fields, "model", self.model)
+  set_optional(fields, "thinking", self.thinking)
+  set_optional(fields, "max_steps", self.max_steps)
+  set_optional(fields, "workspace", self.workspace)
   Json(fields)
 }
 
@@ -101,7 +80,7 @@ pub impl FromJson for CompactPayload with fn from_json(json, path) {
   {
     session: object.required_string("session"),
     model: object.optional_string("model"),
-    thinking: object.optional_thinking("thinking"),
+    thinking: object.optional_of("thinking"),
     max_steps: object.optional_int("max_steps"),
     workspace: object.optional_string("workspace"),
   }
@@ -110,18 +89,10 @@ pub impl FromJson for CompactPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for CompactPayload with fn to_json(self) {
   let fields : Map[String, Json] = { "session": self.session.to_json() }
-  if self.model is Some(model) {
-    fields["model"] = model.to_json()
-  }
-  if self.thinking is Some(thinking) {
-    fields["thinking"] = thinking.to_json()
-  }
-  if self.max_steps is Some(max_steps) {
-    fields["max_steps"] = max_steps.to_json()
-  }
-  if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
-  }
+  set_optional(fields, "model", self.model)
+  set_optional(fields, "thinking", self.thinking)
+  set_optional(fields, "max_steps", self.max_steps)
+  set_optional(fields, "workspace", self.workspace)
   Json(fields)
 }
 
@@ -133,7 +104,7 @@ pub impl FromJson for GoalPayload with fn from_json(json, path) {
     text: object.optional_string("text"),
     auto: object.optional_bool("auto"),
     model: object.optional_string("model"),
-    thinking: object.optional_thinking("thinking"),
+    thinking: object.optional_of("thinking"),
     max_steps: object.optional_int("max_steps"),
     workspace: object.optional_string("workspace"),
   }
@@ -142,24 +113,12 @@ pub impl FromJson for GoalPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for GoalPayload with fn to_json(self) {
   let fields : Map[String, Json] = { "session": self.session.to_json() }
-  if self.text is Some(text) {
-    fields["text"] = text.to_json()
-  }
-  if self.auto is Some(auto) {
-    fields["auto"] = auto.to_json()
-  }
-  if self.model is Some(model) {
-    fields["model"] = model.to_json()
-  }
-  if self.thinking is Some(thinking) {
-    fields["thinking"] = thinking.to_json()
-  }
-  if self.max_steps is Some(max_steps) {
-    fields["max_steps"] = max_steps.to_json()
-  }
-  if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
-  }
+  set_optional(fields, "text", self.text)
+  set_optional(fields, "auto", self.auto)
+  set_optional(fields, "model", self.model)
+  set_optional(fields, "thinking", self.thinking)
+  set_optional(fields, "max_steps", self.max_steps)
+  set_optional(fields, "workspace", self.workspace)
   Json(fields)
 }
 
@@ -204,9 +163,7 @@ pub impl ToJson for ApprovalPayload with fn to_json(self) {
     "id": self.id.to_json(),
     "allow": self.allow.to_json(),
   }
-  if self.run_id is Some(run_id) {
-    fields["run_id"] = run_id.to_json()
-  }
+  set_optional(fields, "run_id", self.run_id)
   Json(fields)
 }
 
@@ -237,31 +194,22 @@ pub impl ToJson for ApprovalReply with fn to_json(self) {
 /// with nothing in flight sends.
 pub impl FromJson for RunsReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "agent.runs reply")
-  let runs : Array[StartedPayload] = []
-  for index, raw in object.required_array("runs") {
-    runs.push(@json.from_json(raw, path=path.add_key("runs").add_index(index)))
-  }
-  let settled : Array[RunSettlementPayload] = []
-  for index, raw in object.required_array("settled") {
-    settled.push(
-      @json.from_json(raw, path=path.add_key("settled").add_index(index)),
-    )
-  }
-  let approvals : Array[PendingApprovalPayload] = []
-  for index, raw in object.required_array("approvals") {
-    approvals.push(
-      @json.from_json(raw, path=path.add_key("approvals").add_index(index)),
-    )
-  }
+  let runs : Array[StartedPayload] = object.required_array_of("runs")
+  let settled : Array[RunSettlementPayload] = object.required_array_of(
+    "settled",
+  )
+  let approvals : Array[PendingApprovalPayload] = object.required_array_of(
+    "approvals",
+  )
   { runs, settled, approvals, }
 }
 
 ///|
 pub impl ToJson for RunsReply with fn to_json(self) {
   {
-    "runs": Json(self.runs.map(run => run.to_json())),
-    "settled": Json(self.settled.map(entry => entry.to_json())),
-    "approvals": Json(self.approvals.map(approval => approval.to_json())),
+    "runs": self.runs.to_json(),
+    "settled": self.settled.to_json(),
+    "approvals": self.approvals.to_json(),
   }
 }
 
@@ -291,11 +239,7 @@ pub impl ToJson for PendingApprovalPayload with fn to_json(self) {
     "tool_name": self.tool_name.to_json(),
     "detail": self.detail.to_json(),
   }
-  if self.run_id is Some(run_id) {
-    fields["run_id"] = run_id.to_json()
-  }
-  if self.body is Some(body) {
-    fields["body"] = body.to_json()
-  }
+  set_optional(fields, "run_id", self.run_id)
+  set_optional(fields, "body", self.body)
   Json(fields)
 }

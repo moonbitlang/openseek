@@ -217,16 +217,16 @@ fn load_setting(storage_key : String) -> String {
 }
 
 ///|
-fn save_setting(storage_key : String, value : String) -> Unit {
+/// One guarded `localStorage` mutation. A profile that denies storage, and a
+/// call that throws, are both silently no-ops — the defaults come back on the
+/// next launch.
+fn storage_write(call : String, args : Array[@js.Value]) -> Unit {
   @js.Error_::wrap(
     fn() {
       guard @interop.js_prop(@js.globalThis, "localStorage") is Some(storage) else {
         return @js.Value::cast_from(())
       }
-      storage.apply_with_string("setItem", [
-        @js.Value::cast_from(storage_key),
-        @js.Value::cast_from(value),
-      ])
+      storage.apply_with_string(call, args)
     },
     map_ok=_ => (),
   ) catch {
@@ -235,18 +235,14 @@ fn save_setting(storage_key : String, value : String) -> Unit {
 }
 
 ///|
+fn save_setting(storage_key : String, value : String) -> Unit {
+  storage_write("setItem", [
+    @js.Value::cast_from(storage_key),
+    @js.Value::cast_from(value),
+  ])
+}
+
+///|
 fn remove_setting(storage_key : String) -> Unit {
-  @js.Error_::wrap(
-    fn() {
-      guard @interop.js_prop(@js.globalThis, "localStorage") is Some(storage) else {
-        return @js.Value::cast_from(())
-      }
-      storage.apply_with_string("removeItem", [
-        @js.Value::cast_from(storage_key),
-      ])
-    },
-    map_ok=_ => (),
-  ) catch {
-    _ => ()
-  }
+  storage_write("removeItem", [@js.Value::cast_from(storage_key)])
 }

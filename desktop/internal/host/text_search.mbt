@@ -793,12 +793,18 @@ fn utf16_offset_for_byte(line : String, byte_offset : Int) -> Int? {
 }
 
 ///|
+/// Whether `offset` falls between the two halves of one surrogate pair.
+fn splits_surrogate_pair(text : String, offset : Int) -> Bool {
+  offset > 0 &&
+  offset < text.length() &&
+  text[offset - 1].to_int().is_leading_surrogate() &&
+  text[offset].to_int().is_trailing_surrogate()
+}
+
+///|
 fn safe_utf16_start(text : String, offset : Int) -> Int {
   let offset = offset.max(0).min(text.length())
-  if offset > 0 &&
-    offset < text.length() &&
-    text[offset - 1].to_int().is_leading_surrogate() &&
-    text[offset].to_int().is_trailing_surrogate() {
+  if splits_surrogate_pair(text, offset) {
     offset - 1
   } else {
     offset
@@ -808,10 +814,7 @@ fn safe_utf16_start(text : String, offset : Int) -> Int {
 ///|
 fn safe_utf16_end(text : String, offset : Int) -> Int {
   let offset = offset.max(0).min(text.length())
-  if offset > 0 &&
-    offset < text.length() &&
-    text[offset - 1].to_int().is_leading_surrogate() &&
-    text[offset].to_int().is_trailing_surrogate() {
+  if splits_surrogate_pair(text, offset) {
     offset + 1
   } else {
     offset
@@ -874,24 +877,18 @@ fn project_text_match(
 
 ///|
 fn text_search_diagnostic_line(detail : String, needle : String) -> String? {
-  for raw_line in detail.split("\n") {
-    let line = raw_line.trim().to_owned()
-    if line.to_lower().contains(needle) {
-      return Some(line)
-    }
-  }
-  None
+  detail
+  .split("\n")
+  .map(raw_line => raw_line.trim().to_owned())
+  .find_first(line => line.to_lower().contains(needle))
 }
 
 ///|
 fn text_search_first_diagnostic_line(detail : String) -> String? {
-  for raw_line in detail.split("\n") {
-    let line = raw_line.trim().to_owned()
-    if !line.is_empty() {
-      return Some(line)
-    }
-  }
-  None
+  detail
+  .split("\n")
+  .map(raw_line => raw_line.trim().to_owned())
+  .find_first(line => !line.is_empty())
 }
 
 ///|
