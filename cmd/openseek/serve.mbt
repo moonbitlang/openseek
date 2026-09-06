@@ -907,7 +907,7 @@ async fn run_serve(
       submission_id : String?,
     ) -> @async.Task[Unit] {
       // Each turn refills the shared subrun allowance; the registry (and the
-      // budget objects the review and subtask tools hold) lives across turns.
+      // budget object the review tool holds) lives across turns.
       subrun_budget.reset_turn()
       group.spawn() <| () => {
         let _ = @agent.run_turn_in_scope(

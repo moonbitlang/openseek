@@ -2914,14 +2914,14 @@ test "sub-run child ids are the ones ending in -sr-<n>" {
 
 ///|
 /// The child session id a subrun tool result names, or `None` for every
-/// other result. The contract is the brief the review/subtask tools stamp:
+/// other result. The contract is the brief the review tool stamps:
 /// `"<tool> sr-N (…)"` — display-only metadata, so parsing it here never
 /// touches what the model saw.
 fn subrun_child_id(
   result : @agent_session.ToolResult,
   parent : String,
 ) -> String? {
-  guard result.tool_name() is ("review" | "subtask") else { return None }
+  guard result.tool_name() is "review" else { return None }
   guard result.brief() is Some(brief) else { return None }
   let tokens = brief.split(" ").collect()
   guard tokens.get(1) is Some(token) else { return None }

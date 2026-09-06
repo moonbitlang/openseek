@@ -362,7 +362,7 @@ async fn dispatch_kind(
       }
       // No scratch lab: the worker's whole worktree is writable, and its
       // geometry (worktree, denied roots, allowed paths) arrives in the
-      // input line from the subtask controller — the child enforces with
+      // input line from the worker controller (`agent_workflow`) — the child enforces with
       // what it was handed rather than deriving anything itself.
       match
         @agent_worker.run_child(

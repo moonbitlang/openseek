@@ -171,12 +171,10 @@ pub fn subrun_parent(id : String) -> String? {
 /// `parent` is the session the result was recorded in, because an `sr-N` is
 /// only unique within its own engine.
 ///
-/// The contract is the `sr-N` the `review`/`subtask` tools stamp into
-/// their briefs. Every position is scanned rather than one fixed token: a
-/// `subtask` launch reports its workers through one brief that leads with a
-/// slice COUNT and carries the per-worker briefs — each with its own `sr-N` —
-/// nested inside it (`cmd/openseek/subtask_tool.mbt::subtask_launch_many`), so
-/// a single result can name several children and none of them at token 1.
+/// The contract is the `sr-N` the `review` tool stamps into its brief. Every
+/// position is scanned rather than one fixed token, so a brief that names
+/// several children (a batch launch, say) links all of them, wherever the
+/// ids sit.
 ///
 /// A brief is display-only metadata — the model never sees one — so reading it
 /// here cannot change what a run did, and a brief naming nothing yields no
@@ -191,7 +189,7 @@ pub fn subrun_child_sessions(
   brief : String,
   parent~ : String,
 ) -> Array[String] {
-  guard tool_name is ("review" | "subtask") else { return [] }
+  guard tool_name is "review" else { return [] }
   guard !parent.is_empty() else { return [] }
   let children : Array[String] = []
   for raw in brief.split(" ") {
@@ -834,34 +832,6 @@ test "a sub-run brief names the child sessions its card links to" {
   // labelled with the `sr-N` the brief carried.
   assert_eq(subrun_label("run-sr-2"), Some("sr-2"))
   assert_eq(subrun_parent("run-sr-2"), Some("run"))
-}
-
-///|
-test "a subtask launch names every worker it started" {
-  // `subtask_launch_many` leads with a slice COUNT and nests the per-worker
-  // briefs — each with its own `sr-N` — inside one brief. Scanning one fixed
-  // token would find the count and link nothing, even for a single slice.
-  assert_eq(
-    subrun_child_sessions(
-      "subtask",
-      "subtask 1 slices (subtask sr-3 alpha (captured, 7 step(s)))",
-      parent="run",
-    ),
-    ["run-sr-3"],
-  )
-  assert_eq(
-    subrun_child_sessions(
-      "subtask",
-      "subtask 2 slices (subtask sr-3 a (captured), subtask sr-4 b (captured))",
-      parent="run",
-    ),
-    ["run-sr-3", "run-sr-4"],
-  )
-  // The same child named twice is one child.
-  assert_eq(
-    subrun_child_sessions("subtask", "subtask sr-3 a sr-3 b", parent="run"),
-    ["run-sr-3"],
-  )
 }
 
 ///|

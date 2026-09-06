@@ -609,7 +609,7 @@ async test "a worker's snippet writes neither its own tree nor a sibling's" {
     )
     let definition = @mbtx.definition(
       workspace_root=worker,
-      // The real geometry the subtask controller computes: the repository's
+      // The real geometry the worker controller computes: the repository's
       // shared surfaces are denied wholesale and the worker's own tree is
       // carved back out of them, so `worker_root` sits below a denied root.
       worker_sandbox={
