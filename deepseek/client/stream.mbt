@@ -140,16 +140,11 @@ async fn apply_stream_json(
   on_content_delta~ : async (String) -> Unit,
   on_reasoning_delta~ : async (String) -> Unit,
 ) -> Unit {
-  match json {
-    { "usage": Null, .. } => ()
-    { "usage": usage_json, .. } => acc.usage = Some(usage_json)
-    _ => ()
+  if json is { "usage": usage_json, .. } && !(usage_json is Null) {
+    acc.usage = Some(usage_json)
   }
-  match json {
-    { "choices": [{ "delta": Object(delta), .. }, ..], .. } =>
-      apply_stream_delta(acc, delta, on_content_delta~, on_reasoning_delta~)
-    { "choices": [], .. } => ()
-    _ => ()
+  if json is { "choices": [{ "delta": Object(delta), .. }, ..], .. } {
+    apply_stream_delta(acc, delta, on_content_delta~, on_reasoning_delta~)
   }
 }
 

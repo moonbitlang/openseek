@@ -140,11 +140,6 @@ pub impl FromJson for ChatResponse with fn from_json(
     { "content"? : Some(String(content)) | (Some(Null) with content = ""), .. } =>
       content
     { "content"? : None, .. } if tool_calls.length() > 0 => ""
-    { "content"? : None, .. } =>
-      json_decode_error(
-        message_path.add_key("content"),
-        "ChatResponse::from_json: expected message content",
-      )
     _ =>
       json_decode_error(
         message_path.add_key("content"),
