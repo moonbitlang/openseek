@@ -5,14 +5,11 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
   let status = match snapshot.status {
     Exited(0) => "exit=0"
     Exited(code) => "exit=\{code}"
-    Stopped =>
-      if snapshot.killed_by_output_limit {
-        "killed: flooded past the output cap"
-      } else if snapshot.killed_by_time_limit {
-        "killed: outlived the wall-clock cap"
-      } else {
-        "stopped"
-      }
+    Stopped if snapshot.killed_by_output_limit =>
+      "killed: flooded past the output cap"
+    Stopped if snapshot.killed_by_time_limit =>
+      "killed: outlived the wall-clock cap"
+    Stopped => "stopped"
     Running => "running"
   }
   "background job \{snapshot.id} finished (\{status}): `\{snapshot.command}` — read its output with job_output (job_id=\"\{snapshot.id}\")."
@@ -155,6 +152,19 @@ async fn[X] mbtx_fixture(
 }
 
 ///|
+/// Poll `condition` every 25ms for up to `attempts` rounds, reporting whether
+/// it ever held. The first probe happens before the first sleep.
+async fn wait_until(attempts~ : Int, condition : async () -> Bool) -> Bool {
+  for _ in 0..<attempts {
+    if condition() {
+      return true
+    }
+    @async.sleep(25)
+  }
+  false
+}
+
+///|
 /// Run a tool definition's async executor, failing the test when the tool was
 /// registered with a synchronous one.
 async fn run_async_tool(
@@ -174,20 +184,16 @@ async test "agent registers the expected tool names" {
     let function_tools = tools.function_tools()
     assert_eq(function_tools.length(), 11)
     let names = [ for t in function_tools => t.name ]
-    assert_true(names.contains("job_output"))
-    assert_true(names.contains("job_stop"))
-    assert_true(names.contains("read"))
-    assert_true(names.contains("edit"))
-    assert_true(names.contains("multi_edit"))
-    assert_true(names.contains("write"))
-    assert_true(names.contains("remove"))
-    assert_true(names.contains("plan"))
-    assert_true(names.contains("goal"))
-    assert_true(names.contains("mbtx"))
-    assert_true(names.contains("finish"))
-    assert_false(names.contains("moon_check"))
-    assert_false(names.contains("moon_cmd"))
-    assert_false(names.contains("moon_ide"))
+    for
+      name in [
+        "job_output", "job_stop", "read", "edit", "multi_edit", "write", "remove",
+        "plan", "goal", "mbtx", "finish",
+      ] {
+      assert_true(names.contains(name), msg=name)
+    }
+    for name in ["moon_check", "moon_cmd", "moon_ide"] {
+      assert_false(names.contains(name), msg=name)
+    }
   }
 }
 
@@ -341,17 +347,9 @@ async test "a handed-off job cleans builds but keeps result files until teardown
     assert_false(result.is_error)
     assert_eq(@fs.read_file(result_path).text(), "kept")
     let build_dir = "\{spill_dir}/snippet-0/build"
-    let mut build_reclaimed = !@fs.exists(build_dir)
     // job_output may observe the terminal state just before its cleanup callback
     // finishes, so wait for that callback rather than racing it.
-    for _ in 0..<400 {
-      if !@fs.exists(build_dir) {
-        build_reclaimed = true
-        break
-      }
-      @async.sleep(25)
-    }
-    assert_true(build_reclaimed)
+    assert_true(wait_until(attempts=400, () => !@fs.exists(build_dir)))
     assert_true(@fs.exists("\{spill_dir}/snippet-0/tmp"))
     @fs.rmdir(spill_dir, recursive=true) catch {
       _ => ()
@@ -481,18 +479,16 @@ async test "an automatically handed-off snippet reads EOF on stdin" {
     assert_true(output.content.contains("moved to the background"))
     // The job read EOF rather than blocking on (or stealing from) fd 0.
     guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
-    let mut saw_eof = false
     // Handoff can happen while a cold dependency build is still running. Wait
     // for the first program output instead of racing the compiler.
-    for _ in 0..<2400 {
-      let recent = bg_runtime.read_output_tail(job.id, 12000).unwrap_or("")
-      if recent.contains("got=false") {
-        saw_eof = true
-        break
-      }
-      @async.sleep(25)
-    }
-    assert_true(saw_eof)
+    assert_true(
+      wait_until(attempts=2400, () => {
+        bg_runtime
+        .read_output_tail(job.id, 12000)
+        .unwrap_or("")
+        .contains("got=false")
+      }),
+    )
     let read = run_async_tool(@job_output.definition(bg_runtime), {
       "job_id": job.id,
     })
@@ -664,12 +660,7 @@ async test "a finished background job queues a notice and wakes the controller" 
     // completion notice. The budget is generous because the job compiles the
     // snippet before running it, on a machine that may be running the rest of
     // the suite in parallel; the loop leaves as soon as the wake lands.
-    for _ in 0..<2400 {
-      if woke {
-        break
-      }
-      @async.sleep(25)
-    }
+    let _ = wait_until(attempts=2400, () => woke)
     assert_true(woke)
     let steers = runtime.drain_steers()
     assert_true(steers.any(s => s is Notice(_)))
