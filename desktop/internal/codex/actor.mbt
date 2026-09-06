@@ -252,6 +252,22 @@ pub fn Actor::status(self : Actor) -> Json {
 }
 
 ///|
+/// Queue one input on its own reply channel, wake the actor, and wait for the
+/// single settlement it sends back.
+async fn Actor::submit(
+  self : Actor,
+  input : (@async.Queue[Result[Json, CodexError]]) -> ActorInput,
+) -> Json {
+  let reply : @async.Queue[Result[Json, CodexError]] = Queue(kind=Blocking(1))
+  self.inputs.put(input(reply))
+  self.signal()
+  match reply.get() {
+    Ok(value) => value
+    Err(error) => raise error
+  }
+}
+
+///|
 /// Send one allowlisted app-server request through the actor. The API package,
 /// not this process owner, decides which method names are exposed to clients.
 pub async fn Actor::call(
@@ -259,13 +275,7 @@ pub async fn Actor::call(
   method_~ : String,
   params~ : Json,
 ) -> Json {
-  let reply : @async.Queue[Result[Json, CodexError]] = Queue(kind=Blocking(1))
-  self.inputs.put(Call(method_, params, reply))
-  self.signal()
-  match reply.get() {
-    Ok(value) => value
-    Err(error) => raise error
-  }
+  self.submit(reply => Call(method_, params, reply))
 }
 
 ///|
@@ -277,13 +287,7 @@ pub async fn Actor::respond(
   request_id~ : Json,
   result~ : Json,
 ) -> Json {
-  let reply : @async.Queue[Result[Json, CodexError]] = Queue(kind=Blocking(1))
-  self.inputs.put(Respond(request_id, result, reply))
-  self.signal()
-  match reply.get() {
-    Ok(value) => value
-    Err(error) => raise error
-  }
+  self.submit(reply => Respond(request_id, result, reply))
 }
 
 ///|
@@ -291,13 +295,7 @@ pub async fn Actor::respond(
 /// this after attaching or reloading so a missed approval event cannot leave a
 /// turn waiting forever with no visible prompt.
 pub async fn Actor::requests(self : Actor) -> Json {
-  let reply : @async.Queue[Result[Json, CodexError]] = Queue(kind=Blocking(1))
-  self.inputs.put(ListRequests(reply))
-  self.signal()
-  match reply.get() {
-    Ok(value) => value
-    Err(error) => raise error
-  }
+  self.submit(reply => ListRequests(reply))
 }
 
 ///|

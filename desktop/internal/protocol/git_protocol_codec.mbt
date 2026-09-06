@@ -5,10 +5,7 @@
 ///|
 pub impl FromJson for GitHistoryPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "Git history payload")
-  let snapshot = match object.optional_json("snapshot") {
-    Some(raw) => Some(@json.from_json(raw, path=path.add_key("snapshot")))
-    None => None
-  }
+  let snapshot : GitHistorySnapshot? = object.optional_of("snapshot")
   {
     session: object.required_string("session"),
     workspace: object.optional_string("workspace"),
@@ -25,12 +22,8 @@ pub impl ToJson for GitHistoryPayload with fn to_json(self) {
     "skip": self.skip.to_json(),
     "limit": self.limit.to_json(),
   }
-  if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
-  }
-  if self.snapshot is Some(snapshot) {
-    fields["snapshot"] = ToJson::to_json(snapshot)
-  }
+  set_optional(fields, "workspace", self.workspace)
+  set_optional(fields, "snapshot", self.snapshot)
   Json(fields)
 }
 
@@ -50,9 +43,7 @@ pub impl ToJson for GitCommitChangesPayload with fn to_json(self) {
     "session": self.session.to_json(),
     "commit": self.commit.to_json(),
   }
-  if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
-  }
+  set_optional(fields, "workspace", self.workspace)
   Json(fields)
 }
 
@@ -89,12 +80,8 @@ pub impl ToJson for GitHistorySnapshot with fn to_json(self) {
     "refs": self.refs.to_json(),
     "tips": self.tips.to_json(),
   }
-  if self.head is Some(head) {
-    fields["head"] = head.to_json()
-  }
-  if self.branch is Some(branch) {
-    fields["branch"] = branch.to_json()
-  }
+  set_optional(fields, "head", self.head)
+  set_optional(fields, "branch", self.branch)
   Json(fields)
 }
 
@@ -124,10 +111,7 @@ pub impl ToJson for GitHistoryCommit with fn to_json(self) {
 ///|
 pub impl FromJson for GitHistoryReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "Git history reply")
-  let snapshot : GitHistorySnapshot = @json.from_json(
-    object.required_json("snapshot"),
-    path=path.add_key("snapshot"),
-  )
+  let snapshot : GitHistorySnapshot = object.required_of("snapshot")
   let commits : Array[GitHistoryCommit] = object.required_array_of("commits")
   {
     repository: object.required_bool("repository"),
@@ -165,9 +149,7 @@ pub impl ToJson for GitHistoricalChange with fn to_json(self) {
     "status": self.status.to_json(),
     "kind": self.kind.to_json(),
   }
-  if self.original_path is Some(original_path) {
-    fields["original_path"] = original_path.to_json()
-  }
+  set_optional(fields, "original_path", self.original_path)
   Json(fields)
 }
 
@@ -188,8 +170,6 @@ pub impl ToJson for GitCommitChangesReply with fn to_json(self) {
     "commit": self.commit.to_json(),
     "changes": self.changes.to_json(),
   }
-  if self.parent is Some(parent) {
-    fields["parent"] = parent.to_json()
-  }
+  set_optional(fields, "parent", self.parent)
   Json(fields)
 }

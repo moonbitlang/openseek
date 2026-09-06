@@ -7,6 +7,24 @@ fn test_goal_command(request : GoalRequest) -> GoalCommand {
 }
 
 ///|
+/// Test-only: commit one runtime notice into the fixture conversation's
+/// durable record and return the model it produced.
+fn commit_notice(model : Model, sequence : Int, content : String) -> Model {
+  let (_, next) = update_dev(
+    test_dispatch(),
+    SessionCommitted(
+      session="desktop-test",
+      sequence~,
+      ts=None,
+      item=@protocol.RuntimeNotice({ content, }),
+      session_root=@interop.ChannelId::Local.test_store_root(),
+    ),
+    model,
+  )
+  next
+}
+
+///|
 test "the goal slash command opens the editor prefilled from the mirror" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
@@ -50,47 +68,31 @@ test "submit holds the text until its marker lands" {
 
 ///|
 test "only the matching set marker settles the pending text" {
-  let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
     goal_pending: Some(test_goal_command(Setting("ship the feature"))),
   })
-  fn commit(model, sequence, content) {
-    let (_, next) = update_dev(
-      dispatch,
-      SessionCommitted(
-        session="desktop-test",
-        sequence~,
-        ts=None,
-        item=@protocol.RuntimeNotice({ content, }),
-        session_root=@interop.ChannelId::Local.test_store_root(),
-      ),
-      model,
-    )
-    next
-  }
-
   // A marker proves the engine is committing, not that this command landed.
   // An earlier set from a second submit, and a block on the goal that still
   // stands, both leave the recovery copy alone — the append it belongs to
   // can still fail.
-  let other_set = commit(model, 1, "[goal]\nan earlier goal")
+  let other_set = commit_notice(model, 1, "[goal]\nan earlier goal")
   assert_true(
     other_set.active().goal_pending
     is Some({ request: Setting("ship the feature"), .. }),
   )
-  let blocked = commit(other_set, 2, "[goal blocked]\nneeds a decision")
+  let blocked = commit_notice(other_set, 2, "[goal blocked]\nneeds a decision")
   assert_true(
     blocked.active().goal_pending
     is Some({ request: Setting("ship the feature"), .. }),
   )
-  let cleared = commit(blocked, 3, "[goal cleared]")
+  let cleared = commit_notice(blocked, 3, "[goal cleared]")
   assert_true(
     cleared.active().goal_pending
     is Some({ request: Setting("ship the feature"), .. }),
   )
   // Its own set does settle it, and moves the mirror.
-  let settled = commit(cleared, 4, "[goal]\nship the feature")
+  let settled = commit_notice(cleared, 4, "[goal]\nship the feature")
   assert_true(settled.active().goal_pending is None)
   assert_true(
     settled.active().goal is Some({ text: "ship the feature", blocked: None, }),
@@ -139,35 +141,19 @@ test "clear sends from goal mode and from the standing row alike" {
 
 ///|
 test "a clear waits for its tombstone, not for any goal marker" {
-  let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
     goal: Some({ text: "ship the feature", blocked: None, }),
     goal_pending: Some(test_goal_command(Clearing)),
   })
-  fn commit(model, sequence, content) {
-    let (_, next) = update_dev(
-      dispatch,
-      SessionCommitted(
-        session="desktop-test",
-        sequence~,
-        ts=None,
-        item=@protocol.RuntimeNotice({ content, }),
-        session_root=@interop.ChannelId::Local.test_store_root(),
-      ),
-      model,
-    )
-    next
-  }
-
   // Someone else's set, and a block on the goal this clear is removing,
   // both leave it in flight: neither is the tombstone it asked for.
-  let other = commit(model, 1, "[goal]\nsomething else")
+  let other = commit_notice(model, 1, "[goal]\nsomething else")
   assert_true(other.active().goal_pending is Some({ request: Clearing, .. }))
-  let blocked = commit(other, 2, "[goal blocked]\nneeds a decision")
+  let blocked = commit_notice(other, 2, "[goal blocked]\nneeds a decision")
   assert_true(blocked.active().goal_pending is Some({ request: Clearing, .. }))
   // The tombstone settles it, and the mirror empties with it.
-  let settled = commit(blocked, 3, "[goal cleared]")
+  let settled = commit_notice(blocked, 3, "[goal cleared]")
   assert_true(settled.active().goal_pending is None)
   assert_true(settled.active().goal is None)
 }
@@ -213,52 +199,19 @@ test "each conversation owns its own goal edit" {
 
 ///|
 test "goal marker commits write the mirror and render cards" {
-  let dispatch = test_dispatch()
-  let (_, set) = update_dev(
-    dispatch,
-    SessionCommitted(
-      session="desktop-test",
-      sequence=1,
-      ts=None,
-      item=@protocol.RuntimeNotice({ content: "[goal]\nship the feature", }),
-      session_root=@interop.ChannelId::Local.test_store_root(),
-    ),
-    test_model(),
-  )
+  let set = commit_notice(test_model(), 1, "[goal]\nship the feature")
   guard set.active().goal is Some(goal) else {
     fail("the set marker should write the mirror")
   }
   inspect(goal.text, content="ship the feature")
   assert_true(goal.blocked is None)
   inspect(set.active().messages.length(), content="1")
-  let (_, blocked) = update_dev(
-    dispatch,
-    SessionCommitted(
-      session="desktop-test",
-      sequence=2,
-      ts=None,
-      item=@protocol.RuntimeNotice({
-        content: "[goal blocked]\nneeds a decision",
-      }),
-      session_root=@interop.ChannelId::Local.test_store_root(),
-    ),
-    set,
-  )
+  let blocked = commit_notice(set, 2, "[goal blocked]\nneeds a decision")
   guard blocked.active().goal is Some(goal) else {
     fail("a blocked goal keeps standing")
   }
   assert_true(goal.blocked is Some("needs a decision"))
-  let (_, cleared) = update_dev(
-    dispatch,
-    SessionCommitted(
-      session="desktop-test",
-      sequence=3,
-      ts=None,
-      item=@protocol.RuntimeNotice({ content: "[goal cleared]", }),
-      session_root=@interop.ChannelId::Local.test_store_root(),
-    ),
-    blocked,
-  )
+  let cleared = commit_notice(blocked, 3, "[goal cleared]")
   assert_true(cleared.active().goal is None)
   inspect(cleared.active().messages.length(), content="3")
 }
@@ -356,7 +309,6 @@ test "the editor opens on the newest text, not on the retired one" {
 
 ///|
 test "a clear over an unconfirmed set waits for a goal to actually go away" {
-  let dispatch = test_dispatch()
   // The row keeps its ✕ while a set is out, so this is reachable: the set has
   // no marker yet, and the mirror is still empty. Goallessness is also what a
   // record carries before anything is set, so reading it as the clear's own
@@ -367,38 +319,22 @@ test "a clear over an unconfirmed set waits for a goal to actually go away" {
     ..test_conversation(),
     goal_pending: Some(test_goal_command(Clearing)),
   })
-  fn commit(model, sequence, content) {
-    let (_, next) = update_dev(
-      dispatch,
-      SessionCommitted(
-        session="desktop-test",
-        sequence~,
-        ts=None,
-        item=@protocol.RuntimeNotice({ content, }),
-        session_root=@interop.ChannelId::Local.test_store_root(),
-      ),
-      model,
-    )
-    next
-  }
-
-  let unrelated = commit(model, 1, "just some runtime notice")
+  let unrelated = commit_notice(model, 1, "just some runtime notice")
   assert_true(
     unrelated.active().goal_pending is Some({ request: Clearing, .. }),
   )
   // The set it was sent over lands first; the clear is still outstanding.
-  let landed = commit(unrelated, 2, "[goal]\nthe goal being removed")
+  let landed = commit_notice(unrelated, 2, "[goal]\nthe goal being removed")
   assert_true(landed.active().goal_pending is Some({ request: Clearing, .. }))
   assert_true(landed.active().goal is Some(_))
   // Only a goal actually going away is this clear's result.
-  let settled = commit(landed, 3, "[goal cleared]")
+  let settled = commit_notice(landed, 3, "[goal cleared]")
   assert_true(settled.active().goal_pending is None)
   assert_true(settled.active().goal is None)
 }
 
 ///|
 test "a tombstone over an empty mirror still ends the clear" {
-  let dispatch = test_dispatch()
   // The other side of that coin: the set never appended, the user hit ✕ to
   // escape, and the engine records the clear as the no-op it is. Nothing
   // stands before this commit and nothing stands after, so the transition
@@ -408,17 +344,7 @@ test "a tombstone over an empty mirror still ends the clear" {
     ..test_conversation(),
     goal_pending: Some(test_goal_command(Clearing)),
   })
-  let (_, settled) = update_dev(
-    dispatch,
-    SessionCommitted(
-      session="desktop-test",
-      sequence=1,
-      ts=None,
-      item=@protocol.RuntimeNotice({ content: "[goal cleared]", }),
-      session_root=@interop.ChannelId::Local.test_store_root(),
-    ),
-    model,
-  )
+  let settled = commit_notice(model, 1, "[goal cleared]")
   assert_true(settled.active().goal is None)
   assert_true(settled.active().goal_pending is None)
 }
@@ -436,22 +362,7 @@ test "re-asserting an unchanged goal waits for its own marker too" {
     goal: Some({ text: "ship the feature", blocked: None, }),
     goal_pending: Some(test_goal_command(Setting("ship the feature"))),
   })
-  fn commit(model, sequence, content) {
-    let (_, next) = update_dev(
-      dispatch,
-      SessionCommitted(
-        session="desktop-test",
-        sequence~,
-        ts=None,
-        item=@protocol.RuntimeNotice({ content, }),
-        session_root=@interop.ChannelId::Local.test_store_root(),
-      ),
-      model,
-    )
-    next
-  }
-
-  let unrelated = commit(model, 1, "just some runtime notice")
+  let unrelated = commit_notice(model, 1, "just some runtime notice")
   assert_true(
     unrelated.active().goal_pending
     is Some({ request: Setting("ship the feature"), .. }),
@@ -493,7 +404,7 @@ test "re-asserting an unchanged goal waits for its own marker too" {
     is None,
   )
   // Its own marker arriving live says so outright too.
-  let settled = commit(unrelated, 2, "[goal]\nship the feature")
+  let settled = commit_notice(unrelated, 2, "[goal]\nship the feature")
   assert_true(settled.active().goal_pending is None)
 }
 
@@ -537,7 +448,6 @@ test "a set is recorded even when the record has moved on since" {
 
 ///|
 test "re-asserting a blocked goal waits for its own marker" {
-  let dispatch = test_dispatch()
   // Edit on a blocked goal seeds from the mirror, so resubmitting unchanged
   // is the ordinary way to re-assert one. The record already spells that
   // text, and a set clears the block — so matching on text alone would let
@@ -548,29 +458,14 @@ test "re-asserting a blocked goal waits for its own marker" {
     goal: Some({ text: "ship the feature", blocked: Some("needs a decision"), }),
     goal_pending: Some(test_goal_command(Setting("ship the feature"))),
   })
-  fn commit(model, sequence, content) {
-    let (_, next) = update_dev(
-      dispatch,
-      SessionCommitted(
-        session="desktop-test",
-        sequence~,
-        ts=None,
-        item=@protocol.RuntimeNotice({ content, }),
-        session_root=@interop.ChannelId::Local.test_store_root(),
-      ),
-      model,
-    )
-    next
-  }
-
-  let unrelated = commit(model, 1, "just some runtime notice")
+  let unrelated = commit_notice(model, 1, "just some runtime notice")
   assert_true(
     unrelated.active().goal_pending
     is Some({ request: Setting("ship the feature"), .. }),
   )
   // Its own marker is what unblocks it, and that is the state it was waiting
   // for.
-  let settled = commit(unrelated, 2, "[goal]\nship the feature")
+  let settled = commit_notice(unrelated, 2, "[goal]\nship the feature")
   assert_true(settled.active().goal_pending is None)
   assert_true(
     settled.active().goal is Some({ text: "ship the feature", blocked: None, }),
@@ -915,17 +810,7 @@ test "an undelivered reply goes quiet once its send has been settled" {
       since: 0,
     }),
   })
-  let (_, settled) = update_dev(
-    dispatch,
-    SessionCommitted(
-      session="desktop-test",
-      sequence=1,
-      ts=None,
-      item=@protocol.RuntimeNotice({ content: "[goal]\nship the feature", }),
-      session_root=@interop.ChannelId::Local.test_store_root(),
-    ),
-    model,
-  )
+  let settled = commit_notice(model, 1, "[goal]\nship the feature")
   assert_true(settled.active().goal_pending is None)
   fn undelivered(model, command) {
     let (_, next) = update_dev(
@@ -972,17 +857,7 @@ test "a rejection that arrives after the record has spoken only reports" {
       since: 0,
     }),
   })
-  let (_, settled) = update_dev(
-    dispatch,
-    SessionCommitted(
-      session="desktop-test",
-      sequence=1,
-      ts=None,
-      item=@protocol.RuntimeNotice({ content: "[goal]\nthe goal that won", }),
-      session_root=@interop.ChannelId::Local.test_store_root(),
-    ),
-    model,
-  )
+  let settled = commit_notice(model, 1, "[goal]\nthe goal that won")
   assert_true(settled.active().goal_pending is None)
   let (_, late) = update_dev(
     dispatch,

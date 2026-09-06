@@ -1005,8 +1005,11 @@ fn show_transient_navigation_target_highlight(
 }
 
 ///|
-fn dispose_markdown_model(model : @viewer.MarkdownViewerModel) -> Unit {
-  model.model.dispose()
+fn dispose_markdown_model(model : @viewer.MarkdownViewerModel?) -> Unit {
+  match model {
+    Some(model) => model.model.dispose()
+    None => ()
+  }
 }
 
 ///|
@@ -1206,10 +1209,7 @@ fn show_file_in_viewer(
             ),
           ),
         )
-        match previous {
-          Some(previous) => dispose_markdown_model(previous)
-          None => ()
-        }
+        dispose_markdown_model(previous)
         if restore_view_state &&
           relative is Some(rel) &&
           viewer_state.markdown_view_states.get(rel.0) is Some(saved) {
@@ -1219,10 +1219,7 @@ fn show_file_in_viewer(
         // `MarkdownViewer::set_model` returns only after its attachment and
         // bridges are detached, so the caller-owned TextModel can be retired
         // immediately before Code takes over.
-        match markdown_viewer.set_model(None) {
-          Some(previous) => dispose_markdown_model(previous)
-          None => ()
-        }
+        dispose_markdown_model(markdown_viewer.set_model(None))
         viewer.set_model(Some(text_model))
         dispose_source_model(code_model)
         let restored_code_view_state = if restore_view_state &&
@@ -1246,10 +1243,7 @@ fn show_file_in_viewer(
       viewer.set_model(None)
       dispose_source_model(code_model)
     } else {
-      match markdown_viewer.set_model(None) {
-        Some(previous) => dispose_markdown_model(previous)
-        None => ()
-      }
+      dispose_markdown_model(markdown_viewer.set_model(None))
     }
     // Gate incoming diagnostics to the file now on screen (a notice document,
     // with no absolute path, takes no diagnostics). The relative name rides
@@ -1397,6 +1391,34 @@ fn should_auto_fold_top_level(text_model : @model.TextModel) -> Bool {
 }
 
 ///|
+/// Retire the source and Markdown documents on screen, the file identity they
+/// were shown under, and the MBTI diagram.
+fn clear_source_presentation() -> Unit {
+  if viewer_state.viewer is Some(viewer) {
+    if viewer_state.point_range_highlight is Some(highlight) {
+      highlight.clear()
+    }
+    if viewer_state.search_match_highlights is Some(highlights) {
+      highlights.clear()
+    }
+    if viewer_state.services is Some(services) &&
+      viewer.get_model() is Some(model) {
+      services.quick_diff.set_original_content(model.uri, None)
+    }
+    let previous = viewer.get_model()
+    viewer.set_model(None)
+    dispose_source_model(previous)
+  }
+  if viewer_state.markdown_viewer is Some(markdown_viewer) {
+    dispose_markdown_model(markdown_viewer.set_model(None))
+  }
+  viewer_state.absolute = None
+  viewer_state.relative = None
+  viewer_state.navigation = None
+  clear_mbti_diagram()
+}
+
+///|
 /// Drop the viewer's current document so it falls back to the placeholder.
 /// Used when the active conversation changes (which also invalidates every
 /// parked scroll position — they belong to the previous workspace's tabs)
@@ -1407,31 +1429,7 @@ fn clear_viewer() -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     viewer_state.view_states.clear()
     viewer_state.markdown_view_states.clear()
-    if viewer_state.viewer is Some(viewer) {
-      if viewer_state.point_range_highlight is Some(highlight) {
-        highlight.clear()
-      }
-      if viewer_state.search_match_highlights is Some(highlights) {
-        highlights.clear()
-      }
-      if viewer_state.services is Some(services) &&
-        viewer.get_model() is Some(model) {
-        services.quick_diff.set_original_content(model.uri, None)
-      }
-      let previous = viewer.get_model()
-      viewer.set_model(None)
-      dispose_source_model(previous)
-    }
-    if viewer_state.markdown_viewer is Some(markdown_viewer) {
-      match markdown_viewer.set_model(None) {
-        Some(previous) => dispose_markdown_model(previous)
-        None => ()
-      }
-    }
-    viewer_state.absolute = None
-    viewer_state.relative = None
-    viewer_state.navigation = None
-    clear_mbti_diagram()
+    clear_source_presentation()
     clear_diff_comparison()
     clear_semantic_review_editors()
   })
@@ -1444,33 +1442,7 @@ fn clear_viewer() -> @cmd.Cmd {
 /// CSS, while the next complete comparison replaces it atomically. Its memory
 /// stays bounded to one pair and `clear_viewer` retires it at an owner boundary.
 fn clear_document() -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
-    if viewer_state.viewer is Some(viewer) {
-      if viewer_state.point_range_highlight is Some(highlight) {
-        highlight.clear()
-      }
-      if viewer_state.search_match_highlights is Some(highlights) {
-        highlights.clear()
-      }
-      if viewer_state.services is Some(services) &&
-        viewer.get_model() is Some(model) {
-        services.quick_diff.set_original_content(model.uri, None)
-      }
-      let previous = viewer.get_model()
-      viewer.set_model(None)
-      dispose_source_model(previous)
-    }
-    if viewer_state.markdown_viewer is Some(markdown_viewer) {
-      match markdown_viewer.set_model(None) {
-        Some(previous) => dispose_markdown_model(previous)
-        None => ()
-      }
-    }
-    viewer_state.absolute = None
-    viewer_state.relative = None
-    viewer_state.navigation = None
-    clear_mbti_diagram()
-  })
+  @cmd.custom_cmd(_scheduler => clear_source_presentation())
 }
 
 ///|

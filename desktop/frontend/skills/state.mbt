@@ -124,42 +124,14 @@ pub fn State::handle(
     QueryChanged(value) => (@cmd.none, { ..self, query: value, }, None)
     PreviewMarket(item) => {
       let target = preview_target_for_market(input.installed, item)
-      match self.preview_cache.get(preview_cache_key(target)) {
-        Some(content) =>
-          (
-            @cmd.none,
-            { ..self, preview: Ready(target~, request=0, content~), },
-            None,
-          )
-        None => {
-          let request = preview_request_id(self.preview) + 1
-          (
-            fetch_content(emit, input.channel, request, target),
-            { ..self, preview: Loading(target~, request~), },
-            None,
-          )
-        }
-      }
+      self.open_preview(target, request => {
+        fetch_content(emit, input.channel, request, target)
+      })
     }
-    PreviewInstalled(item) => {
-      let target = Installed(item)
-      match self.preview_cache.get(preview_cache_key(target)) {
-        Some(content) =>
-          (
-            @cmd.none,
-            { ..self, preview: Ready(target~, request=0, content~), },
-            None,
-          )
-        None => {
-          let request = preview_request_id(self.preview) + 1
-          (
-            fetch_installed_content(emit, input.channel, request, item),
-            { ..self, preview: Loading(target~, request~), },
-            None,
-          )
-        }
-      }
-    }
+    PreviewInstalled(item) =>
+      self.open_preview(Installed(item), request => {
+        fetch_installed_content(emit, input.channel, request, item)
+      })
     PreviewLoaded(request~, target~, content~) => {
       guard self.preview is Loading(request=current, target=current_target) &&
         current == request &&
@@ -264,6 +236,29 @@ pub fn State::handle(
       } else {
         (@cmd.none, { ..self, busy, notice: error, }, None)
       }
+    }
+  }
+}
+
+///|
+/// Show one skill's SKILL.md: straight from the page's own cache when it
+/// already holds the document, and otherwise by asking the host for it under
+/// a fresh request id.
+fn State::open_preview(
+  self : State,
+  target : PreviewTarget,
+  fetch : (Int) -> @cmd.Cmd,
+) -> (@cmd.Cmd, State, Outcome?) {
+  match self.preview_cache.get(preview_cache_key(target)) {
+    Some(content) =>
+      (
+        @cmd.none,
+        { ..self, preview: Ready(target~, request=0, content~), },
+        None,
+      )
+    None => {
+      let request = preview_request_id(self.preview) + 1
+      (fetch(request), { ..self, preview: Loading(target~, request~), }, None)
     }
   }
 }

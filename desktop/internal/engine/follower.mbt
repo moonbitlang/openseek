@@ -753,14 +753,9 @@ async test "an unreadable existing record refuses the spawn baseline" {
     // A record that exists and cannot be read refuses the spawn instead,
     // and leaves no follower installed.
     write_damaged_record(root, "s-baseline")
-    let detail = try {
+    let detail = engine_refusal(() => {
       install_test_follower(engine, "s-baseline", root, sink~, group~, manager~)
-      "no error"
-    } catch {
-      EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
-      error => "\{error}"
-    }
+    })
     assert_true(detail.contains("failed to baseline the session record"))
     assert_true(manager.followers.get("s-baseline") is None)
     group.return_immediately(())
@@ -786,14 +781,9 @@ async test "failed final scan keeps the follower active and propagates" {
       fail("expected follower")
     }
     write_damaged_record(root, "s-fail")
-    let detail = try {
+    let detail = engine_refusal(() => {
       stop_follower(manager, "s-fail", writer_exited=true)
-      "no error"
-    } catch {
-      EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
-      error => "\{error}"
-    }
+    })
     assert_true(detail.contains("session record"))
     assert_true(
       manager.followers.get("s-fail") is Some(current) &&
@@ -1118,14 +1108,9 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
     let slot = slot_for(sessions, session)
     slot.engine = Some(engine)
     manager.pump = Serving(sessions~)
-    let detail = try {
+    let detail = engine_refusal(() => {
       manager.close_engines_for_workspace(workspace)
-      "no error"
-    } catch {
-      EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
-      error => "\{error}"
-    }
+    })
     assert_true(detail.contains("session record"))
     assert_true(
       manager.followers.get(session) is Some(current) &&
@@ -1165,14 +1150,9 @@ async test "record stat failure is not mistaken for an empty final drain" {
       "file",
       create_mode=CreateOrTruncate,
     )
-    let detail = try {
+    let detail = engine_refusal(() => {
       stop_follower(manager, "s-stat", writer_exited=true)
-      "no error"
-    } catch {
-      EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
-      error => "\{error}"
-    }
+    })
     // The reader takes the record's lock first, so ENOTDIR surfaces there —
     // still the failure this test is about, and still not the ENOENT that
     // would prove no record was ever created.
@@ -1416,14 +1396,9 @@ async test "stop requires its generation proof when follower identity vanishes" 
   manager.followers["s-stop-proof"] = follower
   @async.with_task_group(group => {
     let caller = group.spawn(() => {
-      try {
+      engine_refusal(() => {
         stop_follower(manager, "s-stop-proof", writer_exited=false)
-        "no error"
-      } catch {
-        EngineError(detail) => detail
-        error if @async.is_being_cancelled() => raise error
-        error => "\{error}"
-      }
+      })
     })
     guard follower.inbox.get() is Stop(generation~, ..) else {
       fail("expected Stop")

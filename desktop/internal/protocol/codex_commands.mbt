@@ -386,25 +386,16 @@ pub impl FromJson for CodexThreadStartPayload with fn from_json(json, path) {
     cwd: object.optional_string("cwd"),
     model: object.optional_string("model"),
     draft_id: object.optional_string("openseekDraftId"),
-    permission_mode: @json.from_json(
-      object.required_json("permissionMode"),
-      path=path.add_key("permissionMode"),
-    ),
+    permission_mode: object.required_of("permissionMode"),
   }
 }
 
 ///|
 pub impl ToJson for CodexThreadStartPayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  if self.cwd is Some(cwd) {
-    fields["cwd"] = Json(cwd)
-  }
-  if self.model is Some(model) {
-    fields["model"] = Json(model)
-  }
-  if self.draft_id is Some(draft_id) {
-    fields["openseekDraftId"] = Json(draft_id)
-  }
+  set_optional(fields, "cwd", self.cwd)
+  set_optional(fields, "model", self.model)
+  set_optional(fields, "openseekDraftId", self.draft_id)
   fields["permissionMode"] = ToJson::to_json(self.permission_mode)
   Json(fields)
 }
@@ -425,10 +416,7 @@ pub impl FromJson for CodexThreadResumePayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "Codex thread resume payload")
   {
     thread_id: object.required_string("threadId"),
-    permission_mode: @json.from_json(
-      object.required_json("permissionMode"),
-      path=path.add_key("permissionMode"),
-    ),
+    permission_mode: object.required_of("permissionMode"),
   }
 }
 
@@ -452,9 +440,7 @@ pub impl FromJson for CodexThreadReadPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for CodexThreadReadPayload with fn to_json(self) {
   let fields : Map[String, Json] = { "threadId": Json(self.thread_id) }
-  if self.include_turns is Some(include_turns) {
-    fields["includeTurns"] = Json(include_turns)
-  }
+  set_optional(fields, "includeTurns", self.include_turns)
   Json(fields)
 }
 
@@ -474,9 +460,7 @@ pub impl ToJson for CodexThreadListPayload with fn to_json(self) {
     "limit": Json(self.limit.to_double()),
     "archived": Json(self.archived),
   }
-  if self.cursor is Some(cursor) {
-    fields["cursor"] = Json(cursor)
-  }
+  set_optional(fields, "cursor", self.cursor)
   Json(fields)
 }
 
@@ -510,10 +494,7 @@ pub impl FromJson for CodexReviewStartPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "Codex review start payload")
   {
     thread_id: object.required_string("threadId"),
-    target: @json.from_json(
-      object.required_json("target"),
-      path=path.add_key("target"),
-    ),
+    target: object.required_of("target"),
   }
 }
 
@@ -531,10 +512,7 @@ pub impl FromJson for CodexTurnStartPayload with fn from_json(json, path) {
     model: object.optional_string("model"),
     effort: object.optional_string("effort"),
     cwd: object.optional_string("cwd"),
-    permission_mode: @json.from_json(
-      object.required_json("permissionMode"),
-      path=path.add_key("permissionMode"),
-    ),
+    permission_mode: object.required_of("permissionMode"),
   }
 }
 
@@ -544,15 +522,9 @@ pub impl ToJson for CodexTurnStartPayload with fn to_json(self) {
     "threadId": Json(self.thread_id),
     "input": Json(self.input),
   }
-  if self.model is Some(model) {
-    fields["model"] = Json(model)
-  }
-  if self.effort is Some(effort) {
-    fields["effort"] = Json(effort)
-  }
-  if self.cwd is Some(cwd) {
-    fields["cwd"] = Json(cwd)
-  }
+  set_optional(fields, "model", self.model)
+  set_optional(fields, "effort", self.effort)
+  set_optional(fields, "cwd", self.cwd)
   fields["permissionMode"] = ToJson::to_json(self.permission_mode)
   Json(fields)
 }
@@ -602,9 +574,7 @@ pub impl FromJson for CodexStatusReply with fn from_json(json, path) {
 ///|
 pub impl ToJson for CodexStatusReply with fn to_json(self) {
   let fields : Map[String, Json] = { "status": Json(self.status) }
-  if self.message is Some(message) {
-    fields["message"] = Json(message)
-  }
+  set_optional(fields, "message", self.message)
   Json(fields)
 }
 
@@ -639,9 +609,7 @@ pub impl FromJson for CodexDataReply with fn from_json(json, path) {
 ///|
 pub impl ToJson for CodexDataReply with fn to_json(self) {
   let fields : Map[String, Json] = { "data": Json(self.data) }
-  if self.next_cursor is Some(next_cursor) {
-    fields["nextCursor"] = Json(next_cursor)
-  }
+  set_optional(fields, "nextCursor", self.next_cursor)
   Json(fields)
 }
 
@@ -673,9 +641,7 @@ pub impl ToJson for CodexAccountReply with fn to_json(self) {
   let fields : Map[String, Json] = {
     "requiresOpenaiAuth": Json(self.requires_openai_auth),
   }
-  if self.account is Some(account) {
-    fields["account"] = account
-  }
+  set_optional(fields, "account", self.account)
   Json(fields)
 }
 
@@ -740,12 +706,8 @@ pub impl FromJson for CodexTurnReply with fn from_json(json, path) {
 ///|
 pub impl ToJson for CodexTurnReply with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  if self.turn is Some(turn) {
-    fields["turn"] = turn
-  }
-  if self.turn_id is Some(turn_id) {
-    fields["turnId"] = Json(turn_id)
-  }
+  set_optional(fields, "turn", self.turn)
+  set_optional(fields, "turnId", self.turn_id)
   Json(fields)
 }
 
