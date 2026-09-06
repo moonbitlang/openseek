@@ -2,7 +2,7 @@
 /// Raised when a review run fails for an infrastructure reason (e.g. the model
 /// finished without producing a structured report), as opposed to completing
 /// with findings.
-pub suberror ReviewError {
+priv suberror ReviewError {
   ReviewError(String)
 }
 

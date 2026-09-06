@@ -171,7 +171,7 @@ pub fn subrun_parent(id : String) -> String? {
 /// `parent` is the session the result was recorded in, because an `sr-N` is
 /// only unique within its own engine.
 ///
-/// The contract is the `sr-N` the `explore`/`review`/`subtask` tools stamp into
+/// The contract is the `sr-N` the `review`/`subtask` tools stamp into
 /// their briefs. Every position is scanned rather than one fixed token: a
 /// `subtask` launch reports its workers through one brief that leads with a
 /// slice COUNT and carries the per-worker briefs — each with its own `sr-N` —
@@ -191,7 +191,7 @@ pub fn subrun_child_sessions(
   brief : String,
   parent~ : String,
 ) -> Array[String] {
-  guard tool_name is ("explore" | "review" | "subtask") else { return [] }
+  guard tool_name is ("review" | "subtask") else { return [] }
   guard !parent.is_empty() else { return [] }
   let children : Array[String] = []
   for raw in brief.split(" ") {
@@ -791,11 +791,11 @@ test "a sub-run's progress routes by its child session, not its bare id" {
 
 ///|
 test "a sub-run brief names the child sessions its card links to" {
-  // The stamp `agent_explore` writes: `"<tool> sr-N (…)"`.
+  // The stamp the review tool writes: `"<tool> sr-N (…)"`.
   assert_eq(
     subrun_child_sessions(
-      "explore",
-      "explore sr-2 (1 citation(s), 7 step(s))",
+      "review",
+      "review sr-2 (2 finding(s), 7 step(s))",
       parent="run",
     ),
     ["run-sr-2"],
@@ -843,31 +843,25 @@ test "a brief that does not name a sub-run yields no link" {
   // Not a sub-run tool, however the brief happens to read.
   assert_eq(subrun_child_sessions("read", "read sr-2", parent="run"), [])
   // The tool is right but the brief names no child.
-  assert_eq(subrun_child_sessions("explore", "explore", parent="run"), [])
+  assert_eq(subrun_child_sessions("review", "review", parent="run"), [])
   assert_eq(
-    subrun_child_sessions("explore", "explore (budget exhausted)", parent="run"),
+    subrun_child_sessions("review", "review (budget exhausted)", parent="run"),
     [],
   )
   // `sr-` with nothing, or with something that is not an ordinal, is not a
   // sub-run id — linking on it would offer a session that cannot exist.
-  assert_eq(subrun_child_sessions("explore", "explore sr- (x)", parent="run"), [])
-  assert_eq(
-    subrun_child_sessions("explore", "explore sr-x (x)", parent="run"),
-    [],
-  )
-  assert_eq(
-    subrun_child_sessions("explore", "explore sr-2x (x)", parent="run"),
-    [],
-  )
+  assert_eq(subrun_child_sessions("review", "review sr- (x)", parent="run"), [])
+  assert_eq(subrun_child_sessions("review", "review sr-x (x)", parent="run"), [])
+  assert_eq(subrun_child_sessions("review", "review sr-2x (x)", parent="run"), [])
   // Bounded exactly as `split_child_session_id` bounds it, so this never
   // offers an id that parser refuses to read back.
   assert_eq(
-    subrun_child_sessions("explore", "explore sr-1234567890 (x)", parent="run"),
+    subrun_child_sessions("review", "review sr-1234567890 (x)", parent="run"),
     [],
   )
   assert_eq(subrun_parent("run-sr-1234567890"), None)
   // An unsaved conversation has no id to hang a child off.
-  assert_eq(subrun_child_sessions("explore", "explore sr-2 (x)", parent=""), [])
+  assert_eq(subrun_child_sessions("review", "review sr-2 (x)", parent=""), [])
 }
 
 ///|

@@ -114,7 +114,7 @@ card while the rest of the conversation still renders.
 
 ## Subagent transcripts
 
-A sub-run (explore/review child) of a durable session persists its own
+A sub-run (a review/subtask child, or a workflow scout) of a durable session persists its own
 transcript as a sibling session named `<parent id>-sr-N`. The parent's tool
 results carry the sub-run id in their display-only `brief`; the viewer turns
 that into a `↳ subagent` chip on the result card (an in-page `#s=<child id>`

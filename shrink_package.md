@@ -93,8 +93,16 @@ packages actually use. Repo-agnostic; drive it with `moon ide analyze`.
   (b) a trait impl whose trait OBJECT crosses the package boundary cannot
   demote — the consumer package invoking through `&Trait` needs the
   conformance public ("implementation of method X is private" is the
-  compiler telling you this). Derive-generated impls have no block to edit;
-  their visibility follows the type — skip them.
+  compiler telling you this). Derive-generated impls surface through the
+  explicit `pub extend T with Trait::{m}` promotion lines the 2026 toolchain
+  requires (E0079); those lines are the shrinkable block. A promotion nobody
+  calls as `T::m` / `x.m()` cross-package becomes
+  `#doc(hidden)` + `#deprecated` + `pub extend ...` — the trait impl stays
+  usable through the trait, the promoted method drops out of the `.mbti`, and
+  any cross-package dot-call that still needs it fails deny-warn (E0020), so
+  the compiler tells you exactly which promotions to leave un-deprecated.
+  A plain non-`pub` `extend` does not work: E0079 keeps firing because the
+  derived `impl` itself is public, and the private promotion is then unused.
 - **Enum variants and `pub(all)` struct fields** are not individually
   shrinkable — act on the analyzer's narrowability flag for the whole type,
   and skip per-variant/per-field rows unless the type is plain `pub`.
