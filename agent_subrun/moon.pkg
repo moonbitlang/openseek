@@ -1,27 +1,15 @@
 import {
-  "bobzhang/openseek/agent",
   "bobzhang/openseek/agent_subrun/host",
-  "moonbitlang/workflow/spawn",
-  "bobzhang/openseek/agent_runtime",
-  "bobzhang/openseek/agent_session",
   "bobzhang/openseek/agent_tool",
-  "bobzhang/openseek/deepseek",
   "bobzhang/openseek_protocol" @protocol,
   "bobzhang/openseek_protocol/emit",
-  "moonbitlang/async",
   "moonbitlang/core/json",
+  "moonbitlang/workflow/spawn",
 }
 
 import {
-  "bobzhang/openseek/agent_session",
-  "bobzhang/openseek/agent_session/store",
-  "bobzhang/openseek/agent_tool",
   "bobzhang/openseek_protocol" @protocol,
   "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
-  "moonbitlang/core/json",
 } for "test"
 
 supported_targets = "+wasm+native"

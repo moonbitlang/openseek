@@ -80,7 +80,7 @@ pub async fn run_goal_audit(
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   scratch_dir? : String,
 ) -> ReviewReport? {
-  @agent_subrun.execute_kind(
+  @agent_kind.execute_kind(
     session_id~,
     append_item?,
     system_prompt=audit_system_prompt(),

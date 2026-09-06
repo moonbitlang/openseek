@@ -1,6 +1,6 @@
 import {
   "bobzhang/openseek/agent_session",
-  "bobzhang/openseek/agent_subrun",
+  "bobzhang/openseek/agent_kind",
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/agent_tool/edit",
   "bobzhang/openseek/agent_tool/multi_edit",

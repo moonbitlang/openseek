@@ -2,7 +2,7 @@
 fn submit_pattern_repair_tool(
   captured : Ref[PatternRepairReport?],
 ) -> @agent_tool.AgentToolDefinition {
-  @agent_subrun.capture_tool(
+  @agent_kind.capture_tool(
     name="submit_pattern_repair",
     description="Submit one repaired structural pattern and a short explanation.",
     schema=JsonSchema({
@@ -14,7 +14,7 @@ fn submit_pattern_repair_tool(
       "required": ["candidate_pattern", "message"],
     }),
     parse=args => {
-      @agent_subrun.validated(
+      @agent_kind.validated(
         PatternRepairReport::parse(args),
         PatternRepairReport::validate,
       )
@@ -36,7 +36,7 @@ pub async fn run(
   api_url? : String,
   workspace_root? : String = ".",
 ) -> PatternRepairReport? {
-  @agent_subrun.execute_kind(
+  @agent_kind.execute_kind(
     session_id="pattern-repair",
     system_prompt=pattern_repair_system_prompt(),
     task=pattern_repair_task(pattern, instruction),

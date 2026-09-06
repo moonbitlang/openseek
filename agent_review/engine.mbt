@@ -23,7 +23,7 @@ let default_review_max_steps : Int = 120
 /// applies. Raises `ReviewError` if the model finishes without submitting a
 /// report.
 ///
-/// Runs the review kind IN THIS PROCESS via `@agent_subrun.execute_kind`: the
+/// Runs the review kind IN THIS PROCESS via `@agent_kind.execute_kind`: the
 /// standalone CLI is already a dedicated process, and a future in-session
 /// gate spawns `openseek subrun review` — a child process whose dispatch
 /// calls this same code path.
@@ -37,7 +37,7 @@ pub async fn run_review(
   api_url? : String,
   scratch_dir? : String,
 ) -> ReviewReport {
-  let report = @agent_subrun.execute_kind(
+  let report = @agent_kind.execute_kind(
     session_id="review",
     system_prompt=review_system_prompt(),
     task=review_task(base, scratch_dir),

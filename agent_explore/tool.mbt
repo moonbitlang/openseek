@@ -212,7 +212,7 @@ pub async fn run_child(
     { "hints": String(hints), .. } if !hints.is_blank() => Some(hints)
     _ => None
   }
-  @agent_subrun.execute_kind(
+  @agent_kind.execute_kind(
     session_id~,
     append_item?,
     system_prompt=explore_system_prompt(),
