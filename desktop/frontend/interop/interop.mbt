@@ -54,7 +54,7 @@ pub fn page_has_focus() -> Bool {
   }
   let focused : Bool = document.apply_with_string(
     "hasFocus",
-    ([] : Array[@js.Value]),
+    ([] : FixedArray[@js.Value]),
   )
   let hidden : Bool = js_prop(document, "hidden")
     .map(value => value.cast())
@@ -68,7 +68,7 @@ pub fn page_has_focus() -> Bool {
 /// agreement with the host's — does not matter.
 pub fn now_ms() -> Double {
   let date_constructor : @js.Value = @js.globalThis.get_with_string("Date")
-  date_constructor.apply_with_string("now", ([] : Array[@js.Value]))
+  date_constructor.apply_with_string("now", ([] : FixedArray[@js.Value]))
 }
 
 ///|

@@ -123,7 +123,7 @@ fn terminal_style() -> @js.Value {
 }
 
 ///|
-fn no_args() -> Array[@js.Value] {
+fn no_args() -> FixedArray[@js.Value] {
   []
 }
 

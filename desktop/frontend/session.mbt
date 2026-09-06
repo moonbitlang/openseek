@@ -67,9 +67,9 @@ fn new_codex_chat(
 /// separate conversations.
 fn generated_session_id() -> String {
   let date_constructor : @js.Value = @js.globalThis.get_with_string("Date")
-  let now : @js.Value = date_constructor.new(([] : Array[@js.Value]))
+  let now : @js.Value = date_constructor.new(([] : FixedArray[@js.Value]))
   fn utc(name : String) -> Int {
-    now.apply_with_string(name, ([] : Array[@js.Value]))
+    now.apply_with_string(name, ([] : FixedArray[@js.Value]))
   }
 
   let date = pad(utc("getUTCFullYear"), 4) +
@@ -84,7 +84,10 @@ fn generated_session_id() -> String {
 ///|
 fn random_salt() -> String {
   let math : @js.Value = @js.globalThis.get_with_string("Math")
-  let value : Double = math.apply_with_string("random", ([] : Array[@js.Value]))
+  let value : Double = math.apply_with_string(
+    "random",
+    ([] : FixedArray[@js.Value]),
+  )
   pad((value * 1_000_000_000.0).to_int(), 9)
 }
 

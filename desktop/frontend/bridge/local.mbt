@@ -175,6 +175,6 @@ fn LocalBridgeSub::update_dispatch(
 fn LocalBridgeSub::unload(self : LocalBridgeSub) -> Unit {
   self.active = false
   for unsubscribe in self.unsubscribers {
-    let _ : @js.Value = unsubscribe.apply(([] : Array[@js.Value]))
+    let _ : @js.Value = unsubscribe.apply(([] : FixedArray[@js.Value]))
   }
 }

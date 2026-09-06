@@ -98,7 +98,7 @@ fn on_resize_move(event : @dom.Event) -> Unit {
   let rect = content.get_bounding_client_rect()
   set_editor_width(
     drag_size(
-      rect.get_right() - mouse.get_client_x().to_double(),
+      rect.get_right() - mouse.get_client_x(),
       floor=MinEditorWidth.to_double(),
       max=rect.get_width() - MinChatWidth.to_double(),
     ),

@@ -696,7 +696,7 @@ fn clock_label(unix_ms : Double) -> String {
     return ""
   }
   let at : @js.Value = date_constructor.new([@js.Value::cast_from(unix_ms)])
-  let now : @js.Value = date_constructor.new(([] : Array[@js.Value]))
+  let now : @js.Value = date_constructor.new(([] : FixedArray[@js.Value]))
   let locales = @js.Value::cast_from(([] : Array[String]))
   let time_options = @js.Object::new()
   time_options["hour"] = "2-digit"
@@ -707,11 +707,11 @@ fn clock_label(unix_ms : Double) -> String {
   ])
   let at_date : String = at.apply_with_string(
     "toDateString",
-    ([] : Array[@js.Value]),
+    ([] : FixedArray[@js.Value]),
   )
   let today : String = now.apply_with_string(
     "toDateString",
-    ([] : Array[@js.Value]),
+    ([] : FixedArray[@js.Value]),
   )
   if at_date == today {
     return clock
