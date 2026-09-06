@@ -77,14 +77,5 @@ async fn main {
 
 ///|
 fn clip(text : String, limit : Int) -> String {
-  let out = StringBuilder()
-  let mut count = 0
-  for ch in text {
-    if count >= limit {
-      break
-    }
-    out.write_char(ch)
-    count += 1
-  }
-  out.to_string()
+  String::from_iter(text.iter().take(limit))
 }

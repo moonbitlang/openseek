@@ -260,22 +260,14 @@ pub async fn resume_running(
     )
   }
   let entry = { ..entry, state: Running, }
-  match save_entry(geometry.common_git_dir, entry) {
-    Ok(_) => Ok(entry)
-    Err(reason) => Err(reason)
-  }
+  save_entry(geometry.common_git_dir, entry).map(_ => entry)
 }
 
 ///|
 fn is_valid_name(name : String) -> Bool {
-  guard name.length() >= 1 && name.length() <= 40 else { return false }
-  for index, ch in name {
-    let ok = ch is ('a'..='z' | '0'..='9') || (ch == '-' && index > 0)
-    if !ok {
-      return false
-    }
-  }
-  true
+  name.length() <= 40 &&
+  name is ['a'..='z' | '0'..='9', .. rest] &&
+  rest.iter().all(ch => ch is ('a'..='z' | '0'..='9' | '-'))
 }
 
 ///|

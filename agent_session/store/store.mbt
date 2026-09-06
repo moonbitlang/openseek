@@ -75,20 +75,16 @@ pub fn SessionStore::SessionStore(root : String) -> SessionStore {
 
 ///|
 fn validate_session_id(id : @agent_session.SessionId) -> Unit raise {
-  let value = id.value()
-  if value == "" {
-    fail("session id must not be empty")
-  }
-  if value.contains("/") || value.contains("\\") {
-    fail("session id must not contain path separators: \{value}")
-  }
-  if value.contains("\u{0}") {
+  match id.value() {
+    "" => fail("session id must not be empty")
+    value if value.contains("/") || value.contains("\\") =>
+      fail("session id must not contain path separators: \{value}")
     // A NUL truncates the path at the C boundary, silently mapping distinct
     // ids onto one directory.
-    fail("session id must not contain a NUL character")
-  }
-  if value == "." || value == ".." {
-    fail("session id must not be `.` or `..`")
+    value if value.contains("\u{0}") =>
+      fail("session id must not contain a NUL character")
+    "." | ".." => fail("session id must not be `.` or `..`")
+    _ => ()
   }
 }
 
@@ -645,11 +641,7 @@ async fn first_prompt_in_log(path : String) -> String {
 fn[T] stamped_newest_first(a : (T, Int64, Int), b : (T, Int64, Int)) -> Int {
   let (_, a_seconds, a_nanoseconds) = a
   let (_, b_seconds, b_nanoseconds) = b
-  if b_seconds != a_seconds {
-    b_seconds.compare(a_seconds)
-  } else {
-    b_nanoseconds.compare(a_nanoseconds)
-  }
+  (b_seconds, b_nanoseconds).compare((a_seconds, a_nanoseconds))
 }
 
 ///|
