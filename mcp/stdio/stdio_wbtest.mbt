@@ -111,9 +111,7 @@ async test "recv reads a JSON-RPC line from a real subprocess" {
     guard transport.recv() is Some(json) else {
       fail("expected a JSON-RPC line from the subprocess")
     }
-    assert_true(
-      json is { "id": Number(7, ..), "result": { "ok": True, .. }, .. },
-    )
+    assert_true(json is { "id": 7, "result": { "ok": true, .. }, .. })
     transport.close()
   })
 }

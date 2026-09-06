@@ -134,7 +134,7 @@ fn decode_call_result(result : Json) -> CallToolResult raise {
     _ => None
   }
   let is_error = match result {
-    { "isError": True, .. } => true
+    { "isError": true, .. } => true
     _ => false
   }
   { content, structured_content, is_error, }
