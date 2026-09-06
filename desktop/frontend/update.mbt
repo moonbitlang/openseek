@@ -1893,6 +1893,49 @@ fn close_all_tabs(
 }
 
 ///|
+/// One Codex transition for the focused device: every call site maps the
+/// emitter the same way, hands the same channel to the package, and opens
+/// external links through the same command.
+fn codex_update(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  msg : @codex.Msg,
+) -> (@cmd.Cmd, Model) {
+  let channel = model.focused
+  let (cmd, codex) = @codex.update(
+    dispatch.map(next => Codex(channel~, next)),
+    msg,
+    model.codex,
+    channel,
+    url => open_external_link(dispatch, url),
+  )
+  (cmd, { ..model, codex, })
+}
+
+///|
+/// Run one root message against the conversation that owns a composer action,
+/// then restore the navigation the action itself did not change.
+fn composer_owner_msg(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  identity : ComposerActionIdentity,
+  inner : Msg,
+) -> (@cmd.Cmd, Model) {
+  guard model.conversation_for_composer_action(identity) is Some(conv) else {
+    return (@cmd.none, model)
+  }
+  let (command, changed) = update_msg(dispatch, inner, {
+    ..model,
+    focused: conv.device,
+    active_session: conv.session_id,
+  })
+  (
+    command,
+    { ..changed, focused: model.focused, active_session: model.active_session, },
+  )
+}
+
+///|
 fn update_msg(
   dispatch : @cmd.Emit[Msg],
   msg : Msg,
@@ -2069,80 +2112,58 @@ fn update_msg(
       }
     CodexComposerAction(action) =>
       match action {
-        @composer.ModelMenuToggled(identity~) => {
+        @composer.ModelMenuToggled(..)
+        | @composer.ReasoningMenuToggled(..)
+        | @composer.SelectMenuDismissed(..)
+        | @composer.ModelSelected(..)
+        | @composer.ReasoningSelected(..)
+        | @composer.MentionOpened(..)
+        | @composer.FileIndexEnsured(..) => {
           guard model.screen is Codex &&
-            model.codex.accepts_composer_identity(identity, model.focused) else {
+            model.codex.accepts_composer_identity(
+              action.identity(),
+              model.focused,
+            ) else {
             return (@cmd.none, model)
           }
-          update_msg(dispatch, ToggleSelectMenu(CodexModelMenu), model)
-        }
-        @composer.ReasoningMenuToggled(identity~) => {
-          guard model.screen is Codex &&
-            model.codex.accepts_composer_identity(identity, model.focused) else {
-            return (@cmd.none, model)
+          match action {
+            @composer.ModelMenuToggled(..) =>
+              update_msg(dispatch, ToggleSelectMenu(CodexModelMenu), model)
+            @composer.ReasoningMenuToggled(..) =>
+              update_msg(dispatch, ToggleSelectMenu(CodexReasoningMenu), model)
+            @composer.SelectMenuDismissed(..) =>
+              update_msg(dispatch, CloseSelectMenu, model)
+            @composer.ModelSelected(value~, ..) =>
+              update_msg(dispatch, ModelPicked(value), model)
+            @composer.ReasoningSelected(value~, ..) =>
+              update_msg(dispatch, CodexEffortPicked(value), model)
+            @composer.MentionOpened(mention~, ..) => {
+              guard @mention_context.target(mention.ref_) is Some(target) else {
+                return (@cmd.none, model)
+              }
+              let range = if mention.range is Some(_) {
+                mention.range
+              } else {
+                target.range
+              }
+              open_editor_at(
+                dispatch,
+                model,
+                target.file,
+                range,
+                annotation?=target.annotation,
+              )
+            }
+            @composer.FileIndexEnsured(..) =>
+              update_msg(
+                dispatch,
+                FileEditor(@fileeditor.EnsureFileIndex),
+                model,
+              )
+            _ => (@cmd.none, model)
           }
-          update_msg(dispatch, ToggleSelectMenu(CodexReasoningMenu), model)
         }
-        @composer.SelectMenuDismissed(identity~) => {
-          guard model.screen is Codex &&
-            model.codex.accepts_composer_identity(identity, model.focused) else {
-            return (@cmd.none, model)
-          }
-          update_msg(dispatch, CloseSelectMenu, model)
-        }
-        @composer.ModelSelected(identity~, value~) => {
-          guard model.screen is Codex &&
-            model.codex.accepts_composer_identity(identity, model.focused) else {
-            return (@cmd.none, model)
-          }
-          update_msg(dispatch, ModelPicked(value), model)
-        }
-        @composer.ReasoningSelected(identity~, value~) => {
-          guard model.screen is Codex &&
-            model.codex.accepts_composer_identity(identity, model.focused) else {
-            return (@cmd.none, model)
-          }
-          update_msg(dispatch, CodexEffortPicked(value), model)
-        }
-        @composer.MentionOpened(identity~, mention~) => {
-          guard model.screen is Codex &&
-            model.codex.accepts_composer_identity(identity, model.focused) else {
-            return (@cmd.none, model)
-          }
-          guard @mention_context.target(mention.ref_) is Some(target) else {
-            return (@cmd.none, model)
-          }
-          let range = if mention.range is Some(_) {
-            mention.range
-          } else {
-            target.range
-          }
-          open_editor_at(
-            dispatch,
-            model,
-            target.file,
-            range,
-            annotation?=target.annotation,
-          )
-        }
-        @composer.FileIndexEnsured(identity~) => {
-          guard model.screen is Codex &&
-            model.codex.accepts_composer_identity(identity, model.focused) else {
-            return (@cmd.none, model)
-          }
-          update_msg(dispatch, FileEditor(@fileeditor.EnsureFileIndex), model)
-        }
-        _ => {
-          let channel = model.focused
-          let (command, codex) = @codex.update(
-            dispatch.map(next => Codex(channel~, next)),
-            @codex.Msg::composer_action(action),
-            model.codex,
-            channel,
-            url => open_external_link(dispatch, url),
-          )
-          (command, { ..model, codex, })
-        }
+        _ => codex_update(dispatch, model, @codex.Msg::composer_action(action))
       }
     ComposerAction(action) =>
       match action {
@@ -2413,42 +2434,10 @@ fn update_msg(
           }
           (@cmd.none, model.replace_conversation({ ..conv, goal_edit: None, }))
         }
-        @composer.GoalEditStarted(identity~) => {
-          guard model.conversation_for_composer_action(identity) is Some(conv) else {
-            return (@cmd.none, model)
-          }
-          let (command, changed) = update_msg(dispatch, OpenGoalEditor, {
-            ..model,
-            focused: conv.device,
-            active_session: conv.session_id,
-          })
-          (
-            command,
-            {
-              ..changed,
-              focused: model.focused,
-              active_session: model.active_session,
-            },
-          )
-        }
-        @composer.GoalCleared(identity~) => {
-          guard model.conversation_for_composer_action(identity) is Some(conv) else {
-            return (@cmd.none, model)
-          }
-          let (command, changed) = update_msg(dispatch, ClearGoal, {
-            ..model,
-            focused: conv.device,
-            active_session: conv.session_id,
-          })
-          (
-            command,
-            {
-              ..changed,
-              focused: model.focused,
-              active_session: model.active_session,
-            },
-          )
-        }
+        @composer.GoalEditStarted(identity~) =>
+          composer_owner_msg(dispatch, model, identity, OpenGoalEditor)
+        @composer.GoalCleared(identity~) =>
+          composer_owner_msg(dispatch, model, identity, ClearGoal)
         @composer.GoalSubmitted(identity~, draft~, prompt_present~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
@@ -2473,42 +2462,15 @@ fn update_msg(
             },
           )
         }
-        @composer.FileIndexEnsured(identity~) => {
-          guard model.conversation_for_composer_action(identity) is Some(conv) else {
-            return (@cmd.none, model)
-          }
-          let (command, indexed) = update_msg(
+        @composer.FileIndexEnsured(identity~) =>
+          composer_owner_msg(
             dispatch,
+            model,
+            identity,
             FileEditor(@fileeditor.EnsureFileIndex),
-            { ..model, focused: conv.device, active_session: conv.session_id, },
           )
-          (
-            command,
-            {
-              ..indexed,
-              focused: model.focused,
-              active_session: model.active_session,
-            },
-          )
-        }
-        @composer.StopRequested(identity~) => {
-          guard model.conversation_for_composer_action(identity) is Some(conv) else {
-            return (@cmd.none, model)
-          }
-          let (command, stopped) = update_msg(dispatch, Stop, {
-            ..model,
-            focused: conv.device,
-            active_session: conv.session_id,
-          })
-          (
-            command,
-            {
-              ..stopped,
-              focused: model.focused,
-              active_session: model.active_session,
-            },
-          )
-        }
+        @composer.StopRequested(identity~) =>
+          composer_owner_msg(dispatch, model, identity, Stop)
       }
     JumpToMention(index) => {
       guard model.active_conversation() is Some(conv) else {
@@ -2907,16 +2869,13 @@ fn update_msg(
               return (@cmd.none, model)
             }
             let root = model.codex.new_thread_cwd()
-            let (abandon_cmd, codex) = @codex.update(
-              dispatch.map(msg => Codex(channel=model.focused, msg)),
+            let (abandon_cmd, model) = codex_update(
+              dispatch,
+              model,
               @codex.Msg::abandon_draft(),
-              model.codex,
-              model.focused,
-              url => open_external_link(dispatch, url),
             )
             let next = {
               ..model,
-              codex,
               default_model: engine_model,
               default_agent: OpenSeekAgent,
               loading_conversation: None,
@@ -3026,17 +2985,12 @@ fn update_msg(
     }
     CodexEffortPicked(value) => {
       let model = { ..model, select_menu: None, }
-      let (effort_cmd, codex) = @codex.update(
-        dispatch.map(msg => Codex(channel=model.focused, msg)),
+      let (effort_cmd, model) = codex_update(
+        dispatch,
+        model,
         @codex.Msg::effort_changed(value),
-        model.codex,
-        model.focused,
-        url => open_external_link(dispatch, url),
       )
-      (
-        @cmd.batch([effort_cmd, save_codex_reasoning_effort(value)]),
-        { ..model, codex, },
-      )
+      (@cmd.batch([effort_cmd, save_codex_reasoning_effort(value)]), model)
     }
     OpenSeekEffortPicked(value) => {
       guard OpenSeekReasoning::parse(value) is Some(reasoning) else {
@@ -3386,30 +3340,21 @@ fn update_msg(
     OpenCodexConfig => (open_codex_config(dispatch, model.focused), model)
     CodexConfigOpenFailed(message) => model.notify_error(dispatch, message)
     OpenCodex => {
-      let (cmd, codex) = @codex.update(
-        dispatch.map(msg => Codex(channel=model.focused, msg)),
-        @codex.Msg::refresh(),
-        model.codex,
-        model.focused,
-        url => open_external_link(dispatch, url),
-      )
+      let (cmd, model) = codex_update(dispatch, model, @codex.Msg::refresh())
       (
         cmd,
         {
           ..model,
           screen: Codex,
           sidebar_open: model.sidebar_open && !model.narrow,
-          codex,
         },
       )
     }
     CodexDraftRotated(cwd~, id~) => {
-      let (cmd, codex) = @codex.update(
-        dispatch.map(msg => Codex(channel=model.focused, msg)),
+      let (cmd, model) = codex_update(
+        dispatch,
+        model,
         @codex.Msg::start_draft(id, cwd),
-        model.codex,
-        model.focused,
-        url => open_external_link(dispatch, url),
       )
       (
         cmd,
@@ -3417,17 +3362,14 @@ fn update_msg(
           ..model,
           screen: Codex,
           sidebar_open: model.sidebar_open && !model.narrow,
-          codex,
         },
       )
     }
     CodexOpenThread(thread_id) => {
-      let (cmd, codex) = @codex.update(
-        dispatch.map(msg => Codex(channel=model.focused, msg)),
+      let (cmd, model) = codex_update(
+        dispatch,
+        model,
         @codex.Msg::open_thread(thread_id),
-        model.codex,
-        model.focused,
-        url => open_external_link(dispatch, url),
       )
       (
         cmd,
@@ -3435,44 +3377,20 @@ fn update_msg(
           ..model,
           screen: Codex,
           sidebar_open: model.sidebar_open && !model.narrow,
-          codex,
         },
       )
     }
-    CodexArchiveThread(thread_id) => {
-      let (cmd, codex) = @codex.update(
-        dispatch.map(msg => Codex(channel=model.focused, msg)),
-        @codex.Msg::archive_thread(thread_id),
-        model.codex,
-        model.focused,
-        url => open_external_link(dispatch, url),
-      )
-      (cmd, { ..model, codex, })
-    }
-    CodexUnarchiveThread(thread_id) => {
-      let (cmd, codex) = @codex.update(
-        dispatch.map(msg => Codex(channel=model.focused, msg)),
-        @codex.Msg::unarchive_thread(thread_id),
-        model.codex,
-        model.focused,
-        url => open_external_link(dispatch, url),
-      )
-      (cmd, { ..model, codex, })
-    }
+    CodexArchiveThread(thread_id) =>
+      codex_update(dispatch, model, @codex.Msg::archive_thread(thread_id))
+    CodexUnarchiveThread(thread_id) =>
+      codex_update(dispatch, model, @codex.Msg::unarchive_thread(thread_id))
     Codex(channel~, msg) => {
       // A reply, approval request, or status event belongs to the host that
       // produced it. Device focus is the root authority boundary.
       if channel != model.focused {
         return (@cmd.none, model)
       }
-      let (cmd, codex) = @codex.update(
-        dispatch.map(next => Codex(channel~, next)),
-        msg,
-        model.codex,
-        channel,
-        url => open_external_link(dispatch, url),
-      )
-      (cmd, { ..model, codex, })
+      codex_update(dispatch, model, msg)
     }
     ToggleSidebar =>
       (@cmd.none, { ..model, sidebar_open: !model.sidebar_open, })
@@ -4230,9 +4148,7 @@ fn update_msg(
       let sessions : Array[String] = [key.session]
       for row in @transcript.session_tree(dev.archived) {
         if key.matches(row.item) {
-          for child in row.children {
-            sessions.push(child.id)
-          }
+          sessions.push_iter(row.children.iter().map(child => child.id))
         }
       }
       (
@@ -5339,8 +5255,9 @@ fn Model::apply_codex_worktree_snapshot(
   }
   for row in rows {
     if row.codex_thread == Some(thread_id) && row.path is Some(path) {
-      let (command, codex) = @codex.update(
-        dispatch.map(msg => Codex(channel~, msg)),
+      return codex_update(
+        dispatch,
+        self,
         @codex.Msg::worktree_changed(
           thread_id,
           workspace.path,
@@ -5348,11 +5265,7 @@ fn Model::apply_codex_worktree_snapshot(
           path.path,
           row.present,
         ),
-        self.codex,
-        channel,
-        url => open_external_link(dispatch, url),
       )
-      return (command, { ..self, codex, })
     }
   }
   (@cmd.none, self)
@@ -5977,11 +5890,9 @@ fn update_device_msg(
       for fact in dev.archive_overrides {
         if fact.disposition is ArchiveLive &&
           !items.iter().any(item => fact.key.matches(item)) {
-          for current in dev.sessions {
-            if fact.key.matches(current) {
-              items.push(current)
-            }
-          }
+          items.push_iter(
+            dev.sessions.iter().filter(item => fact.key.matches(item)),
+          )
         }
       }
       // A commit or Started broadcast can materialize a conversation before
@@ -6433,11 +6344,9 @@ fn update_device_msg(
       for fact in dev.archive_overrides {
         if fact.disposition is ArchiveStored &&
           !items.iter().any(item => fact.key.matches(item)) {
-          for current in dev.archived {
-            if fact.key.matches(current) {
-              items.push(current)
-            }
-          }
+          items.push_iter(
+            dev.archived.iter().filter(item => fact.key.matches(item)),
+          )
         }
       }
       // An archive mutation response can beat its session.changed callback.
@@ -6634,12 +6543,9 @@ fn update_device_msg(
         )
       }
       if change == "unarchived" {
-        let mut restored : @transcript.SessionListItem? = None
-        for item in dev.archived {
-          if key.matches(item) {
-            restored = Some(item)
-          }
-        }
+        let restored = dev.archived
+          .rev_iter()
+          .find_first(item => key.matches(item))
         let archived = dev.archived.filter(item => !key.matches(item))
         let sessions = dev.sessions.copy()
         if restored is Some(item) &&
@@ -6896,13 +6802,9 @@ fn update_device_msg(
               // carried it. Re-broadcasts are safe by construction.
               (@cmd.none, model)
             } else if sequence == conv.watermark + 1 {
-              let (changed, next) = conv.apply_commit(sequence, item, ts?)
+              let (_, next) = conv.apply_commit(sequence, item, ts?)
               (
-                if changed {
-                  @cmd.none
-                } else {
-                  @cmd.none
-                },
+                @cmd.none,
                 model.replace_conversation({ ..next, watermark: sequence, }),
               )
             } else {
@@ -7553,9 +7455,8 @@ fn update_device_msg(
         // an even newer Started can already have replaced last_run_id. Prefer
         // the exact pending-steer match before the legacy run fallback.
         let exact = match event {
-          SteerApplied(submission_id=Some(submission_id), ..) =>
-            model.conversation_by_pending_steer(channel, submission_id, id)
-          SteerDropped(submission_id=Some(submission_id), ..) =>
+          SteerApplied(submission_id=Some(submission_id), ..)
+          | SteerDropped(submission_id=Some(submission_id), ..) =>
             model.conversation_by_pending_steer(channel, submission_id, id)
           _ => None
         }
@@ -7601,11 +7502,12 @@ fn update_device_msg(
         let (report_cmd, updated) = if report is Some(text) {
           updated.notify_error(dispatch, text)
         } else {
-          let command = match approval_notification {
-            Some(notification) => notification.command()
-            None => @cmd.none
-          }
-          (command, updated)
+          (
+            approval_notification.map_or(@cmd.none, notification => {
+              notification.command()
+            }),
+            updated,
+          )
         }
         (@cmd.batch([finished_cmd, report_cmd]), updated)
       } else {
@@ -7753,7 +7655,7 @@ fn update_device_msg(
         // ends and the reload below shows what the record actually holds.
         ignore(message)
         let owns_submission = conv.has_initial_submission(submission_id)
-        let (settled, changed) = conv.settle_pending_prompt(submission_id)
+        let (settled, _) = conv.settle_pending_prompt(submission_id)
         if !owns_submission {
           (@cmd.none, model)
         } else {
@@ -7778,9 +7680,6 @@ fn update_device_msg(
               dev.connection_generation,
             ),
           ]
-          if changed {
-            commands.push(@cmd.none)
-          }
           (@cmd.batch(commands), updated)
         }
       } else {
@@ -8123,12 +8022,33 @@ fn @interop.ChannelId::test_worktrees(
 }
 
 ///|
-fn test_conversation() -> Conversation {
+/// Test-only: a conversation on the page's one channel, in the fixture
+/// project — the shape every conversation fixture in this file builds.
+fn local_conversation(session : String) -> Conversation {
   empty_conversation(
     @interop.ChannelId::Local,
-    "desktop-test",
+    session,
     @interop.ChannelId::Local.test_project(),
   )
+}
+
+///|
+fn test_conversation() -> Conversation {
+  local_conversation("desktop-test")
+}
+
+///|
+/// Test-only: one durable assistant answer, in the shape a snapshot carries.
+fn assistant_item(
+  prose? : String,
+  reasoning? : String,
+  sequence? : Int,
+) -> @transcript.TranscriptItem {
+  {
+    kind: Assistant(reasoning~, prose~, calls=[], replay=false, finished=false),
+    ts: None,
+    sequence,
+  }
 }
 
 ///|
@@ -8222,6 +8142,17 @@ fn Model::with_listed(self : Model, ids : Array[String]) -> Model raise {
         } : @transcript.SessionListItem)
     }),
   })
+}
+
+///|
+/// Test-only: activate `session` on the page's one channel, in the fixture
+/// project — the placement every activation in these tests uses.
+fn Model::activate_local(self : Model, session : String) -> Model {
+  self.activate(
+    @interop.ChannelId::Local,
+    session,
+    @interop.ChannelId::Local.test_project(),
+  )
 }
 
 ///|
@@ -8379,34 +8310,18 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
 ///|
 test "runs resync names exact Starting Open and Idle owners" {
   let starting = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "starting-session",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("starting-session"),
     run: Starting(submission_id="submission-starting"),
   }
   let open = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "open-session",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("open-session"),
     run: Open(run_id="run-open", stage=Opened),
   }
   let idle = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "idle-session",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("idle-session"),
     last_run_id: Some("run-idle"),
   }
-  let empty = empty_conversation(
-    @interop.ChannelId::Local,
-    "never-started",
-    @interop.ChannelId::Local.test_project(),
-  )
+  let empty = local_conversation("never-started")
   let model = test_model()
     .replace_conversation(starting)
     .replace_conversation(open)
@@ -8832,17 +8747,11 @@ test "a later run does not confuse identical historical reasoning for its commit
   let historical = {
     ..running_conversation(),
     messages: [
-      {
-        kind: Assistant(
-          reasoning=Some("shared opening"),
-          prose=Some("older answer"),
-          calls=[],
-          replay=false,
-          finished=false,
-        ),
-        ts: None,
-        sequence: Some(2),
-      },
+      assistant_item(
+        prose="older answer",
+        reasoning="shared opening",
+        sequence=2,
+      ),
     ],
     watermark: 3,
     turn: RunState::for_run(3),
@@ -8872,19 +8781,7 @@ test "a later run does not confuse identical historical reasoning for its commit
 test "a new model step advances past identical reasoning from the prior step" {
   let previous_step = {
     ..running_conversation(),
-    messages: [
-      {
-        kind: Assistant(
-          reasoning=Some("shared opening"),
-          prose=None,
-          calls=[],
-          replay=false,
-          finished=false,
-        ),
-        ts: None,
-        sequence: Some(2),
-      },
-    ],
+    messages: [assistant_item(reasoning="shared opening", sequence=2)],
     watermark: 2,
     turn: {
       ..RunState::for_run(0),
@@ -9113,17 +9010,7 @@ test "finished run reloads the named durable session for an old host" {
       session="desktop-test",
       items=[
         { kind: User("question"), ts: None, sequence: None, },
-        {
-          kind: Assistant(
-            reasoning=None,
-            prose=Some("done"),
-            calls=[],
-            replay=false,
-            finished=false,
-          ),
-          ts: None,
-          sequence: None,
-        },
+        assistant_item(prose="done"),
       ],
       watermark=3,
       generation=1,
@@ -9241,11 +9128,7 @@ test "a background finish marks its conversation until it is opened" {
     fail("conversation missing")
   }
   inspect(conv.unseen_finish, content="true")
-  let opened = next.activate(
-    @interop.ChannelId::Local,
-    "desktop-test",
-    @interop.ChannelId::Local.test_project(),
-  )
+  let opened = next.activate_local("desktop-test")
   guard opened.find_conversation(@interop.ChannelId::Local, "desktop-test")
     is Some(seen) else {
     fail("conversation missing after activate")
@@ -9439,11 +9322,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
       ],
       request_generation=committed.dev().sessions_request_generation,
     ),
-    committed.activate(
-      @interop.ChannelId::Local,
-      "desktop-foreign",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    committed.activate_local("desktop-foreign"),
   )
   guard listed.find_conversation(@interop.ChannelId::Local, "desktop-foreign")
     is Some(reconciled) else {
@@ -9651,11 +9530,7 @@ test "a background session list updates only its channel's same-id workspace" {
   let dispatch = test_dispatch()
   let remote : @interop.ChannelId = Remote("d-remote")
   let local_conv = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "shared",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("shared"),
     workspace: Project(root=@interop.ChannelId::Local.test_resource("/local")),
   }
   let remote_conv = {
@@ -9861,19 +9736,11 @@ test "a sub-run child opens through its parent before the store lists it" {
 test "open session keeps live state on screen while re-reading the store" {
   let dispatch = test_dispatch()
   let background = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "desktop-bg",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("desktop-bg"),
     run: Open(run_id="r9", stage=Opened),
     messages: [{ kind: User("background task"), ts: None, sequence: None, }],
     turn: {
-      ..empty_conversation(
-        @interop.ChannelId::Local,
-        "desktop-bg",
-        @interop.ChannelId::Local.test_project(),
-      ).turn,
+      ..local_conversation("desktop-bg").turn,
       streaming_response: Some("mid-stream"),
     },
   }
@@ -9950,18 +9817,10 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
     },
   }
   let background = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "desktop-bg",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("desktop-bg"),
     compaction: Compacting,
     turn: {
-      ..empty_conversation(
-        @interop.ChannelId::Local,
-        "desktop-bg",
-        @interop.ChannelId::Local.test_project(),
-      ).turn,
+      ..local_conversation("desktop-bg").turn,
       streaming_response: Some("background answer"),
     },
   }
@@ -10116,18 +9975,10 @@ test "BridgeReady resets only conversations owned by its channel" {
   let dispatch = test_dispatch()
   let background : @interop.ChannelId = Remote("d-bg")
   let local_conv = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "shared",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("shared"),
     compaction: Queued,
     turn: {
-      ..empty_conversation(
-        @interop.ChannelId::Local,
-        "shared",
-        @interop.ChannelId::Local.test_project(),
-      ).turn,
+      ..local_conversation("shared").turn,
       streaming_response: Some("local answer"),
     },
   }
@@ -10424,11 +10275,7 @@ test "same-id session loads are fenced by channel owner" {
   let dispatch = test_dispatch()
   let remote : @interop.ChannelId = Remote("d-remote")
   let local_conv = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "shared",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("shared"),
     messages: [{ kind: User("local"), ts: None, sequence: None, }],
   }
   let remote_conv = {
@@ -10466,19 +10313,7 @@ test "same-id session loads are fenced by channel owner" {
         goal=None,
         goal_markers=[],
         session="shared",
-        items=[
-          {
-            kind: Assistant(
-              reasoning=None,
-              prose=Some("remote loaded"),
-              calls=[],
-              replay=false,
-              finished=false,
-            ),
-            ts: None,
-            sequence: None,
-          },
-        ],
+        items=[assistant_item(prose="remote loaded")],
         watermark=1,
         generation=1,
       ),
@@ -10540,19 +10375,7 @@ test "reselecting a synced active session reloads idle external writes" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[
-        {
-          kind: Assistant(
-            reasoning=None,
-            prose=Some("written elsewhere"),
-            calls=[],
-            replay=false,
-            finished=false,
-          ),
-          ts: None,
-          sequence: None,
-        },
-      ],
+      items=[assistant_item(prose="written elsewhere")],
       watermark=1,
       generation=1,
     ),
@@ -10599,11 +10422,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
     first.sync is Reloading(generation=1, ..) else {
     fail("expected the original request")
   }
-  let pruned = opening.activate(
-    @interop.ChannelId::Local,
-    "desktop-other",
-    @interop.ChannelId::Local.test_project(),
-  )
+  let pruned = opening.activate_local("desktop-other")
   assert_true(
     pruned.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
     is None,
@@ -11008,17 +10827,7 @@ test "session loaded swaps the active conversation onto the stored session" {
   )
   let items : Array[@transcript.TranscriptItem] = [
     { kind: User("stored question"), ts: None, sequence: None, },
-    {
-      kind: Assistant(
-        reasoning=None,
-        prose=Some("stored answer"),
-        calls=[],
-        replay=false,
-        finished=false,
-      ),
-      ts: None,
-      sequence: None,
-    },
+    assistant_item(prose="stored answer"),
   ]
   let (_, once) = update_dev(
     dispatch,
@@ -11601,17 +11410,7 @@ test "an accepted start response opens the run without Started" {
       session="desktop-test",
       items=[
         { kind: User("external prompt"), ts: None, sequence: None, },
-        {
-          kind: Assistant(
-            reasoning=None,
-            prose=Some("external answer"),
-            calls=[],
-            replay=false,
-            finished=false,
-          ),
-          ts: None,
-          sequence: None,
-        },
+        assistant_item(prose="external answer"),
         { kind: User("prompt"), ts: None, sequence: None, },
       ],
       watermark=4,
@@ -11719,29 +11518,17 @@ test "runs settled closes runs the host no longer has, sparing live and starting
   // A run that ended while this client was away: its terminal event is
   // gone for good, so only the `agent.runs` reply can close it.
   let stale = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "desktop-stale",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("desktop-stale"),
     run: Open(run_id="r9", stage=AtStep(Some(4))),
     turn: {
-      ..empty_conversation(
-        @interop.ChannelId::Local,
-        "desktop-stale",
-        @interop.ChannelId::Local.test_project(),
-      ).turn,
+      ..local_conversation("desktop-stale").turn,
       streaming_response: Some("mid-step"),
     },
   }
   // A send still in flight has no run id yet; its own `started` (or
   // failure) is coming and must be the one to settle it.
   let starting = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "desktop-starting",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("desktop-starting"),
     run: Starting(submission_id="pending-start"),
   }
   let model = running_model()
@@ -11849,10 +11636,7 @@ test "an old empty runs snapshot cannot close a start sent after reconnect" {
   // restores the saved key (the BYOK fixture is a ready app).
   let (_, ready) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek", has_deepseek_key=true),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek", has_deepseek_key=true)),
     bridged,
   )
   // A reconnect drops the worktree mirror and re-requests it; path-based work
@@ -12217,11 +12001,7 @@ test "an accepted response consumes a fast-finished prompt without reopening" {
 test "concurrent conversations keep their streams apart" {
   let dispatch = test_dispatch()
   let second = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "desktop-second",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("desktop-second"),
     run: Open(run_id="r8", stage=Opened),
   }
   let model = running_model().replace_conversation(second)
@@ -12243,11 +12023,7 @@ test "concurrent conversations keep their streams apart" {
 test "a background run finishes without disturbing the conversation on screen" {
   let dispatch = test_dispatch()
   let second = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "desktop-second",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("desktop-second"),
     run: Open(run_id="r8", stage=Opened),
     messages: [{ kind: User("background ask"), ts: None, sequence: None, }],
   }
@@ -12589,11 +12365,7 @@ test "a foreign background run schedules one causal read after Started" {
   let dispatch = test_dispatch()
   let session = "desktop-background"
   let conv = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      session,
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation(session),
     watermark: 1,
     sync: test_reloading([]),
   }
@@ -12684,17 +12456,7 @@ test "a foreign background run schedules one causal read after Started" {
     SessionRefreshed(
       session~,
       items=[
-        {
-          kind: Assistant(
-            reasoning=None,
-            prose=Some("previous answer"),
-            calls=[],
-            replay=false,
-            finished=false,
-          ),
-          ts: None,
-          sequence: None,
-        },
+        assistant_item(prose="previous answer"),
         { kind: User("current question"), ts: None, sequence: None, },
       ],
       watermark=4,
@@ -12947,11 +12709,7 @@ test "loaded UI preferences parse their wire names" {
 test "the model selector switches one conversation, not the app" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation(
-    empty_conversation(
-      @interop.ChannelId::Local,
-      "other-chat",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    local_conversation("other-chat"),
   )
   let (_, flash) = update(
     dispatch,
@@ -12981,14 +12739,7 @@ test "the model selector switches one conversation, not the app" {
   // The tier just picked is what conversations opened afterwards start from.
   assert_true(flash.default_model is DsFlash)
   assert_true(
-    flash
-    .activate(
-      @interop.ChannelId::Local,
-      "fresh-chat",
-      @interop.ChannelId::Local.test_project(),
-    )
-    .active().engine_model
-    is DsFlash,
+    flash.activate_local("fresh-chat").active().engine_model is DsFlash,
   )
   let (_, pro) = update(
     dispatch,
@@ -13037,11 +12788,7 @@ test "reopening a conversation recovers its own tier, not the last pick" {
     ModelPicked("openseek:deepseek-v4-flash"),
     test_model(),
   )
-  let other = flash.activate(
-    @interop.ChannelId::Local,
-    "other-chat",
-    @interop.ChannelId::Local.test_project(),
-  )
+  let other = flash.activate_local("other-chat")
   assert_true(other.active().engine_model is DsFlash)
   let (_, pro) = update(
     dispatch,
@@ -13052,11 +12799,7 @@ test "reopening a conversation recovers its own tier, not the last pick" {
   // Reopening drops the conversation and mints it again (nothing was sent,
   // so `activate` does not retain it) — exactly the path that used to hand
   // back the unrelated default.
-  let reopened = pro.activate(
-    @interop.ChannelId::Local,
-    "desktop-test",
-    @interop.ChannelId::Local.test_project(),
-  )
+  let reopened = pro.activate_local("desktop-test")
   assert_true(reopened.active().engine_model is DsFlash)
 }
 
@@ -13082,11 +12825,7 @@ test "a run pins an inherited tier the user never clicked for" {
     is Some(DsPro),
   )
   // Another chat moves the page default to DsFlash...
-  let elsewhere = ran.activate(
-    @interop.ChannelId::Local,
-    "other-chat",
-    @interop.ChannelId::Local.test_project(),
-  )
+  let elsewhere = ran.activate_local("other-chat")
   let (_, moved) = update(
     dispatch,
     ModelPicked("openseek:deepseek-v4-flash"),
@@ -13094,11 +12833,7 @@ test "a run pins an inherited tier the user never clicked for" {
   )
   assert_true(moved.default_model is DsFlash)
   // ...and the first one still comes back on the tier it ran with.
-  let reopened = moved.activate(
-    @interop.ChannelId::Local,
-    "desktop-test",
-    @interop.ChannelId::Local.test_project(),
-  )
+  let reopened = moved.activate_local("desktop-test")
   assert_true(reopened.active().engine_model is DsPro)
 }
 
@@ -13376,6 +13111,13 @@ fn host_settings(
 }
 
 ///|
+/// A `settings.get` reply carrying `settings` from the focused host, as every
+/// settings test here sends it: unfenced by a connection generation.
+fn settings_snapshot(settings : HostSettings) -> DeviceMsg {
+  HostSettingsLoaded(settings, connection_generation=None)
+}
+
+///|
 test "host settings edits wait for the focused host snapshot" {
   let dispatch = test_dispatch()
   // Model a queued DOM message from the old Settings page after focus already
@@ -13416,10 +13158,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   // default: keyless DeepSeek, which needs setup.
   let (_, zero_config) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="openseek"),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="openseek")),
     test_model(),
   )
   assert_true(zero_config.screen is Chat)
@@ -13428,10 +13167,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   assert_true(zero_config.display_status() is ApiKeyRequired)
   let (_, keyless) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek")),
     test_model(),
   )
   assert_true(keyless.screen is Chat)
@@ -13439,10 +13175,7 @@ test "an unusable first settings snapshot opens the setup modal" {
   assert_true(keyless.display_status() is ApiKeyRequired)
   let (_, restored) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek", has_deepseek_key=true),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek", has_deepseek_key=true)),
     test_model(),
   )
   assert_true(restored.screen is Chat)
@@ -13455,10 +13188,7 @@ test "the setup modal tracks endpoint usability without toasts" {
   let dispatch = test_dispatch()
   let (_, keyless) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek")),
     test_model(),
   )
   assert_true(keyless.api_setup_open)
@@ -13467,10 +13197,7 @@ test "the setup modal tracks endpoint usability without toasts" {
   // A snapshot that is usable closes the modal.
   let (_, ready) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek", has_deepseek_key=true),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek", has_deepseek_key=true)),
     { ..test_model(), api_setup_open: true, },
   )
   assert_true(!ready.api_setup_open)
@@ -13478,10 +13205,7 @@ test "the setup modal tracks endpoint usability without toasts" {
   // A later change that breaks a usable endpoint reopens the modal.
   let (_, broken) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="custom", custom_api_url=""),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="custom", custom_api_url="")),
     {
       ..test_model(),
       host_settings_revision: 0,
@@ -13499,10 +13223,7 @@ test "the setup modal tracks endpoint usability without toasts" {
   assert_true(!dismissed.api_setup_open)
   let (_, still) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek")),
     dismissed,
   )
   assert_true(!still.api_setup_open)
@@ -13517,10 +13238,7 @@ test "the setup modal tracks endpoint usability without toasts" {
   // the form; the guide there already explains it.
   let (_, mid_edit) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="custom", custom_api_url=""),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="custom", custom_api_url="")),
     {
       ..test_model(),
       screen: Settings,
@@ -13574,10 +13292,7 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   // though the page-local model preference loads before host settings do.
   let (_, restored) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="glm", has_glm_key=true),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="glm", has_glm_key=true)),
     test_model(),
   )
   assert_true(restored.default_model is Glm53)
@@ -13620,10 +13335,7 @@ test "a dismissal survives the mirror reset a reconnect performs" {
   let dispatch = test_dispatch()
   let (_, keyless) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek")),
     test_model(),
   )
   let (_, dismissed) = update(dispatch, DismissApiSetup, keyless)
@@ -13634,10 +13346,7 @@ test "a dismissal survives the mirror reset a reconnect performs" {
   assert_true(!cleared.api_setup_open)
   let (_, reconnected) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek")),
     cleared,
   )
   assert_true(!reconnected.api_setup_open)
@@ -13645,19 +13354,13 @@ test "a dismissal survives the mirror reset a reconnect performs" {
   // again even after an earlier "Not now".
   let (_, ready) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek", has_deepseek_key=true),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek", has_deepseek_key=true)),
     reconnected,
   )
   assert_true(!ready.api_setup_open)
   let (_, broken) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek")),
     ready,
   )
   assert_true(broken.api_setup_open)
@@ -13668,10 +13371,7 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
   let dispatch = test_dispatch()
   let (_, keyless) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek")),
     test_model(),
   )
   let (_, dismissed) = update(dispatch, DismissApiSetup, keyless)
@@ -13688,10 +13388,7 @@ test "the composer's BYOK notice outlives a dismissal and reopens the modal" {
   assert_true(reopened.api_setup_open)
   let (_, still_open) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek"),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek")),
     reopened,
   )
   assert_true(still_open.api_setup_open)
@@ -13832,10 +13529,7 @@ test "a background device's pushes leave the focused mirrors alone" {
     dispatch,
     FromDevice(
       background,
-      HostSettingsLoaded(
-        host_settings(provider="deepseek"),
-        connection_generation=None,
-      ),
+      settings_snapshot(host_settings(provider="deepseek")),
     ),
     model,
   )
@@ -13851,10 +13545,7 @@ test "host settings are deferred while this client's writes are in flight" {
   // the optimistic mirror.
   let (_, ignored) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek", revision=1),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek", revision=1)),
     model,
   )
   assert_true(ignored.api_provider is Deepseek)
@@ -13899,10 +13590,7 @@ test "a newer peer broadcast beats a delayed local settings reply" {
   }
   let (_, broadcast) = update_dev(
     dispatch,
-    HostSettingsLoaded(
-      host_settings(provider="deepseek", revision=7),
-      connection_generation=None,
-    ),
+    settings_snapshot(host_settings(provider="deepseek", revision=7)),
     model,
   )
   // Preserve the optimistic form until the local RPC settles.
@@ -14888,19 +14576,7 @@ test "switching same-id archived stores fences the first transcript load" {
     dispatch,
     SessionLoaded(
       session=first_item.id,
-      items=[
-        {
-          kind: Assistant(
-            reasoning=None,
-            prose=Some("first store answer"),
-            calls=[],
-            replay=false,
-            finished=false,
-          ),
-          ts: None,
-          sequence: Some(1),
-        },
-      ],
+      items=[assistant_item(prose="first store answer", sequence=1)],
       watermark=1,
       goal=None,
       goal_markers=[],
@@ -14914,19 +14590,7 @@ test "switching same-id archived stores fences the first transcript load" {
     dispatch,
     SessionLoaded(
       session=second_item.id,
-      items=[
-        {
-          kind: Assistant(
-            reasoning=None,
-            prose=Some("second store answer"),
-            calls=[],
-            replay=false,
-            finished=false,
-          ),
-          ts: None,
-          sequence: Some(1),
-        },
-      ],
+      items=[assistant_item(prose="second store answer", sequence=1)],
       watermark=1,
       goal=None,
       goal_markers=[],
@@ -14982,19 +14646,7 @@ test "an archived snapshot stays open across archived-list reconciliation" {
       goal=None,
       goal_markers=[],
       session=item.id,
-      items=[
-        {
-          kind: Assistant(
-            reasoning=None,
-            prose=Some("archived answer"),
-            calls=[],
-            replay=false,
-            finished=false,
-          ),
-          ts: None,
-          sequence: Some(1),
-        },
-      ],
+      items=[assistant_item(prose="archived answer", sequence=1)],
       watermark=1,
       generation=1,
     ),
@@ -15013,25 +14665,9 @@ test "unarchiving an open transcript fences its archived snapshot" {
   let dispatch = test_dispatch()
   let item = archived_item("desktop-archived")
   let archived = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      item.id,
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation(item.id),
     record: ArchivedRecord,
-    messages: [
-      {
-        kind: Assistant(
-          reasoning=None,
-          prose=Some("visible archived answer"),
-          calls=[],
-          replay=false,
-          finished=false,
-        ),
-        ts: None,
-        sequence: Some(1),
-      },
-    ],
+    messages: [assistant_item(prose="visible archived answer", sequence=1)],
     watermark: 1,
   }
   let model = {
@@ -15060,19 +14696,7 @@ test "unarchiving an open transcript fences its archived snapshot" {
       goal=None,
       goal_markers=[],
       session=item.id,
-      items=[
-        {
-          kind: Assistant(
-            reasoning=None,
-            prose=Some("late archived answer"),
-            calls=[],
-            replay=false,
-            finished=false,
-          ),
-          ts: None,
-          sequence: Some(1),
-        },
-      ],
+      items=[assistant_item(prose="late archived answer", sequence=1)],
       watermark=1,
       generation=1,
     ),
@@ -15190,11 +14814,7 @@ test "archived deletion keeps same-id rows in other stores" {
   let model = {
     ..test_model()
     .replace_conversation({
-      ..empty_conversation(
-        @interop.ChannelId::Local,
-        "shared",
-        @interop.ChannelId::Local.test_project(),
-      ),
+      ..local_conversation("shared"),
       workspace: Project(root=project),
       record: ArchivedRecord,
       task: "project draft",
@@ -15253,19 +14873,11 @@ test "delete response tombstones a family before stale list replies" {
     }),
     conversations: [
       {
-        ..empty_conversation(
-          @interop.ChannelId::Local,
-          "desktop-parent",
-          @interop.ChannelId::Local.test_project(),
-        ),
+        ..local_conversation("desktop-parent"),
         record: ArchivedRecord,
         task: "keep local draft",
       },
-      empty_conversation(
-        @interop.ChannelId::Local,
-        "desktop-parent-sr-1",
-        @interop.ChannelId::Local.test_project(),
-      ),
+      local_conversation("desktop-parent-sr-1"),
     ],
     active_session: "desktop-parent",
   }
@@ -15449,11 +15061,7 @@ test "deleted broadcast is immediate and idempotent" {
   let model = {
     ..test_model()
     .replace_conversation({
-      ..empty_conversation(
-        @interop.ChannelId::Local,
-        "desktop-gone",
-        @interop.ChannelId::Local.test_project(),
-      ),
+      ..local_conversation("desktop-gone"),
       record: ArchivedRecord,
       task: "carry this draft",
     })
@@ -15504,11 +15112,7 @@ test "deleted broadcast rotates the active conversation's exact store" {
   let model = {
     ..test_model()
     .replace_conversation({
-      ..empty_conversation(
-        @interop.ChannelId::Local,
-        "shared",
-        @interop.ChannelId::Local.test_project(),
-      ),
+      ..local_conversation("shared"),
       workspace: Project(root=project),
       record: ArchivedRecord,
       task: "project draft",
@@ -15548,11 +15152,7 @@ test "archive facts rotate the open conversation's exact store" {
   let model = {
     ..test_model()
     .replace_conversation({
-      ..empty_conversation(
-        @interop.ChannelId::Local,
-        "shared",
-        @interop.ChannelId::Local.test_project(),
-      ),
+      ..local_conversation("shared"),
       workspace: Project(root=project),
       task: "project draft",
     })
@@ -15764,11 +15364,7 @@ test "a background archive removes only its channel's same-id conversation" {
   let dispatch = test_dispatch()
   let remote : @interop.ChannelId = Remote("d-remote")
   let local_conv = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "shared",
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation("shared"),
     messages: [{ kind: User("local"), ts: None, sequence: None, }],
   }
   let remote_conv = {
@@ -15840,25 +15436,9 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
   let dispatch = test_dispatch()
   let item = archived_item("desktop-old")
   let archived = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      item.id,
-      @interop.ChannelId::Local.test_project(),
-    ),
+    ..local_conversation(item.id),
     record: ArchivedRecord,
-    messages: [
-      {
-        kind: Assistant(
-          reasoning=None,
-          prose=Some("cached archived answer"),
-          calls=[],
-          replay=false,
-          finished=false,
-        ),
-        ts: None,
-        sequence: Some(1),
-      },
-    ],
+    messages: [assistant_item(prose="cached archived answer", sequence=1)],
     watermark: 1,
   }
   let model = {
@@ -15903,19 +15483,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
       goal=None,
       goal_markers=[],
       session=item.id,
-      items=[
-        {
-          kind: Assistant(
-            reasoning=None,
-            prose=Some("late archived answer"),
-            calls=[],
-            replay=false,
-            finished=false,
-          ),
-          ts: None,
-          sequence: Some(1),
-        },
-      ],
+      items=[assistant_item(prose="late archived answer", sequence=1)],
       watermark=1,
       generation=1,
     ),
@@ -16039,14 +15607,7 @@ test "an archived background session drops its live state, active stays" {
   let dispatch = test_dispatch()
   let model = {
     ..test_model(),
-    conversations: [
-      test_conversation(),
-      empty_conversation(
-        @interop.ChannelId::Local,
-        "desktop-old",
-        @interop.ChannelId::Local.test_project(),
-      ),
-    ],
+    conversations: [test_conversation(), local_conversation("desktop-old")],
   }
   let (_, next) = update(
     dispatch,
@@ -17744,7 +17305,6 @@ test "quiet startup outcomes leave no trace; explicit ones answer" {
     test_model(),
   )
   assert_true(
-    offline.update_ux is UpdateCheckFailed(..) &&
     offline.update_ux is UpdateCheckFailed(message~) &&
     message.contains("offline"),
   )
@@ -18044,17 +17604,7 @@ test "a snapshot drains buffered commits in sequence order" {
       session="desktop-test",
       items=[
         { kind: User("one"), ts: None, sequence: None, },
-        {
-          kind: Assistant(
-            reasoning=None,
-            prose=Some("two"),
-            calls=[],
-            replay=false,
-            finished=false,
-          ),
-          ts: None,
-          sequence: None,
-        },
+        assistant_item(prose="two"),
       ],
       watermark=2,
       generation=1,
@@ -18549,17 +18099,14 @@ test "commit-first assistant semantics do not append again" {
 ///|
 test "a sequence-one commit materializes an unknown hidden conversation" {
   let dispatch = test_dispatch()
-  let (_, next) = update_dev(
-    dispatch,
-    SessionCommitted(
-      session="desktop-elsewhere",
-      sequence=1,
-      ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
-      session_root=@interop.ChannelId::Local.test_store_root(),
-    ),
-    test_model(),
+  let commit = SessionCommitted(
+    session="desktop-elsewhere",
+    sequence=1,
+    ts=None,
+    item=@protocol.User({ content: "hi", submission_id: None, }),
+    session_root=@interop.ChannelId::Local.test_store_root(),
   )
+  let (_, next) = update_dev(dispatch, commit, test_model())
   inspect(next.conversations.length(), content="2")
   inspect(next.active().messages.length(), content="0")
   guard next.find_conversation(@interop.ChannelId::Local, "desktop-elsewhere")
@@ -18570,17 +18117,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
   assert_eq(hidden.messages[0].text(), Some("hi"))
   inspect(hidden.watermark, content="1")
   inspect(next.dev().sessions_request_generation, content="1")
-  let (_, repeated) = update_dev(
-    dispatch,
-    SessionCommitted(
-      session="desktop-elsewhere",
-      sequence=1,
-      ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
-      session_root=@interop.ChannelId::Local.test_store_root(),
-    ),
-    next,
-  )
+  let (_, repeated) = update_dev(dispatch, commit, next)
   inspect(repeated.dev().sessions_request_generation, content="1")
 }
 
@@ -18758,6 +18295,21 @@ fn desktop_model() -> Model {
     model,
   )
   model
+}
+
+///|
+/// Test-only: a desktop page showing one Browser tab whose native view has
+/// been placed, with the pane rectangle it was measured at.
+fn placed_browser_page() -> (Model, @preview.Rect) {
+  let dispatch = test_dispatch()
+  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700, }
+  let (_, opened) = update(
+    dispatch,
+    ExternalLinkClicked("http://127.0.0.1:5173/"),
+    desktop_model(),
+  )
+  let (_, placed) = update(dispatch, BrowserPaneMeasured(rect~), opened)
+  (placed, rect)
 }
 
 ///|
@@ -19211,14 +18763,7 @@ test "re-clicking a chat link re-navigates the reused tab to the clicked URL" {
   // whatever the tab currently displays, and the stale pane placement must
   // not survive a possibly rebuilt view (#1021).
   let dispatch = test_dispatch()
-  let model = desktop_model()
-  let (_, model) = update(
-    dispatch,
-    ExternalLinkClicked("http://127.0.0.1:5173/"),
-    model,
-  )
-  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700, }
-  let (_, model) = update(dispatch, BrowserPaneMeasured(rect~), model)
+  let (model, rect) = placed_browser_page()
   assert_true(model.browser_pane.shown == Some(1))
   let (_, model) = update(
     dispatch,
@@ -19294,14 +18839,7 @@ test "submitting the address bar normalizes the draft and commits it" {
 ///|
 test "navigating an already-placed tab re-places its view" {
   let dispatch = test_dispatch()
-  let model = desktop_model()
-  let (_, model) = update(
-    dispatch,
-    ExternalLinkClicked("http://127.0.0.1:5173/"),
-    model,
-  )
-  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700, }
-  let (_, model) = update(dispatch, BrowserPaneMeasured(rect~), model)
+  let (model, rect) = placed_browser_page()
   assert_true(model.browser_pane.shown == Some(1))
   // The host may have rebuilt the view under `browser.navigate` (nothing
   // acknowledges the ops that placed the old one), and a rebuilt view is
@@ -19480,14 +19018,7 @@ test "Search requests survive hidden Explorer Browser and panel states" {
 ///|
 test "pane measurements place the active view and idempotently settle" {
   let dispatch = test_dispatch()
-  let model = desktop_model()
-  let (_, model) = update(
-    dispatch,
-    ExternalLinkClicked("http://127.0.0.1:5173/"),
-    model,
-  )
-  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700, }
-  let (_, model) = update(dispatch, BrowserPaneMeasured(rect~), model)
+  let (model, rect) = placed_browser_page()
   assert_true(model.browser_pane.shown == Some(1))
   assert_true(model.browser_pane.rect == Some(rect))
   let (_, again) = update(dispatch, BrowserPaneMeasured(rect~), model)
@@ -19502,14 +19033,7 @@ test "pane measurements place the active view and idempotently settle" {
 ///|
 test "the launcher popup and final tab close both retire the shown view" {
   let dispatch = test_dispatch()
-  let model = desktop_model()
-  let (_, model) = update(
-    dispatch,
-    ExternalLinkClicked("http://127.0.0.1:5173/"),
-    model,
-  )
-  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700, }
-  let (_, model) = update(dispatch, BrowserPaneMeasured(rect~), model)
+  let (model, _) = placed_browser_page()
   assert_true(model.browser_pane.shown == Some(1))
   // The popup overlaps the pane, so the native view must hide under it.
   let (_, covered) = update(dispatch, ToggleRightPanelMenu, model)
@@ -19566,14 +19090,7 @@ test "closing a background Browser tab keeps the shown view placement" {
 ///|
 test "full-screen modals hide the native view and closing restores it" {
   let dispatch = test_dispatch()
-  let model = desktop_model()
-  let (_, model) = update(
-    dispatch,
-    ExternalLinkClicked("http://127.0.0.1:5173/"),
-    model,
-  )
-  let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700, }
-  let (_, model) = update(dispatch, BrowserPaneMeasured(rect~), model)
+  let (model, rect) = placed_browser_page()
   assert_true(model.browser_pane.shown == Some(1))
   // The workspace picker's modal covers the pane; native views z-order
   // above HTML, so the view must hide first.
@@ -19646,11 +19163,7 @@ fn subrun_page(active~ : String, child_sync? : TranscriptSync) -> Model {
   let base = running_conversation()
   let parent = { ..base, turn: { ..base.turn, subruns: [lane], }, }
   let child = {
-    ..empty_conversation(
-      @interop.ChannelId::Local,
-      "desktop-test-sr-1",
-      @interop.ChannelId::Local.test_project(),
-    )
+    ..local_conversation("desktop-test-sr-1")
     // A child already read once. The positive watermark is what proves a
     // durable record exists, which is `can_reload_transcript`'s gate.
     ,
@@ -19673,20 +19186,23 @@ fn subrun_child_of(model : Model) -> Conversation raise {
 }
 
 ///|
+/// Test-only: the probe push a sub-run's progress produces for the fixture
+/// child, three steps in.
+fn subrun_progress() -> DeviceMsg {
+  SubrunProgressed(
+    id="sr-1",
+    session="desktop-test-sr-1",
+    steps=3,
+    activity="shell",
+  )
+}
+
+///|
 test "a sub-run's progress refreshes the child transcript on screen" {
   // No follower broadcasts a child's commits, so this probe push is the only
   // thing that can move a transcript the reader opened mid-run.
   let page = subrun_page(active="desktop-test-sr-1")
-  let (_, next) = update_dev(
-    test_dispatch(),
-    SubrunProgressed(
-      id="sr-1",
-      session="desktop-test-sr-1",
-      steps=3,
-      activity="shell",
-    ),
-    page,
-  )
+  let (_, next) = update_dev(test_dispatch(), subrun_progress(), page)
   // A fresh generation was minted for the read. `Cmd` is opaque, so this is
   // what separates an issued load from a conversation parked in `Reloading`
   // with nothing on the way to settle it.
@@ -19703,19 +19219,7 @@ test "a sub-run's progress refreshes the child transcript on screen" {
     test_dispatch(),
     SessionRefreshed(
       session="desktop-test-sr-1",
-      items=[
-        {
-          kind: Assistant(
-            reasoning=Some("child thought"),
-            prose=None,
-            calls=[],
-            replay=false,
-            finished=false,
-          ),
-          ts: None,
-          sequence: Some(5),
-        },
-      ],
+      items=[assistant_item(reasoning="child thought", sequence=5)],
       watermark=5,
       goal=None,
       goal_markers=[],
@@ -19742,12 +19246,7 @@ test "a sub-run's progress leaves a child nobody is viewing alone" {
   // a record no one is looking at is work with no reader.
   let (_, next) = update_dev(
     test_dispatch(),
-    SubrunProgressed(
-      id="sr-1",
-      session="desktop-test-sr-1",
-      steps=3,
-      activity="shell",
-    ),
+    subrun_progress(),
     subrun_page(active="desktop-test"),
   )
   assert_true(subrun_child_of(next).sync is Synced)
@@ -19766,12 +19265,7 @@ test "progress during an in-flight read is coalesced, not dropped" {
   // step short with nothing left to correct it.
   let (_, next) = update_dev(
     test_dispatch(),
-    SubrunProgressed(
-      id="sr-1",
-      session="desktop-test-sr-1",
-      steps=3,
-      activity="shell",
-    ),
+    subrun_progress(),
     subrun_page(
       active="desktop-test-sr-1",
       child_sync=Reloading(
@@ -19799,16 +19293,7 @@ test "a lane whose parent is gone still refreshes the child on screen" {
       conv.session_id != "desktop-test"
     }),
   }
-  let (_, next) = update_dev(
-    test_dispatch(),
-    SubrunProgressed(
-      id="sr-1",
-      session="desktop-test-sr-1",
-      steps=3,
-      activity="shell",
-    ),
-    orphaned,
-  )
+  let (_, next) = update_dev(test_dispatch(), subrun_progress(), orphaned)
   guard subrun_child_of(next).sync is Reloading(..) else {
     fail("expected the viewed child to reload without its parent")
   }
