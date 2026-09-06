@@ -64,13 +64,9 @@ fn file_request(
         PopulateCache =>
           scheduler.add(emit(FileCacheLoaded(owner~, cache_key~, generation~)))
         QueryCache => {
-          let files = reply.files.filter_map(path => {
-            if path.is_empty() {
-              None
-            } else {
-              Some(@pathx.Relative(path))
-            }
-          })
+          let files = [
+            for path in reply.files if !path.is_empty() => @pathx.Relative(path)
+          ]
           scheduler.add(
             emit(
               FilesLoaded(

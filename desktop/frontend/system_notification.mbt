@@ -101,17 +101,13 @@ fn show_system_notification(
 /// not opened. It is derived from replicated conversation state rather than
 /// incremented by events, so replay and reconnect converge to one value.
 fn Model::notification_badge_count(self : Model) -> Int {
-  let mut count = 0
-  for conv in self.conversations {
-    if conv.device is Local &&
-      (
-        conv.pending_approval is Some({ answered: false, .. }) ||
-        conv.unseen_finish
-      ) {
-      count += 1
-    }
-  }
-  count
+  self.conversations.count_if(conv => {
+    conv.device is Local &&
+    (
+      conv.pending_approval is Some({ answered: false, .. }) ||
+      conv.unseen_finish
+    )
+  })
 }
 
 ///|

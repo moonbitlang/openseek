@@ -68,14 +68,10 @@ pub fn is_web_url(url : String) -> Bool {
 /// sharing a document differ only in the anchor a same-document jump
 /// scrolls to, which never reloads the page.
 fn document_of(url : String) -> String {
-  let buf = StringBuilder()
-  for ch in url {
-    if ch == '#' {
-      break
-    }
-    buf.write_char(ch)
+  match url.before("#") {
+    Some(document) => document.to_owned()
+    None => url
   }
-  buf.to_string()
 }
 
 ///|
@@ -154,10 +150,8 @@ pub fn normalize_url(input : String) -> String? {
   if trimmed.is_empty() {
     return None
   }
-  for ch in trimmed {
-    if ch == ' ' || ch == '\t' {
-      return None
-    }
+  if trimmed.contains_any(chars=" \t") {
+    return None
   }
   let lower = ascii_lower(trimmed)
   let candidate = if lower.has_prefix("http://") || lower.has_prefix("https://") {

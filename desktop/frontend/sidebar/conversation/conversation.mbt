@@ -188,16 +188,11 @@ fn Input::menu_kind(self : Input) -> MenuKind? {
 
 ///|
 fn Input::menu_enabled(self : Input) -> (Bool, Bool) {
-  let mut archive = false
-  let mut delete = false
-  for action in self.trailing {
-    match action {
-      Archive(..) => archive = !(self.run_mark is RunningMark)
-      Delete(..) => delete = true
-      Restore(..) => ()
-    }
-  }
-  (archive, delete)
+  (
+    self.trailing.any(action => action is Archive(..)) &&
+    !(self.run_mark is RunningMark),
+    self.trailing.any(action => action is Delete(..)),
+  )
 }
 
 ///|

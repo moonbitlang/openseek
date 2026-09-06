@@ -8,13 +8,10 @@
 fn Model::transcript_projects(
   self : Model,
 ) -> Array[@transcript_component.ProjectChoice] {
-  let choices : Array[@transcript_component.ProjectChoice] = []
-  if self.focused_device() is Some(dev) {
-    for root in dev.projects {
-      choices.push({ root, label: @resource.label(root), })
-    }
-  }
-  choices
+  guard self.focused_device() is Some(dev) else { return [] }
+  [
+    for root in dev.projects => { root, label: @resource.label(root), }
+  ]
 }
 
 ///|

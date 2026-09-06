@@ -19,12 +19,7 @@ pub(all) struct Input {
 /// the local library — at that exact version; an older install keeps the
 /// Install button alive as the upgrade path.
 fn Input::has_installed(self : Input, source : String) -> Bool {
-  for skill in self.installed {
-    if skill.source == source {
-      return true
-    }
-  }
-  false
+  self.installed.any(skill => skill.source == source)
 }
 
 ///|

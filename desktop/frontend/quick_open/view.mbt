@@ -116,35 +116,14 @@ fn key_attrs(emit : @cmd.Emit[Msg], selected : Int?) -> @html.Attrs {
 
 ///|
 fn empty_view(open : Open) -> @html.Html {
-  let provider = open.provider()
-  let (class, message) = match open.phase {
-    Debouncing | Loading =>
-      (
-        "quick-open-empty",
-        if provider is Files {
-          "Indexing files…"
-        } else {
-          "Searching symbols…"
-        },
-      )
-    Failed =>
-      (
-        "quick-open-empty error",
-        if provider is Files {
-          "File search failed"
-        } else {
-          "Symbol search failed"
-        },
-      )
-    Ready =>
-      (
-        "quick-open-empty",
-        if provider is Files {
-          "No files found"
-        } else {
-          "No symbols found"
-        },
-      )
+  let (class, message) = match (open.phase, open.provider()) {
+    (Debouncing | Loading, Files) => ("quick-open-empty", "Indexing files…")
+    (Debouncing | Loading, Symbols) =>
+      ("quick-open-empty", "Searching symbols…")
+    (Failed, Files) => ("quick-open-empty error", "File search failed")
+    (Failed, Symbols) => ("quick-open-empty error", "Symbol search failed")
+    (Ready, Files) => ("quick-open-empty", "No files found")
+    (Ready, Symbols) => ("quick-open-empty", "No symbols found")
   }
   @html.div(
     class~,
@@ -164,27 +143,16 @@ fn State::view(self : State, emit : @cmd.Emit[Msg]) -> @html.Html {
 
 ///|
 fn dialog_view(emit : @cmd.Emit[Msg], open : Open) -> @html.Html {
-  let provider = open.provider()
-  let active_id = if open.current() is Some(_) {
-    row_id(open.selected)
-  } else {
-    ""
-  }
-  let dialog_label = if provider is Files {
-    "Search workspace files"
-  } else {
-    "Search workspace symbols"
-  }
-  let placeholder = if provider is Files {
-    "Search files"
-  } else {
-    "Search symbols"
-  }
-  let group_label = if provider is Files { "Files" } else { "Symbols" }
   let selected = if open.current() is Some(_) {
     Some(open.selected)
   } else {
     None
+  }
+  let active_id = selected.map(index => row_id(index)).unwrap_or("")
+  let (dialog_label, placeholder, group_label) = if open.provider() is Files {
+    ("Search workspace files", "Search files", "Files")
+  } else {
+    ("Search workspace symbols", "Search symbols", "Symbols")
   }
   let base_input_attrs = key_attrs(emit, selected)
     .id(InputId)
@@ -200,10 +168,9 @@ fn dialog_view(emit : @cmd.Emit[Msg], open : Open) -> @html.Html {
   } else {
     base_input_attrs.aria_activedescendant(active_id)
   }
-  let rows : Array[@html.Html] = []
-  for index, item in open.items {
-    let selected = index == open.selected
-    rows.push(
+  let rows : Array[@html.Html] = [
+    for index, item in open.items => {
+      let selected = index == open.selected
       @html.div(
         class=if selected {
           "quick-open-row selected"
@@ -230,9 +197,9 @@ fn dialog_view(emit : @cmd.Emit[Msg], open : Open) -> @html.Html {
             @html.div(class="quick-open-detail", item.detail()),
           ]),
         ],
-      ),
-    )
-  }
+      )
+    }
+  ]
   let list_children = if rows.is_empty() { [empty_view(open)] } else { rows }
   let list_busy = match open.phase {
     Debouncing | Loading => "true"

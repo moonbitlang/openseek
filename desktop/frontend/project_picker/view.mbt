@@ -417,12 +417,9 @@ fn picker_breadcrumbs(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
     )
     return @html.div(class="picker-crumbs", crumbs)
   }
-  let segments : Array[String] = []
-  for part in path.split("/") {
-    if !part.is_empty() {
-      segments.push("\{part}")
-    }
-  }
+  let segments : Array[String] = [
+    for part in path.split("/") if !part.is_empty() => part.to_owned()
+  ]
   crumbs.push(
     @html.button(
       class=if segments.is_empty() {
