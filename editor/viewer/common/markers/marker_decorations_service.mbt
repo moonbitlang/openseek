@@ -93,19 +93,12 @@ pub fn MarkerDecorationsService::dispose(
   // Block both marker-service and outward-emitter ingress before any owner can
   // reenter through a model-decoration callback.
   self.disposed = true
-  match self.subscription {
-    Some(d) => {
-      self.subscription = None
-      d.dispose()
-    }
-    None => ()
+  if self.subscription is Some(d) {
+    self.subscription = None
+    d.dispose()
   }
   self.did_change_marker_decorations.dispose()
-  let registrations : Array[ModelMarkerRegistration] = []
-  for _, registration in self.model_registrations {
-    registrations.push(registration)
-  }
-  for registration in registrations {
+  for registration in self.model_registrations.values().to_array() {
     self.finalize_registration(registration, ServiceDisposed)
   }
   // These are the two ownership indexes. They intentionally survive until
@@ -229,19 +222,13 @@ fn MarkerDecorationsService::finalize_registration(
   }
   registration.update_requested = false
   registration.reset_requested = false
-  match registration.content_subscription {
-    Some(subscription) => {
-      registration.content_subscription = None
-      subscription.dispose()
-    }
-    None => ()
+  if registration.content_subscription is Some(subscription) {
+    registration.content_subscription = None
+    subscription.dispose()
   }
-  match registration.dispose_subscription {
-    Some(subscription) => {
-      registration.dispose_subscription = None
-      subscription.dispose()
-    }
-    None => ()
+  if registration.dispose_subscription is Some(subscription) {
+    registration.dispose_subscription = None
+    subscription.dispose()
   }
   registration.marker_decorations.dispose()
 }
@@ -253,17 +240,12 @@ fn MarkerDecorationsService::remove_model_from_uri_index(
   model_id : Int,
 ) -> Unit {
   let uri_key = uri.to_string()
-  match self.model_ids_by_uri.get(uri_key) {
-    Some(model_ids) => {
-      match model_ids.search(model_id) {
-        Some(index) => model_ids.remove(index) |> ignore
-        None => ()
-      }
-      if model_ids.length() == 0 {
-        self.model_ids_by_uri.remove(uri_key)
-      }
-    }
-    None => ()
+  guard self.model_ids_by_uri.get(uri_key) is Some(model_ids) else { return }
+  if model_ids.search(model_id) is Some(index) {
+    model_ids.remove(index) |> ignore
+  }
+  if model_ids.length() == 0 {
+    self.model_ids_by_uri.remove(uri_key)
   }
 }
 
@@ -298,18 +280,15 @@ fn MarkerDecorationsService::handle_marker_change(
     if self.disposed {
       return
     }
-    match self.model_ids_by_uri.get(resource.to_string()) {
-      Some(model_ids) =>
-        for model_id in model_ids.copy() {
-          if self.disposed {
-            return
-          }
-          match self.model_registrations.get(model_id) {
-            Some(registration) => self.update_decorations(registration)
-            None => ()
-          }
+    if self.model_ids_by_uri.get(resource.to_string()) is Some(model_ids) {
+      for model_id in model_ids.copy() {
+        if self.disposed {
+          return
         }
-      None => ()
+        if self.model_registrations.get(model_id) is Some(registration) {
+          self.update_decorations(registration)
+        }
+      }
     }
   }
 }
@@ -389,17 +368,16 @@ fn MarkerDecorationsService::update_decorations_once(
     MarkerReadOptions(resource=marker_decorations.model.uri, take=500),
   )
   // filter markers from suppressed ranges
-  match self.suppressed_ranges.get(marker_decorations.model.uri.to_string()) {
-    Some(suppressed_ranges) =>
-      markers = markers.filter(marker => {
-        !suppressed_ranges.any(candidate => {
-          @base_common.Range::are_intersecting_or_touching(
-            candidate,
-            marker.range(),
-          )
-        })
+  if self.suppressed_ranges.get(marker_decorations.model.uri.to_string())
+    is Some(suppressed_ranges) {
+    markers = markers.filter(marker => {
+      !suppressed_ranges.any(candidate => {
+        @base_common.Range::are_intersecting_or_touching(
+          candidate,
+          marker.range(),
+        )
       })
-    None => ()
+    })
   }
   if marker_decorations.update(markers) && !self.disposed && registration.active {
     self.did_change_marker_decorations.fire(marker_decorations.model)
@@ -481,16 +459,10 @@ fn create_decoration_option(marker : Marker) -> @model.ModelDecorationOptions {
       minimap = Some({ color: minimap_error, position: Inline, })
     }
   }
-  match marker.tags {
-    Some(tags) => {
-      if tags.contains(Unnecessary) {
-        inline_class_name = Some("squiggly-inline-unnecessary")
-      }
-      if tags.contains(Deprecated) {
-        inline_class_name = Some("squiggly-inline-deprecated")
-      }
-    }
-    None => ()
+  if marker.has_tag(Deprecated) {
+    inline_class_name = Some("squiggly-inline-deprecated")
+  } else if marker.has_tag(Unnecessary) {
+    inline_class_name = Some("squiggly-inline-unnecessary")
   }
   ModelDecorationOptions(
     class_name,
@@ -543,15 +515,13 @@ fn create_decoration_range(
       // keep the range as is, it will be rendered 1ch wide
       return ret
     }
-    match model.get_word_at_position(ret.get_start_position()) {
-      Some(word) =>
-        ret = Range(
-          ret.start_line_number,
-          word.start_column,
-          ret.end_line_number,
-          word.end_column,
-        )
-      None => ()
+    if model.get_word_at_position(ret.get_start_position()) is Some(word) {
+      ret = Range(
+        ret.start_line_number,
+        word.start_column,
+        ret.end_line_number,
+        word.end_column,
+      )
     }
   } else if raw_marker.end_column == max_value_column &&
     raw_marker.start_column == 1 &&

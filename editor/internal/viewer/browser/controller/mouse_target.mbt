@@ -878,41 +878,17 @@ fn create_mouse_target_for_request(
     // overflowing content widgets
     return request.fulfill_unknown()
   }
-  match hit_test_content_widget(ctx, request) {
-    Some(result) => return result
-    None => ()
-  }
-  match hit_test_overlay_widget(ctx, request) {
-    Some(result) => return result
-    None => ()
-  }
-  match hit_test_minimap(ctx, request) {
-    Some(result) => return result
-    None => ()
-  }
-  match hit_test_scrollbar_slider(ctx, request) {
-    Some(result) => return result
-    None => ()
-  }
-  match hit_test_view_zone(ctx, request) {
-    Some(result) => return result
-    None => ()
-  }
-  match hit_test_margin(ctx, request) {
-    Some(result) => return result
-    None => ()
-  }
-  match hit_test_view_cursor(ctx, request) {
-    Some(result) => return result
-    None => ()
-  }
-  match hit_test_view_lines(ctx, request) {
-    Some(result) => return result
-    None => ()
-  }
-  match hit_test_scrollbar(ctx, request) {
-    Some(result) => return result
-    None => ()
+  let hit_tests : Array[
+    (HitTestContext, HitTestRequest) -> @editor_browser.MouseTarget?,
+  ] = [
+    hit_test_content_widget, hit_test_overlay_widget, hit_test_minimap, hit_test_scrollbar_slider,
+    hit_test_view_zone, hit_test_margin, hit_test_view_cursor, hit_test_view_lines,
+    hit_test_scrollbar,
+  ]
+  for hit_test in hit_tests {
+    if hit_test(ctx, request) is Some(result) {
+      return result
+    }
   }
   request.fulfill_unknown()
 }
@@ -1175,26 +1151,18 @@ fn hit_test_scrollbar_slider(
   ctx : HitTestContext,
   request : HitTestRequest,
 ) -> @editor_browser.MouseTarget? {
-  if ElementPath::is_child_of_scrollable_element(request.target_path()) {
-    match request.target() {
-      Some(target) => {
-        let class_name = controller_element_class_name(target)
-        if class_name_has_word(class_name, "slider") ||
-          class_name_has_word(class_name, "scrollbar") {
-          let possible_line_number = ctx.get_line_number_at_vertical_offset(
-            request.mouse_vertical_offset,
-          )
-          let max_column = ctx.view_model.get_line_max_column(
-            possible_line_number,
-          )
-          return Some(
-            request.fulfill_scrollbar(
-              Position(possible_line_number, max_column),
-            ),
-          )
-        }
-      }
-      None => ()
+  if ElementPath::is_child_of_scrollable_element(request.target_path()) &&
+    request.target() is Some(target) {
+    let class_name = controller_element_class_name(target)
+    if class_name_has_word(class_name, "slider") ||
+      class_name_has_word(class_name, "scrollbar") {
+      let possible_line_number = ctx.get_line_number_at_vertical_offset(
+        request.mouse_vertical_offset,
+      )
+      let max_column = ctx.view_model.get_line_max_column(possible_line_number)
+      return Some(
+        request.fulfill_scrollbar(Position(possible_line_number, max_column)),
+      )
     }
   }
   None
@@ -1290,30 +1258,18 @@ fn create_mouse_target_from_hit_test_position(
   // Let's define a, b, c and check if the offset is in between them...
   let points : Array[(Double, Int)] = [] // (offset, column)
   points.push((visible_range.left.to_double(), column))
-  if column > 1 {
-    match ctx.visible_range_for_position(line_number, column - 1) {
-      Some(visible_range) =>
-        points.push((visible_range.left.to_double(), column - 1))
-      None => ()
-    }
+  if column > 1 &&
+    ctx.visible_range_for_position(line_number, column - 1)
+    is Some(visible_range) {
+    points.push((visible_range.left.to_double(), column - 1))
   }
   let line_max_column = ctx.view_model.get_line_max_column(line_number)
-  if column < line_max_column {
-    match ctx.visible_range_for_position(line_number, column + 1) {
-      Some(visible_range) =>
-        points.push((visible_range.left.to_double(), column + 1))
-      None => ()
-    }
+  if column < line_max_column &&
+    ctx.visible_range_for_position(line_number, column + 1)
+    is Some(visible_range) {
+    points.push((visible_range.left.to_double(), column + 1))
   }
-  points.sort_by((a, b) => {
-    if a.0 < b.0 {
-      -1
-    } else if a.0 > b.0 {
-      1
-    } else {
-      0
-    }
-  })
+  points.sort_by_key(p => p.0)
   let mouse_coordinates = request.pos.to_client_coordinates()
   let span_node_client_rect = span_node.get_bounding_client_rect()
   let mouse_is_over_span_node = span_node_client_rect.get_left() <=
@@ -1420,18 +1376,11 @@ fn actual_do_hit_test_with_caret_range_from_point(
   if node_is_text(start_container) {
     // startContainer is expected to be the token text
     let parent1 = node_parent_element(start_container) // the token span
-    let parent2 = match parent1 {
-      Some(el) => controller_parent_element(el) // the view line container span
-      None => None
-    }
-    let parent3 = match parent2 {
-      Some(el) => controller_parent_element(el) // the view line div
-      None => None
-    }
-    let parent3_class_name = match parent3 {
-      Some(el) => controller_element_class_name(el)
-      None => ""
-    }
+    // the view line container span
+    let parent2 = parent1.bind(controller_parent_element)
+    // the view line div
+    let parent3 = parent2.bind(controller_parent_element)
+    let parent3_class_name = parent3.map_or("", controller_element_class_name)
     if parent3_class_name == @view.VIEW_LINE_CLASS_NAME {
       return hit_test_result_from_dom_info(
         ctx,
@@ -1447,14 +1396,9 @@ fn actual_do_hit_test_with_caret_range_from_point(
     // startContainer is expected to be the token span
     let start_element = start_container.to_element().unwrap()
     let parent1 = controller_parent_element(start_element) // the view line container span
-    let parent2 = match parent1 {
-      Some(el) => controller_parent_element(el) // the view line div
-      None => None
-    }
-    let parent2_class_name = match parent2 {
-      Some(el) => controller_element_class_name(el)
-      None => ""
-    }
+    // the view line div
+    let parent2 = parent1.bind(controller_parent_element)
+    let parent2_class_name = parent2.map_or("", controller_element_class_name)
     if parent2_class_name == @view.VIEW_LINE_CLASS_NAME {
       return hit_test_result_from_dom_info(
         ctx,
@@ -1487,18 +1431,11 @@ fn do_hit_test_with_caret_position_from_point(
   if node_is_text(offset_node) {
     // offsetNode is expected to be the token text
     let parent1 = node_parent_element(offset_node) // the token span
-    let parent2 = match parent1 {
-      Some(el) => controller_parent_element(el) // the view line container span
-      None => None
-    }
-    let parent3 = match parent2 {
-      Some(el) => controller_parent_element(el) // the view line div
-      None => None
-    }
-    let parent3_class_name = match parent3 {
-      Some(el) => controller_element_class_name(el)
-      None => ""
-    }
+    // the view line container span
+    let parent2 = parent1.bind(controller_parent_element)
+    // the view line div
+    let parent3 = parent2.bind(controller_parent_element)
+    let parent3_class_name = parent3.map_or("", controller_element_class_name)
     if parent3_class_name == @view.VIEW_LINE_CLASS_NAME {
       return hit_test_result_from_dom_info(
         ctx,
@@ -1515,29 +1452,17 @@ fn do_hit_test_with_caret_position_from_point(
   if node_is_element(offset_node) {
     let offset_element = offset_node.to_element().unwrap()
     let parent1 = controller_parent_element(offset_element)
-    let parent1_class_name = match parent1 {
-      Some(el) => controller_element_class_name(el)
-      None => ""
-    }
-    let parent2 = match parent1 {
-      Some(el) => controller_parent_element(el)
-      None => None
-    }
-    let parent2_class_name = match parent2 {
-      Some(el) => controller_element_class_name(el)
-      None => ""
-    }
+    let parent1_class_name = parent1.map_or("", controller_element_class_name)
+    let parent2 = parent1.bind(controller_parent_element)
+    let parent2_class_name = parent2.map_or("", controller_element_class_name)
     if parent1_class_name == @view.VIEW_LINE_CLASS_NAME {
       // it returned the `<span>` of the line and the offset is the `<span>`
       // with the inline decoration
       let child_count = offset_node.get_child_count()
       let child_index = native_caret_hit_offset(hit).min(child_count - 1)
-      if child_index >= 0 {
-        match offset_node.get_child(child_index).to_element() {
-          Some(token_span) =>
-            return hit_test_result_from_dom_info(ctx, token_span, 0)
-          None => ()
-        }
+      if child_index >= 0 &&
+        offset_node.get_child(child_index).to_element() is Some(token_span) {
+        return hit_test_result_from_dom_info(ctx, token_span, 0)
       }
     } else if parent2_class_name == @view.VIEW_LINE_CLASS_NAME {
       // it returned the `<span>` with the inline decoration

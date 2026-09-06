@@ -825,26 +825,17 @@ fn update_embed(
           { ..model, diff_visible: visible, },
         )
       }
-    ToggleDiffLayout =>
+    ToggleDiffLayout | ToggleDiffSash => {
       if model.status != "ready" || !model.diff_visible {
-        (@rabbita.none, model)
-      } else {
-        let inline_layout = !model.inline_layout
-        (
-          set_embed_diff_options(inline_layout, model.sash_enabled),
-          { ..model, inline_layout, },
-        )
+        return (@rabbita.none, model)
       }
-    ToggleDiffSash =>
-      if model.status != "ready" || !model.diff_visible {
-        (@rabbita.none, model)
+      let next = if msg is ToggleDiffLayout {
+        { ..model, inline_layout: !model.inline_layout, }
       } else {
-        let sash_enabled = !model.sash_enabled
-        (
-          set_embed_diff_options(model.inline_layout, sash_enabled),
-          { ..model, sash_enabled, },
-        )
+        { ..model, sash_enabled: !model.sash_enabled, }
       }
+      (set_embed_diff_options(next.inline_layout, next.sash_enabled), next)
+    }
   }
 }
 

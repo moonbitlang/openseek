@@ -41,60 +41,34 @@ pub fn MouseHandler::hook_scrollable_scrollbar_input(
   self.add_dom_listener(scrollable.wrapper(), "mouseleave", _ => {
     scrollable.mouse_left()
   })
-  let vertical_slider = scrollable.slider(true)
-  self.add_dom_listener(vertical_slider, "pointerdown", event => {
-    match event.to_mouse_event() {
-      Some(mouse) if mouse.get_button() == 0 => {
+  let hook_slider = (vertical : Bool) => {
+    let slider = scrollable.slider(vertical)
+    self.add_dom_listener(slider, "pointerdown", event => {
+      if event.to_mouse_event() is Some(mouse) && mouse.get_button() == 0 {
         event.prevent_default()
         event.stop_propagation()
-        self.start_scrollable_drag(scrollable, owner, vertical=true, mouse)
+        self.start_scrollable_drag(scrollable, owner, vertical~, mouse)
       }
-      _ => ()
-    }
-  })
-  self.add_dom_listener(vertical_slider, "click", event => {
-    match event.to_mouse_event() {
-      Some(mouse) if mouse.get_button() == 0 => event.stop_propagation()
-      _ => ()
-    }
-  })
-  let horizontal_slider = scrollable.slider(false)
-  self.add_dom_listener(horizontal_slider, "pointerdown", event => {
-    match event.to_mouse_event() {
-      Some(mouse) if mouse.get_button() == 0 => {
+    })
+    self.add_dom_listener(slider, "click", event => {
+      if event.to_mouse_event() is Some(mouse) && mouse.get_button() == 0 {
+        event.stop_propagation()
+      }
+    })
+  }
+  hook_slider(true)
+  hook_slider(false)
+  let hook_track = (vertical : Bool) => {
+    self.add_dom_listener(scrollable.track(vertical), "pointerdown", event => {
+      if event.to_mouse_event() is Some(mouse) {
         event.prevent_default()
         event.stop_propagation()
-        self.start_scrollable_drag(scrollable, owner, vertical=false, mouse)
+        self.scrollable_track_jump(scrollable, owner, vertical~, mouse)
       }
-      _ => ()
-    }
-  })
-  self.add_dom_listener(horizontal_slider, "click", event => {
-    match event.to_mouse_event() {
-      Some(mouse) if mouse.get_button() == 0 => event.stop_propagation()
-      _ => ()
-    }
-  })
-  self.add_dom_listener(scrollable.track(true), "pointerdown", event => {
-    match event.to_mouse_event() {
-      Some(mouse) => {
-        event.prevent_default()
-        event.stop_propagation()
-        self.scrollable_track_jump(scrollable, owner, vertical=true, mouse)
-      }
-      None => ()
-    }
-  })
-  self.add_dom_listener(scrollable.track(false), "pointerdown", event => {
-    match event.to_mouse_event() {
-      Some(mouse) => {
-        event.prevent_default()
-        event.stop_propagation()
-        self.scrollable_track_jump(scrollable, owner, vertical=false, mouse)
-      }
-      None => ()
-    }
-  })
+    })
+  }
+  hook_track(true)
+  hook_track(false)
 }
 
 ///|
@@ -242,16 +216,10 @@ fn MouseHandler::start_scrollable_drag(
 /// disposal.
 fn MouseHandler::end_scrollable_drag(self : MouseHandler) -> Unit {
   self.scrollbar_drag_monitor.stop_monitoring(false)
-  match self.drag {
-    Some(drag) =>
-      match self.scrollable_for_drag(drag.owner) {
-        Some(scrollable) => {
-          scrollable.set_slider_active(vertical=drag.vertical, false)
-          scrollable.drag_ended()
-        }
-        None => ()
-      }
-    None => ()
+  if self.drag is Some(drag) &&
+    self.scrollable_for_drag(drag.owner) is Some(scrollable) {
+    scrollable.set_slider_active(vertical=drag.vertical, false)
+    scrollable.drag_ended()
   }
   self.drag = None
 }
@@ -338,19 +306,17 @@ fn MouseHandler::apply_scrollable_position(
 ) -> Unit {
   match owner {
     EditorScrollableElement =>
-      match (self.view_helper.view_layout)() {
-        Some(view_layout) =>
-          if vertical {
-            view_layout.scroll_to(scroll_top=desired) |> ignore
-          } else {
-            let position = view_layout.position()
-            view_layout.scroll_to(
-              scroll_top=position.scroll_top,
-              scroll_left=desired,
-            )
-            |> ignore
-          }
-        None => ()
+      if (self.view_helper.view_layout)() is Some(view_layout) {
+        if vertical {
+          view_layout.scroll_to(scroll_top=desired) |> ignore
+        } else {
+          let position = view_layout.position()
+          view_layout.scroll_to(
+            scroll_top=position.scroll_top,
+            scroll_left=desired,
+          )
+          |> ignore
+        }
       }
     HoverScrollableElement => scrollable.native_scroll_to(vertical~, desired)
   }
@@ -428,10 +394,8 @@ fn MouseHandler::handle_browser_desperate_reveal(
     }
   }
   if delta_top != 0.0 || delta_left != 0.0 {
-    match (self.view_helper.view_layout)() {
-      Some(view_layout) =>
-        view_layout.scroll_by(delta_left~, delta_top~) |> ignore
-      None => ()
+    if (self.view_helper.view_layout)() is Some(view_layout) {
+      view_layout.scroll_by(delta_left~, delta_top~) |> ignore
     }
   }
 }

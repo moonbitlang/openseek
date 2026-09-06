@@ -241,7 +241,7 @@ pub fn ContentHoverWidget::ContentHoverWidget(
   wrapper.add_event_listener("contextmenu", event => event.stop_propagation())
   wrapper.add_event_listener("focusin", event => event.stop_propagation())
   wrapper.add_event_listener("focusout", event => event.stop_propagation())
-  wrapper.add_event_listener("wheel", event => {
+  let on_wheel = (event : @rdom.Event) => {
     match event.to_wheel_event() {
       Some(wheel) => {
         event.prevent_default()
@@ -250,19 +250,9 @@ pub fn ContentHoverWidget::ContentHoverWidget(
       }
       None => event.stop_propagation()
     }
-  })
-  scrollable
-  .content()
-  .add_event_listener("wheel", event => {
-    match event.to_wheel_event() {
-      Some(wheel) => {
-        event.prevent_default()
-        event.stop_propagation()
-        widget.handle_wheel(wheel)
-      }
-      None => event.stop_propagation()
-    }
-  })
+  }
+  wrapper.add_event_listener("wheel", on_wheel)
+  scrollable.content().add_event_listener("wheel", on_wheel)
   scrollable
   .content()
   .add_event_listener("scroll", _ => scrollable.update_from_native_content())
