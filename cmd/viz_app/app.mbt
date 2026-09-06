@@ -1996,7 +1996,7 @@ fn session_row_of(json : Json) -> SessionRow? {
     { "last_active": Number(value, ..), .. } => Some(value.to_int64())
     _ => None
   }
-  let is_marker = json is { "is_marker": True, .. }
+  let is_marker = json is { "is_marker": true, .. }
   Some({ key, id, root_label, last_active, is_marker, first_prompt, })
 }
 
@@ -2008,8 +2008,8 @@ fn session_row_of(json : Json) -> SessionRow? {
 fn parse_load(text : String) -> LoadOutcome {
   let json = @json.parse(text) catch { _ => return Malformed }
   match json {
-    { "found": False, .. } => NotFound
-    { "found": True, "events": String(events_text), .. } => {
+    { "found": false, .. } => NotFound
+    { "found": true, "events": String(events_text), .. } => {
       let parsed = @viz.parse_events(events_text)
       let (system_prompt, header_present) = header_info(parsed)
       let log_bytes = match json {

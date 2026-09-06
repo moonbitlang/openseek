@@ -2180,7 +2180,7 @@ fn raw_failed_call_ids(session : @agent_session.Session) -> Map[String, Unit] {
 /// the runtime for escalation.
 fn tool_call_is_escalated(call : @deepseek.ToolCall) -> Bool {
   let json = @json.parse(call.arguments) catch { _ => return false }
-  json is { "escalated": True, .. }
+  json is { "escalated": true, .. }
 }
 
 ///|

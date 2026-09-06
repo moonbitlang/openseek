@@ -135,7 +135,7 @@ fn message_content(message : Json) -> String raise {
 /// checkpoint prompt in the last message pins the classification.
 fn is_checkpoint_request(request : Json) -> Bool raise {
   let messages = request_messages(request)
-  !(request is { "stream": True, .. }) &&
+  !(request is { "stream": true, .. }) &&
   message_content(messages[messages.length() - 1]).contains(
     "CONTEXT CHECKPOINT COMPACTION",
   )
