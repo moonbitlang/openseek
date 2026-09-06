@@ -80,7 +80,7 @@ pub async fn run_goal_audit(
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   scratch_dir? : String,
 ) -> ReviewReport? {
-  @agent_subrun.execute_kind(
+  @agent_kind.execute_kind(
     session_id~,
     append_item?,
     system_prompt=audit_system_prompt(),
@@ -120,8 +120,8 @@ let digest_max_chars : Int = 4_000
 /// summary, and up to `digest_max_findings` one-line findings with an
 /// explicit omission count — never more than `digest_max_chars` total.
 pub fn ReviewReport::digest(self : ReviewReport) -> String {
-  let blockers = self.findings.filter(f => f.severity == "blocker").length()
-  let highs = self.findings.filter(f => f.severity == "high").length()
+  let blockers = self.findings.count_if(f => f.severity == "blocker")
+  let highs = self.findings.count_if(f => f.severity == "high")
   let out = StringBuilder()
   out <+ "[review] worktree audit: \{self.findings.length()} finding(s)"
   if blockers > 0 || highs > 0 {

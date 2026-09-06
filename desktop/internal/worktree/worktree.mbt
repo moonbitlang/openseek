@@ -209,6 +209,16 @@ fn valid_worktree_name(name : String) -> Bool {
 }
 
 ///|
+/// A registry row's optional owner id: present, a JSON string, and non-empty.
+/// A blank id names no conversation, so it reads as an unbound row.
+fn owner_field(fields : Map[String, Json], key : String) -> String? {
+  guard fields.get(key) is Some(String(id)) && !id.is_empty() else {
+    return None
+  }
+  Some(id)
+}
+
+///|
 /// The registered worktrees of `workspace`, dropping anything malformed: an
 /// entry without a valid name, branch, and base string self-heals to absent
 /// rather than poisoning every later operation. A missing or unreadable
@@ -238,19 +248,8 @@ async fn read_worktrees_unlocked(
       continue
     }
     guard fields.get("base") is Some(String(base)) else { continue }
-    let session : String? = if fields.get("session") is Some(String(id)) &&
-      !id.is_empty() {
-      Some(id)
-    } else {
-      None
-    }
-    let codex_thread : String? = if fields.get("codex_thread")
-      is Some(String(id)) &&
-      !id.is_empty() {
-      Some(id)
-    } else {
-      None
-    }
+    let session = owner_field(fields, "session")
+    let codex_thread = owner_field(fields, "codex_thread")
     // A row cannot be owned by both products. Drop a malformed ambiguous row
     // instead of letting whichever lookup happens first claim its checkout.
     guard session is None || codex_thread is None else { continue }
@@ -545,7 +544,7 @@ pub async fn drop_placements(
 ///|
 /// The tree root an absolute in-workspace `path` belongs to: the registered
 /// worktree containing it when one does, otherwise the workspace itself. A
-/// `.worktrees` path with no registry entry (a subtask slice, say) keeps
+/// `.worktrees` path with no registry entry (a worker slice, say) keeps
 /// resolving to the workspace root.
 pub async fn owner_dir(
   workspace : @pathx.Absolute,
@@ -588,10 +587,7 @@ fn archive_dirty_path_preview(status : String) -> (Array[String], Int) {
     if paths.length() < ArchiveDirtyPathPreviewLimit {
       paths.push(path)
     }
-    if index_status == "R" ||
-      worktree_status == "R" ||
-      index_status == "C" ||
-      worktree_status == "C" {
+    if index_status is ("R" | "C") || worktree_status is ("R" | "C") {
       index += 1
     }
     index += 1
@@ -858,7 +854,7 @@ pub async fn create(
     Some(name) => name
     None => fresh_worktree_name(dir, entries)
   }
-  // Refusals name the holder: the registry entry or the directory (a subtask
+  // Refusals name the holder: the registry entry or the directory (a worker
   // slice can own `.worktrees/<name>` without any registry entry). The branch
   // is freshly salted, so nothing can hold it ahead of us.
   if entries.iter().any(entry => entry.name == name) {
@@ -1209,11 +1205,7 @@ fn test_host(
   {
     lifecycle_lock: Mutex(),
     session_is_live: session => live.contains(session),
-    drain_sessions: sessions => {
-      for session in sessions {
-        drained.push(session)
-      }
-    },
+    drain_sessions: sessions => drained.append(sessions),
   }
 }
 

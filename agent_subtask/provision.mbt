@@ -8,14 +8,7 @@ let repo_mutexes : Map[String, @async.Mutex] = Map([])
 
 ///|
 fn repo_mutex(common_git_dir : String) -> @async.Mutex {
-  match repo_mutexes.get(common_git_dir) {
-    Some(mutex) => mutex
-    None => {
-      let mutex = @async.Mutex()
-      repo_mutexes[common_git_dir] = mutex
-      mutex
-    }
-  }
+  repo_mutexes.get_or_init(common_git_dir, () => Mutex())
 }
 
 ///|
@@ -190,68 +183,37 @@ async fn provision_locked(
 }
 
 ///|
-/// Undo a partial provision: worktree directory, bookkeeping, branch, and
-/// registry entry, in that order, each best-effort.
-async fn rollback_provision(geometry : Geometry, entry : SubtaskEntry) -> Unit {
+/// Tear down a slice's worktree: remove the directory, prune git's now-stale
+/// worktree bookkeeping, then drop the branch — in that order, each
+/// best-effort, because a teardown that stops at the first failure leaks the
+/// rest. (`git worktree remove` refuses ANY worktree in a repo with tracked
+/// submodules, so removal is rm + prune by design.) `force` picks `branch -D`
+/// for a branch being abandoned over `-d` for one a merge proved redundant.
+async fn remove_worktree_and_branch(
+  origin : String,
+  entry : SubtaskEntry,
+  force~ : Bool,
+) -> Unit {
   @fs.rmdir(entry.worker_root, recursive=true) catch {
     error if @async.is_being_cancelled() => raise error
     _ => ()
   }
-  let _ = git_run(["worktree", "prune"], cwd=geometry.origin_root)
-  let _ = git_run(["branch", "-D", entry.branch], cwd=geometry.origin_root)
+  let _ = git_run(["worktree", "prune"], cwd=origin)
+  let _ = git_run(
+    ["branch", if force { "-D" } else { "-d" }, entry.branch],
+    cwd=origin,
+  )
+}
+
+///|
+/// Undo a partial provision: worktree directory, bookkeeping, branch, and
+/// registry entry, in that order, each best-effort.
+async fn rollback_provision(geometry : Geometry, entry : SubtaskEntry) -> Unit {
+  remove_worktree_and_branch(geometry.origin_root, entry, force=true)
   let dir = registry_dir(geometry.common_git_dir)
   @fs.remove("\{dir}/\{entry.name}--\{entry.nonce}.json") catch {
     error if @async.is_being_cancelled() => raise error
     _ => ()
-  }
-}
-
-///|
-/// Flip the active slice `name` back to Running for a resume relaunch, or
-/// explain why not. Only a kept-worktree state — Committed (a truncated
-/// worker's validated partial) or Captured (a defective capture awaiting
-/// repair) — can host a fresh worker; capture() then measures the resumed
-/// run against the entry's prior commit and stacks its commit on it.
-pub async fn resume_running(
-  geometry : Geometry,
-  name : String,
-) -> Result[SubtaskEntry, String] {
-  // The same mutex provision and integrate hold: a continue racing an
-  // in-flight integrate must observe its OUTCOME state (Conflicted refuses
-  // below; Integrated is terminal; a clean merge removed the worktree),
-  // never the pre-merge Committed. A cancelled continue still leaks a
-  // Running entry whose branch holds validated work (capture never ran) —
-  // that residual mirrors the launch-cancel one and only discard clears it.
-  let mutex = repo_mutex(geometry.common_git_dir)
-  mutex.acquire()
-  defer mutex.release()
-  let (entries, _) = load_entries(geometry.common_git_dir)
-  guard entries.filter(e => e.name == name && !e.state.is_terminal()).last()
-    is Some(entry) else {
-    return Err("no active subtask named \{name}")
-  }
-  guard geometry.is_integration_target_for(entry) else {
-    return Err(
-      "subtask \{name} belongs to a different worktree; continue it from the worktree that launched it",
-    )
-  }
-  guard entry.state is (Committed | Captured) else {
-    return Err(
-      "subtask \{name} is \{Repr(entry.state)} — only a captured or committed slice with a kept worktree can be continued",
-    )
-  }
-  guard (@fs.exists(entry.worker_root) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => false
-  }) else {
-    return Err(
-      "subtask \{name}'s worktree is gone (\{entry.worker_root}); discard it and launch a fresh slice",
-    )
-  }
-  let entry = { ..entry, state: Running, }
-  match save_entry(geometry.common_git_dir, entry) {
-    Ok(_) => Ok(entry)
-    Err(reason) => Err(reason)
   }
 }
 
@@ -296,11 +258,7 @@ test "subtask names are strict slugs" {
   assert_false(is_valid_name("Upper"))
   assert_false(is_valid_name("has space"))
   assert_false(is_valid_name(""))
-  let long = StringBuilder()
-  for _ in 0..<41 {
-    long.write_char('a')
-  }
-  assert_false(is_valid_name(long.to_string()))
+  assert_false(is_valid_name("a".repeat(41)))
 }
 
 ///|
@@ -313,10 +271,7 @@ fn normalize_allowed_paths(
 ) -> Result[Array[String], String] {
   let normalized : Array[String] = []
   for prefix in allowed_paths {
-    let mut cleaned = prefix.trim().to_owned()
-    while cleaned.has_suffix("/") {
-      cleaned = cleaned.view(end_offset=cleaned.length() - 1).to_owned()
-    }
+    let cleaned = prefix.trim().trim_end(chars="/").to_owned()
     guard cleaned != "" && !cleaned.has_prefix("/") else {
       return Err(
         "allowed_paths entries must be non-empty relative prefixes: \{prefix}",

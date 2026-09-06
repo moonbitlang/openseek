@@ -36,16 +36,14 @@ fn PatternRepairReport::validate(self : PatternRepairReport) -> Array[String] {
 }
 
 ///|
+/// Decode only. The contract check is `validate`, applied by the one caller
+/// through `@agent_kind.validated`, exactly as the sibling report packages
+/// do it.
 fn PatternRepairReport::parse(
   json : Json,
 ) -> Result[PatternRepairReport, String] {
   let report : PatternRepairReport = @json.from_json(json) catch {
     error => return Err("invalid pattern repair report: \{error}")
   }
-  let problems = report.validate()
-  if problems.is_empty() {
-    Ok(report)
-  } else {
-    Err(problems.join("; "))
-  }
+  Ok(report)
 }

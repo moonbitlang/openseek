@@ -1,7 +1,7 @@
 // Live progress for a running sub-run, read from the child's own durable
 // record.
 //
-// A sub-run (`explore`, `review`, `subtask`) runs in a process the host does
+// A sub-run (`review`, or a workflow's `explore`/`worker` child) runs in a process the host does
 // not manage: its events go to ITS parent engine's stdin/stdout, and all the
 // host ever sees are the `subrun_started` / `subrun_finished` brackets around
 // a tool call that can last forty-five minutes. In between, nothing moves on
@@ -104,11 +104,7 @@ async fn SubrunProbeState::poll(self : SubrunProbeState) -> Bool {
     return false
   }
   let want = size - self.offset
-  let take = if want > subrun_probe_max_chunk {
-    subrun_probe_max_chunk
-  } else {
-    want
-  }
+  let take = @cmp.minimum(want, subrun_probe_max_chunk)
   let chunk = file.read_exactly_at(take.to_int(), position=self.offset) catch {
     _ => return false
   }

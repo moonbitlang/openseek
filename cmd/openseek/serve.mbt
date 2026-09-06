@@ -471,78 +471,36 @@ test "an unblocked goal resumes auto-continuation at the boundary" {
 }
 
 ///|
+/// Test helper: `should_auto_continue` with every input defaulted to its
+/// continuing value, so a case reads as the one condition it flips.
+fn auto_continues(
+  auto? : Bool = true,
+  finished? : Bool = true,
+  idle? : Bool = true,
+  shutting_down? : Bool = false,
+  goal_standing? : Bool = true,
+  turns_remaining? : Int = 1,
+) -> Bool {
+  should_auto_continue(
+    auto~,
+    finished~,
+    idle~,
+    shutting_down~,
+    goal_standing~,
+    turns_remaining~,
+  )
+}
+
+///|
 test "auto-continue requires a finished idle serving turn with budget" {
-  assert_true(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=true,
-      shutting_down=false,
-      goal_standing=true,
-      turns_remaining=1,
-    ),
-  )
+  assert_true(auto_continues())
   // Any single condition failing pauses for the controller.
-  assert_false(
-    should_auto_continue(
-      auto=false,
-      finished=true,
-      idle=true,
-      shutting_down=false,
-      goal_standing=true,
-      turns_remaining=1,
-    ),
-  )
-  assert_false(
-    should_auto_continue(
-      auto=true,
-      finished=false,
-      idle=true,
-      shutting_down=false,
-      goal_standing=true,
-      turns_remaining=1,
-    ),
-  )
-  assert_false(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=false,
-      shutting_down=false,
-      goal_standing=true,
-      turns_remaining=1,
-    ),
-  )
-  assert_false(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=true,
-      shutting_down=true,
-      goal_standing=true,
-      turns_remaining=1,
-    ),
-  )
-  assert_false(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=true,
-      shutting_down=false,
-      goal_standing=false,
-      turns_remaining=1,
-    ),
-  )
-  assert_false(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=true,
-      shutting_down=false,
-      goal_standing=true,
-      turns_remaining=0,
-    ),
-  )
+  assert_false(auto_continues(auto=false))
+  assert_false(auto_continues(finished=false))
+  assert_false(auto_continues(idle=false))
+  assert_false(auto_continues(shutting_down=true))
+  assert_false(auto_continues(goal_standing=false))
+  assert_false(auto_continues(turns_remaining=0))
 }
 
 ///|
@@ -688,7 +646,7 @@ async fn run_serve(
     }
     // The same coordinates, in the shape an mbtx snippet needs: a workflow it
     // runs delegates to children that must be named from the SAME ordinal
-    // counter `run_subrun` uses, or a snippet's child and an `explore` child
+    // counter `run_subrun` uses, or a snippet's child and a `review` child
     // collide on one transcript file.
     let mbtx_subrun = child_session.map(spec => {
       spec.injection(exe~, workspace_root~, model="\{model}", api_url?)
@@ -949,7 +907,7 @@ async fn run_serve(
       submission_id : String?,
     ) -> @async.Task[Unit] {
       // Each turn refills the shared subrun allowance; the registry (and the
-      // budget object the explore tool holds) lives across turns.
+      // budget object the review tool holds) lives across turns.
       subrun_budget.reset_turn()
       group.spawn() <| () => {
         let _ = @agent.run_turn_in_scope(

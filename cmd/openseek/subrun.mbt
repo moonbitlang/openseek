@@ -1,4 +1,30 @@
 ///|
+/// The child argv every subrun spawn shares — the parent half of the contract
+/// `run_subrun_command` below reads: the subcommand and its kind, the
+/// inherited model and step ceiling, plus `--api-url` only when one is
+/// configured (absent, the child falls back to its own default endpoint).
+fn subrun_args(
+  kind : String,
+  model~ : @deepseek.Model,
+  max_steps~ : Int,
+  api_url~ : String?,
+) -> Array[String] {
+  let args = [
+    "subrun",
+    kind,
+    "--model",
+    "\{model}",
+    "--max-steps",
+    "\{max_steps}",
+  ]
+  if api_url is Some(url) {
+    args.push("--api-url")
+    args.push(url)
+  }
+  args
+}
+
+///|
 /// `openseek subrun <kind>` — the INTERNAL child mode the engine spawns for
 /// one sub-run. Contract (see `agent_subrun`, and the normative text in the
 /// `moonbitlang/workflow` library's docs/child-contract.md — §7 records what
@@ -25,7 +51,9 @@
 /// `pattern-repair` reads one JSON object from stdin:
 /// `{ "pattern": "...", "instruction": "..." }`.
 async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
-  let report : Ref[Json?] = { val: None, }
+  // Written by the task-group body inside `with_jsonl_stdout` below, read
+  // after its teardown flushed the events; a captured `mut` replaces a Ref.
+  let mut report : Json? = None
   with_jsonl_stdout(() => {
     let workspace_root = prepare_workspace_root(matches, log_created=false)
     let (model, thinking, api_url) = agent_settings(matches)
@@ -38,36 +66,36 @@ async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
       // EOF before input: the parent gave up before we started.
       return
     }
-    guard (Some(@json.parse(line.trim(chars="\r\n").to_owned())) catch {
-        _ => None
-      })
-      is Some(parsed) else {
-      @emit.emit(CommandError(error="subrun input is not JSON"))
-      return
+    let parsed = @json.parse(line.trim(chars="\r\n")) catch {
+      _ => {
+        @emit.emit(CommandError(error="subrun input is not JSON"))
+        return
+      }
     }
-    // The workflow contract's v1 request envelope carries the input
-    // under `input`; a bare input line (the engine's own older callers,
-    // hand-driven children) still works. Unknown future majors fail
-    // loudly rather than half-parse.
-    let input = match parsed {
-      { "workflow_contract": Number(1, ..), "input": inner, .. } => inner
+    // The workflow contract's v1 request envelope is
+    // `{ "workflow_contract": 1, "input": ..., "max_steps"?: ... }`:
+    // `input` is what the kind runs on, and the envelope's step ceiling —
+    // where a hosted snippet's `wf.agent(max_steps=N)` arrives, not on argv,
+    // because the library's argv is a template that cannot express an
+    // optional flag — rides along. A bare input line (the engine's own older
+    // callers, hand-driven children) still works, and unknown future majors
+    // fail loudly rather than half-parse. The explicit `--max-steps` flag
+    // still wins when both are present: it is the operator's word.
+    let (input, ceiling) : (Json, Int?) = match parsed {
+      {
+        "workflow_contract": 1,
+        "input": inner,
+        "max_steps": Number(steps, ..),
+        ..
+      } => (inner, Some(steps.to_int()))
+      { "workflow_contract": 1, "input": inner, .. } => (inner, None)
       { "workflow_contract": Number(version, ..), .. } => {
         @emit.emit(
           CommandError(error="unsupported workflow_contract version \{version}"),
         )
         return
       }
-      other => other
-    }
-    // The envelope also carries the caller's step ceiling. That is where the
-    // workflow contract puts it — a hosted snippet's `wf.agent(max_steps=N)`
-    // arrives HERE, not on argv, because the library's argv is a template
-    // that cannot express an optional flag. The explicit `--max-steps` flag
-    // still wins when both are present: it is the operator's word.
-    let ceiling : Int? = match parsed {
-      { "workflow_contract": Number(1, ..), "max_steps": Number(steps, ..), .. } =>
-        Some(steps.to_int())
-      _ => None
+      other => (other, None)
     }
     @async.with_task_group() <| group => {
       // Failures are caught INSIDE the task: a spawned task's failure
@@ -97,7 +125,7 @@ async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
         }
         work.cancel()
       }
-      report.val = work.wait() catch {
+      report = work.wait() catch {
         // Parent-initiated cancel (stdin EOF): exit without a report; the
         // parent is already classifying the run from what it observed.
         error if @async.is_being_cancelled() ||
@@ -110,7 +138,7 @@ async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
   // report through the SAME channel (@stdio.stdout, like the review CLI)
   // keeps one tracked writer on fd 1 — mixing println's C-stdio offset in
   // corrupts output when stdout is a regular file (review finding).
-  if report.val is Some(value) {
+  if report is Some(value) {
     @stdio.stdout.write(@agent_subrun.report_line(value) + "\n")
   }
 }
@@ -334,7 +362,7 @@ async fn dispatch_kind(
       }
       // No scratch lab: the worker's whole worktree is writable, and its
       // geometry (worktree, denied roots, allowed paths) arrives in the
-      // input line from the subtask controller — the child enforces with
+      // input line from the worker controller (`agent_workflow`) — the child enforces with
       // what it was handed rather than deriving anything itself.
       match
         @agent_worker.run_child(
@@ -423,7 +451,7 @@ async fn self_executable() -> String {
     _ => "openseek"
   }
   // Under `moon run` on the tcc debug path argv0 is the generated .c
-  // SOURCE, not an executable: spawning it would fail every explore call.
+  // SOURCE, not an executable: spawning it would fail every subrun launch.
   // Fall back to PATH resolution — the same case the terminal UI handles for
   // its engine spawn.
   if argv0.has_suffix(".c") {

@@ -6,7 +6,7 @@
 fn submit_result_tool(
   captured : Ref[WorkerReport?],
 ) -> @agent_tool.AgentToolDefinition {
-  @agent_subrun.capture_tool(
+  @agent_kind.capture_tool(
     name="submit_result",
     description=(
       #|Submit the final worker report and end the run. Call this exactly once, when your
@@ -24,7 +24,7 @@ fn submit_result_tool(
 
 ///|
 fn parse_submission(args : Json) -> Result[WorkerReport, Array[String]] {
-  @agent_subrun.validated(WorkerReport::parse(args), WorkerReport::validate)
+  @agent_kind.validated(WorkerReport::parse(args), WorkerReport::validate)
 }
 
 ///|

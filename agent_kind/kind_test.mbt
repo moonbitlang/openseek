@@ -1,8 +1,8 @@
 ///|
-/// Mock-endpoint harness for the child-side executor: `execute_kind` runs
-/// the kind's turn in THIS process, exactly as the `openseek subrun` child
-/// mode does — so the full internal lifecycle (capture, reject-retry,
-/// ceiling salvage) is unit-testable without spawning anything.
+/// Mock-endpoint harness for `execute_kind`: the kind's turn runs in THIS
+/// process, exactly as the `openseek subrun` child mode does — so the full
+/// internal lifecycle (capture, reject-retry, ceiling salvage) is
+/// unit-testable without spawning anything.
 priv enum MockReply {
   Sse(String)
   Body(Json)
@@ -115,13 +115,13 @@ async fn run_answer_kind(
   session_id : String,
   max_steps? : Int = 8,
 ) -> String? {
-  @agent_subrun.execute_kind(
+  @agent_kind.execute_kind(
     session_id~,
     system_prompt="You are a test subagent.",
     task="Answer via the submit tool.",
     tools=captured => {
       @agent_tool.Tools([
-        @agent_subrun.capture_tool(
+        @agent_kind.capture_tool(
           name="submit",
           description="Submit the final answer.",
           schema=JsonSchema({ "type": "object" }),
@@ -260,13 +260,13 @@ async test "a store-backed append_item persists the child transcript" {
     guard child_test_server(group, handle) is Some(url) else { return }
     let store = @store.SessionStore(@fs.tmpdir(prefix="openseek-subrun-child-"))
     defer @fs.rmdir(store.root(), recursive=true)
-    let value = @agent_subrun.execute_kind(
+    let value = @agent_kind.execute_kind(
       session_id="parent-sr-1",
       system_prompt="You are a test subagent.",
       task="Answer via the submit tool.",
       tools=captured => {
         @agent_tool.Tools([
-          @agent_subrun.capture_tool(
+          @agent_kind.capture_tool(
             name="submit",
             description="Submit the final answer.",
             schema=JsonSchema({ "type": "object" }),

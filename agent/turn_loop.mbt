@@ -543,9 +543,7 @@ async fn AgentLoop::handle_tool_calls(
       ContinueToolBatch(next) => {
         // Account the result actually recorded for this call (the loop
         // clamp bounds it at max_tool_result_chars).
-        if next.events().peek() is Some(event) && event.item() is Tool(result) {
-          spent_result_chars += result.content().length().to_int64()
-        }
+        spent_result_chars += recorded_result_chars(next)
         continue next
       }
       ContinueAgentLoop(next) => return StepContinue(next)
@@ -906,15 +904,8 @@ async fn AgentLoop::salvage_control_calls_at_ceiling(
             // like an executed prefix's, or a LATER sealing control would
             // size its compact-on-finish decision against stale usage
             // while the reserved checkpoint headroom is already spent.
-            ContinueToolBatch(next) => {
-              let growth = if next.events().peek() is Some(event) &&
-                event.item() is Tool(result) {
-                result.content().length().to_int64()
-              } else {
-                0
-              }
-              continue index + 1, next, spent + growth
-            }
+            ContinueToolBatch(next) =>
+              continue index + 1, next, spent + recorded_result_chars(next)
             // The control already closed the batch remainder and prepared a
             // continuation (e.g. a control finish converted into a goal
             // check): re-scanning the same calls would duplicate results
@@ -963,6 +954,17 @@ let max_tool_result_chars : Int = 60_000
 
 ///|
 let tool_result_truncation_marker : String = "\n[truncated: result exceeded the 60000-char cap]"
+
+///|
+/// Chars recorded by the tool result the last append added, or 0 when the
+/// last event is not one — the batch budget's accounting unit.
+fn recorded_result_chars(session : @agent_session.Session) -> Int64 {
+  if session.events().peek() is Some(event) && event.item() is Tool(result) {
+    result.content().length().to_int64()
+  } else {
+    0
+  }
+}
 
 ///|
 /// Clamp an oversized tool result to `max_tool_result_chars`, never

@@ -2181,6 +2181,22 @@ async test "run_in_background without timeout_ms is unaffected by defaults" {
 }
 
 ///|
+/// The worker-mode shell tool for a fixture tree: `<root>/w` is the worker tree
+/// and `<root>/admin` its private git admin dir, with `<root>` itself denied.
+fn worker_run(root : String) -> (async (Json) -> @agent_tool.ToolAction) raise {
+  let scope : @shell.WorkerSandbox = {
+    deny_roots: [root],
+    worker_root: "\{root}/w",
+    worker_admin_dir: "\{root}/admin",
+  }
+  match
+    @shell.definition(workspace_root="\{root}/w", worker_sandbox=scope).execute {
+    Async(execute) => execute
+    Sync(_) => fail("shell tool should be async")
+  }
+}
+
+///|
 /// The worker-mode static floor: obvious escapes are refused before launch
 /// with a readable explanation, independent of kernel availability; in-tree
 /// commands run normally.
@@ -2189,16 +2205,7 @@ async test "worker mode statically blocks obvious escapes" {
     let root = @fs.realpath(dir)
     @fs.mkdir("\{root}/w")
     @fs.mkdir("\{root}/admin")
-    let scope : @shell.WorkerSandbox = {
-      deny_roots: [root],
-      worker_root: "\{root}/w",
-      worker_admin_dir: "\{root}/admin",
-    }
-    let run = match
-      @shell.definition(workspace_root="\{root}/w", worker_sandbox=scope).execute {
-      Async(execute) => execute
-      Sync(_) => fail("shell tool should be async")
-    }
+    let run = worker_run(root)
     // A cwd outside the worker tree is refused up front.
     guard run({ "cmd": "pwd", "cwd": "/tmp" }) is Respond(cwd_escape) else {
       fail("expected Respond")
@@ -2235,16 +2242,7 @@ async test "worker mode tracks cd forms, pipelines, and symlinked cwds" {
     @fs.mkdir("\{root}/w")
     @fs.mkdir("\{root}/w/sub")
     @fs.mkdir("\{root}/admin")
-    let scope : @shell.WorkerSandbox = {
-      deny_roots: [root],
-      worker_root: "\{root}/w",
-      worker_admin_dir: "\{root}/admin",
-    }
-    let run = match
-      @shell.definition(workspace_root="\{root}/w", worker_sandbox=scope).execute {
-      Async(execute) => execute
-      Sync(_) => fail("shell tool should be async")
-    }
+    let run = worker_run(root)
     async fn blocked(cmd : Json) -> Unit {
       guard run(cmd) is Respond(output) else { fail("expected Respond") }
       assert_true(output.is_error)
@@ -2290,16 +2288,7 @@ async test "worker mode blocks the failed-cd-into-file escape chain" {
     @fs.mkdir("\{root}/w/sub")
     @fs.write_file("\{root}/w/file", "not a directory", create_mode=CreateNew)
     @fs.mkdir("\{root}/admin")
-    let scope : @shell.WorkerSandbox = {
-      deny_roots: [root],
-      worker_root: "\{root}/w",
-      worker_admin_dir: "\{root}/admin",
-    }
-    let run = match
-      @shell.definition(workspace_root="\{root}/w", worker_sandbox=scope).execute {
-      Async(execute) => execute
-      Sync(_) => fail("shell tool should be async")
-    }
+    let run = worker_run(root)
     guard run({
         "cmd": "cd file; cd sub && cd .. && cd .. && touch escaped.txt",
       })
@@ -2325,16 +2314,7 @@ async test "worker mode survives logical-cd and failure-rejoin chains" {
     @fs.mkdir("\{root}/w/sub")
     @fs.mkdir("\{root}/w/sub/deep")
     @fs.mkdir("\{root}/admin")
-    let scope : @shell.WorkerSandbox = {
-      deny_roots: [root],
-      worker_root: "\{root}/w",
-      worker_admin_dir: "\{root}/admin",
-    }
-    let run = match
-      @shell.definition(workspace_root="\{root}/w", worker_sandbox=scope).execute {
-      Async(execute) => execute
-      Sync(_) => fail("shell tool should be async")
-    }
+    let run = worker_run(root)
     async fn blocked(cmd : Json) -> Unit {
       guard run(cmd) is Respond(output) else { fail("expected Respond") }
       assert_true(output.is_error)

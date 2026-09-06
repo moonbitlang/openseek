@@ -437,12 +437,7 @@ fn State::apply_symbol_result(
     open.phase is Loading else {
     return self
   }
-  let openable : Array[@symbols.Symbol] = []
-  for item in items {
-    if !item.path.is_empty() {
-      openable.push(item)
-    }
-  }
+  let openable = items.filter(item => !item.path.is_empty())
   {
     ..self,
     open: Some({

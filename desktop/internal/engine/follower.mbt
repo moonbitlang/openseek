@@ -677,6 +677,29 @@ fn follower_test_config(
 }
 
 ///|
+/// Install one test follower for `session` under `root`. The identity
+/// `ensure_follower` answers with is only present when this call installed a
+/// new follower; every test below reads the follower map instead.
+#cfg(not(platform="windows"))
+async fn[G] install_test_follower(
+  engine : String,
+  session : String,
+  root : @pathx.Absolute,
+  sink~ : EventSink,
+  group~ : @async.TaskGroup[G],
+  manager~ : EngineManager,
+) -> Unit {
+  ignore(
+    ensure_follower(
+      sink~,
+      group~,
+      manager~,
+      config=follower_test_config(engine, session, root),
+    ),
+  )
+}
+
+///|
 #cfg(not(platform="windows"))
 async test "a follower barrier broadcasts the durable tail before returning" {
   let dir = @fs.tmpdir(prefix="openseek-follower-barrier-")
@@ -689,14 +712,7 @@ async test "a follower barrier broadcasts the durable tail before returning" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(fn(event) { emitted.push(event) })
   @async.with_task_group(group => {
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(engine, session, root),
-      ),
-    )
+    install_test_follower(engine, session, root, sink~, group~, manager~)
     guard manager.followers.get(session) is Some(follower) else {
       fail("expected follower")
     }
@@ -727,14 +743,7 @@ async test "an unreadable existing record refuses the spawn baseline" {
   @async.with_task_group(group => {
     // No record file: absence is proof, so the follower installs at the
     // proven-empty watermark and the first turn can run.
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(engine, "s-baseline", root),
-      ),
-    )
+    install_test_follower(engine, "s-baseline", root, sink~, group~, manager~)
     guard manager.followers.get("s-baseline") is Some(follower) else {
       fail("expected a follower for the record-less first turn")
     }
@@ -745,14 +754,7 @@ async test "an unreadable existing record refuses the spawn baseline" {
     // and leaves no follower installed.
     write_damaged_record(root, "s-baseline")
     let detail = try {
-      ignore(
-        ensure_follower(
-          sink~,
-          group~,
-          manager~,
-          config=follower_test_config(engine, "s-baseline", root),
-        ),
-      )
+      install_test_follower(engine, "s-baseline", root, sink~, group~, manager~)
       "no error"
     } catch {
       EngineError(detail) => detail
@@ -779,14 +781,7 @@ async test "failed final scan keeps the follower active and propagates" {
   let manager = new_engine_manager(engine)
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(engine, "s-fail", root),
-      ),
-    )
+    install_test_follower(engine, "s-fail", root, sink~, group~, manager~)
     guard manager.followers.get("s-fail") is Some(follower) else {
       fail("expected follower")
     }
@@ -825,14 +820,7 @@ async test "an absent record retires as an empty drain" {
   let manager = new_engine_manager(engine)
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(engine, session, root),
-      ),
-    )
+    install_test_follower(engine, session, root, sink~, group~, manager~)
     guard manager.followers.get(session) is Some(follower) else {
       fail("expected follower")
     }
@@ -856,14 +844,7 @@ async test "the drain that finally succeeds broadcasts what it could not read" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(fn(event) { emitted.push(event) })
   @async.with_task_group(group => {
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(engine, session, root),
-      ),
-    )
+    install_test_follower(engine, session, root, sink~, group~, manager~)
     guard manager.followers.get(session) is Some(_) else {
       fail("expected follower")
     }
@@ -878,12 +859,9 @@ async test "the drain that finally succeeds broadcasts what it could not read" {
     // that succeeds is also the one that broadcasts it.
     write_session_record(root, session, [session_user_event(1, "done")])
     stop_follower(manager, session, writer_exited=true)
-    let relevant : Array[EngineEvent] = []
-    for event in emitted {
-      if event is SessionCommit(payload) && payload.session == session {
-        relevant.push(event)
-      }
-    }
+    let relevant = emitted.filter(event => {
+      event is SessionCommit(payload) && payload.session == session
+    })
     guard relevant is [SessionCommit({ sequence: 1, session_root, .. })] else {
       fail("expected exactly one rooted commit")
     }
@@ -908,13 +886,13 @@ async test "a committed terminal does not settle a run the stream never ended" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(fn(event) { emitted.push(event) })
   @async.with_task_group(group => {
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(dir + "/engine.sh", session, root),
-      ),
+    install_test_follower(
+      dir + "/engine.sh",
+      session,
+      root,
+      sink~,
+      group~,
+      manager~,
     )
     guard manager.followers.get(session) is Some(follower) else {
       fail("expected follower")
@@ -982,14 +960,7 @@ async test "abrupt EOF leaves a failed drain for a later caller to retry" {
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(fn(event) { emitted.push(event) })
   @async.with_task_group(group => {
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(engine_path, session, root),
-      ),
-    )
+    install_test_follower(engine_path, session, root, sink~, group~, manager~)
     guard manager.followers.get(session) is Some(follower) else {
       fail("expected follower")
     }
@@ -1071,14 +1042,7 @@ async test "workspace detach drains an orphaned pending follower before commit" 
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(fn(event) { emitted.push(event) })
   @async.with_task_group(group => {
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(engine_path, session, root),
-      ),
-    )
+    install_test_follower(engine_path, session, root, sink~, group~, manager~)
     guard manager.followers.get(session) is Some(follower) else {
       fail("expected follower")
     }
@@ -1122,14 +1086,7 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
   let manager = new_engine_manager(engine_path)
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(engine_path, session, root),
-      ),
-    )
+    install_test_follower(engine_path, session, root, sink~, group~, manager~)
     guard manager.followers.get(session) is Some(follower) else {
       fail("expected follower")
     }
@@ -1196,14 +1153,7 @@ async test "record stat failure is not mistaken for an empty final drain" {
   let manager = new_engine_manager(engine)
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(engine, "s-stat", root),
-      ),
-    )
+    install_test_follower(engine, "s-stat", root, sink~, group~, manager~)
     guard manager.followers.get("s-stat") is Some(follower) else {
       fail("expected follower")
     }
@@ -1252,25 +1202,11 @@ async test "root change retires the old follower before installing another" {
   write_session_record(root_a, "s-root", [])
   write_session_record(root_b, "s-root", [])
   @async.with_task_group(group => {
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(engine, "s-root", root_a),
-      ),
-    )
+    install_test_follower(engine, "s-root", root_a, sink~, group~, manager~)
     guard manager.followers.get("s-root") is Some(first) else {
       fail("expected first follower")
     }
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(engine, "s-root", root_b),
-      ),
-    )
+    install_test_follower(engine, "s-root", root_b, sink~, group~, manager~)
     guard manager.followers.get("s-root") is Some(second) else {
       fail("expected replacement follower")
     }
@@ -1291,14 +1227,7 @@ async test "one Load control message answers a bounded request batch" {
   let manager = new_engine_manager(engine)
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
-    ignore(
-      ensure_follower(
-        sink~,
-        group~,
-        manager~,
-        config=follower_test_config(engine, "s-load", root),
-      ),
-    )
+    install_test_follower(engine, "s-load", root, sink~, group~, manager~)
     guard manager.followers.get("s-load") is Some(follower) else {
       fail("expected follower")
     }
@@ -1421,14 +1350,7 @@ async test "cancelling follower baseline removes its startup identity" {
   let sink = EventSink(fn(_) { () })
   @async.with_task_group(group => {
     let startup = group.spawn(() => {
-      ignore(
-        ensure_follower(
-          sink~,
-          group~,
-          manager~,
-          config=follower_test_config(engine, "s-cancel", root),
-        ),
-      )
+      install_test_follower(engine, "s-cancel", root, sink~, group~, manager~)
     })
     while manager.followers.get("s-cancel") is None {
       @async.pause()

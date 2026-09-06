@@ -97,15 +97,9 @@ fn TerminalResizer::track(self : TerminalResizer, event : @dom.Event) -> Unit {
   let rect = content.get_bounding_client_rect()
   let floor = MinTerminalHeight.to_double()
   let max = rect.get_height() - MinConversationHeight.to_double()
-  let ceiling = if max > floor { max } else { floor }
+  let ceiling = max.max(floor)
   let raw = rect.get_bottom() - mouse.get_client_y().to_double()
-  let height = if raw < floor {
-    floor
-  } else if raw > ceiling {
-    ceiling
-  } else {
-    raw
-  }
+  let height = raw.clamp(min=floor, max=ceiling)
   guard @dom.document().query_selector("html").to_option() is Some(root) else {
     return
   }

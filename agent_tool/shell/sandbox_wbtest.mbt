@@ -347,218 +347,65 @@ async test "sandbox preblocks common source-writing commands" {
     let main_path = "\{real_root}/main.mbt"
     let src_pkg_path = "\{real_root}/src/pkg"
     let backup_path = "\{real_root}/backup.mbt"
+
+    // The four detector shapes this fixture exercises, all against the
+    // fixture root with the cwd at that root. They return the Bool so each
+    // case keeps its own `assert_true` line.
+    async fn blocks(cmd : String, expected : String) -> Bool {
+      is_some_path(tree_target(cmd, real_root, Some(real_root)), expected)
+    }
+
+    async fn allows(cmd : String) -> Bool {
+      tree_target(cmd, real_root, Some(real_root)) is None
+    }
+
+    async fn dyn_blocks(cmd : String, expected : String) -> Bool {
+      is_some_path(dyn_tree_target(cmd, real_root, Some(real_root)), expected)
+    }
+
+    async fn dyn_allows(cmd : String) -> Bool {
+      dyn_tree_target(cmd, real_root, Some(real_root)) is None
+    }
+
     assert_true(
-      is_some_path(
-        tree_target(
-          "cp replacement.txt main.mbt 2>/dev/null || true",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
+      blocks("cp replacement.txt main.mbt 2>/dev/null || true", main_path),
     )
     assert_true(
-      is_some_path(
-        tree_target(
-          "cp replacement.txt out.log 2>/dev/null || true",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
+      blocks("cp replacement.txt out.log 2>/dev/null || true", main_path),
     )
+    assert_true(blocks("touch main.mbt", main_path))
+    assert_true(blocks("touch out.log 2>/dev/null || true", main_path))
+    assert_true(allows("touch -h out.log"))
+    assert_true(allows("touch --no-dereference out.log"))
+    assert_true(blocks("touch --no-dereference main.mbt", main_path))
+    assert_true(blocks("printf x | tee main.mbt >/dev/null", main_path))
+    assert_true(blocks("printf x | tee out.log >/dev/null", main_path))
+    assert_true(blocks("install replacement.txt out.log", main_path))
+    assert_true(blocks("install replacement.txt main.mbt", main_path))
+    assert_true(blocks("install -Dm644 replacement.txt main.mbt", main_path))
+    assert_true(blocks("install -Dm 644 replacement.txt main.mbt", main_path))
+    assert_true(blocks("Set-Content main.mbt value", main_path))
+    assert_true(blocks("Add-Content -Path out.log -Value value", main_path))
+    assert_true(blocks("Out-File -FilePath main.mbt", main_path))
+    assert_true(blocks("Tee-Object -FilePath out.log", main_path))
+    assert_true(blocks("Copy-Item replacement.txt out.log", main_path))
     assert_true(
-      is_some_path(
-        tree_target("touch main.mbt", real_root, Some(real_root)),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "touch out.log 2>/dev/null || true",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
-    assert_true(
-      tree_target("touch -h out.log", real_root, Some(real_root)) is None,
-    )
-    assert_true(
-      tree_target("touch --no-dereference out.log", real_root, Some(real_root))
-      is None,
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "touch --no-dereference main.mbt",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "printf x | tee main.mbt >/dev/null",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "printf x | tee out.log >/dev/null",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "install replacement.txt out.log",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "install replacement.txt main.mbt",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "install -Dm644 replacement.txt main.mbt",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "install -Dm 644 replacement.txt main.mbt",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target("Set-Content main.mbt value", real_root, Some(real_root)),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "Add-Content -Path out.log -Value value",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target("Out-File -FilePath main.mbt", real_root, Some(real_root)),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target("Tee-Object -FilePath out.log", real_root, Some(real_root)),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "Copy-Item replacement.txt out.log",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "Copy-Item _build/main.mbt src/main.mbt -ErrorAction SilentlyContinue",
-          real_root,
-          Some(real_root),
-        ),
+      blocks(
+        "Copy-Item _build/main.mbt src/main.mbt -ErrorAction SilentlyContinue",
         "\{real_root}/src/main.mbt",
       ),
     )
-    assert_true(
-      is_some_path(
-        tree_target("Move-Item main.mbt backup", real_root, Some(real_root)),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target("Remove-Item main.mbt", real_root, Some(real_root)),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "Rename-Item main.mbt backup.mbt",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "New-Item -Path main.mbt -ItemType File",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
+    assert_true(blocks("Move-Item main.mbt backup", main_path))
+    assert_true(blocks("Remove-Item main.mbt", main_path))
+    assert_true(blocks("Rename-Item main.mbt backup.mbt", main_path))
+    assert_true(blocks("New-Item -Path main.mbt -ItemType File", main_path))
     // `-Name` is the leaf created under `-Path`, so the target is `./main.mbt`,
     // not the `.` directory.
     assert_true(
-      is_some_path(
-        tree_target(
-          "New-Item -Path . -Name main.mbt -ItemType File",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
+      blocks("New-Item -Path . -Name main.mbt -ItemType File", main_path),
     )
     let powershell_remove_glob = "Remove-Item *.mbt"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(powershell_remove_glob, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(powershell_remove_glob, real_root))
     // Conservatively pre-blocked git: store feeders (external patch + plumbing),
     // mv, non-dry-run clean, reconfigured writers (-c filter / -C / --work-tree /
     // custom env), and checkout/restore forms that can clobber untracked source.
@@ -580,12 +427,7 @@ async test "sandbox preblocks common source-writing commands" {
         "git submodule update --force", "git submodule deinit --force path", "git -c filter.f.smudge=cmd submodule update --init",
         "GIT_DIR=/tmp/x git submodule update --init",
       ] {
-      assert_true(
-        is_some_path(
-          tree_target(blocked_git, real_root, Some(real_root)),
-          real_root,
-        ),
-      )
+      assert_true(blocks(blocked_git, real_root))
     }
     // A store feeder is blocked unconditionally — not conditioned on the resolved
     // cwd — so it cannot slip through with a cwd outside the workspace (e.g. a
@@ -600,12 +442,7 @@ async test "sandbox preblocks common source-writing commands" {
     )
     // git apply is also caught in the TooComplex text path (e.g. globbed patches).
     let git_apply_glob = "git apply *.patch"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(git_apply_glob, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(git_apply_glob, real_root))
     // A custom-env worktree writer is caught in the TooComplex text path too,
     // even though the env assignment precedes the `git` word.
     let git_env_glob = "GIT_DIR=/tmp/x git checkout -- *.mbt"
@@ -629,352 +466,108 @@ async test "sandbox preblocks common source-writing commands" {
         // bare submodule is implicit status; foreach --help bypasses preblock.
          "git submodule", "git submodule --quiet", "git submodule foreach --help",
       ] {
-      assert_true(tree_target(allowed_git, real_root, Some(real_root)) is None)
+      assert_true(allows(allowed_git))
     }
     let find_sed_source = "find \{real_root} -name '*.mbt' -exec sed -i '' 's/42/43/' {} +"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(find_sed_source, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(find_sed_source, real_root))
     let find_env_sed_source = "find \{real_root} -name '*.mbt' -exec env FOO=bar sed -i '' 's/42/43/' {} + 2>/dev/null || true"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(find_env_sed_source, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(find_env_sed_source, real_root))
     let find_sed_source_case_insensitive = "find \{real_root} -iname '*.MBT' -exec sed -i '' 's/42/43/' {} +"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(
-          find_sed_source_case_insensitive,
-          real_root,
-          Some(real_root),
-        ),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(find_sed_source_case_insensitive, real_root))
     let find_sed_readme_glob = "find \{real_root} -name README.* -exec sed -i '' 's/42/43/' '{}' +"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(find_sed_readme_glob, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(find_sed_readme_glob, real_root))
     // `xargs sed -i` runs sed as the xargs utility, so an in-place edit reached
     // that way must be blocked even though sed is not in shell command position.
     // (These shapes parse as TooComplex via the unquoted glob; the simple
     // `find ... | xargs sed -i` form parses as Simple and is caught by the
     // source-write sandbox instead.)
     let xargs_sed_source = "echo *.mbt | xargs sed -i '' 's/42/43/g'"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(xargs_sed_source, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(xargs_sed_source, real_root))
     let xargs_replace_sed = "echo *.mbt | xargs -I{} sed -i '' 's/42/43/g' {}"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(xargs_replace_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(xargs_replace_sed, real_root))
     let xargs_n1_sed = "echo *.mbt | xargs -n 1 sed -i '' 's/42/43/g'"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(xargs_n1_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(xargs_n1_sed, real_root))
     // BSD/macOS `-J replstr` consumes its operand before the utility.
     let xargs_bsd_replace_sed = "echo *.mbt | xargs -J {} sed -i '' 's/42/43/g' {}"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(xargs_bsd_replace_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(xargs_bsd_replace_sed, real_root))
     // The same xargs-utility gap still applies to `git apply` (the one blocked
     // git op); recognized porcelain is trusted or not pre-blocked.
     let xargs_git_apply = "echo *.patch | xargs git apply"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(xargs_git_apply, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(xargs_git_apply, real_root))
     // Read-only xargs pipelines (sed is not the xargs utility, no in-place edit)
     // must not be blocked, so analysis loops keep working.
     let xargs_grep_readonly = "echo *.mbt | xargs grep -l 'sed -i'"
-    assert_true(
-      dyn_tree_target(xargs_grep_readonly, real_root, Some(real_root)) is None,
-    )
+    assert_true(dyn_allows(xargs_grep_readonly))
     let safe_find_then_sed = "find \{real_root} -name '*.txt' -print; sed -i '' 's/42/43/' *.mbt"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(safe_find_then_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(safe_find_then_sed, real_root))
     let env_wrapped_sed = "env FOO=bar sed -i '' 's/42/43/' *.mbt"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(env_wrapped_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(env_wrapped_sed, real_root))
     let env_assignment_sed = "FOO=bar sed -i '' 's/42/43/' *.mbt"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(env_assignment_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(env_assignment_sed, real_root))
     let env_unset_wrapped_sed = "env -u FOO sed -i '' 's/42/43/' *.mbt"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(env_unset_wrapped_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(env_unset_wrapped_sed, real_root))
     let env_long_unset_wrapped_sed = "env --unset FOO sed -i '' 's/42/43/' *.mbt"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(env_long_unset_wrapped_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(env_long_unset_wrapped_sed, real_root))
     let command_wrapped_sed = "command sed -i '' 's/42/43/' *.mbt"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(command_wrapped_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(command_wrapped_sed, real_root))
     let find_sed_text = "find \{real_root} -name '*.txt' -exec sed -i '' 's/42/43/' {} +"
-    assert_true(tree_target(find_sed_text, real_root, Some(real_root)) is None)
-    assert_true(
-      dyn_tree_target(find_sed_text, real_root, Some(real_root)) is None,
-    )
+    assert_true(allows(find_sed_text))
+    assert_true(dyn_allows(find_sed_text))
     let find_sed_text_quoted = "find \{real_root} -name '*.txt' -exec sed -i '' 's/42/43/' '{}' +"
-    assert_true(
-      tree_target(find_sed_text_quoted, real_root, Some(real_root)) is None,
-    )
-    assert_true(
-      dyn_tree_target(find_sed_text_quoted, real_root, Some(real_root)) is None,
-    )
+    assert_true(allows(find_sed_text_quoted))
+    assert_true(dyn_allows(find_sed_text_quoted))
     let find_sed_filter_after_exec = "find \{real_root} -exec sed -i '' 's/42/43/' '{}' + -name '*.txt'"
-    assert_true(
-      is_some_path(
-        tree_target(find_sed_filter_after_exec, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(blocks(find_sed_filter_after_exec, real_root))
     let broad_find_sed_text = "find \{real_root} -name '*' -exec sed -i '' 's/42/43/' '{}' +"
-    assert_true(
-      is_some_path(
-        tree_target(broad_find_sed_text, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(blocks(broad_find_sed_text, real_root))
     let find_sed_literal_source = "find \{real_root} -name '*.txt' -exec sed -i '' 's/42/43/' main.mbt ';'"
-    assert_true(
-      is_some_path(
-        tree_target(find_sed_literal_source, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(blocks(find_sed_literal_source, real_root))
     let find_sed_comma_quoted = "find \{real_root} -name '*.txt' -exec sed -i '' 's/42/43/' '{}' + , -exec sed -i '' 's/42/43/' '{}' +"
-    assert_true(
-      is_some_path(
-        tree_target(find_sed_comma_quoted, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(blocks(find_sed_comma_quoted, real_root))
     let readonly_sed_pipeline = "sed -n '1,5p' *.mbt | grep -i answer"
-    assert_true(
-      dyn_tree_target(readonly_sed_pipeline, real_root, Some(real_root)) is None,
-    )
+    assert_true(dyn_allows(readonly_sed_pipeline))
     let readonly_sed_file_named_i = "while true; do sed -f -i *.mbt\ndone"
-    assert_true(
-      dyn_tree_target(readonly_sed_file_named_i, real_root, Some(real_root))
-      is None,
-    )
+    assert_true(dyn_allows(readonly_sed_file_named_i))
     let multiline_sed = "while true; do printf ok\nsed -i '' 's/42/43/' *.mbt\ndone"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(multiline_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(multiline_sed, real_root))
     let background_sed = "sleep 1 & sed -i '' 's/42/43/' *.mbt"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(background_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(background_sed, real_root))
     let nested_shell_sed = "sh -c \"sed -i '' 's/42/43/' *.mbt\""
-    assert_true(
-      is_some_path(
-        tree_target(nested_shell_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(blocks(nested_shell_sed, real_root))
     let quoted_sed_text = "grep 'foo|sed -i' *.mbt"
-    assert_true(
-      dyn_tree_target(quoted_sed_text, real_root, Some(real_root)) is None,
-    )
+    assert_true(dyn_allows(quoted_sed_text))
     let generated_script_with_sed = "cat > script.sh <<EOF\nsed -i 's/42/43/' f\nEOF"
-    assert_true(
-      dyn_tree_target(generated_script_with_sed, real_root, Some(real_root))
-      is None,
-    )
+    assert_true(dyn_allows(generated_script_with_sed))
     let backslash_quoted_heredoc_then_copy = "cat <<\\EOF\nignored\nEOF\ncp main.mbt backup.mbt"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(
-          backslash_quoted_heredoc_then_copy,
-          real_root,
-          Some(real_root),
-        ),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(backslash_quoted_heredoc_then_copy, real_root))
     let generated_script_then_executed = "cat > script.sh <<EOF\ncp main.mbt backup.mbt\nEOF\nsh script.sh"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(
-          generated_script_then_executed,
-          real_root,
-          Some(real_root),
-        ),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(generated_script_then_executed, real_root))
     let tee_generated_script_then_executed = "tee script.sh <<EOF >/dev/null\ncp main.mbt backup.mbt\nEOF\nsh script.sh"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(
-          tee_generated_script_then_executed,
-          real_root,
-          Some(real_root),
-        ),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(tee_generated_script_then_executed, real_root))
     let pipe_tee_generated_script_then_executed = "cat <<EOF | tee script.sh >/dev/null\ncp main.mbt backup.mbt\nEOF\nsh script.sh"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(
-          pipe_tee_generated_script_then_executed,
-          real_root,
-          Some(real_root),
-        ),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(pipe_tee_generated_script_then_executed, real_root))
     let generated_script_then_bash_with_option = "cat > script.sh <<EOF\ncp main.mbt backup.mbt\nEOF\nbash -o pipefail script.sh"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(
-          generated_script_then_bash_with_option,
-          real_root,
-          Some(real_root),
-        ),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(generated_script_then_bash_with_option, real_root))
     let generated_script_then_dot_sourced = "cat > script.sh <<EOF\ncp main.mbt backup.mbt\nEOF\n. script.sh"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(
-          generated_script_then_dot_sourced,
-          real_root,
-          Some(real_root),
-        ),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(generated_script_then_dot_sourced, real_root))
     let generated_script_then_source_sourced = "cat > script.sh <<EOF\ncp main.mbt backup.mbt\nEOF\nsource script.sh"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(
-          generated_script_then_source_sourced,
-          real_root,
-          Some(real_root),
-        ),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(generated_script_then_source_sourced, real_root))
     let generated_script_then_shell_c_sourced = "cat > script.sh <<EOF\nmkdir -p _build/gen\ncp main.mbt _build/gen/main.mbt\nmv _build/gen pkg\nEOF\nsh -c '. ./script.sh'"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(
-          generated_script_then_shell_c_sourced,
-          real_root,
-          Some(real_root),
-        ),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(generated_script_then_shell_c_sourced, real_root))
     let shell_heredoc_with_sed = "sh <<EOF\nsed -i '' 's/42/43/' *.mbt\nEOF"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(shell_heredoc_with_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(shell_heredoc_with_sed, real_root))
     let python_heredoc_generated_move = "python3 <<EOF\nimport shutil\nshutil.move('_build/pkg', 'pkg')\nEOF"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(
-          python_heredoc_generated_move,
-          real_root,
-          Some(real_root),
-        ),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(python_heredoc_generated_move, real_root))
     let heredoc_source_redirect = "cat 2>/dev/null > main.mbt <<'EOF' || true\npub fn answer() -> Int { 43 }\nEOF"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(heredoc_source_redirect, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(heredoc_source_redirect, real_root))
     let fd_duplicate_source_redirect = "printf x >& main.mbt *.txt 2>/dev/null || true"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(
-          fd_duplicate_source_redirect,
-          real_root,
-          Some(real_root),
-        ),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(fd_duplicate_source_redirect, real_root))
     let rm_glob_source = "rm *.mbt 2>/dev/null || true"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(rm_glob_source, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(rm_glob_source, real_root))
     let grep_mv_source = "grep mv *.mbt"
-    assert_true(
-      dyn_tree_target(grep_mv_source, real_root, Some(real_root)) is None,
-    )
+    assert_true(dyn_allows(grep_mv_source))
     let python_heredoc_source_write = "python3 - <<'PY'\nopen('main.mbt', 'w').write('pub fn answer() -> Int { 43 }\\n')\nPY"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(python_heredoc_source_write, real_root, Some(real_root)),
-        main_path,
-      ),
-    )
+    assert_true(dyn_blocks(python_heredoc_source_write, main_path))
     let outside_python_heredoc_source_write = "python3 - <<'PY'\nopen('/tmp/probe.mbt', 'w').write('x')\nPY"
     assert_true(
       dyn_tree_target(
@@ -985,14 +578,9 @@ async test "sandbox preblocks common source-writing commands" {
       is None,
     )
     let outside_python_c_source_write = "python3 -c 'open(\"/tmp/probe.mbt\", \"w\").write(\"x\")' *.txt"
-    assert_true(
-      dyn_tree_target(outside_python_c_source_write, real_root, Some(real_root))
-      is None,
-    )
+    assert_true(dyn_allows(outside_python_c_source_write))
     let cd_outside_glob_sed = "cd /tmp && sed -i '' 's/42/43/' *.mbt"
-    assert_true(
-      dyn_tree_target(cd_outside_glob_sed, real_root, Some(real_root)) is None,
-    )
+    assert_true(dyn_allows(cd_outside_glob_sed))
     let cd_workspace_glob_sed = "cd \{real_root} && sed -i '' 's/42/43/' *.mbt"
     assert_true(
       is_some_path(
@@ -1001,190 +589,62 @@ async test "sandbox preblocks common source-writing commands" {
       ),
     )
     let versioned_python_source_write = "python3.12 -c 'open(\"main.mbt\", \"w\").write(\"pub fn answer() -> Int { 43 }\\\\n\")'"
-    assert_true(
-      is_some_path(
-        tree_target(versioned_python_source_write, real_root, Some(real_root)),
-        main_path,
-      ),
-    )
+    assert_true(blocks(versioned_python_source_write, main_path))
     let python_exe_source_write = "Python.EXE -c 'open(\"main.mbt\", \"w+\").close()' 2>/dev/null || true"
-    assert_true(
-      is_some_path(
-        tree_target(python_exe_source_write, real_root, Some(real_root)),
-        main_path,
-      ),
-    )
+    assert_true(blocks(python_exe_source_write, main_path))
     let python_create_mode_source_write = "python -c 'open(\"main.mbt\", \"x\").close()' 2>/dev/null || true"
-    assert_true(
-      is_some_path(
-        tree_target(python_create_mode_source_write, real_root, Some(real_root)),
-        main_path,
-      ),
-    )
+    assert_true(blocks(python_create_mode_source_write, main_path))
     let masked_versioned_python_source_write = "python3.12 -c 'open(\"main.mbt\", \"w\").write(\"pub fn answer() -> Int { 43 }\\\\n\")' 2>/dev/null || true"
-    assert_true(
-      is_some_path(
-        tree_target(
-          masked_versioned_python_source_write,
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
+    assert_true(blocks(masked_versioned_python_source_write, main_path))
     let find_sed_branch = "find \{real_root} -name '*.txt' -o -exec sed -i '' 's/42/43/' {} +"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(find_sed_branch, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(find_sed_branch, real_root))
     let find_sed_branch_quoted = "find \{real_root} -name '*.txt' -o -exec sed -i '' 's/42/43/' '{}' +"
-    assert_true(
-      is_some_path(
-        tree_target(find_sed_branch_quoted, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(blocks(find_sed_branch_quoted, real_root))
     let find_sed_comma = "find \{real_root} -name '*.txt' -exec sed -i '' 's/42/43/' {} + , -exec sed -i '' 's/42/43/' {} +"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(find_sed_comma, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(find_sed_comma, real_root))
     let grouped_sed = "{ sed -i '' 's/42/43/' *.mbt; }"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(grouped_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(grouped_sed, real_root))
     let until_sed = "until sed -i '' 's/42/43/' *.mbt; do true; done"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(until_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(until_sed, real_root))
     let elif_sed = "if false; then true; elif sed -i '' 's/42/43/' *.mbt; then true; fi"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(elif_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(elif_sed, real_root))
     let if_env_sed = "if env FOO=bar sed -i '' 's/42/43/' *.mbt; then true; fi"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(if_env_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(if_env_sed, real_root))
     let if_command_sed = "if command sed -i '' 's/42/43/' *.mbt; then true; fi"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(if_command_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(if_command_sed, real_root))
     let loop_sed = "while IFS= read -r f; do sed -i '' 's/42/43/' \"$f\"; done < /tmp/files.txt"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(loop_sed, real_root, Some(real_root)),
-        real_root,
-      ),
-    )
+    assert_true(dyn_blocks(loop_sed, real_root))
     let cd_glob_sed = "cd pkg && sed -i '' 's/42/43/' *.mbt"
-    assert_true(
-      is_some_path(
-        dyn_tree_target(cd_glob_sed, real_root, Some(real_root)),
-        "\{real_root}/pkg",
-      ),
-    )
+    assert_true(dyn_blocks(cd_glob_sed, "\{real_root}/pkg"))
     let mkdir_or_cp_source = "mkdir gen || true; cp /tmp/generated.mbt gen 2>/dev/null || true"
+    assert_true(blocks(mkdir_or_cp_source, "\{real_root}/gen"))
     assert_true(
-      is_some_path(
-        tree_target(mkdir_or_cp_source, real_root, Some(real_root)),
-        "\{real_root}/gen",
-      ),
+      blocks("cd src && mv pkg pkg.bak 2>/dev/null || true", src_pkg_path),
+    )
+    assert_true(dyn_allows("cp main.mbt backup.txt"))
+    assert_true(allows("cp main.mbt backup.txt"))
+    assert_true(blocks("cp main.mbt backup.mbt", backup_path))
+    assert_true(blocks("mv --force pkg pkg.bak", "\{real_root}/pkg"))
+    assert_true(blocks("mv -b main.mbt backup 2>/dev/null || true", main_path))
+    assert_true(
+      blocks("mv --no-target-directory _build/gen pkg", "\{real_root}/pkg"),
     )
     assert_true(
-      is_some_path(
-        tree_target(
-          "cd src && mv pkg pkg.bak 2>/dev/null || true",
-          real_root,
-          Some(real_root),
-        ),
-        src_pkg_path,
-      ),
-    )
-    assert_true(
-      dyn_tree_target("cp main.mbt backup.txt", real_root, Some(real_root))
-      is None,
-    )
-    assert_true(
-      tree_target("cp main.mbt backup.txt", real_root, Some(real_root)) is None,
-    )
-    assert_true(
-      is_some_path(
-        tree_target("cp main.mbt backup.mbt", real_root, Some(real_root)),
-        backup_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target("mv --force pkg pkg.bak", real_root, Some(real_root)),
-        "\{real_root}/pkg",
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "mv -b main.mbt backup 2>/dev/null || true",
-          real_root,
-          Some(real_root),
-        ),
-        main_path,
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "mv --no-target-directory _build/gen pkg",
-          real_root,
-          Some(real_root),
-        ),
-        "\{real_root}/pkg",
-      ),
-    )
-    assert_true(
-      is_some_path(
-        tree_target(
-          "mkdir -p _build/gen.v1 && printf source > _build/gen.v1/main.mbt && mv _build/gen.v1 pkg.v1",
-          real_root,
-          Some(real_root),
-        ),
+      blocks(
+        "mkdir -p _build/gen.v1 && printf source > _build/gen.v1/main.mbt && mv _build/gen.v1 pkg.v1",
         "\{real_root}/pkg.v1",
       ),
     )
     assert_true(
-      is_some_path(
-        tree_target(
-          "mkdir -p assets _build/gen.tmp && printf source > _build/gen.tmp/main.mbt && mv _build/gen.tmp assets/pkg.tmp",
-          real_root,
-          Some(real_root),
-        ),
+      blocks(
+        "mkdir -p assets _build/gen.tmp && printf source > _build/gen.tmp/main.mbt && mv _build/gen.tmp assets/pkg.tmp",
         "\{real_root}/assets/pkg.tmp",
       ),
     )
     assert_true(
-      tree_target(
+      allows(
         "mkdir -p assets _build && printf data > _build/logo.txt && mv _build/logo.txt assets/logo.txt",
-        real_root,
-        Some(real_root),
-      )
-      is None,
+      ),
     )
   })
 }

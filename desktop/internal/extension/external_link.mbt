@@ -19,15 +19,9 @@ impl Show for OpenExternalError with fn output(self, logger) {
 /// lowercase allowlist is both sufficient and intentionally rejects every
 /// local, app-owned, executable, or otherwise unknown scheme.
 fn allowed_external_url(url : String) -> Bool {
-  if url.strip_prefix("https://") is Some(rest) {
-    !rest.is_empty()
-  } else if url.strip_prefix("http://") is Some(rest) {
-    !rest.is_empty()
-  } else if url.strip_prefix("mailto:") is Some(rest) {
-    !rest.is_empty()
-  } else {
-    false
-  }
+  ["https://", "http://", "mailto:"].any(scheme => {
+    url.strip_prefix(scheme) is Some(rest) && !rest.is_empty()
+  })
 }
 
 ///|

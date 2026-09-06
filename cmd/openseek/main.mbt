@@ -23,11 +23,12 @@ async fn main {
 ///|
 /// Parse the whole `openseek` command tree and dispatch on the chosen subcommand.
 /// The command tree requires a subcommand, so the parser rejects a bare
-/// `openseek` (headless automation has no default action).
+/// `openseek` (headless automation has no default action). argparse reads the
+/// process arguments itself (dropping the program name); only the environment
+/// has to be handed over, because `parse` defaults it to an empty map and the
+/// `[env: OPENSEEK_*]` fallbacks would otherwise silently never fire.
 async fn dispatch() -> Unit {
-  let argv = @env.args()[1:]
-  let env = @env.get_env_vars()
-  let matches = root_command().parse(argv~, env~)
+  let matches = @argparse.parse(root_command(), env=@env.get_env_vars())
   match matches.subcommand {
     Some(("run", m)) => run_task_command(m)
     Some(("serve", m)) => run_serve_command(m)
@@ -309,7 +310,7 @@ async fn run_task_turn(
       child_session?,
     )
     // A snippet's workflow delegates to children named from the SAME ordinal
-    // counter `run_subrun` uses, so a snippet's child and an `explore` child
+    // counter `run_subrun` uses, so a snippet's child and a `review` child
     // cannot collide on one transcript file.
     let mbtx_subrun = child_session.map(spec => {
       spec.injection(exe~, workspace_root~, model="\{model}", api_url?)

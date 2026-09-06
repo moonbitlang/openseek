@@ -252,7 +252,7 @@ let spawnable_commands : Array[(String, Array[String])] = [
 /// absolute path plus the coordinates mbtx reserved for it, and neither can
 /// come from the snippet — the whole point is that only values mbtx chose
 /// resolve to anything the host is watching. `spawnable` is an ABSOLUTE path
-/// for the same reason `explore` never resolves the engine through PATH:
+/// for the same reason `run_subrun` callers never resolve the engine through PATH:
 /// parent and child must be the same binary or the report's derived JSON
 /// codecs can drift. moonrun matches the entry exactly, so an absolute rule
 /// admits only that exact binary and no same-named one earlier in PATH.
@@ -351,10 +351,8 @@ fn wasm_policy_document(
 /// value fails the library's reader closed, so the snippet sees no handoff
 /// rather than someone else's.
 fn env_set(tmp_dir : String, inject : Map[String, String]) -> Map[String, Json] {
-  let set : Map[String, Json] = Map([])
-  for name, value in inject {
-    set[name] = value.to_json()
-  }
+  // A fresh map, so the policy writes below cannot leak back into `inject`.
+  let set = inject.map((_, value) => value.to_json())
   if !set.contains(HostHandoffVar) {
     set[HostHandoffVar] = "".to_json()
   }
@@ -419,8 +417,8 @@ test "the reservation reaches the guest, and only its own directory is writable"
   assert_false(write.contains("/store"))
   // The engine is admitted by ABSOLUTE path and for one verb. moonrun matches
   // the entry exactly, so this admits that binary and not a same-named one
-  // earlier in PATH — the same guarantee `explore` gets from never resolving
-  // the engine through PATH.
+  // earlier in PATH — the same guarantee `run_subrun` callers get from never
+  // resolving the engine through PATH.
   assert_true(
     allow.contains({ "program": "/opt/openseek", "args_prefix": ["subrun"] }),
   )

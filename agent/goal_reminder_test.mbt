@@ -9,12 +9,11 @@ async fn goal_test_server(
   bodies : Array[String],
   probe_calls~ : Int,
 ) -> String? {
-  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
-    error if "\{error}".contains("Operation not permitted") => {
-      println("local TCP bind unavailable; skipping goal reminder test")
-      return None
-    }
-    error => raise error
+  guard bind_test_server(
+      "local TCP bind unavailable; skipping goal reminder test",
+    )
+    is Some(server) else {
+    return None
   }
   group.spawn_bg(no_wait=true) <| () => {
     server.run_forever(
@@ -59,13 +58,7 @@ fn goal_set_marker(text : String) -> @agent_session.SessionItem {
 
 ///|
 fn count_reminders(body : String) -> Int {
-  let mut count = 0
-  let mut view = body[:]
-  while view.find("[goal reminder]") is Some(offset) {
-    count += 1
-    view = view[offset + 1:]
-  }
-  count
+  body.split("[goal reminder]").count() - 1
 }
 
 ///|

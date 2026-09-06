@@ -381,36 +381,31 @@ fn eval_session_with_context(
     @metrics.count_occurrences(text, "Err("),
     try_mentions: @metrics.count_occurrences(text, "try?") +
     @metrics.count_occurrences(text, "try!"),
-    warnings: if warnings.length() == 0 {
-      ""
-    } else {
-      warnings.join("; ")
-    },
+    warnings: warnings.join("; "),
   }
 }
 
 ///|
+/// Locate this trial's session events. A recorded `events_path` counts only
+/// while it stays inside the trial workspace; when it does not name a file
+/// that exists, the same workspace scan `discover_session_events` runs for a
+/// fresh trial decides, with the recorded path — or the default session file
+/// location — as the last resort.
 async fn resolve_events_path(trial : TrialArtifact) -> String {
-  if trial.events_path != "" &&
-    path_under_dir(trial.events_path, trial.workspace) &&
-    @fs.exists(trial.events_path) {
+  let recorded_under_workspace = trial.events_path != "" &&
+    path_under_dir(trial.events_path, trial.workspace)
+  if recorded_under_workspace && @fs.exists(trial.events_path) {
     return trial.events_path
   }
-  let matches : Array[String] = []
-  collect_session_events(trial.workspace, trial.session_id, matches)
-  if matches is [first, ..] {
-    first
-  } else if trial.events_path != "" &&
-    path_under_dir(trial.events_path, trial.workspace) {
-    trial.events_path
-  } else {
-    trial.workspace +
-    "/.openseek/sessions/" +
-    trial.session_id +
-    "/openseek_session-" +
-    trial.session_id +
-    ".jsonl"
-  }
+  discover_session_events(
+    trial.workspace,
+    trial.session_id,
+    fallback=if recorded_under_workspace {
+      trial.events_path
+    } else {
+      "\{trial.workspace}/.openseek/sessions/\{trial.session_id}/openseek_session-\{trial.session_id}.jsonl"
+    },
+  )
 }
 
 ///|
@@ -573,12 +568,11 @@ fn validation_passed_by_name(
   results : Array[ProbeResult],
   name : String,
 ) -> Bool {
-  for result in results {
-    if result.name == name {
-      return result.passed
-    }
-  }
-  false
+  // `find_first` keeps the loop's first-match semantics for duplicate names.
+  results
+  .iter()
+  .find_first(result => result.name == name)
+  .map_or(false, result => result.passed)
 }
 
 ///|

@@ -158,13 +158,18 @@ async fn moon_check_cwd(path : String) -> String? {
 
 ///|
 fn is_relevant_moonbit_path(path : String) -> Bool {
-  let path = path.replace_all(old="\\", new="/")
-  path == "moon.mod" ||
-  path.has_suffix("/moon.mod") ||
-  path == "moon.pkg" ||
-  path.has_suffix("/moon.pkg") ||
-  path == "moon.work" ||
-  path.has_suffix("/moon.work") ||
+  // A path that ends in a separator names a DIRECTORY, never a manifest, and
+  // `path_basename` strips that separator before reporting the last component
+  // — so "pkg/moon.pkg/" would come back as "moon.pkg". Rule those out first
+  // to keep this predicate's domain exactly what it was when the manifest
+  // names were matched as whole final components.
+  if path.has_suffix("/") || path.has_suffix("\\") {
+    return false
+  }
+  // `path_basename` treats backslashes as separators, so the manifest names
+  // match on Windows too; the source suffixes below contain no separator and
+  // so are unaffected by them.
+  @workspace_path.path_basename(path) is ("moon.mod" | "moon.pkg" | "moon.work") ||
   is_moonbit_source_path(path)
 }
 
@@ -175,18 +180,22 @@ fn is_moonbit_source_path(path : String) -> Bool {
 
 ///|
 fn containing_dir(path : String) -> String {
-  let path = path.replace_all(old="\\", new="/")
-  // An empty part before the last slash means the slash was the leading one,
-  // so the containing directory is the root itself rather than "".
-  match path.rev_split_once("/") {
-    Some(([], _)) => "/"
-    Some((dir, _)) => dir.to_owned()
-    None => "."
-  }
+  // `parent_dir` already keeps a leading slash as the root rather than
+  // collapsing it to "", and normalizes backslashes. Its `None` cases ("",
+  // ".", "/", a bare drive) are unreachable here: the only caller has already
+  // passed `path` through `is_relevant_moonbit_path`, so it ends in a manifest
+  // name or a source suffix.
+  @workspace_path.parent_dir(path).unwrap_or(".")
 }
 
 ///|
 test "relevant path detection covers MoonBit source and manifests" {
+  // A trailing separator makes it a directory, not a manifest: the predicate
+  // must answer the same here as it did before `path_basename` (which strips
+  // that separator) was introduced.
+  assert_false(is_relevant_moonbit_path("x/moon.pkg/"))
+  assert_false(is_relevant_moonbit_path("moon.mod/"))
+  assert_false(is_relevant_moonbit_path("x\\moon.work\\"))
   assert_true(is_relevant_moonbit_path("moon.mod"))
   assert_true(is_relevant_moonbit_path("lib/moon.pkg"))
   assert_true(is_relevant_moonbit_path("moon.work"))

@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/agent_kind"
+
+import {
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_tool",
+  "bobzhang/openseek/deepseek",
+  "moonbitlang/core/ref",
+}
+
+// Values
+pub fn[T] capture_tool(name~ : String, description~ : String, schema~ : @agent_tool.JsonSchema, parse~ : (Json) -> Result[T, Array[String]], @ref.Ref[T?], finished_note? : (T) -> String) -> @agent_tool.AgentToolDefinition
+
+pub async fn[T] execute_kind(session_id~ : String, system_prompt~ : String, task~ : String, tools~ : (@ref.Ref[T?]) -> @agent_tool.Tools raise, max_steps~ : Int, api_key~ : String, model~ : @deepseek.Model, thinking? : @deepseek.ThinkingMode, api_url? : String, workspace_root? : String, append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session) -> T?
+
+pub fn[T] validated(Result[T, String], (T) -> Array[String]) -> Result[T, Array[String]]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

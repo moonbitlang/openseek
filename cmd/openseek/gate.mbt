@@ -33,6 +33,20 @@ fn parse_audit_report(
 }
 
 ///|
+/// The input every `subrun review` child reads: the criteria to audit
+/// against, plus the baseline commit when the goal captured one.
+fn review_subrun_input(
+  goal : String,
+  baseline : @agent_session.GoalBaseline?,
+) -> Json {
+  match baseline {
+    Some(baseline) =>
+      { "goal": goal, "sha": baseline.sha, "dirty": baseline.dirty }
+    None => { "goal": goal }
+  }
+}
+
+///|
 /// Build the advisory goal-met gate: on a durably recorded met, spawn the
 /// `subrun review` child against the goal's baseline and return the bounded
 /// digest notice. Advisory by contract — every failure shape (no report,
@@ -42,8 +56,8 @@ fn parse_audit_report(
 ///
 /// The gate does NOT draw from the shared `SubrunBudget`: that allowance
 /// meters MODEL-initiated delegation, while the gate is engine-initiated
-/// and fires at most once per met claim. Sharing let a turn's explore
-/// calls starve the audit into an underpowered run that died at its step
+/// and fires at most once per met claim. Sharing let a turn's model-initiated
+/// subrun calls starve the audit into an underpowered run that died at its step
 /// ceiling unreported (ccomp-run10) — the one subrun that must not be
 /// shortchanged is the one auditing the claim everything else rests on.
 fn build_goal_met_gate(
@@ -55,23 +69,13 @@ fn build_goal_met_gate(
   child_session? : @agent_subrun.ChildSession,
 ) -> async (String, @agent_session.GoalBaseline?) -> String? {
   (goal, baseline) => {
-    let args = [
-      "subrun",
+    let args = subrun_args(
       "review",
-      "--model",
-      "\{model}",
-      "--max-steps",
-      "\{@agent_review.default_audit_max_steps}",
-    ]
-    if api_url is Some(url) {
-      args.push("--api-url")
-      args.push(url)
-    }
-    let input : Json = match baseline {
-      Some(baseline) =>
-        { "goal": goal, "sha": baseline.sha, "dirty": baseline.dirty }
-      None => { "goal": goal }
-    }
+      model~,
+      max_steps=@agent_review.default_audit_max_steps,
+      api_url~,
+    )
+    let input = review_subrun_input(goal, baseline)
     let result = @agent_subrun.run_subrun(
       command=self_exe,
       args~,

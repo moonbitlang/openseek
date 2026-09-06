@@ -7,6 +7,14 @@ priv struct CodexRequestQuestion {
 }
 
 ///|
+/// The string members of a JSON array; every other value is ignored.
+fn json_string_parts(values : Array[Json]) -> Array[String] {
+  [
+    for value in values if value is String(part) => part
+  ]
+}
+
+///|
 /// Render only the approval facts needed for a decision. The complete payload
 /// remains available below for diagnostics and fields this client does not yet
 /// understand.
@@ -75,12 +83,7 @@ fn CodexRequestInput::approval_details(
     )
   }
   if fields.get("proposedExecpolicyAmendment") is Some(Array(values)) {
-    let parts : Array[String] = []
-    for value in values {
-      if value is String(part) {
-        parts.push(part)
-      }
-    }
+    let parts = json_string_parts(values)
     if !parts.is_empty() {
       details.push(
         @html.div(class="codex-request-detail", [
@@ -140,25 +143,17 @@ fn CodexRequestInput::execpolicy_label(
   self : CodexRequestInput,
   decision : Json,
 ) -> String {
-  let parts : Array[String] = []
+  let mut parts : Array[String] = []
   if decision is Object(decision_fields) &&
     decision_fields.get("acceptWithExecpolicyAmendment")
     is Some(Object(amendment)) &&
     amendment.get("execpolicy_amendment") is Some(Array(values)) {
-    for value in values {
-      if value is String(part) {
-        parts.push(part)
-      }
-    }
+    parts = json_string_parts(values)
   }
   if parts.is_empty() &&
     self.params is Object(fields) &&
     fields.get("proposedExecpolicyAmendment") is Some(Array(values)) {
-    for value in values {
-      if value is String(part) {
-        parts.push(part)
-      }
-    }
+    parts = json_string_parts(values)
   }
   if parts.is_empty() {
     "Allow by rule"

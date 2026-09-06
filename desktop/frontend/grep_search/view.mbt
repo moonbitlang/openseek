@@ -64,11 +64,7 @@ fn visible_file_groups(page : Page) -> Array[FileGroup] {
   let mut remaining = page.visible_lines.max(0)
   for group in grouped_matches(page.text.matches) {
     guard remaining > 0 else { break }
-    let rows : Array[@protocol.TextSearchMatch] = []
-    for result in group.matches {
-      guard rows.length() < remaining else { break }
-      rows.push(result)
-    }
+    let rows = group.matches.iter().take(remaining).to_array()
     visible.push({ ..group, matches: rows, })
     remaining -= rows.length()
   }
@@ -623,6 +619,49 @@ fn text_search_body(
     }
   }
   @html.div(class="search-results", children)
+}
+
+///|
+priv struct SemanticFileGroup {
+  path : String
+  hits : Array[@protocol.SemanticSearchHit]
+  count : Int
+}
+
+///|
+fn semantic_grouped_hits(
+  hits : Array[@protocol.SemanticSearchHit],
+) -> Array[SemanticFileGroup] {
+  let groups : Array[SemanticFileGroup] = []
+  let indexes : Map[String, Int] = Map([])
+  for hit in hits {
+    match indexes.get(hit.path) {
+      Some(index) => {
+        let group = groups[index]
+        let rows = group.hits
+        rows.push(hit)
+        groups[index] = { ..group, hits: rows, count: group.count + 1, }
+      }
+      None => {
+        indexes[hit.path] = groups.length()
+        groups.push({ path: hit.path, hits: [hit], count: 1, })
+      }
+    }
+  }
+  groups
+}
+
+///|
+fn visible_semantic_file_groups(page : Page) -> Array[SemanticFileGroup] {
+  let visible : Array[SemanticFileGroup] = []
+  let mut remaining = page.visible_lines.max(0)
+  for group in semantic_grouped_hits(page.semantic.hits) {
+    guard remaining > 0 else { break }
+    let rows = group.hits.iter().take(remaining).to_array()
+    visible.push({ ..group, hits: rows, })
+    remaining -= rows.length()
+  }
+  visible
 }
 
 ///|

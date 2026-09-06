@@ -5,6 +5,21 @@
 // refusal, and a failed attempt must leave no wedged host state behind.
 
 ///|
+/// The refusal `archive_session` answers with, or "no error" when it commits.
+/// Cancellation is never a refusal and stays observable.
+#cfg(not(platform="windows"))
+async fn archive_refusal(manager : EngineManager, session : String) -> String {
+  try {
+    ignore(archive_session(manager, session, (_, _) => ()))
+    "no error"
+  } catch {
+    EngineError(detail) => detail
+    error if @async.is_being_cancelled() => raise error
+    error => "\{error}"
+  }
+}
+
+///|
 #cfg(not(platform="windows"))
 async test "archive names the missing store after a workspace detach" {
   ambient_env_test_lock.acquire()
@@ -33,14 +48,7 @@ async test "archive names the missing store after a workspace detach" {
   // A stale sidebar can still offer the conversation; archiving it now
   // reports the record as unreachable instead of pretending it never
   // existed.
-  let detail = try {
-    ignore(archive_session(manager, "s-ws", (_, _) => ()))
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  let detail = archive_refusal(manager, "s-ws")
   debug_inspect(
     detail,
     content=(
@@ -54,14 +62,7 @@ async test "archive names the missing store after a workspace detach" {
   assert_true(manager.record_guards.get("s-ws") is None)
   guard manager.pump is Serving(sessions~) else { fail("pump stopped") }
   assert_true(sessions.get("s-ws") is None)
-  let second = try {
-    ignore(archive_session(manager, "s-ws", (_, _) => ()))
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  let second = archive_refusal(manager, "s-ws")
   debug_inspect(
     second,
     content=(
@@ -95,14 +96,7 @@ async test "archive reports a workspace record whose directory vanished" {
   // The workspace directory vanishes outside the app; the registry keeps
   // its dead entry addressable, so the sidebar still shows the workspace.
   @fs.rmdir(workspace, recursive=true)
-  let detail = try {
-    ignore(archive_session(manager, "s-ws", (_, _) => ()))
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  let detail = archive_refusal(manager, "s-ws")
   debug_inspect(
     detail,
     content=(
@@ -169,14 +163,7 @@ async test "archiving an already-archived conversation names that state" {
   @fsx.ensure_dir(Path(store + "/archived/sessions/s-done"))
   let manager = new_engine_manager("unused")
   manager.pump = Serving(sessions=Map([]))
-  let detail = try {
-    ignore(archive_session(manager, "s-done", (_, _) => ()))
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  let detail = archive_refusal(manager, "s-done")
   debug_inspect(
     detail,
     content=(

@@ -109,13 +109,9 @@ test "validate accepts a good report and rejects contract violations" {
   assert_true(
     { ..sample_worker_report(), verification: "", }.validate().length() > 0,
   )
-  let long = StringBuilder()
-  for _ in 0..<(max_summary_chars + 1) {
-    long.write_char('a')
-  }
+  let long = "a".repeat(max_summary_chars + 1)
   assert_true(
-    { ..sample_worker_report(), summary: long.to_string(), }.validate().length() >
-    0,
+    { ..sample_worker_report(), summary: long, }.validate().length() > 0,
   )
 }
 

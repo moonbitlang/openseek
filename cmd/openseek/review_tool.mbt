@@ -90,23 +90,8 @@ async fn execute_review(
       brief="review (budget exhausted)",
     )
   }
-  let args = [
-    "subrun",
-    "review",
-    "--model",
-    "\{model}",
-    "--max-steps",
-    "\{granted_steps}",
-  ]
-  if api_url is Some(url) {
-    args.push("--api-url")
-    args.push(url)
-  }
-  let input : Json = match baseline {
-    Some(baseline) =>
-      { "goal": criteria, "sha": baseline.sha, "dirty": baseline.dirty }
-    None => { "goal": criteria }
-  }
+  let args = subrun_args("review", model~, max_steps=granted_steps, api_url~)
+  let input = review_subrun_input(criteria, baseline)
   let result = @agent_subrun.run_subrun(
     command=self_exe,
     args~,

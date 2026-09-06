@@ -141,12 +141,7 @@ fn EmptyProjectControl::render(
     ),
   ]
   if self.open {
-    let visible : Array[ProjectChoice] = []
-    for project in projects {
-      if project.matches(self.query) {
-        visible.push(project)
-      }
-    }
+    let visible = projects.filter(project => project.matches(self.query))
     let rows : Array[@html.Html] = []
     for project in visible {
       let selected = project.root == current

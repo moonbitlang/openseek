@@ -563,79 +563,49 @@ async test "a non-skill module is refused" {
 }
 
 ///|
-async test "a skill without archive coordinates is not installable" {
+/// Every bad registry fixture is refused with the phrase its own message
+/// carries, and a refusal leaves no directory behind in the library. Each row
+/// still names the scenario it stands for — that label rides the assertion, so
+/// a failure says which refusal broke rather than only which line.
+async test "install refuses every bad fixture and leaves no library directory" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
-    let lib = @fs.tmpdir(prefix="skillmarket-")
-    let message = install_failure(base, lib, "acme/bare")
-    assert_true(message.contains("does not publish a skill archive"))
-    assert_false(@fs.exists("\{lib}/acme-bare"))
-  }
-}
-
-///|
-async test "malformed archive coordinates are a registry error, not absence" {
-  @async.with_task_group() <| group => {
-    guard fake_registry(group) is Some(base) else { return }
-    let lib = @fs.tmpdir(prefix="skillmarket-")
-    let message = install_failure(base, lib, "acme/malformed")
-    assert_true(message.contains("malformed"))
-    assert_false(@fs.exists("\{lib}/acme-malformed"))
-  }
-}
-
-///|
-async test "a skill whose archive is missing reports it plainly" {
-  @async.with_task_group() <| group => {
-    guard fake_registry(group) is Some(base) else { return }
-    let lib = @fs.tmpdir(prefix="skillmarket-")
-    let message = install_failure(base, lib, "acme/noarchive")
-    assert_true(message.contains("missing from the registry"))
-    assert_false(@fs.exists("\{lib}/acme-noarchive"))
-  }
-}
-
-///|
-async test "an archive that fails its digest check is refused" {
-  @async.with_task_group() <| group => {
-    guard fake_registry(group) is Some(base) else { return }
-    let lib = @fs.tmpdir(prefix="skillmarket-")
-    let message = install_failure(base, lib, "acme/badsum")
-    assert_true(message.contains("does not match its published digest"))
-    assert_false(@fs.exists("\{lib}/acme-badsum"))
-  }
-}
-
-///|
-async test "an archive without a SKILL.md is refused at install" {
-  @async.with_task_group() <| group => {
-    guard fake_registry(group) is Some(base) else { return }
-    let lib = @fs.tmpdir(prefix="skillmarket-")
-    let message = install_failure(base, lib, "acme/nomd")
-    assert_true(message.contains("does not contain a SKILL.md"))
-    assert_false(@fs.exists("\{lib}/acme-nomd"))
-  }
-}
-
-///|
-async test "an archive whose SKILL.md is not text is refused" {
-  @async.with_task_group() <| group => {
-    guard fake_registry(group) is Some(base) else { return }
-    let lib = @fs.tmpdir(prefix="skillmarket-")
-    let message = install_failure(base, lib, "acme/binary")
-    assert_true(message.contains("unreadable SKILL.md"))
-    assert_false(@fs.exists("\{lib}/acme-binary"))
-  }
-}
-
-///|
-async test "a path-escaping archive is refused" {
-  @async.with_task_group() <| group => {
-    guard fake_registry(group) is Some(base) else { return }
-    let lib = @fs.tmpdir(prefix="skillmarket-")
-    let message = install_failure(base, lib, "acme/slip")
-    assert_true(message.contains("unsafe path"))
-    assert_false(@fs.exists("\{lib}/acme-slip"))
+    for
+      row in [
+        (
+          "a skill without archive coordinates is not installable", "acme/bare",
+          "does not publish a skill archive", "acme-bare",
+        ),
+        (
+          "malformed archive coordinates are a registry error, not absence", "acme/malformed",
+          "malformed", "acme-malformed",
+        ),
+        (
+          "a skill whose archive is missing reports it plainly", "acme/noarchive",
+          "missing from the registry", "acme-noarchive",
+        ),
+        (
+          "an archive that fails its digest check is refused", "acme/badsum", "does not match its published digest",
+          "acme-badsum",
+        ),
+        (
+          "an archive without a SKILL.md is refused at install", "acme/nomd", "does not contain a SKILL.md",
+          "acme-nomd",
+        ),
+        (
+          "an archive whose SKILL.md is not text is refused", "acme/binary", "unreadable SKILL.md",
+          "acme-binary",
+        ),
+        (
+          "a path-escaping archive is refused", "acme/slip", "unsafe path", "acme-slip",
+        ),
+      ] {
+      let (scenario, module_name, reason, directory) = row
+      let lib = @fs.tmpdir(prefix="skillmarket-")
+      let message = install_failure(base, lib, module_name)
+      assert_true(message.contains(reason), msg="case: \{scenario}")
+      assert_false(@fs.exists("\{lib}/\{directory}"), msg="case: \{scenario}")
+    }
   }
 }
 

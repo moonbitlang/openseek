@@ -10,6 +10,23 @@ fn session_file(store : @store.SessionStore, id : String) -> String {
 }
 
 ///|
+/// Append raw bytes to a session's durable file the way a torn write or a
+/// foreign writer would: no header rewrite, no lock, and no trailing newline
+/// unless `text` carries one.
+async fn append_raw(
+  store : @store.SessionStore,
+  id : String,
+  text : String,
+) -> Unit {
+  @fs.write_file(
+    session_file(store, id),
+    text,
+    create_mode=OpenOrCreate,
+    append=true,
+  )
+}
+
+///|
 async test "store creates and loads a session from one session file" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
@@ -598,12 +615,7 @@ async test "load drops a torn trailing record without mutating the file" {
   store.create(session)
   // A crash mid-append leaves a half-written last line. The uncommitted tail
   // is dropped so the session stays resumable, and load itself is read-only.
-  @fs.write_file(
-    session_file(store, "s1"),
-    "{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi",
-    create_mode=OpenOrCreate,
-    append=true,
-  )
+  append_raw(store, "s1", "{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi")
   let text_before = @fs.read_file(session_file(store, "s1")).text()
   let loaded = store.load(SessionId("s1"))
   assert_eq(loaded.events().length(), 1)
@@ -619,12 +631,7 @@ async test "load keeps a complete final record that lost only its newline" {
   let (_, event) = session.append_event(User(UserMessage("first")))
   store.create(session)
   // The append was torn exactly at the newline boundary: the record is whole.
-  @fs.write_file(
-    session_file(store, "s1"),
-    ToJson::to_json(event).stringify(),
-    create_mode=OpenOrCreate,
-    append=true,
-  )
+  append_raw(store, "s1", ToJson::to_json(event).stringify())
   let loaded = store.load(SessionId("s1"))
   assert_eq(loaded.events().length(), 1)
   guard loaded.events()[0].item() is User(message) else {
@@ -641,12 +648,7 @@ async test "append repairs a torn tail before persisting the next event" {
     User(UserMessage("first")),
   )
   store.create(session)
-  @fs.write_file(
-    session_file(store, "s1"),
-    "{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi",
-    create_mode=OpenOrCreate,
-    append=true,
-  )
+  append_raw(store, "s1", "{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi")
   let resumed = store.load(SessionId("s1"))
   let next = store.append(resumed, Runtime(RuntimeNotice("recovered")))
   assert_eq(next.events().length(), 2)
@@ -667,12 +669,7 @@ async test "append repairs and keeps a complete unterminated final event" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   let (_, event) = session.append_event(User(UserMessage("first")))
   store.create(session)
-  @fs.write_file(
-    session_file(store, "s1"),
-    ToJson::to_json(event).stringify(),
-    create_mode=OpenOrCreate,
-    append=true,
-  )
+  append_raw(store, "s1", ToJson::to_json(event).stringify())
   let resumed = store.load(SessionId("s1"))
   assert_eq(resumed.events().length(), 1)
   let next = store.append(resumed, Runtime(RuntimeNotice("second")))
@@ -697,12 +694,7 @@ async test "append rejects a stale snapshot against an unterminated durable even
   // Another writer committed an event; only its newline is missing. The
   // pre-commit empty snapshot is stale, and tail repair must not become a
   // path that discards that writer's data.
-  @fs.write_file(
-    session_file(store, "s1"),
-    ToJson::to_json(event).stringify(),
-    create_mode=OpenOrCreate,
-    append=true,
-  )
+  append_raw(store, "s1", ToJson::to_json(event).stringify())
   try store.append(session, Runtime(RuntimeNotice("stale"))) catch {
     error => {
       assert_true("\{error}".contains("stale session snapshot"))
@@ -725,12 +717,7 @@ async test "load tolerates unterminated tails in every torn shape" {
   // Valid JSON that is not a valid event: torn exactly inside the payload in
   // a way that still balances braces.
   store.create(Session(SessionId("json"), system_prompt="system"))
-  @fs.write_file(
-    session_file(store, "json"),
-    "{\"not\":\"an event\"}",
-    create_mode=OpenOrCreate,
-    append=true,
-  )
+  append_raw(store, "json", "{\"not\":\"an event\"}")
   assert_eq(store.load(SessionId("json")).events().length(), 0)
   // Whitespace-only unterminated tail.
   let one_event = @agent_session.Session(
@@ -738,21 +725,11 @@ async test "load tolerates unterminated tails in every torn shape" {
     system_prompt="system",
   ).append(User(UserMessage("hello")))
   store.create(one_event)
-  @fs.write_file(
-    session_file(store, "blank"),
-    "   ",
-    create_mode=OpenOrCreate,
-    append=true,
-  )
+  append_raw(store, "blank", "   ")
   assert_eq(store.load(SessionId("blank")).events().length(), 1)
   // Torn garbage after zero events.
   store.create(Session(SessionId("zero"), system_prompt="system"))
-  @fs.write_file(
-    session_file(store, "zero"),
-    "{\"seq",
-    create_mode=OpenOrCreate,
-    append=true,
-  )
+  append_raw(store, "zero", "{\"seq")
   assert_eq(store.load(SessionId("zero")).events().length(), 0)
 }
 
@@ -786,12 +763,7 @@ async test "compact repairs a torn tail before persisting the summary" {
     .append(User(UserMessage("first")))
     .append(Assistant(AssistantMessage("second")))
   store.create(session)
-  @fs.write_file(
-    session_file(store, "s1"),
-    "{\"sequence\":3,\"ts\":0,\"item\":{\"kind\":\"runt",
-    create_mode=OpenOrCreate,
-    append=true,
-  )
+  append_raw(store, "s1", "{\"sequence\":3,\"ts\":0,\"item\":{\"kind\":\"runt")
   let resumed = store.load(SessionId("s1"))
   let compacted = store.compact(
     resumed,
@@ -817,11 +789,8 @@ async test "latest can resume a session whose newest write was torn" {
     system_prompt="system",
   ).append(User(UserMessage("hello")))
   store.create(newest)
-  @fs.write_file(
-    session_file(store, "newest"),
-    "{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi",
-    create_mode=OpenOrCreate,
-    append=true,
+  append_raw(
+    store, "newest", "{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi",
   )
   guard store.latest() is Some(id) else { fail("expected a latest session") }
   assert_eq(id.value(), "newest")
@@ -837,23 +806,13 @@ async test "load still fails on corruption that is not a torn tail" {
   store.create(session)
   // Terminated garbage is interior-style corruption, not an interrupted
   // append: something after the bad line committed a newline.
-  @fs.write_file(
-    session_file(store, "s1"),
-    "not an event\n",
-    create_mode=OpenOrCreate,
-    append=true,
-  )
+  append_raw(store, "s1", "not an event\n")
   try store.load(SessionId("s1")) catch {
     error => {
       assert_true("\{error}" != "")
       // A bad line with valid lines after it fails the same way.
       let (_, event) = session.append_event(Runtime(RuntimeNotice("later")))
-      @fs.write_file(
-        session_file(store, "s1"),
-        ToJson::to_json(event).stringify() + "\n",
-        create_mode=OpenOrCreate,
-        append=true,
-      )
+      append_raw(store, "s1", ToJson::to_json(event).stringify() + "\n")
       try store.load(SessionId("s1")) catch {
         error => assert_true("\{error}" != "")
       } noraise {

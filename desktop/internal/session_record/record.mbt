@@ -263,11 +263,7 @@ async fn Tail::read_forward(self : Tail) -> Array[@protocol.SessionEvent] {
   let fresh : Array[@protocol.SessionEvent] = []
   while self.offset < size {
     let remaining = size - self.offset
-    let take = if remaining > record_chunk_bytes {
-      record_chunk_bytes
-    } else {
-      remaining
-    }
+    let take = @cmp.minimum(remaining, record_chunk_bytes)
     let chunk = file.read_exactly_at(take.to_int(), position=self.offset) catch {
       error if @async.is_being_cancelled() => raise error
       error => raise Unreadable("cannot read the session record: \{error}")

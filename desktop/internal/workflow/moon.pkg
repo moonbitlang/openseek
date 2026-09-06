@@ -2,6 +2,7 @@ import {
   "openseek_desktop/internal/protocol",
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/core/cmp",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
 }

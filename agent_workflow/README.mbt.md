@@ -107,11 +107,11 @@ guessed), `discard_slice` abandons it, `slices()` lists every generation.
   clear (provisioning's resume path accepts `Committed`/`Captured`,
   not `Running`). A child cancelled by the wall DEADLINE is different:
   it reaches capture as `TimedOut`, so mergeable edits are salvaged and
-  the slice can be continued through the engine's `subtask continue`.
+  the slice keeps its worktree and branch, inspectable via `slices()`.
 - Provision refusals and non-mergeable captures both surface as
   `AgentFailure::Failed(reason)` — a typed split is future work.
 - One writing workflow process per journal path, and one engine per
-  repository for the subtask registry (it has no cross-process locking).
+  repository for the slice registry (it has no cross-process locking).
 - A worker waiting for a worker slot already holds one of the workflow's
   `max_concurrent` slots and has been counted as launched: saturating
   `max_workers` can head-of-line block scouts sharing the workflow.

@@ -101,11 +101,7 @@ fn optional_positive_int_option(
 
 ///|
 fn cap_max_output_chars(value : Int) -> Int {
-  if value > hard_max_output_chars {
-    hard_max_output_chars
-  } else {
-    value
-  }
+  value.min(hard_max_output_chars)
 }
 
 ///|

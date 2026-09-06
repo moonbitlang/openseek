@@ -106,8 +106,7 @@ report a calibrated confidence signal that one pass cannot.
 
 | file | role |
 | --- | --- |
-| `types.mbt` | `ReviewReport` / `Finding` / `ReviewScope` / `ReviewStats`, JSON derive, `to_json_string` |
-| `exports.mbt` | `ReviewReport::parse` and `ReviewReport::validate` |
+| `types.mbt` | `ReviewReport` / `Finding` / `ReviewScope` / `ReviewStats`, JSON derive, `to_json_string`, `parse`, `validate` |
 | `submit.mbt` | the `submit_review` structured-output tool |
 | `prompt.mbt` | the review system prompt and task |
 | `engine.mbt` | `run_review` — the engine, and `ReviewError` |

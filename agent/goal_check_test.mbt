@@ -6,12 +6,9 @@ async fn goal_check_test_server(
   bodies : Array[String],
   responses : Array[String],
 ) -> String? {
-  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
-    error if "\{error}".contains("Operation not permitted") => {
-      println("local TCP bind unavailable; skipping goal check test")
-      return None
-    }
-    error => raise error
+  guard bind_test_server("local TCP bind unavailable; skipping goal check test")
+    is Some(server) else {
+    return None
   }
   group.spawn_bg(no_wait=true) <| () => {
     server.run_forever(
@@ -39,12 +36,9 @@ async fn goal_ceiling_test_server(
   checkpoint_bodies : Array[String],
   responses : Array[String],
 ) -> String? {
-  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
-    error if "\{error}".contains("Operation not permitted") => {
-      println("local TCP bind unavailable; skipping goal check test")
-      return None
-    }
-    error => raise error
+  guard bind_test_server("local TCP bind unavailable; skipping goal check test")
+    is Some(server) else {
+    return None
   }
   group.spawn_bg(no_wait=true) <| () => {
     server.run_forever(

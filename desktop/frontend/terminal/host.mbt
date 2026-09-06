@@ -483,15 +483,7 @@ fn TermHost::clear_pending(
     term_host.opening_channels = term_host.opening_channels.filter(existing => {
       existing != channel
     })
-    let pending_ids : Array[String] = []
-    for id, pending in self.pending {
-      if pending.0 == channel {
-        pending_ids.push(id)
-      }
-    }
-    for id in pending_ids {
-      self.pending.remove(id)
-    }
+    self.pending.retain((_, pending) => pending.0 != channel)
   })
 }
 

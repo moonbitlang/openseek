@@ -1,12 +1,23 @@
 ///|
-pub impl FromJson for PatternRepairPayload with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "pattern-repair payload")
+/// A pattern-repair generation counts forward only; both the payload and the
+/// reply refuse a negative one with the same message.
+fn required_generation(
+  object : JsonObject,
+  path : @json.JsonPath,
+) -> Int raise @json.JsonDecodeError {
   let generation = object.required_int("generation")
   if generation < 0 {
     raise JsonDecodeError(
       (path.add_key("generation"), "expected non-negative generation"),
     )
   }
+  generation
+}
+
+///|
+pub impl FromJson for PatternRepairPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "pattern-repair payload")
+  let generation = required_generation(object, path)
   {
     root: object.required_string("root"),
     pattern: object.required_string("pattern"),
@@ -34,12 +45,7 @@ pub extend PatternRepairPayload with ToJson::{to_json}
 ///|
 pub impl FromJson for PatternRepairReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "pattern-repair reply")
-  let generation = object.required_int("generation")
-  if generation < 0 {
-    raise JsonDecodeError(
-      (path.add_key("generation"), "expected non-negative generation"),
-    )
-  }
+  let generation = required_generation(object, path)
   {
     root: object.required_string("root"),
     generation,

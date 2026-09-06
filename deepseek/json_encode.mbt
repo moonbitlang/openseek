@@ -72,20 +72,18 @@ impl ToJson for ChatMessage with fn to_json(message : ChatMessage) -> Json {
 ///|
 /// Encodes a `ToolDefinition` as a DeepSeek `tools[]` entry.
 impl ToJson for ToolDefinition with fn to_json(tool : ToolDefinition) -> Json {
-  let function : Json = if tool.strict {
-    {
-      "name": tool.name,
-      "description": tool.description,
-      "parameters": tool.parameters,
-      "strict": true,
-    }
-  } else {
-    {
-      "name": tool.name,
-      "description": tool.description,
-      "parameters": tool.parameters,
-    }
-  }
+  let function = Json(
+    Map(
+      [
+        ("name", Json(tool.name)),
+        ("description", Json(tool.description)),
+        ("parameters", tool.parameters),
+        ..if tool.strict {
+          [("strict", Json(true))]
+        },
+      ],
+    ),
+  )
   { "type": "function", "function": function }
 }
 
@@ -167,6 +165,34 @@ test "tool definitions encode as native DeepSeek tools" {
       "strict": true,
     },
   })
+}
+
+///|
+/// The `..if tool.strict` spread is the only thing standing between a tool
+/// entry and a stray `"strict": false` the API would have to ignore, and the
+/// wire order of the four keys is what a diff of a captured request is read
+/// against. Both are pinned here as bytes, not as a structural comparison,
+/// because a `Map` literal compares equal whatever order it was built in.
+test "tool definitions omit strict when unset and keep their key order" {
+  let plain = ToolDefinition("noop", "Does nothing.", { "type": "object" })
+  inspect(
+    ToJson::to_json(plain).stringify(),
+    content=(
+      #|{"type":"function","function":{"name":"noop","description":"Does nothing.","parameters":{"type":"object"}}}
+    ),
+  )
+  let strict = ToolDefinition(
+    "noop",
+    "Does nothing.",
+    { "type": "object" },
+    strict=true,
+  )
+  inspect(
+    ToJson::to_json(strict).stringify(),
+    content=(
+      #|{"type":"function","function":{"name":"noop","description":"Does nothing.","parameters":{"type":"object"},"strict":true}}
+    ),
+  )
 }
 
 ///|

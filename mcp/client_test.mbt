@@ -115,20 +115,28 @@ fn[X] spawn_server(
 }
 
 ///|
+/// An MCP client wired to a fake server that answers with `reply`: the queue
+/// transport, the jsonrpc client with its message pump, and the server loop,
+/// all spawned on `group`.
+fn[X] fake_client(
+  group : @async.TaskGroup[X],
+  reply : (Json) -> Json?,
+) -> @mcp.McpClient {
+  let transport = new_transport()
+  let rpc = @jsonrpc.Client(transport)
+  spawn_client(group, rpc)
+  spawn_server(group, transport, reply)
+  @mcp.McpClient(rpc)
+}
+
+///|
 async test "initialize completes the handshake and returns server identity" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let rpc = @jsonrpc.Client(transport)
-    spawn_client(group, rpc)
-    spawn_server(
+    let client = fake_client(
       group,
-      transport,
       stock_reply({ "tools": [] }, { "content": [] }),
     )
-    let init = @mcp.McpClient(rpc).initialize(
-      client_name="openseek",
-      client_version="0.1",
-    )
+    let init = client.initialize(client_name="openseek", client_version="0.1")
     assert_eq(init.protocol_version, "2025-11-25")
     assert_eq(init.server_name, "fake")
     assert_eq(init.server_version, "1.0")
@@ -138,9 +146,6 @@ async test "initialize completes the handshake and returns server identity" {
 ///|
 async test "initialize accepts a supported older protocol version" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let rpc = @jsonrpc.Client(transport)
-    spawn_client(group, rpc)
     let reply = fn(request : Json) -> Json? {
       match method_of(request) {
         "initialize" =>
@@ -153,11 +158,8 @@ async test "initialize accepts a supported older protocol version" {
         _ => None
       }
     }
-    spawn_server(group, transport, reply)
-    let init = @mcp.McpClient(rpc).initialize(
-      client_name="openseek",
-      client_version="0.1",
-    )
+    let client = fake_client(group, reply)
+    let init = client.initialize(client_name="openseek", client_version="0.1")
     assert_eq(init.protocol_version, "2024-11-05")
   })
 }
@@ -165,9 +167,6 @@ async test "initialize accepts a supported older protocol version" {
 ///|
 async test "initialize rejects an unsupported negotiated protocol version" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let rpc = @jsonrpc.Client(transport)
-    spawn_client(group, rpc)
     let reply = fn(request : Json) -> Json? {
       match method_of(request) {
         "initialize" =>
@@ -180,13 +179,9 @@ async test "initialize rejects an unsupported negotiated protocol version" {
         _ => None
       }
     }
-    spawn_server(group, transport, reply)
+    let client = fake_client(group, reply)
     let outcome = try {
-      @mcp.McpClient(rpc).initialize(
-        client_name="openseek",
-        client_version="0.1",
-      )
-      |> ignore
+      client.initialize(client_name="openseek", client_version="0.1") |> ignore
       "no error raised"
     } catch {
       @mcp.Protocol(_) => "protocol"
@@ -200,9 +195,6 @@ async test "initialize rejects an unsupported negotiated protocol version" {
 ///|
 async test "list_tools returns tools with pass-through schemas" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let rpc = @jsonrpc.Client(transport)
-    spawn_client(group, rpc)
     let tools_result : Json = {
       "tools": [
         {
@@ -215,8 +207,11 @@ async test "list_tools returns tools with pass-through schemas" {
         },
       ],
     }
-    spawn_server(group, transport, stock_reply(tools_result, { "content": [] }))
-    let tools = @mcp.McpClient(rpc).list_tools()
+    let client = fake_client(
+      group,
+      stock_reply(tools_result, { "content": [] }),
+    )
+    let tools = client.list_tools()
     assert_eq(tools.length(), 1)
     assert_eq(tools[0].name, "echo")
     assert_eq(tools[0].description, "Echo text")
@@ -234,9 +229,6 @@ async test "list_tools returns tools with pass-through schemas" {
 ///|
 async test "list_tools follows nextCursor pagination" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let rpc = @jsonrpc.Client(transport)
-    spawn_client(group, rpc)
     let calls : Ref[Int] = { val: 0, }
     let reply = fn(request : Json) -> Json? {
       match method_of(request) {
@@ -256,8 +248,8 @@ async test "list_tools follows nextCursor pagination" {
         _ => None
       }
     }
-    spawn_server(group, transport, reply)
-    let tools = @mcp.McpClient(rpc).list_tools()
+    let client = fake_client(group, reply)
+    let tools = client.list_tools()
     assert_eq(tools.length(), 2)
     assert_eq(tools[0].name, "a")
     assert_eq(tools[1].name, "b")
@@ -267,17 +259,12 @@ async test "list_tools follows nextCursor pagination" {
 ///|
 async test "call_tool returns text content and renders it" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let rpc = @jsonrpc.Client(transport)
-    spawn_client(group, rpc)
     let call_result : Json = {
       "content": [{ "type": "text", "text": "hello world" }],
       "isError": false,
     }
-    spawn_server(group, transport, stock_reply({ "tools": [] }, call_result))
-    let result = @mcp.McpClient(rpc).call_tool(name="echo", arguments={
-      "text": "hi",
-    })
+    let client = fake_client(group, stock_reply({ "tools": [] }, call_result))
+    let result = client.call_tool(name="echo", arguments={ "text": "hi" })
     assert_false(result.is_error)
     assert_eq(result.render_text(), "hello world")
   })
@@ -286,15 +273,12 @@ async test "call_tool returns text content and renders it" {
 ///|
 async test "call_tool surfaces a tool-level error as is_error" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let rpc = @jsonrpc.Client(transport)
-    spawn_client(group, rpc)
     let call_result : Json = {
       "content": [{ "type": "text", "text": "boom" }],
       "isError": true,
     }
-    spawn_server(group, transport, stock_reply({ "tools": [] }, call_result))
-    let result = @mcp.McpClient(rpc).call_tool(
+    let client = fake_client(group, stock_reply({ "tools": [] }, call_result))
+    let result = client.call_tool(
       name="explode",
       arguments=Json::empty_object(),
     )
@@ -306,22 +290,15 @@ async test "call_tool surfaces a tool-level error as is_error" {
 ///|
 async test "call_tool raises on a JSON-RPC error reply" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let rpc = @jsonrpc.Client(transport)
-    spawn_client(group, rpc)
     let reply = fn(request : Json) -> Json? {
       match method_of(request) {
         "tools/call" => Some(failure(request, -32602, "unknown tool"))
         _ => None
       }
     }
-    spawn_server(group, transport, reply)
+    let client = fake_client(group, reply)
     let outcome = try {
-      @mcp.McpClient(rpc).call_tool(
-        name="ghost",
-        arguments=Json::empty_object(),
-      )
-      |> ignore
+      client.call_tool(name="ghost", arguments=Json::empty_object()) |> ignore
       "no error raised"
     } catch {
       @jsonrpc.Failed(code~, message~, data=_) => "failed \{code} \{message}"
@@ -335,18 +312,15 @@ async test "call_tool raises on a JSON-RPC error reply" {
 ///|
 async test "list_tools raises Protocol on a malformed result" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let rpc = @jsonrpc.Client(transport)
-    spawn_client(group, rpc)
     let reply = fn(request : Json) -> Json? {
       match method_of(request) {
         "tools/list" => Some(success(request, Json::empty_object()))
         _ => None
       }
     }
-    spawn_server(group, transport, reply)
+    let client = fake_client(group, reply)
     let outcome = try {
-      @mcp.McpClient(rpc).list_tools() |> ignore
+      client.list_tools() |> ignore
       "no error raised"
     } catch {
       @mcp.Protocol(_) => "protocol"

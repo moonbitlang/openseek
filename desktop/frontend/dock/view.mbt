@@ -5,17 +5,6 @@
 // reads document tables.
 
 ///|
-/// The sidebar-right codicon for the panel toggle, from Microsoft's
-/// vscode-codicons (CC BY 4.0); the path data is unmodified, transcribed
-/// into `@svg` builders (an innerHTML-bearing element cannot be safely
-/// morphed by the positional child diff).
-fn icon_layout_sidebar_right() -> @html.Html {
-  @icons.codicon(
-    "M12.5 1C13.881 1 15 2.119 15 3.5V12.5C15 13.881 13.881 15 12.5 15H3.5C2.119 15 1 13.881 1 12.5V3.5C1 2.119 2.119 1 3.5 1H12.5ZM9 14V2H3.5C2.672 2 2 2.672 2 3.5V12.5C2 13.328 2.672 14 3.5 14H9Z",
-  )
-}
-
-///|
 /// Four outward-facing corners for expanding the panel into the whole content
 /// area. The inverse glyph below points inward when the next action restores
 /// the split view.
@@ -43,30 +32,6 @@ fn icon_restore_panel() -> @html.Html {
       .stroke("currentColor")
       .stroke_linecap("round"),
     [@svg.path(d="M2.5 6H6V2.5M13.5 6H10V2.5M13.5 10H10v3.5M2.5 10H6v3.5")],
-  )
-}
-
-///|
-/// The add codicon (CC BY 4.0): the strip's new-tab button.
-fn icon_add() -> @html.Html {
-  @icons.codicon(
-    "M8 1.5C8 1.22386 7.77614 1 7.5 1C7.22386 1 7 1.22386 7 1.5V7H1.5C1.22386 7 1 7.22386 1 7.5C1 7.77614 1.22386 8 1.5 8H7V13.5C7 13.7761 7.22386 14 7.5 14C7.77614 14 8 13.7761 8 13.5V8H13.5C13.7761 8 14 7.77614 14 7.5C14 7.22386 13.7761 7 13.5 7H8V1.5Z",
-  )
-}
-
-///|
-/// The folder codicon (CC BY 4.0): the launcher's Files row.
-fn icon_folder() -> @html.Html {
-  @icons.codicon(
-    "M2 4.5V6H5.58579C5.71839 6 5.84557 5.94732 5.93934 5.85355L7.29289 4.5L5.93934 3.14645C5.84557 3.05268 5.71839 3 5.58579 3H3.5C2.67157 3 2 3.67157 2 4.5ZM1 4.5C1 3.11929 2.11929 2 3.5 2H5.58579C5.98361 2 6.36514 2.15804 6.64645 2.43934L8.20711 4H12.5C13.8807 4 15 5.11929 15 6.5V11.5C15 12.8807 13.8807 14 12.5 14H3.5C2.11929 14 1 12.8807 1 11.5V4.5ZM2 7V11.5C2 12.3284 2.67157 13 3.5 13H12.5C13.3284 13 14 12.3284 14 11.5V6.5C14 5.67157 13.3284 5 12.5 5H8.20711L6.64645 6.56066C6.36514 6.84197 5.98361 7 5.58579 7H2Z",
-  )
-}
-
-///|
-/// The search codicon (CC BY 4.0): the launcher's workspace Search row.
-fn icon_search() -> @html.Html {
-  @icons.codicon(
-    "M10.0195 10.7266C9.06578 11.5217 7.83875 12 6.5 12C3.46243 12 1 9.53757 1 6.5C1 3.46243 3.46243 1 6.5 1C9.53757 1 12 3.46243 12 6.5C12 7.83875 11.5217 9.06578 10.7266 10.0195L13.8535 13.1464C14.0488 13.3417 14.0488 13.6583 13.8535 13.8536C13.6583 14.0488 13.3417 14.0488 13.1464 13.8536L10.0195 10.7266ZM11 6.5C11 4.01472 8.98528 2 6.5 2C4.01472 2 2 4.01472 2 6.5C2 8.98528 4.01472 11 6.5 11C8.98528 11 11 8.98528 11 6.5Z",
   )
 }
 
@@ -130,16 +95,6 @@ fn icon_workflows() -> @html.Html {
 }
 
 ///|
-/// An icon in a fixed-size span. Icons are functions, not shared constants:
-/// each render site gets its own virtual-DOM value, so no Props instance is
-/// ever aliased between two mounted elements.
-fn icon(image : () -> @html.Html) -> @html.Html {
-  @html.span(class="icon", attrs=@html.Attrs::build().aria_hidden("true"), [
-    image(),
-  ])
-}
-
-///|
 /// One strip entry as the root view presents it: the tab's identity plus the
 /// decorations only the owning subsystem knows — the label text, the hover
 /// title, and whether the tab's backing content is missing (a deleted file),
@@ -172,7 +127,7 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
   if actions.browser is Some(open_browser) {
     rows.push(
       @html.button(class="dock-launcher-row", on_click=open_browser, [
-        icon(icon_globe),
+        @icons.icon(icon_globe),
         @html.span(class="dock-launcher-name", "Browse"),
         @html.span(class="dock-launcher-hint", "Open a page in a tab"),
       ]),
@@ -180,28 +135,28 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
   }
   rows.push(
     @html.button(class="dock-launcher-row", on_click=actions.search, [
-      icon(icon_search),
+      @icons.icon(@icons.icon_search),
       @html.span(class="dock-launcher-name", "Search"),
       @html.span(class="dock-launcher-hint", "Search text across the workspace"),
     ]),
   )
   rows.push(
     @html.button(class="dock-launcher-row", on_click=actions.files, [
-      icon(icon_folder),
+      @icons.icon(@icons.icon_folder),
       @html.span(class="dock-launcher-name", "Files"),
       @html.span(class="dock-launcher-hint", "Open a file from the workspace"),
     ]),
   )
   rows.push(
     @html.button(class="dock-launcher-row", on_click=actions.review, [
-      icon(icon_review),
+      @icons.icon(icon_review),
       @html.span(class="dock-launcher-name", "Review"),
       @html.span(class="dock-launcher-hint", "Review changed files and diffs"),
     ]),
   )
   rows.push(
     @html.button(class="dock-launcher-row", on_click=actions.workflows, [
-      icon(icon_workflows),
+      @icons.icon(icon_workflows),
       @html.span(class="dock-launcher-name", "Workflows"),
       @html.span(
         class="dock-launcher-hint",
@@ -283,7 +238,7 @@ pub fn tabs_bar(
         .aria_label("Close all tabs")
         .disabled(close_all_tabs_disabled)
         .on_click(_ => close_all_tabs),
-      icon(@icons.icon_close_all),
+      @icons.icon(@icons.icon_close_all),
     ),
     @html.button(
       class=if chips.is_empty() {
@@ -293,7 +248,7 @@ pub fn tabs_bar(
       },
       title="New tab",
       on_click=toggle_menu,
-      icon(icon_add),
+      @icons.icon(@icons.icon_add),
     ),
     @html.button(
       class="panel-toggle panel-expand",
@@ -302,13 +257,13 @@ pub fn tabs_bar(
         .aria_label(if expanded { "Restore panel" } else { "Expand panel" })
         .aria_pressed(expanded.to_string())
         .on_click(_ => toggle_expanded),
-      icon(if expanded { icon_restore_panel } else { icon_expand_panel }),
+      @icons.icon(if expanded { icon_restore_panel } else { icon_expand_panel }),
     ),
     @html.button(
       class="panel-toggle",
       title="Hide panel",
       on_click=toggle_panel,
-      icon(icon_layout_sidebar_right),
+      @icons.icon(@icons.icon_layout_sidebar_right),
     ),
   ]
   if menu_open {

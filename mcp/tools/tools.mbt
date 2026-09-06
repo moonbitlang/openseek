@@ -96,20 +96,16 @@ pub async fn[X] build(
   workspace_root? : String,
   discovery_timeout_ms? : Int = DefaultDiscoveryTimeoutMs,
 ) -> Array[@agent_tool.AgentToolDefinition] {
-  let tools = []
-  for
-    entry in build_grouped(
-      scope,
-      servers,
-      client_name~,
-      client_version~,
-      workspace_root?,
-      discovery_timeout_ms~,
-    ) {
-    let (_, contributed) = entry
-    tools.append(contributed)
-  }
-  tools
+  build_grouped(
+    scope,
+    servers,
+    client_name~,
+    client_version~,
+    workspace_root?,
+    discovery_timeout_ms~,
+  )
+  .map(group => group.1)
+  .flatten()
 }
 
 ///|

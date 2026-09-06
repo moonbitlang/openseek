@@ -73,10 +73,7 @@ fn State::visible_entries(self : State) -> Array[String] {
       contains.push(name)
     }
   }
-  for name in contains {
-    prefixes.push(name)
-  }
-  prefixes
+  [..prefixes, ..contains]
 }
 
 ///|

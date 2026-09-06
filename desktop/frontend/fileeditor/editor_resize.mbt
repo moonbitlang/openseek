@@ -112,14 +112,7 @@ fn on_resize_move(event : @dom.Event) -> Unit {
 /// On a very narrow window the floor wins, even past the ceiling.
 fn drag_size(raw : Double, floor~ : Double, max~ : Double) -> Int {
   let ceiling = if max > floor { max } else { floor }
-  let size = if raw < floor {
-    floor
-  } else if raw > ceiling {
-    ceiling
-  } else {
-    raw
-  }
-  size.to_int()
+  raw.clamp(min=floor, max=ceiling).to_int()
 }
 
 ///|
@@ -152,24 +145,19 @@ let tree_width : Ref[Int?] = Ref(None)
 fn sync_root_style() -> Unit {
   guard document_element() is Some(root) else { return }
   let style : @js.Value = @js.Value::cast_from(root).get_with_string("style")
-  if editor_width.val is Some(width) {
-    let _ : @js.Value = style.apply_with_string("setProperty", [
-      @js.Value::cast_from("--editor-width"),
-      @js.Value::cast_from("\{width}px"),
-    ])
+  // One `style` handle, one `setProperty` per set size, in the same order.
+  fn set_px(name : String, size : Int?) -> Unit {
+    if size is Some(px) {
+      let _ : @js.Value = style.apply_with_string("setProperty", [
+        @js.Value::cast_from(name),
+        @js.Value::cast_from("\{px}px"),
+      ])
+    }
   }
-  if tree_height.val is Some(height) {
-    let _ : @js.Value = style.apply_with_string("setProperty", [
-      @js.Value::cast_from("--tree-height"),
-      @js.Value::cast_from("\{height}px"),
-    ])
-  }
-  if tree_width.val is Some(width) {
-    let _ : @js.Value = style.apply_with_string("setProperty", [
-      @js.Value::cast_from("--tree-width"),
-      @js.Value::cast_from("\{width}px"),
-    ])
-  }
+
+  set_px("--editor-width", editor_width.val)
+  set_px("--tree-height", tree_height.val)
+  set_px("--tree-width", tree_width.val)
 }
 
 ///|

@@ -45,20 +45,3 @@ async fn git_run(
     None => { exit_code: -1, output: "git timed out after \{timeout_ms}ms", }
   }
 }
-
-///|
-/// Run git and require success; `Err` carries the merged diagnostics.
-pub async fn git_require(
-  args : Array[String],
-  cwd~ : String,
-  timeout_ms? : Int = 30_000,
-) -> Result[String, String] {
-  let outcome = git_run(args, cwd~, timeout_ms~)
-  if outcome.exit_code == 0 {
-    Ok(outcome.output)
-  } else {
-    Err(
-      "git \{args.join(" ")} failed (exit \{outcome.exit_code}): \{outcome.output}",
-    )
-  }
-}

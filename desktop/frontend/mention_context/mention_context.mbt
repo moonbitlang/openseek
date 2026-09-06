@@ -414,12 +414,6 @@ fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
       index += 1
       continue
     }
-    if file_pattern.execute(line) is Some(matched) {
-      guard matched.named_group("path") is Some(path) else { return None }
-      mentions.push(File(path=path.to_owned()))
-      index += 1
-      continue
-    }
     if symbol_pattern.execute(line) is Some(matched) {
       guard matched.named_group("name") is Some(name) else { return None }
       let (file, line_number) = if matched.named_group("file") is Some(file) &&

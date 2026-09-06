@@ -105,17 +105,20 @@ test "finished_body and timeout_head are stage-aware only when staged" {
 }
 
 ///|
+/// The argument prefixes the spawn allowlist admits for `program`, in the
+/// order `spawnable_commands` lists them.
+fn spawn_prefixes(program : String) -> Array[Array[String]] {
+  [
+    for entry in spawnable_commands if entry.0 == program => entry.1
+  ]
+}
+
+///|
 /// Proton CLI is admitted one subcommand at a time. In particular, there is no
 /// bare rule and no global working-directory prefix: callers set the child
 /// process cwd instead of letting the command redirect itself elsewhere.
 test "the spawn policy admits Proton subcommands but not global cwd options" {
-  let proton_prefixes : Array[Array[String]] = []
-  for entry in spawnable_commands {
-    let (program, args_prefix) = entry
-    if program == "proton_cli" {
-      proton_prefixes.push(args_prefix)
-    }
-  }
+  let proton_prefixes = spawn_prefixes("proton_cli")
   assert_eq(proton_prefixes.length(), 9)
   for
     args_prefix in [
@@ -146,13 +149,7 @@ test "the spawn policy admits Proton subcommands but not global cwd options" {
 /// bare rule and no verb that runs or installs an agent (`exec`, `install`),
 /// so the prefix gating keeps the agentic binary's surface to review.
 test "the spawn policy admits only the codex review verb" {
-  let codex_prefixes : Array[Array[String]] = []
-  for entry in spawnable_commands {
-    let (program, args_prefix) = entry
-    if program == "codex" {
-      codex_prefixes.push(args_prefix)
-    }
-  }
+  let codex_prefixes = spawn_prefixes("codex")
   assert_eq(codex_prefixes.length(), 1)
   assert_eq(codex_prefixes[0], ["review"])
   assert_false(codex_prefixes.contains([]))

@@ -21,8 +21,8 @@ pub let default_worker_max_steps : Int = 300
 pub let default_worker_deadline_ms : Int = 2_700_000
 
 ///|
-/// The geometry and work order a worker child receives from the subtask
-/// controller, decoded from the `subrun worker` input line. Every path is
+/// The geometry and work order a worker child receives from the worker
+/// controller (`agent_workflow`), decoded from the `subrun worker` input line. Every path is
 /// canonical (the controller realpaths at provision time) — the child does
 /// not re-derive geometry, it enforces with what it was handed.
 pub struct WorkerInput {
@@ -147,7 +147,7 @@ pub async fn run_child(
   // it: remove's created-only gate and edit's rebind detection only work
   // when all four tools share the record.
   let file_state = @agent_tool.FileStateMap()
-  let report = @agent_subrun.execute_kind(
+  let report = @agent_kind.execute_kind(
     session_id~,
     append_item?,
     system_prompt=worker_system_prompt(),

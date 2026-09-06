@@ -200,14 +200,7 @@ async fn integrate_locked(
     let _ = save_entry(geometry.common_git_dir, entry)
     // The branch's content now lives in origin history: the worktree and
     // branch are provably redundant — the one auto-clean that is safe.
-    // (`git worktree remove` refuses ANY worktree in repos with tracked
-    // submodules, so removal is rm + prune by design.)
-    @fs.rmdir(entry.worker_root, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => ()
-    }
-    let _ = git_run(["worktree", "prune"], cwd=origin)
-    let _ = git_run(["branch", "-d", entry.branch], cwd=origin)
+    remove_worktree_and_branch(origin, entry, force=false)
     return {
       entry,
       result: "integrated",
@@ -218,184 +211,6 @@ async fn integrate_locked(
     entry,
     result: "refused",
     detail: ["merge did not land: \{merge.output.trim()}"],
-  }
-}
-
-///|
-/// Continue a conflicted integration after the caller resolved the markers:
-/// verify the in-progress merge is THIS attempt, nothing is left unmerged,
-/// and the staged resolution stays inside scope ∪ the conflicted set, then
-/// commit through the controller.
-pub async fn integrate_continue(
-  geometry : Geometry,
-  entry : SubtaskEntry,
-) -> IntegrateOutcome {
-  let origin = geometry.origin_root
-  let mutex = repo_mutex(geometry.common_git_dir)
-  mutex.acquire()
-  defer mutex.release()
-  integrate_continue_locked(geometry, origin, entry)
-}
-
-///|
-async fn integrate_continue_locked(
-  geometry : Geometry,
-  origin : String,
-  entry : SubtaskEntry,
-) -> IntegrateOutcome {
-  let entry = reload_entry(geometry.common_git_dir, entry)
-  guard geometry.is_integration_target_for(entry) else {
-    return {
-      entry,
-      result: "refused",
-      detail: [
-        "subtask \{entry.name} belongs to a different worktree; continue the integration from the worktree that launched it",
-      ],
-    }
-  }
-  guard entry.state is Conflicted && entry.commit_oid is Some(commit_oid) else {
-    return {
-      entry,
-      result: "refused",
-      detail: ["subtask \{entry.name} has no conflicted integration"],
-    }
-  }
-  let merge_head = git_run(
-    ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
-    cwd=origin,
-  )
-  guard merge_head.exit_code == 0 && merge_head.output.trim() == commit_oid else {
-    return {
-      entry,
-      result: "refused",
-      detail: [
-        "no merge of \{commit_oid} is in progress — the conflicted state is stale",
-      ],
-    }
-  }
-  match entry.origin_head_before {
-    Some(before) =>
-      match git_require(["rev-parse", "HEAD"], cwd=origin) {
-        Ok(head) =>
-          if head.trim() != before {
-            return {
-              entry,
-              result: "refused",
-              detail: ["origin HEAD moved during the conflicted window"],
-            }
-          }
-        Err(reason) => return { entry, result: "refused", detail: [reason], }
-      }
-    None => ()
-  }
-  let unmerged = git_run(["ls-files", "-u", "-z"], cwd=origin)
-  if unmerged.exit_code == 0 && unmerged.output != "" {
-    return {
-      entry,
-      result: "refused",
-      detail: ["unresolved conflict entries remain; resolve them all first"],
-    }
-  }
-  // The staged resolution may only touch the slice's scope plus the
-  // recorded conflict set — a stray `git add -A` must not smuggle
-  // unrelated changes into the merge commit.
-  let staged = git_run(
-    ["diff", "--cached", "--name-status", "-z", "HEAD"],
-    cwd=origin,
-  )
-  guard staged.exit_code == 0 else {
-    return {
-      entry,
-      result: "refused",
-      detail: ["git diff --cached failed: \{staged.output.trim()}"],
-    }
-  }
-  let permitted = entry.allowed_paths + entry.conflict_paths
-  let strays = scope_violations(
-    parse_diff_name_status_z(staged.output),
-    permitted,
-  )
-  if !strays.is_empty() {
-    return {
-      entry,
-      result: "refused",
-      detail: [
-        "the staged resolution touches paths outside the slice and its conflict set: \{strays.join(", ")}; unstage them first",
-      ],
-    }
-  }
-  match
-    git_require(
-      [
-        "-c", "core.hooksPath=/dev/null", "commit", "--no-verify", "--no-gpg-sign",
-        "--no-edit",
-      ],
-      cwd=origin,
-    ) {
-    Ok(_) => ()
-    Err(reason) => return { entry, result: "refused", detail: [reason], }
-  }
-  let entry = { ..entry, state: Integrated, }
-  let _ = save_entry(geometry.common_git_dir, entry)
-  @fs.rmdir(entry.worker_root, recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => ()
-  }
-  let _ = git_run(["worktree", "prune"], cwd=origin)
-  let _ = git_run(["branch", "-d", entry.branch], cwd=origin)
-  { entry, result: "integrated", detail: ["conflict resolution committed"], }
-}
-
-///|
-/// Abort a conflicted integration: verify ownership first, then restore
-/// the pre-merge state. The subtask returns to `committed` (its branch and
-/// worktree survive) — the reservation is NOT released.
-pub async fn integrate_abort(
-  geometry : Geometry,
-  entry : SubtaskEntry,
-) -> IntegrateOutcome {
-  let origin = geometry.origin_root
-  let mutex = repo_mutex(geometry.common_git_dir)
-  mutex.acquire()
-  defer mutex.release()
-  let entry = reload_entry(geometry.common_git_dir, entry)
-  guard geometry.is_integration_target_for(entry) else {
-    return {
-      entry,
-      result: "refused",
-      detail: [
-        "subtask \{entry.name} belongs to a different worktree; abort the integration from the worktree that launched it",
-      ],
-    }
-  }
-  guard entry.state is Conflicted && entry.commit_oid is Some(commit_oid) else {
-    return {
-      entry,
-      result: "refused",
-      detail: ["subtask \{entry.name} has no conflicted integration"],
-    }
-  }
-  let merge_head = git_run(
-    ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
-    cwd=origin,
-  )
-  guard merge_head.exit_code == 0 && merge_head.output.trim() == commit_oid else {
-    return {
-      entry,
-      result: "refused",
-      detail: ["no merge of \{commit_oid} is in progress"],
-    }
-  }
-  match git_require(["merge", "--abort"], cwd=origin) {
-    Ok(_) => ()
-    Err(reason) => return { entry, result: "refused", detail: [reason], }
-  }
-  let entry = { ..entry, state: Committed, }
-  let _ = save_entry(geometry.common_git_dir, entry)
-  {
-    entry,
-    result: "aborted",
-    detail: ["merge aborted; the branch and worktree remain"],
   }
 }
 
@@ -430,12 +245,7 @@ pub async fn discard(
       return Err("a merge of this subtask is in progress; abort it first")
     }
   }
-  @fs.rmdir(entry.worker_root, recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => ()
-  }
-  let _ = git_run(["worktree", "prune"], cwd=origin)
-  let _ = git_run(["branch", "-D", entry.branch], cwd=origin)
+  remove_worktree_and_branch(origin, entry, force=true)
   let entry = { ..entry, state: Discarded, }
   let _ = save_entry(geometry.common_git_dir, entry)
   Ok(())

@@ -94,13 +94,9 @@ pub fn Request::run(
           scheduler.add(failed())
           return
         }
-        let paths = reply.files.filter_map(path => {
-          if path.is_empty() {
-            None
-          } else {
-            Some(@pathx.Relative(path))
-          }
-        })
+        let paths = [
+          for path in reply.files if !path.is_empty() => @pathx.Relative(path)
+        ]
         scheduler.add(loaded(paths, reply.limit_hit))
       }) catch {
         _ => scheduler.add(failed())
@@ -205,13 +201,9 @@ fn searching_loader(
           if reply.cancelled {
             return
           }
-          let paths = reply.files.filter_map(path => {
-            if path.is_empty() {
-              None
-            } else {
-              Some(@pathx.Relative(path))
-            }
-          })
+          let paths = [
+            for path in reply.files if !path.is_empty() => @pathx.Relative(path)
+          ]
           if active {
             scheduler.add(loaded(paths, reply.limit_hit))
           }

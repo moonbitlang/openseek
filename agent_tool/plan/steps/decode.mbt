@@ -92,17 +92,15 @@ pub fn decode(arguments : Json) -> PlanInput raise {
     )
   }
   let steps : Array[PlanStep] = []
-  for index, item in items; in_progress_count = 0 {
+  for index, item in items {
     let step = decode_step(index, item)
-    steps.push(step)
-    if step.status is InProgress {
-      if in_progress_count > 0 {
-        fail("arguments.steps to contain at most one in_progress step")
-      }
-      continue in_progress_count + 1
-    } else {
-      continue in_progress_count
+    // Checked before the push, so `steps` still holds only the earlier steps:
+    // the SECOND in_progress step is the one that fails, and no later item is
+    // decoded — same rejection point as a running counter.
+    if step.status is InProgress && steps.any(s => s.status is InProgress) {
+      fail("arguments.steps to contain at most one in_progress step")
     }
+    steps.push(step)
   }
   { steps, }
 }
