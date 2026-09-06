@@ -37,26 +37,14 @@ test "squiggly_theme_css emits one rule per present color, in severity order" {
     info: Some("#59a4f9"),
     hint: Some("#eeeeeeb3"),
   })
-  assert_true(
-    css.contains(
-      ".moonbit-viewer .squiggly-error { background: url(\"data:image/svg+xml,",
-    ),
-  )
-  assert_true(
-    css.contains(
-      ".moonbit-viewer .squiggly-warning { background: url(\"data:image/svg+xml,",
-    ),
-  )
-  assert_true(
-    css.contains(
-      ".moonbit-viewer .squiggly-info { background: url(\"data:image/svg+xml,",
-    ),
-  )
-  assert_true(
-    css.contains(
-      ".moonbit-viewer .squiggly-hint { background: url(\"data:image/svg+xml,",
-    ),
-  )
+  for severity in ["error", "warning", "info", "hint"] {
+    assert_true(
+      css.contains(
+        ".moonbit-viewer .squiggly-\{severity} { background: url(\"data:image/svg+xml,",
+      ),
+      msg="squiggly-\{severity} rule",
+    )
+  }
   // wavy severities repeat horizontally; hint is a single no-repeat dot cluster.
   assert_true(css.contains("\") repeat-x bottom left; }"))
   assert_true(css.contains("\") no-repeat bottom left; }"))

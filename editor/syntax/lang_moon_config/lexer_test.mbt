@@ -22,17 +22,9 @@ fn render_tokens(source : String) -> String {
 ///|
 /// Splits on `\n` only, matching the snapshot line table the viewer consumes.
 fn split_lines(source : String) -> Array[String] {
-  let lines : Array[String] = []
-  let start = for i in 0..<source.length(); start = 0 {
-    if source[i] == '\n' {
-      lines.push(source[start:i].to_owned())
-      continue i + 1
-    }
-  } nobreak {
-    start
-  }
-  lines.push(source[start:source.length()].to_owned())
-  lines
+  [
+    for line in source.split("\n") => line.to_owned()
+  ]
 }
 
 ///|
