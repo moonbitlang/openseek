@@ -126,9 +126,8 @@ pub fn ContextMenuWidget::show(
   self.focused_entry_index = -1
   self.theme = theme
   self.container.set_attribute("data-theme", theme)
-  match theme_source {
-    Some(source) => copy_context_menu_theme(self.container, source)
-    None => ()
+  if theme_source is Some(source) {
+    copy_context_menu_theme(self.container, source)
   }
   self.rebuild_root_menu()
   self.install_show_listeners()
@@ -180,11 +179,8 @@ pub fn ContextMenuWidget::hide(
   self.entries = []
   self.item_nodes = []
   self.focused_entry_index = -1
-  if restore_focus {
-    match self.focus_to_return {
-      Some(element) => @base_browser.focus_prevent_scroll(element)
-      None => ()
-    }
+  if restore_focus && self.focus_to_return is Some(element) {
+    @base_browser.focus_prevent_scroll(element)
   }
   self.focus_to_return = None
   (self.callbacks.on_hide)(was_cancelled)
@@ -287,57 +283,36 @@ fn ContextMenuWidget::install_show_listeners(self : ContextMenuWidget) -> Unit {
     event.prevent_default()
     event.stop_propagation()
   })
+  let listen_document = (event_type : String, listener : @rdom.Listener) => {
+    @rdom.document().add_event_listener(event_type, listener)
+    self.show_listeners.push(
+      @base_common.Disposable::from(() => {
+        @rdom.document().remove_event_listener(event_type, listener)
+      }),
+    )
+  }
+  let hide_when_outside : @rdom.Listener = event => {
+    guard self.visible else { return }
+    if !context_menu_event_inside(event, self.container) &&
+      !self.event_inside_submenu(event) {
+      self.hide(was_cancelled=true)
+    }
+  }
   // An eligible editor target stops propagation and replaces this menu in its
   // own handler. A native-fallback target does not, so the document event
   // closes the stale custom menu before the browser presents its own surface.
-  let context_menu_listener : @rdom.Listener = event => {
-    guard self.visible else { return }
-    if !context_menu_event_inside(event, self.container) &&
-      !self.event_inside_submenu(event) {
-      self.hide(was_cancelled=true)
-    }
-  }
-  @rdom.document().add_event_listener("contextmenu", context_menu_listener)
-  self.show_listeners.push(
-    @base_common.Disposable::from(() => {
-      @rdom.document().remove_event_listener(
-        "contextmenu", context_menu_listener,
-      )
-    }),
-  )
+  listen_document("contextmenu", hide_when_outside)
   self.listen_show(self.container, "keydown", event => {
     self.handle_keydown(event)
   })
-  let document_listener : @rdom.Listener = event => {
+  listen_document("mousedown", event => {
     guard self.visible else { return }
-    match event.to_mouse_event() {
-      Some(mouse) if mouse.get_button() == 2 => return
-      _ => ()
+    if event.to_mouse_event() is Some(mouse) && mouse.get_button() == 2 {
+      return
     }
-    if !context_menu_event_inside(event, self.container) &&
-      !self.event_inside_submenu(event) {
-      self.hide(was_cancelled=true)
-    }
-  }
-  @rdom.document().add_event_listener("mousedown", document_listener)
-  self.show_listeners.push(
-    @base_common.Disposable::from(() => {
-      @rdom.document().remove_event_listener("mousedown", document_listener)
-    }),
-  )
-  let focus_listener : @rdom.Listener = event => {
-    guard self.visible else { return }
-    if !context_menu_event_inside(event, self.container) &&
-      !self.event_inside_submenu(event) {
-      self.hide(was_cancelled=true)
-    }
-  }
-  @rdom.document().add_event_listener("focusin", focus_listener)
-  self.show_listeners.push(
-    @base_common.Disposable::from(() => {
-      @rdom.document().remove_event_listener("focusin", focus_listener)
-    }),
-  )
+    hide_when_outside(event)
+  })
+  listen_document("focusin", hide_when_outside)
   let blur_listener = () => self.hide(was_cancelled=true)
   context_menu_add_window_blur_listener(self.container, blur_listener)
   self.show_listeners.push(
@@ -591,7 +566,7 @@ fn ContextMenuWidget::handle_keydown(
         self.focus_relative_root(-1)
       }
     }
-    "Home" => {
+    "Home" | "PageUp" => {
       event.prevent_default()
       if self.submenu_owns_focus() {
         self.focus_submenu_boundary(first=true)
@@ -605,14 +580,6 @@ fn ContextMenuWidget::handle_keydown(
         self.focus_submenu_boundary(first=false)
       } else {
         self.focus_root_boundary(first=false)
-      }
-    }
-    "PageUp" => {
-      event.prevent_default()
-      if self.submenu_owns_focus() {
-        self.focus_submenu_boundary(first=true)
-      } else {
-        self.focus_root_boundary(first=true)
       }
     }
     "ArrowRight" =>
@@ -689,9 +656,8 @@ fn ContextMenuWidget::close_submenu(
   self.cancel_submenu_timers()
   if submenu.parent_entry_index >= 0 &&
     submenu.parent_entry_index < self.item_nodes.length() {
-    match self.item_nodes[submenu.parent_entry_index] {
-      Some(parent) => parent.action.set_attribute("aria-expanded", "false")
-      None => ()
+    if self.item_nodes[submenu.parent_entry_index] is Some(parent) {
+      parent.action.set_attribute("aria-expanded", "false")
     }
   }
   dispose_context_submenu(submenu)
@@ -731,9 +697,8 @@ fn ContextMenuWidget::event_inside_submenu(
 fn ContextMenuWidget::cancel_submenu_show_timer(
   self : ContextMenuWidget,
 ) -> Unit {
-  match self.submenu_show_timer {
-    Some(timer) => timer.dispose()
-    None => ()
+  if self.submenu_show_timer is Some(timer) {
+    timer.dispose()
   }
   self.submenu_show_timer = None
 }
@@ -742,9 +707,8 @@ fn ContextMenuWidget::cancel_submenu_show_timer(
 fn ContextMenuWidget::cancel_submenu_hide_timer(
   self : ContextMenuWidget,
 ) -> Unit {
-  match self.submenu_hide_timer {
-    Some(timer) => timer.dispose()
-    None => ()
+  if self.submenu_hide_timer is Some(timer) {
+    timer.dispose()
   }
   self.submenu_hide_timer = None
 }
@@ -877,15 +841,12 @@ fn build_context_menu_item(entry : ContextMenuEntry) -> ContextMenuItemNode {
       action.set_attribute("data-context-menu-command", id)
       label.append_child(document.create_text_node(title).as_node())
       action.append_child(label.as_node())
-      match keybinding_label {
-        Some(binding) => {
-          let keybinding = document.create_element("span")
-          keybinding.set_attribute("class", "keybinding")
-          keybinding.set_attribute("aria-hidden", "true")
-          keybinding.append_child(document.create_text_node(binding).as_node())
-          action.append_child(keybinding.as_node())
-        }
-        None => ()
+      if keybinding_label is Some(binding) {
+        let keybinding = document.create_element("span")
+        keybinding.set_attribute("class", "keybinding")
+        keybinding.set_attribute("aria-hidden", "true")
+        keybinding.append_child(document.create_text_node(binding).as_node())
+        action.append_child(keybinding.as_node())
       }
     }
     ContextMenuSubmenu(label=title, ..) => {
@@ -926,27 +887,20 @@ fn update_context_menu_focus(
   pointer_driven : Bool,
 ) -> Unit {
   for index, maybe_node in nodes {
-    match maybe_node {
-      Some(node) => {
-        let focused = index == focused_index
-        node.wrapper.set_attribute(
-          "class",
-          if focused {
-            "action-item focused"
-          } else {
-            "action-item"
-          },
-        )
-        node.action.set_attribute(
-          "data-pointer-focus",
-          if focused && pointer_driven {
-            "true"
-          } else {
-            "false"
-          },
-        )
-      }
-      None => ()
+    if maybe_node is Some(node) {
+      let focused = index == focused_index
+      node.wrapper.set_attribute(
+        "class",
+        if focused {
+          "action-item focused"
+        } else {
+          "action-item"
+        },
+      )
+      node.action.set_attribute(
+        "data-pointer-focus",
+        (focused && pointer_driven).to_string(),
+      )
     }
   }
 }
@@ -981,21 +935,11 @@ fn context_menu_boundary_index(
   nodes : Array[ContextMenuItemNode?],
   first : Bool,
 ) -> Int {
-  if first {
-    for index, node in nodes {
-      if node is Some(_) {
-        return index
-      }
-    }
-  } else {
-    for offset in 0..<nodes.length() {
-      let index = nodes.length() - 1 - offset
-      if nodes[index] is Some(_) {
-        return index
-      }
-    }
+  match [ for index, node in nodes if node is Some(_) => index ] {
+    [] => -1
+    [head, ..] if first => head
+    [.., last] => last
   }
-  -1
 }
 
 ///|

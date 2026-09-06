@@ -466,44 +466,35 @@ pub fn FoldingModel::get_regions_inside(
     Some(region) => region.end_line_number()
     None => 0x7FFFFFFF // Number.MAX_VALUE
   }
-  match filter {
-    Some({ with_level: Some(filter), .. }) => {
-      let level_stack : Array[FoldingRegion] = []
-      for i in index..<self.regions.length() {
-        let current = self.regions.to_region(i)
-        if self.regions.get_start_line_number(i) < end_line_number {
-          while level_stack.length() > 0 &&
-                !current.contained_by({
-                  start_line_number: level_stack[level_stack.length() - 1].start_line_number(),
-                  end_line_number: level_stack[level_stack.length() - 1].end_line_number(),
-                }) {
-            level_stack.pop() |> ignore
-          }
-          level_stack.push(current)
-          if filter(current, level_stack.length()) {
-            result.push(current)
-          }
-        } else {
-          break
+  let with_level_filter = match filter {
+    Some({ with_level: Some(filter), .. }) => Some(filter)
+    _ => None
+  }
+  let plain_filter = match filter {
+    Some({ plain: Some(f), .. }) => Some(f)
+    _ => None
+  }
+  let level_stack : Array[FoldingRegion] = []
+  for i in index..<self.regions.length() {
+    guard self.regions.get_start_line_number(i) < end_line_number else { break }
+    let current = self.regions.to_region(i)
+    let keep = match (with_level_filter, plain_filter) {
+      (Some(filter), _) => {
+        while level_stack.length() > 0 &&
+              !current.contained_by({
+                start_line_number: level_stack[level_stack.length() - 1].start_line_number(),
+                end_line_number: level_stack[level_stack.length() - 1].end_line_number(),
+              }) {
+          level_stack.pop() |> ignore
         }
+        level_stack.push(current)
+        filter(current, level_stack.length())
       }
+      (None, Some(f)) => f(current)
+      (None, None) => true
     }
-    _ => {
-      let plain_filter = match filter {
-        Some({ plain: Some(f), .. }) => Some(f)
-        _ => None
-      }
-      for i in index..<self.regions.length() {
-        let current = self.regions.to_region(i)
-        if self.regions.get_start_line_number(i) < end_line_number {
-          match plain_filter {
-            Some(f) => if f(current) { result.push(current) }
-            None => result.push(current)
-          }
-        } else {
-          break
-        }
-      }
+    if keep {
+      result.push(current)
     }
   }
   result
@@ -520,36 +511,28 @@ pub fn set_collapse_state_levels_down(
   line_numbers? : Array[Int],
 ) -> Unit {
   let to_toggle : Array[FoldingRegion] = []
+  let inside_filter = region_filter_with_level((r, level) => {
+    r.is_collapsed() != do_collapse && level < levels
+  })
   match line_numbers {
     Some(line_numbers) if line_numbers.length() > 0 =>
       for line_number in line_numbers {
-        match folding_model.get_region_at_line(line_number) {
-          Some(region) => {
-            if region.is_collapsed() != do_collapse {
-              to_toggle.push(region)
-            }
-            if levels > 1 {
-              let regions_inside = folding_model.get_regions_inside(
-                Some(region),
-                filter=region_filter_with_level((r, level) => {
-                  r.is_collapsed() != do_collapse && level < levels
-                }),
-              )
-              to_toggle.append(regions_inside)
-            }
-          }
-          None => ()
+        guard folding_model.get_region_at_line(line_number) is Some(region) else {
+          continue
+        }
+        if region.is_collapsed() != do_collapse {
+          to_toggle.push(region)
+        }
+        if levels > 1 {
+          to_toggle.append(
+            folding_model.get_regions_inside(Some(region), filter=inside_filter),
+          )
         }
       }
-    _ => {
-      let regions_inside = folding_model.get_regions_inside(
-        None,
-        filter=region_filter_with_level((r, level) => {
-          r.is_collapsed() != do_collapse && level < levels
-        }),
+    _ =>
+      to_toggle.append(
+        folding_model.get_regions_inside(None, filter=inside_filter),
       )
-      to_toggle.append(regions_inside)
-    }
   }
   folding_model.toggle_collapse_state(to_toggle)
 }

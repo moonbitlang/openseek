@@ -381,11 +381,9 @@ fn ViewZones::recompute_whitespace_props(self : ViewZones) -> Bool {
 
 ///|
 fn ViewZones::zone_keys_snapshot(self : ViewZones) -> Array[String] {
-  let keys : Array[String] = []
-  for id, _ in self.zones {
-    keys.push(id)
-  }
-  keys
+  [
+    for id, _ in self.zones => id
+  ]
 }
 
 ///|
@@ -401,17 +399,15 @@ fn ViewZones::layout_infos(self : ViewZones) -> Array[(String, Int, Double)] {
   for whitespace in context.view_model.get_whitespaces() {
     layout_heights.set(whitespace.id, whitespace.height.to_double())
   }
-  let result : Array[(String, Int, Double)] = []
-  for _, zone in self.zones {
-    result.push(
+  [
+    for _, zone in self.zones => {
       (
         zone.whitespace_id,
         zone.delegate.after_line_number,
         layout_heights.get(zone.whitespace_id).unwrap_or(0.0),
-      ),
-    )
-  }
-  result
+      )
+    }
+  ]
 }
 
 ///|
@@ -419,10 +415,7 @@ fn ViewZones::zone_ordinal(
   _self : ViewZones,
   zone : @editor_browser.ViewZone,
 ) -> Int {
-  match zone.ordinal {
-    Some(ordinal) => ordinal
-    None => zone.after_column.unwrap_or(10000)
-  }
+  zone.ordinal.unwrap_or(zone.after_column.unwrap_or(10000))
 }
 
 ///|
@@ -430,15 +423,7 @@ fn ViewZones::compute_whitespace_props(
   self : ViewZones,
   zone : @editor_browser.ViewZone,
 ) -> ComputedViewZoneProps {
-  if zone.after_line_number == 0 {
-    return {
-      is_in_hidden_area: false,
-      after_view_line_number: 0,
-      height_in_px: self.height_in_pixels(zone),
-      min_width_in_px: self.min_width_in_pixels(zone),
-    }
-  }
-  guard self.context is Some(context) else {
+  guard zone.after_line_number != 0 && self.context is Some(context) else {
     return {
       is_in_hidden_area: false,
       after_view_line_number: 0,
@@ -533,10 +518,7 @@ fn ViewZones::add_zone(
     is_in_hidden_area: props.is_in_hidden_area,
     is_visible: false,
     dom_node: FastViewZoneDomNode(zone.dom_node),
-    margin_dom_node: match zone.margin_dom_node {
-      Some(node) => Some(FastViewZoneDomNode(node))
-      None => None
-    },
+    margin_dom_node: zone.margin_dom_node.map(node => FastViewZoneDomNode(node)),
     caller_aria_hidden_present,
     caller_aria_hidden_value,
   }
@@ -553,15 +535,12 @@ fn ViewZones::add_zone(
   registered.dom_node.element.set_attribute("monaco-view-zone", whitespace_id)
   registered.dom_node.element.set_attribute("aria-hidden", "true")
   self.dom_node.append_child(registered.dom_node.element.as_node())
-  match registered.margin_dom_node {
-    Some(margin_dom_node) => {
-      margin_dom_node.set_position("absolute")
-      @base_browser.set_style_property(margin_dom_node.element, "width", "100%")
-      margin_dom_node.set_display("none")
-      margin_dom_node.element.set_attribute("monaco-view-zone", whitespace_id)
-      self.margin_dom_node.append_child(margin_dom_node.element.as_node())
-    }
-    None => ()
+  if registered.margin_dom_node is Some(margin_dom_node) {
+    margin_dom_node.set_position("absolute")
+    @base_browser.set_style_property(margin_dom_node.element, "width", "100%")
+    margin_dom_node.set_display("none")
+    margin_dom_node.element.set_attribute("monaco-view-zone", whitespace_id)
+    self.margin_dom_node.append_child(margin_dom_node.element.as_node())
   }
   self.zones.set(whitespace_id, registered)
   self.should_render = true
@@ -582,13 +561,10 @@ fn ViewZones::remove_zone(
   zone.dom_node.element.remove_attribute("monaco-view-zone")
   restore_view_zone_aria_hidden(zone)
   @base_browser.remove_element(zone.dom_node.element)
-  match zone.margin_dom_node {
-    Some(margin_dom_node) => {
-      margin_dom_node.element.remove_attribute("monaco-visible-view-zone")
-      margin_dom_node.element.remove_attribute("monaco-view-zone")
-      @base_browser.remove_element(margin_dom_node.element)
-    }
-    None => ()
+  if zone.margin_dom_node is Some(margin_dom_node) {
+    margin_dom_node.element.remove_attribute("monaco-visible-view-zone")
+    margin_dom_node.element.remove_attribute("monaco-view-zone")
+    @base_browser.remove_element(margin_dom_node.element)
   }
   self.should_render = true
   true
@@ -633,10 +609,10 @@ fn ViewZones::should_suppress_mouse_down_on_view_zone(
   self : ViewZones,
   id : String,
 ) -> Bool {
-  match self.zones.get(id) {
-    Some(zone) => zone.delegate.suppress_mouse_down.unwrap_or(false)
-    None => false
-  }
+  self.zones
+  .get(id)
+  .bind(zone => zone.delegate.suppress_mouse_down)
+  .unwrap_or(false)
 }
 
 ///|
@@ -797,13 +773,10 @@ fn ViewZones::render(
     zone.dom_node.set_top(css_pixels_double(new_top))
     zone.dom_node.set_height(css_pixels(new_height))
     zone.dom_node.set_display(new_display)
-    match zone.margin_dom_node {
-      Some(margin_dom_node) => {
-        margin_dom_node.set_top(css_pixels_double(new_top))
-        margin_dom_node.set_height(css_pixels(new_height))
-        margin_dom_node.set_display(new_display)
-      }
-      None => ()
+    if zone.margin_dom_node is Some(margin_dom_node) {
+      margin_dom_node.set_top(css_pixels_double(new_top))
+      margin_dom_node.set_height(css_pixels(new_height))
+      margin_dom_node.set_display(new_display)
     }
   }
 

@@ -588,15 +588,10 @@ async fn write_static_response_body(
   content : Bytes,
 ) -> Unit {
   let chunk_size = 16384
-  let mut start = 0
-  while start < content.length() {
-    let end = if start + chunk_size < content.length() {
-      start + chunk_size
-    } else {
-      content.length()
-    }
+  for start = 0; start < content.length(); {
+    let end = (start + chunk_size).min(content.length())
     conn.write(content[start:end])
-    start = end
+    continue end
   }
 }
 

@@ -11,102 +11,85 @@ fn detect_markdown_comments_in_snapshot(
   while line_index < line_count {
     // Line comments deliberately take precedence when configured delimiters
     // overlap. A whole consecutive run is consumed by this branch.
-    match rule.line_comment {
-      Some(line_rule) =>
-        match
-          line_comment_content(
+    if rule.line_comment is Some(line_rule) &&
+      line_comment_content(
+        snapshot.get_line_content(line_index + 1),
+        line_rule.comment,
+      )
+      is Some(first_content) {
+      let contents = [first_content]
+      let start_line_number = line_index + 1
+      line_index += 1
+      while line_index < line_count {
+        guard line_comment_content(
             snapshot.get_line_content(line_index + 1),
             line_rule.comment,
-          ) {
-          Some(first_content) => {
-            let contents = [first_content]
-            let start_line_number = line_index + 1
-            line_index += 1
-            while line_index < line_count {
-              match
-                line_comment_content(
-                  snapshot.get_line_content(line_index + 1),
-                  line_rule.comment,
-                ) {
-                Some(content) => {
-                  contents.push(content)
-                  line_index += 1
-                }
-                None => break
-              }
-            }
-            result.push({
-              line_range: LineRange(start_line_number, line_index + 1),
-              markdown: contents.join("\n"),
-            })
-            continue
-          }
-          None => ()
+          )
+          is Some(content) else {
+          break
         }
-      None => ()
+        contents.push(content)
+        line_index += 1
+      }
+      result.push({
+        line_range: LineRange(start_line_number, line_index + 1),
+        markdown: contents.join("\n"),
+      })
+      continue
     }
-
-    match rule.block_comment {
-      Some(pair) => {
-        let first_line = snapshot.get_line_content(line_index + 1)
-        let opening_offset = leading_indent_end(first_line)
-        if matches_at(first_line, opening_offset, pair.open) {
-          let start_line_index = line_index
-          let after_open = opening_offset + pair.open.length()
-          let mut closing_line_index = line_index
-          let mut closing_offset = -1
-          while closing_line_index < line_count {
-            let line = snapshot.get_line_content(closing_line_index + 1)
-            let search_start = if closing_line_index == start_line_index {
-              after_open
-            } else {
-              0
-            }
-            closing_offset = find_from(line, pair.close, search_start)
-            if closing_offset >= 0 {
-              break
-            }
-            closing_line_index += 1
+    if rule.block_comment is Some(pair) {
+      let first_line = snapshot.get_line_content(line_index + 1)
+      let opening_offset = leading_indent_end(first_line)
+      if matches_at(first_line, opening_offset, pair.open) {
+        let start_line_index = line_index
+        let after_open = opening_offset + pair.open.length()
+        let mut closing_line_index = line_index
+        let mut closing_offset = -1
+        while closing_line_index < line_count {
+          let line = snapshot.get_line_content(closing_line_index + 1)
+          let search_start = if closing_line_index == start_line_index {
+            after_open
+          } else {
+            0
           }
-          if closing_line_index == line_count {
-            // The unmatched opening delimiter owns the remaining source as a
-            // block comment, but cannot produce a renderable whole-line block.
-            line_index = line_count
-            continue
+          closing_offset = find_from(line, pair.close, search_start)
+          if closing_offset >= 0 {
+            break
           }
-          let closing_line = snapshot.get_line_content(closing_line_index + 1)
-          let closes_at_boundary = closing_offset + pair.close.length() ==
-            trailing_content_end(closing_line)
-          if closes_at_boundary {
-            let body_lines : Array[String] = []
-            if start_line_index == closing_line_index {
-              body_lines.push(slice(first_line, after_open, closing_offset))
-            } else {
-              body_lines.push(
-                slice(first_line, after_open, first_line.length()),
-              )
-              let mut interior_line = start_line_index + 1
-              while interior_line < closing_line_index {
-                body_lines.push(snapshot.get_line_content(interior_line + 1))
-                interior_line += 1
-              }
-              body_lines.push(slice(closing_line, 0, closing_offset))
-            }
-            result.push({
-              line_range: LineRange(
-                start_line_index + 1,
-                closing_line_index + 2,
-              ),
-              markdown: normalize_block_body(body_lines),
-            })
-          }
-          // The first closing delimiter ends the language block even when
-          // trailing source makes the whole-line candidate invalid.
-          line_index = closing_line_index + 1
+          closing_line_index += 1
+        }
+        if closing_line_index == line_count {
+          // The unmatched opening delimiter owns the remaining source as a
+          // block comment, but cannot produce a renderable whole-line block.
+          line_index = line_count
           continue
         }
+        let closing_line = snapshot.get_line_content(closing_line_index + 1)
+        let closes_at_boundary = closing_offset + pair.close.length() ==
+          trailing_content_end(closing_line)
+        if closes_at_boundary {
+          let body_lines : Array[String] = []
+          if start_line_index == closing_line_index {
+            body_lines.push(slice(first_line, after_open, closing_offset))
+          } else {
+            body_lines.push(slice(first_line, after_open, first_line.length()))
+            let mut interior_line = start_line_index + 1
+            while interior_line < closing_line_index {
+              body_lines.push(snapshot.get_line_content(interior_line + 1))
+              interior_line += 1
+            }
+            body_lines.push(slice(closing_line, 0, closing_offset))
+          }
+          result.push({
+            line_range: LineRange(start_line_index + 1, closing_line_index + 2),
+            markdown: normalize_block_body(body_lines),
+          })
+        }
+        // The first closing delimiter ends the language block even when
+        // trailing source makes the whole-line candidate invalid.
+        line_index = closing_line_index + 1
+        continue
       }
-      None => ()
     }
     line_index += 1
   }

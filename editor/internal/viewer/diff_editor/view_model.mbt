@@ -125,34 +125,24 @@ pub fn DiffEditorViewModel::set_model(
       self.state = Pending
       let original_identity = model.original.identity()
       let modified_identity = model.modified.identity()
+      let invalidate_content = () => {
+        self.invalidate_content_for_model_pair(
+          original_identity, modified_identity,
+        )
+      }
+      let clear_pair = () => {
+        self.clear_model_pair_on_will_dispose(
+          original_identity, modified_identity,
+        )
+      }
       self.model_subscriptions.push(
-        model.original.on_did_change_content(_ => {
-          self.invalidate_content_for_model_pair(
-            original_identity, modified_identity,
-          )
-        }),
+        model.original.on_did_change_content(_ => invalidate_content()),
       )
       self.model_subscriptions.push(
-        model.modified.on_did_change_content(_ => {
-          self.invalidate_content_for_model_pair(
-            original_identity, modified_identity,
-          )
-        }),
+        model.modified.on_did_change_content(_ => invalidate_content()),
       )
-      self.model_subscriptions.push(
-        model.original.on_will_dispose(() => {
-          self.clear_model_pair_on_will_dispose(
-            original_identity, modified_identity,
-          )
-        }),
-      )
-      self.model_subscriptions.push(
-        model.modified.on_will_dispose(() => {
-          self.clear_model_pair_on_will_dispose(
-            original_identity, modified_identity,
-          )
-        }),
-      )
+      self.model_subscriptions.push(model.original.on_will_dispose(clear_pair))
+      self.model_subscriptions.push(model.modified.on_will_dispose(clear_pair))
       self.schedule_immediate_compute()
     }
   }

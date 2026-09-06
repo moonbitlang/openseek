@@ -80,24 +80,19 @@ fn TokenizerSyntaxTokenBackend::handle_attached_view_state_change(
   self : TokenizerSyntaxTokenBackend,
   change : AttachedViewStateChange,
 ) -> Unit {
+  let existing = self.attached_view_states.search_by(entry => {
+    entry.view.same(change.view)
+  })
   match change.state {
     Some(state) => {
-      let index = for i, entry in self.attached_view_states {
-        if entry.view.same(change.view) {
-          break i
-        }
-      } nobreak {
-        -1
-      }
-      let handler = if index >= 0 {
+      let handler = if existing is Some(index) {
         self.attached_view_states[index].handler
       } else {
         let holder : Ref[AttachedViewHandler?] = Ref(None)
         let handler = AttachedViewHandler(
           () => {
-            match holder.val {
-              Some(current) => self.refresh_ranges(current.line_ranges())
-              None => ()
+            if holder.val is Some(current) {
+              self.refresh_ranges(current.line_ranges())
             }
           },
           () => self.model_state.scheduler.val,
@@ -108,19 +103,11 @@ fn TokenizerSyntaxTokenBackend::handle_attached_view_state_change(
       }
       handler.handle_state_change(state)
     }
-    None => {
-      let index = for i, entry in self.attached_view_states {
-        if entry.view.same(change.view) {
-          break i
-        }
-      } nobreak {
-        -1
-      }
-      if index >= 0 {
+    None =>
+      if existing is Some(index) {
         self.attached_view_states[index].handler.dispose()
         self.attached_view_states.remove(index) |> ignore
       }
-    }
   }
 }
 
