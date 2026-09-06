@@ -222,51 +222,34 @@ fn mode_options(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
 ///|
 fn pattern_repair_control(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
   let requested = page.pattern_repair_phase is PatternRepairRequested
-  let completed = page.pattern_repair_phase is PatternRepairPreview
-  let failed = page.pattern_repair_phase is PatternRepairFailed
+  let settled = page.pattern_repair_phase
+    is (PatternRepairPreview | PatternRepairFailed)
+  let composing = page.pattern_repair_phase is PatternRepairComposer
+  let label = if requested {
+    "Pattern Repair in progress"
+  } else {
+    "Fix Pattern"
+  }
   @html.button(
-    class=if requested {
-      "search-option pressed pattern-repair-button"
-    } else if completed {
-      "search-option pressed pattern-repair-button"
-    } else if failed {
+    class=if requested || settled {
       "search-option pressed pattern-repair-button"
     } else {
       "search-option pattern-repair-button"
     },
-    title=if requested { "Pattern Repair in progress" } else { "Fix Pattern" },
+    title=label,
     attrs=@html.Attrs::build()
-      .aria_label(
-        if requested {
-          "Pattern Repair in progress"
-        } else {
-          "Fix Pattern"
-        },
-      )
-      .aria_pressed(
-        (requested ||
-        completed ||
-        failed ||
-        page.pattern_repair_phase is PatternRepairComposer).to_string(),
-      )
+      .aria_label(label)
+      .aria_pressed((requested || settled || composing).to_string())
       .on_click(_ => {
         if requested {
           @cmd.none
-        } else if page.pattern_repair_phase is PatternRepairComposer ||
-          completed ||
-          failed {
+        } else if composing || settled {
           emit(RejectPatternRepair)
         } else {
           emit(FixPattern)
         }
       }),
-    @icons.icon(
-      if requested {
-        @icons.icon_sparkle
-      } else {
-        @icons.icon_sparkle
-      },
-    ),
+    @icons.icon(@icons.icon_sparkle),
   )
 }
 

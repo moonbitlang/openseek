@@ -529,18 +529,12 @@ fn SessionTerminalProjection::append_to(
   ts? : Double,
   sequence? : Int,
 ) -> Bool {
-  let (kind, message) = match self.0 {
-    @desktop_protocol.Finished(message) => ("finished", message)
-    @desktop_protocol.Aborted(message) => ("aborted", message)
-    @desktop_protocol.Interrupted(message) => ("interrupted", message)
-    @desktop_protocol.Failed(message) => ("failed", message)
-  }
-  let message = message.trim().to_owned()
-  match kind {
+  let failure = match self.0 {
     // A current no-tool final is already the last provider response. Mark
     // that response finished instead of duplicating its prose; it keeps its
     // own stamp and sequence, so the settled bubble stays the same keyed node.
-    "finished" =>
+    @desktop_protocol.Finished(message) => {
+      let message = message.trim().to_owned()
       if !message.is_empty() &&
         items is [.., last] &&
         last.kind
@@ -562,53 +556,33 @@ fn SessionTerminalProjection::append_to(
             finished=true,
           ),
         }
-        true
-      } else {
-        if !message.is_empty() {
-          // A differing terminal message, such as a completion-tool answer,
-          // remains a new final bubble.
-          items.push({ kind: Answer(message), ts, sequence, })
-        }
-        false
+        return true
       }
-    "aborted" => {
-      items.push({
-        kind: Failure(
-          if message.is_empty() {
-            "aborted"
-          } else {
-            "aborted: \{message}"
-          },
-        ),
-        ts,
-        sequence,
-      })
-      false
+      if !message.is_empty() {
+        // A differing terminal message, such as a completion-tool answer,
+        // remains a new final bubble.
+        items.push({ kind: Answer(message), ts, sequence, })
+      }
+      return false
     }
-    "interrupted" => {
-      items.push({
-        kind: Failure(
-          if message.is_empty() {
-            "cancelled"
-          } else {
-            "cancelled: \{message}"
-          },
-        ),
-        ts,
-        sequence,
-      })
-      false
-    }
-    "failed" => {
-      items.push({
-        kind: Failure(if message.is_empty() { "failed" } else { message }),
-        ts,
-        sequence,
-      })
-      false
-    }
-    _ => false
+    @desktop_protocol.Aborted(message) =>
+      match message.trim().to_owned() {
+        "" => "aborted"
+        message => "aborted: \{message}"
+      }
+    @desktop_protocol.Interrupted(message) =>
+      match message.trim().to_owned() {
+        "" => "cancelled"
+        message => "cancelled: \{message}"
+      }
+    @desktop_protocol.Failed(message) =>
+      match message.trim().to_owned() {
+        "" => "failed"
+        message => message
+      }
   }
+  items.push({ kind: Failure(failure), ts, sequence, })
+  false
 }
 
 ///|

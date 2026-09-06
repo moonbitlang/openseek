@@ -1,17 +1,27 @@
 ///|
+/// A connected local conversation at `placement`, in the light scheme: the
+/// context most cases below start from.
+fn local_ctx(session : String, placement : @interop.CheckoutPlacement) -> Ctx {
+  {
+    channel: @interop.ChannelId::Local,
+    session,
+    placement: Some(placement),
+    dark_mode: false,
+    connected: true,
+  }
+}
+
+///|
 test "Windows workspace paths use their final component as the tab label" {
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   guard @resource.of_path(@interop.ChannelId::Local, "/C:/Users/alice/project")
     is Some(workspace) else {
     fail("Windows resource fixture was invalid")
   }
-  let ctx : Ctx = {
-    channel: @interop.ChannelId::Local,
-    session: "windows-workspace",
-    placement: Some(@interop.WorkspaceRoot(root=workspace)),
-    dark_mode: false,
-    connected: true,
-  }
+  let ctx = local_ctx(
+    "windows-workspace",
+    @interop.WorkspaceRoot(root=workspace),
+  )
   let (_, state) = update(emit, ToggleTerminal, State::empty(), ctx)
   guard state.tabs.get(0) is Some(tab) else {
     fail("terminal tab was not opened")
@@ -26,13 +36,7 @@ test "an exit before the open reply cannot revive a dead terminal" {
     is Some(workspace) else {
     fail("workspace resource fixture was invalid")
   }
-  let ctx : Ctx = {
-    channel: @interop.ChannelId::Local,
-    session: "exit-race",
-    placement: Some(@interop.WorkspaceRoot(root=workspace)),
-    dark_mode: false,
-    connected: true,
-  }
+  let ctx = local_ctx("exit-race", @interop.WorkspaceRoot(root=workspace))
   let (_, opening) = update(emit, ToggleTerminal, State::empty(), ctx)
   let key = opening.tabs[0].key
   let terminal_id = "terminal-exit-race"
@@ -67,13 +71,7 @@ test "sync records color-scheme changes even when the shown tab is unchanged" {
     is Some(scratch_root) else {
     fail("scratch resource fixture was invalid")
   }
-  let light_ctx : Ctx = {
-    channel: @interop.ChannelId::Local,
-    session: "theme",
-    placement: Some(@interop.Scratch(root=Some(scratch_root))),
-    dark_mode: false,
-    connected: true,
-  }
+  let light_ctx = local_ctx("theme", @interop.Scratch(root=Some(scratch_root)))
   let (light, _) = sync(emit, State::empty(), light_ctx)
   assert_true(light.shown is None)
   assert_true(light.synced_dark_mode is Some(false))
@@ -89,13 +87,10 @@ test "terminal UUIDs route independently of the focused device" {
     is Some(local_workspace) else {
     fail("local workspace resource fixture was invalid")
   }
-  let local_ctx : Ctx = {
-    channel: @interop.ChannelId::Local,
-    session: "shared-session",
-    placement: Some(@interop.WorkspaceRoot(root=local_workspace)),
-    dark_mode: false,
-    connected: true,
-  }
+  let local_ctx = local_ctx(
+    "shared-session",
+    @interop.WorkspaceRoot(root=local_workspace),
+  )
   let remote : @interop.ChannelId = Remote("device-1")
   guard @resource.of_path(remote, "/work/project") is Some(remote_workspace) else {
     fail("remote workspace resource fixture was invalid")
@@ -245,15 +240,10 @@ test "a missing checkout refuses new PTYs and retires only its conversation" {
     is Some(worktree_root) else {
     fail("workspace resource fixture was invalid")
   }
-  let ctx : Ctx = {
-    channel: @interop.ChannelId::Local,
-    session: "missing",
-    placement: Some(
-      @interop.Worktree(project=workspace, name="wt", root=worktree_root),
-    ),
-    dark_mode: false,
-    connected: true,
-  }
+  let ctx = local_ctx(
+    "missing",
+    @interop.Worktree(project=workspace, name="wt", root=worktree_root),
+  )
   let (_, opening) = update(emit, ToggleTerminal, State::empty(), ctx)
   let opening_key = opening.tabs[0].key
   let (_, running) = update(
@@ -309,13 +299,7 @@ test "a worktree conversation never reuses the main checkout terminal group" {
     is Some(worktree_root) else {
     fail("workspace resource fixture was invalid")
   }
-  let main : Ctx = {
-    channel: @interop.ChannelId::Local,
-    session: "main-chat",
-    placement: Some(@interop.WorkspaceRoot(root=workspace)),
-    dark_mode: false,
-    connected: true,
-  }
+  let main = local_ctx("main-chat", @interop.WorkspaceRoot(root=workspace))
   let (_, main_opening) = update(emit, ToggleTerminal, State::empty(), main)
   let worktree = {
     ..main,
@@ -346,13 +330,7 @@ test "an unresolved placement cannot reveal or create a project terminal" {
     is Some(worktree_root) else {
     fail("workspace resource fixture was invalid")
   }
-  let main : Ctx = {
-    channel: @interop.ChannelId::Local,
-    session: "main-chat",
-    placement: Some(@interop.WorkspaceRoot(root=workspace)),
-    dark_mode: false,
-    connected: true,
-  }
+  let main = local_ctx("main-chat", @interop.WorkspaceRoot(root=workspace))
   let (_, project_opening) = update(emit, ToggleTerminal, State::empty(), main)
   let unresolved : Ctx = { ..main, session: "restored-chat", placement: None, }
   // The existing project tab stays alive for its owner, but the restored

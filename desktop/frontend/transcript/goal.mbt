@@ -50,18 +50,8 @@ pub fn apply_goal_marker(
   match marker {
     GoalSet(text) => Some({ text, blocked: None, })
     GoalCleared => None
-    GoalBlocked(reason) =>
-      if goal is Some(goal) {
-        Some({ ..goal, blocked: Some(reason), })
-      } else {
-        None
-      }
-    GoalUnblocked =>
-      if goal is Some(goal) {
-        Some({ ..goal, blocked: None, })
-      } else {
-        None
-      }
+    GoalBlocked(reason) => goal.map(goal => { ..goal, blocked: Some(reason), })
+    GoalUnblocked => goal.map(goal => { ..goal, blocked: None, })
   }
 }
 
