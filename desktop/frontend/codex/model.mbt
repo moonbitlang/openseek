@@ -1685,7 +1685,7 @@ fn State::with_thread_reply(
     runtime: active.runtime,
     updated_at_ms: reply_stamp_ms,
   }
-  let replaced = self.threads.iter().any(existing => existing.id == active.id)
+  let replaced = self.threads.any(existing => existing.id == active.id)
   let threads = self.threads.map(existing => {
     if existing.id == active.id {
       // A reply without a stamp must not erase the catalog's; keep the row
@@ -2033,9 +2033,7 @@ fn CodexThread::with_turn(self : CodexThread, turn : CodexTurn) -> CodexThread {
 /// the first submitted input. Item ids stay app-server-owned; the local
 /// preview needs only this semantic boundary and never tries to match text.
 fn CodexThread::has_user_item(self : CodexThread) -> Bool {
-  self.turns
-  .iter()
-  .any(turn => turn.items.iter().any(item => item.kind == "userMessage"))
+  self.turns.any(turn => turn.items.any(item => item.kind == "userMessage"))
 }
 
 ///|

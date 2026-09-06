@@ -28,14 +28,14 @@ fn EngineModel::wire(self : EngineModel) -> String {
 /// Read a wire name. A blank one is the absence of a model, not a tier, so it
 /// reads as `None` — stored preferences fall back to what they already had,
 /// and the event decoders treat it like the missing field it is.
-fn EngineModel::parse(value : String) -> EngineModel? {
-  match value.trim().to_owned() {
+fn EngineModel::parse(value : StringView) -> EngineModel? {
+  match value.trim() {
     "deepseek-v4-pro" => Some(DsPro)
     "deepseek-v4-flash" => Some(DsFlash)
     "glm-5.3" => Some(Glm53)
     "glm-5.3-flash" => Some(Glm53Flash)
     "" => None
-    name => Some(Other(name))
+    name => Some(Other(name.to_owned()))
   }
 }
 
