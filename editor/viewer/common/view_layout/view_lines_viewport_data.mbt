@@ -28,7 +28,12 @@ pub fn ViewportData::decorations_for_line(
   self : ViewportData,
   line_number : Int,
 ) -> Array[LineDecoration] {
-  self.line_decorations.get(line_number - self.start_line_number).unwrap_or([])
+  // Matched rather than `unwrap_or([])`: this runs once per rendered line, and
+  // `unwrap_or` builds the empty fallback array on the hit path too.
+  match self.line_decorations.get(line_number - self.start_line_number) {
+    Some(decorations) => decorations
+    None => []
+  }
 }
 
 ///|

@@ -295,39 +295,44 @@ fn InlineModelDecorationsComputer::get_or_create_view_model_decoration(
   decoration_options : ResolvedInlineDecorationOptions,
 ) -> ViewModelDecoration {
   let id = model_decoration.id
-  self.decorations_cache.get_or_init(id, () => {
-    let model_range = model_decoration.range
-    let options = model_decoration.options
-    let view_range = if decoration_options.is_whole_line {
-      // For backwards compatibility, whole-line decorations span min..max
-      // col, kept outside injected text (inlineDecorations.ts:171-172).
-      // DEFERRED: the source belowHiddenRanges switch is absent; hidden-line
-      // handling remains in the projection.
-      let start = self.coordinates_converter.model_position_to_view_position(
-        Position(model_range.start_line_number, 1),
-        affinity=Left,
-      )
-      let end = self.coordinates_converter.model_position_to_view_position(
-        Position(
-          model_range.end_line_number,
-          self.model.snapshot.get_line_max_column(model_range.end_line_number),
-        ),
-        affinity=Right,
-      )
-      @base_common.Range(
-        start.line_number,
-        start.column,
-        end.line_number,
-        end.column,
-      )
-    } else {
-      // inlineDecorations.ts:177: Right keeps an empty decoration right of
-      // injected text at its position.
-      self.coordinates_converter.model_range_to_view_range(
-        model_range,
-        affinity=Right,
-      )
+  match self.decorations_cache.get(id) {
+    Some(r) => r
+    None => {
+      let model_range = model_decoration.range
+      let options = model_decoration.options
+      let view_range = if decoration_options.is_whole_line {
+        // For backwards compatibility, whole-line decorations span min..max
+        // col, kept outside injected text (inlineDecorations.ts:171-172).
+        // DEFERRED: the source belowHiddenRanges switch is absent; hidden-line
+        // handling remains in the projection.
+        let start = self.coordinates_converter.model_position_to_view_position(
+          Position(model_range.start_line_number, 1),
+          affinity=Left,
+        )
+        let end = self.coordinates_converter.model_position_to_view_position(
+          Position(
+            model_range.end_line_number,
+            self.model.snapshot.get_line_max_column(model_range.end_line_number),
+          ),
+          affinity=Right,
+        )
+        @base_common.Range(
+          start.line_number,
+          start.column,
+          end.line_number,
+          end.column,
+        )
+      } else {
+        // inlineDecorations.ts:177: Right keeps an empty decoration right of
+        // injected text at its position.
+        self.coordinates_converter.model_range_to_view_range(
+          model_range,
+          affinity=Right,
+        )
+      }
+      let r = ViewModelDecoration::ViewModelDecoration(view_range, options)
+      self.decorations_cache[id] = r
+      r
     }
-    ViewModelDecoration(view_range, options)
-  })
+  }
 }
