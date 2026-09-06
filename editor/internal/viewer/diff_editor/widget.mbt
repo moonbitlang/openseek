@@ -504,9 +504,7 @@ fn DiffEditorWidget::install_event_bridges(self : DiffEditorWidget) -> Unit {
           .get_bounding_client_rect()
           .get_width()
           .max(1.0)
-        let state_relative_offset = (
-            Double::from_int(pointer_event.get_client_x()) - root_left
-          ) /
+        let state_relative_offset = (pointer_event.get_client_x() - root_left) /
           pane_width *
           self.layout_state.width
         if self.layout_state.set_split_from_pointer(state_relative_offset) {

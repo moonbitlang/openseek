@@ -4,6 +4,11 @@
 /// policy remains product code in `install_markdown_dom`.
 extern "js" fn install_markdown_test_dom() -> Unit =
   #| () => {
+  #|   // rabbita reads DOM collections through `item(index)`, so the fake ones
+  #|   // are arrays carrying that method rather than bare arrays.
+  #|   const collection = (items) => Object.assign(items, {
+  #|     item: (index) => items[index] ?? null,
+  #|   });
   #|   const voidTags = new Set(["AREA", "BASE", "BR", "COL", "EMBED", "HR", "IMG", "INPUT", "LINK", "META", "PARAM", "SOURCE", "TRACK", "WBR"]);
   #|   const decode = (value) => value
   #|     .replaceAll("&quot;", "\"")
@@ -68,7 +73,7 @@ extern "js" fn install_markdown_test_dom() -> Unit =
   #|         }
   #|       };
   #|       visit(this);
-  #|       return result;
+  #|       return collection(result);
   #|     }
   #|     get textContent() { return this.childNodes.map((child) => child.textContent).join(""); }
   #|   }
@@ -126,7 +131,7 @@ extern "js" fn install_markdown_test_dom() -> Unit =
   #|     removeAttribute(name) { this.attributes.delete(name.toLowerCase()); }
   #|     remove() { this.parentNode?.removeChild(this); }
   #|     set innerHTML(value) { parseInto(this.tagName === "TEMPLATE" ? this.content : this, value, this.ownerDocument); }
-  #|     get children() { return this.childNodes.filter((child) => child.nodeType === 1); }
+  #|     get children() { return collection(this.childNodes.filter((child) => child.nodeType === 1)); }
   #|   }
   #|
   #|   class FakeDocument extends FakeTree {

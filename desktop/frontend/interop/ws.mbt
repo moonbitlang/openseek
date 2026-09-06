@@ -122,7 +122,7 @@ pub fn ws_close(channel : ChannelId) -> Unit {
   reject_all(session, "SeekMoon connection closed")
   let _ : @js.Value = session.socket.apply_with_string(
     "close",
-    ([] : Array[@js.Value]),
+    ([] : FixedArray[@js.Value]),
   )
 }
 

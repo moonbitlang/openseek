@@ -112,7 +112,7 @@ fn on_tree_resize_move(event : @dom.Event) -> Unit {
   if tree_docked_right() {
     set_tree_width(
       drag_size(
-        rect.get_right() - mouse.get_client_x().to_double(),
+        rect.get_right() - mouse.get_client_x(),
         floor=MinTreeWidth.to_double(),
         max=rect.get_width() - MinViewerWidth.to_double(),
       ),
@@ -120,7 +120,7 @@ fn on_tree_resize_move(event : @dom.Event) -> Unit {
   } else {
     set_tree_height(
       drag_size(
-        rect.get_bottom() - mouse.get_client_y().to_double(),
+        rect.get_bottom() - mouse.get_client_y(),
         floor=MinTreeHeight.to_double(),
         max=rect.get_height() - MinViewerHeight.to_double(),
       ),

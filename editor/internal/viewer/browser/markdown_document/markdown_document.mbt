@@ -450,7 +450,7 @@ fn MarkdownDocumentView::post_render(self : MarkdownDocumentView) -> Unit {
       element_index < children.length() else {
       continue
     }
-    let element = children[element_index]
+    let element = children.item(element_index.to_double()).unwrap()
     element.set_attribute(
       "data-markdown-block-anchor",
       anchor.index.to_string(),
@@ -680,7 +680,8 @@ pub fn MarkdownDocumentView::set_hidden_root_elements(
   // `display:none`, so the view never owns or clobbers an element's `style`
   // attribute, and no `aria-hidden` bookkeeping is needed: `display:none`
   // already removes the subtree from the accessibility tree.
-  for index, child in children {
+  for index in 0..<children.length() {
+    let child = children.item(index.to_double()).unwrap()
     if hidden.contains(index) {
       child.set_attribute(markdown_hidden_element_attribute, "true")
     } else if child.has_attribute(markdown_hidden_element_attribute) {
@@ -731,7 +732,8 @@ pub fn MarkdownDocumentView::install_section_fold_controls(
       wanted[control.heading_element_index] = control
     }
   }
-  for index, child in children {
+  for index in 0..<children.length() {
+    let child = children.item(index.to_double()).unwrap()
     let existing = child.query_selector(markdown_fold_toggle_selector)
     match wanted.get(index) {
       Some(control) => {
@@ -790,7 +792,7 @@ let markdown_fold_toggle_selector : String = ".moonbit-viewer-markdown-fold-togg
 
 ///|
 fn markdown_first_child(element : @rdom.Element) -> @rdom.Node? {
-  element.get_children().get(0).map(first => first.as_node())
+  element.get_children().item(0).to_option().map(first => first.as_node())
 }
 
 ///|
@@ -946,7 +948,7 @@ fn MarkdownDocumentView::element_for_source_offset(
     }
     match anchor.rendered_element_index {
       Some(index) if index >= 0 && index < children.length() =>
-        return Some(children[index])
+        return Some(children.item(index.to_double()).unwrap())
       _ => ()
     }
   }
@@ -958,7 +960,7 @@ fn MarkdownDocumentView::element_for_source_offset(
       index < children.length() else {
       continue
     }
-    let element = children[index]
+    let element = children.item(index.to_double()).unwrap()
     if first_mapped is None {
       first_mapped = Some(element)
     }
@@ -1059,7 +1061,10 @@ pub fn MarkdownDocumentView::visible_source_ranges(
       index < children.length() else {
       continue
     }
-    let rect = children[index].get_bounding_client_rect()
+    let rect = children
+      .item(index.to_double())
+      .unwrap()
+      .get_bounding_client_rect()
     if rect.get_bottom() > viewport_top && rect.get_top() < viewport_bottom {
       result.push(anchor.source_range)
     }
@@ -1123,7 +1128,7 @@ pub fn MarkdownDocumentView::set_toc_entries(
   // Re-read the first child every pass: the underlying collection is live in
   // a real browser, so removing while iterating a snapshot hands the DOM an
   // undefined mid-loop.
-  while self.toc_list.get_children() is [stale, ..] {
+  while self.toc_list.get_children().item(0).to_option() is Some(stale) {
     self.toc_list.as_node().remove_child(stale.as_node())
   }
   for entry in entries {

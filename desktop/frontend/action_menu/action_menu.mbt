@@ -152,7 +152,10 @@ pub fn context_attrs(target : String) -> @html.Attrs {
     event.prevent_default()
     dispatch_open({
       target,
-      anchor: Pointer(event.get_client_x(), event.get_client_y()),
+      anchor: Pointer(
+        event.get_client_x().to_int(),
+        event.get_client_y().to_int(),
+      ),
       restore_focus_id: remembered_context_focus(event),
     })
   })
@@ -193,7 +196,7 @@ fn focus_element(id : String, after_render : Bool) -> @cmd.Cmd {
     if @dom.document().get_element_by_id(id).to_option() is Some(element) {
       let _ : @js.Value = @js.Value::cast_from(element).apply_with_string(
         "focus",
-        ([] : Array[@js.Value]),
+        ([] : FixedArray[@js.Value]),
       )
       if element.get_attribute(TemporaryFocusAttribute) == Some(id) {
         element.remove_attribute(TemporaryFocusAttribute)
@@ -241,8 +244,8 @@ fn position(target : String, anchor : Anchor) -> @cmd.Cmd {
       let window = @dom.window()
       let mut viewport_left = 0.0
       let mut viewport_top = 0.0
-      let mut viewport_width = window.inner_width().to_double()
-      let mut viewport_height = window.inner_height().to_double()
+      let mut viewport_width = window.inner_width()
+      let mut viewport_height = window.inner_height()
       if window.get_visual_viewport() is Some(viewport) {
         viewport_left = viewport.get_offset_left()
         viewport_top = viewport.get_offset_top()

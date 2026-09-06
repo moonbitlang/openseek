@@ -4,7 +4,7 @@ version = "0.1.0"
 
 import {
   "bobzhang/openseek@0.2.2",
-  "moonbit-community/rabbita@0.15.4",
+  "moonbit-community/rabbita@0.15.7",
 }
 
 preferred_target = "js"

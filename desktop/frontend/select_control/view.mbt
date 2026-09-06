@@ -122,7 +122,7 @@ fn Control::focus(
     if @dom.document().get_element_by_id(id).to_option() is Some(element) {
       let _ : @js.Value = @js.Value::cast_from(element).apply_with_string(
         "focus",
-        ([] : Array[@js.Value]),
+        ([] : FixedArray[@js.Value]),
       )
     }
   }

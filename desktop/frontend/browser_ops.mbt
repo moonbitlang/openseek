@@ -243,7 +243,7 @@ fn focus_browser_address() -> @cmd.Cmd {
         Some(element) => {
           let _ : @js.Value = @js.Cast::from(element).apply_with_string(
             "focus",
-            ([] : Array[@js.Value]),
+            ([] : FixedArray[@js.Value]),
           )
         }
         None => ()

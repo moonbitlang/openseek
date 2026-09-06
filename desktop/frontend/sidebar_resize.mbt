@@ -98,7 +98,7 @@ fn on_sidebar_resize_move(event : @dom.Event) -> Unit {
   let rect = app.get_bounding_client_rect()
   set_sidebar_width(
     drag_width(
-      mouse.get_client_x().to_double() - rect.get_left(),
+      mouse.get_client_x() - rect.get_left(),
       ceiling=rect.get_width() - MinContentWidth.to_double(),
     ),
   )

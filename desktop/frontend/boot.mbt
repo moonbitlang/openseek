@@ -390,7 +390,7 @@ pub fn boot() -> Unit {
       subscriptions=(model, emit) => {
         let subs : Array[@sub.Sub] = [
           @sub.on_resize(
-            emit.map(viewport => ViewportResized(width=viewport.width)),
+            emit.map(viewport => ViewportResized(width=viewport.width.to_int())),
           ),
           app_shortcut_subscription(emit),
           // Host event sources follow the device roster. Removing a device

@@ -358,8 +358,7 @@ fn CodeEditorOverviewRuler::handle_pointer_down(
   }
   let rect = self.root.get_bounding_client_rect()
   let pixel_ratio = @base_browser.device_pixel_ratio().max(1.0)
-  let offset = ((mouse.get_client_y().to_double() - rect.get_top()) *
-    pixel_ratio)
+  let offset = ((mouse.get_client_y() - rect.get_top()) * pixel_ratio)
     .round()
     .to_int()
   guard closest_code_editor_overview_ruler_entry(self.bands, offset) is Some(id) else {

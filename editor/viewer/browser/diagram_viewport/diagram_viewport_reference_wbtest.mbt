@@ -22,6 +22,11 @@ type DiagramViewportTestHarness
 ///|
 extern "js" fn install_diagram_viewport_test_dom() -> DiagramViewportTestHarness =
   #| () => {
+  #|   // rabbita reads DOM collections through `item(index)`, so the fake ones
+  #|   // are arrays carrying that method rather than bare arrays.
+  #|   const collection = (items) => Object.assign(items, {
+  #|     item: (index) => items[index] ?? null,
+  #|   });
   #|   const harness = {
   #|     restored: false,
   #|     originals: {
@@ -164,7 +169,7 @@ extern "js" fn install_diagram_viewport_test_dom() -> DiagramViewportTestHarness
   #|     removeAttribute(name) { this.attributes.delete(String(name).toLowerCase()); }
   #|     get children() {
   #|       harness.childReads += 1;
-  #|       return this.childNodes.filter(child => child.nodeType === 1);
+  #|       return collection(this.childNodes.filter(child => child.nodeType === 1));
   #|     }
   #|     get firstChild() { return this.childNodes[0] ?? null; }
   #|     get nextSibling() {
@@ -218,7 +223,7 @@ extern "js" fn install_diagram_viewport_test_dom() -> DiagramViewportTestHarness
   #|         }
   #|       };
   #|       visit(this);
-  #|       return result;
+  #|       return collection(result);
   #|     }
   #|     getBoundingClientRect() {
   #|       if (this.tagName === 'SVG' &&

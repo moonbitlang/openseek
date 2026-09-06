@@ -22,7 +22,7 @@ fn focus_after_render() -> @cmd.Cmd {
       if @dom.document().get_element_by_id(InputId).to_option() is Some(input) {
         let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
           "focus",
-          ([] : Array[@js.Value]),
+          ([] : FixedArray[@js.Value]),
         )
       }
     },

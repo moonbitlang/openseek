@@ -225,9 +225,9 @@ fn native_scrollbar_orthogonal_coord(
   vertical : Bool,
 ) -> Double {
   if vertical {
-    mouse.get_client_x().to_double()
+    mouse.get_client_x()
   } else {
-    mouse.get_client_y().to_double()
+    mouse.get_client_y()
   }
 }
 
