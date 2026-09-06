@@ -3,16 +3,7 @@ fn review_progress_state() -> (State, Ctx, ChangedFile) raise {
   let path = @pathx.Relative("src/main.mbt")
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[path] = {
-    ..loaded_doc(path.0),
-    review: Some({
-      generation: 1,
-      working_generation: 1,
-      baseline: ReviewContent("old source"),
-      view_mode: ReviewDiff,
-      selected,
-    }),
-  }
+  docs[path] = reviewed_doc(path, selected)
   let state = {
     ..owned_state(),
     docs,

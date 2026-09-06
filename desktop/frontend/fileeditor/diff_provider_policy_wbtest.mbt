@@ -14,16 +14,7 @@ test "selecting a Moon semantic algorithm enters Diff view and retains policy" {
   let path = @pathx.Relative("src/main.mbt")
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[path] = {
-    ..loaded_doc(path.0),
-    review: Some({
-      generation: 1,
-      working_generation: 1,
-      baseline: ReviewContent("old source"),
-      view_mode: ReviewSource,
-      selected,
-    }),
-  }
+  docs[path] = reviewed_doc(path, selected, view_mode=ReviewSource)
   let state = { ..owned_state(), docs, review_view_mode: ReviewSource, }
   let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
   let (_, line_unchanged) = update(
@@ -84,16 +75,7 @@ test "non-MoonBit review parks the last semantic review preference" {
   let path = @pathx.Relative("README.md")
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[path] = {
-    ..loaded_doc(path.0),
-    review: Some({
-      generation: 1,
-      working_generation: 1,
-      baseline: ReviewContent("old text"),
-      view_mode: ReviewDiff,
-      selected,
-    }),
-  }
+  docs[path] = reviewed_doc(path, selected, baseline="old text")
   let state = { ..owned_state(), docs, review_diff_mode: ReviewDiffTree, }
   let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
   let (_, unchanged) = update(

@@ -117,14 +117,13 @@ fn breadcrumb_entry_id(index : Int) -> String {
 }
 
 ///|
-fn focus_breadcrumb_entry_after_render(index : Int) -> @cmd.Cmd {
+/// Move DOM focus to the element with `id` after the next render. Every
+/// roving-tabindex list in the panel shares this one imperative effect.
+fn focus_element_after_render(id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
-      if @dom.document()
-        .get_element_by_id(breadcrumb_entry_id(index))
-        .to_option()
-        is Some(row) {
-        let _ : @js.Value = @js.Value::cast_from(row).apply_with_string(
+      if @dom.document().get_element_by_id(id).to_option() is Some(element) {
+        let _ : @js.Value = @js.Value::cast_from(element).apply_with_string(
           "focus",
           ([] : Array[@js.Value]),
         )
@@ -135,18 +134,8 @@ fn focus_breadcrumb_entry_after_render(index : Int) -> @cmd.Cmd {
 }
 
 ///|
-fn focus_explorer_tab_after_render(id : String) -> @cmd.Cmd {
-  @cmd.custom_cmd(
-    _ => {
-      if @dom.document().get_element_by_id(id).to_option() is Some(tab) {
-        let _ : @js.Value = @js.Value::cast_from(tab).apply_with_string(
-          "focus",
-          ([] : Array[@js.Value]),
-        )
-      }
-    },
-    kind=@cmd.after_render,
-  )
+fn focus_breadcrumb_entry_after_render(index : Int) -> @cmd.Cmd {
+  focus_element_after_render(breadcrumb_entry_id(index))
 }
 
 ///|
@@ -214,7 +203,7 @@ fn explorer_tab(
             event.prevent_default()
             @cmd.batch([
               dispatch(ExplorerModeSelected(target)),
-              focus_explorer_tab_after_render(explorer_tab_id(target)),
+              focus_element_after_render(explorer_tab_id(target)),
             ])
           }
           None => @cmd.none
@@ -231,20 +220,7 @@ fn changed_file_row_id(index : Int) -> String {
 
 ///|
 fn focus_changed_file_after_render(index : Int) -> @cmd.Cmd {
-  @cmd.custom_cmd(
-    _ => {
-      if @dom.document()
-        .get_element_by_id(changed_file_row_id(index))
-        .to_option()
-        is Some(row) {
-        let _ : @js.Value = @js.Value::cast_from(row).apply_with_string(
-          "focus",
-          ([] : Array[@js.Value]),
-        )
-      }
-    },
-    kind=@cmd.after_render,
-  )
+  focus_element_after_render(changed_file_row_id(index))
 }
 
 ///|
@@ -349,76 +325,63 @@ pub fn body_view(
       None =>
         ctx.active_file.map(path => supports_moon_diff(path.0)).unwrap_or(false)
     })
+  // Every surface host is the same never-re-keyed element: its id, the shared
+  // `viewer-host editor-shell` classes plus its own, and the app's theme.
+  fn surface_attrs(
+    id : String,
+    extra_class : String,
+    visible : Bool,
+  ) -> @html.Attrs {
+    @html.Attrs::build()
+    .id(id)
+    .class(
+      "viewer-host editor-shell" +
+      extra_class +
+      (if visible { "" } else { " moonbit-viewer-surface-hidden" }),
+    )
+    .data_set("theme", if ctx.dark_mode { "dark" } else { "light" })
+  }
+
   let viewer_host = @html.div(
-    attrs=@html.Attrs::build()
-      .id(ViewerHostId)
-      .class(
-        if use_diff_surface || use_markdown_surface || use_mbti_surface {
-          "viewer-host editor-shell moonbit-viewer-surface-hidden"
-        } else {
-          "viewer-host editor-shell"
-        },
-      )
-      .data_set("theme", if ctx.dark_mode { "dark" } else { "light" }),
+    attrs=surface_attrs(
+      ViewerHostId,
+      "",
+      !(use_diff_surface || use_markdown_surface || use_mbti_surface),
+    ),
     ([] : Array[@html.Html]),
   )
   let markdown_viewer_host = @html.div(
-    attrs=@html.Attrs::build()
-      .id(MarkdownViewerHostId)
-      .class(
-        if use_markdown_surface {
-          "viewer-host editor-shell"
-        } else {
-          "viewer-host editor-shell moonbit-viewer-surface-hidden"
-        },
-      )
-      .data_set("theme", if ctx.dark_mode { "dark" } else { "light" }),
+    attrs=surface_attrs(MarkdownViewerHostId, "", use_markdown_surface),
     ([] : Array[@html.Html]),
   )
   let mbti_diagram_host = @html.div(
-    attrs=@html.Attrs::build()
-      .id(MbtiDiagramHostId)
-      .class(
-        if use_mbti_surface {
-          "viewer-host editor-shell mbti-diagram-host"
-        } else {
-          "viewer-host editor-shell mbti-diagram-host moonbit-viewer-surface-hidden"
-        },
-      )
-      .data_set("theme", if ctx.dark_mode { "dark" } else { "light" }),
+    attrs=surface_attrs(
+      MbtiDiagramHostId,
+      " mbti-diagram-host",
+      use_mbti_surface,
+    ),
     ([] : Array[@html.Html]),
   )
   let diff_editor_host = @html.div(
-    attrs=@html.Attrs::build()
-      .id(DiffEditorHostId)
-      .class(
-        if use_diff_surface && !use_semantic_surface {
-          "viewer-host editor-shell"
-        } else {
-          "viewer-host editor-shell moonbit-viewer-surface-hidden"
-        },
-      )
-      .data_set("theme", if ctx.dark_mode { "dark" } else { "light" }),
+    attrs=surface_attrs(
+      DiffEditorHostId,
+      "",
+      use_diff_surface && !use_semantic_surface,
+    ),
     ([] : Array[@html.Html]),
   )
   let semantic_review_host = @html.div(
-    attrs=@html.Attrs::build()
-      .id(SemanticReviewHostId)
-      .class(
-        if use_semantic_surface {
-          "viewer-host editor-shell semantic-review-host"
-        } else {
-          "viewer-host editor-shell semantic-review-host moonbit-viewer-surface-hidden"
-        },
-      )
-      .data_set("theme", if ctx.dark_mode { "dark" } else { "light" })
-      .on_scroll(event => {
-        guard event.target().to_element() is Some(element) else {
-          return @cmd.none
-        }
-        sync_semantic_review_scroll_left(element.get_scroll_left())
-        @cmd.none
-      }),
+    attrs=surface_attrs(
+      SemanticReviewHostId,
+      " semantic-review-host",
+      use_semantic_surface,
+    ).on_scroll(event => {
+      guard event.target().to_element() is Some(element) else {
+        return @cmd.none
+      }
+      sync_semantic_review_scroll_left(element.get_scroll_left())
+      @cmd.none
+    }),
     semantic_review,
   )
   @html.div(class="editor-body", [
@@ -810,18 +773,7 @@ fn git_commit_row_id(index : Int) -> String {
 
 ///|
 fn focus_git_commit_after_render(index : Int) -> @cmd.Cmd {
-  @cmd.custom_cmd(
-    _ => {
-      if @dom.document().get_element_by_id(git_commit_row_id(index)).to_option()
-        is Some(row) {
-        let _ : @js.Value = @js.Value::cast_from(row).apply_with_string(
-          "focus",
-          ([] : Array[@js.Value]),
-        )
-      }
-    },
-    kind=@cmd.after_render,
-  )
+  focus_element_after_render(git_commit_row_id(index))
 }
 
 ///|
@@ -1009,6 +961,17 @@ fn git_graph_placeholder(
 }
 
 ///|
+/// One swimlane edge: every Git Graph edge is the same round-capped path in
+/// its lane color.
+fn graph_edge(color : Int, d : String) -> @svg.Svg {
+  @svg.path(
+    class="git-graph-edge " + graph_color_class(color),
+    d~,
+    attrs=@svg.Attrs::build().stroke_linecap("round"),
+  )
+}
+
+///|
 fn git_graph_cell(
   row : GraphRow,
   commit : @protocol.GitHistoryCommit,
@@ -1025,10 +988,9 @@ fn git_graph_cell(
     if node.id == commit.id {
       if index != circle_index {
         children.push(
-          @svg.path(
-            class="git-graph-edge " + graph_color_class(node.color),
-            d="M \{graph_lane_x(index)} 0 A 11 11 0 0 1 \{11 * index} 11 H \{circle_x}",
-            attrs=@svg.Attrs::build().stroke_linecap("round"),
+          graph_edge(
+            node.color,
+            "M \{graph_lane_x(index)} 0 A 11 11 0 0 1 \{11 * index} 11 H \{circle_x}",
           ),
         )
       } else {
@@ -1043,13 +1005,7 @@ fn git_graph_cell(
       } else {
         "M \{x} 0 V 6 A 5 5 0 0 1 \{x - 5} 11 H \{output_x + 5} A 5 5 0 0 0 \{output_x} 16 V 22"
       }
-      children.push(
-        @svg.path(
-          class="git-graph-edge " + graph_color_class(node.color),
-          d~,
-          attrs=@svg.Attrs::build().stroke_linecap("round"),
-        ),
-      )
+      children.push(graph_edge(node.color, d))
       output_swimlane_index += 1
     }
   }
@@ -1064,45 +1020,34 @@ fn git_graph_cell(
     }
     let start_x = 11 * parent_output_index
     children.push(
-      @svg.path(
-        class="git-graph-edge " +
-          graph_color_class(row.output_swimlanes[parent_output_index].color),
-        d="M \{start_x} 11 A 11 11 0 0 1 \{graph_lane_x(parent_output_index)} 22 M \{start_x} 11 H \{circle_x}",
-        attrs=@svg.Attrs::build().stroke_linecap("round"),
+      graph_edge(
+        row.output_swimlanes[parent_output_index].color,
+        "M \{start_x} 11 A 11 11 0 0 1 \{graph_lane_x(parent_output_index)} 22 M \{start_x} 11 H \{circle_x}",
       ),
     )
   }
 
   if input_index is Some(index) {
     children.push(
-      @svg.path(
-        class="git-graph-edge " +
-          graph_color_class(row.input_swimlanes[index].color),
-        d="M \{circle_x} 0 V 11",
-        attrs=@svg.Attrs::build().stroke_linecap("round"),
-      ),
+      graph_edge(row.input_swimlanes[index].color, "M \{circle_x} 0 V 11"),
     )
   }
   if !commit.parent_ids.is_empty() {
-    children.push(
-      @svg.path(
-        class="git-graph-edge " + graph_color_class(circle_color),
-        d="M \{circle_x} 11 V 22",
-        attrs=@svg.Attrs::build().stroke_linecap("round"),
-      ),
-    )
+    children.push(graph_edge(circle_color, "M \{circle_x} 11 V 22"))
   }
 
   let node_color = graph_color_class(circle_color)
-  if head {
-    children.push(
-      @svg.circle(
-        class="git-graph-node git-graph-node-head-outer " + node_color,
-        cx=circle_x,
-        cy=11,
-        r=7,
-      ),
+  fn node_circle(name : String, r : Int) -> @svg.Svg {
+    @svg.circle(
+      class="git-graph-node \{name} " + node_color,
+      cx=circle_x,
+      cy=11,
+      r~,
     )
+  }
+
+  if head {
+    children.push(node_circle("git-graph-node-head-outer", 7))
     children.push(
       @svg.circle(
         class="git-graph-node git-graph-node-head-inner " + node_color,
@@ -1113,31 +1058,10 @@ fn git_graph_cell(
       ),
     )
   } else if commit.parent_ids.length() > 1 {
-    children.push(
-      @svg.circle(
-        class="git-graph-node git-graph-node-merge-outer " + node_color,
-        cx=circle_x,
-        cy=11,
-        r=6,
-      ),
-    )
-    children.push(
-      @svg.circle(
-        class="git-graph-node git-graph-node-merge-inner " + node_color,
-        cx=circle_x,
-        cy=11,
-        r=3,
-      ),
-    )
+    children.push(node_circle("git-graph-node-merge-outer", 6))
+    children.push(node_circle("git-graph-node-merge-inner", 3))
   } else {
-    children.push(
-      @svg.circle(
-        class="git-graph-node git-graph-node-commit " + node_color,
-        cx=circle_x,
-        cy=11,
-        r=5,
-      ),
-    )
+    children.push(node_circle("git-graph-node-commit", 5))
   }
   @html.span(
     class="git-graph-cell",
@@ -2106,21 +2030,13 @@ fn review_diff_mode_toolbar(
       .role("toolbar")
       .aria_label("Comparison algorithm"),
     [
-      review_diff_mode_button(
-        ReviewDiffLine,
-        state.review_diff_mode == ReviewDiffLine,
-        dispatch(ReviewDiffModeSelected(ReviewDiffLine)),
-      ),
-      review_diff_mode_button(
-        ReviewDiffToken,
-        state.review_diff_mode == ReviewDiffToken,
-        dispatch(ReviewDiffModeSelected(ReviewDiffToken)),
-      ),
-      review_diff_mode_button(
-        ReviewDiffTree,
-        state.review_diff_mode == ReviewDiffTree,
-        dispatch(ReviewDiffModeSelected(ReviewDiffTree)),
-      ),
+      for mode in [ReviewDiffLine, ReviewDiffToken, ReviewDiffTree] => {
+        review_diff_mode_button(
+          mode,
+          state.review_diff_mode == mode,
+          dispatch(ReviewDiffModeSelected(mode)),
+        )
+      }
     ],
   )
 }
