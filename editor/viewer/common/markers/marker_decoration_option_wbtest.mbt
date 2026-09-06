@@ -63,7 +63,7 @@ test "create_decoration_option tag overrides" {
   assert_true(
     deprecated.inline_class_name == Some("squiggly-inline-deprecated"),
   )
-  // both tags → Deprecated overrides inlineClassName (checked second)
+  // both tags → Deprecated overrides inlineClassName (tested first)
   let both = option_for(Hint, tags=[Unnecessary, Deprecated])
   assert_true(both.class_name == "")
   assert_true(both.inline_class_name == Some("squiggly-inline-deprecated"))

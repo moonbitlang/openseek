@@ -295,12 +295,9 @@ fn runs_loaded_with_approvals(
   approvals : Array[RecoveredApproval],
 ) -> Msg {
   let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
-  let live : Array[String] = []
-  for conv in model.conversations {
-    if conv.run is Open(run_id~, ..) {
-      live.push(run_id)
-    }
-  }
+  let live : Array[String] = [
+    for conv in model.conversations if conv.run is Open(run_id~, ..) => run_id
+  ]
   FromDevice(
     @interop.ChannelId::Local,
     RunsLoaded(

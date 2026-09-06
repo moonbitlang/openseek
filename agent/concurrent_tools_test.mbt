@@ -41,13 +41,10 @@ fn probe_tool(
 ///|
 /// The recorded tool results for the batch, in session order.
 fn probe_results(session : @agent_session.Session) -> Array[String] {
-  let out : Array[String] = []
-  for event in session.events() {
-    if event.item() is Tool(result) && result.tool_name() == "probe" {
-      out.push(result.content())
-    }
-  }
-  out
+  [
+    for event in session.events() if event.item() is Tool(result) &&
+    result.tool_name() == "probe" => result.content()
+  ]
 }
 
 ///|
