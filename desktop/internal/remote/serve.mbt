@@ -399,14 +399,8 @@ async fn run_request(
   method_ : String,
   params : Json,
 ) -> Json {
-  let mut selected_endpoint = None
-  for endpoint in endpoints {
-    if endpoint.name() == method_ {
-      selected_endpoint = Some(endpoint)
-      break
-    }
-  }
-  guard selected_endpoint is Some(endpoint) else {
+  guard endpoints.iter().find_first(endpoint => endpoint.name() == method_)
+    is Some(endpoint) else {
     return error_envelope(id, CodeMethodNotFound, "unknown method '\{method_}'")
   }
   let result = endpoint.invoke_remote(params) catch {

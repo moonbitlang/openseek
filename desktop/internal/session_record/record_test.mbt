@@ -30,6 +30,19 @@ async fn append_record(path : @pathx.Path, text : String) -> Unit {
 }
 
 ///|
+/// The `Unreadable` detail one poll of `session` refuses with; "read" when the
+/// poll succeeded, and any other failure rendered as itself.
+async fn unreadable_detail(root : @pathx.Absolute, session : String) -> String {
+  try {
+    ignore(@session_record.Tail(root, session).poll())
+    "read"
+  } catch {
+    @session_record.Unreadable(detail) => detail
+    error => "\{error}"
+  }
+}
+
+///|
 async test "a record's header names the document its events belong to" {
   let (root, path) = record_fixture("s-1")
   write_record(path, header_line("s-1") + event_line(1, "one"))
@@ -108,13 +121,7 @@ async test "an absent record is not the same failure as an unreadable one" {
   }
   inspect(absent, content="absent")
   write_record(path, "not a header\n" + event_line(1, "one"))
-  let unreadable = try {
-    ignore(@session_record.Tail(root, "s-5").poll())
-    "read"
-  } catch {
-    @session_record.Unreadable(detail) => detail
-    error => "\{error}"
-  }
+  let unreadable = unreadable_detail(root, "s-5")
   inspect(
     unreadable,
     content=(
@@ -127,13 +134,7 @@ async test "an absent record is not the same failure as an unreadable one" {
 async test "a record holding another session is refused" {
   let (root, path) = record_fixture("s-6")
   write_record(path, header_line("s-other") + event_line(1, "one"))
-  let refusal = try {
-    ignore(@session_record.Tail(root, "s-6").poll())
-    "read"
-  } catch {
-    @session_record.Unreadable(detail) => detail
-    error => "\{error}"
-  }
+  let refusal = unreadable_detail(root, "s-6")
   inspect(refusal, content="the session record holds s-other, not s-6")
 }
 
@@ -145,13 +146,7 @@ async test "a header version this build does not read is refused" {
     "{\"version\":2,\"id\":\"s-7\",\"system_prompt\":\"\"}\n" +
     event_line(1, "one"),
   )
-  let refusal = try {
-    ignore(@session_record.Tail(root, "s-7").poll())
-    "read"
-  } catch {
-    @session_record.Unreadable(detail) => detail
-    error => "\{error}"
-  }
+  let refusal = unreadable_detail(root, "s-7")
   inspect(
     refusal,
     content="the session record uses session file version 2; this build reads version 1",
@@ -217,13 +212,7 @@ async test "a lock that cannot be taken is a failure, not an unlocked read" {
   let session_dir = @session_record.record_path(root, "s-14").dirname()
   @fsx.ensure_dir(session_dir.dirname())
   @fs.write_file(session_dir.to_string(), "file", create_mode=CreateOrTruncate)
-  let refusal = try {
-    ignore(@session_record.Tail(root, "s-14").poll())
-    "read"
-  } catch {
-    @session_record.Unreadable(detail) => detail
-    error => "\{error}"
-  }
+  let refusal = unreadable_detail(root, "s-14")
   // The message carries the temp path, so assert its stable halves: that the
   // lock is what failed — not the record read behind it — and why.
   assert_true(refusal.has_prefix("cannot take the session record's lock"))
@@ -239,13 +228,7 @@ async test "a line that is not UTF-8 is refused, not silently mangled" {
   @fsx.write_bytes(
     path, b"{\"version\":1,\"id\":\"s-13\",\"system_prompt\":\"\"}\n{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"\xff\"}}}\n",
   )
-  let refusal = try {
-    ignore(@session_record.Tail(root, "s-13").poll())
-    "read"
-  } catch {
-    @session_record.Unreadable(detail) => detail
-    error => "\{error}"
-  }
+  let refusal = unreadable_detail(root, "s-13")
   inspect(
     refusal,
     content=(
