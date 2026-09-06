@@ -218,55 +218,6 @@ async fn rollback_provision(geometry : Geometry, entry : SubtaskEntry) -> Unit {
 }
 
 ///|
-/// Flip the active slice `name` back to Running for a resume relaunch, or
-/// explain why not. Only a kept-worktree state — Committed (a truncated
-/// worker's validated partial) or Captured (a defective capture awaiting
-/// repair) — can host a fresh worker; capture() then measures the resumed
-/// run against the entry's prior commit and stacks its commit on it.
-pub async fn resume_running(
-  geometry : Geometry,
-  name : String,
-) -> Result[SubtaskEntry, String] {
-  // The same mutex provision and integrate hold: a continue racing an
-  // in-flight integrate must observe its OUTCOME state (Conflicted refuses
-  // below; Integrated is terminal; a clean merge removed the worktree),
-  // never the pre-merge Committed. A cancelled continue still leaks a
-  // Running entry whose branch holds validated work (capture never ran) —
-  // that residual mirrors the launch-cancel one and only discard clears it.
-  let mutex = repo_mutex(geometry.common_git_dir)
-  mutex.acquire()
-  defer mutex.release()
-  let (entries, _) = load_entries(geometry.common_git_dir)
-  guard entries.filter(e => e.name == name && !e.state.is_terminal()).last()
-    is Some(entry) else {
-    return Err("no active subtask named \{name}")
-  }
-  guard geometry.is_integration_target_for(entry) else {
-    return Err(
-      "subtask \{name} belongs to a different worktree; continue it from the worktree that launched it",
-    )
-  }
-  guard entry.state is (Committed | Captured) else {
-    return Err(
-      "subtask \{name} is \{Repr(entry.state)} — only a captured or committed slice with a kept worktree can be continued",
-    )
-  }
-  guard (@fs.exists(entry.worker_root) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => false
-  }) else {
-    return Err(
-      "subtask \{name}'s worktree is gone (\{entry.worker_root}); discard it and launch a fresh slice",
-    )
-  }
-  let entry = { ..entry, state: Running, }
-  match save_entry(geometry.common_git_dir, entry) {
-    Ok(_) => Ok(entry)
-    Err(reason) => Err(reason)
-  }
-}
-
-///|
 fn is_valid_name(name : String) -> Bool {
   guard name.length() >= 1 && name.length() <= 40 else { return false }
   for index, ch in name {
