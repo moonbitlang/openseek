@@ -162,6 +162,18 @@ error: --approval ask needs a controller to ask: this command reads no commands,
 [1]
 ```
 
+The `[env: OPENSEEK_APPROVAL]` fallback is the same option arriving through the
+process environment instead of argv, so it is refused the same way. This is the
+one piece of `main` that argparse cannot pick up on its own: `parse` reads the
+process arguments itself but defaults the environment to empty, so the binary
+must hand it `@env.get_env_vars()` — and this case fails if it ever stops.
+
+```mooncram
+$ env DEEPSEEK=test-key OPENSEEK_APPROVAL=ask openseek.exe run "probe" 2>&1
+error: --approval ask needs a controller to ask: this command reads no commands, so use never (refuse escalation) or always (grant it unasked)
+[1]
+```
+
 ## API Key Is Required For Agent Runs
 
 With no `--api-key` flag and no `DEEPSEEK` in the environment, a run reports the
