@@ -13,36 +13,29 @@ async fn auto_compact_test_server(
   group : @async.TaskGroup[Unit],
   handle : (Json) -> MockReply raise,
 ) -> String? {
-  guard bind_test_server(
-      "local TCP bind unavailable; skipping auto-compaction test",
-    )
-    is Some(server) else {
-    return None
-  }
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (request, body, conn) => {
-        assert_eq(request.path, "/chat/completions")
-        match handle(@json.parse(body.read_all().text())) {
-          Sse(payload) => {
-            conn.send_response(200, "OK", extra_headers={
-              "Content-Type": "text/event-stream",
-            })
-            conn.write("data: \{payload}\n\n")
-            conn.write("data: [DONE]\n\n")
-          }
-          Body(json) => {
-            conn.send_response(200, "OK", extra_headers={
-              "Content-Type": "application/json",
-            })
-            conn.write(json.stringify())
-          }
+  serve_chat_completions(
+    group,
+    "local TCP bind unavailable; skipping auto-compaction test",
+    max_connections=8,
+    (request, body, conn) => {
+      assert_eq(request.path, "/chat/completions")
+      match handle(@json.parse(body)) {
+        Sse(payload) => {
+          conn.send_response(200, "OK", extra_headers={
+            "Content-Type": "text/event-stream",
+          })
+          conn.write("data: \{payload}\n\n")
+          conn.write("data: [DONE]\n\n")
         }
-      },
-      max_connections=8,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+        Body(json) => {
+          conn.send_response(200, "OK", extra_headers={
+            "Content-Type": "application/json",
+          })
+          conn.write(json.stringify())
+        }
+      }
+    },
+  )
 }
 
 ///|
@@ -164,14 +157,10 @@ fn summary_before_terminal(
   result : @agent_session.Session,
   loc~ : SourceLoc,
 ) -> @agent_session.SessionSummary raise {
-  let events = result.events()
-  let mut found = None
-  for event in events {
-    if event.item() is Summary(summary) {
-      found = Some(summary)
-    }
-  }
-  guard found is Some(summary) else {
+  let summaries = [
+    for event in result.events() if event.item() is Summary(summary) => summary
+  ]
+  guard summaries.last() is Some(summary) else {
     fail("expected the checkpoint summary before the terminal", loc~)
   }
   summary
@@ -206,15 +195,7 @@ fn finish_definition() -> @agent_tool.AgentToolDefinition {
 
 ///|
 fn finish_and_probe_tools() -> @agent_tool.Tools raise {
-  Tools([
-    finish_definition(),
-    AgentToolDefinition(
-      name="probe",
-      description="Probe tool.",
-      schema=JsonSchema({ "type": "object" }),
-      execute=Sync(_args => @agent_tool.respond("result-1")),
-    ),
-  ])
+  Tools([finish_definition(), probe_definition(result="result-1")])
 }
 
 ///|
@@ -621,12 +602,7 @@ async test "a pressured custom control completion is salvaged at the ceiling" {
         execute=Sync(_args => @agent_tool.ToolAction::finish("report captured")),
         control=true,
       ),
-      AgentToolDefinition(
-        name="probe",
-        description="Probe tool.",
-        schema=JsonSchema({ "type": "object" }),
-        execute=Sync(_args => @agent_tool.respond("result-1")),
-      ),
+      probe_definition(result="result-1"),
     ])
     let session = @agent_session.Session(
       SessionId("custom-completion-pressure"),
@@ -690,12 +666,7 @@ async test "a lone control verdict without a finish executes then yields" {
         execute=Sync(_args => @agent_tool.respond("verdict recorded")),
         control=true,
       ),
-      AgentToolDefinition(
-        name="probe",
-        description="Probe tool.",
-        schema=JsonSchema({ "type": "object" }),
-        execute=Sync(_args => @agent_tool.respond("result-1")),
-      ),
+      probe_definition(result="result-1"),
     ])
     let session = @agent_session.Session(
       SessionId("control-verdict-pressure"),

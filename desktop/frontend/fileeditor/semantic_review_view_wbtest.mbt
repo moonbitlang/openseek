@@ -27,19 +27,12 @@ test "semantic input follows active MoonBit review and ignores layout" {
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
   docs[path] = {
-    ..loaded_doc(path.0),
+    ..reviewed_doc(path, selected, baseline="fn value() { 1 }"),
     state: TabLoaded(
       content="fn value() { 2 }",
       absolute=test_ctx().test_resource("/work/src/main.mbt"),
       sig="working",
     ),
-    review: Some({
-      generation: 1,
-      working_generation: 1,
-      baseline: ReviewContent("fn value() { 1 }"),
-      view_mode: ReviewDiff,
-      selected,
-    }),
   }
   let state = {
     ..owned_state(),

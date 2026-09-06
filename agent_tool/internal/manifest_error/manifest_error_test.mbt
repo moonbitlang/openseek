@@ -1,4 +1,17 @@
 ///|
+/// Asserts that writing `content` to `path` is refused with exactly `expected`.
+async fn assert_write_error(
+  path : String,
+  content : String,
+  expected : String,
+) -> Unit {
+  guard @manifest_error.write_error(path, content) is Some(message) else {
+    fail("expected a manifest error for \{path}")
+  }
+  assert_eq(message, expected)
+}
+
+///|
 async test "manifest error allows ordinary files" {
   assert_true(@manifest_error.write_error("notes.json", "{}") is None)
   assert_true(@manifest_error.write_error("not-moon.mod", "{}") is None)
@@ -8,16 +21,8 @@ async test "manifest error allows ordinary files" {
 ///|
 async test "manifest error rejects generated mbti files" {
   let message = "*.generated.mbti files are generated; run moon info instead of editing them"
-  guard @manifest_error.write_error("lib/pkg.generated.mbti", "package x")
-    is Some(unix) else {
-    fail("expected generated mbti error")
-  }
-  assert_eq(unix, message)
-  guard @manifest_error.write_error("C:\\workspace\\pkg.generated.mbti", "")
-    is Some(windows) else {
-    fail("expected generated mbti error")
-  }
-  assert_eq(windows, message)
+  assert_write_error("lib/pkg.generated.mbti", "package x", message)
+  assert_write_error("C:\\workspace\\pkg.generated.mbti", "", message)
 }
 
 ///|
@@ -42,72 +47,45 @@ async test "manifest error allows existing moon.mod.json" {
 
 ///|
 async test "manifest error rejects invalid moon.mod content" {
-  guard @manifest_error.write_error("moon.mod", "") is Some(empty) else {
-    fail("expected empty moon.mod error")
-  }
-  assert_eq(empty, "moon.mod must not be empty")
-  guard @manifest_error.write_error("moon.mod", "{\"name\":\"demo\"}")
-    is Some(json) else {
-    fail("expected JSON moon.mod error")
-  }
-  assert_eq(json, "moon.mod uses current text syntax, not JSON")
-  guard @manifest_error.write_error("moon.mod", "version = \"0.1.0\"")
-    is Some(missing_name) else {
-    fail("expected missing name moon.mod error")
-  }
-  assert_eq(missing_name, "moon.mod should include a module `name = ...` entry")
+  assert_write_error("moon.mod", "", "moon.mod must not be empty")
+  assert_write_error(
+    "moon.mod", "{\"name\":\"demo\"}", "moon.mod uses current text syntax, not JSON",
+  )
+  assert_write_error(
+    "moon.mod", "version = \"0.1.0\"", "moon.mod should include a module `name = ...` entry",
+  )
 }
 
 ///|
 async test "manifest error checks invalid moon.pkg content" {
   assert_true(@manifest_error.write_error("moon.pkg", "x") is None)
-  guard @manifest_error.write_error("moon.pkg", "# comment") is Some(comment) else {
-    fail("expected moon.pkg comment syntax error")
-  }
-  assert_eq(comment, "moon.pkg use // for comment syntax, not #")
-  guard @manifest_error.write_error("moon.pkg", "{\"import\":[]}") is Some(json) else {
-    fail("expected JSON moon.pkg error")
-  }
-  assert_eq(json, "moon.pkg uses current text syntax, not JSON")
+  assert_write_error(
+    "moon.pkg", "# comment", "moon.pkg use // for comment syntax, not #",
+  )
+  assert_write_error(
+    "moon.pkg", "{\"import\":[]}", "moon.pkg uses current text syntax, not JSON",
+  )
 }
 
 ///|
 async test "manifest error accepts Windows path separators" {
-  guard @manifest_error.write_error(
-      "C:\\workspace\\moon.mod", "{\"name\":\"bad\"}",
-    )
-    is Some(moon_mod) else {
-    fail("expected moon.mod error")
-  }
-  assert_eq(moon_mod, "moon.mod uses current text syntax, not JSON")
+  assert_write_error(
+    "C:\\workspace\\moon.mod", "{\"name\":\"bad\"}", "moon.mod uses current text syntax, not JSON",
+  )
   assert_true(
     @manifest_error.write_error("C:\\workspace\\moon.pkg", "x") is None,
   )
-  guard @manifest_error.write_error("C:\\workspace\\moon.pkg", "# comment")
-    is Some(moon_pkg) else {
-    fail("expected moon.pkg comment syntax error")
-  }
-  assert_eq(moon_pkg, "moon.pkg use // for comment syntax, not #")
-  guard @manifest_error.write_error("C:\\workspace\\moon.mod.json", "{}")
-    is Some(moon_mod_json) else {
-    fail("expected moon.mod.json error")
-  }
-  assert_eq(
-    moon_mod_json, "moon.mod.json is legacy; create moon.mod for new MoonBit projects",
+  assert_write_error(
+    "C:\\workspace\\moon.pkg", "# comment", "moon.pkg use // for comment syntax, not #",
+  )
+  assert_write_error(
+    "C:\\workspace\\moon.mod.json", "{}", "moon.mod.json is legacy; create moon.mod for new MoonBit projects",
   )
 }
 
 ///|
 async test "manifest error rejects generated interfaces" {
   let message = "*.generated.mbti files are generated; run moon info instead of editing them"
-  guard @manifest_error.write_error("pkg.generated.mbti", "...")
-    is Some(root_error) else {
-    fail("expected generated interface error")
-  }
-  assert_eq(root_error, message)
-  guard @manifest_error.write_error("lib\\pkg.generated.mbti", "...")
-    is Some(windows_error) else {
-    fail("expected generated interface error")
-  }
-  assert_eq(windows_error, message)
+  assert_write_error("pkg.generated.mbti", "...", message)
+  assert_write_error("lib\\pkg.generated.mbti", "...", message)
 }

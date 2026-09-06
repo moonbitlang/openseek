@@ -35,16 +35,12 @@ test "reviewed MBTI files keep source and reject the diagram toggle" {
   let path = @pathx.Relative("api/pkg.generated.mbti")
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[path] = {
-    ..loaded_doc(path.0),
-    review: Some({
-      generation: 1,
-      working_generation: 1,
-      baseline: ReviewContent("package \"old\""),
-      view_mode: ReviewSource,
-      selected,
-    }),
-  }
+  docs[path] = reviewed_doc(
+    path,
+    selected,
+    baseline="package \"old\"",
+    view_mode=ReviewSource,
+  )
   let state = { ..owned_state(), docs, }
   let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
 

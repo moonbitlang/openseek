@@ -3,30 +3,24 @@
 /// carries both the original task and the steered text as user messages, then
 /// streams a plain content answer so the turn finishes without tool calls.
 async fn steer_test_server(group : @async.TaskGroup[Unit]) -> String? {
-  guard bind_test_server("local TCP bind unavailable; skipping steer test")
-    is Some(server) else {
-    return None
-  }
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (request, body, conn) => {
-        assert_eq(request.path, "/chat/completions")
-        let request_body = body.read_all().text()
-        assert_true(request_body.contains("do the task"))
-        assert_true(request_body.contains("also rename the file"))
-        // The prebuilt registry reached the request: the standard tools ride
-        // along even though the caller, not the turn, constructed them.
-        assert_true(request_body.contains("\"name\":\"mbtx\""))
-        conn.send_response(200, "OK", extra_headers={
-          "Content-Type": "text/event-stream",
-        })
-        conn.write("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n")
-        conn.write("data: [DONE]\n\n")
-      },
-      max_connections=1,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+  serve_chat_completions(
+    group,
+    "local TCP bind unavailable; skipping steer test",
+    max_connections=1,
+    (request, request_body, conn) => {
+      assert_eq(request.path, "/chat/completions")
+      assert_true(request_body.contains("do the task"))
+      assert_true(request_body.contains("also rename the file"))
+      // The prebuilt registry reached the request: the standard tools ride
+      // along even though the caller, not the turn, constructed them.
+      assert_true(request_body.contains("\"name\":\"mbtx\""))
+      conn.send_response(200, "OK", extra_headers={
+        "Content-Type": "text/event-stream",
+      })
+      conn.write("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n")
+      conn.write("data: [DONE]\n\n")
+    },
+  )
 }
 
 ///|
@@ -85,46 +79,55 @@ async test "queued steering is folded in at the next step boundary" {
 async fn override_test_server(
   group : @async.TaskGroup[Unit],
   runtime : @agent_runtime.AgentRuntime,
+  skip_message : String,
+  steer : @agent_runtime.SteerInput,
+  expected~ : Array[String],
+  final_answer~ : String,
 ) -> String? {
-  guard bind_test_server("local TCP bind unavailable; skipping override test")
-    is Some(server) else {
-    return None
-  }
   let mut requests = 0
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (_request, body, conn) => {
-        requests += 1
-        let request_body = body.read_all().text()
-        conn.send_response(200, "OK", extra_headers={
-          "Content-Type": "text/event-stream",
-        })
-        if requests == 1 {
-          // The steer arrives while this "final" call is in flight.
-          runtime.queue_steer(Prompt("actually, make it rhyme"))
-          conn.write(
-            "data: {\"choices\":[{\"delta\":{\"content\":\"draft answer\"}}]}\n\n",
-          )
-        } else {
-          assert_true(request_body.contains("actually, make it rhyme"))
-          assert_true(request_body.contains("draft answer"))
-          conn.write(
-            "data: {\"choices\":[{\"delta\":{\"content\":\"rhymed answer\"}}]}\n\n",
-          )
-        }
-        conn.write("data: [DONE]\n\n")
-      },
-      max_connections=2,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+  serve_chat_completions(group, skip_message, max_connections=2, (
+    _request,
+    request_body,
+    conn,
+  ) => {
+    requests += 1
+    conn.send_response(200, "OK", extra_headers={
+      "Content-Type": "text/event-stream",
+    })
+    if requests == 1 {
+      // The steer arrives while this "final" call is in flight.
+      runtime.queue_steer(steer)
+      conn.write(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"draft answer\"}}]}\n\n",
+      )
+    } else {
+      for fragment in expected {
+        assert_true(request_body.contains(fragment), msg=fragment)
+      }
+      assert_true(request_body.contains("draft answer"))
+      conn.write(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"\{final_answer}\"}}]}\n\n",
+      )
+    }
+    conn.write("data: [DONE]\n\n")
+  })
 }
 
 ///|
 async test "a steer racing the final call keeps the turn alive" {
   @async.with_task_group() <| group => {
     let runtime = @agent_runtime.AgentRuntime()
-    guard override_test_server(group, runtime) is Some(url) else { return }
+    guard override_test_server(
+        group,
+        runtime,
+        "local TCP bind unavailable; skipping override test",
+        Prompt("actually, make it rhyme"),
+        expected=["actually, make it rhyme"],
+        final_answer="rhymed answer",
+      )
+      is Some(url) else {
+      return
+    }
     let scope = @agent_runtime.AgentTaskScope(group)
     let session = @agent_session.Session(
       SessionId("steer-override"),
@@ -165,48 +168,6 @@ async test "a steer racing the final call keeps the turn alive" {
 }
 
 ///|
-async fn inject_override_test_server(
-  group : @async.TaskGroup[Unit],
-  runtime : @agent_runtime.AgentRuntime,
-  context : String,
-) -> String? {
-  guard bind_test_server("local TCP bind unavailable; skipping inject test")
-    is Some(server) else {
-    return None
-  }
-  let mut requests = 0
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (_request, body, conn) => {
-        requests += 1
-        let request_body = body.read_all().text()
-        conn.send_response(200, "OK", extra_headers={
-          "Content-Type": "text/event-stream",
-        })
-        if requests == 1 {
-          runtime.queue_steer(Command(context))
-          conn.write(
-            "data: {\"choices\":[{\"delta\":{\"content\":\"draft answer\"}}]}\n\n",
-          )
-        } else {
-          assert_true(request_body.contains("<user_shell_command>"))
-          assert_true(request_body.contains("<command>"))
-          assert_true(request_body.contains("exit=0"))
-          assert_true(request_body.contains("_build"))
-          assert_true(request_body.contains("draft answer"))
-          conn.write(
-            "data: {\"choices\":[{\"delta\":{\"content\":\"contextual answer\"}}]}\n\n",
-          )
-        }
-        conn.write("data: [DONE]\n\n")
-      },
-      max_connections=2,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
-}
-
-///|
 async test "inject racing the final call keeps the turn alive" {
   @async.with_task_group() <| group => {
     let runtime = @agent_runtime.AgentRuntime()
@@ -220,7 +181,15 @@ async test "inject racing the final call keeps the turn alive" {
       #|_build
       #|</result>
       #|</user_shell_command>
-    guard inject_override_test_server(group, runtime, context) is Some(url) else {
+    guard override_test_server(
+        group,
+        runtime,
+        "local TCP bind unavailable; skipping inject test",
+        Command(context),
+        expected=["<user_shell_command>", "<command>", "exit=0", "_build"],
+        final_answer="contextual answer",
+      )
+      is Some(url) else {
       return
     }
     let scope = @agent_runtime.AgentTaskScope(group)
@@ -306,45 +275,33 @@ fn drain_emitted() -> Array[Json] raise {
 ///|
 fn log_event(entry : Json) -> String {
   match entry {
-    Object(object) =>
-      match object.get("event") {
-        Some(String(event)) => event
-        _ => ""
-      }
+    { "event": String(event), .. } => event
     _ => ""
   }
 }
 
 ///|
 async fn reasoning_log_test_server(group : @async.TaskGroup[Unit]) -> String? {
-  guard bind_test_server(
-      "local TCP bind unavailable; skipping reasoning log test",
-    )
-    is Some(server) else {
-    return None
-  }
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (_request, body, conn) => {
-        let _ = body.read_all()
-        conn.send_response(200, "OK", extra_headers={
-          "Content-Type": "text/event-stream",
-        })
-        conn.write(
-          "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"I\"}}]}\n\n",
-        )
-        conn.write(
-          "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\" think\"}}]}\n\n",
-        )
-        conn.write(
-          "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":5,\"total_tokens\":8,\"prompt_cache_hit_tokens\":1,\"prompt_cache_miss_tokens\":2}}\n\n",
-        )
-        conn.write("data: [DONE]\n\n")
-      },
-      max_connections=1,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+  serve_chat_completions(
+    group,
+    "local TCP bind unavailable; skipping reasoning log test",
+    max_connections=1,
+    (_request, _body, conn) => {
+      conn.send_response(200, "OK", extra_headers={
+        "Content-Type": "text/event-stream",
+      })
+      conn.write(
+        "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"I\"}}]}\n\n",
+      )
+      conn.write(
+        "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\" think\"}}]}\n\n",
+      )
+      conn.write(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":5,\"total_tokens\":8,\"prompt_cache_hit_tokens\":1,\"prompt_cache_miss_tokens\":2}}\n\n",
+      )
+      conn.write("data: [DONE]\n\n")
+    },
+  )
 }
 
 ///|
@@ -410,44 +367,38 @@ async fn notice_test_server(
   notice : String,
   finish_first? : Bool = false,
 ) -> String? {
-  guard bind_test_server("local TCP bind unavailable; skipping notice test")
-    is Some(server) else {
-    return None
-  }
   let mut requests = 0
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (_request, body, conn) => {
-        requests += 1
-        let request_body = body.read_all().text()
-        conn.send_response(200, "OK", extra_headers={
-          "Content-Type": "text/event-stream",
-        })
-        if requests == 1 {
-          // A background job finishes mid-turn and pushes a notice.
-          runtime.queue_steer(Notice(notice))
-          if finish_first {
-            conn.write(
-              "data: \{sse_tool_call("call_finish", "finish_test", 100_000)}\n\n",
-            )
-          } else {
-            conn.write(
-              "data: {\"choices\":[{\"delta\":{\"content\":\"draft\"}}]}\n\n",
-            )
-          }
-        } else {
-          // The notice was delivered to the model as user-role content.
-          assert_true(request_body.contains(notice))
+  serve_chat_completions(
+    group,
+    "local TCP bind unavailable; skipping notice test",
+    max_connections=2,
+    (_request, request_body, conn) => {
+      requests += 1
+      conn.send_response(200, "OK", extra_headers={
+        "Content-Type": "text/event-stream",
+      })
+      if requests == 1 {
+        // A background job finishes mid-turn and pushes a notice.
+        runtime.queue_steer(Notice(notice))
+        if finish_first {
           conn.write(
-            "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n",
+            "data: \{sse_tool_call("call_finish", "finish_test", 100_000)}\n\n",
+          )
+        } else {
+          conn.write(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"draft\"}}]}\n\n",
           )
         }
-        conn.write("data: [DONE]\n\n")
-      },
-      max_connections=2,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+      } else {
+        // The notice was delivered to the model as user-role content.
+        assert_true(request_body.contains(notice))
+        conn.write(
+          "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n",
+        )
+      }
+      conn.write("data: [DONE]\n\n")
+    },
+  )
 }
 
 ///|
@@ -525,12 +476,12 @@ async test "a runtime notice after a completion preserves the follow-up step" {
       tools~,
     )
     let events = result.events()
-    let mut completions = 0
-    for event in events {
-      if event.item() is Tool(tool) && tool.tool_name() == "finish_test" {
-        completions += 1
-      }
-    }
+    let completions = events
+      .iter()
+      .filter(event => {
+        event.item() is Tool(tool) && tool.tool_name() == "finish_test"
+      })
+      .count()
     assert_eq(completions, 1)
     guard events[events.length() - 2].item() is Assistant(message) else {
       fail("expected explicit follow-up step before its terminal")
