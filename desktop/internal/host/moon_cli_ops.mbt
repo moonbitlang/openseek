@@ -304,11 +304,7 @@ async fn lsp_open_op(
   for push in diagnostics_pushes(request_root.absolute, previous, current) {
     ignore(state.diagnostics.try_put(push) catch { _ => false })
   }
-  let paths : Array[@pathx.Absolute] = []
-  for path, _ in current {
-    paths.push(path)
-  }
-  state.published.set(root, paths)
+  state.published.set(root, current.keys().to_array())
   { diagnostics: Some(current.get(file).unwrap_or([])), }
 }
 
@@ -460,27 +456,17 @@ fn parse_ide_hover(output : String) -> LspHoverReply {
   } else {
     None
   }
-  match range {
-    Some((start_line, start_character, end_line, end_character)) =>
-      {
-        value,
-        markdown: true,
-        has_range: true,
-        start_line,
-        start_character,
-        end_line,
-        end_character,
-      }
-    None =>
-      {
-        value,
-        markdown: true,
-        has_range: false,
-        start_line: 0,
-        start_character: 0,
-        end_line: 0,
-        end_character: 0,
-      }
+  let (start_line, start_character, end_line, end_character) = range.unwrap_or(
+    (0, 0, 0, 0),
+  )
+  {
+    value,
+    markdown: true,
+    has_range: range is Some(_),
+    start_line,
+    start_character,
+    end_line,
+    end_character,
   }
 }
 

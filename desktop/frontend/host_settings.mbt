@@ -166,33 +166,22 @@ fn legacy_settings_patch(
   // The host persists a one-shot fence with the first settings write.
   // Retrying this import after a lost reply therefore acknowledges and
   // clears localStorage without overwriting a newer host configuration.
-  let provider = provider.trim().to_owned()
-  let custom_url = custom_url.trim().to_owned()
-  let api_key = api_key.trim().to_owned()
-  let custom_api_key = custom_api_key.trim().to_owned()
+  fn carried(value : String) -> String? {
+    let value = value.trim().to_owned()
+    if value.is_empty() {
+      None
+    } else {
+      Some(value)
+    }
+  }
+
   {
-    provider: if provider.is_empty() {
-      None
-    } else {
-      Some(provider)
-    },
-    custom_api_url: if custom_url.is_empty() {
-      None
-    } else {
-      Some(custom_url)
-    },
-    deepseek_api_key: if api_key.is_empty() {
-      None
-    } else {
-      Some(api_key)
-    },
+    provider: carried(provider),
+    custom_api_url: carried(custom_url),
+    deepseek_api_key: carried(api_key),
     // No legacy page ever stored a GLM key; the import has nothing to carry.
     glm_api_key: None,
-    custom_api_key: if custom_api_key.is_empty() {
-      None
-    } else {
-      Some(custom_api_key)
-    },
+    custom_api_key: carried(custom_api_key),
     legacy_migration: Some(true),
     followup_behavior: None,
   }

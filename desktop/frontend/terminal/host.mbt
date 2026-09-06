@@ -473,13 +473,7 @@ fn TermHost::clear_pending(
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
-    let retained : Map[String, (@interop.ChannelId, String)] = Map([])
-    for id, owner in term_host.owners {
-      if owner.0 != channel {
-        retained[id] = owner
-      }
-    }
-    term_host.owners = retained
+    term_host.owners.retain((_, owner) => owner.0 != channel)
     term_host.opening_channels = term_host.opening_channels.filter(existing => {
       existing != channel
     })
@@ -491,13 +485,7 @@ fn TermHost::clear_pending(
 /// Dispose a closed tab's emulator and remove its element.
 fn dispose_tab(key : String) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
-    let retained : Map[String, (@interop.ChannelId, String)] = Map([])
-    for id, owner in term_host.owners {
-      if owner.1 != key {
-        retained[id] = owner
-      }
-    }
-    term_host.owners = retained
+    term_host.owners.retain((_, owner) => owner.1 != key)
     guard term_host.entries.get(key) is Some(entry) else { return }
     term_host.entries.remove(key)
     let _ : @js.Value = entry.term.apply_with_string("dispose", no_args())

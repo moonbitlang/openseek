@@ -68,12 +68,11 @@ fn ModelChoice::parse(value : String) -> ModelChoice? {
   if value == CodexUnavailableChoiceWire {
     return Some(CodexUnavailablePick)
   }
-  if value.has_prefix(OpenSeekChoicePrefix) {
-    let rest = value.view(start_offset=OpenSeekChoicePrefix.length()).to_owned()
-    return EngineModel::parse(rest).map(model => OpenSeekModel(model))
+  if value.strip_prefix(OpenSeekChoicePrefix) is Some(rest) {
+    return EngineModel::parse(rest.to_owned()).map(model => OpenSeekModel(model))
   }
-  if value.has_prefix(CodexChoicePrefix) {
-    let id = value.view(start_offset=CodexChoicePrefix.length()).to_owned()
+  if value.strip_prefix(CodexChoicePrefix) is Some(rest) {
+    let id = rest.to_owned()
     if !id.trim().is_empty() {
       return Some(CodexModel(id))
     }

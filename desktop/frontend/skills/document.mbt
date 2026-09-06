@@ -39,13 +39,10 @@ fn parse_skill_document(source : String) -> SkillDocument {
 
 ///|
 fn find_frontmatter_close(lines : Array[String]) -> Int? {
-  for index, line in lines {
+  lines.search_by(line => {
     let marker = line.trim()
-    if marker == "---" || marker == "..." {
-      return Some(index)
-    }
-  }
-  None
+    marker == "---" || marker == "..."
+  })
 }
 
 ///|

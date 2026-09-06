@@ -178,12 +178,7 @@ fn DeviceState::workspace_settings_row(
   self : DeviceState,
   project : @common.Uri,
 ) -> ProjectSettings? {
-  for row in self.workspace_settings {
-    if row.project == project {
-      return Some(row)
-    }
-  }
-  None
+  self.workspace_settings.iter().find_first(row => row.project == project)
 }
 
 ///|

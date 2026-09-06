@@ -347,13 +347,12 @@ pub fn Run::tokens(self : Run) -> Int {
 ///|
 /// Total cost across children that reported one; `None` when none did.
 pub fn Run::cost_usd(self : Run) -> Double? {
-  let mut total : Double? = None
-  for row in self.rows {
-    if row.cost_usd is Some(cost) {
-      total = Some(total.unwrap_or(0.0) + cost)
+  self.rows.fold(init=None, (total : Double?, row) => {
+    match row.cost_usd {
+      Some(cost) => Some(total.unwrap_or(0.0) + cost)
+      None => total
     }
-  }
-  total
+  })
 }
 
 ///|

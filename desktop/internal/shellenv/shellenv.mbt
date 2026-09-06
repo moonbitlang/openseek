@@ -141,19 +141,19 @@ pub fn path_prepend_command(
     return None
   }
   if shell_name == "fish" {
-    let quoted_dirs : Array[String] = []
-    for bin_dir in bin_dirs {
-      let quoted = bin_dir
-        .replace_all(old="\\", new="\\\\")
-        .replace_all(old="'", new="\\'")
-      quoted_dirs.push("'\{quoted}'")
-    }
+    let quoted_dirs = [
+      for bin_dir in bin_dirs => {
+        let quoted = bin_dir
+          .replace_all(old="\\", new="\\\\")
+          .replace_all(old="'", new="\\'")
+        "'\{quoted}'"
+      }
+    ]
     return Some("set -gx PATH \{quoted_dirs.join(" ")} $PATH\r")
   }
-  let quoted_dirs : Array[String] = []
-  for bin_dir in bin_dirs {
-    quoted_dirs.push("'\{bin_dir.replace_all(old="'", new="'\\''")}'")
-  }
+  let quoted_dirs = [
+    for bin_dir in bin_dirs => "'\{bin_dir.replace_all(old="'", new="'\\''")}'"
+  ]
   if shell_name is ("csh" | "tcsh") {
     return Some("setenv PATH \{quoted_dirs.join(":")}:\"$PATH\"\r")
   }

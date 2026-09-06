@@ -91,13 +91,13 @@ fn browser_set_theme_for_pages(
   model : Model,
   dark : Bool,
 ) -> @cmd.Cmd {
-  let commands : Array[@cmd.Cmd] = []
-  for id, page in model.preview.pages {
-    if page.url is Some(_) {
-      commands.push(browser_set_theme(dispatch, id, dark))
-    }
-  }
-  @cmd.batch(commands)
+  @cmd.batch(
+    [
+      for id, page in model.preview.pages if page.url is Some(_) => {
+        browser_set_theme(dispatch, id, dark)
+      }
+    ],
+  )
 }
 
 ///|

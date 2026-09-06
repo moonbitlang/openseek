@@ -117,14 +117,7 @@ let ordered_request_lanes : Map[String, Lane] = Map([])
 
 ///|
 fn ordered_request_lane(lane : String) -> Lane {
-  match ordered_request_lanes.get(lane) {
-    Some(found) => found
-    None => {
-      let created = Lane::Lane()
-      ordered_request_lanes[lane] = created
-      created
-    }
-  }
+  ordered_request_lanes.get_or_init(lane, () => Lane::Lane())
 }
 
 ///|

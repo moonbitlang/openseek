@@ -532,12 +532,9 @@ fn with_file_candidates(
 /// provisional candidates after the query changes; the debounced Host request
 /// restores global top-K correctness.
 fn Open::result_files(self : Open) -> Array[@pathx.Relative] {
-  self.items.filter_map(item => {
-    match item {
-      FileRow(file) => Some(file.path)
-      SymbolRow(_) => None
-    }
-  })
+  [
+    for item in self.items if item is FileRow(file) => file.path
+  ]
 }
 
 ///|
