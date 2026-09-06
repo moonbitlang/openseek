@@ -89,28 +89,14 @@ fn FontMeasurementsImpl::remove_from_cache(
   id : String,
 ) -> Unit {
   self.cache.remove(id)
-  let retained : Array[String] = []
-  for key in self.cache_keys {
-    if key != id {
-      retained.push(key)
-    }
-  }
-  self.cache_keys.clear()
-  self.cache_keys.append(retained)
+  self.cache_keys.retain(key => key != id)
 }
 
 ///|
 fn FontMeasurementsImpl::cached_values(
   self : FontMeasurementsImpl,
 ) -> Array[@common_config.FontInfo] {
-  let result : Array[@common_config.FontInfo] = []
-  for id in self.cache_keys {
-    match self.cache.get(id) {
-      Some(value) => result.push(value)
-      None => ()
-    }
-  }
-  result
+  self.cache_keys.filter_map(id => self.cache.get(id))
 }
 
 ///|
@@ -217,16 +203,9 @@ fn FontMeasurementsImpl::actual_read_font_info(
   )
   let space = create_request(" ", Regular, all, Some(monospace))
   let digits = [
-    create_request("0", Regular, all, Some(monospace)),
-    create_request("1", Regular, all, Some(monospace)),
-    create_request("2", Regular, all, Some(monospace)),
-    create_request("3", Regular, all, Some(monospace)),
-    create_request("4", Regular, all, Some(monospace)),
-    create_request("5", Regular, all, Some(monospace)),
-    create_request("6", Regular, all, Some(monospace)),
-    create_request("7", Regular, all, Some(monospace)),
-    create_request("8", Regular, all, Some(monospace)),
-    create_request("9", Regular, all, Some(monospace)),
+    for digit in 0..<10 => {
+      create_request(digit.to_string(), Regular, all, Some(monospace))
+    }
   ]
   // monospace test: used for whitespace rendering.
   let rightwards_arrow = create_request("→", Regular, all, Some(monospace))

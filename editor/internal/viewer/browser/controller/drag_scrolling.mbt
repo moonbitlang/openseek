@@ -108,12 +108,9 @@ fn DragScrolling::start(
 
 ///|
 fn DragScrolling::stop(self : DragScrolling) -> Unit {
-  match self.operation {
-    Some(operation) => {
-      operation.dispose()
-      self.operation = None
-    }
-    None => ()
+  if self.operation is Some(operation) {
+    operation.dispose()
+    self.operation = None
   }
 }
 
@@ -178,9 +175,8 @@ fn DragScrollingOperation::schedule(self : DragScrollingOperation) -> Unit {
 ///|
 fn DragScrollingOperation::dispose(self : DragScrollingOperation) -> Unit {
   self.disposed = true
-  match self.animation_frame_id {
-    Some(id) => @rdom.window().cancel_animation_frame(id)
-    None => ()
+  if self.animation_frame_id is Some(id) {
+    @rdom.window().cancel_animation_frame(id)
   }
   self.animation_frame_id = None
 }
@@ -325,21 +321,16 @@ fn DragScrollingOperation::execute(self : DragScrollingOperation) -> Unit {
       // First, try to find a position that matches the horizontal position
       // of the mouse
       let probed = self.probe_mouse_target(layout_info)
-      let mouse_target = if outside_position is Left {
-        @editor_browser.MouseTarget::create_outside_editor(
-          probed.mouse_column(),
-          Position(edge_line_number, probed.mouse_column()),
-          Left,
-          outside_distance,
-        )
-      } else {
-        @editor_browser.MouseTarget::create_outside_editor(
-          probed.mouse_column(),
-          Position(edge_line_number, probed.mouse_column()),
-          Right,
-          outside_distance,
-        )
-      }
+      let mouse_target = @editor_browser.MouseTarget::create_outside_editor(
+        probed.mouse_column(),
+        Position(edge_line_number, probed.mouse_column()),
+        if outside_position is Left {
+          Left
+        } else {
+          Right
+        },
+        outside_distance,
+      )
       (self.dispatch_mouse)(mouse_target, true, None)
       self.schedule()
     }
