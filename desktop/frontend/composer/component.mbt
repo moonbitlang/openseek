@@ -142,54 +142,33 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
   let root_changed = input.root != self.root
   let context_changed = self.context_generation != input.context_generation
   let skills_changed = self.installed_skills != input.installed_skills
-  match self.pending_submission {
+  let acknowledged : Draft? = match self.pending_submission {
     Some(PromptSubmission(sequence_before~, _)) if input.submission_sequence >
-      sequence_before =>
-      return {
-        ..self,
-        source: incoming,
-        draft: incoming,
-        source_goal: incoming_goal,
-        goal_draft: incoming_goal,
-        completion: None,
-        symbol_cache: if root_changed {
-          SymbolCache()
-        } else {
-          self.symbol_cache
-        },
-        file_completion: self.file_completion_for(
-          input,
-          incoming.task,
-          input.root,
-        ),
-        root: input.root,
-        installed_skills: input.installed_skills,
-        context_generation: input.context_generation,
-        pending_submission: None,
-      }
+      sequence_before => Some(incoming)
     Some(GoalSubmission(sequence_before~, _)) if input.submission_sequence >
-      sequence_before => {
-      let draft = self.draft.reconciled(source=self.source, incoming~)
-      return {
-        ..self,
-        source: incoming,
-        draft,
-        source_goal: incoming_goal,
-        goal_draft: incoming_goal,
-        completion: None,
-        symbol_cache: if root_changed {
-          SymbolCache()
-        } else {
-          self.symbol_cache
-        },
-        file_completion: self.file_completion_for(input, draft.task, input.root),
-        root: input.root,
-        installed_skills: input.installed_skills,
-        context_generation: input.context_generation,
-        pending_submission: None,
-      }
+      sequence_before =>
+      Some(self.draft.reconciled(source=self.source, incoming~))
+    _ => None
+  }
+  if acknowledged is Some(draft) {
+    return {
+      ..self,
+      source: incoming,
+      draft,
+      source_goal: incoming_goal,
+      goal_draft: incoming_goal,
+      completion: None,
+      symbol_cache: if root_changed {
+        SymbolCache()
+      } else {
+        self.symbol_cache
+      },
+      file_completion: self.file_completion_for(input, draft.task, input.root),
+      root: input.root,
+      installed_skills: input.installed_skills,
+      context_generation: input.context_generation,
+      pending_submission: None,
     }
-    _ => ()
   }
   let draft = self.draft.reconciled(source=self.source, incoming~)
   let goal_draft = if incoming_goal == self.source_goal {
@@ -318,13 +297,10 @@ fn Model::active(self : Model, input : Input) -> Entry {
 ///|
 fn Model::with_entry(self : Model, entry : Entry) -> Model {
   let entries = self.entries.copy()
-  for index, existing in entries {
-    if existing.owner == entry.owner {
-      entries[index] = entry
-      return { ..self, entries, }
-    }
+  match entries.search_by(existing => existing.owner == entry.owner) {
+    Some(index) => entries[index] = entry
+    None => entries.push(entry)
   }
-  entries.push(entry)
   { ..self, entries, }
 }
 
@@ -433,9 +409,9 @@ fn Entry::accept_completion(
   guard self.completion is Some(completion) else {
     return ({ ..self, completion: None, }, @cmd.none)
   }
-  match completion.kind {
+  let mention : Mention? = match completion.kind {
     SlashCommands =>
-      (
+      return (
         {
           ..self,
           draft: { ..self.draft, task: completion.menu.draft_without_token(), },
@@ -446,61 +422,41 @@ fn Entry::accept_completion(
         ),
       )
     SkillMentions =>
-      (
-        {
-          ..self,
-          draft: {
-            ..self.draft.with_mention({
-              ref_: @mention_context.Skill(name=item.insert.trim().to_owned()),
-              range: None,
-            }),
-            task: completion.menu.draft_without_token(),
-          },
-          completion: None,
-        },
-        @cmd.none,
-      )
+      Some({
+        ref_: @mention_context.Skill(name=item.insert.trim().to_owned()),
+        range: None,
+      })
     Symbols => {
       let (file, line) = if item.path is Some(path) && item.range is Some(range) {
         (path, range.start_line_number)
       } else {
         ("", 0)
       }
-      (
-        {
-          ..self,
-          draft: {
-            ..self.draft.with_mention({
-              ref_: @mention_context.Symbol(name=item.label, file~, line~),
-              range: item.range,
-            }),
-            task: completion.menu.draft_without_token(),
-          },
-          completion: None,
-        },
-        @cmd.none,
-      )
+      Some({
+        ref_: @mention_context.Symbol(name=item.label, file~, line~),
+        range: item.range,
+      })
     }
     Files =>
-      if item.path is Some(path) {
-        (
-          {
-            ..self,
-            draft: {
-              ..self.draft.with_mention({
-                ref_: @mention_context.File(path~),
-                range: None,
-              }),
-              task: completion.menu.draft_without_token(),
-            },
-            completion: None,
-          },
-          @cmd.none,
-        )
-      } else {
-        ({ ..self, completion: None, }, @cmd.none)
-      }
+      item.path.map(path => Mention::{
+        ref_: @mention_context.File(path~),
+        range: None,
+      })
   }
+  guard mention is Some(mention) else {
+    return ({ ..self, completion: None, }, @cmd.none)
+  }
+  (
+    {
+      ..self,
+      draft: {
+        ..self.draft.with_mention(mention),
+        task: completion.menu.draft_without_token(),
+      },
+      completion: None,
+    },
+    @cmd.none,
+  )
 }
 
 ///|
@@ -773,31 +729,15 @@ fn Model::update(
       )
     }
     FilesLoaded(owner~, root~, query~, epoch~, files~) => {
-      guard entry.settled_file_completion(
-          input,
-          owner,
-          root,
-          query,
-          epoch,
-          Some(files),
-        )
-        is Some(next) else {
-        return (self.with_entry(entry), @cmd.none)
-      }
+      let next = entry
+        .settled_file_completion(input, owner, root, query, epoch, Some(files))
+        .unwrap_or(entry)
       (self.with_entry(next), @cmd.none)
     }
     FilesFailed(owner~, root~, query~, epoch~) => {
-      guard entry.settled_file_completion(
-          input,
-          owner,
-          root,
-          query,
-          epoch,
-          None,
-        )
-        is Some(next) else {
-        return (self.with_entry(entry), @cmd.none)
-      }
+      let next = entry
+        .settled_file_completion(input, owner, root, query, epoch, None)
+        .unwrap_or(entry)
       (self.with_entry(next), @cmd.none)
     }
   }

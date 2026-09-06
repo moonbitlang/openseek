@@ -35,16 +35,8 @@ fn SelfUpdate::SelfUpdate(
 ) -> SelfUpdate {
   {
     app_version,
-    work_dir: if runtime_dir is Some(dir) {
-      Some(dir.to_string())
-    } else {
-      None
-    },
-    bundle_path: if executable is Some(exe) {
-      app_bundle_path(exe)
-    } else {
-      None
-    },
+    work_dir: runtime_dir.map(dir => dir.to_string()),
+    bundle_path: executable.bind(app_bundle_path),
     downloads: Queue(kind=Blocking(1)),
     staged: None,
     busy: false,
@@ -96,17 +88,14 @@ async fn SelfUpdate::check(self : SelfUpdate) -> CheckUpdateReply {
     error => raise error
   }
   guard info is Some(info) else { return UpToDate }
-  let unavailable_reason = if info.artifact is Some(_) &&
+  let (installable, unavailable_reason) = if info.artifact is Some(_) &&
     self.work_dir is Some(_) &&
     self.bundle_path is Some(bundle) {
-    @update.self_update_unavailable_reason(bundle_path=bundle)
+    let reason = @update.self_update_unavailable_reason(bundle_path=bundle)
+    (reason is None, reason)
   } else {
-    None
+    (false, None)
   }
-  let installable = info.artifact is Some(_) &&
-    self.work_dir is Some(_) &&
-    self.bundle_path is Some(_) &&
-    unavailable_reason is None
   Available(version=info.version, installable~, unavailable_reason~)
 }
 

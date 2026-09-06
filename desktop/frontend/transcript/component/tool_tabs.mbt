@@ -81,28 +81,26 @@ fn tool_arguments_tabbed_view(
   name : String,
   arguments : String?,
 ) -> @html.Html? {
+  guard arguments is Some(arguments) else { return None }
+  let trimmed = arguments.trim()
+  guard !trimmed.is_empty() && trimmed != "{}" else { return None }
   let tabs : Array[ToolCallTab] = []
-  if arguments is Some(arguments) {
-    let trimmed = arguments.trim()
-    if !trimmed.is_empty() && trimmed != "{}" {
-      match custom_card(name, arguments) {
-        Some((label, card)) => {
-          tabs.push({ label, body: card, })
-          tabs.push({
-            label: "Original JSON",
-            body: original_json_content(arguments),
-          })
-        }
-        None => {
-          let content = json_arguments_content(arguments)
-          tabs.push({ label: "Arguments", body: content.body, })
-          if content.has_distinct_original {
-            tabs.push({
-              label: "Original JSON",
-              body: original_json_content(arguments),
-            })
-          }
-        }
+  match custom_card(name, arguments) {
+    Some((label, card)) => {
+      tabs.push({ label, body: card, })
+      tabs.push({
+        label: "Original JSON",
+        body: original_json_content(arguments),
+      })
+    }
+    None => {
+      let content = json_arguments_content(arguments)
+      tabs.push({ label: "Arguments", body: content.body, })
+      if content.has_distinct_original {
+        tabs.push({
+          label: "Original JSON",
+          body: original_json_content(arguments),
+        })
       }
     }
   }
@@ -124,34 +122,24 @@ fn tool_output_tabs(
   if output.is_blank() {
     return []
   }
-  match (name, arguments) {
-    ("read", Some(arguments)) =>
-      match @read_html.moonbit_output(arguments, output) {
-        Some(rendered) =>
-          [
-            {
-              label: "Output",
-              body: @html.pre(class="tool-call-output", [rendered]),
-            },
-            {
-              label: "Original output",
-              body: @html.pre(class="tool-card-original-json", output),
-            },
-          ]
-        None =>
-          [
-            {
-              label: "Output",
-              body: @html.pre(class="tool-call-output", truncate_output(output)),
-            },
-          ]
-      }
-    _ =>
-      [
-        {
-          label: "Output",
-          body: @html.pre(class="tool-call-output", truncate_output(output)),
-        },
-      ]
+  if name == "read" &&
+    arguments is Some(arguments) &&
+    @read_html.moonbit_output(arguments, output) is Some(rendered) {
+    return [
+      {
+        label: "Output",
+        body: @html.pre(class="tool-call-output", [rendered]),
+      },
+      {
+        label: "Original output",
+        body: @html.pre(class="tool-card-original-json", output),
+      },
+    ]
   }
+  [
+    {
+      label: "Output",
+      body: @html.pre(class="tool-call-output", truncate_output(output)),
+    },
+  ]
 }
