@@ -17,10 +17,18 @@ priv struct MarkdownCommentContributionState {
   listeners : Array[@base_common.Disposable]
   mut viewport_observer : @markdown_comments_browser.MarkdownCommentViewportObserver?
   mut geometry_lease : @base_common.Disposable?
+  /// One measurement pass per animation frame for every comment zone of this
+  /// kernel; its completion publishes `pending_layouts` in one transaction.
+  measure_batch : @markdown_comments_browser.MarkdownCommentMeasureBatch
+  /// Zone ids whose measured height changed during the current pass, in
+  /// report order.
+  pending_layouts : Map[String, Unit]
 }
 
 ///|
-fn MarkdownCommentContributionState::MarkdownCommentContributionState() -> MarkdownCommentContributionState {
+fn MarkdownCommentContributionState::MarkdownCommentContributionState(
+  viewer : CodeEditorWidget,
+) -> MarkdownCommentContributionState {
   {
     presentation_enabled: true,
     generation: 0,
@@ -28,6 +36,10 @@ fn MarkdownCommentContributionState::MarkdownCommentContributionState() -> Markd
     listeners: [],
     viewport_observer: None,
     geometry_lease: None,
+    measure_batch: MarkdownCommentMeasureBatch(on_pass_complete=() => {
+      viewer.flush_markdown_comment_layouts()
+    }),
+    pending_layouts: Map([]),
   }
 }
 
@@ -151,7 +163,7 @@ fn register_markdown_comment_contribution(
     markdown_comment_contribution_id,
     MarkdownComments,
     AfterFirstRender,
-    _viewer => MarkdownComments(MarkdownCommentContributionState()),
+    viewer => MarkdownComments(MarkdownCommentContributionState(viewer)),
     viewer => {
       guard viewer.markdown_comment_contribution() is Some(state) else {
         abort("Markdown-comment contribution variant mismatch")
@@ -627,7 +639,7 @@ fn CodeEditorWidget::refresh_markdown_comments(
           // Replace it before any observer or renderer can measure the node.
           dom.pin_to_content_viewport()
           let entry_generation = Ref(generation)
-          let size_observer = dom.observe_size(height => {
+          let size_observer = dom.observe_size(state.measure_batch, height => {
             self.apply_markdown_comment_height(
               state, key, zone_id, entry_generation, height,
             )
@@ -782,7 +794,37 @@ fn CodeEditorWidget::apply_markdown_comment_height(
   }
   entry.measured_height = measured
   entry.zone.height_in_px = Some(measured)
-  self.change_view_zones(accessor => accessor.layout_zone(expected_zone_id))
+  if state.measure_batch.in_pass() {
+    // The batch reports every zone of this frame back to back; one relayout
+    // transaction at pass completion replaces a per-zone whitespace change,
+    // ViewZones event, and full zone re-render.
+    state.pending_layouts.set(expected_zone_id, ())
+  } else {
+    self.change_view_zones(accessor => accessor.layout_zone(expected_zone_id))
+  }
+}
+
+///|
+/// Publishes every height reported by the measurement pass that just
+/// completed in one ViewZone transaction.
+fn CodeEditorWidget::flush_markdown_comment_layouts(
+  self : CodeEditorWidget,
+) -> Unit {
+  guard !self.disposed else { return }
+  guard self.markdown_comment_contribution() is Some(state) else { return }
+  if state.pending_layouts.is_empty() {
+    return
+  }
+  let zone_ids : Array[String] = []
+  for zone_id, _ in state.pending_layouts {
+    zone_ids.push(zone_id)
+  }
+  state.pending_layouts.clear()
+  self.change_view_zones(accessor => {
+    for zone_id in zone_ids {
+      accessor.layout_zone(zone_id)
+    }
+  })
 }
 
 ///|
@@ -813,6 +855,7 @@ fn CodeEditorWidget::clear_markdown_comment_model_state(
     None => ()
   }
   state.rendered.clear()
+  state.pending_layouts.clear()
   state.dispose_geometry_lease()
   self.set_hidden_areas([], source=markdown_comment_hidden_source)
 }
@@ -823,6 +866,7 @@ fn MarkdownCommentContributionState::dispose(
   viewer : CodeEditorWidget,
 ) -> Unit {
   viewer.clear_markdown_comment_model_state()
+  self.measure_batch.dispose()
   for listener in self.listeners {
     listener.dispose()
   }

@@ -17,6 +17,8 @@ extern "js" fn install_markdown_comment_browser_test_dom() -> MarkdownCommentBro
   #|     frames: [],
   #|     observers: [],
   #|     hiddenMeasureCount: 0,
+  #|     // 'w' per inline style write, 'r' per hidden height read, in order.
+  #|     events: [],
   #|   };
   #|
   #|   class TestStyle {
@@ -29,12 +31,14 @@ extern "js" fn install_markdown_comment_browser_test_dom() -> MarkdownCommentBro
   #|     getPropertyPriority(name) { return this.priorities.get(name) ?? ""; }
   #|     setProperty(name, value, priority = "") {
   #|       this.writes.push({ operation: 'set', name: String(name) });
+  #|       harness.events.push('w');
   #|       this.values.set(name, String(value));
   #|       if (priority) this.priorities.set(name, String(priority));
   #|       else this.priorities.delete(name);
   #|     }
   #|     removeProperty(name) {
   #|       this.writes.push({ operation: 'remove', name: String(name) });
+  #|       harness.events.push('w');
   #|       const previous = this.getPropertyValue(name);
   #|       this.values.delete(name);
   #|       this.priorities.delete(name);
@@ -67,6 +71,7 @@ extern "js" fn install_markdown_comment_browser_test_dom() -> MarkdownCommentBro
   #|       const outer = this.parentNode;
   #|       if (!this.__hiddenHeights || outer?.style.getPropertyValue('display') !== 'block') return 0;
   #|       harness.hiddenMeasureCount += 1;
+  #|       harness.events.push('r');
   #|       const width = Math.trunc(outer.getBoundingClientRect().width);
   #|       return this.__hiddenHeights.get(width) ?? 0;
   #|     }
@@ -338,6 +343,16 @@ extern "js" fn markdown_comment_test_outer_style(
 extern "js" fn markdown_comment_test_hidden_measure_count(
   harness : MarkdownCommentBrowserTestHarness,
 ) -> Int = "harness => harness.hiddenMeasureCount"
+
+///|
+extern "js" fn markdown_comment_test_events(
+  harness : MarkdownCommentBrowserTestHarness,
+) -> String = "harness => harness.events.join('')"
+
+///|
+extern "js" fn markdown_comment_test_clear_events(
+  harness : MarkdownCommentBrowserTestHarness,
+) -> Unit = "harness => { harness.events.length = 0; }"
 
 ///|
 extern "js" fn markdown_comment_test_disconnect_count(
@@ -624,7 +639,8 @@ test "size observation coalesces and reports positive changed integer heights" {
   defer harness.dispose()
   let dom = MarkdownCommentDom(1, 2)
   let observed : Array[Int] = []
-  let lifetime = dom.observe_size(height => observed.push(height))
+  let batch = MarkdownCommentMeasureBatch(on_pass_complete=() => ())
+  let lifetime = dom.observe_size(batch, height => observed.push(height))
   assert_true(markdown_comment_test_observes(harness, dom.content))
   assert_eq(markdown_comment_test_observer_count(harness), 1)
   assert_eq(markdown_comment_test_observer_target_count(harness, 0), 1)
@@ -659,7 +675,8 @@ test "disconnected zero queued and late observer callbacks are inert" {
   defer harness.dispose()
   let dom = MarkdownCommentDom(5, 6)
   let observed : Array[Int] = []
-  let lifetime = dom.observe_size(height => observed.push(height))
+  let batch = MarkdownCommentMeasureBatch(on_pass_complete=() => ())
+  let lifetime = dom.observe_size(batch, height => observed.push(height))
 
   markdown_comment_test_set_measurement(dom.content, false, 20.0)
   markdown_comment_test_trigger_resize(harness)
@@ -713,7 +730,8 @@ test "offscreen measurement retains pinned width and offset and avoids zero feed
   assert_eq(markdown_comment_test_offset_width(dom.outer), 306)
   let original_style = markdown_comment_test_outer_style(dom.outer)
   let observed : Array[Int] = []
-  let observer = dom.observe_size(height => observed.push(height))
+  let batch = MarkdownCommentMeasureBatch(on_pass_complete=() => ())
+  let observer = dom.observe_size(batch, height => observed.push(height))
   let viewport_observer = dom.observe_viewport_width(() => {
     observer.request_measure()
   })
@@ -783,4 +801,83 @@ test "offscreen measurement retains pinned width and offset and avoids zero feed
   markdown_comment_test_set_viewport_width(viewport, 240)
   markdown_comment_test_trigger_resize_for(harness, viewport)
   assert_eq(markdown_comment_test_pending_frame_count(harness), 0)
+}
+
+///|
+test "a batch lays out every offscreen zone in one frame and completes once" {
+  let harness = install_markdown_comment_browser_test_dom()
+  defer harness.dispose()
+  let first = MarkdownCommentDom(1, 3)
+  let second = MarkdownCommentDom(10, 12)
+  first.pin_to_content_viewport()
+  second.pin_to_content_viewport()
+  markdown_comment_test_mount_offscreen(
+    first.outer,
+    first.content,
+    320,
+    40,
+    180,
+    60,
+  )
+  |> ignore
+  markdown_comment_test_mount_offscreen(
+    second.outer,
+    second.content,
+    320,
+    70,
+    180,
+    90,
+  )
+  |> ignore
+  let first_style = markdown_comment_test_outer_style(first.outer)
+  let second_style = markdown_comment_test_outer_style(second.outer)
+  let completed = Ref(0)
+  let observed : Array[(Int, Int)] = []
+  let batch = MarkdownCommentMeasureBatch(on_pass_complete=() => {
+    completed.val += 1
+  })
+  let first_observer = first.observe_size(batch, height => {
+    // Reports run after every zone's styles are restored, inside the pass.
+    assert_true(batch.in_pass()) catch {
+      _ => abort("report outside the measurement pass")
+    }
+    if markdown_comment_test_style(second.outer, "display") != "none" {
+      abort("report before every zone's styles were restored")
+    }
+    observed.push((1, height))
+  })
+  let second_observer = second.observe_size(batch, height => {
+    observed.push((2, height))
+  })
+  markdown_comment_test_clear_events(harness)
+  first_observer.request_measure()
+  second_observer.request_measure()
+  second_observer.request_measure()
+  // Both zones share one animation frame.
+  assert_eq(markdown_comment_test_pending_frame_count(harness), 1)
+  assert_false(batch.in_pass())
+  markdown_comment_test_flush_frame(harness)
+  assert_eq(observed, [(1, 40), (2, 70)])
+  assert_eq(completed.val, 1)
+  assert_false(batch.in_pass())
+  assert_eq(markdown_comment_test_hidden_measure_count(harness), 2)
+  // Every hidden zone is shown before any height is read, and every style is
+  // restored afterwards: five writes per zone, then one read per zone, then
+  // five restores per zone.
+  assert_eq(
+    markdown_comment_test_events(harness),
+    "wwwwwwwwww" + "rr" + "wwwwwwwwww",
+  )
+  assert_eq(markdown_comment_test_outer_style(first.outer), first_style)
+  assert_eq(markdown_comment_test_outer_style(second.outer), second_style)
+
+  // A disposed batch ignores later requests without scheduling frames.
+  batch.dispose()
+  batch.dispose()
+  first_observer.request_measure()
+  assert_eq(markdown_comment_test_pending_frame_count(harness), 0)
+  first_observer.dispose()
+  second_observer.dispose()
+  assert_eq(markdown_comment_test_disconnect_count(harness), 2)
+  assert_eq(completed.val, 1)
 }

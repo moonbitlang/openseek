@@ -25,10 +25,15 @@ pub fn MarkdownCommentDom::disable_folding(Self) -> Unit
 pub fn MarkdownCommentDom::enable_folding(Self, @ref.Ref[Bool], () -> Unit) -> @common.Disposable
 pub fn MarkdownCommentDom::enable_source_toggle(Self, @ref.Ref[Bool], () -> Unit) -> @common.Disposable
 pub fn MarkdownCommentDom::expose_accessible_content(Self) -> Unit
-pub fn MarkdownCommentDom::observe_size(Self, (Int) -> Unit) -> MarkdownCommentSizeObserver
+pub fn MarkdownCommentDom::observe_size(Self, MarkdownCommentMeasureBatch, (Int) -> Unit) -> MarkdownCommentSizeObserver
 pub fn MarkdownCommentDom::observe_viewport_width(Self, () -> Unit) -> MarkdownCommentViewportObserver
 pub fn MarkdownCommentDom::pin_to_content_viewport(Self) -> Unit
 pub fn MarkdownCommentDom::set_margin_fold_lane_width(Self, Int) -> Unit
+
+type MarkdownCommentMeasureBatch
+pub fn MarkdownCommentMeasureBatch::MarkdownCommentMeasureBatch(on_pass_complete~ : () -> Unit) -> Self
+pub fn MarkdownCommentMeasureBatch::dispose(Self) -> Unit
+pub fn MarkdownCommentMeasureBatch::in_pass(Self) -> Bool
 
 type MarkdownCommentSizeObserver
 pub fn MarkdownCommentSizeObserver::dispose(Self) -> Unit

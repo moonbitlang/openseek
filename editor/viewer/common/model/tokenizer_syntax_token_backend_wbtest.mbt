@@ -92,6 +92,34 @@ test "passive reads never invoke support; stable attached ranges store exact ran
 }
 
 ///|
+/// A visible model range can be a single line ending exactly at the
+/// tokenization frontier (the first line of a file whose second line is hidden
+/// by a rich replacement). It must be tokenized by the stable refresh instead
+/// of waiting for the background worker's idle turn.
+test "stable single-line range at the frontier is tokenized synchronously" {
+  let harness = backend_harness(["one", "two"])
+  let attached_views = AttachedViews()
+  let calls : Array[String] = []
+  let backend = TokenizerSyntaxTokenBackend::new_with_support_resolver(
+    harness.model_state,
+    attached_views,
+    _ => Some(logging_support(calls, Ref(0))),
+  )
+  let events : Array[ModelTokensChangedEvent] = []
+  backend.on_did_change_tokens(event => events.push(event)) |> ignore
+  let view = attached_views.attach_view()
+  view.set_visible_lines([{ start_line_number: 1, end_line_number: 1, }], true)
+  assert_eq(calls.length(), 1)
+  assert_eq(events.length(), 1)
+  assert_eq(events[0].ranges[0].from_line_number, 1)
+  assert_eq(events[0].ranges[0].to_line_number, 1)
+  // The same stable range is now accurate and refreshes nothing.
+  view.set_visible_lines([{ start_line_number: 1, end_line_number: 1, }], true)
+  assert_eq(calls.length(), 1)
+  assert_eq(events.length(), 1)
+}
+
+///|
 test "too-large and missing support stay passive defaults and schedule nothing" {
   let harness = backend_harness(["one"], too_large=true)
   let resolves = Ref(0)

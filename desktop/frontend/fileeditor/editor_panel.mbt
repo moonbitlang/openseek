@@ -1172,6 +1172,7 @@ fn show_file_in_viewer(
       let current_view_state = viewer.save_view_state()
       viewer.set_value(content)
       viewer.restore_view_state(current_view_state)
+      viewer.handle_initialized()
     } else if !same_document {
       // Park the outgoing document's view state for its tab's return.
       if viewer_state.relative is Some(prev) {
@@ -1241,6 +1242,13 @@ fn show_file_in_viewer(
         if !restored_code_view_state && should_auto_fold_top_level(text_model) {
           viewer.fold_top_level()
         }
+        // Matches TextFileEditor.setInput and the reference workbench: model,
+        // restored state, and initial fold policy first, then the separate
+        // `handleInitialized` boundary. It publishes the stable visible range,
+        // so the viewport's syntax tokens are computed before the first paint;
+        // without it the document first paints as plain text and only colors
+        // once the background tokenizer's idle callback reaches the viewport.
+        viewer.handle_initialized()
       }
     } else if show_markdown {
       viewer.set_model(None)
