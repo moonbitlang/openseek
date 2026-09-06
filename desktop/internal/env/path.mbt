@@ -50,23 +50,16 @@ pub fn prepend_path_entry(
   env : Map[String, String],
   bin_dir : String,
 ) -> String {
-  let mut key = "PATH"
-  let mut current : String? = None
-  let duplicates : Array[String] = []
-  for name, value in env {
-    if name.to_upper() == "PATH" {
-      if current is None {
-        key = name
-        current = Some(value)
-      } else {
-        duplicates.push(name)
-      }
+  let spellings = [
+    for name in env.keys() if name.to_upper() == "PATH" => name
+  ]
+  for index, name in spellings {
+    if index > 0 {
+      env.remove(name)
     }
   }
-  for name in duplicates {
-    env.remove(name)
-  }
-  let joined = prepend_to_path_env(bin_dir, current)
+  let key = spellings.get(0).unwrap_or("PATH")
+  let joined = prepend_to_path_env(bin_dir, env.get(key))
   env[key] = joined
   joined
 }

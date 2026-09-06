@@ -1096,17 +1096,12 @@ async fn ApiState::codex_request(
     "codex.thread.start"
     | "codex.thread.resume"
     | "codex.thread.read"
-    | "codex.thread.list" => self.codex_projects.annotate(reply)
-    _ => reply
-  }
-  let reply = match desktop_method {
-    "codex.thread.start"
-    | "codex.thread.resume"
-    | "codex.thread.read"
-    | "codex.thread.list" =>
+    | "codex.thread.list" => {
+      let annotated = self.codex_projects.annotate(reply)
       CodexWorktreeCatalog(@worktree.list_codex_worktree_bindings()).annotate(
-        reply,
+        annotated,
       )
+    }
     _ => reply
   }
   // App-server is the Codex task's writer and therefore archives first. Only

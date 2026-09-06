@@ -66,8 +66,7 @@ pub fn PathQuery::key(self : PathQuery) -> String {
 
 ///|
 fn path_label(path : String) -> String {
-  let segments : Array[StringView] = path.split("/").collect()
-  segments.last().map_or(path, label => label.to_owned())
+  path.rev_after("/").map_or(path, label => label.to_owned())
 }
 
 ///|
@@ -162,7 +161,7 @@ pub fn PathQuery::rank_paths(
     }
   }
   let ranked = best.to_array()
-  ranked.sort_by((left, right) => Compare::compare(left, right))
+  ranked.sort()
   ranked.map(entry => entry.path)
 }
 

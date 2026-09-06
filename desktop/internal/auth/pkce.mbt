@@ -11,17 +11,7 @@
 fn pkce_challenge(verifier : String) -> String {
   let digest = Bytes::from_array(@crypto.sha256(@utf8.encode(verifier)))
   let standard = @base64.encode(digest, padding=false)
-  let builder = StringBuilder()
-  for c in standard {
-    builder.write_char(
-      match c {
-        '+' => '-'
-        '/' => '_'
-        c => c
-      },
-    )
-  }
-  builder.to_string()
+  standard.replace_all(old="+", new="-").replace_all(old="/", new="_")
 }
 
 ///|
@@ -35,10 +25,7 @@ fn start_url(
   port~ : Int,
   name~ : String,
 ) -> String {
-  let origin = match server_url.strip_suffix("/") {
-    Some(origin) => origin.to_owned()
-    None => server_url
-  }
+  let origin = without_suffix(server_url, "/")
   "\{origin}/v1/auth/desktop/start" +
   "?state=\{oauth_state}" +
   "&code_challenge=\{challenge}" +

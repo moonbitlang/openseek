@@ -17,11 +17,7 @@ pub fn random_hex(byte_count : Int) -> String? {
   guard random_bytes(byte_count) is Some(bytes) else { return None }
   let builder = StringBuilder()
   for byte in bytes {
-    let value = byte.to_int()
-    if value < 16 {
-      builder <+ "0"
-    }
-    builder <+ "\{value.to_string(radix=16)}"
+    builder <+ "\{byte.to_int().to_string(radix=16).pad_start(2, '0')}"
   }
   Some(builder.to_string())
 }
