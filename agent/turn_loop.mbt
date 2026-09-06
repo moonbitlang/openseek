@@ -876,10 +876,9 @@ async fn AgentLoop::salvage_control_calls_at_ceiling(
   }) else {
     return None
   }
-  let session = for index = from, session = session, spent = spent_result_chars {
-    if index >= response.tool_calls.length() {
-      break session
-    }
+  let session = for
+    index in from..<response.tool_calls.length()
+    session = session, spent = spent_result_chars {
     let call = response.tool_calls[index]
     let is_control_call = self.tools.find(call.name) is Some(definition) &&
       definition.is_control()
@@ -905,7 +904,7 @@ async fn AgentLoop::salvage_control_calls_at_ceiling(
             // size its compact-on-finish decision against stale usage
             // while the reserved checkpoint headroom is already spent.
             ContinueToolBatch(next) =>
-              continue index + 1, next, spent + recorded_result_chars(next)
+              continue next, spent + recorded_result_chars(next)
             // The control already closed the batch remainder and prepared a
             // continuation (e.g. a control finish converted into a goal
             // check): re-scanning the same calls would duplicate results
@@ -922,13 +921,14 @@ async fn AgentLoop::salvage_control_calls_at_ceiling(
         None => ()
       }
     }
-    continue index + 1,
-      self.close_skipped_tool_calls(
+    continue self.close_skipped_tool_calls(
         session,
         response.tool_calls[index:index + 1],
         note=ceiling_skip_note,
       ),
       spent
+  } nobreak {
+    session
   }
   // Controls ran but none sealed or continued the turn: every call is
   // closed (executed or skip-noted), so yield at the ceiling with the

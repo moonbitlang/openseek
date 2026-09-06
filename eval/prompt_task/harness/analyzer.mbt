@@ -522,32 +522,20 @@ fn probe_output_result(
         summarize(combined),
     )
   }
-  if spec.output_contains != "" &&
-    !contains_expected_text(combined, spec.output_contains) {
-    return ProbeResult(
-      name=spec.name,
-      passed=false,
-      reason="missing output text `\{spec.output_contains}`: " +
-        summarize(combined),
-    )
-  }
-  if spec.stdout_contains != "" &&
-    !contains_expected_text(stdout, spec.stdout_contains) {
-    return ProbeResult(
-      name=spec.name,
-      passed=false,
-      reason="missing stdout text `\{spec.stdout_contains}`: " +
-        summarize(stdout),
-    )
-  }
-  if spec.stderr_contains != "" &&
-    !contains_expected_text(stderr, spec.stderr_contains) {
-    return ProbeResult(
-      name=spec.name,
-      passed=false,
-      reason="missing stderr text `\{spec.stderr_contains}`: " +
-        summarize(stderr),
-    )
+  let text_checks = [
+    ("output", spec.output_contains, combined),
+    ("stdout", spec.stdout_contains, stdout),
+    ("stderr", spec.stderr_contains, stderr),
+  ]
+  for check in text_checks {
+    let (label, expected, haystack) = check
+    if expected != "" && !contains_expected_text(haystack, expected) {
+      return ProbeResult(
+        name=spec.name,
+        passed=false,
+        reason="missing \{label} text `\{expected}`: " + summarize(haystack),
+      )
+    }
   }
   if spec.stdout_json {
     let trimmed = stdout.trim().to_owned()

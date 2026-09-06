@@ -123,12 +123,18 @@ async fn write_file(
   file_state~ : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
-  if @manifest_error.write_error(path, input.content) is Some(message) {
-    return @agent_tool.respond(
+  fn err(message : String) -> @agent_tool.ToolAction {
+    // Every failure names the file it tried to write, as `edit`/`remove` do.
+    // Built here rather than once per call: the success path never needs it.
+    @agent_tool.respond(
       "error writing \{path}: \{message}",
       is_error=true,
       brief="write \{@agent_tool.brief_basename(path)}",
     )
+  }
+
+  if @manifest_error.write_error(path, input.content) is Some(message) {
+    return err(message)
   }
   // Resolve symlinks once, up front: the realpath decides both whether this
   // is an existing-source overwrite to reject and — for the syntax gate below
@@ -147,10 +153,8 @@ async fn write_file(
   // stops a link named `x.txt` pointing at `lib.mbt` from slipping past the
   // suffix check and truncating the source through CreateOrTruncate below.
   if @fs.exists(path) && (is_mbt_source(path) || is_mbt_source(target)) {
-    return @agent_tool.respond(
-      "error writing \{path}: existing source file — use edit or multi_edit to change it (an empty old_string inserts new code); write is for creating new files",
-      is_error=true,
-      brief="write \{@agent_tool.brief_basename(path)}",
+    return err(
+      "existing source file — use edit or multi_edit to change it (an empty old_string inserts new code); write is for creating new files",
     )
   }
   // Pre-write syntax gate for syncheck inputs (`.mbt`, `.mbt.md`, `moon.mod`,
@@ -183,11 +187,7 @@ async fn write_file(
   // are created for the target): the early gate decided on filesystem state
   // that awaits ago may have changed underneath the tool.
   if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
-    return @agent_tool.respond(
-      "error writing \{path}: write blocked: \{reason}",
-      is_error=true,
-      brief="write \{@agent_tool.brief_basename(path)}",
-    )
+    return err("write blocked: \{reason}")
   }
   create_parent_dirs(path)
   // Probe before writing so the result can tell the model whether it created a
@@ -233,12 +233,7 @@ async fn write_file(
   let lines = if input.content == "" {
     0
   } else {
-    let newlines = for ch in input.content; newlines = 0 {
-      continue if ch == '\n' { newlines + 1 } else { newlines }
-    } nobreak {
-      newlines
-    }
-    newlines + 1
+    input.content.iter().count_if(ch => ch == '\n') + 1
   }
   let line_word = if lines == 1 { "line" } else { "lines" }
   let summary = if existed {
