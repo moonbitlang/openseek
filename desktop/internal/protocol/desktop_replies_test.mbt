@@ -819,24 +819,18 @@ test "Git pull-request payload controls optional branch hints explicitly" {
     "session": "thread-2",
   })
   @debug.assert_eq(absent.to_json(), { "session": "thread-2" })
-  let missing_session = try {
+  let missing_session = refused(() => {
     let _ : @protocol.GitPullRequestPayload = @json.from_json({
       "branch_hint": "openseek/wt-1",
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(missing_session)
-  let malformed_hint = try {
+  let malformed_hint = refused(() => {
     let _ : @protocol.GitPullRequestPayload = @json.from_json({
       "session": "thread-1",
       "branch_hint": 7,
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(malformed_hint)
 }
 
@@ -891,17 +885,14 @@ test "language payload codecs require every routing coordinate" {
     "line": 8,
     "column": 13,
   })
-  let missing_root = try {
+  let missing_root = refused(() => {
     let _ : @protocol.LspOpenPayload = @json.from_json({
       "session": "thread-1",
       "path": "src/main.mbt",
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(missing_root)
-  let malformed_position = try {
+  let malformed_position = refused(() => {
     let _ : @protocol.LspHoverPayload = @json.from_json({
       "session": "thread-1",
       "root": "/work/project",
@@ -909,10 +900,7 @@ test "language payload codecs require every routing coordinate" {
       "line": "eight",
       "character": 13,
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(malformed_position)
 }
 
@@ -963,7 +951,7 @@ test "worktree replies omit absent owners and reject ambiguous ownership" {
   })
   assert_eq(ownerless.session, None)
   assert_eq(ownerless.codex_thread, None)
-  let ambiguous = try {
+  let ambiguous = refused(() => {
     let _ : @protocol.WorktreeInfo = @json.from_json({
       "name": "ambiguous",
       "branch": "openseek/ambiguous",
@@ -973,12 +961,9 @@ test "worktree replies omit absent owners and reject ambiguous ownership" {
       "path": "/work/project/.worktrees/ambiguous",
       "present": true,
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(ambiguous)
-  let malformed_present = try {
+  let malformed_present = refused(() => {
     let _ : @protocol.WorktreeInfo = @json.from_json({
       "name": "wt-3",
       "branch": "openseek/wt-3",
@@ -986,10 +971,7 @@ test "worktree replies omit absent owners and reject ambiguous ownership" {
       "path": "/work/project/.worktrees/wt-3",
       "present": "yes",
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(malformed_present)
 }
 
@@ -1156,48 +1138,36 @@ test "Git history codecs ignore unknown fields and omit absent optionals" {
 
 ///|
 test "Git history codecs reject missing, null, and malformed required data" {
-  let missing_session = try {
+  let missing_session = refused(() => {
     let _ : @protocol.GitHistoryPayload = @json.from_json({
       "skip": 0,
       "limit": 50,
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(missing_session)
-  let null_commit = try {
+  let null_commit = refused(() => {
     let _ : @protocol.GitCommitChangesPayload = @json.from_json({
       "session": "s1",
       "commit": null,
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(null_commit)
-  let malformed_ref = try {
+  let malformed_ref = refused(() => {
     let _ : @protocol.GitHistoryRef = @json.from_json({
       "name": "HEAD",
       "revision": "1111111111111111111111111111111111111111",
       "kind": 1,
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(malformed_ref)
-  let null_refs = try {
+  let null_refs = refused(() => {
     let _ : @protocol.GitHistorySnapshot = @json.from_json({
       "refs": null,
       "tips": [],
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(null_refs)
-  let malformed_parent = try {
+  let malformed_parent = refused(() => {
     let _ : @protocol.GitHistoryCommit = @json.from_json({
       "id": "1111111111111111111111111111111111111111",
       "parent_ids": [1],
@@ -1205,42 +1175,30 @@ test "Git history codecs reject missing, null, and malformed required data" {
       "author": "OpenSeek",
       "authored_at": "2026-08-19T10:00:00+08:00",
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(malformed_parent)
-  let null_snapshot = try {
+  let null_snapshot = refused(() => {
     let _ : @protocol.GitHistoryReply = @json.from_json({
       "repository": true,
       "snapshot": null,
       "commits": [],
       "has_more": false,
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(null_snapshot)
-  let missing_status = try {
+  let missing_status = refused(() => {
     let _ : @protocol.GitHistoricalChange = @json.from_json({
       "path": "README.md",
       "kind": "file",
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(missing_status)
-  let malformed_change = try {
+  let malformed_change = refused(() => {
     let _ : @protocol.GitCommitChangesReply = @json.from_json({
       "commit": "1111111111111111111111111111111111111111",
       "changes": [{ "path": "README.md", "status": false, "kind": "file" }],
     })
-    false
-  } catch {
-    _ => true
-  }
+  })
   assert_true(malformed_change)
 }
 

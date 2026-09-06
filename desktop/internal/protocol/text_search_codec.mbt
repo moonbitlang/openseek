@@ -5,14 +5,52 @@
 ///|
 
 ///|
-fn require_text_search_non_negative(
-  value : Int,
-  path : @json.JsonPath,
+/// A count that only moves forward. Both search boundaries refuse a negative
+/// one at the field's own path, with the same message.
+fn JsonObject::required_non_negative_int(
+  self : JsonObject,
+  name : String,
 ) -> Int raise @json.JsonDecodeError {
+  let value = self.required_int(name)
   if value < 0 {
-    raise JsonDecodeError((path, "expected non-negative integer"))
+    raise JsonDecodeError(
+      (self.path.add_key(name), "expected non-negative integer"),
+    )
   }
   value
+}
+
+///|
+/// Both search boundaries carry a failure as a code/message pair that is
+/// wholly present or wholly absent, and refuse a blank half of one.
+fn required_error_pair(
+  object : JsonObject,
+) -> (String, String)? raise @json.JsonDecodeError {
+  let error_code = object.optional_string("error_code")
+  let error_message = object.optional_string("error_message")
+  match (error_code, error_message) {
+    (None, None) => None
+    (Some(code), Some(message)) => {
+      if code.is_empty() {
+        raise JsonDecodeError(
+          (object.path.add_key("error_code"), "expected non-empty error code"),
+        )
+      }
+      if message.is_empty() {
+        raise JsonDecodeError(
+          (
+            object.path.add_key("error_message"),
+            "expected non-empty error message",
+          ),
+        )
+      }
+      Some((code, message))
+    }
+    _ =>
+      raise JsonDecodeError(
+        (object.path, "error_code and error_message must be present together"),
+      )
+  }
 }
 
 ///|
@@ -27,14 +65,8 @@ pub impl FromJson for SearchTextPayload with fn from_json(json, path) {
     include_glob: object.required_string("include_glob"),
     exclude_glob: object.required_string("exclude_glob"),
     session_key: object.required_string("session_key"),
-    generation: require_text_search_non_negative(
-      object.required_int("generation"),
-      path.add_key("generation"),
-    ),
-    max_results: require_text_search_non_negative(
-      object.required_int("max_results"),
-      path.add_key("max_results"),
-    ),
+    generation: object.required_non_negative_int("generation"),
+    max_results: object.required_non_negative_int("max_results"),
   }
 }
 
@@ -61,10 +93,7 @@ pub impl FromJson for CancelSearchTextPayload with fn from_json(json, path) {
   )
   {
     session_key: object.required_string("session_key"),
-    generation: require_text_search_non_negative(
-      object.required_int("generation"),
-      path.add_key("generation"),
-    ),
+    generation: object.required_non_negative_int("generation"),
   }
 }
 
@@ -140,41 +169,13 @@ pub impl ToJson for TextSearchMatch with fn to_json(self) {
 ///|
 pub impl FromJson for SearchTextReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "text-search reply")
-  let generation = require_text_search_non_negative(
-    object.required_int("generation"),
-    path.add_key("generation"),
-  )
-  let match_count = require_text_search_non_negative(
-    object.required_int("match_count"),
-    path.add_key("match_count"),
-  )
-  let file_count = require_text_search_non_negative(
-    object.required_int("file_count"),
-    path.add_key("file_count"),
-  )
+  let generation = object.required_non_negative_int("generation")
+  let match_count = object.required_non_negative_int("match_count")
+  let file_count = object.required_non_negative_int("file_count")
   let matches : Array[TextSearchMatch] = object.required_array_of("matches")
-  let error_code = object.optional_string("error_code")
-  let error_message = object.optional_string("error_message")
-  let error = match (error_code, error_message) {
-    (None, None) => None
-    (Some(code), Some(message)) => {
-      if code.is_empty() {
-        raise JsonDecodeError(
-          (path.add_key("error_code"), "expected non-empty error code"),
-        )
-      }
-      if message.is_empty() {
-        raise JsonDecodeError(
-          (path.add_key("error_message"), "expected non-empty error message"),
-        )
-      }
-      let pair : TextSearchError = { code, message, }
-      Some(pair)
-    }
-    _ =>
-      raise JsonDecodeError(
-        (path, "error_code and error_message must be present together"),
-      )
+  let error : TextSearchError? = match required_error_pair(object) {
+    Some((code, message)) => Some({ code, message, })
+    None => None
   }
   {
     root: object.required_string("root"),

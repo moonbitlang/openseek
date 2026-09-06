@@ -42,6 +42,20 @@ fn JsonObject::of(
 }
 
 ///|
+/// Write `value` under `name` only when it is present. Every Desktop encoder
+/// omits an absent optional instead of writing `null`; each field used to
+/// spell that rule out in three lines of its own.
+fn[T : ToJson] set_optional(
+  fields : Map[String, Json],
+  name : String,
+  value : T?,
+) -> Unit {
+  if value is Some(value) {
+    fields[name] = Json(value)
+  }
+}
+
+///|
 /// A tolerant optional read: a wrong-typed value reads as absent instead of
 /// refusing the whole payload, which is what the lifecycle readers want — a
 /// report must not disappear because one display field is malformed. The
@@ -79,6 +93,26 @@ fn JsonObject::optional_json(self : JsonObject, name : String) -> Json? {
     Some(Null) | None => None
     Some(value) => Some(value)
   }
+}
+
+///|
+/// The value at `name`, decoded into `T` with the failing path naming the
+/// field — the scalar sibling of `required_array_of`.
+fn[T : @json.FromJson] JsonObject::required_of(
+  self : JsonObject,
+  name : String,
+) -> T raise @json.JsonDecodeError {
+  @json.from_json(self.required_json(name), path=self.path.add_key(name))
+}
+
+///|
+/// `required_of` for a field that may be absent or explicitly null.
+fn[T : @json.FromJson] JsonObject::optional_of(
+  self : JsonObject,
+  name : String,
+) -> T? raise @json.JsonDecodeError {
+  guard self.optional_json(name) is Some(value) else { return None }
+  Some(@json.from_json(value, path=self.path.add_key(name)))
 }
 
 ///|
@@ -137,7 +171,7 @@ fn JsonObject::required_int(
   self : JsonObject,
   name : String,
 ) -> Int raise @json.JsonDecodeError {
-  @json.from_json(self.required_json(name), path=self.path.add_key(name))
+  self.required_of(name)
 }
 
 ///|
@@ -145,8 +179,7 @@ fn JsonObject::optional_int(
   self : JsonObject,
   name : String,
 ) -> Int? raise @json.JsonDecodeError {
-  guard self.optional_json(name) is Some(value) else { return None }
-  Some(@json.from_json(value, path=self.path.add_key(name)))
+  self.optional_of(name)
 }
 
 ///|
