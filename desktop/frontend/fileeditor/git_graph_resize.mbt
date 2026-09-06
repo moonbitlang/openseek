@@ -61,7 +61,7 @@ fn request_git_graph_resize_mount() -> @cmd.Cmd {
         }
         let rect = layout.get_bounding_client_rect()
         let height = drag_size(
-          mouse.get_client_y().to_double() - rect.get_top(),
+          mouse.get_client_y() - rect.get_top(),
           floor=MinReviewSectionHeight.to_double(),
           max=rect.get_height() - MinReviewSectionHeight.to_double(),
         )

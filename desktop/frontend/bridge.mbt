@@ -1610,7 +1610,7 @@ fn close_window() -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     let _ : @js.Value = @js.globalThis.apply_with_string(
       "close",
-      ([] : Array[@js.Value]),
+      ([] : FixedArray[@js.Value]),
     )
   })
 }

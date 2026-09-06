@@ -337,7 +337,7 @@ fn show_empty_project_menu_after_render() -> @cmd.Cmd {
         is Some(search) {
         let _ : @js.Value = @js.Value::cast_from(search).apply_with_string(
           "focus",
-          ([] : Array[@js.Value]),
+          ([] : FixedArray[@js.Value]),
         )
       }
     },
@@ -353,7 +353,7 @@ fn focus_empty_project_trigger_after_render() -> @cmd.Cmd {
         is Some(trigger) {
         let _ : @js.Value = @js.Value::cast_from(trigger).apply_with_string(
           "focus",
-          ([] : Array[@js.Value]),
+          ([] : FixedArray[@js.Value]),
         )
       }
     },
@@ -425,7 +425,12 @@ fn visible_turn_anchor(transcript : @dom.Element) -> String? {
   let mut found : Int? = None
   while low <= high {
     let middle = low + (high - low) / 2
-    if bubbles[middle].get_bounding_client_rect().get_top() <= reference {
+    if bubbles
+      .item(middle.to_double())
+      .unwrap()
+      .get_bounding_client_rect()
+      .get_top() <=
+      reference {
       found = Some(middle)
       low = middle + 1
     } else {
@@ -433,7 +438,7 @@ fn visible_turn_anchor(transcript : @dom.Element) -> String? {
     }
   }
   guard found is Some(index) else { return None }
-  bubbles[index].get_attribute("id")
+  bubbles.item(index.to_double()).unwrap().get_attribute("id")
 }
 
 ///|

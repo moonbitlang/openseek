@@ -156,7 +156,7 @@ fn window_titlebar_sub_loader(
         unload: _ => {
           let _ : @js.Value = geometry.apply_with_string(
             "dispose",
-            ([] : Array[@js.Value]),
+            ([] : FixedArray[@js.Value]),
           )
           target.remove_event_listener_with_options(
             "dblclick",
@@ -169,7 +169,7 @@ fn window_titlebar_sub_loader(
           emit = next
           let _ : @js.Value = geometry.apply_with_string(
             "refreshDom",
-            ([] : Array[@js.Value]),
+            ([] : FixedArray[@js.Value]),
           )
         },
       })

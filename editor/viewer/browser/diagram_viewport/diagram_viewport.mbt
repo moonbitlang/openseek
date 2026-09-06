@@ -538,8 +538,8 @@ fn MarkdownDiagramViewport::install_listeners(
     self.is_panning = true
     self.has_dragged = false
     self.pan_pointer_id = Some(@base_browser.mouse_event_pointer_id(mouse))
-    let client_x = Double::from_int(mouse.get_client_x())
-    let client_y = Double::from_int(mouse.get_client_y())
+    let client_x = mouse.get_client_x()
+    let client_y = mouse.get_client_y()
     self.start_x = client_x - self.translate_x
     self.start_y = client_y - self.translate_y
     self.previous_move_x = client_x
@@ -573,8 +573,8 @@ fn MarkdownDiagramViewport::install_listeners(
       } else {
         1.25
       },
-      Double::from_int(mouse.get_client_x()) - rect.get_left(),
-      Double::from_int(mouse.get_client_y()) - rect.get_top(),
+      mouse.get_client_x() - rect.get_left(),
+      mouse.get_client_y() - rect.get_top(),
     )
     |> ignore
   })
@@ -602,8 +602,8 @@ fn MarkdownDiagramViewport::install_listeners(
       let delta = -delta_y * diagram_zoom_factor * multiplier
       self.zoom_at_point(
         1.0 + delta,
-        Double::from_int(wheel.get_client_x()) - rect.get_left(),
-        Double::from_int(wheel.get_client_y()) - rect.get_top(),
+        wheel.get_client_x() - rect.get_left(),
+        wheel.get_client_y() - rect.get_top(),
       )
       |> ignore
     },
@@ -652,7 +652,7 @@ fn MarkdownDiagramViewport::install_listeners(
     }
     self.is_resizing = true
     self.resize_pointer_id = Some(@base_browser.mouse_event_pointer_id(mouse))
-    self.resize_start_y = Double::from_int(mouse.get_client_y())
+    self.resize_start_y = mouse.get_client_y()
     self.resize_start_height = rect.get_height()
   })
   self.listen(self.owner_window.as_event_target(), "pointermove", event => {
@@ -668,8 +668,8 @@ fn MarkdownDiagramViewport::install_listeners(
       }
       event.prevent_default()
       event.stop_propagation()
-      let client_x = Double::from_int(mouse.get_client_x())
-      let client_y = Double::from_int(mouse.get_client_y())
+      let client_x = mouse.get_client_x()
+      let client_y = mouse.get_client_y()
       let dx = client_x - self.previous_move_x
       let dy = client_y - self.previous_move_y
       if dx.abs() > diagram_drag_threshold || dy.abs() > diagram_drag_threshold {
@@ -690,9 +690,7 @@ fn MarkdownDiagramViewport::install_listeners(
       event.prevent_default()
       event.stop_propagation()
       self.resize_to_height(
-        self.resize_start_height +
-        Double::from_int(mouse.get_client_y()) -
-        self.resize_start_y,
+        self.resize_start_height + mouse.get_client_y() - self.resize_start_y,
       )
       |> ignore
     }

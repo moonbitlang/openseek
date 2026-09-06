@@ -114,7 +114,7 @@ pub fn MouseHandler::delegate_vertical_scrollbar_pointer_down(
   let scrollable = self.view_helper.editor_scrollable
   let track_rect = scrollable.track(true).get_bounding_client_rect()
   let state = scrollable.state(true)
-  let pointer_position = mouse.get_client_y().to_double()
+  let pointer_position = mouse.get_client_y()
   let slider_start = track_rect.get_top() + state.slider_position()
   let slider_end = slider_start + state.slider_size()
   event.prevent_default()
@@ -297,9 +297,9 @@ fn scrollbar_drag_orthogonal_coord(
   vertical : Bool,
 ) -> Double {
   if vertical {
-    mouse.get_client_x().to_double()
+    mouse.get_client_x()
   } else {
-    mouse.get_client_y().to_double()
+    mouse.get_client_y()
   }
 }
 

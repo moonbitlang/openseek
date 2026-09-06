@@ -492,8 +492,8 @@ fn MarkdownViewerWidgetDefinitionBridge::bind_semantic_dom(
       self.cancel_link_preview()
       return
     }
-    self.last_client_x = mouse.get_client_x().to_double()
-    self.last_client_y = mouse.get_client_y().to_double()
+    self.last_client_x = mouse.get_client_x()
+    self.last_client_y = mouse.get_client_y()
     let target = self.target_at(self.last_client_x, self.last_client_y)
     self.last_target = target
     if mouse.get_buttons() == 0 &&
@@ -514,17 +514,13 @@ fn MarkdownViewerWidgetDefinitionBridge::bind_semantic_dom(
   self.view.listen_semantic_dom("contextmenu", event => {
     guard self.is_current() &&
       event.to_mouse_event() is Some(mouse) &&
-      self.target_at(
-        mouse.get_client_x().to_double(),
-        mouse.get_client_y().to_double(),
-      )
-      is Some(target) else {
+      self.target_at(mouse.get_client_x(), mouse.get_client_y()) is Some(target) else {
       return
     }
     if self.show_context_menu(
         target,
-        mouse.get_client_x().to_double(),
-        mouse.get_client_y().to_double(),
+        mouse.get_client_x(),
+        mouse.get_client_y(),
       ) {
       event.prevent_default()
       event.stop_propagation()
@@ -538,8 +534,8 @@ fn MarkdownViewerWidgetDefinitionBridge::bind_semantic_dom(
     guard standard.left_button && standard.detail <= 1 else { return }
     self.viewer.focus()
     self.mouse_down_target = self.target_at(
-      mouse.get_client_x().to_double(),
-      mouse.get_client_y().to_double(),
+      mouse.get_client_x(),
+      mouse.get_client_y(),
     )
     self.last_target = self.mouse_down_target
   })
@@ -548,10 +544,7 @@ fn MarkdownViewerWidgetDefinitionBridge::bind_semantic_dom(
       return
     }
     let standard = @base_browser.StandardMouseEvent(mouse)
-    let target = self.target_at(
-      mouse.get_client_x().to_double(),
-      mouse.get_client_y().to_double(),
-    )
+    let target = self.target_at(mouse.get_client_x(), mouse.get_client_y())
     let down = self.mouse_down_target
     self.mouse_down_target = None
     guard standard.left_button &&

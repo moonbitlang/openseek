@@ -9,7 +9,7 @@ import {
   "moonbit-community/pty@0.4.1",
   "moonbit-community/fuzzy_match@0.2.6",
   "moonbit-community/flate@0.7.1",
-  "moonbit-community/rabbita@0.15.4",
+  "moonbit-community/rabbita@0.15.6",
   "moonbitlang/x@0.4.50",
   "moonbitlang/async@0.21.0",
   "moonbit-community/proton@0.2.8",

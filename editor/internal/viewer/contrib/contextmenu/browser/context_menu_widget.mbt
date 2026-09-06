@@ -229,7 +229,7 @@ fn ContextMenuWidget::rebuild_menu_shell(self : ContextMenuWidget) -> Unit {
 fn ContextMenuWidget::root_actions_node(
   self : ContextMenuWidget,
 ) -> @rdom.Element {
-  self.menu.get_children()[0].get_children()[0]
+  self.menu.get_children().item(0).unwrap().get_children().item(0).unwrap()
 }
 
 ///|

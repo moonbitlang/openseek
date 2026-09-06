@@ -9,7 +9,7 @@ pub fn focus_query_after_render() -> @cmd.Cmd {
         is Some(input) {
         let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
           "focus",
-          ([] : Array[@js.Value]),
+          ([] : FixedArray[@js.Value]),
         )
       }
     },

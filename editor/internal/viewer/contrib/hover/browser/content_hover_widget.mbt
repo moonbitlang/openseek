@@ -215,10 +215,7 @@ pub fn ContentHoverWidget::ContentHoverWidget(
   wrapper.add_event_listener("mouseleave", event => {
     match event.to_mouse_event() {
       Some(mouse) =>
-        (host.handle_mouseleave)(
-          mouse.get_client_x().to_double(),
-          mouse.get_client_y().to_double(),
-        )
+        (host.handle_mouseleave)(mouse.get_client_x(), mouse.get_client_y())
       None => ()
     }
     event.stop_propagation()
@@ -858,8 +855,7 @@ fn hover_prefer_above(
 /// Monaco `dom.getDomNodePagePosition(editorDomNode).top`: client-rect top
 /// plus the window's vertical scroll.
 fn dom_node_page_top(node : @rdom.Element) -> Double {
-  node.get_bounding_client_rect().get_top() +
-  @rdom.window().scroll_y().to_double()
+  node.get_bounding_client_rect().get_top() + @rdom.window().scroll_y()
 }
 
 ///|

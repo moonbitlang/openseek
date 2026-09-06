@@ -200,8 +200,8 @@ fn install_context_menu_listener(
       event_element(event) is Some(element) else {
       return
     }
-    let x = mouse.get_client_x()
-    let y = mouse.get_client_y()
+    let x = mouse.get_client_x().to_int()
+    let y = mouse.get_client_y().to_int()
     remembered_selection = Some((x, y, selected_at(element, x, y, false)))
   }
   // Capture closes the previous menu even when another owner stops bubbling.
@@ -223,8 +223,8 @@ fn install_context_menu_listener(
       return
     }
     event.prevent_default()
-    let x = mouse.get_client_x()
-    let y = mouse.get_client_y()
+    let x = mouse.get_client_x().to_int()
+    let y = mouse.get_client_y().to_int()
     let keyboard = x == 0 && y == 0
     let mut selected_text = selected_at(element, x, y, keyboard)
     if selected_text is None &&

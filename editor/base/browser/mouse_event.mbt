@@ -56,8 +56,8 @@ pub fn StandardMouseEvent::StandardMouseEvent(
     } else {
       detail
     },
-    posx: e.get_page_x().to_double(),
-    posy: e.get_page_y().to_double(),
+    posx: e.get_page_x(),
+    posy: e.get_page_y(),
     ctrl_key: e.get_ctrl_key(),
     shift_key: e.get_shift_key(),
     alt_key: e.get_alt_key(),

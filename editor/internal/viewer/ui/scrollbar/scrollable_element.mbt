@@ -465,9 +465,9 @@ pub fn ScrollableElementDom::desired_position_from_track(
 ) -> Double {
   let rect = self.track(vertical).get_bounding_client_rect()
   let offset = if vertical {
-    mouse.get_client_y().to_double() - rect.get_top()
+    mouse.get_client_y() - rect.get_top()
   } else {
-    mouse.get_client_x().to_double() - rect.get_left()
+    mouse.get_client_x() - rect.get_left()
   }
   self.state(vertical).desired_position_from_offset(offset)
 }
@@ -586,8 +586,8 @@ fn away_from_zero(value : Double) -> Double {
 ///|
 pub fn drag_coord(mouse : @rdom.MouseEvent, vertical : Bool) -> Double {
   if vertical {
-    mouse.get_client_y().to_double()
+    mouse.get_client_y()
   } else {
-    mouse.get_client_x().to_double()
+    mouse.get_client_x()
   }
 }

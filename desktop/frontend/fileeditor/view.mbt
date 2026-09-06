@@ -126,7 +126,7 @@ fn focus_breadcrumb_entry_after_render(index : Int) -> @cmd.Cmd {
         is Some(row) {
         let _ : @js.Value = @js.Value::cast_from(row).apply_with_string(
           "focus",
-          ([] : Array[@js.Value]),
+          ([] : FixedArray[@js.Value]),
         )
       }
     },
@@ -141,7 +141,7 @@ fn focus_explorer_tab_after_render(id : String) -> @cmd.Cmd {
       if @dom.document().get_element_by_id(id).to_option() is Some(tab) {
         let _ : @js.Value = @js.Value::cast_from(tab).apply_with_string(
           "focus",
-          ([] : Array[@js.Value]),
+          ([] : FixedArray[@js.Value]),
         )
       }
     },
@@ -239,7 +239,7 @@ fn focus_changed_file_after_render(index : Int) -> @cmd.Cmd {
         is Some(row) {
         let _ : @js.Value = @js.Value::cast_from(row).apply_with_string(
           "focus",
-          ([] : Array[@js.Value]),
+          ([] : FixedArray[@js.Value]),
         )
       }
     },
@@ -816,7 +816,7 @@ fn focus_git_commit_after_render(index : Int) -> @cmd.Cmd {
         is Some(row) {
         let _ : @js.Value = @js.Value::cast_from(row).apply_with_string(
           "focus",
-          ([] : Array[@js.Value]),
+          ([] : FixedArray[@js.Value]),
         )
       }
     },

@@ -426,10 +426,7 @@ fn MarkdownDocumentHoverBridge::bind_semantic_dom(
       self.invalidate_pointer_request()
       return
     }
-    self.on_pointer_move(
-      mouse.get_client_x().to_double(),
-      mouse.get_client_y().to_double(),
-    )
+    self.on_pointer_move(mouse.get_client_x(), mouse.get_client_y())
   })
 }
 
