@@ -2383,6 +2383,38 @@ fn update_msg(
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
+          if mention.ref_ is @mention_context.SemanticSearch(_) {
+            let (mode_cmd, mode_model) = update_msg(
+              dispatch,
+              FileEditor(
+                @fileeditor.ExplorerModeSelected(@fileeditor.ExplorerSearch),
+              ),
+              {
+                ..model,
+                focused: conv.device,
+                active_session: conv.session_id,
+              },
+            )
+            let (filter_cmd, filtered) = update_msg(
+              dispatch,
+              FileEditor(
+                @fileeditor.Search(
+                  @grep_search.SetSemanticResultFilter(
+                    @grep_search.SemanticResultFilter::SelectedSemanticResults,
+                  ),
+                ),
+              ),
+              mode_model,
+            )
+            return (
+              @cmd.batch([mode_cmd, filter_cmd]),
+              {
+                ..filtered,
+                focused: model.focused,
+                active_session: model.active_session,
+              },
+            )
+          }
           guard @mention_context.target(mention.ref_) is Some(target) else {
             return (@cmd.none, model)
           }
@@ -2694,6 +2726,21 @@ fn update_msg(
     // place; an already-open file is activated.
     FileEditor(@fileeditor.SearchMatchSelected(path~, range~)) =>
       open_editor_at(dispatch, model, path, Some(range))
+    FileEditor(@fileeditor.SemanticSelectionChanged(reference)) => {
+      guard model.active_conversation() is Some(conv) else {
+        return (@cmd.none, model)
+      }
+      let mentions = conv.mentions.filter(mention => {
+        !(mention.ref_ is @mention_context.SemanticSearch(_))
+      })
+      let mentions = match reference {
+        Some(reference) =>
+          mentions +
+          [{ ref_: @mention_context.SemanticSearch(reference), range: None, }]
+        None => mentions
+      }
+      (@cmd.none, model.replace_conversation({ ..conv, mentions, }))
+    }
     // Intercepted like the comment above: which dock tab a tree click opens
     // is the strip's business. The dock opens (or re-activates) the tab,
     // then the file subsystem loads and shows the document against the

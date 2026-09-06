@@ -620,10 +620,119 @@ html.is-resizing * {
   gap: 3px;
 }
 /* Semantic hits: one structural match per block, semgrep-style. */
+.search-semantic-pattern-group {
+  min-width: 0;
+}
+.search-semantic-pattern-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px 6px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.search-semantic-pattern-header:hover {
+  background: var(--color-bg-subtle);
+}
+.search-semantic-pattern {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+  font-family: var(--font-family-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-semantic-pattern-results {
+  min-width: 0;
+  margin-left: 12px;
+  border-left: 1px solid var(--color-border);
+}
+.search-semantic-pattern-results > .search-file-group {
+  margin-left: 8px;
+}
+.search-semantic-pattern-results .search-file-results {
+  margin-left: 16px;
+  border-left: 1px solid var(--color-border);
+}
+.search-selection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+.search-selection-toolbar span {
+  flex: 1 1 auto;
+}
+.search-selection-toolbar button {
+  margin-left: auto;
+  padding: 3px 7px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.search-selection-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.search-selection-toolbar button:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
 .search-semantic-hit {
-  padding: 6px 10px 6px 34px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  align-items: start;
+  gap: 6px;
+  padding: 6px 10px 6px 10px;
   cursor: pointer;
   border-radius: var(--radius-xs);
+}
+.search-semantic-select {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  align-self: start;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.search-semantic-group-select {
+  display: inline-block;
+  flex: 0 0 auto;
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.search-semantic-hit.selected {
+  background: var(--color-accent-soft);
+}
+.search-semantic-hit.selected .search-semantic-select {
+  color: var(--color-accent-strong);
 }
 .search-semantic-hit:hover {
   background: var(--color-bg-hover, var(--color-bg-surface));

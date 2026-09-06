@@ -28,6 +28,7 @@ import {
   "openseek_desktop/frontend/fileeditor/feedback",
   "openseek_desktop/frontend/files",
   "openseek_desktop/frontend/grep_search",
+  "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/resource",
