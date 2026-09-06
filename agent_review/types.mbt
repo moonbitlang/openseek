@@ -51,6 +51,62 @@ pub fn ReviewReport::to_json_string(self : ReviewReport) -> String {
 }
 
 ///|
+/// The schema version this build emits and accepts.
+let current_schema_version : Int = 1
+
+///|
+/// Allowed severity values, ordered most to least severe.
+fn severities() -> Array[String] {
+  ["blocker", "high", "medium", "low", "nit"]
+}
+
+///|
+/// Parse a report from JSON, returning the report or a human-readable error.
+pub fn ReviewReport::parse(json : Json) -> Result[ReviewReport, String] {
+  let report : ReviewReport = @json.from_json(json) catch {
+    e => return Err("invalid review report JSON: \{e}")
+  }
+  Ok(report)
+}
+
+///|
+/// Validate a report against the contract. Returns the list of problems; an
+/// empty list means the report is valid. The `submit_review` tool uses this to
+/// reject malformed model output and ask for a retry.
+pub fn ReviewReport::validate(self : ReviewReport) -> Array[String] {
+  let problems : Array[String] = []
+  if self.schema_version != current_schema_version {
+    problems.push(
+      "schema_version must be \{current_schema_version}, got \{self.schema_version}",
+    )
+  }
+  if self.summary.is_blank() {
+    problems.push("summary must not be empty")
+  }
+  let allowed = severities()
+  for finding in self.findings {
+    if !allowed.contains(finding.severity) {
+      problems.push(
+        "finding '\{finding.title}': invalid severity '\{finding.severity}'",
+      )
+    }
+    if finding.file == "" {
+      problems.push("a finding has an empty file path")
+    }
+    if finding.title == "" {
+      problems.push("a finding has an empty title")
+    }
+    if finding.category == "" {
+      problems.push("finding '\{finding.title}': empty category")
+    }
+    if finding.detail == "" {
+      problems.push("finding '\{finding.title}': empty detail")
+    }
+  }
+  problems
+}
+
+///|
 fn sample_report() -> ReviewReport {
   {
     schema_version: 1,
@@ -142,49 +198,79 @@ test "parse reports an error on malformed json" {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend Finding with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend Finding with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend Finding with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend Finding with ToJson::{to_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ReviewReport with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ReviewReport with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ReviewReport with Eq::{equal, not_equal}
 
 ///|
 pub extend ReviewReport with ToJson::{to_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ReviewScope with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ReviewScope with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ReviewScope with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ReviewScope with ToJson::{to_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ReviewStats with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ReviewStats with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ReviewStats with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ReviewStats with ToJson::{to_json}
