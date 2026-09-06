@@ -94,15 +94,10 @@ pub fn LineDecorationsNormalizer::normalize(
       end_column -= 1
     }
     let start_offset = (start_column - 1).clamp(min=0, max=line_length)
-    let max_end_offset = if line_length == 0 {
+    let end_offset_high = if line_length == 0 {
       start_offset - 1
     } else {
-      line_length - 1
-    }
-    let end_offset_high = if max_end_offset < start_offset - 1 {
-      start_offset - 1
-    } else {
-      max_end_offset
+      (line_length - 1).max(start_offset - 1)
     }
     let end_offset = (end_column - 2).clamp(
       min=start_offset - 1,
@@ -206,11 +201,7 @@ fn DecorationSegmentStack::insert(
 
 ///|
 fn decoration_stack_metadata(metadata : Array[Int]) -> Int {
-  let mut result = 0
-  for item in metadata {
-    result = result | item
-  }
-  result
+  metadata.fold(init=0, (bits, item) => bits | item)
 }
 
 ///|

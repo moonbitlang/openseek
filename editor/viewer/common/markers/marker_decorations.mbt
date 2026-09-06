@@ -93,15 +93,10 @@ fn MarkerDecorations::update(
       added.push(marker)
     }
   }
-  let retained : Array[(Marker, String)] = []
-  let old_ids : Array[String] = []
-  for index in 0..<self.entries.length() {
-    if matched_entries[index] {
-      retained.push(self.entries[index])
-    } else {
-      old_ids.push(self.entries[index].1)
-    }
-  }
+  let retained = [ for i, entry in self.entries if matched_entries[i] => entry ]
+  let old_ids = [
+    for i, entry in self.entries if !matched_entries[i] => entry.1
+  ]
   if added.length() == 0 && old_ids.length() == 0 {
     return false
   }
@@ -135,9 +130,8 @@ fn MarkerDecorations::get_markers(
   let res : Array[(@base_common.Range, Marker)] = []
   for entry in self.entries {
     let (marker, id) = entry
-    match self.model.get_decoration_range(id) {
-      Some(range) => res.push((range, marker))
-      None => ()
+    if self.model.get_decoration_range(id) is Some(range) {
+      res.push((range, marker))
     }
   }
   res
