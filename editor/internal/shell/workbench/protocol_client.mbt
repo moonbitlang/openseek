@@ -28,9 +28,8 @@ let protocol_send : Ref[((@remote_protocol.ClientPacket) -> Unit)?] = Ref(None)
 
 ///|
 fn send_protocol_packet(packet : @remote_protocol.ClientPacket) -> Unit {
-  match protocol_send.val {
-    Some(send) => send(packet)
-    None => ()
+  if protocol_send.val is Some(send) {
+    send(packet)
   }
 }
 
@@ -102,24 +101,25 @@ fn cancelled_protocol_response(id : String) -> @remote_protocol.ServerPacket {
 }
 
 ///|
-fn cancel_pending_request(id : String) -> Unit {
-  match pending_requests.get(id) {
-    Some(pending) => {
-      pending_requests.remove(id)
-      if pending.sent {
-        cancelled_request_ids[id] = ()
-      }
-      match pending.cancellation_subscription {
-        Some(subscription) => {
-          pending.cancellation_subscription = None
-          subscription.dispose()
-        }
-        None => ()
-      }
-      (pending.resolve)(cancelled_protocol_response(id))
-    }
-    None => ()
+/// Removes the pending entry for `id` and releases its cancellation
+/// subscription, returning the entry when one was still registered.
+fn take_pending_request(id : String) -> PendingProtocolRequest? {
+  guard pending_requests.get(id) is Some(pending) else { return None }
+  pending_requests.remove(id)
+  if pending.cancellation_subscription is Some(subscription) {
+    pending.cancellation_subscription = None
+    subscription.dispose()
   }
+  Some(pending)
+}
+
+///|
+fn cancel_pending_request(id : String) -> Unit {
+  guard take_pending_request(id) is Some(pending) else { return }
+  if pending.sent {
+    cancelled_request_ids[id] = ()
+  }
+  (pending.resolve)(cancelled_protocol_response(id))
 }
 
 ///|
@@ -130,27 +130,15 @@ fn resolve_pending_response(packet : @remote_protocol.ServerPacket) -> Bool {
   if id == "" {
     return false
   }
-  match pending_requests.get(id) {
-    Some(pending) => {
-      pending_requests.remove(id)
-      match pending.cancellation_subscription {
-        Some(subscription) => {
-          pending.cancellation_subscription = None
-          subscription.dispose()
-        }
-        None => ()
-      }
-      (pending.resolve)(packet)
-      true
-    }
-    None =>
-      if cancelled_request_ids.contains(id) {
-        cancelled_request_ids.remove(id)
-        true
-      } else {
-        false
-      }
+  if take_pending_request(id) is Some(pending) {
+    (pending.resolve)(packet)
+    return true
   }
+  if cancelled_request_ids.contains(id) {
+    cancelled_request_ids.remove(id)
+    return true
+  }
+  false
 }
 
 ///|
@@ -158,28 +146,14 @@ fn resolve_pending_response(packet : @remote_protocol.ServerPacket) -> Bool {
 /// providers resolve instead of leaking.
 fn fail_pending_requests(message : String) -> Unit {
   cancelled_request_ids.clear()
-  let ids : Array[String] = []
-  for id, _pending in pending_requests {
-    ids.push(id)
-  }
+  let ids = [ for id, _pending in pending_requests => id ]
   for id in ids {
-    match pending_requests.get(id) {
-      Some(pending) => {
-        pending_requests.remove(id)
-        match pending.cancellation_subscription {
-          Some(subscription) => {
-            pending.cancellation_subscription = None
-            subscription.dispose()
-          }
-          None => ()
-        }
-        (pending.resolve)(
-          RemoteError(
-            ProtocolError(ProtocolProviderError, message, request_id=id),
-          ),
-        )
-      }
-      None => ()
+    if take_pending_request(id) is Some(pending) {
+      (pending.resolve)(
+        RemoteError(
+          ProtocolError(ProtocolProviderError, message, request_id=id),
+        ),
+      )
     }
   }
 }
