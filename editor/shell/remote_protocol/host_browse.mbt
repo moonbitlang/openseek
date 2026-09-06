@@ -102,28 +102,19 @@ fn decode_host_directory_listed_payload(
   id : String,
 ) -> ServerPacketDecodeResult {
   match json_string_field(packet, "path") {
-    Some(path) => {
-      let entries : Array[HostDirectoryEntry] = []
-      match json_field(packet, "entries") {
-        Some(Array(items)) =>
-          for item in items {
-            if parse_host_directory_entry(item) is Some(entry) {
-              entries.push(entry)
-            }
-          }
-        _ => ()
-      }
+    Some(path) =>
       DecodedServerPacket(
         HostDirectoryListed({
           id,
           listing: {
             path,
             parent: json_string_field(packet, "parent"),
-            entries,
+            entries: json_array_field(
+              packet, "entries", parse_host_directory_entry,
+            ),
           },
         }),
       )
-    }
     None =>
       ServerPacketDecodeError(
         ProtocolError(

@@ -867,27 +867,15 @@ fn active_document_error_update(
     workbench_services().remote_language.invalidate()
     clear_workbench_model()
   })
-  if error.code == FileNotFound {
-    (
-      @rabbita.batch([clear, dom_mounted_status_cmd("missing")]),
-      {
-        ..model,
-        status: "missing",
-        status_message: "Source file is missing.",
-        viewer_has_frame: false,
-      },
-    )
+  let (status, status_message) = if error.code == FileNotFound {
+    ("missing", "Source file is missing.")
   } else {
-    (
-      @rabbita.batch([clear, dom_mounted_status_cmd("error")]),
-      {
-        ..model,
-        status: "error",
-        status_message: error.message,
-        viewer_has_frame: false,
-      },
-    )
+    ("error", error.message)
   }
+  (
+    @rabbita.batch([clear, dom_mounted_status_cmd(status)]),
+    { ..model, status, status_message, viewer_has_frame: false, },
+  )
 }
 
 ///|

@@ -78,20 +78,15 @@ fn FileTreeModel::update(
     DirectoryResolved(uri, result) =>
       self.with_directory_resolved(provider, emit, uri, result)
     ToggleDirectory(uri) =>
-      match self.root {
-        Some(root) =>
-          match root.toggle(uri) {
-            Some((root, effect)) => {
-              let model = { ..self, root: Some(root), }
-              match effect {
-                ToggleResolve(uri) =>
-                  (FileTree::resolve_directory(provider, emit, uri), model)
-                ToggleNone => (@rabbita.none, model)
-              }
-            }
-            None => (@rabbita.none, self)
-          }
-        None => (@rabbita.none, self)
+      if self.root is Some(root) && root.toggle(uri) is Some((toggled, effect)) {
+        let model = { ..self, root: Some(toggled), }
+        match effect {
+          ToggleResolve(uri) =>
+            (FileTree::resolve_directory(provider, emit, uri), model)
+          ToggleNone => (@rabbita.none, model)
+        }
+      } else {
+        (@rabbita.none, self)
       }
     OpenFile(uri) =>
       (@cmd.custom_cmd(_ => on_open(uri)), { ..self, selected: Some(uri), })
@@ -122,28 +117,22 @@ fn FileTreeModel::with_directory_resolved(
             self.selected
           },
         }
+      } else if self.root is Some(root) &&
+        root.with_resolved(uri, stat) is Some(resolved) {
+        { ..self, root: Some(resolved), }
       } else {
-        match self.root {
-          Some(root) =>
-            match root.with_resolved(uri, stat) {
-              Some(root) => { ..self, root: Some(root), }
-              None => self
-            }
-          None => self
-        }
+        self
       }
       model.continue_reveal(provider, emit)
     }
     WorkspaceResolveError(_) => {
       // The folder keeps rendering as an empty-with-error level; children
       // stay unresolved so the next expand retries the resolve.
-      let model = match self.root {
-        Some(root) =>
-          match root.with_resolve_failed(uri) {
-            Some(root) => { ..self, root: Some(root), pending_reveal: None, }
-            None => { ..self, pending_reveal: None, }
-          }
-        None => { ..self, pending_reveal: None, }
+      let model = if self.root is Some(root) &&
+        root.with_resolve_failed(uri) is Some(failed) {
+        { ..self, root: Some(failed), pending_reveal: None, }
+      } else {
+        { ..self, pending_reveal: None, }
       }
       (@rabbita.none, model)
     }
@@ -197,16 +186,14 @@ fn FileTreeModel::view(
   emit : @rabbita.Emit[FileTreeMsg],
 ) -> @html.Html {
   let children : Array[@html.Html] = []
-  match self.root {
-    Some(root) =>
-      for row in root.visible_rows() {
-        if row.node.kind == Directory {
-          children.push(row.folder_view(emit))
-        } else {
-          children.push(row.file_view(emit, self))
-        }
+  if self.root is Some(root) {
+    for row in root.visible_rows() {
+      if row.node.kind == Directory {
+        children.push(row.folder_view(emit))
+      } else {
+        children.push(row.file_view(emit, self))
       }
-    None => ()
+    }
   }
   @html.div(class="file-tree", children)
 }
@@ -273,9 +260,8 @@ fn TreeRow::file_view(
 
 ///|
 fn FileTree::indent_guides(depth : Int) -> @html.Html {
-  let guides : Array[@html.Html] = []
-  for _ in 0..<depth {
-    guides.push(@html.span(class="indent-guide", ""))
-  }
+  let guides : Array[@html.Html] = [
+    for _ in 0..<depth => @html.span(class="indent-guide", "")
+  ]
   @html.span(class="workspace-guides", guides)
 }
