@@ -122,21 +122,8 @@ test "decode rejects a server with both command and url" {
 
 ///|
 test "decode rejects mistyped http fields" {
-  let bad_url = try {
-    decode({ "mcpServers": { "x": { "url": 7 } } }) |> ignore
-    "no error"
-  } catch {
-    Invalid(_) => "invalid"
-    _ => "other"
-  }
-  assert_eq(bad_url, "invalid")
-  let bad_headers = try {
-    decode({ "mcpServers": { "x": { "url": "http://h/mcp", "headers": [] } } })
-    |> ignore
-    "no error"
-  } catch {
-    Invalid(_) => "invalid"
-    _ => "other"
-  }
-  assert_eq(bad_headers, "invalid")
+  assert_invalid({ "mcpServers": { "x": { "url": 7 } } })
+  assert_invalid({
+    "mcpServers": { "x": { "url": "http://h/mcp", "headers": [] } },
+  })
 }

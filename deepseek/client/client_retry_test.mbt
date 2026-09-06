@@ -47,17 +47,25 @@ async fn flaky_server(
 }
 
 ///|
+/// The retrying client these tests drive: the fake key, the flaky server's
+/// endpoint, and a 1ms backoff so a retry budget is exercised without real
+/// sleeps. Only the attempt budget varies per test.
+fn retry_client(url : String, attempts~ : Int) -> @client.Client {
+  Client(
+    api_key="test-key",
+    api_url=url,
+    retry_attempts=attempts,
+    retry_backoff_ms=1,
+  )
+}
+
+///|
 async test "chat retries transient 5xx and succeeds" {
   @async.with_task_group() <| group => {
     guard flaky_server(group, failures=2, status=503) is Some((url, hits)) else {
       return
     }
-    let client = @client.Client(
-      api_key="test-key",
-      api_url=url,
-      retry_attempts=3,
-      retry_backoff_ms=1,
-    )
+    let client = retry_client(url, attempts=3)
     let response = client.chat([ChatMessage(User, content="hello")])
     assert_eq(response.content, "ok")
     assert_eq(hits.val, 3)
@@ -70,12 +78,7 @@ async test "chat gives up after the retry budget with the API error" {
     guard flaky_server(group, failures=99, status=500) is Some((url, hits)) else {
       return
     }
-    let client = @client.Client(
-      api_key="test-key",
-      api_url=url,
-      retry_attempts=2,
-      retry_backoff_ms=1,
-    )
+    let client = retry_client(url, attempts=2)
     let _ = client.chat([ChatMessage(User, content="hello")]) catch {
       error => {
         assert_true("\{error}".contains("DeepSeek API error 500"))
@@ -93,12 +96,7 @@ async test "chat never retries a non-429 client error" {
     guard flaky_server(group, failures=99, status=400) is Some((url, hits)) else {
       return
     }
-    let client = @client.Client(
-      api_key="test-key",
-      api_url=url,
-      retry_attempts=3,
-      retry_backoff_ms=1,
-    )
+    let client = retry_client(url, attempts=3)
     let _ = client.chat([ChatMessage(User, content="hello")]) catch {
       error => {
         assert_true("\{error}".contains("DeepSeek API error 400"))
@@ -117,12 +115,7 @@ async test "streaming chat retries a pre-stream 429 and then streams" {
       is Some((url, hits)) else {
       return
     }
-    let client = @client.Client(
-      api_key="test-key",
-      api_url=url,
-      retry_attempts=3,
-      retry_backoff_ms=1,
-    )
+    let client = retry_client(url, attempts=3)
     let deltas : Array[String] = []
     let response = client.chat(
       [ChatMessage(User, content="hello")],
@@ -189,12 +182,7 @@ async test "streaming chat retries a pre-delta stream drop" {
       )
     }
     let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
-    let client = @client.Client(
-      api_key="test-key",
-      api_url=url,
-      retry_attempts=3,
-      retry_backoff_ms=1,
-    )
+    let client = retry_client(url, attempts=3)
     let response = client.chat(
       [ChatMessage(User, content="hello")],
       stream=StreamHandler(on_content_delta=_ => ()),
@@ -233,12 +221,7 @@ async test "streaming chat never retries after the first delta" {
       )
     }
     let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
-    let client = @client.Client(
-      api_key="test-key",
-      api_url=url,
-      retry_attempts=3,
-      retry_backoff_ms=1,
-    )
+    let client = retry_client(url, attempts=3)
     let deltas : Array[String] = []
     let _ = client.chat(
       [ChatMessage(User, content="hello")],
@@ -284,12 +267,7 @@ async test "streaming chat never retries after a tool-call-only delta" {
       )
     }
     let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
-    let client = @client.Client(
-      api_key="test-key",
-      api_url=url,
-      retry_attempts=3,
-      retry_backoff_ms=1,
-    )
+    let client = retry_client(url, attempts=3)
     let _ = client.chat(
       [ChatMessage(User, content="hello")],
       stream=StreamHandler(on_content_delta=_ => ()),

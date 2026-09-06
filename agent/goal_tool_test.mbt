@@ -21,15 +21,7 @@ fn goal_tool_call_payload(arguments : String) -> String {
 
 ///|
 fn goal_tools_with_probe() -> @agent_tool.Tools raise {
-  Tools([
-    @goal.definition(),
-    AgentToolDefinition(
-      name="probe",
-      description="Probe tool.",
-      schema=JsonSchema({ "type": "object" }),
-      execute=Sync(_args => @agent_tool.respond("probe-result")),
-    ),
-  ])
+  Tools([@goal.definition(), probe_definition()])
 }
 
 ///|

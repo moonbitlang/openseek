@@ -1,46 +1,40 @@
 ///|
 async fn tool_batch_test_server(group : @async.TaskGroup[Unit]) -> String? {
-  guard bind_test_server("local TCP bind unavailable; skipping tool batch test")
-    is Some(server) else {
-    return None
-  }
   let mut requests = 0
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (request, body, conn) => {
-        requests += 1
-        assert_eq(request.path, "/chat/completions")
-        let request_body = body.read_all().text()
-        conn.send_response(200, "OK", extra_headers={
-          "Content-Type": "text/event-stream",
-        })
-        if requests == 1 {
-          assert_true(request_body.contains("\"name\":\"first_test\""))
-          assert_true(request_body.contains("\"name\":\"second_test\""))
-          conn.write(
-            (
-              #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_first","type":"function","function":{"name":"first_test","arguments":"{}"}},{"index":1,"id":"call_second","type":"function","function":{"name":"second_test","arguments":"{}"}}]}}]}
-              #|
-              #|
-            ),
-          )
-        } else {
-          assert_true(request_body.contains("first-result"))
-          assert_true(request_body.contains("second-result"))
-          conn.write(
-            (
-              #|data: {"choices":[{"delta":{"content":"done"}}]}
-              #|
-              #|
-            ),
-          )
-        }
-        conn.write("data: [DONE]\n\n")
-      },
-      max_connections=2,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+  serve_chat_completions(
+    group,
+    "local TCP bind unavailable; skipping tool batch test",
+    max_connections=2,
+    (request, request_body, conn) => {
+      requests += 1
+      assert_eq(request.path, "/chat/completions")
+      conn.send_response(200, "OK", extra_headers={
+        "Content-Type": "text/event-stream",
+      })
+      if requests == 1 {
+        assert_true(request_body.contains("\"name\":\"first_test\""))
+        assert_true(request_body.contains("\"name\":\"second_test\""))
+        conn.write(
+          (
+            #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_first","type":"function","function":{"name":"first_test","arguments":"{}"}},{"index":1,"id":"call_second","type":"function","function":{"name":"second_test","arguments":"{}"}}]}}]}
+            #|
+            #|
+          ),
+        )
+      } else {
+        assert_true(request_body.contains("first-result"))
+        assert_true(request_body.contains("second-result"))
+        conn.write(
+          (
+            #|data: {"choices":[{"delta":{"content":"done"}}]}
+            #|
+            #|
+          ),
+        )
+      }
+      conn.write("data: [DONE]\n\n")
+    },
+  )
 }
 
 ///|
@@ -118,42 +112,42 @@ async test "agent executes each normal tool call in a response batch" {
 }
 
 ///|
-async fn max_step_exhaustion_test_server(
+/// A stand-in that answers every request with a single `tool_name` call
+/// (id `call_id`), after checking the request advertised that tool.
+async fn one_tool_call_server(
   group : @async.TaskGroup[Unit],
+  skip_message : String,
+  tool_name~ : String,
+  call_id~ : String,
 ) -> String? {
-  guard bind_test_server(
-      "local TCP bind unavailable; skipping max-step exhaustion test",
+  serve_chat_completions(group, skip_message, max_connections=1, (
+    _request,
+    request_body,
+    conn,
+  ) => {
+    assert_true(request_body.contains("\"name\":\"\{tool_name}\""))
+    conn.send_response(200, "OK", extra_headers={
+      "Content-Type": "text/event-stream",
+    })
+    conn.write(
+      "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"\{call_id}\",\"type\":\"function\",\"function\":{\"name\":\"\{tool_name}\",\"arguments\":\"{}\"}}]}}]}\n\n",
     )
-    is Some(server) else {
-    return None
-  }
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (_request, body, conn) => {
-        let request_body = body.read_all().text()
-        assert_true(request_body.contains("\"name\":\"continue_test\""))
-        conn.send_response(200, "OK", extra_headers={
-          "Content-Type": "text/event-stream",
-        })
-        conn.write(
-          (
-            #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_continue","type":"function","function":{"name":"continue_test","arguments":"{}"}}]}}]}
-            #|
-            #|
-          ),
-        )
-        conn.write("data: [DONE]\n\n")
-      },
-      max_connections=1,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+    conn.write("data: [DONE]\n\n")
+  })
 }
 
 ///|
 async test "max-step exhaustion preserves continued session state" {
   @async.with_task_group() <| group => {
-    guard max_step_exhaustion_test_server(group) is Some(url) else { return }
+    guard one_tool_call_server(
+        group,
+        "local TCP bind unavailable; skipping max-step exhaustion test",
+        tool_name="continue_test",
+        call_id="call_continue",
+      )
+      is Some(url) else {
+      return
+    }
     let runtime = @agent_runtime.AgentRuntime()
     let scope = @agent_runtime.AgentTaskScope(group)
     let session = @agent_session.Session(
@@ -200,40 +194,17 @@ async test "max-step exhaustion preserves continued session state" {
 }
 
 ///|
-async fn append_failure_test_server(group : @async.TaskGroup[Unit]) -> String? {
-  guard bind_test_server(
-      "local TCP bind unavailable; skipping append failure test",
-    )
-    is Some(server) else {
-    return None
-  }
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (_request, body, conn) => {
-        let request_body = body.read_all().text()
-        assert_true(request_body.contains("\"name\":\"ok_test\""))
-        conn.send_response(200, "OK", extra_headers={
-          "Content-Type": "text/event-stream",
-        })
-        conn.write(
-          (
-            #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_ok","type":"function","function":{"name":"ok_test","arguments":"{}"}}]}}]}
-            #|
-            #|
-          ),
-        )
-        conn.write("data: [DONE]\n\n")
-      },
-      max_connections=1,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
-}
-
-///|
 async test "agent failure terminal uses the latest persisted session" {
   @async.with_task_group() <| group => {
-    guard append_failure_test_server(group) is Some(url) else { return }
+    guard one_tool_call_server(
+        group,
+        "local TCP bind unavailable; skipping append failure test",
+        tool_name="ok_test",
+        call_id="call_ok",
+      )
+      is Some(url) else {
+      return
+    }
     let runtime = @agent_runtime.AgentRuntime()
     let scope = @agent_runtime.AgentTaskScope(group)
     let initial = @agent_session.Session(

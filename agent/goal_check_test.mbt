@@ -6,24 +6,19 @@ async fn goal_check_test_server(
   bodies : Array[String],
   responses : Array[String],
 ) -> String? {
-  guard bind_test_server("local TCP bind unavailable; skipping goal check test")
-    is Some(server) else {
-    return None
-  }
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (_request, body, conn) => {
-        bodies.push(body.read_all().text())
-        conn.send_response(200, "OK", extra_headers={
-          "Content-Type": "text/event-stream",
-        })
-        conn.write("data: \{responses[bodies.length() - 1]}\n\n")
-        conn.write("data: [DONE]\n\n")
-      },
-      max_connections=2,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+  serve_chat_completions(
+    group,
+    "local TCP bind unavailable; skipping goal check test",
+    max_connections=2,
+    (_request, body, conn) => {
+      bodies.push(body)
+      conn.send_response(200, "OK", extra_headers={
+        "Content-Type": "text/event-stream",
+      })
+      conn.write("data: \{responses[bodies.length() - 1]}\n\n")
+      conn.write("data: [DONE]\n\n")
+    },
+  )
 }
 
 ///|
@@ -36,35 +31,29 @@ async fn goal_ceiling_test_server(
   checkpoint_bodies : Array[String],
   responses : Array[String],
 ) -> String? {
-  guard bind_test_server("local TCP bind unavailable; skipping goal check test")
-    is Some(server) else {
-    return None
-  }
-  group.spawn_bg(no_wait=true) <| () => {
-    server.run_forever(
-      (_request, body, conn) => {
-        let text = body.read_all().text()
-        if text.contains("CONTEXT CHECKPOINT COMPACTION") {
-          checkpoint_bodies.push(text)
-          conn.send_response(200, "OK", extra_headers={
-            "Content-Type": "application/json",
-          })
-          conn.write(
-            "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"GOAL-CEILING-SUMMARY\"}}]}",
-          )
-        } else {
-          bodies.push(text)
-          conn.send_response(200, "OK", extra_headers={
-            "Content-Type": "text/event-stream",
-          })
-          conn.write("data: \{responses[bodies.length() - 1]}\n\n")
-          conn.write("data: [DONE]\n\n")
-        }
-      },
-      max_connections=4,
-    )
-  }
-  Some("http://127.0.0.1:\{server.addr.port()}/chat/completions")
+  serve_chat_completions(
+    group,
+    "local TCP bind unavailable; skipping goal check test",
+    max_connections=4,
+    (_request, text, conn) => {
+      if text.contains("CONTEXT CHECKPOINT COMPACTION") {
+        checkpoint_bodies.push(text)
+        conn.send_response(200, "OK", extra_headers={
+          "Content-Type": "application/json",
+        })
+        conn.write(
+          "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"GOAL-CEILING-SUMMARY\"}}]}",
+        )
+      } else {
+        bodies.push(text)
+        conn.send_response(200, "OK", extra_headers={
+          "Content-Type": "text/event-stream",
+        })
+        conn.write("data: \{responses[bodies.length() - 1]}\n\n")
+        conn.write("data: [DONE]\n\n")
+      }
+    },
+  )
 }
 
 ///|
@@ -286,16 +275,13 @@ async test "a check on the reminder boundary is not buried by a reminder" {
     // 30-request reminder boundary; the check resets the cadence, so the
     // post-check request carries the check as the tail instruction with no
     // fresh reminder after it.
-    let responses = []
-    for _ in 0..<29 {
-      responses.push(
-        (
-          #|{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_probe","function":{"name":"probe","arguments":"{}"}}]}}]}
-        ),
-      )
-    }
-    responses.push(final_answer_payload("premature answer"))
-    responses.push(final_answer_payload("really done"))
+    let probe_round =
+      #|{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_probe","function":{"name":"probe","arguments":"{}"}}]}}]}
+    let responses = Array::make(29, probe_round) +
+      [
+        final_answer_payload("premature answer"),
+        final_answer_payload("really done"),
+      ]
     guard goal_check_test_server(group, bodies, responses) is Some(url) else {
       return
     }

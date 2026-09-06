@@ -1,4 +1,26 @@
 ///|
+/// One open changed-file review document: `path` loaded from the fixture
+/// workspace with `baseline` as its HEAD side, in the given presentation.
+fn reviewed_doc(
+  path : @pathx.Relative,
+  selected : ChangedFile,
+  baseline? : String = "old source",
+  view_mode? : ReviewViewMode = ReviewDiff,
+  generation? : Int = 1,
+) -> Doc raise {
+  {
+    ..loaded_doc(path.0),
+    review: Some({
+      generation,
+      working_generation: generation,
+      baseline: ReviewContent(baseline),
+      view_mode,
+      selected,
+    }),
+  }
+}
+
+///|
 test "new reviews default to the full diff" {
   let path = @pathx.Relative("src/main.mbt")
   let change = test_modified_change(path)
@@ -24,16 +46,7 @@ test "full diff change navigation is enabled only after a nonempty diff" {
   let path = @pathx.Relative("src/main.mbt")
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[path] = {
-    ..loaded_doc(path.0),
-    review: Some({
-      generation: 1,
-      working_generation: 1,
-      baseline: ReviewContent("old source"),
-      view_mode: ReviewDiff,
-      selected,
-    }),
-  }
+  docs[path] = reviewed_doc(path, selected)
   let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
   let state = { ..owned_state(), docs, }
   let (_, available) = update(
@@ -117,16 +130,7 @@ test "full diff layout toggles independently and source mode preserves it" {
   let path = @pathx.Relative("src/main.mbt")
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[path] = {
-    ..loaded_doc(path.0),
-    review: Some({
-      generation: 1,
-      working_generation: 1,
-      baseline: ReviewContent("old source"),
-      view_mode: ReviewDiff,
-      selected,
-    }),
-  }
+  docs[path] = reviewed_doc(path, selected)
   let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
   let (_, inline) = update(
     test_emit(),
@@ -159,16 +163,11 @@ test "full diff remains selected when opening another changed file" {
   let first_change = test_modified_change(first_path)
   let second_change = test_modified_change(second_path)
   let docs = owned_state().docs.copy()
-  docs[first_path] = {
-    ..loaded_doc(first_path.0),
-    review: Some({
-      generation: 1,
-      working_generation: 1,
-      baseline: ReviewContent("old source"),
-      view_mode: ReviewSource,
-      selected: first_change,
-    }),
-  }
+  docs[first_path] = reviewed_doc(
+    first_path,
+    first_change,
+    view_mode=ReviewSource,
+  )
   let first_ctx = {
     ..test_ctx(),
     open_files: [first_path],
@@ -204,16 +203,12 @@ test "full diff remains selected when opening another changed file" {
   )
 
   let loaded_docs = switched.docs.copy()
-  loaded_docs[second_path] = {
-    ..loaded_doc(second_path.0),
-    review: Some({
-      generation: switched.review_generation,
-      working_generation: switched.review_generation,
-      baseline: ReviewContent("second old source"),
-      view_mode: ReviewDiff,
-      selected: second_change,
-    }),
-  }
+  loaded_docs[second_path] = reviewed_doc(
+    second_path,
+    second_change,
+    baseline="second old source",
+    generation=switched.review_generation,
+  )
   let (_, source_again) = update(
     test_emit(),
     ToggleReviewDiff,

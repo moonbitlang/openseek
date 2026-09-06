@@ -1,71 +1,46 @@
 ///|
 test "path activation follows the target shell's syntax" {
-  assert_eq(
-    @shellenv.path_prepend_command(
+  let posix_dirs = ["/tmp/it's moon/bin", "/tmp/packaged tools/bin"]
+  let windows_dirs = [
+    "C:\\Users\\Moon User\\toolchain\\bin", "C:\\Program Files\\SeekMoon\\bin",
+  ]
+  // shell command, PATH entries, windows, the line the shell should receive
+  let cases = [
+    (
       "/bin/zsh",
       [
         "/Applications/Seek Moon/toolchain/bin", "/Applications/Seek Moon/packaged/bin",
       ],
-      windows=false,
-    ),
-    Some(
+      false,
       "export PATH='/Applications/Seek Moon/toolchain/bin':'/Applications/Seek Moon/packaged/bin':\"$PATH\"\r",
     ),
-  )
-  assert_eq(
-    @shellenv.path_prepend_command(
+    (
       "/opt/homebrew/bin/fish",
       ["/tmp/it's\\moon/bin", "/tmp/packaged tools/bin"],
-      windows=false,
-    ),
-    Some(
+      false,
       "set -gx PATH '/tmp/it\\'s\\\\moon/bin' '/tmp/packaged tools/bin' $PATH\r",
     ),
-  )
-  assert_eq(
-    @shellenv.path_prepend_command(
-      "/bin/tcsh",
-      ["/tmp/it's moon/bin", "/tmp/packaged tools/bin"],
-      windows=false,
+    (
+      "/bin/tcsh", posix_dirs, false, "setenv PATH '/tmp/it'\\''s moon/bin':'/tmp/packaged tools/bin':\"$PATH\"\r",
     ),
-    Some(
-      "setenv PATH '/tmp/it'\\''s moon/bin':'/tmp/packaged tools/bin':\"$PATH\"\r",
+    (
+      "/usr/local/bin/pwsh", posix_dirs, false, "$env:PATH = '/tmp/it''s moon/bin:/tmp/packaged tools/bin:' + $env:PATH\r",
     ),
-  )
-  assert_eq(
-    @shellenv.path_prepend_command(
-      "/usr/local/bin/pwsh",
-      ["/tmp/it's moon/bin", "/tmp/packaged tools/bin"],
-      windows=false,
+    (
+      "C:/Program Files/PowerShell/pwsh.exe", windows_dirs, true, "$env:Path = 'C:\\Users\\Moon User\\toolchain\\bin;C:\\Program Files\\SeekMoon\\bin;' + $env:Path\r",
     ),
-    Some(
-      "$env:PATH = '/tmp/it''s moon/bin:/tmp/packaged tools/bin:' + $env:PATH\r",
+    (
+      "C:\\Windows\\System32\\cmd.exe", windows_dirs, true, "set \"Path=C:\\Users\\Moon User\\toolchain\\bin;C:\\Program Files\\SeekMoon\\bin;%Path%\"\r",
     ),
-  )
-  assert_eq(
-    @shellenv.path_prepend_command(
-      "C:/Program Files/PowerShell/pwsh.exe",
-      [
-        "C:\\Users\\Moon User\\toolchain\\bin", "C:\\Program Files\\SeekMoon\\bin",
-      ],
-      windows=true,
-    ),
-    Some(
-      "$env:Path = 'C:\\Users\\Moon User\\toolchain\\bin;C:\\Program Files\\SeekMoon\\bin;' + $env:Path\r",
-    ),
-  )
-  assert_eq(
-    @shellenv.path_prepend_command(
-      "C:\\Windows\\System32\\cmd.exe",
-      [
-        "C:\\Users\\Moon User\\toolchain\\bin", "C:\\Program Files\\SeekMoon\\bin",
-      ],
-      windows=true,
-    ),
-    Some(
-      "set \"Path=C:\\Users\\Moon User\\toolchain\\bin;C:\\Program Files\\SeekMoon\\bin;%Path%\"\r",
-    ),
-  )
+  ]
+  for row in cases {
+    let (shell, bin_dirs, windows, expected) = row
+    assert_eq(
+      @shellenv.path_prepend_command(shell, bin_dirs, windows~),
+      Some(expected),
+      msg="shell: \{shell}",
+    )
+  }
 }
 
 ///|

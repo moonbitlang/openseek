@@ -231,28 +231,26 @@ async test "edit preserves surrounding multiline content" {
 }
 
 ///|
-async test "edit rejects missing old_string" {
+/// One test for the argument shapes `edit` refuses before touching a file:
+/// each row is the arguments and the field the error must name.
+async test "edit rejects malformed arguments and names the offending field" {
   @vfs.with_tmpdir(dir => {
-    let output = run_edit({ "path": "\{dir}/noop.txt" })
-    assert_eq(output.content, "error: edit requires arguments.old_string")
-    assert_true(output.is_error)
+    let cases : Array[(Json, String)] = [
+      ({ "path": "\{dir}/noop.txt" }, "arguments.old_string"),
+      ({ "path": "\{dir}/noop.txt", "old_string": "x" }, "arguments.new_string"),
+      (Json::null(), "object arguments"),
+    ]
+    for case in cases {
+      let (arguments, expected) = case
+      let output = run_edit(arguments)
+      assert_eq(
+        output.content,
+        "error: edit requires \{expected}",
+        msg=expected,
+      )
+      assert_true(output.is_error, msg=expected)
+    }
   })
-}
-
-///|
-async test "edit rejects missing new_string" {
-  @vfs.with_tmpdir(dir => {
-    let output = run_edit({ "path": "\{dir}/noop.txt", "old_string": "x" })
-    assert_eq(output.content, "error: edit requires arguments.new_string")
-    assert_true(output.is_error)
-  })
-}
-
-///|
-async test "edit rejects non-object arguments" {
-  let output = run_edit(Json::null())
-  assert_eq(output.content, "error: edit requires object arguments")
-  assert_true(output.is_error)
 }
 
 ///|
