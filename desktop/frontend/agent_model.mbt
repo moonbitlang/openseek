@@ -69,7 +69,7 @@ fn ModelChoice::parse(value : String) -> ModelChoice? {
     return Some(CodexUnavailablePick)
   }
   if value.strip_prefix(OpenSeekChoicePrefix) is Some(rest) {
-    return EngineModel::parse(rest.to_owned()).map(model => OpenSeekModel(model))
+    return EngineModel::parse(rest).map(model => OpenSeekModel(model))
   }
   if value.strip_prefix(CodexChoicePrefix) is Some(rest) {
     let id = rest.to_owned()

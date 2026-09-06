@@ -227,18 +227,18 @@ fn apply_roster(
   let devices = model.devices.filter(dev => {
     Some(dev.channel) == page_channel &&
     dev.channel is Remote(id) &&
-    metas.iter().any(meta => meta.id == id)
+    metas.any(meta => meta.id == id)
   })
   let conversations = model.conversations.filter(conv => {
-    devices.iter().any(dev => dev.channel == conv.device)
+    devices.any(dev => dev.channel == conv.device)
   })
   // Connect only the query-selected target when the roster reports it online.
   // A held target keeps its reconnect loop when the advisory `online` flag
   // drops; a page first opened while it is offline waits for a later refresh.
   if console.page_device is Some(id) &&
-    metas.iter().any(meta => meta.id == id && meta.online) {
+    metas.any(meta => meta.id == id && meta.online) {
     let channel : @interop.ChannelId = Remote(id)
-    if !devices.iter().any(dev => dev.channel == channel) {
+    if !devices.any(dev => dev.channel == channel) {
       websocket_epoch += 1
       devices.push({ ..empty_device_state(channel), websocket_epoch, })
     }
@@ -247,13 +247,13 @@ fn apply_roster(
   // has no channel. The full console frame is gated then, so no UI action can
   // accidentally treat Local as a usable browser device.
   let focused = if page_channel is Some(channel) &&
-    devices.iter().any(dev => dev.channel == channel) {
+    devices.any(dev => dev.channel == channel) {
     channel
   } else {
     @interop.ChannelId::Local
   }
   let refocused = focused != model.focused
-  let focus_held = devices.iter().any(dev => dev.channel == focused)
+  let focus_held = devices.any(dev => dev.channel == focused)
   // The deep link's `?workspace=` lands on the pinned device when it first
   // connects, so its initial conversation opens in that project.
   let mut preselect_project = console.preselect_project
