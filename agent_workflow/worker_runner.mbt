@@ -413,13 +413,9 @@ pub async fn discard_slice(
   workspace_root~ : String,
   name~ : String,
 ) -> Result[Unit, String] {
-  match
-    with_slice(workspace_root, name, (geometry, entry) => {
-      @agent_subtask.discard(geometry, entry)
-    }) {
-    Ok(result) => result
-    Err(reason) => Err(reason)
-  }
+  with_slice(workspace_root, name, (geometry, entry) => {
+    @agent_subtask.discard(geometry, entry)
+  }).flatten()
 }
 
 ///|
@@ -459,13 +455,9 @@ async fn worker_nonce() -> String {
     _ => ()
   }
   guard dir.rev_split_once(prefix) is Some((_, suffix)) else { return "n0" }
-  let salt = StringBuilder()
-  for ch in suffix {
-    if ch is ('0'..='9' | 'a'..='z' | 'A'..='Z') {
-      salt.write_char(ch)
-    }
-  }
-  let salt = salt.to_string()
+  let salt = String::from_iter(
+    suffix.iter().filter(ch => ch is ('0'..='9' | 'a'..='z' | 'A'..='Z')),
+  )
   if salt.is_empty() {
     "n0"
   } else {

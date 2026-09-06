@@ -231,23 +231,13 @@ fn cd_command_effect(
   arg_start : Int,
   base_cwd : String,
 ) -> CwdCommandEffect {
-  let remaining = argv.length() - arg_start
-  if remaining == 1 {
-    let target = argv[arg_start]
-    if target == "--" || target.has_prefix("-") {
-      UnknownCwd
-    } else if cd_target_resolves_from_base(target) {
-      KnownCwd(resolve_command_cwd(base_cwd, target))
-    } else {
-      UnknownCwd
-    }
-  } else if remaining == 2 && argv[arg_start] == "--" {
-    let target = argv[arg_start + 1]
-    if cd_target_resolves_from_base(target) {
-      KnownCwd(resolve_command_cwd(base_cwd, target))
-    } else {
-      UnknownCwd
-    }
+  let target = match argv.length() - arg_start {
+    1 if !argv[arg_start].has_prefix("-") => argv[arg_start]
+    2 if argv[arg_start] == "--" => argv[arg_start + 1]
+    _ => return UnknownCwd
+  }
+  if cd_target_resolves_from_base(target) {
+    KnownCwd(resolve_command_cwd(base_cwd, target))
   } else {
     UnknownCwd
   }

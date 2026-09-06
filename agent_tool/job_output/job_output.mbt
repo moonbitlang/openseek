@@ -186,12 +186,10 @@ fn apply_output_rewrites(
   text : String,
   rewrites : Array[(String, String)],
 ) -> String {
-  let mut output = text
-  for rewrite in rewrites {
+  rewrites.fold(init=text, (output, rewrite) => {
     let (old, replacement) = rewrite
-    output = output.replace_all(old~, new=replacement)
-  }
-  output
+    output.replace_all(old~, new=replacement)
+  })
 }
 
 ///|

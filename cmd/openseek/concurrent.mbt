@@ -230,18 +230,17 @@ async fn run_one_attempt(
 /// The terminal status and message of a finished run, read from its last
 /// `Terminal` event. `("(no terminal)", "")` when the run recorded none.
 fn terminal_summary(session : @agent_session.Session) -> (String, String) {
-  let mut out = ("(no terminal)", "")
-  for event in session.events() {
-    if event.item() is Terminal(terminal) {
-      out = match terminal {
-        Finished(answer) => ("finished", answer)
-        Aborted(reason) => ("aborted", reason)
-        Interrupted(reason) => ("interrupted", reason)
-        Failed(message) => ("failed", message)
-      }
+  session
+  .events()
+  .fold(init=("(no terminal)", ""), (out, event) => {
+    match event.item() {
+      Terminal(Finished(answer)) => ("finished", answer)
+      Terminal(Aborted(reason)) => ("aborted", reason)
+      Terminal(Interrupted(reason)) => ("interrupted", reason)
+      Terminal(Failed(message)) => ("failed", message)
+      _ => out
     }
-  }
-  out
+  })
 }
 
 ///|
@@ -416,12 +415,7 @@ fn one_line_brief(text : String, max : Int) -> String {
   if one.length() <= max {
     "\{one}"
   } else {
-    let kept = StringBuilder()
-    for ch in one.iter().take(max) {
-      kept.write_char(ch)
-    }
-    kept.write_char('…')
-    kept.to_string()
+    "\{String::from_iter(one.iter().take(max))}…"
   }
 }
 

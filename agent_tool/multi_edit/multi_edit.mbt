@@ -951,11 +951,9 @@ fn compare_plan_descending(a : PlannedEdit, b : PlannedEdit) -> Int {
 fn apply_plans(content : String, plans : Array[PlannedEdit]) -> String {
   let ordered = plans.copy()
   ordered.sort_by(compare_plan_descending)
-  let mut output = content
-  for plan in ordered {
-    output = "\{output.unsafe_substring(start=0, end=plan.start)}\{plan.new_string}\{output.unsafe_substring(start=plan.end, end=output.length())}"
-  }
-  output
+  ordered.fold(init=content, (output, plan) => {
+    "\{output.unsafe_substring(start=0, end=plan.start)}\{plan.new_string}\{output.unsafe_substring(start=plan.end, end=output.length())}"
+  })
 }
 
 ///|

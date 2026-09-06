@@ -219,14 +219,9 @@ async fn rollback_provision(geometry : Geometry, entry : SubtaskEntry) -> Unit {
 
 ///|
 fn is_valid_name(name : String) -> Bool {
-  guard name.length() >= 1 && name.length() <= 40 else { return false }
-  for index, ch in name {
-    let ok = ch is ('a'..='z' | '0'..='9') || (ch == '-' && index > 0)
-    if !ok {
-      return false
-    }
-  }
-  true
+  name.length() <= 40 &&
+  name is ['a'..='z' | '0'..='9', .. rest] &&
+  rest.iter().all(ch => ch is ('a'..='z' | '0'..='9' | '-'))
 }
 
 ///|

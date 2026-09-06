@@ -253,15 +253,11 @@ fn validate_prefix(prefix : String) -> Result[Array[String], String] {
   guard !@path.Path(normalized).is_absolute() && !normalized.has_prefix("/") else {
     return Err("allowed_paths entries must be relative, got: \{prefix}")
   }
-  let parts : Array[String] = []
-  for part in normalized.split("/") {
-    let part = part.to_owned()
-    guard part != "" && part != "." && part != ".." else {
-      return Err(
-        "allowed_paths entries must not contain empty, `.`, or `..` components: \{prefix}",
-      )
-    }
-    parts.push(part)
+  let parts = [ for part in normalized.split("/") => part.to_owned() ]
+  guard !parts.any(part => part is ("" | "." | "..")) else {
+    return Err(
+      "allowed_paths entries must not contain empty, `.`, or `..` components: \{prefix}",
+    )
   }
   guard parts[0] != ".git" && parts[0] != ".worktrees" else {
     return Err(

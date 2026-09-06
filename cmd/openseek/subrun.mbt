@@ -151,13 +151,12 @@ async fn first_free_child_ordinal(
   store : @store.SessionStore,
   parent : String,
 ) -> Int {
-  let mut highest = 0
-  for id in store.list() {
-    if child_session_ordinal(id.value(), parent) is Some(ordinal) &&
-      ordinal > highest {
-      highest = ordinal
-    }
-  }
+  let highest = store
+    .list()
+    .iter()
+    .filter_map(id => child_session_ordinal(id.value(), parent))
+    .maximum()
+    .unwrap_or(0)
   highest + 1
 }
 

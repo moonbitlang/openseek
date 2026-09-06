@@ -624,11 +624,7 @@ fn total_line_count(content : String) -> Int {
   if content == "" {
     return 0
   }
-  let count = for ch in content; count = 0 {
-    continue if ch == '\n' { count + 1 } else { count }
-  } nobreak {
-    count
-  }
+  let count = content.iter().count_if(ch => ch == '\n')
   if content.has_suffix("\n") {
     count
   } else {
@@ -952,31 +948,23 @@ fn first_diff_info(
   expected : String,
   actual : String,
 ) -> (Int, String, String)? {
+  // The code unit at `pos`, or `∅` when `s` has already ended there.
+  fn unit_at(s : String, pos : Int) -> String {
+    if pos < s.length() {
+      s.unsafe_substring(start=pos, end=pos + 1)
+    } else {
+      "∅"
+    }
+  }
+
   let len = expected.length().min(actual.length())
   for i in 0..<len {
     if expected[i] != actual[i] {
-      return Some(
-        (
-          i,
-          expected.unsafe_substring(start=i, end=i + 1),
-          actual.unsafe_substring(start=i, end=i + 1),
-        ),
-      )
+      return Some((i, unit_at(expected, i), unit_at(actual, i)))
     }
   }
   if expected.length() != actual.length() {
-    let pos = len
-    let expected_str = if pos < expected.length() {
-      expected.unsafe_substring(start=pos, end=pos + 1)
-    } else {
-      "∅"
-    }
-    let actual_str = if pos < actual.length() {
-      actual.unsafe_substring(start=pos, end=pos + 1)
-    } else {
-      "∅"
-    }
-    return Some((pos, expected_str, actual_str))
+    return Some((len, unit_at(expected, len), unit_at(actual, len)))
   }
   None
 }

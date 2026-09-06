@@ -1170,12 +1170,10 @@ fn temp_path_rewrites(bases : Array[String]) -> Array[(String, String)] {
 
 ///|
 fn rewrite_temp_paths(text : String, bases : Array[String]) -> String {
-  let mut out = text
-  for rewrite in temp_path_rewrites(bases) {
+  temp_path_rewrites(bases).fold(init=text, (out, rewrite) => {
     let (old, replacement) = rewrite
-    out = out.replace_all(old~, new=replacement)
-  }
-  out
+    out.replace_all(old~, new=replacement)
+  })
 }
 
 ///|

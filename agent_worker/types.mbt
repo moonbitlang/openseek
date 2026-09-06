@@ -122,10 +122,7 @@ test "validate accepts a good report and rejects contract violations" {
 pub fn WorkerReport::parse_validated(
   json : Json,
 ) -> Result[WorkerReport, String] {
-  match parse_submission(json) {
-    Err(problems) => Err(problems.join("; "))
-    Ok(report) => Ok(report)
-  }
+  parse_submission(json).map_err(problems => problems.join("; "))
 }
 
 ///|
