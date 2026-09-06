@@ -135,30 +135,24 @@ pub fn merge_skills(
 /// use a skill: read the listed file first, then follow it.
 pub fn skills_prompt_section(skills : Array[Skill]) -> String? {
   guard skills.length() > 0 else { return None }
-  // Stream the listing into the multiline block's writer: the `$|` separator
-  // supplies the newline before the first entry, so each entry only needs a
-  // leading newline once another already precedes it.
-  fn list(out : StringBuilder) {
-    for index, skill in skills {
+  // Entries are joined with newlines; the `$|` block below supplies the one
+  // before the first entry.
+  let listing = [
+    for skill in skills => {
       let description = if skill.description() == "" {
         "(no description)"
       } else {
         skill.description()
       }
-      if index > 0 {
-        out <+ "\n"
-      }
-      out <+ "- \{skill.name()} — \{description} (file: \{skill.path()})"
+      "- \{skill.name()} — \{description} (file: \{skill.path()})"
     }
-  }
-
-  let sb = StringBuilder()
-  sb <+
+  ].join("\n")
+  let section =
     $|## Skills
     $|
     $|Reusable skills are available. When a task matches one, read its file with the read tool BEFORE doing the work, then follow it. Listed skill files are pre-approved reads even when they sit outside the working directory.
-    $|\{out => list(out)}
-  Some(sb.to_string())
+    $|\{listing}
+  Some(section)
 }
 
 ///|

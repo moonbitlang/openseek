@@ -50,11 +50,8 @@ pub async fn resolve_geometry(
   }
   let worktree_roots : Array[String] = []
   for record in listing.output.split("\u{0}") {
-    let record = record.to_owned()
-    if record.has_prefix("worktree ") {
-      worktree_roots.push(
-        canonical(record.view(start_offset="worktree ".length()).to_owned()),
-      )
+    if record.strip_prefix("worktree ") is Some(root) {
+      worktree_roots.push(canonical(root.to_owned()))
     }
   }
   guard !worktree_roots.is_empty() else {
@@ -68,11 +65,7 @@ pub async fn resolve_geometry(
 /// directory is listed explicitly because it is not necessarily nested under
 /// a worktree root (for example, repositories using `--separate-git-dir`).
 pub fn Geometry::worker_deny_roots(self : Geometry) -> Array[String] {
-  let roots = Set([self.common_git_dir])
-  for root in self.worktree_roots {
-    roots.add(root)
-  }
-  roots.to_array()
+  Set([self.common_git_dir, ..self.worktree_roots]).to_array()
 }
 
 ///|

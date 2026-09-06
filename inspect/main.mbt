@@ -896,17 +896,10 @@ async fn SessionCatalog::lookup(
   key : String,
 ) -> SessionListRow? {
   let rows = self.rows()
-  for row in rows {
-    if row.key == key {
-      return Some(row)
-    }
+  match rows.iter().find_first(row => row.key == key) {
+    Some(row) => Some(row)
+    None => rows.iter().find_first(row => row.id == key)
   }
-  for row in rows {
-    if row.id == key {
-      return Some(row)
-    }
-  }
-  None
 }
 
 ///|

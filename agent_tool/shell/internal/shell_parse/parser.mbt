@@ -166,26 +166,12 @@ fn is_separator(op : String) -> Bool {
 
 ///|
 fn is_redirect_op(op : String) -> Bool {
-  op == ">" ||
-  op == ">|" ||
-  op == ">>" ||
-  op == "<>" ||
-  op == "<" ||
-  op == "&>" ||
-  op == "&>>" ||
-  op == ">&" ||
-  op == "<&"
+  op is (">" | ">|" | ">>" | "<>" | "<" | "&>" | "&>>" | ">&" | "<&")
 }
 
 ///|
 fn is_fd_redirect_op(op : String) -> Bool {
-  op == ">" ||
-  op == ">|" ||
-  op == ">>" ||
-  op == ">&" ||
-  op == "<>" ||
-  op == "<" ||
-  op == "<&"
+  op is (">" | ">|" | ">>" | ">&" | "<>" | "<" | "<&")
 }
 
 ///|

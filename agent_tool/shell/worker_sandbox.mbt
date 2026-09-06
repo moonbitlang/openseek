@@ -168,32 +168,26 @@ async fn worker_cd_escapes(
       _ => ()
     }
     for index, arg in argv {
-      let operand = if arg == "-C" || arg == "--work-tree" {
-        if index + 1 < argv.length() {
-          Some(argv[index + 1])
-        } else {
-          None
-        }
-      } else if arg.has_prefix("--work-tree=") {
-        arg.view(start_offset="--work-tree=".length()).to_owned() |> Some
-      } else {
-        None
-      }
-      match operand {
-        Some(op) =>
-          for cwd in candidates {
-            match resolve_worker_operand(cwd, op) {
-              Some(resolved) =>
-                if !@workspace_path.is_under_workspace_root(
-                    worker_root,
-                    canonicalize_existing(resolved),
-                  ) {
-                  return Some("`\{arg} \{op}` points outside your worker tree")
-                }
-              None => ()
-            }
+      let operand = match arg {
+        "-C" | "--work-tree" =>
+          if index + 1 < argv.length() {
+            Some(argv[index + 1])
+          } else {
+            None
           }
-        None => ()
+        _ => arg.strip_prefix("--work-tree=").map(value => value.to_owned())
+      }
+      guard operand is Some(op) else { continue }
+      for cwd in candidates {
+        guard resolve_worker_operand(cwd, op) is Some(resolved) else {
+          continue
+        }
+        if !@workspace_path.is_under_workspace_root(
+            worker_root,
+            canonicalize_existing(resolved),
+          ) {
+          return Some("`\{arg} \{op}` points outside your worker tree")
+        }
       }
     }
   }

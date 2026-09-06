@@ -55,17 +55,16 @@ fn moonbit_output_for_path(path : String, content : String) -> @rhtml.Html? {
   }
   let highlighted = @syntax_html.moonbit_source_lines(source_lines.join("\n"))
   guard highlighted.length() == source_lines.length() else { return None }
-  let children : Array[@rhtml.Html] = []
-  for index, gutter in gutters {
-    children.push(
+  let children = [
+    for index, gutter in gutters => {
       @rhtml.span(class="read-moonbit-line", [
         @rhtml.span(class="read-moonbit-gutter", gutter),
         @rhtml.code(class="language-moonbit read-moonbit-code", [
           highlighted[index],
         ]),
-      ]),
-    )
-  }
+      ])
+    }
+  ]
   children.push(@rhtml.span(class="read-moonbit-status", status))
   Some(@rhtml.span(class="read-moonbit-output moonbit-source", children))
 }
@@ -78,11 +77,8 @@ pub fn moonbit_output_for_brief(
   content : String,
 ) -> @rhtml.Html? {
   guard brief.strip_prefix("read ") is Some(path_view) else { return None }
-  let path = match path_view.strip_suffix(" (truncated)") {
-    Some(path) => path.to_owned()
-    None => path_view.to_owned()
-  }
-  moonbit_output_for_path(path, content)
+  let path = path_view.strip_suffix(" (truncated)").unwrap_or(path_view)
+  moonbit_output_for_path(path.to_owned(), content)
 }
 
 ///|

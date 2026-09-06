@@ -147,13 +147,7 @@ fn components(prefix : String) -> Array[String] {
 /// Whether `shorter` is a component-wise prefix of `longer` (equal counts as
 /// covered).
 fn one_covers(shorter : Array[String], longer : Array[String]) -> Bool {
-  guard shorter.length() <= longer.length() else { return false }
-  for index in 0..<shorter.length() {
-    if shorter[index] != longer[index] {
-      return false
-    }
-  }
-  true
+  longer.starts_with(shorter)
 }
 
 ///|

@@ -1783,12 +1783,10 @@ fn model_event_covered_by_later_summary(
   event : @agent_session.SessionEvent,
   events : @vector.Vector[@agent_session.SessionEvent],
 ) -> Bool {
-  for candidate in events {
-    if model_summary_covers_event(candidate, event.sequence()) {
-      return true
-    }
-  }
-  false
+  let sequence = event.sequence()
+  events
+  .iter()
+  .any(candidate => model_summary_covers_event(candidate, sequence))
 }
 
 ///|
@@ -1796,13 +1794,9 @@ fn remove_pending_tool_id(
   pending : Array[String],
   tool_call_id : String,
 ) -> Bool {
-  for index, id in pending {
-    if id == tool_call_id {
-      ignore(pending.remove(index))
-      return true
-    }
-  }
-  false
+  guard pending.search(tool_call_id) is Some(index) else { return false }
+  ignore(pending.remove(index))
+  true
 }
 
 ///|
@@ -2964,13 +2958,7 @@ fn encode_hash_component(value : String) -> String {
 
   for c in value {
     let code = c.to_int()
-    if (code >= 0x61 && code <= 0x7A) ||
-      (code >= 0x41 && code <= 0x5A) ||
-      (code >= 0x30 && code <= 0x39) ||
-      code == 0x2D ||
-      code == 0x5F ||
-      code == 0x2E ||
-      code == 0x7E {
+    if c is ('a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' | '~') {
       out <+ "\{c}"
     } else if code < 0x80 {
       put_byte(code)
