@@ -60,8 +60,8 @@ pub struct AgentToolDefinition {
   /// Safe to execute CONCURRENTLY with adjacent same-flagged calls in one
   /// tool batch: the tool must not mutate the workspace or loop state,
   /// must not return `Control` actions, and its result must not depend on
-  /// a sibling call's result. The built-in subagent launchers (explore,
-  /// the callable review) declare it — each runs an isolated child
+  /// a sibling call's result. The built-in subagent launchers (the
+  /// callable review, `subtask`) declare it — each runs an isolated child
   /// process — so a batch of independent delegations overlaps instead of
   /// serializing. Like `control`, this is a BUILT-IN-ONLY privilege:
   /// never set it on a definition built from dynamic input (MCP listings,

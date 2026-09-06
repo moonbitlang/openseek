@@ -1,7 +1,8 @@
 ///|
 /// The extra tools a turn's registry carries on top of the built-ins: the
-/// configured MCP servers' tools, the three model-callable subrun tools
-/// (`explore`, `review`, `subtask`), and `web_search` when a key the official
+/// configured MCP servers' tools, the two model-callable subrun tools
+/// (`review`, `subtask`; read-only scouts are fanned out from an `mbtx`
+/// workflow instead), and `web_search` when a key the official
 /// DeepSeek endpoint accepts is in hand.
 ///
 /// `main`'s one-shot turn and `serve`'s long-lived loop wire the identical
@@ -27,14 +28,6 @@ async fn[X] build_extra_tools(
 ) -> Array[@agent_tool.AgentToolDefinition] {
   let extra_tools = resolve_mcp_tools(matches, scope, workspace_root~) +
     [
-      @agent_explore.definition(
-        self_exe~,
-        model~,
-        workspace_root~,
-        budget~,
-        api_url?,
-        child_session?,
-      ),
       review_tool_definition(
         self_exe~,
         model~,

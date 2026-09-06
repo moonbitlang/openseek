@@ -136,22 +136,3 @@ async test "run_child rejects malformed input without a model call" {
   )
   assert_true(report is None)
 }
-
-///|
-/// Input validation and budget refusal both fire BEFORE any child process
-/// exists: a nonexistent self_exe proves nothing was spawned.
-async test "the tool validates input and budget before spawning anything" {
-  let budget = @agent_subrun.SubrunBudget(max_calls_per_turn=1)
-  let tool = @agent_explore.definition(
-    self_exe="/nonexistent/openseek-not-here",
-    model=Deepseek(V4Flash),
-    workspace_root=".",
-    budget~,
-  )
-  guard tool.execute is Async(execute) else { fail("explore should be async") }
-  let action = execute({ "query": "   " })
-  guard action is Respond(output) else { fail("expected Respond") }
-  assert_true(output.is_error)
-  // The rejection consumed no budget.
-  assert_true(budget.reserve(10) is Some(10))
-}

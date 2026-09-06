@@ -310,7 +310,7 @@ async fn run_task_turn(
       child_session?,
     )
     // A snippet's workflow delegates to children named from the SAME ordinal
-    // counter `run_subrun` uses, so a snippet's child and an `explore` child
+    // counter `run_subrun` uses, so a snippet's child and a `review` child
     // cannot collide on one transcript file.
     let mbtx_subrun = child_session.map(spec => {
       spec.injection(exe~, workspace_root~, model="\{model}", api_url?)

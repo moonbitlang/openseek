@@ -99,9 +99,9 @@ test('a subrun link opens the child session', async ({ page }) => {
         payload: {
           content: '',
           tool_calls: [{
-            id: 'explore-parent',
-            name: 'explore',
-            arguments: '{"query":"find the renderer"}',
+            id: 'review-parent',
+            name: 'review',
+            arguments: '{"focus":"find the renderer"}',
           }],
         },
       },
@@ -111,11 +111,11 @@ test('a subrun link opens the child session', async ({ page }) => {
       item: {
         kind: 'tool_result',
         payload: {
-          tool_call_id: 'explore-parent',
-          tool_name: 'explore',
+          tool_call_id: 'review-parent',
+          tool_name: 'review',
           content: 'Subagent completed.',
           is_error: false,
-          brief: 'explore sr-2 (completed)',
+          brief: 'review sr-2 (completed)',
         },
       },
     },

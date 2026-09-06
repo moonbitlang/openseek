@@ -451,7 +451,7 @@ async fn self_executable() -> String {
     _ => "openseek"
   }
   // Under `moon run` on the tcc debug path argv0 is the generated .c
-  // SOURCE, not an executable: spawning it would fail every explore call.
+  // SOURCE, not an executable: spawning it would fail every subrun launch.
   // Fall back to PATH resolution — the same case the terminal UI handles for
   // its engine spawn.
   if argv0.has_suffix(".c") {

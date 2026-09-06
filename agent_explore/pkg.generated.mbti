@@ -3,8 +3,6 @@ package "bobzhang/openseek/agent_explore"
 
 import {
   "bobzhang/openseek/agent_session",
-  "bobzhang/openseek/agent_subrun",
-  "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/deepseek",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
@@ -12,8 +10,6 @@ import {
 
 // Values
 pub let default_explore_max_steps : Int
-
-pub fn definition(self_exe~ : String, model~ : @deepseek.Model, workspace_root~ : String, budget~ : @agent_subrun.SubrunBudget, api_url? : String, child_session? : @agent_subrun.ChildSession) -> @agent_tool.AgentToolDefinition
 
 pub async fn run_child(Json, api_key~ : String, model~ : @deepseek.Model, max_steps~ : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, workspace_root? : String, session_id? : String, append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, scratch_dir? : String) -> ExploreReport?
 
