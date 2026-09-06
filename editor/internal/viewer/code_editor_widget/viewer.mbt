@@ -613,14 +613,10 @@ pub fn CodeEditorWidget::set_model(
       }
     _ => ()
   }
-  let old_model_url = match self.model_slot.current {
-    Some(model_data) => Some(model_data.model.uri)
-    None => None
-  }
-  let new_model_url = match model {
-    Some(model) => Some(model.uri)
-    None => None
-  }
+  let old_model_url = self.model_slot.current.map(model_data => {
+    model_data.model.uri
+  })
+  let new_model_url = model.map(model => model.uri)
   let had_text_focus = self.has_text_focus()
   let had_definition_peek_focus = self.definition_peek_contains_focus()
   let previous_layout_identity = self.configuration.event_snapshot().layout
@@ -740,10 +736,7 @@ fn CodeEditorWidget::detach_model(self : CodeEditorWidget) -> @model.TextModel? 
 pub fn CodeEditorWidget::get_model(
   self : CodeEditorWidget,
 ) -> @model.TextModel? {
-  match self.model_slot.current {
-    Some(model_data) => Some(model_data.model)
-    None => None
-  }
+  self.model_slot.current.map(model_data => model_data.model)
 }
 
 ///|
@@ -758,20 +751,14 @@ fn CodeEditorWidget::has_model(self : CodeEditorWidget) -> Bool {
 fn CodeEditorWidget::get_view_model(
   self : CodeEditorWidget,
 ) -> @view_model.ViewModel? {
-  match self.model_slot.current {
-    Some(model_data) => Some(model_data.view_model)
-    None => None
-  }
+  self.model_slot.current.map(model_data => model_data.view_model)
 }
 
 ///|
 /// The attached bundle's view — `None` with no model, and `None` headless
 /// (the `hasRealView = false` analog).
 fn CodeEditorWidget::current_code_view(self : CodeEditorWidget) -> @view.View? {
-  match self.current_code_browser_data() {
-    Some(browser) => Some(browser.view)
-    None => None
-  }
+  self.current_code_browser_data().map(browser => browser.view)
 }
 
 ///|
@@ -839,10 +826,9 @@ pub fn CodeEditorWidget::save_view_state(
   self : CodeEditorWidget,
 ) -> CodeEditorViewState? {
   guard self.active_scroll_position() is Some(position) else { return None }
-  let folding_state = match self.folding_controller() {
-    Some(controller) => controller.save_view_state()
-    None => None
-  }
+  let folding_state = self
+    .folding_controller()
+    .bind(controller => controller.save_view_state())
   Some({
     scroll_top: position.scroll_top,
     scroll_left: position.scroll_left,

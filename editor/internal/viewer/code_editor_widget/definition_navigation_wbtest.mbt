@@ -97,6 +97,20 @@ fn definition_navigation_services(
 }
 
 ///|
+/// Installs a viewer over `model` whose definition async tasks land in a
+/// manually drained queue.
+fn definition_navigation_viewer(
+  services : CodeEditorServices,
+  model : @model.TextModel,
+) -> (CodeEditorWidget, ManualDefinitionTasks) {
+  let viewer = CodeEditorWidget(services~)
+  let tasks = ManualDefinitionTasks()
+  viewer.set_definition_host_for_test(task => tasks.schedule(task))
+  viewer.set_model(Some(model))
+  (viewer, tasks)
+}
+
+///|
 test "definition-link cancellation callbacks cannot clobber replacement owners" {
   let services = definition_navigation_services([])
   let viewer = CodeEditorWidget(services~)
@@ -135,10 +149,7 @@ async test "F12 reveals a same-resource definition without calling the opener" {
     true
   })
   let services = definition_navigation_services([location], opener~)
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, tasks) = definition_navigation_viewer(services, model)
   viewer.set_position(Position(1, 5))
 
   assert_true(
@@ -182,10 +193,7 @@ async test "headless multiple definitions retain provider-first fallback" {
     ],
     opener~,
   )
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, tasks) = definition_navigation_viewer(services, model)
   viewer.set_position(Position(1, 5))
   viewer.start_goto_definition()
   tasks.run_next()
@@ -208,10 +216,7 @@ async test "F12 sends a cross-resource request and preserves rejection feedback"
     false
   })
   let services = definition_navigation_services([location], opener~)
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, tasks) = definition_navigation_viewer(services, model)
   viewer.set_position(Position(1, 5))
 
   assert_true(
@@ -254,10 +259,7 @@ async test "a superseded definition opener failure cannot overwrite a newer navi
     }
   })
   let services = definition_navigation_services([location], opener~)
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, tasks) = definition_navigation_viewer(services, model)
   viewer.set_position(Position(1, 5))
 
   @async.with_task_group() <| group => {
@@ -298,10 +300,7 @@ async test "cursor movement suppresses late definition opener failure" {
     false
   })
   let services = definition_navigation_services([location], opener~)
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, tasks) = definition_navigation_viewer(services, model)
   viewer.set_position(Position(1, 5))
 
   @async.with_task_group() <| group => {
@@ -330,10 +329,7 @@ async test "empty and stale definition actions cannot navigate" {
     true
   })
   let services = definition_navigation_services([location], opener~)
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, tasks) = definition_navigation_viewer(services, model)
   viewer.start_goto_definition()
   viewer.set_value("let source = changed\n")
   tasks.run_next()
@@ -347,11 +343,10 @@ async test "empty and stale definition actions cannot navigate" {
   assert_eq(opener_calls.val, 0)
 
   let empty_services = definition_navigation_services([], opener~)
-  let empty_viewer = CodeEditorWidget(services=empty_services)
-  let empty_tasks = ManualDefinitionTasks()
-  empty_viewer.set_definition_host_for_test(task => empty_tasks.schedule(task))
   let empty_model = definition_navigation_test_model("file:///empty.mbt")
-  empty_viewer.set_model(Some(empty_model))
+  let (empty_viewer, empty_tasks) = definition_navigation_viewer(
+    empty_services, empty_model,
+  )
   empty_viewer.start_goto_definition()
   empty_tasks.run_next()
   assert_eq(
@@ -371,10 +366,7 @@ async test "empty and stale definition actions cannot navigate" {
 async test "empty definition-link result is cached silently for one gesture" {
   let model = definition_navigation_test_model("file:///source.mbt")
   let services = definition_navigation_services([])
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, tasks) = definition_navigation_viewer(services, model)
   let position = @base_common.Position(1, 14)
   let word = model.get_word_at_position(position).unwrap()
   let target = @definition.DefinitionTargetFingerprint::from_model(
@@ -450,10 +442,7 @@ async test "definition-link arms only a fresh token and stale content clears it"
     range: Range(3, 2, 3, 8),
   }
   let services = definition_navigation_services([location])
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, tasks) = definition_navigation_viewer(services, model)
   let position = @base_common.Position(1, 14)
   let word = model.get_word_at_position(position).unwrap()
   let target = @definition.DefinitionTargetFingerprint::from_model(
@@ -538,10 +527,7 @@ async test "definition-link caches by word and executes a fresh Definition actio
     location_opener=opener,
     log_service=log_service.log_handle(),
   )
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, tasks) = definition_navigation_viewer(services, model)
   let first_position = @base_common.Position(1, 14)
   let second_position = @base_common.Position(1, 18)
   let first_target = @definition.DefinitionTargetFingerprint::from_model(
@@ -626,10 +612,7 @@ async test "definition-link click does not wait for preview resolution" {
     true
   })
   let services = definition_navigation_services([location], opener~)
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, tasks) = definition_navigation_viewer(services, model)
   let position = @base_common.Position(1, 14)
   let target = @definition.DefinitionTargetFingerprint::from_model(
     model,
@@ -689,10 +672,7 @@ async test "drag selection cancels an unresolved definition-link click" {
     true
   })
   let services = definition_navigation_services([location], opener~)
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, tasks) = definition_navigation_viewer(services, model)
   let position = @base_common.Position(1, 14)
   let target = @definition.DefinitionTargetFingerprint::from_model(
     model,
@@ -782,10 +762,7 @@ async test "plain definition click cancels the previous pointer-anchored action"
     [{ uri: target_uri, range: Range(3, 2, 3, 6), }],
     opener~,
   )
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, tasks) = definition_navigation_viewer(services, model)
   let first_position = @base_common.Position(1, 5)
   let second_position = @base_common.Position(1, 14)
   let second_target = @definition.DefinitionTargetFingerprint::from_model(
@@ -812,10 +789,7 @@ async test "plain definition click cancels the previous pointer-anchored action"
 test "non-left definition mouseup does not replace the command anchor" {
   let model = definition_navigation_test_model("file:///source.mbt")
   let services = definition_navigation_services([])
-  let viewer = CodeEditorWidget(services~)
-  let tasks = ManualDefinitionTasks()
-  viewer.set_definition_host_for_test(task => tasks.schedule(task))
-  viewer.set_model(Some(model))
+  let (viewer, _tasks) = definition_navigation_viewer(services, model)
   let first_position = @base_common.Position(1, 5)
   let second_position = @base_common.Position(1, 14)
   let first_target = @definition.DefinitionTargetFingerprint::from_model(

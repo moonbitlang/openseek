@@ -145,31 +145,24 @@ fn CodeEditorWidget::on_editor_context_menu(
   event.event.prevent_default()
   event.event.stop_propagation()
   self.focus()
-  match event.target.position() {
-    Some(position) => {
-      let mut inside_selection = false
-      match self.get_selections() {
-        Some(selections) =>
-          for selection in selections {
-            let start = selection.start()
-            let end = selection.end()
-            if @base_common.Range(
-                start.line_number,
-                start.column,
-                end.line_number,
-                end.column,
-              ).contains_position(position) {
-              inside_selection = true
-              break
-            }
-          }
-        None => ()
-      }
-      if !inside_selection {
-        self.set_position(position, source="contextmenu")
-      }
+  if event.target.position() is Some(position) {
+    let inside_selection = match self.get_selections() {
+      Some(selections) =>
+        selections.any(selection => {
+          let start = selection.start()
+          let end = selection.end()
+          @base_common.Range(
+            start.line_number,
+            start.column,
+            end.line_number,
+            end.column,
+          ).contains_position(position)
+        })
+      None => false
     }
-    None => ()
+    if !inside_selection {
+      self.set_position(position, source="contextmenu")
+    }
   }
   let client = event.event.pos.to_client_coordinates()
   self.show_context_menu_at(client.client_x, client.client_y) |> ignore

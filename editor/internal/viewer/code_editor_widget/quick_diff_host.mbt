@@ -18,23 +18,15 @@ fn CodeEditorWidget::quick_diff_update(
   self : CodeEditorWidget,
   collection : EditorDecorationsCollection,
 ) -> Unit {
-  if !self.is_code_presentation() {
+  guard self.is_code_presentation() &&
+    self.get_model() is Some(model) &&
+    self.services.quick_diff.get_original_content(model.uri) is Some(original) else {
     collection.set([]) |> ignore
     return
   }
-  match self.get_model() {
-    Some(model) =>
-      match self.services.quick_diff.get_original_content(model.uri) {
-        Some(original) => {
-          let changes = @quick_diff_browser.compute_changes(
-            @base_common.split_lines(original),
-            model.get_lines_content(),
-          )
-          collection.set(@quick_diff_browser.changes_to_decorations(changes))
-          |> ignore
-        }
-        None => collection.set([]) |> ignore
-      }
-    None => collection.set([]) |> ignore
-  }
+  let changes = @quick_diff_browser.compute_changes(
+    @base_common.split_lines(original),
+    model.get_lines_content(),
+  )
+  collection.set(@quick_diff_browser.changes_to_decorations(changes)) |> ignore
 }

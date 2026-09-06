@@ -117,10 +117,8 @@ fn CodeEditorWidget::is_current_resource(
   self : CodeEditorWidget,
   resource : @base_common.Uri,
 ) -> Bool {
-  match self.get_model() {
-    Some(model) => model.uri.to_string() == resource.to_string()
-    None => false
-  }
+  self.get_model() is Some(model) &&
+  model.uri.to_string() == resource.to_string()
 }
 
 ///|
@@ -146,10 +144,7 @@ fn CodeEditorWidget::agent_feedback_input_contribution(
 fn CodeEditorWidget::agent_feedback_input_visible(
   self : CodeEditorWidget,
 ) -> Bool {
-  match self.agent_feedback_input_contribution() {
-    Some(ic) => ic.visible
-    None => false
-  }
+  self.agent_feedback_input_contribution() is Some(ic) && ic.visible
 }
 
 ///|
@@ -157,10 +152,8 @@ fn CodeEditorWidget::agent_feedback_input_visible(
 /// the `_getSessionForFile` stand-in.
 fn CodeEditorWidget::agent_feedback_enabled(self : CodeEditorWidget) -> Bool {
   guard self.is_code_presentation() else { return false }
-  match self.get_model() {
-    Some(model) => self.services.agent_feedback.is_feedback_enabled(model.uri)
-    None => false
-  }
+  self.get_model() is Some(model) &&
+  self.services.agent_feedback.is_feedback_enabled(model.uri)
 }
 
 ///|
@@ -522,10 +515,7 @@ fn CodeEditorWidget::ensure_agent_feedback_input(
   self : CodeEditorWidget,
 ) -> @agent_feedback_browser.AgentFeedbackInputWidget {
   let ic = self.agent_feedback_input_contribution()
-  let existing = match ic {
-    Some(ic) => ic.widget
-    None => None
-  }
+  let existing = ic.bind(contribution => contribution.widget)
   match existing {
     Some(widget) => widget
     None => {

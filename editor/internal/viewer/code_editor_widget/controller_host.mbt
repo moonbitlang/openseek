@@ -59,20 +59,13 @@ fn CodeEditorWidget::pointer_handler_helper(
     overflow_guard: view.overflow_guard,
     editor_scrollable: view.editor_scrollbar.scrollable(),
     hover_scrollable: () => {
-      match self.content_hover_contribution() {
-        Some(state) =>
-          match state.widget {
-            Some(widget) => Some(widget.scrollable)
-            None => None
-          }
-        None => None
-      }
+      self
+      .content_hover_contribution()
+      .bind(state => state.widget)
+      .map(widget => widget.scrollable)
     },
     view_layout: () => {
-      match self.get_view_model() {
-        Some(view_model) => Some(view_model.view_layout)
-        None => None
-      }
+      self.get_view_model().map(view_model => view_model.view_layout)
     },
     schedule_render: () => self.schedule_render(),
   }
