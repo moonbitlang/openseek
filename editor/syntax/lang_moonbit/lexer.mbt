@@ -52,6 +52,8 @@ fn classify_word(word : StringView) -> @syntax.HighlightTag {
     | "try"
     | "catch"
     | "noraise"
+    | "defer"
+    | "errdefer"
     | "async"
     | "test"
     | "if"

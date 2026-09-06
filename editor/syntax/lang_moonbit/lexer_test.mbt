@@ -236,6 +236,25 @@ test "word classification distinguishes keywords from identifiers" {
 }
 
 ///|
+test "defer and errdefer classify as keywords" {
+  inspect(
+    render_tokens("defer close(); errdefer rollback(); let deferred = 1"),
+    content=(
+      #|0-5 Keyword defer
+      #|6-11 Identifier close
+      #|11-14 Delimiter ();
+      #|15-23 Keyword errdefer
+      #|24-32 Identifier rollback
+      #|32-35 Delimiter ();
+      #|36-39 Keyword let
+      #|40-48 Identifier deferred
+      #|49-50 Operator =
+      #|51-52 Number 1
+    ),
+  )
+}
+
+///|
 test "fallback punctuation preserves UTF-16 offsets" {
   inspect(
     render_tokens("🌟"),
