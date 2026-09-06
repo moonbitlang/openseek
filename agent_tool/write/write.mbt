@@ -123,13 +123,13 @@ async fn write_file(
   file_state~ : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
-  // Every failure names the file it tried to write, as `edit`/`remove` do.
-  let fail_brief = "write \{@agent_tool.brief_basename(path)}"
   fn err(message : String) -> @agent_tool.ToolAction {
+    // Every failure names the file it tried to write, as `edit`/`remove` do.
+    // Built here rather than once per call: the success path never needs it.
     @agent_tool.respond(
       "error writing \{path}: \{message}",
       is_error=true,
-      brief=fail_brief,
+      brief="write \{@agent_tool.brief_basename(path)}",
     )
   }
 
