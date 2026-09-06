@@ -257,32 +257,15 @@ async test "worktree remove refuses a running conversation without unmapping it"
   let previous = @sys.get_env_var("HOME")
   let root = worktree_test_root("openseek-worktree-busy-")
   defer @fs.rmdir(root.to_string(), recursive=true)
-  let engine = root.join("bin/engine.sh")
-  let runtime = root.join("runtime")
   @sys.set_env_var("HOME", root.join("global").to_string())
   defer restore_home_env(previous)
   let ws = root.join("ws")
   @fsx.ensure_dir(ws.join(".worktrees/wt").to_path())
-  prepare_fake_moonbit_seed(
-    root.join("bin/toolchains/moonbit/macos-arm64").to_path(),
-    version="0.10.0-test",
-  )
-  prepare_fake_bundled_moonbit_home(
-    runtime.join("toolchains/moonbit/macos-arm64").to_path(),
-    version="0.10.0-test",
-  )
-  @fs.write_file(
-    engine.to_string(),
+  let actor = prepare_run_actor(
+    root.to_path(),
     "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}' ; exit 0; fi\nwhile IFS= read -r line; do sleep 30; done\n",
-    create_mode=CreateOrTruncate,
-  )
-  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let actor = new_engine_actor(
-    engine.to_string(),
-    runtime_dir=runtime.to_path(),
   )
   let manager = actor.manager()
-  configure_custom_provider(manager)
   let sink = EventSink(fn(_) {  })
   @async.with_task_group(group => {
     serve_until_pumping(actor, manager, sink, group~)
@@ -301,7 +284,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
     )
     assert_eq(reply.status, "accepted")
     let committed : Ref[Bool] = Ref(false)
-    let detail = try {
+    let detail = engine_refusal(() => {
       ignore(
         @worktree.remove(manager.worktree_host(), ws.to_string(), "wt", false, fn(
           _,
@@ -309,12 +292,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
           committed.val = true
         }),
       )
-      "no error"
-    } catch {
-      EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
-      error => "\{error}"
-    }
+    })
     assert_true(detail.contains("still running"))
     assert_false(committed.val)
     assert_true(@fsx.is_dir(ws.join(".worktrees/wt").to_path()))
@@ -391,16 +369,9 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
     @work_dir.resolve_in_workspace("s-vanish", "", workspace=repo.to_string())
     is None,
   )
-  let refusal = try {
-    ignore(@worktree.run_dir(repo, "s-vanish"))
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  let refusal = engine_refusal(() => ignore(@worktree.run_dir(repo, "s-vanish")))
   assert_true(refusal.contains("wt") && refusal.contains("gone"))
-  let hinted_refusal = try {
+  let hinted_refusal = engine_refusal(() => {
     ignore(
       run_config(manager, {
         task: "continue",
@@ -412,14 +383,9 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
         workspace: Some(repo.to_string()),
       }),
     )
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  })
   assert_true(hinted_refusal.contains("wt") && hinted_refusal.contains("gone"))
-  let resumed_refusal = try {
+  let resumed_refusal = engine_refusal(() => {
     ignore(
       run_config(manager, {
         task: "resume",
@@ -431,12 +397,7 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
         workspace: None,
       }),
     )
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  })
   assert_true(
     resumed_refusal.contains("wt") && resumed_refusal.contains("gone"),
   )

@@ -9,14 +9,7 @@
 /// Cancellation is never a refusal and stays observable.
 #cfg(not(platform="windows"))
 async fn archive_refusal(manager : EngineManager, session : String) -> String {
-  try {
-    ignore(archive_session(manager, session, (_, _) => ()))
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  engine_refusal(() => ignore(archive_session(manager, session, (_, _) => ())))
 }
 
 ///|
@@ -132,14 +125,9 @@ async test "loading a conversation from a detached workspace names that state" {
   // A stale client's transcript reload names the conversation without a
   // workspace hint; the reply must say the record is unreachable rather
   // than surface the engine's raw file error.
-  let detail = try {
+  let detail = engine_refusal(() => {
     ignore(load_session(manager, { session: "s-ws", workspace: None, }))
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  })
   debug_inspect(
     detail,
     content=(
