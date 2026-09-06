@@ -157,6 +157,17 @@ fn EditorContributionEntry::typed_lookup_available(
 }
 
 ///|
+/// Disposes every retained subscription in `listeners` and empties the list.
+fn dispose_and_clear_listeners(
+  listeners : Array[@base_common.Disposable],
+) -> Unit {
+  for listener in listeners {
+    listener.dispose()
+  }
+  listeners.clear()
+}
+
+///|
 /// Direct typed lifecycle dispatch. The complete CodeEditorWidget map remains installed
 /// while every row tears down, so feature cleanup can still use typed central
 /// accessors. The explicit lifecycle state rejects recursive/repeated teardown
@@ -169,55 +180,32 @@ fn EditorContributionEntry::dispose(
   guard self.lifecycle == ContributionLive else { return }
   self.lifecycle = ContributionDisposing
   match self.instance {
-    AgentFeedbackInput(_) => {
-      for listener in self.listeners {
-        listener.dispose()
-      }
-      self.listeners.clear()
-    }
+    AgentFeedbackInput(_) => dispose_and_clear_listeners(self.listeners)
     AgentFeedbackWidget(controller) => {
       viewer.clear_agent_feedback_widgets_from(controller) |> ignore
-      for listener in self.listeners {
-        listener.dispose()
-      }
-      self.listeners.clear()
+      dispose_and_clear_listeners(self.listeners)
     }
     Folding(controller) => {
       controller.clear_local()
-      for listener in self.listeners {
-        listener.dispose()
-      }
-      self.listeners.clear()
+      dispose_and_clear_listeners(self.listeners)
     }
     ContentHover(state) => state.dispose_behavior()
     QuickDiff(state) => {
       state.collection.clear()
-      for listener in state.listeners {
-        listener.dispose()
-      }
-      state.listeners.clear()
+      dispose_and_clear_listeners(state.listeners)
     }
     MarkdownComments(state) => state.dispose(viewer)
     ContextMenu(state) => {
       state.dispose()
-      for listener in self.listeners {
-        listener.dispose()
-      }
-      self.listeners.clear()
+      dispose_and_clear_listeners(self.listeners)
     }
     Definition(state) => {
       state.dispose(viewer)
-      for listener in self.listeners {
-        listener.dispose()
-      }
-      self.listeners.clear()
+      dispose_and_clear_listeners(self.listeners)
     }
     References(state) => {
       state.dispose(viewer)
-      for listener in self.listeners {
-        listener.dispose()
-      }
-      self.listeners.clear()
+      dispose_and_clear_listeners(self.listeners)
     }
   }
   self.lifecycle = ContributionDisposed
@@ -458,6 +446,22 @@ fn EditorContributionRegistry::register_editor_contribution(
 }
 
 ///|
+/// Adds one keybinding rule per `(key, alt, ctrl_cmd)` row, all sharing the
+/// command id and live `when` predicate.
+fn EditorContributionRegistry::push_keybinding_rules(
+  self : EditorContributionRegistry,
+  bindings : Array[(String, Bool, Bool)],
+  command_id : String,
+  when : (CodeEditorWidget) -> Bool,
+  shift~ : Bool,
+) -> Unit {
+  for binding in bindings {
+    let (key, alt, ctrl_cmd) = binding
+    self.keybindings.push({ key, alt, ctrl_cmd, shift, command_id, when, })
+  }
+}
+
+///|
 /// `registerEditorCommand` + the keybinding rows of `Command.register`
 /// (`editorExtensions.ts:528-531`, `:124-156`).
 fn EditorContributionRegistry::register_editor_command(
@@ -481,28 +485,8 @@ fn EditorContributionRegistry::register_editor_command(
     run,
   }
   self.commands.set(command.id, RegisteredEditor(command))
-  for binding in keybindings {
-    let (key, alt, ctrl_cmd) = binding
-    self.keybindings.push({
-      key,
-      alt,
-      ctrl_cmd,
-      shift: false,
-      command_id: id,
-      when: precondition,
-    })
-  }
-  for binding in shift_keybindings {
-    let (key, alt, ctrl_cmd) = binding
-    self.keybindings.push({
-      key,
-      alt,
-      ctrl_cmd,
-      shift: true,
-      command_id: id,
-      when: precondition,
-    })
-  }
+  self.push_keybinding_rules(keybindings, id, precondition, shift=false)
+  self.push_keybinding_rules(shift_keybindings, id, precondition, shift=true)
 }
 
 ///|
@@ -579,28 +563,18 @@ fn EditorContributionRegistry::register_core_editor_command(
   shift_keybindings? : Array[(String, Bool, Bool)] = [],
 ) -> Unit {
   self.commands.set(command.id, RegisteredCore(command))
-  for binding in keybindings {
-    let (key, alt, ctrl_cmd) = binding
-    self.keybindings.push({
-      key,
-      alt,
-      ctrl_cmd,
-      shift: false,
-      command_id: command.id,
-      when: keybinding_when,
-    })
-  }
-  for binding in shift_keybindings {
-    let (key, alt, ctrl_cmd) = binding
-    self.keybindings.push({
-      key,
-      alt,
-      ctrl_cmd,
-      shift: true,
-      command_id: command.id,
-      when: keybinding_when,
-    })
-  }
+  self.push_keybinding_rules(
+    keybindings,
+    command.id,
+    keybinding_when,
+    shift=false,
+  )
+  self.push_keybinding_rules(
+    shift_keybindings,
+    command.id,
+    keybinding_when,
+    shift=true,
+  )
 }
 
 ///|

@@ -16,10 +16,10 @@
 fn encode_uri_component(text : String) -> String {
   let sb = StringBuilder()
   for ch in text {
-    let code = ch.to_int()
-    if is_unreserved(code) {
+    if is_unreserved(ch) {
       sb.write_char(ch)
     } else {
+      let code = ch.to_int()
       sb.write_char('%')
       sb.write_char(hex_digit_char((code >> 4) & 0xF))
       sb.write_char(hex_digit_char(code & 0xF))
@@ -29,19 +29,12 @@ fn encode_uri_component(text : String) -> String {
 }
 
 ///|
-fn is_unreserved(code : Int) -> Bool {
-  (code >= '0'.to_int() && code <= '9'.to_int()) ||
-  (code >= 'A'.to_int() && code <= 'Z'.to_int()) ||
-  (code >= 'a'.to_int() && code <= 'z'.to_int()) ||
-  code == '-'.to_int() ||
-  code == '_'.to_int() ||
-  code == '.'.to_int() ||
-  code == '!'.to_int() ||
-  code == '~'.to_int() ||
-  code == '*'.to_int() ||
-  code == '\''.to_int() ||
-  code == '('.to_int() ||
-  code == ')'.to_int()
+fn is_unreserved(ch : Char) -> Bool {
+  match ch {
+    '0'..='9' | 'A'..='Z' | 'a'..='z' => true
+    '-' | '_' | '.' | '!' | '~' | '*' | '\'' | '(' | ')' => true
+    _ => false
+  }
 }
 
 ///|
@@ -94,23 +87,17 @@ pub(all) struct SquigglyThemeColors {
 /// in this viewer consumes those custom properties (deviation, no dead state).
 pub fn squiggly_theme_css(colors : SquigglyThemeColors) -> String {
   let sb = StringBuilder()
-  match colors.error {
-    Some(color) =>
-      write_squiggly_rule(sb, "error", squiggly_svg_data_uri(color))
-    None => ()
+  if colors.error is Some(color) {
+    write_squiggly_rule(sb, "error", squiggly_svg_data_uri(color))
   }
-  match colors.warning {
-    Some(color) =>
-      write_squiggly_rule(sb, "warning", squiggly_svg_data_uri(color))
-    None => ()
+  if colors.warning is Some(color) {
+    write_squiggly_rule(sb, "warning", squiggly_svg_data_uri(color))
   }
-  match colors.info {
-    Some(color) => write_squiggly_rule(sb, "info", squiggly_svg_data_uri(color))
-    None => ()
+  if colors.info is Some(color) {
+    write_squiggly_rule(sb, "info", squiggly_svg_data_uri(color))
   }
-  match colors.hint {
-    Some(color) => write_dotdotdot_rule(sb, dotdotdot_svg_data_uri(color))
-    None => ()
+  if colors.hint is Some(color) {
+    write_dotdotdot_rule(sb, dotdotdot_svg_data_uri(color))
   }
   sb.to_string()
 }

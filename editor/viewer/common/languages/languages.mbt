@@ -48,9 +48,7 @@ fn[T] LanguageFeatureRegistry::register(
   self.entries.push(entry)
   @base_common.Disposable::from(() => {
     active.val = false
-    let retained = self.entries.filter(item => item.active.val)
-    self.entries.clear()
-    self.entries.append(retained)
+    self.entries.retain(item => item.active.val)
   })
 }
 
@@ -393,46 +391,54 @@ async fn Languages::hover_at_with_log_handle(
     if !entry.active.val {
       continue
     }
-    match
-      (entry.provider.provide_hover(model, position, token) catch {
-        _ => {
-          if !token.is_cancellation_requested() {
-            log_provider_failure(
-              log_service,
-              "language.hover",
-              model,
-              captured.provider_index,
-            )
-          }
-          None
+    let hover = entry.provider.provide_hover(model, position, token) catch {
+      _ => {
+        if !token.is_cancellation_requested() {
+          log_provider_failure(
+            log_service,
+            "language.hover",
+            model,
+            captured.provider_index,
+          )
         }
-      }) {
-      Some(hover) =>
-        if token.is_cancellation_requested() {
-          return None
-        } else if entry.active.val && hover.contents.length() > 0 {
-          return Some(hover)
-        }
-      None => ()
+        None
+      }
+    }
+    if hover is Some(hover) {
+      if token.is_cancellation_requested() {
+        return None
+      } else if entry.active.val && hover.contents.length() > 0 {
+        return Some(hover)
+      }
     }
   }
   None
 }
 
 ///|
-async fn Languages::definition_at_with_log_handle(
-  self : Languages,
+/// Shared body of `definition_at_with_log_handle` and
+/// `references_at_with_log_handle`: fans one position out to every matching
+/// live provider, then concatenates the surviving results in registry order.
+async fn[T] locations_at_with_log_handle(
+  registry : LanguageFeatureRegistry[T],
   model : @model.TextModel,
   offset : Int,
   log_service : @log.LogHandle,
-  token? : @language.CancellationToken = @language.CancellationToken::none(),
-  run_tasks? : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
+  category : String,
+  token : @language.CancellationToken,
+  run_tasks : async (Array[async () -> Unit]) -> Unit,
+  provide : async (
+    T,
+    @model.TextModel,
+    @base_common.Position,
+    @language.CancellationToken,
+  ) -> Array[@language.Location],
 ) -> Array[@language.Location] noraise {
   if token.is_cancellation_requested() {
     return []
   }
   let position = model.get_position_at(offset)
-  let providers = self.definition_provider.snapshot_matching(model)
+  let providers = registry.snapshot_matching(model)
   let provider_results : Array[Array[@language.Location]?] = [
     for _ in 0..<providers.length() => None
   ]
@@ -443,12 +449,12 @@ async fn Languages::definition_at_with_log_handle(
       if token.is_cancellation_requested() || !entry.active.val {
         return
       }
-      let result = entry.provider.provide_definition(model, position, token) catch {
+      let result = provide(entry.provider, model, position, token) catch {
         _ => {
           if !token.is_cancellation_requested() {
             log_provider_failure(
               log_service,
-              "language.definition",
+              category,
               model,
               captured.provider_index,
             )
@@ -467,15 +473,34 @@ async fn Languages::definition_at_with_log_handle(
   }
   let locations : Array[@language.Location] = []
   for index, result in provider_results {
-    match result {
-      Some(result) =>
-        if providers[index].entry.active.val {
-          locations.append(result)
-        }
-      None => ()
+    if result is Some(result) && providers[index].entry.active.val {
+      locations.append(result)
     }
   }
   locations
+}
+
+///|
+async fn Languages::definition_at_with_log_handle(
+  self : Languages,
+  model : @model.TextModel,
+  offset : Int,
+  log_service : @log.LogHandle,
+  token? : @language.CancellationToken = @language.CancellationToken::none(),
+  run_tasks? : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
+) -> Array[@language.Location] noraise {
+  locations_at_with_log_handle(
+    self.definition_provider,
+    model,
+    offset,
+    log_service,
+    "language.definition",
+    token,
+    run_tasks,
+    (provider, model, position, token) => {
+      provider.provide_definition(model, position, token)
+    },
+  )
 }
 
 ///|
@@ -497,54 +522,18 @@ async fn Languages::references_at_with_log_handle(
   token? : @language.CancellationToken = @language.CancellationToken::none(),
   run_tasks? : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
 ) -> Array[@language.Location] noraise {
-  if token.is_cancellation_requested() {
-    return []
-  }
-  let position = model.get_position_at(offset)
-  let providers = self.references_provider.snapshot_matching(model)
-  let provider_results : Array[Array[@language.Location]?] = [
-    for _ in 0..<providers.length() => None
-  ]
-  let tasks : Array[async () -> Unit] = []
-  for result_index, captured in providers {
-    tasks.push(() => {
-      let entry = captured.entry
-      if token.is_cancellation_requested() || !entry.active.val {
-        return
-      }
-      let result = entry.provider.provide_references(model, position, token) catch {
-        _ => {
-          if !token.is_cancellation_requested() {
-            log_provider_failure(
-              log_service,
-              "language.references",
-              model,
-              captured.provider_index,
-            )
-          }
-          []
-        }
-      }
-      provider_results[result_index] = Some(result)
-    })
-  }
-  run_tasks(tasks) catch {
-    _ => ()
-  }
-  if token.is_cancellation_requested() {
-    return []
-  }
-  let locations : Array[@language.Location] = []
-  for index, result in provider_results {
-    match result {
-      Some(result) =>
-        if providers[index].entry.active.val {
-          locations.append(result)
-        }
-      None => ()
-    }
-  }
-  locations
+  locations_at_with_log_handle(
+    self.references_provider,
+    model,
+    offset,
+    log_service,
+    "language.references",
+    token,
+    run_tasks,
+    (provider, model, position, token) => {
+      provider.provide_references(model, position, token)
+    },
+  )
 }
 
 ///|

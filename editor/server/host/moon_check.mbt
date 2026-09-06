@@ -139,18 +139,17 @@ async fn MoonCheckDiagnostics::run_once(self : MoonCheckDiagnostics) -> Unit {
   // raced the switch discards its results below.
   let root = normalize_host_path(self.root.val)
   let generation = self.sync_generation.val
-  let documents = copy_synced_documents(self.documents)
+  let documents = self.documents.copy()
   let before = capture_native_disk_snapshots(root, documents)
   let raw = (self.collect_check)()
   let after = capture_native_disk_snapshots(root, documents)
-  if self.sync_generation.val != generation ||
-    !same_native_disk_snapshot_map(before, after) {
+  if self.sync_generation.val != generation || before != after {
     self.dirty.val = true
     return
   }
   guard raw is Some(raw) else { return }
   let next = parse_moon_check_diagnostics(root, raw)
-  let accepted = copy_published_diagnostic_sets(self.published.val)
+  let accepted = self.published.val.copy()
   for key, document in documents {
     // A stable disk/model mismatch is not a clear for the last accepted model.
     // Preserve that key and continue so historical entries cannot suppress
@@ -189,28 +188,6 @@ fn MoonCheckDiagnostics::emit(
 }
 
 ///|
-fn copy_synced_documents(
-  documents : Map[String, SyncedDocumentStamp],
-) -> Map[String, SyncedDocumentStamp] {
-  let copy : Map[String, SyncedDocumentStamp] = Map([])
-  for key, document in documents {
-    copy.set(key, document)
-  }
-  copy
-}
-
-///|
-fn copy_published_diagnostic_sets(
-  published : Map[String, PublishedDiagnosticSet],
-) -> Map[String, PublishedDiagnosticSet] {
-  let copy : Map[String, PublishedDiagnosticSet] = Map([])
-  for key, diagnostic_set in published {
-    copy.set(key, diagnostic_set)
-  }
-  copy
-}
-
-///|
 async fn capture_native_disk_snapshots(
   root : String,
   documents : Map[String, SyncedDocumentStamp],
@@ -229,22 +206,6 @@ async fn capture_native_disk_snapshots(
     }
   }
   snapshots
-}
-
-///|
-fn same_native_disk_snapshot_map(
-  left : Map[String, NativeDiskSnapshot],
-  right : Map[String, NativeDiskSnapshot],
-) -> Bool {
-  if left.length() != right.length() {
-    return false
-  }
-  for key, snapshot in left {
-    guard right.get(key) is Some(other) && other == snapshot else {
-      return false
-    }
-  }
-  true
 }
 
 ///|
@@ -323,43 +284,26 @@ fn check_level_severity(level : String) -> @language.DiagnosticSeverity {
 /// Parses a `moon check` location: `line:col-line:col`, or a bare `line:col`
 /// which degrades to an empty range at that position.
 fn parse_moon_loc(loc : String) -> @base_common.Range? {
-  match loc.find("-") {
-    Some(dash) =>
-      match
-        (
-          parse_check_position(loc[0:dash]),
-          parse_check_position(loc[dash + 1:]),
-        ) {
-        (Some(start), Some(end)) =>
-          Some(@base_common.Range::from_positions(start, end))
-        _ => None
-      }
-    None =>
-      match parse_check_position(loc[:]) {
-        Some(position) =>
-          Some(@base_common.Range::from_positions(position, position))
-        None => None
-      }
+  guard loc.find("-") is Some(dash) else {
+    guard parse_check_position(loc[:]) is Some(position) else { return None }
+    return Some(@base_common.Range::from_positions(position, position))
   }
+  guard parse_check_position(loc[0:dash]) is Some(start) else { return None }
+  guard parse_check_position(loc[dash + 1:]) is Some(end) else { return None }
+  Some(@base_common.Range::from_positions(start, end))
 }
 
 ///|
 fn parse_check_position(view : StringView) -> @base_common.Position? {
-  match view.find(":") {
-    Some(colon) => {
-      let parsed = Some(
-        (
-          @string.parse_int(view[0:colon], base=10),
-          @string.parse_int(view[colon + 1:], base=10),
-        ),
-      ) catch {
-        _ => None
-      }
-      match parsed {
-        Some((line, column)) => Some(Position(line, column))
-        None => None
-      }
-    }
-    None => None
+  guard view.find(":") is Some(colon) else { return None }
+  let parsed = Some(
+    (
+      @string.parse_int(view[0:colon], base=10),
+      @string.parse_int(view[colon + 1:], base=10),
+    ),
+  ) catch {
+    _ => None
   }
+  guard parsed is Some((line, column)) else { return None }
+  Some(Position(line, column))
 }

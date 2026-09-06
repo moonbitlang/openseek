@@ -135,27 +135,21 @@ fn reload_active_document_cmd(
 
 ///|
 fn close_active_document_source() -> Unit {
-  match active_document_watch.val {
-    Some(watch) => watch.dispose()
-    None => ()
+  if active_document_watch.val is Some(watch) {
+    watch.dispose()
   }
   active_document_watch.val = None
-  match active_document_uri.val {
-    Some(uri) =>
-      if !preview_resource_retains_remote_document(uri) {
-        document_provider.close(uri)
-      }
-    None => ()
+  if active_document_uri.val is Some(uri) &&
+    !preview_resource_retains_remote_document(uri) {
+    document_provider.close(uri)
   }
   active_document_uri.val = None
 }
 
 ///|
 fn is_active_document_resource(uri : @base_common.Uri) -> Bool {
-  match active_document_uri.val {
-    Some(current) => current.to_string() == uri.to_string()
-    None => false
-  }
+  active_document_uri.val is Some(current) &&
+  current.to_string() == uri.to_string()
 }
 
 ///|
@@ -179,13 +173,8 @@ fn read_active_document(
 
 ///|
 fn is_active_document(uri : @base_common.Uri, generation : Int) -> Bool {
-  if generation != active_document_generation.val {
-    return false
-  }
-  match active_document_uri.val {
-    Some(current) => current.to_string() == uri.to_string()
-    None => false
-  }
+  generation == active_document_generation.val &&
+  is_active_document_resource(uri)
 }
 
 ///|
@@ -196,9 +185,8 @@ fn route_watched_document_cmd(
   payload : @remote_protocol.DocumentPayload,
 ) -> @rabbita.Cmd {
   @cmd.custom_cmd(_ => {
-    match watch_listeners.get(payload.document.uri.to_string()) {
-      Some(listener) => listener(DocumentUpdated(payload.document))
-      None => ()
+    if watch_listeners.get(payload.document.uri.to_string()) is Some(listener) {
+      listener(DocumentUpdated(payload.document))
     }
   })
 }

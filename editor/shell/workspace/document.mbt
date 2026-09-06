@@ -199,23 +199,7 @@ pub impl ToJson for DocumentSnapshot with fn to_json(self) {
 ///|
 /// JSON shape for document errors.
 pub impl ToJson for DocumentError with fn to_json(self) {
-  let fields : Map[String, Json] = {
-    "code": self.code.to_string().to_json(),
-    "message": self.message.to_json(),
-    "status": self.status().to_json(),
-  }
-  if self.uri is Some(uri) {
-    fields["uri"] = uri.to_string().to_json()
-    fields["displayName"] = @base_common.basename_or_authority(uri).to_json()
-  }
-  Json(fields)
-}
-
-///|
-/// HTTP-like status used by the reference server when serializing document
-/// failures.
-fn DocumentError::status(self : DocumentError) -> Int {
-  self.to_file_system_error().status()
+  ToJson::to_json(self.to_file_system_error())
 }
 
 ///|
