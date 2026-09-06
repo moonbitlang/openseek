@@ -152,26 +152,20 @@ fn moonbit_wasm_gc_bundle_probe_path(moon_home : @pathx.Path) -> @pathx.Path {
 async fn write_fake_seed(root : @pathx.Absolute) -> Unit {
   @fs.mkdir(root.join("bin").to_string(), recursive=true)
   @fs.mkdir(root.join("lib/core").to_string(), recursive=true)
-  @fs.write_file(
-    root.join("bin/moon").to_string(),
-    "",
-    create_mode=CreateOrTruncate,
-  )
-  @fs.write_file(
-    root.join("bin/moonc").to_string(),
-    "",
-    create_mode=CreateOrTruncate,
-  )
-  @fs.write_file(
-    root.join("lib/core/moon.mod").to_string(),
-    "{}",
-    create_mode=CreateOrTruncate,
-  )
-  @fs.write_file(
-    root.join(MoonbitSeedVersionFile).to_string(),
-    "test-version",
-    create_mode=CreateOrTruncate,
-  )
+  let files = [
+    ("bin/moon", ""),
+    ("bin/moonc", ""),
+    ("lib/core/moon.mod", "{}"),
+    (MoonbitSeedVersionFile, "test-version"),
+  ]
+  for file in files {
+    let (path, content) = file
+    @fs.write_file(
+      root.join(path).to_string(),
+      content,
+      create_mode=CreateOrTruncate,
+    )
+  }
 }
 
 ///|
