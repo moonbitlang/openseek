@@ -127,9 +127,8 @@ pub fn ScrollableElementDom::ScrollableElementDom(
 fn ScrollableElementDom::cancel_hide_timeout(
   self : ScrollableElementDom,
 ) -> Unit {
-  match self.hide_timeout {
-    Some(timeout) => timeout.dispose()
-    None => ()
+  if self.hide_timeout is Some(timeout) {
+    timeout.dispose()
   }
   self.hide_timeout = None
   self.hide_generation += 1
@@ -205,22 +204,18 @@ fn ScrollableElementDom::write_vertical_bar(
     "class",
     self.scrollbar_class(vertical=true, needed~),
   )
-  if self.vertical_state.is_needed() {
-    self.vertical_bar.set_attribute(
-      "style",
-      "width:\{self.vertical_size.to_string()}px;height:\{self.vertical_state.rectangle_large_size().to_string()}px;right:0px;top:0px",
-    )
-    self.vertical_slider.set_attribute(
-      "style",
-      "width:\{self.vertical_size.to_string()}px;height:\{self.vertical_state.slider_size().to_string()}px;transform:translateY(\{self.vertical_state.slider_position().to_string()}px)",
-    )
-  } else {
-    self.vertical_bar.set_attribute(
-      "style",
-      "width:\{self.vertical_size.to_string()}px;height:\{self.vertical_state.rectangle_large_size().to_string()}px;right:0px;top:0px",
-    )
-    self.vertical_slider.set_attribute("style", "")
-  }
+  self.vertical_bar.set_attribute(
+    "style",
+    "width:\{self.vertical_size.to_string()}px;height:\{self.vertical_state.rectangle_large_size().to_string()}px;right:0px;top:0px",
+  )
+  self.vertical_slider.set_attribute(
+    "style",
+    if needed {
+      "width:\{self.vertical_size.to_string()}px;height:\{self.vertical_state.slider_size().to_string()}px;transform:translateY(\{self.vertical_state.slider_position().to_string()}px)"
+    } else {
+      ""
+    },
+  )
 }
 
 ///|
@@ -236,26 +231,19 @@ fn ScrollableElementDom::write_horizontal_bar(
     "class",
     self.scrollbar_class(vertical=false, needed~),
   )
-  if self.horizontal_state.is_needed() {
-    let mut bar_style = "height:\{self.horizontal_size.to_string()}px;width:\{self.horizontal_state.rectangle_large_size().to_string()}px;bottom:0px"
-    match horizontal_left {
-      Some(left) => bar_style = "\{bar_style};left:\{left.to_string()}px"
-      None => ()
-    }
-    self.horizontal_bar.set_attribute("style", bar_style)
-    self.horizontal_slider.set_attribute(
-      "style",
-      "height:\{self.horizontal_size.to_string()}px;width:\{self.horizontal_state.slider_size().to_string()}px;transform:translateX(\{self.horizontal_state.slider_position().to_string()}px)",
-    )
-  } else {
-    let mut bar_style = "height:\{self.horizontal_size.to_string()}px;width:\{self.horizontal_state.rectangle_large_size().to_string()}px;bottom:0px"
-    match horizontal_left {
-      Some(left) => bar_style = "\{bar_style};left:\{left.to_string()}px"
-      None => ()
-    }
-    self.horizontal_bar.set_attribute("style", bar_style)
-    self.horizontal_slider.set_attribute("style", "")
+  let mut bar_style = "height:\{self.horizontal_size.to_string()}px;width:\{self.horizontal_state.rectangle_large_size().to_string()}px;bottom:0px"
+  if horizontal_left is Some(left) {
+    bar_style = "\{bar_style};left:\{left.to_string()}px"
   }
+  self.horizontal_bar.set_attribute("style", bar_style)
+  self.horizontal_slider.set_attribute(
+    "style",
+    if needed {
+      "height:\{self.horizontal_size.to_string()}px;width:\{self.horizontal_state.slider_size().to_string()}px;transform:translateX(\{self.horizontal_state.slider_position().to_string()}px)"
+    } else {
+      ""
+    },
+  )
 }
 
 ///|

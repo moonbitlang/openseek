@@ -20,16 +20,13 @@ pub struct WordAtPosition {
 
 ///|
 fn is_ascii_digit(code : UInt16) -> Bool {
-  code >= '0' && code <= '9'
+  code is ('0'..='9')
 }
 
 ///|
 /// `\w` = `[A-Za-z0-9_]` (ASCII, no `u` flag).
 fn is_regex_word_char(code : UInt16) -> Bool {
-  (code >= 'A' && code <= 'Z') ||
-  (code >= 'a' && code <= 'z') ||
-  is_ascii_digit(code) ||
-  code == '_'
+  code is ('A'..='Z' | 'a'..='z' | '0'..='9' | '_')
 }
 
 ///|
@@ -37,15 +34,7 @@ fn is_regex_word_char(code : UInt16) -> Bool {
 /// the `[^...\s]+` character class (`wordHelper.ts:39`). Whitespace follows the
 /// repo convention (space/tab), the only whitespace present in line content.
 fn is_word_break(code : UInt16) -> Bool {
-  if code is (' ' | '\t') {
-    return true
-  }
-  for unit in usual_word_separators.code_units() {
-    if unit == code {
-      return true
-    }
-  }
-  false
+  code is (' ' | '\t') || usual_word_separators.code_units().contains(code)
 }
 
 ///|

@@ -185,10 +185,7 @@ fn prepare_current_line_render(
   render_line_highlight_only_when_focus : Bool,
   width : Double,
 ) -> Array[String] {
-  let render_data : Array[String] = []
-  for _ in 0..<viewport.lines.length() {
-    render_data.push("")
-  }
+  let render_data = Array::make(viewport.lines.length(), "")
   // `_shouldRenderThis` (`:213-215`) → `_shouldRenderInContent` (`:191-197`).
   if !@view_layout.should_render_line_highlight_in_content(
       render_line_highlight, render_line_highlight_only_when_focus, editor_has_focus,

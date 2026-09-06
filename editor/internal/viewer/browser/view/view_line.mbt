@@ -131,10 +131,9 @@ fn ViewLine::on_selection_changed(self : ViewLine) -> Bool {
 
 ///|
 fn ViewLine::get_dom_node(self : ViewLine) -> @rdom.Element? {
-  match self.rendered_view_line {
-    Some(rendered) => rendered.dom_node.map(node => node.element())
-    None => None
-  }
+  self.rendered_view_line.bind(rendered => {
+    rendered.dom_node.map(node => node.element())
+  })
 }
 
 ///|
@@ -158,17 +157,10 @@ fn ViewLine::layout_line(
   delta_top : Double,
   line_height : Int,
 ) -> Unit {
-  match self.rendered_view_line {
-    Some(rendered) =>
-      match rendered.dom_node {
-        Some(node) => {
-          node.set_top(Pixels(delta_top))
-          node.set_height(Pixels(line_height.to_double()))
-          node.set_line_height(Pixels(line_height.to_double()))
-        }
-        None => ()
-      }
-    None => ()
+  if self.rendered_view_line is Some({ dom_node: Some(node), .. }) {
+    node.set_top(Pixels(delta_top))
+    node.set_height(Pixels(line_height.to_double()))
+    node.set_line_height(Pixels(line_height.to_double()))
   }
 }
 
@@ -205,10 +197,9 @@ fn ViewLine::render_line(
   }
   builder <+
     $|px;" class="\{@viewer_common.render_line_class()}" data-line="\{line_number}">\{output.html}</div>
-  let prior_dom_node = match self.rendered_view_line {
-    Some(rendered) => rendered.dom_node
-    None => None
-  }
+  let prior_dom_node = self.rendered_view_line.bind(rendered => {
+    rendered.dom_node
+  })
   self.rendered_view_line = Some(
     create_rendered_line(
       prior_dom_node,

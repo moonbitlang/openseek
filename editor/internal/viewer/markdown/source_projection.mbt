@@ -109,9 +109,8 @@ pub fn MarkdownCodeBlock::project_source_range(
 ) -> Array[MarkdownProjectedCodeRange] {
   let projected : Array[MarkdownProjectedCodeRange] = []
   for line_index, line in self.code_lines {
-    match line.project_source_range(source_range) {
-      Some(displayed_range) => projected.push({ line_index, displayed_range, })
-      None => ()
+    if line.project_source_range(source_range) is Some(displayed_range) {
+      projected.push({ line_index, displayed_range, })
     }
   }
   projected
@@ -140,34 +139,27 @@ fn markdown_document_projection(doc : @cmark.Doc) -> MarkdownDocumentProjection 
     builder : MarkdownProjectionBuilder,
     block,
   ) {
-    if markdown_block_has_anchor(block) {
-      match markdown_offset_range(block.meta().loc) {
-        Some(source_range) =>
-          builder.block_anchors.push({
-            index: builder.block_anchors.length(),
-            source_range,
-            rendered_element_index: markdown_take_rendered_element_index(
-              rendered_element_indices,
-              block.meta().id,
-            ),
-            heading_level: markdown_block_heading_level(block),
-            heading_text: markdown_block_heading_text(block),
-          })
-        None => ()
-      }
+    if markdown_block_has_anchor(block) &&
+      markdown_offset_range(block.meta().loc) is Some(source_range) {
+      builder.block_anchors.push({
+        index: builder.block_anchors.length(),
+        source_range,
+        rendered_element_index: markdown_take_rendered_element_index(
+          rendered_element_indices,
+          block.meta().id,
+        ),
+        heading_level: markdown_block_heading_level(block),
+        heading_text: markdown_block_heading_text(block),
+      })
     }
-    match block {
-      CodeBlock(node) =>
-        match
-          markdown_code_block_from_cmark(
-            node.v,
-            node.meta.loc,
-            builder.code_blocks.length(),
-          ) {
-          Some(code_block) => builder.code_blocks.push(code_block)
-          None => ()
-        }
-      _ => ()
+    if block is CodeBlock(node) &&
+      markdown_code_block_from_cmark(
+        node.v,
+        node.meta.loc,
+        builder.code_blocks.length(),
+      )
+      is Some(code_block) {
+      builder.code_blocks.push(code_block)
     }
     @cmark.Folder::none(folder, builder, block)
   })
@@ -308,9 +300,9 @@ fn markdown_code_block_from_cmark(
   )
   let code_lines : Array[MarkdownCodeLine] = []
   for line in block.code {
-    match markdown_code_line_from_cmark(line.v, line.meta.loc) {
-      Some(projected_line) => code_lines.push(projected_line)
-      None => ()
+    if markdown_code_line_from_cmark(line.v, line.meta.loc)
+      is Some(projected_line) {
+      code_lines.push(projected_line)
     }
   }
   Some({

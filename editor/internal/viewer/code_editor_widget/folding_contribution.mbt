@@ -15,35 +15,26 @@ fn register_folding_contribution(registry : EditorContributionRegistry) -> Unit 
     Eager,
     _viewer => Folding(FoldingController()),
     viewer => {
-      let listeners : Array[@base_common.Disposable] = []
-      // `this.editor.onDidChangeModel(() => this.onModelChanged())`
-      listeners.push(
+      let listeners : Array[@base_common.Disposable] = [
+        // `this.editor.onDidChangeModel(() => this.onModelChanged())`
         viewer.on_did_change_model(_ => viewer.folding_on_model_changed()),
-      )
-      // `this.editor.onDidChangeModelContent(e => this.onDidChangeModelContent(e))`
-      // (`folding.ts`, the localToDispose set): recompute the regions against
-      // the new content; `FoldingModel.update`'s region matching preserves
-      // collapse state where ranges still match, and its decoration delta
-      // tolerates the ids the flush destroyed.
-      listeners.push(
+        // `this.editor.onDidChangeModelContent(e => this.onDidChangeModelContent(e))`
+        // (`folding.ts`, the localToDispose set): recompute the regions against
+        // the new content; `FoldingModel.update`'s region matching preserves
+        // collapse state where ranges still match, and its decoration delta
+        // tolerates the ids the flush destroyed.
         viewer.on_did_change_model_content(_ => {
           viewer.trigger_folding_model_changed()
         }),
-      )
-      // `this.editor.onDidChangeCursorPosition(...)` (model-scoped in the
-      // source; the viewer's cursor events already gate on a model)
-      listeners.push(
+        // `this.editor.onDidChangeCursorPosition(...)` (model-scoped in the
+        // source; the viewer's cursor events already gate on a model)
         viewer.on_did_change_cursor_position(_ => {
           viewer.folding_on_cursor_position_changed()
         }),
-      )
-      // `this.editor.onMouseDown/Up(...)`
-      listeners.push(
+        // `this.editor.onMouseDown/Up(...)`
         viewer.on_mouse_down(e => viewer.folding_on_editor_mouse_down(e)),
-      )
-      listeners.push(
         viewer.on_mouse_up(e => viewer.folding_on_editor_mouse_up(e)),
-      )
+      ]
       // the constructor's trailing `this.onModelChanged()`
       viewer.folding_on_model_changed()
       listeners

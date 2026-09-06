@@ -67,19 +67,16 @@ fn RemoteLanguageFreshness::is_current(
   self : RemoteLanguageFreshness,
   stamp : RemoteDocumentStamp,
 ) -> Bool {
-  match self.current {
-    Some(registration) =>
-      registration.stamp.generation == stamp.generation &&
-      registration.stamp.model.same(stamp.model) &&
-      registration.stamp.model_identity == stamp.model_identity &&
-      registration.stamp.model_version == stamp.model_version &&
-      registration.stamp.content_version == stamp.content_version &&
-      registration.stamp.uri == stamp.uri &&
-      registration.stamp.revision == stamp.revision &&
-      stamp.generation == self.generation &&
-      stamp.matches_model(registration.stamp.model)
-    None => false
-  }
+  self.current is Some(registration) &&
+  registration.stamp.generation == stamp.generation &&
+  registration.stamp.model.same(stamp.model) &&
+  registration.stamp.model_identity == stamp.model_identity &&
+  registration.stamp.model_version == stamp.model_version &&
+  registration.stamp.content_version == stamp.content_version &&
+  registration.stamp.uri == stamp.uri &&
+  registration.stamp.revision == stamp.revision &&
+  stamp.generation == self.generation &&
+  stamp.matches_model(registration.stamp.model)
 }
 
 ///|
@@ -87,15 +84,9 @@ fn RemoteLanguageFreshness::capture_model(
   self : RemoteLanguageFreshness,
   model : @model.TextModel,
 ) -> RemoteDocumentStamp? {
-  match self.current {
-    Some(registration) =>
-      if registration.stamp.matches_model(model) {
-        Some(registration.stamp)
-      } else {
-        None
-      }
-    None => None
-  }
+  guard self.current is Some(registration) else { return None }
+  guard registration.stamp.matches_model(model) else { return None }
+  Some(registration.stamp)
 }
 
 ///|
@@ -103,12 +94,9 @@ fn RemoteLanguageFreshness::invalidate_generation(
   self : RemoteLanguageFreshness,
   generation : Int,
 ) -> Unit {
-  match self.current {
-    Some(registration) =>
-      if registration.stamp.generation == generation {
-        self.invalidate()
-      }
-    None => ()
+  if self.current is Some(registration) &&
+    registration.stamp.generation == generation {
+    self.invalidate()
   }
 }
 
@@ -117,13 +105,11 @@ fn RemoteLanguageFreshness::invalidate(self : RemoteLanguageFreshness) -> Unit {
   self.generation += 1
   guard self.current is Some(registration) else { return }
   self.current = None
-  match registration.content_subscription {
-    Some(subscription) => subscription.dispose()
-    None => ()
+  if registration.content_subscription is Some(subscription) {
+    subscription.dispose()
   }
-  match registration.dispose_subscription {
-    Some(subscription) => subscription.dispose()
-    None => ()
+  if registration.dispose_subscription is Some(subscription) {
+    subscription.dispose()
   }
   self.markers.remove_owner_resource("moon", registration.stamp.model.uri)
 }
@@ -169,19 +155,14 @@ fn RemoteLanguageFreshness::prepare_diagnostics(
   self : RemoteLanguageFreshness,
   payload : @remote_protocol.DiagnosticsPayload,
 ) -> RemoteDocumentStamp? {
-  match self.current {
-    Some(registration) => {
-      let stamp = registration.stamp
-      if stamp.uri == payload.uri.to_string() &&
-        stamp.revision == payload.revision &&
-        self.is_current(stamp) {
-        Some(stamp)
-      } else {
-        None
-      }
-    }
-    None => None
+  guard self.current is Some(registration) else { return None }
+  let stamp = registration.stamp
+  guard stamp.uri == payload.uri.to_string() &&
+    stamp.revision == payload.revision &&
+    self.is_current(stamp) else {
+    return None
   }
+  Some(stamp)
 }
 
 ///|

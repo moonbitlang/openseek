@@ -149,23 +149,15 @@ fn merge_code_editor_overview_ruler_bands(
   bands.sort_by(compare_code_editor_overview_ruler_bands)
   let merged : Array[CodeEditorOverviewRulerBand] = []
   for band in bands {
-    if merged.is_empty() {
-      merged.push(band)
-      continue
-    }
-    let previous = merged[merged.length() - 1]
-    if previous.lane == band.lane &&
-      previous.color == band.color &&
-      previous.to >= band.from {
-      merged[merged.length() - 1] = {
-        id: previous.id,
-        from: previous.from,
-        to: previous.to.max(band.to),
-        color: previous.color,
-        lane: previous.lane,
-      }
-    } else {
-      merged.push(band)
+    match merged.last() {
+      Some(previous) if previous.lane == band.lane &&
+        previous.color == band.color &&
+        previous.to >= band.from =>
+        merged[merged.length() - 1] = {
+          ..previous,
+          to: previous.to.max(band.to),
+        }
+      _ => merged.push(band)
     }
   }
   merged
@@ -331,17 +323,9 @@ fn CodeEditorOverviewRuler::render(self : CodeEditorOverviewRuler) -> Unit {
   let render_bands = merge_code_editor_overview_ruler_bands(self.bands)
   let resolved_colors : Map[String, String] = Map([])
   for band in render_bands {
-    let color = match resolved_colors.get(band.color) {
-      Some(color) => color
-      None => {
-        let color = resolve_code_editor_overview_ruler_color(
-          self.root,
-          band.color,
-        )
-        resolved_colors[band.color] = color
-        color
-      }
-    }
+    let color = resolved_colors.get_or_init(band.color, () => {
+      resolve_code_editor_overview_ruler_color(self.root, band.color)
+    })
     let (left, width) = code_editor_overview_ruler_lane_geometry(
       band.lane,
       code_editor_overview_ruler_canvas_width(self.root),

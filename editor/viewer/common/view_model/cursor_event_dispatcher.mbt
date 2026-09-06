@@ -47,21 +47,7 @@ fn selections_are_equal(
   a : Array[@core.Selection]?,
   b : Array[@core.Selection]?,
 ) -> Bool {
-  match (a, b) {
-    (None, None) => true
-    (None, Some(_)) | (Some(_), None) => false
-    (Some(a), Some(b)) => {
-      if a.length() != b.length() {
-        return false
-      }
-      for index in 0..<a.length() {
-        if a[index] != b[index] {
-          return false
-        }
-      }
-      true
-    }
-  }
+  a == b
 }
 
 ///|
@@ -339,11 +325,8 @@ fn CursorEventDispatcher::on_event(
   listener : (CursorStateChangedEvent) -> Unit,
 ) -> @base_common.Disposable {
   self.on_outgoing_event(event => {
-    match event {
-      CursorEvent(event) => listener(event)
-      ViewZonesEvent(_) => ()
-      HiddenAreasEvent(_) => ()
-      ModelTokensEvent(_) => ()
+    if event is CursorEvent(event) {
+      listener(event)
     }
   })
 }
@@ -355,11 +338,8 @@ fn CursorEventDispatcher::on_view_zones_changed(
   listener : (ViewZonesChangedEvent) -> Unit,
 ) -> @base_common.Disposable {
   self.on_outgoing_event(event => {
-    match event {
-      CursorEvent(_) => ()
-      ViewZonesEvent(event) => listener(event)
-      HiddenAreasEvent(_) => ()
-      ModelTokensEvent(_) => ()
+    if event is ViewZonesEvent(event) {
+      listener(event)
     }
   })
 }
@@ -371,9 +351,8 @@ fn CursorEventDispatcher::on_hidden_areas_changed(
   listener : (HiddenAreasChangedOutgoingEvent) -> Unit,
 ) -> @base_common.Disposable {
   self.on_outgoing_event(event => {
-    match event {
-      HiddenAreasEvent(event) => listener(event)
-      CursorEvent(_) | ViewZonesEvent(_) | ModelTokensEvent(_) => ()
+    if event is HiddenAreasEvent(event) {
+      listener(event)
     }
   })
 }
@@ -385,9 +364,8 @@ fn CursorEventDispatcher::on_model_tokens_changed(
   listener : (ModelTokensChangedOutgoingEvent) -> Unit,
 ) -> @base_common.Disposable {
   self.on_outgoing_event(event => {
-    match event {
-      CursorEvent(_) | ViewZonesEvent(_) | HiddenAreasEvent(_) => ()
-      ModelTokensEvent(event) => listener(event)
+    if event is ModelTokensEvent(event) {
+      listener(event)
     }
   })
 }
@@ -455,12 +433,9 @@ fn CursorEventDispatcher::add_outgoing_event(
     return
   }
   for index, pending in self.outgoing_events {
-    match pending.attempt_to_merge(event) {
-      Some(merged) => {
-        self.outgoing_events[index] = merged
-        return
-      }
-      None => ()
+    if pending.attempt_to_merge(event) is Some(merged) {
+      self.outgoing_events[index] = merged
+      return
     }
   }
   self.outgoing_events.push(event)

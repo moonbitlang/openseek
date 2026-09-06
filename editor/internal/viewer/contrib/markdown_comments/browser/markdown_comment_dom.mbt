@@ -122,30 +122,9 @@ pub fn MarkdownCommentDom::enable_source_toggle(
     } else {
       "Show original source"
     }
-    self.outer.set_attribute(
-      "data-source-visible",
-      if visible {
-        "true"
-      } else {
-        "false"
-      },
-    )
-    self.margin.set_attribute(
-      "data-source-visible",
-      if visible {
-        "true"
-      } else {
-        "false"
-      },
-    )
-    self.source_toggle.set_attribute(
-      "aria-pressed",
-      if visible {
-        "true"
-      } else {
-        "false"
-      },
-    )
+    self.outer.set_attribute("data-source-visible", visible.to_string())
+    self.margin.set_attribute("data-source-visible", visible.to_string())
+    self.source_toggle.set_attribute("aria-pressed", visible.to_string())
     self.source_toggle.set_attribute("title", label)
   }
   apply_state()
@@ -201,20 +180,9 @@ pub fn MarkdownCommentDom::enable_folding(
     }
     self.outer.set_attribute(
       "data-documentation-expanded",
-      if is_expanded {
-        "true"
-      } else {
-        "false"
-      },
+      is_expanded.to_string(),
     )
-    self.toggle.set_attribute(
-      "aria-expanded",
-      if is_expanded {
-        "true"
-      } else {
-        "false"
-      },
-    )
+    self.toggle.set_attribute("aria-expanded", is_expanded.to_string())
     self.toggle.set_attribute("aria-label", label)
     self.toggle.set_attribute("title", label)
     self.toggle_icon.set_attribute(
@@ -370,13 +338,11 @@ pub fn MarkdownCommentDom::observe_size(
   })
   let lifetime = @base_common.Disposable::from(() => {
     disposed.val = true
-    match observer {
-      Some(observer) => observer.dispose()
-      None => ()
+    if observer is Some(observer) {
+      observer.dispose()
     }
-    match pending_frame.val {
-      Some(registration) => registration.dispose()
-      None => ()
+    if pending_frame.val is Some(registration) {
+      registration.dispose()
     }
     pending_frame.val = None
     frame_scheduled.val = false
@@ -435,9 +401,8 @@ pub fn MarkdownCommentDom::observe_viewport_width(
       })
       @base_common.Disposable::from(() => {
         disposed.val = true
-        match observer {
-          Some(observer) => observer.dispose()
-          None => ()
+        if observer is Some(observer) {
+          observer.dispose()
         }
       })
     }
@@ -463,14 +428,11 @@ fn markdown_comment_content_viewport(element : @rdom.Element) -> @rdom.Element? 
   if markdown_comment_element_has_class(element, "editor-scrollable") {
     return Some(element)
   }
-  match element.get_parent_node().to_option() {
-    Some(parent) =>
-      match parent.to_element() {
-        Some(parent) => markdown_comment_content_viewport(parent)
-        None => None
-      }
-    None => None
+  guard element.get_parent_node().to_option() is Some(parent_node) &&
+    parent_node.to_element() is Some(parent_element) else {
+    return None
   }
+  markdown_comment_content_viewport(parent_element)
 }
 
 ///|

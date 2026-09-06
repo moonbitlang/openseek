@@ -256,20 +256,8 @@ fn FoldingRegions::set_source(
   index : Int,
   source : FoldSource,
 ) -> Unit {
-  match source {
-    UserDefined => {
-      self.user_defined_states.set(index, true)
-      self.recovered_states.set(index, false)
-    }
-    Recovered => {
-      self.user_defined_states.set(index, false)
-      self.recovered_states.set(index, true)
-    }
-    Provider => {
-      self.user_defined_states.set(index, false)
-      self.recovered_states.set(index, false)
-    }
-  }
+  self.user_defined_states.set(index, source is UserDefined)
+  self.recovered_states.set(index, source is Recovered)
 }
 
 ///|
@@ -371,27 +359,21 @@ pub fn FoldingRegions::from_fold_ranges(
   let ranges_length = ranges.length()
   let start_indexes = FixedArray::make(ranges_length, 0U)
   let end_indexes = FixedArray::make(ranges_length, 0U)
-  let types : Array[String?] = []
-  let mut got_types = false
-  for i in 0..<ranges_length {
-    let range = ranges[i]
+  let types : Array[String?] = [ for range in ranges => range.type_ ]
+  for i, range in ranges {
     start_indexes[i] = range.start_line_number.reinterpret_as_uint()
     end_indexes[i] = range.end_line_number.reinterpret_as_uint()
-    types.push(range.type_)
-    if range.type_ is Some(_) {
-      got_types = true
-    }
   }
   let regions = FoldingRegions(
     start_indexes,
     end_indexes,
-    types?=if got_types { Some(types) } else { None },
+    types?=if types.any(t => t is Some(_)) { Some(types) } else { None },
   )
-  for i in 0..<ranges_length {
-    if ranges[i].is_collapsed {
+  for i, range in ranges {
+    if range.is_collapsed {
       regions.set_collapsed(i, true)
     }
-    regions.set_source(i, ranges[i].source)
+    regions.set_source(i, range.source)
   }
   regions
 }

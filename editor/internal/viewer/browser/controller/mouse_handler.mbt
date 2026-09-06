@@ -193,22 +193,16 @@ pub fn MouseHandler::MouseHandler(
       // editor, we remove this listener
       if handler.mouse_leave_monitor is None {
         let recover = (event : @rdom.Event) => {
-          match event.to_mouse_event() {
-            Some(mouse) =>
-              if !mouse_event_target_within(
-                  mouse,
-                  handler.view_helper.view_dom_node,
-                ) {
-                // went outside the editor!
-                handler.on_mouse_leave(
-                  EditorDomMouseEvent(
-                    mouse,
-                    false,
-                    handler.view_helper.view_dom_node,
-                  ),
-                )
-              }
-            None => ()
+          if event.to_mouse_event() is Some(mouse) &&
+            !mouse_event_target_within(mouse, handler.view_helper.view_dom_node) {
+            // went outside the editor!
+            handler.on_mouse_leave(
+              EditorDomMouseEvent(
+                mouse,
+                false,
+                handler.view_helper.view_dom_node,
+              ),
+            )
           }
         }
         @rdom.document().add_event_listener("mousemove", recover)
@@ -273,18 +267,16 @@ pub fn MouseHandler::dispose(self : MouseHandler) -> Unit {
   self.disposed = true
   self.end_scrollable_drag()
   self.scrollbar_drag_monitor.dispose()
-  match self.touch_scroll_gesture {
-    Some(gesture) => gesture.dispose()
-    None => ()
+  if self.touch_scroll_gesture is Some(gesture) {
+    gesture.dispose()
   }
   self.touch_scroll_gesture = None
   for listener in self.listeners {
     listener.dispose()
   }
   self.listeners.clear()
-  match self.mouse_leave_monitor {
-    Some(monitor) => monitor.dispose()
-    None => ()
+  if self.mouse_leave_monitor is Some(monitor) {
+    monitor.dispose()
   }
   self.mouse_leave_monitor = None
   self.mouse_down_operation.dispose()
@@ -347,9 +339,8 @@ fn MouseHandler::on_mouse_leave(
   self : MouseHandler,
   e : @editor_browser.EditorDomMouseEvent,
 ) -> Unit {
-  match self.mouse_leave_monitor {
-    Some(monitor) => monitor.dispose()
-    None => ()
+  if self.mouse_leave_monitor is Some(monitor) {
+    monitor.dispose()
   }
   self.mouse_leave_monitor = None
   self.last_mouse_leave_time = @base_browser.wall_clock_now_ms()
@@ -621,21 +612,18 @@ fn MouseDownOperation::get_position_outside_editor(
     let outside_distance = editor_content.y - e.posy
     let scrolled_above = view_layout.get_current_scroll_top() - outside_distance
     let vertical_offset = scrolled_above.max(0.0)
-    match hit_test_get_zone_at_coord(view_model, vertical_offset) {
-      Some(view_zone_data) =>
-        match self.help_position_jump_over_view_zone(view_zone_data) {
-          Some(new_position) =>
-            return Some(
-              @editor_browser.MouseTarget::create_outside_editor(
-                mouse_column,
-                new_position,
-                Above,
-                outside_distance,
-              ),
-            )
-          None => ()
-        }
-      None => ()
+    if hit_test_get_zone_at_coord(view_model, vertical_offset)
+      is Some(view_zone_data) &&
+      self.help_position_jump_over_view_zone(view_zone_data)
+      is Some(new_position) {
+      return Some(
+        @editor_browser.MouseTarget::create_outside_editor(
+          mouse_column,
+          new_position,
+          Above,
+          outside_distance,
+        ),
+      )
     }
     let above_line_number = view_layout.line_at_vertical_offset(vertical_offset)
     return Some(
@@ -651,21 +639,18 @@ fn MouseDownOperation::get_position_outside_editor(
     let outside_distance = e.posy - editor_content.y - editor_content.height
     let vertical_offset = view_layout.get_current_scroll_top() +
       e.relative_pos().y
-    match hit_test_get_zone_at_coord(view_model, vertical_offset) {
-      Some(view_zone_data) =>
-        match self.help_position_jump_over_view_zone(view_zone_data) {
-          Some(new_position) =>
-            return Some(
-              @editor_browser.MouseTarget::create_outside_editor(
-                mouse_column,
-                new_position,
-                Below,
-                outside_distance,
-              ),
-            )
-          None => ()
-        }
-      None => ()
+    if hit_test_get_zone_at_coord(view_model, vertical_offset)
+      is Some(view_zone_data) &&
+      self.help_position_jump_over_view_zone(view_zone_data)
+      is Some(new_position) {
+      return Some(
+        @editor_browser.MouseTarget::create_outside_editor(
+          mouse_column,
+          new_position,
+          Below,
+          outside_distance,
+        ),
+      )
     }
     let below_line_number = view_layout.line_at_vertical_offset(vertical_offset)
     return Some(
@@ -722,9 +707,8 @@ fn MouseDownOperation::find_mouse_position(
   e : @editor_browser.EditorDomMouseEvent,
   test_event_target : Bool,
 ) -> @editor_browser.MouseTarget? {
-  match self.get_position_outside_editor(e) {
-    Some(position_outside_editor) => return Some(position_outside_editor)
-    None => ()
+  if self.get_position_outside_editor(e) is Some(position_outside_editor) {
+    return Some(position_outside_editor)
   }
   let t = self.mouse_target_factory.create_mouse_target(
     (self.view_helper.get_last_render_data)(),
@@ -738,18 +722,13 @@ fn MouseDownOperation::find_mouse_position(
     },
   )
   guard t.position() is Some(_) else { return None }
-  match t {
-    MouseTargetViewZone(type_~, element~, mouse_column~, detail~, ..) =>
-      match self.help_position_jump_over_view_zone(detail) {
-        Some(new_position) =>
-          return Some(
-            @editor_browser.MouseTarget::create_view_zone(
-              type_, element, mouse_column, new_position, detail,
-            ),
-          )
-        None => ()
-      }
-    _ => ()
+  if t is MouseTargetViewZone(type_~, element~, mouse_column~, detail~, ..) &&
+    self.help_position_jump_over_view_zone(detail) is Some(new_position) {
+    return Some(
+      @editor_browser.MouseTarget::create_view_zone(
+        type_, element, mouse_column, new_position, detail,
+      ),
+    )
   }
   Some(t)
 }

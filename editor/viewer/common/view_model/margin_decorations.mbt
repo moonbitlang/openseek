@@ -30,25 +30,21 @@ pub fn lines_decorations_to_render(
 ) -> Array[DecorationToRender] {
   let result : Array[DecorationToRender] = []
   for decoration in decorations {
-    match decoration.options.lines_decorations_class_name {
-      Some(class_name) =>
-        result.push({
-          start_line_number: decoration.range.start_line_number,
-          end_line_number: decoration.range.end_line_number,
-          class_name,
-          z_index: decoration.options.z_index,
-        })
-      None => ()
+    if decoration.options.lines_decorations_class_name is Some(class_name) {
+      result.push({
+        start_line_number: decoration.range.start_line_number,
+        end_line_number: decoration.range.end_line_number,
+        class_name,
+        z_index: decoration.options.z_index,
+      })
     }
-    match decoration.options.first_line_decoration_class_name {
-      Some(class_name) =>
-        result.push({
-          start_line_number: decoration.range.start_line_number,
-          end_line_number: decoration.range.start_line_number,
-          class_name,
-          z_index: decoration.options.z_index,
-        })
-      None => ()
+    if decoration.options.first_line_decoration_class_name is Some(class_name) {
+      result.push({
+        start_line_number: decoration.range.start_line_number,
+        end_line_number: decoration.range.start_line_number,
+        class_name,
+        z_index: decoration.options.z_index,
+      })
     }
   }
   result
@@ -89,28 +85,16 @@ pub fn dedup_margin_decorations(
   let mut prev_end_line_index = 0
   for decoration in decorations {
     let class_name = decoration.class_name
-    let mut start_line_index = if decoration.start_line_number >
-      visible_start_line_number {
-      decoration.start_line_number - visible_start_line_number
-    } else {
-      0
-    }
-    let end_line_index = if decoration.end_line_number < visible_end_line_number {
-      decoration.end_line_number - visible_start_line_number
-    } else {
-      visible_end_line_number - visible_start_line_number
-    }
+    let mut start_line_index = (decoration.start_line_number -
+    visible_start_line_number).max(0)
+    let end_line_index = (decoration.end_line_number - visible_start_line_number).min(
+      visible_end_line_number - visible_start_line_number,
+    )
     if prev_class_name == Some(class_name) {
       // Here we avoid rendering the same className multiple times on the
       // same line.
-      start_line_index = if prev_end_line_index + 1 > start_line_index {
-        prev_end_line_index + 1
-      } else {
-        start_line_index
-      }
-      if end_line_index > prev_end_line_index {
-        prev_end_line_index = end_line_index
-      }
+      start_line_index = start_line_index.max(prev_end_line_index + 1)
+      prev_end_line_index = prev_end_line_index.max(end_line_index)
     } else {
       prev_class_name = Some(class_name)
       prev_end_line_index = end_line_index

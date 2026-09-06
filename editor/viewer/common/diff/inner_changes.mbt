@@ -115,16 +115,15 @@ fn flatten_inner_diff_sequence(
     let anchor = empty_line_range_anchor(lines, range.start_line_number)
     return { values: [], start_boundaries: [anchor], end_boundaries: [anchor], }
   }
-  let line_sequences : Array[InnerDiffLine] = []
-  for line_number in range.start_line_number..<range.end_line_number_exclusive {
-    line_sequences.push(
+  let line_sequences : Array[InnerDiffLine] = [
+    for line_number in range.start_line_number..<range.end_line_number_exclusive => {
       flatten_inner_diff_line(
         lines[line_number - 1],
         line_number,
         ignore_trim_whitespace,
-      ),
-    )
-  }
+      )
+    }
+  ]
   let values : Array[Int] = []
   let start_boundaries : Array[@base_common.Position] = []
   let end_boundaries : Array[@base_common.Position] = []
@@ -138,12 +137,9 @@ fn flatten_inner_diff_sequence(
     start_boundaries.push(previous_end)
     end_boundaries.push(previous_end)
     values.push('\n'.to_int())
-    start_boundaries.push(first.start_right)
-    end_boundaries.push(first.start_left)
-  } else {
-    start_boundaries.push(first.start_right)
-    end_boundaries.push(first.start_left)
   }
+  start_boundaries.push(first.start_right)
+  end_boundaries.push(first.start_left)
   for line_index in 0..<line_sequences.length() {
     let line = line_sequences[line_index]
     for value_index in 0..<line.values.length() {
@@ -248,14 +244,12 @@ fn compute_inner_changes(
     modified_trailing_newline,
   )
   let diffs = compute_advanced_scalar_diffs(original.values, modified.values)
-  let changes : Array[RangeMapping] = []
-  for diff in diffs {
-    changes.push(
+  Some(
+    diffs.map(diff => {
       RangeMapping(
         original.range(diff.original.start, diff.original.end_exclusive),
         modified.range(diff.modified.start, diff.modified.end_exclusive),
-      ),
-    )
-  }
-  Some(changes)
+      )
+    }),
+  )
 }

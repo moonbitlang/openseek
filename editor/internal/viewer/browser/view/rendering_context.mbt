@@ -172,14 +172,9 @@ fn RenderingContext::visible_range_for_position(
   self : RenderingContext,
   position : @base_common.Position,
 ) -> HorizontalPosition? {
-  match
-    self.view_lines.raw_visible_range_for_position(
-      position.line_number,
-      position.column,
-    ) {
-    Some(left) => Some(HorizontalPosition(left))
-    None => None
-  }
+  self.view_lines
+  .raw_visible_range_for_position(position.line_number, position.column)
+  .map(left => HorizontalPosition(left))
 }
 
 ///|
@@ -192,11 +187,9 @@ fn RenderingContext::lines_visible_ranges_for_range(
   range : @base_common.Range,
   include_new_lines : Bool,
 ) -> Array[LineVisibleRanges]? {
-  match
-    self.view_lines.raw_lines_visible_ranges_for_range(range, include_new_lines) {
-    Some(raw_lines) => Some(line_visible_ranges_from_raw(raw_lines))
-    None => None
-  }
+  self.view_lines
+  .raw_lines_visible_ranges_for_range(range, include_new_lines)
+  .map(line_visible_ranges_from_raw)
 }
 
 ///|
@@ -205,15 +198,16 @@ fn RenderingContext::lines_visible_ranges_for_range(
 fn line_visible_ranges_from_raw(
   raw_lines : Array[(Int, Array[(Int, Int)])],
 ) -> Array[LineVisibleRanges] {
-  let result : Array[LineVisibleRanges] = []
-  for raw in raw_lines {
-    let horizontal_ranges : Array[HorizontalRange] = []
-    for range in raw.1 {
-      horizontal_ranges.push({ left: range.0, width: range.1, })
+  [
+    for raw in raw_lines => {
+      LineVisibleRanges(
+        raw.0,
+        [
+          for range in raw.1 => { left: range.0, width: range.1, }
+        ],
+      )
     }
-    result.push(LineVisibleRanges(raw.0, horizontal_ranges))
-  }
-  result
+  ]
 }
 
 ///|
@@ -227,10 +221,9 @@ fn RenderingContext::content_widgets_render_context(
     vertical_offset_for_line: line => self.vertical_offset_for_line(line),
     line_height_for_line: line => self.line_height_for_line(line),
     visible_range_for_position: position => {
-      match self.visible_range_for_position(position) {
-        Some(horizontal) => Some(horizontal.left.to_double())
-        None => None
-      }
+      self
+      .visible_range_for_position(position)
+      .map(horizontal => horizontal.left.to_double())
     },
     typical_fullwidth_character_width: self.input.typical_fullwidth_character_width,
     scroll_top: self.position.scroll_top,

@@ -245,10 +245,7 @@ fn MarkdownDiagramViewportLifetime::dispose(
     return
   }
   self.active = false
-  while self.controllers.length() > 0 {
-    let index = self.controllers.length() - 1
-    let controller = self.controllers[index]
-    self.controllers.pop() |> ignore
+  while self.controllers.pop() is Some(controller) {
     controller.dispose()
   }
 }
@@ -1165,23 +1162,18 @@ fn MarkdownDiagramViewport::dispose(self : MarkdownDiagramViewport) -> Unit {
     return
   }
   self.active = false
-  match self.pending_frame {
-    Some(cancel) => cancel()
-    None => ()
+  if self.pending_frame is Some(cancel) {
+    cancel()
   }
   self.pending_frame = None
-  match self.observer {
-    Some(observer) => observer.dispose()
-    None => ()
+  if self.observer is Some(observer) {
+    observer.dispose()
   }
   self.observer = None
   self.finish_resize()
   self.is_panning = false
   self.pan_pointer_id = None
-  while self.listeners.length() > 0 {
-    let index = self.listeners.length() - 1
-    let listener = self.listeners[index]
-    self.listeners.pop() |> ignore
+  while self.listeners.pop() is Some(listener) {
     listener.dispose()
   }
   @base_browser.remove_element(self.controls)
@@ -1227,12 +1219,10 @@ fn release_body_cursor_lease(lease : DiagramBodyCursorLease) -> Unit {
   lease.active = false
   restore_element_style(lease.body, "cursor", lease.saved_cursor)
   lease.coordinator.active = false
-  let retained = diagram_body_cursor_coordinators.filter(coordinator => {
+  diagram_body_cursor_coordinators.retain(coordinator => {
     coordinator.active ||
     !same_document(coordinator.document, lease.coordinator.document)
   })
-  diagram_body_cursor_coordinators.clear()
-  diagram_body_cursor_coordinators.append(retained)
 }
 
 ///|
@@ -1247,24 +1237,16 @@ fn is_positive_finite(value : Double) -> Bool {
 
 ///|
 fn element_class_tokens(element : @rdom.Element) -> Array[String] {
-  let tokens : Array[String] = []
-  for token in element_attribute_or_empty(element, "class").split(" ") {
-    let value = token.to_owned()
-    if value != "" {
-      tokens.push(value)
+  [
+    for token in element_attribute_or_empty(element, "class").split(" ") if !token.is_empty() => {
+      token.to_owned()
     }
-  }
-  tokens
+  ]
 }
 
 ///|
 fn element_has_class(element : @rdom.Element, class_name : String) -> Bool {
-  for token in element_class_tokens(element) {
-    if token == class_name {
-      return true
-    }
-  }
-  false
+  element_class_tokens(element).contains(class_name)
 }
 
 ///|

@@ -24,24 +24,8 @@ fn DoubleResourceMap::set(
   value : Array[Marker],
 ) -> Unit {
   let key = resource.to_string()
-  let owner_map = match self.by_resource.get(key) {
-    Some(m) => m
-    None => {
-      let m : Map[String, Array[Marker]] = Map([])
-      self.by_resource.set(key, m)
-      m
-    }
-  }
-  owner_map.set(owner, value)
-  let resource_map = match self.by_owner.get(owner) {
-    Some(m) => m
-    None => {
-      let m : Map[String, Array[Marker]] = Map([])
-      self.by_owner.set(owner, m)
-      m
-    }
-  }
-  resource_map.set(key, value)
+  self.by_resource.get_or_init(key, () => Map([])).set(owner, value)
+  self.by_owner.get_or_init(owner, () => Map([])).set(key, value)
 }
 
 ///|
@@ -93,13 +77,7 @@ fn DoubleResourceMap::delete(
 fn DoubleResourceMap::values_all(
   self : DoubleResourceMap,
 ) -> Array[Array[Marker]] {
-  let out : Array[Array[Marker]] = []
-  for owner_map in self.by_owner.values() {
-    for v in owner_map.values() {
-      out.push(v)
-    }
-  }
-  out
+  self.by_owner.values().flat_map(m => m.values()).to_array()
 }
 
 ///|
@@ -109,13 +87,7 @@ fn DoubleResourceMap::values_by_resource(
   resource : @base_common.Uri,
 ) -> Array[Array[Marker]] {
   match self.by_resource.get(resource.to_string()) {
-    Some(owner_map) => {
-      let out : Array[Array[Marker]] = []
-      for v in owner_map.values() {
-        out.push(v)
-      }
-      out
-    }
+    Some(owner_map) => owner_map.values().to_array()
     None => []
   }
 }
@@ -127,13 +99,7 @@ fn DoubleResourceMap::values_by_owner(
   owner : String,
 ) -> Array[Array[Marker]] {
   match self.by_owner.get(owner) {
-    Some(resource_map) => {
-      let out : Array[Array[Marker]] = []
-      for v in resource_map.values() {
-        out.push(v)
-      }
-      out
-    }
+    Some(resource_map) => resource_map.values().to_array()
     None => []
   }
 }
@@ -231,9 +197,8 @@ fn MarkerService::change_one_impl(
     // insert marker for this (owner,resource)-tuple
     let markers : Array[Marker] = []
     for data in marker_data {
-      match data.to_marker(owner, resource) {
-        Some(marker) => markers.push(marker)
-        None => ()
+      if data.to_marker(owner, resource) is Some(marker) {
+        markers.push(marker)
       }
     }
     self.data.set(resource, owner, markers)

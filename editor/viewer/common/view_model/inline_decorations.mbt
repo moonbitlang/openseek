@@ -191,76 +191,69 @@ fn InlineModelDecorationsComputer::compute_decorations(
     )
     let view_range = view_model_decoration.range
     decorations_in_viewport.push(view_model_decoration)
-    match decoration_options.inline_class_name {
-      Some(inline_class_name) => {
-        let type_ = if decoration_options.inline_class_name_affects_letter_spacing {
-          RegularAffectingLetterSpacing
-        } else {
-          Regular
-        }
-        let inline_decoration = InlineDecoration::InlineDecoration(
-          view_range, inline_class_name, type_,
-        )
-        let intersected_start_line_number = start_line_number.max(
-          view_range.start_line_number,
-        )
-        let intersected_end_line_number = end_line_number.min(
-          view_range.end_line_number,
-        )
-        for j in intersected_start_line_number..<=intersected_end_line_number {
-          inline_decorations[j - start_line_number].push(inline_decoration)
-          if decoration_options.affects_font {
-            has_variable_fonts[j - start_line_number] = true
-          }
+    if decoration_options.inline_class_name is Some(inline_class_name) {
+      let type_ = if decoration_options.inline_class_name_affects_letter_spacing {
+        RegularAffectingLetterSpacing
+      } else {
+        Regular
+      }
+      let inline_decoration = InlineDecoration::InlineDecoration(
+        view_range, inline_class_name, type_,
+      )
+      let intersected_start_line_number = start_line_number.max(
+        view_range.start_line_number,
+      )
+      let intersected_end_line_number = end_line_number.min(
+        view_range.end_line_number,
+      )
+      for j in intersected_start_line_number..<=intersected_end_line_number {
+        inline_decorations[j - start_line_number].push(inline_decoration)
+        if decoration_options.affects_font {
+          has_variable_fonts[j - start_line_number] = true
         }
       }
-      None => ()
     }
-    match decoration_options.before_content_class_name {
-      Some(before_content_class_name) =>
-        if start_line_number <= view_range.start_line_number &&
-          view_range.start_line_number <= end_line_number {
-          let inline_decoration = InlineDecoration::InlineDecoration(
-            Range(
-              view_range.start_line_number,
-              view_range.start_column,
-              view_range.start_line_number,
-              view_range.start_column,
-            ),
-            before_content_class_name,
-            Before,
-          )
-          inline_decorations[view_range.start_line_number - start_line_number].push(
-            inline_decoration,
-          )
-          if decoration_options.affects_font {
-            has_variable_fonts[view_range.start_line_number - start_line_number] = true
-          }
-        }
-      None => ()
+    if decoration_options.before_content_class_name
+      is Some(before_content_class_name) &&
+      start_line_number <= view_range.start_line_number &&
+      view_range.start_line_number <= end_line_number {
+      let inline_decoration = InlineDecoration::InlineDecoration(
+        Range(
+          view_range.start_line_number,
+          view_range.start_column,
+          view_range.start_line_number,
+          view_range.start_column,
+        ),
+        before_content_class_name,
+        Before,
+      )
+      inline_decorations[view_range.start_line_number - start_line_number].push(
+        inline_decoration,
+      )
+      if decoration_options.affects_font {
+        has_variable_fonts[view_range.start_line_number - start_line_number] = true
+      }
     }
-    match decoration_options.after_content_class_name {
-      Some(after_content_class_name) =>
-        if start_line_number <= view_range.end_line_number &&
-          view_range.end_line_number <= end_line_number {
-          let inline_decoration = InlineDecoration::InlineDecoration(
-            Range(
-              view_range.end_line_number,
-              view_range.end_column,
-              view_range.end_line_number,
-              view_range.end_column,
-            ),
-            after_content_class_name,
-            After,
-          )
-          inline_decorations[view_range.end_line_number - start_line_number].push(
-            inline_decoration,
-          )
-          if decoration_options.affects_font {
-            has_variable_fonts[view_range.end_line_number - start_line_number] = true
-          }
-        }
-      None => ()
+    if decoration_options.after_content_class_name
+      is Some(after_content_class_name) &&
+      start_line_number <= view_range.end_line_number &&
+      view_range.end_line_number <= end_line_number {
+      let inline_decoration = InlineDecoration::InlineDecoration(
+        Range(
+          view_range.end_line_number,
+          view_range.end_column,
+          view_range.end_line_number,
+          view_range.end_column,
+        ),
+        after_content_class_name,
+        After,
+      )
+      inline_decorations[view_range.end_line_number - start_line_number].push(
+        inline_decoration,
+      )
+      if decoration_options.affects_font {
+        has_variable_fonts[view_range.end_line_number - start_line_number] = true
+      }
     }
   }
   {

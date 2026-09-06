@@ -165,22 +165,19 @@ pub fn ViewModel::with_options(
 /// registered cursor listeners and is retired here before layout teardown.
 /// Called from the Viewer's `ModelData::dispose`.
 pub fn ViewModel::dispose(self : ViewModel) -> Unit {
-  match self.visible_lines_subscription {
-    Some(subscription) => subscription.dispose()
-    None => ()
+  if self.visible_lines_subscription is Some(subscription) {
+    subscription.dispose()
   }
   self.visible_lines_subscription = None
-  match self.model_tokens_subscription {
-    Some(subscription) => subscription.dispose()
-    None => ()
+  if self.model_tokens_subscription is Some(subscription) {
+    subscription.dispose()
   }
   self.model_tokens_subscription = None
   self.cursor_event_dispatcher.dispose()
   self.lines.dispose()
   self.view_layout.dispose()
-  match self.model_registration {
-    Some(registration) => registration.dispose()
-    None => ()
+  if self.model_registration is Some(registration) {
+    registration.dispose()
   }
   self.model_registration = None
 }

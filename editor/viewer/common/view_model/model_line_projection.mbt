@@ -521,11 +521,7 @@ fn view_line_data_for_segment_with_injections(
 /// A run of `n` spaces — the leading indent prepended to a wrapped continuation
 /// line. Monaco's `spaces(count)`.
 fn spaces(n : Int) -> String {
-  let sb = StringBuilder()
-  for _ in 0..<n {
-    sb.write_char(' ')
-  }
-  sb.to_string()
+  " ".repeat(n.max(0))
 }
 
 ///|
@@ -533,11 +529,10 @@ fn spaces(n : Int) -> String {
 fn injection_options_for_projected_line(
   projected_line : ProjectedTextLine,
 ) -> Array[@model.InjectedTextOptions] {
-  let options : Array[@model.InjectedTextOptions] = []
-  for part in projected_line.parts {
+  projected_line.parts.filter_map(part => {
     match part.kind {
       InjectedSegment(class_name~, ..) =>
-        options.push(
+        Some(
           InjectedTextOptions(
             projected_line.text[part.start:part.end].to_owned(),
             inline_class_name?=if class_name == "" {
@@ -547,10 +542,9 @@ fn injection_options_for_projected_line(
             },
           ),
         )
-      SourceSegment(_) => ()
+      SourceSegment(_) => None
     }
-  }
-  options
+  })
 }
 
 ///|
@@ -575,14 +569,12 @@ fn resolve_injection_options(
 fn injection_offsets_for_projected_line(
   projected_line : ProjectedTextLine,
 ) -> Array[Int] {
-  let offsets : Array[Int] = []
-  for part in projected_line.parts {
+  projected_line.parts.filter_map(part => {
     match part.kind {
-      InjectedSegment(model_column~, ..) => offsets.push(model_column)
-      SourceSegment(_) => ()
+      InjectedSegment(model_column~, ..) => Some(model_column)
+      SourceSegment(_) => None
     }
-  }
-  offsets
+  })
 }
 
 ///|
@@ -668,44 +660,41 @@ fn InjectedTextInlineDecorationsComputer::get_inline_decorations(
       }
       if line_start_offset_in_input_with_injections <
         injected_text_end_offset_in_input_with_injections {
-        match options.inline_class_name {
-          Some(inline_class_name) => {
-            let wrapped_text_indent_length = (self.context.get_wrapped_text_indent_length)(
-              model_line_number,
-            )
-            let offset = if output_line_index > 0 {
-              wrapped_text_indent_length
-            } else {
-              0
-            }
-            let start = offset +
-              (injected_text_start_offset_in_input_with_injections -
-              line_start_offset_in_input_with_injections).max(0)
-            let end = offset +
-              (injected_text_end_offset_in_input_with_injections -
-              line_start_offset_in_input_with_injections).min(
-                line_end_offset_in_input_with_injections -
-                line_start_offset_in_input_with_injections,
-              )
-            if start != end {
-              let view_line_number = (self.context.get_base_view_line_number)(
-                  model_line_number,
-                ) +
-                output_line_index
-              inline_decorations.push(
-                InlineDecoration(
-                  Range(view_line_number, start + 1, view_line_number, end + 1),
-                  inline_class_name,
-                  if options.inline_class_name_affects_letter_spacing {
-                    RegularAffectingLetterSpacing
-                  } else {
-                    Regular
-                  },
-                ),
-              )
-            }
+        if options.inline_class_name is Some(inline_class_name) {
+          let wrapped_text_indent_length = (self.context.get_wrapped_text_indent_length)(
+            model_line_number,
+          )
+          let offset = if output_line_index > 0 {
+            wrapped_text_indent_length
+          } else {
+            0
           }
-          None => ()
+          let start = offset +
+            (injected_text_start_offset_in_input_with_injections -
+            line_start_offset_in_input_with_injections).max(0)
+          let end = offset +
+            (injected_text_end_offset_in_input_with_injections -
+            line_start_offset_in_input_with_injections).min(
+              line_end_offset_in_input_with_injections -
+              line_start_offset_in_input_with_injections,
+            )
+          if start != end {
+            let view_line_number = (self.context.get_base_view_line_number)(
+                model_line_number,
+              ) +
+              output_line_index
+            inline_decorations.push(
+              InlineDecoration(
+                Range(view_line_number, start + 1, view_line_number, end + 1),
+                inline_class_name,
+                if options.inline_class_name_affects_letter_spacing {
+                  RegularAffectingLetterSpacing
+                } else {
+                  Regular
+                },
+              ),
+            )
+          }
         }
       }
       if injected_text_end_offset_in_input_with_injections <=

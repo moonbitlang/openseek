@@ -97,18 +97,11 @@ fn view_cursors_on_view_event(part : ViewCursors, event : ViewEvent) -> Bool {
     ViewDecorationsChanged => true
     ViewConfigurationChanged(_) => true
     ViewTokensChanged(e) =>
-      match self.last_position {
-        None => false
-        Some(position) => {
-          for range in e.ranges {
-            if position.line_number >= range.from_line_number &&
-              position.line_number <= range.to_line_number {
-              return true
-            }
-          }
-          false
-        }
-      }
+      self.last_position is Some(position) &&
+      e.ranges.any(range => {
+        position.line_number >= range.from_line_number &&
+        position.line_number <= range.to_line_number
+      })
     ViewZonesChanged => true
     ViewFocusChanged(e) => {
       // Source `onFocusChanged`: update cursor visibility immediately, but do

@@ -316,9 +316,8 @@ fn DiffEditorWidget::complete_layout_pane_render(
   // Every outer layout, including height-only resizes, gets exactly one
   // reconcile using geometry from the completed pane render(s).
   self.reconcile_view_model()
-  match self.pending_layout_modified_viewport {
-    Some(state) => self.restore_modified_viewport_and_sync_original(state)
-    None => ()
+  if self.pending_layout_modified_viewport is Some(state) {
+    self.restore_modified_viewport_and_sync_original(state)
   }
   self.refresh_overview_viewport()
 }
@@ -818,77 +817,65 @@ fn DiffEditorWidget::apply_diff_state_decorations(
     let change = mapping.line_range_mapping
     let original_range = changed_line_range(change.original, original_snapshot)
     let modified_range = changed_line_range(change.modified, modified_snapshot)
-    match original_range {
-      Some(range) =>
-        original_decorations.append(
-          diff_whole_line_decorations(
-            [range],
-            "diff-editor-line-delete",
-            "delete-sign codicon codicon-diff-remove",
-            "diff-editor-gutter-delete",
-            self.options.render_indicators,
-            "diff-editor-original-line",
-          ),
-        )
-      None => ()
+    if original_range is Some(range) {
+      original_decorations.append(
+        diff_whole_line_decorations(
+          [range],
+          "diff-editor-line-delete",
+          "delete-sign codicon codicon-diff-remove",
+          "diff-editor-gutter-delete",
+          self.options.render_indicators,
+          "diff-editor-original-line",
+        ),
+      )
     }
-    match modified_range {
-      Some(range) =>
-        modified_decorations.append(
-          diff_whole_line_decorations(
-            [range],
-            "diff-editor-line-insert",
-            "insert-sign codicon codicon-diff-insert",
-            "diff-editor-gutter-insert",
-            self.options.render_indicators,
-            "diff-editor-modified-line",
-          ),
-        )
-      None => ()
+    if modified_range is Some(range) {
+      modified_decorations.append(
+        diff_whole_line_decorations(
+          [range],
+          "diff-editor-line-insert",
+          "insert-sign codicon codicon-diff-insert",
+          "diff-editor-gutter-insert",
+          self.options.render_indicators,
+          "diff-editor-modified-line",
+        ),
+      )
     }
     if change.modified.is_empty() || change.original.is_empty() {
-      match original_range {
-        Some(range) =>
+      if original_range is Some(range) {
+        original_decorations.push(
+          whole_line_character_decoration(
+            range, "diff-editor-char-delete", "diff-editor-original-character",
+          ),
+        )
+      }
+      if modified_range is Some(range) {
+        modified_decorations.push(
+          whole_line_character_decoration(
+            range, "diff-editor-char-insert", "diff-editor-modified-character",
+          ),
+        )
+      }
+    } else if change.inner_changes is Some(inner_changes) {
+      for inner in inner_changes {
+        if change.original.contains(inner.original.start_line_number) {
           original_decorations.push(
-            whole_line_character_decoration(
-              range, "diff-editor-char-delete", "diff-editor-original-character",
+            inner_character_decoration(
+              inner.original,
+              "diff-editor-char-delete",
+              "diff-editor-original-character",
             ),
           )
-        None => ()
-      }
-      match modified_range {
-        Some(range) =>
+        }
+        if change.modified.contains(inner.modified.start_line_number) {
           modified_decorations.push(
-            whole_line_character_decoration(
-              range, "diff-editor-char-insert", "diff-editor-modified-character",
+            inner_character_decoration(
+              inner.modified,
+              "diff-editor-char-insert",
+              "diff-editor-modified-character",
             ),
           )
-        None => ()
-      }
-    } else {
-      match change.inner_changes {
-        Some(inner_changes) =>
-          for inner in inner_changes {
-            if change.original.contains(inner.original.start_line_number) {
-              original_decorations.push(
-                inner_character_decoration(
-                  inner.original,
-                  "diff-editor-char-delete",
-                  "diff-editor-original-character",
-                ),
-              )
-            }
-            if change.modified.contains(inner.modified.start_line_number) {
-              modified_decorations.push(
-                inner_character_decoration(
-                  inner.modified,
-                  "diff-editor-char-insert",
-                  "diff-editor-modified-character",
-                ),
-              )
-            }
-          }
-        None => ()
+        }
       }
     }
   }
@@ -972,13 +959,11 @@ fn DiffEditorWidget::clear_overview_ruler(
   self : DiffEditorWidget,
   generation : Int,
 ) -> Unit {
-  match self.original_overview_ruler {
-    Some(ruler) => ruler.clear(generation)
-    None => ()
+  if self.original_overview_ruler is Some(ruler) {
+    ruler.clear(generation)
   }
-  match self.modified_overview_ruler {
-    Some(ruler) => ruler.clear(generation)
-    None => ()
+  if self.modified_overview_ruler is Some(ruler) {
+    ruler.clear(generation)
   }
 }
 
@@ -988,21 +973,17 @@ fn DiffEditorWidget::apply_overview_diff_state(
   diff_state : DiffState,
   generation : Int,
 ) -> Unit {
-  match self.original_overview_ruler {
-    Some(ruler) =>
-      ruler.set_entries(
-        generation,
-        original_diff_overview_ruler_entries(diff_state),
-      )
-    None => ()
+  if self.original_overview_ruler is Some(ruler) {
+    ruler.set_entries(
+      generation,
+      original_diff_overview_ruler_entries(diff_state),
+    )
   }
-  match self.modified_overview_ruler {
-    Some(ruler) =>
-      ruler.set_entries(
-        generation,
-        modified_diff_overview_ruler_entries(diff_state),
-      )
-    None => ()
+  if self.modified_overview_ruler is Some(ruler) {
+    ruler.set_entries(
+      generation,
+      modified_diff_overview_ruler_entries(diff_state),
+    )
   }
 }
 
@@ -1049,13 +1030,11 @@ fn DiffEditorWidget::sync_overview_ruler_option(
   if !self.options.overview_ruler {
     self.root.remove_attribute("data-overview-ruler")
     self.overview_root.set_attribute("hidden", "")
-    match self.original_overview_ruler {
-      Some(ruler) => ruler.dispose()
-      None => ()
+    if self.original_overview_ruler is Some(ruler) {
+      ruler.dispose()
     }
-    match self.modified_overview_ruler {
-      Some(ruler) => ruler.dispose()
-      None => ()
+    if self.modified_overview_ruler is Some(ruler) {
+      ruler.dispose()
     }
     self.original_overview_ruler = None
     self.modified_overview_ruler = None
@@ -1138,9 +1117,8 @@ fn DiffEditorWidget::commit_empty_diff_features(
     [],
     generation,
   )
-  match modified_viewport {
-    Some(state) => self.restore_modified_viewport_and_sync_original(state)
-    None => ()
+  if modified_viewport is Some(state) {
+    self.restore_modified_viewport_and_sync_original(state)
   }
   self.clear_overview_ruler(generation)
   self.original_alignment_geometry = None
@@ -1211,9 +1189,8 @@ fn DiffEditorWidget::commit_diff_state(
     generation,
   )
   self.inline_deleted_zones = next_inline_deleted_zones
-  match modified_viewport {
-    Some(state) => self.restore_modified_viewport_and_sync_original(state)
-    None => ()
+  if modified_viewport is Some(state) {
+    self.restore_modified_viewport_and_sync_original(state)
   }
   self.apply_overview_diff_state(diff_state, generation)
   self.diff_state = Some(diff_state)
@@ -1944,9 +1921,8 @@ pub fn DiffEditorWidget::dispose(self : DiffEditorWidget) -> Unit {
   }
   self.clear_diff_features_for_transition()
   self.disposed = true
-  match self.resize_observer {
-    Some(observer) => observer.dispose()
-    None => ()
+  if self.resize_observer is Some(observer) {
+    observer.dispose()
   }
   self.resize_observer = None
   self.pointer_monitor.dispose()
@@ -1956,13 +1932,11 @@ pub fn DiffEditorWidget::dispose(self : DiffEditorWidget) -> Unit {
   }
   self.lifetime.clear()
   self.view_model.dispose()
-  match self.original_overview_ruler {
-    Some(ruler) => ruler.dispose()
-    None => ()
+  if self.original_overview_ruler is Some(ruler) {
+    ruler.dispose()
   }
-  match self.modified_overview_ruler {
-    Some(ruler) => ruler.dispose()
-    None => ()
+  if self.modified_overview_ruler is Some(ruler) {
+    ruler.dispose()
   }
   self.original_overview_ruler = None
   self.modified_overview_ruler = None

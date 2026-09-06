@@ -185,10 +185,7 @@ pub fn Viewer::on_mouse_leave(
 
 ///|
 pub fn Viewer::save_view_state(self : Viewer) -> ViewerViewState? {
-  match self.widget.save_view_state() {
-    Some(inner) => Some({ inner, })
-    None => None
-  }
+  self.widget.save_view_state().map(inner => { inner, })
 }
 
 ///|
@@ -196,10 +193,7 @@ pub fn Viewer::restore_view_state(
   self : Viewer,
   state : ViewerViewState?,
 ) -> Unit {
-  match state {
-    Some(state) => self.widget.restore_view_state(Some(state.inner))
-    None => self.widget.restore_view_state(None)
-  }
+  self.widget.restore_view_state(state.map(state => state.inner))
 }
 
 ///|

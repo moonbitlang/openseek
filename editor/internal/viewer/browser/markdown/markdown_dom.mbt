@@ -114,14 +114,8 @@ fn MarkdownDomLifetime::postprocess_images(
       continue
     }
     image.set_attribute("src", resolved)
-    match self.on_size_changed {
-      Some(on_size_changed) =>
-        self.listen(image, "load", _event => {
-          if self.active {
-            on_size_changed()
-          }
-        })
-      None => ()
+    if self.on_size_changed is Some(on_size_changed) {
+      self.listen(image, "load", _event => if self.active { on_size_changed() })
     }
   }
 }
@@ -269,14 +263,8 @@ fn MarkdownDomLifetime::dispose(self : MarkdownDomLifetime) -> Unit {
     let listener = self.listeners.remove(self.listeners.length() - 1)
     listener.dispose()
   }
-  match self.target_token {
-    Some(token) =>
-      clear_markdown_target_lifetime(
-        markdown_target_registry,
-        self.target,
-        token,
-      )
-    None => ()
+  if self.target_token is Some(token) {
+    clear_markdown_target_lifetime(markdown_target_registry, self.target, token)
   }
   self.target_token = None
 }
@@ -384,12 +372,7 @@ fn markdown_element_has_class(
     .replace_all(old="\n", new=" ")
     .replace_all(old="\r", new=" ")
     .replace_all(old="\f", new=" ")
-  for token in normalized.split(" ") {
-    if token == class_name {
-      return true
-    }
-  }
-  false
+  normalized.split(" ").any(token => token == class_name)
 }
 
 ///|

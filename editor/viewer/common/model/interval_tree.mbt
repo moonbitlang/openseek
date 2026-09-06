@@ -1119,16 +1119,10 @@ fn right_rotate(t : IntervalTree, y : IntervalNode) -> Unit {
 fn compute_max_end(node : IntervalNode) -> Int {
   let mut max_end = node.end
   if !same_interval_node(node.left(), sentinel) {
-    let left_max_end = node.left().max_end
-    if left_max_end > max_end {
-      max_end = left_max_end
-    }
+    max_end = max_end.max(node.left().max_end)
   }
   if !same_interval_node(node.right(), sentinel) {
-    let right_max_end = node.right().max_end + node.delta
-    if right_max_end > max_end {
-      max_end = right_max_end
-    }
+    max_end = max_end.max(node.right().max_end + node.delta)
   }
   max_end
 }

@@ -167,15 +167,11 @@ fn prepare_line_numbers_overlay(
   // line-decorations lane.
   let line_numbers_width = context.gutter_width -
     context.input.line_decorations_width
-  let active_model_line_number = match context.input.view_selection {
-    Some(selection) =>
-      Some(
-        context.input.view_model
-        .coordinates_converter()
-        .view_position_to_model_position(selection.get_position()).line_number,
-      )
-    None => None
-  }
+  let active_model_line_number = context.input.view_selection.map(selection => {
+    context.input.view_model
+    .coordinates_converter()
+    .view_position_to_model_position(selection.get_position()).line_number
+  })
   self.render_result = prepare_line_numbers_render(
     context.viewport,
     Some(context.input.view_model),
@@ -361,20 +357,14 @@ fn prepare_selections_overlay(
 ) -> Unit {
   let self = part
   let visible_ranges : Array[(Int, Array[(Double, Double)])] = []
-  match context.input.selection_view_range {
-    Some(selection) =>
-      match context.lines_visible_ranges_for_range(selection, true) {
-        Some(lines) =>
-          for line in lines {
-            let ranges : Array[(Double, Double)] = []
-            for range in line.ranges {
-              ranges.push((range.left.to_double(), range.width.to_double()))
-            }
-            visible_ranges.push((line.line_number, ranges))
-          }
-        None => ()
-      }
-    None => ()
+  if context.input.selection_view_range is Some(selection) &&
+    context.lines_visible_ranges_for_range(selection, true) is Some(lines) {
+    for line in lines {
+      let ranges = line.ranges.map(range => {
+        (range.left.to_double(), range.width.to_double())
+      })
+      visible_ranges.push((line.line_number, ranges))
+    }
   }
   self.render_result = prepare_selections_render_from_visible_ranges(
     context.viewport,

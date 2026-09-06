@@ -98,12 +98,7 @@ pub fn ModelRawContentChangedEvent::contains_event(
   self : ModelRawContentChangedEvent,
   change_type : RawContentChangedType,
 ) -> Bool {
-  for change in self.changes {
-    if change.change_type() == change_type {
-      return true
-    }
-  }
-  false
+  self.changes.any(change => change.change_type() == change_type)
 }
 
 ///|
@@ -280,9 +275,7 @@ pub fn TextModel::register_view_model(
   })
   @base_common.Disposable::from(() => {
     active.val = false
-    let retained = self.view_models.filter(callbacks => callbacks.active.val)
-    self.view_models.clear()
-    self.view_models.append(retained)
+    self.view_models.retain(callbacks => callbacks.active.val)
   })
 }
 

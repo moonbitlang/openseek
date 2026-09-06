@@ -53,13 +53,10 @@ pub fn to_selected_lines(selections : Array[@core.Selection]) -> SelectedLines {
   }
   {
     starts_inside: (start_line, end_line) => {
-      for s in selections {
+      selections.any(s => {
         let line = s.start().line_number
-        if line >= start_line && line <= end_line {
-          return true
-        }
-      }
-      false
+        line >= start_line && line <= end_line
+      })
     },
   }
 }

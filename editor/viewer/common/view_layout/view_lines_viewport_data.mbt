@@ -19,12 +19,7 @@ pub fn ViewportData::line_data(
   self : ViewportData,
   line_number : Int,
 ) -> ViewLineRenderingData? {
-  let index = line_number - self.start_line_number
-  if index >= 0 && index < self.lines.length() {
-    Some(self.lines[index])
-  } else {
-    None
-  }
+  self.lines.get(line_number - self.start_line_number)
 }
 
 ///|
@@ -33,8 +28,9 @@ pub fn ViewportData::decorations_for_line(
   self : ViewportData,
   line_number : Int,
 ) -> Array[LineDecoration] {
-  let index = line_number - self.start_line_number
-  match self.line_decorations.get(index) {
+  // Matched rather than `unwrap_or([])`: this runs once per rendered line, and
+  // `unwrap_or` builds the empty fallback array on the hit path too.
+  match self.line_decorations.get(line_number - self.start_line_number) {
     Some(decorations) => decorations
     None => []
   }
@@ -45,13 +41,7 @@ pub fn ViewportData::decorations_for_line(
 pub fn ViewportData::decorations_in_viewport(
   self : ViewportData,
 ) -> Array[LineDecoration] {
-  let out : Array[LineDecoration] = []
-  for line in self.line_decorations {
-    for decoration in line {
-      out.push(decoration)
-    }
-  }
-  out
+  self.line_decorations.flatten()
 }
 
 ///|

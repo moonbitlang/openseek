@@ -74,19 +74,14 @@ pub fn render_markdown(
           is Some(code_block) else {
           return false
         }
-        match render_diagram_code_block(code_block) {
-          Some(html) => {
-            ctx.string(html)
-            true
-          }
-          None =>
-            match code_block_renderer {
-              Some(render) => {
-                ctx.string(render(code_block, language_id))
-                true
-              }
-              None => false
-            }
+        if render_diagram_code_block(code_block) is Some(html) {
+          ctx.string(html)
+          true
+        } else if code_block_renderer is Some(render) {
+          ctx.string(render(code_block, language_id))
+          true
+        } else {
+          false
         }
       }
       _ => false

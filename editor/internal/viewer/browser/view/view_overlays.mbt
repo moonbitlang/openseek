@@ -54,22 +54,16 @@ fn DynamicViewOverlayHandle::render(
   start_line_number : Int,
   line_number : Int,
 ) -> String {
-  match self {
-    CurrentLine(overlay) =>
-      render_result_slice(overlay.render_result, start_line_number, line_number)
-    Selections(overlay) =>
-      render_result_slice(overlay.render_result, start_line_number, line_number)
-    Decorations(overlay) =>
-      render_result_slice(overlay.render_result, start_line_number, line_number)
-    CurrentLineMargin(overlay) =>
-      render_result_slice(overlay.render_result, start_line_number, line_number)
-    MarginDecorations(overlay) =>
-      render_result_slice(overlay.render_result, start_line_number, line_number)
-    LinesDecorations(overlay) =>
-      render_result_slice(overlay.render_result, start_line_number, line_number)
-    LineNumbers(overlay) =>
-      render_result_slice(overlay.render_result, start_line_number, line_number)
+  let render_result = match self {
+    CurrentLine(overlay) => overlay.render_result
+    Selections(overlay) => overlay.render_result
+    Decorations(overlay) => overlay.render_result
+    CurrentLineMargin(overlay) => overlay.render_result
+    MarginDecorations(overlay) => overlay.render_result
+    LinesDecorations(overlay) => overlay.render_result
+    LineNumbers(overlay) => overlay.render_result
   }
+  render_result_slice(render_result, start_line_number, line_number)
 }
 
 ///|

@@ -17,13 +17,9 @@ pub fn View::offset_for_column(
   view_line_number : Int,
   view_column : Int,
 ) -> Double {
-  match
-    self.view_lines.raw_visible_range_for_position(
-      view_line_number, view_column,
-    ) {
-    Some(left) => left
-    None => -1.0
-  }
+  self.view_lines
+  .raw_visible_range_for_position(view_line_number, view_column)
+  .unwrap_or(-1.0)
 }
 
 ///|
@@ -76,11 +72,7 @@ pub fn View::visible_range_for_position(
   view_line_number : Int,
   view_column : Int,
 ) -> HorizontalPosition? {
-  match
-    self.view_lines.raw_visible_range_for_position(
-      view_line_number, view_column,
-    ) {
-    Some(left) => Some(HorizontalPosition(left))
-    None => None
-  }
+  self.view_lines
+  .raw_visible_range_for_position(view_line_number, view_column)
+  .map(left => HorizontalPosition(left))
 }

@@ -392,11 +392,5 @@ pub fn View::render(
 
 ///|
 fn View::get_view_parts_to_render(self : View) -> Array[ViewPartHandle] {
-  let parts : Array[ViewPartHandle] = []
-  for part in self.view_parts {
-    if part.should_render() {
-      parts.push(part)
-    }
-  }
-  parts
+  self.view_parts.filter(part => part.should_render())
 }

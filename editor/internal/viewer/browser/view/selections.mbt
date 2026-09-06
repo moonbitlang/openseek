@@ -71,10 +71,7 @@ fn prepare_selections_render_from_visible_ranges(
 ) -> Array[String] {
   let lines : Array[LineSelectionRanges] = []
   for visible_line in visible_ranges {
-    let ranges : Array[StyledRange] = []
-    for range in visible_line.1 {
-      ranges.push(new_styled_range(range.0, range.1))
-    }
+    let ranges = visible_line.1.map(range => new_styled_range(range.0, range.1))
     if !ranges.is_empty() {
       lines.push({ line_number: visible_line.0, ranges, })
     }
@@ -105,23 +102,14 @@ fn render_selection_lines(
     rest_of_selection[line_index] += selection_html
   }
   // `output.map(([innerCorners, rest]) => innerCorners + rest)`.
-  let result : Array[String] = []
-  for index in 0..<rest_of_selection.length() {
-    result.push(inner_corners[index] + rest_of_selection[index])
-  }
-  result
+  rest_of_selection.mapi((index, rest) => inner_corners[index] + rest)
 }
 
 ///|
 /// Whether any line carries more than one range, in which case Monaco skips
 /// corner enrichment (the staircase math assumes one range per line).
 fn visible_ranges_have_gaps(lines : Array[LineSelectionRanges]) -> Bool {
-  for line in lines {
-    if line.ranges.length() > 1 {
-      return true
-    }
-  }
-  false
+  lines.any(line => line.ranges.length() > 1)
 }
 
 ///|

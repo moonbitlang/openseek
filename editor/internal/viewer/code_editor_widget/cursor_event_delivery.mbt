@@ -88,10 +88,7 @@ fn CursorEventDelivery::take_next_ready(
   }
   let event = self.queue.remove(0)
   if is_model_flush_cursor_event(event) {
-    match
-      self.completed_content_versions.search_by(version => {
-        version == event.model_version_id
-      }) {
+    match self.completed_content_versions.search(event.model_version_id) {
       Some(index) => self.completed_content_versions.remove(index) |> ignore
       None => ()
     }
