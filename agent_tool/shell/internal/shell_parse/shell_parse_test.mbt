@@ -375,62 +375,29 @@ test "parse pipes and conditionals as visible top level commands" {
 
 ///|
 test "return syntax errors for dangling operators and redirects" {
-  assert_true(@shell_parse.parse_for_policy("moon check &&") is SyntaxError(_))
-  assert_true(@shell_parse.parse_for_policy("moon check >") is SyntaxError(_))
-  assert_true(@shell_parse.parse_for_policy("&& moon check") is SyntaxError(_))
-  assert_true(
-    @shell_parse.parse_for_policy("moon 'unterminated") is SyntaxError(_),
-  )
+  for
+    cmd in [
+      "moon check &&", "moon check >", "&& moon check", "moon 'unterminated",
+    ] {
+    assert_true(@shell_parse.parse_for_policy(cmd) is SyntaxError(_), msg=cmd)
+  }
 }
 
 ///|
 #cfg(not(platform="windows"))
 test "return too complex for runtime expansion and shell structures" {
-  assert_true(
-    @shell_parse.parse_for_policy("cd \"$(pwd)\" && moon check")
-    is TooComplex(_),
-  )
-  assert_true(
-    @shell_parse.parse_for_policy("TOOL=moon; $TOOL check") is TooComplex(_),
-  )
-  assert_true(
-    @shell_parse.parse_for_policy("(cd pkg && moon check)") is TooComplex(_),
-  )
-  assert_true(
-    @shell_parse.parse_for_policy("for f in file; do moon check; done")
-    is TooComplex(_),
-  )
-  assert_true(
-    @shell_parse.parse_for_policy("for f in *.mbt; do moon check; done")
-    is TooComplex(_),
-  )
-  assert_true(@shell_parse.parse_for_policy("moon test *.mbt") is TooComplex(_))
-  assert_true(
-    @shell_parse.parse_for_policy("moon check <<EOF") is TooComplex(_),
-  )
-  assert_true(@shell_parse.parse_for_policy("moon \\\ncheck") is TooComplex(_))
-  assert_true(
-    @shell_parse.parse_for_policy("eval 'moon check'") is TooComplex(_),
-  )
-  assert_true(
-    @shell_parse.parse_for_policy("exit 0; moon fmt") is TooComplex(_),
-  )
-  assert_true(
-    @shell_parse.parse_for_policy("command exit 0; moon fmt") is TooComplex(_),
-  )
-  assert_true(
-    @shell_parse.parse_for_policy("command -p exit 0; moon fmt")
-    is TooComplex(_),
-  )
+  for
+    cmd in [
+      "cd \"$(pwd)\" && moon check", "TOOL=moon; $TOOL check", "(cd pkg && moon check)",
+      "for f in file; do moon check; done", "for f in *.mbt; do moon check; done",
+      "moon test *.mbt", "moon check <<EOF", "moon \\\ncheck", "eval 'moon check'",
+      "exit 0; moon fmt", "command exit 0; moon fmt", "command -p exit 0; moon fmt",
+      "HOME=~ cmd", "PATH=/bin:~/bin cmd", "HOME=~/\"quoted\" cmd",
+    ] {
+    assert_true(@shell_parse.parse_for_policy(cmd) is TooComplex(_), msg=cmd)
+  }
   assert_true(
     @shell_parse.parse_for_policy("command -v exit; moon fmt") is Simple(_),
-  )
-  assert_true(@shell_parse.parse_for_policy("HOME=~ cmd") is TooComplex(_))
-  assert_true(
-    @shell_parse.parse_for_policy("PATH=/bin:~/bin cmd") is TooComplex(_),
-  )
-  assert_true(
-    @shell_parse.parse_for_policy("HOME=~/\"quoted\" cmd") is TooComplex(_),
   )
 }
 

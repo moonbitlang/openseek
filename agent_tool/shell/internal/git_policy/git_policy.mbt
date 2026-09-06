@@ -307,6 +307,28 @@ fn short_cluster_has(arg : String, flag : String) -> Bool {
 }
 
 ///|
+/// True when some argument in `words[start..end)` before a `--` terminator
+/// satisfies `matches`. Every option scan here stops at `--`: past it every
+/// word is an operand, and an operand cannot be an option.
+fn any_arg_before_ddash(
+  words : Array[String],
+  start : Int,
+  end : Int,
+  matches : (String) -> Bool,
+) -> Bool {
+  for index in start..<end {
+    let arg = words[index]
+    if arg == "--" {
+      return false
+    }
+    if matches(arg) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Whether a `git rebase` invocation's arguments (in `words[start..end)`)
 /// request running external commands: `-i`/`--interactive` (sequence-editor
 /// driven, `exec` todo lines), `--edit-todo` (opens the todo in an editor),
@@ -325,16 +347,7 @@ fn rebase_args_run_external_commands(
   start : Int,
   end : Int,
 ) -> Bool {
-  for index in start..<end {
-    let arg = words[index]
-    if arg == "--" {
-      return false
-    }
-    if rebase_arg_runs_external_commands(arg) {
-      return true
-    }
-  }
-  false
+  any_arg_before_ddash(words, start, end, rebase_arg_runs_external_commands)
 }
 
 ///|
@@ -363,24 +376,17 @@ fn merge_strategy_args_run_external_command(
   end : Int,
   short_s_is_strategy : Bool,
 ) -> Bool {
-  for index in start..<end {
-    let arg = words[index]
-    if arg == "--" {
-      return false
-    }
-    if (
-        arg.has_prefix("--") &&
-        (
-          long_option_selects(arg, "--strategy") ||
-          long_option_selects(arg, "--strategy-option")
-        )
-      ) ||
-      short_cluster_has(arg, "X") ||
-      (short_s_is_strategy && short_cluster_has(arg, "s")) {
-      return true
-    }
-  }
-  false
+  any_arg_before_ddash(words, start, end, arg => {
+    (
+      arg.has_prefix("--") &&
+      (
+        long_option_selects(arg, "--strategy") ||
+        long_option_selects(arg, "--strategy-option")
+      )
+    ) ||
+    short_cluster_has(arg, "X") ||
+    (short_s_is_strategy && short_cluster_has(arg, "s"))
+  })
 }
 
 ///|
@@ -392,16 +398,7 @@ fn pull_args_request_interactive_rebase(
   start : Int,
   end : Int,
 ) -> Bool {
-  for index in start..<end {
-    let arg = words[index]
-    if arg == "--" {
-      return false
-    }
-    if arg.has_prefix("--rebase=i") {
-      return true
-    }
-  }
-  false
+  any_arg_before_ddash(words, start, end, arg => arg.has_prefix("--rebase=i"))
 }
 
 ///|
@@ -430,16 +427,9 @@ fn worktree_verb_is_unsafe(
   if words[start] != "remove" {
     return false
   }
-  for index in (start + 1)..<end {
-    let arg = words[index]
-    if arg == "--" {
-      return false
-    }
-    if long_option_selects(arg, "--force") || short_cluster_has(arg, "f") {
-      return true
-    }
-  }
-  false
+  any_arg_before_ddash(words, start + 1, end, arg => {
+    long_option_selects(arg, "--force") || short_cluster_has(arg, "f")
+  })
 }
 
 ///|
@@ -552,11 +542,7 @@ fn text_subcommand_index(words : Array[String], start : Int, end : Int) -> Int? 
 
 ///|
 fn global_option_consumes_next(arg : String) -> Bool {
-  arg == "-c" ||
-  arg == "--config-env" ||
-  arg == "--exec-path" ||
-  arg == "--git-dir" ||
-  arg == "--namespace"
+  arg is ("-c" | "--config-env" | "--exec-path" | "--git-dir" | "--namespace")
 }
 
 ///|
@@ -640,16 +626,9 @@ fn submodule_verb_index(words : Array[String], start : Int, end : Int) -> Int? {
 /// permanently lose data that has no object-store copy. The scan stops at `--`,
 /// past which every word is a path.
 fn submodule_forced(words : Array[String], start : Int, end : Int) -> Bool {
-  for index in start..<end {
-    let arg = words[index]
-    if arg == "--" {
-      break
-    }
-    if arg == "--force" || short_cluster_has(arg, "f") {
-      return true
-    }
-  }
-  false
+  any_arg_before_ddash(words, start, end, arg => {
+    arg == "--force" || short_cluster_has(arg, "f")
+  })
 }
 
 ///|

@@ -92,16 +92,10 @@ async fn agent_shell_launch(
     }
   }
   let real_workspace_root = @fs.realpath(workspace_root)
-  let real_cwd = match cwd {
-    Some(cwd) => Some(@fs.realpath(cwd) catch { _ => cwd })
-    None => None
-  }
+  let real_cwd = realpath_or_same(cwd)
   // The lab is realpath'd for the static-policy checks below; the sandbox
   // capability resolves it again on its own before emitting any rule.
-  let scratch_dir = match scratch_dir {
-    Some(lab) => Some(@fs.realpath(lab) catch { _ => lab })
-    None => None
-  }
+  let scratch_dir = realpath_or_same(scratch_dir)
   let mode = source_write_mode_for_parse(parsed, real_workspace_root, real_cwd)
   // `moon new` is trusted to scaffold, but only into a genuinely new or empty
   // target. A scaffold that would land in an existing non-empty directory is
@@ -549,10 +543,7 @@ async fn direct_source_write_redirect_target(
   cwd : String?,
 ) -> String? {
   let real_workspace_root = @fs.realpath(workspace_root)
-  let real_cwd = match cwd {
-    Some(cwd) => Some(@fs.realpath(cwd) catch { _ => cwd })
-    None => None
-  }
+  let real_cwd = realpath_or_same(cwd)
   direct_source_write_redirect_target_for_root_following_existing_links(
     parsed, real_workspace_root, real_cwd,
   )
@@ -818,16 +809,38 @@ async fn existing_path_resolves_to_protected_workspace_source(
 }
 
 ///|
+/// The first path in `targets` that is protected workspace source — directly,
+/// or (when `follow_symlinks`) after resolving an existing symlink.
+async fn first_protected_workspace_source(
+  real_workspace_root : String,
+  targets : Array[String],
+  follow_symlinks? : Bool = true,
+) -> String? {
+  for target in targets {
+    if @source_write_policy.is_protected_workspace_source_path(
+        real_workspace_root, target,
+      ) {
+      return Some(target)
+    }
+    if follow_symlinks &&
+      existing_path_resolves_to_protected_workspace_source(
+        real_workspace_root, target,
+      )
+      is Some(resolved) {
+      return Some(resolved)
+    }
+  }
+  None
+}
+
+///|
 async fn direct_source_tree_operation_target(
   parsed : @shell_parse.ParseResult,
   workspace_root : String,
   cwd : String?,
 ) -> String? {
   let real_workspace_root = @fs.realpath(workspace_root)
-  let real_cwd = match cwd {
-    Some(cwd) => Some(@fs.realpath(cwd) catch { _ => cwd })
-    None => None
-  }
+  let real_cwd = realpath_or_same(cwd)
   direct_source_tree_operation_target_for_root(
     parsed, real_workspace_root, real_cwd,
   )
@@ -862,10 +875,7 @@ async fn dynamic_source_tree_operation_target(
     return None
   }
   let real_workspace_root = @fs.realpath(workspace_root)
-  let real_cwd = match cwd {
-    Some(cwd) => Some(@fs.realpath(cwd) catch { _ => cwd })
-    None => None
-  }
+  let real_cwd = realpath_or_same(cwd)
   dynamic_source_tree_operation_target_for_text(
     cmd,
     real_workspace_root,
@@ -1589,19 +1599,8 @@ fn heredoc_output_targets_in_line(line : String) -> Array[String] {
             (chars[index] == '>' || chars[index] == '|' || chars[index] == '&') {
             index += 1
           }
-          while index < chars.length() && command_text_line_space(chars[index]) {
-            index += 1
-          }
-          match read_command_word(chars, index) {
-            Some(result) => {
-              if !command_redirect_target_is_fd(result.word) {
-                targets.push(result.word)
-              }
-              index = result.next
-              continue
-            }
-            None => ()
-          }
+          index = scan_redirect_target(chars, index, targets)
+          continue
         } else if ch == '&' &&
           index + 1 < chars.length() &&
           chars[index + 1] == '>' {
@@ -1609,19 +1608,8 @@ fn heredoc_output_targets_in_line(line : String) -> Array[String] {
           if index < chars.length() && chars[index] == '>' {
             index += 1
           }
-          while index < chars.length() && command_text_line_space(chars[index]) {
-            index += 1
-          }
-          match read_command_word(chars, index) {
-            Some(result) => {
-              if !command_redirect_target_is_fd(result.word) {
-                targets.push(result.word)
-              }
-              index = result.next
-              continue
-            }
-            None => ()
-          }
+          index = scan_redirect_target(chars, index, targets)
+          continue
         }
     }
     index += 1
@@ -1749,21 +1737,12 @@ fn command_line_after_first_post_heredoc_pipe(line : String) -> String? {
           ch == '|' &&
           !(index > 0 && chars[index - 1] == '|') &&
           !(index + 1 < chars.length() && chars[index + 1] == '|') {
-          return Some(chars_to_string(chars, index + 1))
+          return Some(String::from_array(chars[index + 1:]))
         }
     }
     index += 1
   }
   None
-}
-
-///|
-fn chars_to_string(chars : Array[Char], start : Int) -> String {
-  let output = StringBuilder()
-  for index in start..<chars.length() {
-    output.write_char(chars[index])
-  }
-  output.to_string()
 }
 
 ///|
@@ -1789,6 +1768,30 @@ fn command_text_tee_targets(
     targets.push(arg)
   }
   targets
+}
+
+///|
+/// Read the word after a redirection operator at `index` (skipping blanks),
+/// push it as an output target unless it names a file descriptor, and return
+/// the scan index to continue from.
+fn scan_redirect_target(
+  chars : Array[Char],
+  index : Int,
+  targets : Array[String],
+) -> Int {
+  let mut index = index
+  while index < chars.length() && command_text_line_space(chars[index]) {
+    index += 1
+  }
+  match read_command_word(chars, index) {
+    Some(result) => {
+      if !command_redirect_target_is_fd(result.word) {
+        targets.push(result.word)
+      }
+      result.next
+    }
+    None => index + 1
+  }
 }
 
 ///|
@@ -1843,26 +1846,12 @@ fn read_command_word(
 
 ///|
 fn command_word_stop_char(ch : Char) -> Bool {
-  ch == ';' ||
-  ch == '&' ||
-  ch == '|' ||
-  ch == '<' ||
-  ch == '>' ||
-  ch == '(' ||
-  ch == ')'
+  ch is (';' | '&' | '|' | '<' | '>' | '(' | ')')
 }
 
 ///|
 fn command_redirect_target_is_fd(target : String) -> Bool {
-  if target == "-" || target == "" {
-    return true
-  }
-  for ch in target {
-    if !(ch is ('0'..='9')) {
-      return false
-    }
-  }
-  true
+  target == "-" || target.all(ch => ch is ('0'..='9'))
 }
 
 ///|
@@ -2167,14 +2156,7 @@ fn read_quoted_heredoc_marker(
 ///|
 fn heredoc_delimiter_char(ch : Char) -> Bool {
   !command_text_line_space(ch) &&
-  ch != '\r' &&
-  ch != ';' &&
-  ch != '&' &&
-  ch != '|' &&
-  ch != '<' &&
-  ch != '>' &&
-  ch != '(' &&
-  ch != ')'
+  !(ch is ('\r' | ';' | '&' | '|' | '<' | '>' | '(' | ')'))
 }
 
 ///|
@@ -2320,25 +2302,8 @@ fn push_command_text_word(
 
 ///|
 fn shell_token_char(ch : Char) -> Bool {
-  ch is ('a'..='z') ||
-  ch is ('A'..='Z') ||
-  ch is ('0'..='9') ||
-  ch == '_' ||
-  ch == '-' ||
-  ch == '.' ||
-  ch == '/' ||
-  ch == '=' ||
-  ch == '*' ||
-  ch == '?' ||
-  ch == '[' ||
-  ch == ']' ||
-  ch == '!' ||
-  ch == '^' ||
-  ch == ':' ||
-  ch == ',' ||
-  ch == '{' ||
-  ch == '}' ||
-  ch == '+'
+  ch is ('a'..='z' | 'A'..='Z' | '0'..='9') ||
+  "_-./=*?[]!^:,{}+".contains_char(ch)
 }
 
 ///|
@@ -2541,21 +2506,10 @@ async fn powershell_write_target(
   guard parse_powershell_path_operands(argv, arg_start) is Some(operands) else {
     return git_workspace_scope_target(real_workspace_root, cwd)
   }
-  for target in powershell_new_item_targets(operands, cwd) {
-    if @source_write_policy.is_protected_workspace_source_path(
-        real_workspace_root, target,
-      ) {
-      return Some(target)
-    }
-    match
-      existing_path_resolves_to_protected_workspace_source(
-        real_workspace_root, target,
-      ) {
-      Some(resolved) => return Some(resolved)
-      None => ()
-    }
-  }
-  None
+  first_protected_workspace_source(
+    real_workspace_root,
+    powershell_new_item_targets(operands, cwd),
+  )
 }
 
 ///|
@@ -2843,11 +2797,7 @@ fn record_created_dirs_for_command(
 ///|
 fn source_writing_shell_runtime(name : String) -> Bool {
   let name = source_writing_runtime_name(name)
-  name == "sh" ||
-  name == "bash" ||
-  name == "zsh" ||
-  name == "dash" ||
-  name == "ksh"
+  name is ("sh" | "bash" | "zsh" | "dash" | "ksh")
 }
 
 ///|
@@ -2950,13 +2900,7 @@ fn shell_c_command_text(argv : Array[String], arg_start : Int) -> String? {
 
 ///|
 fn shell_option_consumes_next(arg : String) -> Bool {
-  arg == "-o" ||
-  arg == "+o" ||
-  arg == "-O" ||
-  arg == "+O" ||
-  arg == "--init-file" ||
-  arg == "--rcfile" ||
-  arg == "--emulate"
+  arg is ("-o" | "+o" | "-O" | "+O" | "--init-file" | "--rcfile" | "--emulate")
 }
 
 ///|
@@ -3431,12 +3375,8 @@ fn find_source_filter_before(
 
 ///|
 fn find_filter_option_takes_pattern(arg : String) -> Bool {
-  arg == "-name" ||
-  arg == "-iname" ||
-  arg == "-path" ||
-  arg == "-ipath" ||
-  arg == "-wholename" ||
-  arg == "-iwholename"
+  arg
+  is ("-name" | "-iname" | "-path" | "-ipath" | "-wholename" | "-iwholename")
 }
 
 ///|
@@ -3571,12 +3511,6 @@ fn sed_targets_only_find_results(
     }
     if arg == "{}" {
       placeholder_seen = true
-    } else if find_pattern_mentions_protected_source(
-        arg,
-        case_insensitive=false,
-      ) ||
-      @source_write_policy.is_protected_source_path(arg) {
-      return false
     } else {
       return false
     }
@@ -4074,14 +4008,7 @@ fn script_quoted_literals(text : String) -> Array[String] {
 
 ///|
 fn command_tail_text(argv : Array[String], start : Int) -> String {
-  let text = StringBuilder()
-  for index in start..<argv.length() {
-    if index > start {
-      text.write_char(' ')
-    }
-    text.write_string(argv[index])
-  }
-  text.to_string()
+  argv[start:].join(" ")
 }
 
 ///|
@@ -4420,12 +4347,7 @@ fn looks_like_non_source_file_path(path : String) -> Bool {
 
 ///|
 fn looks_like_file_extension(ext : String) -> Bool {
-  for ch in ext {
-    if !(ch is ('a'..='z') || ch is ('A'..='Z')) {
-      return false
-    }
-  }
-  ext.length() > 0
+  ext != "" && ext.all(ch => ch is ('a'..='z' | 'A'..='Z'))
 }
 
 ///|
@@ -4963,12 +4885,7 @@ fn install_short_option_cluster_has(arg : String, needle : Char) -> Bool {
   guard arg.strip_prefix("-") is Some(options) && !options.has_prefix("-") else {
     return false
   }
-  for ch in options {
-    if ch == needle {
-      return true
-    }
-  }
-  false
+  options.contains_char(needle)
 }
 
 ///|
@@ -5010,24 +4927,14 @@ async fn source_tree_touch_target(
     is Some((operands, follow_symlinks)) else {
     return None
   }
-  for operand in operands {
-    let target = resolve_source_write_redirect_target(cwd, operand)
-    if @source_write_policy.is_protected_workspace_source_path(
-        real_workspace_root, target,
-      ) {
-      return Some(target)
-    }
-    if follow_symlinks {
-      match
-        existing_path_resolves_to_protected_workspace_source(
-          real_workspace_root, target,
-        ) {
-        Some(resolved) => return Some(resolved)
-        None => ()
-      }
-    }
-  }
-  None
+  let targets = [
+    for path in operands => resolve_source_write_redirect_target(cwd, path)
+  ]
+  first_protected_workspace_source(
+    real_workspace_root,
+    targets,
+    follow_symlinks~,
+  )
 }
 
 ///|
@@ -5076,11 +4983,7 @@ fn parse_touch_operands(
 
 ///|
 fn touch_option_consumes_next(arg : String) -> Bool {
-  arg == "-d" ||
-  arg == "--date" ||
-  arg == "-r" ||
-  arg == "--reference" ||
-  arg == "-t"
+  arg is ("-d" | "--date" | "-r" | "--reference" | "-t")
 }
 
 ///|
@@ -5126,22 +5029,10 @@ async fn source_tree_tee_target(
   guard parse_tee_operands(argv, arg_start) is Some(operands) else {
     return None
   }
-  for operand in operands {
-    let target = resolve_source_write_redirect_target(cwd, operand)
-    if @source_write_policy.is_protected_workspace_source_path(
-        real_workspace_root, target,
-      ) {
-      return Some(target)
-    }
-    match
-      existing_path_resolves_to_protected_workspace_source(
-        real_workspace_root, target,
-      ) {
-      Some(resolved) => return Some(resolved)
-      None => ()
-    }
-  }
-  None
+  let targets = [
+    for path in operands => resolve_source_write_redirect_target(cwd, path)
+  ]
+  first_protected_workspace_source(real_workspace_root, targets)
 }
 
 ///|
@@ -5350,6 +5241,16 @@ fn known_absolute_cd_target(target : String) -> CwdCommandEffect {
     UnknownCwd
   } else {
     KnownCwd(target_path.normalize().to_string())
+  }
+}
+
+///|
+/// `path` with existing symlinks resolved, keeping the given spelling when it
+/// cannot be resolved (a nonexistent path, or a realpath failure).
+async fn realpath_or_same(path : String?) -> String? {
+  match path {
+    Some(path) => Some(@fs.realpath(path) catch { _ => path })
+    None => None
   }
 }
 
