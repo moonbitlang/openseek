@@ -458,34 +458,26 @@ fn compute_range_alignments(
       last_original_in_hunk = original_line_number_exclusive
       last_modified_in_hunk = modified_line_number_exclusive
     }
-    if inner_hunk_alignment {
-      match alignment.diff {
-        Some(change) =>
-          match change.inner_changes {
-            Some(inner_changes) =>
-              for inner in inner_changes {
-                if inner.original.start_column > 1 &&
-                  inner.modified.start_column > 1 {
-                  emit_alignment(
-                    inner.original.start_line_number,
-                    inner.modified.start_line_number,
-                    false,
-                  )
-                }
-                match
-                  original_geometry.max_column(inner.original.end_line_number) {
-                  Some(max_column) if inner.original.end_column < max_column =>
-                    emit_alignment(
-                      inner.original.end_line_number,
-                      inner.modified.end_line_number,
-                      false,
-                    )
-                  _ => ()
-                }
-              }
-            None => ()
-          }
-        None => ()
+    if inner_hunk_alignment &&
+      alignment.diff is Some(change) &&
+      change.inner_changes is Some(inner_changes) {
+      for inner in inner_changes {
+        if inner.original.start_column > 1 && inner.modified.start_column > 1 {
+          emit_alignment(
+            inner.original.start_line_number,
+            inner.modified.start_line_number,
+            false,
+          )
+        }
+        if original_geometry.max_column(inner.original.end_line_number)
+          is Some(max_column) &&
+          inner.original.end_column < max_column {
+          emit_alignment(
+            inner.original.end_line_number,
+            inner.modified.end_line_number,
+            false,
+          )
+        }
       }
     }
     emit_alignment(

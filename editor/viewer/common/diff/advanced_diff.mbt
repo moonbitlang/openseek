@@ -120,19 +120,6 @@ priv struct ReadabilitySequence {
 }
 
 ///|
-fn reverse_sequence_diffs(
-  reversed : Array[SequenceDiff],
-) -> Array[SequenceDiff] {
-  let result : Array[SequenceDiff] = []
-  let mut index = reversed.length() - 1
-  while index >= 0 {
-    result.push(reversed[index])
-    index -= 1
-  }
-  result
-}
-
-///|
 // Port of DynamicProgrammingDiffing.compute. In particular, the direction
 // order, diagonal tie preference, and consecutive-diagonal bonus match the
 // pinned source.
@@ -223,7 +210,7 @@ fn weighted_sequence_diffs(
     }
   }
   report_alignment(-1, -1)
-  reverse_sequence_diffs(reversed)
+  reversed.rev()
 }
 
 ///|
@@ -434,24 +421,16 @@ fn shift_sequence_diffs(
       None
     }
     let sequence1_valid : DiffOffsetRange = {
-      start: match previous {
-        Some(value) => value.original.end_exclusive + 1
-        None => 0
-      },
-      end_exclusive: match next {
-        Some(value) => value.original.start - 1
-        None => sequence1.values.length()
-      },
+      start: previous.map_or(0, value => value.original.end_exclusive + 1),
+      end_exclusive: next.map_or(sequence1.values.length(), value => {
+        value.original.start - 1
+      }),
     }
     let sequence2_valid : DiffOffsetRange = {
-      start: match previous {
-        Some(value) => value.modified.end_exclusive + 1
-        None => 0
-      },
-      end_exclusive: match next {
-        Some(value) => value.modified.start - 1
-        None => sequence2.values.length()
-      },
+      start: previous.map_or(0, value => value.modified.end_exclusive + 1),
+      end_exclusive: next.map_or(sequence2.values.length(), value => {
+        value.modified.start - 1
+      }),
     }
     let current = result[index]
     if current.original.is_empty() {
@@ -485,19 +464,51 @@ fn optimize_sequence_diffs(
 }
 
 ///|
+// One left-to-right pass that folds each diff into the one accumulated before
+// it whenever `should_join` accepts the pair.
+fn join_adjacent_sequence_diffs(
+  sequence_diffs : Array[SequenceDiff],
+  should_join : (SequenceDiff, SequenceDiff) -> Bool,
+) -> Array[SequenceDiff] {
+  let result : Array[SequenceDiff] = []
+  for diff in sequence_diffs {
+    let last_index = result.length() - 1
+    if last_index >= 0 && should_join(result[last_index], diff) {
+      result[last_index] = result[last_index].join(diff)
+    } else {
+      result.push(diff)
+    }
+  }
+  result
+}
+
+///|
+// Repeat that pass until it stops merging, at most eleven times. Every join
+// drops one diff, so a pass that returns as many diffs as it received made no
+// join and the sequence is stable.
+fn join_adjacent_sequence_diffs_until_stable(
+  sequence_diffs : Array[SequenceDiff],
+  should_join : (SequenceDiff, SequenceDiff) -> Bool,
+) -> Array[SequenceDiff] {
+  let mut diffs = sequence_diffs
+  for _ in 0..<11 {
+    let joined = join_adjacent_sequence_diffs(diffs, should_join)
+    let stable = joined.length() == diffs.length()
+    diffs = joined
+    if stable {
+      break
+    }
+  }
+  diffs
+}
+
+///|
 fn remove_short_matches(
   original_values : Array[Int],
   modified_values : Array[Int],
   sequence_diffs : Array[SequenceDiff],
 ) -> Array[SequenceDiff] {
-  let result : Array[SequenceDiff] = []
-  for diff in sequence_diffs {
-    if result.is_empty() {
-      result.push(diff)
-      continue
-    }
-    let last_index = result.length() - 1
-    let last = result[last_index]
+  join_adjacent_sequence_diffs(sequence_diffs, (last, diff) => {
     let original_gap : DiffOffsetRange = {
       start: last.original.end_exclusive,
       end_exclusive: diff.original.start,
@@ -506,14 +517,9 @@ fn remove_short_matches(
       start: last.modified.end_exclusive,
       end_exclusive: diff.modified.start,
     }
-    if scalar_range_utf16_length(original_values, original_gap) <= 2 ||
-      scalar_range_utf16_length(modified_values, modified_gap) <= 2 {
-      result[last_index] = last.join(diff)
-    } else {
-      result.push(diff)
-    }
-  }
-  result
+    scalar_range_utf16_length(original_values, original_gap) <= 2 ||
+    scalar_range_utf16_length(modified_values, modified_gap) <= 2
+  })
 }
 
 ///|
@@ -742,31 +748,14 @@ fn remove_very_short_matching_text_between_long_diffs(
   modified_values : Array[Int],
   sequence_diffs : Array[SequenceDiff],
 ) -> Array[SequenceDiff] {
-  let mut diffs = sequence_diffs
-  if diffs.is_empty() {
-    return diffs
-  }
-  let mut pass = 0
-  let mut repeat = true
-  while repeat && pass < 11 {
-    repeat = false
-    let joined : Array[SequenceDiff] = [diffs[0]]
-    for index in 1..<diffs.length() {
-      let current = diffs[index]
-      let last_index = joined.length() - 1
-      let previous = joined[last_index]
-      if should_join_long_scalar_diffs(
-          original_values, modified_values, previous, current,
-        ) {
-        joined[last_index] = previous.join(current)
-        repeat = true
-      } else {
-        joined.push(current)
-      }
-    }
-    diffs = joined
-    pass += 1
-  }
+  let diffs = join_adjacent_sequence_diffs_until_stable(sequence_diffs, (
+    previous,
+    current,
+  ) => {
+    should_join_long_scalar_diffs(
+      original_values, modified_values, previous, current,
+    )
+  })
   mark_short_trim_as_changed(original_values, modified_values, diffs)
 }
 
@@ -774,22 +763,10 @@ fn remove_very_short_matching_text_between_long_diffs(
 fn merge_touching_sequence_diffs(
   sequence_diffs : Array[SequenceDiff],
 ) -> Array[SequenceDiff] {
-  let result : Array[SequenceDiff] = []
-  for diff in sequence_diffs {
-    if result.is_empty() {
-      result.push(diff)
-      continue
-    }
-    let last_index = result.length() - 1
-    let last = result[last_index]
-    if last.original.end_exclusive >= diff.original.start ||
-      last.modified.end_exclusive >= diff.modified.start {
-      result[last_index] = last.join(diff)
-    } else {
-      result.push(diff)
-    }
-  }
-  result
+  join_adjacent_sequence_diffs(sequence_diffs, (last, diff) => {
+    last.original.end_exclusive >= diff.original.start ||
+    last.modified.end_exclusive >= diff.modified.start
+  })
 }
 
 ///|
@@ -898,10 +875,13 @@ fn include_strict_whitespace_line_diffs(
     return sequence_diffs
   }
   let result : Array[SequenceDiff] = []
-  let mut original_start = 0
-  let mut modified_start = 0
-  for diff in sequence_diffs {
-    let equal_count = diff.original.start - original_start
+  // Emit a one-line diff for every line of an equal run whose two sides still
+  // differ once whitespace is no longer ignored.
+  fn push_strict_whitespace_diffs(
+    original_start : Int,
+    modified_start : Int,
+    equal_count : Int,
+  ) -> Unit {
     for offset in 0..<equal_count {
       let original_offset = original_start + offset
       let modified_offset = modified_start + offset
@@ -918,27 +898,25 @@ fn include_strict_whitespace_line_diffs(
         })
       }
     }
+  }
+
+  let mut original_start = 0
+  let mut modified_start = 0
+  for diff in sequence_diffs {
+    push_strict_whitespace_diffs(
+      original_start,
+      modified_start,
+      diff.original.start - original_start,
+    )
     result.push(diff)
     original_start = diff.original.end_exclusive
     modified_start = diff.modified.end_exclusive
   }
-  let equal_count = original_lines.length() - original_start
-  for offset in 0..<equal_count {
-    let original_offset = original_start + offset
-    let modified_offset = modified_start + offset
-    if original_lines[original_offset] != modified_lines[modified_offset] {
-      result.push({
-        original: {
-          start: original_offset,
-          end_exclusive: original_offset + 1,
-        },
-        modified: {
-          start: modified_offset,
-          end_exclusive: modified_offset + 1,
-        },
-      })
-    }
-  }
+  push_strict_whitespace_diffs(
+    original_start,
+    modified_start,
+    original_lines.length() - original_start,
+  )
   merge_touching_sequence_diffs(result)
 }
 
@@ -966,40 +944,19 @@ fn remove_very_short_matching_lines_between_diffs(
   original_lines : Array[String],
   sequence_diffs : Array[SequenceDiff],
 ) -> Array[SequenceDiff] {
-  let mut diffs = sequence_diffs
-  if diffs.is_empty() {
-    return diffs
-  }
-  let mut pass = 0
-  let mut repeat = true
-  while repeat && pass < 11 {
-    repeat = false
-    let result : Array[SequenceDiff] = [diffs[0]]
-    for index in 1..<diffs.length() {
-      let current = diffs[index]
-      let last_index = result.length() - 1
-      let previous = result[last_index]
-      let short_unchanged = line_non_whitespace_length(
-          original_lines,
-          previous.original.end_exclusive,
-          current.original.start,
-        ) <=
-        4
-      let substantial_side = previous.original.length() +
-        previous.modified.length() >
-        5 ||
-        current.original.length() + current.modified.length() > 5
-      if short_unchanged && substantial_side {
-        result[last_index] = previous.join(current)
-        repeat = true
-      } else {
-        result.push(current)
-      }
-    }
-    diffs = result
-    pass += 1
-  }
-  diffs
+  join_adjacent_sequence_diffs_until_stable(sequence_diffs, (previous, current) => {
+    let short_unchanged = line_non_whitespace_length(
+        original_lines,
+        previous.original.end_exclusive,
+        current.original.start,
+      ) <=
+      4
+    let substantial_side = previous.original.length() +
+      previous.modified.length() >
+      5 ||
+      current.original.length() + current.modified.length() > 5
+    short_unchanged && substantial_side
+  })
 }
 
 ///|
@@ -1139,7 +1096,7 @@ fn merge_sequence_diff_sets(
   first : Array[SequenceDiff],
   second : Array[SequenceDiff],
 ) -> Array[SequenceDiff] {
-  let result : Array[SequenceDiff] = []
+  let merged : Array[SequenceDiff] = []
   let mut first_index = 0
   let mut second_index = 0
   while first_index < first.length() || second_index < second.length() {
@@ -1156,15 +1113,11 @@ fn merge_sequence_diff_sets(
       second_index += 1
       value
     }
-    if !result.is_empty() &&
-      result[result.length() - 1].original.end_exclusive >= next.original.start {
-      let last_index = result.length() - 1
-      result[last_index] = result[last_index].join(next)
-    } else {
-      result.push(next)
-    }
+    merged.push(next)
   }
-  result
+  join_adjacent_sequence_diffs(merged, (last, next) => {
+    last.original.end_exclusive >= next.original.start
+  })
 }
 
 ///|
@@ -1255,40 +1208,23 @@ fn extend_diffs_to_parent_if_appropriate(
     if equal_mapping.original.is_empty() {
       continue
     }
-    let (next_index, next_original, next_modified) = scan_parent_for_word_extension(
-      sequence1,
-      sequence2,
-      equal_mappings,
-      index,
-      equal_mapping.original.start,
-      equal_mapping.modified.start,
-      equal_mapping,
-      last_original,
-      last_modified,
-      find_parent,
-      force,
-      additional,
-    )
-    index = next_index
-    last_original = next_original
-    last_modified = next_modified
-    let (next_index, next_original, next_modified) = scan_parent_for_word_extension(
-      sequence1,
-      sequence2,
-      equal_mappings,
-      index,
-      equal_mapping.original.end_exclusive - 1,
-      equal_mapping.modified.end_exclusive - 1,
-      equal_mapping,
-      last_original,
-      last_modified,
-      find_parent,
-      force,
-      additional,
-    )
-    index = next_index
-    last_original = next_original
-    last_modified = next_modified
+    let anchors = [
+      (equal_mapping.original.start, equal_mapping.modified.start),
+      (
+        equal_mapping.original.end_exclusive - 1,
+        equal_mapping.modified.end_exclusive - 1,
+      ),
+    ]
+    for anchor in anchors {
+      let (pair_original, pair_modified) = anchor
+      let (next_index, next_original, next_modified) = scan_parent_for_word_extension(
+        sequence1, sequence2, equal_mappings, index, pair_original, pair_modified,
+        equal_mapping, last_original, last_modified, find_parent, force, additional,
+      )
+      index = next_index
+      last_original = next_original
+      last_modified = next_modified
+    }
   }
   merge_sequence_diff_sets(sequence_diffs, additional)
 }

@@ -32,39 +32,35 @@ fn diff_overview_viewport_geometry(
 }
 
 ///|
-fn original_diff_overview_ruler_entries(
+fn diff_overview_ruler_entries(
   diff_state : DiffState,
+  color : String,
+  range_of : (@diff.DetailedLineRangeMapping) -> @base_common.LineRange,
 ) -> Array[@code_widget.CodeEditorOverviewRulerEntry] {
   let entries : Array[@code_widget.CodeEditorOverviewRulerEntry] = []
   for change_index, mapping in diff_state.mappings {
-    let range = mapping.line_range_mapping.original
+    let range = range_of(mapping.line_range_mapping)
     if !range.is_empty() {
-      entries.push({
-        id: change_index,
-        range,
-        color: diff_overview_removed_color,
-        lane: Full,
-      })
+      entries.push({ id: change_index, range, color, lane: Full, })
     }
   }
   entries
 }
 
 ///|
+fn original_diff_overview_ruler_entries(
+  diff_state : DiffState,
+) -> Array[@code_widget.CodeEditorOverviewRulerEntry] {
+  diff_overview_ruler_entries(diff_state, diff_overview_removed_color, mapping => {
+    mapping.original
+  })
+}
+
+///|
 fn modified_diff_overview_ruler_entries(
   diff_state : DiffState,
 ) -> Array[@code_widget.CodeEditorOverviewRulerEntry] {
-  let entries : Array[@code_widget.CodeEditorOverviewRulerEntry] = []
-  for change_index, mapping in diff_state.mappings {
-    let range = mapping.line_range_mapping.modified
-    if !range.is_empty() {
-      entries.push({
-        id: change_index,
-        range,
-        color: diff_overview_inserted_color,
-        lane: Full,
-      })
-    }
-  }
-  entries
+  diff_overview_ruler_entries(diff_state, diff_overview_inserted_color, mapping => {
+    mapping.modified
+  })
 }
