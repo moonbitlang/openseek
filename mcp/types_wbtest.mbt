@@ -1,6 +1,22 @@
 // Pure decoder and rendering tests — no transport.
 
 ///|
+/// Assert that `decode` raises `Protocol`. The three tests below differ only in
+/// the call; the chain that turns the raise into a comparable string — and the
+/// `_ => "other"` arm that keeps an unexpected error from reading as a pass —
+/// was copied into each of them.
+fn assert_protocol(decode : () -> Unit raise) -> Unit raise {
+  let outcome = try {
+    decode()
+    "no error"
+  } catch {
+    Protocol(_) => "protocol"
+    _ => "other"
+  }
+  assert_eq(outcome, "protocol")
+}
+
+///|
 test "decode_tool reads all fields" {
   let tool = decode_tool({
     "name": "search",
@@ -22,14 +38,7 @@ test "decode_tool defaults a missing description and schema" {
 
 ///|
 test "decode_tool raises Protocol when name is missing" {
-  let outcome = try {
-    decode_tool({ "description": "no name" }) |> ignore
-    "no error"
-  } catch {
-    Protocol(_) => "protocol"
-    _ => "other"
-  }
-  assert_eq(outcome, "protocol")
+  assert_protocol(() => decode_tool({ "description": "no name" }) |> ignore)
 }
 
 ///|
@@ -66,14 +75,7 @@ test "decode_content_block reads each block kind" {
 
 ///|
 test "decode_content_block raises Protocol without a type" {
-  let outcome = try {
-    decode_content_block({ "text": "orphan" }) |> ignore
-    "no error"
-  } catch {
-    Protocol(_) => "protocol"
-    _ => "other"
-  }
-  assert_eq(outcome, "protocol")
+  assert_protocol(() => decode_content_block({ "text": "orphan" }) |> ignore)
 }
 
 ///|
@@ -104,14 +106,9 @@ test "decode_initialize_result reads identity and defaults" {
 
 ///|
 test "decode_initialize_result raises without a protocol version" {
-  let outcome = try {
+  assert_protocol(() => {
     decode_initialize_result({ "serverInfo": { "name": "srv" } }) |> ignore
-    "no error"
-  } catch {
-    Protocol(_) => "protocol"
-    _ => "other"
-  }
-  assert_eq(outcome, "protocol")
+  })
 }
 
 ///|

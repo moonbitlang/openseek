@@ -72,6 +72,16 @@ fn[X] spawn_client(group : @async.TaskGroup[X], client : Client) -> Unit {
 }
 
 ///|
+/// The client every test below starts from: a queue transport plus the two
+/// standing tasks (reader and writer) the client requires, spawned on `group`.
+fn[X] new_client(group : @async.TaskGroup[X]) -> (FakeTransport, Client) {
+  let transport = new_transport()
+  let client = Client::Client(transport)
+  spawn_client(group, client)
+  (transport, client)
+}
+
+///|
 /// The raw id of a request, or `Null` if it somehow has none.
 fn id_of(request : Json) -> Json {
   match request {
@@ -121,9 +131,7 @@ async fn request_outcome(client : Client, method_ : String) -> String {
 ///|
 async test "concurrent requests each get their own reply even when answered out of order" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    spawn_client(group, client)
+    let (transport, client) = new_client(group)
     // Fake peer: take both requests, then answer them in reverse arrival order.
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
       let first_seen = transport.outbound.get()
@@ -147,9 +155,7 @@ async test "concurrent requests each get their own reply even when answered out 
 /// the answered request's reply must come back promptly (no read-lock starving).
 async test "a delivered reply never waits behind other outstanding requests" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    spawn_client(group, client)
+    let (transport, client) = new_client(group)
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
       client.request(method_="first", params=Json::null()) |> ignore
     })
@@ -174,9 +180,7 @@ async test "a delivered reply never waits behind other outstanding requests" {
 ///|
 async test "a request raises Failed on a JSON-RPC error reply" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    spawn_client(group, client)
+    let (transport, client) = new_client(group)
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
       transport.inbound.put(error_for(transport.outbound.get(), -32601, "nope"))
     })
@@ -190,9 +194,7 @@ async test "a request raises Failed on a JSON-RPC error reply" {
 /// must win so a failure is never masked as success.
 async test "a reply with both result and error surfaces the error" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    spawn_client(group, client)
+    let (transport, client) = new_client(group)
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
       let request = transport.outbound.get()
       transport.inbound.put({
@@ -211,9 +213,7 @@ async test "a reply with both result and error surfaces the error" {
 /// A reply carrying `error: null` next to a result is a success, not a failure.
 async test "a reply with a null error alongside a result succeeds" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    spawn_client(group, client)
+    let (transport, client) = new_client(group)
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
       let request = transport.outbound.get()
       transport.inbound.put({
@@ -233,9 +233,7 @@ async test "a reply with a null error alongside a result succeeds" {
 /// correlated requests.
 async test "a batched array reply routes each element" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    spawn_client(group, client)
+    let (transport, client) = new_client(group)
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
       let first = transport.outbound.get()
       let second = transport.outbound.get()
@@ -279,9 +277,7 @@ async test "peer notifications reach the installed handler" {
 /// usable for the real request.
 async test "a reply for an unknown id is dropped and the client stays usable" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    spawn_client(group, client)
+    let (transport, client) = new_client(group)
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
       let request = transport.outbound.get()
       transport.inbound.put({
@@ -301,9 +297,7 @@ async test "a reply for an unknown id is dropped and the client stays usable" {
 /// no other method).
 async test "a peer ping is answered with an empty success" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    spawn_client(group, client)
+    let (transport, _) = new_client(group)
     transport.inbound.put({ "jsonrpc": "2.0", "id": 42, "method": "ping" })
     let reply = transport.outbound.get()
     assert_true(reply is { "id": Number(42, ..), "result": _, .. })
@@ -314,9 +308,7 @@ async test "a peer ping is answered with an empty success" {
 ///|
 async test "a peer method has no owner until a request handler is installed" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    spawn_client(group, client)
+    let (transport, _) = new_client(group)
     transport.inbound.put({
       "jsonrpc": "2.0",
       "id": 41,
@@ -431,9 +423,7 @@ async test "a failing peer request handler receives internal error and keeps rou
 ///|
 async test "a request fails with Closed when the transport ends without a reply" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    spawn_client(group, client)
+    let (transport, client) = new_client(group)
     // The peer consumes the request but ends the stream without answering.
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
       transport.outbound.get() |> ignore
@@ -510,9 +500,7 @@ async test "a request after close raises Closed and notify is a no-op" {
 ///|
 async test "notify enqueues an id-less message the writer sends" {
   @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    spawn_client(group, client)
+    let (transport, client) = new_client(group)
     client.notify(
       method_="notifications/initialized",
       params=Json::empty_object(),

@@ -314,21 +314,18 @@ async fn subtask_launch_many(
   let mut any_error = false
   let briefs : Array[String] = []
   for index, spec in specs {
-    let (status, errored) = match results.get(index) {
-      Some(outcome) =>
-        (outcome.status, outcome.action is Respond(output) && output.is_error)
-      None => ("no result", true)
+    let (status, errored, body) = match results.get(index) {
+      Some({ action: Respond(output), status, }) =>
+        (status, output.is_error, "\{output.content}\n\n")
+      Some({ status, .. }) => (status, false, "(no result)\n\n")
+      None => ("no result", true, "(no result)\n\n")
     }
     if errored {
       any_error = true
     }
     briefs.push(spec.name)
     summary <+ "- \{spec.name}: \{status}\n"
-    detail <+ "## \{spec.name}\n"
-    match results.get(index) {
-      Some({ action: Respond(output), .. }) => detail <+ "\{output.content}\n\n"
-      _ => detail <+ "(no result)\n\n"
-    }
+    detail <+ "## \{spec.name}\n\{body}"
   }
   let out = StringBuilder()
   out <+

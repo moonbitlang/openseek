@@ -493,11 +493,7 @@ fn SseLineReader::SseLineReader(client : @http.Client) -> SseLineReader {
 async fn SseLineReader::next_line(self : SseLineReader) -> String? {
   // Drop consumed bytes so memory tracks the current line, not the stream.
   if self.start >= SseCompactAt {
-    let remaining = self.buf.length() - self.start
-    for j in 0..<remaining {
-      self.buf[j] = self.buf[self.start + j]
-    }
-    self.buf.truncate(remaining)
+    self.buf.drain(0, self.start) |> ignore
     self.scan -= self.start
     self.start = 0
   }
@@ -532,10 +528,7 @@ async fn SseLineReader::next_line(self : SseLineReader) -> String? {
     }
     match self.client.read_some() {
       None => self.eof = true
-      Some(chunk) =>
-        for byte in chunk {
-          self.buf.push(byte)
-        }
+      Some(chunk) => self.buf.push_iter(chunk.iter())
     }
   }
 }

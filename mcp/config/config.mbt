@@ -47,11 +47,9 @@ pub fn decode(json : Json) -> Array[McpServer] raise {
   guard json is { "mcpServers": Object(servers), .. } else {
     raise Invalid("configuration is missing an `mcpServers` object")
   }
-  let out = []
-  for name, entry in servers {
-    out.push(decode_server(name, entry))
-  }
-  out
+  [
+    for name, entry in servers => decode_server(name, entry)
+  ]
 }
 
 ///|
