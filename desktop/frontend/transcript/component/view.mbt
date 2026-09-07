@@ -919,6 +919,10 @@ fn assistant_message_view(
       }
     }
     children.push(@html.div(class="assistant-message-actions", actions))
+    // Throwaway visual comparison: rendered only for a confirmed final answer.
+    children.push(
+      @html.div(class="prototype-exchange-end", [@html.text("Completed")]),
+    )
   }
   let class = if is_danger {
     "msg transcript-error"

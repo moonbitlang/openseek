@@ -90,7 +90,7 @@ globalThis.__desktopReplay = {
       if (event.method === 'agent.event') openApproval = {...event.params.event,session:'replay-a',run_id:'run-a'};
       if (event.method === 'agent.finished') {
         openRun = null; openApproval = null;
-        const result = {sequence:2,item:{kind:'assistant',payload:{content:event.params.answer}}};
+        const result = {sequence:2,item:{kind:'terminal',payload:{kind:event.params.status === 'finished' ? 'finished' : 'failed',message:event.params.answer}}};
         outcomes.set('replay-a',result);
         socket.receive({jsonrpc:'2.0',method:'session.event',params:{session:'replay-a',session_root:'/workspace/.openseek',sequence:2,event:result}});
       }

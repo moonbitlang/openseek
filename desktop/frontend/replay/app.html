@@ -5,6 +5,8 @@
 <title>Desktop replay application</title>
 <link rel="stylesheet" href="../../dev/viewer.css">
 <link rel="stylesheet" href="../../app.css">
+<link rel="stylesheet" href="./variants.css">
+<script>document.documentElement.dataset.variant = new URLSearchParams(location.search).get("variant") || "A";</script>
 <div id="app"></div>
 <script type="module">
 import './transport.js';

@@ -2,17 +2,29 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Desktop · background approval replay</title>
+<title>Desktop · message layout prototypes</title>
 <style>
 html,body{height:100%;margin:0}body{display:flex;flex-direction:column;background:#f8f9fb;color:#202632;font:14px/1.45 system-ui}
 #replay{flex:none;max-height:32vh;overflow:auto;padding:12px 24px;border-bottom:1px solid #ccd1da}
 #replay p{margin:6px 0}#replay button{font:inherit;background:white;border:1px solid #a6adba;padding:5px 12px;margin:4px 8px 4px 0;border-radius:6px;cursor:pointer}
 #replay button:disabled{opacity:.4;cursor:default}#replay pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}#replay summary{cursor:pointer}
 #application{flex:1;min-height:0;width:100%;border:0;background:white}
+#variants{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:100;background:#202632;color:white;padding:8px 12px;border-radius:24px;box-shadow:0 4px 18px #0003;display:flex;gap:10px;align-items:center}#variants button{background:transparent;color:white;border:1px solid #ffffff55;border-radius:18px;padding:6px 12px;cursor:pointer}#variants button[aria-pressed=true]{background:white;color:#202632}body{padding-bottom:64px;box-sizing:border-box}
 </style>
 <nav style="padding:6px 24px"><a href="?device=device-a">Codex replay</a> · <a href="?device=device-a&provider=openseek">OpenSeek replay</a></nav>
 <div id="replay"></div>
+<div id="variants" aria-label="Prototype layouts"><button id="previous" aria-label="Previous layout">←</button><button data-variant="A">A · Soft bubbles</button><button data-variant="B">B · Reading view</button><button data-variant="C">C · Exchange card</button><button id="next" aria-label="Next layout">→</button></div>
 <iframe id="application" title="Production Desktop application" ></iframe>
 <script>document.getElementById("application").src = "./app.html" + location.search;</script>
 <script src="../../target/replay.js"></script>
+<script>
+const choices=['A','B','C'];
+let variant=new URLSearchParams(location.search).get('variant')||'A';
+function choose(value){variant=value;const url=new URL(location.href);url.searchParams.set('variant',value);history.replaceState(null,'',url);document.querySelectorAll('[data-variant]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.variant===value)));const frame=document.getElementById('application');if(frame.contentDocument)frame.contentDocument.documentElement.dataset.variant=value;}
+document.querySelectorAll('[data-variant]').forEach(b=>b.onclick=()=>choose(b.dataset.variant));
+function cycle(delta){choose(choices[(choices.indexOf(variant)+delta+3)%3]);}
+document.getElementById('previous').onclick=()=>cycle(-1);document.getElementById('next').onclick=()=>cycle(1);
+function keys(event){if(event.target.closest('input,textarea,[contenteditable]'))return;if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();cycle(event.key==='ArrowLeft'?-1:1);}}
+document.addEventListener('keydown',keys);document.getElementById('application').addEventListener('load',()=>{choose(variant);document.getElementById('application').contentDocument.addEventListener('keydown',keys);});choose(variant);
+</script>
 </html>

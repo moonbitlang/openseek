@@ -193,13 +193,13 @@ fn main {
       @html.div([
         @html.strong(
           if is_openseek() {
-            "OpenSeek · chat separator review"
+            "OpenSeek · message layout prototypes"
           } else {
-            "Codex · chat separator review"
+            "Codex · message layout prototypes"
           },
         ),
         @html.p(
-          "Separator review: open Task A → Start A → Finish A. Inspect the line between the prompt and answer. The earlier panel scenario is documented below.",
+          "Open Task A → Start A → Finish A. Switch A / B / C below to compare the same real messages.",
         ),
         @html.div([
           @html.button(disabled=state.running, on_click=emit(Start), "Start A"),
@@ -219,12 +219,14 @@ fn main {
         @html.p(state.note),
         @html.details([
           @html.summary("Earlier scenario: exact panel steps (deprioritized)"),
-          @html.p("1. Reset replay. Select Task A and press Start A. 2. Select Task B. 3. In the app top-right, click Show panel (OpenSeek) or Show files (Codex). 4. In the panel header, click Expand panel: the chat messages must disappear, leaving Search, Files, Review, and Workflows. 5. Press Finish A above. 6. Select Task A and move the pointer off its row. 7. Click Restore panel to reveal the transcript. Selecting a task alone does not perform steps 3 and 4."),
+          @html.p(
+            "1. Reset replay. Select Task A and press Start A. 2. Select Task B. 3. In the app top-right, click Show panel (OpenSeek) or Show files (Codex). 4. In the panel header, click Expand panel: the chat messages must disappear, leaving Search, Files, Review, and Workflows. 5. Press Finish A above. 6. Select Task A and move the pointer off its row. 7. Click Restore panel to reveal the transcript. Selecting a task alone does not perform steps 3 and 4.",
+          ),
         ]),
         @html.details([
           @html.summary("Synthetic events and limits"),
           @html.p(
-            "Application state, navigation, cards and CSS are production code. Only the host is simulated. Codex also sends status changes and request resolutions; OpenSeek commits a transcript event before finishing. Responses use actual RPC handlers. No real command executes. This is not a captured trace and does not cover native notifications, reconnects or stale-response races.",
+            "Real application state, navigation and message components; prototype CSS and a MoonBit completion footer change presentation. The host is simulated. Codex also sends status changes and request resolutions; OpenSeek commits a transcript event before finishing. Responses use actual RPC handlers. No real command executes. This is not a captured trace and does not cover native notifications, reconnects or stale-response races.",
           ),
           @html.pre(state.events.join("\n\n")),
         ]),

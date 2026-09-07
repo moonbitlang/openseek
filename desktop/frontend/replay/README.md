@@ -1,3 +1,20 @@
+# Message layout prototypes
+
+Three layouts on the real desktop replay route, selected by `?variant=A|B|C`
+and the bottom switcher. Switching preserves the live application state.
+A uses separate soft message surfaces; B uses a labeled reading column;
+C groups prompt and answer visually into an exchange card. All hide the
+prompt separator and show a completion line below a confirmed final answer.
+
+Run `just replay` from desktop, select Task A, Start A, Finish A. Compare the
+three layouts with the bottom buttons or left/right arrows outside inputs.
+This branch changes the actual MoonBit assistant renderer to include the
+experimental completion footer, plus replay-only CSS. It is not a production
+fix. The host fixture now commits the terminal event so completion comes from
+the real transcript mapper. This visual comparison has been checked with a
+short successful exchange; long transcripts and other outcomes need further
+review before choosing a production design. No design has been selected.
+
 # Current review: chat separator
 
 The user deprioritized the covered-transcript edge case below. The current
