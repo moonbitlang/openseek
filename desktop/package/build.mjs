@@ -32,6 +32,22 @@ const Hosts = {
 
 const EsbuildVersion = "0.28.1";
 
+// A development build must not answer to the shipped application's identity.
+// Proton derives the macOS permission grants and the application data
+// directory from it, and locks the operating system's single-instance slot on
+// it, so sharing the identity means a locally built app and the installed one
+// hand each other their launches.
+//
+// A packaged app cannot choose its identity at startup the way an unbundled
+// host can: Proton reads it from the manifest inside the bundle and rejects
+// any disagreement. So a development build is stamped here instead, from a
+// generated copy of the project config. The suffix is what the host looks for
+// when deciding whether to take part in single instance, so it is spelled in
+// `desktop/main.mbt` too.
+const DevelopmentSuffix = ".dev";
+const DevelopmentConfig = "proton.project.dev.json";
+const DevelopmentProduct = "SeekMoon Dev";
+
 // These archives already contain browser-ready distributions. Fetching the
 // exact tarballs avoids installing a package manager or recreating its
 // dependency graph during an application build.
@@ -345,6 +361,34 @@ class Build {
     }
   }
 
+  // Derive the project config a development build runs under: the checked-in
+  // one with its own identity and product name, and everything else — the
+  // signing list above all — carried over rather than duplicated.
+  //
+  // The output directory is deliberately left alone. The product name already
+  // keeps a development bundle from overwriting a release one, and moving the
+  // output would strand every consumer that knows where packaging writes.
+  //
+  // One identity covers every development build. It only has to differ from
+  // the shipped one, because a development build does not take part in single
+  // instance at all: nothing is competing for the identity, so nothing has to
+  // tell one development build from the next.
+  //
+  // `proton dev` passes this path on to the host as PROTON_PROJECT_CONFIG and
+  // the host reads its identity from there, so an unbundled run and a
+  // development package pick it up the same way.
+  async developmentConfig() {
+    const config = JSON.parse(await readFile(join(this.desktop, "proton.project.json"), "utf8"));
+    config.identifier = `${config.identifier}${DevelopmentSuffix}`;
+    config.package.product_name = DevelopmentProduct;
+    // The generated config has to sit beside the one it derives from: every
+    // relative path in a project config — the backend package, icons, staged
+    // resources, the signing list, the output directory — resolves against the
+    // directory holding the config itself.
+    await writeFile(join(this.desktop, DevelopmentConfig), `${JSON.stringify(config, null, 2)}\n`);
+    return DevelopmentConfig;
+  }
+
   async package(options) {
     if (!this.host || this.host.command !== this.command) throw new Error(`${this.command} packaging cannot run on ${process.platform}/${process.arch}`);
     if ((this.command === "macos" && process.arch !== "arm64") || (this.command !== "macos" && process.arch !== "x64")) {
@@ -360,7 +404,8 @@ class Build {
       : this.command === "windows"
         ? options.targets.map(target => target === "installer" ? "nsis" : target)
         : ["appimage"];
-    const args = ["-C", ".", "package", "--config", "proton.project.json"];
+    const config = options.release ? "proton.project.json" : await this.developmentConfig();
+    const args = ["-C", ".", "package", "--config", config];
     for (const format of [...new Set(formats)]) args.push("--format", format);
     if (options.release) args.push("--release");
     if (options.sign) args.push("--sign");
@@ -378,7 +423,8 @@ class Build {
       env.APPIMAGE_EXTRACT_AND_RUN = "1";
     }
     await this.proton(args, env);
-    if (this.command === "macos" && options.open) await this.commandRun("open", [join(this.desktop, "dist/SeekMoon.app")]);
+    const bundle = `dist/${options.release ? "SeekMoon" : DevelopmentProduct}.app`;
+    if (this.command === "macos" && options.open) await this.commandRun("open", [join(this.desktop, bundle)]);
   }
 
   async run() {
@@ -391,7 +437,10 @@ class Build {
     if (this.command === "dev") {
       await this.web("debug");
       await this.commandRun("moon", ["build", "cmd/openseek", "--target", "native"], { cwd: this.repo });
-      return await this.proton(["-C", ".", "dev", "--config", "proton.project.json", "--no-frontend", "--setup"]);
+      // The same development identity a packaged development build gets, for
+      // the same reason: never the shipped one.
+      const config = await this.developmentConfig();
+      return await this.proton(["-C", ".", "dev", "--config", config, "--no-frontend", "--setup"]);
     }
     await this.package(options);
   }

@@ -19,6 +19,11 @@ e2e/node_modules/
 e2e/playwright-report/
 e2e/test-results/
 
+# Project config a development package is built from, derived from the
+# checked-in one at packaging time. It has to live here rather than under
+# target/, because a project config's relative paths resolve against its own
+# directory.
+/proton.project.dev.json
 # The empty file redirected into one-shot child runs as stdin. It normally
 # lives in the per-user runtime dir; with no runtime dir (tests, and any bare
 # invocation) `prepare_engine_stdin` falls back to `<program>.stdin` beside the

@@ -56,46 +56,6 @@ async fn main {
       .map(p => p.to_string())
       .unwrap_or("(inherited environment)"),
     }
-  // A fresh install has no workspaces at all. Attach the default one before
-  // anything can serve a workspace list, so the first page to connect
-  // already has somewhere to work. This runs exactly once per registry: a
-  // user who later detaches it does not get it back.
-  let default_workspace = @workspaces.initialize() catch {
-    error => {
-      // An unwritable Documents folder must not stop the app — the user can
-      // still attach a project by hand.
-      @xlog.error() <?
-        {
-          "message": "default workspace setup failed",
-          "error": @debug.render(Repr(error)),
-        }
-      None
-    }
-  }
-  if default_workspace is Some(dir) {
-    @xlog.info() <?
-      { "message": "default workspace attached", "path": dir.to_string() }
-  }
-  // Conversations the desktop used to keep in the global store predate
-  // workspaces owning every record. Move them into the default workspace so
-  // they stay listed; a failure leaves them where they are for a later launch.
-  let migrated = @engine.migrate_global_store() catch {
-    error => {
-      @xlog.error() <?
-        {
-          "message": "global store migration failed",
-          "error": @debug.render(Repr(error)),
-        }
-      0
-    }
-  }
-  if migrated > 0 {
-    @xlog.info() <?
-      {
-        "message": "migrated conversations from the global store",
-        "count": migrated,
-      }
-  }
   // The relay sign-in store: a persisted session from auth.json, unless the
   // environment override pins the connector config directly (development).
   let auth = @auth.AuthStore::load(
@@ -123,8 +83,17 @@ async fn main {
   // entry serves from. The window is bridge-only: it makes no HTTP requests
   // at all. Remote browsers use the same method catalog over the relay
   // WebSocket instead (docs/remote-protocol.md).
+  // The identity this process answers to. A development build never answers
+  // to the shipped one: `package/build.mjs` generates a project config
+  // carrying its own, and `proton dev` hands that config on to the host
+  // through PROTON_PROJECT_CONFIG, so this call picks it up either way.
+  let app = app.load_config()
+  // One host per identity, for the shipped application: `single_instance`
+  // hands a later launch to the process already holding that identity's lock,
+  // and that process brings its window to the front.
+  let single_instance = single_instance_wanted(app)
+  let app = if single_instance { app.single_instance() } else { app }
   let app = app
-    .load_config()
     // Let the page palette paint the native titlebar area. The default macOS
     // titlebar follows the system appearance, so an explicit in-app dark theme
     // otherwise leaves a bright strip above the dark application shell.
@@ -139,19 +108,15 @@ async fn main {
     // the system opener until Proton exposes the disposition.
     .on_new_window_request(async fn(_, request) noraise {
       if request.user_gesture {
-        ignore(
-          Some(@extension.open_external({ url: request.url, })) catch {
-            error => {
-              @xlog.error() <?
-                {
-                  "event": "external_link_open_failed",
-                  "url": request.url,
-                  "error": @debug.render(Repr(error)),
-                }
-              None
-            }
-          },
-        )
+        ignore(@extension.open_external({ url: request.url, })) catch {
+          error =>
+            @xlog.error() <?
+              {
+                "event": "external_link_open_failed",
+                "url": request.url,
+                "error": @debug.render(Repr(error)),
+              }
+        }
       }
       Deny
     })
@@ -235,49 +200,77 @@ async fn main {
         None => ()
       }
     })
+  // Set by the application lifecycle hook, which only the process that kept
+  // this launch reaches. A forwarded launch returns from
+  // `app.run()` having done nothing, and must not go on to act on state
+  // that belongs to the host still running.
+  let mut is_primary = false
   @async.with_task_group(group => {
-    // The bridge actor, engine actor, and host actors run for the app's
-    // lifetime — they feed every page/client rather than borrowing a
-    // `host.connect` request task as their owner.
-    group.spawn_bg(allow_failure=true, () => bridge.run())
-    group.spawn_bg(allow_failure=true, () => {
-      state
-      .codex_actor()
-      .run((method_, params) => {
-        if @protocol.Notification::from_wire(method_, params)
-          is Some(notification) {
+    // Everything that acts on state belonging to whoever owns the runtime
+    // directory starts here and nowhere earlier: the hook runs only in the
+    // process that kept the launch, and before its window opens. A launch
+    // handed to another host returns from `app.run()` without ever reaching
+    // it, so it neither spawns a Codex app-server or engine of its own, nor
+    // registers with the relay under the running host's device identity.
+    //
+    // The actors run for the app's lifetime on this group — they feed every
+    // page/client rather than borrowing a `host.connect` request task as
+    // their owner — and stop when the run loop returns.
+    let app = app.app_lifecycle(
+      on_start=async fn(_) {
+        is_primary = true
+        prepare_workspaces()
+        group.spawn_bg(allow_failure=true, () => bridge.run())
+        group.spawn_bg(allow_failure=true, () => {
+          state
+          .codex_actor()
+          .run((method_, params) => {
+            if @protocol.Notification::from_wire(method_, params)
+              is Some(notification) {
+              state.publish(notification)
+            }
+          })
+        })
+        group.spawn_bg(allow_failure=true, () => {
+          state
+          .engine_actor()
+          .run(state.sink(), message => {
+            state.publish(
+              AgentError({
+                run_id: None,
+                message: Some(message),
+                exit_code: None,
+                diagnostics: None,
+              }),
+            )
+          })
+        })
+        @host.spawn_host_pumps(group, state.host_state(), notification => {
           state.publish(notification)
-        }
-      })
-    })
-    group.spawn_bg(allow_failure=true, () => {
-      state
-      .engine_actor()
-      .run(state.sink(), message => {
-        state.publish(
-          AgentError({
-            run_id: None,
-            message: Some(message),
-            exit_code: None,
-            diagnostics: None,
-          }),
-        )
-      })
-    })
-    @host.spawn_host_pumps(group, state.host_state(), notification => {
-      state.publish(notification)
-    })
-    // The relay actor runs for the app's lifetime: it registers
-    // this host whenever a sign-in (or the environment override) says so,
-    // and idles otherwise.
-    group.spawn_bg(allow_failure=true, () => relay.run())
-    @xlog.info() <? { "event": "desktop_app_run_start" }
+        })
+        // The relay actor registers this host whenever a sign-in (or the
+        // environment override) says so, and idles otherwise.
+        group.spawn_bg(allow_failure=true, () => relay.run())
+      },
+      on_shutdown=fn(_) {  },
+    )
+    @xlog.info() <?
+      { "event": "desktop_app_run_start", "single_instance": single_instance }
     try {
       app.run()
+      if !is_primary {
+        // Nothing else tells a `moon run` user what happened: Proton notes
+        // the forwarding in its own log, the running instance's window comes
+        // to the front, and this process ends.
+        println(
+          "SeekMoon is already running; its window was brought to the front. Quit it first, or set OPENSEEK_DESKTOP_MULTI_INSTANCE=1 to start another instance.",
+        )
+      }
       @xlog.info() <?
         {
           "event": "desktop_app_run_return",
           "result": "ok",
+          "primary": is_primary,
           "message": "host process exit ok",
         }
     } catch {
@@ -298,20 +291,129 @@ async fn main {
   // relaunch marker: reopen the new version now that the run loop is done.
   // `open -n` hands the launch to LaunchServices, so the new instance is
   // not our child and this process can exit right after.
-  if runtime_dir is Some(dir) &&
-    @update.take_relaunch_target(work_dir=dir.to_string()) is Some(target) {
-    @xlog.info() <? { "message": "relaunch after update", "path": target }
-    let code = @process.run("open", ["-n", target]) catch {
-      error => {
-        @xlog.error() <? { "message": "relaunch failed", "error": "\{error}" }
-        return
+  //
+  // Only the host that ran the loop may take that marker. A forwarded
+  // launch reaches here too, having done nothing, and taking the marker
+  // there would consume the still-running primary's relaunch: the bundle
+  // would reopen, hand itself straight back to that primary, exit — and
+  // when the primary finally closed, its marker would be gone and the
+  // update would never be entered. The nesting is deliberate; a `&&` chain
+  // would take the marker while deciding whether it was allowed to.
+  if is_primary {
+    if runtime_dir is Some(dir) {
+      if @update.take_relaunch_target(work_dir=dir.to_string()) is Some(target) {
+        @xlog.info() <? { "message": "relaunch after update", "path": target }
+        let code = @process.run("open", ["-n", target]) catch {
+          error => {
+            @xlog.error() <?
+              { "message": "relaunch failed", "error": "\{error}" }
+            return
+          }
+        }
+        if code != 0 {
+          @xlog.error() <? { "message": "relaunch failed", "code": code }
+        }
       }
     }
-    if code != 0 {
-      @xlog.error() <? { "message": "relaunch failed", "code": code }
+  }
+  @xlog.info() <? { "event": "desktop_main_return", "primary": is_primary }
+}
+
+///|
+/// The identity suffix `package/build.mjs` appends when it generates the
+/// project config a development build runs under. Spelled there too; this is
+/// the shared half of that convention.
+const DevelopmentSuffix = ".dev"
+
+///|
+/// Whether this launch takes part in single instance at all.
+///
+/// Only the shipped application does. A development build is a second copy of
+/// the same program on the same machine, and being told "one is already
+/// running" is never what its author wanted: a rebuilt one has to start, not
+/// hand its launch to the binary it just replaced. Standing outside also
+/// costs it nothing it had, since Proton only grants a persistent browser
+/// profile to an application that owns a single-instance identity.
+///
+/// `OPENSEEK_DESKTOP_MULTI_INSTANCE` takes the shipped application out too,
+/// for a harness driving several hosts or a second copy of one build.
+///
+/// The identity is read back through `data_dir`, whose last segment is the
+/// identity Proton resolved from the manifest or the project config. Proton
+/// has no public accessor for it, and reading it here rather than trusting
+/// the build mode means the two always agree.
+fn single_instance_wanted(app : @proton.App) -> Bool {
+  if @envx.get("OPENSEEK_DESKTOP_MULTI_INSTANCE") is Some(_) {
+    @xlog.info() <?
+      {
+        "event": "desktop_instance_opt_out",
+        "message": "OPENSEEK_DESKTOP_MULTI_INSTANCE is set; starting beside any running host",
+      }
+    return false
+  }
+  let identity = app.data_dir() catch {
+    error => {
+      // Without an identity there is nothing to lock on, and guessing one
+      // could silence a launch that belongs to the installed application.
+      @xlog.warn() <?
+        {
+          "event": "desktop_instance_identity_unknown",
+          "message": "could not resolve this application's identity; starting beside any running host",
+          "error": @debug.render(Repr(error)),
+        }
+      return false
     }
   }
-  @xlog.info() <? { "event": "desktop_main_return" }
+  // A path separator cannot appear inside an identity, so a data directory
+  // ending in the suffix is one whose identity does.
+  !identity.has_suffix(DevelopmentSuffix)
+}
+
+///|
+/// First-launch and migration work on the workspace registry. The primary
+/// runs this before it serves any client, so the first `workspace.list` a
+/// page sees already reflects it.
+async fn prepare_workspaces() -> Unit {
+  // A fresh install has no workspaces at all. Attach the default one before
+  // anything can serve a workspace list, so the first page to connect
+  // already has somewhere to work. This runs exactly once per registry: a
+  // user who later detaches it does not get it back.
+  let default_workspace = @workspaces.initialize() catch {
+    error => {
+      // An unwritable Documents folder must not stop the app — the user can
+      // still attach a project by hand.
+      @xlog.error() <?
+        {
+          "message": "default workspace setup failed",
+          "error": @debug.render(Repr(error)),
+        }
+      None
+    }
+  }
+  if default_workspace is Some(dir) {
+    @xlog.info() <?
+      { "message": "default workspace attached", "path": dir.to_string() }
+  }
+  // Conversations the desktop used to keep in the global store predate
+  // workspaces owning every record. Move them into the default workspace so
+  // they stay listed; a failure leaves them where they are for a later launch.
+  let migrated = @engine.migrate_global_store() catch {
+    error => {
+      @xlog.error() <?
+        {
+          "message": "global store migration failed",
+          "error": @debug.render(Repr(error)),
+        }
+      0
+    }
+  }
+  if migrated > 0 {
+    @xlog.info() <?
+      {
+        "message": "migrated conversations from the global store",
+        "count": migrated,
+      }
+  }
 }
 
 ///|
