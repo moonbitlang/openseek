@@ -2,7 +2,6 @@
 package "bobzhang/openseek/mcp/stdio"
 
 import {
-  "bobzhang/openseek/jsonrpc",
   "bobzhang/openseek/mcp",
   "moonbitlang/async",
 }
@@ -13,12 +12,6 @@ pub async fn[X] connect(@async.TaskGroup[X], command~ : String, args~ : Array[St
 // Errors
 
 // Types and methods
-type NdjsonTransport
-pub fn NdjsonTransport::close(Self) -> Unit
-pub async fn NdjsonTransport::recv(Self) -> Json?
-pub async fn NdjsonTransport::send(Self, Json) -> Unit
-pub impl @jsonrpc.Transport for NdjsonTransport
-
 type StdioConnection
 pub fn StdioConnection::client(Self) -> @mcp.McpClient
 pub fn StdioConnection::init(Self) -> @mcp.InitializeResult

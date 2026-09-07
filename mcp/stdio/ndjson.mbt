@@ -6,7 +6,7 @@
 /// A `@jsonrpc.Transport` that frames messages as newline-delimited JSON over a
 /// reader/writer pair. `on_close` is the synchronous teardown (e.g. terminate
 /// the subprocess and close its pipes) run when the client closes.
-struct NdjsonTransport {
+priv struct NdjsonTransport {
   reader : &@io.Reader
   writer : &@io.Writer
   on_close : () -> Unit
@@ -29,14 +29,14 @@ fn NdjsonTransport::NdjsonTransport(
 }
 
 ///|
-pub impl @jsonrpc.Transport for NdjsonTransport with fn send(self, message) {
+impl @jsonrpc.Transport for NdjsonTransport with fn send(self, message) {
   // One line per message; JSON stringify never emits a newline, so the frame is
   // unambiguous.
   self.writer.write("\{message.stringify()}\n")
 }
 
 ///|
-pub impl @jsonrpc.Transport for NdjsonTransport with fn recv(self) {
+impl @jsonrpc.Transport for NdjsonTransport with fn recv(self) {
   // Read whole lines until one parses as JSON or the stream ends. A valid-UTF-8
   // line that is not JSON (e.g. a stray log line the server leaked to stdout) is
   // skipped; end of stream, a read error, or invalid UTF-8 (a server violating
@@ -52,16 +52,15 @@ pub impl @jsonrpc.Transport for NdjsonTransport with fn recv(self) {
     if trimmed == "" {
       continue
     }
-    if (Some(@json.parse(trimmed)) catch { _ => None }) is Some(message) {
-      return Some(message)
+    try @json.parse(trimmed) catch {
+      _ => continue
+    } noraise {
+      message => return Some(message)
     }
   }
 }
 
 ///|
-pub impl @jsonrpc.Transport for NdjsonTransport with fn close(self) {
+impl @jsonrpc.Transport for NdjsonTransport with fn close(self) {
   (self.on_close)()
 }
-
-///|
-pub extend NdjsonTransport with @jsonrpc.Transport::{close, recv, send}
