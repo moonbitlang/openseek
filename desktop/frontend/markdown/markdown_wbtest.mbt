@@ -152,5 +152,3 @@ test "non-paths are left alone" {
   // Dotfiles have an empty stem, so they are not treated as an extension.
   assert_false(is_file_path(".gitignore"))
 }
-
-///|
