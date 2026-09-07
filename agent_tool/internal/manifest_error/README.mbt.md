@@ -1,6 +1,6 @@
 # Manifest Error
 
-`bobzhang/openseek/agent_tool/internal/manifest_error` keeps the manifest safety
+`moonbitlang/openseek/agent_tool/internal/manifest_error` keeps the manifest safety
 checks used before the `edit` and `multi_edit` tools write replacement content,
 so both write paths reject the same known-bad manifest shapes identically.
 

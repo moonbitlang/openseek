@@ -1,6 +1,6 @@
 # Background Job Registry
 
-`bobzhang/openseek/agent_tool/bgjobs` is the session-scoped registry of
+`moonbitlang/openseek/agent_tool/bgjobs` is the session-scoped registry of
 background shell jobs. Each job wraps one shared
 `@shell_exec.ShellExecution` (see `agent_tool/shell_exec`): the registry adds
 ids, session-visible metadata, spill-file placement, exit watchers, and
