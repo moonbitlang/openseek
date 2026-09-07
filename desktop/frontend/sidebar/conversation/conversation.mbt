@@ -540,13 +540,27 @@ pub fn component(
           ),
         )
       NeedsInputMark | CompletedMark | FailedMark | StoppedMark | EndedMark => {
-        let (label, glyph, class_name) = match input.run_mark {
-          NeedsInputMark => ("Needs your input", "?", "run-status needs-input")
+        let (label, image, class_name) = match input.run_mark {
+          NeedsInputMark =>
+            (
+              "Needs your input", @icons.icon_question, "sidebar-run-status needs-input",
+            )
           CompletedMark =>
-            ("Completed — unread", "✓", "run-status completed")
-          FailedMark => ("Failed — unread", "!", "run-status failed")
-          StoppedMark => ("Stopped — unread", "■", "run-status completed")
-          _ => ("Ended — unread", "○", "run-status completed")
+            (
+              "Completed — unread", @icons.icon_check, "sidebar-run-status completed",
+            )
+          FailedMark =>
+            (
+              "Failed — unread", @icons.icon_error, "sidebar-run-status failed",
+            )
+          StoppedMark =>
+            (
+              "Stopped — unread", @icons.icon_debug_stop, "sidebar-run-status completed",
+            )
+          _ =>
+            (
+              "Ended — unread", @icons.icon_circle, "sidebar-run-status completed",
+            )
         }
         status.push(
           @html.span(
@@ -555,7 +569,7 @@ pub fn component(
               .role("status")
               .aria_label(label)
               .title(label),
-            glyph,
+            @icons.icon(image),
           ),
         )
       }
