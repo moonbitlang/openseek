@@ -1,3 +1,11 @@
+## Latest revision: D — Quiet ending
+
+D preserves the original user bubble and unboxed assistant prose. It removes
+the experimental Completed footer and puts a subtle line in the existing copy
+action row. The prompt-to-response gap is 14px, with additional space before
+the next prompt. A/B/C remain for comparison. This is a visual prototype,
+not an accepted production change.
+
 # Message layout prototypes
 
 Three layouts on the real desktop replay route, selected by `?variant=A|B|C`

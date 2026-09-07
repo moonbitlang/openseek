@@ -15,3 +15,10 @@
 [data-variant="C"] .msg:not(.user):not(.transcript-error) > .msg-body {padding:20px;background:var(--color-bg-surface);border-radius:0 0 var(--radius-md) var(--radius-md);border-left:2px solid var(--color-border);}
 [data-variant="C"] .msg.user {margin-bottom:-14px;}
 [data-variant="C"] .prototype-exchange-end::before {content:"";height:1px;background:var(--color-border);flex:1;}
+
+/* D: original message surfaces, compact functional ending. */
+[data-variant="D"] .prototype-exchange-end {display:none;}
+[data-variant="D"] .assistant-message-actions::after {content:"";height:1px;background:var(--color-border-subtle);flex:1;}
+[data-variant="D"] .stream {gap:14px;}
+[data-variant="D"] .msg.user {margin-top:18px;}
+[data-variant="D"] .stream > .msg.user:first-child {margin-top:8px;}

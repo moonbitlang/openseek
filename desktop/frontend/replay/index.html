@@ -13,16 +13,16 @@ html,body{height:100%;margin:0}body{display:flex;flex-direction:column;backgroun
 </style>
 <nav style="padding:6px 24px"><a href="?device=device-a">Codex replay</a> · <a href="?device=device-a&provider=openseek">OpenSeek replay</a></nav>
 <div id="replay"></div>
-<div id="variants" aria-label="Prototype layouts"><button id="previous" aria-label="Previous layout">←</button><button data-variant="A">A · Soft bubbles</button><button data-variant="B">B · Reading view</button><button data-variant="C">C · Exchange card</button><button id="next" aria-label="Next layout">→</button></div>
+<div id="variants" aria-label="Prototype layouts"><button id="previous" aria-label="Previous layout">←</button><button data-variant="A">A · Soft bubbles</button><button data-variant="B">B · Reading view</button><button data-variant="C">C · Exchange card</button><button data-variant="D">D · Quiet ending</button><button id="next" aria-label="Next layout">→</button></div>
 <iframe id="application" title="Production Desktop application" ></iframe>
 <script>document.getElementById("application").src = "./app.html" + location.search;</script>
 <script src="../../target/replay.js"></script>
 <script>
-const choices=['A','B','C'];
+const choices=['A','B','C','D'];
 let variant=new URLSearchParams(location.search).get('variant')||'A';
 function choose(value){variant=value;const url=new URL(location.href);url.searchParams.set('variant',value);history.replaceState(null,'',url);document.querySelectorAll('[data-variant]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.variant===value)));const frame=document.getElementById('application');if(frame.contentDocument)frame.contentDocument.documentElement.dataset.variant=value;}
 document.querySelectorAll('[data-variant]').forEach(b=>b.onclick=()=>choose(b.dataset.variant));
-function cycle(delta){choose(choices[(choices.indexOf(variant)+delta+3)%3]);}
+function cycle(delta){choose(choices[(choices.indexOf(variant)+delta+choices.length)%choices.length]);}
 document.getElementById('previous').onclick=()=>cycle(-1);document.getElementById('next').onclick=()=>cycle(1);
 function keys(event){if(event.target.closest('input,textarea,[contenteditable]'))return;if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();cycle(event.key==='ArrowLeft'?-1:1);}}
 document.addEventListener('keydown',keys);document.getElementById('application').addEventListener('load',()=>{choose(variant);document.getElementById('application').contentDocument.addEventListener('keydown',keys);});choose(variant);

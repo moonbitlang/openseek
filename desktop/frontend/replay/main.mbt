@@ -199,7 +199,7 @@ fn main {
           },
         ),
         @html.p(
-          "Open Task A → Start A → Finish A. Switch A / B / C below to compare the same real messages.",
+          "Open Task A → Start A → Finish A. Switch A / B / C / D below to compare the same real messages.",
         ),
         @html.div([
           @html.button(disabled=state.running, on_click=emit(Start), "Start A"),
