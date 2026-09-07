@@ -935,11 +935,16 @@ fn context_menu_boundary_index(
   nodes : Array[ContextMenuItemNode?],
   first : Bool,
 ) -> Int {
-  match [ for index, node in nodes if node is Some(_) => index ] {
-    [] => -1
-    [head, ..] if first => head
-    [.., last] => last
+  let mut result = -1
+  for index, node in nodes {
+    if node is Some(_) {
+      if first {
+        return index
+      }
+      result = index
+    }
   }
+  result
 }
 
 ///|
