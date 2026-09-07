@@ -30,3 +30,8 @@ the next. The provisional and failed output had no final-answer copy action;
 confirmed answers did. At 390px, the table and failure text wrapped within the
 transcript. The main transcript renderer matches the baseline again; all visual
 changes are isolated in transcript.prototype.css.
+
+Latest focused comparison: retain D's exchange ending, remove the composer's
+outer top border, and remove the streaming cursor. Existing header/sidebar and
+composer activity indicators, step numbers, and responsive input sizing stay
+as they were. These changes are isolated to the prototype stylesheet.
