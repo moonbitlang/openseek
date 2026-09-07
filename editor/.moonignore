@@ -1,0 +1,37 @@
+# Packaging ignore list for `moonbitlang/editor`.
+#
+# `.moonignore` overrides `.gitignore` in this directory, so the build and
+# dependency directories from `.gitignore` are repeated here; the second block
+# holds what used to live in `options(exclude: ...)` in `moon.mod`.
+
+_build/
+.mooncakes/
+node_modules/
+dist/
+playwright-report/
+test-results/
+target/
+web/generated/editor.mjs
+web/generated/editor.mjs.map
+web/generated/moonbit.d.ts
+web/generated/web.d.ts
+web/dist/
+.claude/
+
+/codemirror
+/vscode
+/internal/shell
+/server
+/moon.work
+/tests
+/scripts
+/internal/viewer/ui/scrollbar/mouse_wheel_classifier_reference_wbtest.mbt
+/AGENTS.md
+/justfile
+/package.json
+/package-lock.json
+/playwright.config.js
+/docs/exec-plans
+/docs/references
+/docs/notes
+/docs/styles.md

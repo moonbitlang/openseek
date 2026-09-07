@@ -27,25 +27,3 @@ import {
   "moonbitlang/x@0.4.50",
   "kokic/uml@0.2.2",
 }
-
-options(
-  exclude: [
-    "codemirror",
-    "vscode",
-    "internal/shell",
-    "server",
-    "moon.work",
-    "tests",
-    "scripts",
-    "internal/viewer/ui/scrollbar/mouse_wheel_classifier_reference_wbtest.mbt",
-    "AGENTS.md",
-    "justfile",
-    "package.json",
-    "package-lock.json",
-    "playwright.config.js",
-    "docs/exec-plans",
-    "docs/references",
-    "docs/notes",
-    "docs/styles.md",
-  ],
-)
