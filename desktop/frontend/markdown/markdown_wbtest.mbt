@@ -29,6 +29,24 @@ test "markdown survives streaming-truncated input" {
 }
 
 ///|
+test "moonbit-family fences keep their block shape" {
+  // The fence languages that route through the shared MoonBit tokenizer
+  // (`moonbit` itself, plus the editor markdown pipeline's `mbt`/`mbtx`
+  // aliases) each still render as exactly one block, exactly like a plain
+  // fence — the tokenization changes the code payload, never the layout.
+  for fence in ["moonbit", "mbt", "mbtx"] {
+    inspect(
+      markdown_nodes("intro\n\n```\{fence}\nlet answer = 42\n```\n\noutro").length(),
+      content="3",
+    )
+  }
+  inspect(
+    markdown_nodes("intro\n\n```\nplain text\n```\n\noutro").length(),
+    content="3",
+  )
+}
+
+///|
 test "raw html stays text instead of markup" {
   // One pre.raw-html block; the structure proves the branch is taken and the
   // payload is routed through a text node, never through innerHTML.
@@ -133,4 +151,48 @@ test "non-paths are left alone" {
   assert_false(is_file_path("#section"))
   // Dotfiles have an empty stem, so they are not treated as an extension.
   assert_false(is_file_path(".gitignore"))
+}
+
+///|
+test "moonbit fence info strings reach the tokenized branch" {
+  // `code_block` routes a fence to the MoonBit tokenizer exactly when cmark's
+  // language_of_info_string yields one of the moonbit-family names; lock that
+  // trigger condition against the parser's real output (plus the tolerated
+  // alias spellings from the editor markdown pipeline).
+  for fence in ["moonbit", "mbt", "mbtx"] {
+    let doc = @cmark.Doc::from_string(
+      "```\{fence}\nlet a = 1\n```",
+      strict=false,
+    )
+    guard first_code_language(doc.block) is Some(language) else {
+      fail("expected a fenced code block")
+    }
+    assert_true(
+      language == "moonbit" || language == "mbt" || language == "mbtx",
+    )
+  }
+}
+
+///|
+fn first_code_language(block : @cmark.Block) -> String? {
+  match block {
+    CodeBlock(node) =>
+      match node.v.info_string {
+        Some(info) =>
+          match @cmark.CodeBlock::language_of_info_string(info.v) {
+            Some((language, _)) => Some(language)
+            None => None
+          }
+        None => None
+      }
+    Blocks(node) => {
+      for child in node.v.iter() {
+        if first_code_language(child) is Some(language) {
+          return Some(language)
+        }
+      }
+      None
+    }
+    _ => None
+  }
 }

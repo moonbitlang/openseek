@@ -134,6 +134,18 @@ fn code_block(block : @cmark.CodeBlock) -> @html.Html {
       None => ()
     }
   }
+  // MoonBit fences in model prose get the same syntax colors as an `mbtx`
+  // argument card or a composer approval body: the shared code helper runs the
+  // production lexer over the whole fence (so multiline strings and comments
+  // survive) and emits the editor's `mtk<n>` token spans. The `moonbit-source`
+  // class scopes the `--vscode-token-*` palette — dark and light — to this
+  // block; the aliases mirror the editor markdown pipeline's `mbt`/`mbtx` →
+  // `moonbit` mapping. Other languages keep their plain escaped rendering.
+  if language == "moonbit" || language == "mbt" || language == "mbtx" {
+    return @html.pre(class="moonbit-source", [
+      @syntax_html.moonbit_source_code(source),
+    ])
+  }
   let code_class = if language.is_empty() { "" } else { "language-" + language }
   @html.pre([@html.code(class=code_class, source)])
 }
