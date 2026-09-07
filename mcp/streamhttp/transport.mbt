@@ -40,7 +40,7 @@ const SessionDeleteTimeoutMs : Int = 5000
 
 ///|
 /// A `@jsonrpc.Transport` speaking MCP Streamable HTTP against `url`.
-struct HttpTransport {
+priv struct HttpTransport {
   url : String
   // User-supplied headers (e.g. Authorization), sent on every request.
   extra_headers : Map[String, String]
@@ -156,7 +156,7 @@ fn header_value(headers : @http.Headers, name : String) -> String? {
 }
 
 ///|
-pub impl @jsonrpc.Transport for HttpTransport with fn send(self, message) {
+impl @jsonrpc.Transport for HttpTransport with fn send(self, message) {
   guard !self.closed else { fail("transport closed") }
   // The id this POST must answer (None for a notification or a reply): if the
   // exchange fails before delivering that reply, a synthesized error fails the
@@ -228,7 +228,7 @@ pub impl @jsonrpc.Transport for HttpTransport with fn send(self, message) {
 }
 
 ///|
-pub impl @jsonrpc.Transport for HttpTransport with fn recv(self) {
+impl @jsonrpc.Transport for HttpTransport with fn recv(self) {
   Some(self.inbound.get()) catch {
     error if @async.is_being_cancelled() => raise error
     _ => None
@@ -236,7 +236,7 @@ pub impl @jsonrpc.Transport for HttpTransport with fn recv(self) {
 }
 
 ///|
-pub impl @jsonrpc.Transport for HttpTransport with fn close(self) {
+impl @jsonrpc.Transport for HttpTransport with fn close(self) {
   let already_closed = self.closed
   self.closed = true
   self.inbound.close()
@@ -585,6 +585,3 @@ fn HttpTransport::deliver(self : HttpTransport, message : Json) -> Unit {
   }
   (self.inbound.try_put(message) catch { _ => false }) |> ignore
 }
-
-///|
-pub extend HttpTransport with @jsonrpc.Transport::{close, recv, send}

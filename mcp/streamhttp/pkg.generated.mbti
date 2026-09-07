@@ -2,7 +2,6 @@
 package "bobzhang/openseek/mcp/streamhttp"
 
 import {
-  "bobzhang/openseek/jsonrpc",
   "bobzhang/openseek/mcp",
   "moonbitlang/async",
 }
@@ -17,12 +16,6 @@ type HttpConnection
 pub fn HttpConnection::client(Self) -> @mcp.McpClient
 pub fn HttpConnection::init(Self) -> @mcp.InitializeResult
 pub fn HttpConnection::shutdown(Self) -> Unit
-
-type HttpTransport
-pub fn HttpTransport::close(Self) -> Unit
-pub async fn HttpTransport::recv(Self) -> Json?
-pub async fn HttpTransport::send(Self, Json) -> Unit
-pub impl @jsonrpc.Transport for HttpTransport
 
 // Type aliases
 
