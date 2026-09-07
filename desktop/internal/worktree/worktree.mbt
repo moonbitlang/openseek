@@ -773,7 +773,7 @@ pub async fn create(
   // Snapshot this workspace's setting once for the lifecycle operation. A
   // concurrent page edit applies to the next create or repair instead of
   // changing this checkout halfway through.
-  let workspace_settings = @workspaces.settings(dir.to_string())
+  let workspace_settings = @workspaces.settings(resource_path(dir))
   let checkout_submodules = workspace_settings.checkout_submodules
   let submodule_checkout_timeout_seconds = workspace_settings.submodule_checkout_timeout_seconds
   worktree_registry_lock.acquire()
