@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/goal"
+package "moonbitlang/openseek/agent_tool/goal"
 
 import {
-  "bobzhang/openseek/agent_tool",
   "moonbitlang/core/debug",
+  "moonbitlang/openseek/agent_tool",
 }
 
 // Values

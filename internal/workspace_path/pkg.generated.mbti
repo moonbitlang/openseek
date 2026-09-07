@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/internal/workspace_path"
+package "moonbitlang/openseek/internal/workspace_path"
 
 // Values
 pub fn is_under_workspace_root(String, String) -> Bool

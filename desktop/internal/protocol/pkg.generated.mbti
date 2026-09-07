@@ -2,9 +2,9 @@
 package "openseek_desktop/internal/protocol"
 
 import {
-  "bobzhang/openseek_protocol",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values

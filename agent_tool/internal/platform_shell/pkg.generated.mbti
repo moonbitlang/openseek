@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/internal/platform_shell"
+package "moonbitlang/openseek/agent_tool/internal/platform_shell"
 
 // Values
 pub fn args(String) -> Array[String]

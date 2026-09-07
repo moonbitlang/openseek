@@ -2,9 +2,9 @@
 package "openseek_desktop/internal/codex"
 
 import {
-  "bobzhang/openseek/jsonrpc",
   "moonbitlang/async",
   "moonbitlang/core/debug",
+  "moonbitlang/openseek/jsonrpc",
   "openseek_desktop/internal/pathx",
 }
 

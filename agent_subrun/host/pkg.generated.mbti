@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_subrun/host"
+package "moonbitlang/openseek/agent_subrun/host"
 
 // Values
 pub let block_size : Int

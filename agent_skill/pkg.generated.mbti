@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_skill"
+package "moonbitlang/openseek/agent_skill"
 
 import {
   "moonbitlang/core/debug",

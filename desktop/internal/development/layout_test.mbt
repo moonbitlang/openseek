@@ -13,7 +13,9 @@ async test "Moon native host layout identifies checkout-local development paths"
   assert_eq(
     layout.viz_bundle(),
     root
-    .join("_build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js")
+    .join(
+      "_build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js",
+    )
     .to_string(),
   )
   assert_eq(
