@@ -111,13 +111,12 @@ fn retryable_status(code : Int) -> Bool {
 }
 
 ///|
-/// Provider errors stay typed through retries and diagnostic construction.
+/// These failures may be retried before any response data is received.
 /// The public chat boundary formats them as Failure messages.
-priv suberror ApiError {
+priv suberror RetryableApiError {
   HttpStatusError(Int, String)
   IdleTimeout(String, Int)
   StreamEnded
-  ResponseError(String)
 }
 
 ///|
@@ -157,8 +156,6 @@ async fn[T] Client::with_retries(
     fatal_error=error => {
       let streamed = bail()
       let fatal = streamed ||
-        (error is HttpStatusError(code, _) && !retryable_status(code)) ||
-        error is ResponseError(_) ||
         @async.is_cancellation_error(error) ||
         error is Failure::Failure(_) ||
         error is @http.URIParseError::InvalidFormat ||
@@ -239,7 +236,6 @@ pub async fn Client::chat(
     IdleTimeout(context, timeout_ms) =>
       fail("\{context} idle for \{timeout_ms}ms")
     StreamEnded => fail("DeepSeek stream ended before [DONE]")
-    ResponseError(message) => fail(message)
     error => raise error
   }
 }
@@ -255,22 +251,19 @@ async fn Client::chat_attempt(
   })
   let text = data.text()
   guard resp.code >= 200 && resp.code < 300 else {
-    raise HttpStatusError(resp.code, text)
+    if retryable_status(resp.code) {
+      raise HttpStatusError(resp.code, text)
+    }
+    fail("DeepSeek API error \{resp.code}: \{text}")
   }
   // A 2xx body that fails to parse or decode is a final verdict, not a
   // transport error: the completion already ran (and billed), so retrying
   // would duplicate it for the same bad payload.
   let json = @json.parse(text) catch {
-    error =>
-      raise ResponseError(
-        "DeepSeek response is not JSON: \{error}; body: \{text}",
-      )
+    error => fail("DeepSeek response is not JSON: \{error}; body: \{text}")
   }
   @json.from_json(json) catch {
-    error =>
-      raise ResponseError(
-        "DeepSeek response decode error: \{error}; body: \{text}",
-      )
+    error => fail("DeepSeek response decode error: \{error}; body: \{text}")
   }
 }
 
@@ -307,7 +300,10 @@ async fn Client::chat_stream_attempt(
   guard resp.code >= 200 && resp.code < 300 else {
     progress.phase = ResponseBody
     let text = client.read_all().text()
-    raise HttpStatusError(resp.code, text)
+    if retryable_status(resp.code) {
+      raise HttpStatusError(resp.code, text)
+    }
+    fail("DeepSeek API error \{resp.code}: \{text}")
   }
   // The stream reader finalizes malformed SSE payloads at its parse site
   // (see decode_sse_data in stream.mbt), so a mid-stream transport error

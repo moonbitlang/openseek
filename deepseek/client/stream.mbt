@@ -186,12 +186,9 @@ async fn flush_sse_event(
     acc,
     // A malformed payload on an established 2xx stream is a final verdict:
     // the completion already ran (and billed), so the retry loop must not
-    // re-run it. Keep that verdict typed until retry classification finishes.
+    // re-run it. Failure marks the parse error as non-retryable.
     @json.parse(data) catch {
-      error =>
-        raise ResponseError(
-          "DeepSeek stream decode error: \{error}; data: \{data}",
-        )
+      error => fail("DeepSeek stream decode error: \{error}; data: \{data}")
     },
     on_content_delta~,
     on_reasoning_delta~,
@@ -265,7 +262,8 @@ async fn read_chat_stream(
     // is model output already produced (and billed), so flushing fires
     // on_stream_event and keeps the retry loop from replaying a half-consumed
     // completion. EOF and timeout differ only in the retry reason.
-    let error : ApiError = match read_stream_line(reader, idle_timeout_ms) {
+    let error : RetryableApiError = match
+      read_stream_line(reader, idle_timeout_ms) {
       Some(Some(raw)) => {
         let trimmed = raw.trim()
         if trimmed.is_empty() {
@@ -307,7 +305,6 @@ async fn read_chat_stream(
     last_event_at=sse.last_event_at,
   )
   acc.response() catch {
-    error =>
-      raise ResponseError("DeepSeek stream response decode error: \{error}")
+    error => fail("DeepSeek stream response decode error: \{error}")
   }
 }

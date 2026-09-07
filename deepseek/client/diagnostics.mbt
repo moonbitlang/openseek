@@ -64,7 +64,6 @@ fn RequestProgress::failure_message(
       "Request idle for \{timeout_ms} ms: \{context}"
     HttpStatusError(code, body) => "HTTP \{code}: \{body}"
     StreamEnded => "Stream ended before [DONE]"
-    ResponseError(message) => "Invalid model response: \{message}"
     @http.IncorrectBodyLength => "HTTP response body length mismatch"
     error => "\{@debug.Repr(error)}"
   }

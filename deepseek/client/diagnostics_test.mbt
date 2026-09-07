@@ -229,7 +229,7 @@ async test "malformed buffered response is not mislabeled as the idle timeout th
     assert_eq(hits.val, 1)
     assert_eq(failures.length(), 1)
     let text = failures[0]
-    assert_true(text.contains("Invalid model response"))
+    assert_true(text.contains("DeepSeek stream decode error"))
     assert_true(
       text.contains("Not retried because response data was already received."),
     )
