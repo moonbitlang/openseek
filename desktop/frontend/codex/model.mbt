@@ -3059,7 +3059,7 @@ test "carried Codex rows do not revive running after completion" {
     0,
   )
   assert_true(
-    completed.activity.presentation("thread-1") is @conversation.NoRunMark,
+    completed.activity.presentation("thread-1") is @conversation.CompletedMark,
   )
   let (frontier, activity) = completed.activity.reserve_snapshot()
   let refreshed = { ..completed, activity, }.with_threads(
@@ -3069,7 +3069,7 @@ test "carried Codex rows do not revive running after completion" {
   )
   assert_eq(refreshed.threads.map(thread => thread.id), ["thread-1"])
   assert_true(
-    refreshed.activity.presentation("thread-1") is @conversation.NoRunMark,
+    refreshed.activity.presentation("thread-1") is @conversation.CompletedMark,
   )
 }
 

@@ -100,7 +100,9 @@ After a response is accepted, continuing work returns to the running cue.
 
 Completion and failure remain unread until the terminal turn is actually
 visible in a focused window. A retained selection on another screen is not a
-read receipt. Refreshing an idle catalog must not erase the outcome, and stale
+read receipt. Expanded editor panels and narrow-layout editor overlays also
+keep outcomes unread; restoring or closing the panel acknowledges the outcome
+only when it reveals the transcript. Refreshing an idle catalog must not erase the outcome, and stale
 snapshots must not revive a completed run. Cancellation is labeled as stopped,
 not failed. Status meaning must remain distinguishable without color or motion.
 

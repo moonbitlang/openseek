@@ -1686,20 +1686,7 @@ fn view(
     ) {
     return console_gate_view(dispatch, console)
   }
-  let active_file_ctx = file_ctx(model)
-  // Panel state survives page switches, but a Codex page only exposes it
-  // after a real task supplies the identity (and, for files, a cwd) needed by
-  // the host operation. Selecting a task makes an already-open panel reappear
-  // in that task's workspace.
-  let file_panel_visible = model.right_panel_open &&
-    (
-      model.screen is Chat ||
-      (
-        model.screen is Codex &&
-        active_file_ctx.placement is Some(placement) &&
-        placement.checkout_root() is Some(_)
-      )
-    )
+  let file_panel_visible = model.file_panel_visible()
   let terminal_panel_visible = model.terminal_panel_visible()
   // Pages without their own topbar still paint beneath the native overlay.
   // Mark their main element so the document-level double-click gesture can

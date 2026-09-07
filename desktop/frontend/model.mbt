@@ -3480,6 +3480,29 @@ fn Model::conversation_by_pending_steer(
 }
 
 ///|
+/// Panel state survives page switches, but the panel is rendered only when
+/// the current task supplies the identity and checkout needed by the host.
+/// Rendering and read acknowledgment must agree on whether it covers a chat.
+fn Model::file_panel_visible(self : Model) -> Bool {
+  self.right_panel_open &&
+  (
+    self.screen is Chat ||
+    (
+      self.screen is Codex &&
+      file_ctx(self).placement is Some(placement) &&
+      placement.checkout_root() is Some(_)
+    )
+  )
+}
+
+///|
+fn Model::transcript_is_visible(self : Model) -> Bool {
+  self.window_focused &&
+  (self.screen is Chat || self.screen is Codex) &&
+  !(self.file_panel_visible() && (self.right_panel_expanded || self.narrow))
+}
+
+///|
 /// Whether this conversation is the transcript the reader can currently see.
 /// Keeping this predicate separate from the unread bit makes window focus a
 /// read-state input, not a second encoding of read state.
@@ -3488,7 +3511,7 @@ fn Model::conversation_is_visible(
   channel : @interop.ChannelId,
   session_id : String,
 ) -> Bool {
-  self.window_focused &&
+  self.transcript_is_visible() &&
   self.screen is Chat &&
   channel == self.focused &&
   session_id == self.active_session
@@ -3517,10 +3540,12 @@ fn Model::mark_conversation_read(
 /// latest completion. Other screens retain the unread state until the reader
 /// returns to the transcript.
 fn Model::mark_visible_conversation_read(self : Model) -> Model {
-  guard self.conversation_is_visible(self.focused, self.active_session) else {
-    return self
+  guard self.transcript_is_visible() else { return self }
+  if self.screen is Codex {
+    { ..self, codex: self.codex.mark_visible_read(), }
+  } else {
+    self.mark_conversation_read(self.focused, self.active_session)
   }
-  self.mark_conversation_read(self.focused, self.active_session)
 }
 
 ///|
