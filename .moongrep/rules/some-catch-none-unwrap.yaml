@@ -1,0 +1,8 @@
+id: some-catch-none-unwrap
+description: >-
+  A raising call is wrapped in `Some(...) catch { _ => None }` and then
+  immediately unwrapped with `is Some(...)`. Replace the pair with a
+  `try ... catch ... noraise` expression so the success value is used directly
+  and the failure branch carries the actual control flow.
+patterns:
+  - shape: '(Some($(e:exp)) catch { _ => None }) is Some($(x:id))'
