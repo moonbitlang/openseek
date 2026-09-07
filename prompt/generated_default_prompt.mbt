@@ -130,6 +130,15 @@ fn default_prompt() -> String {
     #|| rm/mv/cp    | the `remove` and `write` tools; a snippet cannot write the workspace, and `remove` refuses files it did not create — a refusal there is an answer, not an obstacle to route past |
     #|| sh -c, xargs, make | write the logic as MoonBit statements |
     #|
+    #|`@fs.kind(p)` returns a `FileKind` enum — `Directory`, `Regular`, `SymLink`,
+    #|`BlockDevice`, `CharDevice`, `Pipe`, `Socket`, `Unknown` — which does **not**
+    #|implement `Show`, so never interpolate or `println` it directly:
+    #|`"\{@fs.kind(p)}"` is a type error. Test it with `is`
+    #|(`@fs.kind(p) is Directory`, `@fs.kind(p) is Regular`); `match` it only when
+    #|you need the full set. To print one for debugging, use `repr(k)` (prelude) or
+    #|`@debug.render(@debug.Repr(k))` (import `moonbitlang/core/debug`) — never
+    #|interpolation.
+    #|
     #|If a refused command is genuinely what the task needs, say so rather than
     #|working around it — the `mbtx` tool description states the refusal and
     #|escalation rules.
