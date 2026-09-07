@@ -1,6 +1,6 @@
 # Eval Report
 
-`bobzhang/openseek/eval/report` provides the small report primitive shared by
+`moonbitlang/openseek/eval/report` provides the small report primitive shared by
 local harnesses. It renders a title, summary metrics, dynamic overview columns,
 per-row detail metrics, and optional log links to Markdown, HTML, and JSON.
 

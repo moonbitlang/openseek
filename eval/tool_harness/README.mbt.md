@@ -1,6 +1,6 @@
 # Tool Harness
 
-`bobzhang/openseek/eval/tool_harness` is a deterministic harness for the local
+`moonbitlang/openseek/eval/tool_harness` is a deterministic harness for the local
 tool layer. It creates temporary fixtures, dispatches every built-in tool
 through `agent_tool.execute_tool_call`, and returns a shared `eval/report`
 report.

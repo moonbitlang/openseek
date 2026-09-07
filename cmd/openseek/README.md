@@ -5,7 +5,7 @@ This package is the native-only automation entry point for OpenSeek — the
 interactive terminal UI is the separate `openseek_tui` binary, maintained in
 [moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui)). It parses arguments with
 `moonbitlang/core/argparse`, reads defaults from environment variables, and
-drives turns through `bobzhang/openseek/agent.run_turn_in_scope` (both one-shot
+drives turns through `moonbitlang/openseek/agent.run_turn_in_scope` (both one-shot
 `run` and durable sessions; fleet mode's independent attempts use
 `agent.run_turn_with_append`).
 

@@ -52,7 +52,7 @@ opening of the reply it drew — and clicking jumps to the prompt's card
 |------------------|--------|---------------------------------------------------------------------|
 | `viz`            | js     | Pure parse + render: session-file text → typed events → `@html.Html`. Reuses `agent_session` decoders and projection, so it stays correct as the format evolves. |
 | `cmd/viz_app`    | js     | The rabbita (TEA) frontend: session browser, fetch, mode toggle.    |
-| `inspect`        | native+wasm | Read-only web server (`moonbitlang/async/http`, standalone module `bobzhang/inspect`) exposing a JSON/raw-file API over discovered `openseek_session-*.jsonl` files. It never writes, so pointing it at a live session root is safe. |
+| `inspect`        | native+wasm | Read-only web server (`moonbitlang/async/http`, standalone module `moonbitlang/inspect`) exposing a JSON/raw-file API over discovered `openseek_session-*.jsonl` files. It never writes, so pointing it at a live session root is safe. |
 
 The `viz` library keeps its parsing, projection, and error-count rules
 headless-testable. `render_session` returns `@html.Html`, which the Rabbita

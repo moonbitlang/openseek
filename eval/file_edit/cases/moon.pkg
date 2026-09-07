@@ -1,5 +1,5 @@
 import {
-  "bobzhang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
 }
 
 warnings = "+unnecessary_annotation"

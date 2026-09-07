@@ -1,9 +1,9 @@
 import {
-  "bobzhang/openseek/deepseek",
-  "bobzhang/openseek/eval/prompt_task/harness",
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek/eval/prompt_task/harness",
   "moonbitlang/async",
   "moonbitlang/core/argparse",
-  "bobzhang/openseek/cli",
+  "moonbitlang/openseek/cli",
 }
 
 warnings = "+unnecessary_annotation"

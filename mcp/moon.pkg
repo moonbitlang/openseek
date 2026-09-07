@@ -1,9 +1,9 @@
 import {
-  "bobzhang/openseek/jsonrpc",
+  "moonbitlang/openseek/jsonrpc",
 }
 
 import {
-  "bobzhang/openseek/jsonrpc",
+  "moonbitlang/openseek/jsonrpc",
   "moonbitlang/async",
 } for "test"
 

@@ -78,7 +78,7 @@ export KIMI=<kimi key>
 # Build a prebuilt engine once so trials exec it directly instead of
 # recompiling cmd/openseek per trial.
 moon build --target native cmd/openseek
-ENGINE="$PWD/_build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe"
+ENGINE="$PWD/_build/native/debug/build/moonbitlang/openseek/cmd/openseek/openseek.exe"
 
 # Run the full suite (7 problems × 2 models × 3 repeats). No --api-key: keys are
 # inherited from the environment per provider.

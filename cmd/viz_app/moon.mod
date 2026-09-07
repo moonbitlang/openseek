@@ -1,9 +1,9 @@
-name = "bobzhang/openseek-viz-app"
+name = "moonbitlang/openseek-viz-app"
 
 version = "0.1.0"
 
 import {
-  "bobzhang/openseek@0.2.2",
+  "moonbitlang/openseek@0.2.2",
   "moonbit-community/rabbita@0.15.4",
 }
 
