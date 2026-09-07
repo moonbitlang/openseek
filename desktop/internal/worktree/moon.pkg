@@ -16,6 +16,7 @@ warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op
 
 import {
   "openseek_desktop/internal/processx",
+  "tonyfettes/platform",
 } for "wbtest"
 
 supported_targets = "+native"

@@ -1,9 +1,9 @@
 ///|
-#cfg(platform="windows")
-async test "Windows worktree creation reads settings using a resource path" {
+async test "worktree creation reads settings using a resource path" {
   let root = worktree_test_root("openseek-worktree-windows-")
-  // Git objects are read-only on Windows; fs.rmdir cannot remove them.
-  defer {
+  let windows = @platform.win32 || @platform.win64
+  defer (if windows {
+    // Git objects are read-only on Windows; fs.rmdir cannot remove them.
     let (code, _, stderr) = @processx.collect_output_no_stdin(
       "powershell.exe",
       [
@@ -12,13 +12,16 @@ async test "Windows worktree creation reads settings using a resource path" {
       extra_env={ "OPENSEEK_WORKTREE_TEST_ROOT": root.to_string() },
     )
     assert_eq(code, 0, msg=stderr.text())
-  }
-  let previous = @sys.get_env_var("USERPROFILE")
-  @sys.set_env_var("USERPROFILE", root.join("global").to_string())
-  defer (if previous is Some(value) {
-    @sys.set_env_var("USERPROFILE", value)
   } else {
-    @sys.unset_env_var("USERPROFILE")
+    @fs.rmdir(root.to_string(), recursive=true)
+  })
+  let home_variable = if windows { "USERPROFILE" } else { "HOME" }
+  let previous = @sys.get_env_var(home_variable)
+  @sys.set_env_var(home_variable, root.join("global").to_string())
+  defer (if previous is Some(value) {
+    @sys.set_env_var(home_variable, value)
+  } else {
+    @sys.unset_env_var(home_variable)
   })
   let repo = root.join("repo")
   @fsx.ensure_dir(repo.to_path())
