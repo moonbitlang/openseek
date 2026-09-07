@@ -53,11 +53,11 @@ async test "idle stream delivers partial output once without retrying" {
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
-    let hits = Ref(0)
+    let mut hits = 0
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever((_request, body, conn) => {
         ignore(body.read_all())
-        hits.val += 1
+        hits += 1
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
@@ -84,7 +84,7 @@ async test "idle stream delivers partial output once without retrying" {
     } noraise {
       _ => fail("expected timeout")
     }
-    assert_eq(hits.val, 1)
+    assert_eq(hits, 1)
     assert_eq(deltas, ["partial"])
   }
 }
@@ -94,12 +94,12 @@ async test "a thrown body read after a buffered data line cannot replay the requ
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
-    let hits = Ref(0)
+    let mut hits = 0
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {
           ignore(body.read_all())
-          hits.val += 1
+          hits += 1
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "text/event-stream",
             "Content-Length": "10000",
@@ -128,7 +128,7 @@ async test "a thrown body read after a buffered data line cannot replay the requ
     } noraise {
       _ => fail("expected body read failure")
     }
-    assert_eq(hits.val, 1)
+    assert_eq(hits, 1)
   }
 }
 
@@ -161,11 +161,11 @@ async test "idle flush preserves malformed response payload without retrying" {
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
-    let hits = Ref(0)
+    let mut hits = 0
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever((_request, body, conn) => {
         ignore(body.read_all())
-        hits.val += 1
+        hits += 1
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
@@ -191,7 +191,7 @@ async test "idle flush preserves malformed response payload without retrying" {
     } noraise {
       _ => fail("expected invalid response")
     }
-    assert_eq(hits.val, 1)
+    assert_eq(hits, 1)
   }
 }
 
