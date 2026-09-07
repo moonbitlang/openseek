@@ -261,6 +261,13 @@ button.panel-toggle:not(:disabled):hover {
   flex-basis: 0;
 }
 
+/* Follow the pointer immediately while dragging either tree axis. Resizing
+   the sidebar or editor can also change the tree's clamped size; animate its
+   open/close changes again once the drag ends. */
+html:is(.is-resizing, .is-resizing-row, .is-resizing-col) .file-tree-pane {
+  transition: none;
+}
+
 /* Drag-to-resize handle on the panel's viewer-facing seam — the
    row-resize twin of .editor-resize-handle in the bottom layout, a
    col-resize strip on the left seam in the sidebar layout. */

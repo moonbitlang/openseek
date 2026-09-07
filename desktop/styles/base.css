@@ -408,6 +408,15 @@ html.native-titlebar-overlay .app .window-titlebar-drag-strip {
     grid-template-rows var(--drawer-duration) var(--drawer-easing);
 }
 
+/* A drag continuously changes the target size. Restarting the drawer
+   transition on every move makes the seam lag behind the pointer. The drag
+   classes last until mouseup, so ordinary open/close motion stays animated. */
+html.is-resizing .app,
+html.is-resizing .content,
+html.is-resizing-terminal .content {
+  transition: none;
+}
+
 /* Opening the terminal carves a resizable second row out of the conversation
    column. The editor keeps the full height in its own column. */
 .content.terminal-open {
