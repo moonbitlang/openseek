@@ -1,3 +1,17 @@
+# Current review: chat separator
+
+The user deprioritized the covered-transcript edge case below. The current
+review concerns the horizontal rule between the user prompt and assistant
+answer. Open A, Start A, Finish A; restore or hide the file panel to see both.
+The production shared transcript renderer deliberately inserts `TurnRule`
+after user messages, with an optional send time. This fixture omits timestamps,
+so the line is bare. No separator styling or production behavior has changed.
+
+The earlier panel scenario now has explicit in-page instructions naming both
+Show panel / Show files and Expand panel, including the visible checkpoint
+that the messages disappear. Future scenarios must list each required UI
+transition instead of assuming the user knows the setup.
+
 # Selecting a covered task
 
 This throwaway replay uses unchanged production code from main `8b00cad`

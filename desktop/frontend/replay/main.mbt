@@ -172,9 +172,9 @@ fn main {
               requested: msg is Ask,
               events: [..state.events, encoded],
               note: if msg is Finish || msg is Fail {
-                "A has ended. With the panel still expanded, select A: does its unread cue survive until the transcript is visible?"
+                "Select Task A to inspect the prompt, separator, and answer. If the file panel covers the chat, use Restore panel or Hide panel first."
               } else if msg is Start {
-                "Open Task B, show the file panel and expand it, then finish or fail A."
+                "For separator review, stay on Task A and press Finish A. For the earlier unread-cue scenario, follow the panel steps below."
               } else {
                 "A is waiting for a decision. Inspect the background UI, then open A to find and answer the actual approval card. Reset and stay on A to compare."
               },
@@ -193,13 +193,13 @@ fn main {
       @html.div([
         @html.strong(
           if is_openseek() {
-            "OpenSeek · selecting a covered task"
+            "OpenSeek · chat separator review"
           } else {
-            "Codex · selecting a covered task"
+            "Codex · chat separator review"
           },
         ),
         @html.p(
-          "Open A → Start A → open B → show and expand panel → Finish A → select A. Should selecting a hidden transcript count as reading it?",
+          "Separator review: open Task A → Start A → Finish A. Inspect the line between the prompt and answer. The earlier panel scenario is documented below.",
         ),
         @html.div([
           @html.button(disabled=state.running, on_click=emit(Start), "Start A"),
@@ -217,6 +217,10 @@ fn main {
           @html.button(on_click=emit(Reset), "Reset replay"),
         ]),
         @html.p(state.note),
+        @html.details([
+          @html.summary("Earlier scenario: exact panel steps (deprioritized)"),
+          @html.p("1. Reset replay. Select Task A and press Start A. 2. Select Task B. 3. In the app top-right, click Show panel (OpenSeek) or Show files (Codex). 4. In the panel header, click Expand panel: the chat messages must disappear, leaving Search, Files, Review, and Workflows. 5. Press Finish A above. 6. Select Task A and move the pointer off its row. 7. Click Restore panel to reveal the transcript. Selecting a task alone does not perform steps 3 and 4."),
+        ]),
         @html.details([
           @html.summary("Synthetic events and limits"),
           @html.p(
