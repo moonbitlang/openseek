@@ -33,6 +33,8 @@ jobs:
           moon version --all
           moon update
 
+      # MOONCAKES_MOONBITLANG_TOKEN is the moonbitlang org's mooncakes token:
+      # only it can publish under the moonbitlang/* owner namespace.
       - name: publish moonbitlang/openseek_protocol
         env:
           SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
@@ -44,9 +46,10 @@ jobs:
             echo "Please contact an admin to grant access to this secret."
             exit 1
           fi
+          trap 'rm -f ~/.moon/credentials.json' EXIT
           echo "$SECRET" > ~/.moon/credentials.json
           moon publish
-          rm ~/.moon/credentials.json
+          rm -f ~/.moon/credentials.json
 
       - name: publish moonbitlang/openseek
         env:
@@ -58,6 +61,7 @@ jobs:
             echo "Please contact an admin to grant access to this secret."
             exit 1
           fi
+          trap 'rm -f ~/.moon/credentials.json' EXIT
           echo "$SECRET" > ~/.moon/credentials.json
           moon publish
-          rm ~/.moon/credentials.json
+          rm -f ~/.moon/credentials.json
