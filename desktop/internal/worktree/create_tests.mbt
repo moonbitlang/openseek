@@ -1,5 +1,8 @@
 ///|
 async test "worktree creation reads settings using a resource path" {
+  worktree_env_test_lock.acquire()
+  // Release only after the home variable has been restored by the defer below.
+  defer worktree_env_test_lock.release()
   let root = worktree_test_root("openseek-worktree-windows-")
   let windows = @platform.win32 || @platform.win64
   defer (if windows {

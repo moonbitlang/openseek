@@ -1178,9 +1178,8 @@ async fn worktree_test_root(prefix : String) -> @pathx.Absolute {
 }
 
 ///|
-/// Tests that redirect HOME share the process environment,
+/// Tests that redirect HOME or USERPROFILE share the process environment,
 /// so they run one at a time.
-#cfg(not(platform="windows"))
 let worktree_env_test_lock : @async.Mutex = Mutex()
 
 ///|
