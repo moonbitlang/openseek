@@ -186,9 +186,12 @@ async fn flush_sse_event(
     acc,
     // A malformed payload on an established 2xx stream is a final verdict:
     // the completion already ran (and billed), so the retry loop must not
-    // re-run it. fail() converts the parse error to the non-retryable class.
+    // re-run it. Keep that verdict typed until retry classification finishes.
     @json.parse(data) catch {
-      error => fail("DeepSeek stream decode error: \{error}; data: \{data}")
+      error =>
+        raise ResponseError(
+          "DeepSeek stream decode error: \{error}; data: \{data}",
+        )
     },
     on_content_delta~,
     on_reasoning_delta~,
@@ -197,7 +200,7 @@ async fn flush_sse_event(
 }
 
 ///|
-/// Runs `read` under an idle bound, raising `RetryableApiError` directly if it
+/// Runs `read` under an idle bound, raising `IdleTimeout` directly if it
 /// produces nothing within `idle_timeout_ms`. Use it only where a stall leaves
 /// no buffered state to reconcile — the response-header read, where nothing has
 /// been produced yet so retrying on a fresh connection is unconditionally safe.
@@ -214,7 +217,7 @@ async fn[T] with_idle_timeout(
   } else {
     match @async.with_timeout_opt(idle_timeout_ms, read) {
       Some(value) => value
-      None => raise RetryableApiError("\{what} idle for \{idle_timeout_ms}ms")
+      None => raise IdleTimeout(what, idle_timeout_ms)
     }
   }
 }
@@ -239,11 +242,21 @@ async fn read_stream_line(
 ///|
 async fn read_chat_stream(
   reader : @http.Client,
+  progress : RequestProgress,
   idle_timeout_ms~ : Int,
-  on_stream_event~ : () -> Unit,
   on_content_delta~ : async (String) -> Unit,
   on_reasoning_delta~ : async (String) -> Unit,
 ) -> @deepseek.ChatResponse {
+  let sse : SseProgress = {
+    event_count: 0,
+    last_event_at: None,
+    buffered_data: false,
+  }
+  progress.phase = Sse(sse)
+  let on_stream_event = () => {
+    sse.event_count += 1
+    sse.last_event_at = Some(@async.now())
+  }
   let acc = StreamAccumulator::StreamAccumulator()
   let data_lines : Array[String] = []
   for ;; {
@@ -252,10 +265,11 @@ async fn read_chat_stream(
     // is model output already produced (and billed), so flushing fires
     // on_stream_event and keeps the retry loop from replaying a half-consumed
     // completion. EOF and timeout differ only in the retry reason.
-    let reason = match read_stream_line(reader, idle_timeout_ms) {
+    let error : ApiError = match read_stream_line(reader, idle_timeout_ms) {
       Some(Some(raw)) => {
         let trimmed = raw.trim()
         if trimmed.is_empty() {
+          sse.buffered_data = false
           if flush_sse_event(
               acc,
               data_lines,
@@ -267,12 +281,16 @@ async fn read_chat_stream(
           }
         } else if sse_data_fragment(raw) is Some(data) {
           data_lines.push(data)
+          // A socket exception can bypass EOF flushing. Once a data line is
+          // buffered, retrying must not replay the partially received output.
+          sse.buffered_data = true
         }
         continue
       }
-      Some(None) => "DeepSeek stream ended before [DONE]"
-      None => "DeepSeek stream idle for \{idle_timeout_ms}ms"
+      Some(None) => StreamEnded
+      None => IdleTimeout("DeepSeek stream", idle_timeout_ms)
     }
+    sse.buffered_data = false
     if flush_sse_event(
         acc,
         data_lines,
@@ -282,7 +300,14 @@ async fn read_chat_stream(
       ) {
       break
     }
-    raise RetryableApiError(reason)
+    raise error
   }
-  acc.response()
+  progress.phase = Decode(
+    event_count=sse.event_count,
+    last_event_at=sse.last_event_at,
+  )
+  acc.response() catch {
+    error =>
+      raise ResponseError("DeepSeek stream response decode error: \{error}")
+  }
 }

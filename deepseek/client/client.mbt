@@ -111,11 +111,13 @@ fn retryable_status(code : Int) -> Bool {
 }
 
 ///|
-/// Marks an attempt failure the retry loop may absorb. Carries the
-/// already-formatted public failure message so the final attempt re-raises
-/// the same text a non-retrying client would have produced.
-priv suberror RetryableApiError {
-  RetryableApiError(String)
+/// Provider errors stay typed through retries and diagnostic construction.
+/// The public chat boundary formats them as Failure messages.
+priv suberror ApiError {
+  HttpStatusError(Int, String)
+  IdleTimeout(String, Int)
+  StreamEnded
+  ResponseError(String)
 }
 
 ///|
@@ -129,23 +131,21 @@ let max_backoff_ms : Int = 60_000
 /// (exponential backoff doubling from `retry_backoff_ms`, capped at
 /// `max_backoff_ms`; `max_retry` counts restarts, hence the -1).
 ///
-/// The `fatal_error` classification: cancellations, plain failures (our own
-/// final verdicts — non-retryable HTTP statuses, malformed response bodies,
-/// truncated streams), and malformed-api_url parse errors (which fail
-/// identically every time, before any network I/O) propagate immediately;
+/// Cancellations, non-retryable HTTP statuses, malformed responses, plain
+/// failures, and malformed-api_url parse errors propagate immediately;
 /// anything else is transport-shaped (connect refused, reset, DNS) and
 /// retries within budget. `bail` lets an attempt declare later retries
 /// pointless — streaming chat sets it once the stream has produced any event,
 /// since replaying a half-consumed completion would duplicate content (or
 /// regenerate tool calls) downstream.
 ///
-/// A `RetryableApiError` that survives the budget (or bail) re-raises as a
-/// plain failure carrying the same text a non-retrying client would have
-/// produced, so the private marker type never escapes the package.
+/// Errors propagate with their types intact. The chat boundary observes the
+/// final cause before adding request context for the caller.
 async fn[T] Client::with_retries(
   self : Client,
   attempt : async () -> T,
   bail : () -> Bool,
+  progress? : RequestProgress,
 ) -> T {
   @async.retry(
     ExponentialDelay(
@@ -155,17 +155,27 @@ async fn[T] Client::with_retries(
     ),
     max_retry=self.retry_attempts - 1,
     fatal_error=error => {
-      bail() ||
-      @async.is_cancellation_error(error) ||
-      error is Failure::Failure(_) ||
-      error is @http.URIParseError::InvalidFormat ||
-      error is @http.URIParseError::UnsupportedProtocol(_)
+      let streamed = bail()
+      let fatal = streamed ||
+        (error is HttpStatusError(code, _) && !retryable_status(code)) ||
+        error is ResponseError(_) ||
+        @async.is_cancellation_error(error) ||
+        error is Failure::Failure(_) ||
+        error is @http.URIParseError::InvalidFormat ||
+        error is @http.URIParseError::UnsupportedProtocol(_)
+      if progress is Some(progress) {
+        progress.stop_reason = if streamed {
+          StreamStarted
+        } else if fatal {
+          NotRetryable
+        } else {
+          AttemptsExhausted
+        }
+      }
+      fatal
     },
     attempt,
-  ) catch {
-    RetryableApiError(message) => fail(message)
-    error => raise error
-  }
+  )
 }
 
 ///|
@@ -176,6 +186,8 @@ async fn[T] Client::with_retries(
 /// be constrained to a JSON object. Pass `stream=StreamHandler(...)` to send
 /// the request in SSE streaming mode while still receiving the accumulated
 /// response as the return value.
+/// Streaming failures include request progress in the Failure message after
+/// retries stop. Cancellation propagates unchanged.
 pub async fn Client::chat(
   self : Client,
   messages : Array[@deepseek.ChatMessage],
@@ -191,27 +203,44 @@ pub async fn Client::chat(
     stream=is_streaming,
     response_format?,
   ) <| messages
-  match stream {
-    None => self.with_retries(() => self.chat_attempt(body), () => false)
-    Some(stream) => {
-      // Once the server has produced any complete SSE event the completion is
-      // running and billed — text deltas, tool-call deltas, and usage alike,
-      // even though only text reaches the callbacks. A retry past that point
-      // could duplicate content or generate a different tool call, so the
-      // first event (not just the first text delta) bails the retry loop and
-      // failures surface instead (Codex review).
-      let mut streamed = false
-      self.with_retries(
-        () => {
-          self.chat_stream_attempt(
-            body,
-            on_stream_event=() => streamed = true,
-            stream,
-          )
-        },
-        () => streamed,
-      )
+  try {
+    match stream {
+      None => self.with_retries(() => self.chat_attempt(body), () => false)
+      Some(stream) => {
+        // Once the server has produced any complete SSE event the completion is
+        // running and billed — text deltas, tool-call deltas, and usage alike,
+        // even though only text reaches the callbacks. A retry past that point
+        // could duplicate content or generate a different tool call, so the
+        // first event (not just the first text delta) bails the retry loop and
+        // failures surface instead (Codex review).
+        let progress = RequestProgress()
+        self.with_retries(
+          () => {
+            progress.begin_attempt()
+            self.chat_stream_attempt(body, progress, stream)
+          },
+          () => {
+            match progress.phase {
+              Sse(sse) => sse.event_count > 0 || sse.buffered_data
+              Decode(event_count~, ..) => event_count > 0
+              Connect | WriteRequest | ResponseHeaders | ResponseBody => false
+            }
+          },
+          progress~,
+        ) catch {
+          error if @async.is_being_cancelled() ||
+            @async.is_cancellation_error(error) => raise error
+          error => fail(progress.failure_message(self, error))
+        }
+      }
     }
+  } catch {
+    HttpStatusError(code, body) => fail("DeepSeek API error \{code}: \{body}")
+    IdleTimeout(context, timeout_ms) =>
+      fail("\{context} idle for \{timeout_ms}ms")
+    StreamEnded => fail("DeepSeek stream ended before [DONE]")
+    ResponseError(message) => fail(message)
+    error => raise error
   }
 }
 
@@ -226,21 +255,22 @@ async fn Client::chat_attempt(
   })
   let text = data.text()
   guard resp.code >= 200 && resp.code < 300 else {
-    let message = "DeepSeek API error \{resp.code}: \{text}"
-    if retryable_status(resp.code) {
-      raise RetryableApiError(message)
-    }
-    fail(message)
+    raise HttpStatusError(resp.code, text)
   }
   // A 2xx body that fails to parse or decode is a final verdict, not a
   // transport error: the completion already ran (and billed), so retrying
   // would duplicate it for the same bad payload.
-  @json.from_json(
-    @json.parse(text) catch {
-      error => fail("DeepSeek response is not JSON: \{error}; body: \{text}")
-    },
-  ) catch {
-    error => fail("DeepSeek response decode error: \{error}; body: \{text}")
+  let json = @json.parse(text) catch {
+    error =>
+      raise ResponseError(
+        "DeepSeek response is not JSON: \{error}; body: \{text}",
+      )
+  }
+  @json.from_json(json) catch {
+    error =>
+      raise ResponseError(
+        "DeepSeek response decode error: \{error}; body: \{text}",
+      )
   }
 }
 
@@ -248,7 +278,7 @@ async fn Client::chat_attempt(
 async fn Client::chat_stream_attempt(
   self : Client,
   body : Json,
-  on_stream_event~ : () -> Unit,
+  progress : RequestProgress,
   stream : StreamHandler,
 ) -> @deepseek.ChatResponse {
   let client = @http.post_stream(self.api_url, headers={
@@ -261,23 +291,23 @@ async fn Client::chat_stream_attempt(
     "Accept-Encoding": "identity",
   })
   defer client.close()
+  progress.phase = WriteRequest
   client.write(body.stringify())
   // Bound the wait for response headers the same way the SSE loop bounds the
   // wait between events: a peer that accepts the connection then never sends a
   // status line would otherwise block here forever, before any event, with no
   // error for the retry loop to see.
+  progress.phase = ResponseHeaders
   let resp = with_idle_timeout(
     self.idle_timeout_ms,
     "DeepSeek response headers",
     () => client.end_request(),
   )
+  progress.http_status = Some(resp.code)
   guard resp.code >= 200 && resp.code < 300 else {
+    progress.phase = ResponseBody
     let text = client.read_all().text()
-    let message = "DeepSeek API error \{resp.code}: \{text}"
-    if retryable_status(resp.code) {
-      raise RetryableApiError(message)
-    }
-    fail(message)
+    raise HttpStatusError(resp.code, text)
   }
   // The stream reader finalizes malformed SSE payloads at its parse site
   // (see decode_sse_data in stream.mbt), so a mid-stream transport error
@@ -285,8 +315,8 @@ async fn Client::chat_stream_attempt(
   // decides whether retrying is allowed.
   read_chat_stream(
     client,
+    progress,
     idle_timeout_ms=self.idle_timeout_ms,
-    on_stream_event~,
     on_content_delta=stream.on_content_delta,
     on_reasoning_delta=stream.on_reasoning_delta,
   )
