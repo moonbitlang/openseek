@@ -4,7 +4,21 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Desktop replay application</title>
 <link rel="stylesheet" href="../../dev/viewer.css">
-<link rel="stylesheet" href="../../app.css">
+<script type="module">
+// Refresh every imported stylesheet; reloading only the manifest can retain
+// stale imports in a long-lived review tab.
+const revision = Date.now();
+const manifest = new URL('../../app.css', location.href);
+const css = await (await fetch(manifest, {cache:'no-store'})).text();
+for (const match of css.matchAll(/@import url\("([^"]+)"\);/g)) {
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  const url = new URL(match[1], manifest);
+  url.searchParams.set('replay', String(revision));
+  link.href = url.href;
+  document.head.append(link);
+}
+</script>
 <link rel="stylesheet" href="./transcript.prototype.css">
 <div id="app"></div>
 <script type="module">
