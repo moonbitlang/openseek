@@ -942,9 +942,9 @@ fn context_menu_boundary_index(
       }
     }
   } else {
-    for index = nodes.length() - 1; index >= 0; index = index - 1 {
-      if nodes[index] is Some(_) {
-        return index
+    for index, node in nodes.rev_iter() {
+      if node is Some(_) {
+        return nodes.length() - 1 - index
       }
     }
   }
