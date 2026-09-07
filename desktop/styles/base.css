@@ -290,10 +290,12 @@ html {
   }
 }
 
-/* Opening progress runs from 0 (no layout space) to 1 (the requested size).
-   Only open/close state changes animate it; dragging or window resizing
-   changes the requested size directly. These local numbers do not inherit
-   into nested panes. */
+/* Register progress as a number so CSS can interpolate between 0 and 1.
+   Layout size = requested size * opening progress: a 320px pane occupies
+   0px when closed, 160px at progress 0.5, and 320px when fully open.
+   Only toggling or expanding a pane animates progress. A resize changes the
+   requested size directly, without starting a new transition. These local
+   numbers do not inherit into nested panes. */
 @property --sidebar-open-progress {
   syntax: "<number>";
   inherits: false;
