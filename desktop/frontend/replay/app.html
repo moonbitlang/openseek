@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Desktop replay application</title>
+<link rel="stylesheet" href="../../dev/viewer.css">
+<link rel="stylesheet" href="../../app.css">
+<div id="app"></div>
+<script type="module">
+import './transport.js';
+const script = document.createElement('script');
+script.src = '../../target/replay.js';
+document.body.append(script);
+</script>
+</html>

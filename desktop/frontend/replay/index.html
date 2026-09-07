@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Desktop · background approval replay</title>
+<style>
+html,body{height:100%;margin:0}body{display:flex;flex-direction:column;background:#f8f9fb;color:#202632;font:14px/1.45 system-ui}
+#replay{flex:none;max-height:32vh;overflow:auto;padding:12px 24px;border-bottom:1px solid #ccd1da}
+#replay p{margin:6px 0}#replay button{font:inherit;background:white;border:1px solid #a6adba;padding:5px 12px;margin:4px 8px 4px 0;border-radius:6px;cursor:pointer}
+#replay button:disabled{opacity:.4;cursor:default}#replay pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}#replay summary{cursor:pointer}
+#application{flex:1;min-height:0;width:100%;border:0;background:white}
+</style>
+<nav style="padding:6px 24px"><a href="?device=device-a">Codex replay</a> · <a href="?device=device-a&provider=openseek">OpenSeek replay</a></nav>
+<div id="replay"></div>
+<iframe id="application" title="Production Desktop application" ></iframe>
+<script>document.getElementById("application").src = "./app.html" + location.search;</script>
+<script src="../../target/replay.js"></script>
+</html>

@@ -18,3 +18,11 @@ dev:
 test-browser:
     moon run package/browser --target native
     npm --prefix e2e test
+
+# Throwaway playback using the production frontend and a simulated host.
+replay:
+    moon build frontend/replay --target js
+    mkdir -p target
+    cp ../_build/js/debug/build/openseek_desktop/frontend/replay/replay.js target/replay.js
+    @echo 'Open http://127.0.0.1:5177/desktop/frontend/replay/index.html?device=device-a'
+    python3 -m http.server 5177 --bind 127.0.0.1 --directory ..

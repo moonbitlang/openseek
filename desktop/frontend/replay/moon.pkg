@@ -1,0 +1,14 @@
+import {
+  "openseek_desktop/frontend",
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+}
+
+supported_targets = "js"
+
+pkgtype(kind: "executable")
+
+options(
+  link: { "js": { "exports": [ ], "format": "iife" } },
+)
