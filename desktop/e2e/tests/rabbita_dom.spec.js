@@ -1016,6 +1016,32 @@ test('new chat materializes on send, and archive and restore update the sidebar'
   expect(app.pageErrors).toEqual([]);
 });
 
+test('sidebar sizes update immediately between toggles', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await app.install();
+  await app.goto();
+  await expect(page.getByRole('button', { name: 'Hide sidebar', exact: true }))
+    .toBeVisible();
+
+  // No drag class is set: any requested size must take effect immediately,
+  // while the separate toggle test continues to exercise open/close motion.
+  const samples = await page.locator('.app').evaluate(async element => {
+    const sidebar = element.querySelector(':scope > aside');
+    const samples = [];
+    for (const width of [300, 360, 420, 280]) {
+      document.documentElement.style.setProperty('--sidebar-width', `${width}px`);
+      samples.push({ requested: width, actual: sidebar.getBoundingClientRect().width });
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+    return samples;
+  });
+  for (const sample of samples) {
+    expect(Math.abs(sample.actual - sample.requested)).toBeLessThan(0.5);
+  }
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('sidebar toggle stays fixed throughout the sidebar animation', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();

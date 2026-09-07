@@ -222,22 +222,32 @@ button.panel-toggle:not(:disabled):hover {
    clamped so the panel floors at 96px while the viewer keeps at
    least 120px. The clamp also re-fits the panel on window resize
    without any script. */
+/* Only opening/closing changes this progress. The drag size stays outside
+   the transition, so both tree orientations follow size changes directly. */
+@property --tree-open-progress {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
 .file-tree-pane {
   position: relative;
   display: flex;
   flex-direction: column;
-  flex: 0 0 clamp(96px, var(--tree-height, 32%), calc(100% - 120px));
+  flex: 0 0 calc(
+    clamp(96px, var(--tree-height, 32%), calc(100% - 120px)) * var(--tree-open-progress)
+  );
   min-height: 0;
   overflow: hidden;
   border-top: 1px solid var(--color-separator);
   background: var(--color-bg-surface);
   visibility: visible;
   transition:
-    flex-basis var(--drawer-duration) var(--drawer-easing),
+    --tree-open-progress var(--drawer-duration) var(--drawer-easing),
     visibility 0s linear;
 }
 .editor:not(.tree-open) .file-tree-pane {
-  flex-basis: 0;
+  --tree-open-progress: 0;
   visibility: hidden;
   pointer-events: none;
   transition-delay: 0s, var(--drawer-duration);
@@ -252,20 +262,12 @@ button.panel-toggle:not(:disabled):hover {
   flex-direction: row;
 }
 .editor.tree-right .file-tree-pane {
-  flex: 0 0 clamp(180px, var(--tree-width, 260px), calc(100% - 240px));
+  flex: 0 0 calc(
+    clamp(180px, var(--tree-width, 260px), calc(100% - 240px)) * var(--tree-open-progress)
+  );
   min-width: 0;
   border-top: none;
   border-left: 1px solid var(--color-separator);
-}
-.editor.tree-right:not(.tree-open) .file-tree-pane {
-  flex-basis: 0;
-}
-
-/* Follow the pointer immediately while dragging either tree axis. Resizing
-   the sidebar or editor can also change the tree's clamped size; animate its
-   open/close changes again once the drag ends. */
-html:is(.is-resizing, .is-resizing-row, .is-resizing-col) .file-tree-pane {
-  transition: none;
 }
 
 /* Drag-to-resize handle on the panel's viewer-facing seam — the

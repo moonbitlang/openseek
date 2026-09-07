@@ -290,12 +290,42 @@ html {
   }
 }
 
+/* Opening progress runs from 0 (no layout space) to 1 (the requested size).
+   Only open/close state changes animate it; dragging or window resizing
+   changes the requested size directly. These local numbers do not inherit
+   into nested panes. */
+@property --sidebar-open-progress {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+@property --editor-open-progress {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --editor-expand-progress {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --terminal-open-progress {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
 .app {
   /* Vertical and horizontal resize handles share one hit-area size per axis.
      Component styles consume the dimension that matches their seam. */
   --resize-handle-width: 6px;
   --resize-handle-height: 6px;
-  --sidebar-column-width: clamp(220px, var(--sidebar-width, 264px), 480px);
+  --sidebar-column-width: calc(
+    clamp(220px, var(--sidebar-width, 264px), 480px) * var(--sidebar-open-progress)
+  );
   --sidebar-drawer-width: min(320px, 86vw);
   --sidebar-toggle-size: 28px;
   --topbar-inline-padding: 18px;
@@ -325,7 +355,7 @@ html {
      rather than 100vh, so the two height bases can't disagree. */
   height: 100%;
   min-height: 0;
-  transition: grid-template-columns var(--drawer-duration)
+  transition: --sidebar-open-progress var(--drawer-duration)
     var(--drawer-easing);
 }
 
@@ -333,8 +363,7 @@ html {
    takes the full width. The aside stays in the DOM (merely unmounted
    from layout) so reopening keeps its scroll position. */
 .app.sidebar-collapsed {
-  --sidebar-column-width: 0px;
-  grid-template-columns: 0 minmax(0, 1fr);
+  --sidebar-open-progress: 0;
 }
 .app.sidebar-collapsed > aside {
   visibility: hidden;
@@ -398,31 +427,34 @@ html.native-titlebar-overlay .app .window-titlebar-drag-strip {
    opens, so the viewer host element stays in the DOM but takes no
    space. */
 .content {
+  --editor-restored-width: clamp(360px, var(--editor-width, 50%), calc(100% - 240px));
+  /* Expansion fills the remainder beyond the saved width. Closing scales
+     the resulting column to zero without changing the saved drag size. */
+  --editor-column-width: calc(
+    (var(--editor-restored-width) +
+      (100% - var(--editor-restored-width)) * var(--editor-expand-progress)) *
+      var(--editor-open-progress)
+  );
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 0;
-  grid-template-rows: minmax(0, 1fr) 0;
+  grid-template-columns: minmax(0, 1fr) var(--editor-column-width);
+  grid-template-rows:
+    minmax(0, 1fr)
+    calc(
+      clamp(180px, var(--terminal-height, 38%), calc(100% - 180px)) *
+        var(--terminal-open-progress)
+    );
   min-width: 0;
   min-height: 0;
   transition:
-    grid-template-columns var(--drawer-duration) var(--drawer-easing),
-    grid-template-rows var(--drawer-duration) var(--drawer-easing);
-}
-
-/* A drag continuously changes the target size. Restarting the drawer
-   transition on every move makes the seam lag behind the pointer. The drag
-   classes last until mouseup, so ordinary open/close motion stays animated. */
-html.is-resizing .app,
-html.is-resizing .content,
-html.is-resizing-terminal .content {
-  transition: none;
+    --editor-open-progress var(--drawer-duration) var(--drawer-easing),
+    --editor-expand-progress var(--drawer-duration) var(--drawer-easing),
+    --terminal-open-progress var(--drawer-duration) var(--drawer-easing);
 }
 
 /* Opening the terminal carves a resizable second row out of the conversation
    column. The editor keeps the full height in its own column. */
 .content.terminal-open {
-  grid-template-rows:
-    minmax(0, 1fr)
-    clamp(180px, var(--terminal-height, 38%), calc(100% - 180px));
+  --terminal-open-progress: 1;
 }
 .content > main {
   grid-row: 1;
@@ -440,16 +472,14 @@ html.is-resizing-terminal .content {
    editor floors at 360px while the conversation keeps at least 240px. The
    clamp also re-fits the panel on window resize without any script. */
 .content.panel-open {
-  grid-template-columns:
-    minmax(0, 1fr)
-    clamp(360px, var(--editor-width, 50%), calc(100% - 240px));
+  --editor-open-progress: 1;
 }
 
 /* Expanded: keep the conversation mounted in a zero-width track and hand the
    whole content area to the editor. The saved --editor-width is untouched, so
    restoring returns to the user's previous split. */
 .content.panel-open.panel-expanded {
-  grid-template-columns: 0 minmax(0, 1fr);
+  --editor-expand-progress: 1;
 }
 
 /* The expanded editor occupies the main column and inherits its reservation. */
