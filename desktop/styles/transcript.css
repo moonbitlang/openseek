@@ -26,7 +26,7 @@
      the message off the right. minmax(0, …) lets it shrink so the
      pre's own `overflow: auto` scrolls and plain text wraps instead. */
   grid-template-columns: minmax(0, 1fr);
-  gap: 20px;
+  gap: 14px;
   max-width: 820px;
   margin: 0 auto;
 }
@@ -461,6 +461,9 @@
    used to. */
 .msg.user {
   justify-content: flex-end;
+  margin-top: 18px;
+}
+.stream > .msg.user:first-child {
   margin-top: 8px;
 }
 .user-bubble {
@@ -486,21 +489,16 @@
   white-space: nowrap;
 }
 
-/* Closes the user's turn: a hairline running to the right edge, where a
-   trailing label (the send time) can sit under the bubble it belongs
-   to. Empty of children it is simply the full-width rule. */
+/* Send time belongs beneath the prompt, without separating its answer. */
 .turn-rule {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  justify-content: flex-end;
+  margin-top: -8px;
   color: var(--color-text-faint);
   font-size: var(--font-size-xs);
 }
-.turn-rule::before {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--color-border);
+.turn-rule:empty {
+  display: none;
 }
 
 .msg-body {
@@ -508,8 +506,8 @@
   min-width: 0;
 }
 
-/* A completed assistant answer closes with a left-aligned metadata row: the
-   raw-Markdown action first, followed by the durable event's completion time.
+/* A completed assistant answer closes with the raw-Markdown action on the
+   left and the durable event's completion time on the right.
    The icon stays visible instead of relying on hover so touch and keyboard
    users can discover it. */
 .assistant-message-actions {
@@ -518,6 +516,13 @@
   justify-content: flex-start;
   gap: 8px;
   margin-top: 4px;
+}
+/* Actions lead; metadata trails the quiet end-of-exchange boundary. */
+.assistant-message-actions::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--color-border-subtle);
 }
 .assistant-message-copy {
   --icon-size: var(--icon-md);
@@ -533,6 +538,7 @@
   cursor: pointer;
 }
 .assistant-message-time {
+  order: 1;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
@@ -778,19 +784,7 @@
   color: var(--color-text-secondary);
 }
 
-/* live streaming bubble: a blinking caret after the latest text */
-.msg.streaming .msg-content::after {
-  content: "▍";
-  margin-left: 2px;
-  color: var(--color-text-secondary);
-  animation: caretBlink 1s steps(1) infinite;
-}
 
-@keyframes caretBlink {
-  50% {
-    opacity: 0;
-  }
-}
 
 
 .inline-code {

@@ -797,12 +797,8 @@ fn step_time_label(unix_ms : Double) -> String {
 }
 
 ///|
-/// The hairline closing a user's turn: everything below it until the next
-/// bubble is the agent's answer. Drawn after the bubble rather than before it
-/// because that is the boundary a reader needs — the bubble's own alignment
-/// already separates it from the answer above. The rule carries the prompt's
-/// send time at its right end, under the bubble it dates; a turn replayed
-/// from an unstamped store keeps the bare rule.
+/// The prompt's send time, aligned beneath its bubble. Unstamped history
+/// leaves this row empty; styling removes it from the layout.
 fn turn_rule_view(ts? : Double) -> @html.Html {
   let children : Array[@html.Html] = []
   if ts is Some(ts) {
