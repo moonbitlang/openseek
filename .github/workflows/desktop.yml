@@ -31,13 +31,79 @@ on:
       - "moon.work"
       - ".github/workflows/desktop.yml"
 
-# A newer PR head supersedes its older browser run. Keep main runs complete so
-# every relevant merged commit still receives a Desktop E2E result.
+# A newer PR head supersedes its older run. Keep main runs complete so every
+# relevant merged commit still receives Desktop E2E and packaging results.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  desktop-package-windows:
+    name: desktop package (Windows ZIP)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up MoonBit
+        run: |
+          Invoke-RestMethod https://cli.moonbitlang.com/install/powershell.ps1 | Invoke-Expression
+          "$env:USERPROFILE\.moon\bin" >> $env:GITHUB_PATH
+
+      - name: Update MoonBit dependencies
+        run: moon update
+
+      - name: Cache Proton runtime
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/moon.mod') }}
+
+      - name: Cache MoonBit toolchain seed
+        uses: actions/cache@v4
+        with:
+          path: desktop/target/moonbit/cache
+          key: moonbit-seed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/.moonbit-version') }}
+
+      - name: Assemble Proton CEF runtime
+        working-directory: desktop
+        run: |
+          $manifest = Get-Content moon.mod -Raw
+          if ($manifest -notmatch '"moonbit-community/proton@([^"]+)"') {
+            throw 'desktop/moon.mod does not pin Proton'
+          }
+          moonx "moonbit-community/proton_cli@$($Matches[1])" cef setup
+
+      - name: Build Windows ZIP
+        run: moon run ./desktop/package/windows --target native -- --target zip
+
+      - name: Upload Windows ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeekMoon-windows-x64
+          path: desktop/dist/*.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
   desktop-e2e:
     name: desktop e2e
     runs-on: ubuntu-latest
