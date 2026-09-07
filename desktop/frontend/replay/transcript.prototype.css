@@ -1,9 +1,1 @@
-.turn-rule { display: none; }
-.assistant-message-actions::after { content: ""; height: 1px; background: var(--color-border-subtle); flex: 1; }
-.stream { gap: 14px; }
-.msg.user { margin-top: 18px; }
-.stream > .msg.user:first-child { margin-top: 8px; }
-/* Keep the exchange boundary; the composer surface already defines its region. */
-.composer { border-top: 0; }
-/* Existing run status remains visible without an animated text cursor. */
-.msg.streaming .msg-content::after { content: none; animation: none; }
+/* Selected presentation now comes from the implementation styles. */

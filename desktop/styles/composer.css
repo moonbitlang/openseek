@@ -1,7 +1,6 @@
 
 /* ---------- composer ---------- */
 .composer {
-  border-top: 1px solid var(--color-separator);
   background: var(--color-bg-canvas);
   padding: 16px 24px 18px;
 }
