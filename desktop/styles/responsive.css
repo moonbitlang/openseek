@@ -207,7 +207,8 @@
   .browser-nav-button.loading .icon svg,
   .conversation-load-spinner,
   .run-dot.pulse,
-  .run-dot.running {
+  .run-dot.running,
+  .sidebar-run-status.running .icon {
     animation: none;
   }
 }

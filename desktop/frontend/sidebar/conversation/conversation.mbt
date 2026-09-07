@@ -528,19 +528,15 @@ pub fn component(
     }
     match input.run_mark {
       NoRunMark => ()
-      RunningMark =>
-        status.push(
-          @html.span(
-            class="run-dot running",
-            attrs=@html.Attrs::build()
-              .role("status")
-              .aria_live("polite")
-              .aria_label("Running"),
-            "",
-          ),
-        )
-      NeedsInputMark | CompletedMark | FailedMark | StoppedMark | EndedMark => {
+      RunningMark
+      | NeedsInputMark
+      | CompletedMark
+      | FailedMark
+      | StoppedMark
+      | EndedMark => {
         let (label, image, class_name) = match input.run_mark {
+          RunningMark =>
+            ("Running", @icons.icon_loading, "sidebar-run-status running")
           NeedsInputMark =>
             (
               "Needs your input", @icons.icon_question, "sidebar-run-status needs-input",
@@ -567,6 +563,7 @@ pub fn component(
             class=class_name,
             attrs=@html.Attrs::build()
               .role("status")
+              .aria_live("polite")
               .aria_label(label)
               .title(label),
             @icons.icon(image),

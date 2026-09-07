@@ -136,6 +136,10 @@ main {
   display: inline-flex;
   flex: 0 0 auto;
 }
+.sidebar-run-status.running { color: var(--color-text-secondary); }
+.sidebar-run-status.running .icon {
+  animation: spinRunDot 0.9s linear infinite;
+}
 .sidebar-run-status.needs-input { color: var(--color-warning); }
 .sidebar-run-status.completed { color: var(--color-text-secondary); }
 .sidebar-run-status.failed { color: var(--color-danger); }
