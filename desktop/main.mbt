@@ -225,10 +225,12 @@ async fn main {
     .on_view_event(async fn(view, event) noraise {
       match @extension.browser_view_id(view.id()) {
         Some(id) =>
-          bridge.notify_browser_event(@extension.view_event_json(id, event)) catch {
-            // Only cancellation can interrupt the queue put — the app is
-            // shutting down, so the event has nowhere to go anyway.
-            _ => ()
+          if @extension.view_event_json(id, event) is Some(payload) {
+            bridge.notify_browser_event(payload) catch {
+              // Only cancellation can interrupt the queue put — the app is
+              // shutting down, so the event has nowhere to go anyway.
+              _ => ()
+            }
           }
         None => ()
       }

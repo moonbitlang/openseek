@@ -63,9 +63,10 @@ pub fn browser_view_id(name : String) -> Int? {
 
 ///|
 /// A view event as the `browser.event` notification payload the frontend
-/// decodes.
-pub fn view_event_json(id : Int, event : @proton.ViewEvent) -> Json {
-  match event {
+/// decodes. Lifecycle notifications without a frontend consumer are omitted.
+pub fn view_event_json(id : Int, event : @proton.ViewEvent) -> Json? {
+  let payload : Json = match event {
+    DidStartLoading | DidFinishLoad => return None
     Navigated(url~) =>
       { "id": id.to_json(), "kind": "navigated", "url": url.to_json() }
     LoadingChanged(is_loading~) =>
@@ -95,6 +96,7 @@ pub fn view_event_json(id : Int, event : @proton.ViewEvent) -> Json {
       }
     Closed => { "id": id.to_json(), "kind": "closed" }
   }
+  Some(payload)
 }
 
 ///|

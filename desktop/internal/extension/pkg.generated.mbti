@@ -14,7 +14,7 @@ pub async fn open_external(@protocol.ExternalLinkPayload) -> @protocol.OpenExter
 
 pub fn openseek_capability(@api.ApiState, DesktopBridgeActor, BrowserViews) -> @moonbit-community/proton/extension.RendererCapability
 
-pub fn view_event_json(Int, @proton.ViewEvent) -> Json
+pub fn view_event_json(Int, @proton.ViewEvent) -> Json?
 
 // Errors
 
