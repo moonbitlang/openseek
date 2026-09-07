@@ -37,8 +37,10 @@ pub impl @jsonrpc.Transport for StdioTransport with fn recv(self) {
     }
     // A non-JSON stdout line violates app-server framing. Ignore it instead of
     // killing unrelated in-flight requests; EOF still closes the connection.
-    if (Some(@json.parse(trimmed)) catch { _ => None }) is Some(message) {
-      return Some(message)
+    try @json.parse(trimmed) catch {
+      _ => continue
+    } noraise {
+      message => return Some(message)
     }
   }
 }
