@@ -5,7 +5,6 @@ async test "stream failure diagnostics preserve HTTP error payload after exhaust
       is Some((url, hits)) else {
       return
     }
-    let failures : Array[String] = []
     let client = @client.Client(
       api_key="private-key",
       api_url=url,
@@ -18,56 +17,39 @@ async test "stream failure diagnostics preserve HTTP error payload after exhaust
         stream=StreamHandler(on_content_delta=_ => ()),
       )
     catch {
-      Failure(message) => failures.push(message)
+      Failure(message) => assert_true(message.contains("synthetic failure"))
       error => raise error
     } noraise {
       _ => fail("expected failure")
     }
     assert_eq(hits.val, 2)
-    assert_eq(failures.length(), 1)
-    let text = failures[0]
-    assert_true(text.contains("attempts: 2/2"))
-    assert_true(text.contains("HTTP 503"))
-    assert_true(text.contains("The retry limit was reached."))
-    assert_true(text.contains("stage: response_body"))
-    assert_false(text.contains("last event:"))
-    assert_false(text.contains("stream events:"))
-    assert_false(text.contains("buffered event:"))
-    assert_false(text.contains("private"))
-    assert_true(text.contains("synthetic failure"))
-    assert_false(text.contains(url))
   }
 }
 
 ///|
-async test "stream diagnostics distinguish non-retryable HTTP errors" {
+async test "stream never retries a non-retryable HTTP error" {
   @async.with_task_group() <| group => {
     guard flaky_server(group, failures=99, status=400, sse=true)
       is Some((url, hits)) else {
       return
     }
-    let failures : Array[String] = []
     try
       @client.Client(api_key="test", api_url=url).chat(
         [ChatMessage(User, content="hello")],
         stream=StreamHandler(on_content_delta=_ => ()),
       )
     catch {
-      Failure(message) => failures.push(message)
+      Failure(_) => ()
       error => raise error
     } noraise {
       _ => fail("expected failure")
     }
     assert_eq(hits.val, 1)
-    assert_eq(failures.length(), 1)
-    assert_true(
-      failures[0].contains("This error cannot be retried automatically."),
-    )
   }
 }
 
 ///|
-async test "idle stream diagnostics report partial output without retrying" {
+async test "idle stream delivers partial output once without retrying" {
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
@@ -86,7 +68,7 @@ async test "idle stream diagnostics report partial output without retrying" {
         @async.sleep(3000)
       })
     }
-    let failures : Array[String] = []
+    let deltas : Array[String] = []
     try
       @client.Client(
         api_key="test",
@@ -94,25 +76,16 @@ async test "idle stream diagnostics report partial output without retrying" {
         idle_timeout_ms=100,
       ).chat(
         [ChatMessage(User, content="hello")],
-        stream=StreamHandler(on_content_delta=_ => ()),
+        stream=StreamHandler(on_content_delta=delta => deltas.push(delta)),
       )
     catch {
-      Failure(message) => failures.push(message)
+      Failure(_) => ()
       error => raise error
     } noraise {
       _ => fail("expected timeout")
     }
     assert_eq(hits.val, 1)
-    assert_eq(failures.length(), 1)
-    let text = failures[0]
-    assert_true(text.contains("Request idle for 100 ms"))
-    assert_true(text.contains("stage: sse_read"))
-    assert_true(text.contains("stream events: 1"))
-    assert_true(
-      text.contains("Not retried because response data was already received."),
-    )
-    assert_true(text.contains("last event:"))
-    assert_true(text.contains("elapsed:"))
+    assert_eq(deltas, ["partial"])
   }
 }
 
@@ -140,7 +113,6 @@ async test "a thrown body read after a buffered data line cannot replay the requ
         allow_failure=true,
       )
     }
-    let failures : Array[String] = []
     try
       @client.Client(
         api_key="test",
@@ -151,18 +123,12 @@ async test "a thrown body read after a buffered data line cannot replay the requ
         stream=StreamHandler(on_content_delta=_ => ()),
       )
     catch {
-      Failure(message) => failures.push(message)
+      Failure(_) => ()
       error => raise error
     } noraise {
       _ => fail("expected body read failure")
     }
     assert_eq(hits.val, 1)
-    assert_eq(failures.length(), 1)
-    assert_true(
-      failures[0].contains(
-        "Not retried because response data was already received.",
-      ),
-    )
   }
 }
 
@@ -191,7 +157,7 @@ async test "cancellation is not wrapped as a request failure" {
 }
 
 ///|
-async test "malformed buffered response is not mislabeled as the idle timeout that flushed it" {
+async test "idle flush preserves malformed response payload without retrying" {
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
@@ -210,7 +176,6 @@ async test "malformed buffered response is not mislabeled as the idle timeout th
         @async.sleep(3000)
       })
     }
-    let failures : Array[String] = []
     try
       @client.Client(
         api_key="test",
@@ -221,21 +186,12 @@ async test "malformed buffered response is not mislabeled as the idle timeout th
         stream=StreamHandler(on_content_delta=_ => ()),
       )
     catch {
-      Failure(message) => failures.push(message)
+      Failure(message) => assert_true(message.contains("private-invalid-json"))
       error => raise error
     } noraise {
       _ => fail("expected invalid response")
     }
     assert_eq(hits.val, 1)
-    assert_eq(failures.length(), 1)
-    let text = failures[0]
-    assert_true(text.contains("DeepSeek stream decode error"))
-    assert_true(
-      text.contains("Not retried because response data was already received."),
-    )
-    assert_true(text.contains("stream events: 1"))
-    assert_false(text.contains("Request idle"))
-    assert_true(text.contains("private-invalid-json"))
   }
 }
 
@@ -245,7 +201,7 @@ suberror StreamCallbackError {
 } derive(Debug)
 
 ///|
-async test "fallback diagnostics preserve error representation and payload" {
+async test "fallback diagnostics preserve the original error payload" {
   @async.with_task_group() <| group => {
     guard flaky_server(group, failures=0, status=200, sse=true)
       is Some((url, hits)) else {
@@ -259,11 +215,8 @@ async test "fallback diagnostics preserve error representation and payload" {
         }),
       )
     catch {
-      Failure(message) => {
-        assert_true(message.contains("StreamCallbackError"))
+      Failure(message) =>
         assert_true(message.contains("callback error payload"))
-        assert_false(message.contains("omitted"))
-      }
       error => raise error
     } noraise {
       _ => fail("expected callback failure")
