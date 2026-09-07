@@ -11,6 +11,18 @@ const revision = Date.now();
 const manifest = new URL('../../app.css', location.href);
 const css = await (await fetch(manifest, {cache:'no-store'})).text();
 for (const match of css.matchAll(/@import url\("([^"]+)"\);/g)) {
+  const name = /\/styles\/(transcript|composer)\.css$/.exec(match[1])?.[1];
+  if (name) {
+    for (const variant of ['before', 'after']) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.dataset.comparison = variant;
+      link.media = variant === (new URLSearchParams(parent.location.search).get('compare') || 'after') ? 'all' : 'not all';
+      link.href = `./${name}.${variant}.css?replay=${revision}`;
+      document.head.append(link);
+    }
+    continue;
+  }
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   const url = new URL(match[1], manifest);

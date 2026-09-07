@@ -1,0 +1,1522 @@
+
+/* ---------- transcript ---------- */
+.transcript {
+  /* Keep clipped accessibility controls in this scroller's coordinate
+     space. Proton's CEF otherwise positions a focused tool-tab radio
+     against the document and scrolls the entire app out of the viewport. */
+  position: relative;
+  min-height: 0;
+  overflow: auto;
+  /* Reserve both edges so the centered stream does not shift when overflow
+     appears and the native scrollbar claims its lane. */
+  scrollbar-gutter: stable both-edges;
+  padding: 24px 24px 22px;
+  background: transparent;
+  /* The overview rail's container: its cq units measure this scroller's
+     own viewport, so the rail centers and bounds itself against the real
+     transcript height whatever the topbar, composer, or terminal do. Safe
+     to contain: the grid row sizes this element, not its content. */
+  container-type: size;
+}
+
+.stream {
+  display: grid;
+  /* A bare `auto` column takes its minimum from content, so one wide
+     <pre> or long token would blow the track past max-width and shove
+     the message off the right. minmax(0, …) lets it shrink so the
+     pre's own `overflow: auto` scrolls and plain text wraps instead. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+/* Floating "jump to latest" over the transcript's bottom edge, shown
+   only while auto-follow is unpinned. Sticky inside the scroller; zero
+   height so it never adds scroll length, the transform lifts the button
+   into view. */
+.jump-latest-wrap {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  height: 0;
+  overflow: visible;
+  z-index: 5;
+}
+.jump-latest {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  transform: translateY(-42px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: var(--line-height-tight);
+  cursor: pointer;
+  box-shadow: var(--shadow-overlay);
+}
+.jump-latest:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+  border-color: var(--color-accent-border);
+}
+
+/* ---------- transcript overview ---------- */
+/* The rail of user-turn ticks over the transcript's left gutter. Sticky
+   first child of the scroller with zero height (the jump-latest trick), so
+   it never adds scroll length; the rail hangs from it into the gutter the
+   centered stream leaves free. */
+.transcript-overview {
+  position: sticky;
+  top: 0;
+  height: 0;
+  overflow: visible;
+  z-index: 6;
+}
+.overview-rail {
+  position: absolute;
+  /* Centered on the transcript's own viewport — `.transcript` is the size
+     container, so no chrome arithmetic. The sticky wrapper pins this to
+     the viewport top; 50cqh is its middle. */
+  top: 50cqh;
+  transform: translateY(-50%);
+  /* Into the scroller's own 24px padding, flush with its left edge — the
+     rail must not depend on the centered stream leaving a gutter, because
+     at common window widths it leaves none. */
+  left: -20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  /* Bounded by the real transcript height; past the cap the rail scrolls
+     (the wheel, or the active-tick reveal) instead of compressing its
+     ticks into an unreadable bar. The scrollbar stays hidden — this is
+     18px of gutter. Scrolling means clipping, which is why the preview
+     popover renders as the nav's child, never inside this box. */
+  max-height: calc(100cqh - 32px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.overview-rail::-webkit-scrollbar {
+  display: none;
+}
+.overview-tick {
+  display: flex;
+  /* Fixed-height rows: a conversation past the rail's cap scrolls (see the
+     rail) rather than compressing, so every tick keeps a hittable size at
+     any length. */
+  flex: none;
+  height: 6px;
+}
+/* The button is the full row — a hover target the size of the dash alone
+   is unhittable — and the dash it shows is drawn by its ::before. */
+.overview-tick-button {
+  width: 18px;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: grid;
+  align-items: center;
+  justify-items: start;
+}
+/* Text-gray tones, not border tones: the border palette is intentionally too
+   quiet for a navigation mark against the dark canvas. The muted resting
+   state comes from opacity so one semantic text family carries both themes. */
+.overview-tick-button::before {
+  content: "";
+  width: 7px;
+  height: 2px;
+  max-height: 100%;
+  border-radius: 1px;
+  background: var(--color-text-muted);
+  opacity: 0.5;
+  transition:
+    width 0.12s ease,
+    background 0.12s ease,
+    opacity 0.12s ease;
+}
+.overview-tick:hover .overview-tick-button::before,
+.overview-tick.hovered .overview-tick-button::before {
+  width: 12px;
+  background: var(--color-text-secondary);
+  opacity: 1;
+}
+.overview-tick.active .overview-tick-button::before {
+  width: 12px;
+  background: var(--color-accent);
+  opacity: 1;
+}
+/* A turn that hit a tool error. Declared last so its color wins, and setting
+   no width so hover and active keep theirs: the two states occupy separate
+   channels, and a failed tick stays red while it is the one you are reading —
+   which is usually the one you clicked the mark to reach. The tick's
+   aria-label and its hover preview say the same thing in words; the color is
+   never the only carrier. */
+.overview-tick.failed .overview-tick-button::before {
+  background: var(--color-danger);
+  opacity: 1;
+}
+/* The hovered tick's preview: the prompt, its send time, and the answer it
+   got. Preview only — pointer events pass through, so it can never trap the
+   pointer or cover the text beneath from a click. The nav's child, hung
+   from the hovered tick's enter-time anchor (its inline CSS variable,
+   measured against the nav): the scrolling rail would clip a popover
+   nested in its ticks. 10px = the rail's -20px inset plus the old 30px
+   tick-to-preview gap. */
+.overview-preview {
+  position: absolute;
+  left: 10px;
+  top: calc(var(--overview-preview-anchor, 0px) - 10px);
+  width: min(360px, 44cqw);
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-overlay);
+  pointer-events: none;
+  z-index: 7;
+}
+/* A tick measured (at hover time) to lack downward room opens its preview
+   upward instead of running past the scroller's clipping bottom edge: the
+   anchor is then the tick's bottom edge, and the translate hangs the
+   popover above it. */
+.overview-preview.flip {
+  top: calc(var(--overview-preview-anchor, 0px) + 10px);
+  transform: translateY(-100%);
+}
+.overview-preview-prompt {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.overview-preview-time {
+  margin-top: 3px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+.overview-preview-failed {
+  margin-top: 5px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-danger);
+}
+.overview-preview-reply {
+  margin-top: 7px;
+  padding-left: 8px;
+  border-left: 2px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+/* The rail lives in the scroller's padding, so it survives any width the
+   desktop layout produces; only a phone-narrow column drops it. */
+@container (max-width: 700px) {
+  .transcript-overview {
+    display: none;
+  }
+}
+
+/* empty state */
+.empty {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 14px;
+  min-height: 46vh;
+  text-align: center;
+  padding: 32px 12px;
+}
+.empty-badge {
+  /* Not a control glyph: the empty state's hero mark, sized to its 52px tile. */
+  --icon-size: 30px;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+  background: var(--color-control-surface);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+}
+.empty-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  font-size: calc(var(--font-size-base) + 12px);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-text-primary);
+}
+.empty-title-project {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.empty-project-control {
+  anchor-scope: --empty-project-trigger;
+  display: inline-flex;
+  min-width: 0;
+}
+.empty-project-trigger {
+  anchor-name: --empty-project-trigger;
+  display: inline-flex;
+  align-items: center;
+  max-width: min(42vw, 420px);
+  margin: 0;
+  padding: 0.08em 0.34em;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-subtle);
+  color: inherit;
+  font-family: var(--font-family-mono);
+  font-size: 0.9em;
+  font-weight: 500;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+.empty-project-trigger:hover,
+.empty-project-trigger.open {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+}
+.empty-project-trigger:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+.empty-project-menu {
+  position: fixed;
+  position-anchor: --empty-project-trigger;
+  position-visibility: anchors-visible;
+  position-area: block-end span-inline-start;
+  position-try-fallbacks: flip-block;
+  inset: auto;
+  z-index: var(--z-menu);
+  display: none;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(360px, calc(100dvw - 24px));
+  /* 100% is the chosen position-area block. Constraining to it keeps a tall
+     project list on one side of the title instead of shifting across it. */
+  max-height: min(420px, calc(100dvh - 24px), calc(100% - 18px));
+  margin: 9px 0;
+  overflow: hidden;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-overlay);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-md);
+  font-weight: 400;
+  line-height: var(--line-height-normal);
+  text-align: left;
+}
+.empty-project-menu:popover-open {
+  display: grid;
+}
+.empty-project-search {
+  --icon-size: var(--icon-md);
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  margin-bottom: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-text-muted);
+}
+.empty-project-search input {
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: inherit;
+}
+.empty-project-search input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+.empty-project-options {
+  display: grid;
+  min-height: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1px 0;
+}
+.empty-project-option {
+  --icon-size: var(--icon-lg);
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.empty-project-option:hover,
+.empty-project-option.selected {
+  background: var(--color-bg-subtle);
+}
+.empty-project-option:focus-visible,
+.empty-project-new:focus-visible {
+  outline: 1px solid var(--color-focus-ring);
+  outline-offset: -1px;
+}
+.empty-project-option-icon {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-secondary);
+}
+.empty-project-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.empty-project-option-check {
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+.empty-project-no-results {
+  padding: 18px 10px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.empty-project-new {
+  --icon-size: var(--icon-lg);
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 9px;
+  border: 0;
+  border-top: 1px solid var(--color-border-subtle);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.empty-project-new:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+}
+.empty-sub {
+  max-width: 400px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+}
+
+/* messages */
+.msg {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 0;
+  animation: riseIn 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Nothing labels the speaker: the user's turn is a bubble pushed to the
+   right, the agent's prose and its work log are unbubbled and flush
+   left, so either side reads as one voice however many messages it
+   spans. Extra room above the bubble marks the turn boundary the labels
+   used to. */
+.msg.user {
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+.stream > .msg.user:first-child {
+  margin-top: 8px;
+}
+.user-bubble {
+  min-width: 0;
+  max-width: 85%;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+}
+
+/* In the accessibility tree, out of the layout: speaker names and the
+   like, which the redesign says visually through alignment and fill. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Send time belongs beneath the prompt, without separating its answer. */
+.turn-rule {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -8px;
+  color: var(--color-text-faint);
+  font-size: var(--font-size-xs);
+}
+.turn-rule:empty {
+  display: none;
+}
+
+.msg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A completed assistant answer closes with the raw-Markdown action on the
+   left and the durable event's completion time on the right.
+   The icon stays visible instead of relying on hover so touch and keyboard
+   users can discover it. */
+.assistant-message-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+}
+/* Actions lead; metadata trails the quiet end-of-exchange boundary. */
+.assistant-message-actions::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--color-border-subtle);
+}
+.assistant-message-copy {
+  --icon-size: var(--icon-md);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.assistant-message-time {
+  order: 1;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+.assistant-message-copy:hover {
+  background: var(--color-hover-subtle);
+  color: var(--color-text-primary);
+}
+.assistant-message-copy:focus-visible {
+  outline: 1px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.msg-content {
+  /* Let the content box shrink so a wide child (a <pre>) scrolls
+     internally rather than widening the message. */
+  min-width: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* A failed/aborted terminal is durable run status, not assistant prose. Keep
+   it in transcript order as an unboxed status row. Semantic color on the icon
+   and exact diagnostic text carries the state without adding another surface
+   to the transcript. */
+.msg.transcript-error {
+  /* The stream's 20px gap was sized for surfaced cards and prose blocks. A
+     naked status row needs a tighter relationship with both adjacent rows. */
+  margin-block: -8px;
+}
+
+.transcript-error-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 0;
+}
+
+.transcript-error-icon {
+  --icon-size: var(--icon-sm);
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  color: var(--color-danger);
+}
+
+.transcript-error-message {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  color: var(--color-danger);
+  line-height: var(--line-height-normal);
+}
+
+/* markdown-rendered assistant content: block elements own the spacing,
+   so the pre-wrap used for plain text would double every newline */
+.msg-content.markdown {
+  white-space: normal;
+}
+.msg-content.markdown > :first-child {
+  margin-top: 0;
+}
+.msg-content.markdown > :last-child {
+  margin-bottom: 0;
+}
+.msg-content.markdown p {
+  margin: 0.55em 0;
+}
+.msg-content.markdown h1,
+.msg-content.markdown h2,
+.msg-content.markdown h3,
+.msg-content.markdown h4,
+.msg-content.markdown h5,
+.msg-content.markdown h6 {
+  margin: 0.95em 0 0.45em;
+  line-height: 1.35;
+  font-weight: 600;
+}
+.msg-content.markdown h1 {
+  font-size: 1.3em;
+}
+.msg-content.markdown h2 {
+  font-size: 1.18em;
+}
+.msg-content.markdown h3 {
+  font-size: 1.08em;
+}
+.msg-content.markdown h4,
+.msg-content.markdown h5,
+.msg-content.markdown h6 {
+  font-size: 1em;
+}
+.msg-content.markdown ul,
+.msg-content.markdown ol {
+  margin: 0.45em 0;
+  padding-left: 1.5em;
+}
+.msg-content.markdown li {
+  margin: 0.2em 0;
+}
+.msg-content.markdown ul.tight p,
+.msg-content.markdown ol.tight p {
+  margin: 0;
+}
+.msg-content.markdown pre {
+  margin: 0.55em 0;
+  padding: 10px 13px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-code);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+  white-space: pre;
+}
+.msg-content.markdown pre code {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: inherit;
+}
+
+/* UML/PlantUML fences compile synchronously through the shared Viewer
+   renderer. Bind both generated SVGs and the shared diagram controls to the
+   chat palette so they follow explicit and system themes. */
+.msg-content.markdown .chat-markdown-diagram {
+  --vscode-editor-foreground: var(--color-text-primary);
+  --vscode-descriptionForeground: var(--color-text-secondary);
+  --vscode-editorWidget-background: var(--color-bg-surface);
+  --vscode-editorWidget-border: var(--color-border);
+  --vscode-editor-background: var(--color-bg-surface);
+  --vscode-editorHoverWidget-background: var(--color-bg-subtle);
+  --vscode-focusBorder: var(--color-focus-ring);
+  --vscode-icon-foreground: var(--color-text-secondary);
+  --vscode-toolbar-hoverBackground: var(--color-accent-soft);
+  --vscode-toolbar-activeBackground: var(--color-accent-soft);
+  --vscode-widget-border: var(--color-border);
+
+  min-width: 0;
+  margin: 0.7em 0;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+.msg-content.markdown
+  .chat-markdown-diagram:not(
+    .moonbit-viewer-markdown-diagram-viewport
+  ) {
+  max-height: min(50vh, 480px);
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+}
+.msg-content.markdown
+  .chat-markdown-diagram:not(.moonbit-viewer-markdown-diagram-viewport)
+  > svg {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: min(50vh, 456px);
+  margin-inline: auto;
+}
+/* Plain-text fallback when the markdown parser rejects an input. */
+.msg-content.markdown pre.markdown-fallback {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-content.markdown pre.raw-html {
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+}
+.msg-content.markdown blockquote {
+  margin: 0.55em 0;
+  padding: 2px 12px;
+  border-left: 3px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+}
+.msg-content.markdown table {
+  /* Scroll a wide table horizontally inside the message (like a code
+     block) rather than letting it widen or get clipped: display:block +
+     max-content lets overflow-x engage while max-width keeps it in
+     column. */
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.55em 0;
+  border-collapse: collapse;
+  font-size: var(--font-size-md);
+}
+.msg-content.markdown th,
+.msg-content.markdown td {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+}
+.msg-content.markdown th {
+  background: var(--color-bg-subtle);
+  font-weight: 600;
+}
+.msg-content.markdown hr {
+  margin: 0.9em 0;
+  border: none;
+  border-top: 1px solid var(--color-border);
+}
+.msg-content a {
+  color: var(--color-accent);
+}
+.msg-content.markdown img {
+  max-width: 100%;
+}
+.msg-content.markdown .transcript-image.pending {
+  min-width: 1px;
+  min-height: 1px;
+}
+.msg-content.markdown .transcript-image.unavailable {
+  color: var(--color-text-muted);
+}
+.msg-content.markdown .footnote {
+  margin: 0.45em 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+.msg-content.markdown .footnote-label {
+  margin-right: 6px;
+  color: var(--color-text-secondary);
+}
+
+
+
+
+.inline-code {
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-subtle);
+  color: inherit;
+  border: 1px solid var(--color-border-subtle);
+  padding: 0.08em 0.34em;
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+/* A clickable file reference in transcript text. It is a <button> (the
+   only inline element that carries a click here), stripped of button
+   chrome so it reads as a link, or as accented inline code when it wraps
+   a code span. */
+.file-link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--color-accent);
+  cursor: pointer;
+  vertical-align: baseline;
+}
+.file-link:hover,
+.file-link:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.file-link .inline-code {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  text-decoration: none;
+}
+.file-link:hover .inline-code,
+.file-link:focus-visible .inline-code {
+  background: var(--color-accent);
+  color: var(--bg, var(--color-on-accent));
+}
+
+/* One provider response: its thought fold, its prose, and its tool rows, in
+   the order the model produced them. The same grid and gap as the stream, so
+   a response's parts space exactly as separate stream children would. */
+.step {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+/* One model step's work: a heading (or thought fold) carrying the ordinal
+   and commit instant, then every tool call on display as its own row. Flush
+   with the agent's prose, not indented: the work is the agent's, and an
+   indent under a user bubble would read as the user's. Only reasoning sits
+   behind a fold; a quiet guide line groups the call rows without turning
+   them into a card. */
+.activity-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  animation: riseIn 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.activity-summary,
+.tool-call-summary,
+.tool-result-summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.activity-summary::-webkit-details-marker,
+.tool-call-summary::-webkit-details-marker,
+.tool-result-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The visible guide belongs to the body, while this empty part of the native
+   summary extends its hit area over the guide. A click therefore toggles only
+   the details element that owns that line, including when disclosures nest. */
+.activity {
+  position: relative;
+}
+.activity[open] > .activity-summary::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 1.5em;
+  bottom: 0;
+  left: -5px;
+  width: 12px;
+  cursor: pointer;
+}
+
+.activity-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+.activity-summary:hover {
+  color: var(--color-text-secondary);
+}
+.activity-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-text::before {
+  content: "▸ ";
+}
+.activity[open] > .activity-summary .activity-text::before {
+  content: "▾ ";
+}
+
+/* The model-step ordinal stays in the transcript's neutral hierarchy so step
+   status does not compete with selection, primary actions, or failures. Tabular
+   numerals in a fixed right-aligned column hold every `·` on the same x as the
+   count crosses #9 → #10. */
+.activity-step {
+  display: inline-block;
+  min-width: 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  transition: color 0.15s ease;
+}
+
+/* Hover and disclosure raise contrast without introducing another blue state. */
+.activity-summary:hover .activity-step,
+.activity[open] > .activity-summary .activity-step {
+  color: var(--color-text-secondary);
+}
+.activity:has(> .activity-summary .activity-step) > .activity-body {
+  border-left-color: var(--color-border);
+}
+
+/* The step heading when the step went straight to tools: the same ordinal and
+   instant columns the thought fold's summary carries, on a plain line — there
+   is nothing to disclose, every call below is already on display. The hidden
+   marker reserves exactly the lead the summary's `▸ ` takes (same font, same
+   text), so `#N` and the instant line up in one column across both header
+   forms; the gap between them is the markup's real space, as in the summary. */
+.activity-heading {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+.activity-heading::before {
+  content: "▸ ";
+  visibility: hidden;
+}
+
+/* When the step committed, in the summary's second fixed column, right after
+   the ordinal — which a real space in the markup separates it from, not a
+   margin here, so the gap survives being copied or read aloud. No color of its
+   own: it inherits the summary's, so it is exactly as legible as the line it
+   belongs to and brightens with it on hover. Setting one would only have
+   restated the same token, or made the row's least important item its highest
+   contrast. Tabular numerals so the seconds digits do not shift against the
+   rows above and below — reading the gaps between steps is the whole point of
+   showing them. */
+.activity-time {
+  color: var(--color-text-faint);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-body {
+  display: grid;
+  gap: 14px;
+  padding: 12px 0 4px 16px;
+  border-left: 2px solid var(--color-border);
+}
+
+/* compaction checkpoint between turns: a quiet labeled fold with the
+   summary prose behind it */
+.summary-card-label {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+.summary-card-label::-webkit-details-marker {
+  display: none;
+}
+.summary-card-label:hover {
+  color: var(--color-text-secondary);
+}
+.summary-card-icon {
+  --icon-size: var(--icon-md);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+.summary-card-text::after {
+  content: " ▸";
+}
+.summary-card[open] > .summary-card-label .summary-card-text::after {
+  content: " ▾";
+}
+.summary-card-body {
+  padding: 10px 0 4px;
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+}
+
+/* Reasoning inside the work log — and the live stream before it commits
+   (`assistant_view`): full-width muted prose, never a labelled
+   "Thinking" row of its own. */
+.activity-thinking {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+}
+.activity-thinking-live {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A step's tool exchanges, always on display: one row per request and result,
+   with every request in a proven parallel burst preceding its result rows.
+   They hang behind
+   the same quiet guide line an expanded fold used to draw, so the step still
+   reads as one block under its heading or thought fold. */
+.activity-work {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 2px 0 2px 16px;
+  border-left: 2px solid var(--color-border);
+}
+
+.tool-exchange {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+/* One tool request/result row: the request expands to recorded arguments and
+   the result expands to output. Same muted line treatment as the summaries —
+   depth is carried by the guide line, not a size step. */
+.tool-call-label,
+.tool-call-summary,
+.tool-result-label,
+.tool-result-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+.tool-flow {
+  flex: 0 0 1em;
+  color: var(--color-text-faint);
+  text-align: center;
+}
+.tool-call-summary:hover,
+.tool-result-summary:hover {
+  color: var(--color-text-secondary);
+}
+/* One line per expandable call, whatever the brief's length: a long brief
+   (a Codex command string, a full shell invocation) truncates with an
+   ellipsis instead of wrapping or forcing the pane wider — the row list
+   stays scannable, and the full text is one click away inside the fold.
+   Only summaries get this: a bodyless `.tool-call-label` row (a goal
+   notice, a pending call) holds the sole copy of its text, so it wraps
+   rather than losing what an ellipsis would clip. */
+.tool-call-summary .tool-call-text,
+.tool-result-summary .tool-result-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An open row shows its whole brief: the body carries arguments and output,
+   not the brief, so expansion (with the summary's title tooltip) is what
+   keeps a clipped brief reachable — including where there is no hover.
+   `anywhere` breaks an unbroken token (a Codex command string), so the
+   revealed text wraps instead of painting past the pane. */
+.tool-call[open] > .tool-call-summary .tool-call-text,
+.tool-result[open] > .tool-result-summary .tool-result-text {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+/* A bodyless label wraps its whole text (see above — it is the sole copy),
+   and the same `anywhere` break keeps an unbroken token, such as a long URL
+   in a one-line goal, from pushing the transcript wide. */
+.tool-call-label .tool-call-text,
+.tool-result-label .tool-result-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* The trailing marker belongs to rows that own a fold; `.tool-call-label`
+   rows have nothing to disclose and stay bare. It is the summary's own last
+   flex item rather than part of the text span, so a truncated brief cannot
+   ellipsize it away. */
+.tool-call-summary::after,
+.tool-result-summary::after {
+  content: "▸";
+}
+.tool-call[open] > .tool-call-summary::after,
+.tool-result[open] > .tool-result-summary::after {
+  content: "▾";
+}
+.tool-call-label.error,
+.tool-call.error > .tool-call-summary,
+.tool-result-label.error,
+.tool-result.error > .tool-result-summary {
+  color: var(--color-danger);
+}
+/* The literal word beside a failed call's brief: the state must not rest on
+   the row's red alone. */
+.tool-call-failed {
+  flex: 0 0 auto;
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+}
+/* An mbtx build failure reads amber, not the error red: the fix lives in the
+   source, and its BRIEF already carries the literal stage words ("build
+   failed", "build timeout"), so the row appends no marker — appending one
+   repeated the brief verbatim. Runtime failures keep the red row plus the
+   "runtime error" marker, which does add a word the brief lacks. */
+.tool-call-label.error.stage-build,
+.tool-call.error.stage-build > .tool-call-summary,
+.tool-result-label.error.stage-build,
+.tool-result.error.stage-build > .tool-result-summary {
+  color: var(--color-warning);
+}
+/* The result row's own "build error" word (its label shows no brief). */
+.tool-call-failed.tool-stage-build {
+  color: var(--color-warning);
+}
+
+/* Arguments and output grow the page instead of scrolling in place: the
+   transcript stays the only scroll area, so the wheel is never trapped by a
+   nested scrollbar. Long result dumps are clamped in the renderer. */
+.tool-call-section + .tool-call-section {
+  margin-top: 8px;
+}
+.tool-call-section-label {
+  margin-top: 6px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+/* The way out of a sub-run's tool card and into the child's own transcript.
+   This card holds the subagent's REPORT; the work behind it is a whole
+   transcript of its own, and until this link that transcript was reachable
+   only by matching an `sr-N` against a sidebar row by eye. Accent-soft rather
+   than a filled button: it is a way to go deeper, not the card's primary
+   action, and it sits above quoted output that must stay the loudest thing
+   in the card. */
+.subrun-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: var(--font-size-xs);
+  font-family: inherit;
+  cursor: pointer;
+}
+.subrun-chip:hover {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  border-color: var(--color-accent);
+}
+
+.tool-call pre,
+.tool-result pre {
+  margin: 6px 0 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-subtle);
+  color: var(--color-code);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tool-result.error .tool-call-output {
+  background: var(--color-danger-soft);
+}
+
+/* Alternate views of one request or one result share a compact radio-backed
+   tab set. Requests and results never share a strip: the separate rows retain
+   the call/result chronology exposed by the viz HTML renderer. */
+.tool-call-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+  margin: 6px 0 8px;
+  padding: 0;
+  border: 0;
+}
+.tool-call-tab-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.tool-call-tab-label {
+  padding: 4px 8px;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  user-select: none;
+}
+.tool-call-tab-label:hover {
+  color: var(--color-text-secondary);
+}
+.tool-call-tab-input:checked + .tool-call-tab-label {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+.tool-call-tab-panels {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+.tool-call-tab-panel {
+  display: none;
+}
+.tool-call-tab-input:nth-of-type(1):checked
+  ~ .tool-call-tab-panels
+  > .tool-call-tab-panel:nth-child(1),
+.tool-call-tab-input:nth-of-type(2):checked
+  ~ .tool-call-tab-panels
+  > .tool-call-tab-panel:nth-child(2),
+.tool-call-tab-input:nth-of-type(3):checked
+  ~ .tool-call-tab-panels
+  > .tool-call-tab-panel:nth-child(3),
+.tool-call-tab-input:nth-of-type(4):checked
+  ~ .tool-call-tab-panels
+  > .tool-call-tab-panel:nth-child(4) {
+  display: block;
+}
+
+/* Generic JSON arguments follow viz's human-readable form: one labeled field
+   per object member, decoded strings shown verbatim, and nested collections
+   retaining their hierarchy. The exact recorded payload remains in the
+   neighboring Original JSON tab for debugging. */
+.tool-call-arguments-friendly {
+  margin: 6px 0 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-subtle);
+  color: var(--color-code);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+.tool-argument-field {
+  margin: 3px 0;
+}
+.tool-argument-key {
+  color: var(--color-accent);
+  font-family: var(--font-family-sans);
+  font-weight: 600;
+}
+.tool-argument-key::after {
+  content: ": ";
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+.tool-argument-value {
+  font-family: var(--font-family-sans);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tool-argument-number,
+.tool-argument-boolean {
+  color: var(--color-warning);
+}
+.tool-argument-null {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+.tool-call .tool-argument-value-block {
+  margin: 4px 0 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+}
+.tool-argument-object {
+  margin: 3px 0 3px 2px;
+  padding-left: 10px;
+  border-left: 1px solid var(--color-border);
+}
+.tool-argument-array {
+  margin: 3px 0 3px 2px;
+}
+.tool-argument-item {
+  margin: 4px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--color-border);
+}
+/* ---------- custom tool cards ----------
+   One tool's arguments rendered in the shape a reader wants — an `mbtx`
+   call as its program, an `edit` as the change it describes — instead of the
+   escaped JSON the generic path shows. A chip row carries arguments the card
+   does not dramatize; the shared tab set carries the exact payload. */
+.tool-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.tool-card-chip {
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+/* The rare single-view read fallback still exposes its original protocol as a
+   disclosure. In the usual multi-view path, that protocol has its own tab. */
+.tool-card-original-summary {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+.tool-card-original-summary:hover {
+  color: var(--color-text-secondary);
+}
+
+/* The `mbtx` program block needs no rule of its own: the shared
+   `.tool-call pre` already gives it the padding and background, and its
+   `pre-wrap` keeps the listing's indentation while wrapping the overflow — so
+   a long line grows the page rather than adding a nested scrollbar. Its
+   numbered lines are the shared `moonbit-line` gutter grid below. */
+
+/* Numbered MoonBit lines — a `read` result's protocol gutter and an `mbtx`
+   program's generated one — keep the number muted while the source uses the
+   shared `moonbit-source` editor tokens. Each logical line owns its two
+   columns so wrapping never shifts the next line away from its number. */
+.read-moonbit-output {
+  display: block;
+}
+.read-moonbit-line,
+.moonbit-line {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 1ch;
+  align-items: start;
+}
+.read-moonbit-gutter,
+.moonbit-gutter {
+  color: var(--color-text-muted);
+  text-align: right;
+  white-space: pre;
+  user-select: none;
+}
+.read-moonbit-code,
+.moonbit-code {
+  min-width: 0;
+  color: var(--color-code);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* The numbered renderer's elision row for a degenerate line count: no number
+   of its own, muted like the gutters whose sequence it interrupts. */
+.moonbit-skip {
+  color: var(--color-text-muted);
+}
+.read-moonbit-status {
+  display: block;
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A synthesized `edit` / `multi_edit` diff. Same block treatment as the
+   argument and output dumps beside it, since it stands in for one; the marker
+   column is part of the text, so removed and added lines stay distinguishable
+   without relying on color alone. */
+.tool-diff {
+  margin: 6px 0 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-subtle);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tool-diff .diff-add {
+  color: var(--color-success);
+}
+.tool-diff .diff-del {
+  color: var(--color-danger);
+}
+.tool-diff .diff-ctx {
+  color: var(--color-text-muted);
+}
+/* One edit of a batch: the anchoring chips sit with the diff they anchor,
+   with a quiet rule between entries so a long batch reads as a list. */
+.edit-entry + .edit-entry {
+  margin-top: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-border);
+}
+.edit-omitted {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* ---------- plan ----------
+   One checklist, rendered at three altitudes: a meter riding a folded run's
+   summary line, the full card inside an expanded `plan` call, and the
+   standing plan docked above the composer. The row and meter rules are shared
+   by all three so they cannot drift apart. */
+.plan-steps {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-size-md);
+}
+.plan-step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  margin: 3px 0;
+}
+.plan-step .step-icon {
+  flex: none;
+  width: 14px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+.plan-step.completed .step-icon {
+  color: var(--color-success);
+}
+.plan-step.in_progress .step-icon {
+  color: var(--color-text-secondary);
+}
+/* a status this build does not know reads as its literal word: disguising it
+   as a pending ring would misreport e.g. a blocked step as untouched */
+.plan-step .step-status {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+.plan-step .step-num {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+.plan-step .step-title {
+  min-width: 0;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+.plan-step.completed .step-title {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+.plan-step.in_progress .step-title {
+  font-weight: 600;
+}
+/* The meter: the completed run, then one step's worth of lighter fill for the
+   step in progress — the only thing a per-step ribbon showed that a plain bar
+   does not. Fixed width, so a twenty-step plan does not stretch it. */
+.plan-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0;
+}
+.plan-progress-track {
+  display: flex;
+  flex: 0 1 200px;
+  height: 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-subtle);
+  overflow: hidden;
+}
+.plan-progress-fill {
+  flex: none;
+  width: var(--plan-progress-width, 0%);
+  height: 100%;
+  background: var(--color-text-secondary);
+  transition: width 0.2s ease;
+}
+.plan-progress-fill.active {
+  background: var(--color-border);
+}
+.plan-progress-fill.complete {
+  background: var(--color-success);
+}
+.plan-progress-count {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+.plan-progress.mini {
+  flex: none;
+  align-self: center;
+  gap: 6px;
+}
+.plan-progress.mini .plan-progress-track {
+  flex: 0 0 52px;
+  height: 4px;
+}
+.plan-cleared {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-style: italic;
+}
