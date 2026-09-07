@@ -2167,8 +2167,19 @@ fn State::with_notification(
   let observed = match (method_, thread_id, fields.get("turn")) {
     ("turn/started", Some(thread_id), Some(Object(_))) =>
       { ..self, activity: self.activity.started(thread_id), }
-    ("turn/completed", Some(thread_id), Some(Object(_))) =>
-      { ..self, activity: self.activity.completed(thread_id), }
+    ("turn/completed", Some(thread_id), Some(turn)) =>
+      {
+        ..self,
+        activity: self.activity.completed(
+          thread_id,
+          turn?=if turn is Object(turn_fields) &&
+            turn_fields.get("status") is Some(String(_)) {
+            CodexTurn::decode(turn)
+          } else {
+            None
+          },
+        ),
+      }
     ("thread/status/changed", Some(thread_id), _) =>
       {
         ..self,

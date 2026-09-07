@@ -311,7 +311,16 @@ fn CodexThreadRow::sidebar_input(
 ) -> @conversation.Input {
   let selected = context.selected &&
     state.active_thread().map(item => item.id == self.id).unwrap_or(false)
-  let run_mark = state.activity.presentation(self.id)
+  let activity = state.activity.entry(self.id)
+  let needs_input = state.pending_requests.any(request => {
+    request.thread_id == self.id
+  })
+  let running = activity.running || needs_input
+  let run_mark = @conversation.RunMark::for_task(
+    running~,
+    needs_input~,
+    unseen_outcome=activity.unseen_outcome.map(outcome => outcome.1),
+  )
   {
     id: @conversation.Id(
       source=@conversation.CodexLive,
@@ -326,7 +335,7 @@ fn CodexThreadRow::sidebar_input(
     active: selected,
     loading: false,
     load_failed: false,
-    running: run_mark is @conversation.RunningMark,
+    running,
     openable: true,
     worktree: self.worktree
     .filter(worktree => worktree.present)

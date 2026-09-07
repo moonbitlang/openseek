@@ -89,3 +89,21 @@ The empty “New chat” row observed during this replay was subsequently
 addressed by `a48977c` (`fix(desktop): clarify project new chat`). The
 prototype commit predates that fix; use its original revision to reproduce
 the old behavior and the same inputs on current code to inspect the correction.
+
+## Background task status contract
+
+Run the same scenario for OpenSeek and Codex: open A, start it, switch to B,
+then deliver an approval request or a terminal outcome for A. Neither event
+should navigate away from B. A pending decision takes priority over running;
+opening A reveals the real decision controls without acknowledging the request.
+After a response is accepted, continuing work returns to the running cue.
+
+Completion and failure remain unread until the terminal turn is actually
+visible in a focused window. A retained selection on another screen is not a
+read receipt. Refreshing an idle catalog must not erase the outcome, and stale
+snapshots must not revive a completed run. Cancellation is labeled as stopped,
+not failed. Status meaning must remain distinguishable without color or motion.
+
+Keep this contract and its visual priority in the shared conversation module.
+The provider adapters translate their own lifecycle and approval evidence;
+protocol-specific snapshot ordering and recovery stay with those adapters.

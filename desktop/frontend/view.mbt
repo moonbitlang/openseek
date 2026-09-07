@@ -108,20 +108,25 @@ fn session_component_input(
     session_id == model.active_session
   let conv = model.find_conversation(channel, session_id)
   let running = conv is Some(conv) && conv.is_running()
-  // The row's status dot: pulsing while a run is in flight, then — when the
-  // run finished off screen — settling into a solid dot (accent for success,
-  // warn otherwise) until the conversation is opened (`Model::activate`
-  // clears the mark).
-  let run_mark = match conv {
-    Some(conv) if conv.is_running() => @conversation.RunningMark
-    Some(conv) if conv.unseen_finish && !active =>
-      if conv.run is NoRun(ended=Some(RunFinished(Completed))) {
-        @conversation.CompletedMark
-      } else {
-        @conversation.FailedMark
-      }
-    _ => @conversation.NoRunMark
+  let unseen_outcome = match conv {
+    Some(conv) if conv.unseen_finish =>
+      Some(
+        match conv.run {
+          NoRun(ended=Some(RunFinished(Completed))) => @conversation.Completed
+          NoRun(ended=Some(RunFinished(RunFailed) | RunFailed | RunErrored)) =>
+            @conversation.Failed
+          NoRun(ended=Some(RunFinished(Aborted))) => @conversation.Stopped
+          _ => @conversation.Ended
+        },
+      )
+    _ => None
   }
+  let run_mark = @conversation.RunMark::for_task(
+    running~,
+    needs_input=conv is Some(conv) &&
+      conv.pending_approval is Some({ answered: false, .. }),
+    unseen_outcome~,
+  )
   // The row's own tooltip carries the worktree name, joined from the
   // registry (or the local binding while the first turn is still on its way
   // to the store).

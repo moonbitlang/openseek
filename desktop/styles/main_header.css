@@ -129,3 +129,19 @@ main {
 .run-dot.pulse {
   animation: pulseDot 1.6s ease-out infinite;
 }
+
+/* Outcomes and requests stay distinguishable without color or animation. */
+.run-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+.run-status.needs-input { color: var(--color-warning); }
+.run-status.completed { color: var(--color-text-secondary); }
+.run-status.failed { color: var(--color-danger); }

@@ -74,9 +74,42 @@ pub fn Id::key(self : Id) -> String {
 pub(all) enum RunMark {
   NoRunMark
   RunningMark
+  NeedsInputMark
   CompletedMark
   FailedMark
+  StoppedMark
+  EndedMark
 } derive(Debug, Eq)
+
+///|
+/// Backend adapters supply facts; priority and visual meaning belong here.
+pub(all) enum RunOutcome {
+  Completed
+  Failed
+  Stopped
+  Ended
+} derive(Eq)
+
+///|
+pub fn RunMark::for_task(
+  running~ : Bool,
+  needs_input~ : Bool,
+  unseen_outcome~ : RunOutcome?,
+) -> RunMark {
+  if needs_input {
+    NeedsInputMark
+  } else if running {
+    RunningMark
+  } else {
+    match unseen_outcome {
+      Some(Completed) => CompletedMark
+      Some(Failed) => FailedMark
+      Some(Stopped) => StoppedMark
+      Some(Ended) => EndedMark
+      None => NoRunMark
+    }
+  }
+}
 
 ///|
 /// One hover-revealed control on the row's trailing edge. A live durable
@@ -189,8 +222,7 @@ fn Input::menu_kind(self : Input) -> MenuKind? {
 ///|
 fn Input::menu_enabled(self : Input) -> (Bool, Bool) {
   (
-    self.trailing.any(action => action is Archive(..)) &&
-    !(self.run_mark is RunningMark),
+    self.trailing.any(action => action is Archive(..)) && !self.running,
     self.trailing.any(action => action is Delete(..)),
   )
 }
@@ -507,8 +539,26 @@ pub fn component(
             "",
           ),
         )
-      CompletedMark => status.push(@html.span(class="run-dot accent", ""))
-      FailedMark => status.push(@html.span(class="run-dot warn", ""))
+      NeedsInputMark | CompletedMark | FailedMark | StoppedMark | EndedMark => {
+        let (label, glyph, class_name) = match input.run_mark {
+          NeedsInputMark => ("Needs your input", "?", "run-status needs-input")
+          CompletedMark =>
+            ("Completed — unread", "✓", "run-status completed")
+          FailedMark => ("Failed — unread", "!", "run-status failed")
+          StoppedMark => ("Stopped — unread", "■", "run-status completed")
+          _ => ("Ended — unread", "○", "run-status completed")
+        }
+        status.push(
+          @html.span(
+            class=class_name,
+            attrs=@html.Attrs::build()
+              .role("status")
+              .aria_label(label)
+              .title(label),
+            glyph,
+          ),
+        )
+      }
     }
     let menu_kind = input.menu_kind()
     // Direct durable-action shortcuts stay alongside the shared WebView
@@ -521,7 +571,7 @@ pub fn component(
       }
       let buttons : Array[@html.Html] = []
       for action in trailing_actions {
-        let enabled = !(action is Archive(..) && input.run_mark is RunningMark)
+        let enabled = !(action is Archive(..) && input.running)
         let (title, button_class, image, id_suffix) = match action {
           Archive(title~) =>
             (title, "row-archive", @icons.icon_archive, "archive")
@@ -630,3 +680,6 @@ pub extend RenameInput with Debug::{to_repr}
 
 ///|
 pub extend RenameInput with Eq::{equal, not_equal}
+
+///|
+pub extend RunOutcome with Eq::{equal, not_equal}

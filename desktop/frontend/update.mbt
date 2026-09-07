@@ -1681,6 +1681,13 @@ fn update(
 ) -> (@cmd.Cmd, Model) {
   let previous = model
   let (cmd, model) = update_msg(dispatch, msg, model)
+  // Only the root knows whether Codex's retained selection is being read.
+  // Apply this after every transition, including history delivery and focus.
+  let model = if model.window_focused && model.screen is Codex {
+    { ..model, codex: model.codex.mark_visible_read(), }
+  } else {
+    model
+  }
   let notification_badge_cmd = notification_badge_command(
     previous,
     model,
