@@ -1,0 +1,63 @@
+name: publish-openseek
+
+# Publishes the `moonbitlang/openseek` (repo root) and
+# `moonbitlang/openseek_protocol` (`protocol/`) modules to mooncakes.
+# Manual: bump `version` in moon.mod and/or protocol/moon.mod first. Both
+# modules are published under the moonbitlang namespace, so they use the
+# organization's mooncakes token, not a personal one. `openseek_protocol` is
+# published first because the root `openseek` module depends on it; the
+# publish itself type-checks the module, and the full workspace build/tests are
+# already gated on every main push by ci.yml. The root `.moonignore` keeps the
+# nested member modules (desktop, editor, …) out of the published archive.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish-openseek:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: install moon
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: post install
+        run: |
+          moon version --all
+          moon update
+
+      - name: publish moonbitlang/openseek_protocol
+        env:
+          SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
+        working-directory: protocol
+        shell: bash
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "Error: MOONCAKES_MOONBITLANG_TOKEN secret is not set."
+            echo "Please contact an admin to grant access to this secret."
+            exit 1
+          fi
+          echo "$SECRET" > ~/.moon/credentials.json
+          moon publish
+          rm ~/.moon/credentials.json
+
+      - name: publish moonbitlang/openseek
+        env:
+          SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "Error: MOONCAKES_MOONBITLANG_TOKEN secret is not set."
+            echo "Please contact an admin to grant access to this secret."
+            exit 1
+          fi
+          echo "$SECRET" > ~/.moon/credentials.json
+          moon publish
+          rm ~/.moon/credentials.json

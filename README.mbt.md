@@ -1,4 +1,4 @@
-# bobzhang/openseek
+# moonbitlang/openseek
 
 OpenSeek is a small MoonBit foundation for an OpenAI-compatible coding agent
 supporting DeepSeek, Kimi, and Z.AI GLM models. The module is split into pure
@@ -16,13 +16,13 @@ prebuilt wasm binary for every published version. `moonx` fetches and caches it,
 so the engine runs with no clone and no build:
 
 ```sh
-moonx bobzhang/openseek/cmd/openseek --help
-DEEPSEEK=sk-... moonx bobzhang/openseek/cmd/openseek run --no-session 'summarize this repo'
+moonx moonbitlang/openseek/cmd/openseek --help
+DEEPSEEK=sk-... moonx moonbitlang/openseek/cmd/openseek run --no-session 'summarize this repo'
 ```
 
-The coordinate is the package path, not the module: `bobzhang/openseek` alone
+The coordinate is the package path, not the module: `moonbitlang/openseek` alone
 resolves to the root package, which is not an executable. Pin a release with
-`bobzhang/openseek/cmd/openseek@0.3.1`, or take the newest with `@latest`.
+`moonbitlang/openseek/cmd/openseek@0.3.1`, or take the newest with `@latest`.
 Subprocesses, the filesystem, and HTTPS all work under `moonrun`, so the wasm
 binary drives the same tools as the native one.
 
@@ -71,38 +71,38 @@ git submodule update --init editor/vscode     # opt-in performance suite
 
 | Package | Purpose | Docs |
 | --- | --- | --- |
-| `bobzhang/openseek` | Root package and module overview. | `README.mbt.md` |
-| `bobzhang/openseek/deepseek` | Pure chat data, provider-aware JSON encoding, and response decoding. | `deepseek/README.mbt.md` |
-| `bobzhang/openseek/deepseek/client` | HTTP transport (native or wasm) for supported chat-completions providers. | `deepseek/client/README.mbt.md` |
-| `bobzhang/openseek/agent_runtime` | Agent task-group (native or wasm) and extensible runtime event queue. | `agent_runtime/README.mbt.md` |
-| `bobzhang/openseek/agent_session` | Typed durable conversation state and DeepSeek message projection. | `agent_session/README.mbt.md` |
-| `bobzhang/openseek/agent_session/store` | Native filesystem-backed append-only session store. | `agent_session/store/README.mbt.md` |
-| `bobzhang/openseek/agent_session/log` | Lenient session-file reader: header plus events, with per-line error capture. | — |
-| `bobzhang/openseek/agent_session/compact` | Context-checkpoint (compaction) request building and summary handling. | — |
-| `bobzhang/openseek/agent_tool` | Tool registry, executor, output, and control-action types; one subpackage per built-in tool. | `agent_tool/README.mbt.md` |
-| `bobzhang/openseek/agent_skill` | Workspace skills: markdown playbooks discovered from skill libraries and listed in the system prompt. | `agent_skill/README.mbt.md` |
-| `bobzhang/openseek/jsonrpc` | Duplex JSON-RPC 2.0 client (concurrent requests, notifications, out-of-order replies). | — |
-| `bobzhang/openseek/mcp` (+ `config`, `stdio`, `streamhttp`, `tools`) | MCP client: `mcp.json` decoding, stdio and Streamable HTTP transports, and the bridge that namespaces server tools into the registry. | — |
-| `bobzhang/openseek/prompt` | Built-in system prompt text (generated from Markdown) and prompt-selection policy. | `prompt/README.mbt.md` |
-| `bobzhang/openseek_protocol` | Typed engine event stream (own module): the `openseek run`/`serve` stdout wire contract, decodable on every backend. | `protocol/README.mbt.md` |
-| `bobzhang/openseek_protocol/emit` | Writer for that stream (native or wasm): owns each event's log level. | `protocol/emit/README.mbt.md` |
-| `bobzhang/openseek/agent` | OpenSeek agent loop (native or wasm) and local tool dispatch. | `agent/README.mbt.md` |
-| `bobzhang/openseek/agent_review` | Read-only, compiler-grounded code-review engine behind `openseek review`. | `agent_review/README.mbt.md` |
-| `bobzhang/openseek/cmd/openseek` | Headless automation CLI (`openseek`), built for native or wasm. | `cmd/openseek/README.md` |
-| `bobzhang/openseek/cli` | Shared command-main helpers: the agent options (`--api-key`, `--model`, …) and failure-text sanitizer used by `openseek` and the out-of-tree `openseek_tui`. | — |
-| `bobzhang/openseek/viz` | Browser viewer for durable session logs (JS). | `viz/README.md` |
-| `bobzhang/inspect` (in `inspect/`, own module) | HTTP server (native or wasm) that serves the visualizer over recorded sessions. | `inspect/README.md` |
-| `bobzhang/openseek-viz-app` (in `cmd/viz_app/`, own module) | JS entry point compiled into the visualizer bundle. | `viz/README.md` |
+| `moonbitlang/openseek` | Root package and module overview. | `README.mbt.md` |
+| `moonbitlang/openseek/deepseek` | Pure chat data, provider-aware JSON encoding, and response decoding. | `deepseek/README.mbt.md` |
+| `moonbitlang/openseek/deepseek/client` | HTTP transport (native or wasm) for supported chat-completions providers. | `deepseek/client/README.mbt.md` |
+| `moonbitlang/openseek/agent_runtime` | Agent task-group (native or wasm) and extensible runtime event queue. | `agent_runtime/README.mbt.md` |
+| `moonbitlang/openseek/agent_session` | Typed durable conversation state and DeepSeek message projection. | `agent_session/README.mbt.md` |
+| `moonbitlang/openseek/agent_session/store` | Native filesystem-backed append-only session store. | `agent_session/store/README.mbt.md` |
+| `moonbitlang/openseek/agent_session/log` | Lenient session-file reader: header plus events, with per-line error capture. | — |
+| `moonbitlang/openseek/agent_session/compact` | Context-checkpoint (compaction) request building and summary handling. | — |
+| `moonbitlang/openseek/agent_tool` | Tool registry, executor, output, and control-action types; one subpackage per built-in tool. | `agent_tool/README.mbt.md` |
+| `moonbitlang/openseek/agent_skill` | Workspace skills: markdown playbooks discovered from skill libraries and listed in the system prompt. | `agent_skill/README.mbt.md` |
+| `moonbitlang/openseek/jsonrpc` | Duplex JSON-RPC 2.0 client (concurrent requests, notifications, out-of-order replies). | — |
+| `moonbitlang/openseek/mcp` (+ `config`, `stdio`, `streamhttp`, `tools`) | MCP client: `mcp.json` decoding, stdio and Streamable HTTP transports, and the bridge that namespaces server tools into the registry. | — |
+| `moonbitlang/openseek/prompt` | Built-in system prompt text (generated from Markdown) and prompt-selection policy. | `prompt/README.mbt.md` |
+| `moonbitlang/openseek_protocol` | Typed engine event stream (own module): the `openseek run`/`serve` stdout wire contract, decodable on every backend. | `protocol/README.mbt.md` |
+| `moonbitlang/openseek_protocol/emit` | Writer for that stream (native or wasm): owns each event's log level. | `protocol/emit/README.mbt.md` |
+| `moonbitlang/openseek/agent` | OpenSeek agent loop (native or wasm) and local tool dispatch. | `agent/README.mbt.md` |
+| `moonbitlang/openseek/agent_review` | Read-only, compiler-grounded code-review engine behind `openseek review`. | `agent_review/README.mbt.md` |
+| `moonbitlang/openseek/cmd/openseek` | Headless automation CLI (`openseek`), built for native or wasm. | `cmd/openseek/README.md` |
+| `moonbitlang/openseek/cli` | Shared command-main helpers: the agent options (`--api-key`, `--model`, …) and failure-text sanitizer used by `openseek` and the out-of-tree `openseek_tui`. | — |
+| `moonbitlang/openseek/viz` | Browser viewer for durable session logs (JS). | `viz/README.md` |
+| `moonbitlang/inspect` (in `inspect/`, own module) | HTTP server (native or wasm) that serves the visualizer over recorded sessions. | `inspect/README.md` |
+| `moonbitlang/openseek-viz-app` (in `cmd/viz_app/`, own module) | JS entry point compiled into the visualizer bundle. | `viz/README.md` |
 | `moonbitlang/editor` (in `editor/`, own module) | Reusable readonly editor plus its reference browser shell and server. | `editor/README.md` |
-| `bobzhang/openseek/internal/{cli,workspace_path}` | Shared CLI accessors and workspace-path resolution for the command mains. | — |
-| `bobzhang/openseek/testkit/filesystem` | JSON-backed virtual filesystem for tests and eval fixtures. | `testkit/filesystem/README.mbt.md` |
-| `bobzhang/openseek/eval/report` | Shared Markdown/JSON report primitive for deterministic and model evals. | `eval/report/README.mbt.md` |
-| `bobzhang/openseek/eval/tool_harness` | Deterministic host-side harness that dispatches every built-in tool. | `eval/tool_harness/README.mbt.md` |
-| `bobzhang/openseek/eval/file_edit/cases` | Deterministic file-editing eval case definitions. | `eval/file_edit/README.md` |
-| `bobzhang/openseek/eval/file_edit/harness` | Reusable file-editing eval runner, oracle, and reporter. | `eval/file_edit/README.md` |
-| `bobzhang/openseek/eval/file_edit/cmd/main` | Native-only CLI wrapper for the file-editing eval harness. | `eval/file_edit/README.md` |
-| `bobzhang/openseek/eval/prompt_task/harness` | Prompt-task eval: runs the real agent over isolated per-trial workspaces. | `eval/prompt_task/README.md` |
-| `bobzhang/openseek/eval/session_analyzer` | Post-hoc session-log analyzer producing Markdown/HTML/JSON reports. | — |
+| `moonbitlang/openseek/internal/{cli,workspace_path}` | Shared CLI accessors and workspace-path resolution for the command mains. | — |
+| `moonbitlang/openseek/testkit/filesystem` | JSON-backed virtual filesystem for tests and eval fixtures. | `testkit/filesystem/README.mbt.md` |
+| `moonbitlang/openseek/eval/report` | Shared Markdown/JSON report primitive for deterministic and model evals. | `eval/report/README.mbt.md` |
+| `moonbitlang/openseek/eval/tool_harness` | Deterministic host-side harness that dispatches every built-in tool. | `eval/tool_harness/README.mbt.md` |
+| `moonbitlang/openseek/eval/file_edit/cases` | Deterministic file-editing eval case definitions. | `eval/file_edit/README.md` |
+| `moonbitlang/openseek/eval/file_edit/harness` | Reusable file-editing eval runner, oracle, and reporter. | `eval/file_edit/README.md` |
+| `moonbitlang/openseek/eval/file_edit/cmd/main` | Native-only CLI wrapper for the file-editing eval harness. | `eval/file_edit/README.md` |
+| `moonbitlang/openseek/eval/prompt_task/harness` | Prompt-task eval: runs the real agent over isolated per-trial workspaces. | `eval/prompt_task/README.md` |
+| `moonbitlang/openseek/eval/session_analyzer` | Post-hoc session-log analyzer producing Markdown/HTML/JSON reports. | — |
 | `openseek_desktop` (in `desktop/`, own module) | Desktop app: CEF shell (Proton, a registry dependency) plus a JS frontend driving the engine over JSONL. | `desktop/README.md` |
 
 The `deepseek` subpackage is pure and exposes chat data plus JSON helpers:
@@ -233,7 +233,7 @@ agent reads the file before applying it. See `agent_skill/README.mbt.md`.
 
 The interactive terminal UI is the `openseek_tui` binary, maintained in its own
 repository: [moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui). It depends on this module
-(`bobzhang/openseek` on mooncakes) for the agent, session, and provider
+(`moonbitlang/openseek` on mooncakes) for the agent, session, and provider
 packages, and spawns the `openseek` engine built here in `serve` mode. Its
 sessions are interoperable with the CLI's: `moon run cmd/openseek -- sessions
 list` shows what is resumable from either.
