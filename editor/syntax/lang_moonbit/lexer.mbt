@@ -75,7 +75,9 @@ fn classify_word(word : StringView) -> @syntax.HighlightTag {
     | "extern"
     | "declare"
     | "where"
-    | "nobreak" => Keyword
+    | "nobreak"
+    | "lexscan"
+    | "lexmatch" => Keyword
     "true" | "false" => Constant
     _ => if @syntax.is_capitalized(word) { Type } else { Identifier }
   }

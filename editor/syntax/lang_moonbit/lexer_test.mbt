@@ -287,3 +287,19 @@ test "import classifies as a keyword in script import blocks" {
     ),
   )
 }
+
+///|
+test "lexscan and lexmatch classify as keywords" {
+  inspect(
+    render_tokens("lexscan lexmatch; let lexer = 0"),
+    content=(
+      #|0-7 Keyword lexscan
+      #|8-16 Keyword lexmatch
+      #|16-17 Delimiter ;
+      #|18-21 Keyword let
+      #|22-27 Identifier lexer
+      #|28-29 Operator =
+      #|30-31 Number 0
+    ),
+  )
+}
