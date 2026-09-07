@@ -154,11 +154,28 @@ test "non-paths are left alone" {
 }
 
 ///|
-test "moonbit fence info strings reach the tokenized branch" {
-  // `code_block` routes a fence to the MoonBit tokenizer exactly when cmark's
-  // language_of_info_string yields one of the moonbit-family names; lock that
-  // trigger condition against the parser's real output (plus the tolerated
-  // alias spellings from the editor markdown pipeline).
+test "moonbit tokenization dispatch is exact" {
+  // The predicate that routes a fence to the shared MoonBit tokenizer accepts
+  // exactly the moonbit-family spellings `code_block` recognizes; every other
+  // fence language (and the unlabelled fence) keeps its plain rendering.
+  for fence in ["moonbit", "mbt", "mbtx"] {
+    assert_true(is_moonbit_fence(fence))
+  }
+  for
+    other in [
+      "", "moon", "MOONBIT", "mbtx ", "uml", "plantuml", "javascript", "rust", "text",
+    ] {
+    assert_false(is_moonbit_fence(other))
+  }
+}
+
+///|
+test "a real moonbit fence is dispatched by the language cmark reports" {
+  // The two halves of the highlight decision chained together: cmark parses a
+  // real ```fence's info string, and that parsed language feeds the dispatch
+  // predicate `code_block` uses. If either half drifts — cmark stops
+  // reporting the language, or the predicate stops accepting it — the fence
+  // silently falls back to plain text and this test fails.
   for fence in ["moonbit", "mbt", "mbtx"] {
     let doc = @cmark.Doc::from_string(
       "```\{fence}\nlet a = 1\n```",
@@ -167,10 +184,16 @@ test "moonbit fence info strings reach the tokenized branch" {
     guard first_code_language(doc.block) is Some(language) else {
       fail("expected a fenced code block")
     }
-    assert_true(
-      language == "moonbit" || language == "mbt" || language == "mbtx",
-    )
+    assert_true(is_moonbit_fence(language))
   }
+  let doc = @cmark.Doc::from_string(
+    "```javascript\nlet x = 1\n```",
+    strict=false,
+  )
+  guard first_code_language(doc.block) is Some(language) else {
+    fail("expected a fenced code block")
+  }
+  assert_false(is_moonbit_fence(language))
 }
 
 ///|

@@ -141,13 +141,22 @@ fn code_block(block : @cmark.CodeBlock) -> @html.Html {
   // class scopes the `--vscode-token-*` palette — dark and light — to this
   // block; the aliases mirror the editor markdown pipeline's `mbt`/`mbtx` →
   // `moonbit` mapping. Other languages keep their plain escaped rendering.
-  if language == "moonbit" || language == "mbt" || language == "mbtx" {
+  if is_moonbit_fence(language) {
     return @html.pre(class="moonbit-source", [
       @syntax_html.moonbit_source_code(source),
     ])
   }
   let code_class = if language.is_empty() { "" } else { "language-" + language }
   @html.pre([@html.code(class=code_class, source)])
+}
+
+///|
+/// Which fence languages `code_block` routes through the shared MoonBit
+/// tokenizer: `moonbit` itself plus the aliases the editor markdown pipeline
+/// accepts (`mbt`, `mbtx`). One pure predicate so the dispatch decision is
+/// unit-testable and its condition text lives in exactly one place.
+fn is_moonbit_fence(language : String) -> Bool {
+  language == "moonbit" || language == "mbt" || language == "mbtx"
 }
 
 ///|
