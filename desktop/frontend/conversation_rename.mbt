@@ -21,6 +21,9 @@ fn Model::decorate_conversation_input(
   }
   let selected = match input.id.source() {
     @conversation.OpenSeekLive | @conversation.OpenSeekArchived =>
+      // Remembered OpenSeek selection survives page switches, but its row
+      // must stop highlighting while Codex or another page is on screen.
+      self.screen is Chat &&
       self
       .conversation_selection()
       .map_or(false, selection => selection.matches_id(input.id))

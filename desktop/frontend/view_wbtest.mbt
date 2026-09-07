@@ -45,4 +45,12 @@ test "a fresh chat selects its project and materializes on first send" {
     "Explain the sidebar state",
   )
   assert_true(submitted_project.conversations[0].active)
+
+  // Opening Codex preserves the OpenSeek conversation for returning to it,
+  // but must clear its sidebar highlight while the Codex page is visible.
+  let (_, codex_page) = update(test_dispatch(), OpenCodex, submitted)
+  assert_true(!sidebar_project_for_test(codex_page).conversations[0].active)
+  assert_true(
+    codex_page.conversation_selection() == submitted.conversation_selection(),
+  )
 }
