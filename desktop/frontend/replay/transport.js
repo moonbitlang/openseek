@@ -30,11 +30,12 @@ const answer = `The transcript now keeps each prompt close to its response. The 
 
 This is a simulated design review, not evidence that project checks passed. Try the narrow viewport to inspect code scrolling and table wrapping.`;
 const events = [];
-function record(kind,payload){const row={sequence:events.length+1,item:{kind,payload}};events.push(row);return row;}
-record('user',{content:'Could you make the conversation easier to scan without adding more cards?'});
-record('terminal',{kind:'finished',message:'Yes. I would keep each prompt and answer together, then mark the end of the exchange with a thin line beside the copy action.'});
-record('user',{content:'Show me how that works with a longer explanation, code, and a table.'});
-record('terminal',{kind:'finished',message:answer});
+const historyStart = Date.now() - 10 * 60 * 1000;
+function record(kind,payload,ts=Date.now()){const row={sequence:events.length+1,ts,item:{kind,payload}};events.push(row);return row;}
+record('user',{content:'Could you make the conversation easier to scan without adding more cards?'},historyStart + 0);
+record('terminal',{kind:'finished',message:'Yes. I would keep each prompt and answer together, then mark the end of the exchange with a thin line beside the copy action.'},historyStart + 120000);
+record('user',{content:'Show me how that works with a longer explanation, code, and a table.'},historyStart + 240000);
+record('terminal',{kind:'finished',message:answer},historyStart + 360000);
 const originalReply=host.replyFor.bind(host);
 host.replyFor=request=>{
   switch(request.method){

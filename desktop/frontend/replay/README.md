@@ -35,3 +35,5 @@ Latest focused comparison: retain D's exchange ending, remove the composer's
 outer top border, and remove the streaming cursor. Existing header/sidebar and
 composer activity indicators, step numbers, and responsive input sizing stay
 as they were. These changes are isolated to the prototype stylesheet.
+
+Timestamp comparison: initial history has synthetic timestamps spaced two minutes apart, starting ten minutes before page load. New replay events use their injection time. The existing MoonBit completion-time renderer supplies the label beside Copy; no token summary or new timestamp UI was added.
