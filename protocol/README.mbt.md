@@ -1,6 +1,6 @@
 # OpenSeek Protocol
 
-`bobzhang/openseek_protocol` owns **both directions** of the serve protocol: the
+`moonbitlang/openseek_protocol` owns **both directions** of the serve protocol: the
 stdout event stream the engine reports (`Event`), and the stdin command stream it
 is told (`Command`). Between them they are the whole wire contract with the TUI,
 the desktop host, the desktop frontend, and any script driving `run` or `serve`.
@@ -10,8 +10,8 @@ portable:
 
 | Package | Contents | Targets | Deps |
 | --- | --- | --- | --- |
-| `bobzhang/openseek_protocol` | `Event`, `Usage`, `Command`, `SteerKind`, `to_json`, `parse` | js, wasm, wasm-gc, native | `core/json` |
-| `bobzhang/openseek_protocol/emit` | `emit` (`to_json` + stdout writer) | native | `async`, above |
+| `moonbitlang/openseek_protocol` | `Event`, `Usage`, `Command`, `SteerKind`, `to_json`, `parse` | js, wasm, wasm-gc, native | `core/json` |
+| `moonbitlang/openseek_protocol/emit` | `emit` (`to_json` + stdout writer) | native | `async`, above |
 
 Only the *writer* does I/O, and only a native process can write fd 1
 asynchronously. Keeping it in its own package means a client that reads the

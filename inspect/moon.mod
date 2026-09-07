@@ -1,9 +1,9 @@
-name = "bobzhang/inspect"
+name = "moonbitlang/inspect"
 
 version = "0.1.0"
 
 import {
-  "bobzhang/openseek@0.2.2",
+  "moonbitlang/openseek@0.2.2",
   "moonbitlang/async@0.21.0",
 }
 

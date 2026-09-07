@@ -1,4 +1,4 @@
-name = "bobzhang/openseek_protocol"
+name = "moonbitlang/openseek_protocol"
 
 version = "0.1.1"
 
@@ -8,7 +8,7 @@ import {
 
 readme = "README.mbt.md"
 
-repository = "https://github.com/bobzhang/openseek"
+repository = "https://github.com/moonbitlang/openseek"
 
 license = "Apache-2.0"
 

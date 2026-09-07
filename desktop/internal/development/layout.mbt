@@ -47,7 +47,7 @@ pub fn Layout::viz_bundle(self : Layout) -> String {
   .join("_build")
   .join("js")
   .join(Path(profile.to_owned()))
-  .join("build/bobzhang/openseek-viz-app/openseek-viz-app.js")
+  .join("build/moonbitlang/openseek-viz-app/openseek-viz-app.js")
   .normalize()
   .to_string()
 }
@@ -55,7 +55,7 @@ pub fn Layout::viz_bundle(self : Layout) -> String {
 ///|
 /// Return the engine output directory in the same native profile as the host.
 pub fn Layout::engine_dir(self : Layout) -> String {
-  self.build_root.join("bobzhang/openseek/cmd/openseek").normalize().to_string()
+  self.build_root.join("moonbitlang/openseek/cmd/openseek").normalize().to_string()
 }
 
 ///|

@@ -21,7 +21,7 @@ const DevelopmentVizShellPath = "web/index.html"
 /// The development visualizer bundle. `package/build.mjs` builds the JS
 /// targets at `debug` for the development launcher, the same profile
 /// `engine_command` resolves for the development engine.
-const DevelopmentVizBundlePath = "_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js"
+const DevelopmentVizBundlePath = "_build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js"
 
 ///|
 #cfg(platform="windows")

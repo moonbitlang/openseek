@@ -1,5 +1,5 @@
 import {
-  "bobzhang/openseek_protocol" @wire,
+  "moonbitlang/openseek_protocol" @wire,
   "openseek_desktop/internal/fsx",
   "openseek_desktop/internal/pathx",
   "openseek_desktop/internal/workspaces",
