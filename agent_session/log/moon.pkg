@@ -1,11 +1,11 @@
 import {
-  "bobzhang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
 }
 
 import {
-  "bobzhang/openseek/deepseek",
+  "moonbitlang/openseek/deepseek",
 } for "test"
 
 warnings = "+unnecessary_annotation"

@@ -1,6 +1,6 @@
 # OpenSeek Agent Session
 
-`bobzhang/openseek/agent_session` is the typed, provider-aware conversation
+`moonbitlang/openseek/agent_session` is the typed, provider-aware conversation
 state for resumable OpenSeek agents. It owns the durable event log and the
 projection from that log into DeepSeek chat messages.
 
@@ -393,7 +393,7 @@ test "summary replaces covered events in model projection only" {
 
 This package provides JSON round-tripping for `Session`, `SessionId`,
 `SessionEvent`, and all session item variants. The nested native package
-`bobzhang/openseek/agent_session/store` owns filesystem persistence.
+`moonbitlang/openseek/agent_session/store` owns filesystem persistence.
 
 The store layout is:
 

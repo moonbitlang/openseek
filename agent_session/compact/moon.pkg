@@ -1,11 +1,11 @@
 import {
   "moonbitlang/core/env",
-  "bobzhang/openseek/agent_session",
-  "bobzhang/openseek/agent_session/store",
-  "bobzhang/openseek/deepseek",
-  "bobzhang/openseek/deepseek/client",
-  "bobzhang/openseek_protocol",
-  "bobzhang/openseek_protocol/emit",
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek/deepseek/client",
+  "moonbitlang/openseek_protocol",
+  "moonbitlang/openseek_protocol/emit",
 }
 
 import {
