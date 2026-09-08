@@ -4,10 +4,6 @@ import {
   "moonbitlang/core/json",
 }
 
-import {
-  "moonbitlang/core/test",
-} for "test"
-
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"

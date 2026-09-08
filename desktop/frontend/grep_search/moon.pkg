@@ -14,7 +14,3 @@ import {
 }
 
 supported_targets = "js"
-
-import {
-  "moonbitlang/core/debug",
-} for "test"

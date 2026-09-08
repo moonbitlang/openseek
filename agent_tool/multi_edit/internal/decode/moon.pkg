@@ -1,7 +1,3 @@
-import {
-  "moonbitlang/core/json",
-}
-
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"

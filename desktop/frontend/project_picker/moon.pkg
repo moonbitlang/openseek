@@ -11,7 +11,6 @@ import {
 
 import {
   "moonbit-community/rabbita/cmd",
-  "moonbitlang/core/debug",
   "openseek_desktop/frontend/interop",
 } for "test"
 

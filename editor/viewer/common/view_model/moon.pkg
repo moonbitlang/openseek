@@ -7,7 +7,6 @@ import {
   "moonbitlang/editor/viewer/common/model",
   "moonbitlang/editor/viewer/common/tokens",
   "moonbitlang/editor/viewer/common/view_layout",
-  "moonbitlang/core/json",
 }
 
 import {
