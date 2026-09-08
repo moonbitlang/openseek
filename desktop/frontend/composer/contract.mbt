@@ -219,6 +219,8 @@ pub(all) struct Input {
   goal : GoalInput
   // The turn in flight, `None` between runs.
   run : RunHeartbeat?
+  // Canonical turn identity, including transitions while this entry is hidden.
+  turn_id : String?
   slash_commands : Array[SlashCommand]
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]

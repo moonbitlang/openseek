@@ -365,6 +365,7 @@ pub fn State::composer_input(
     .bind(placement => placement.checkout_root()),
     installed_skills: self.installed_codex_skills(),
     context_generation: 0,
+    turn_id: active_turn,
     submission_sequence: self.submission_sequence,
     retirements: [],
     file_candidates: context.file_candidates,

@@ -26,8 +26,16 @@ test "the composer is handed the turn's facts, not a rendered row" {
     is Some({ stage: Thinking, started_ms: None, tokens: 0, }) else {
     fail("expected the open turn's heartbeat facts")
   }
+  assert_eq(
+    running.composer_input().turn_id,
+    match conv.run {
+      Open(run_id~, ..) => Some(run_id)
+      _ => None
+    },
+  )
   let idle = running.replace_conversation({ ..conv, run: NoRun(ended=None), })
   assert_eq(idle.composer_input().run, None)
+  assert_eq(idle.composer_input().turn_id, None)
 }
 
 ///|

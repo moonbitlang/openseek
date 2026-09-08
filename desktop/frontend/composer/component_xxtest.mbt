@@ -8,6 +8,7 @@ fn Input::fixture(task : String) -> Input {
     identity: { owner, archive_generation: 0, },
     draft: { task, mentions: [], },
     run: None,
+    turn_id: None,
     goal: { draft: None, standing: None, pending: None, },
     slash_commands: [],
     root: Some(@common.Uri::file("/workspace")),
@@ -613,4 +614,55 @@ test "setting a goal preserves the pending message follow-up choice" {
     submitted.active(accepted).submission_choice(accepted),
     Some(QueueNext),
   )
+}
+
+///|
+test "a background successor turn resets the unsent follow-up override" {
+  let base = Input::fixture("unsent draft")
+  let first = {
+    ..base,
+    turn_id: Some("turn-1"),
+    presentation: {
+      ..base.presentation,
+      primary_action: Running(
+        steer_available=true,
+        can_stop=true,
+        submit=Steer,
+        queue_available=true,
+      ),
+    },
+  }
+  let (queued, _) = Model(first).update(
+    first,
+    FollowupSelected("queue"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let (opened, _) = queued.update(
+    first,
+    FollowupMenuToggled,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let other = {
+    ..base,
+    identity: {
+      ..base.identity,
+      owner: { ..base.identity.owner, session: "other", },
+    },
+  }
+  let (away, _) = opened.update(
+    other,
+    TextChanged("another conversation"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  // Visiting another conversation alone must not discard the selection.
+  assert_eq(away.active(first).submission_choice(first), Some(QueueNext))
+  // No idle presentation for turn-1 was ever delivered to this entry.
+  let successor = { ..first, turn_id: Some("turn-2"), }
+  let returned = away.active(successor)
+  assert_eq(returned.draft.task, "unsent draft")
+  assert_eq(returned.submission_choice(successor), Some(SteerNow))
+  assert_false(returned.followup_menu_open)
 }
