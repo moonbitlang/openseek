@@ -340,6 +340,21 @@ html.is-resizing * {
   user-select: none !important;
 }
 
+/* Like VS Code's SplitView, keep divider drags out of the editor's mouse
+   hit testing: a mousemove there reads geometry after the drag writes sizes.
+   Restrict this to viewer content so Desktop's divider handles remain usable.
+   Include descendants because viewer widgets can explicitly enable pointers.
+   Removing the existing drag class restores each widget's normal behavior. */
+html:is(
+  .is-resizing,
+  .is-resizing-row,
+  .is-resizing-col,
+  .is-resizing-terminal,
+  .is-resizing-review
+) :is(.viewer-stack, .viewer-stack *) {
+  pointer-events: none !important;
+}
+
 /* ---------- dock: browser tabs, launcher, file picker ---------- */
 /* The active tab's kind is a class on .editor (mode-file / mode-browser /
    mode-picker / mode-launcher); every body part below the strip is always
