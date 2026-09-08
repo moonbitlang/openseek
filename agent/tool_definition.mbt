@@ -126,9 +126,11 @@ pub async fn[X] build_tools(
       // here would misdescribe the state the job left behind.
       @job_output.definition(bg_runtime),
       @job_stop.definition(bg_runtime),
+      @job_wait.definition(),
       @finish.definition(),
     ] +
     extra_tools,
+    background_jobs=bg_runtime,
   )
 }
 
@@ -172,10 +174,11 @@ async test "agent registers the expected tool names" {
   @async.with_task_group() <| group => {
     let tools = build_tools(AgentRuntime(), AgentTaskScope(group))
     let function_tools = tools.function_tools()
-    assert_eq(function_tools.length(), 11)
+    assert_eq(function_tools.length(), 12)
     let names = [ for t in function_tools => t.name ]
     assert_true(names.contains("job_output"))
     assert_true(names.contains("job_stop"))
+    assert_true(names.contains("job_wait"))
     assert_true(names.contains("read"))
     assert_true(names.contains("edit"))
     assert_true(names.contains("multi_edit"))

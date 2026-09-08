@@ -290,6 +290,8 @@ fn tool_request_view(
   }
   let label = if brief is Some(brief) && !brief.is_blank() {
     brief
+  } else if pending_job_wait_label(call) is Some(label) {
+    label
   } else {
     name
   }

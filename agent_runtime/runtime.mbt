@@ -49,6 +49,8 @@ pub struct AgentRuntime {
   /// lossy event bus: a noisy watcher may fill `events` and cause later runtime
   /// updates to be ignored, but user-visible input must never be the casualty.
   priv steers : @aqueue.Queue[SteerInput]
+  priv user_input_changed : @async.CondVar
+  priv mut user_input_pending : Bool
   /// Where a tool's permission question goes, when anything can answer one
   /// (see `approval_channel`). `None` is the fail-closed default, and it is
   /// also what tells a tool registry not to advertise the arguments that ask.
@@ -83,6 +85,8 @@ pub fn AgentRuntime::AgentRuntime(
     workspace_root,
     events: Queue(kind=DiscardOldest(default_agent_event_capacity)),
     steers: Queue(kind=Unbounded),
+    user_input_changed: Cond(),
+    user_input_pending: false,
     approval,
   }
 }
@@ -146,6 +150,10 @@ pub fn AgentRuntime::queue_steer(
   input : SteerInput,
 ) -> Unit {
   ignore(self.steers.try_put(input) catch { _ => false })
+  if input is (Prompt(text) | Command(text)) && !text.is_blank() {
+    self.user_input_pending = true
+    self.user_input_changed.broadcast()
+  }
 }
 
 ///|
@@ -156,6 +164,7 @@ pub fn AgentRuntime::queue_steer(
 /// this call. This method does not trim or filter; consumers decide how to treat
 /// blank steering input.
 pub fn AgentRuntime::drain_steers(self : AgentRuntime) -> Array[SteerInput] {
+  self.user_input_pending = false
   drain_queue(self.steers)
 }
 

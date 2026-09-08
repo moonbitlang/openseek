@@ -446,8 +446,11 @@ fn default_prompt() -> String {
     #|    job finishes. Never wait with a sleep loop or repeated polling; keep working
     #|    and act on the notice. `job_output` reads recent output; `job_stop` cancels
     #|    the job. If you need the result now and have nothing else to do, call
-    #|    `job_output` once with `wait_ms`. Background jobs are reaped after thirty
-    #|    minutes of wall clock.
+    #|    `job_wait` with `job_ids`, alone in its tool batch. It waits for any selected
+    #|    job to finish or for user input, without a timeout. Then read results with
+    #|    `job_output`. If your work is complete despite running jobs, explicitly call
+    #|    `finish`; a plain-text answer with running jobs asks you to choose. Background
+    #|    jobs are reaped after thirty minutes of wall clock.
     #|- Start `moon check` once `moon.mod` and the relevant `moon.pkg` files exist;
     #|  use `moon build` or `moon test` only when you need artifacts or test results.
     #|- `multi_edit` example — one edit per distinct line; a line with several matches

@@ -1,4 +1,5 @@
 import {
+  "bobzhang/openseek/agent_tool/bgjobs",
   "bobzhang/openseek/deepseek",
   "moonbitlang/async",
   "moonbitlang/core/encoding/utf8",

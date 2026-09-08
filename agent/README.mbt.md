@@ -110,6 +110,7 @@ calls `@agent.run`, but that decision lives outside the `agent` package.
   five seconds, then automatically hand the same execution to the background
   runtime;
 - `job_output` / `job_stop`: read or stop a background job;
+- `job_wait`: wait for selected jobs or user input in the same turn;
 - `read`: read a text file;
 - `edit`: replace exact text in a file;
 - `multi_edit`: apply several explicit line-anchored replacements to one file;
@@ -152,6 +153,7 @@ async test "standard tools are registered in dispatch order" {
         #|  "mbtx",
         #|  "job_output",
         #|  "job_stop",
+        #|  "job_wait",
         #|  "finish",
         #|]
       ),

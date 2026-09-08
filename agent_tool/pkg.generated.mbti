@@ -2,6 +2,7 @@
 package "bobzhang/openseek/agent_tool"
 
 import {
+  "bobzhang/openseek/agent_tool/bgjobs",
   "bobzhang/openseek/deepseek",
   "moonbitlang/core/debug",
 }
@@ -23,6 +24,7 @@ pub fn respond(String, is_error? : Bool, brief? : String) -> ToolAction
 pub enum AgentControl {
   Finish(String)
   Abort(String)
+  WaitJobs(Array[String])
 } derive(@debug.Debug)
 pub fn AgentControl::to_repr(Self) -> @debug.Repr
 
@@ -73,6 +75,7 @@ pub enum ToolAction {
 } derive(@debug.Debug)
 pub fn ToolAction::finish(String) -> Self
 pub fn ToolAction::to_repr(Self) -> @debug.Repr
+pub fn ToolAction::wait_jobs(Array[String]) -> Self
 
 pub(all) enum ToolExecutor {
   Async(async (Json) -> ToolAction)
@@ -87,9 +90,10 @@ pub struct ToolOutput {
 pub fn ToolOutput::to_repr(Self) -> @debug.Repr
 
 pub struct Tools {
+  background_jobs : @bgjobs.BgJobRuntime?
   // private fields
 }
-pub fn Tools::Tools(Array[AgentToolDefinition]) -> Self raise
+pub fn Tools::Tools(Array[AgentToolDefinition], background_jobs? : @bgjobs.BgJobRuntime) -> Self raise
 pub fn Tools::find(Self, String) -> AgentToolDefinition?
 pub fn Tools::function_tools(Self) -> Array[@deepseek.ToolDefinition]
 

@@ -7,6 +7,7 @@ import {
   "bobzhang/openseek/agent_tool/bgjobs",
   "bobzhang/openseek/agent_tool/job_output",
   "bobzhang/openseek/agent_tool/job_stop",
+  "bobzhang/openseek/agent_tool/job_wait",
   "bobzhang/openseek/agent_tool/edit",
   "bobzhang/openseek/agent_tool/finish",
   "bobzhang/openseek/agent_tool/goal",
@@ -28,6 +29,11 @@ import {
 
 import {
   "bobzhang/openseek/agent_tool",
+  "bobzhang/openseek/agent_tool/bgjobs",
+  "bobzhang/openseek/agent_tool/job_wait",
+  "bobzhang/openseek/agent_tool/job_output",
+  "bobzhang/openseek/agent_tool/finish",
+  "moonbitlang/async/process",
   "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_session",
   "moonbitlang/async",

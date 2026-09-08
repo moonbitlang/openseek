@@ -1585,8 +1585,9 @@ fn description(
     $|succeeded, so the job's output and exit code are the program's own. A completion
     $|notice arrives when it finishes, so never wait with sleep loops or repeated
     $|polling: keep working and act on the notice. Read recent output with job_output
-    $|(use one bounded wait_ms call only when the result is needed now), and cancel it
-    $|with job_stop.
+    $|and cancel it with job_stop. If you need results and have no other work, call
+    $|job_wait with job_ids, alone in its tool batch; it resumes on completion or
+    $|user input, without a timeout. Explicitly finish when your work is complete.
     $|\{delegation}
   )
 }

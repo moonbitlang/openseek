@@ -1,0 +1,5 @@
+import {
+  "bobzhang/openseek/agent_tool",
+}
+
+supported_targets = "+wasm+native"

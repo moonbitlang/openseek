@@ -9,8 +9,8 @@
 /// - `Control(Finish(<answer>))` — stops the loop and returns the string.
 ///   Missing or non-string `answer` produces `Control(Finish(""))`.
 ///
-/// `finish` is the only built-in tool whose action is not `Respond`. The loop
-/// always stops after `finish` runs, regardless of what comes back.
+/// Explicit completion is respected even with live background jobs. Pending
+/// steering and existing goal/ceiling checks may still continue the turn.
 pub fn definition() -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="finish",

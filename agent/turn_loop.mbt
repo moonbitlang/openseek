@@ -150,6 +150,22 @@ async fn AgentLoop::run(
         let steer_inputs = self.runtime.pending_steers()
         if steer_inputs.is_empty() {
           if step + 1 < max_steps &&
+            !self.at_soft_context_ceiling(response.usage) &&
+            self.background_finish_notice() is Some(_) {
+            let session = self.record_assistant(session, response)
+            // Appending may yield: input or completion takes precedence over
+            // a reminder based on the earlier snapshot.
+            let inputs = self.runtime.pending_steers()
+            let session = if !inputs.is_empty() {
+              self.apply_steer_inputs(session, inputs)
+            } else if self.background_finish_notice() is Some(notice) {
+              self.append_runtime_notice(session, notice)
+            } else {
+              session
+            }
+            continue session
+          }
+          if step + 1 < max_steps &&
             self.goal_cadence.due_finish_check() is Some(_) {
             // The model considers itself done, but the standing goal is
             // unconfirmed: keep the would-be answer as an ordinary assistant
@@ -673,6 +689,45 @@ async fn AgentLoop::execute_tool_call(
     None => @agent_tool.execute_tool_call(tool_call, self.tools)
   }
   match result {
+    Control(WaitJobs(ids)) => {
+      let (output, is_error) = if response.tool_calls.length() != 1 {
+        ("error: job_wait must be called alone in its tool batch", true)
+      } else if last_step || self.at_soft_context_ceiling(response.usage) {
+        ("error: cannot wait without budget for another model step", true)
+      } else {
+        try self.wait_for_jobs(ids) catch {
+          error if @async.is_being_cancelled() ||
+            @async.is_cancellation_error(error) => {
+            // Preserve cancellation even if the session store is unavailable.
+            @async.protect_from_cancel(() => {
+              self.record_tool_result(
+                session,
+                tool_call_id=native_call.id,
+                tool_name=tool_call.name,
+                content="job_wait cancelled",
+                is_error=true,
+              ) catch {
+                _ => session
+              }
+            })
+            |> ignore
+            raise error
+          }
+          error => ("error: \{error}", true)
+        } noraise {
+          content => (content, false)
+        }
+      }
+      ContinueToolBatch(
+        self.record_tool_result(
+          session,
+          tool_call_id=native_call.id,
+          tool_name=tool_call.name,
+          content=output,
+          is_error~,
+        ),
+      )
+    }
     Control(Finish(answer)) => {
       let session = self.record_tool_result(
         session,

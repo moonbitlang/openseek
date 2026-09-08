@@ -148,6 +148,8 @@ pub enum AgentControl {
   Finish(String)
   /// Stop the loop because execution cannot usefully continue.
   Abort(String)
+  /// Yield this turn until a selected background job ends or user input arrives.
+  WaitJobs(Array[String])
 } derive(Debug)
 
 ///|
@@ -229,6 +231,8 @@ fn ToolAction::abort(reason : String) -> ToolAction {
 /// `Tools(definitions)`, which raises if any two definitions share a name.
 pub struct Tools {
   priv by_name : Map[String, AgentToolDefinition]
+  /// Shared execution registry, also used by the loop for wait/finish decisions.
+  background_jobs : @bgjobs.BgJobRuntime?
 }
 
 ///|
@@ -236,7 +240,10 @@ pub struct Tools {
 /// definitions share a name — duplicates are treated as a programming bug,
 /// since the model dispatches by name and a silent override would mask one
 /// of the tools.
-pub fn Tools::Tools(definitions : Array[AgentToolDefinition]) -> Tools raise {
+pub fn Tools::Tools(
+  definitions : Array[AgentToolDefinition],
+  background_jobs? : @bgjobs.BgJobRuntime,
+) -> Tools raise {
   let by_name : Map[String, AgentToolDefinition] = Map([])
   for definition in definitions {
     if by_name.contains(definition.name) {
@@ -244,7 +251,7 @@ pub fn Tools::Tools(definitions : Array[AgentToolDefinition]) -> Tools raise {
     }
     by_name[definition.name] = definition
   }
-  { by_name, }
+  { by_name, background_jobs, }
 }
 
 ///|
@@ -533,3 +540,9 @@ pub extend ToolAction with Debug::{to_repr}
 
 ///|
 pub extend ToolOutput with Debug::{to_repr}
+
+///|
+/// Request event-driven waiting inside the current agent loop.
+pub fn ToolAction::wait_jobs(ids : Array[String]) -> ToolAction {
+  Control(WaitJobs(ids.copy()))
+}

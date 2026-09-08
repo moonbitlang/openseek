@@ -78,6 +78,7 @@ struct BgJobRuntime {
   // `stop`/teardown) — e.g. to push a completion notice into the agent loop.
   on_job_exit : ((BgJobSnapshot) -> Unit)?
   jobs : Map[String, BgJob]
+  settled : @async.CondVar
   mut next_index : Int
   // Separate counter for the spill files of detachable foreground executions
   // (which are not registered until adopted), so their `fg-<n>.out` files never
@@ -109,6 +110,8 @@ priv struct BgJob {
   // Cleared before invocation so cleanup is exactly once even if more terminal
   // observers are added later.
   mut on_terminal : (async () -> Unit)?
+  // True only after launcher cleanup and the existing completion notification.
+  mut completion_published : Bool
   // A terminal denial scan may read a large retained log. Cache its
   // classification so repeated job_output calls do not repeat that allocation.
   mut denial_scanned : Bool
@@ -204,6 +207,7 @@ pub fn[X] BgJobRuntime::BgJobRuntime(
     hard_timeout_ms,
     on_job_exit,
     jobs: Map([]),
+    settled: Cond(),
     next_index: 1,
     fg_index: 1,
   }
@@ -330,6 +334,7 @@ fn BgJobRuntime::register(
     output_rewrites: output_rewrites.copy(),
     moonrun_policy_active,
     on_terminal,
+    completion_published: false,
     denial_scanned: false,
     denial_feedback: None,
   }
@@ -342,21 +347,26 @@ fn BgJobRuntime::register(
   // `snapshot(id)` always resolves.
   (self.spawn_watcher)(() => {
     exec.wait()
-    // The output spill belongs to the runtime, but a launcher may also have
-    // handed the job a separate build directory. Reclaim that directory for
-    // natural exit, watchdog kills, and requested stops alike.
+    // Publish even if launcher cleanup fails. Keep the job pending until the
+    // notice is queued, then wake waiters; a terminal snapshot alone is too
+    // early for the loop's finish decision.
+    defer (if self.jobs.get(id) is Some(job) {
+      if self.on_job_exit is Some(callback) &&
+        self.snapshot(id) is Some(snapshot) &&
+        (
+          snapshot.status is Exited(_) ||
+          snapshot.killed_by_output_limit ||
+          snapshot.killed_by_time_limit
+        ) {
+        callback(snapshot)
+      }
+      job.completion_published = true
+      self.settled.broadcast()
+    })
     if self.jobs.get(id) is Some(job) && job.on_terminal is Some(cleanup) {
       job.on_terminal = None
       cleanup()
     }
-    guard self.on_job_exit is Some(callback) else { return }
-    guard self.snapshot(id) is Some(snapshot) else { return }
-    guard snapshot.status is Exited(_) ||
-      snapshot.killed_by_output_limit ||
-      snapshot.killed_by_time_limit else {
-      return
-    }
-    callback(snapshot)
   })
   // Wall-clock reaper: every registered job has a bounded lifetime measured
   // from its process start, so a detached job's foreground wait counts
