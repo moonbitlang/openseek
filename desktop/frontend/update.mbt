@@ -3660,7 +3660,7 @@ fn update_msg(
             )
           }
           (
-            command,
+            @cmd.batch([command, @transcript_component.scroll_to_latest()]),
             {
               ..model.replace_conversation({
                 ..conv,
@@ -3743,7 +3743,12 @@ fn update_msg(
             workspace=conv.project(),
           )
         }
-        (start_cmd, model.replace_conversation(next))
+        // Re-pin now, before the durable User item arrives, so the early
+        // streamed work is visible even if the reader had scrolled up.
+        (
+          @cmd.batch([start_cmd, @transcript_component.scroll_to_latest()]),
+          model.replace_conversation(next),
+        )
       }
     }
     Stop => {
@@ -4691,7 +4696,10 @@ fn update_msg(
       // then nothing would carry the user's writing.
       let (model, command) = model.allocate_submission_id()
       (
-        send_goal(dispatch, model, conv, command, Some(text)),
+        @cmd.batch([
+          send_goal(dispatch, model, conv, command, Some(text)),
+          @transcript_component.scroll_to_latest(),
+        ]),
         model.replace_conversation({
           ..conv,
           goal_edit: None,
@@ -4719,7 +4727,10 @@ fn update_msg(
       }
       let (model, command) = model.allocate_submission_id()
       (
-        send_goal(dispatch, model, conv, command, None),
+        @cmd.batch([
+          send_goal(dispatch, model, conv, command, None),
+          @transcript_component.scroll_to_latest(),
+        ]),
         model.replace_conversation({
           ..conv,
           goal_edit: None,

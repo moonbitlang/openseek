@@ -1,10 +1,68 @@
 ///|
+/// The conversation whose transcript the root view places on screen. It keys
+/// the transcript component's lifetime (`Val::switch_by` in `boot`): a new
+/// slot builds a fresh component whose `init` pins the scroller and clears
+/// overview state, and `None` disposes the current one. The view's own fork
+/// — the console gate, Chat onboarding, loading, and load failure — is
+/// mirrored here so the component exists exactly while its DOM does.
+priv struct TranscriptSlot {
+  source : @transcript_component.Source
+  channel : @interop.ChannelId
+  session : String
+} derive(Eq)
+
+///|
+fn TranscriptSlot::wire(self : TranscriptSlot) -> String {
+  let source = match self.source {
+    OpenSeek => "openseek"
+    Codex => "codex"
+  }
+  source + "\u{0}" + self.channel.uri_authority() + "\u{0}" + self.session
+}
+
+///|
+fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
+  if self.console is Some(console) &&
+    (
+      console.page_device is None ||
+      !(console.auth is AuthSignedIn(..)) ||
+      self.focused_device() is None
+    ) {
+    return None
+  }
+  match self.screen {
+    Codex =>
+      Some({
+        source: Codex,
+        channel: self.focused,
+        session: self.codex.active_id().unwrap_or("none"),
+      })
+    Chat => {
+      if self.conversation_load_failure is Some(failure) &&
+        self.selected_conversation == Some(failure.target) {
+        return None
+      }
+      guard self.selected_conversation_loaded() &&
+        self.active_conversation() is Some(_) else {
+        return None
+      }
+      Some({
+        source: OpenSeek,
+        channel: self.focused,
+        session: self.active_session,
+      })
+    }
+    Skills | Settings | WorkspaceSettings(..) => None
+  }
+}
+
+///|
 /// Project the application data that the transcript package renders. The
 /// component owns scroll position; the root owns durable conversation data.
 ///
-/// The component stays mounted while onboarding is on screen — the root view
-/// simply does not place it — so a model with no conversation projects an
-/// empty transcript rather than inventing one to read.
+/// The input is read only while a slot is on screen, but the switch may
+/// recompute it while disposing a branch, so a model with no conversation
+/// projects an empty transcript rather than inventing one to read.
 fn Model::transcript_projects(
   self : Model,
 ) -> Array[@transcript_component.ProjectChoice] {
@@ -34,7 +92,6 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         project_menu_open=false,
         project_query="",
         root=placement.bind(value => value.checkout_root()),
-        submission_generation=0,
         items=@transcript_component.VisibleRow::history(
           self.codex.transcript_items(),
         ),
@@ -55,7 +112,6 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
             project_menu_open=false,
             project_query="",
             root=None,
-            submission_generation=self.submission_sequence,
             items=[],
             streaming_response=None,
             streaming_identity="",
@@ -77,7 +133,6 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
             root=self
               .conversation_placement(conversation)
               .bind(value => value.checkout_root()),
-            submission_generation=self.submission_sequence,
             items=conversation.visible_transcript_rows(),
             streaming_response=conversation.turn.streaming_response,
             streaming_reasoning?,

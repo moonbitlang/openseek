@@ -77,7 +77,6 @@ struct Input {
   // The concrete project or worktree root sent alongside relative Markdown
   // image paths so the owning host, rather than the frontend, resolves them.
   root : @common.Uri?
-  submission_generation : Int
   items : Array[VisibleRow]
   // The in-flight assistant text to show below the committed rows, or `None`
   // when nothing is streaming. It is deliberately not a `VisibleRow`: the
@@ -102,7 +101,6 @@ pub fn Input::Input(
   project_menu_open~ : Bool,
   project_query~ : String,
   root~ : @common.Uri?,
-  submission_generation~ : Int,
   items~ : Array[VisibleRow],
   streaming_response~ : String?,
   streaming_reasoning? : String,
@@ -120,7 +118,6 @@ pub fn Input::Input(
     project_menu_open,
     project_query,
     root,
-    submission_generation,
     items,
     streaming_response,
     streaming_reasoning,
@@ -148,23 +145,22 @@ pub(all) struct Actions {
 }
 
 ///|
+/// Scroll ownership and overview state for one mounted conversation. The
+/// component lives exactly as long as its conversation is on screen (the
+/// root keys it by conversation), so a fresh conversation or a return from
+/// another page always starts pinned with an empty overview through `init`.
 priv struct Model {
   pinned : Bool
   overview : @transcript_overview.State
-  source : Source
-  focused : @interop.ChannelId
-  active_session : String
   image_owner : ImageOwner
   images : ImageCache
-  submission_generation : Int
-  mounted : Bool
 } derive(Eq)
 
 ///|
 priv enum Msg {
   Pinned(Bool)
   JumpToLatest
-  ContentRendered(mounted~ : Bool)
+  ContentRendered
   ImageRequested(String)
   ImageResolved(ImageOwner, String, ImageReadResult)
   Overview(@transcript_overview.Msg)
@@ -177,9 +173,9 @@ fn Model::update(
   msg : Msg,
   emit : @cmd.Emit[Msg],
 ) -> (Model, @cmd.Cmd) {
-  // A conversation switch can reach the component through input before its
-  // DOM mutation notification. Never project the previous owner's data URLs
-  // into that intermediate render.
+  // The conversation is fixed for this component's lifetime, but its image
+  // root can move (a worktree gets bound after the first send). Never project
+  // the previous root's data URLs into a render for the new one.
   let image_owner = input.image_owner()
   let self = if self.image_owner == image_owner {
     self
@@ -196,47 +192,16 @@ fn Model::update(
           report_visible_turn_after_render(emit, skip_unchanged=true),
         ]),
       )
-    ContentRendered(mounted~) => {
-      // The component outlives the Chat DOM while Skills, Settings, or the
-      // signed-out console gate is shown. A newly mounted scroller therefore
-      // resets scroll and overview state even when the conversation identity
-      // itself did not change.
-      let remounted = mounted && !self.mounted
-      let navigated = remounted ||
-        self.source != input.source ||
-        self.focused != input.focused ||
-        self.active_session != input.active_session
-      // Submission generation changes synchronously when Send accepts either
-      // a prompt or a steer, before its durable User item arrives. Re-pin on
-      // that explicit signal so early streamed work is immediately visible;
-      // another client's later User item must not impersonate a local send.
-      let submitted = !navigated &&
-        input.submission_generation != self.submission_generation
-      let pinned = navigated || submitted || self.pinned
-      let next = {
-        pinned,
-        overview: if navigated {
-          @transcript_overview.State::empty()
-        } else {
-          self.overview
-        },
-        source: input.source,
-        focused: input.focused,
-        active_session: input.active_session,
-        image_owner,
-        images: self.images,
-        submission_generation: input.submission_generation,
-        mounted,
-      }
+    ContentRendered => {
+      // Rendered content grew or changed size. A pinned reader follows the
+      // tail; the overview re-reads which turn sits under the reading line.
       let commands : Array[@cmd.Cmd] = []
-      if pinned {
+      if self.pinned {
         commands.push(scroll_after_render())
       }
-      commands.push(
-        report_visible_turn_after_render(emit, skip_unchanged=!navigated),
-      )
+      commands.push(report_visible_turn_after_render(emit, skip_unchanged=true))
       commands.push(self.images.apply_after_render())
-      (next, @cmd.batch(commands))
+      (self, @cmd.batch(commands))
     }
     ImageRequested(path) => {
       let (images, command) = self.images.begin_read(image_owner, path, emit)
@@ -275,26 +240,30 @@ fn Model::update(
 
 ///|
 /// Build the transcript state and return its independently updating Html.
+///
+/// Create one component per conversation on screen and dispose it when that
+/// conversation leaves the screen (`Val::switch_by` keyed by conversation at
+/// the root). Conversation identity therefore never changes inside a
+/// component: `init` pins the fresh scroller to its tail and reports the
+/// first visible turn once its DOM exists.
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
 ) -> @rabbita.Val[@html.Html] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
-    init=(_, input) => {
+    init=(emit, input) => {
       (
         {
           pinned: true,
           overview: @transcript_overview.State::empty(),
-          source: input.source,
-          focused: input.focused,
-          active_session: input.active_session,
           image_owner: input.image_owner(),
           images: ImageCache::empty(),
-          submission_generation: input.submission_generation,
-          mounted: false,
         },
-        @cmd.none,
+        @cmd.batch([
+          scroll_after_render(),
+          report_visible_turn_after_render(emit),
+        ]),
       )
     },
     update=(state, input, msg, emit) => state.update(input, msg, emit),
@@ -362,11 +331,21 @@ fn focus_empty_project_trigger_after_render() -> @cmd.Cmd {
 }
 
 ///|
+/// Re-pin the transcript to its tail after the next render. The root issues
+/// this when Send accepts a prompt or a steer, before the durable User item
+/// arrives, so early streamed work is immediately visible. The scroll it
+/// causes reaches the component's own listener as `Pinned(true)`.
+pub fn scroll_to_latest() -> @cmd.Cmd {
+  scroll_after_render()
+}
+
+///|
 fn scroll_after_render() -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
       // A forced tail jump must also reset the subscription's DOM cache. A
-      // remounted short transcript may clamp without emitting a scroll event.
+      // freshly mounted short transcript may clamp without emitting a scroll
+      // event.
       transcript_pinned_watch.val = true
       if @dom.document().get_element_by_id("transcript").to_option()
         is Some(transcript) {
@@ -548,7 +527,7 @@ fn transcript_sub_loader(
       }
       target.add_event_listener_with_options("scroll", listener, capture=true)
       let observers = TranscriptObservers::install(
-        mounted => scheduler.add(emit(ContentRendered(mounted~))),
+        () => scheduler.add(emit(ContentRendered)),
         path => scheduler.add(emit(ImageRequested(path))),
       )
       Some({
@@ -572,9 +551,11 @@ fn transcript_sub_loader(
 
 ///|
 /// Observe the transcript through Rabbita's typed DOM bindings. The document
-/// observer only follows mount/replacement; content and identity changes are
-/// observed directly on the current transcript, so unrelated page mutations
-/// cannot feed back into component updates.
+/// observer only finds the scroller element once Rabbita has inserted it (the
+/// subscription starts before the first paint); content growth and geometry
+/// are then observed directly on that element, so unrelated page mutations
+/// cannot feed back into component updates. Conversation identity is never
+/// read back from the DOM: it is fixed for the component's lifetime.
 priv struct TranscriptObservers {
   document : @dom.MutationObserver
   content : @dom.MutationObserver
@@ -656,14 +637,9 @@ fn TranscriptDomMount::observe_content(
   if self.element is Some(element) {
     observer.observe(
       element.as_node(),
-      attributes=true,
       child_list=true,
       character_data=true,
       subtree=true,
-      attribute_filter=[
-        "data-transcript-source", "data-transcript-channel", "data-transcript-session",
-        "data-transcript-root", "data-transcript-submission",
-      ],
     )
   }
 }
@@ -685,11 +661,11 @@ fn TranscriptDomMount::dispose(self : Self) -> Unit {
 
 ///|
 fn TranscriptObservers::install(
-  on_change : (Bool) -> Unit,
+  on_change : () -> Unit,
   on_image : (String) -> Unit,
 ) -> Self {
-  let mount = TranscriptDomMount(() => on_change(true), on_image)
-  let resize = @dom.ResizeObserver::new((_, _) => on_change(true))
+  let mount = TranscriptDomMount(on_change, on_image)
+  let resize = @dom.ResizeObserver::new((_, _) => on_change())
   let content = @dom.MutationObserver::new((_, observer) => {
     // Reconciliation itself moves the SVG and installs toolbar nodes. Pause
     // this same observer while doing that so those owned mutations cannot
@@ -697,7 +673,7 @@ fn TranscriptObservers::install(
     observer.disconnect()
     mount.refresh_content()
     mount.observe_content(observer)
-    on_change(true)
+    on_change()
   })
   let attach = () => {
     let next = @dom.document().get_element_by_id("transcript").to_option()
@@ -707,7 +683,9 @@ fn TranscriptObservers::install(
     mount.replace(next)
     mount.observe_content(content)
     mount.observe_resize(resize)
-    on_change(next is Some(_))
+    if next is Some(_) {
+      on_change()
+    }
   }
   let document = @dom.MutationObserver::new((_, _) => attach())
   if @dom.document().get_document_element() is Some(root) {
@@ -740,7 +718,6 @@ fn base_input() -> Input {
     project_menu_open=false,
     project_query="",
     root=None,
-    submission_generation=0,
     items=[],
     streaming_response=None,
     streaming_identity="idle",
@@ -748,18 +725,13 @@ fn base_input() -> Input {
 }
 
 ///|
-/// The mounted, pinned model matching `base_input()`.
+/// The pinned model matching `base_input()`.
 fn pinned_model(input : Input) -> Model {
   {
     pinned: true,
     overview: @transcript_overview.State::empty(),
-    source: OpenSeek,
-    focused: Local,
-    active_session: "desktop-test",
     image_owner: input.image_owner(),
     images: ImageCache::empty(),
-    submission_generation: 0,
-    mounted: true,
   }
 }
 
@@ -772,7 +744,10 @@ test "local pinned transitions are pure" {
   let (second, _) = state.update(input, Pinned(false), emit)
   assert_false(first.pinned)
   assert_false(second.pinned)
-  let (grown, _) = first.update(input, ContentRendered(mounted=true), emit)
+  // Content growth never re-pins by itself: only the reader's scroll or an
+  // explicit jump does. Another client's User item must not impersonate a
+  // local send.
+  let (grown, _) = first.update(input, ContentRendered, emit)
   assert_false(grown.pinned)
   let (received, _) = first.update(
     {
@@ -784,24 +759,12 @@ test "local pinned transitions are pure" {
         },
       ],
     },
-    ContentRendered(mounted=true),
+    ContentRendered,
     emit,
   )
   assert_false(received.pinned)
-  let (submitted, _) = first.update(
-    { ..input, submission_generation: 1, },
-    ContentRendered(mounted=true),
-    emit,
-  )
-  assert_true(submitted.pinned)
   let (jumped, _) = grown.update(input, JumpToLatest, emit)
   assert_true(jumped.pinned)
-  let (navigated, _) = grown.update(
-    { ..input, active_session: "another-session", },
-    ContentRendered(mounted=true),
-    emit,
-  )
-  assert_true(navigated.pinned)
 }
 
 ///|
@@ -813,43 +776,6 @@ test "an overview click unpins and highlights inside the component" {
   let (next, _) = state.update(input, Overview(Clicked(key)), emit)
   assert_false(next.pinned)
   @debug.assert_eq(next.overview.active, Some(key))
-}
-
-///|
-test "a conversation switch clears component-owned overview state" {
-  let input = base_input()
-  let state = {
-    ..pinned_model(input),
-    pinned: false,
-    overview: {
-      hover: Some({
-        key: @transcript_overview.Durable(2),
-        flip: false,
-        anchor: 0,
-      }),
-      active: Some(@transcript_overview.Durable(3)),
-    },
-  }
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  let (next, _) = state.update(
-    { ..input, active_session: "desktop-other", },
-    ContentRendered(mounted=true),
-    emit,
-  )
-  assert_true(next.pinned)
-  @debug.assert_eq(next.overview.hover, None)
-  @debug.assert_eq(next.overview.active, None)
-  let (removed, _) = state.update(input, ContentRendered(mounted=false), emit)
-  let (remounted, _) = removed.update(
-    input,
-    ContentRendered(mounted=true),
-    emit,
-  )
-  assert_false(removed.mounted)
-  assert_true(remounted.mounted)
-  assert_true(remounted.pinned)
-  @debug.assert_eq(remounted.overview.hover, None)
-  @debug.assert_eq(remounted.overview.active, None)
 }
 
 ///|

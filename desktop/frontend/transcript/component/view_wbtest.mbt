@@ -38,7 +38,6 @@ test "transcript stream children use stable typed keys in display order" {
     project_menu_open=false,
     project_query="",
     root=None,
-    submission_generation=1,
     items=[
       {
         item: { kind: User("question"), ts: None, sequence: Some(41), },
@@ -97,7 +96,6 @@ test "the live response is one node, replaced by the durable one" {
     project_menu_open=false,
     project_query="",
     root=None,
-    submission_generation=1,
     items=[user],
     streaming_response=None,
     streaming_reasoning="next thought",
@@ -145,7 +143,6 @@ test "a streaming delta changes only the live block" {
     project_menu_open=false,
     project_query="",
     root=None,
-    submission_generation=1,
     items=[
       {
         item: { kind: User("question"), ts: Some(1.0e12), sequence: Some(1), },
@@ -196,7 +193,6 @@ test "transcript stream section key scopes equal session ids by channel" {
     project_menu_open=false,
     project_query="",
     root=None,
-    submission_generation=0,
     items=[],
     streaming_response=None,
     streaming_identity="idle",

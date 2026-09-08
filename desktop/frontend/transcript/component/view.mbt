@@ -993,25 +993,16 @@ fn transcript_view(
     overview_emit~,
     on_jump_latest~,
   )
-  // These identity attributes make conversation and root changes observable
-  // even when the rendered children stay identical. The component subscription
-  // reconciles local state on their mutation instead of relying on incidental
-  // transcript DOM changes.
+  // The identity attributes name the conversation this scroller shows, for
+  // tests and tooling. Nothing observes them: the component is created per
+  // conversation, so its state never has to detect a switch from the DOM.
   @html.section(
     attrs=@html.Attrs::build()
       .id("transcript")
       .class("transcript")
       .data_set("transcript-source", input.source.wire())
       .data_set("transcript-channel", input.focused.uri_authority())
-      .data_set("transcript-session", input.active_session)
-      .data_set(
-        "transcript-root",
-        input.root.map(uri => uri.to_string()).unwrap_or(""),
-      )
-      .data_set(
-        "transcript-submission",
-        input.submission_generation.to_string(),
-      ),
+      .data_set("transcript-session", input.active_session),
     children,
   )
 }

@@ -543,8 +543,7 @@ pub fn boot() -> Unit {
     let terminal_html = @terminal.component(
       terminal_input, terminal_state, terminal_emit,
     )
-    let transcript_input = state.map(model => model.transcript_input())
-    let transcript_html = @transcript_component.component(transcript_input, {
+    let transcript_actions : @transcript_component.Actions = {
       open: emit.map(path => OpenFile(path)),
       jump: emit.map(target => {
         JumpToLocation(
@@ -559,7 +558,31 @@ pub fn boot() -> Unit {
       toggle_project_menu: emit(ToggleSelectMenu(ProjectMenu)),
       dismiss_project_menu: emit(CloseSelectMenu),
       project_query_changed: emit.map(query => ProjectMenuQueryChanged(query)),
-    })
+    }
+    // One transcript component per conversation on screen. Switching
+    // conversations or leaving the Chat/Codex page disposes the component
+    // with its scroll and overview state; returning creates a fresh one, so
+    // the component never has to detect a switch from its own DOM.
+    let transcript_html = state
+      .map(model => model.transcript_slot())
+      .switch_by(
+        slot => {
+          match slot {
+            None => @rabbita.Val::constant(@html.nothing)
+            Some(_) =>
+              @transcript_component.component(
+                state.map(model => model.transcript_input()),
+                transcript_actions,
+              )
+          }
+        },
+        by=slot => {
+          match slot {
+            None => ""
+            Some(slot) => slot.wire()
+          }
+        },
+      )
     let composer_input = state.map(model => model.composer_input())
     let composer_html = @composer.component(
       composer_input,
