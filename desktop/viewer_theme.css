@@ -91,6 +91,7 @@
     transparent
   );
   --vscode-editorLink-activeForeground: var(--color-accent-strong);
+  --vscode-editorCodeLens-foreground: var(--color-text-muted);
   --vscode-editorWarning-foreground: var(--color-warning);
   --vscode-editorError-foreground: var(--color-danger);
   --vscode-editorInfo-foreground: var(--color-accent);

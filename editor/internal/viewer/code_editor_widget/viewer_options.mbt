@@ -59,6 +59,14 @@ struct CodeEditorOptions {
   /// `editorOptions.ts:6649-6653`): adds the `showDeprecated` root class
   /// gating the `squiggly-inline-deprecated` strike-through.
   show_deprecated : Bool
+  /// Monaco's standalone `codeLens` option. The contribution is installed
+  /// only for standalone viewers, but this live gate can hide/show it without
+  /// rebuilding the code view.
+  code_lens : Bool
+  /// Optional CodeLens-specific font overrides. `None` inherits the measured
+  /// editor font family and 90% of its measured size.
+  code_lens_font_family : String?
+  code_lens_font_size : Double?
   /// Monaco's `fontFamily`/`fontWeight`/`fontSize`/`lineHeight`/
   /// `letterSpacing` editor options, defaulting to `EDITOR_FONT_DEFAULTS`.
   /// `line_height` follows `BareFontInfo._create`'s rules: `0` derives the
@@ -103,6 +111,9 @@ pub fn CodeEditorOptions::CodeEditorOptions(
   handle_mouse_wheel? : Bool = true,
   show_unused? : Bool = true,
   show_deprecated? : Bool = true,
+  code_lens? : Bool = true,
+  code_lens_font_family? : String,
+  code_lens_font_size? : Double,
   font_family? : String = @config.editor_font_defaults.font_family,
   font_weight? : String = @config.editor_font_defaults.font_weight,
   font_size? : Double = @config.editor_font_defaults.font_size,
@@ -131,6 +142,9 @@ pub fn CodeEditorOptions::CodeEditorOptions(
     handle_mouse_wheel,
     show_unused,
     show_deprecated,
+    code_lens,
+    code_lens_font_family,
+    code_lens_font_size,
     font_family,
     font_weight,
     font_size,
@@ -153,6 +167,9 @@ fn CodeEditorOptions::same_layout_options(
     placeholder: other.placeholder,
     show_unused: other.show_unused,
     show_deprecated: other.show_deprecated,
+    code_lens: other.code_lens,
+    code_lens_font_family: other.code_lens_font_family,
+    code_lens_font_size: other.code_lens_font_size,
     smooth_scrolling: other.smooth_scrolling,
     handle_mouse_wheel: other.handle_mouse_wheel,
   } ==
@@ -199,6 +216,33 @@ pub fn CodeEditorOptions::with_font_size(
   font_size : Double,
 ) -> CodeEditorOptions {
   { ..self, font_size, }
+}
+
+///|
+/// Returns a copy with CodeLens rendering enabled or disabled.
+pub fn CodeEditorOptions::with_code_lens(
+  self : CodeEditorOptions,
+  code_lens : Bool,
+) -> CodeEditorOptions {
+  { ..self, code_lens, }
+}
+
+///|
+/// Returns a copy with the optional CodeLens font-family override changed.
+pub fn CodeEditorOptions::with_code_lens_font_family(
+  self : CodeEditorOptions,
+  code_lens_font_family : String?,
+) -> CodeEditorOptions {
+  { ..self, code_lens_font_family, }
+}
+
+///|
+/// Returns a copy with the optional CodeLens font-size override changed.
+pub fn CodeEditorOptions::with_code_lens_font_size(
+  self : CodeEditorOptions,
+  code_lens_font_size : Double?,
+) -> CodeEditorOptions {
+  { ..self, code_lens_font_size, }
 }
 
 ///|

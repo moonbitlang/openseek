@@ -580,21 +580,23 @@ Notification:
 
 ### moonide.* — workspace navigation
 
-Both methods accept an absolute editor `root`, a source `path` relative to that
-root, and positive, one-based `line` and `column` numbers. The root is the
-actual main checkout, linked worktree, or Codex cwd displayed by the editor;
-it need not be an attached OpenSeek workspace. The host passes the position to
-`moon ide --loc`, and runs the bundled `moon` from that root (`moon` on `PATH`
-only for a bare development host without a packaged toolchain seed). Result
-paths are canonicalized for physical containment, then mapped back under the
-supplied root's lexical spelling so they match existing file/model identities.
-The CLI's line and column values are returned unchanged; malformed or
-root-escaping locations are omitted.
+All three methods accept the owning `session`, an absolute editor `root`, and a
+source `path` relative to that root. Definition and References additionally
+accept positive, one-based `line` and `column` numbers. The root is the actual
+main checkout, linked worktree, or Codex cwd displayed by the editor; it need
+not be an attached OpenSeek workspace. The host runs the bundled `moon` from
+that root (`moon` on `PATH` only for a bare development host without a packaged
+toolchain seed). Result paths are canonicalized for physical containment, then
+mapped back under the supplied root's lexical spelling so they match existing
+file/model identities. Navigation result lines and columns remain one-based;
+CodeLens source ranges and action positions remain zero-based LSP coordinates.
+Malformed, unknown, or root-escaping rows are omitted.
 
 | method | params | result |
 |---|---|---|
-| `moonide.definition` | `{root, path, line, column}` (`root` absolute, `path` relative; positive 1-based position) | `{locations: [{path, start_line, start_column, end_line, end_column}]}` — absolute paths under the supplied lexical root, with Moon IDE's numeric ranges |
-| `moonide.references` | `{root, path, line, column}` (`root` absolute, `path` relative; positive 1-based position) | `{locations: [{path, start_line, start_column, end_line, end_column}]}` — absolute paths under the supplied lexical root, with Moon IDE's numeric ranges |
+| `moonide.definition` | `{session, root, path, line, column}` (`root` absolute, `path` relative; positive 1-based position) | `{locations: [{path, start_line, start_column, end_line, end_column}]}` — absolute paths under the supplied lexical root, with Moon IDE's numeric ranges |
+| `moonide.references` | `{session, root, path, line, column}` (`root` absolute, `path` relative; positive 1-based position) | `{locations: [{path, start_line, start_column, end_line, end_column}]}` — absolute paths under the supplied lexical root, with Moon IDE's numeric ranges |
+| `moonide.codelens` | `{session, root, path}` (`root` absolute, `path` relative) | `{lenses: [{range, title, action}]}` — `range` and `action.position` use zero-based LSP coordinates. `action` is either `{kind:"local", position, locations}` with canonical one-based locations, or `{kind:"outside", position}` |
 
 ### skills.*
 

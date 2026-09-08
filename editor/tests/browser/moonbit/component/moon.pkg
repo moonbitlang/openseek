@@ -14,6 +14,7 @@ import {
   "moonbitlang/editor/viewer/common/markers",
   "moonbitlang/editor/viewer/common/model",
   "moonbitlang/editor/viewer/common/core",
+  "moonbitlang/editor/viewer/common/code_lens_api",
   "moonbitlang/editor/syntax/lang_moonbit",
   "moonbitlang/editor/syntax",
   "moonbitlang/editor/tests/browser/moonbit/support",

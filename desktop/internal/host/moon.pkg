@@ -21,6 +21,7 @@ import {
   "openseek_desktop/internal/terminal",
   "openseek_desktop/internal/update",
   "moonbit-community/proton",
+  "openseek_desktop/internal/uri",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/io",

@@ -46,6 +46,7 @@ pub fn ContentWidgetPositionPreference::not_equal(Self, Self) -> Bool
 type ContentWidgets
 pub fn ContentWidgets::add_widget(Self, ContentWidgetHandle) -> Unit
 pub fn ContentWidgets::install_live_view_context_with_affinity(Self, () -> (Double, Double), (@common.Position, @model.PositionAffinity?) -> @common.Position?) -> Unit
+pub fn ContentWidgets::remove_widget(Self, ContentWidgetHandle) -> Unit
 pub fn ContentWidgets::set_widget_position(Self, ContentWidgetHandle) -> Unit
 
 type EditorScrollbar
