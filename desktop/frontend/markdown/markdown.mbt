@@ -20,16 +20,14 @@
 /// file references in prose into clickable elements whose click runs the
 /// returned command (the frontend opens the file or reveals the directory).
 /// Absent (tests, plain rendering), explicit links remain ordinary anchors.
-/// Inline code stays inert. Streaming diagram fences keep their source until
-/// cmark reports a closing fence; completed messages also render unclosed ones.
+/// Inline code stays inert.
 pub fn markdown_nodes(
   source : String,
   open_file? : (String) -> @cmd.Cmd,
-  streaming? : Bool = false,
 ) -> Array[@html.Html] {
   @js.Error_::wrap(() => {
     let doc = @cmark.Doc::from_string(source, strict=false)
-    let render = MarkdownRender::{ defs: doc.defs, open_file, streaming, }
+    let render = MarkdownRender::{ defs: doc.defs, open_file, }
     @js.Value::cast_from(render.block_nodes(doc.block))
   }) catch {
     _ => [@html.pre(class="markdown-fallback", source)]
@@ -41,7 +39,6 @@ priv struct MarkdownRender {
   // Link-reference and footnote definitions collected by the parser, used to
   // resolve `[text][label]` style references to their destinations.
   defs : Map[String, @cmark.LabelDef]
-  streaming : Bool
   // How to make a file path clickable; `None` renders paths inertly.
   open_file : ((String) -> @cmd.Cmd)?
 }
@@ -72,7 +69,7 @@ fn MarkdownRender::push_block(
     Heading(node) => out.push(self.heading(node.v))
     BlockQuote(node) =>
       out.push(@html.blockquote(self.block_nodes(node.v.block)))
-    CodeBlock(node) | ExtMathBlock(node) => out.push(self.code_block(node.v))
+    CodeBlock(node) | ExtMathBlock(node) => out.push(code_block(node.v))
     // Raw HTML is shown as text, not injected; see the module comment.
     HtmlBlock(node) =>
       out.push(@html.pre(class="raw-html", lines_text(node.v.0)))
@@ -114,10 +111,7 @@ fn lines_text(lines : @cmark.Seq[@cmark.Node[String]]) -> String {
 
 ///|
 #warnings("-alert_xss_vulnerable")
-fn MarkdownRender::code_block(
-  self : Self,
-  block : @cmark.CodeBlock,
-) -> @html.Html {
+fn code_block(block : @cmark.CodeBlock) -> @html.Html {
   let language = match block.info_string {
     Some(info) =>
       match @cmark.CodeBlock::language_of_info_string(info.v) {
@@ -127,17 +121,15 @@ fn MarkdownRender::code_block(
     None => ""
   }
   let source = lines_text(block.code)
-  // cmark accepts unfinished fences as code blocks. While tokens are still
-  // arriving, show their source without invoking a diagram compiler. A final
-  // message deliberately bypasses this gate even if its fence never closed.
+  // cmark also parses unfinished fences as code blocks. Only compile closed
+  // diagrams, so each growing prefix stays source, including saved messages
+  // whose author never supplied a closing fence.
   let diagram = language == "mermaid" ||
     language == "d2" ||
     language == "diago" ||
     language == "uml" ||
     language == "plantuml"
-  if diagram &&
-    self.streaming &&
-    block.layout is Fenced({ closing_fence: None, .. }) {
+  if diagram && block.layout is Fenced({ closing_fence: None, .. }) {
     return @html.pre(@html.code(class="language-\{language}", source))
   }
   if language == "mermaid" || language == "d2" || language == "diago" {

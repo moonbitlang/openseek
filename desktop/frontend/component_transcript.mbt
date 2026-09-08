@@ -129,13 +129,6 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       let project_label = placement
         .bind(value => value.project_root())
         .map(project => @resource.label(project))
-      let rows = self.codex.transcript_rows()
-      let visible = @transcript_component.VisibleRow::history(
-        rows.map(row => row.item),
-      )
-      for index, row in rows {
-        visible[index] = { ..visible[index], streaming: row.streaming, }
-      }
       @transcript_component.Input(
         dark_mode=self.theme.is_dark(self.system_dark),
         source=@transcript_component.Codex,
@@ -149,7 +142,9 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         project_menu_open=false,
         project_query="",
         root=placement.bind(value => value.checkout_root()),
-        items=visible,
+        items=@transcript_component.VisibleRow::history(
+          self.codex.transcript_items(),
+        ),
         streaming_response=None,
         streaming_identity="idle",
       )

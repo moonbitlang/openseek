@@ -167,8 +167,6 @@ priv struct CodexItem {
   // Deltas are presentation-only. `item/completed` replaces `value` and
   // clears this field because the completed item is authoritative.
   streamed : String
-  // Item completion is independent of turn completion.
-  streaming : Bool
 } derive(Eq)
 
 ///|
@@ -1237,7 +1235,7 @@ fn CodexItem::decode(value : Json) -> CodexItem? {
     @jsonx.json_text(fields, "type") is Some(kind) else {
     return None
   }
-  Some({ id, kind, value, streamed: "", streaming: false, })
+  Some({ id, kind, value, streamed: "", })
 }
 
 ///|
@@ -1245,14 +1243,8 @@ fn CodexTurn::decode(value : Json) -> CodexTurn? {
   guard value is Object(fields) && @jsonx.json_text(fields, "id") is Some(id) else {
     return None
   }
-  let status = @jsonx.json_text(fields, "status").unwrap_or("completed")
   let items = match fields.get("items") {
-    // A running snapshot has no per-message completion events. Conservatively
-    // defer its open fences until an item or turn completion arrives.
-    Some(Array(values)) =>
-      values
-      .filter_map(CodexItem::decode)
-      .map(item => { ..item, streaming: status == "inProgress", })
+    Some(Array(values)) => values.filter_map(CodexItem::decode)
     _ => []
   }
   let error = match fields.get("error") {
@@ -1261,7 +1253,7 @@ fn CodexTurn::decode(value : Json) -> CodexTurn? {
   }
   Some({
     id,
-    status,
+    status: @jsonx.json_text(fields, "status").unwrap_or("completed"),
     started_at: @jsonx.json_int(fields, "startedAt"),
     completed_at: @jsonx.json_int(fields, "completedAt"),
     items,
@@ -1978,7 +1970,6 @@ fn CodexTurn::with_item(
   item : CodexItem,
   completed~ : Bool,
 ) -> CodexTurn {
-  let item = { ..item, streaming: !completed, }
   let mut found = false
   let items = self.items.map(existing => {
     if existing.id == item.id {
@@ -2008,7 +1999,7 @@ fn CodexTurn::with_delta(
     ..self,
     items: self.items.map(item => {
       if item.id == item_id {
-        { ..item, streamed: item.streamed + delta, streaming: true, }
+        { ..item, streamed: item.streamed + delta, }
       } else {
         item
       }
@@ -2662,35 +2653,23 @@ fn CodexItem::tool_brief(self : CodexItem) -> String? {
 /// The root shell consumes this display-only snapshot with the same transcript
 /// view used for OpenSeek. Notices and per-turn failures become ordinary
 /// danger messages, so Codex does not need a parallel banner/message layout.
-pub struct TranscriptRow {
-  item : @transcript.TranscriptItem
-  streaming : Bool
-}
-
-///|
-/// Preserve item completion in the display projection so open diagram fences
-/// stay as source while Codex is producing an answer.
-pub fn State::transcript_rows(self : State) -> Array[TranscriptRow] {
-  let items : Array[TranscriptRow] = []
+pub fn State::transcript_items(
+  self : State,
+) -> Array[@transcript.TranscriptItem] {
+  let items : Array[@transcript.TranscriptItem] = []
   if !self.notice.is_empty() {
     items.push({
-      item: {
-        kind: @transcript.Failure(self.notice),
-        ts: None,
-        sequence: None,
-      },
-      streaming: false,
+      kind: @transcript.Failure(self.notice),
+      ts: None,
+      sequence: None,
     })
   }
   if self.waiting_for_first_user_item() &&
     self.submitted_first_prompt is Some(submitted) {
     items.push({
-      item: {
-        kind: @transcript.User(submitted.prompt()),
-        ts: None,
-        sequence: None,
-      },
-      streaming: false,
+      kind: @transcript.User(submitted.prompt()),
+      ts: None,
+      sequence: None,
     })
   }
   if self.active_thread() is Some(active) {
@@ -2706,12 +2685,7 @@ pub fn State::transcript_rows(self : State) -> Array[TranscriptRow] {
           is @transcript.Assistant(reasoning=Some(summary), ..) &&
           summary.is_blank()
         if !blank_thought {
-          items.push({
-            item: transcript_item,
-            streaming: turn.is_running() &&
-            item.streaming &&
-            (item.kind == "agentMessage" || item.kind == "plan"),
-          })
+          items.push(transcript_item)
         }
       }
       // A receipt belongs after the canonical items already observed in the
@@ -2719,29 +2693,19 @@ pub fn State::transcript_rows(self : State) -> Array[TranscriptRow] {
       // so this projection never shows both representations of one steer.
       for receipt in self.pending_steers {
         if receipt.turn_id == turn.id {
-          items.push({ item: receipt.transcript_item(), streaming: false, })
+          items.push(receipt.transcript_item())
         }
       }
       if turn.error is Some(message) {
         items.push({
-          item: {
-            kind: @transcript.Failure(message),
-            ts: None,
-            sequence: None,
-          },
-          streaming: false,
+          kind: @transcript.Failure(message),
+          ts: None,
+          sequence: None,
         })
       }
     }
   }
   items
-}
-
-///|
-pub fn State::transcript_items(
-  self : State,
-) -> Array[@transcript.TranscriptItem] {
-  self.transcript_rows().map(row => row.item)
 }
 
 ///|
@@ -3256,85 +3220,3 @@ test "Codex editor annotations stay in chips and preserve model context" {
 
 ///|
 pub extend State with Eq::{equal, not_equal}
-
-///|
-test "Codex transcript distinguishes item completion from turn completion" {
-  let state = State::from_thread_snapshot({
-    "thread": {
-      "id": "thread-1",
-      "turns": [{ "id": "turn-1", "status": "inProgress", "items": [] }],
-    },
-  })
-  let started = state.with_notification(
-    "item/started",
-    {
-      "threadId": "thread-1",
-      "turnId": "turn-1",
-      "item": { "id": "answer-1", "type": "agentMessage", "text": "" },
-    },
-    0,
-  )
-  assert_true(started.transcript_rows()[0].streaming)
-  let streamed = started.with_notification(
-    "item/agentMessage/delta",
-    {
-      "threadId": "thread-1",
-      "turnId": "turn-1",
-      "itemId": "answer-1",
-      "delta": "```d2\na -> b",
-    },
-    0,
-  )
-  assert_true(streamed.transcript_rows()[0].streaming)
-  let completed = streamed.with_notification(
-    "item/completed",
-    {
-      "threadId": "thread-1",
-      "turnId": "turn-1",
-      "item": {
-        "id": "answer-1",
-        "type": "agentMessage",
-        "text": "```d2\na -> b",
-      },
-    },
-    0,
-  )
-  assert_true(completed.is_running())
-  assert_false(completed.transcript_rows()[0].streaming)
-  assert_true(completed.transcript_items() == streamed.transcript_items())
-  // A terminal turn must also release a preview whose item completion was
-  // not delivered, without relying on a change to the message's source.
-  let ended = streamed.with_notification(
-    "turn/completed",
-    {
-      "threadId": "thread-1",
-      "turn": {
-        "id": "turn-1",
-        "status": "completed",
-        "itemsView": "summary",
-        "items": [],
-      },
-    },
-    0,
-  )
-  assert_false(ended.transcript_rows()[0].streaming)
-  let snapshot = State::from_thread_snapshot({
-    "thread": {
-      "id": "thread-1",
-      "turns": [
-        {
-          "id": "turn-1",
-          "status": "inProgress",
-          "items": [
-            {
-              "id": "answer-1",
-              "type": "agentMessage",
-              "text": "```d2\na -> b",
-            },
-          ],
-        },
-      ],
-    },
-  })
-  assert_true(snapshot.transcript_rows()[0].streaming)
-}

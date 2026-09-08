@@ -42,9 +42,8 @@ test "transcript stream children use stable typed keys in display order" {
       {
         item: { kind: User("question"), ts: None, sequence: Some(41), },
         identity: "s41",
-        streaming: false,
       },
-      { item: response, identity: "s42", streaming: false, },
+      { item: response, identity: "s42", },
     ],
     streaming_response=Some("partial answer"),
     streaming_identity="r7",
@@ -75,7 +74,6 @@ test "transcript stream children use stable typed keys in display order" {
           ),
         },
         identity: "s42",
-        streaming: false,
       },
     ],
   }
@@ -87,7 +85,6 @@ test "the live response is one node, replaced by the durable one" {
   let user : VisibleRow = {
     item: { kind: User("question"), ts: None, sequence: Some(1), },
     identity: "s1",
-    streaming: false,
   }
   let live_input = Input(
     source=OpenSeek,
@@ -127,7 +124,6 @@ test "the live response is one node, replaced by the durable one" {
           sequence: Some(2),
         },
         identity: "s2",
-        streaming: false,
       },
     ],
     streaming_reasoning: None,
@@ -151,7 +147,6 @@ test "a streaming delta changes only the live block" {
       {
         item: { kind: User("question"), ts: Some(1.0e12), sequence: Some(1), },
         identity: "s1",
-        streaming: false,
       },
       {
         item: {
@@ -166,7 +161,6 @@ test "a streaming delta changes only the live block" {
           sequence: Some(2),
         },
         identity: "s2",
-        streaming: false,
       },
     ],
     streaming_response=Some("partial"),

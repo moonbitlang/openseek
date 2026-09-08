@@ -77,58 +77,32 @@ test('transcript keeps escaped Mermaid source when local module loading fails', 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('transcript discards Mermaid results for changed themes and removed conversations', async ({ page }) => {
+test('transcript ignores a Mermaid result after its conversation is removed', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture diagram' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: '```mermaid\nflowchart LR\nA --> B\n```' } } },
+  ];
   await app.install();
-  // Control only the library completion boundary. The production Markdown,
-  // transcript subscription, DOM reconciliation and render queue still run.
+  // Hold the library result while the production transcript is unmounted.
   await page.route('**/mermaid/mermaid.esm.min.mjs', route => route.fulfill({
     contentType: 'text/javascript',
-    body: `export default {
-      initialize() {},
-      render(id, source) {
-        return new Promise(resolve => {
-          (window.diagramRequests ??= []).push({source, complete() {
-            resolve({svg: '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80" viewBox="0 0 200 80"><text x="10" y="30">' +
-              (source.includes('Latest') ? 'Latest' : 'Old') + '</text></svg>'});
-          }});
-        });
-      }
-    };`,
+    body: `export default { initialize() {}, render() {
+      return new Promise(resolve => { window.completeDiagram = () => resolve({
+        svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80"><text>Late</text></svg>'
+      }); });
+    }};`,
   }));
-  await page.emulateMedia({ colorScheme: 'light' });
   await app.goto();
   await app.openSession();
-  app.notify('agent.started', {
-    run_id: 'diagram-run', session: 'session-1',
-    session_root: '/workspace/.openseek', model: 'deepseek-v4-pro', max_steps: 1000,
-  });
-  app.notify('agent.event', {
-    run_id: 'diagram-run', session: 'session-1',
-    event: { event: 'assistant_delta', content: '```mermaid\nflowchart LR\nOld --> B\n```' },
-  });
-  await expect.poll(() => page.evaluate(() => window.diagramRequests?.length)).toBe(1);
-  await page.emulateMedia({ colorScheme: 'dark' });
-  const diagram = page.locator('#transcript .chat-mermaid');
-  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-theme', 'dark');
-  await page.evaluate(() => window.diagramRequests[0].complete());
-  await expect.poll(() => page.evaluate(() => window.diagramRequests.length)).toBe(2);
-  await expect(diagram.locator('svg')).toHaveCount(0);
-  await page.evaluate(() => window.diagramRequests[1].complete());
-  await expect(diagram.locator('svg')).toContainText('Old');
-
-  // A third request remains pending while the mounted conversation is removed.
-  await page.emulateMedia({ colorScheme: 'light' });
-  await expect.poll(() => page.evaluate(() => window.diagramRequests.length)).toBe(3);
-  const oldTarget = await diagram.elementHandle();
+  await expect.poll(() => page.evaluate(() => typeof window.completeDiagram)).toBe('function');
+  const oldTarget = await page.locator('#transcript .chat-mermaid').elementHandle();
   const workspace = page.locator('.workspace-row[title="/workspace"]');
   await workspace.hover();
   await workspace.getByTitle('New conversation in this project').click();
   await expect(page.locator('#transcript .chat-mermaid')).toHaveCount(0);
-  // Per-conversation disposal may remove the old SVG. A late completion
-  // must leave that disposed container exactly as it was after unmount.
   const disposedHtml = await oldTarget.evaluate(element => element.innerHTML);
-  await page.evaluate(() => window.diagramRequests[2].complete());
+  await page.evaluate(() => window.completeDiagram());
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   expect(await oldTarget.evaluate(element => element.innerHTML)).toBe(disposedHtml);
   await expect(page.locator('#transcript .chat-mermaid')).toHaveCount(0);
@@ -136,7 +110,7 @@ test('transcript discards Mermaid results for changed themes and removed convers
 });
 
 for (const language of ['mermaid', 'd2', 'diago']) {
-  test(`streaming ${language} waits for fence closure and renders an unclosed committed message`, async ({ page }) => {
+  test(`streaming ${language} renders only closed fences, including in committed messages`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     await app.install();
     await app.goto();
@@ -171,8 +145,8 @@ for (const language of ['mermaid', 'd2', 'diago']) {
     await expect(live.locator('[data-transcript-diagram]')).toHaveCount(1);
     expect(await svg.evaluate(node => node.isConnected)).toBe(true);
 
-    // A committed message renders even without a closing fence. Its lifecycle
-    // event then retires the provisional live row.
+    // Completion does not change the rule: the first closed diagram renders,
+    // and the second unclosed fence stays source in the saved message.
     const sequence = Math.max(...app.sessionEvents.map(event => event.sequence)) + 1;
     app.notify('session.event', {
       session: 'session-1', session_root: '/workspace/.openseek', sequence,
@@ -181,46 +155,9 @@ for (const language of ['mermaid', 'd2', 'diago']) {
     app.notify('agent.event', { ...run, event: { event: 'assistant_message', content } });
     await expect(live).toHaveCount(0);
     const diagrams = page.locator('#transcript [data-transcript-diagram]');
-    await expect(diagrams).toHaveCount(2);
-    await expect(diagrams.last().locator('svg').first()).toBeVisible();
+    await expect(diagrams).toHaveCount(1);
+    await expect(diagrams.first().locator('svg').first()).toBeVisible();
+    await expect(page.locator('#transcript pre code').last()).toHaveText(language === 'mermaid' ? 'flowchart LR\nFinal --> Done' : 'final -> done');
     expect(app.pageErrors).toEqual([]);
   });
 }
-
-test('Codex completes an unclosed diagram when the item finishes before its turn', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.codexModels = [{
-    id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
-    defaultReasoningEffort: 'medium',
-    supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Balanced' }],
-  }];
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
-  await expect.poll(() => app.requests.some(request => request.method === 'codex.draft.open')).toBe(true);
-  await page.locator('#task').fill('Draw a diagram');
-  await page.getByTitle('Send', { exact: true }).click();
-  await expect.poll(() => app.requests.some(request => request.method === 'codex.turn.start')).toBe(true);
-  const params = { threadId: 'codex-thread-e2e', turnId: 'codex-turn-e2e' };
-  app.notify('codex.notification', {
-    generation: 1, method: 'item/started',
-    params: { ...params, item: { id: 'diagram-1', type: 'agentMessage', text: '' } },
-  });
-  const text = '```d2\nalpha -> beta';
-  app.notify('codex.notification', {
-    generation: 1, method: 'item/agentMessage/delta',
-    params: { ...params, itemId: 'diagram-1', delta: text },
-  });
-  await expect(page.locator('#transcript pre code')).toHaveText('alpha -> beta');
-  await expect(page.locator('#transcript [data-transcript-diagram]')).toHaveCount(0);
-  // Identical source, different item lifecycle: this must invalidate the
-  // memoized row and allow its first compile without waiting for turn end.
-  app.notify('codex.notification', {
-    generation: 1, method: 'item/completed',
-    params: { ...params, item: { id: 'diagram-1', type: 'agentMessage', text } },
-  });
-  await expect(page.locator('#transcript .chat-diago svg').first()).toBeVisible();
-  await expect(page.getByTitle('Stop', { exact: true })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});
