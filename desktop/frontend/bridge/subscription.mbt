@@ -52,10 +52,7 @@ fn bridge_sub_loader(
       let running = LocalBridgeSub(events)
       scheduler.add(running.install(0))
       Some({
-        unload: scheduler => {
-          running.unload()
-          running.events.enqueue(scheduler, ConnectionRetired(channel=Local))
-        },
+        unload: _ => running.unload(),
         update_tagger: payload => {
           match payload {
             LocalBridge(events=next) => running.update_events(next)
@@ -68,13 +65,7 @@ fn bridge_sub_loader(
       let running = RemoteBridgeSub(device_id, websocket_epoch, events)
       running.install(scheduler)
       Some({
-        unload: scheduler => {
-          running.unload()
-          running.events.enqueue(
-            scheduler,
-            ConnectionRetired(channel=running.channel),
-          )
-        },
+        unload: _ => running.unload(),
         update_tagger: payload => {
           match payload {
             RemoteBridge(events=next, ..) => running.update_events(next)

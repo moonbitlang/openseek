@@ -351,10 +351,6 @@ fn bridge_event(
       live_reasoning.clear_channel(channel)
       Some(dispatch(FromDevice(channel, ChannelDown(websocket_epoch~))))
     }
-    @bridge.Event::ConnectionRetired(channel~) => {
-      live_reasoning.clear_channel(channel)
-      None
-    }
     @bridge.Event::BrowserEvent(payload~) =>
       browser_event_msg(payload).map(msg => dispatch(msg))
     @bridge.Event::MenuCommand(command_id~) =>
