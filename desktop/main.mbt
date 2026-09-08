@@ -88,9 +88,9 @@ async fn main {
   // carrying its own, and `proton dev` hands that config on to the host
   // through PROTON_PROJECT_CONFIG, so this call picks it up either way.
   let app = app.load_config()
-  // One host per identity, for the shipped application: `single_instance`
-  // hands a later launch to the process already holding that identity's lock,
-  // and that process brings its window to the front.
+  // One host per identity: `single_instance` hands a later launch to the
+  // process already holding that identity's lock, and that process brings its
+  // window to the front. Off by default for now; see `single_instance_wanted`.
   let single_instance = single_instance_wanted(app)
   let app = if single_instance { app.single_instance() } else { app }
   let app = app
@@ -263,7 +263,7 @@ async fn main {
         // the forwarding in its own log, the running instance's window comes
         // to the front, and this process ends.
         println(
-          "SeekMoon is already running; its window was brought to the front. Quit it first, or set OPENSEEK_DESKTOP_MULTI_INSTANCE=1 to start another instance.",
+          "SeekMoon is already running; its window was brought to the front. Quit it first, or unset OPENSEEK_DESKTOP_SINGLE_INSTANCE to start another instance.",
         )
       }
       @xlog.info() <?
@@ -326,29 +326,15 @@ async fn main {
 const DevelopmentSuffix = ".dev"
 
 ///|
-/// Whether this launch takes part in single instance at all.
+/// Whether this launch takes part in single instance.
 ///
-/// Only the shipped application does. A development build is a second copy of
-/// the same program on the same machine, and being told "one is already
-/// running" is never what its author wanted: a rebuilt one has to start, not
-/// hand its launch to the binary it just replaced. Standing outside also
-/// costs it nothing it had, since Proton only grants a persistent browser
-/// profile to an application that owns a single-instance identity.
-///
-/// `OPENSEEK_DESKTOP_MULTI_INSTANCE` takes the shipped application out too,
-/// for a harness driving several hosts or a second copy of one build.
-///
-/// The identity is read back through `data_dir`, whose last segment is the
-/// identity Proton resolved from the manifest or the project config. Proton
-/// has no public accessor for it, and reading it here rather than trusting
-/// the build mode means the two always agree.
+/// Off unless `OPENSEEK_DESKTOP_SINGLE_INSTANCE` is set: a host that Proton
+/// leaves stuck in `cef_shutdown` keeps the identity's lock, and every later
+/// launch would hand itself to it. Even then only the shipped application
+/// takes part; a development build must start beside the binary it replaced.
+/// The identity comes back through `data_dir`, whose last segment it is.
 fn single_instance_wanted(app : @proton.App) -> Bool {
-  if @envx.get("OPENSEEK_DESKTOP_MULTI_INSTANCE") is Some(_) {
-    @xlog.info() <?
-      {
-        "event": "desktop_instance_opt_out",
-        "message": "OPENSEEK_DESKTOP_MULTI_INSTANCE is set; starting beside any running host",
-      }
+  if @envx.get("OPENSEEK_DESKTOP_SINGLE_INSTANCE") is None {
     return false
   }
   let identity = app.data_dir() catch {
