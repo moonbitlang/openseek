@@ -1,10 +1,4 @@
 ///|
-/// Keep rewrites bounded while avoiding one DOM node per rendered frame. A
-/// long provider fragment may occupy its own larger node; later fragments
-/// start a fresh bounded chunk instead of repeatedly copying that large text.
-const LIVE_TEXT_CHUNK_LIMIT = 8192
-
-///|
 /// Imperative DOM state for the childless live-reasoning host. This object is
 /// captured by the component's private update closure; it is never stored in
 /// a Rabbita model or exposed to the root view.
@@ -13,8 +7,9 @@ priv struct LivePreview {
   mut step_label : String?
   mut host : @dom.Element?
   mut reasoning : @dom.Element?
-  mut text_chunk : @dom.Element?
-  mut text_chunk_content : String
+  // The one text node fragments are appended to. The browser appends in
+  // place, so no copy of the accumulated text lives on this side.
+  mut text : @dom.Element?
   pending : Array[String]
   mut frame : Double?
   mut resize : @dom.ResizeObserver?
@@ -30,8 +25,7 @@ fn LivePreview::LivePreview() -> LivePreview {
     step_label: None,
     host: None,
     reasoning: None,
-    text_chunk: None,
-    text_chunk_content: "",
+    text: None,
     pending: [],
     frame: None,
     resize: None,
@@ -40,16 +34,20 @@ fn LivePreview::LivePreview() -> LivePreview {
 }
 
 ///|
+/// The stable container Rabbita renders for the preview (see
+/// `section_children`). Absent while no transcript is on screen.
+fn live_host() -> @dom.Element? {
+  @dom.document().get_element_by_id("live-reasoning-host").to_option()
+}
+
+///|
 /// Cancel a queued frame before changing ownership. Clearing the fragments at
 /// the same time prevents a callback from one conversation from appending to
 /// a replacement conversation's card.
 fn LivePreview::cancel_pending(self : LivePreview) -> Unit {
-  match self.frame {
-    Some(frame) => {
-      @dom.window().cancel_animation_frame(frame)
-      self.frame = None
-    }
-    None => ()
+  if self.frame is Some(frame) {
+    @dom.window().cancel_animation_frame(frame)
+    self.frame = None
   }
   self.pending.clear()
 }
@@ -61,17 +59,14 @@ fn LivePreview::clear_host(self : LivePreview, host : @dom.Element?) -> Unit {
   if self.resize is Some(resize) {
     resize.disconnect()
   }
-  match host {
-    Some(host) =>
-      while host.get_child_count() > 0 {
-        host.remove_child(host.get_child(0))
-      }
-    None => ()
+  if host is Some(host) {
+    while host.get_child_count() > 0 {
+      host.remove_child(host.get_child(0))
+    }
   }
   self.host = host
   self.reasoning = None
-  self.text_chunk = None
-  self.text_chunk_content = ""
+  self.text = None
 }
 
 ///|
@@ -110,30 +105,25 @@ fn LivePreview::observe_reasoning(
 }
 
 ///|
-/// Append into a bounded current chunk. Updating one unbounded text node would
-/// copy the whole preview every frame; appending one node per frame instead
-/// leaves thousands of layout objects. Bounded chunks avoid both growth modes.
+/// Append in place through `CharacterData.appendData`, which the typed DOM
+/// package does not expose. One text node grows for the whole thought.
 fn LivePreview::append_text(
   self : LivePreview,
   reasoning : @dom.Element,
   content : String,
 ) -> Unit {
-  if self.text_chunk is Some(text_chunk) {
-    let combined = self.text_chunk_content + content
-    if combined.length() <= LIVE_TEXT_CHUNK_LIMIT {
-      text_chunk.set_node_value(@js.Nullable::from_option(Some(combined)))
-      self.text_chunk_content = combined
-      return
+  match self.text {
+    Some(text) => {
+      let _ : @js.Value = @js.Value::cast_from(text).apply_with_string(
+        "appendData",
+        [@js.Value::cast_from(content)],
+      )
     }
-  }
-  let text_chunk = @dom.document().create_text_node(content)
-  reasoning.append_child(text_chunk.as_node())
-  if content.length() <= LIVE_TEXT_CHUNK_LIMIT {
-    self.text_chunk = Some(text_chunk)
-    self.text_chunk_content = content
-  } else {
-    self.text_chunk = None
-    self.text_chunk_content = ""
+    None => {
+      let text = @dom.document().create_text_node(content)
+      reasoning.append_child(text.as_node())
+      self.text = Some(text)
+    }
   }
 }
 
@@ -191,8 +181,7 @@ fn LivePreview::build_card(
 }
 
 ///|
-/// Drain fragments received during one browser frame. Only the current text
-/// chunk changes; the browser may still lay out earlier text when needed.
+/// Drain fragments received during one browser frame into the text node.
 fn LivePreview::flush(self : LivePreview, target : String) -> Unit {
   self.frame = None
   if self.target != Some(target) {
@@ -208,9 +197,7 @@ fn LivePreview::flush(self : LivePreview, target : String) -> Unit {
   if content.is_empty() {
     return
   }
-  let document = @dom.document()
-  guard document.get_element_by_id("live-reasoning-host").to_option()
-    is Some(host) else {
+  guard live_host() is Some(host) else {
     self.clear_host(None)
     return
   }
@@ -230,33 +217,25 @@ fn LivePreview::flush(self : LivePreview, target : String) -> Unit {
 fn LivePreview::sync(
   self : LivePreview,
   target : String,
-  step_label : String,
-  content : String,
+  step_label : String?,
+  content : String?,
 ) -> Unit {
   if self.target == Some(target) &&
-    self.step_label == Some(step_label) &&
+    self.step_label == step_label &&
     self.host is Some(previous) &&
     self.reasoning is Some(_) &&
-    @dom.document().get_element_by_id("live-reasoning-host").to_option()
-    is Some(current) &&
+    live_host() is Some(current) &&
     previous.is_same_node(current.as_node()) {
     return
   }
   self.cancel_pending()
   self.target = Some(target)
-  self.step_label = Some(step_label)
-  let host = @dom.document()
-    .get_element_by_id("live-reasoning-host")
-    .to_option()
-  if content.is_empty() {
-    self.clear_host(host)
-  } else {
-    match host {
-      Some(host) => {
-        let _ = self.build_card(host, content)
-      }
-      None => self.clear_host(None)
+  self.step_label = step_label
+  match (content, live_host()) {
+    (Some(content), Some(host)) => {
+      let _ = self.build_card(host, content)
     }
+    (_, host) => self.clear_host(host)
   }
 }
 
@@ -283,9 +262,7 @@ fn LivePreview::hide(self : LivePreview, target : String) -> Unit {
     return
   }
   self.cancel_pending()
-  self.clear_host(
-    @dom.document().get_element_by_id("live-reasoning-host").to_option(),
-  )
+  self.clear_host(live_host())
 }
 
 ///|
@@ -293,7 +270,5 @@ fn LivePreview::reset(self : LivePreview) -> Unit {
   self.cancel_pending()
   self.target = None
   self.step_label = None
-  self.clear_host(
-    @dom.document().get_element_by_id("live-reasoning-host").to_option(),
-  )
+  self.clear_host(live_host())
 }

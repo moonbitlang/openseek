@@ -1,4 +1,23 @@
 ///|
+/// State-only projection for transitions whose DOM effect is not under test.
+fn LiveReasoningState::transition(
+  self : LiveReasoningState,
+  msg : LiveReasoningMsg,
+) -> LiveReasoningState {
+  self.update(msg).0
+}
+
+///|
+/// The preview text this input would show, if any.
+fn LiveReasoningState::content_for(
+  self : LiveReasoningState,
+  input : Input,
+) -> String? {
+  guard input.live_reasoning_target() is Some(target) else { return None }
+  self.preview_for(target.key).map(preview => preview.content())
+}
+
+///|
 test "live reasoning appends by owner and semantic finish deletes it" {
   let key : LiveReasoningKey = {
     channel: @interop.ChannelId::Local,
@@ -26,7 +45,10 @@ test "live reasoning appends by owner and semantic finish deletes it" {
   let empty = LiveReasoningState::{ previews: @vector.new(), active: None, }
   let target = input.live_reasoning_target()
   let (focused, focus_effect) = empty.update(Focused(target))
-  assert_eq(focus_effect, Sync(target=key.wire(), step_label="#1", content=""))
+  assert_eq(
+    focus_effect,
+    Sync(target=key.wire(), step_label=Some("#1"), content=None),
+  )
   let (first, first_effect) = focused.update(Delta(key, "think"))
   assert_eq(first_effect, Append(target=key.wire(), content="think"))
   let (live, second_effect) = first.update(Delta(key, "ing"))
@@ -35,7 +57,7 @@ test "live reasoning appends by owner and semantic finish deletes it" {
   let (_, hydrate_effect) = live.update(Focused(target))
   assert_eq(
     hydrate_effect,
-    Sync(target=key.wire(), step_label="#1", content="thinking"),
+    Sync(target=key.wire(), step_label=Some("#1"), content=Some("thinking")),
   )
 
   // The full reasoning event is a semantic boundary, not a durable commit.
@@ -118,7 +140,11 @@ test "live reasoning keeps concurrent conversations and runs isolated" {
   )
   assert_eq(
     focus_effect,
-    Sync(target=local_r8.wire(), step_label="#1", content="local-current"),
+    Sync(
+      target=local_r8.wire(),
+      step_label=Some("#1"),
+      content=Some("local-current"),
+    ),
   )
   let (with_background, background_effect) = focused.update(
     Delta(remote_r7, "-more"),

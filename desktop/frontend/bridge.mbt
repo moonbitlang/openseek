@@ -307,92 +307,42 @@ fn bridge_event(
         }
         AgentEvent(payload) =>
           match engine_msg(payload) {
-            Some(Engine(run_id, ReasoningDelta(content), session=Some(session))) => {
-              live_reasoning.delta(channel~, session~, run_id~, content~)
-              None
-            }
-            Some(
-              Engine(run_id, ReasoningMessage(_), session=Some(session)) as msg
-            ) => {
-              live_reasoning.finish(channel~, session~, run_id~)
-              Some(dispatch(FromDevice(channel, msg)))
-            }
-            Some(Engine(run_id, AgentStep(_), session=Some(session)) as msg) => {
-              live_reasoning.start_step(channel~, session~, run_id~)
-              Some(dispatch(FromDevice(channel, msg)))
-            }
-            Some(
-              Engine(
-                run_id,
-                AssistantDelta(content)
-                | AssistantMessage(content),
-                session=Some(session)
-              ) as msg
-            ) => {
-              let command = dispatch(FromDevice(channel, msg))
-              if content.is_empty() {
-                return Some(command)
-              }
-              if live_reasoning.complete_before_answer(
-                  channel~,
-                  session~,
-                  run_id~,
-                )
-                is Some(content) {
-                Some(
-                  @cmd.batch([
-                    dispatch(
-                      FromDevice(
-                        channel,
-                        Engine(
-                          run_id,
-                          ReasoningMessage(content),
-                          session=Some(session),
+            Some(Engine(run_id, event, session=Some(session)) as msg) => {
+              let forward = dispatch(FromDevice(channel, msg))
+              match live_reasoning.observe(channel~, session~, run_id~, event) {
+                Consumed => None
+                Forward => Some(forward)
+                ForwardAfterReasoning(content) =>
+                  Some(
+                    @cmd.batch([
+                      dispatch(
+                        FromDevice(
+                          channel,
+                          Engine(
+                            run_id,
+                            ReasoningMessage(content),
+                            session=Some(session),
+                          ),
                         ),
                       ),
-                    ),
-                    command,
-                  ]),
-                )
-              } else {
-                Some(command)
+                      forward,
+                    ]),
+                  )
               }
             }
-            Some(
-              Engine(
-                run_id,
-                AgentFinished(_)
-                | ContextYield(_)
-                | AgentAborted(_)
-                | AgentSetupFailed(_)
-                | MaxStepsExhausted,
-                session=Some(session)
-              ) as msg
-            ) => {
-              live_reasoning.finish(channel~, session~, run_id~)
-              Some(dispatch(FromDevice(channel, msg)))
-            }
             Some(msg) => Some(dispatch(FromDevice(channel, msg)))
             None => None
           }
-        AgentError(payload) =>
-          match error_msg(payload) {
-            Some(Error(run_id=Some(run_id), ..) as msg) => {
-              live_reasoning.finish_run(channel~, run_id~)
-              Some(dispatch(FromDevice(channel, msg)))
-            }
-            Some(msg) => Some(dispatch(FromDevice(channel, msg)))
-            None => None
+        AgentError(payload) => {
+          if payload.run_id is Some(run_id) {
+            live_reasoning.finish_run(channel~, run_id~)
           }
-        AgentFinished(payload) =>
-          match finished_msg(payload) {
-            Some(Finished(run_id~, ..) as msg) => {
-              live_reasoning.finish_run(channel~, run_id~)
-              Some(dispatch(FromDevice(channel, msg)))
-            }
-            Some(msg) => Some(dispatch(FromDevice(channel, msg)))
-            None => None
-          }
+          error_msg(payload).map(msg => dispatch(FromDevice(channel, msg)))
+        }
+        AgentFinished(payload) => {
+          live_reasoning.finish_run(channel~, run_id=payload.run_id)
+          finished_msg(payload).map(msg => dispatch(FromDevice(channel, msg)))
+        }
         _ => notification_msg(channel, notification).map(msg => dispatch(msg))
       }
     @bridge.Event::Unavailable(channel~, message~) =>

@@ -8,24 +8,6 @@ priv struct LiveReasoningKey {
 } derive(Eq)
 
 ///|
-fn LiveReasoningKey::matches_input(
-  self : LiveReasoningKey,
-  input : Input,
-) -> Bool {
-  input.source is OpenSeek &&
-  self.channel == input.focused &&
-  self.session == input.active_session &&
-  Some(self.run_id) == input.active_run_id
-}
-
-///|
-/// The `switch_by` tag of a focus target: run identity plus the step label,
-/// so a new step re-targets the preview with its own heading.
-fn LiveReasoningTarget::key(self : LiveReasoningTarget) -> String {
-  self.key.wire() + "\u{0}" + self.step_label
-}
-
-///|
 fn LiveReasoningKey::wire(self : LiveReasoningKey) -> String {
   self.channel.uri_authority() + "\u{0}" + self.session + "\u{0}" + self.run_id
 }
@@ -37,6 +19,8 @@ priv struct LiveReasoningPreview {
   // text on every delta. Join them when rehydrating the visible widget or
   // handing a completed thought back to the ordinary transcript.
   chunks : @vector.Vector[String]
+  // Sealed by the run's full reasoning event: a delayed fragment must not
+  // recreate the thought until the next step reopens the run.
   complete : Bool
 } derive(Eq)
 
@@ -55,8 +39,15 @@ fn LiveReasoningPreview::content(self : LiveReasoningPreview) -> String {
 /// does not participate in routing provider fragments.
 priv struct LiveReasoningTarget {
   key : LiveReasoningKey
-  step_label : String
+  step_label : String?
 } derive(Eq)
+
+///|
+/// The `switch_by` tag of a focus target: run identity plus the step label,
+/// so a new step re-targets the preview with its own heading.
+fn LiveReasoningTarget::key(self : LiveReasoningTarget) -> String {
+  self.key.wire() + "\u{0}" + self.step_label.unwrap_or("")
+}
 
 ///|
 fn Input::live_reasoning_target(self : Input) -> LiveReasoningTarget? {
@@ -65,14 +56,16 @@ fn Input::live_reasoning_target(self : Input) -> LiveReasoningTarget? {
   }
   Some({
     key: { channel: self.focused, session: self.active_session, run_id, },
-    step_label: "#\{self.items.filter(row => row.item.kind is Assistant(replay=false, ..)).length() + 1}",
+    step_label: self.next_step_label(),
   })
 }
 
 ///|
 /// Previews for concurrently running conversations. Connection subscriptions
 /// filter retired callbacks before they reach this state; it only owns content
-/// and the currently displayed conversation.
+/// and the currently displayed conversation. `Eq` serves the whitebox tests,
+/// which compare whole states.
+#warnings("-unused_value")
 priv struct LiveReasoningState {
   previews : @vector.Vector[LiveReasoningPreview]
   active : LiveReasoningTarget?
@@ -90,10 +83,14 @@ priv enum LiveReasoningMsg {
 
 ///|
 /// The only effects allowed out of the live state machine. They update one
-/// browser-owned text node and never produce a Rabbita `Val[Html]`.
+/// browser-owned text node and never produce a Rabbita `Val[Html]`. `Eq` and
+/// `Debug` serve the whitebox tests, which assert on effects.
+#warnings("-unused_value")
 priv enum LiveReasoningEffect {
   NoChange
-  Sync(target~ : String, step_label~ : String, content~ : String)
+  // `content` is the stored preview to rehydrate; `None` means the target
+  // has no open preview and the host is cleared.
+  Sync(target~ : String, step_label~ : String?, content~ : String?)
   Append(target~ : String, content~ : String)
   Hide(target~ : String)
   Reset
@@ -138,11 +135,20 @@ fn LiveReasoningState::sync_effect(
       Sync(
         target=target.key.wire(),
         step_label=target.step_label,
-        content=self
-          .preview_for(target.key)
-          .map(preview => preview.content())
-          .unwrap_or(""),
+        content=self.preview_for(target.key).map(preview => preview.content()),
       )
+  }
+}
+
+///|
+/// Hide the visible card when the displayed target matches.
+fn LiveReasoningState::hide_when(
+  self : LiveReasoningState,
+  matches : (LiveReasoningKey) -> Bool,
+) -> LiveReasoningEffect {
+  match self.active {
+    Some(active) if matches(active.key) => Hide(target=active.key.wire())
+    _ => NoChange
   }
 }
 
@@ -154,8 +160,6 @@ fn LiveReasoningState::update(
   match msg {
     Focused(target) => {
       let next = { ..self, active: target, }
-      // Always re-sync, even when the logical target is unchanged: the host
-      // may have been remounted while another application screen was visible.
       (next, next.sync_effect(target))
     }
     ClearChannel(channel) =>
@@ -164,49 +168,39 @@ fn LiveReasoningState::update(
           ..self,
           previews: self.previews.filter(p => p.key.channel != channel),
         },
-        if self.active is Some(active) && active.key.channel == channel {
-          Hide(target=active.key.wire())
-        } else {
-          NoChange
-        },
+        self.hide_when(key => key.channel == channel),
       )
     Delta(key, content) => {
       if content.is_empty() {
         return (self, NoChange)
       }
+      let mut existing : Int? = None
       for index in 0..<self.previews.length() {
         if self.previews[index].key == key {
-          if self.previews[index].complete {
-            return (self, NoChange)
-          }
-          let next = {
-            ..self,
-            previews: self.previews.set(index, {
-              key,
-              chunks: self.previews[index].chunks.push(content),
-              complete: false,
-            }),
-          }
-          return (
-            next,
-            if self.active is Some(active) && active.key == key {
-              Append(target=key.wire(), content~)
-            } else {
-              NoChange
-            },
-          )
+          existing = Some(index)
+          break
         }
       }
-      let next = {
-        ..self,
-        previews: self.previews.push({
-          key,
-          chunks: @vector.new().push(content),
-          complete: false,
-        }),
+      let previews = match existing {
+        Some(index) => {
+          let preview = self.previews[index]
+          if preview.complete {
+            return (self, NoChange)
+          }
+          self.previews.set(index, {
+            ..preview,
+            chunks: preview.chunks.push(content),
+          })
+        }
+        None =>
+          self.previews.push({
+            key,
+            chunks: @vector.singleton(content),
+            complete: false,
+          })
       }
       (
-        next,
+        { ..self, previews, },
         if self.active is Some(active) && active.key == key {
           Append(target=key.wire(), content~)
         } else {
@@ -220,11 +214,7 @@ fn LiveReasoningState::update(
           ..self,
           previews: self.previews.filter(preview => preview.key != key),
         },
-        if self.active is Some(active) && active.key == key {
-          Hide(target=key.wire())
-        } else {
-          NoChange
-        },
+        self.hide_when(active => active == key),
       )
     Finished(key) => {
       for preview in self.previews {
@@ -241,59 +231,22 @@ fn LiveReasoningState::update(
           .filter(preview => preview.key != key)
           .push({ key, chunks: @vector.new(), complete: true, }),
         },
-        if self.active is Some(active) && active.key == key {
-          Hide(target=key.wire())
-        } else {
-          NoChange
-        },
+        self.hide_when(active => active == key),
       )
     }
-    RunFinished(channel, run_id) => {
-      let next = {
-        ..self,
-        previews: self.previews.map(preview => {
-          if preview.key.channel == channel && preview.key.run_id == run_id {
-            { ..preview, chunks: @vector.new(), complete: true, }
-          } else {
-            preview
-          }
-        }),
-      }
+    // The run is over, so nothing can reopen it: drop its entries rather than
+    // keeping one sealed tombstone per completed run for the session's life.
+    RunFinished(channel, run_id) =>
       (
-        next,
-        if self.active is Some(active) &&
-          active.key.channel == channel &&
-          active.key.run_id == run_id {
-          Hide(target=active.key.wire())
-        } else {
-          NoChange
+        {
+          ..self,
+          previews: self.previews.filter(preview => {
+            preview.key.channel != channel || preview.key.run_id != run_id
+          }),
         },
+        self.hide_when(key => key.channel == channel && key.run_id == run_id),
       )
-    }
   }
-}
-
-///|
-/// State-only projection used by reducer tests that are not inspecting the DOM
-/// effect of a transition.
-fn LiveReasoningState::transition(
-  self : LiveReasoningState,
-  msg : LiveReasoningMsg,
-) -> LiveReasoningState {
-  self.update(msg).0
-}
-
-///|
-fn LiveReasoningState::content_for(
-  self : LiveReasoningState,
-  input : Input,
-) -> String? {
-  for preview in self.previews {
-    if preview.key.matches_input(input) && !preview.complete {
-      return Some(preview.content())
-    }
-  }
-  None
 }
 
 ///|
@@ -375,32 +328,6 @@ pub fn LiveReasoning::clear_channel(
 }
 
 ///|
-/// Append one ordered provider fragment to its conversation's preview.
-pub fn LiveReasoning::delta(
-  self : LiveReasoning,
-  channel~ : @interop.ChannelId,
-  session~ : String,
-  run_id~ : String?,
-  content~ : String,
-) -> Unit {
-  guard run_id is Some(run_id) else { return }
-  self.apply(Delta({ channel, session, run_id, }, content))
-}
-
-///|
-/// The full semantic reasoning event closes the preview unconditionally.
-/// Its durable Assistant commit, whenever observed, is the only history row.
-pub fn LiveReasoning::finish(
-  self : LiveReasoning,
-  channel~ : @interop.ChannelId,
-  session~ : String,
-  run_id~ : String?,
-) -> Unit {
-  guard run_id is Some(run_id) else { return }
-  self.apply(Finished({ channel, session, run_id, }))
-}
-
-///|
 /// Clear an abnormally closed run even when no semantic finish was emitted.
 pub fn LiveReasoning::finish_run(
   self : LiveReasoning,
@@ -411,30 +338,66 @@ pub fn LiveReasoning::finish_run(
 }
 
 ///|
-/// A new model step, unlike a late delta, can reopen the run's preview.
-pub fn LiveReasoning::start_step(
-  self : LiveReasoning,
-  channel~ : @interop.ChannelId,
-  session~ : String,
-  run_id~ : String?,
-) -> Unit {
-  guard run_id is Some(run_id) else { return }
-  self.apply(StepStarted({ channel, session, run_id, }))
+/// What the bridge should do with an engine event after the preview has seen
+/// it.
+pub enum LiveObservation {
+  /// The preview consumed the event; the application never sees it.
+  Consumed
+  /// Forward the event to the application unchanged.
+  Forward
+  /// Forward the event after committing this finished thought to the
+  /// application as a full reasoning event. Some engines start assistant
+  /// deltas before sending one; the preview is retired at that point and the
+  /// ordinary model shows the thought instead.
+  ForwardAfterReasoning(String)
 }
 
 ///|
-/// Some engines start assistant deltas before sending a full reasoning event.
-/// Preserve that finished thought in the ordinary model once, then retire the
-/// imperative preview. Called only at the transport callback boundary.
-pub fn LiveReasoning::complete_before_answer(
+/// Route one engine event through the preview. Fragments are consumed here so
+/// they never schedule an application render; semantic boundaries seal or
+/// reopen the run's preview and are forwarded.
+pub fn LiveReasoning::observe(
   self : LiveReasoning,
   channel~ : @interop.ChannelId,
   session~ : String,
   run_id~ : String?,
-) -> String? {
-  guard run_id is Some(run_id) else { return None }
+  event : @transcript.EngineEvent,
+) -> LiveObservation {
+  guard run_id is Some(run_id) else { return Forward }
   let key : LiveReasoningKey = { channel, session, run_id, }
-  let content = self.state.preview_for(key).map(preview => preview.content())
-  self.apply(Finished(key))
-  content
+  match event {
+    ReasoningDelta(content) => {
+      self.apply(Delta(key, content))
+      Consumed
+    }
+    // A retried provider stream starts the step over: the fragments of the
+    // interrupted attempt are discarded so the replacement reopens cleanly.
+    AgentStep(_) | StreamRetry(..) => {
+      self.apply(StepStarted(key))
+      Forward
+    }
+    AssistantDelta(content) | AssistantMessage(content) => {
+      if content.is_empty() {
+        return Forward
+      }
+      let thought = self.state
+        .preview_for(key)
+        .map(preview => preview.content())
+      self.apply(Finished(key))
+      match thought {
+        Some(content) => ForwardAfterReasoning(content)
+        None => Forward
+      }
+    }
+    ReasoningMessage(_)
+    | AgentFinished(_)
+    | ContextYield(_)
+    | AgentAborted(_)
+    | AgentSetupFailed(_)
+    | MaxStepsExhausted => {
+      self.apply(Finished(key))
+      Forward
+    }
+    _ => Forward
+  }
 }

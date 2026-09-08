@@ -36,14 +36,17 @@ pub fn Input::Input(dark_mode? : Bool, source~ : Source, focused~ : @interop.Cha
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 
+pub enum LiveObservation {
+  Consumed
+  Forward
+  ForwardAfterReasoning(String)
+}
+
 type LiveReasoning
 pub fn LiveReasoning::LiveReasoning() -> Self
 pub fn LiveReasoning::clear_channel(Self, @interop.ChannelId) -> Unit
-pub fn LiveReasoning::complete_before_answer(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?) -> String?
-pub fn LiveReasoning::delta(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?, content~ : String) -> Unit
-pub fn LiveReasoning::finish(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?) -> Unit
 pub fn LiveReasoning::finish_run(Self, channel~ : @interop.ChannelId, run_id~ : String) -> Unit
-pub fn LiveReasoning::start_step(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?) -> Unit
+pub fn LiveReasoning::observe(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?, @transcript.EngineEvent) -> LiveObservation
 
 pub(all) struct ProjectChoice {
   root : @common.Uri

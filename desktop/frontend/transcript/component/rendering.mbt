@@ -453,6 +453,18 @@ priv enum BlockContent {
 } derive(Eq)
 
 ///|
+/// The ordinal of the model step that would come next. OpenSeek numbers its
+/// steps: every provider response that is not a checkpoint replay is one.
+/// Codex and legacy items carry no ordinal.
+fn Input::next_step_label(self : Input) -> String? {
+  guard self.source is OpenSeek else { return None }
+  let steps = self.items
+    .filter(row => row.item.kind is Assistant(replay=false, ..))
+    .length()
+  Some("#\{steps + 1}")
+}
+
+///|
 /// The direct children of `#stream` in display order: one block per
 /// transcript item (a user turn also draws its closing rule), then the
 /// response still streaming; or the empty state alone. Vector order determines
@@ -521,11 +533,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
         prose=input.streaming_response,
         reasoning=input.streaming_reasoning,
         reasoning_complete=input.reasoning_complete,
-        step_label=if input.source is OpenSeek {
-          Some("#\{steps + 1}")
-        } else {
-          None
-        },
+        step_label=input.next_step_label(),
         assistant_name~,
       ),
     })
