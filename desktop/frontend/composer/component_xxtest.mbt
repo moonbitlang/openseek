@@ -578,3 +578,39 @@ test "queue default can be overridden but queue editing and steer-only hosts can
   assert_eq(unchanged.active(codex).followup_choice, None)
   assert_eq(unchanged.active(codex).submission_choice(codex), None)
 }
+
+///|
+test "setting a goal preserves the pending message follow-up choice" {
+  let base = Input::fixture("waiting prompt")
+  let input = {
+    ..base,
+    presentation: {
+      ..base.presentation,
+      primary_action: Running(
+        steer_available=true,
+        can_stop=true,
+        submit=Steer,
+        queue_available=true,
+      ),
+    },
+  }
+  let (queued, _) = Model(input).update(
+    input,
+    FollowupSelected("queue"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let goal = { ..input, goal: { ..input.goal, draft: Some("new goal"), }, }
+  let (submitted, _) = queued.update(
+    goal,
+    SubmitRequested,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let accepted = { ..input, submission_sequence: 1, }
+  assert_eq(submitted.active(accepted).draft.task, "waiting prompt")
+  assert_eq(
+    submitted.active(accepted).submission_choice(accepted),
+    Some(QueueNext),
+  )
+}

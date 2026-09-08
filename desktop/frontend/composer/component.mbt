@@ -177,7 +177,10 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
       root: input.root,
       installed_skills: input.installed_skills,
       context_generation: input.context_generation,
-      followup_choice: None,
+      followup_choice: match self.pending_submission {
+        Some(PromptSubmission(_, ..)) => None
+        _ => self.followup_choice
+      },
       followup_menu_open: false,
       pending_submission: None,
     }
