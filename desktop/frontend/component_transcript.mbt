@@ -187,6 +187,11 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
               .conversation_placement(conversation)
               .bind(value => value.checkout_root()),
             items=conversation.visible_transcript_rows(),
+            active_run_id?=if conversation.run is Open(run_id~, ..) {
+              Some(run_id)
+            } else {
+              None
+            },
             streaming_response=conversation.turn.streaming_response,
             streaming_reasoning?,
             reasoning_complete~,

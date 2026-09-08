@@ -74,6 +74,8 @@ fn assistant_view(
     let body = if thinking {
       // Do not parse an unfinished Markdown document on every provider token.
       // Newlines are preserved by CSS while fragments are still arriving.
+      // Transport reasoning deltas use the sibling LivePreview instead;
+      // this path supports provisional text supplied by other view callers.
       @html.div(
         class="msg-content activity-thinking activity-thinking-live",
         @html.text(text),
@@ -982,6 +984,7 @@ fn transcript_view(
   overview~ : @transcript_overview.State,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
   stream~ : Map[String, @html.Html],
+  live_focus~ : @html.Html,
   on_jump_latest~ : @cmd.Cmd,
 ) -> @html.Html {
   let children = section_children(
@@ -990,6 +993,7 @@ fn transcript_view(
     pinned~,
     overview~,
     overview_emit~,
+    live_focus~,
     on_jump_latest~,
   )
   // Nothing in the app reads the session back from the DOM: the component is

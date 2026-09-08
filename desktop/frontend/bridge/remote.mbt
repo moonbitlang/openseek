@@ -7,20 +7,22 @@ priv struct RemoteBridgeSub {
   device_id : String
   channel : @interop.ChannelId
   websocket_epoch : Int
-  mut dispatch : @cmd.Emit[Event]
+  mut events : EventHandler
+  mut active : Bool
 }
 
 ///|
 fn RemoteBridgeSub::RemoteBridgeSub(
   device_id : String,
   websocket_epoch : Int,
-  dispatch : @cmd.Emit[Event],
+  events : EventHandler,
 ) -> RemoteBridgeSub {
   {
     device_id,
     channel: @interop.ChannelId::Remote(device_id),
     websocket_epoch,
-    dispatch,
+    events,
+    active: true,
   }
 }
 
@@ -42,34 +44,38 @@ fn RemoteBridgeSub::install(
   @interop.ws_connect(
     self.device_id,
     on_notification=notification => {
-      scheduler.add(
-        (self.dispatch)(Notification(channel=self.channel, notification~)),
+      guard self.active else { return }
+      self.events.enqueue(
+        scheduler,
+        Notification(
+          channel=self.channel,
+          websocket_epoch=self.websocket_epoch,
+          notification~,
+        ),
       )
     },
     on_down=() => {
-      scheduler.add(
-        (self.dispatch)(
-          ChannelDown(
-            channel=self.channel,
-            websocket_epoch=self.websocket_epoch,
-          ),
-        ),
+      guard self.active else { return }
+      self.events.enqueue(
+        scheduler,
+        ChannelDown(channel=self.channel, websocket_epoch=self.websocket_epoch),
       )
     },
   )
 }
 
 ///|
-fn RemoteBridgeSub::update_dispatch(
+fn RemoteBridgeSub::update_events(
   self : RemoteBridgeSub,
-  dispatch : @cmd.Emit[Event],
+  events : EventHandler,
 ) -> Unit {
-  self.dispatch = dispatch
+  self.events = events
 }
 
 ///|
 /// Close the current socket without emitting a down event. Removing the device
 /// or replacing its declared generation therefore cannot start another retry.
 fn RemoteBridgeSub::unload(self : RemoteBridgeSub) -> Unit {
+  self.active = false
   @interop.ws_close(self.channel)
 }

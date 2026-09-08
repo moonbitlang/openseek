@@ -73,6 +73,9 @@ struct Input {
   active_session : String
   // Where the reader left this conversation last time, read once by `init`.
   scroll : ScrollPosition
+  // The run whose live reasoning may occupy the preview host, if one is
+  // open. Keys the focus branch: a new run (or step) re-targets the preview.
+  active_run_id : String?
   // The registered project that owns this conversation, kept separate from
   // `root`: a managed worktree resolves files from its checkout while the
   // empty-state question should still name the project the user selected.
@@ -109,6 +112,7 @@ pub fn Input::Input(
   focused~ : @interop.ChannelId,
   active_session~ : String,
   scroll? : ScrollPosition = Pinned,
+  active_run_id? : String,
   project_label? : String,
   current_project~ : @common.Uri?,
   projects~ : Array[ProjectChoice],
@@ -128,6 +132,7 @@ pub fn Input::Input(
     focused,
     active_session,
     scroll,
+    active_run_id,
     project_label,
     current_project,
     projects,
@@ -272,6 +277,7 @@ fn Model::update(
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
+  live_reasoning~ : LiveReasoning,
 ) -> @rabbita.Val[@html.Html] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
@@ -294,25 +300,47 @@ pub fn component(
     },
     update=(state, input, msg, emit) => state.update(input, msg, emit),
     subscriptions=(model, _, emit) => {
-      transcript_subscription(model, emit, actions.departed)
+      transcript_subscription(model, emit, actions.departed, live_reasoning)
     },
   )
   // Every stream child renders in its own branch, keyed by the block within
-  // its stream. A streaming delta then recomputes only the live block's Html;
-  // each settled row keeps the Html it already has, so the cost of a delta no
-  // longer grows with the length of the transcript.
+  // its stream. An assistant-text delta recomputes only the live block's Html;
+  // each settled row keeps the Html it already has. This saves recomputing
+  // settled content, but Rabbita 0.15.4 still recursively compares ordinary
+  // VDOM nodes on later frames; this cache does not skip that comparison.
   let blocks = input.map(stream_blocks)
   let rendered = blocks.assoc_by(
     (_, block) => block.map(block => (block.key.wire(), block.render(actions))),
     by=block => block.branch_key(),
   )
-  state.view3(input, rendered, (state, input, rendered) => {
+  // The run (and step) whose reasoning may occupy the preview host is a
+  // disposable branch keyed by that target: creating it focuses the preview
+  // after the next render and disposing it releases the host. The branch
+  // renders nothing; it lives in the view only so the graph keeps it alive.
+  let live_focus = input
+    .map(input => input.live_reasoning_target())
+    .switch_by(
+      target => {
+        match target {
+          None => @rabbita.Val::constant(@html.nothing)
+          Some(target) => live_reasoning.focus_while(target)
+        }
+      },
+      by=target => {
+        match target {
+          None => ""
+          Some(target) => target.key()
+        }
+      },
+    )
+  state.view4(input, rendered, live_focus, (state, input, rendered, live_focus) => {
     transcript_view(
       input,
       pinned=state.pinned,
       overview=state.overview,
       overview_emit=emit.map(msg => Overview(msg)),
       stream=keyed_stream(rendered),
+      live_focus~,
       on_jump_latest=emit(JumpToLatest),
     )
   })
@@ -532,7 +560,10 @@ priv suberror TranscriptSubscription {
     // listener reports only readings that differ from it, so the Model is the
     // single source of truth and no cache can drift from it.
     pinned~ : Bool,
-    active~ : @transcript_overview.TurnKey?
+    active~ : @transcript_overview.TurnKey?,
+    // Follows `pinned` so the live preview can decide, in its own layout
+    // callback, whether to keep the tail in view.
+    live_reasoning~ : LiveReasoning
   )
 }
 
@@ -544,6 +575,7 @@ fn transcript_subscription(
   model : Model,
   emit : @cmd.Emit[Msg],
   departed : @cmd.Emit[ScrollPosition],
+  live_reasoning : LiveReasoning,
 ) -> @sub.Sub {
   @sub.custom_sub(
     "transcript-dom",
@@ -553,6 +585,7 @@ fn transcript_subscription(
       departed~,
       pinned=model.pinned,
       active=model.overview.active,
+      live_reasoning~,
     ),
     transcript_sub_loader,
   )
@@ -564,11 +597,12 @@ fn transcript_sub_loader(
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    TranscriptSubscription(emit~, departed~, pinned~, active~) => {
+    TranscriptSubscription(emit~, departed~, pinned~, active~, live_reasoning~) => {
       let mut emit = emit
       let mut departed = departed
       let mut pinned = pinned
       let mut active = active
+      live_reasoning.preview.pinned = pinned
       let target = @dom.document().as_event_target()
       let listener : @dom.Listener = event => {
         guard event.target().to_element() is Some(element) &&
@@ -617,7 +651,8 @@ fn transcript_sub_loader(
               emit=next,
               departed=left,
               pinned=next_pinned,
-              active=next_active
+              active=next_active,
+              ..
             ) else {
             return
           }
@@ -625,6 +660,7 @@ fn transcript_sub_loader(
           departed = left
           pinned = next_pinned
           active = next_active
+          live_reasoning.preview.pinned = next_pinned
         },
       })
     }
@@ -728,15 +764,24 @@ fn TranscriptDomMount::observe_content(
   observer : @dom.MutationObserver,
 ) -> Unit {
   if self.element is Some(element) {
-    observer.observe(
-      element.as_node(),
-      child_list=true,
-      character_data=true,
-      subtree=true,
-      attribute_filter=[
-        "data-transcript-diagram", "data-transcript-diagram-source", "data-transcript-theme",
-      ],
-    )
+    // The theme attribute lives on the scroller itself; diagram markers live
+    // on Markdown nodes inside `#stream`. The sibling live-reasoning host owns
+    // its descendants and is not observed, so live text appends never
+    // schedule ContentRendered.
+    observer.observe(element.as_node(), attribute_filter=[
+      "data-transcript-theme",
+    ])
+    if element.query_selector("#stream") is Some(stream) {
+      observer.observe(
+        stream.as_node(),
+        child_list=true,
+        character_data=true,
+        subtree=true,
+        attribute_filter=[
+          "data-transcript-diagram", "data-transcript-diagram-source",
+        ],
+      )
+    }
   }
 }
 
@@ -746,7 +791,12 @@ fn TranscriptDomMount::observe_resize(
   observer : @dom.ResizeObserver,
 ) -> Unit {
   if self.element is Some(element) {
+    // The scroller's viewport can resize independently of its content. Its
+    // fixed layout box does not grow when the live sibling appends text.
     observer.observe(element)
+    if element.query_selector("#stream") is Some(stream) {
+      observer.observe(stream)
+    }
   }
 }
 
@@ -769,6 +819,8 @@ fn TranscriptObservers::install(
     observer.disconnect()
     mount.refresh_content()
     mount.observe_content(observer)
+    resize.disconnect()
+    mount.observe_resize(resize)
     on_change()
   })
   let attach = () => {

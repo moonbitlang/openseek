@@ -463,6 +463,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
   // never synthesize durable-looking items here; their store commits populate
   // the transcript.
   guard !input.items.is_empty() ||
+    input.active_run_id is Some(_) ||
     input.streaming_reasoning is Some(_) ||
     input.streaming_response is Some(_) else {
     return @vector.singleton({
@@ -604,6 +605,7 @@ fn section_children(
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
+  live_focus~ : @html.Html,
   on_jump_latest~ : @cmd.Cmd,
 ) -> Map[String, @html.Html] {
   let visible_items = input.items.map(row => row.item)
@@ -629,6 +631,19 @@ fn section_children(
     TranscriptSectionKey::stream(input).wire(),
     @html.div(id="stream", class="stream", stream),
   )
+  // Rabbita owns this container but no descendants. Streamed reasoning is
+  // written by LivePreview, outside both historical diffing and observation.
+  children.set(
+    "live-reasoning",
+    @html.div(
+      id="live-reasoning-host",
+      class="live-reasoning-host",
+      ([] : Array[@html.Html]),
+    ),
+  )
+  // Empty Html from the focus branch (see `component`): present so the
+  // branch is part of the rendered graph, never anything visible.
+  children.set("live-focus", live_focus)
   // Reading history unpins auto-follow (see `watch_transcript_scroll`); the
   // floating button is the way back to the live tail. Sticky inside the
   // scroller with zero height, so it never adds scroll length.
