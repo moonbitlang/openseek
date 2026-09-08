@@ -339,10 +339,7 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
           Ok(text) =>
             match parse_load(text) {
               Loaded(parsed, system_prompt, _header_present, _bytes) => {
-                let children : Map[String, @agent_session.Session] = Map([])
-                for id, child in model.subrun_children {
-                  children.set(id, child)
-                }
+                let children = model.subrun_children.copy()
                 children.set(
                   child_id,
                   @viz.session_from_parse(parsed, id=child_id, system_prompt~),
@@ -469,81 +466,36 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
     }
     SetArgsView(show_original) =>
       (@cmd.none, { ..model, show_original_args: show_original, })
-    ToggleErrorsOnly =>
-      (
-        @cmd.none,
-        {
-          ..model,
-          errors_only: !model.errors_only,
-          escalated_only: false,
-          build_errors_only: false,
-        },
-      )
+    ToggleErrorsOnly => only_filter(model, errors=!model.errors_only)
     // Scroll to the next/previous failed-tool card, cycling. The count is
     // recomputed for the active view, while the browser chooses the target
     // relative to the current viewport so manual scrolling is respected.
-    JumpToError(direction) => {
-      let count = current_error_count(model)
-      if count <= 0 {
-        (@cmd.none, model)
-      } else {
-        (
-          @cmd.effect(() => {
-            scroll_to_card_from_viewport(".card.tool.error", direction)
-          }),
-          model,
-        )
-      }
-    }
-    ToggleEscalatedOnly =>
-      (
-        @cmd.none,
-        {
-          ..model,
-          escalated_only: !model.escalated_only,
-          errors_only: false,
-          build_errors_only: false,
-        },
+    JumpToError(direction) =>
+      jump_to_card(
+        model,
+        current_count(model, @viz.rendered_error_count),
+        ".card.tool.error",
+        direction,
       )
-    JumpToEscalated(direction) => {
-      let count = current_escalated_count(model)
-      if count <= 0 {
-        (@cmd.none, model)
-      } else {
-        (
-          @cmd.effect(() => {
-            scroll_to_card_from_viewport(".tool-call-escalated", direction)
-          }),
-          model,
-        )
-      }
-    }
+    ToggleEscalatedOnly => only_filter(model, escalated=!model.escalated_only)
+    JumpToEscalated(direction) =>
+      jump_to_card(
+        model,
+        current_count(model, @viz.rendered_escalated_count),
+        ".tool-call-escalated",
+        direction,
+      )
     ToggleBuildErrorsOnly =>
-      (
-        @cmd.none,
-        {
-          ..model,
-          build_errors_only: !model.build_errors_only,
-          errors_only: false,
-          escalated_only: false,
-        },
+      only_filter(model, build_errors=!model.build_errors_only)
+    // Result cards, not call rows: every build failure has exactly one tagged
+    // result card — orphans included — so the jump set matches the count.
+    JumpToBuildError(direction) =>
+      jump_to_card(
+        model,
+        current_count(model, @viz.rendered_build_error_count),
+        ".card.build-failed",
+        direction,
       )
-    JumpToBuildError(direction) => {
-      let count = current_build_error_count(model)
-      if count <= 0 {
-        (@cmd.none, model)
-      } else {
-        (
-          @cmd.effect(() => {
-            // Result cards, not call rows: every build failure has exactly
-            // one tagged result card — orphans included — so the jump set
-            // matches the count.
-            scroll_to_card_from_viewport(".card.build-failed", direction)
-          }),
-          model,
-        )
-      }
-    }
     UnfoldCurrent => (@cmd.effect(() => unfold_nearest_details()), model)
     SetTheme(theme) =>
       // Apply the theme as a side effect (set `data-theme` on <html>) so the CSS
@@ -559,6 +511,46 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
           collapsed_roots: toggle_collapsed_root(model.collapsed_roots, root),
         },
       )
+  }
+}
+
+///|
+/// Turn one card filter on or off, clearing the other two: the three filters
+/// are mutually exclusive, so switching any of them on retires the others.
+fn only_filter(
+  model : Model,
+  errors? : Bool = false,
+  escalated? : Bool = false,
+  build_errors? : Bool = false,
+) -> (@cmd.Cmd, Model) {
+  (
+    @cmd.none,
+    {
+      ..model,
+      errors_only: errors,
+      escalated_only: escalated,
+      build_errors_only: build_errors,
+    },
+  )
+}
+
+///|
+/// Scroll to the next/previous card matching `selector`, or do nothing when the
+/// active view draws none. The model never changes: the jump is a pure viewport
+/// effect.
+fn jump_to_card(
+  model : Model,
+  count : Int,
+  selector : String,
+  direction : Int,
+) -> (@cmd.Cmd, Model) {
+  if count <= 0 {
+    (@cmd.none, model)
+  } else {
+    (
+      @cmd.effect(() => scroll_to_card_from_viewport(selector, direction)),
+      model,
+    )
   }
 }
 
@@ -1664,21 +1656,13 @@ fn running_ms(parsed : @session_log.ParsedLog) -> Int64? {
 /// The first and last positive wall-clock stamps in the log (unix ms), in file
 /// order, or `None` when no event carries one.
 fn stamp_range(parsed : @session_log.ParsedLog) -> (Int64, Int64)? {
-  let mut first = 0L
-  let mut last = 0L
-  for event in parsed.events {
-    let stamp = event.unix_ms()
-    if stamp > 0 {
-      if first == 0L {
-        first = stamp
-      }
-      last = stamp
-    }
-  }
-  if first > 0L {
-    Some((first, last))
-  } else {
-    None
+  let stamps = [
+    for event in parsed.events if event.unix_ms() > 0 => event.unix_ms()
+  ]
+  match stamps {
+    [first, .., last] => Some((first, last))
+    [only] => Some((only, only))
+    [] => None
   }
 }
 
@@ -1914,40 +1898,22 @@ fn session_log_view(
 }
 
 ///|
-/// Number of failures the active view will draw, recomputed from the loaded
-/// log — served or dropped; the session id plays no part in the count.
-/// Returns 0 when nothing is loaded.
-fn current_error_count(model : Model) -> Int {
+/// What `counter` reports for the loaded log under the active view mode —
+/// failures the view will draw, explicitly escalated calls the projection will
+/// render, or mbtx build errors. Recomputed from the loaded log, served or
+/// dropped; the session id plays no part in the count. Returns 0 when nothing
+/// is loaded.
+fn current_count(
+  model : Model,
+  counter : (@agent_session.Session, @viz.ViewMode) -> Int,
+) -> Int {
   guard model.parsed is Some(parsed) else { return 0 }
   let session = @viz.session_from_parse(
     parsed,
     id="",
     system_prompt=model.system_prompt,
   )
-  @viz.rendered_error_count(session, model.view_mode)
-}
-
-///|
-/// Number of explicitly escalated calls the active projection will render.
-fn current_escalated_count(model : Model) -> Int {
-  guard model.parsed is Some(parsed) else { return 0 }
-  let session = @viz.session_from_parse(
-    parsed,
-    id="",
-    system_prompt=model.system_prompt,
-  )
-  @viz.rendered_escalated_count(session, model.view_mode)
-}
-
-///|
-fn current_build_error_count(model : Model) -> Int {
-  guard model.parsed is Some(parsed) else { return 0 }
-  let session = @viz.session_from_parse(
-    parsed,
-    id="",
-    system_prompt=model.system_prompt,
-  )
-  @viz.rendered_build_error_count(session, model.view_mode)
+  counter(session, model.view_mode)
 }
 
 ///|

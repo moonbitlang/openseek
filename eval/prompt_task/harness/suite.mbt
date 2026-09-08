@@ -268,19 +268,12 @@ fn suite_config_from_json(
 
 ///|
 fn parse_models(fields : Map[String, Json]) -> Array[@deepseek.Model] raise {
-  match fields.get("models") {
-    Some(Array(items)) =>
-      [
-        for item in items => {
-          match item {
-            String(value) => @deepseek.Model::parse(value)
-            _ => fail("suite model entries must be strings")
-          }
-        }
-      ]
-    Some(_) => fail("suite models must be an array")
-    None => fail("suite models is missing")
-  }
+  array_field(fields, "models", "suite models", item => {
+    match item {
+      String(value) => @deepseek.Model::parse(value)
+      _ => fail("suite model entries must be strings")
+    }
+  })
 }
 
 ///|
@@ -288,29 +281,21 @@ fn parse_problems(
   fields : Map[String, Json],
   base_dir : String,
 ) -> Array[ProblemSpec] raise {
-  match fields.get("problems") {
-    Some(Array(items)) =>
-      [
-        for item in items => ProblemSpec::from_json(item, base_dir)
-      ]
-    Some(_) => fail("suite problems must be an array")
-    None => fail("suite problems is missing")
-  }
+  array_field(fields, "problems", "suite problems", item => {
+    ProblemSpec::from_json(item, base_dir)
+  })
 }
 
 ///|
 fn ProblemSpec::from_json(json : Json, base_dir : String) -> ProblemSpec raise {
   let fields = object_fields(json, "suite problem")
   let id = string_field(fields, "id")
-  let probes : Array[ValidationProbeSpec] = match
-    fields.get("validation_probes") {
-    Some(Array(items)) =>
-      [
-        for item in items => ValidationProbeSpec::from_json(item)
-      ]
-    Some(_) => fail("suite problem validation_probes must be an array")
-    None => fail("suite problem validation_probes is missing")
-  }
+  let probes = array_field(
+    fields,
+    "validation_probes",
+    "suite problem validation_probes",
+    ValidationProbeSpec::from_json,
+  )
   guard probes.length() > 0 else {
     fail("suite problem validation_probes must not be empty")
   }
@@ -570,23 +555,17 @@ fn SuiteManifest::from_json(json : Json) -> SuiteManifest raise {
 fn suite_manifest_problems(
   fields : Map[String, Json],
 ) -> Array[ProblemSpec] raise {
-  match fields.get("problems") {
-    Some(Array(items)) =>
-      [
-        for item in items => ProblemSpec::from_manifest_json(item)
-      ]
-    Some(_) => fail("suite manifest problems must be an array")
-    None => fail("suite manifest problems is missing")
-  }
+  array_field(
+    fields,
+    "problems",
+    "suite manifest problems",
+    ProblemSpec::from_manifest_json,
+  )
 }
 
 ///|
 fn suite_manifest_combos(fields : Map[String, Json]) -> Array[ComboRun] raise {
-  match fields.get("combos") {
-    Some(Array(items)) => [ for item in items => ComboRun::from_json(item) ]
-    Some(_) => fail("suite manifest combos must be an array")
-    None => fail("suite manifest combos is missing")
-  }
+  array_field(fields, "combos", "suite manifest combos", ComboRun::from_json)
 }
 
 ///|
@@ -605,15 +584,12 @@ fn ProblemSpec::to_json(self : ProblemSpec) -> Json {
 ///|
 fn ProblemSpec::from_manifest_json(json : Json) -> ProblemSpec raise {
   let fields = object_fields(json, "suite manifest problem")
-  let probes : Array[ValidationProbeSpec] = match
-    fields.get("validation_probes") {
-    Some(Array(items)) =>
-      [
-        for item in items => ValidationProbeSpec::from_json(item)
-      ]
-    Some(_) => fail("suite manifest problem validation_probes must be an array")
-    None => fail("suite manifest problem validation_probes is missing")
-  }
+  let probes = array_field(
+    fields,
+    "validation_probes",
+    "suite manifest problem validation_probes",
+    ValidationProbeSpec::from_json,
+  )
   ProblemSpec(
     id=string_field(fields, "id"),
     prompt_label=string_field(fields, "prompt_label"),
@@ -652,19 +628,12 @@ fn string_array_field(
   fields : Map[String, Json],
   key : String,
 ) -> Array[String] raise {
-  match fields.get(key) {
-    Some(Array(items)) =>
-      [
-        for item in items => {
-          match item {
-            String(value) => value
-            _ => fail("\{key} entries must be strings")
-          }
-        }
-      ]
-    Some(_) => fail("\{key} must be an array")
-    None => fail("\{key} is missing")
-  }
+  array_field(fields, key, key, item => {
+    match item {
+      String(value) => value
+      _ => fail("\{key} entries must be strings")
+    }
+  })
 }
 
 ///|
