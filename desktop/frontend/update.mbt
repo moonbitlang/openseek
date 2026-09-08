@@ -1069,6 +1069,45 @@ fn send_goal(
 }
 
 ///|
+/// Whether an engine event reports progress on the open step's model request,
+/// which ends a pending retry notice: the replacement attempt produced output
+/// or completed (a tool-only response has no deltas, so its usage report or
+/// tool result is the first sign), or the step moved on or the run ended.
+/// Events about other work in the same run say nothing about that request.
+fn ends_retry(event : @transcript.EngineEvent) -> Bool {
+  match event {
+    AssistantDelta(_)
+    | ReasoningDelta(_)
+    | ReasoningMessage(_)
+    | AssistantMessage(_)
+    | Usage(..)
+    | ToolResult(..)
+    | ToolCallDecodeError(..)
+    | AgentStep(_)
+    | AgentFinished(_)
+    | ContextYield(_)
+    | AgentAborted(_)
+    | MaxStepsExhausted
+    | AgentSetupFailed(_) => true
+    StreamRetry(..)
+    | BackgroundNotice(_)
+    | SubrunOpened(..)
+    | SubrunClosed(..)
+    | WorkflowOpened(..)
+    | WorkflowClosed(..)
+    | SteerApplied(..)
+    | SteerDropped(..)
+    | AutoCompactionFinished(_)
+    | CompactionStarted
+    | CompactionFinished(_)
+    | CompactionFailed(_)
+    | ApprovalRequested(..)
+    | ApprovalResolved(..)
+    | SessionAppendFailed(_) => false
+  }
+}
+
+///|
 /// Fold one engine event into its conversation. Returns the new conversation
 /// and, when the event reported a failure the durable record will never carry,
 /// the text to raise as a toast — the caller owns the dispatch a toast needs.
@@ -1077,6 +1116,13 @@ fn apply_engine_event(
   event : @transcript.EngineEvent,
   event_run_id : String?,
 ) -> (String?, Conversation) {
+  // A retry notice lasts until the engine reports progress on the request it
+  // is retrying; events about other work in the run leave it in place.
+  let conv = if ends_retry(event) {
+    { ..conv, turn: { ..conv.turn, retrying: None, }, }
+  } else {
+    conv
+  }
   match event {
     AgentStep(step) => {
       // The next model request starts after every durable commit this page
@@ -1102,7 +1148,8 @@ fn apply_engine_event(
     // The engine is waiting out a backoff before reopening this step's
     // provider request. Drop every delta of the failed attempt so the
     // replacement stream cannot be concatenated with it, and show the retry
-    // in the heartbeat; the step and every durable row stay as they are.
+    // in the heartbeat until `ends_retry`; the step and every durable row
+    // stay as they are.
     StreamRetry(attempt~, max_attempts~, reason~) => {
       let cleared = conv.clear_streams()
       (
@@ -1126,11 +1173,7 @@ fn apply_engine_event(
           None,
           {
             ..conv,
-            turn: {
-              ..conv.turn,
-              streaming_response: Some(carried + content),
-              retrying: None,
-            },
+            turn: { ..conv.turn, streaming_response: Some(carried + content), },
           },
         )
       }
@@ -1155,7 +1198,6 @@ fn apply_engine_event(
                 content: carried + content,
                 complete: false,
               }),
-              retrying: None,
             },
           },
         )
@@ -9158,6 +9200,49 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
   assert_eq(streaming.active().turn.streaming_response, Some("again"))
   assert_true(
     streaming.active().run_heartbeat() is Some({ stage: AtStep(2), .. }),
+  )
+}
+
+///|
+test "a retry notice ends at the model's next progress, not at unrelated events" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=AtStep(Some(2))),
+  })
+  let (_, retrying) = update_dev(
+    dispatch,
+    Engine(
+      Some("r7"),
+      StreamRetry(attempt=2, max_attempts=5, reason="connection reset"),
+      session=None,
+    ),
+    model,
+  )
+  // A background job finishing while the engine waits says nothing about
+  // the request being retried.
+  let (_, still) = update_dev(
+    dispatch,
+    Engine(Some("r7"), BackgroundNotice("job done"), session=None),
+    retrying,
+  )
+  assert_true(
+    still.active().run_heartbeat()
+    is Some({ stage: Retrying(attempt=2, ..), .. }),
+  )
+  // A tool-only response streams no deltas; its usage report is the first
+  // sign the replacement attempt completed.
+  let (_, resumed) = update_dev(
+    dispatch,
+    Engine(
+      Some("r7"),
+      Usage(prompt_tokens=10, completion_tokens=5),
+      session=None,
+    ),
+    still,
+  )
+  assert_true(
+    resumed.active().run_heartbeat() is Some({ stage: AtStep(2), .. }),
   )
 }
 
