@@ -17,9 +17,7 @@ pub let references_peek_height_in_lines : Int
 // Errors
 
 // Types and methods
-pub struct ReferencesController {
-  // private fields
-}
+type ReferencesController
 pub fn ReferencesController::ReferencesController(ReferencesPeekHost, ReferencesPeekPreviewFactory, resolver? : @navigation_api.TextModelResolverHandle, (async () -> Unit noraise) -> Unit) -> Self
 pub fn ReferencesController::close(Self, restore_focus~ : Bool) -> Unit
 pub fn ReferencesController::contains_focus(Self) -> Bool
@@ -37,16 +35,12 @@ pub(all) struct ReferencesPeekHost {
   show_message : (@goto_symbol.SymbolNavigationAnchor, String) -> Unit
 }
 
-pub struct ReferencesPeekMount {
-  // private fields
-}
+type ReferencesPeekMount
 pub fn ReferencesPeekMount::ReferencesPeekMount(is_current~ : () -> Bool, dispose~ : () -> Unit) -> Self
 pub fn ReferencesPeekMount::dispose(Self) -> Unit
 pub fn ReferencesPeekMount::is_current(Self) -> Bool
 
-pub struct ReferencesPeekPreview {
-  // private fields
-}
+type ReferencesPeekPreview
 pub fn ReferencesPeekPreview::ReferencesPeekPreview(contains_focus~ : () -> Bool, focus~ : () -> Unit, dispose~ : () -> Unit) -> Self
 pub fn ReferencesPeekPreview::contains_focus(Self) -> Bool
 pub fn ReferencesPeekPreview::dispose(Self) -> Unit
@@ -56,9 +50,7 @@ pub(all) struct ReferencesPeekPreviewFactory {
   create : (@dom.Element, @model.TextModel, @common.Range, Array[@common.Range], @references.ReferencesPeekMode) -> ReferencesPeekPreview?
 }
 
-pub struct ReferencesPeekWidget {
-  // private fields
-}
+type ReferencesPeekWidget
 #alias(new, deprecated)
 pub fn ReferencesPeekWidget::ReferencesPeekWidget(@references.ReferencesPeekMode, ReferencesPeekWidgetCallbacks) -> Self
 pub fn ReferencesPeekWidget::dispose(Self) -> Unit

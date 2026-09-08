@@ -55,9 +55,7 @@ pub fn FileState::equal(Self, Self) -> Bool
 pub fn FileState::not_equal(Self, Self) -> Bool
 pub fn FileState::to_repr(Self) -> @debug.Repr
 
-pub struct FileStateMap {
-  // private fields
-}
+type FileStateMap
 pub fn FileStateMap::FileStateMap() -> Self
 pub fn FileStateMap::created_and_unchanged(Self, String, String) -> Bool
 pub fn FileStateMap::forget(Self, String) -> Unit
@@ -89,9 +87,7 @@ pub struct ToolOutput {
 } derive(@debug.Debug)
 pub fn ToolOutput::to_repr(Self) -> @debug.Repr
 
-pub struct Tools {
-  // private fields
-}
+type Tools
 pub fn Tools::Tools(Array[AgentToolDefinition], background_jobs? : @bgjobs.BgJobRuntime) -> Self raise
 pub fn Tools::background_job_runtime(Self) -> @bgjobs.BgJobRuntime?
 pub fn Tools::find(Self, String) -> AgentToolDefinition?

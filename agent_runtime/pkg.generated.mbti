@@ -15,9 +15,7 @@ pub let default_agent_event_capacity : Int
 pub(all) extenum AgentEvent {
 }
 
-pub struct AgentRuntime {
-  // private fields
-}
+type AgentRuntime
 pub fn AgentRuntime::AgentRuntime(workspace_root? : String, approval? : ApprovalChannel) -> Self
 pub fn AgentRuntime::approval_channel(Self) -> ApprovalChannel?
 pub fn AgentRuntime::drain_events(Self) -> Array[AgentEvent]
@@ -27,9 +25,7 @@ pub fn AgentRuntime::queue_steer(Self, SteerInput, wake? : Bool) -> Unit
 pub async fn AgentRuntime::wait_for_user_input(Self) -> Unit
 pub fn AgentRuntime::workspace_root(Self) -> String
 
-pub struct AgentTaskScope[X] {
-  // private fields
-}
+type AgentTaskScope[X]
 pub fn[X] AgentTaskScope::AgentTaskScope(@async.TaskGroup[X]) -> Self[X]
 pub fn[X] AgentTaskScope::group(Self[X]) -> @async.TaskGroup[X]
 

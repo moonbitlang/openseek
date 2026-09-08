@@ -42,33 +42,33 @@ fn ExecStatus::is_terminal(self : ExecStatus) -> Bool {
 /// `shell` tool and `moon_check`): the process library exposes no process-group
 /// kill, so a command that daemonizes its own children can leave descendants
 /// running after the execution is terminal.
-pub struct ShellExecution {
-  priv sink : ShellOutputSink
-  priv process : @process.Process
-  priv mut status : ExecStatus
+struct ShellExecution {
+  sink : ShellOutputSink
+  process : @process.Process
+  mut status : ExecStatus
   // Set before the child is cancelled (by `stop`, or by the output-limit kill)
   // so the monitor reports `Killed` rather than the kill signal's exit code.
-  priv mut cancel_requested : Bool
+  mut cancel_requested : Bool
   // Foreground semantics: kill the child once the sink fills (output prefix hit
   // the hard cap or the kill threshold), so an un-timed runaway cannot hang the
   // tool call. Cleared by `background()` — a detached job keeps running.
-  priv mut kill_when_full : Bool
+  mut kill_when_full : Bool
   // Background watchdog: kill the child once full output hits the *hard* cap —
   // past it every further byte is dropped, so the job is a runaway producing
   // nothing anyone can read. Unlike `kill_when_full` this survives
   // `background()`: a detached job keeps running but not unboundedly.
-  priv kill_at_hard_cap : Bool
+  kill_at_hard_cap : Bool
   // Set when the child was cancelled by an output-limit watchdog (either flag
   // above), so a consumer can tell a watchdog kill from a requested stop and
   // surface it rather than letting the job die silently.
-  priv mut killed_by_output_limit : Bool
+  mut killed_by_output_limit : Bool
   // Monotonic start stamp, so a wall-clock reaper measures a job's lifetime
   // from process start — a detached (adopted) job keeps its original
   // deadline, not one restarted at adoption.
-  priv started_at_ms : Int64
+  started_at_ms : Int64
   // Set when the child was cancelled by the wall-clock reaper, so consumers
   // can tell a lifetime kill from a requested stop.
-  priv mut killed_by_time_limit : Bool
+  mut killed_by_time_limit : Bool
 }
 
 ///|

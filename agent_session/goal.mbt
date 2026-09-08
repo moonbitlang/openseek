@@ -51,11 +51,11 @@ pub const GoalContinuePrompt : String =
 
 ///|
 /// A standing goal derived from the durable event log.
-pub struct StandingGoal {
-  priv text : String
-  priv answered_since_set : Bool
-  priv set_sequence : Int
-  priv blocked : Bool
+struct StandingGoal {
+  text : String
+  answered_since_set : Bool
+  set_sequence : Int
+  blocked : Bool
 } derive(Debug)
 
 ///|

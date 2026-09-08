@@ -19,8 +19,8 @@ priv enum CodeEditorContributionKind {
 /// Explicit contribution set for one code-editor kernel. The fields stay
 /// opaque outside this package so hosts choose a reviewed factory rather than
 /// rebuilding a second contribution policy from booleans or editor roles.
-pub struct CodeEditorContributionDescriptors {
-  priv enabled : Array[CodeEditorContributionKind]
+struct CodeEditorContributionDescriptors {
+  enabled : Array[CodeEditorContributionKind]
 }
 
 ///|

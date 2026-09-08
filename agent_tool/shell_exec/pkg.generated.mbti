@@ -23,9 +23,7 @@ pub fn ExecStatus::equal(Self, Self) -> Bool
 pub fn ExecStatus::not_equal(Self, Self) -> Bool
 pub fn ExecStatus::to_repr(Self) -> @debug.Repr
 
-pub struct ShellExecution {
-  // private fields
-}
+type ShellExecution
 pub fn ShellExecution::background(Self) -> Bool
 pub async fn ShellExecution::discard(Self) -> Unit
 pub fn ShellExecution::exit_code(Self) -> Int?
@@ -48,10 +46,6 @@ pub fn ShellExecution::status(Self) -> ExecStatus
 pub async fn ShellExecution::stop(Self) -> Bool
 pub async fn ShellExecution::wait(Self) -> Unit
 pub async fn ShellExecution::wait_or_invalid(Self) -> Unit
-
-pub struct ShellOutputSink {
-  // private fields
-}
 
 // Type aliases
 

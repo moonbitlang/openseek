@@ -21,18 +21,18 @@ pub let references_peek_height_in_lines : Int = 18
 /// Detached browser shell shared by Definition and References Peek sessions.
 /// The root owns the presentation mount and nested readonly Viewer; this type
 /// owns only its DOM, result-tree state, and event-listener lifetime.
-pub struct ReferencesPeekWidget {
-  priv mode : @references.ReferencesPeekMode
-  priv root : @rdom.Element
-  priv title_meta : @rdom.Element
-  priv preview_host : @rdom.Element
-  priv status : @rdom.Element
-  priv results_scrollable : @scrollbar.ScrollableElementDom
-  priv results_scrollbar_input : @scrollbar.NativeScrollableElementInput
-  priv tree : ReferenceResultsTree
-  priv callbacks : ReferencesPeekWidgetCallbacks
-  priv listeners : Array[@base_common.Disposable]
-  priv mut disposed : Bool
+struct ReferencesPeekWidget {
+  mode : @references.ReferencesPeekMode
+  root : @rdom.Element
+  title_meta : @rdom.Element
+  preview_host : @rdom.Element
+  status : @rdom.Element
+  results_scrollable : @scrollbar.ScrollableElementDom
+  results_scrollbar_input : @scrollbar.NativeScrollableElementInput
+  tree : ReferenceResultsTree
+  callbacks : ReferencesPeekWidgetCallbacks
+  listeners : Array[@base_common.Disposable]
+  mut disposed : Bool
 }
 
 ///|

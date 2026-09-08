@@ -24,9 +24,7 @@ pub fn Client::Client(api_key~ : String, model? : @deepseek.Model, api_url? : St
 pub async fn Client::chat(Self, Array[@deepseek.ChatMessage], tools? : Array[@deepseek.ToolDefinition], response_format? : @deepseek.ResponseFormat, stream? : StreamHandler) -> @deepseek.ChatResponse
 pub fn Client::to_repr(Self) -> @debug.Repr
 
-pub struct StreamHandler {
-  // private fields
-}
+type StreamHandler
 pub fn StreamHandler::StreamHandler(on_content_delta~ : async (String) -> Unit, on_reasoning_delta? : async (String) -> Unit, on_retry? : (Int, Int, String) -> Unit) -> Self
 
 // Type aliases

@@ -11,18 +11,14 @@ import {
 // Errors
 
 // Types and methods
-pub struct SessionListing {
-  // private fields
-} derive(@debug.Debug)
+type SessionListing derive(@debug.Debug)
 pub fn SessionListing::first_prompt(Self) -> String
 pub fn SessionListing::id(Self) -> @agent_session.SessionId
 pub fn SessionListing::last_active_unix_seconds(Self) -> Int64?
 pub fn SessionListing::title(Self) -> String?
 pub fn SessionListing::to_repr(Self) -> @debug.Repr
 
-pub struct SessionStore {
-  // private fields
-} derive(@debug.Debug)
+type SessionStore derive(@debug.Debug)
 pub fn SessionStore::SessionStore(String) -> Self
 pub async fn SessionStore::append(Self, @agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
 pub async fn SessionStore::compact(Self, @agent_session.Session, content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> @agent_session.Session

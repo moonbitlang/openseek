@@ -103,10 +103,10 @@ pub fn Client::Client(
 /// `reason` describes the failure. Pre-stream retries (429, 5xx, connect
 /// errors) report through it too, so a consumer can show that the request is
 /// being retried rather than silently waiting.
-pub struct StreamHandler {
-  priv on_content_delta : async (String) -> Unit
-  priv on_reasoning_delta : async (String) -> Unit
-  priv on_retry : ((Int, Int, String) -> Unit)?
+struct StreamHandler {
+  on_content_delta : async (String) -> Unit
+  on_reasoning_delta : async (String) -> Unit
+  on_retry : ((Int, Int, String) -> Unit)?
 }
 
 ///|

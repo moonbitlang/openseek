@@ -35,13 +35,14 @@ struct ReviewStats {
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
-/// The full review report.
-pub struct ReviewReport {
-  priv schema_version : Int
-  priv scope : ReviewScope
-  priv findings : Array[Finding]
-  priv summary : String
-  priv stats : ReviewStats
+/// The full review report. Abstract: the representation stays inside this
+/// package; callers reach it through the accessors and JSON contract below.
+struct ReviewReport {
+  schema_version : Int
+  scope : ReviewScope
+  findings : Array[Finding]
+  summary : String
+  stats : ReviewStats
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|

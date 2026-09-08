@@ -4,8 +4,8 @@
 /// contains only open lexer modes. Stack edits share unchanged tails
 /// while cached states remain isolated from later edits. Derived equality is
 /// what callers use to detect re-tokenization convergence.
-pub struct TokenizerState {
-  priv modes : @list.List[Byte]
+struct TokenizerState {
+  modes : @list.List[Byte]
 } derive(Eq)
 
 ///|

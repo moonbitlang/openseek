@@ -24,31 +24,31 @@ pub let default_hard_cap : Int = 20_000_000
 /// With no `spill_path` the sink is memory-only: it keeps the head and drops the
 /// rest (bounded, never touches disk) — used by contexts that never need full
 /// large output (tests, the scope-less `collect_shell_output`).
-pub struct ShellOutputSink {
+priv struct ShellOutputSink {
   // The first `inline_cap` characters, for inline rendering without a file read.
-  priv head : StringBuilder
-  priv mut head_chars : Int
+  head : StringBuilder
+  mut head_chars : Int
   // Total decoded characters of full output (across memory + file), ≤ hard_cap.
-  priv mut total_chars : Int
+  mut total_chars : Int
   // Trailing bytes of an incomplete UTF-8 sequence carried to the next chunk.
-  priv mut pending : Bytes
+  mut pending : Bytes
   // Bumps whenever retained output grows, for poll change detection.
-  priv mut seq : Int
+  mut seq : Int
   // Set once output was dropped at the hard cap.
-  priv mut truncated : Bool
+  mut truncated : Bool
   // Set once any invalid (non-UTF-8 / binary) bytes were decoded lossily, so a
   // consumer can preserve the strict-decode "binary output" error rather than
   // silently showing replacement characters.
-  priv mut had_invalid : Bool
+  mut had_invalid : Bool
   // Full-output spill file, opened lazily once output exceeds `inline_cap` and a
   // spill path is configured. None → memory-only (small output, or no path).
-  priv mut file : @fs.File?
+  mut file : @fs.File?
   // Bytes written to the file so far (== full output byte length once spilled).
-  priv mut file_bytes : Int64
+  mut file_bytes : Int64
   // Where to spill; None → never spill (memory-only, head kept, rest dropped).
-  priv spill_path : String?
-  priv inline_cap : Int
-  priv hard_cap : Int
+  spill_path : String?
+  inline_cap : Int
+  hard_cap : Int
 }
 
 ///|

@@ -15,9 +15,7 @@ pub async fn[T] run_subrun(command~ : String, args~ : Array[String], input~ : Js
 // Errors
 
 // Types and methods
-pub struct ChildSession {
-  // private fields
-}
+type ChildSession
 pub fn ChildSession::ChildSession(root~ : String, parent~ : String, first_free? : Int) -> Self
 pub fn ChildSession::injection(Self, exe~ : String, workspace_root~ : String, model? : String, api_url? : String) -> @host.SubrunInjection
 

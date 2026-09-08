@@ -231,10 +231,10 @@ fn ToolAction::abort(reason : String) -> ToolAction {
 ///|
 /// A name-indexed collection of `AgentToolDefinition` values. Construct via
 /// `Tools(definitions)`, which raises if any two definitions share a name.
-pub struct Tools {
-  priv by_name : Map[String, AgentToolDefinition]
+struct Tools {
+  by_name : Map[String, AgentToolDefinition]
   /// Shared execution registry, also used by the loop for wait/finish decisions.
-  priv background_jobs : @bgjobs.BgJobRuntime?
+  background_jobs : @bgjobs.BgJobRuntime?
 }
 
 ///|

@@ -2,10 +2,10 @@
 /// Exact surface mount owned by one Peek session. The adapter captures its
 /// concrete ViewZone/overlay or Markdown overlay node; the shared controller
 /// only asks whether that mount is still current and disposes it once.
-pub struct ReferencesPeekMount {
-  priv is_current_callback : () -> Bool
-  priv dispose_callback : () -> Unit
-  priv mut disposed : Bool
+struct ReferencesPeekMount {
+  is_current_callback : () -> Bool
+  dispose_callback : () -> Unit
+  mut disposed : Bool
 }
 
 ///|
@@ -37,11 +37,11 @@ pub fn ReferencesPeekMount::dispose(self : ReferencesPeekMount) -> Unit {
 ///|
 /// Surface-independent lifetime of the embedded CodeEditor preview. The
 /// injected factory owns concrete editor construction and decorations.
-pub struct ReferencesPeekPreview {
-  priv contains_focus_callback : () -> Bool
-  priv focus_callback : () -> Unit
-  priv dispose_callback : () -> Unit
-  priv mut disposed : Bool
+struct ReferencesPeekPreview {
+  contains_focus_callback : () -> Bool
+  focus_callback : () -> Unit
+  dispose_callback : () -> Unit
+  mut disposed : Bool
 }
 
 ///|
@@ -131,27 +131,27 @@ priv struct DetachedReferencesGroupResources {
 ///|
 /// One mutable Peek state machine per source surface. Controller instances are
 /// never shared between Code and Markdown surfaces.
-pub struct ReferencesController {
-  priv host : ReferencesPeekHost
-  priv preview_factory : ReferencesPeekPreviewFactory
-  priv resolver : @navigation_api.TextModelResolverHandle?
-  priv mut launch_async_task : (async () -> Unit noraise) -> Unit
-  priv mut generation : Int
-  priv mut preview_generation : Int
-  priv mut mode : @references.ReferencesPeekMode?
-  priv mut phase : @references.ReferencesPeekPhase
-  priv mut anchor : @goto_symbol.SymbolNavigationAnchor?
-  priv mut session_key : @references.ReferencesSessionKey?
-  priv mut model : @references.ReferencesModel?
-  priv mut selected_index : Int
-  priv mut widget : ReferencesPeekWidget?
-  priv mut mount : ReferencesPeekMount?
-  priv mut preview_source : @language.CancellationTokenSource?
-  priv mut preview_reference : @navigation_api.TextModelReference?
-  priv mut preview : ReferencesPeekPreview?
-  priv mut group_preview_owners : Array[ReferencesGroupPreviewOwner]
-  priv mut focus_frame : @base_common.Disposable?
-  priv mut disposed : Bool
+struct ReferencesController {
+  host : ReferencesPeekHost
+  preview_factory : ReferencesPeekPreviewFactory
+  resolver : @navigation_api.TextModelResolverHandle?
+  mut launch_async_task : (async () -> Unit noraise) -> Unit
+  mut generation : Int
+  mut preview_generation : Int
+  mut mode : @references.ReferencesPeekMode?
+  mut phase : @references.ReferencesPeekPhase
+  mut anchor : @goto_symbol.SymbolNavigationAnchor?
+  mut session_key : @references.ReferencesSessionKey?
+  mut model : @references.ReferencesModel?
+  mut selected_index : Int
+  mut widget : ReferencesPeekWidget?
+  mut mount : ReferencesPeekMount?
+  mut preview_source : @language.CancellationTokenSource?
+  mut preview_reference : @navigation_api.TextModelReference?
+  mut preview : ReferencesPeekPreview?
+  mut group_preview_owners : Array[ReferencesGroupPreviewOwner]
+  mut focus_frame : @base_common.Disposable?
+  mut disposed : Bool
 }
 
 ///|

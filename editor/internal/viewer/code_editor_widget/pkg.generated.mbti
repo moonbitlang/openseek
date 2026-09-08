@@ -28,9 +28,7 @@ pub fn view_zone(Int, @dom.Element, after_column? : Int, after_column_affinity? 
 // Errors
 
 // Types and methods
-pub struct CodeEditorContributionDescriptors {
-  // private fields
-}
+type CodeEditorContributionDescriptors
 pub fn CodeEditorContributionDescriptors::diff_pane() -> Self
 pub fn CodeEditorContributionDescriptors::peek_preview() -> Self
 pub fn CodeEditorContributionDescriptors::standalone() -> Self

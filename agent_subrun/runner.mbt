@@ -201,10 +201,10 @@ pub async fn[T] run_subrun(
 /// sub-run counter is per-process, so without this floor a RESUMED durable
 /// session would reuse `sr-1` — and the fresh child session would die on
 /// its first append against the old child's file (stale-snapshot check).
-pub struct ChildSession {
-  priv root : String
-  priv parent : String
-  priv first_free : Int
+struct ChildSession {
+  root : String
+  parent : String
+  first_free : Int
 }
 
 ///|

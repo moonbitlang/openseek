@@ -56,8 +56,8 @@ priv struct Entry {
 /// restored from a durable log. A file created in an earlier process (before a
 /// resume) is absent, so consumers must read "absent" as "unknown provenance",
 /// never as "not created".
-pub struct FileStateMap {
-  priv entries : Map[String, Entry]
+struct FileStateMap {
+  entries : Map[String, Entry]
 }
 
 ///|

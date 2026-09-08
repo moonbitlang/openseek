@@ -2,13 +2,13 @@
 /// Immutable semantic origin for one symbol-navigation request. Surface
 /// adapters reduce DOM/cursor input to this value before shared actions see
 /// it; the original TextModel remains the only provider input.
-pub struct SymbolNavigationAnchor {
-  priv model : @model.TextModel
-  priv position : @base_common.Position
-  priv range : @base_common.Range
-  priv model_identity : Int
-  priv model_version_id : Int
-  priv surface_generation : Int
+struct SymbolNavigationAnchor {
+  model : @model.TextModel
+  position : @base_common.Position
+  range : @base_common.Range
+  model_identity : Int
+  model_version_id : Int
+  surface_generation : Int
 }
 
 ///|
@@ -217,13 +217,13 @@ priv enum SymbolNavigationQueryKind {
 /// Shared cancellation, provider-query, normalization, and result-policy
 /// owner. DefinitionAction and ReferencesAction are typed views over this one
 /// mutually-cancelling request stream.
-pub struct SymbolNavigationAction {
-  priv languages : @languages.LanguageHandle
-  priv host : SymbolNavigationActionHost
-  priv run_provider_tasks : async (Array[async () -> Unit]) -> Unit
-  priv mut generation : Int
-  priv mut source : @language.CancellationTokenSource?
-  priv mut disposed : Bool
+struct SymbolNavigationAction {
+  languages : @languages.LanguageHandle
+  host : SymbolNavigationActionHost
+  run_provider_tasks : async (Array[async () -> Unit]) -> Unit
+  mut generation : Int
+  mut source : @language.CancellationTokenSource?
+  mut disposed : Bool
 }
 
 ///|
@@ -351,13 +351,13 @@ fn normalize_symbol_locations(
 ///|
 /// Shared provider-query owner for modifier-hover Definition links. Surfaces
 /// retain only hit testing and projected-decoration work.
-pub struct DefinitionLinkResolver {
-  priv languages : @languages.LanguageHandle
-  priv is_anchor_current : (SymbolNavigationAnchor) -> Bool
-  priv run_provider_tasks : async (Array[async () -> Unit]) -> Unit
-  priv mut generation : Int
-  priv mut source : @language.CancellationTokenSource?
-  priv mut disposed : Bool
+struct DefinitionLinkResolver {
+  languages : @languages.LanguageHandle
+  is_anchor_current : (SymbolNavigationAnchor) -> Bool
+  run_provider_tasks : async (Array[async () -> Unit]) -> Unit
+  mut generation : Int
+  mut source : @language.CancellationTokenSource?
+  mut disposed : Bool
 }
 
 ///|
@@ -581,8 +581,8 @@ async fn SymbolNavigationAction::run_reserved(
 }
 
 ///|
-pub struct DefinitionAction {
-  priv action : SymbolNavigationAction
+struct DefinitionAction {
+  action : SymbolNavigationAction
 }
 
 ///|
@@ -621,8 +621,8 @@ pub async fn DefinitionAction::run(
 }
 
 ///|
-pub struct ReferencesAction {
-  priv action : SymbolNavigationAction
+struct ReferencesAction {
+  action : SymbolNavigationAction
 }
 
 ///|

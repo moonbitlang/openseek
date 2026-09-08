@@ -23,8 +23,8 @@ pub const ContextYieldAnswerPrefix : String = "[context ceiling]"
 /// This type deliberately stores the raw string without normalizing or
 /// validating it; store APIs validate filesystem safety before constructing
 /// paths. Use `generated` for ids created by OpenSeek itself.
-pub struct SessionId {
-  priv value : String
+struct SessionId {
+  value : String
 } derive(Eq, Debug)
 
 ///|
@@ -105,9 +105,9 @@ pub fn SessionId::generated(
 /// prompts, and every record written before the field existed. Encoding
 /// omits it when absent, so untagged lines are byte for byte what this store
 /// has always written.
-pub struct UserMessage {
-  priv content : String
-  priv submission_id : String?
+struct UserMessage {
+  content : String
+  submission_id : String?
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -158,13 +158,13 @@ pub fn UserMessage::submission_id(self : UserMessage) -> String? {
 /// This stores visible assistant text, requested tool calls, and optional
 /// reasoning content. Tool calls are durable because later `ToolResult` events
 /// must match their call ids during `Session::chat_messages` projection.
-pub struct AssistantMessage {
-  priv content : String
-  priv tool_calls : Array[SessionToolCall]
-  priv reasoning_content : String?
+struct AssistantMessage {
+  content : String
+  tool_calls : Array[SessionToolCall]
+  reasoning_content : String?
   // True only when a checkpoint re-appends an answer that an earlier durable
   // provider step already owns. Absent on ordinary messages.
-  priv is_replay : Bool?
+  is_replay : Bool?
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -241,12 +241,12 @@ pub fn AssistantMessage::is_replay(self : AssistantMessage) -> Bool {
 /// During model projection, a `ToolResult` is emitted only when its
 /// `tool_call_id` matches a pending assistant tool call. Unmatched results are
 /// ignored to keep replay protocol-valid.
-pub struct ToolResult {
-  priv tool_call_id : String
-  priv tool_name : String
-  priv content : String
-  priv is_error : Bool
-  priv brief : String?
+struct ToolResult {
+  tool_call_id : String
+  tool_name : String
+  content : String
+  is_error : Bool
+  brief : String?
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -302,8 +302,8 @@ pub fn ToolResult::is_error(self : ToolResult) -> Bool {
 /// Runtime notices are projected as user-role messages. They are intended for
 /// loop-injected context such as plan reminders or other text that did not
 /// originate from the user's prompt.
-pub struct RuntimeNotice {
-  priv content : String
+struct RuntimeNotice {
+  content : String
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -331,10 +331,10 @@ pub fn RuntimeNotice::content(self : RuntimeNotice) -> String {
 /// A summary does not delete the covered raw events. It records that
 /// `from_sequence..to_sequence` can be replaced by `content` when projecting
 /// model context. The durable event log remains append-only.
-pub struct SessionSummary {
-  priv content : String
-  priv from_sequence : Int
-  priv to_sequence : Int
+struct SessionSummary {
+  content : String
+  from_sequence : Int
+  to_sequence : Int
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -422,15 +422,15 @@ pub(all) enum SessionItem {
 /// when loading from disk. The timestamp is unix milliseconds; in-memory
 /// appends default to `0`, while `SessionStore::append` stamps with the current
 /// wall clock.
-pub struct SessionEvent {
-  priv sequence : Int
+struct SessionEvent {
+  sequence : Int
   // Wall-clock stamp (unix milliseconds) of when the event was appended; 0
   // for purely in-memory sessions appended without a clock (the durable
   // store always stamps). The field is named for its wire key, and typed
   // Double so it serializes as a JSON number (core encodes Int64 as a
   // string); milliseconds are exactly representable until year ~2255.
-  priv ts : Double
-  priv item : SessionItem
+  ts : Double
+  item : SessionItem
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -479,11 +479,11 @@ pub fn SessionEvent::is_agent_step(self : SessionEvent) -> Bool {
 /// `append`/`append_event` preserve it by construction; the `Session::Session`
 /// constructor trusts callers to supply a log that already satisfies it — see
 /// that constructor for the full contract.
-pub struct Session {
-  priv id : SessionId
-  priv system_prompt : String
-  priv events : @vector.Vector[SessionEvent]
-  priv last_sequence : Int
+struct Session {
+  id : SessionId
+  system_prompt : String
+  events : @vector.Vector[SessionEvent]
+  last_sequence : Int
 } derive(Eq, Debug)
 
 ///|

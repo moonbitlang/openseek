@@ -30,14 +30,14 @@ let title_file_name : String = "session-title"
 /// lines) and `session.lock`. The store is not a handle to one current
 /// session; APIs that operate on a session either take a `SessionId` or a
 /// `Session` carrying its id.
-pub struct SessionStore {
-  priv root : String
+struct SessionStore {
+  root : String
   // The last session value this store instance loaded from or persisted to
   // disk, per id, with the file fingerprint at that moment. Purely an
   // optimization: it lets the stale-snapshot check skip re-reading the whole
   // file on the common append path. Never required for correctness — a
   // missing or mismatching mark falls back to the full comparison.
-  priv marks : Map[String, DurableMark]
+  marks : Map[String, DurableMark]
 } derive(Debug)
 
 ///|
@@ -514,11 +514,11 @@ pub fn SessionStore::session_file(
 /// built without replaying the full event log, so it is suitable for pickers
 /// and `--session-list`. A row can also represent a damaged directory: in that
 /// case timestamp may be `None` and first prompt may be empty.
-pub struct SessionListing {
-  priv id : @agent_session.SessionId
-  priv last_active_unix_seconds : Int64?
-  priv first_prompt : String
-  priv title : String?
+struct SessionListing {
+  id : @agent_session.SessionId
+  last_active_unix_seconds : Int64?
+  first_prompt : String
+  title : String?
 } derive(Debug)
 
 ///|

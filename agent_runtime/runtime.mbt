@@ -37,20 +37,20 @@ pub(all) extenum AgentEvent {}
 ///
 /// It does not own background task lifetime. Tools that need to spawn bounded
 /// background work receive an `AgentTaskScope` alongside the runtime.
-pub struct AgentRuntime {
+struct AgentRuntime {
   /// Workspace root used by local tools when resolving relative paths.
   /// Defaults to "." so direct package users keep current-directory behavior.
-  priv workspace_root : String
+  workspace_root : String
   /// Bounded event bus (see `default_agent_event_capacity`) that background
   /// tools can post updates to; consumers choose when and how to drain and
   /// render retained tool output.
-  priv events : @aqueue.Queue[AgentEvent]
+  events : @aqueue.Queue[AgentEvent]
   /// Unbounded queue of typed mid-turn input. Deliberately separate from the
   /// lossy event bus: a noisy watcher may fill `events` and cause later runtime
   /// updates to be ignored, but user-visible input must never be the casualty.
-  priv steers : @aqueue.Queue[SteerInput]
-  priv user_input_changed : @async.CondVar
-  priv mut user_input_pending : Bool
+  steers : @aqueue.Queue[SteerInput]
+  user_input_changed : @async.CondVar
+  mut user_input_pending : Bool
   /// Where a tool's permission question goes, when anything can answer one
   /// (see `approval_channel`). `None` is the fail-closed default, and it is
   /// also what tells a tool registry not to advertise the arguments that ask.
@@ -58,7 +58,7 @@ pub struct AgentRuntime {
   /// A bare function rather than a service type, so a tool package asking for
   /// approval does not acquire a dependency on the protocol, the engine, or
   /// whichever controller happens to be attached.
-  priv approval : ApprovalChannel?
+  approval : ApprovalChannel?
 }
 
 ///|
@@ -108,8 +108,8 @@ pub fn AgentRuntime::workspace_root(self : AgentRuntime) -> String {
 /// the loop's task group exits. The type parameter `X` is the return type of
 /// that enclosing task group; it is carried through so MoonBit's task-group type
 /// remains precise.
-pub struct AgentTaskScope[X] {
-  priv group : @async.TaskGroup[X]
+struct AgentTaskScope[X] {
+  group : @async.TaskGroup[X]
 }
 
 ///|

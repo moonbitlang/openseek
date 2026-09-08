@@ -53,30 +53,30 @@ priv struct Tab {
 } derive(Eq)
 
 ///|
-pub struct State {
-  priv open : Bool
-  priv tabs : Array[Tab]
+struct State {
+  open : Bool
+  tabs : Array[Tab]
   /// The remembered active tab per workspace group, as an association list
   /// (small; a workspace rarely has more than a handful of tabs).
-  priv active : Array[(WorkspaceKey, String)]
+  active : Array[(WorkspaceKey, String)]
   /// The tab whose emulator element is currently displayed (`None` while
   /// the panel is closed). Mirrors imperative DOM state so `sync` can tell
   /// when a conversation switch must re-aim the display — the switch itself
   /// produces no terminal message.
-  priv shown : String?
+  shown : String?
   /// Session UUIDs whose exit event beat their `terminal_open` reply, paired
   /// with the channel used to discard that channel's pending output on loss.
   /// The reply is the first event that identifies the opening tab, so it
   /// consumes the pair and retires that tab instead of reviving an
   /// already-dead session.
-  priv exited_before_open : Array[(@interop.ChannelId, String)]
+  exited_before_open : Array[(@interop.ChannelId, String)]
   /// The color scheme last applied to every mounted emulator. Keeping this in
   /// model state lets `sync` refresh existing xterm instances exactly once
   /// when the application switches between light and dark mode.
-  priv synced_dark_mode : Bool?
+  synced_dark_mode : Bool?
   /// Root-owned input snapshot used to retire dead channels. Keeping it
   /// beside the tabs makes input reconciliation a normal state transition.
-  priv live_channels : Array[@interop.ChannelId]
+  live_channels : Array[@interop.ChannelId]
 } derive(Eq)
 
 ///|

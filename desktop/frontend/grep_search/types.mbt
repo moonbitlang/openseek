@@ -100,9 +100,9 @@ pub fn EditorHighlights::ranges(
 }
 
 ///|
-pub struct State {
-  priv page : Page
-  priv generation : Int
+struct State {
+  page : Page
+  generation : Int
 } derive(Eq)
 
 ///|

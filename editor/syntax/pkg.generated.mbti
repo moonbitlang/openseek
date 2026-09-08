@@ -69,9 +69,7 @@ pub fn TokenizationRegistry::on_did_change(Self, (TokenizationChangedEvent) -> U
 pub fn TokenizationRegistry::register(Self, String, &LineTokenizer) -> @common.Disposable
 pub fn TokenizationRegistry::set_color_map(Self, Array[String]) -> Unit
 
-pub struct TokenizerState {
-  // private fields
-} derive(Eq)
+type TokenizerState derive(Eq)
 pub fn TokenizerState::TokenizerState() -> Self
 pub fn TokenizerState::equal(Self, Self) -> Bool
 pub fn TokenizerState::last_mode(Self) -> Byte?

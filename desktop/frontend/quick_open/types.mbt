@@ -70,12 +70,12 @@ priv struct FileQueryCache {
 ///|
 /// The palette's whole state. The shell holds this value but cannot read into
 /// it; every transition goes through `open`, `handle`, or `reconcile`.
-pub struct State {
-  priv open : Open?
+struct State {
+  open : Open?
   /// Page-level counter, kept across close so an old reply cannot become
   /// current again by reopening the palette.
-  priv generation : Int
-  priv cache : FileQueryCache
+  generation : Int
+  cache : FileQueryCache
 } derive(Eq)
 
 ///|
