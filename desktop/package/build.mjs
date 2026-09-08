@@ -46,7 +46,7 @@ const EsbuildVersion = "0.28.1";
 // `desktop/main.mbt` too.
 const DevelopmentSuffix = ".dev";
 const DevelopmentConfig = "proton.project.dev.json";
-const DevelopmentProduct = "SeekMoon Dev";
+const DevelopmentProduct = "SeekMoonDev";
 
 // These archives already contain browser-ready distributions. Fetching the
 // exact tarballs avoids installing a package manager or recreating its
