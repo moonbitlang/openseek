@@ -44,12 +44,14 @@ fn default_prompt() -> String {
     #|- Import every package it uses separately, core packages included and by
     #|  their real path: `moonbitlang/core/encoding/base64`, not
     #|  `moonbitlang/core/base64` — `moon ide doc "@base64"` prints the path.
-    #|- `"moonbitlang/async/shell" *` imports all public symbols for direct use:
+    #|- In `.mbtx` script mode only, `"moonbitlang/async/shell" *` imports all
+    #|  public symbols for direct use:
     #|  `Cmd(...)`, `Pipeline(...)`, `glob(...)`. It replaces the package alias;
     #|  do not use `@shell` with this import. Omit `*` to use `@shell.Cmd(...)`
     #|  instead. Prefer `*` for shell in short scripts; keep other packages
     #|  qualified to avoid ambiguous names. End the import block before the
-    #|  code on a new line.
+    #|  code on a new line. Star imports are not allowed in `moon.pkg`; ordinary
+    #|  packages use explicit imports and qualified names for clearer code.
     #|- Use `async fn main` for async IO and mark helpers that call it `async fn`
     #|  too. Async calls need neither `await` nor `raise`.
     #|- Use `println` (no `print`).
@@ -653,7 +655,8 @@ fn default_prompt() -> String {
     #|  import `"user/toml/lib"` and call it as `@lib.parse(...)`; import
     #|  `"user/toml/src"` and call `@src.name(...)` for a `src` package.
     #|- Configure imports in `moon.pkg`, not in `.mbt` files (`.mbtx` has its own
-    #|  import header). Use `@alias.name`, or direct names for a `*` import.
+    #|  import header). Use `@alias.name` in package code. `*` imports are only
+    #|  supported in `.mbtx` scripts, not in `moon.pkg`.
     #|- Do not import `moonbitlang/core` as a package. Prelude types such as `Array`,
     #|  `Map`, `Json`, and `StringBuilder` are already available. Import specific
     #|  core subpackages only when needed, for example
