@@ -430,6 +430,7 @@ priv enum BlockContent {
   /// transcript under, when this transcript can hold one.
   Item(
     item~ : @transcript.TranscriptItem,
+    streaming~ : Bool,
     anchor~ : String?,
     step_label~ : String?,
     assistant_name~ : String,
@@ -497,6 +498,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
       key: TranscriptRenderKey::row(row.identity),
       content: Item(
         item~,
+        streaming=row.streaming,
         anchor~,
         step_label~,
         assistant_name~,
@@ -547,6 +549,7 @@ fn Block::render(self : Block, actions : Actions) -> @html.Html {
     Empty(empty) => empty.render(actions)
     Item(
       item~,
+      streaming~,
       anchor~,
       step_label~,
       assistant_name~,
@@ -556,6 +559,7 @@ fn Block::render(self : Block, actions : Actions) -> @html.Html {
       transcript_item_view(
         item,
         on_open,
+        streaming~,
         wait_labels~,
         anchor?,
         on_jump=target => (actions.jump)(target),

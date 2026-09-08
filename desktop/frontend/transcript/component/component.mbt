@@ -21,6 +21,8 @@ pub fn Source::wire(self : Source) -> String {
 pub(all) struct VisibleRow {
   item : @transcript.TranscriptItem
   identity : String
+  // A live provider item may contain an unfinished diagram fence.
+  streaming : Bool
 } derive(Eq)
 
 ///|
@@ -35,7 +37,7 @@ pub fn VisibleRow::history(
       Some(sequence) => "s\{sequence}"
       None => "l\{index}"
     }
-    rows.push({ item, identity, })
+    rows.push({ item, identity, streaming: false, })
   }
   rows
 }
@@ -847,6 +849,7 @@ test "local pinned transitions are pure" {
         {
           item: { kind: User("new turn"), ts: None, sequence: None, },
           identity: "l0",
+          streaming: false,
         },
       ],
     },

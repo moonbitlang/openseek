@@ -832,6 +832,7 @@ fn transcript_item_view(
   assistant_name? : String = "OpenSeek",
   step_label? : String,
   subrun? : SubrunLink,
+  streaming? : Bool = false,
 ) -> @html.Html {
   match item.kind {
     User(prompt) => user_message_view(prompt, anchor?, on_jump?)
@@ -847,6 +848,7 @@ fn transcript_item_view(
         step_label?,
         assistant_name~,
         finished~,
+        live=streaming,
         subrun?,
       )
     Answer(text) =>
@@ -876,9 +878,9 @@ fn transcript_item_view(
 ///|
 /// The agent's prose. A bubble still `streaming` is the in-flight answer
 /// rendered live from the engine's deltas: the partial text is re-parsed as
-/// markdown on every delta, and an unterminated construct (an open code
-/// fence, say) simply renders as plain text until its closing marker streams
-/// in. The committed response replaces it.
+/// markdown on every delta. Pass that lifecycle to Markdown explicitly:
+/// open diagram fences display code until cmark reports a closing marker;
+/// a completed message also renders diagrams whose fence never closed.
 fn assistant_message_view(
   content : String,
   on_open : (String) -> @cmd.Cmd,
@@ -903,7 +905,7 @@ fn assistant_message_view(
   } else {
     @html.div(
       class="msg-content markdown",
-      @markdown.markdown_nodes(content, open_file=on_open),
+      @markdown.markdown_nodes(content, open_file=on_open, streaming~),
     )
   }
   let children = [speaker_label(assistant_name), body]

@@ -91,6 +91,7 @@ pub fn State::git_details_open(Self) -> Bool
 pub fn State::has_active(Self) -> Bool
 pub fn State::is_busy(Self) -> Bool
 pub fn State::loose_entries(Self, SidebarContext) -> Array[@section.Entry]
+pub fn State::mark_visible_read(Self) -> Self
 pub fn State::model_listing(Self) -> CodexModelListing
 pub fn State::new_thread_cwd(Self) -> String
 pub fn State::not_equal(Self, Self) -> Bool
@@ -104,9 +105,15 @@ pub fn State::refresh(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Se
 pub fn State::sign_in_required(Self) -> Bool
 pub fn State::signed_in(Self) -> Bool
 pub fn State::transcript_items(Self) -> Array[@transcript.TranscriptItem]
+pub fn State::transcript_rows(Self) -> Array[TranscriptRow]
 pub fn State::with_editor_comment(Self, String, @common.Range, String, String, side? : @mention_context.AnnotationSide) -> Self
 pub fn State::with_git_details_closed(Self) -> Self
 pub fn State::worktree_launch_workspace(Self, @interop.ChannelId) -> @common.Uri?
+
+pub struct TranscriptRow {
+  item : @transcript.TranscriptItem
+  streaming : Bool
+}
 
 // Type aliases
 
