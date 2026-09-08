@@ -71,9 +71,20 @@ pub(all) enum RunningSubmit {
 } derive(Eq, @debug.Debug)
 
 ///|
+pub(all) enum FollowupChoice {
+  SteerNow
+  QueueNext
+} derive(Eq, @debug.Debug)
+
+///|
 pub(all) enum PrimaryAction {
   Send(available~ : Bool)
-  Running(steer_available~ : Bool, can_stop~ : Bool, submit~ : RunningSubmit)
+  Running(
+    steer_available~ : Bool,
+    can_stop~ : Bool,
+    submit~ : RunningSubmit,
+    queue_available~ : Bool
+  )
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -226,6 +237,11 @@ pub(all) struct Input {
 /// navigation, debounce ticks, and async replies remain private to the package.
 pub(all) enum Action {
   DraftSubmitted(identity~ : Identity, draft~ : Draft)
+  FollowupSubmitted(
+    identity~ : Identity,
+    draft~ : Draft,
+    choice~ : FollowupChoice
+  )
   DraftPresenceChanged(
     identity~ : Identity,
     present~ : Bool,
@@ -280,6 +296,7 @@ pub(all) enum Action {
 pub fn Action::identity(self : Action) -> Identity {
   match self {
     DraftSubmitted(identity~, ..)
+    | FollowupSubmitted(identity~, ..)
     | DraftPresenceChanged(identity~, ..)
     | RootMentionRemoved(identity~, ..)
     | SlashCommand(identity~, ..)
@@ -417,3 +434,9 @@ pub extend SlashCommand with Eq::{equal, not_equal}
 #deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
 #doc(hidden)
 pub extend StatusComponent with Eq::{equal, not_equal}
+
+///|
+pub extend FollowupChoice with Eq::{equal, not_equal}
+
+///|
+pub extend FollowupChoice with @debug.Debug::{to_repr}

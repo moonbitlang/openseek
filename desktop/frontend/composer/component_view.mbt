@@ -186,7 +186,8 @@ fn Entry::action_buttons(
           content: @icons.icon(@icons.icon_arrow_up),
         },
       ]
-    Running(steer_available~, can_stop~, submit~) => {
+    Running(steer_available~, can_stop~, submit~, ..) => {
+      let submit = self.running_submit(submit)
       let actions : Array[ActionButton] = [
         {
           id: "stop",
@@ -245,7 +246,14 @@ fn Entry::view(
     } else {
       self.draft.task
     },
-    placeholder: input.presentation.placeholder,
+    placeholder: if !goal_mode && self.submission_choice(input) is Some(choice) {
+      match choice {
+        SteerNow => "Steer the running task."
+        QueueNext => "Queue a follow-up for the next turn."
+      }
+    } else {
+      input.presentation.placeholder
+    },
     disabled: input.presentation.disabled,
     input: emit.map(value => TextChanged(value)),
     keyboard: {
@@ -264,10 +272,78 @@ fn Entry::view(
       component.render(self.identity(), action_emit)
     }),
     actions,
+    followup_menu: self.followup_menu(input, emit),
     overlay: if goal_mode {
       None
     } else {
       self.completion.map(completion => completion.view(emit))
     },
   }.render()
+}
+
+///|
+fn Entry::running_submit(
+  self : Entry,
+  default : RunningSubmit,
+) -> RunningSubmit {
+  if default is SaveQueue {
+    return SaveQueue
+  }
+  match self.followup_choice {
+    Some(SteerNow) => Steer
+    Some(QueueNext) => Queue
+    None => default
+  }
+}
+
+///|
+fn Entry::submission_choice(self : Entry, input : Input) -> FollowupChoice? {
+  guard input.presentation.primary_action
+    is Running(queue_available=true, submit~, ..) else {
+    return None
+  }
+  match self.running_submit(submit) {
+    Steer => Some(SteerNow)
+    Queue => Some(QueueNext)
+    SaveQueue => None
+  }
+}
+
+///|
+fn Entry::followup_menu(
+  self : Entry,
+  input : Input,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html? {
+  guard input.goal.draft is None &&
+    input.presentation.primary_action is Running(steer_available~, ..) &&
+    self.submission_choice(input) is Some(choice) else {
+    return None
+  }
+  Some(
+    @select_control.Control::{
+      id: "composer-followup-select",
+      groups: [
+        {
+          label: "This message",
+          options: [
+            { value: "steer", label: "Steer now", },
+            { value: "queue", label: "Queue next", },
+          ],
+        },
+      ],
+      selected: match choice {
+        SteerNow => "steer"
+        QueueNext => "queue"
+      },
+      disabled: !steer_available,
+      open: self.followup_menu_open,
+      toggle: emit(FollowupMenuToggled),
+      dismiss: emit(FollowupMenuDismissed),
+      change: emit.map(value => FollowupSelected(value)),
+      title: "Send this message now or after the current turn",
+      aria_label: "Follow-up action",
+      presentation: Composer("↳", true),
+    }.render(),
+  )
 }

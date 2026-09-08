@@ -719,11 +719,34 @@ priv struct View {
   keyboard : KeyboardActions
   status : Array[@html.Html]
   actions : Array[ActionButton]
+  followup_menu : @html.Html?
   overlay : @html.Html?
 }
 
 ///|
 fn View::render(self : View) -> @html.Html {
+  let actions : Array[@html.Html] = []
+  for action in self.actions {
+    if action.id != "stop" {
+      continue
+    }
+    actions.push(action.render())
+  }
+  actions.push(
+    @html.div(
+      class="composer-followup",
+      match self.followup_menu {
+        Some(menu) => [menu]
+        None => []
+      },
+    ),
+  )
+  for action in self.actions {
+    if action.id == "stop" {
+      continue
+    }
+    actions.push(action.render())
+  }
   let inner : Array[@html.Html] = [
     // Keep the input wrapper and its two children permanently mounted. Rabbita
     // diffs array children by position, so chips appearing must not replace
@@ -746,10 +769,7 @@ fn View::render(self : View) -> @html.Html {
     @html.div(class="composer-toolbar", [
       @html.div(class="composer-controls", [
         @html.div(class="composer-status", self.status),
-        @html.div(
-          class="composer-actions",
-          self.actions.map(action => action.render()),
-        ),
+        @html.div(class="composer-actions", actions),
       ]),
     ]),
   ]

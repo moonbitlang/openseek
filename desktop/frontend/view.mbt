@@ -1151,7 +1151,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             disabled=!settings_loaded,
           ),
         ],
-        desc="Steer is the default. Queue keeps follow-ups editable until their turn starts.",
+        desc="Default for messages sent while a task is running. Change it for one message beside the send button.",
       ),
       @settings.row(
         "Theme",

@@ -1870,6 +1870,7 @@ priv enum Msg {
   // Everything the Skills page does with itself once it is open.
   Skills(@skills.Msg)
   Send
+  SendFollowup(@composer.FollowupChoice)
   Stop
   // The user answered the active conversation's permission question. `allow`
   // grants the one action it asked about; the card stays until the engine's

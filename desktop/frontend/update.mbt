@@ -2293,7 +2293,8 @@ fn update_msg(
             _ => (@cmd.none, model)
           }
         }
-        @composer.DraftSubmitted(identity~, draft~) => {
+        @composer.DraftSubmitted(identity~, draft~)
+        | @composer.FollowupSubmitted(identity~, draft~, ..) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
@@ -2312,7 +2313,11 @@ fn update_msg(
             focused: conv.device,
             active_session: conv.session_id,
           }
-          let (command, submitted) = update_msg(dispatch, Send, target)
+          let submit = match action {
+            @composer.FollowupSubmitted(choice~, ..) => SendFollowup(choice)
+            _ => Send
+          }
+          let (command, submitted) = update_msg(dispatch, submit, target)
           (
             command,
             {
@@ -3579,7 +3584,12 @@ fn update_msg(
       }
       (@cmd.batch([page_cmd, fetch_installed_skills(dispatch, channel)]), model)
     }
-    Send => {
+    Send | SendFollowup(_) => {
+      let followup_behavior = match msg {
+        SendFollowup(@composer.SteerNow) => FollowupSteer
+        SendFollowup(@composer.QueueNext) => FollowupQueue
+        _ => model.followup_behavior
+      }
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
       }
@@ -3629,9 +3639,9 @@ fn update_msg(
             task,
             conv.task,
             conv.mentions,
-            model.followup_behavior,
+            followup_behavior,
           )
-          let command = if model.followup_behavior is FollowupQueue {
+          let command = if followup_behavior is FollowupQueue {
             queue_openseek(
               dispatch,
               model.focused,

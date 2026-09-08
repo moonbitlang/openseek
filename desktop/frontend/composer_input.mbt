@@ -28,6 +28,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     checkout_ready
   let primary_action : @composer.PrimaryAction = if conv.is_running() {
     @composer.Running(
+      queue_available=true,
       steer_available=root_ready &&
         conv.run is Open(stage~, ..) &&
         !(stage is Cancelling),

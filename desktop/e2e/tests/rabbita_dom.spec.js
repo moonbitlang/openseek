@@ -1796,3 +1796,41 @@ test('workspace settings open and persist per-workspace choices', async ({ page 
 
   expect(app.pageErrors).toEqual([]);
 });
+
+
+test('composer selects queue for one message and preserves queued controls', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const composer = page.locator('#task');
+  await composer.fill('Start a turn');
+  await page.getByTitle('Send', { exact: true }).click();
+  const choice = page.getByRole('button', { name: 'Follow-up action', exact: true });
+  await expect(choice).toContainText('Steer now');
+  await composer.fill('Do this after the turn');
+  await choice.click();
+  await page.getByRole('option', { name: 'Queue next', exact: true }).click();
+  await expect(choice).toContainText('Queue next');
+  await expect(page.getByTitle('Queue for the next turn', { exact: true })).toBeVisible();
+  await composer.press('Enter');
+  await expect.poll(() => app.requests.find(r => r.method === 'agent.queue'))
+    .toMatchObject({ params: { action: 'add', text: 'Do this after the turn', run_id: 'run-e2e' } });
+  await expect(choice).toContainText('Steer now');
+  const queued = page.locator('.queued-input-row');
+  await expect(queued).toContainText('Do this after the turn');
+  await queued.getByTitle('Edit', { exact: true }).click();
+  await expect(choice).toBeHidden();
+  await composer.fill('Edited follow-up');
+  await page.getByTitle('Save queued message', { exact: true }).click();
+  await expect(queued).toContainText('Edited follow-up');
+  await expect(choice).toContainText('Steer now');
+  await queued.getByTitle('Delete', { exact: true }).click();
+  await expect(queued).toHaveCount(0);
+  await composer.fill('An immediate correction');
+  await page.getByTitle('Steer the running task', { exact: true }).click();
+  await expect.poll(() => app.requests.find(r => r.method === 'agent.steer'))
+    .toMatchObject({ params: { text: 'An immediate correction', run_id: 'run-e2e' } });
+  expect(app.requests.filter(r => r.method === 'settings.set')).toEqual([]);
+  expect(app.pageErrors).toEqual([]);
+});

@@ -88,7 +88,15 @@ a finish cannot outrun the canonical row. The UI likewise renders
 `assistant_delta` as a live answer bubble, while durable `session.event`
 commits remain the only permanent transcript source.
 
-Submitting while a turn runs steers it instead of starting a new prompt: the
+While a turn runs, the composer exposes a **Steer now / Queue next** selector
+beside Send. It starts from Settings → Interface → Follow-up messages, applies
+only to this message, and resets to that default after submission. Enter and
+the send button use the same selection. Queue keeps the follow-up editable
+and deletable above the composer until its turn starts; its Steer button can
+apply it to the current turn instead. Editing a queued message exposes Save
+and hides the selector. Codex mode currently retains its steer-only action.
+
+Steer adds input to the current turn instead of starting a new prompt: the
 text rides the serve engine's lossless steering queue and is folded into the
 running turn at its next step boundary. The composer's action group grows
 while a turn runs — the interrupt (■) stays available throughout, and typed
