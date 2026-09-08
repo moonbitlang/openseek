@@ -77,6 +77,13 @@ Without `stream`, `Client::chat` builds the same JSON body as
 configuration, then posts it to `api_url` with `Content-Type:
 application/json` and bearer authorization.
 
+When `api_url` is OpenRouter's canonical
+`https://openrouter.ai/api/v1/chat/completions` endpoint, the client maps
+DeepSeek V4 models to OpenRouter's namespaced ids and translates the configured
+thinking effort to OpenRouter's portable `reasoning` object. Both
+`reasoning_content` and OpenRouter's `reasoning` response field are normalized
+into `ChatResponse::reasoning_content`.
+
 Use `tools=[...]` when the model may request native function calls.
 Use `response_format=JsonObject` only when the assistant content itself must be
 a JSON object.

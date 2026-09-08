@@ -1752,6 +1752,35 @@ test('settings persist host API changes through settings.set', async ({ page }) 
   expect(app.pageErrors).toEqual([]);
 });
 
+test('initial API setup accepts an OpenRouter key and DeepSeek model', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.hostSettings.has_deepseek_key = false;
+  await app.install();
+  await app.goto();
+
+  await expect(page.getByText('Set up your DeepSeek API key')).toBeVisible();
+  await page.getByRole('button', { name: 'API endpoint' }).click();
+  await page.getByRole('option', { name: 'OpenRouter' }).click();
+  const model = page.getByRole('textbox', { name: 'OpenRouter model' });
+  await expect(model).toHaveValue('deepseek/deepseek-v4-flash');
+  await model.fill('deepseek/deepseek-v4-pro');
+  await page.getByLabel('API key').fill('sk-openrouter-test');
+  await page.getByRole('button', { name: 'Save API key' }).click();
+
+  await expect.poll(() => app.requests.some(request =>
+    request.method === 'settings.set' &&
+    request.params?.provider === 'custom' &&
+    request.params?.custom_api_url === 'https://openrouter.ai/api/v1/chat/completions')).toBe(true);
+  await expect.poll(() => app.requests.some(request =>
+    request.method === 'settings.set' &&
+    request.params?.provider === 'custom' &&
+    request.params?.custom_api_key === 'sk-openrouter-test')).toBe(true);
+  await expect(page.getByText('Set up OpenRouter')).toBeHidden();
+  expect(app.hostSettings.has_deepseek_key).toBe(false);
+  expect(app.hostSettings.has_custom_key).toBe(true);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('skills installs a catalog entry and refreshes the installed library', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();

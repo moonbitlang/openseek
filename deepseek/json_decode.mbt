@@ -147,16 +147,21 @@ pub impl FromJson for ChatResponse with fn from_json(
       )
   }
   let reasoning_content = match message_fields {
-    {
-      "reasoning_content"? : Some(String(reasoning_content))
-      | (Some(Null) | None with reasoning_content = ""),
-      ..
-    } => reasoning_content
-    _ =>
+    { "reasoning_content": String(reasoning_content), .. } => reasoning_content
+    { "reasoning_content": Null, .. } => ""
+    { "reasoning_content": _, .. } =>
       json_decode_error(
         message_path.add_key("reasoning_content"),
         "ChatResponse::from_json: expected reasoning_content string",
       )
+    { "reasoning": String(reasoning), .. } => reasoning
+    { "reasoning": Null, .. } => ""
+    { "reasoning": _, .. } =>
+      json_decode_error(
+        message_path.add_key("reasoning"),
+        "ChatResponse::from_json: expected reasoning string",
+      )
+    _ => ""
   }
   let usage = match usage_json {
     Some(usage) => FromJson::from_json(usage, path.add_key("usage"))

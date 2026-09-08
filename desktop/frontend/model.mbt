@@ -404,9 +404,13 @@ fn AppFontSize::pixels(self : AppFontSize) -> Double {
 }
 
 ///|
+const OpenRouterChatCompletionsUrl : String = "https://openrouter.ai/api/v1/chat/completions"
+
+///|
 /// Which chat-completions endpoint the engine talks to. SeekMoon runs are
 /// bring-your-own-key only: the hosted proxy is retired. `Deepseek` is the
-/// official endpoint and needs the user's own key; `Custom` is any other
+/// official endpoint and needs the user's own key; `OpenRouter` is a preset
+/// over the existing custom endpoint; `Custom` accepts any other
 /// OpenAI-compatible endpoint, whose key is optional. The retired hosted
 /// names (`openseek` / `openseek-staging`) parse as `Deepseek` so old
 /// stores and old clients land on the BYOK default instead of wedging.
@@ -416,6 +420,7 @@ fn AppFontSize::pixels(self : AppFontSize) -> Double {
 priv enum ApiProvider {
   Deepseek
   Glm
+  OpenRouter
   Custom
 } derive(Eq)
 
@@ -447,6 +452,7 @@ fn ApiProvider::wire(self : ApiProvider) -> String {
   match self {
     Deepseek => "deepseek"
     Glm => "glm"
+    OpenRouter => "openrouter"
     Custom => "custom"
   }
 }
@@ -459,6 +465,7 @@ fn ApiProvider::parse(value : String) -> ApiProvider {
   match value.trim().to_owned() {
     "openseek" | "openseek-staging" | "deepseek" => Deepseek
     "glm" => Glm
+    "openrouter" => OpenRouter
     "custom" => Custom
     _ => Deepseek
   }
@@ -469,13 +476,13 @@ fn ApiProvider::parse(value : String) -> ApiProvider {
 /// the page's last model choice belong to different known model families.
 fn ApiProvider::default_model(self : ApiProvider) -> EngineModel {
   match self {
-    Deepseek | Custom => DsFlash
+    Deepseek | OpenRouter | Custom => DsFlash
     Glm => Glm53
   }
 }
 
 ///|
-/// Whether a known model belongs to the official provider. Custom endpoints
+/// Whether a known model belongs to the selected provider. Custom endpoints
 /// deliberately accept every model, and an unknown wire name stays pinned so
 /// a newer engine's model is never silently replaced by an older frontend.
 fn EngineModel::matches_provider(
@@ -484,8 +491,31 @@ fn EngineModel::matches_provider(
 ) -> Bool {
   match (provider, self) {
     (Custom, _) | (_, Other(_)) => true
-    (Deepseek, DsPro | DsFlash) | (Glm, Glm53 | Glm53Flash) => true
+    (Deepseek | OpenRouter, DsPro | DsFlash) | (Glm, Glm53 | Glm53Flash) => true
     _ => false
+  }
+}
+
+///|
+/// OpenRouter currently carries the DeepSeek models understood by the engine.
+/// Accept direct-API names as conveniences while showing canonical,
+/// namespaced OpenRouter ids in the setup field.
+fn parse_openrouter_model(value : String) -> EngineModel? {
+  match value.trim().to_owned() {
+    "deepseek-v4-pro" | "deepseek/deepseek-v4-pro" => Some(DsPro)
+    "deepseek-v4-flash" | "deepseek/deepseek-v4-flash" => Some(DsFlash)
+    _ => None
+  }
+}
+
+///|
+fn EngineModel::openrouter_wire(self : EngineModel) -> String? {
+  match self {
+    DsPro => Some("deepseek/deepseek-v4-pro")
+    DsFlash => Some("deepseek/deepseek-v4-flash")
+    Other(name) =>
+      parse_openrouter_model(name).bind(model => model.openrouter_wire())
+    Glm53 | Glm53Flash => None
   }
 }
 
@@ -1399,6 +1429,9 @@ priv struct Model {
   api_provider : ApiProvider
   custom_api_url : String
   followup_behavior : FollowupBehavior
+  // Editable only in the initial OpenRouter setup. A valid value also feeds
+  // `default_model`, which remains the conversation-level source of truth.
+  openrouter_model : String?
   // Host-settings writes still in flight. While any are, incoming
   // `settings.changed` broadcasts and `settings.get` replies may predate an
   // optimistic edit, so the newest revision is deferred until the last write
@@ -1762,6 +1795,7 @@ priv enum Msg {
   ProviderChanged(String)
   FollowupBehaviorChanged(String)
   CustomApiUrlChanged(String)
+  OpenRouterModelChanged(String)
   // The Settings choice of which window corner error toasts pop up in.
   NotificationCornerChanged(String)
   // The Settings choice of where the editor's file tree docks.
@@ -2578,6 +2612,7 @@ fn initial_model() -> Model {
     api_provider: Deepseek,
     custom_api_url: "",
     followup_behavior: FollowupSteer,
+    openrouter_model: Some("deepseek/deepseek-v4-flash"),
     settings_saves: 0,
     host_settings_revision: -1,
     deferred_host_settings: None,
@@ -2783,16 +2818,35 @@ fn Model::clear_host_settings(self : Model) -> Model {
 /// mirrors the store, so a payload applied from a deferred flush can never
 /// yank the screen around on its own.
 fn Model::apply_host_settings(self : Model, settings : HostSettings) -> Model {
+  let provider = if settings.provider == "custom" &&
+    settings.custom_api_url == OpenRouterChatCompletionsUrl {
+    OpenRouter
+  } else {
+    ApiProvider::parse(settings.provider)
+  }
+  let openrouter_model = if provider is OpenRouter {
+    if self.api_provider is OpenRouter {
+      self.openrouter_model
+    } else {
+      match self.default_model.openrouter_wire() {
+        Some(model) => Some(model)
+        None => self.openrouter_model
+      }
+    }
+  } else {
+    self.openrouter_model
+  }
   let next = {
     ..self,
     host_settings_revision: settings.revision,
     deferred_host_settings: None,
-    api_provider: ApiProvider::parse(settings.provider),
+    api_provider: provider,
     custom_api_url: settings.custom_api_url,
     followup_behavior: FollowupBehavior::parse(settings.followup_behavior),
     deepseek_key_saved: settings.has_deepseek_key,
     glm_key_saved: settings.has_glm_key,
     custom_key_saved: settings.has_custom_key,
+    openrouter_model,
   }
   next.align_fresh_conversation_with_provider()
 }
@@ -2901,14 +2955,17 @@ fn Model::settle_api_setup(self : Model) -> Model {
 }
 
 ///|
-/// Whether the configured endpoint is usable as it stands: the official
-/// endpoint needs a key stored on the host, and a custom endpoint needs a
-/// plausible URL. The credentials themselves live on the host; a start
-/// carries none.
+/// Whether the configured endpoint is usable as it stands: keyed providers
+/// need their own credential, OpenRouter also needs a supported DeepSeek model,
+/// and a custom endpoint needs a plausible URL. The credentials themselves
+/// live on the host; a start carries none.
 fn Model::api_ready(self : Model) -> Bool {
   match self.api_provider {
     Deepseek => self.deepseek_key_saved
     Glm => self.glm_key_saved
+    OpenRouter =>
+      self.custom_key_saved &&
+      self.openrouter_model.bind(parse_openrouter_model) is Some(_)
     Custom => plausible_endpoint_url(self.custom_api_url)
   }
 }
@@ -2929,7 +2986,7 @@ fn plausible_endpoint_url(url : String) -> Bool {
 fn Model::settings_status(self : Model) -> Status {
   if self.api_ready() {
     Ready
-  } else if self.api_provider is (Deepseek | Glm) {
+  } else if self.api_provider is (Deepseek | Glm | OpenRouter) {
     ApiKeyRequired
   } else {
     SetupRequired

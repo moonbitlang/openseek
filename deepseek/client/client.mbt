@@ -8,6 +8,9 @@ const KimiDefaultApiUrl : String = "https://api.moonshot.cn/v1/chat/completions"
 const GlmDefaultApiUrl : String = "https://api.z.ai/api/paas/v4/chat/completions"
 
 ///|
+const OpenRouterChatCompletionsUrl : String = "https://openrouter.ai/api/v1/chat/completions"
+
+///|
 let default_model : @deepseek.Model = Deepseek(V4Pro)
 
 ///|
@@ -17,6 +20,34 @@ fn default_api_url_for_model(model : @deepseek.Model) -> String {
     Glm(_) => GlmDefaultApiUrl
     Deepseek(_) => DeepSeekDefaultApiUrl
   }
+}
+
+///|
+/// OpenRouter is OpenAI-compatible, but its DeepSeek catalog uses namespaced
+/// model ids and its portable reasoning control instead of DeepSeek's native
+/// `thinking` object. Keep that endpoint-specific translation at the transport
+/// boundary so the rest of OpenSeek can continue to reason about the same
+/// typed DeepSeek model.
+fn adapt_chat_request_for_endpoint(
+  api_url : String,
+  model : @deepseek.Model,
+  thinking : @deepseek.ThinkingMode,
+  body : Json,
+) -> Json {
+  guard api_url == OpenRouterChatCompletionsUrl && model is Deepseek(_) else {
+    return body
+  }
+  guard body is Object(fields) else { return body }
+  fields["model"] = "deepseek/\{model}"
+  fields.remove("thinking")
+  fields.remove("reasoning_effort")
+  let effort = match thinking {
+    No => "none"
+    High => "high"
+    Max => "max"
+  }
+  fields["reasoning"] = { "effort": effort }
+  Json(fields)
 }
 
 ///|
@@ -232,13 +263,18 @@ pub async fn Client::chat(
   stream? : StreamHandler,
 ) -> @deepseek.ChatResponse {
   let is_streaming = stream is Some(_)
-  let body = @deepseek.encode_chat_request(
-    model=self.model,
-    tools~,
-    thinking=self.thinking,
-    stream=is_streaming,
-    response_format?,
-  ) <| messages
+  let body = adapt_chat_request_for_endpoint(
+    self.api_url,
+    self.model,
+    self.thinking,
+    @deepseek.encode_chat_request(
+      model=self.model,
+      tools~,
+      thinking=self.thinking,
+      stream=is_streaming,
+      response_format?,
+    ) <| messages,
+  )
   try {
     match stream {
       None => self.with_retries(() => self.chat_attempt(body), _ => false)

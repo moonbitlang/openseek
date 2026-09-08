@@ -95,10 +95,21 @@ fn push_host_settings(
 ///|
 fn provider_settings_patch(
   provider : ApiProvider,
+  custom_api_url : String,
 ) -> @protocol.SettingsSetPayload {
   {
-    provider: Some(provider.wire()),
-    custom_api_url: None,
+    provider: Some(
+      if provider is OpenRouter {
+        "custom"
+      } else {
+        provider.wire()
+      },
+    ),
+    custom_api_url: match provider {
+      OpenRouter => Some(OpenRouterChatCompletionsUrl)
+      Custom if custom_api_url == OpenRouterChatCompletionsUrl => Some("")
+      _ => None
+    },
     deepseek_api_key: None,
     glm_api_key: None,
     custom_api_key: None,
@@ -126,8 +137,18 @@ fn api_key_settings_patch(
   key : String,
 ) -> @protocol.SettingsSetPayload {
   {
-    provider: None,
-    custom_api_url: None,
+    provider: Some(
+      if provider is OpenRouter {
+        "custom"
+      } else {
+        provider.wire()
+      },
+    ),
+    custom_api_url: if provider is OpenRouter {
+      Some(OpenRouterChatCompletionsUrl)
+    } else {
+      None
+    },
     deepseek_api_key: if provider is Deepseek {
       Some(key)
     } else {
@@ -138,13 +159,30 @@ fn api_key_settings_patch(
     } else {
       None
     },
-    custom_api_key: if provider is Custom {
+    custom_api_key: if provider is (OpenRouter | Custom) {
       Some(key)
     } else {
       None
     },
     followup_behavior: None,
   }
+}
+
+///|
+test "OpenRouter is an atomic custom-backend preset" {
+  json_inspect(provider_settings_patch(OpenRouter, "").to_json(), content={
+    "provider": "custom",
+    "custom_api_url": "https://openrouter.ai/api/v1/chat/completions",
+  })
+  json_inspect(api_key_settings_patch(OpenRouter, "sk-openrouter").to_json(), content={
+    "provider": "custom",
+    "custom_api_url": "https://openrouter.ai/api/v1/chat/completions",
+    "custom_api_key": "sk-openrouter",
+  })
+  json_inspect(
+    provider_settings_patch(Custom, OpenRouterChatCompletionsUrl).to_json(),
+    content={ "provider": "custom", "custom_api_url": "" },
+  )
 }
 
 ///|

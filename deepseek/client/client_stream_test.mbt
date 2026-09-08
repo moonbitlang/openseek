@@ -36,6 +36,9 @@ async fn stream_test_server(
           "data: {\"choices\":[{\"delta\":{\"content\":\" world\",\"reasoning_content\":\"hidden\",\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"read\",\"arguments\":\"{\\\"path\\\"\"}}]}}]}\n\n",
         )
         conn.write(
+          "data: {\"choices\":[{\"delta\":{\"reasoning\":\" via OpenRouter\"}}]}\n\n",
+        )
+        conn.write(
           if kimi_usage {
             "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\":\\\"moon.mod\\\"}\"}}]},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":5,\"total_tokens\":8}}\n\n"
           } else {
@@ -74,13 +77,13 @@ async test "chat stream handler accumulates SSE content, tool calls, and usage" 
       ),
     )
     assert_eq(deltas.join("|"), "Hello| world")
-    assert_eq(reasoning_deltas.join("|"), "hidden")
+    assert_eq(reasoning_deltas.join("|"), "hidden| via OpenRouter")
     assert_eq(
       callbacks.join("|"),
-      "content:Hello|reasoning:hidden|content: world",
+      "content:Hello|reasoning:hidden|content: world|reasoning: via OpenRouter",
     )
     assert_eq(response.content, "Hello world")
-    assert_eq(response.reasoning_content, "hidden")
+    assert_eq(response.reasoning_content, "hidden via OpenRouter")
     assert_eq(response.tool_calls.length(), 1)
     assert_eq(response.tool_calls[0].id, "call_1")
     assert_eq(response.tool_calls[0].name, "read")

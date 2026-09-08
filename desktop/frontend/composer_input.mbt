@@ -85,6 +85,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       "No endpoint URL configured — Send is disabled."
     } else if self.api_provider is Glm {
       "No GLM API key configured — Send is disabled."
+    } else if self.api_provider is OpenRouter {
+      "OpenRouter needs an API key and supported DeepSeek model — Send is disabled."
     } else {
       "No DeepSeek API key configured — Send is disabled."
     }

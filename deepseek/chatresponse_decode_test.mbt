@@ -202,6 +202,19 @@ test "chat response decode rejects malformed reasoning_content" {
 }
 
 ///|
+test "chat response accepts OpenRouter reasoning alias" {
+  let response : @deepseek.ChatResponse = @json.from_json(
+    @json.parse(
+      (
+        #|{"choices":[{"message":{"role":"assistant","content":"done","reasoning":"checked the workspace"}}]}
+      ),
+    ),
+  )
+  assert_eq(response.content, "done")
+  assert_eq(response.reasoning_content, "checked the workspace")
+}
+
+///|
 test "chat response decode rejects malformed tool_calls" {
   try
     decode_chat_response(
