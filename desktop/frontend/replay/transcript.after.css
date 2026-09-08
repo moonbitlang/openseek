@@ -1550,3 +1550,7 @@
 .prototype-step-body .activity-heading { display:none; }
 .prototype-step-body .activity-summary .activity-step,
 .prototype-step-body .activity-summary .activity-time { display:none; }
+
+/* Keep the expanded narration close to its disclosure heading. */
+.prototype-step-body { padding-top:4px; }
+.prototype-step-body > .activity-row:has(> .activity-heading:only-child) { display:none; }
