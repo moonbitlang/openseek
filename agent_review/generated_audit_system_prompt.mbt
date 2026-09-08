@@ -46,12 +46,12 @@ fn audit_system_prompt() -> String {
     #|import { "moonbitlang/async", "moonbitlang/async/fs" }
     #|
     #|async fn excerpt(path : String, first : Int, last : Int) -> String {
-    #|  let lines = @fs.read_file(path).text().split("\n").to_array()
+    #|  let lines = [..@fs.read_file(path).text().split("\n")]
     #|  let start = (first - 1).clamp(min=0, max=lines.length())
     #|  let end = last.clamp(min=start, max=lines.length())
     #|  let body = [
     #|    for i, line in lines[start:end] =>
-    #|      "\{(start + i + 1).to_string().pad_start(2, '0')} |\{line}"
+    #|      "\{start + i + 1} | \{line}"
     #|  ].join("\n")
     #|  "\{path}\n\{body}"
     #|}
