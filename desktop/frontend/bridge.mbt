@@ -668,30 +668,17 @@ fn started_msg(
   // malformed and dropped. The durable `session_root` is genuinely optional,
   // and the host resolved it itself, so this is the decode boundary where its
   // absolute provenance is collapsed into the type.
-  let session = payload.session
-  guard !session.is_empty() &&
-    payload.model is Some(model) &&
-    EngineModel::parse(model) is Some(model) &&
-    payload.max_steps is Some(max_steps) else {
+  guard RecoveredRun::from_started(channel, payload) is Some(run) else {
     return None
-  }
-  let session_root = match payload.session_root {
-    Some(path) => {
-      guard @resource.of_path(channel, path) is Some(absolute) else {
-        return None
-      }
-      Some(absolute)
-    }
-    None => None
   }
   Some(
     Started(
-      run_id=payload.run_id,
-      session~,
-      model~,
-      max_steps~,
-      session_root~,
-      submission_id=payload.submission_id,
+      run_id=run.run_id,
+      session=run.session,
+      model=run.model,
+      max_steps=run.max_steps,
+      session_root=run.session_root,
+      submission_id=run.submission_id,
     ),
   )
 }
@@ -1249,6 +1236,20 @@ fn queue_openseek(
 ) -> @cmd.Cmd {
   let root_dispatch = dispatch
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
+  // Both endings refuse the same way — the host rejected the call, or it
+  // answered that the queued message is gone. Only the wording differs.
+  let refuse : (String) -> @cmd.Cmd = message => {
+    match action {
+      QueueAdd(id~, ..) =>
+        dispatch(QueueAddRejected(session~, submission_id=id, run_id~))
+      QueueSteer(id~) =>
+        dispatch(
+          QueueSteerRejected(session~, submission_id=id, run_id~, message~),
+        )
+      QueueEdit(..) | QueueWithdraw(..) =>
+        root_dispatch(HostActionFailed(message))
+    }
+  }
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let accepted = try {
@@ -1260,49 +1261,13 @@ fn queue_openseek(
       } catch {
         error => {
           scheduler.add(
-            match action {
-              QueueAdd(id~, ..) =>
-                dispatch(QueueAddRejected(session~, submission_id=id, run_id~))
-              QueueSteer(id~) =>
-                dispatch(
-                  QueueSteerRejected(
-                    session~,
-                    submission_id=id,
-                    run_id~,
-                    message="Queue action failed: \{@interop.bridge_error_text(error)}",
-                  ),
-                )
-              QueueEdit(..) | QueueWithdraw(..) =>
-                root_dispatch(
-                  HostActionFailed(
-                    "Queue action failed: \{@interop.bridge_error_text(error)}",
-                  ),
-                )
-            },
+            refuse("Queue action failed: \{@interop.bridge_error_text(error)}"),
           )
           return
         }
       }
       if !accepted {
-        scheduler.add(
-          match action {
-            QueueAdd(id~, ..) =>
-              dispatch(QueueAddRejected(session~, submission_id=id, run_id~))
-            QueueSteer(id~) =>
-              dispatch(
-                QueueSteerRejected(
-                  session~,
-                  submission_id=id,
-                  run_id~,
-                  message="The queued message is no longer available.",
-                ),
-              )
-            QueueEdit(..) | QueueWithdraw(..) =>
-              root_dispatch(
-                HostActionFailed("The queued message is no longer available."),
-              )
-          },
-        )
+        scheduler.add(refuse("The queued message is no longer available."))
       } else {
         scheduler.add(dispatch(QueueAccepted(session~, action~, run_id~)))
       }
@@ -1537,6 +1502,12 @@ fn approve_openseek(
   allow~ : Bool,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
+    // Both endings put the card back and say why: nothing else will, since a
+    // settlement only follows a decision that actually arrived.
+    let restore = (message : String) => {
+      scheduler.add(dispatch(ApprovalAnswerFailed(channel~, session~, id~)))
+      scheduler.add(dispatch(HostActionFailed(message)))
+    }
     @js.async_run(() => {
       let reply : @protocol.ApprovalReply = @interop.bridge_request(
         channel,
@@ -1544,14 +1515,9 @@ fn approve_openseek(
         { id, allow, run_id, },
       ) catch {
         error => {
-          scheduler.add(dispatch(ApprovalAnswerFailed(channel~, session~, id~)))
-          scheduler.add(
-            dispatch(
-              HostActionFailed(
-                "Failed to answer the approval request: " +
-                @interop.bridge_error_text(error),
-              ),
-            ),
+          restore(
+            "Failed to answer the approval request: " +
+            @interop.bridge_error_text(error),
           )
           return
         }
@@ -1560,13 +1526,8 @@ fn approve_openseek(
         // The host had no live engine to hand it to. Restore it anyway: being
         // refused a second time is a better end than a card that cannot be
         // pressed at all.
-        scheduler.add(dispatch(ApprovalAnswerFailed(channel~, session~, id~)))
-        scheduler.add(
-          dispatch(
-            HostActionFailed(
-              "That approval request is no longer waiting — the turn it belonged to has ended.",
-            ),
-          ),
+        restore(
+          "That approval request is no longer waiting — the turn it belonged to has ended.",
         )
       }
     })

@@ -193,13 +193,9 @@ async fn EngineManager::claim_session_family_move(
   let (workspace, workspace_token) = if selected is Some(selected) {
     (Some(selected.workspace), selected.workspace_token)
   } else {
-    let mut workspace : @pathx.Absolute? = None
-    for project in @workspaces.registered() {
-      if @workspaces.store_root(project) == root {
-        workspace = Some(project)
-        break
-      }
-    }
+    let workspace = @workspaces.registered()
+      .iter()
+      .find_first(project => @workspaces.store_root(project) == root)
     let workspace_token = match workspace {
       Some(project) => project.resource_path()
       None => ""
@@ -331,25 +327,10 @@ async fn move_session_family(
         moved.push(session_id)
       }
     } catch {
-      error => {
-        let mut rollback_failed = false
-        for session_id in moved.rev_iter() {
-          move_session_record(destination.join(session_id), source, session_id) catch {
-            _ => rollback_failed = true
-          }
-        }
-        let detail = match error {
-          EngineError(detail) => detail
-          _ => "\{error}"
-        }
-        raise EngineError(
-          if rollback_failed {
-            "\{detail}; some session-family moves could not be rolled back"
-          } else {
-            detail
-          },
+      error =>
+        raise_after_rollback(
+          moved, destination, source, error, "some session-family moves could not be rolled back",
         )
-      }
     }
     for session_id in order {
       on_committed(session_id, family.workspace_token)
@@ -568,30 +549,46 @@ async fn SessionFamilyMove::delete_archived_records(
       }
       self.remove_worktree_placements(on_committed?=on_worktree_changed)
     } catch {
-      error => {
-        let mut rollback_failed = false
-        for session_id in moved.rev_iter() {
-          move_session_record(deleting.join(session_id), archived, session_id) catch {
-            _ => rollback_failed = true
-          }
-        }
-        let detail = match error {
-          EngineError(detail) => detail
-          _ => "\{error}"
-        }
-        raise EngineError(
-          if rollback_failed {
-            "\{detail}; some condemned conversation records could not be restored"
-          } else {
-            detail
-          },
+      error =>
+        raise_after_rollback(
+          moved, deleting, archived, error, "some condemned conversation records could not be restored",
         )
-      }
     }
     for session_id in order {
       on_committed(session_id, self.workspace_token)
     }
   })
+}
+
+///|
+/// Put the records already moved out of `from` back into `to`, newest move
+/// first, then refuse with the failure that stopped the family mid-move. When
+/// the undo itself fails the refusal also carries `rollback_detail`, so the
+/// caller learns the store was left in a mixed state rather than restored.
+async fn raise_after_rollback(
+  moved : Array[String],
+  from : @pathx.Absolute,
+  to : @pathx.Absolute,
+  error : Error,
+  rollback_detail : String,
+) -> Unit {
+  let mut rollback_failed = false
+  for session_id in moved.rev_iter() {
+    move_session_record(from.join(session_id), to, session_id) catch {
+      _ => rollback_failed = true
+    }
+  }
+  let detail = match error {
+    EngineError(detail) => detail
+    _ => "\{error}"
+  }
+  raise EngineError(
+    if rollback_failed {
+      "\{detail}; \{rollback_detail}"
+    } else {
+      detail
+    },
+  )
 }
 
 ///|
@@ -663,6 +660,22 @@ fn restore_home_env(previous : String?) -> Unit {
 }
 
 ///|
+/// The `EngineError` message `body` refuses with, or "no error" when it
+/// commits. Cancellation is never a refusal and stays observable, so a test
+/// torn down mid-operation still fails as cancelled instead of silently
+/// reading the cancellation as the refusal it was asserting on.
+async fn engine_refusal(body : async () -> Unit) -> String {
+  try {
+    body()
+    "no error"
+  } catch {
+    EngineError(detail) => detail
+    error if @async.is_being_cancelled() => raise error
+    error => "\{error}"
+  }
+}
+
+///|
 #cfg(not(platform="windows"))
 async test "archive refuses a durable record while the pump is stopped" {
   ambient_env_test_lock.acquire()
@@ -677,18 +690,13 @@ async test "archive refuses a durable record while the pump is stopped" {
   @fsx.ensure_dir(Path(store + "/sessions/s-stopped"))
   let manager = new_engine_manager("unused")
   let committed = Ref(false)
-  let detail = try {
+  let detail = engine_refusal(() => {
     ignore(
       archive_session_commit(manager, "s-stopped", (_, _) => {
         committed.val = true
       }),
     )
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  })
   assert_true(detail.contains("not connected"))
   assert_false(committed.val)
   assert_true(@fsx.is_dir(Path(store + "/sessions/s-stopped")))
@@ -913,19 +921,14 @@ async test "permanent deletion refuses a live twin in the selected store" {
   )
   let manager = new_engine_manager("unused")
   manager.pump = Serving(sessions=Map([]))
-  let detail = try {
+  let detail = engine_refusal(() => {
     delete_archived_session_commit(
       manager,
       "chat",
       @pathx.Path(workspace).resolve().resource_path(),
       (_, _) => (),
     )
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  })
   assert_true(detail.contains("live record"))
   assert_true(@fsx.is_dir(Path(workspace + "/.openseek/sessions/chat")))
   assert_true(
@@ -982,19 +985,14 @@ async test "selected archived store is revalidated after detachment" {
   let workspace_token = workspace.resource_path()
   let selected = @session_store.ArchivedStore::for_workspace(workspace_token)
   ignore(detach_workspace(manager, workspace_token, fn(_) { () }))
-  let detail = try {
+  let detail = engine_refusal(() => {
     let family = manager.claim_session_family_move(
       "chat",
       archived=true,
       selected~,
     )
     family.release()
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  })
   assert_true(detail.contains("not a registered workspace"))
   assert_true(
     @fsx.is_dir(workspace.join(".openseek/archived/sessions/chat").to_path()),
@@ -1024,14 +1022,9 @@ async test "a claimed child prevents a partial family archive" {
     StartPending,
   )
   defer child_claim.release(manager)
-  let detail = try {
+  let detail = engine_refusal(() => {
     ignore(archive_session_commit(manager, "chat", (_, _) => ()))
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  })
   assert_true(detail.contains("already starting"))
   assert_true(@fsx.is_dir(Path(store + "/sessions/chat")))
   assert_true(@fsx.is_dir(Path(store + "/sessions/chat-sr-1")))

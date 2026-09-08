@@ -4,13 +4,21 @@
 // only derives from it.
 
 ///|
+/// `text` without a trailing `suffix`, or `text` unchanged when it does not
+/// end with one. Callers strip either the optional trailing slash from a
+/// server origin, or the `/v1/tunnel` path from a relay URL.
+fn without_suffix(text : String, suffix : StringView) -> String {
+  match text.strip_suffix(suffix) {
+    Some(rest) => rest.to_owned()
+    None => text
+  }
+}
+
+///|
 /// The control-WebSocket URL a host dials to register with `server_url`'s
 /// relay: `https` becomes `wss` (`http` → `ws` for local development).
 pub fn tunnel_url(server_url : String) -> String {
-  let origin = match server_url.strip_suffix("/") {
-    Some(origin) => origin.to_owned()
-    None => server_url
-  }
+  let origin = without_suffix(server_url, "/")
   let ws_origin = if origin.strip_prefix("https://") is Some(rest) {
     "wss://\{rest}"
   } else if origin.strip_prefix("http://") is Some(rest) {
@@ -31,10 +39,7 @@ pub fn device_url(
   device : String,
   app_version~ : String,
 ) -> String {
-  let origin = match server_url.strip_suffix("/") {
-    Some(origin) => origin.to_owned()
-    None => server_url
-  }
+  let origin = without_suffix(server_url, "/")
   if app_version == "development" {
     "\{origin}/console/?device=\{device}"
   } else {
@@ -54,8 +59,5 @@ pub fn origin_from_relay_url(relay_url : String) -> String {
   } else {
     relay_url
   }
-  match origin.strip_suffix("/v1/tunnel") {
-    Some(base) => base.to_owned()
-    None => origin
-  }
+  without_suffix(origin, "/v1/tunnel")
 }

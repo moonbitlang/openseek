@@ -28,27 +28,19 @@ test "transcript stream children use stable typed keys in display order" {
     ts: None,
     sequence: Some(42),
   }
-  let input = Input(
-    source=OpenSeek,
-    focused=@interop.ChannelId::Local,
-    active_session="desktop-test",
-    current_project=None,
-    projects=[],
-    can_choose_project=false,
-    project_menu_open=false,
-    project_query="",
-    root=None,
-    submission_generation=1,
-    items=[
+  let input = {
+    ..base_input(),
+    submission_generation: 1,
+    items: [
       {
         item: { kind: User("question"), ts: None, sequence: Some(41), },
         identity: "s41",
       },
       { item: response, identity: "s42", },
     ],
-    streaming_response=Some("partial answer"),
-    streaming_identity="r7",
-  )
+    streaming_response: Some("partial answer"),
+    streaming_identity: "r7",
+  }
   let keys = stream_keys(input)
   assert_eq(keys, ["row\u{0}s41", "rule\u{0}s41", "row\u{0}s42", "live\u{0}r7"])
   // The result filling the call, and the durable reasoning the same event
@@ -87,22 +79,13 @@ test "the live response is one node, replaced by the durable one" {
     item: { kind: User("question"), ts: None, sequence: Some(1), },
     identity: "s1",
   }
-  let live_input = Input(
-    source=OpenSeek,
-    focused=@interop.ChannelId::Local,
-    active_session="desktop-test",
-    current_project=None,
-    projects=[],
-    can_choose_project=false,
-    project_menu_open=false,
-    project_query="",
-    root=None,
-    submission_generation=1,
-    items=[user],
-    streaming_response=None,
-    streaming_reasoning="next thought",
-    streaming_identity="r7",
-  )
+  let live_input = {
+    ..base_input(),
+    submission_generation: 1,
+    items: [user],
+    streaming_reasoning: Some("next thought"),
+    streaming_identity: "r7",
+  }
   let live_keys = stream_keys(live_input)
   assert_eq(live_keys, ["row\u{0}s1", "rule\u{0}s1", "live\u{0}r7"])
   // The answer streaming after the thought joins the same node.
@@ -135,18 +118,10 @@ test "the live response is one node, replaced by the durable one" {
 
 ///|
 test "a streaming delta changes only the live block" {
-  let input = Input(
-    source=OpenSeek,
-    focused=@interop.ChannelId::Local,
-    active_session="desktop-test",
-    current_project=None,
-    projects=[],
-    can_choose_project=false,
-    project_menu_open=false,
-    project_query="",
-    root=None,
-    submission_generation=1,
-    items=[
+  let input = {
+    ..base_input(),
+    submission_generation: 1,
+    items: [
       {
         item: { kind: User("question"), ts: Some(1.0e12), sequence: Some(1), },
         identity: "s1",
@@ -166,9 +141,9 @@ test "a streaming delta changes only the live block" {
         identity: "s2",
       },
     ],
-    streaming_response=Some("partial"),
-    streaming_identity="r7",
-  )
+    streaming_response: Some("partial"),
+    streaming_identity: "r7",
+  }
   let before = stream_blocks(input).to_array()
   let after = stream_blocks({
     ..input,
@@ -186,21 +161,7 @@ test "a streaming delta changes only the live block" {
 
 ///|
 test "transcript stream section key scopes equal session ids by channel" {
-  let local_input = Input(
-    source=OpenSeek,
-    focused=@interop.ChannelId::Local,
-    active_session="desktop-test",
-    current_project=None,
-    projects=[],
-    can_choose_project=false,
-    project_menu_open=false,
-    project_query="",
-    root=None,
-    submission_generation=0,
-    items=[],
-    streaming_response=None,
-    streaming_identity="idle",
-  )
+  let local_input = base_input()
   let remote = {
     ..local_input,
     focused: @interop.ChannelId::Remote("device-a"),

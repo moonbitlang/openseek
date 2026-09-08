@@ -75,9 +75,7 @@ pub(all) struct CancelReply {
 /// same thing as one that inspects its value.
 pub impl ToJson for CancelReply with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  if self.run_id is Some(run_id) {
-    fields["run_id"] = Json(run_id)
-  }
+  set_optional(fields, "run_id", self.run_id)
   Json(fields)
 }
 
@@ -90,12 +88,7 @@ pub impl FromJson for CancelReply with fn from_json(json, path) {
   guard json is Object(fields) else {
     raise JsonDecodeError((path, "expected a cancel reply"))
   }
-  {
-    run_id: match fields.get("run_id") {
-      Some(String(run_id)) => Some(run_id)
-      _ => None
-    },
-  }
+  { run_id: lenient_string(fields, "run_id"), }
 }
 
 ///|
@@ -165,12 +158,8 @@ pub impl ToJson for RunSettlementPayload with fn to_json(self) {
     "session": Json(self.session),
     "status": Json(self.status),
   }
-  if self.submission_id is Some(submission_id) {
-    fields["submission_id"] = Json(submission_id)
-  }
-  if self.exit_code is Some(exit_code) {
-    fields["exit_code"] = Json(exit_code.to_double())
-  }
+  set_optional(fields, "submission_id", self.submission_id)
+  set_optional(fields, "exit_code", self.exit_code)
   Json(fields)
 }
 
@@ -244,10 +233,7 @@ pub impl FromJson for SessionListEntry with fn from_json(json, path) {
   guard json is Object(fields) else {
     raise JsonDecodeError((path, "session list entry must be an object"))
   }
-  let title = match fields.get("title") {
-    Some(String(title)) => Some(title)
-    _ => None
-  }
+  let title = lenient_string(fields, "title")
   let updated_at_ms = match fields.get("updated_at_ms") {
     Some(Number(value, ..)) => Some(value)
     _ => None
@@ -379,9 +365,7 @@ pub(all) struct SessionUserMessage {
 /// held before the field existed.
 pub impl ToJson for SessionUserMessage with fn to_json(self) {
   let fields = { "content": Json(self.content) }
-  if self.submission_id is Some(submission_id) {
-    fields["submission_id"] = Json(submission_id)
-  }
+  set_optional(fields, "submission_id", self.submission_id)
   Json(fields)
 }
 
@@ -403,11 +387,7 @@ pub impl FromJson for SessionUserMessage with fn from_json(json, path) {
   guard fields.get("content") is Some(String(content)) else {
     raise JsonDecodeError((path.add_key("content"), "expected message content"))
   }
-  let submission_id = if fields.get("submission_id") is Some(String(value)) {
-    Some(value)
-  } else {
-    None
-  }
+  let submission_id = lenient_string(fields, "submission_id")
   { content, submission_id, }
 }
 
@@ -424,15 +404,9 @@ pub(all) struct SessionAssistantMessage {
 /// rather than null, and replay provenance appears only on checkpoint copies.
 pub impl ToJson for SessionAssistantMessage with fn to_json(self) {
   let fields = { "content": Json(self.content) }
-  if self.tool_calls is Some(tool_calls) {
-    fields["tool_calls"] = ToJson::to_json(tool_calls)
-  }
-  if self.reasoning_content is Some(reasoning_content) {
-    fields["reasoning_content"] = Json(reasoning_content)
-  }
-  if self.is_replay is Some(is_replay) {
-    fields["is_replay"] = Json(is_replay)
-  }
+  set_optional(fields, "tool_calls", self.tool_calls)
+  set_optional(fields, "reasoning_content", self.reasoning_content)
+  set_optional(fields, "is_replay", self.is_replay)
   Json(fields)
 }
 
@@ -452,12 +426,7 @@ pub impl FromJson for SessionAssistantMessage with fn from_json(json, path) {
     None | Some(Null) => None
     Some(value) => Some(@json.from_json(value, path=path.add_key("tool_calls")))
   }
-  let reasoning_content = if fields.get("reasoning_content")
-    is Some(String(value)) {
-    Some(value)
-  } else {
-    None
-  }
+  let reasoning_content = lenient_string(fields, "reasoning_content")
   let is_replay = match fields.get("is_replay") {
     Some(True) => Some(true)
     Some(False) => Some(false)
@@ -486,9 +455,7 @@ pub impl ToJson for SessionToolResult with fn to_json(self) {
     "content": Json(self.content),
     "is_error": Json(self.is_error),
   }
-  if self.brief is Some(brief) {
-    fields["brief"] = Json(brief)
-  }
+  set_optional(fields, "brief", self.brief)
   Json(fields)
 }
 
@@ -526,11 +493,7 @@ pub impl FromJson for SessionToolResult with fn from_json(json, path) {
         (path.add_key("is_error"), "expected tool result error flag"),
       )
   }
-  let brief = if fields.get("brief") is Some(String(value)) {
-    Some(value)
-  } else {
-    None
-  }
+  let brief = lenient_string(fields, "brief")
   { tool_call_id, tool_name, content, is_error, brief, }
 }
 
@@ -712,9 +675,7 @@ pub impl FromJson for SessionExportReply with fn from_json(json, path) {
 /// optional Desktop reply fields.
 pub impl ToJson for SessionExportReply with fn to_json(self) {
   let fields : Map[String, Json] = { "opened": Json(self.opened) }
-  if self.path is Some(path) {
-    fields["path"] = Json(path)
-  }
+  set_optional(fields, "path", self.path)
   Json(fields)
 }
 
@@ -788,7 +749,6 @@ pub impl FromJson for WorktreeInfo with fn from_json(json, path) {
       (path, "worktree cannot belong to both session and codex_thread"),
     )
   }
-  let object = JsonObject::of(fields, path)
   let checkout_path = object.required_string("path")
   let present = object.required_bool("present")
   { name, branch, base, session, codex_thread, path: checkout_path, present, }
@@ -803,12 +763,8 @@ pub impl ToJson for WorktreeInfo with fn to_json(self) {
     "path": Json(self.path),
     "present": Json(self.present),
   }
-  if self.session is Some(session) {
-    fields["session"] = Json(session)
-  }
-  if self.codex_thread is Some(thread_id) {
-    fields["codex_thread"] = Json(thread_id)
-  }
+  set_optional(fields, "session", self.session)
+  set_optional(fields, "codex_thread", self.codex_thread)
   Json(fields)
 }
 
@@ -1487,10 +1443,7 @@ pub impl FromJson for FileStat with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "file stat")
   {
     path: object.required_string("path"),
-    signature: @json.from_json(
-      object.required_json("signature"),
-      path=path.add_key("signature"),
-    ),
+    signature: object.required_of("signature"),
   }
 }
 
@@ -1534,9 +1487,7 @@ pub impl ToJson for BrowseDirectoryReply with fn to_json(self) {
         "path": path.to_json(),
         "entries": entries.to_json(),
       }
-      if parent is Some(parent) {
-        fields["parent"] = parent.to_json()
-      }
+      set_optional(fields, "parent", parent)
       Json(fields)
     }
     Drives(entries~) => { "drives": entries.to_json() }
@@ -1742,10 +1693,7 @@ pub impl FromJson for CheckUpdateReply with fn from_json(json, path) {
         Some(False) => false
         _ => raise JsonDecodeError((path, "malformed available update"))
       }
-      let unavailable_reason = match fields.get("unavailable_reason") {
-        Some(String(reason)) => Some(reason)
-        _ => None
-      }
+      let unavailable_reason = lenient_string(fields, "unavailable_reason")
       Available(version~, installable~, unavailable_reason~)
     }
     "unreachable" => {

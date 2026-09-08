@@ -637,6 +637,13 @@ fn State::prompt_text(self : State) -> String {
 }
 
 ///|
+/// Every mention Codex cannot express natively degrades to the shared textual
+/// envelope form.
+fn mention_text_input(mention : @composer.Mention) -> Json {
+  { "type": "text", "text": @mention_context.encode([mention.ref_], "") }
+}
+
+///|
 fn State::mention_input(self : State, mention : @composer.Mention) -> Json? {
   match mention.ref_ {
     @mention_context.File(path~) => {
@@ -649,27 +656,14 @@ fn State::mention_input(self : State, mention : @composer.Mention) -> Json? {
     @mention_context.Skill(name~) => {
       guard self.active_context() is Some(context) &&
         self.skills is CodexSkillsReady(cwd, skills) &&
-        cwd == context.cwd else {
-        return Some({
-          "type": "text",
-          "text": @mention_context.encode([mention.ref_], ""),
-        })
+        cwd == context.cwd &&
+        skills.iter().find_first(skill => skill.name == name) is Some(skill) else {
+        return Some(mention_text_input(mention))
       }
-      for skill in skills {
-        if skill.name == name {
-          return Some({ "type": "skill", "name": name, "path": skill.path })
-        }
-      }
-      Some({
-        "type": "text",
-        "text": @mention_context.encode([mention.ref_], ""),
-      })
+      Some({ "type": "skill", "name": name, "path": skill.path })
     }
     @mention_context.Symbol(..) | @mention_context.Annotation(..) =>
-      Some({
-        "type": "text",
-        "text": @mention_context.encode([mention.ref_], ""),
-      })
+      Some(mention_text_input(mention))
   }
 }
 
@@ -915,16 +909,15 @@ fn State::respond(
   request_key : String,
   decision : Json,
 ) -> @cmd.Cmd {
-  let mut selected : CodexPendingRequest? = None
-  for request in self.pending_requests {
-    if request.request_id.stringify() == request_key &&
-      self.active_thread() is Some(active) &&
-      request.thread_id == active.id {
-      selected = Some(request)
-      break
-    }
-  }
-  guard selected is Some(request) && request.response(decision) is Some(result) else {
+  guard self.active_thread() is Some(active) &&
+    self.pending_requests
+    .iter()
+    .find_first(request => {
+      request.request_id.stringify() == request_key &&
+      request.thread_id == active.id
+    })
+    is Some(request) &&
+    request.response(decision) is Some(result) else {
     return @cmd.none
   }
   CodexApprovalReply.request(

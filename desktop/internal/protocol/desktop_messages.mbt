@@ -233,27 +233,13 @@ pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for SettingsSetPayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  if self.legacy_migration is Some(value) {
-    fields["legacy_migration"] = value.to_json()
-  }
-  if self.provider is Some(value) {
-    fields["provider"] = value.to_json()
-  }
-  if self.custom_api_url is Some(value) {
-    fields["custom_api_url"] = value.to_json()
-  }
-  if self.deepseek_api_key is Some(value) {
-    fields["deepseek_api_key"] = value.to_json()
-  }
-  if self.glm_api_key is Some(value) {
-    fields["glm_api_key"] = value.to_json()
-  }
-  if self.followup_behavior is Some(value) {
-    fields["followup_behavior"] = value.to_json()
-  }
-  if self.custom_api_key is Some(value) {
-    fields["custom_api_key"] = value.to_json()
-  }
+  set_optional(fields, "legacy_migration", self.legacy_migration)
+  set_optional(fields, "provider", self.provider)
+  set_optional(fields, "custom_api_url", self.custom_api_url)
+  set_optional(fields, "deepseek_api_key", self.deepseek_api_key)
+  set_optional(fields, "glm_api_key", self.glm_api_key)
+  set_optional(fields, "followup_behavior", self.followup_behavior)
+  set_optional(fields, "custom_api_key", self.custom_api_key)
   Json(fields)
 }
 
@@ -301,12 +287,8 @@ pub impl FromJson for WorktreeCreatePayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for WorktreeCreatePayload with fn to_json(self) {
   let fields : Map[String, Json] = { "workspace": Json(self.workspace) }
-  if self.session is Some(session) {
-    fields["session"] = Json(session)
-  }
-  if self.codex_thread is Some(codex_thread) {
-    fields["codex_thread"] = Json(codex_thread)
-  }
+  set_optional(fields, "session", self.session)
+  set_optional(fields, "codex_thread", self.codex_thread)
   Json(fields)
 }
 
@@ -376,12 +358,8 @@ pub impl FromJson for GitPullRequestPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for GitPullRequestPayload with fn to_json(self) {
   let fields : Map[String, Json] = { "session": Json(self.session) }
-  if self.cwd is Some(cwd) {
-    fields["cwd"] = Json(cwd)
-  }
-  if self.branch_hint is Some(branch_hint) {
-    fields["branch_hint"] = Json(branch_hint)
-  }
+  set_optional(fields, "cwd", self.cwd)
+  set_optional(fields, "branch_hint", self.branch_hint)
   Json(fields)
 }
 
@@ -656,12 +634,8 @@ pub impl FromJson for TerminalInputPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for TerminalInputPayload with fn to_json(self) {
   let fields : Map[String, Json] = { "id": self.id.to_json() }
-  if self.data is Some(data) {
-    fields["data"] = data.to_json()
-  }
-  if self.data_base64 is Some(data_base64) {
-    fields["data_base64"] = data_base64.to_json()
-  }
+  set_optional(fields, "data", self.data)
+  set_optional(fields, "data_base64", self.data_base64)
   Json::object(fields)
 }
 
@@ -942,10 +916,7 @@ pub impl FromJson for ConnectedPayload with fn from_json(json, path) {
   guard json is Object(fields) else {
     raise JsonDecodeError((path, "expected connected payload"))
   }
-  guard fields.get("stage") is Some(stage) else {
-    raise JsonDecodeError((path.add_key("stage"), "missing required field"))
-  }
-  { stage: @json.from_json(stage, path=path.add_key("stage")), }
+  { stage: JsonObject::of(fields, path).required_of("stage"), }
 }
 
 ///|
@@ -1011,12 +982,8 @@ pub(all) struct FinishedPayload {
 ///|
 pub impl ToJson for FinishedPayload with fn to_json(self) {
   let fields = { "run_id": Json(self.run_id), "status": Json(self.status) }
-  if self.answer is Some(answer) {
-    fields["answer"] = Json(answer)
-  }
-  if self.exit_code is Some(exit_code) {
-    fields["exit_code"] = Json(exit_code.to_double())
-  }
+  set_optional(fields, "answer", self.answer)
+  set_optional(fields, "exit_code", self.exit_code)
   Json(fields)
 }
 
@@ -1186,9 +1153,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
     "has_custom_key": self.has_custom_key.to_json(),
     "followup_behavior": self.followup_behavior.to_json(),
   }
-  if self.custom_api_url is Some(value) {
-    fields["custom_api_url"] = value.to_json()
-  }
+  set_optional(fields, "custom_api_url", self.custom_api_url)
   Json(fields)
 }
 

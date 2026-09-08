@@ -132,24 +132,9 @@ pub async fn HostConnection::run(
     group.spawn_bg(allow_failure=true, () => {
       @terminal.run_terminal_pump(self.terminal, async fn(push) {
         match push {
-          Output(id~, sequence~, data~) => {
-            let payload : TerminalOutputPayload = {
-              id,
-              sequence,
-              data: @base64.encode(data),
-            }
-            emit(
-              TerminalOutput({
-                id: payload.id,
-                sequence: payload.sequence,
-                data: payload.data,
-              }),
-            )
-          }
-          Exited(id~, code~) => {
-            let payload : TerminalExitPayload = { id, code, }
-            emit(TerminalExit({ id: payload.id, code: payload.code, }))
-          }
+          Output(id~, sequence~, data~) =>
+            emit(TerminalOutput({ id, sequence, data: @base64.encode(data), }))
+          Exited(id~, code~) => emit(TerminalExit({ id, code, }))
         }
       })
     })

@@ -48,10 +48,7 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
   let port = server.addr.port()
 
   // Hand the browser the consent URL.
-  let name = match @platform.machine_hostname() {
-    Some(hostname) => hostname
-    None => "desktop"
-  }
+  let name = @platform.machine_hostname().unwrap_or("desktop")
   let url = start_url(server_url~, oauth_state~, challenge~, port~, name~)
   let code = @platform.open_url(url) catch {
     error if @async.is_being_cancelled() => raise error
@@ -340,10 +337,7 @@ async fn exchange_code(
   verifier~ : String,
   name~ : String,
 ) -> AuthSession {
-  let origin = match server_url.strip_suffix("/") {
-    Some(origin) => origin.to_owned()
-    None => server_url
-  }
+  let origin = without_suffix(server_url, "/")
   let body : Json = {
     "code": code.to_json(),
     "code_verifier": verifier.to_json(),

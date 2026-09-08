@@ -27,15 +27,7 @@ fn browse(
         },
       }) catch {
         error => {
-          scheduler.add(
-            emit(
-              Failed(
-                channel~,
-                message=@interop.bridge_error_text(error),
-                generation~,
-              ),
-            ),
-          )
+          scheduler.add(emit(browse_failure(channel, error, generation~)))
           return
         }
       }
@@ -79,15 +71,7 @@ fn create_folder(
           }
         }
         error => {
-          scheduler.add(
-            emit(
-              Failed(
-                channel~,
-                message=@interop.bridge_error_text(error),
-                generation~,
-              ),
-            ),
-          )
+          scheduler.add(emit(browse_failure(channel, error, generation~)))
           return
         }
       }
@@ -96,6 +80,17 @@ fn create_folder(
       )
     })
   })
+}
+
+///|
+/// The state machine's failure result for one host error, carrying the
+/// channel and generation the request was fenced with.
+fn browse_failure(
+  channel : @interop.ChannelId,
+  error : Error,
+  generation~ : Int,
+) -> Msg {
+  Failed(channel~, message=@interop.bridge_error_text(error), generation~)
 }
 
 ///|

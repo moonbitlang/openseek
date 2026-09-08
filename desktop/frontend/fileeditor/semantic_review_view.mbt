@@ -1376,14 +1376,20 @@ fn refresh_semantic_review_editor_options() -> Unit {
 }
 
 ///|
+/// Retire one mounted section widget and drop its map entry.
+fn remove_semantic_review_editor(key : String) -> Unit {
+  if semantic_review_editors.get(key) is Some(entry) {
+    dispose_semantic_review_editor(entry)
+    semantic_review_editors.remove(key)
+  }
+}
+
+///|
 fn clear_semantic_review_editors() -> Unit {
   semantic_review_navigation_generation.val += 1
-  let keys = semantic_review_editors.to_array().map(pair => pair.0)
+  let keys = [ for key, _ in semantic_review_editors => key ]
   for key in keys {
-    if semantic_review_editors.get(key) is Some(entry) {
-      dispose_semantic_review_editor(entry)
-      semantic_review_editors.remove(key)
-    }
+    remove_semantic_review_editor(key)
   }
   semantic_review_order.clear()
   semantic_review_active_key.val = None
@@ -1499,15 +1505,12 @@ fn sync_semantic_review_editors(state : State) -> @cmd.Cmd {
         !desired_keys.contains(key) {
         semantic_review_active_key.val = None
       }
-      let stale = semantic_review_editors
-        .to_array()
-        .map(pair => pair.0)
-        .filter(key => !desired_keys.contains(key))
+      let is_stale = key => !desired_keys.contains(key)
+      let stale = [
+        for key, _ in semantic_review_editors if is_stale(key) => key
+      ]
       for key in stale {
-        if semantic_review_editors.get(key) is Some(entry) {
-          dispose_semantic_review_editor(entry)
-          semantic_review_editors.remove(key)
-        }
+        remove_semantic_review_editor(key)
       }
       for section in desired {
         let key = section.key
@@ -1515,35 +1518,23 @@ fn sync_semantic_review_editors(state : State) -> @cmd.Cmd {
           .get_element_by_id(semantic_editor_host_id(key))
           .to_option()
           is Some(host) else {
-          if semantic_review_editors.get(key) is Some(previous) {
-            dispose_semantic_review_editor(previous)
-            semantic_review_editors.remove(key)
-          }
+          remove_semantic_review_editor(key)
           continue
         }
-        let reusable = semantic_review_editors
-          .get(key)
-          .map(previous => {
-            previous.section == section &&
-            previous.old_name == input.old_name &&
-            previous.new_name == input.new_name &&
-            previous.feedback_file == input.feedback_file &&
-            previous.live_modified == input.live_modified &&
-            previous.host.is_same_node(host.as_node())
-          })
-          .unwrap_or(false)
-        if reusable {
-          let entry = semantic_review_editors[key]
-          entry.editor.update_options(
+        if semantic_review_editors.get(key) is Some(previous) &&
+          previous.section == section &&
+          previous.old_name == input.old_name &&
+          previous.new_name == input.new_name &&
+          previous.feedback_file == input.feedback_file &&
+          previous.live_modified == input.live_modified &&
+          previous.host.is_same_node(host.as_node()) {
+          previous.editor.update_options(
             semantic_diff_options(state.review_diff_layout),
           )
-          entry.editor.layout()
+          previous.editor.layout()
           continue
         }
-        if semantic_review_editors.get(key) is Some(previous) {
-          dispose_semantic_review_editor(previous)
-          semantic_review_editors.remove(key)
-        }
+        remove_semantic_review_editor(key)
         if create_semantic_review_editor(
             input,
             section,

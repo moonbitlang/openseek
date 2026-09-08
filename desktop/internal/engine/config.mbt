@@ -432,7 +432,7 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
 async test "run config rejects a blank session" {
   let manager = new_engine_manager("openseek")
   for session in ["", "   "] {
-    let detail = try {
+    let detail = engine_refusal(() => {
       ignore(
         run_config(manager, {
           task: "hello",
@@ -444,12 +444,7 @@ async test "run config rejects a blank session" {
           workspace: None,
         }),
       )
-      "no error"
-    } catch {
-      EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
-      error => "\{error}"
-    }
+    })
     assert_true(detail.contains("session id must not be empty"))
   }
 }
@@ -508,7 +503,7 @@ async test "host chooses durable placement from workspace state" {
   // A hint-less session that no attached workspace claims has nowhere to run.
   // The host refuses instead of inventing a directory and a store for it,
   // which is what would fork one id into two histories.
-  let unclaimed = try {
+  let unclaimed = engine_refusal(() => {
     ignore(
       run_config(manager, {
         task: "fresh",
@@ -520,12 +515,7 @@ async test "host chooses durable placement from workspace state" {
         workspace: None,
       }),
     )
-    "no error"
-  } catch {
-    EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
-    error => "\{error}"
-  }
+  })
   assert_true(unclaimed.contains("has no workspace"))
   let attached = run_config(manager, {
     task: "attached",

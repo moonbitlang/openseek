@@ -759,17 +759,9 @@ fn EngineManager::record_guard(
   self : EngineManager,
   session : String,
 ) -> SessionRecordGuard {
-  if self.record_guards.get(session) is Some(state) {
-    state
-  } else {
-    let state : SessionRecordGuard = {
-      readers: 0,
-      active_ops: 0,
-      moving: false,
-    }
-    self.record_guards[session] = state
-    state
-  }
+  self.record_guards.get_or_init(session, () => {
+    ({ readers: 0, active_ops: 0, moving: false, } : SessionRecordGuard)
+  })
 }
 
 ///|
@@ -908,13 +900,9 @@ pub fn EngineManager::worktree_host(
 ///|
 /// This conversation's slot, created empty on first touch.
 fn slot_for(sessions : Map[String, SessionSlot], key : String) -> SessionSlot {
-  if sessions.get(key) is Some(slot) {
-    slot
-  } else {
-    let slot : SessionSlot = { pending: None, engine: None, }
-    sessions.set(key, slot)
-    slot
-  }
+  sessions.get_or_init(key, () => {
+    ({ pending: None, engine: None, } : SessionSlot)
+  })
 }
 
 ///|
@@ -983,12 +971,10 @@ async fn EngineManager::close_engines_for_workspace(
   // exact follower still rooted in this workspace before the registry commit;
   // replacement/start cannot install another one while the lifecycle lock is
   // held, and identity checks make already-retired captures harmless.
-  let retained : Array[SessionFollower] = []
-  for _, follower in self.followers {
-    if follower.root.to_string() == root {
-      retained.push(follower)
-    }
-  }
+  let retained = self.followers
+    .values()
+    .filter(follower => follower.root.to_string() == root)
+    .to_array()
   for follower in retained {
     stop_follower_instance(self, follower, writer_exited=true)
   }
@@ -1271,10 +1257,7 @@ fn reset_engine_generation(
   // Actor defers normally retire themselves. Defensively retire any identity
   // still present so queued/in-flight load callers are answered and both
   // control queues close before a successor pump starts.
-  let followers : Array[SessionFollower] = []
-  for _, follower in manager.followers {
-    followers.push(follower)
-  }
+  let followers = manager.followers.values().to_array()
   for follower in followers {
     retire_follower_actor(manager, follower)
   }
@@ -2194,17 +2177,7 @@ fn emit_session_error(
   engine : ServeEngine,
   reason : String,
 ) -> Unit {
-  emit(
-    sink,
-    StreamEvent({
-      run_id: engine.phase.latest_run(),
-      session: engine.session_key,
-      event: {
-        event: (SessionError(error=reason) : @wire.Event),
-        submission_id: None,
-      },
-    }),
-  )
+  emit_engine_stream_event(sink, engine, SessionError(error=reason))
 }
 
 ///|
@@ -2213,15 +2186,24 @@ fn emit_compaction_failed(
   engine : ServeEngine,
   reason : String,
 ) -> Unit {
+  emit_engine_stream_event(sink, engine, CompactionFailed(error=reason))
+}
+
+///|
+/// Publish one host-made stream event on the engine's behalf: routed by its
+/// session, with the latest run id as the frontend's fallback, and carrying
+/// no submission id because nothing the client sent is being answered.
+fn emit_engine_stream_event(
+  sink : EventSink,
+  engine : ServeEngine,
+  event : @wire.Event,
+) -> Unit {
   emit(
     sink,
     StreamEvent({
       run_id: engine.phase.latest_run(),
       session: engine.session_key,
-      event: {
-        event: (CompactionFailed(error=reason) : @wire.Event),
-        submission_id: None,
-      },
+      event: { event, submission_id: None, },
     }),
   )
 }

@@ -28,23 +28,16 @@ fn CodexRequestInput::approval_details(
     fields.get("networkApprovalContext") is Some(Object(network)) &&
     @jsonx.json_text(network, "host") is Some(host) {
     let protocol = @jsonx.json_text(network, "protocol")
-    let port = network
-      .get("port")
-      .bind(value => {
-        match value {
-          String(port) => Some(port)
-          Number(_) => Some(value.stringify())
-          _ => None
-        }
-      })
-    let destination = if protocol is Some(protocol) && port is Some(port) {
-      "\{protocol}://\{host}:\{port}"
-    } else if protocol is Some(protocol) {
-      "\{protocol}://\{host}"
-    } else if port is Some(port) {
-      "\{host}:\{port}"
-    } else {
-      host
+    let port = match network.get("port") {
+      Some(String(port)) => Some(port)
+      Some(value) if value is Number(_) => Some(value.stringify())
+      _ => None
+    }
+    let destination = match (protocol, port) {
+      (Some(protocol), Some(port)) => "\{protocol}://\{host}:\{port}"
+      (Some(protocol), None) => "\{protocol}://\{host}"
+      (None, Some(port)) => "\{host}:\{port}"
+      (None, None) => host
     }
     details.push(
       @html.div(class="codex-request-detail", [
@@ -163,87 +156,57 @@ fn CodexRequestInput::execpolicy_label(
 }
 
 ///|
+/// Every reverse-request control is the same button: one class, one label, and
+/// the identity-scoped decision it sends back.
+fn CodexRequestInput::decision_button(
+  self : CodexRequestInput,
+  identity : Identity,
+  action_emit : @cmd.Emit[Action],
+  class_name~ : String,
+  decision~ : Json,
+  label~ : String,
+) -> @html.Html {
+  @html.button(
+    class=class_name,
+    on_click=action_emit(
+      CodexRequestResponded(identity~, request_key=self.request_key, decision~),
+    ),
+    label,
+  )
+}
+
+///|
 fn CodexRequestInput::approval_actions(
   self : CodexRequestInput,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
-  let controls : Array[@html.Html] = []
-  for decision in self.approval_decisions() {
-    match decision {
-      String("accept") =>
-        controls.push(
-          @html.button(
-            class="codex-request-action codex-request-action-primary",
-            on_click=action_emit(
-              CodexRequestResponded(
-                identity~,
-                request_key=self.request_key,
-                decision~,
-              ),
-            ),
-            "Approve once",
-          ),
-        )
-      String("acceptForSession") =>
-        controls.push(
-          @html.button(
-            class="codex-request-action",
-            on_click=action_emit(
-              CodexRequestResponded(
-                identity~,
-                request_key=self.request_key,
-                decision~,
-              ),
-            ),
-            "Approve for session",
-          ),
-        )
-      String("decline") =>
-        controls.push(
-          @html.button(
-            class="codex-request-action codex-request-action-danger",
-            on_click=action_emit(
-              CodexRequestResponded(
-                identity~,
-                request_key=self.request_key,
-                decision~,
-              ),
-            ),
-            "Decline",
-          ),
-        )
-      String("cancel") =>
-        controls.push(
-          @html.button(
-            class="codex-request-action codex-request-action-danger",
-            on_click=action_emit(
-              CodexRequestResponded(
-                identity~,
-                request_key=self.request_key,
-                decision~,
-              ),
-            ),
-            "Cancel",
-          ),
-        )
-      Object(fields) if fields.get("acceptWithExecpolicyAmendment") is Some(_) =>
-        controls.push(
-          @html.button(
-            class="codex-request-action",
-            on_click=action_emit(
-              CodexRequestResponded(
-                identity~,
-                request_key=self.request_key,
-                decision~,
-              ),
-            ),
-            self.execpolicy_label(decision),
-          ),
-        )
-      _ => ()
-    }
-  }
+  let controls = self
+    .approval_decisions()
+    .filter_map(decision => {
+      let (class_name, label) = match decision {
+        String("accept") =>
+          ("codex-request-action codex-request-action-primary", "Approve once")
+        String("acceptForSession") =>
+          ("codex-request-action", "Approve for session")
+        String("decline") =>
+          ("codex-request-action codex-request-action-danger", "Decline")
+        String("cancel") =>
+          ("codex-request-action codex-request-action-danger", "Cancel")
+        Object(fields) if fields.get("acceptWithExecpolicyAmendment") is Some(_) =>
+          ("codex-request-action", self.execpolicy_label(decision))
+        _ => return None
+      }
+      Some(
+        self.decision_button(
+          identity,
+          action_emit,
+          class_name~,
+          decision~,
+          label~,
+        ),
+      )
+    })
   if controls.is_empty() {
     controls.push(
       @html.span(
@@ -345,38 +308,26 @@ fn CodexRequestInput::render(
       body.push(@html.pre(class="codex-raw", self.params.stringify(indent=2)))
       body.push(
         @html.div(class="codex-request-actions", [
-          @html.button(
-            class="codex-request-action codex-request-action-primary",
-            on_click=action_emit(
-              CodexRequestResponded(
-                identity~,
-                request_key=self.request_key,
-                decision=Json("accept"),
-              ),
-            ),
-            "Grant for turn",
+          self.decision_button(
+            identity,
+            action_emit,
+            class_name="codex-request-action codex-request-action-primary",
+            decision=Json("accept"),
+            label="Grant for turn",
           ),
-          @html.button(
-            class="codex-request-action",
-            on_click=action_emit(
-              CodexRequestResponded(
-                identity~,
-                request_key=self.request_key,
-                decision=Json("acceptForSession"),
-              ),
-            ),
-            "Grant for session",
+          self.decision_button(
+            identity,
+            action_emit,
+            class_name="codex-request-action",
+            decision=Json("acceptForSession"),
+            label="Grant for session",
           ),
-          @html.button(
-            class="codex-request-action codex-request-action-danger",
-            on_click=action_emit(
-              CodexRequestResponded(
-                identity~,
-                request_key=self.request_key,
-                decision=Json("decline"),
-              ),
-            ),
-            "Deny",
+          self.decision_button(
+            identity,
+            action_emit,
+            class_name="codex-request-action codex-request-action-danger",
+            decision=Json("decline"),
+            label="Deny",
           ),
         ]),
       )
@@ -389,30 +340,27 @@ fn CodexRequestInput::render(
           @html.div(class="codex-question-text", question.question),
         ]
         if !question.options.is_empty() {
-          let options : Array[@html.Html] = []
-          for option in question.options {
-            options.push(
-              @html.button(
-                class=if answer == option.0 {
-                  "codex-option selected"
-                } else {
-                  "codex-option"
-                },
-                on_click=action_emit(
-                  CodexRequestAnswerChanged(
-                    identity~,
-                    request_key=self.request_key,
-                    question_id=question.id,
-                    answer=option.0,
-                  ),
+          let options = question.options.map(option => {
+            @html.button(
+              class=if answer == option.0 {
+                "codex-option selected"
+              } else {
+                "codex-option"
+              },
+              on_click=action_emit(
+                CodexRequestAnswerChanged(
+                  identity~,
+                  request_key=self.request_key,
+                  question_id=question.id,
+                  answer=option.0,
                 ),
-                [
-                  @html.span(class="codex-option-label", option.0),
-                  @html.span(class="codex-option-desc", option.1),
-                ],
               ),
+              [
+                @html.span(class="codex-option-label", option.0),
+                @html.span(class="codex-option-desc", option.1),
+              ],
             )
-          }
+          })
           controls.push(@html.div(class="codex-options", options))
         }
         controls.push(
@@ -434,16 +382,12 @@ fn CodexRequestInput::render(
       }
       body.push(
         @html.div(class="codex-request-actions", [
-          @html.button(
-            class="codex-request-action codex-request-action-primary",
-            on_click=action_emit(
-              CodexRequestResponded(
-                identity~,
-                request_key=self.request_key,
-                decision=Json("accept"),
-              ),
-            ),
-            "Submit answers",
+          self.decision_button(
+            identity,
+            action_emit,
+            class_name="codex-request-action codex-request-action-primary",
+            decision=Json("accept"),
+            label="Submit answers",
           ),
         ]),
       )
@@ -468,27 +412,19 @@ fn CodexRequestInput::render(
       )
       body.push(
         @html.div(class="codex-request-actions", [
-          @html.button(
-            class="codex-request-action codex-request-action-primary",
-            on_click=action_emit(
-              CodexRequestResponded(
-                identity~,
-                request_key=self.request_key,
-                decision=Json("accept"),
-              ),
-            ),
-            "Submit JSON",
+          self.decision_button(
+            identity,
+            action_emit,
+            class_name="codex-request-action codex-request-action-primary",
+            decision=Json("accept"),
+            label="Submit JSON",
           ),
-          @html.button(
-            class="codex-request-action codex-request-action-danger",
-            on_click=action_emit(
-              CodexRequestResponded(
-                identity~,
-                request_key=self.request_key,
-                decision=Json("decline"),
-              ),
-            ),
-            "Decline",
+          self.decision_button(
+            identity,
+            action_emit,
+            class_name="codex-request-action codex-request-action-danger",
+            decision=Json("decline"),
+            label="Decline",
           ),
         ]),
       )

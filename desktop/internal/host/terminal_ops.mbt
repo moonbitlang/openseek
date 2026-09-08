@@ -36,19 +36,6 @@ type TerminalAckPayload = @protocol.TerminalAckPayload
 type TerminalClosePayload = @protocol.TerminalClosePayload
 
 ///|
-priv struct TerminalOutputPayload {
-  id : String
-  sequence : Int
-  data : String
-}
-
-///|
-priv struct TerminalExitPayload {
-  id : String
-  code : Int
-}
-
-///|
 async fn terminal_open_op(
   state : HostState,
   terminals : @terminal.TerminalState,

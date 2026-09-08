@@ -68,21 +68,21 @@ async fn git_branch(dir : String) -> String? {
 }
 
 ///|
+/// One line of Git output, with a command that failed and one that printed
+/// nothing both reading as None.
+async fn git_line_opt(dir : String, args : Array[String]) -> String? {
+  git_output_opt(dir, args)
+  .map(git_single_line)
+  .filter(line => !line.is_empty())
+}
+
+///|
 /// The branch `HEAD` points at, and nothing else. Unlike `git_branch` this
 /// does not stand in a short hash for a detached checkout: a hash is a fine
 /// thing to show a person and a nonsense thing to hand an API that filters by
 /// branch name.
 async fn git_symbolic_branch(dir : String) -> String? {
-  guard git_output_opt(dir, ["symbolic-ref", "--short", "--quiet", "HEAD"])
-    is Some(output) else {
-    return None
-  }
-  let name = git_single_line(output)
-  if name.is_empty() {
-    None
-  } else {
-    Some(name)
-  }
+  git_line_opt(dir, ["symbolic-ref", "--short", "--quiet", "HEAD"])
 }
 
 ///|
@@ -183,19 +183,10 @@ async fn git_base_ref(dir : String, hint? : String) -> String? {
       return Some(hinted)
     }
   }
-  guard git_output_opt(dir, [
-      "rev-parse", "--abbrev-ref", "--verify", "--quiet", "origin/HEAD",
-    ])
-    is Some(output) else {
-    return None
-  }
-  let name = git_single_line(output)
   // A dangling `origin/HEAD` abbreviates to itself and names no branch.
-  if name.is_empty() || name == "origin/HEAD" {
-    None
-  } else {
-    Some(name)
-  }
+  git_line_opt(dir, [
+    "rev-parse", "--abbrev-ref", "--verify", "--quiet", "origin/HEAD",
+  ]).filter(name => name != "origin/HEAD")
 }
 
 ///|
@@ -230,15 +221,10 @@ async fn git_branch_base(dir : String, hint? : String) -> (String, String?) {
   guard git_base_ref(dir, hint?) is Some(base_ref) else {
     return ("HEAD", None)
   }
-  guard git_output_opt(dir, ["merge-base", "HEAD", base_ref]) is Some(output) else {
+  guard git_line_opt(dir, ["merge-base", "HEAD", base_ref]) is Some(commit) else {
     return ("HEAD", None)
   }
-  let commit = git_single_line(output)
-  if commit.is_empty() {
-    ("HEAD", None)
-  } else {
-    (commit, Some(base_ref))
-  }
+  (commit, Some(base_ref))
 }
 
 ///|
@@ -255,15 +241,7 @@ async fn git_branch_base(dir : String, hint? : String) -> (String, String?) {
 async fn git_review_branch_base(dir : String, head : String?) -> String? {
   guard head is Some(head) else { return None }
   guard git_base_ref(dir) is Some(base_ref) else { return None }
-  guard git_output_opt(dir, ["merge-base", head, base_ref]) is Some(output) else {
-    return None
-  }
-  let base = git_single_line(output)
-  if base.is_empty() || base == head {
-    None
-  } else {
-    Some(base)
-  }
+  git_line_opt(dir, ["merge-base", head, base_ref]).filter(base => base != head)
 }
 
 ///|
@@ -502,27 +480,17 @@ async fn git_output(dir : String, args : Array[String]) -> String {
 ///|
 /// The presentation category for Git's two porcelain status columns.
 fn git_change_kind(index_status : String, worktree_status : String) -> String {
-  let pair = index_status + worktree_status
-  if ["DD", "AU", "UD", "UA", "DU", "AA", "UU"].contains(pair) {
-    "unmerged"
-  } else if index_status == "U" || worktree_status == "U" {
-    // `git diff --name-status` uses one column rather than porcelain's
-    // two-column conflict pairs.
-    "unmerged"
-  } else if pair == "??" {
-    "untracked"
-  } else if index_status == "R" || worktree_status == "R" {
-    "renamed"
-  } else if index_status == "C" || worktree_status == "C" {
-    "copied"
-  } else if index_status == "D" || worktree_status == "D" {
-    "deleted"
-  } else if index_status == "A" || worktree_status == "A" {
-    "added"
-  } else if index_status == "T" || worktree_status == "T" {
-    "type-changed"
-  } else {
-    "modified"
+  match (index_status, worktree_status) {
+    // A single `U` column covers `git diff --name-status`, which uses one
+    // column rather than porcelain's two-column conflict pairs.
+    ("D", "D") | ("A", "A") | ("U", _) | (_, "U") => "unmerged"
+    ("?", "?") => "untracked"
+    ("R", _) | (_, "R") => "renamed"
+    ("C", _) | (_, "C") => "copied"
+    ("D", _) | (_, "D") => "deleted"
+    ("A", _) | (_, "A") => "added"
+    ("T", _) | (_, "T") => "type-changed"
+    _ => "modified"
   }
 }
 
@@ -859,6 +827,18 @@ async fn git_collect(
 }
 
 ///|
+/// Git's own diagnostic for a failed command, or `fallback` when it printed
+/// none (stderr this host could not decode included).
+fn git_failure_detail(stderr : &@io.Data, fallback : String) -> String {
+  let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
+  if detail.is_empty() {
+    fallback
+  } else {
+    detail
+  }
+}
+
+///|
 /// Capture the exact index entries used by one review snapshot. Task mode
 /// reads this again after its diff/untracked queries, so an index-only change
 /// retries just like a concurrent commit instead of publishing mixed rows.
@@ -867,14 +847,7 @@ async fn git_index_metadata(dir : String) -> String {
     "ls-files", "--full-name", "--stage", "-z", "--", ".",
   ])
   guard code == 0 else {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
-    raise HostError(
-      if detail.is_empty() {
-        "failed to inspect Git index"
-      } else {
-        detail
-      },
-    )
+    raise HostError(git_failure_detail(stderr, "failed to inspect Git index"))
   }
   stdout.text() catch {
     _ => raise HostError("Git returned a non-UTF-8 index path")
@@ -911,16 +884,7 @@ fn valid_commit_identity(revision : String) -> Bool {
   if revision.length() != 40 && revision.length() != 64 {
     return false
   }
-  for character in revision {
-    let code = character.to_int()
-    let digit = code >= '0'.to_int() && code <= '9'.to_int()
-    let lower = code >= 'a'.to_int() && code <= 'f'.to_int()
-    let upper = code >= 'A'.to_int() && code <= 'F'.to_int()
-    if !(digit || lower || upper) {
-      return false
-    }
-  }
-  true
+  revision.iter().all(character => character.is_ascii_hexdigit())
 }
 
 ///|
@@ -978,13 +942,8 @@ async fn git_change_snapshot(
         ".",
       ])
       guard code == 0 else {
-        let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
         raise HostError(
-          if detail.is_empty() {
-            "failed to read untracked Git paths"
-          } else {
-            detail
-          },
+          git_failure_detail(stderr, "failed to read untracked Git paths"),
         )
       }
       let raw = stdout.text() catch {
@@ -999,13 +958,8 @@ async fn git_change_snapshot(
         "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".",
       ])
       guard code == 0 else {
-        let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
         raise HostError(
-          if detail.is_empty() {
-            "failed to read Git changes"
-          } else {
-            detail
-          },
+          git_failure_detail(stderr, "failed to read Git changes"),
         )
       }
       let raw = stdout.text() catch {
@@ -1026,13 +980,8 @@ async fn git_change_snapshot(
         ".",
       ])
       guard diff_code == 0 else {
-        let detail = (diff_stderr.text() catch { _ => "" }).trim().to_owned()
         raise HostError(
-          if detail.is_empty() {
-            "failed to read Git task changes"
-          } else {
-            detail
-          },
+          git_failure_detail(diff_stderr, "failed to read Git task changes"),
         )
       }
       let diff_raw = diff_stdout.text() catch {
@@ -1073,13 +1022,8 @@ async fn git_change_snapshot(
       }
       let (tree_code, tree_stdout, tree_stderr) = git_collect(dir, tree_args)
       guard tree_code == 0 else {
-        let detail = (tree_stderr.text() catch { _ => "" }).trim().to_owned()
         raise HostError(
-          if detail.is_empty() {
-            "failed to inspect Git review tree"
-          } else {
-            detail
-          },
+          git_failure_detail(tree_stderr, "failed to inspect Git review tree"),
         )
       }
       let comparison_metadata = tree_stdout.text() catch {
@@ -1146,13 +1090,10 @@ async fn git_changes_op(payload : GitChangesPayload) -> GitChangesReply {
     "rev-parse", "--show-prefix",
   ])
   guard prefix_code == 0 else {
-    let detail = (prefix_stderr.text() catch { _ => "" }).trim().to_owned()
     raise HostError(
-      if detail.is_empty() {
-        "failed to resolve Git workspace prefix"
-      } else {
-        detail
-      },
+      git_failure_detail(
+        prefix_stderr, "failed to resolve Git workspace prefix",
+      ),
     )
   }
   let workspace_prefix = git_single_line(
@@ -1238,18 +1179,9 @@ fn push_history_ref(
 
 ///|
 async fn git_history_upstream(dir : String) -> String? {
-  guard git_output_opt(dir, [
-      "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}",
-    ])
-    is Some(output) else {
-    return None
-  }
-  let upstream = git_single_line(output)
-  if upstream.is_empty() || upstream == "@{upstream}" {
-    None
-  } else {
-    Some(upstream)
-  }
+  git_line_opt(dir, [
+    "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}",
+  ]).filter(upstream => upstream != "@{upstream}")
 }
 
 ///|
@@ -1258,12 +1190,10 @@ async fn git_history_upstream(dir : String) -> String? {
 async fn git_history_default_ref(dir : String, upstream : String?) -> String? {
   if upstream is Some(upstream) && upstream.split_once("/") is Some((remote, _)) {
     let symbolic = "refs/remotes/\{remote}/HEAD"
-    if git_output_opt(dir, ["symbolic-ref", "--quiet", "--short", symbolic])
-      is Some(output) {
-      let name = git_single_line(output)
-      if !name.is_empty() && name != symbolic {
-        return Some(name)
-      }
+    if git_line_opt(dir, ["symbolic-ref", "--quiet", "--short", symbolic])
+      is Some(name) &&
+      name != symbolic {
+      return Some(name)
     }
   }
   git_base_ref(dir)
@@ -1275,18 +1205,7 @@ async fn capture_git_history_snapshot(
   review_base : String?,
 ) -> GitHistorySnapshot {
   let head = git_revision_commit(dir, "HEAD")
-  let branch = match
-    git_output_opt(dir, ["symbolic-ref", "--quiet", "--short", "HEAD"]) {
-    Some(output) => {
-      let name = git_single_line(output)
-      if name.is_empty() {
-        None
-      } else {
-        Some(name)
-      }
-    }
-    None => None
-  }
+  let branch = git_line_opt(dir, ["symbolic-ref", "--quiet", "--short", "HEAD"])
   let refs : Array[GitHistoryRef] = []
   let tips : Array[String] = []
   if head is Some(head) {
@@ -1408,14 +1327,7 @@ async fn git_history_page(
   args.push("--")
   let (code, stdout, stderr) = git_collect(dir, args)
   guard code == 0 else {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
-    raise HostError(
-      if detail.is_empty() {
-        "failed to read Git history"
-      } else {
-        detail
-      },
-    )
+    raise HostError(git_failure_detail(stderr, "failed to read Git history"))
   }
   let raw = stdout.text() catch {
     _ => raise HostError("Git returned non-UTF-8 history metadata")
@@ -1488,13 +1400,8 @@ async fn git_tree_object_modes(
     "ls-tree", "-r", "--full-name", "-z", revision, "--", ".",
   ])
   guard code == 0 else {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
     raise HostError(
-      if detail.is_empty() {
-        "failed to inspect Git commit tree"
-      } else {
-        detail
-      },
+      git_failure_detail(stderr, "failed to inspect Git commit tree"),
     )
   }
   let output = stdout.text() catch {
@@ -1538,13 +1445,8 @@ async fn git_commit_changes_at(
     base, commit, "--", ".",
   ])
   guard code == 0 else {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
     raise HostError(
-      if detail.is_empty() {
-        "failed to read Git commit changes"
-      } else {
-        detail
-      },
+      git_failure_detail(stderr, "failed to read Git commit changes"),
     )
   }
   let raw = stdout.text() catch {
@@ -1602,13 +1504,10 @@ async fn git_commit_changes_op(
     "rev-parse", "--show-prefix",
   ])
   guard prefix_code == 0 else {
-    let detail = (prefix_stderr.text() catch { _ => "" }).trim().to_owned()
     raise HostError(
-      if detail.is_empty() {
-        "failed to resolve Git workspace prefix"
-      } else {
-        detail
-      },
+      git_failure_detail(
+        prefix_stderr, "failed to resolve Git workspace prefix",
+      ),
     )
   }
   let workspace_prefix = git_single_line(
@@ -1649,13 +1548,8 @@ async fn git_original_file_at(
     "cat-file", "-t", oid,
   ])
   guard type_code == 0 else {
-    let detail = (type_stderr.text() catch { _ => "" }).trim().to_owned()
     raise HostError(
-      if detail.is_empty() {
-        "failed to inspect Git baseline"
-      } else {
-        detail
-      },
+      git_failure_detail(type_stderr, "failed to inspect Git baseline"),
     )
   }
   let object_type = git_single_line(type_stdout.text() catch { _ => "" })
@@ -1666,13 +1560,8 @@ async fn git_original_file_at(
     "cat-file", "-s", oid,
   ])
   guard size_code == 0 else {
-    let detail = (size_stderr.text() catch { _ => "" }).trim().to_owned()
     raise HostError(
-      if detail.is_empty() {
-        "failed to size Git baseline"
-      } else {
-        detail
-      },
+      git_failure_detail(size_stderr, "failed to size Git baseline"),
     )
   }
   let size_text = git_single_line(size_stdout.text() catch { _ => "" })
@@ -1684,14 +1573,7 @@ async fn git_original_file_at(
   }
   let (content_code, content, stderr) = git_collect(dir, ["cat-file", "-p", oid])
   guard content_code == 0 else {
-    let detail = (stderr.text() catch { _ => "" }).trim().to_owned()
-    raise HostError(
-      if detail.is_empty() {
-        "failed to read Git baseline"
-      } else {
-        detail
-      },
-    )
+    raise HostError(git_failure_detail(stderr, "failed to read Git baseline"))
   }
   // Use the same content policy as working-tree reads so a tab cannot treat
   // its current file and Git baseline as different kinds of content.
@@ -2109,10 +1991,7 @@ async test "Git recognizes only origin HEAD's branch as the default" {
   git_test_run(dir, ["init", "--quiet"])
   @fs.write_file("\{dir}/tracked.txt", "first\n", create_mode=CreateOrTruncate)
   git_test_run(dir, ["add", "tracked.txt"])
-  git_test_run(dir, [
-    "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
-    "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "first",
-  ])
+  git_test_commit(dir, "first")
   // A branch spelling alone proves nothing until the remote declares its
   // default. Once it does, only that exact name is suppressed from PR lookup.
   assert_false(git_is_default_branch(dir, branch="main"))
@@ -2131,10 +2010,7 @@ async test "ordinary checkout reviews retain committed branch changes" {
   git_test_run(dir, ["init", "--quiet"])
   @fs.write_file("\{dir}/review.txt", "first\n", create_mode=CreateOrTruncate)
   git_test_run(dir, ["add", "review.txt"])
-  git_test_run(dir, [
-    "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
-    "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "first",
-  ])
+  git_test_commit(dir, "first")
   let first = git_revision_commit(dir, "HEAD").unwrap()
   git_test_run(dir, ["update-ref", "refs/remotes/origin/main", first])
   git_test_run(dir, [
@@ -2155,10 +2031,7 @@ async test "ordinary checkout reviews retain committed branch changes" {
     is [{ path: "review.txt", index_status: " ", worktree_status: "M", .. }],
   )
   git_test_run(dir, ["add", "review.txt"])
-  git_test_run(dir, [
-    "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
-    "-c", "commit.gpgSign=false", "commit", "--quiet", "-m", "second",
-  ])
+  git_test_commit(dir, "second")
   let second = git_revision_commit(dir, "HEAD").unwrap()
   let (after_head, after_base, _, _, _, _, after_changes) = git_change_snapshot(
     dir,
