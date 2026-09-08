@@ -48,3 +48,5 @@ preview rather than the PR. Verified the tool-step disclosure opens to reveal
 its number and timestamp. Reasoning-led steps remain outside this sample.
 
 Revision: B now folds each non-final reasoning/tool activity as a whole. Its summary shows the step, tool count, pending/error status when present, and a CSS-clipped verbatim reasoning or narration preview. Expanding reveals the original activity components; final answers stay outside. Browser-checked the tool fixture collapsed and expanded. No generated summary; still prototype-only.
+
+Tool timing review: the shared ToolCall/ToolOutcome projection has no execution duration or start time. OpenSeek event commit timestamps cannot establish tool runtime. This fixture therefore omits duration rather than inventing it. B removes the repeated step/commit-time heading inside expanded activities. Reliable per-tool elapsed time requires timing data through the provider projection before production UI can display it.

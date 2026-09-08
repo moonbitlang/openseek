@@ -1545,3 +1545,8 @@
 .prototype-step-body .activity-heading { display:flex; align-items:baseline; justify-content:flex-start; gap:8px; text-align:left; }
 .prototype-step-body .activity-heading::before { content:none; }
 .prototype-step-body .activity-step { min-width:0; text-align:left; }
+
+/* The disclosure already identifies the step; commit time is not runtime. */
+.prototype-step-body .activity-heading { display:none; }
+.prototype-step-body .activity-summary .activity-step,
+.prototype-step-body .activity-summary .activity-time { display:none; }
