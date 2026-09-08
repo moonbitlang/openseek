@@ -35,8 +35,12 @@ jobs:
   release-needed:
     name: Check for updates
     runs-on: ubuntu-latest
+    env:
+      OPENSEEK_API_ORIGIN: ${{ (github.event_name != 'schedule' && inputs.channel == 'staging') && 'https://openseek-api-staging.moonbitlang.cn' || 'https://openseek-api.moonbitlang.cn' }}
+      RELEASE_CHANNEL: ${{ github.event_name == 'schedule' && 'stable' || inputs.channel }}
     outputs:
       release: ${{ steps.check.outputs.release }}
+      version: ${{ steps.release.outputs.version }}
     steps:
       # Manual staging/stable dispatches are explicit release requests. A
       # scheduled run only proceeds when main differs from the newest
@@ -69,48 +73,11 @@ jobs:
             echo "Stable update found: ${previous_sha:-none} -> $GITHUB_SHA." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  release-macos:
-    name: Sign, notarize, and publish macOS
-    needs: release-needed
-    if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
-    runs-on: macos-latest
-    timeout-minutes: 120
-    env:
-      APPLE_TEAM_ID: NYZ3LQ5QWC
-      MACOS_SIGNING_IDENTITY: "Developer ID Application: Haoxiang Fei (NYZ3LQ5QWC)"
-      NOTARY_PROFILE: openseek-${{ github.event_name == 'schedule' && 'stable' || inputs.channel }}
-      OPENSEEK_API_ORIGIN: ${{ (github.event_name != 'schedule' && inputs.channel == 'staging') && 'https://openseek-api-staging.moonbitlang.cn' || 'https://openseek-api.moonbitlang.cn' }}
-      RELEASE_CHANNEL: ${{ github.event_name == 'schedule' && 'stable' || inputs.channel }}
-
-    steps:
-      - name: Checkout main
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      # Proton 0.2 installs its immutable runtime and versioned helper in the
-      # shared user-level store selected by the dependency in desktop/moon.mod.
-      - name: Cache Proton runtime
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.proton/store
-            ~/.proton/helpers
-          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/moon.mod') }}
-
-      # The packager stages the seed toolchain pinned by
-      # `desktop/.moonbit-version` from archives downloaded into this directory.
-      - name: Cache MoonBit toolchain seed
-        uses: actions/cache@v4
-        with:
-          path: desktop/target/moonbit/cache
-          key: moonbit-seed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/.moonbit-version') }}
-
+      # Every platform packager stamps the same version, so it is resolved
+      # once here rather than on whichever runner happens to build first.
       - name: Resolve release version
         id: release
+        if: steps.check.outputs.release == 'true'
         shell: bash
         env:
           MANUAL_RELEASE_VERSION: ${{ inputs.version }}
@@ -148,26 +115,54 @@ jobs:
           else
             release_version="$MANUAL_RELEASE_VERSION"
           fi
-          echo "RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
           echo "version=$release_version" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$release_version." >> "$GITHUB_STEP_SUMMARY"
+
+  release-macos:
+    name: Build, sign, and notarize macOS
+    needs: release-needed
+    if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 120
+    env:
+      APPLE_TEAM_ID: NYZ3LQ5QWC
+      MACOS_SIGNING_IDENTITY: "Developer ID Application: Haoxiang Fei (NYZ3LQ5QWC)"
+      NOTARY_PROFILE: openseek-${{ github.event_name == 'schedule' && 'stable' || inputs.channel }}
+      RELEASE_CHANNEL: ${{ github.event_name == 'schedule' && 'stable' || inputs.channel }}
+      RELEASE_VERSION: ${{ needs.release-needed.outputs.version }}
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Proton 0.2 installs its immutable runtime and versioned helper in the
+      # shared user-level store selected by the dependency in desktop/moon.mod.
+      - name: Cache Proton runtime
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/moon.mod') }}
+
+      # The packager stages the seed toolchain pinned by
+      # `desktop/.moonbit-version` from archives downloaded into this directory.
+      - name: Cache MoonBit toolchain seed
+        uses: actions/cache@v4
+        with:
+          path: desktop/target/moonbit/cache
+          key: moonbit-seed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/.moonbit-version') }}
 
       # Stamp only this runner's checkout. OpenSeek's shared build program uses
       # moon.mod, while Proton 0.2 reads package.version from the project config.
       - name: Stamp release version
         shell: bash
-        run: |
-          set -euo pipefail
-          RELEASE_VERSION="$RELEASE_VERSION" perl -0pi -e '
-            s/^version = "[^"]+"/version = "$ENV{RELEASE_VERSION}"/m
-          ' desktop/moon.mod
-          config_tmp="$RUNNER_TEMP/proton.project.json"
-          jq --arg version "$RELEASE_VERSION" '.package.version = $version' \
-            desktop/proton.project.json > "$config_tmp"
-          mv "$config_tmp" desktop/proton.project.json
-          expected="version = \"$RELEASE_VERSION\""
-          grep -Fx "$expected" desktop/moon.mod
-          jq -e --arg version "$RELEASE_VERSION" \
-            '.package.version == $version' desktop/proton.project.json
+        run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
 
       # Stable, matching CI. This is the toolchain that BUILDS the app, not
       # the seed it ships (that one is pinned by `desktop/.moonbit-version`), but
@@ -184,22 +179,6 @@ jobs:
 
       - name: Update MoonBit package registry
         run: moon update
-
-      # The publish script uploads release artifacts to OSS with ossutil 2.x,
-      # pinned and installed from the official distribution.
-      - name: Install ossutil
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsSL -o "$RUNNER_TEMP/ossutil.zip" \
-            "https://gosspublic.alicdn.com/ossutil/v2/2.3.0/ossutil-2.3.0-mac-arm64.zip"
-          echo "058fd048f321f8c80def8b748030531646eefe3a82837bf16b581ba7d9c84ac7  $RUNNER_TEMP/ossutil.zip" \
-            | shasum -a 256 -c -
-          unzip -q "$RUNNER_TEMP/ossutil.zip" -d "$RUNNER_TEMP/ossutil"
-          sudo install -m 755 \
-            "$RUNNER_TEMP/ossutil/ossutil-2.3.0-mac-arm64/ossutil" \
-            /usr/local/bin/ossutil
-          ossutil version
 
       # GitHub's runner starts without the Developer ID identity available on
       # the developer Mac. Import it into an ephemeral keychain for codesign.
@@ -282,6 +261,182 @@ jobs:
             -czf desktop/dist/SeekMoon.browser.tar.gz \
             browser
 
+      # Only a hand-off to the publish job. The downloadable release artifact
+      # is uploaded there, after OSS has settled which bytes are canonical.
+      - name: Hand macOS and Browser archives to the publish job
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeekMoon-macos-arm64-v${{ needs.release-needed.outputs.version }}-build
+          path: |
+            desktop/dist/SeekMoon.app.zip
+            desktop/dist/SeekMoon.dmg
+            desktop/dist/SeekMoon.browser.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Remove signing keychain
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${SIGNING_KEYCHAIN:-}" && -f "$SIGNING_KEYCHAIN" ]]; then
+            security delete-keychain "$SIGNING_KEYCHAIN"
+          fi
+
+  release-windows:
+    name: Build Windows
+    needs: release-needed
+    if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      RELEASE_VERSION: ${{ needs.release-needed.outputs.version }}
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # Stable, matching CI, for the same reason as the macOS job below.
+      - name: Set up MoonBit
+        run: |
+          Invoke-RestMethod https://cli.moonbitlang.com/install/powershell.ps1 | Invoke-Expression
+          "$env:USERPROFILE\.moon\bin" >> $env:GITHUB_PATH
+
+      - name: Show MoonBit version
+        run: moon version --all
+
+      - name: Update MoonBit package registry
+        run: moon update
+
+      - name: Cache Proton runtime
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/moon.mod') }}
+
+      - name: Cache MoonBit toolchain seed
+        uses: actions/cache@v4
+        with:
+          path: desktop/target/moonbit/cache
+          key: moonbit-seed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/.moonbit-version') }}
+
+      - name: Assemble Proton CEF runtime
+        working-directory: desktop
+        run: |
+          $manifest = Get-Content moon.mod -Raw
+          if ($manifest -notmatch '"moonbit-community/proton@([^"]+)"') {
+            throw 'desktop/moon.mod does not pin Proton'
+          }
+          moonx "moonbit-community/proton_cli@$($Matches[1])" cef setup
+
+      # After the cache steps: stamping edits moon.mod, whose hash keys the
+      # Proton runtime cache.
+      - name: Stamp release version
+        shell: bash
+        run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
+
+      - name: Build Windows ZIP
+        run: moon run ./desktop/package/windows --target native -- --release --target zip
+
+      # Proton names the portable ZIP after the executable. The release keeps
+      # the platform in the filename, matching the other download names.
+      - name: Verify packaged application version
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module -e '
+            import { readFile } from "node:fs/promises";
+            const manifest = JSON.parse(await readFile("desktop/dist/seekmoon/proton-package.json", "utf8"));
+            const version = process.env.RELEASE_VERSION;
+            if (manifest.version !== version || manifest.bundle_version !== version) {
+              throw new Error(`packaged ${manifest.version} (bundle ${manifest.bundle_version}), expected ${version}`);
+            }
+          '
+          mv desktop/dist/seekmoon.zip desktop/dist/SeekMoon-windows-x64.zip
+
+      # Only a hand-off to the publish job. The downloadable release artifact
+      # is uploaded there, after OSS has settled which bytes are canonical.
+      - name: Hand Windows ZIP to the publish job
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeekMoon-windows-x64-v${{ needs.release-needed.outputs.version }}-build
+          path: desktop/dist/SeekMoon-windows-x64.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  # The one job that holds the OSS credentials and the deploy token. It builds
+  # nothing: every archive arrives from a build job above.
+  release-publish:
+    name: Publish
+    needs: [release-needed, release-windows, release-macos]
+    if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENSEEK_API_ORIGIN: ${{ (github.event_name != 'schedule' && inputs.channel == 'staging') && 'https://openseek-api-staging.moonbitlang.cn' || 'https://openseek-api.moonbitlang.cn' }}
+      RELEASE_VERSION: ${{ needs.release-needed.outputs.version }}
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The release script refuses to upload or publish a version other than
+      # the checkout's own, so this checkout is stamped like the builders'.
+      - name: Stamp release version
+        shell: bash
+        run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
+
+      # The release script uploads artifacts to OSS with ossutil 2.x, pinned
+      # and installed from the official distribution.
+      - name: Install ossutil
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/ossutil.zip" \
+            "https://gosspublic.alicdn.com/ossutil/v2/2.3.0/ossutil-2.3.0-linux-amd64.zip"
+          echo "3ae4d9fc85a7a6e9f5654d1599766f1a3a42a3692870887b5ae9338d582ef65a  $RUNNER_TEMP/ossutil.zip" \
+            | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/ossutil.zip" -d "$RUNNER_TEMP/ossutil"
+          sudo install -m 755 \
+            "$RUNNER_TEMP/ossutil/ossutil-2.3.0-linux-amd64/ossutil" \
+            /usr/local/bin/ossutil
+          ossutil version
+
+      # Every platform's archives land in dist/ so the upload, publish, and
+      # verification below cover the whole release.
+      - name: Collect macOS and Browser archives
+        uses: actions/download-artifact@v4
+        with:
+          name: SeekMoon-macos-arm64-v${{ needs.release-needed.outputs.version }}-build
+          path: desktop/dist
+
+      - name: Collect Windows ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: SeekMoon-windows-x64-v${{ needs.release-needed.outputs.version }}-build
+          path: desktop/dist
+
       # Upload artifacts before publication. Until API publish succeeds, a
       # retry may replace nondeterministic rebuilds; a published Browser
       # version restores the exact OSS bytes instead.
@@ -294,25 +449,35 @@ jobs:
           OSS_ACCESS_KEY_ID: ${{ secrets.OPENSEEK_OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OPENSEEK_OSS_ACCESS_KEY_SECRET }}
         run: |
-          desktop/scripts/publish-release.sh upload "v$RELEASE_VERSION"
+          node desktop/scripts/release.mjs upload "v$RELEASE_VERSION"
 
       # A retry of an API-published version replaces this run's nondeterministic
       # rebuilds with the exact OSS objects before reaching here. Keep those
-      # canonical bytes as the downloadable Actions artifact too.
-      - name: Upload release artifacts
+      # canonical bytes as the downloadable Actions artifacts too.
+      - name: Upload macOS release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SeekMoon-macos-arm64-v${{ steps.release.outputs.version }}
+          name: SeekMoon-macos-arm64-v${{ needs.release-needed.outputs.version }}
           path: |
             desktop/dist/SeekMoon.app.zip
             desktop/dist/SeekMoon.dmg
             desktop/dist/SeekMoon.browser.tar.gz
           if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload Windows release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeekMoon-windows-x64-v${{ needs.release-needed.outputs.version }}
+          path: desktop/dist/SeekMoon-windows-x64.zip
+          if-no-files-found: error
+          compression-level: 0
           retention-days: 14
 
       # Publish sends filenames and digests to the API. The API selects the
       # staged Browser version and atomically replaces its own latest.json; it
-      # does not receive the ZIP or DMG.
+      # does not receive the ZIPs or the DMG.
       - name: Publish release
         shell: bash
         env:
@@ -322,95 +487,11 @@ jobs:
           OSS_ACCESS_KEY_ID: ${{ secrets.OPENSEEK_OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OPENSEEK_OSS_ACCESS_KEY_SECRET }}
         run: |
-          desktop/scripts/publish-release.sh publish "v$RELEASE_VERSION"
+          node desktop/scripts/release.mjs publish "v$RELEASE_VERSION"
 
-      - name: Verify release manifest
+      # The release as a user meets it: the manifest, the public download URLs,
+      # and the console, compared with the archives in dist/. Needs no
+      # credentials; the summary lands on the run page.
+      - name: Verify release
         shell: bash
-        run: |
-          set -euo pipefail
-          manifest="$(curl -fsSL "$OPENSEEK_API_ORIGIN/desktop/releases/latest.json")"
-          jq -e --arg version "$RELEASE_VERSION" '.version == $version' \
-            <<< "$manifest"
-
-          platforms=("macos-arm64" "macos-arm64-dmg" "browser")
-          artifacts=(
-            "desktop/dist/SeekMoon.app.zip"
-            "desktop/dist/SeekMoon.dmg"
-            "desktop/dist/SeekMoon.browser.tar.gz"
-          )
-          for index in 0 1 2; do
-            key="${platforms[$index]}"
-            artifact="${artifacts[$index]}"
-            url="$(jq -er --arg key "$key" '.platforms[$key].url' <<< "$manifest")"
-            manifest_sha256="$(jq -er --arg key "$key" '.platforms[$key].sha256' <<< "$manifest")"
-            local_sha256="$(shasum -a 256 "$artifact" | cut -d' ' -f1)"
-            local_size="$(wc -c < "$artifact" | tr -d '[:space:]')"
-            headers="$(curl -fsSI --retry 3 "$url" | tr -d '\r')"
-            served_size="$(awk 'tolower($1) == "content-length:" { print $2; exit }' <<< "$headers")"
-            served_sha256="$(awk 'tolower($1) == "x-oss-meta-sha256:" { print $2; exit }' <<< "$headers")"
-            served_crc64="$(awk 'tolower($1) == "x-oss-hash-crc64ecma:" { print $2; exit }' <<< "$headers")"
-            if [[ "$manifest_sha256" != "$local_sha256" || \
-              "$served_sha256" != "$local_sha256" || \
-              "$served_size" != "$local_size" || \
-              -z "$served_crc64" ]]; then
-              echo "::error::OSS metadata for $key does not match the built artifact"
-              exit 1
-            fi
-            echo "$key ok: $url"
-          done
-
-          archive_sha256="$(shasum -a 256 desktop/dist/SeekMoon.app.zip | cut -d' ' -f1)"
-          dmg_sha256="$(shasum -a 256 desktop/dist/SeekMoon.dmg | cut -d' ' -f1)"
-          browser_sha256="$(shasum -a 256 desktop/dist/SeekMoon.browser.tar.gz | cut -d' ' -f1)"
-          archive_url="$(jq -er '.platforms["macos-arm64"].url' <<< "$manifest")"
-          dmg_url="$(jq -er '.platforms["macos-arm64-dmg"].url' <<< "$manifest")"
-          browser_url="$(jq -er '.platforms.browser.url' <<< "$manifest")"
-
-          browser_manifest="$(curl -fsSL "$OPENSEEK_API_ORIGIN/browser/releases/current.json")"
-          browser_base_url="$OPENSEEK_API_ORIGIN/console/releases/v$RELEASE_VERSION"
-          jq -e \
-            --arg version "$RELEASE_VERSION" \
-            '.version == $version' \
-            <<< "$browser_manifest"
-
-          response_headers="$RUNNER_TEMP/openseek-console-headers"
-          curl -fsS -D "$response_headers" -o /dev/null \
-            "$OPENSEEK_API_ORIGIN/console/"
-          if ! tr -d '\r' < "$response_headers" | grep -Fqx \
-            "location: /console/releases/v${RELEASE_VERSION}/index.html"; then
-            echo "::error::/console/ did not select browser v$RELEASE_VERSION"
-            cat "$response_headers"
-            exit 1
-          fi
-
-          for file in index.html browser.js; do
-            served="$RUNNER_TEMP/openseek-browser-$file"
-            curl -fsSL "$browser_base_url/$file" -o "$served"
-            served_sha256="$(shasum -a 256 "$served" | cut -d' ' -f1)"
-            local_sha256="$(shasum -a 256 "desktop/dist/browser/$file" | cut -d' ' -f1)"
-            if [[ "$served_sha256" != "$local_sha256" ]]; then
-              echo "::error::Served $file digest does not match the release bundle"
-              exit 1
-            fi
-          done
-
-          {
-            echo "## Desktop $RELEASE_CHANNEL release"
-            echo
-            echo "- Version: \`$RELEASE_VERSION\`"
-            echo "- Updater ZIP: $archive_url"
-            echo "- ZIP SHA-256: \`$archive_sha256\`"
-            echo "- Installer DMG: $dmg_url"
-            echo "- DMG SHA-256: \`$dmg_sha256\`"
-            echo "- Browser bundle: $browser_url"
-            echo "- Browser SHA-256: \`$browser_sha256\`"
-            echo "- Browser console: $browser_base_url/"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Remove signing keychain
-        if: always()
-        shell: bash
-        run: |
-          if [[ -n "${SIGNING_KEYCHAIN:-}" && -f "$SIGNING_KEYCHAIN" ]]; then
-            security delete-keychain "$SIGNING_KEYCHAIN"
-          fi
+        run: node desktop/scripts/release.mjs verify "v$RELEASE_VERSION"
