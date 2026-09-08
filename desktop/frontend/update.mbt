@@ -1837,8 +1837,21 @@ fn update(
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
-      cmd, notification_badge_cmd, quick_open_cmd, panel_visibility_cmd, panel_cmd,
-      terminal_cmd, browser_cmd,
+      cmd,
+      notification_badge_cmd,
+      quick_open_cmd,
+      panel_visibility_cmd,
+      panel_cmd,
+      terminal_cmd,
+      browser_cmd,
+      sync_dock_visibility(
+        model.dock.active != previous.dock.active ||
+        model.dock.tabs != previous.dock.tabs ||
+        model.dock.owner != previous.dock.owner ||
+        panel_visibility_changed ||
+        msg.opens_file_before_panel_reconciliation() ||
+        msg is Dock(TabActivated(_)),
+      ),
     ]),
     model,
   )

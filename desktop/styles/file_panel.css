@@ -93,7 +93,7 @@ button.panel-toggle:not(:disabled):hover {
   align-items: center;
   gap: 2px;
   flex: 0 0 auto;
-  max-width: 200px;
+  max-width: min(200px, 100%);
   padding: 4px 4px 4px 10px;
   font-size: var(--font-size-sm);
   color: var(--color-text-faint);
