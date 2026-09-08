@@ -9,8 +9,8 @@ tour of the three viz pieces and the full run recipe.
 
 ## A separate module on purpose
 
-This directory is its own module (`bobzhang/openseek-viz-app`, a `moon.work`
-member), not a package of `bobzhang/openseek`:
+This directory is its own module (`moonbitlang/openseek-viz-app`, a `moon.work`
+member), not a package of `moonbitlang/openseek`:
 
 - it keeps the `moonbit-community/rabbita` DOM framework out of the main
   module's dependency set;

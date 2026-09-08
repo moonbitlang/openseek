@@ -1,6 +1,6 @@
 # OpenSeek Agent Session Store
 
-`bobzhang/openseek/agent_session/store` is the native filesystem persistence
+`moonbitlang/openseek/agent_session/store` is the native filesystem persistence
 layer for typed OpenSeek sessions. It wraps `agent_session.Session` with the
 filesystem rules needed to save, resume, list, and compact durable
 conversations.

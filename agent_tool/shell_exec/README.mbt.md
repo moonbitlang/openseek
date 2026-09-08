@@ -1,6 +1,6 @@
 # Shell Execution Model
 
-`bobzhang/openseek/agent_tool/shell_exec` is the shared execution model behind
+`moonbitlang/openseek/agent_tool/shell_exec` is the shared execution model behind
 every shell command the agent runs: one process, one output owner, one status
 flag. It is the foundation the `shell`, `shell_output`, and `shell_stop` tools
 (and the `bgjobs` registry) are built on.

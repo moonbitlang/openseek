@@ -1,10 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/mcp/streamhttp"
+package "moonbitlang/openseek/mcp/streamhttp"
 
 import {
-  "bobzhang/openseek/jsonrpc",
-  "bobzhang/openseek/mcp",
   "moonbitlang/async",
+  "moonbitlang/openseek/jsonrpc",
+  "moonbitlang/openseek/mcp",
 }
 
 // Values

@@ -1,6 +1,6 @@
 import {
-  "bobzhang/openseek/agent_tool",
-  "bobzhang/openseek/agent_tool/finish/internal/decode",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/finish/internal/decode",
   "moonbitlang/core/json",
 }
 

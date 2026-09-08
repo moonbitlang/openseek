@@ -12,7 +12,7 @@ One shared engine, three frontends. `cmd/openseek` is the engine (headless
 automation: `run`/`serve`/`review`/`subrun`/`mcp`/`sessions`; the desktop app and the
 viz server are separate executables that spawn or read from it): its `serve`
 mode reads JSONL commands on stdin and streams typed JSONL events
-(`bobzhang/openseek_protocol`) on stdout. The terminal UI (`openseek_tui`, in
+(`moonbitlang/openseek_protocol`) on stdout. The terminal UI (`openseek_tui`, in
 its own repository, [moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui)), the desktop app,
 and headless `run` all drive that same engine and event stream. Durable state lives in append-only session files that
 the visualizer reads directly.
@@ -55,7 +55,7 @@ flowchart LR
   FILES --> VIZ
 ```
 
-The engine ↔ frontend wire contract is `bobzhang/openseek_protocol`: commands
+The engine ↔ frontend wire contract is `moonbitlang/openseek_protocol`: commands
 in (`prompt`, `steer`, `cancel`, `compact`, `goal`), events out (steps,
 deltas, tool results, goal/plan reminders, compaction, terminals). The
 protocol module is backend-neutral so any frontend — including the JS ones —

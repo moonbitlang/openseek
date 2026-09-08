@@ -1,8 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/eval/session_analyzer"
+package "moonbitlang/openseek/eval/session_analyzer"
 
 import {
-  "bobzhang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session",
 }
 
 // Values

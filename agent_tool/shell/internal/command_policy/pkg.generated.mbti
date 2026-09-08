@@ -1,8 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/shell/internal/command_policy"
+package "moonbitlang/openseek/agent_tool/shell/internal/command_policy"
 
 import {
-  "bobzhang/openseek/agent_tool/shell/internal/shell_parse",
+  "moonbitlang/openseek/agent_tool/shell/internal/shell_parse",
 }
 
 // Values

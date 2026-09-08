@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/internal/moon_check"
+package "moonbitlang/openseek/agent_tool/internal/moon_check"
 
 // Values
 pub const Command : String = "moon check --diagnostic-limit 1"

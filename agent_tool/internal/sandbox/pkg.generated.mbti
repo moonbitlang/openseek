@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/internal/sandbox"
+package "moonbitlang/openseek/agent_tool/internal/sandbox"
 
 // Values
 pub fn output_reports_policy_refusal(String) -> Bool

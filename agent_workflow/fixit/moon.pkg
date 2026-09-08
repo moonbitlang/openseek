@@ -1,5 +1,5 @@
 import {
-  "bobzhang/openseek/agent_workflow",
+  "moonbitlang/openseek/agent_workflow",
   "moonbitlang/workflow",
   "moonbitlang/async",
 }

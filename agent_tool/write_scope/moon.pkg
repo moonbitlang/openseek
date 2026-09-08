@@ -1,12 +1,12 @@
 import {
-  "bobzhang/openseek/internal/workspace_path",
+  "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/x/path",
 }
 
 import {
-  "bobzhang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/async",
   "moonbitlang/async/fs",
 } for "test"

@@ -1,7 +1,7 @@
 import {
-  "bobzhang/openseek/agent_tool",
-  "bobzhang/openseek/agent_tool/goal/internal/decode",
-  "bobzhang/openseek/agent_tool/internal/error" @tool_error,
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/goal/internal/decode",
+  "moonbitlang/openseek/agent_tool/internal/error" @tool_error,
   "moonbitlang/core/json",
 }
 

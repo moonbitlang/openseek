@@ -1,19 +1,19 @@
 import {
-  "bobzhang/openseek/agent_tool",
-  "bobzhang/openseek/agent_subrun/host",
-  "bobzhang/openseek/agent_tool/bgjobs",
-  "bobzhang/openseek/agent_runtime",
-  "bobzhang/openseek/agent_tool/mbtx/internal/decode",
-  "bobzhang/openseek/agent_tool/internal/error" @tool_error,
-  "bobzhang/openseek/agent_tool/internal/sandbox",
-  "bobzhang/openseek/internal/workspace_path",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_subrun/host",
+  "moonbitlang/openseek/agent_tool/bgjobs",
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_tool/mbtx/internal/decode",
+  "moonbitlang/openseek/agent_tool/internal/error" @tool_error,
+  "moonbitlang/openseek/agent_tool/internal/sandbox",
+  "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
-  "bobzhang/openseek_protocol",
-  "bobzhang/openseek_protocol/emit",
+  "moonbitlang/openseek_protocol",
+  "moonbitlang/openseek_protocol/emit",
 }
 
 warnings = "+unnecessary_annotation"
@@ -23,15 +23,15 @@ supported_targets = "+wasm+native"
 import {
   "moonbitlang/async",
   "moonbitlang/core/json",
-  "bobzhang/openseek/agent_runtime",
-  "bobzhang/openseek/agent_subrun/host",
-  "bobzhang/openseek/agent_tool/bgjobs",
-  "bobzhang/openseek/testkit/filesystem" @vfs,
-  "bobzhang/openseek_protocol/emit",
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_subrun/host",
+  "moonbitlang/openseek/agent_tool/bgjobs",
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek_protocol/emit",
 } for "test"
 
 import {
-  "bobzhang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
 } for "wbtest"
 
 options(

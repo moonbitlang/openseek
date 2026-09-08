@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek-scripts/internal/markdown_comments"
+package "moonbitlang/openseek-scripts/internal/markdown_comments"
 
 // Values
 pub fn without_comments(String) -> String

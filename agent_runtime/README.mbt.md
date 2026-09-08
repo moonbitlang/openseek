@@ -1,6 +1,6 @@
 # OpenSeek Agent Runtime
 
-`bobzhang/openseek/agent_runtime` owns the small piece of per-agent-loop state
+`moonbitlang/openseek/agent_runtime` owns the small piece of per-agent-loop state
 that side-effectful tools need but concrete tool packages should not own:
 
 - the workspace root used by local tools to resolve relative paths;

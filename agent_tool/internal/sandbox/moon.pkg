@@ -3,17 +3,17 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
   "moonbitlang/x/path",
-  "bobzhang/openseek/agent_tool/internal/platform_shell",
-  "bobzhang/openseek/agent_tool/internal/source_write_policy",
-  "bobzhang/openseek/internal/workspace_path",
+  "moonbitlang/openseek/agent_tool/internal/platform_shell",
+  "moonbitlang/openseek/agent_tool/internal/source_write_policy",
+  "moonbitlang/openseek/internal/workspace_path",
 }
 
 import {
-  "bobzhang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
 } for "wbtest"
 
 import {
-  "bobzhang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",

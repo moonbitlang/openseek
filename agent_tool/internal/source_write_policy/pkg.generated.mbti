@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/internal/source_write_policy"
+package "moonbitlang/openseek/agent_tool/internal/source_write_policy"
 
 // Values
 pub fn is_moon_managed_workspace_path(String, String) -> Bool

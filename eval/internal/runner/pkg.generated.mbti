@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/eval/internal/runner"
+package "moonbitlang/openseek/eval/internal/runner"
 
 // Values
 pub fn padded_index(Int) -> String

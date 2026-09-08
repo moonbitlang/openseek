@@ -1,12 +1,12 @@
 # DeepSeek Client
 
 This package is the effectful HTTP transport for DeepSeek-, Kimi-, and
-Z.AI-compatible chat completions. It uses `bobzhang/openseek/deepseek` for typed
+Z.AI-compatible chat completions. It uses `moonbitlang/openseek/deepseek` for typed
 models, messages, tool definitions, request JSON encoding, and response JSON
 decoding.
 
 Use this package when code needs to call a supported provider API. Keep pure
-request/response tests in `bobzhang/openseek/deepseek`; use this package for
+request/response tests in `moonbitlang/openseek/deepseek`; use this package for
 transport behavior such as retries, HTTP errors, and streaming.
 
 The package depends on `moonbitlang/async/http` and is native-only.

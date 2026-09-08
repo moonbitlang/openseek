@@ -1,8 +1,8 @@
 # OpenSeek Protocol Writer
 
-`bobzhang/openseek_protocol/emit` writes an `Event` to the engine's stdout JSONL
+`moonbitlang/openseek_protocol/emit` writes an `Event` to the engine's stdout JSONL
 stream — the events the desktop host, the TUI, and any script driving `run` or
-`serve` decode. It is the effectful half of `bobzhang/openseek_protocol`, the
+`serve` decode. It is the effectful half of `moonbitlang/openseek_protocol`, the
 way `deepseek/client` is the effectful half of `deepseek`: the parent package
 is pure and portable, this one is native-only and does the I/O.
 
@@ -31,8 +31,8 @@ So the split runs along the effect, not along the data:
 
 | | package | targets |
 | --- | --- | --- |
-| `Event`, `Usage`, `to_json`, `parse` | `bobzhang/openseek_protocol` | js, wasm, wasm-gc, native |
-| `emit`, the stdout sink | `bobzhang/openseek_protocol/emit` (here) | native |
+| `Event`, `Usage`, `to_json`, `parse` | `moonbitlang/openseek_protocol` | js, wasm, wasm-gc, native |
+| `emit`, the stdout sink | `moonbitlang/openseek_protocol/emit` (here) | native |
 
 ## What this package owns
 

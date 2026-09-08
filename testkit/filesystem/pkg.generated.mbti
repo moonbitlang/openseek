@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/testkit/filesystem"
+package "moonbitlang/openseek/testkit/filesystem"
 
 // Values
 pub async fn dir_outline(String, max_depth? : Int, max_dirs? : Int) -> String?

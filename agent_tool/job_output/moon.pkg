@@ -1,12 +1,12 @@
 import {
-  "bobzhang/openseek/agent_tool",
-  "bobzhang/openseek/agent_tool/bgjobs",
-  "bobzhang/openseek/agent_tool/internal/sandbox",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/bgjobs",
+  "moonbitlang/openseek/agent_tool/internal/sandbox",
   "moonbitlang/core/json",
 }
 
 import {
-  "bobzhang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_runtime",
   "moonbitlang/async",
   "moonbitlang/async/fs",
 } for "test"

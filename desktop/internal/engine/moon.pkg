@@ -1,8 +1,8 @@
 import {
-  "bobzhang/openseek/agent_session",
-  "bobzhang/openseek/agent_session/store",
-  "bobzhang/openseek/viz_export",
-  "bobzhang/openseek_protocol" @wire,
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/openseek/viz_export",
+  "moonbitlang/openseek_protocol" @wire,
   "moonbitlang/jsonl",
   "openseek_desktop/internal/env",
   "openseek_desktop/internal/fsx",

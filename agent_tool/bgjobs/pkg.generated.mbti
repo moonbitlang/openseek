@@ -1,11 +1,11 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/bgjobs"
+package "moonbitlang/openseek/agent_tool/bgjobs"
 
 import {
-  "bobzhang/openseek/agent_runtime",
-  "bobzhang/openseek/agent_tool/internal/sandbox",
-  "bobzhang/openseek/agent_tool/shell_exec",
   "moonbitlang/async/process",
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_tool/internal/sandbox",
+  "moonbitlang/openseek/agent_tool/shell_exec",
 }
 
 // Values

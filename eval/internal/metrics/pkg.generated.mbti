@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/eval/internal/metrics"
+package "moonbitlang/openseek/eval/internal/metrics"
 
 // Values
 pub fn count_lines_containing_all(String, Array[String]) -> Int

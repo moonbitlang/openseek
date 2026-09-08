@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/shell/internal/git_policy"
+package "moonbitlang/openseek/agent_tool/shell/internal/git_policy"
 
 // Values
 pub fn global_option_reconfigures(String) -> Bool
