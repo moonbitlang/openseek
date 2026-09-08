@@ -718,6 +718,7 @@ fn transcript_view(
   overview~ : @transcript_overview.State,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
   stream~ : Map[String, @html.Html],
+  image_root~ : @html.Html,
   on_jump_latest~ : @cmd.Cmd,
 ) -> @html.Html {
   let children = section_children(
@@ -726,6 +727,7 @@ fn transcript_view(
     pinned~,
     overview~,
     overview_emit~,
+    image_root~,
     on_jump_latest~,
   )
   // Nothing in the app reads the session back from the DOM: the component is

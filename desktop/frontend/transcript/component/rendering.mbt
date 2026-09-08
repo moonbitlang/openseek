@@ -598,6 +598,7 @@ fn section_children(
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
+  image_root~ : @html.Html,
   on_jump_latest~ : @cmd.Cmd,
 ) -> Map[String, @html.Html] {
   let visible_items = input.items.map(row => row.item)
@@ -623,6 +624,9 @@ fn section_children(
     TranscriptSectionKey::stream(input).wire(),
     @html.div(id="stream", class="stream", stream),
   )
+  // Empty Html from the image root branch (see `component`): present so the
+  // branch is part of the rendered graph, never anything visible.
+  children.set("image-root", image_root)
   // Reading history unpins auto-follow (see `watch_transcript_scroll`); the
   // floating button is the way back to the live tail. Sticky inside the
   // scroller with zero height, so it never adds scroll length.
