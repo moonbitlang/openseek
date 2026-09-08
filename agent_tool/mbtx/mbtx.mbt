@@ -402,8 +402,10 @@ async fn execute(
   defer cleanup()
   // Keep disposable compiler inputs and artifacts apart from `tmp`, whose
   // result files may need to remain readable after a background job exits.
-  // Moon places each single-file build under a directory named after its
-  // input, so its target directory must be separate from snippet.mbtx.
+  // `dir` is one numbered call directory under `job_dir` or `scratch_dir`,
+  // or a fresh system temp directory when neither was supplied. Keep moon's
+  // target directory in `build/_build`: single-file builds append the input
+  // filename, so targeting `build` itself collides with `build/snippet.mbtx`.
   let build_dir = "\{dir}/build"
   @fs.mkdir(build_dir) catch {
     error if @async.is_being_cancelled() => raise error
@@ -953,6 +955,8 @@ async fn build_snippet(
       ),
     )
   }
+  // Older moon versions without an artifact report write directly under the
+  // configured target directory; newer versions report their per-file path.
   let artifact = parse_artifacts_path(raw).unwrap_or(
     "\{build_dir}/_build/wasm/debug/build/single/single.wasm",
   )
@@ -1160,9 +1164,12 @@ fn temp_path_rewrites(bases : Array[String]) -> Array[(String, String)] {
   for base in bases {
     for sep in ["/", "\\"] {
       // `.mbtx` first: replacing `snippet.mbt` before it would leave a stray
-      // `x` (`sourcex`). `snippet.mbt` is the generated file at the top of the
-      // target-dir; `_build/snippet.mbt` covers the older build layout.
+      // `x` (`sourcex`). Older moon versions copy the source to `snippet.mbt`
+      // under the target directory, sometimes with another `_build` layer.
       rewrites.push(("\{base}\{sep}snippet.mbtx", "source"))
+      rewrites.push(
+        ("\{base}\{sep}_build\{sep}_build\{sep}snippet.mbt", "source"),
+      )
       rewrites.push(("\{base}\{sep}_build\{sep}snippet.mbt", "source"))
       rewrites.push(("\{base}\{sep}snippet.mbt", "source"))
     }
