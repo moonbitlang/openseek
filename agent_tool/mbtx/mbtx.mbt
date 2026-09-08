@@ -402,6 +402,8 @@ async fn execute(
   defer cleanup()
   // Keep disposable compiler inputs and artifacts apart from `tmp`, whose
   // result files may need to remain readable after a background job exits.
+  // Moon places each single-file build under a directory named after its
+  // input, so its target directory must be separate from snippet.mbtx.
   let build_dir = "\{dir}/build"
   @fs.mkdir(build_dir) catch {
     error if @async.is_being_cancelled() => raise error
@@ -651,7 +653,7 @@ async fn execute(
         "--target",
         input.target,
         "--target-dir",
-        build_dir,
+        "\{build_dir}/_build",
         ..if !input.warning {
           ["--warn-list", WarnOffList]
         },
@@ -897,7 +899,7 @@ async fn build_snippet(
     "--target",
     "wasm",
     "--target-dir",
-    build_dir,
+    "\{build_dir}/_build",
     ..if !warning {
       ["--warn-list", WarnOffList]
     },
@@ -952,7 +954,7 @@ async fn build_snippet(
     )
   }
   let artifact = parse_artifacts_path(raw).unwrap_or(
-    "\{build_dir}/wasm/debug/build/single/single.wasm",
+    "\{build_dir}/_build/wasm/debug/build/single/single.wasm",
   )
   let artifact_present = @fs.exists(artifact) catch {
     error if @async.is_being_cancelled() => raise error
