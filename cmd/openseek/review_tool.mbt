@@ -110,8 +110,8 @@ async fn execute_review(
     Some(report) =>
       @agent_tool.respond(
         report.digest(),
-        is_error=report.findings.any(f => f.severity == "blocker"),
-        brief="review \{result.subrun_id()} (\{report.findings.length()} finding(s), \{result.steps_used()} step(s))",
+        is_error=report.has_blockers(),
+        brief="review \{result.subrun_id()} (\{report.finding_count()} finding(s), \{result.steps_used()} step(s))",
       )
     None =>
       @agent_tool.respond(

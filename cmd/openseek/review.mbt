@@ -72,7 +72,7 @@ async fn run_review_cli(
     }
   }
   @stdio.stdout.write(report.to_json_string() + "\n")
-  if report.findings.any(f => f.severity == "blocker") {
+  if report.has_blockers() {
     remove_scratch_lab(scratch_dir)
     @sys.exit(2)
   }
