@@ -65,21 +65,28 @@ fn RequestProgress::streamed(self : Self) -> Bool {
 }
 
 ///|
+/// One line naming what went wrong, for both the final failure message and
+/// the retry notice. Preserves the original payload, including errors not
+/// classified here.
+fn error_detail(error : Error) -> String {
+  match error {
+    IdleTimeout(context, timeout_ms) =>
+      "Request idle for \{timeout_ms} ms: \{context}"
+    HttpStatusError(code, body) => "HTTP \{code}: \{body}"
+    StreamEnded => "Stream ended before [DONE]"
+    StreamTransport(cause) => "Stream transport error: \{@debug.Repr(cause)}"
+    @http.IncorrectBodyLength => "HTTP response body length mismatch"
+    error => "\{@debug.Repr(error)}"
+  }
+}
+
+///|
 fn RequestProgress::failure_message(
   self : Self,
   client : Client,
   error : Error,
 ) -> String {
-  // Preserve the original payload, including errors not classified here.
-  let detail = match error {
-    IdleTimeout(context, timeout_ms) =>
-      "Request idle for \{timeout_ms} ms: \{context}"
-    HttpStatusError(code, body) => "HTTP \{code}: \{body}"
-    StreamEnded => "Stream ended before [DONE]"
-    StreamTransport(detail) => "Stream transport error: \{detail}"
-    @http.IncorrectBodyLength => "HTTP response body length mismatch"
-    error => "\{@debug.Repr(error)}"
-  }
+  let detail = error_detail(error)
   let reason = match self.stop_reason {
     StreamStarted => "Not retried because response data was already received."
     NotRetryable => "This error cannot be retried automatically."

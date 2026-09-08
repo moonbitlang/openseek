@@ -83,8 +83,16 @@ and `context_yield` are omitted. The separate `agent.finished` lifecycle
 notification remains, including its optional `answer`;
 `compaction_finished` remains with an empty `summary` so it still closes the
 lifecycle state. Deltas — including the `reasoning_delta` progress stream —
-usage, step progress, tool-decode errors, runtime status, steer
-receipts, and all other run/compaction lifecycle and error events are unchanged.
+usage, step progress, `stream_retry` boundaries, tool-decode errors, runtime
+status, steer receipts, and all other run/compaction lifecycle and error events
+are unchanged.
+`stream_retry` means the provider request for the current model step failed
+and the engine is waiting out its backoff before attempt `attempt` of
+`max_attempts`: clients must discard that attempt's live reasoning and answer
+deltas and should show the retry (Desktop replaces the step heartbeat with
+"Retrying · attempt 2/5 · reason"), but must not remove durable transcript rows
+or advance the step. It is never a `session.event` and never appears in
+`session.jsonl`.
 Before publishing a new `agent_step` or a successful terminal lifecycle event,
 the Desktop host drains that session's serialized follower. Consequently every
 durable commit preceding the boundary reaches both local and remote clients
@@ -283,7 +291,7 @@ Notifications:
 | method | params |
 |---|---|
 | `agent.started` | `{run_id, submission_id?, session, engine, model, max_steps, session_root?}` — `session_root` is a host-derived durable-store fact, never a client-selected path; the prompt bubble comes from its own `session.event` commit |
-| `agent.event` | `{run_id?, session, event: {…}}` — the engine's event object (`assistant_delta`, `tool_result`, `agent_finished`, …); for a correlated steer receipt the host adds its optional `submission_id`. `run_id` is absent for events emitted before any run of the engine process's lifetime (a compaction on a freshly spawned engine), which route by `session` |
+| `agent.event` | `{run_id?, session, event: {…}}` — the engine's event object (`assistant_delta`, `stream_retry`, `tool_result`, `agent_finished`, …); for a correlated steer receipt the host adds its optional `submission_id`. `stream_retry` carries `{attempt, max_attempts, reason}`: it clears only the failed attempt's transient deltas and announces the retry the engine is waiting to make. `run_id` is absent for events emitted before any run of the engine process's lifetime (a compaction on a freshly spawned engine), which route by `session` |
 | `agent.error` | `{message, run_id?, exit_code?, diagnostics?}` |
 | `agent.finished` | `{run_id, status, answer?, exit_code?}` — the run's outcome, published when the engine's stdout event that ends the turn arrives, or at the engine's death for a turn whose event never came (`failed`). The durable record renders the conversation and never settles a run: the two travel independently, so a client may see this before, after, or without the matching `session.event` commit |
 

@@ -14,6 +14,14 @@ pub(all) enum Event {
   // ── agent loop ─────────────────────────────────────────────────────────
   AgentSetupFailed(error~ : String)
   AgentStep(step~ : Int)
+  /// The current step's provider request failed and attempt `attempt` (of
+  /// `max_attempts`) is about to be made, after the client's backoff. It is
+  /// emitted when the retry is decided, so a controller can discard the failed
+  /// attempt's live output and show the retry while the client waits. This is
+  /// transient controller state: it is emitted on the live JSONL stream, never
+  /// represented by `agent_session.SessionItem`, and therefore never appended
+  /// to `session.jsonl`.
+  StreamRetry(attempt~ : Int, max_attempts~ : Int, reason~ : String)
   AgentAborted(reason~ : String)
   AgentFinished(answer~ : String)
   MaxStepsExhausted

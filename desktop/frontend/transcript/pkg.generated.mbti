@@ -33,6 +33,7 @@ pub fn subrun_parent(String) -> String?
 // Types and methods
 pub(all) enum EngineEvent {
   AgentStep(Int?)
+  StreamRetry(attempt~ : Int, max_attempts~ : Int, reason~ : String)
   AssistantDelta(String)
   ReasoningDelta(String)
   ReasoningMessage(String)

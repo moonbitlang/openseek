@@ -8,6 +8,10 @@ pub(all) enum EngineEvent {
   // carries it (`AtStep`) is: every engine that emits `agent_step` has
   // numbered it (1f761102, the commit that introduced both).
   AgentStep(Int?)
+  // The provider request for the current step failed and is being retried.
+  // The view discards the failed attempt's transient streams and shows the
+  // retry while the engine waits out its backoff.
+  StreamRetry(attempt~ : Int, max_attempts~ : Int, reason~ : String)
   AssistantDelta(String)
   ReasoningDelta(String)
   ReasoningMessage(String)
@@ -98,6 +102,8 @@ pub fn decode_engine_event(
 ) -> EngineEvent? {
   match stream.event {
     AgentStep(step~) => Some(AgentStep(Some(step)))
+    StreamRetry(attempt~, max_attempts~, reason~) =>
+      Some(StreamRetry(attempt~, max_attempts~, reason~))
     AssistantDelta(content~) => Some(AssistantDelta(content))
     ReasoningDelta(content~) => Some(ReasoningDelta(content))
     ReasoningMessage(content~) => Some(ReasoningMessage(content))
@@ -216,6 +222,23 @@ fn event_fields(json : Json) -> @desktop_protocol.AgentStreamEvent raise {
 
 ///|
 test "decode recognizes the streaming events" {
+  assert_true(
+    decode_engine_event(
+      event_fields({
+        "event": "stream_retry",
+        "attempt": 2,
+        "max_attempts": 5,
+        "reason": "Stream ended before [DONE]",
+      }),
+    )
+    is Some(
+      StreamRetry(
+        attempt=2,
+        max_attempts=5,
+        reason="Stream ended before [DONE]"
+      )
+    ),
+  )
   guard decode_engine_event(
       event_fields({ "event": "assistant_delta", "content": "abc" }),
     )

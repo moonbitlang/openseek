@@ -1099,6 +1099,23 @@ fn apply_engine_event(
         },
       )
     }
+    // The engine is waiting out a backoff before reopening this step's
+    // provider request. Drop every delta of the failed attempt so the
+    // replacement stream cannot be concatenated with it, and show the retry
+    // in the heartbeat; the step and every durable row stay as they are.
+    StreamRetry(attempt~, max_attempts~, reason~) => {
+      let cleared = conv.clear_streams()
+      (
+        None,
+        {
+          ..cleared,
+          turn: {
+            ..cleared.turn,
+            retrying: Some({ attempt, max_attempts, reason, }),
+          },
+        },
+      )
+    }
     AssistantDelta(content) =>
       if content.is_empty() {
         (None, conv)
@@ -1109,7 +1126,11 @@ fn apply_engine_event(
           None,
           {
             ..conv,
-            turn: { ..conv.turn, streaming_response: Some(carried + content), },
+            turn: {
+              ..conv.turn,
+              streaming_response: Some(carried + content),
+              retrying: None,
+            },
           },
         )
       }
@@ -1134,6 +1155,7 @@ fn apply_engine_event(
                 content: carried + content,
                 complete: false,
               }),
+              retrying: None,
             },
           },
         )
@@ -9086,6 +9108,60 @@ test "a new agent step clears the live stream" {
 }
 
 ///|
+test "a stream retry clears previews and shows the retry until a delta lands" {
+  let dispatch = test_dispatch()
+  let model = running_model().replace_conversation({
+    ..running_conversation(),
+    run: Open(run_id="r7", stage=AtStep(Some(2))),
+    turn: {
+      ..running_conversation().turn,
+      streaming_response: Some("left"),
+      live_reasoning: Some({ content: "old thought", complete: false, }),
+    },
+  })
+  let (_, retrying) = update_dev(
+    dispatch,
+    Engine(
+      Some("r7"),
+      StreamRetry(
+        attempt=2,
+        max_attempts=5,
+        reason="Stream ended before [DONE]",
+      ),
+      session=None,
+    ),
+    model,
+  )
+  let conv = retrying.active()
+  assert_eq(conv.turn.streaming_response, None)
+  assert_eq(conv.turn.live_reasoning, None)
+  assert_true(conv.run is Open(run_id="r7", stage=AtStep(Some(2))))
+  assert_true(
+    conv.run_heartbeat()
+    is Some(
+      {
+        stage: Retrying(
+          attempt=2,
+          max_attempts=5,
+          reason="Stream ended before [DONE]"
+        ),
+        ..
+      }
+    ),
+  )
+  // The replacement attempt's first delta ends the notice.
+  let (_, streaming) = update_dev(
+    dispatch,
+    Engine(Some("r7"), AssistantDelta("again"), session=None),
+    retrying,
+  )
+  assert_eq(streaming.active().turn.streaming_response, Some("again"))
+  assert_true(
+    streaming.active().run_heartbeat() is Some({ stage: AtStep(2), .. }),
+  )
+}
+
+///|
 test "finished run clears any leftover stream" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
@@ -11335,6 +11411,7 @@ test "a run boundary discards the previous turn's live state whole" {
     turn: {
       streaming_response: Some("old answer fragment"),
       live_reasoning: None,
+      retrying: None,
       reasoning_frontier: 0,
       subruns: [lane],
       usage_tokens: 4200,

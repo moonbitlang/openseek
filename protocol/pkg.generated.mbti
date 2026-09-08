@@ -32,6 +32,7 @@ pub fn Command::to_repr(Self) -> @debug.Repr
 pub(all) enum Event {
   AgentSetupFailed(error~ : String)
   AgentStep(step~ : Int)
+  StreamRetry(attempt~ : Int, max_attempts~ : Int, reason~ : String)
   AgentAborted(reason~ : String)
   AgentFinished(answer~ : String)
   MaxStepsExhausted

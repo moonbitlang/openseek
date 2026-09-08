@@ -236,12 +236,13 @@ async fn read_stream_line(
       @async.with_timeout_opt(idle_timeout_ms, () => reader.read_until("\n"))
     }
   } catch {
-    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
-      raise error
+    error if @async.is_being_cancelled() => raise error
     // A socket reset/close while reading is the same retry class as EOF and an
-    // idle timeout; keeping it out of `Failure` lets `Client::chat` tell it
-    // apart from callback and malformed-SSE failures.
-    error => raise StreamTransport("\{error}")
+    // idle timeout. Only those are re-tagged: HTTP framing errors and anything
+    // else the reader raises are deterministic and stay non-replayable.
+    @io.ReaderClosed | @os_error.OSError(_) as cause =>
+      raise StreamTransport(cause)
+    error => raise error
   }
 }
 

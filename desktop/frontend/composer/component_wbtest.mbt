@@ -419,6 +419,12 @@ test "the heartbeat reports only the detail it actually has" {
   }
   assert_eq(bare(Starting), "Starting…")
   assert_eq(bare(AtStep(3)), "Working · step 3")
+  assert_eq(
+    bare(
+      Retrying(attempt=2, max_attempts=5, reason="Stream ended before [DONE]"),
+    ),
+    "Retrying · attempt 2/5 · Stream ended before [DONE]",
+  )
   assert_eq(bare(Working), "Working…")
   assert_eq(bare(Stopping), "Stopping…")
 }

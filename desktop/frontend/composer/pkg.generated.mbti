@@ -274,6 +274,7 @@ pub(all) enum RunStage {
   Starting
   Thinking
   AtStep(Int)
+  Retrying(attempt~ : Int, max_attempts~ : Int, reason~ : String)
   Working
   Stopping
 } derive(Eq, @debug.Debug)

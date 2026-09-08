@@ -825,6 +825,8 @@ fn RunHeartbeat::label(self : RunHeartbeat, clock_ms~ : Double) -> String {
     Starting => "Starting…"
     Thinking => "Thinking…"
     AtStep(step) => "Working · step \{step}"
+    Retrying(attempt~, max_attempts~, reason~) =>
+      "Retrying · attempt \{attempt}/\{max_attempts} · \{reason}"
     Working => "Working…"
     Stopping => "Stopping…"
   }

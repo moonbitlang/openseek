@@ -92,16 +92,21 @@ pub fn Client::Client(
 /// By default a failure after the first SSE event is final: the completion is
 /// already running and billed, and replaying it could duplicate content or
 /// regenerate a tool call. Supplying `on_retry` says the consumer can discard
-/// every fragment it received from a failed attempt. A socket error, EOF
-/// before `[DONE]`, or idle timeout then reopens the same request, and
-/// `on_retry` runs immediately before that next attempt so the consumer can
-/// clear the failed attempt's output. It is not called for a retry before the
-/// first event, since there is nothing to discard. Malformed SSE and errors
-/// raised by the delta callbacks stay final either way.
+/// every fragment it received from a failed attempt, which lets a socket
+/// error, EOF before `[DONE]`, or idle timeout reopen the same request.
+/// Malformed SSE and errors raised by the delta callbacks stay final either
+/// way.
+///
+/// `on_retry(attempt, max_attempts, reason)` runs for every retry the client
+/// is about to make, before its backoff sleep: `attempt` is the 1-based number
+/// of the attempt that will follow, `max_attempts` the total budget, and
+/// `reason` describes the failure. Pre-stream retries (429, 5xx, connect
+/// errors) report through it too, so a consumer can show that the request is
+/// being retried rather than silently waiting.
 pub struct StreamHandler {
   priv on_content_delta : async (String) -> Unit
   priv on_reasoning_delta : async (String) -> Unit
-  priv on_retry : (() -> Unit)?
+  priv on_retry : ((Int, Int, String) -> Unit)?
 }
 
 ///|
@@ -109,7 +114,7 @@ pub struct StreamHandler {
 pub fn StreamHandler::StreamHandler(
   on_content_delta~ : async (String) -> Unit,
   on_reasoning_delta? : async (String) -> Unit = _ => (),
-  on_retry? : () -> Unit,
+  on_retry? : (Int, Int, String) -> Unit,
 ) -> StreamHandler {
   { on_content_delta, on_reasoning_delta, on_retry, }
 }
@@ -129,7 +134,7 @@ priv suberror RetryableApiError {
   HttpStatusError(Int, String)
   IdleTimeout(String, Int)
   StreamEnded
-  StreamTransport(String)
+  StreamTransport(Error)
 }
 
 ///|
@@ -158,7 +163,9 @@ let max_backoff_ms : Int = 60_000
 /// anything else is transport-shaped (connect refused, reset, DNS) and
 /// retries within budget. `bail` lets an attempt declare later retries
 /// pointless for the error it raised; streaming chat uses it to refuse
-/// replaying a half-consumed completion (see `StreamHandler`).
+/// replaying a half-consumed completion (see `StreamHandler`). `on_retry`
+/// runs with the number of the attempt about to start and the error that
+/// prompted it, at the decision point and therefore before the backoff sleep.
 ///
 /// Errors propagate with their types intact. The chat boundary observes the
 /// final cause before adding request context for the caller.
@@ -167,7 +174,9 @@ async fn[T] Client::with_retries(
   attempt : async () -> T,
   bail : (Error) -> Bool,
   progress? : RequestProgress,
+  on_retry? : (Int, Error) -> Unit = (_, _) => (),
 ) -> T {
+  let mut attempts = 0
   @async.retry(
     ExponentialDelay(
       initial=self.retry_backoff_ms,
@@ -191,9 +200,17 @@ async fn[T] Client::with_retries(
           AttemptsExhausted
         }
       }
+      // `fatal_error` also runs for the last attempt of the budget, when no
+      // retry follows; only announce a retry that will actually happen.
+      if !fatal && attempts < self.retry_attempts {
+        on_retry(attempts + 1, error)
+      }
       fatal
     },
-    attempt,
+    () => {
+      attempts += 1
+      attempt()
+    },
   )
 }
 
@@ -229,11 +246,6 @@ pub async fn Client::chat(
         let progress = RequestProgress()
         self.with_retries(
           () => {
-            // `progress` still describes the previous attempt here, so this is
-            // the boundary where an opted-in handler discards its output.
-            if progress.streamed() && stream.on_retry is Some(on_retry) {
-              on_retry()
-            }
             progress.begin_attempt()
             self.chat_stream_attempt(body, progress, stream)
           },
@@ -242,6 +254,11 @@ pub async fn Client::chat(
             !(stream.on_retry is Some(_) && is_stream_interruption(error))
           },
           progress~,
+          on_retry=(attempt, error) => {
+            if stream.on_retry is Some(on_retry) {
+              on_retry(attempt, self.retry_attempts, error_detail(error))
+            }
+          },
         ) catch {
           error if @async.is_being_cancelled() ||
             @async.is_cancellation_error(error) => raise error

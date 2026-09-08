@@ -365,6 +365,17 @@ async test "streaming reasoning deltas survive a stream retry and stay transient
       entries.any(entry => {
         entry
         is {
+          "event": String("stream_retry"),
+          "attempt": Number(2, ..),
+          "max_attempts": Number(5, ..),
+          ..
+        }
+      }),
+    )
+    assert_true(
+      entries.any(entry => {
+        entry
+        is {
           "event": String("assistant_delta"),
           "content": String("discarded"),
           ..

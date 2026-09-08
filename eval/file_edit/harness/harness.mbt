@@ -252,10 +252,9 @@ fn summarize_agent_log(log_text : String) -> AgentLogSummary {
   for line in log_text.split("\n") {
     let json = @json.parse(line.trim()) catch { _ => continue }
     match json {
-      { "event": String("agent_step"), "step": Number(step, ..), .. } => {
+      { "event": String("agent_step"), .. } => {
         has_json_events = true
-        // A retried provider stream re-announces the same step number.
-        steps = steps.max(step.to_int())
+        steps += 1
       }
       {
         "event": String("tool_result"),

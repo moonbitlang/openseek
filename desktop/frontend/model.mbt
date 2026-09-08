@@ -705,6 +705,15 @@ priv struct LiveReasoning {
 } derive(Eq, Debug)
 
 ///|
+/// A provider retry the engine announced for the open step: the attempt about
+/// to be made, out of the client's budget, and why the last one failed.
+priv struct RetryNotice {
+  attempt : Int
+  max_attempts : Int
+  reason : String
+} derive(Eq)
+
+///|
 /// Everything that belongs to one turn and to nothing outside it.
 ///
 /// It is replaced wholesale when a run opens, so a fragment or token count
@@ -727,6 +736,10 @@ priv struct RunState {
   // sole history; rendering de-duplicates an equal completed preview without
   // letting the untagged commit mutate this run-scoped state.
   live_reasoning : LiveReasoning?
+  // The retry the engine is waiting out, from `stream_retry` until the
+  // replacement attempt produces a delta or the step moves on. Shown in place
+  // of the step heartbeat so a backoff does not read as a hang.
+  retrying : RetryNotice?
   // Highest durable event already known when this run opened. Only reasoning
   // committed after this frontier can visually de-duplicate this run's sealed
   // preview; identical text from an earlier turn is unrelated.
@@ -745,6 +758,7 @@ fn RunState::empty() -> RunState {
   {
     streaming_response: None,
     live_reasoning: None,
+    retrying: None,
     reasoning_frontier: 0,
     subruns: [],
     usage_tokens: 0,
@@ -3737,6 +3751,17 @@ fn Conversation::run_heartbeat(self : Conversation) -> @composer.RunHeartbeat? {
     Open(stage=AtStep(None), ..) => Working
     Open(stage=Cancelling, ..) => Stopping
   }
+  // A pending retry replaces the step wording; a Stop already sent still wins.
+  let stage : @composer.RunStage = if self.turn.retrying is Some(retrying) &&
+    !(stage is Stopping) {
+    Retrying(
+      attempt=retrying.attempt,
+      max_attempts=retrying.max_attempts,
+      reason=retrying.reason,
+    )
+  } else {
+    stage
+  }
   Some({
     stage,
     started_ms: self.run_started_ms,
@@ -3748,7 +3773,12 @@ fn Conversation::run_heartbeat(self : Conversation) -> @composer.RunHeartbeat? {
 fn Conversation::clear_streams(self : Conversation) -> Conversation {
   {
     ..self,
-    turn: { ..self.turn, streaming_response: None, live_reasoning: None, },
+    turn: {
+      ..self.turn,
+      streaming_response: None,
+      live_reasoning: None,
+      retrying: None,
+    },
   }
 }
 

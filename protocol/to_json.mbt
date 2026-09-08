@@ -29,6 +29,13 @@ pub fn Event::to_json(self : Event) -> Json {
     AgentSetupFailed(error~) =>
       { "event": "agent_setup_failed", "error": error }
     AgentStep(step~) => { "event": "agent_step", "step": step }
+    StreamRetry(attempt~, max_attempts~, reason~) =>
+      {
+        "event": "stream_retry",
+        "attempt": attempt,
+        "max_attempts": max_attempts,
+        "reason": reason,
+      }
     AgentAborted(reason~) => { "event": "agent_aborted", "reason": reason }
     AgentFinished(answer~) => { "event": "agent_finished", "answer": answer }
     MaxStepsExhausted => { "event": "max_steps_exhausted" }

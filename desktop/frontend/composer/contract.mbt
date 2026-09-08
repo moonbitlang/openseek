@@ -189,6 +189,9 @@ pub(all) enum RunStage {
   Thinking
   // The engine's latest 1-based step counter.
   AtStep(Int)
+  // The step's provider request failed and the engine is waiting out its
+  // backoff before attempt `attempt` of `max_attempts`.
+  Retrying(attempt~ : Int, max_attempts~ : Int, reason~ : String)
   // Open and stepping, from an engine that does not number its steps.
   Working
   // A Stop was sent and the engine has not honored it yet.
