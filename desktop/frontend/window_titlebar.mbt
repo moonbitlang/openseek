@@ -1,5 +1,5 @@
 // Proton owns native control geometry; this window-local subscription mirrors
-// its available titlebar area into CSS and manages the page's drag regions.
+// its available titlebar area into CSS. CSS declares the page's drag regions.
 
 ///|
 const WindowTitlebarSelector = ".sidebar-header, .topbar, .editor-tabsbar, .window-titlebar-drag-strip"
@@ -27,29 +27,17 @@ fn is_window_titlebar_double_click_target(element : @dom.Element) -> Bool {
 /// Geometry is transient renderer state, not a session or host preference.
 /// Native state events cover OS fullscreen transitions (which are not DOM
 /// fullscreen events); resize also covers page zoom. Only the latest query may
-/// publish geometry. Subscription reconciliation republishes CEF drag regions
-/// for new DOM without issuing another native query.
+/// publish geometry. Drag regions are declared in CSS, so message callback
+/// updates do not need to scan the DOM or rewrite element styles.
 extern "js" fn install_window_titlebar_geometry() -> @js.Value =
   #| () => {
   #|   const html = document.documentElement;
-  #|   const selector = ".sidebar-header, .topbar, .editor-tabsbar, .window-titlebar-drag-strip";
-  #|   const excluded =
-  #|     "button, a, input, textarea, select, [role=button], [contenteditable=true], .editor-tab, .dock-menu";
   #|   let active = true;
   #|   let revision = 0;
   #|   let inFlight = false;
   #|   let frame = null;
   #|   let retry = null;
   #|   let unsubscribe = null;
-  #|   const refreshDom = () => {
-  #|     const drag = html.classList.contains("native-titlebar-overlay");
-  #|     for (const root of document.querySelectorAll(selector)) {
-  #|       root.style.webkitAppRegion = drag ? "drag" : "no-drag";
-  #|       for (const control of root.querySelectorAll(excluded)) {
-  #|         control.style.webkitAppRegion = "no-drag";
-  #|       }
-  #|     }
-  #|   };
   #|   const publish = (area) => {
   #|     // null means no overlay (including native fullscreen). A rejected or
   #|     // malformed query must not be mistaken for that successful answer.
@@ -68,7 +56,6 @@ extern "js" fn install_window_titlebar_geometry() -> @js.Value =
   #|       html.style.setProperty("--native-titlebar-right", `${Math.max(0, window.innerWidth - area.x - area.width)}px`);
   #|       html.style.setProperty("--native-titlebar-height", `${area.y + area.height}px`);
   #|     }
-  #|     refreshDom();
   #|   };
   #|   const schedule = () => {
   #|     if (active && !inFlight && frame === null) frame = requestAnimationFrame(read);
@@ -105,7 +92,6 @@ extern "js" fn install_window_titlebar_geometry() -> @js.Value =
   #|   };
   #|   connect(0);
   #|   return {
-  #|     refreshDom,
   #|     dispose() {
   #|       active = false;
   #|       clearTimeout(retry);
@@ -167,10 +153,6 @@ fn window_titlebar_sub_loader(
         update_tagger: payload => {
           guard payload is WindowTitlebarSubscription(next) else { return }
           emit = next
-          let _ : @js.Value = geometry.apply_with_string(
-            "refreshDom",
-            ([] : Array[@js.Value]),
-          )
         },
       })
     }

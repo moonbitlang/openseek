@@ -375,8 +375,8 @@ html {
 
 /* Proton's overlay titlebar lets the page palette paint the native chrome.
    Empty chrome drags the native window; every interactive descendant opts
-   back out. The inline mirror in window_titlebar.mbt makes CEF publish the
-   initial regions after DOM creation. */
+   back out. Keep these declarations in CSS so newly rendered headers and
+   controls receive them without a JavaScript scan. */
 html.native-titlebar-overlay .app .sidebar-header,
 html.native-titlebar-overlay .app .topbar,
 html.native-titlebar-overlay .app .editor-tabsbar,
