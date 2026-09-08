@@ -15,8 +15,9 @@ accessible name `Original source`, reports the selected presentation through
 `aria-pressed`, and uses its tooltip for the next action. Rendered content
 always reserves its trailing hit area, while a one-line separator constrains
 the control to the existing ViewZone height. Source controls appear on block
-hover or keyboard focus and remain visible while inspecting source. Comments
-share the editor background, with smaller preview text and quiet separators.
+hover or keyboard focus and remain visible while inspecting source. Documentation uses a subtle
+tinted surface, with smaller preview text and quiet separators. Separator-only
+blocks retain the editor background.
 Item-delimited multi-line API documents whose provider registration opted
 into folding start on the preview. Two affordances drive one fold state: a
 mouse-only gutter chevron that reuses the code-folding `.cldr` codicons and
