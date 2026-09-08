@@ -645,6 +645,7 @@ test('tool-call tabs keep focus-driven scrolling inside the transcript', async (
             name: 'mbtx',
             arguments: JSON.stringify({
               source: 'fn main { println("browser fixture") }',
+              description: 'Print <browser> fixture',
             }),
           },
         ],
@@ -661,6 +662,7 @@ test('tool-call tabs keep focus-driven scrolling inside the transcript', async (
   await app.openSession();
 
   const transcript = page.locator('#transcript');
+  await expect(transcript.locator('.tool-call-summary')).toContainText('Print <browser> fixture');
   const tabs = transcript.locator('.tool-call-tabs');
   const originalJson = tabs.getByText('Original JSON', { exact: true });
   await transcript.locator('.tool-call-summary').click();

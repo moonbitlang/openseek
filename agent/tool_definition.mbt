@@ -15,7 +15,11 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
       }
     Running => "running"
   }
-  "background job \{snapshot.id} finished (\{status}): `\{snapshot.command}` — read its output with job_output (job_id=\"\{snapshot.id}\")."
+  let label = match snapshot.description {
+    Some(description) => "\{description} · \{snapshot.command}"
+    None => snapshot.command
+  }
+  "background job \{snapshot.id} finished (\{status}): `\{label}` — read its output with job_output (job_id=\"\{snapshot.id}\")."
 }
 
 ///|
@@ -212,8 +216,8 @@ async test "the registry has no shell tool family" {
       fail("expected an object schema")
     }
     let names = properties.keys().collect()
-    assert_eq(names.length(), 4)
-    for name in ["source", "target", "cwd", "warning"] {
+    assert_eq(names.length(), 5)
+    for name in ["source", "description", "target", "cwd", "warning"] {
       assert_true(names.contains(name))
     }
     assert_false(mbtx.description.contains("run_in_background"))
@@ -265,7 +269,11 @@ async test "a handoff carries build warnings and the build-ok label" {
       #|  let unused = 1
       #|  @async.sleep(60_000)
       #|}
-    let action = run_async_tool(mbtx, { "source": source, "warning": "on" })
+    let action = run_async_tool(mbtx, {
+      "source": source,
+      "warning": "on",
+      "description": "Check compiler warnings",
+    })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
     assert_true(output.content.contains("moved to the background"))
@@ -274,6 +282,8 @@ async test "a handoff carries build warnings and the build-ok label" {
     assert_true(output.content.contains("source:"))
     guard bg_runtime.list() is [job, ..] else { fail("no job was registered") }
     assert_true(job.command.contains("build ok"))
+    assert_eq(job.description, Some("Check compiler warnings"))
+    assert_true(background_notice_text(job).contains("Check compiler warnings"))
     let _ = bg_runtime.stop(job.id)
     @fs.rmdir(spill_dir, recursive=true) catch {
       _ => ()

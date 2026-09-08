@@ -695,8 +695,8 @@ test "the schema advertises every decoded argument" {
   // MoonBit's String ordering is by length first, so a sorted expectation would
   // encode neither what this test means nor what a reader expects.
   let names = properties.keys().collect()
-  assert_eq(names.length(), 4)
-  for name in ["source", "target", "cwd", "warning"] {
+  assert_eq(names.length(), 5)
+  for name in ["source", "description", "target", "cwd", "warning"] {
     assert_true(names.contains(name))
   }
   assert_eq(required, (["source"] : Json))

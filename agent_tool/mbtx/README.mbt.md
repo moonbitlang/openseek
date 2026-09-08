@@ -45,6 +45,10 @@ cancelled at that deadline.
 
 ## Arguments
 
+- `description` (string, optional): a short human-readable label shown in the
+  transcript and inherited by any background job. Presentation only; it does
+  not affect compilation, execution, sandboxing, or background handoff.
+
 - `source` (string, required): a full `.mbtx` program. It may open with an
   inline `import { "pkg", "pkg", … }` block (comma-separated module paths),
   then the program including its own `main`. Use `async fn main` for

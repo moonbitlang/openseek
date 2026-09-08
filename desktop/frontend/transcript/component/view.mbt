@@ -295,6 +295,14 @@ fn tool_request_view(
   } else {
     name
   }
+  let label = if name == "mbtx" &&
+    card_fields(arguments) is Some(fields) &&
+    fields.get("description") is Some(String(description)) &&
+    !description.is_blank() {
+    "\{label} · \{description}"
+  } else {
+    label
+  }
   let error_class = (if is_error { " error" } else { "" }) +
     failure_stage_class(name, brief, is_error, Some(arguments))
   // The row's always-visible line: the brief, a literal marker when the

@@ -8,7 +8,9 @@ fn AgentLoop::background_finish_notice(self : AgentLoop) -> String? {
     .filter(job => !self.jobs_before_turn.contains(job.id))
   guard !pending.is_empty() else { return None }
   let labels = pending
-    .map(job => "\{job.id}: \{@agent_tool.brief_line(job.command, limit=100)}")
+    .map(job => {
+      "\{job.id}: \{@agent_tool.brief_line(job.description.unwrap_or(job.command), limit=100)}"
+    })
     .join("\n")
   Some(
     "Background jobs still need a decision:\n\{labels}\nIf your work is complete, call finish. If you need their results and have no other work, call job_wait with job_ids. Otherwise keep working, or stop unneeded jobs with job_stop.",

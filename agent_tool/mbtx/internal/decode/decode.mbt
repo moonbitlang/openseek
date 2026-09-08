@@ -5,6 +5,8 @@
 /// program runs in; `None` means the workspace root).
 pub struct MbtxInput {
   source : String
+  /// Presentation metadata, inherited by a background job.
+  description : String?
   target : String
   cwd : String?
   /// Whether compiler warnings appear in the run output — decoded from the
@@ -58,6 +60,12 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
   }
   match arguments {
     { "source": String(source), .. } => {
+      let description = match arguments {
+        { "description": String(text), .. } => Some(text)
+        { "description": Null, .. } => None
+        { "description": _, .. } => fail("arguments.description to be a string")
+        _ => None
+      }
       let target = match arguments {
         { "target": String(t), .. } => t
         { "target": Null, .. } => "wasm"
@@ -93,7 +101,7 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         { "subrun": _, .. } => fail("arguments.subrun to be a boolean")
         _ => false
       }
-      { source, target, cwd, warning, escalated, subrun, }
+      { source, description, target, cwd, warning, escalated, subrun, }
     }
     Object(_) => fail("arguments.source")
     _ => fail("object arguments")
@@ -164,6 +172,7 @@ test "decode rejects malformed arguments" {
     // missing source, and arguments that are not an object at all.
     { "source": "x", "warning": "loud" },
     { "source": "x", "cwd": 3 },
+    { "source": "x", "description": 3 },
     { "source": "x", "target": "banana" },
     { "code": "x" },
     Json("x"),
@@ -186,3 +195,14 @@ test "decode rejects malformed arguments" {
 #deprecated("the derived Debug impl is the API; use @debug.repr or the trait directly")
 #doc(hidden)
 pub extend MbtxInput with Debug::{to_repr}
+
+///|
+test "description is optional presentation metadata" {
+  assert_eq(decode({ "source": "x" }).description, None)
+  assert_eq(decode({ "source": "x", "description": null }).description, None)
+  assert_eq(
+    decode({ "source": "x", "description": "Run tests" }).description,
+    Some("Run tests"),
+  )
+  assert_eq(decode({ "source": "x", "description": "" }).description, Some(""))
+}

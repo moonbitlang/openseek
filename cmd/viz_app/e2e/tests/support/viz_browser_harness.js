@@ -64,7 +64,7 @@ export class VizBrowserHarness {
               {
                 id: 'mbtx-build',
                 name: 'mbtx',
-                arguments: JSON.stringify({ source: 'fn main { compile_error }' }),
+                arguments: JSON.stringify({ source: 'fn main { compile_error }', description: 'Check <compiler> diagnostics' }),
               },
               {
                 id: 'mbtx-run',

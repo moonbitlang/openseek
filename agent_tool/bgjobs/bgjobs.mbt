@@ -93,6 +93,7 @@ struct BgJobRuntime {
 priv struct BgJob {
   id : String
   command : String
+  description : String?
   exec : @shell_exec.ShellExecution
   // The opaque prepared command is carried from launch so a reader can apply
   // the same source-write-denial detection the foreground path does.
@@ -125,6 +126,7 @@ priv struct BgJob {
 pub struct BgJobSnapshot {
   id : String
   command : String
+  description : String?
   status : BgJobStatus
   priv output : String
   output_truncated : Bool
@@ -255,6 +257,7 @@ pub async fn BgJobRuntime::start(
   program~ : String,
   args~ : Array[String],
   command~ : String,
+  description? : String,
   cwd? : String,
   max_output_chars? : Int = default_max_output_chars,
   sandboxed_command? : @sandbox.SandboxedCommand,
@@ -274,6 +277,7 @@ pub async fn BgJobRuntime::start(
     id,
     exec,
     command~,
+    description?,
     sandboxed_command?,
     read_only_review~,
     output_rewrites~,
@@ -292,6 +296,7 @@ pub fn BgJobRuntime::adopt(
   self : BgJobRuntime,
   exec : @shell_exec.ShellExecution,
   command~ : String,
+  description? : String,
   sandboxed_command? : @sandbox.SandboxedCommand,
   read_only_review? : Bool = false,
   output_rewrites? : Array[(String, String)] = [],
@@ -303,6 +308,7 @@ pub fn BgJobRuntime::adopt(
     id,
     exec,
     command~,
+    description?,
     sandboxed_command?,
     read_only_review~,
     output_rewrites~,
@@ -319,6 +325,7 @@ fn BgJobRuntime::register(
   id : String,
   exec : @shell_exec.ShellExecution,
   command~ : String,
+  description? : String,
   sandboxed_command? : @sandbox.SandboxedCommand,
   read_only_review~ : Bool,
   output_rewrites~ : Array[(String, String)],
@@ -328,6 +335,7 @@ fn BgJobRuntime::register(
   self.jobs[id] = {
     id,
     command,
+    description,
     exec,
     sandboxed_command,
     read_only_review,
@@ -398,6 +406,7 @@ fn BgJob::to_snapshot(self : BgJob) -> BgJobSnapshot {
   {
     id: self.id,
     command: self.command,
+    description: self.description,
     status: bg_status(self.exec.status()),
     output: self.exec.head(),
     output_truncated: self.exec.output_truncated(),

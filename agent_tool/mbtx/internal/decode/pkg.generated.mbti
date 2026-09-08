@@ -13,6 +13,7 @@ pub fn decode(Json) -> MbtxInput raise
 // Types and methods
 pub struct MbtxInput {
   source : String
+  description : String?
   target : String
   cwd : String?
   warning : Bool

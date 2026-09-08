@@ -726,6 +726,7 @@ async fn execute(
       // program output and its `exit=N` is the program's own by construction.
       let id = runtime.adopt(
         exec,
+        description?=input.description,
         command=if staged {
           "mbtx run (build ok): \{@agent_tool.brief_line(input.source, limit=64)}"
         } else {
@@ -1326,6 +1327,13 @@ fn schema(escalation~ : Bool, hosting~ : Bool) -> Json {
       Map(
         [
           ("source", Json({ "type": "string" })),
+          (
+            "description",
+            {
+              "type": "string",
+              "description": "Short human-readable description of this call for the transcript. Inherited by any background job; does not affect execution.",
+            },
+          ),
           (
             "target",
             {

@@ -175,7 +175,10 @@ async fn execute(
   }
   content.write_string(footer)
   let content = content.to_string()
-  @agent_tool.respond(content, is_error~)
+  let brief = snapshot.description.map(description => {
+    "job \{job_id} (\{status_label}): \{description}"
+  })
+  @agent_tool.respond(content, is_error~, brief?)
 }
 
 ///|

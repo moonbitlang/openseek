@@ -68,12 +68,14 @@ async test "job_output returns a running job's output and status" {
       program="moonx",
       args=[CLI_SH, "-c", "printf hi; sleep 30"],
       command="job",
+      description="Collect progress",
     )
     poll_bg_output(bg, id, "hi")
     let output = run_job_output(bg, { "job_id": id })
     assert_false(output.is_error)
     assert_true(output.content.contains("hi"))
     assert_true(output.content.contains("running"))
+    assert_eq(output.brief, Some("job \{id} (running): Collect progress"))
     let _ = bg.stop(id)
   })
 }

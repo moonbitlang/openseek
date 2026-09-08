@@ -1046,6 +1046,13 @@ fn tool_call_view(
   if briefs.get(call.id) is Some(brief) && !brief.is_blank() {
     name_row.push(@html.span(class="tool-call-brief") <| " · \{brief}")
   }
+  if call.name == "mbtx" {
+    let arguments = Some(@json.parse(call.arguments)) catch { _ => None }
+    if arguments is Some({ "description": String(description), .. }) &&
+      !description.is_blank() {
+      name_row.push(@html.span(class="tool-call-brief", " · \{description}"))
+    }
+  }
   let plan_steps = plan_call_steps(call)
   if plan_steps is Some(steps) {
     name_row.push(plan_ribbon(steps))
