@@ -338,7 +338,7 @@ pub fn ContextComponent::render(
           @html.div(class="pending-steer-row", title=shown, [
             @html.span(class="pending-steer-icon", "⤷"),
             @html.span(class="pending-steer-text", shown),
-            @html.span(class="pending-steer-state", "steering…"),
+            @html.span(class="pending-steer-state", "Steer"),
           ]),
         )
       }

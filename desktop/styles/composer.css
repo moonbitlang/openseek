@@ -499,7 +499,6 @@
   flex: none;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
-  animation: caretBlink 1.4s steps(1) infinite;
 }
 
 /* Queued follow-ups are composer state until the engine promotes them into
