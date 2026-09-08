@@ -43,14 +43,14 @@ test "folding decoration controls preserve mouseover always and never policies" 
 }
 
 ///|
-test "outline body decorations omit the trailing folded ellipsis" {
+test "outline body decorations complete the hidden body inline" {
   let provider = FoldingDecorationProvider(folding_test_model(["line"]))
   let collapsed = provider.get_decoration_option(true, false, false, true)
   assert_eq(
     collapsed.description,
     "folding-collapsed-outline-body-highlighted-visual-decoration",
   )
-  assert_eq(collapsed.after_content_class_name, None)
+  assert_eq(collapsed.after_content_class_name, Some("inline-folded-body"))
   assert_eq(
     collapsed.first_line_decoration_class_name,
     Some(FOLDING_COLLAPSED_ICON_CLASS),

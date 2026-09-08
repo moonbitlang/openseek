@@ -53,12 +53,12 @@ let collapsed_highlighted_visual_decoration : @model.ModelDecorationOptions = Mo
 
 ///|
 /// A collapsed host outline whose visible line already ends at the body
-/// delimiter. The chevron communicates collapse without appending `⋯` to the
-/// complete declaration header.
+/// delimiter. A quiet inline suffix completes the hidden body as `{ … }`.
 let collapsed_outline_body_visual_decoration : @model.ModelDecorationOptions = ModelDecorationOptions(
   "",
   description="folding-collapsed-outline-body-visual-decoration",
   stickiness=AlwaysGrowsWhenTypingAtEdges,
+  after_content_class_name="inline-folded-body",
   is_whole_line=true,
   first_line_decoration_class_name=FOLDING_COLLAPSED_ICON_CLASS,
 )
@@ -68,6 +68,7 @@ let collapsed_outline_body_highlighted_visual_decoration : @model.ModelDecoratio
   "folded-background",
   description="folding-collapsed-outline-body-highlighted-visual-decoration",
   stickiness=AlwaysGrowsWhenTypingAtEdges,
+  after_content_class_name="inline-folded-body",
   is_whole_line=true,
   first_line_decoration_class_name=FOLDING_COLLAPSED_ICON_CLASS,
 )
@@ -119,6 +120,7 @@ let no_controls_collapsed_outline_body_range_decoration : @model.ModelDecoration
   "",
   description="folding-no-controls-outline-body-range-decoration",
   stickiness=AlwaysGrowsWhenTypingAtEdges,
+  after_content_class_name="inline-folded-body",
   is_whole_line=true,
 )
 
@@ -127,6 +129,7 @@ let no_controls_collapsed_outline_body_highlighted_range_decoration : @model.Mod
   "folded-background",
   description="folding-no-controls-outline-body-range-decoration",
   stickiness=AlwaysGrowsWhenTypingAtEdges,
+  after_content_class_name="inline-folded-body",
   is_whole_line=true,
 )
 

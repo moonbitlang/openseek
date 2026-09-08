@@ -28,7 +28,8 @@
   opacity: 1;
 }
 
-.inline-folded:after {
+.inline-folded:after,
+.inline-folded-body:after {
   color: var(--vscode-editor-foldPlaceholderForeground);
   margin: 0.1em 0.2em 0 0.2em;
   content: "\22EF"; /* ellipses unicode character */
@@ -37,8 +38,14 @@
   cursor: pointer;
 }
 
+.inline-folded-body:after {
+  content: "\2026  }";
+}
+
+/* A folded row is not a selection. The gutter and inline placeholder carry
+ * its state without painting a second selection-like band across the code. */
 .folded-background {
-  background-color: var(--vscode-editor-foldBackground);
+  background-color: transparent;
 }
 
 .cldr.codicon.codicon-folding-expanded,

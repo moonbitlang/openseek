@@ -127,7 +127,10 @@ test "folding: MoonBit outline keeps the complete signature and opening brace" {
     if decoration.options.description ==
       "folding-collapsed-outline-body-highlighted-visual-decoration" {
       saw_outline_body = true
-      assert_eq(decoration.options.after_content_class_name, None)
+      assert_eq(
+        decoration.options.after_content_class_name,
+        Some("inline-folded-body"),
+      )
       assert_eq(decoration.range.start_line_number, 3)
     }
   }
@@ -669,7 +672,10 @@ test "folding: MoonBit outline survives folding decoration option updates" {
     if decoration.options.description ==
       "folding-no-controls-outline-body-range-decoration" {
       saw_outline_body = true
-      assert_eq(decoration.options.after_content_class_name, None)
+      assert_eq(
+        decoration.options.after_content_class_name,
+        Some("inline-folded-body"),
+      )
     }
   }
   assert_true(saw_outline_body)

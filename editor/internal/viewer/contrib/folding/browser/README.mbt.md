@@ -38,8 +38,9 @@ The root may compose a host-computed range with
 `OUTLINE_BODY_FOLDING_RANGE_TYPE` before an explicit outline action. The range
 uses its complete declaration header's final line as the ordinary fold header,
 so the standard hidden-range model needs no partial-line projection. Its
-collapsed decoration keeps the chevron/highlight but omits `inline-folded`'s
-trailing ellipsis. Provider and user folds retain the Monaco presentation.
+collapsed decoration keeps the chevron and completes the hidden body with an
+inline `… }` suffix. Ordinary folds retain their trailing ellipsis. Collapsed
+rows have no background tint, so they cannot be mistaken for selected lines.
 
 Exact callable types are in `pkg.generated.mbti`. Run focused tests with:
 

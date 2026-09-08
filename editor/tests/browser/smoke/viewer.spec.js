@@ -128,6 +128,7 @@ test('opens MoonBit models as a top-level outline without enforcing later folds'
     hasText: 'pub fn startup_event',
   });
   await expect(functionLine.locator('.inline-folded')).toHaveCount(0);
+  await expect(functionLine.locator('.inline-folded-body')).toHaveCount(1);
   expect((await functionLine.innerText()).replaceAll('\u00a0', ' ').trim()).toBe(
     'pub fn startup_event() -> StartupEvent {',
   );

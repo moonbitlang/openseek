@@ -10,16 +10,9 @@
    * Markdown input above it, but below editor cursors (4) and widgets (50+). */
   z-index: 2;
   color: var(--vscode-editor-foreground);
-  /* Give documentation its own quiet surface while leaving the stronger
-   * textCodeBlock background available for nested inline and fenced code. */
   background: var(--vscode-editor-background);
-  background: color-mix(
-    in srgb,
-    var(--vscode-editor-foreground) 4%,
-    var(--vscode-editor-background)
-  );
   font-family: var(--ui-font-family, var(--editor-font-family));
-  font-size: var(--editor-font-size);
+  font-size: calc(var(--editor-font-size) * 0.92);
   line-height: 1.5;
 }
 
@@ -31,7 +24,7 @@
   box-sizing: border-box;
   /* The pinned outer already ends at the vertical scrollbar rail. */
   width: 100%;
-  padding: 6px 40px 8px 0;
+  padding: 4px 40px 5px 0;
   overflow-wrap: anywhere;
   user-select: text;
   -webkit-user-select: text;
@@ -65,6 +58,10 @@
 .moonbit-viewer-markdown-comment[data-documentation-foldable="true"][data-documentation-expanded="false"]
   .moonbit-viewer-markdown-comment-preview {
   display: block;
+}
+
+.moonbit-viewer-markdown-comment-preview {
+  color: var(--vscode-descriptionForeground, var(--vscode-editor-foreground));
 }
 
 .moonbit-viewer-markdown-comment-preview > :not(hr) {
@@ -122,7 +119,12 @@
   font-family: var(--monaco-monospace-font, var(--editor-font-family));
   font-size: 11px;
   cursor: pointer;
-  opacity: 0.55;
+  opacity: 0;
+}
+
+.moonbit-viewer-markdown-comment:hover .moonbit-viewer-markdown-comment-source-toggle,
+.moonbit-viewer-markdown-comment:focus-within .moonbit-viewer-markdown-comment-source-toggle {
+  opacity: 1;
 }
 
 .moonbit-viewer-markdown-comment-source-toggle:hover,
@@ -312,13 +314,13 @@
   height: 1px;
   margin: 10px 0;
   border: 0;
-  background: var(--vscode-editorWidget-border, var(--vscode-widget-border));
+  background: color-mix(in srgb, var(--vscode-editor-foreground) 10%, transparent);
 }
 
 /* An item separator replaces one source line. Its content box is otherwise
- * 15px tall (6px + 1px + 8px), so retain the configured line geometry. */
+ * 10px tall (4px + 1px + 5px), so retain the configured line geometry. */
 .moonbit-viewer-markdown-comment-body > hr:only-child {
-  margin-bottom: calc(var(--editor-line-height, 18px) - 15px);
+  margin-bottom: calc(var(--editor-line-height, 18px) - 10px);
 }
 
 .moonbit-viewer-markdown-comment-content a {
