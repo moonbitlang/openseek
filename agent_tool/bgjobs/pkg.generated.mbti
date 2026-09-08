@@ -13,9 +13,7 @@ import {
 // Errors
 
 // Types and methods
-pub struct BgJobRuntime {
-  // private fields
-}
+type BgJobRuntime
 pub fn[X] BgJobRuntime::BgJobRuntime(@agent_runtime.AgentTaskScope[X], spill_dir? : String, hard_output_cap? : Int, hard_timeout_ms? : Int, on_job_exit? : (BgJobSnapshot) -> Unit) -> Self
 pub fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit) -> String
 pub fn BgJobRuntime::list(Self) -> Array[BgJobSnapshot]

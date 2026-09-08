@@ -38,11 +38,11 @@ let default_hard_timeout_ms : Int = 1_800_000
 /// (`run_in_background`), `shell_output`, and `shell_stop` tools. the constructor captures
 /// the session group in a spawn closure, so the runtime is not generic and can be
 /// an optional tool argument.
-pub struct BgJobRuntime {
+struct BgJobRuntime {
   // Spawn a `ShellExecution` on the captured session group: (program, args, cwd,
   // inline-preview budget, spill path) -> execution. Captured so the runtime type
   // is not generic.
-  priv spawn_exec : async (
+  spawn_exec : async (
     String,
     Array[String],
     String?,
@@ -55,7 +55,7 @@ pub struct BgJobRuntime {
   // cap so a timed command that floods output is an immediate output-limit error;
   // `background()` clears that kill so a detached-under-the-limit job keeps
   // growing. The `String?` is the spill path.
-  priv spawn_foreground_retained_exec : async (
+  spawn_foreground_retained_exec : async (
     String,
     Array[String],
     String?,
@@ -64,25 +64,25 @@ pub struct BgJobRuntime {
     &@process.ProcessInput?,
   ) -> @shell_exec.ShellExecution
   // Spawn a per-job watcher task on that same group.
-  priv spawn_watcher : (async () -> Unit) -> Unit
+  spawn_watcher : (async () -> Unit) -> Unit
   // Directory for per-job spill files (full output beyond the inline preview).
   // None → memory-only jobs (no full-output file).
-  priv spill_dir : String?
+  spill_dir : String?
   // Wall-clock lifetime cap for any registered job, measured from process
   // start (an adopted job keeps its original deadline). Bounded lifetime,
   // not machine protection: the kill reaches the direct child only, so a
   // spinning grandchild can be orphaned — true process-group kill is
   // upstream work in moonbitlang/async. Tests shrink it to fire cheaply.
-  priv hard_timeout_ms : Int
+  hard_timeout_ms : Int
   // Called once, with the terminal snapshot, when a job exits on its own (not on
   // `stop`/teardown) — e.g. to push a completion notice into the agent loop.
-  priv on_job_exit : ((BgJobSnapshot) -> Unit)?
-  priv jobs : Map[String, BgJob]
-  priv mut next_index : Int
+  on_job_exit : ((BgJobSnapshot) -> Unit)?
+  jobs : Map[String, BgJob]
+  mut next_index : Int
   // Separate counter for the spill files of detachable foreground executions
   // (which are not registered until adopted), so their `fg-<n>.out` files never
   // collide with a job's `bg-<n>.out`.
-  priv mut fg_index : Int
+  mut fg_index : Int
 }
 
 ///|
