@@ -543,21 +543,29 @@ pub fn boot() -> Unit {
     let terminal_html = @terminal.component(
       terminal_input, terminal_state, terminal_emit,
     )
-    let transcript_actions : @transcript_component.Actions = {
-      open: emit.map(path => OpenFile(path)),
-      jump: emit.map(target => {
-        JumpToLocation(
-          path=target.file,
-          range=target.range,
-          annotation=target.annotation,
-        )
-      }),
-      open_session: emit.map(session => OpenSessionHere(session)),
-      choose_project: emit.map(project => ProjectMenuProjectChosen(project)),
-      new_project: emit(AddProjectRequested),
-      toggle_project_menu: emit(ToggleSelectMenu(ProjectMenu)),
-      dismiss_project_menu: emit(CloseSelectMenu),
-      project_query_changed: emit.map(query => ProjectMenuQueryChanged(query)),
+    let transcript_actions = (slot : String) => {
+      (
+        {
+          open: emit.map(path => OpenFile(path)),
+          jump: emit.map(target => {
+            JumpToLocation(
+              path=target.file,
+              range=target.range,
+              annotation=target.annotation,
+            )
+          }),
+          open_session: emit.map(session => OpenSessionHere(session)),
+          choose_project: emit.map(project => ProjectMenuProjectChosen(project)),
+          new_project: emit(AddProjectRequested),
+          toggle_project_menu: emit(ToggleSelectMenu(ProjectMenu)),
+          dismiss_project_menu: emit(CloseSelectMenu),
+          project_query_changed: emit.map(query => {
+            ProjectMenuQueryChanged(query)
+          }),
+          // Bound to the slot at construction: by the time the report
+          // arrives the model already shows the next conversation.
+          departed: emit.map(scroll => TranscriptLeft(slot~, scroll~)),
+        } : @transcript_component.Actions)
     }
     // One transcript component per conversation on screen. Switching
     // conversations or leaving the Chat/Codex page disposes the component
@@ -569,17 +577,17 @@ pub fn boot() -> Unit {
         slot => {
           match slot {
             None => @rabbita.Val::constant(@html.nothing)
-            Some(_) =>
+            Some(slot) =>
               @transcript_component.component(
                 state.map(model => model.transcript_input()),
-                transcript_actions,
+                transcript_actions(slot.key()),
               )
           }
         },
         by=slot => {
           match slot {
             None => ""
-            Some(slot) => slot.wire()
+            Some(slot) => slot.key()
           }
         },
       )

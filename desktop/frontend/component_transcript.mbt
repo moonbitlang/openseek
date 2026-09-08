@@ -1,23 +1,24 @@
 ///|
 /// The conversation whose transcript the root view places on screen. It keys
 /// the transcript component's lifetime (`Val::switch_by` in `boot`): a new
-/// slot builds a fresh component whose `init` pins the scroller and clears
+/// slot builds a fresh component whose `init` places the scroller and clears
 /// overview state, and `None` disposes the current one. The view's own fork
 /// — the console gate, Chat onboarding, loading, and load failure — is
 /// mirrored here so the component exists exactly while its DOM does.
 priv struct TranscriptSlot {
   source : @transcript_component.Source
   channel : @interop.ChannelId
-  session : String
+  // The Codex page shows a transcript even before a task is selected.
+  session : String?
 } derive(Eq)
 
 ///|
-fn TranscriptSlot::wire(self : TranscriptSlot) -> String {
-  let source = match self.source {
-    OpenSeek => "openseek"
-    Codex => "codex"
+fn TranscriptSlot::key(self : TranscriptSlot) -> String {
+  let key = self.source.wire() + "\u{0}" + self.channel.uri_authority()
+  match self.session {
+    Some(session) => key + "\u{0}" + session
+    None => key
   }
-  source + "\u{0}" + self.channel.uri_authority() + "\u{0}" + self.session
 }
 
 ///|
@@ -35,7 +36,7 @@ fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
       Some({
         source: Codex,
         channel: self.focused,
-        session: self.codex.active_id().unwrap_or("none"),
+        session: self.codex.active_id(),
       })
     Chat => {
       if self.conversation_load_failure is Some(failure) &&
@@ -49,11 +50,22 @@ fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
       Some({
         source: OpenSeek,
         channel: self.focused,
-        session: self.active_session,
+        session: Some(self.active_session),
       })
     }
     Skills | Settings | WorkspaceSettings(..) => None
   }
+}
+
+///|
+/// Where the reader left the conversation on screen, if it has been on screen
+/// before. A conversation never visited, or one that was pinned when left,
+/// opens at its tail.
+fn Model::remembered_scroll(
+  self : Model,
+) -> @transcript_component.ScrollPosition {
+  guard self.transcript_slot() is Some(slot) else { return Pinned }
+  self.transcript_scroll.get(slot.key()).unwrap_or(Pinned)
 }
 
 ///|
@@ -85,6 +97,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         source=@transcript_component.Codex,
         focused=self.focused,
         active_session=self.codex.active_id().unwrap_or("none"),
+        scroll=self.remembered_scroll(),
         project_label?,
         current_project=placement.bind(value => value.project_root()),
         projects~,
@@ -123,6 +136,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
             source=@transcript_component.OpenSeek,
             focused=self.focused,
             active_session=self.active_session,
+            scroll=self.remembered_scroll(),
             project_label=@resource.label(conversation.project()),
             current_project=Some(conversation.project()),
             projects~,

@@ -993,15 +993,14 @@ fn transcript_view(
     overview_emit~,
     on_jump_latest~,
   )
-  // The identity attributes name the conversation this scroller shows, for
-  // tests and tooling. Nothing observes them: the component is created per
-  // conversation, so its state never has to detect a switch from the DOM.
+  // Nothing in the app reads the session back from the DOM: the component is
+  // created per conversation. The attribute is a test hook only: a draft
+  // rotation has no other visible signal (`rabbita_dom.spec.js`, "new-chat
+  // project title filters and switches registered projects").
   @html.section(
     attrs=@html.Attrs::build()
       .id("transcript")
       .class("transcript")
-      .data_set("transcript-source", input.source.wire())
-      .data_set("transcript-channel", input.focused.uri_authority())
       .data_set("transcript-session", input.active_session),
     children,
   )

@@ -4593,6 +4593,14 @@ fn update_msg(
       )
     }
     CloseGitDetails => (@cmd.none, { ..model, git_details_open: false, })
+    TranscriptLeft(slot~, scroll~) =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          transcript_scroll: model.transcript_scroll.add(slot, scroll),
+        },
+      )
     ToggleRightPanel => {
       let opening = !model.right_panel_open
       // A direct visibility toggle has no later semantic action to fence old
@@ -4696,10 +4704,7 @@ fn update_msg(
       // then nothing would carry the user's writing.
       let (model, command) = model.allocate_submission_id()
       (
-        @cmd.batch([
-          send_goal(dispatch, model, conv, command, Some(text)),
-          @transcript_component.scroll_to_latest(),
-        ]),
+        send_goal(dispatch, model, conv, command, Some(text)),
         model.replace_conversation({
           ..conv,
           goal_edit: None,
@@ -4727,10 +4732,7 @@ fn update_msg(
       }
       let (model, command) = model.allocate_submission_id()
       (
-        @cmd.batch([
-          send_goal(dispatch, model, conv, command, None),
-          @transcript_component.scroll_to_latest(),
-        ]),
+        send_goal(dispatch, model, conv, command, None),
         model.replace_conversation({
           ..conv,
           goal_edit: None,

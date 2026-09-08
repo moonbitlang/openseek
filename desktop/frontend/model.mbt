@@ -1514,6 +1514,13 @@ priv struct Model {
   // the same model remains deterministic.
   page_namespace : String
   submission_sequence : Int
+  // Where the reader left each transcript that has been on screen, keyed by
+  // its `TranscriptSlot` key. The transcript component reports it when its
+  // conversation leaves the screen and reads it back on return.
+  transcript_scroll : @sorted_map.SortedMap[
+    String,
+    @transcript_component.ScrollPosition,
+  ]
   // Every conversation with live client state this app run: the active one,
   // those still running in the background, and those visited and kept for an
   // instant switch back. Copy-on-write, like the transcript arrays.
@@ -2025,6 +2032,9 @@ priv enum Msg {
   // Clicks away from a transient menu, one per menu. Each is separate from
   // its toggle on purpose: a dismissal must never reopen what it closed.
   CloseGitDetails
+  // The transcript component reports where its reader was as it leaves the
+  // screen; the root remembers it for the conversation's next visit.
+  TranscriptLeft(slot~ : String, scroll~ : @transcript_component.ScrollPosition)
   // The right panel renders these root-owned values and reports only user
   // actions. Keeping the transitions here avoids a component mirror and a
   // second message that writes the same visibility back into the root.
@@ -2634,6 +2644,7 @@ fn initial_model() -> Model {
     transcript_request_generation: 0,
     page_namespace: generated_session_id(),
     submission_sequence: 0,
+    transcript_scroll: @sorted_map.new(),
     conversations: [],
     project_picker: None,
     pending_project_adoption: None,

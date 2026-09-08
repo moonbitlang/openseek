@@ -28,10 +28,11 @@ pub(all) struct Actions {
   toggle_project_menu : @cmd.Cmd
   dismiss_project_menu : @cmd.Cmd
   project_query_changed : @cmd.Emit[String]
+  departed : @cmd.Emit[ScrollPosition]
 }
 
 type Input derive(Eq)
-pub fn Input::Input(source~ : Source, focused~ : @interop.ChannelId, active_session~ : String, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
+pub fn Input::Input(source~ : Source, focused~ : @interop.ChannelId, active_session~ : String, scroll? : ScrollPosition, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 
@@ -42,12 +43,20 @@ pub(all) struct ProjectChoice {
 pub fn ProjectChoice::equal(Self, Self) -> Bool
 pub fn ProjectChoice::not_equal(Self, Self) -> Bool
 
+pub(all) enum ScrollPosition {
+  Pinned
+  Unpinned(top~ : Double)
+} derive(Eq)
+pub fn ScrollPosition::equal(Self, Self) -> Bool
+pub fn ScrollPosition::not_equal(Self, Self) -> Bool
+
 pub(all) enum Source {
   OpenSeek
   Codex
 } derive(Eq)
 pub fn Source::equal(Self, Self) -> Bool
 pub fn Source::not_equal(Self, Self) -> Bool
+pub fn Source::wire(Self) -> String
 
 pub(all) struct VisibleRow {
   item : @transcript.TranscriptItem
