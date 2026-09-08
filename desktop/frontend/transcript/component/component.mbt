@@ -167,6 +167,19 @@ pub(all) struct Actions {
 }
 
 ///|
+/// The run whose reasoning may occupy the live preview host, keyed with the
+/// step label so a new step re-targets the preview with its own heading.
+fn Input::live_reasoning_target(self : Input) -> @live_reasoning.Target? {
+  guard self.source is OpenSeek && self.active_run_id is Some(run_id) else {
+    return None
+  }
+  Some({
+    key: { channel: self.focused, session: self.active_session, run_id, },
+    step_label: self.next_step_label(),
+  })
+}
+
+///|
 /// Scroll ownership and overview state for one mounted conversation. The
 /// component lives exactly as long as its conversation is on screen (the
 /// root keys it by conversation), so `init` alone decides where a fresh
@@ -291,7 +304,7 @@ fn Model::step(
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
-  live_reasoning~ : LiveReasoning,
+  live_reasoning~ : @live_reasoning.LiveReasoning,
 ) -> @rabbita.Val[@html.Html] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
@@ -343,7 +356,7 @@ pub fn component(
       by=target => {
         match target {
           None => ""
-          Some(target) => target.key()
+          Some(target) => target.tag()
         }
       },
     )
@@ -603,7 +616,7 @@ priv suberror TranscriptSubscription {
     active~ : @transcript_overview.TurnKey?,
     // Follows `pinned` so the live preview can decide, in its own layout
     // callback, whether to keep the tail in view.
-    live_reasoning~ : LiveReasoning
+    live_reasoning~ : @live_reasoning.LiveReasoning
   )
 }
 
@@ -615,7 +628,7 @@ fn transcript_subscription(
   model : Model,
   emit : @cmd.Emit[Msg],
   departed : @cmd.Emit[ScrollPosition],
-  live_reasoning : LiveReasoning,
+  live_reasoning : @live_reasoning.LiveReasoning,
 ) -> @sub.Sub {
   @sub.custom_sub(
     "transcript-dom",
@@ -642,7 +655,7 @@ fn transcript_sub_loader(
       let mut departed = departed
       let mut pinned = pinned
       let mut active = active
-      live_reasoning.preview.pinned = pinned
+      live_reasoning.set_pinned(pinned)
       let target = @dom.document().as_event_target()
       let listener : @dom.Listener = event => {
         guard event.target().to_element() is Some(element) &&
@@ -701,7 +714,7 @@ fn transcript_sub_loader(
           departed = left
           pinned = next_pinned
           active = next_active
-          live_reasoning.preview.pinned = next_pinned
+          live_reasoning.set_pinned(next_pinned)
         },
       })
     }

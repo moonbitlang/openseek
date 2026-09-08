@@ -1,20 +1,20 @@
 ///|
 /// One live reasoning stream's exact owner. Session ids are scoped by their
 /// device channel, and separate runs of one session must never share text.
-priv struct LiveReasoningKey {
+pub(all) struct Key {
   channel : @interop.ChannelId
   session : String
   run_id : String
 } derive(Eq)
 
 ///|
-fn LiveReasoningKey::wire(self : LiveReasoningKey) -> String {
+fn Key::wire(self : Key) -> String {
   self.channel.uri_authority() + "\u{0}" + self.session + "\u{0}" + self.run_id
 }
 
 ///|
 priv struct LiveReasoningPreview {
-  key : LiveReasoningKey
+  key : Key
   // Keep provider fragments separate instead of copying the accumulated
   // text on every delta. Join them when rehydrating the visible widget or
   // handing a completed thought back to the ordinary transcript.
@@ -34,30 +34,19 @@ fn LiveReasoningPreview::content(self : LiveReasoningPreview) -> String {
 }
 
 ///|
-/// The OpenSeek conversation currently allowed to use the one visible host.
+/// The conversation currently allowed to use the one visible host.
 /// `step_label` is presentation data derived from durable transcript rows; it
 /// does not participate in routing provider fragments.
-priv struct LiveReasoningTarget {
-  key : LiveReasoningKey
+pub(all) struct Target {
+  key : Key
   step_label : String?
 } derive(Eq)
 
 ///|
 /// The `switch_by` tag of a focus target: run identity plus the step label,
 /// so a new step re-targets the preview with its own heading.
-fn LiveReasoningTarget::key(self : LiveReasoningTarget) -> String {
+pub fn Target::tag(self : Target) -> String {
   self.key.wire() + "\u{0}" + self.step_label.unwrap_or("")
-}
-
-///|
-fn Input::live_reasoning_target(self : Input) -> LiveReasoningTarget? {
-  guard self.source is OpenSeek && self.active_run_id is Some(run_id) else {
-    return None
-  }
-  Some({
-    key: { channel: self.focused, session: self.active_session, run_id, },
-    step_label: self.next_step_label(),
-  })
 }
 
 ///|
@@ -68,16 +57,16 @@ fn Input::live_reasoning_target(self : Input) -> LiveReasoningTarget? {
 #warnings("-unused_value")
 priv struct LiveReasoningState {
   previews : @vector.Vector[LiveReasoningPreview]
-  active : LiveReasoningTarget?
+  active : Target?
 } derive(Eq)
 
 ///|
 priv enum LiveReasoningMsg {
-  Focused(LiveReasoningTarget?)
+  Focused(Target?)
   ClearChannel(@interop.ChannelId)
-  Delta(LiveReasoningKey, String)
-  Finished(LiveReasoningKey)
-  StepStarted(LiveReasoningKey)
+  Delta(Key, String)
+  Finished(Key)
+  StepStarted(Key)
   RunFinished(@interop.ChannelId, String)
 }
 
@@ -114,7 +103,7 @@ fn LiveReasoningEffect::apply(
 ///|
 fn LiveReasoningState::preview_for(
   self : LiveReasoningState,
-  key : LiveReasoningKey,
+  key : Key,
 ) -> LiveReasoningPreview? {
   for preview in self.previews {
     if preview.key == key && !preview.complete {
@@ -127,7 +116,7 @@ fn LiveReasoningState::preview_for(
 ///|
 fn LiveReasoningState::sync_effect(
   self : LiveReasoningState,
-  target : LiveReasoningTarget?,
+  target : Target?,
 ) -> LiveReasoningEffect {
   match target {
     None => Reset
@@ -144,7 +133,7 @@ fn LiveReasoningState::sync_effect(
 /// Hide the visible card when the displayed target matches.
 fn LiveReasoningState::hide_when(
   self : LiveReasoningState,
-  matches : (LiveReasoningKey) -> Bool,
+  matches : (Key) -> Bool,
 ) -> LiveReasoningEffect {
   match self.active {
     Some(active) if matches(active.key) => Hide(target=active.key.wire())
@@ -284,9 +273,9 @@ priv suberror LiveFocusSubscription {
 /// focuses the preview once the host has rendered; its only subscription
 /// exists for `unload`, which releases the host when the target changes or
 /// the conversation leaves the screen. It renders nothing.
-fn LiveReasoning::focus_while(
+pub fn LiveReasoning::focus_while(
   self : LiveReasoning,
-  target : LiveReasoningTarget,
+  target : Target,
 ) -> @rabbita.Val[@html.Html] {
   let (state, _) = @rabbita.create_state_with_init(
     init=_ => {
@@ -315,6 +304,14 @@ fn LiveReasoning::focus_while(
     },
   )
   state.map(_ => @html.nothing)
+}
+
+///|
+/// Whether the reader follows the tail. The transcript component mirrors its
+/// scroll model here after every message; the preview reads it in its own
+/// layout callback.
+pub fn LiveReasoning::set_pinned(self : LiveReasoning, pinned : Bool) -> Unit {
+  self.preview.pinned = pinned
 }
 
 ///|
@@ -364,7 +361,7 @@ pub fn LiveReasoning::observe(
   event : @transcript.EngineEvent,
 ) -> LiveObservation {
   guard run_id is Some(run_id) else { return Forward }
-  let key : LiveReasoningKey = { channel, session, run_id, }
+  let key : Key = { channel, session, run_id, }
   match event {
     ReasoningDelta(content) => {
       self.apply(Delta(key, content))
@@ -401,3 +398,9 @@ pub fn LiveReasoning::observe(
     _ => Forward
   }
 }
+
+///|
+pub extend Key with Eq::{equal, not_equal}
+
+///|
+pub extend Target with Eq::{equal, not_equal}

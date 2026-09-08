@@ -375,7 +375,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
 pub fn boot() -> Unit {
   @crash_page.install()
   let app = @rabbita.new(() => {
-    let live_reasoning = @transcript_component.LiveReasoning()
+    let live_reasoning = @live_reasoning.LiveReasoning()
     let (state, emit) = @rabbita.create_state_with_init(
       // Init flows through `update` like any other message, as
       // `with_init(dispatch(Init))` did before the 0.13 migration.

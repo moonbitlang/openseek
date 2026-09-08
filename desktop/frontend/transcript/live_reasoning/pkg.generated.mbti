@@ -1,0 +1,48 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/transcript/live_reasoning"
+
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/transcript",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct Key {
+  channel : @interop.ChannelId
+  session : String
+  run_id : String
+} derive(Eq)
+pub fn Key::equal(Self, Self) -> Bool
+pub fn Key::not_equal(Self, Self) -> Bool
+
+pub enum LiveObservation {
+  Consumed
+  Forward
+  ForwardAfterReasoning(String)
+}
+
+type LiveReasoning
+pub fn LiveReasoning::LiveReasoning() -> Self
+pub fn LiveReasoning::clear_channel(Self, @interop.ChannelId) -> Unit
+pub fn LiveReasoning::finish_run(Self, channel~ : @interop.ChannelId, run_id~ : String) -> Unit
+pub fn LiveReasoning::focus_while(Self, Target) -> @rabbita.Val[@html.Html]
+pub fn LiveReasoning::observe(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?, @transcript.EngineEvent) -> LiveObservation
+pub fn LiveReasoning::set_pinned(Self, Bool) -> Unit
+
+pub(all) struct Target {
+  key : Key
+  step_label : String?
+} derive(Eq)
+pub fn Target::equal(Self, Self) -> Bool
+pub fn Target::not_equal(Self, Self) -> Bool
+pub fn Target::tag(Self) -> String
+
+// Type aliases
+
+// Traits

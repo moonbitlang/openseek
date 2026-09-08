@@ -238,3 +238,26 @@ test "tool output truncation keeps the head and tail around a skip marker" {
   assert_true(bounded.has_suffix("x".repeat(8_000)))
   assert_true(bounded.contains("10000 UTF-16 code units skipped"))
 }
+
+///|
+test "an open run without durable items renders no empty state" {
+  // An open run can precede its first durable User commit. The live
+  // reasoning preview beside the stream must not appear beneath the
+  // empty-chat welcome screen.
+  let input = Input(
+    source=OpenSeek,
+    focused=@interop.ChannelId::Local,
+    active_session="desktop-test",
+    active_run_id="r7",
+    current_project=None,
+    projects=[],
+    can_choose_project=false,
+    project_menu_open=false,
+    project_query="",
+    root=None,
+    items=[],
+    streaming_response=None,
+    streaming_identity="r7",
+  )
+  assert_true(stream_blocks(input).is_empty())
+}

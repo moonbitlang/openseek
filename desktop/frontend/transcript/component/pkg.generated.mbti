@@ -9,10 +9,11 @@ import {
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/transcript",
+  "openseek_desktop/frontend/transcript/live_reasoning",
 }
 
 // Values
-pub fn component(@rabbita.Val[Input], Actions, live_reasoning~ : LiveReasoning) -> @rabbita.Val[@html.Html]
+pub fn component(@rabbita.Val[Input], Actions, live_reasoning~ : @live_reasoning.LiveReasoning) -> @rabbita.Val[@html.Html]
 
 pub fn scroll_to_latest() -> @cmd.Cmd
 
@@ -35,18 +36,6 @@ type Input derive(Eq)
 pub fn Input::Input(dark_mode? : Bool, source~ : Source, focused~ : @interop.ChannelId, active_session~ : String, scroll? : ScrollPosition, active_run_id? : String, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, streaming_identity~ : String) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
-
-pub enum LiveObservation {
-  Consumed
-  Forward
-  ForwardAfterReasoning(String)
-}
-
-type LiveReasoning
-pub fn LiveReasoning::LiveReasoning() -> Self
-pub fn LiveReasoning::clear_channel(Self, @interop.ChannelId) -> Unit
-pub fn LiveReasoning::finish_run(Self, channel~ : @interop.ChannelId, run_id~ : String) -> Unit
-pub fn LiveReasoning::observe(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?, @transcript.EngineEvent) -> LiveObservation
 
 pub(all) struct ProjectChoice {
   root : @common.Uri

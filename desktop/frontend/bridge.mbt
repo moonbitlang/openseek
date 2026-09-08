@@ -280,7 +280,7 @@ fn session_changed_msg(
 /// `None`, so neither path redraws unrelated application UI.
 fn bridge_event(
   dispatch : @cmd.Emit[Msg],
-  live_reasoning : @transcript_component.LiveReasoning,
+  live_reasoning : @live_reasoning.LiveReasoning,
   event : @bridge.Event,
 ) -> @cmd.Cmd? {
   match event {
@@ -370,7 +370,7 @@ fn bridge_event(
 fn DeviceState::bridge_subscription(
   self : DeviceState,
   dispatch : @cmd.Emit[Msg],
-  live_reasoning : @transcript_component.LiveReasoning,
+  live_reasoning : @live_reasoning.LiveReasoning,
 ) -> @sub.Sub {
   let events = @bridge.EventHandler::new(event => {
     bridge_event(dispatch, live_reasoning, event)
@@ -394,7 +394,7 @@ fn DeviceState::bridge_subscription(
 fn Model::bridge_subscriptions(
   self : Model,
   dispatch : @cmd.Emit[Msg],
-  live_reasoning : @transcript_component.LiveReasoning,
+  live_reasoning : @live_reasoning.LiveReasoning,
 ) -> @sub.Sub {
   @sub.batch(
     self.devices.map(dev => dev.bridge_subscription(dispatch, live_reasoning)),
