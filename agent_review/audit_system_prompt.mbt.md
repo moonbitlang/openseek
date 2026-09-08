@@ -35,63 +35,31 @@ Principles:
 
 ## Reading Files
 
-Read files through `mbtx`. This example selects a 1-based line range and prints
-original line numbers as `01 |...`, `02 |...`. It reads two files concurrently
-with `@async.all`, then prints each file's result together so lines do not
-interleave. Change the paths and ranges for your task; keep batches small.
+Read files through `mbtx`, selecting an inclusive 1-based line range:
 
 ```mbtx
-///|
-import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
+import { "moonbitlang/async", "moonbitlang/async/fs" }
+
+async fn excerpt(path : String, first : Int, last : Int) -> String {
+  let lines = @fs.read_file(path).text().split("\n").to_array()
+  let start = (first - 1).clamp(min=0, max=lines.length())
+  let end = last.clamp(min=start, max=lines.length())
+  let body = [
+    for i, line in lines[start:end] =>
+      "\{(start + i + 1).to_string().pad_start(2, '0')} |\{line}"
+  ].join("\n")
+  "\{path}\n\{body}"
 }
 
-///|
-async fn excerpt(path : String, start_line : Int, max_lines : Int) -> String {
-  let text = @fs.read_file(path).text() catch {
-    error => return "\{path}: error reading file: \{error}"
-  }
-  if text.is_empty() {
-    return "\{path}: empty file"
-  }
-  let lines = text.split("\n").to_array()
-  let start = (start_line - 1).clamp(min=0, max=lines.length())
-  let end = start + max_lines.clamp(min=0, max=lines.length() - start)
-  let width = end.to_string().length().max(2)
-  let out = StringBuilder()
-  out.write_string("\{path}\n")
-  for i in start..<end {
-    let line = lines[i]
-    let number = (i + 1).to_string().pad_start(width, '0')
-    let clipped = if line.length() > 200 { " [line clipped]" } else { "" }
-    out.write_string("\{number} |\{line.clamped_view(end=200)}\{clipped}\n")
-  }
-  out.write_string(
-    "[shown=\{end - start} total=\{lines.length()} before=\{start} after=\{lines.length() - end}]",
-  )
-  out.to_string()
-}
-
-///|
 async fn main {
-  let results = @async.all([
-    () => excerpt("moon.mod", 1, 40),
-    () => excerpt("agent/tool_definition.mbt", 80, 40),
-  ])
-  for result in results {
-    println(result)
-  }
+  println(excerpt("moon.mod", 1, 40))
+  println(excerpt("agent/tool_definition.mbt", 80, 119))
 }
 ```
 
-The example loads each text file and prints it line by line; it does not stream
-file input. Each excerpt is limited to 40 lines and 200 UTF-16 code units per
-line, with clipped lines and omitted line counts marked explicitly. For huge
-files, use streaming IO or a focused `rg` query instead of loading the whole
-file. A failed read is reported for that path without discarding the other
-file's result. Line numbers are display labels, not part of the source text
-passed to `edit` or `multi_edit`.
+Read errors propagate. Keep ranges small; for huge files or long lines, use a
+focused `rg` query or streaming IO. Line numbers are display labels, not part
+of the source text passed to `edit` or `multi_edit`.
 
 ## Running Commands
 
