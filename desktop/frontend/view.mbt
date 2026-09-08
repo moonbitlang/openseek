@@ -1695,45 +1695,55 @@ fn view(
     window_titlebar_page,
     model.is_desktop,
   )
-  let content = match model.screen {
+  // The column is keyed so its DOM identity follows what it shows: a new
+  // conversation gets a new transcript element rather than the previous
+  // one patched in place, which is what lets the transcript component's
+  // observers trust the element they attached to.
+  let content : Map[String, @html.Html] = Map([])
+  match model.screen {
     // `Model::chat_column` is the one fork that decides what the conversation
     // column is; the transcript component's lifetime follows the same value.
     Chat =>
       match model.chat_column() {
         LoadFailed(message~) =>
-          [conversation_load_failed_view(dispatch, message)]
-        Loading => [conversation_loading_view()]
-        Onboarding => [onboarding_view(dispatch, model)]
-        Transcript(conversation=conv, ..) =>
-          [
-            topbar_view(
-              dispatch, toggle_terminal, toggle_right_panel, model, conv,
-            ),
-            transcript_html,
-            if conv.is_archived_read_only() {
-              conv.archived_read_only_view(dispatch)
-            } else {
-              composer_html
-            },
-          ]
+          content["load-failed"] = conversation_load_failed_view(
+            dispatch, message,
+          )
+        Loading => content["loading"] = conversation_loading_view()
+        Onboarding => content["onboarding"] = onboarding_view(dispatch, model)
+        Transcript(slot~, conversation=conv) => {
+          content["topbar"] = topbar_view(
+            dispatch, toggle_terminal, toggle_right_panel, model, conv,
+          )
+          content["transcript\u{0}" + slot.key()] = transcript_html
+          content["composer"] = if conv.is_archived_read_only() {
+            conv.archived_read_only_view(dispatch)
+          } else {
+            composer_html
+          }
+        }
       }
     Codex =>
-      model.codex.page(
-        dispatch.map(msg => Codex(channel=model.focused, msg)),
-        model.focused,
-        terminal_panel_visible,
-        file_panel_visible,
-        @codex.PageActions::{
-          toggle_terminal,
-          toggle_files: toggle_right_panel,
-          workspace_label: workspace => @resource.label(workspace),
-          transcript: transcript_html,
-          composer: codex_composer_html,
-        },
-      )
-    Skills => [skills_html]
-    Settings => [settings_page(dispatch, model)]
-    WorkspaceSettings(..) => [workspace_settings_html]
+      for
+        index, html in model.codex.page(
+          dispatch.map(msg => Codex(channel=model.focused, msg)),
+          model.focused,
+          terminal_panel_visible,
+          file_panel_visible,
+          @codex.PageActions::{
+            toggle_terminal,
+            toggle_files: toggle_right_panel,
+            workspace_label: workspace => @resource.label(workspace),
+            transcript: transcript_html,
+            composer: codex_composer_html,
+          },
+        ) {
+        content["codex\{index}"] = html
+      }
+    Skills => content["skills"] = skills_html
+    Settings => content["settings"] = settings_page(dispatch, model)
+    WorkspaceSettings(..) =>
+      content["workspace-settings"] = workspace_settings_html
   }
   // The app is `sidebar | content`; `content` itself splits into the
   // conversation (left) and the editor (right) as two independent parts, so
@@ -1752,10 +1762,15 @@ fn view(
   if terminal_panel_visible {
     content_class += " terminal-open"
   }
-  let page_content = if window_titlebar_drag_strip {
-    [@html.div(class="window-titlebar-drag-strip", @html.nothing), ..content]
-  } else {
-    content
+  let page_content : Map[String, @html.Html] = Map([])
+  if window_titlebar_drag_strip {
+    page_content["window-titlebar-drag-strip"] = @html.div(
+      class="window-titlebar-drag-strip",
+      @html.nothing,
+    )
+  }
+  for key, html in content {
+    page_content[key] = html
   }
   let sidebar_toggle_label = if model.sidebar_open {
     "Hide sidebar"

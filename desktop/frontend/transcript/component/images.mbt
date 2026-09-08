@@ -39,6 +39,9 @@ extern "js" fn TranscriptImageObserver::disconnect(self : Self) -> Unit =
 
 ///|
 priv enum LocalImageState {
+  // A root-relative path seen before the conversation's root resolved. It is
+  // requested as soon as an owner with a root arrives (`rebase`).
+  ImageAwaitingRoot
   ImageLoading
   ImageReady(String)
   ImageUnavailable
@@ -74,23 +77,44 @@ fn ImageCache::empty() -> ImageCache {
 
 ///|
 /// Start at most one in-flight read for a path in this conversation. A
-/// root-relative path waits without entering the cache while the root is
-/// unresolved, so a later root update can rescan and request it.
+/// root-relative path waits in the cache while the root is unresolved;
+/// `rebase` requests it once an owner with a root arrives.
 fn ImageCache::begin_read(
   self : ImageCache,
   owner : ImageOwner,
   path : String,
   emit : @cmd.Emit[Msg],
 ) -> (ImageCache, @cmd.Cmd) {
-  guard owner.read_target(path) is Some(target) else {
-    return (self, @cmd.none)
-  }
   if self.0.get(path) is Some(ImageLoading) {
     return (self, @cmd.none)
   }
   let entries = self.0.copy()
+  guard owner.read_target(path) is Some(target) else {
+    entries[path] = ImageAwaitingRoot
+    return (ImageCache(entries), @cmd.none)
+  }
   entries[path] = ImageLoading
   (ImageCache(entries), owner.read_image(target, path, emit))
+}
+
+///|
+/// Move to a new owner: results and in-flight reads belonged to the previous
+/// root and are dropped, while paths that were waiting for a root are read
+/// now.
+fn ImageCache::rebase(
+  self : ImageCache,
+  owner : ImageOwner,
+  emit : @cmd.Emit[Msg],
+) -> (ImageCache, @cmd.Cmd) {
+  let mut images = ImageCache::empty()
+  let commands : Array[@cmd.Cmd] = []
+  for path, state in self.0 {
+    guard state is ImageAwaitingRoot else { continue }
+    let (next, command) = images.begin_read(owner, path, emit)
+    images = next
+    commands.push(command)
+  }
+  (images, @cmd.batch(commands))
 }
 
 ///|
@@ -105,7 +129,7 @@ fn ImageCache::apply_after_render(self : ImageCache) -> @cmd.Cmd {
         match state {
           ImageReady(source) => settle_transcript_image(path, source)
           ImageUnavailable => settle_transcript_image(path, "")
-          ImageLoading => ()
+          ImageLoading | ImageAwaitingRoot => ()
         }
       }
     },
