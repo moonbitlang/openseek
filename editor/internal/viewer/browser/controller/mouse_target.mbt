@@ -874,8 +874,8 @@ fn create_mouse_target_for_request(
   if !ElementPath::is_child_of_overflow_guard(path) &&
     !ElementPath::is_child_of_overflowing_content_widgets(path) &&
     !ElementPath::is_child_of_overflowing_overlay_widgets(path) {
-    // We only render dom nodes inside the overflow guard or in the
-    // overflowing content widgets
+    // We only render dom nodes inside the overflow guard, or in the
+    // overflowing content or overlay widgets
     return request.fulfill_unknown()
   }
   let hit_tests : Array[

@@ -101,9 +101,9 @@ pub fn MarkerDecorationsService::dispose(
   for registration in self.model_registrations.values().to_array() {
     self.finalize_registration(registration, ServiceDisposed)
   }
-  // These are the two ownership indexes. They intentionally survive until
-  // every watch/owner is inert so teardown callbacks cannot observe a partial
-  // service as live ingress.
+  // Drop watches/leases/ranges first, then the two ownership indexes
+  // (model_registrations and model_ids_by_uri) last, so teardown callbacks
+  // cannot observe a partial service as live ingress.
   self.blocked_model_ids.clear()
   self.legacy_leases.clear()
   self.suppressed_ranges.clear()
@@ -311,9 +311,11 @@ fn MarkerDecorationsService::refresh_model_registration(
 }
 
 ///|
-/// `_updateDecorations` (`markerDecorationsService.ts:114`): read the first 500
-/// markers, drop ones inside suppressed ranges, push them through `update`, and
-/// fire the change event when something changed.
+/// `_updateDecorations` (`markerDecorationsService.ts:114`): drain a
+/// registration's pending update/reset requests. A drain already in flight
+/// only gets the flags set; otherwise loop, applying a pending reset and
+/// running one stable marker read + owner update per pass
+/// (`update_decorations_once`), until reentrant callbacks request no more.
 fn MarkerDecorationsService::update_decorations(
   self : MarkerDecorationsService,
   registration : ModelMarkerRegistration,

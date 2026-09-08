@@ -202,9 +202,6 @@ pub fn ContentHoverWidget::ContentHoverWidget(
     position_preference: None,
     hover_rows: None,
   }
-  // Content widgets swallow pointer motion, but a hover may overlap source
-  // text; non-interactive mousedown should still start editor selection at
-  // the underlying coordinate.
   wrapper.add_event_listener("mousemove", event => {
     // The pointer is on the hover widget: keep it open. The editor never
     // sees this move (stop_propagation), so the controller's grace timer

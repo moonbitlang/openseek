@@ -273,7 +273,7 @@ fn FoldingModel::current_folded_or_manual_ranges(
               dec_range.start_line_number + 1,
               dec_range.end_line_number,
             ) {
-            is_collapsed = false // uncollapse is the range is blocked
+            is_collapsed = false // uncollapse if the range is blocked
           }
           folded_ranges.push({
             start_line_number: dec_range.start_line_number,
