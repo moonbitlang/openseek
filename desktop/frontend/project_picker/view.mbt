@@ -10,21 +10,37 @@ const PathInputId : String = "project-picker-path-input"
 const PathListId : String = "project-picker-folder-list"
 
 ///|
+const NewFolderInputId : String = "project-picker-new-folder-input"
+
+///|
 fn path_row_id(index : Int) -> String {
   "project-picker-folder-\{index}"
 }
 
 ///|
-/// Focus the path after rendering it. Opening the editor selects the whole
-/// value; resuming after a browse leaves the caret at the end.
-fn focus_path_after_render(select_all : Bool) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => focus_path_input(select_all), kind=@cmd.after_render)
+/// Focus the path after rendering it, selecting the whole value so typing
+/// replaces it. Completion browses leave the editor enabled, so it keeps
+/// focus and caret on its own while they run.
+fn focus_path_after_render() -> @cmd.Cmd {
+  focus_after_render(PathInputId, select_all=true)
 }
 
 ///|
-extern "js" fn focus_path_input(select_all : Bool) -> Unit =
-  #| (selectAll) => {
-  #|   const input = document.getElementById("project-picker-path-input");
+/// Focus the new-folder composer after rendering it, keeping whatever name
+/// a failed create left behind.
+fn focus_new_folder_after_render() -> @cmd.Cmd {
+  focus_after_render(NewFolderInputId, select_all=false)
+}
+
+///|
+fn focus_after_render(id : String, select_all~ : Bool) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => focus_input(id, select_all), kind=@cmd.after_render)
+}
+
+///|
+extern "js" fn focus_input(id : String, select_all : Bool) -> Unit =
+  #| (id, selectAll) => {
+  #|   const input = document.getElementById(id);
   #|   if (!input) return;
   #|   input.focus();
   #|   if (selectAll) return input.select();
@@ -88,10 +104,7 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
   if visible_entries.is_empty() && picker.new_folder is None {
     rows.push(empty_view(picker, filter_active))
   }
-  let can_create = !picker.loading &&
-    picker.location is Some(Directory(_)) &&
-    picker.new_folder is None &&
-    picker.path_draft is None
+  let can_create = picker.actionable_directory() is Some(_)
   let folder_count = visible_entries.length()
   let folder_count_label = if filter_active {
     if folder_count == 1 {
@@ -203,7 +216,6 @@ fn path_editor(
     .aria_autocomplete("list")
     .aria_keyshortcuts("Meta+L Control+L")
     .data_set("focus-owner", "")
-    .disabled(picker.loading)
     .on_keydown(event => {
       if event.is_composing() {
         return @cmd.none
@@ -282,6 +294,7 @@ fn new_folder_row(
       placeholder="New folder name",
       on_input=emit.map(value => NewFolderNameChanged(value)),
       attrs=@html.Attrs::build()
+        .id(NewFolderInputId)
         .aria_label("New folder name")
         .data_set("focus-owner", "")
         .disabled(picker.loading)
@@ -291,12 +304,12 @@ fn new_folder_row(
           }
           match event.key() {
             "Enter" => {
+              // Deciding validity here would read the name captured at the
+              // last paint, missing keystrokes still inside the same frame —
+              // typing a name and pressing Enter at once created nothing.
+              // `CreateFolder` checks the current name itself.
               event.prevent_default()
-              if valid {
-                emit(CreateFolder)
-              } else {
-                @cmd.none
-              }
+              emit(CreateFolder)
             }
             "Escape" => {
               event.prevent_default()
@@ -331,6 +344,14 @@ fn new_folder_row(
 fn empty_view(picker : State, filter_active : Bool) -> @html.Html {
   let (title, detail) = if picker.loading {
     ("Loading folders…", "This should only take a moment.")
+  } else if !picker.listing_completes_draft() {
+    // The host's own refusal, so permissions, a missing directory, and a
+    // non-directory path read differently in place.
+    let reason = match picker.completion_browse {
+      Some(Refused(_, message~)) => message
+      _ => "Check the path, or press Enter to open it and see why."
+    }
+    ("Cannot list this folder", reason)
   } else if filter_active {
     ("No matching folders", "Try a different name or enter a complete path.")
   } else {
@@ -344,10 +365,7 @@ fn empty_view(picker : State, filter_active : Bool) -> @html.Html {
 
 ///|
 fn picker_footer(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
-  let can_confirm = !picker.loading &&
-    picker.location is Some(Directory(_)) &&
-    picker.new_folder is None &&
-    picker.path_draft is None
+  let can_confirm = picker.actionable_directory() is Some(_)
   @html.div(class="picker-footer", [
     current_location(picker),
     @html.div(class="modal-actions", [
