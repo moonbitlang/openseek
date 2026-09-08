@@ -2,8 +2,10 @@
 /// Plain text alone cannot disambiguate completion from waiting for a job.
 /// Explicit finish is handled elsewhere and never calls this guard.
 fn AgentLoop::background_finish_notice(self : AgentLoop) -> String? {
-  guard self.tools.background_jobs is Some(jobs) else { return None }
-  let pending = jobs.pending()
+  guard self.tools.background_job_runtime() is Some(jobs) else { return None }
+  let pending = jobs
+    .pending()
+    .filter(job => !self.jobs_before_turn.contains(job.id))
   guard !pending.is_empty() else { return None }
   let labels = pending
     .map(job => "\{job.id}: \{@agent_tool.brief_line(job.command, limit=100)}")
@@ -20,7 +22,7 @@ async fn AgentLoop::wait_for_jobs(
   self : AgentLoop,
   ids : Array[String],
 ) -> String {
-  guard self.tools.background_jobs is Some(jobs) else {
+  guard self.tools.background_job_runtime() is Some(jobs) else {
     fail("no background job registry is available")
   }
   guard !ids.is_empty() else { fail("job_wait requires at least one job id") }

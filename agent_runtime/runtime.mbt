@@ -144,13 +144,18 @@ pub fn[X] AgentTaskScope::group(
 /// an unbounded queue, so event-bus overflow cannot discard it. The text is
 /// stored exactly as supplied inside its variant; this method does not trim,
 /// deduplicate, or drop blank strings. The agent loop may apply its own
-/// filtering when it drains.
+/// filtering when it drains. `wake=true` marks a user-originated notice (for
+/// example a goal change) as actionable during job_wait without changing its
+/// persisted Notice representation. Ordinary notices do not wake waiting.
 pub fn AgentRuntime::queue_steer(
   self : AgentRuntime,
   input : SteerInput,
+  wake? : Bool = false,
 ) -> Unit {
   ignore(self.steers.try_put(input) catch { _ => false })
-  if input is (Prompt(text) | Command(text)) && !text.is_blank() {
+  if input is (Prompt(text) | Command(text) | Notice(text)) &&
+    !text.is_blank() &&
+    (wake || !(input is Notice(_))) {
     self.user_input_pending = true
     self.user_input_changed.broadcast()
   }

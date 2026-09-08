@@ -90,10 +90,10 @@ pub struct ToolOutput {
 pub fn ToolOutput::to_repr(Self) -> @debug.Repr
 
 pub struct Tools {
-  background_jobs : @bgjobs.BgJobRuntime?
   // private fields
 }
 pub fn Tools::Tools(Array[AgentToolDefinition], background_jobs? : @bgjobs.BgJobRuntime) -> Self raise
+pub fn Tools::background_job_runtime(Self) -> @bgjobs.BgJobRuntime?
 pub fn Tools::find(Self, String) -> AgentToolDefinition?
 pub fn Tools::function_tools(Self) -> Array[@deepseek.ToolDefinition]
 

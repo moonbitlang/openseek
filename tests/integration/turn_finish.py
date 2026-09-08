@@ -16,8 +16,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-def main():
-    executable = str(Path(sys.argv[1]).resolve())
+def run_case(executable, serve=False):
     with tempfile.TemporaryDirectory(prefix="openseek-turn-finish-") as directory:
         release = Path(directory) / "release"
         source = '''import { "moonbitlang/async", "moonbitlang/async/fs" }
@@ -27,6 +26,7 @@ async fn main {
 }'''
         requests = []
         errors = []
+        process = None
 
         class Provider(BaseHTTPRequestHandler):
             def log_message(self, *_args):
@@ -60,6 +60,11 @@ async fn main {
                     elif step == 3:
                         assert "Background jobs still need a decision" in messages, messages
                         name, args = "job_wait", {"job_ids": ["bg-1"]}
+                    elif step == 4 and serve:
+                        assert "user_input" in messages, messages
+                        assert "[goal cleared]" in messages, messages
+                        assert not release.exists(), "job completed before goal wake"
+                        name, args = "finish", {"answer": "checked the background result"}
                     elif step == 4:
                         assert "job_completed" in messages, messages
                         assert "background job bg-1 finished" in messages, messages
@@ -74,7 +79,11 @@ async fn main {
                         "function": {"name": name, "arguments": json.dumps(args)},
                     }]})
                     if step == 3:
-                        release.touch()
+                        if serve:
+                            process.stdin.write(json.dumps({"command": "goal", "action": "clear"}) + "\n")
+                            process.stdin.flush()
+                        else:
+                            release.touch()
                 except Exception as error:
                     errors.append(error)
                     self.send_error(500)
@@ -92,21 +101,47 @@ async fn main {
         thread.start()
         try:
             env = {**os.environ, "DEEPSEEK": "test", "OPENSEEK_RETRY_ATTEMPTS": "1"}
-            run = subprocess.run([
-                executable, "run", "--no-session", "--dir", directory,
+            command = [
+                executable, "serve" if serve else "run", "--no-session", "--dir", directory,
                 "--api-key", "test", "--model", "deepseek-v4-flash",
                 "--api-url", f"http://127.0.0.1:{server.server_port}/chat/completions",
                 "--max-steps", "8", "--mcp-config", "",
-                "Run a background job and process its result.",
-            ], env=env, capture_output=True, text=True, timeout=120)
+            ]
+            if serve:
+                with tempfile.TemporaryFile(mode="w+") as stderr:
+                    process = subprocess.Popen(command, env=env, stdin=subprocess.PIPE,
+                                               stdout=subprocess.PIPE, stderr=stderr, text=True)
+                    timer = threading.Timer(120, process.kill)
+                    timer.start()
+                    try:
+                        process.stdin.write(json.dumps({"command": "prompt", "text": "Run a background job."}) + "\n")
+                        process.stdin.flush()
+                        lines = []
+                        for line in process.stdout:
+                            lines.append(line)
+                            if line.startswith("{") and json.loads(line).get("event") == "agent_finished":
+                                process.stdin.close()
+                                process.stdin = None
+                        process.wait(timeout=10)
+                        stderr.seek(0)
+                        run = subprocess.CompletedProcess(command, process.returncode, "".join(lines), stderr.read())
+                    finally:
+                        timer.cancel()
+                        if process.poll() is None:
+                            process.kill()
+                            process.wait()
+            else:
+                run = subprocess.run(command + ["Run a background job and process its result."],
+                                     env=env, capture_output=True, text=True, timeout=120)
             assert not errors, errors
             assert run.returncode == 0, (run.stdout, run.stderr)
-            assert len(requests) == 5, (requests, run.stdout, run.stderr)
+            assert len(requests) == (4 if serve else 5), (requests, run.stdout, run.stderr)
             events = [json.loads(line) for line in run.stdout.splitlines() if line.startswith("{")]
             finishes = [event for event in events if event.get("event") == "agent_finished"]
             assert len(finishes) == 1, finishes
             assert finishes[0]["answer"] == "checked the background result", finishes
-            print("PASS: real CLI preserves background work through wait, notice, read, and finish")
+            print("PASS: serve goal clear wakes job_wait while the job is still running" if serve else
+                  "PASS: real CLI preserves background work through wait, notice, read, and finish")
         finally:
             server.shutdown()
             server.server_close()
@@ -114,4 +149,6 @@ async fn main {
 
 
 if __name__ == "__main__":
-    main()
+    executable = str(Path(sys.argv[1]).resolve())
+    run_case(executable)
+    run_case(executable, serve=True)

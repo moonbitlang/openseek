@@ -8,6 +8,7 @@ pub fn definition() -> @agent_tool.AgentToolDefinition {
       #|Use when you need those results and have no other work to do. No timeout or
       #|polling is needed. Call this tool alone in its batch. Returns job states;
       #|read logs afterward with job_output. Use finish if your work is already done.
+      #|Runtime watchdogs still apply; a job may be stopped at its output or time cap.
     ),
     schema=JsonSchema({
       "type": "object",

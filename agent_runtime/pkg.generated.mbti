@@ -23,7 +23,7 @@ pub fn AgentRuntime::approval_channel(Self) -> ApprovalChannel?
 pub fn AgentRuntime::drain_events(Self) -> Array[AgentEvent]
 pub fn AgentRuntime::drain_steers(Self) -> Array[SteerInput]
 pub fn AgentRuntime::emit_event(Self, AgentEvent) -> Unit
-pub fn AgentRuntime::queue_steer(Self, SteerInput) -> Unit
+pub fn AgentRuntime::queue_steer(Self, SteerInput, wake? : Bool) -> Unit
 pub async fn AgentRuntime::wait_for_user_input(Self) -> Unit
 pub fn AgentRuntime::workspace_root(Self) -> String
 

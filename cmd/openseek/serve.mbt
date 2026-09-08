@@ -1168,7 +1168,7 @@ async fn run_serve(
             if baseline is Some(notice) {
               runtime.queue_steer(Notice(notice))
             }
-            runtime.queue_steer(Notice(marker))
+            runtime.queue_steer(Notice(marker), wake=true)
           } else {
             append_goal_baseline(baseline)
             if append_goal_marker(marker) {

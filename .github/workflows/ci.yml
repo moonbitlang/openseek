@@ -167,6 +167,12 @@ jobs:
         if: matrix.target == 'native'
         run: moon cram test tests/cram
 
+      - name: Background turn lifecycle (offline CLI)
+        if: matrix.target == 'native'
+        run: |
+          moon build cmd/openseek --target native
+          python3 tests/integration/turn_finish.py _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
+
   # cmd/viz_app is a separate MoonBit module and owns its browser test runner.
   # Keep it out of Desktop's recipe so either application can be tested alone.
   viz-e2e:

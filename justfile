@@ -29,6 +29,12 @@ inspect *args:
 # Run workspace MoonBit tests plus the offline OpenSeek CLI documentation tests.
 test: test-moon
     moon cram test tests/cram
+    just test-turn-finish
+
+# Real CLI lifecycle regression with an offline scripted model (Python 3).
+test-turn-finish:
+    moon build cmd/openseek --target native
+    python3 tests/integration/turn_finish.py _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
 
 test-moon:
     moon test --target native

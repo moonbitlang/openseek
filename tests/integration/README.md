@@ -1,6 +1,7 @@
 # Background job lifecycle
 
-Run the offline test against the native CLI:
+Included in `just test` and native CI. Run it separately with
+`just test-turn-finish`, or directly against the native CLI:
 
 ```sh
 moon build cmd/openseek --target native
@@ -16,3 +17,7 @@ same MoonBit runtime dependencies as `mbtx`.
 
 The agent and runtime MoonBit tests cover input, cancellation, invalid calls,
 multi-job selection, and notification ordering separately.
+
+A second real `serve` scenario clears the goal through stdin while `job_wait`
+observes a gated job. The next model request must report `user_input` before the
+job is released, proving that the command dispatcher wakes the active turn.

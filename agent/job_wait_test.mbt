@@ -23,6 +23,7 @@ fn wait_call_payload(name : String, args : Json) -> String {
 priv enum WaitWake {
   Complete
   UserInput
+  GoalChange
   Stop
   Cancel
 }
@@ -99,6 +100,7 @@ async fn exercise_job_wait(wake : WaitWake) -> Unit {
           release.close()
         }
         UserInput => runtime.queue_steer(Prompt("NEW-DIRECTION"))
+        GoalChange => runtime.queue_steer(Notice("NEW-GOAL"), wake=true)
         Stop => {
           let _ = jobs.stop(id)
         }
@@ -148,6 +150,11 @@ async fn exercise_job_wait(wake : WaitWake) -> Unit {
             assert_true(bodies[1].contains("user_input"))
             assert_true(jobs.snapshot(id) is Some(job) && job.status is Running)
           }
+          GoalChange => {
+            assert_true(bodies[1].contains("NEW-GOAL"))
+            assert_true(bodies[1].contains("user_input"))
+            assert_true(jobs.snapshot(id) is Some(job) && job.status is Running)
+          }
           Stop => assert_true(bodies[1].contains("stopped"))
           Cancel => ()
         }
@@ -191,24 +198,34 @@ async test "job_wait cancellation seals the turn without another model request" 
 
 ///|
 #cfg(not(platform="windows"))
-async test "plain text with a live job asks for a decision and explicit finish is respected" {
+async fn exercise_plain_finish(existing : Bool) -> Unit {
   @async.with_task_group(group => {
     let runtime = @agent_runtime.AgentRuntime()
     let scope = @agent_runtime.AgentTaskScope(group)
     let jobs = @bgjobs.BgJobRuntime(scope)
     let (input, release) = @process.write_to_process()
     defer release.close()
-    let id = jobs.start(
-      program="/bin/cat",
-      args=[],
-      command="long lived server",
-      stdin=input,
-    )
+    async fn start_job() -> Unit {
+      let _ = jobs.start(
+        program="/bin/cat",
+        args=[],
+        command="long lived server",
+        stdin=input,
+      )
+    }
+    if existing {
+      start_job()
+    }
     let bodies : Array[String] = []
-    guard goal_check_test_server(group, bodies, [
-        final_answer_payload("server started"),
-        wait_call_payload("finish", { "answer": "intentionally done" }),
-      ])
+    guard goal_check_test_server(
+        group,
+        bodies,
+        [
+          final_answer_payload("server started"),
+          wait_call_payload("finish", { "answer": "intentionally done" }),
+        ],
+        on_request=() => if !existing && bodies.length() == 1 { start_job() },
+      )
       is Some(url) else {
       return
     }
@@ -227,16 +244,44 @@ async test "plain text with a live job asks for a decision and explicit finish i
       ),
       append_item=(session, item) => session.append(item),
     )
-    assert_eq(bodies.length(), 2)
-    assert_true(bodies[1].contains("Background jobs still need a decision"))
-    assert_true(bodies[1].contains(id))
-    assert_true(
-      result.events().peek() is Some(e) &&
-      e.item() is Terminal(Finished("intentionally done")),
-    )
+    guard jobs.list() is [job] else { fail("missing job") }
+    let id = job.id
+    if existing {
+      assert_eq(bodies.length(), 1)
+      assert_true(
+        result.events().peek() is Some(e) &&
+        e.item() is Terminal(Finished("server started")),
+      )
+    } else {
+      assert_eq(bodies.length(), 2)
+      assert_true(bodies[1].contains("Background jobs still need a decision"))
+      assert_true(bodies[1].contains(id))
+      assert_true(
+        result.events().peek() is Some(e) &&
+        e.item() is Terminal(Finished("intentionally done")),
+      )
+    }
     assert_true(jobs.snapshot(id) is Some(job) && job.status is Running)
     let _ = jobs.stop(id)
   })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "plain text with a new job asks for a decision and explicit finish is respected" {
+  exercise_plain_finish(false)
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "a preexisting server does not add a finish reminder to a later turn" {
+  exercise_plain_finish(true)
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "a user goal notice wakes job_wait without becoming a user message" {
+  exercise_job_wait(GoalChange)
 }
 
 ///|

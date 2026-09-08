@@ -6,6 +6,7 @@ priv struct AgentLoop {
   /// model honors the control — a handoff summary needs no reasoning budget.
   summary_client : @client.Client
   tools : @agent_tool.Tools
+  jobs_before_turn : Array[String]
   append_item : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
   /// Turn-local DeepSeek request buffer. `AgentLoop` is private and per-run; a
   /// later user turn gets a fresh loop seeded from `Session::chat_messages`, not
@@ -41,6 +42,10 @@ fn AgentLoop::AgentLoop(
     client,
     summary_client,
     tools,
+    jobs_before_turn: match tools.background_job_runtime() {
+      Some(jobs) => jobs.list().map(job => job.id)
+      None => []
+    },
     append_item,
     on_goal_met,
     messages: session.chat_messages(),

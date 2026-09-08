@@ -5,13 +5,17 @@ async fn goal_check_test_server(
   group : @async.TaskGroup[Unit],
   bodies : Array[String],
   responses : Array[String],
+  on_request? : async () -> Unit,
 ) -> String? {
   serve_chat_completions(
     group,
     "local TCP bind unavailable; skipping goal check test",
-    max_connections=2,
+    max_connections=responses.length(),
     (_request, body, conn) => {
       bodies.push(body)
+      if on_request is Some(f) {
+        f()
+      }
       conn.send_response(200, "OK", extra_headers={
         "Content-Type": "text/event-stream",
       })

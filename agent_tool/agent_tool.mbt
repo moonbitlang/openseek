@@ -42,6 +42,8 @@ pub struct AgentToolDefinition {
   description : String
   schema : JsonSchema
   execute : ToolExecutor
+  /// This flag grants context-ceiling execution, not every Control action.
+  /// In particular, WaitJobs needs another model step and must leave it false.
   /// A control tool's action is loop flow (`Control(Finish/Abort)`), not
   /// tool output — its "result" is a few bytes. The loop uses this to know,
   /// WITHOUT executing, that a call is safe to honor at the context
@@ -232,7 +234,7 @@ fn ToolAction::abort(reason : String) -> ToolAction {
 pub struct Tools {
   priv by_name : Map[String, AgentToolDefinition]
   /// Shared execution registry, also used by the loop for wait/finish decisions.
-  background_jobs : @bgjobs.BgJobRuntime?
+  priv background_jobs : @bgjobs.BgJobRuntime?
 }
 
 ///|
@@ -545,4 +547,11 @@ pub extend ToolOutput with Debug::{to_repr}
 /// Request event-driven waiting inside the current agent loop.
 pub fn ToolAction::wait_jobs(ids : Array[String]) -> ToolAction {
   Control(WaitJobs(ids.copy()))
+}
+
+///|
+/// Registry associated with this tool set, used by loop-owned waiting.
+/// Kept behind an accessor so the storage is not part of the public record.
+pub fn Tools::background_job_runtime(self : Tools) -> @bgjobs.BgJobRuntime? {
+  self.background_jobs
 }
