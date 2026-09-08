@@ -52,8 +52,10 @@ pub impl @jsonrpc.Transport for NdjsonTransport with fn recv(self) {
     if trimmed == "" {
       continue
     }
-    if (Some(@json.parse(trimmed)) catch { _ => None }) is Some(message) {
-      return Some(message)
+    try @json.parse(trimmed) catch {
+      _ => continue
+    } noraise {
+      message => return Some(message)
     }
   }
 }

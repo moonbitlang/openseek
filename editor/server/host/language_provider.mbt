@@ -155,9 +155,7 @@ fn parse_moon_hover_output_impl(
   raw : String,
   position : @base_common.Position,
 ) -> @language.Hover? {
-  guard (Some(@json.parse(raw)) catch { _ => None }) is Some(json) else {
-    return None
-  }
+  let json = @json.parse(raw) catch { _ => return None }
   let contents : Array[@language.HoverContent] = match json {
     { "contents": Array(items), .. } =>
       [

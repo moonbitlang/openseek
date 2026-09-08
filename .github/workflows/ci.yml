@@ -167,6 +167,37 @@ jobs:
         if: matrix.target == 'native'
         run: moon cram test tests/cram
 
+  # Structural lint via moongrep. The `.moongrep/rules/*.yaml` files are the
+  # source of truth; this gate keeps new code from reintroducing the patterns
+  # they forbid. `scan` streams one JSON Lines finding per match on stdout and
+  # exits 0 whether or not it matches, so gate on an empty stdout.
+  moongrep:
+    name: moongrep lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Update MoonBit package registry
+        run: moon update
+
+      - name: Run moongrep scan
+        run: |
+          findings="$(moonx moonbit-community/moongrep@0.1.18 -- scan --output-json)"
+          if [ -n "$findings" ]; then
+            printf '%s\n' "$findings"
+            count="$(printf '%s\n' "$findings" | wc -l | tr -d ' ')"
+            echo "::error::moongrep reported $count finding(s)"
+            exit 1
+          fi
+
   # cmd/viz_app is a separate MoonBit module and owns its browser test runner.
   # Keep it out of Desktop's recipe so either application can be tested alone.
   viz-e2e:

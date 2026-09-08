@@ -149,12 +149,8 @@ async fn read_native_disk_snapshot(
   guard validate_native_file(root, target) is None else { return None }
   let before = native_file_signature(target)
   guard before != "missing" else { return None }
-  guard (Some(@fs.read_file(target)) catch { _ => None }) is Some(data) else {
-    return None
-  }
-  guard (Some(data.text()) catch { _ => None }) is Some(text) else {
-    return None
-  }
+  let data = @fs.read_file(target) catch { _ => return None }
+  let text = data.text() catch { _ => return None }
   guard !text.contains("\u{0}") else { return None }
   let after = native_file_signature(target)
   guard before == after else { return None }

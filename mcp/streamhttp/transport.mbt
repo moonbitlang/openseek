@@ -430,14 +430,18 @@ async fn read_sse_stream(
         let text = data.to_string()
         data.reset()
         has_data = false
-        if (Some(@json.parse(text)) catch { _ => None }) is Some(message) {
-          deliver(message)
-          // The spec has the server close the stream after the reply; a server
-          // that keeps it open instead would pin this exchange's cap slot, so
-          // once our request is answered we close from this side (allowed at
-          // any time) rather than read to EOF.
-          if answered() {
-            break
+        try @json.parse(text) catch {
+          _ => ()
+        } noraise {
+          message => {
+            deliver(message)
+            // The spec has the server close the stream after the reply; a server
+            // that keeps it open instead would pin this exchange's cap slot, so
+            // once our request is answered we close from this side (allowed at
+            // any time) rather than read to EOF.
+            if answered() {
+              break
+            }
           }
         }
       }
@@ -454,9 +458,12 @@ async fn read_sse_stream(
     // event:/id:/retry:/comments are irrelevant to the message layer.
   }
   // A final event unterminated by a blank line still counts.
-  if has_data &&
-    (Some(@json.parse(data.to_string())) catch { _ => None }) is Some(message) {
-    deliver(message)
+  if has_data {
+    try @json.parse(data.to_string()) catch {
+      _ => ()
+    } noraise {
+      message => deliver(message)
+    }
   }
 }
 
