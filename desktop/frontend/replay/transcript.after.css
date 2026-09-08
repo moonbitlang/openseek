@@ -1540,3 +1540,8 @@
 .prototype-step-label { flex:none; }
 .prototype-step-preview { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
 .prototype-step-body { display:flex; flex-direction:column; gap:12px; padding-top:12px; font-size:var(--font-size-sm); color:var(--color-text); }
+
+/* Expanded metadata starts at the content edge, without the old marker gutter. */
+.prototype-step-body .activity-heading { display:flex; align-items:baseline; justify-content:flex-start; gap:8px; text-align:left; }
+.prototype-step-body .activity-heading::before { content:none; }
+.prototype-step-body .activity-step { min-width:0; text-align:left; }
