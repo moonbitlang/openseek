@@ -104,13 +104,12 @@ calls `@agent.run`, but that decision lives outside the `agent` package.
 `build_tools(runtime, scope)` returns the standard local tool registry:
 
 - `mbtx`: compile and run a self-contained MoonBit program — both the
-  scripting surface (transform files, parse JSON, compute, probe the language)
+  scripting surface (read files, transform data, parse JSON, compute, probe the language)
   and the command runner, since processes are spawned from the program through
   the shell-free `moonbitlang/async/shell` API. Calls return inline for up to
   five seconds, then automatically hand the same execution to the background
   runtime;
 - `job_output` / `job_stop`: read or stop a background job;
-- `read`: read a text file;
 - `edit`: replace exact text in a file;
 - `multi_edit`: apply several explicit line-anchored replacements to one file;
 - `write`: overwrite a file;
@@ -142,7 +141,6 @@ async test "standard tools are registered in dispatch order" {
       ],
       content=(
         #|[
-        #|  "read",
         #|  "edit",
         #|  "multi_edit",
         #|  "write",

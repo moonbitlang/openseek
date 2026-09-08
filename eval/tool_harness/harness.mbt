@@ -32,13 +32,11 @@ fn tool_definitions(
   runtime : @agent_runtime.AgentRuntime,
   scope : @agent_runtime.AgentTaskScope[@report.Report],
 ) -> @agent_tool.Tools raise {
-  // No harness tool needs the runtime or task scope now that the moon_check
-  // watcher is gone; the parameters stay so the registry shape still mirrors
-  // the agent's build_tools.
-  ignore(runtime)
+  // Bind mbtx to the runtime workspace; this harness runs snippets inline
+  // and does not need a background task scope.
   ignore(scope)
   Tools([
-    @read.definition(),
+    @mbtx.definition(workspace_root=runtime.workspace_root()),
     @write.definition(),
     @edit.definition(),
     @multi_edit.definition(),
@@ -61,14 +59,16 @@ async fn run_read_case(
       #|
     ),
   }).write_to(root)
-  let action = dispatch(tools, "read", {
-    "path": "\{root}/src/read.txt",
-    "start_line": 1,
-    "max_lines": 1,
-  })
+  let source =
+    #|import { "moonbitlang/async", "moonbitlang/async/fs" }
+    #|async fn main {
+    #|  let text = @fs.read_file("src/read.txt").text()
+    #|  println(text.split("\n").to_array()[0])
+    #|}
+  let action = dispatch(tools, "mbtx", { "source": source, "cwd": root })
   let reason = expect_respond(action, contains=["hello read"], error=false)
   @fs.rmdir(root, recursive=true)
-  row(index~, name="read", mode="filesystem", action="range read", reason~)
+  row(index~, name="mbtx", mode="filesystem", action="range read", reason~)
 }
 
 ///|

@@ -226,9 +226,8 @@ let spawnable_commands : Array[(String, Array[String])] = [
 /// and a read-only role's lab — while reads are open.
 ///
 /// Reads are open because bounding them stops nothing this agent cannot already
-/// do more easily, and costs steps to enforce. The `read` tool takes any
-/// absolute path with no scope of its own, so any file on the machine is one
-/// tool call away; `env.from_host` below hands the snippet every environment
+/// do more easily, and costs steps to enforce. File reads through `mbtx` may
+/// use absolute paths; `env.from_host` below hands the snippet every environment
 /// variable the agent holds, API keys included. Against that, a read root list
 /// buys no confidentiality — it only turns a wrong guess at where the toolchain
 /// lives into a refusal that reads like a broken environment. Live runs spent

@@ -47,6 +47,66 @@ Rules:
 - When done, call submit_answer exactly once with the full report
   (schema_version 1). Do not finish with plain text.
 
+## Reading Files
+
+Read files through `mbtx`. This example selects a 1-based line range and prints
+original line numbers as `01 |...`, `02 |...`. It reads two files concurrently
+with `@async.all`, then prints each file's result together so lines do not
+interleave. Change the paths and ranges for your task; keep batches small.
+
+```mbtx
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+}
+
+///|
+async fn excerpt(path : String, start_line : Int, max_lines : Int) -> String {
+  let text = @fs.read_file(path).text() catch {
+    error => return "\{path}: error reading file: \{error}"
+  }
+  if text.is_empty() {
+    return "\{path}: empty file"
+  }
+  let lines = text.split("\n").to_array()
+  let start = (start_line - 1).clamp(min=0, max=lines.length())
+  let end = start + max_lines.clamp(min=0, max=lines.length() - start)
+  let width = end.to_string().length().max(2)
+  let out = StringBuilder()
+  out.write_string("\{path}\n")
+  for i in start..<end {
+    let line = lines[i]
+    let number = (i + 1).to_string().pad_start(width, '0')
+    let clipped = if line.length() > 200 { " [line clipped]" } else { "" }
+    out.write_string("\{number} |\{line.clamped_view(end=200)}\{clipped}\n")
+  }
+  out.write_string(
+    "[shown=\{end - start} total=\{lines.length()} before=\{start} after=\{lines.length() - end}]",
+  )
+  out.to_string()
+}
+
+///|
+async fn main {
+  let results = @async.all([
+    () => excerpt("moon.mod", 1, 40),
+    () => excerpt("agent/tool_definition.mbt", 80, 40),
+  ])
+  for result in results {
+    println(result)
+  }
+}
+```
+
+The example loads each text file and prints it line by line; it does not stream
+file input. Each excerpt is limited to 40 lines and 200 UTF-16 code units per
+line, with clipped lines and omitted line counts marked explicitly. For huge
+files, use streaming IO or a focused `rg` query instead of loading the whole
+file. A failed read is reported for that path without discarding the other
+file's result. Line numbers are display labels, not part of the source text
+passed to `edit` or `multi_edit`.
+
 ## Running Commands
 
 There is no shell tool. Every command — `moon`, `git`, anything else — is

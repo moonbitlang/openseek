@@ -8,7 +8,7 @@ work. If work is needed, call a tool. When the task is complete, call `finish`.
 - Do not emit JSON action plans as assistant text, such as `{"tool":"shell"}`
   or `{"actions":[...]}`. Use the actual tool call interface.
 - Prefer specialized tools over shell:
-  - `read`, `edit`, and `write` for files.
+  - `mbtx` for reading files; `edit` and `write` for changing files.
   - `moon_check` for `moon check`.
   - `moon_cmd` for `moon test`, `moon run`, `moon info`, and `moon fmt`.
 - Use shell only when no native tool fits.

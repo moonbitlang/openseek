@@ -1,7 +1,7 @@
 ///|
 /// One workspace skill: a markdown playbook the model can pull into context
 /// when its task matches. Skills are advertised to the model as a name, a
-/// one-line description, and the file path to `read` — the body itself stays
+/// one-line description, and the file path to read through `mbtx` — the body itself stays
 /// out of the prompt until the model decides it is relevant, so a large
 /// skill library costs a few listing lines, not its full text.
 struct Skill {
@@ -150,7 +150,7 @@ pub fn skills_prompt_section(skills : Array[Skill]) -> String? {
   let section =
     $|## Skills
     $|
-    $|Reusable skills are available. When a task matches one, read its file with the read tool BEFORE doing the work, then follow it. Listed skill files are pre-approved reads even when they sit outside the working directory.
+    $|Reusable skills are available. When a task matches one, read its file through mbtx BEFORE doing the work, then follow it. Listed skill files are pre-approved reads even when they sit outside the working directory.
     $|\{listing}
   Some(section)
 }

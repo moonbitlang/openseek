@@ -1255,7 +1255,7 @@ fn references_environment_block(references_dir : String) -> String {
     $|MoonBit reference docs: \{references_dir}
     $|This installation bundles the official MoonBit documentation (the moonbit-docs markdown build) at the path above. It sits outside the workspace and is read-only; treat it as the authoritative source for language, standard-library, toolchain, and tutorial facts — look facts up there instead of guessing or inventing them.
     $|Top-level layout: language/ (language guide, attributes, error codes), toolchain/, tutorial/, example/, and index.md (the site map).
-    $|Read on demand, never wholesale: find the page you need with a subtree listing or search (@shell.glob or rg over "\{references_dir}"), then open only that page with the read tool, keeping each read bounded.
+    $|Read on demand, never wholesale: find the page you need with a subtree listing or search (@shell.glob or rg over "\{references_dir}"), then read only that page through mbtx, printing a bounded, numbered excerpt.
   )
 }
 

@@ -148,11 +148,11 @@ tree (`run`/`serve`/`review`/`subrun`/`mcp`/`sessions`). The interactive termina
 UI is the separate `openseek_tui` binary, maintained in its own repository,
 [moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui). `openseek run` parses arguments and
 runs the agent package. The agent sends DeepSeek native function tools and
-supports eleven local tools: `mbtx` — both the scripting surface and the
+supports ten local tools: `mbtx` — both the scripting surface and the
 command runner, spawning processes through the shell-free
 `moonbitlang/async/shell` API, with
 `job_output` and `job_stop` watching anything it detaches as a background job —
-plus `read`, `edit`, `multi_edit`, `write`, `remove`, `plan`, `goal`, and
+plus `edit`, `multi_edit`, `write`, `remove`, `plan`, `goal`, and
 `finish`. There is no shell tool, so no command ever goes through a shell.
 
 ```bash

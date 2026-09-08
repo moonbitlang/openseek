@@ -2,7 +2,7 @@
 /// Tool definition for `remove`: delete a file the agent created earlier this
 /// session, with a required rationale recorded for auditing.
 ///
-/// This fills the one gap in the tool-mediated file API — `read`/`write`/`edit`
+/// This fills the one gap in the tool-mediated file API — `write`/`edit`
 /// exist, but there was no in-workflow way to delete a file. `remove` is
 /// intentionally narrow: it deletes ONLY a file the session's `FileStateMap`
 /// records as `Created` — one the agent itself created this session — so removing
