@@ -35,6 +35,8 @@ pub async fn run_review(
   max_steps? : Int = default_review_max_steps,
   thinking? : @deepseek.ThinkingMode = Max,
   api_url? : String,
+  retry_attempts? : Int,
+  retry_backoff_ms? : Int,
   scratch_dir? : String,
 ) -> ReviewReport {
   let report = @agent_kind.execute_kind(
@@ -53,6 +55,8 @@ pub async fn run_review(
     model~,
     thinking~,
     api_url?,
+    retry_attempts?,
+    retry_backoff_ms?,
     workspace_root~,
   )
   match report {

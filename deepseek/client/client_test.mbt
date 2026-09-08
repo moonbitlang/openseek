@@ -22,7 +22,15 @@ test "client endpoint defaults follow selected model" {
 
 ///|
 test "client debug redacts api key" {
-  let client = @client.Client(api_key="test-key", thinking=Max)
+  let client = @client.Client(
+    api_key="test-key",
+    model=Deepseek(V4Pro),
+    api_url="https://api.deepseek.com/chat/completions",
+    thinking=Max,
+    retry_attempts=3,
+    retry_backoff_ms=500,
+    idle_timeout_ms=120000,
+  )
   debug_inspect(
     client,
     content=(

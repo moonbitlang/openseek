@@ -17,6 +17,7 @@ async fn run_fleet(matches : @argparse.Matches, concurrency~ : Int) -> Unit {
   guard model.api_key(matches.values) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
   }
+  let (retry_attempts, retry_backoff_ms) = retry_overrides(matches)
   let max_steps = max_steps(matches)
   // One desk for the whole fleet, not one per attempt: every attempt streams
   // to the same stdout, so one ask counter keeps that stream readable in ask
@@ -80,6 +81,8 @@ async fn run_fleet(matches : @argparse.Matches, concurrency~ : Int) -> Unit {
               thinking~,
               api_key,
               api_url,
+              retry_attempts,
+              retry_backoff_ms,
               approval?,
             ),
           )
@@ -168,6 +171,8 @@ async fn run_one_attempt(
   thinking~ : @deepseek.ThinkingMode,
   api_key : String,
   api_url : String?,
+  retry_attempts : Int?,
+  retry_backoff_ms : Int?,
   approval? : @agent_runtime.ApprovalChannel,
 ) -> AttemptOutcome {
   // Generated before the try so a failed attempt can still name its (partial)
@@ -196,6 +201,8 @@ async fn run_one_attempt(
       max_steps?,
       thinking~,
       api_url?,
+      retry_attempts?,
+      retry_backoff_ms?,
       workspace_root=run_dir,
       approval?,
     )

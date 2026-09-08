@@ -1,9 +1,9 @@
 ///|
 /// Options shared by the agent-running mains (`cmd/openseek` here and the
 /// `openseek_tui` binary in `moonbitlang/openseek_tui`): `--api-key`,
-/// `--model`, `--api-url`, `--max-steps`,
-/// `--thinking`, `--session`, `--session-root`, plus the provider-specific key
-/// options.
+/// `--model`, `--api-url`, `--retry-attempts`, `--retry-backoff-ms`,
+/// `--max-steps`, `--thinking`, `--session`, `--session-root`, plus the
+/// provider-specific key options.
 ///
 /// `cmd/openseek` installs these on its root command with `global=true`, so
 /// they read the same value in any position — `openseek --api-key k run`,
@@ -65,6 +65,20 @@ pub fn agent_shared_options(
       default_values=[""],
       global~,
       about="OpenAI-compatible chat completions endpoint.",
+    ),
+    OptionArg(
+      "retry-attempts",
+      long="retry-attempts",
+      env="OPENSEEK_RETRY_ATTEMPTS",
+      global~,
+      about="Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default.",
+    ),
+    OptionArg(
+      "retry-backoff-ms",
+      long="retry-backoff-ms",
+      env="OPENSEEK_RETRY_BACKOFF_MS",
+      global~,
+      about="Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default.",
     ),
     OptionArg(
       "max-steps",

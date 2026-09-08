@@ -34,6 +34,8 @@ pub async fn run(
   max_steps~ : Int,
   thinking? : @deepseek.ThinkingMode = Max,
   api_url? : String,
+  retry_attempts? : Int,
+  retry_backoff_ms? : Int,
   workspace_root? : String = ".",
 ) -> PatternRepairReport? {
   @agent_kind.execute_kind(
@@ -46,6 +48,8 @@ pub async fn run(
     model~,
     thinking~,
     api_url?,
+    retry_attempts?,
+    retry_backoff_ms?,
     workspace_root~,
   )
 }

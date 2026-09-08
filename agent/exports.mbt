@@ -30,7 +30,9 @@ pub let plan_reminder_after_steps : Int = 50
 /// `prompt` package. `thinking` defaults to `Max`. `workspace_root` defaults to
 /// `"."` and is passed into the per-turn `AgentRuntime`; local file and shell
 /// tools resolve relative paths against that root. `api_url` is forwarded to
-/// the DeepSeek client and is mainly useful for tests or compatible endpoints.
+/// the DeepSeek client and is mainly useful for tests or compatible endpoints,
+/// as are `retry_attempts` and `retry_backoff_ms`; omit either to keep the
+/// client's own default.
 ///
 /// Use `run_turn_with_append` when every committed event must be persisted as
 /// the turn progresses, or `run_turn_in_scope` when runtime/tool state must span
@@ -43,6 +45,8 @@ pub async fn run(
   max_steps? : Int = unbounded_max_steps,
   thinking? : @deepseek.ThinkingMode = Max,
   api_url? : String,
+  retry_attempts? : Int,
+  retry_backoff_ms? : Int,
   workspace_root? : String = ".",
 ) -> Unit {
   let session = @agent_session.Session(
@@ -59,6 +63,8 @@ pub async fn run(
       max_steps~,
       thinking~,
       api_url?,
+      retry_attempts?,
+      retry_backoff_ms?,
       workspace_root~,
     ),
   )

@@ -267,6 +267,11 @@ async fn dispatch_kind(
   // items append as the turn runs. Without the flags the transcript stays
   // in-memory, exactly as before.
   let durable = child_durable_session(matches, workspace_root~)
+  // Read here rather than threaded in: like `step_ceiling` below, this is a
+  // pure read of the child's own already-parsed argv/env. The parent does not
+  // inject `--retry-attempts` on the child argv — the retry settings ride the
+  // inherited environment, exactly as the API key and `--thinking` do.
+  let (retry_attempts, retry_backoff_ms) = retry_overrides(matches)
   // A child spawned from a hosted snippet inherits that snippet's handoff
   // in its environment. One that arrives with the handoff but WITHOUT a
   // reserved session was launched around the library — a hand-rolled
@@ -308,6 +313,8 @@ async fn dispatch_kind(
         ),
         thinking~,
         api_url?,
+        retry_attempts?,
+        retry_backoff_ms?,
         workspace_root~,
         session_id?,
         append_item?,
@@ -342,6 +349,8 @@ async fn dispatch_kind(
         ),
         thinking~,
         api_url?,
+        retry_attempts?,
+        retry_backoff_ms?,
         workspace_root~,
         session_id?,
         append_item?,
@@ -373,6 +382,8 @@ async fn dispatch_kind(
           ),
           thinking~,
           api_url?,
+          retry_attempts?,
+          retry_backoff_ms?,
           session_id?,
           append_item?,
         ) {
@@ -410,6 +421,8 @@ async fn dispatch_kind(
         max_steps=step_ceiling(matches, ceiling, 8),
         thinking~,
         api_url?,
+        retry_attempts?,
+        retry_backoff_ms?,
         workspace_root~,
       )
       report.map(report => report.to_json())

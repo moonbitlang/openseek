@@ -33,14 +33,16 @@ Commands:
   sessions  Manage durable sessions.
 
 Options:
-  -h, --help                     Show help information.
-  --api-key <api-key>            API key for the selected chat provider. [default: ]
-  --model <model>                Chat model: deepseek-v4-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-v4-flash]
-  --api-url <api-url>            OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
-  --max-steps <max-steps>        Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
-  --thinking <thinking>          Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
-  --session <session>            Create or resume this durable session id.
-  --session-root <session-root>  Directory containing durable OpenSeek sessions. [default: .openseek]
+  -h, --help                             Show help information.
+  --api-key <api-key>                    API key for the selected chat provider. [default: ]
+  --model <model>                        Chat model: deepseek-v4-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-v4-flash]
+  --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>      Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>  Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
+  --max-steps <max-steps>                Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
+  --thinking <thinking>                  Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
+  --session <session>                    Create or resume this durable session id.
+  --session-root <session-root>          Directory containing durable OpenSeek sessions. [default: .openseek]
 ```
 
 The root carries the engine-shared options (`--api-key`, `--model`, …) as
@@ -135,6 +137,8 @@ Options:
   --api-key <api-key>                                          API key for the selected chat provider. [default: ]
   --model <model>                                              Chat model: deepseek-v4-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-v4-flash]
   --api-url <api-url>                                          OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
+  --retry-attempts <retry-attempts>                            Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
+  --retry-backoff-ms <retry-backoff-ms>                        Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
   --max-steps <max-steps>                                      Maximum agent steps per turn; omit to bound turns by the model's context window instead (a checkpoint summary carries each turn into the next). [env: OPENSEEK_MAX_STEPS]
   --thinking <thinking>                                        Model thinking mode: no, high, or max; GLM maps no to low effort. [env: OPENSEEK_THINKING] [default: high]
   --session <session>                                          Create or resume this durable session id.
@@ -277,11 +281,15 @@ This example stays offline by pointing `--api-url` at a closed local port: the
 engine names its session, durably records the user prompt, and only then fails
 to reach the API. The generated id's timestamp is normalized for determinism.
 
+A refused connection is retryable, so every example below that targets the
+closed port pins `OPENSEEK_RETRY_ATTEMPTS=1`: none of them is testing the retry
+budget, and the suite's runtime should not track its default.
+
 ```mooncram
 $ sh <<'EOF'
 > tmp=$(mktemp -d)
 > cd "$tmp"
-> if env DEEPSEEK=test-key openseek.exe run --api-url "http://127.0.0.1:9/chat/completions" "say hi" > out.jsonl 2>/dev/null; then echo exit-zero; else echo exit-non-zero; fi
+> if env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --api-url "http://127.0.0.1:9/chat/completions" "say hi" > out.jsonl 2>/dev/null; then echo exit-zero; else echo exit-non-zero; fi
 > grep -c '"event":"session_started"' out.jsonl
 > env -u DEEPSEEK openseek.exe sessions list | cut -f1 | sed -E 's/cli-[0-9]{8}-[0-9]{6}-[0-9]{3}(-[A-Za-z0-9]+)?/cli-<stamp>/'
 > rm -rf "$tmp"
@@ -303,7 +311,7 @@ $ sh <<'EOF'
 > tmp=$(mktemp -d)
 > cd "$tmp"
 > for level in warn error; do
->   env DEEPSEEK=test-key MOON_XLOG=$level openseek.exe run --api-url "http://127.0.0.1:9/chat/completions" --dir "$tmp/$level" "say hi" > "out-$level.jsonl" 2>/dev/null
+>   env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 MOON_XLOG=$level openseek.exe run --api-url "http://127.0.0.1:9/chat/completions" --dir "$tmp/$level" "say hi" > "out-$level.jsonl" 2>/dev/null
 >   echo "$level: $(grep -c '"event":"agent_step"' "out-$level.jsonl")"
 > done
 > rm -rf "$tmp"
@@ -319,7 +327,7 @@ behind.
 $ sh <<'EOF'
 > tmp=$(mktemp -d)
 > cd "$tmp"
-> env DEEPSEEK=test-key openseek.exe run --no-session --api-url "http://127.0.0.1:9/chat/completions" "say hi" >/dev/null 2>&1
+> env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --no-session --api-url "http://127.0.0.1:9/chat/completions" "say hi" >/dev/null 2>&1
 > if test -d .openseek; then echo recorded; else echo ephemeral; fi
 > rm -rf "$tmp"
 > EOF
@@ -337,7 +345,7 @@ it.
 $ sh <<'EOF'
 > tmp=$(mktemp -d)
 > mkdir -p "$tmp/parent"
-> if env DEEPSEEK=test-key openseek.exe run --dir "$tmp/parent/new" --api-url "http://127.0.0.1:9/chat/completions" "say hi" > "$tmp/out.jsonl" 2>/dev/null; then echo exit-zero; else echo exit-non-zero; fi
+> if env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --dir "$tmp/parent/new" --api-url "http://127.0.0.1:9/chat/completions" "say hi" > "$tmp/out.jsonl" 2>/dev/null; then echo exit-zero; else echo exit-non-zero; fi
 > if test -d "$tmp/parent/new"; then echo dir-created; else echo dir-missing; fi
 > grep -c '"event":"workspace_created"' "$tmp/out.jsonl"
 > env -u DEEPSEEK openseek.exe sessions list --dir "$tmp/parent/new" | cut -f1 | sed -E 's/cli-[0-9]{8}-[0-9]{6}-[0-9]{3}(-[A-Za-z0-9]+)?/cli-<stamp>/'

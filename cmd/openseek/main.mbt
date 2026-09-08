@@ -152,6 +152,7 @@ async fn run_task_command(matches : @argparse.Matches) -> Unit {
     guard model.api_key(matches.values) is Some(api_key) else {
       fail("an API key is required for \{model}: pass --api-key")
     }
+    let (retry_attempts, retry_backoff_ms) = retry_overrides(matches)
     let max_steps = max_steps(matches)
     let task = task_text(matches)
     match resolved_session_id(matches) {
@@ -177,6 +178,8 @@ async fn run_task_command(matches : @argparse.Matches) -> Unit {
           max_steps?,
           thinking~,
           api_url?,
+          retry_attempts?,
+          retry_backoff_ms?,
           workspace_root~,
           review_deadline_ms~,
         )
@@ -210,6 +213,8 @@ async fn run_task_command(matches : @argparse.Matches) -> Unit {
           max_steps?,
           thinking~,
           api_url?,
+          retry_attempts?,
+          retry_backoff_ms?,
           workspace_root~,
           review_deadline_ms~,
           child_session=ChildSession(
@@ -268,6 +273,8 @@ async fn run_task_turn(
   max_steps? : Int,
   thinking~ : @deepseek.ThinkingMode,
   api_url? : String,
+  retry_attempts? : Int,
+  retry_backoff_ms? : Int,
   workspace_root~ : String,
   review_deadline_ms~ : Int?,
   child_session? : @agent_subrun.ChildSession,
@@ -346,6 +353,8 @@ async fn run_task_turn(
         max_steps?,
         thinking~,
         api_url?,
+        retry_attempts?,
+        retry_backoff_ms?,
         tools~,
         on_goal_met?,
       ),
@@ -834,6 +843,29 @@ fn max_steps(matches : @argparse.Matches) -> Int? raise {
       Some(@cli.parse_positive_int(input, "--max-steps"))
     _ => None
   }
+}
+
+///|
+/// Model-request retry overrides. `None` for either half means the DeepSeek
+/// client keeps its own default, so the defaults live in exactly one place
+/// (`@client.Client`) and are never restated here.
+///
+/// The pair is forwarded as `retry_attempts?, retry_backoff_ms?` all the way
+/// down to every in-process `@client.Client`. Child processes (`subrun`, the
+/// review gate) inherit it through `$OPENSEEK_RETRY_ATTEMPTS` /
+/// `$OPENSEEK_RETRY_BACKOFF_MS` rather than argument injection.
+fn retry_overrides(matches : @argparse.Matches) -> (Int?, Int?) raise {
+  let attempts = match matches {
+    { values: { "retry-attempts": [input, ..], .. }, .. } =>
+      Some(@cli.parse_positive_int(input, "--retry-attempts"))
+    _ => None
+  }
+  let backoff_ms = match matches {
+    { values: { "retry-backoff-ms": [input, ..], .. }, .. } =>
+      Some(@cli.parse_positive_int(input, "--retry-backoff-ms"))
+    _ => None
+  }
+  (attempts, backoff_ms)
 }
 
 ///|
@@ -1367,6 +1399,8 @@ test "cli parses env backed options and task" {
     "OPENSEEK_MAX_STEPS": "120",
     "OPENSEEK_SYSTEM_PROMPT_FILE": "/tmp/prompt-a.md",
     "OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE": "/tmp/prompt-b.md",
+    "OPENSEEK_RETRY_ATTEMPTS": "4",
+    "OPENSEEK_RETRY_BACKOFF_MS": "25",
   })
   let (model, _, api_url) = agent_settings(parsed)
   assert_true(model is Deepseek(V4Pro))
@@ -1383,6 +1417,7 @@ test "cli parses env backed options and task" {
   assert_false(parsed is { values: { "session": [_, ..], .. }, .. })
   assert_eq(session_root(parsed), ".openseek")
   assert_eq(task_text(parsed), "write MoonBit")
+  assert_eq(retry_overrides(parsed), (Some(4), Some(25)))
 }
 
 ///|
@@ -1399,6 +1434,34 @@ test "cli defaults model and max steps" {
   assert_true(max_steps(parsed) is None)
   assert_true(parsed is { values: { "session"? : None, .. }, .. })
   assert_eq(session_root(parsed), ".openseek")
+  // Absent on both halves: the DeepSeek client keeps its own defaults, which
+  // the CLI never restates.
+  assert_eq(retry_overrides(parsed), (None, None))
+}
+
+///|
+test "cli retry flags override the environment and reject non-positives" {
+  let parsed = run_matches(
+    argv=["--retry-attempts", "2", "--retry-backoff-ms", "7", "write"],
+    env={ "DEEPSEEK": "test-key", "OPENSEEK_RETRY_ATTEMPTS": "9" },
+  )
+  assert_eq(retry_overrides(parsed), (Some(2), Some(7)))
+  // Rejection is checked through the environment: argparse refuses a bare
+  // `-1` as a missing value before the parsed string ever reaches here.
+  for bad in ["0", "-1", "many"] {
+    let rejected = run_matches(argv=["write"], env={
+      "DEEPSEEK": "test-key",
+      "OPENSEEK_RETRY_ATTEMPTS": bad,
+    })
+    try ignore(retry_overrides(rejected)) catch {
+      err =>
+        assert_true(
+          "\{err}".contains("--retry-attempts must be a positive integer"),
+        )
+    } noraise {
+      _ => fail("expected --retry-attempts \{bad} to be rejected")
+    }
+  }
 }
 
 ///|

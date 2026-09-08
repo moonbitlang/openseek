@@ -66,7 +66,7 @@ pub fn Client::Client(
   model? : @deepseek.Model = default_model,
   api_url? : String = default_api_url_for_model(model),
   thinking? : @deepseek.ThinkingMode = No,
-  retry_attempts? : Int = 3,
+  retry_attempts? : Int = 5,
   retry_backoff_ms? : Int = 500,
   idle_timeout_ms? : Int = 120_000,
 ) -> Client {
@@ -121,8 +121,10 @@ priv suberror RetryableApiError {
 
 ///|
 /// Ceiling on a single backoff sleep. The doubling sequence from
-/// `retry_backoff_ms` stops growing here, so a generous retry budget cannot
-/// accumulate minutes-long sleeps between attempts.
+/// `retry_backoff_ms` stops growing here — but this bounds each sleep, not
+/// their sum, which stays a geometric series: raising `retry_attempts` buys
+/// tries at superlinear wall-clock cost (from 500ms, 5 tries sleep 7.5s and
+/// 10 sleep 183.5s).
 let max_backoff_ms : Int = 60_000
 
 ///|

@@ -75,6 +75,8 @@ pub async fn run_goal_audit(
   max_steps~ : Int,
   thinking? : @deepseek.ThinkingMode = Max,
   api_url? : String,
+  retry_attempts? : Int,
+  retry_backoff_ms? : Int,
   workspace_root? : String = ".",
   session_id? : String = "goal-audit",
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
@@ -97,6 +99,8 @@ pub async fn run_goal_audit(
     model~,
     thinking~,
     api_url?,
+    retry_attempts?,
+    retry_backoff_ms?,
     workspace_root~,
   )
 }

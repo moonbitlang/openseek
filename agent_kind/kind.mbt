@@ -26,6 +26,8 @@ pub async fn[T] execute_kind(
   model~ : @deepseek.Model,
   thinking? : @deepseek.ThinkingMode = Max,
   api_url? : String,
+  retry_attempts? : Int,
+  retry_backoff_ms? : Int,
   workspace_root? : String = ".",
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
 ) -> T? {
@@ -54,6 +56,8 @@ pub async fn[T] execute_kind(
       max_steps~,
       thinking~,
       api_url?,
+      retry_attempts?,
+      retry_backoff_ms?,
       tools~,
     )
   }

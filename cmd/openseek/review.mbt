@@ -13,6 +13,7 @@ async fn run_review_cli(
     fail("an API key is required for \{model}: pass --api-key")
   }
   let max_steps = max_steps(matches)
+  let (retry_attempts, retry_backoff_ms) = retry_overrides(matches)
   let (thinking, base, api_url) = match matches {
     {
       values: {
@@ -58,6 +59,8 @@ async fn run_review_cli(
     max_steps=max_steps.unwrap_or(@agent.unbounded_max_steps),
     thinking~,
     api_url?,
+    retry_attempts?,
+    retry_backoff_ms?,
   ) catch {
     error => {
       @stdio.stderr.write("review failed: \{error}\n")

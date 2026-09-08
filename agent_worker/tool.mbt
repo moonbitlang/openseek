@@ -123,6 +123,8 @@ pub async fn run_child(
   max_steps~ : Int,
   thinking? : @deepseek.ThinkingMode = Max,
   api_url? : String,
+  retry_attempts? : Int,
+  retry_backoff_ms? : Int,
   session_id? : String = "worker",
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
 ) -> Result[WorkerReport?, String] {
@@ -184,6 +186,8 @@ pub async fn run_child(
     model~,
     thinking~,
     api_url?,
+    retry_attempts?,
+    retry_backoff_ms?,
     workspace_root=input.worker_root,
   )
   Ok(report)

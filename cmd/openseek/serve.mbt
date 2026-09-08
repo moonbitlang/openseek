@@ -553,6 +553,7 @@ async fn run_serve(
   guard model.api_key(matches.values) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
   }
+  let (retry_attempts, retry_backoff_ms) = retry_overrides(matches)
   let max_steps = max_steps(matches)
   let review_deadline_ms = review_deadline_ms(matches)
   let session_id = match matches {
@@ -753,7 +754,15 @@ async fn run_serve(
     async fn compact_and_report(
       current : @agent_session.Session,
     ) -> @agent_session.Session {
-      @compact.compact_session(store?, current, api_key~, model~, api_url?) catch {
+      @compact.compact_session(
+        store?,
+        current,
+        api_key~,
+        model~,
+        api_url?,
+        retry_attempts?,
+        retry_backoff_ms?,
+      ) catch {
         error if @async.is_being_cancelled() ||
           @async.is_cancellation_error(error) => raise error
         error => {
@@ -930,6 +939,8 @@ async fn run_serve(
           max_steps?,
           thinking~,
           api_url?,
+          retry_attempts?,
+          retry_backoff_ms?,
           tools~,
         ) catch {
           error => {

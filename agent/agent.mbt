@@ -132,6 +132,8 @@ pub async fn run_turn_with_append(
   max_steps? : Int = unbounded_max_steps,
   thinking? : @deepseek.ThinkingMode = Max,
   api_url? : String,
+  retry_attempts? : Int,
+  retry_backoff_ms? : Int,
   workspace_root? : String = ".",
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_session.Session {
@@ -147,6 +149,8 @@ pub async fn run_turn_with_append(
       max_steps~,
       thinking~,
       api_url?,
+      retry_attempts?,
+      retry_backoff_ms?,
     )
   }
 }
@@ -235,8 +239,10 @@ async test "run_turn_with_append closes failed persisted turns" {
 ///
 /// `tools` should normally be a registry built once with `build_tools(runtime,
 /// scope)` for a long-lived engine. If `tools` is omitted, this function builds
-/// a fresh registry for this call only. `api_url` is forwarded to the DeepSeek
-/// client. The caller owns the lifetime of `runtime`, `scope`, and any shared
+/// a fresh registry for this call only. `api_url`, `retry_attempts` and
+/// `retry_backoff_ms` are forwarded to the DeepSeek clients this turn builds;
+/// omitting a retry argument leaves that client default in place.
+/// The caller owns the lifetime of `runtime`, `scope`, and any shared
 /// `tools` registry passed here. Provider reasoning fragments always join the
 /// transient event stream; consumers choose whether and how to present them.
 pub async fn[X] run_turn_in_scope(
@@ -251,11 +257,27 @@ pub async fn[X] run_turn_in_scope(
   max_steps? : Int = unbounded_max_steps,
   thinking? : @deepseek.ThinkingMode = Max,
   api_url? : String,
+  retry_attempts? : Int,
+  retry_backoff_ms? : Int,
   tools? : @agent_tool.Tools,
   on_goal_met? : async (String, @agent_session.GoalBaseline?) -> String?,
 ) -> @agent_session.Session {
-  let client = @client.Client(api_key~, model~, thinking~, api_url?)
-  let summary_client = @client.Client(api_key~, model~, api_url?, thinking=No)
+  let client = @client.Client(
+    api_key~,
+    model~,
+    thinking~,
+    api_url?,
+    retry_attempts?,
+    retry_backoff_ms?,
+  )
+  let summary_client = @client.Client(
+    api_key~,
+    model~,
+    api_url?,
+    thinking=No,
+    retry_attempts?,
+    retry_backoff_ms?,
+  )
   let session = session |> append_item(User(UserMessage(task, submission_id?)))
   let tools = try {
     match tools {

@@ -85,6 +85,8 @@ pub async fn compact_session(
   api_key~ : String,
   model~ : @deepseek.Model,
   api_url? : String,
+  retry_attempts? : Int,
+  retry_backoff_ms? : Int,
 ) -> @agent_session.Session {
   let from_sequence = 1
   let to_sequence = session.last_sequence()
@@ -92,7 +94,14 @@ pub async fn compact_session(
     fail("session compaction requires at least one event")
   }
   @emit.emit(CompactionStarted(from_sequence~, to_sequence~))
-  let client = @client.Client(api_key~, model~, api_url?, thinking=No)
+  let client = @client.Client(
+    api_key~,
+    model~,
+    api_url?,
+    thinking=No,
+    retry_attempts?,
+    retry_backoff_ms?,
+  )
   let summary = generate_compaction_summary(client~, session)
   let next = append_compaction_summary(
     store?,
