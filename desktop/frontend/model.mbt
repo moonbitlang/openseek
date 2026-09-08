@@ -672,10 +672,6 @@ fn Workspace::worktree_name(self : Workspace) -> String? {
 
 ///|
 /// Reasoning visible before its durable assistant event lands.
-priv struct LiveReasoning {
-  content : String
-  complete : Bool
-} derive(Eq, Debug)
 
 ///|
 /// A provider retry the engine announced for the open step: the attempt about
@@ -704,11 +700,13 @@ priv struct RunState {
   // has not committed yet, and the only reason it is a separate field from
   // `messages` rather than a row inside it.
   streaming_response : String?
-  // Provisional reasoning assembled from `reasoning_delta`. The completed
-  // semantic event seals the buffer. The durable Assistant commit remains the
-  // sole history; rendering de-duplicates an equal completed preview without
-  // letting the untagged commit mutate this run-scoped state.
-  live_reasoning : LiveReasoning?
+  // The run's completed reasoning, from its full semantic event, shown until
+  // its durable Assistant commit arrives. Fragments never reach the model:
+  // the transcript component previews them outside the application render.
+  // The durable commit remains the sole history; rendering de-duplicates an
+  // equal sealed thought without letting the untagged commit mutate this
+  // run-scoped state.
+  sealed_reasoning : String?
   // The retry the engine is waiting out, from `stream_retry` until the
   // replacement attempt produces a delta or the step moves on. Shown in place
   // of the step heartbeat so a backoff does not read as a hang.
@@ -730,7 +728,7 @@ priv struct RunState {
 fn RunState::empty() -> RunState {
   {
     streaming_response: None,
-    live_reasoning: None,
+    sealed_reasoning: None,
     retrying: None,
     reasoning_frontier: 0,
     subruns: [],
@@ -3737,7 +3735,7 @@ fn Conversation::clear_streams(self : Conversation) -> Conversation {
     turn: {
       ..self.turn,
       streaming_response: None,
-      live_reasoning: None,
+      sealed_reasoning: None,
       retrying: None,
     },
   }
@@ -3746,21 +3744,6 @@ fn Conversation::clear_streams(self : Conversation) -> Conversation {
 ///|
 fn Conversation::clear_response(self : Conversation) -> Conversation {
   { ..self, turn: { ..self.turn, streaming_response: None, }, }
-}
-
-///|
-fn Conversation::complete_reasoning(self : Conversation) -> Conversation {
-  match self.turn.live_reasoning {
-    Some(reasoning) if !reasoning.complete =>
-      {
-        ..self,
-        turn: {
-          ..self.turn,
-          live_reasoning: Some({ ..reasoning, complete: true, }),
-        },
-      }
-    _ => self
-  }
 }
 
 ///|

@@ -442,11 +442,10 @@ priv enum BlockContent {
   /// response gets. Durable commits are untagged and cannot prove ownership
   /// of an in-flight preview, so the preview stays visible as the provisional
   /// next step; `Conversation::reasoning_for_render` suppresses only an
-  /// exact, completed duplicate after it has durably committed.
+  /// exact duplicate of a sealed thought after it has durably committed.
   Live(
     prose~ : String?,
     reasoning~ : String?,
-    reasoning_complete~ : Bool,
     step_label~ : String?,
     assistant_name~ : String
   )
@@ -532,7 +531,6 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
       content: Live(
         prose=input.streaming_response,
         reasoning=input.streaming_reasoning,
-        reasoning_complete=input.reasoning_complete,
         step_label=input.next_step_label(),
         assistant_name~,
       ),
@@ -576,7 +574,7 @@ fn Block::render(self : Block, actions : Actions) -> @html.Html {
         }),
       )
     TurnRule(ts~) => turn_rule_view(ts?)
-    Live(prose~, reasoning~, reasoning_complete~, step_label~, assistant_name~) =>
+    Live(prose~, reasoning~, step_label~, assistant_name~) =>
       assistant_view(
         on_open,
         prose?,
@@ -584,7 +582,6 @@ fn Block::render(self : Block, actions : Actions) -> @html.Html {
         step_label?,
         assistant_name~,
         live=true,
-        reasoning_complete~,
       )
   }
 }

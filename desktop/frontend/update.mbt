@@ -1167,7 +1167,6 @@ fn apply_engine_event(
       if content.is_empty() {
         (None, conv)
       } else {
-        let conv = conv.complete_reasoning()
         let carried = conv.turn.streaming_response.unwrap_or("")
         (
           None,
@@ -1177,34 +1176,13 @@ fn apply_engine_event(
           },
         )
       }
-    ReasoningDelta(content) =>
-      if content.is_empty() ||
-        conv.turn.live_reasoning is Some({ complete: true, .. }) {
-        // A completed semantic event is the boundary. A delayed fragment must
-        // not resurrect or mutate the finished preview.
-        (None, conv)
-      } else {
-        let carried = match conv.turn.live_reasoning {
-          Some(reasoning) => reasoning.content
-          None => ""
-        }
-        (
-          None,
-          {
-            ..conv,
-            turn: {
-              ..conv.turn,
-              live_reasoning: Some({
-                content: carried + content,
-                complete: false,
-              }),
-            },
-          },
-        )
-      }
+    // Fragments are previewed by the transcript component at the transport
+    // boundary and never reach the application; see
+    // `@transcript_component.LiveReasoning::observe`.
+    ReasoningDelta(_) => (None, conv)
     // Full semantic events never append transcript items: the store commit is
-    // the sole durable source. The complete reasoning payload replaces any
-    // accumulated fragments and seals their transient presentation.
+    // the sole durable source. The complete reasoning payload is shown until
+    // that commit arrives.
     ReasoningMessage(content) => {
       let normalized = content.trim().to_owned()
       if normalized.is_empty() {
@@ -1213,21 +1191,15 @@ fn apply_engine_event(
         // through the stream, so its accumulated deltas can be only a suffix;
         // discard that provisional text at settlement and let the canonical
         // commit supply the complete Markdown card.
-        (None, { ..conv, turn: { ..conv.turn, live_reasoning: None, }, })
+        (None, { ..conv, turn: { ..conv.turn, sealed_reasoning: None, }, })
       } else {
         (
           None,
-          {
-            ..conv,
-            turn: {
-              ..conv.turn,
-              live_reasoning: Some({ content, complete: true, }),
-            },
-          },
+          { ..conv, turn: { ..conv.turn, sealed_reasoning: Some(content), }, },
         )
       }
     }
-    AssistantMessage(_) => (None, conv.complete_reasoning().clear_response())
+    AssistantMessage(_) => (None, conv.clear_response())
     // A background-job completion notice while idle. The durable record owns
     // the transcript card, and the completion is already surfaced to the
     // model as a steer — a toast would double it for an idle reader without
@@ -8692,66 +8664,26 @@ test "reasoning message waits for its durable commit" {
     model,
   )
   inspect(next.active().messages.length(), content="0")
-  assert_eq(
-    next.active().turn.live_reasoning,
-    Some({ content: "full thought", complete: true, }),
-  )
+  assert_eq(next.active().turn.sealed_reasoning, Some("full thought"))
 }
 
 ///|
-test "reasoning deltas accumulate and answer output closes the live stream" {
+test "an empty remote reasoning settlement clears the sealed thought" {
   let dispatch = test_dispatch()
-  let (_, first) = update_dev(
-    dispatch,
-    Engine(Some("r7"), ReasoningDelta("first"), session=None),
-    running_model(),
-  )
-  let (_, second) = update_dev(
-    dispatch,
-    Engine(Some("r7"), ReasoningDelta(" line"), session=None),
-    first,
-  )
-  assert_eq(
-    second.active().turn.live_reasoning,
-    Some({ content: "first line", complete: false, }),
-  )
-  let (_, answered) = update_dev(
-    dispatch,
-    Engine(Some("r7"), AssistantDelta("answer"), session=None),
-    second,
-  )
-  assert_eq(
-    answered.active().turn.live_reasoning,
-    Some({ content: "first line", complete: true, }),
-  )
-  // Once the stream is semantically complete, a delayed delta cannot revive
-  // or extend it.
-  let (_, late) = update_dev(
-    dispatch,
-    Engine(Some("r7"), ReasoningDelta(" late"), session=None),
-    answered,
-  )
-  assert_eq(
-    late.active().turn.live_reasoning,
-    answered.active().turn.live_reasoning,
-  )
-}
-
-///|
-test "an empty remote reasoning settlement clears the partial preview" {
-  let dispatch = test_dispatch()
-  let (_, partial) = update_dev(
-    dispatch,
-    Engine(Some("r7"), ReasoningDelta("first line"), session=None),
-    running_model(),
-  )
+  let with_thought = running_model().replace_conversation({
+    ..running_conversation(),
+    turn: {
+      ..running_conversation().turn,
+      sealed_reasoning: Some("first line"),
+    },
+  })
   let (_, settled) = update_dev(
     dispatch,
     Engine(Some("r7"), ReasoningMessage(""), session=None),
-    partial,
+    with_thought,
   )
-  assert_eq(settled.active().turn.live_reasoning, None)
-  assert_eq(settled.active().reasoning_for_render(), (None, false))
+  assert_eq(settled.active().turn.sealed_reasoning, None)
+  assert_eq(settled.active().reasoning_for_render(), None)
 }
 
 ///|
@@ -8759,10 +8691,7 @@ test "a matching durable commit de-duplicates without mutating the preview" {
   let dispatch = test_dispatch()
   let live = running_model().replace_conversation({
     ..running_conversation(),
-    turn: {
-      ..running_conversation().turn,
-      live_reasoning: Some({ content: "think", complete: true, }),
-    },
+    turn: { ..running_conversation().turn, sealed_reasoning: Some("think"), },
   })
   let (_, committed) = update_dev(
     dispatch,
@@ -8780,11 +8709,8 @@ test "a matching durable commit de-duplicates without mutating the preview" {
     ),
     live,
   )
-  assert_eq(
-    committed.active().turn.live_reasoning,
-    Some({ content: "think", complete: true, }),
-  )
-  assert_eq(committed.active().reasoning_for_render(), (None, true))
+  assert_eq(committed.active().turn.sealed_reasoning, Some("think"))
+  assert_eq(committed.active().reasoning_for_render(), None)
   assert_eq(committed.active().messages.length(), 1)
   assert_true(
     committed.active().messages[0].kind
@@ -8793,7 +8719,7 @@ test "a matching durable commit de-duplicates without mutating the preview" {
 }
 
 ///|
-test "commit-first reasoning keeps late prefixes and de-duplicates when sealed" {
+test "commit-first reasoning de-duplicates when sealed" {
   let dispatch = test_dispatch()
   let commit = SessionCommitted(
     session="desktop-test",
@@ -8808,62 +8734,13 @@ test "commit-first reasoning keeps late prefixes and de-duplicates when sealed" 
     session_root=@interop.ChannelId::Local.test_store_root(),
   )
   let (_, committed) = update_dev(dispatch, commit, running_model())
-  let (_, partial) = update_dev(
-    dispatch,
-    Engine(Some("r7"), ReasoningDelta("complete"), session=None),
-    committed,
-  )
-  assert_eq(partial.active().reasoning_for_render(), (Some("complete"), false))
   let (_, completed) = update_dev(
     dispatch,
     Engine(Some("r7"), ReasoningMessage("complete thought"), session=None),
-    partial,
-  )
-  assert_eq(
-    completed.active().turn.live_reasoning,
-    Some({ content: "complete thought", complete: true, }),
-  )
-  assert_eq(completed.active().reasoning_for_render(), (None, true))
-}
-
-///|
-test "a delayed untagged commit cannot truncate a newer reasoning stream" {
-  let dispatch = test_dispatch()
-  let (_, partial) = update_dev(
-    dispatch,
-    Engine(Some("r7"), ReasoningDelta("shared"), session=None),
-    running_model(),
-  )
-  let (_, committed) = update_dev(
-    dispatch,
-    SessionCommitted(
-      session="desktop-test",
-      sequence=1,
-      ts=None,
-      item=@protocol.Assistant({
-        content: "older answer",
-        tool_calls: None,
-        reasoning_content: Some("shared"),
-        is_replay: None,
-      }),
-      session_root=@interop.ChannelId::Local.test_store_root(),
-    ),
-    partial,
-  )
-  assert_eq(
-    committed.active().turn.live_reasoning,
-    Some({ content: "shared", complete: false, }),
-  )
-  assert_eq(committed.active().reasoning_for_render(), (Some("shared"), false))
-  let (_, continued) = update_dev(
-    dispatch,
-    Engine(Some("r7"), ReasoningDelta(" future"), session=None),
     committed,
   )
-  assert_eq(
-    continued.active().turn.live_reasoning,
-    Some({ content: "shared future", complete: false, }),
-  )
+  assert_eq(completed.active().turn.sealed_reasoning, Some("complete thought"))
+  assert_eq(completed.active().reasoning_for_render(), None)
 }
 
 ///|
@@ -8888,24 +8765,15 @@ test "a later run does not confuse identical historical reasoning for its commit
     turn: RunState::for_run(3),
   }
   let model = running_model().replace_conversation(historical)
-  let (_, partial) = update_dev(
-    dispatch,
-    Engine(Some("r7"), ReasoningDelta("shared opening"), session=None),
-    model,
-  )
-  assert_eq(
-    partial.active().reasoning_for_render(),
-    (Some("shared opening"), false),
-  )
   let (_, complete) = update_dev(
     dispatch,
     Engine(Some("r7"), ReasoningMessage("shared opening"), session=None),
-    partial,
+    model,
   )
-  assert_eq(
-    complete.active().turn.live_reasoning,
-    Some({ content: "shared opening", complete: true, }),
-  )
+  assert_eq(complete.active().turn.sealed_reasoning, Some("shared opening"))
+  // The equal historical thought predates this run's frontier: it is not the
+  // commit of this thought, so the thought stays visible.
+  assert_eq(complete.active().reasoning_for_render(), Some("shared opening"))
 }
 
 ///|
@@ -8926,24 +8794,21 @@ test "a new model step advances past identical reasoning from the prior step" {
       },
     ],
     watermark: 2,
-    turn: {
-      ..RunState::for_run(0),
-      live_reasoning: Some({ content: "old live", complete: true, }),
-    },
+    turn: { ..RunState::for_run(0), sealed_reasoning: Some("old live"), },
   }
   let (_, next_step) = apply_engine_event(
     previous_step,
     AgentStep(Some(2)),
     Some("r7"),
   )
-  assert_eq(next_step.turn.live_reasoning, None)
+  assert_eq(next_step.turn.sealed_reasoning, None)
   assert_eq(next_step.turn.reasoning_frontier, 2)
-  let (_, live) = apply_engine_event(
+  let (_, with_thought) = apply_engine_event(
     next_step,
-    ReasoningDelta("shared opening"),
+    ReasoningMessage("shared opening"),
     Some("r7"),
   )
-  assert_eq(live.reasoning_for_render(), (Some("shared opening"), false))
+  assert_eq(with_thought.reasoning_for_render(), Some("shared opening"))
 }
 
 ///|
@@ -9121,7 +8986,7 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
     turn: {
       ..running_conversation().turn,
       streaming_response: Some("left"),
-      live_reasoning: Some({ content: "old thought", complete: false, }),
+      sealed_reasoning: Some("old thought"),
     },
   })
   let (_, retrying) = update_dev(
@@ -9139,7 +9004,7 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
   )
   let conv = retrying.active()
   assert_eq(conv.turn.streaming_response, None)
-  assert_eq(conv.turn.live_reasoning, None)
+  assert_eq(conv.turn.sealed_reasoning, None)
   assert_true(conv.run is Open(run_id="r7", stage=AtStep(Some(2))))
   assert_true(
     conv.run_heartbeat()
@@ -11458,7 +11323,7 @@ test "a run boundary discards the previous turn's live state whole" {
     run: Open(run_id="r-old", stage=AtStep(Some(3))),
     turn: {
       streaming_response: Some("old answer fragment"),
-      live_reasoning: None,
+      sealed_reasoning: None,
       retrying: None,
       reasoning_frontier: 0,
       subruns: [lane],
@@ -18481,17 +18346,14 @@ test "a committed tool result visibly changes its existing call row" {
 }
 
 ///|
-test "a delayed assistant commit never clears a newer live delta" {
+test "a delayed assistant commit never clears a newer sealed thought" {
   let dispatch = test_dispatch()
   let model = running_model().replace_conversation({
     ..running_conversation(),
     turn: {
       ..running_conversation().turn,
       streaming_response: Some("newer turn fragment"),
-      live_reasoning: Some({
-        content: "newer reasoning fragment",
-        complete: false,
-      }),
+      sealed_reasoning: Some("newer reasoning fragment"),
     },
   })
   let (_, committed) = update_dev(
@@ -18515,8 +18377,8 @@ test "a delayed assistant commit never clears a newer live delta" {
     Some("newer turn fragment"),
   )
   assert_eq(
-    committed.active().turn.live_reasoning,
-    Some({ content: "newer reasoning fragment", complete: false, }),
+    committed.active().turn.sealed_reasoning,
+    Some("newer reasoning fragment"),
   )
 }
 

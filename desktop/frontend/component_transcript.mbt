@@ -168,7 +168,6 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
             streaming_identity="",
           )
         Some(conversation) => {
-          let (streaming_reasoning, reasoning_complete) = conversation.reasoning_for_render()
           let can_choose_project = self.can_choose_new_chat_project()
           @transcript_component.Input(
             dark_mode=self.theme.is_dark(self.system_dark),
@@ -193,8 +192,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
               None
             },
             streaming_response=conversation.turn.streaming_response,
-            streaming_reasoning?,
-            reasoning_complete~,
+            streaming_reasoning?=conversation.reasoning_for_render(),
             streaming_identity=conversation.streaming_render_identity(),
           )
         }

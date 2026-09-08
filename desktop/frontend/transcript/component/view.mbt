@@ -31,7 +31,6 @@ fn assistant_view(
   assistant_name? : String = "OpenSeek",
   finished? : Bool = false,
   live? : Bool = false,
-  reasoning_complete? : Bool = true,
   subrun? : SubrunLink,
 ) -> @html.Html {
   // The step ordinal is its own span so it can carry the accent and a fixed
@@ -60,32 +59,21 @@ fn assistant_view(
   // row's summary belongs to that call alone. Prose alone carries no heading.
   let lead : Array[@html.Html] = []
   if reasoning is Some(text) {
-    let thinking = live && !reasoning_complete
-    let label = if thinking { "Thinking…" } else { "Thought" }
+    // A thought here is always complete: fragments still arriving are drawn
+    // by the live preview, not by this view.
     let summary : Array[@html.Html] = []
     if header.is_empty() {
       // The separator introduces the label only when something precedes it:
       // a Codex thought with no ordinal and no stamp is the label alone.
-      summary.push(@html.text(label))
+      summary.push(@html.text("Thought"))
     } else {
       summary.append(header)
-      summary.push(@html.text(" · \{label}"))
+      summary.push(@html.text(" · Thought"))
     }
-    let body = if thinking {
-      // Do not parse an unfinished Markdown document on every provider token.
-      // Newlines are preserved by CSS while fragments are still arriving.
-      // Transport reasoning deltas use the sibling LivePreview instead;
-      // this path supports provisional text supplied by other view callers.
-      @html.div(
-        class="msg-content activity-thinking activity-thinking-live",
-        @html.text(text),
-      )
-    } else {
-      @html.div(
-        class="msg-content markdown activity-thinking",
-        @markdown.markdown_nodes(text, open_file=on_open),
-      )
-    }
+    let body = @html.div(
+      class="msg-content markdown activity-thinking",
+      @markdown.markdown_nodes(text, open_file=on_open),
+    )
     lead.push(
       @html.details(class="activity", open=live, [
         @html.summary(class="activity-summary", [
