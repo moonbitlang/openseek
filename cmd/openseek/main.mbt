@@ -29,17 +29,25 @@ async fn main {
 /// `[env: OPENSEEK_*]` fallbacks would otherwise silently never fire.
 async fn dispatch() -> Unit {
   let matches = @argparse.parse(root_command(), env=@env.get_env_vars())
-  match matches.subcommand {
-    Some(("run", m)) => run_task_command(m)
-    Some(("serve", m)) => run_serve_command(m)
-    Some(("review", m)) => run_review_command(m)
-    Some(("subrun", m)) => run_subrun_command(m)
-    Some(("mcp", m)) => run_mcp_command(m)
-    Some(("sessions", m)) => run_sessions_command(m)
-    // argparse rejects unknown and missing subcommands during parse, so this is
-    // unreachable.
-    Some((name, _)) => fail("unhandled subcommand: \{name}")
-    None => fail("missing subcommand (argparse should have rejected this)")
+  // argparse rejects unknown and missing subcommands during parse, so the
+  // absent case is unreachable.
+  guard matches.subcommand is Some((name, m)) else {
+    fail("missing subcommand (argparse should have rejected this)")
+  }
+  // Only the agent-running commands spawn children, and only they read the
+  // setting at all: a malformed value must not break `sessions list`, for the
+  // same reason `--api-key` is not argparse-`required`.
+  if name is ("run" | "serve" | "review" | "subrun") {
+    export_retry_overrides(m)
+  }
+  match name {
+    "run" => run_task_command(m)
+    "serve" => run_serve_command(m)
+    "review" => run_review_command(m)
+    "subrun" => run_subrun_command(m)
+    "mcp" => run_mcp_command(m)
+    "sessions" => run_sessions_command(m)
+    name => fail("unhandled subcommand: \{name}")
   }
 }
 
@@ -850,10 +858,9 @@ fn max_steps(matches : @argparse.Matches) -> Int? raise {
 /// client keeps its own default, so the defaults live in exactly one place
 /// (`@client.Client`) and are never restated here.
 ///
-/// The pair is forwarded as `retry_attempts?, retry_backoff_ms?` all the way
-/// down to every in-process `@client.Client`. Child processes (`subrun`, the
-/// review gate) inherit it through `$OPENSEEK_RETRY_ATTEMPTS` /
-/// `$OPENSEEK_RETRY_BACKOFF_MS` rather than argument injection.
+/// The pair is forwarded as `retry_attempts?, retry_backoff_ms?` down to every
+/// in-process `@client.Client`; `export_retry_overrides` carries it to child
+/// processes.
 fn retry_overrides(matches : @argparse.Matches) -> (Int?, Int?) raise {
   let attempts = match matches {
     { values: { "retry-attempts": [input, ..], .. }, .. } =>
@@ -866,6 +873,32 @@ fn retry_overrides(matches : @argparse.Matches) -> (Int?, Int?) raise {
     _ => None
   }
   (attempts, backoff_ms)
+}
+
+///|
+/// Write the resolved retry overrides back into this process's environment, so
+/// that a child sees exactly what this process resolved.
+///
+/// `--retry-attempts 2` and `OPENSEEK_RETRY_ATTEMPTS=2` must mean the same
+/// thing to a subagent, and before this a child got only the second: nothing
+/// injects these on the child command line, and four separate spawn sites
+/// would each have to — the review gate, the model-callable review tool, and
+/// the workflow scout and worker runners, the last two reachable only through
+/// the `SubrunInjection` handoff an `mbtx` snippet receives. Children do
+/// inherit the environment (`@process.spawn(inherit_env=true)`), so writing
+/// the flag back closes all four at once. It is also the shape `--api-key`
+/// already has: argv carries what a child cannot otherwise know, and the
+/// environment carries the rest.
+///
+/// A value that arrived from the environment is rewritten unchanged.
+fn export_retry_overrides(matches : @argparse.Matches) -> Unit raise {
+  let (attempts, backoff_ms) = retry_overrides(matches)
+  if attempts is Some(attempts) {
+    @env.set_env_var("OPENSEEK_RETRY_ATTEMPTS", "\{attempts}")
+  }
+  if backoff_ms is Some(backoff_ms) {
+    @env.set_env_var("OPENSEEK_RETRY_BACKOFF_MS", "\{backoff_ms}")
+  }
 }
 
 ///|
@@ -1462,6 +1495,27 @@ test "cli retry flags override the environment and reject non-positives" {
       _ => fail("expected --retry-attempts \{bad} to be rejected")
     }
   }
+}
+
+///|
+/// The flag has to reach subagents, and they are handed the environment, not
+/// this process's argv — see `export_retry_overrides`.
+test "cli exports argv retry overrides into the environment for children" {
+  let parsed = run_matches(
+    argv=["--retry-attempts", "3", "--retry-backoff-ms", "11", "write"],
+    env={ "DEEPSEEK": "test-key" },
+  )
+  export_retry_overrides(parsed)
+  assert_eq(@env.get_env_var("OPENSEEK_RETRY_ATTEMPTS"), Some("3"))
+  assert_eq(@env.get_env_var("OPENSEEK_RETRY_BACKOFF_MS"), Some("11"))
+  @env.unset_env_var("OPENSEEK_RETRY_ATTEMPTS")
+  @env.unset_env_var("OPENSEEK_RETRY_BACKOFF_MS")
+  // Nothing to carry means nothing written: a child keeps falling back to the
+  // client default rather than being pinned to a value nobody asked for.
+  let bare = run_matches(argv=["write"], env={ "DEEPSEEK": "test-key" })
+  export_retry_overrides(bare)
+  assert_eq(@env.get_env_var("OPENSEEK_RETRY_ATTEMPTS"), None)
+  assert_eq(@env.get_env_var("OPENSEEK_RETRY_BACKOFF_MS"), None)
 }
 
 ///|
