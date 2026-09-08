@@ -239,6 +239,68 @@ async test "streaming chat never retries after the first delta" {
 }
 
 ///|
+/// A consumer that supplies `on_retry` promises to discard every delta from
+/// the failed attempt. That makes a transport/EOF interruption replayable: the
+/// callback clears "partial" before the second request delivers "replacement".
+async test "streaming chat retries after a delta when the consumer opts in" {
+  @async.with_task_group() <| group => {
+    guard bind_test_server("local TCP bind unavailable; skipping retry test")
+      is Some(server) else {
+      return
+    }
+    let hits : Ref[Int] = { val: 0, }
+    group.spawn_bg(no_wait=true) <| () => {
+      server.run_forever(
+        (_request, body, conn) => {
+          let _ = body.read_all()
+          hits.val += 1
+          conn.send_response(200, "OK", extra_headers={
+            "Content-Type": "text/event-stream",
+          })
+          if hits.val == 1 {
+            conn.write(
+              "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n",
+            )
+          } else {
+            conn.write(
+              "data: {\"choices\":[{\"delta\":{\"content\":\"replacement\"}}]}\n\n",
+            )
+            conn.write("data: [DONE]\n\n")
+          }
+        },
+        max_connections=8,
+      )
+    }
+    let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
+    let client = @client.Client(
+      api_key="test-key",
+      api_url=url,
+      retry_attempts=3,
+      retry_backoff_ms=1,
+    )
+    let deltas : Array[String] = []
+    let retries : Array[String] = []
+    let response = client.chat(
+      [ChatMessage(User, content="hello")],
+      stream=StreamHandler(on_content_delta=delta => deltas.push(delta), on_retry=(
+        attempt,
+        max_attempts,
+        reason,
+      ) => {
+        deltas.clear()
+        retries.push("\{attempt}/\{max_attempts}: \{reason}")
+      }),
+    )
+    assert_eq(response.content, "replacement")
+    assert_eq(deltas.join("|"), "replacement")
+    assert_eq(hits.val, 2)
+    assert_eq(retries.length(), 1)
+    assert_true(retries[0].has_prefix("2/3: "))
+    assert_true(retries[0].contains("ended before [DONE]"))
+  }
+}
+
+///|
 /// Tool-call deltas carry no text, so the content callbacks never fire —
 /// but they are model output all the same. A stream that emits only a
 /// tool-call delta and then drops must surface the failure rather than

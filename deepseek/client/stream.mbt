@@ -229,10 +229,20 @@ async fn read_stream_line(
   reader : @http.Client,
   idle_timeout_ms : Int,
 ) -> String?? {
-  if idle_timeout_ms <= 0 {
-    Some(reader.read_until("\n"))
-  } else {
-    @async.with_timeout_opt(idle_timeout_ms, () => reader.read_until("\n"))
+  try {
+    if idle_timeout_ms <= 0 {
+      Some(reader.read_until("\n"))
+    } else {
+      @async.with_timeout_opt(idle_timeout_ms, () => reader.read_until("\n"))
+    }
+  } catch {
+    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
+      raise error
+    // A socket reset/close while reading is the same retry class as EOF and an
+    // idle timeout. Keeping it out of `Failure` lets an opted-in stream owner
+    // discard the failed attempt, while callback and malformed-SSE failures
+    // remain final even after output has started.
+    error => raise StreamTransport("\{error}")
   }
 }
 

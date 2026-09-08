@@ -281,33 +281,49 @@ fn log_event(entry : Json) -> String {
 }
 
 ///|
-async fn reasoning_log_test_server(group : @async.TaskGroup[Unit]) -> String? {
-  serve_chat_completions(
-    group,
-    "local TCP bind unavailable; skipping reasoning log test",
-    max_connections=1,
-    (_request, _body, conn) => {
-      conn.send_response(200, "OK", extra_headers={
-        "Content-Type": "text/event-stream",
-      })
-      conn.write(
-        "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"I\"}}]}\n\n",
-      )
-      conn.write(
-        "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\" think\"}}]}\n\n",
-      )
-      conn.write(
-        "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":5,\"total_tokens\":8,\"prompt_cache_hit_tokens\":1,\"prompt_cache_miss_tokens\":2}}\n\n",
-      )
-      conn.write("data: [DONE]\n\n")
-    },
-  )
+async fn reasoning_log_test_server(
+  group : @async.TaskGroup[Unit],
+) -> (String, Ref[Int])? {
+  let hits : Ref[Int] = { val: 0, }
+  guard serve_chat_completions(
+      group,
+      "local TCP bind unavailable; skipping reasoning log test",
+      max_connections=2,
+      (_request, _body, conn) => {
+        hits.val += 1
+        conn.send_response(200, "OK", extra_headers={
+          "Content-Type": "text/event-stream",
+        })
+        if hits.val == 1 {
+          // The first attempt deliberately dies after visible output. Agent's
+          // retry boundary must keep that fragment transient.
+          conn.write(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"discarded\"}}]}\n\n",
+          )
+          return
+        }
+        conn.write(
+          "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"stream-retry:\"}}]}\n\n",
+        )
+        conn.write(
+          "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"reasoning-proof\"}}]}\n\n",
+        )
+        conn.write(
+          "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":5,\"total_tokens\":8,\"prompt_cache_hit_tokens\":1,\"prompt_cache_miss_tokens\":2}}\n\n",
+        )
+        conn.write("data: [DONE]\n\n")
+      },
+    )
+    is Some(url) else {
+    return None
+  }
+  Some((url, hits))
 }
 
 ///|
-async test "streaming reasoning deltas are always emitted and stay transient" {
+async test "stream retries and reasoning deltas stay transient" {
   @async.with_task_group() <| group => {
-    guard reasoning_log_test_server(group) is Some(url) else { return }
+    guard reasoning_log_test_server(group) is Some((url, hits)) else { return }
     // The sink is process-global and drops events until opened: open it for
     // this turn and close it after, so the other tests in this binary never
     // accumulate lines. Drop whatever an earlier open left, so the capture
@@ -335,13 +351,18 @@ async test "streaming reasoning deltas are always emitted and stay transient" {
       fail("expected a durable reasoning-bearing assistant response")
     }
     assert_eq(message.content(), "done")
-    assert_eq(message.reasoning_content(), Some("I think"))
+    assert_eq(message.reasoning_content(), Some("stream-retry:reasoning-proof"))
     guard events[2].item() is Terminal(Finished("done")) else {
       fail("expected a completed one-step turn")
     }
     // The events this turn reported, read back off the protocol sink.
     let entries = drain_emitted()
     let event_names = entries.map(log_event)
+    // The first connection cannot finish, so two hits prove Agent opted into
+    // the retry. The three durable events above prove that its boundary and
+    // discarded delta never became SessionItems/session.jsonl lines.
+    assert_eq(hits.val, 2)
+    assert_true(event_names.contains("stream_retry"))
     assert_true(event_names.contains("reasoning_message"))
     assert_true(event_names.contains("assistant_delta"))
     assert_true(event_names.contains("assistant_message"))
@@ -352,11 +373,12 @@ async test "streaming reasoning deltas are always emitted and stay transient" {
           "event": String("reasoning_delta"),
           "content": String(content),
           ..
-        } {
+        } &&
+        (content == "stream-retry:" || content == "reasoning-proof") {
         reasoning_deltas.push(content)
       }
     }
-    assert_eq(reasoning_deltas.join(""), "I think")
+    assert_eq(reasoning_deltas.join(""), "stream-retry:reasoning-proof")
   }
 }
 

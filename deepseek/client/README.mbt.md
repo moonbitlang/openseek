@@ -20,8 +20,10 @@ The package depends on `moonbitlang/async/http` and is native-only.
   and decode the response as `@deepseek.ChatResponse`. Without `stream`, this
   is a normal JSON response. With `stream=StreamHandler(...)`, it uses SSE and
   still returns the accumulated response.
-- `StreamHandler(on_content_delta~, on_reasoning_delta?)`: receive non-empty
-  content and reasoning deltas while a streaming chat request is in progress.
+- `StreamHandler(on_content_delta~, on_reasoning_delta?, on_retry?)`: receive
+  non-empty content and reasoning deltas while a streaming chat request is in
+  progress. `on_retry`, when present, is the boundary where the consumer must
+  discard deltas from the failed attempt before the replacement stream starts.
 
 `Client` implements `Debug` with the API key redacted.
 
@@ -156,9 +158,18 @@ The stream reader:
 - accumulates content, reasoning, tool-call fragments, and final usage
 - returns the accumulated value as a normal `@deepseek.ChatResponse`
 
-Streaming calls retry only until the first SSE event is produced. After any
-event - text, reasoning, tool-call, or usage - retrying could duplicate or
-change the completion, so later failures surface directly.
+By default, streaming calls retry only until the first SSE event is produced.
+After any event - text, reasoning, tool-call, or usage - retrying could
+duplicate or change the completion, so later failures surface directly.
+
+A consumer that can replace its transient preview may opt in with `on_retry`.
+Then a socket read error, EOF before `[DONE]`, or idle timeout may reopen the
+same chat request even after output began. The callback runs immediately before
+the next attempt after a failed attempt emitted an SSE event, and receives
+`(attempt, max_attempts, reason)`; it must clear the failed attempt rather than
+concatenate both streams. A retry before the first event remains silent because
+there is no preview to discard. Malformed SSE and errors raised by delta
+callbacks remain final and are not retried.
 
 At runtime:
 

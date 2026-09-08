@@ -27,7 +27,7 @@ pub fn Client::to_repr(Self) -> @debug.Repr
 pub struct StreamHandler {
   // private fields
 }
-pub fn StreamHandler::StreamHandler(on_content_delta~ : async (String) -> Unit, on_reasoning_delta? : async (String) -> Unit) -> Self
+pub fn StreamHandler::StreamHandler(on_content_delta~ : async (String) -> Unit, on_reasoning_delta? : async (String) -> Unit, on_retry? : (Int, Int, String) -> Unit) -> Self
 
 // Type aliases
 

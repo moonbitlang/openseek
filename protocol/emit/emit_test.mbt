@@ -63,6 +63,11 @@ fn all_events() -> Array[@protocol.Event] {
   [
     AgentSetupFailed(error="boom"),
     AgentStep(step=3),
+    StreamRetry(
+      attempt=2,
+      max_attempts=3,
+      reason="DeepSeek stream transport error: ConnectionClosed",
+    ),
     AgentAborted(reason="interrupted"),
     AgentFinished(answer="done"),
     MaxStepsExhausted,

@@ -50,6 +50,14 @@ pub fn parse(line : Json) -> Event? {
     "agent_setup_failed" =>
       text(fields, "error").map(error => AgentSetupFailed(error~))
     "agent_step" => int(fields, "step").map(step => AgentStep(step~))
+    "stream_retry" => {
+      guard int(fields, "attempt") is Some(attempt) &&
+        int(fields, "max_attempts") is Some(max_attempts) &&
+        text(fields, "reason") is Some(reason) else {
+        return None
+      }
+      Some(StreamRetry(attempt~, max_attempts~, reason~))
+    }
     "agent_aborted" =>
       text(fields, "reason").map(reason => AgentAborted(reason~))
     "agent_finished" =>

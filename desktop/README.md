@@ -87,6 +87,10 @@ terminal boundary, so an older commit cannot be mistaken for the next step and
 a finish cannot outrun the canonical row. The UI likewise renders
 `assistant_delta` as a live answer bubble, while durable `session.event`
 commits remain the only permanent transcript source.
+If the provider stream is interrupted, `stream_retry` clears both live previews
+before the replacement attempt starts. It leaves the current model step and all
+durable rows untouched; the retry boundary is live state and is not written to
+`session.jsonl`.
 
 While a turn runs, the composer exposes a **Steer now / Queue next** selector
 beside Send. It starts from Settings → Interface → Follow-up messages, applies

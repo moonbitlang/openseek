@@ -38,6 +38,20 @@ test "decodes a reasoning delta" {
 }
 
 ///|
+test "decodes a transient stream retry boundary" {
+  debug_inspect(
+    decode(
+      (
+        #|{"event":"stream_retry","attempt":2,"max_attempts":3,"reason":"ConnectionClosed"}
+      ),
+    ),
+    content=(
+      #|Some(StreamRetry(attempt=2, max_attempts=3, reason="ConnectionClosed"))
+    ),
+  )
+}
+
+///|
 /// The envelope is ignored: a reader cares about the event, not about which
 /// line of the engine reported it.
 test "decodes with the envelope absent" {
@@ -222,6 +236,15 @@ test "unknown and malformed lines are ignored" {
   assert_eq(@openseek_protocol.parse({ "event": "from_a_newer_engine" }), None)
   // `agent_step` without its required payload.
   assert_eq(@openseek_protocol.parse({ "event": "agent_step" }), None)
+  // Retry fields describe one concrete attempt; none is optional.
+  assert_eq(
+    @openseek_protocol.parse({
+      "event": "stream_retry",
+      "attempt": 2,
+      "max_attempts": 3,
+    }),
+    None,
+  )
   // A fractional `step` is not an Int.
   assert_eq(
     @openseek_protocol.parse({ "event": "agent_step", "step": 1.5 }),
