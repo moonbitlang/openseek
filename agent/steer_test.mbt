@@ -285,43 +285,40 @@ async fn reasoning_log_test_server(
   group : @async.TaskGroup[Unit],
 ) -> (String, Ref[Int])? {
   let hits : Ref[Int] = { val: 0, }
-  guard serve_chat_completions(
-      group,
-      "local TCP bind unavailable; skipping reasoning log test",
-      max_connections=2,
-      (_request, _body, conn) => {
-        hits.val += 1
-        conn.send_response(200, "OK", extra_headers={
-          "Content-Type": "text/event-stream",
-        })
-        if hits.val == 1 {
-          // The first attempt deliberately dies after visible output. Agent's
-          // retry boundary must keep that fragment transient.
-          conn.write(
-            "data: {\"choices\":[{\"delta\":{\"content\":\"discarded\"}}]}\n\n",
-          )
-          return
-        }
+  let url = serve_chat_completions(
+    group,
+    "local TCP bind unavailable; skipping reasoning log test",
+    max_connections=2,
+    (_request, _body, conn) => {
+      hits.val += 1
+      conn.send_response(200, "OK", extra_headers={
+        "Content-Type": "text/event-stream",
+      })
+      if hits.val == 1 {
+        // The first attempt dies after visible output; the agent's retry
+        // boundary must keep that fragment transient.
         conn.write(
-          "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"stream-retry:\"}}]}\n\n",
+          "data: {\"choices\":[{\"delta\":{\"content\":\"discarded\"}}]}\n\n",
         )
-        conn.write(
-          "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"reasoning-proof\"}}]}\n\n",
-        )
-        conn.write(
-          "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":5,\"total_tokens\":8,\"prompt_cache_hit_tokens\":1,\"prompt_cache_miss_tokens\":2}}\n\n",
-        )
-        conn.write("data: [DONE]\n\n")
-      },
-    )
-    is Some(url) else {
-    return None
-  }
-  Some((url, hits))
+        return
+      }
+      conn.write(
+        "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"stream-retry:\"}}]}\n\n",
+      )
+      conn.write(
+        "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"reasoning-proof\"}}]}\n\n",
+      )
+      conn.write(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":5,\"total_tokens\":8,\"prompt_cache_hit_tokens\":1,\"prompt_cache_miss_tokens\":2}}\n\n",
+      )
+      conn.write("data: [DONE]\n\n")
+    },
+  )
+  url.map(url => (url, hits))
 }
 
 ///|
-async test "stream retries and reasoning deltas stay transient" {
+async test "streaming reasoning deltas survive a stream retry and stay transient" {
   @async.with_task_group() <| group => {
     guard reasoning_log_test_server(group) is Some((url, hits)) else { return }
     // The sink is process-global and drops events until opened: open it for
@@ -358,11 +355,22 @@ async test "stream retries and reasoning deltas stay transient" {
     // The events this turn reported, read back off the protocol sink.
     let entries = drain_emitted()
     let event_names = entries.map(log_event)
-    // The first connection cannot finish, so two hits prove Agent opted into
-    // the retry. The three durable events above prove that its boundary and
-    // discarded delta never became SessionItems/session.jsonl lines.
+    // The first connection cannot finish, so two hits prove the agent opted
+    // into the retry. Its "discarded" delta went out live, yet the three
+    // durable events above show it never became a session item. The sink is
+    // shared with concurrently running tests, so assertions below pick this
+    // turn's events out by their unique content.
     assert_eq(hits.val, 2)
-    assert_true(event_names.contains("stream_retry"))
+    assert_true(
+      entries.any(entry => {
+        entry
+        is {
+          "event": String("assistant_delta"),
+          "content": String("discarded"),
+          ..
+        }
+      }),
+    )
     assert_true(event_names.contains("reasoning_message"))
     assert_true(event_names.contains("assistant_delta"))
     assert_true(event_names.contains("assistant_message"))

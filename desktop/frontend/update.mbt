@@ -1099,11 +1099,6 @@ fn apply_engine_event(
         },
       )
     }
-    StreamRetry =>
-      // The provider is reopening only this chat request. Keep the run and its
-      // step/frontier intact, but remove every delta from the failed attempt so
-      // the replacement stream cannot be concatenated with it.
-      (None, conv.clear_streams())
     AssistantDelta(content) =>
       if content.is_empty() {
         (None, conv)
@@ -9088,28 +9083,6 @@ test "a new agent step clears the live stream" {
     model,
   )
   assert_eq(next.active().turn.streaming_response, None)
-}
-
-///|
-test "a stream retry clears previews without changing the step" {
-  let dispatch = test_dispatch()
-  let model = running_model().replace_conversation({
-    ..running_conversation(),
-    run: Open(run_id="r7", stage=AtStep(Some(2))),
-    turn: {
-      ..running_conversation().turn,
-      streaming_response: Some("left"),
-      live_reasoning: Some({ content: "old thought", complete: false, }),
-    },
-  })
-  let (_, next) = update_dev(
-    dispatch,
-    Engine(Some("r7"), StreamRetry, session=None),
-    model,
-  )
-  assert_eq(next.active().turn.streaming_response, None)
-  assert_eq(next.active().turn.live_reasoning, None)
-  assert_true(next.active().run is Open(run_id="r7", stage=AtStep(Some(2))))
 }
 
 ///|

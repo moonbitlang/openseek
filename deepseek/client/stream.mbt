@@ -239,9 +239,8 @@ async fn read_stream_line(
     error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
       raise error
     // A socket reset/close while reading is the same retry class as EOF and an
-    // idle timeout. Keeping it out of `Failure` lets an opted-in stream owner
-    // discard the failed attempt, while callback and malformed-SSE failures
-    // remain final even after output has started.
+    // idle timeout; keeping it out of `Failure` lets `Client::chat` tell it
+    // apart from callback and malformed-SSE failures.
     error => raise StreamTransport("\{error}")
   }
 }

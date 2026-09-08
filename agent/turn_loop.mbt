@@ -464,14 +464,10 @@ async fn AgentLoop::chat(self : Self, step : Int) -> @deepseek.ChatResponse {
           @emit.emit(ReasoningDelta(content=delta))
         }
       },
-      on_retry=(attempt, max_attempts, reason) => {
-        // Repeat the existing step boundary first so an older controller that
-        // does not know `stream_retry` still drops the failed attempt's live
-        // preview. This does not append a session item or rerun any tool: the
-        // chat client is only reopening this step's provider request.
-        @emit.emit(AgentStep(step=step + 1))
-        @emit.emit(StreamRetry(attempt~, max_attempts~, reason~))
-      },
+      // The provider request for this step is being reopened. Re-announcing
+      // the same step makes every controller drop the failed attempt's live
+      // preview; it appends no session item and reruns no tool.
+      on_retry=() => @emit.emit(AgentStep(step=step + 1)),
     ),
   )
   response.log_and_reasoning_content()

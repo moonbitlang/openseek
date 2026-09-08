@@ -53,6 +53,18 @@ fn RequestProgress::begin_attempt(self : Self) -> Unit {
 }
 
 ///|
+/// Whether the current attempt received any SSE event (or part of one). The
+/// completion is then running and billed, so replaying it is unsafe unless the
+/// consumer promised to discard what it already received.
+fn RequestProgress::streamed(self : Self) -> Bool {
+  match self.phase {
+    Sse(sse) => sse.event_count > 0 || sse.buffered_data
+    Decode(event_count~, ..) => event_count > 0
+    Connect | WriteRequest | ResponseHeaders | ResponseBody => false
+  }
+}
+
+///|
 fn RequestProgress::failure_message(
   self : Self,
   client : Client,

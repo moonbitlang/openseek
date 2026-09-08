@@ -279,24 +279,18 @@ async test "streaming chat retries after a delta when the consumer opts in" {
       retry_backoff_ms=1,
     )
     let deltas : Array[String] = []
-    let retries : Array[String] = []
+    let mut retries = 0
     let response = client.chat(
       [ChatMessage(User, content="hello")],
-      stream=StreamHandler(on_content_delta=delta => deltas.push(delta), on_retry=(
-        attempt,
-        max_attempts,
-        reason,
-      ) => {
+      stream=StreamHandler(on_content_delta=delta => deltas.push(delta), on_retry=() => {
         deltas.clear()
-        retries.push("\{attempt}/\{max_attempts}: \{reason}")
+        retries += 1
       }),
     )
     assert_eq(response.content, "replacement")
     assert_eq(deltas.join("|"), "replacement")
     assert_eq(hits.val, 2)
-    assert_eq(retries.length(), 1)
-    assert_true(retries[0].has_prefix("2/3: "))
-    assert_true(retries[0].contains("ended before [DONE]"))
+    assert_eq(retries, 1)
   }
 }
 

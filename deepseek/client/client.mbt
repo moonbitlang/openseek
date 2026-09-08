@@ -86,20 +86,22 @@ pub fn Client::Client(
 ///
 /// `on_content_delta` is called for each assistant content fragment as it
 /// arrives; `on_reasoning_delta` likewise for each thinking-mode reasoning
-/// fragment (it is simply not called when thinking is off).
+/// fragment (it is simply not called when thinking is off). `Client::chat`
+/// returns the fully accumulated response after the stream reaches `[DONE]`.
 ///
-/// Supplying `on_retry` explicitly says that the consumer can discard every
-/// fragment from a failed attempt. When such an attempt emitted an SSE event,
-/// the callback runs immediately before the next request starts, with the
-/// 1-based attempt number, the total attempt budget, and the previous failure.
-/// A pre-event retry needs no discard boundary and remains silent. Without the
-/// callback, a failure after any SSE event keeps the conservative no-replay
-/// behavior. `Client::chat` returns the fully accumulated response only after
-/// one attempt reaches `[DONE]`.
+/// By default a failure after the first SSE event is final: the completion is
+/// already running and billed, and replaying it could duplicate content or
+/// regenerate a tool call. Supplying `on_retry` says the consumer can discard
+/// every fragment it received from a failed attempt. A socket error, EOF
+/// before `[DONE]`, or idle timeout then reopens the same request, and
+/// `on_retry` runs immediately before that next attempt so the consumer can
+/// clear the failed attempt's output. It is not called for a retry before the
+/// first event, since there is nothing to discard. Malformed SSE and errors
+/// raised by the delta callbacks stay final either way.
 pub struct StreamHandler {
   priv on_content_delta : async (String) -> Unit
   priv on_reasoning_delta : async (String) -> Unit
-  priv on_retry : ((Int, Int, String) -> Unit)?
+  priv on_retry : (() -> Unit)?
 }
 
 ///|
@@ -107,7 +109,7 @@ pub struct StreamHandler {
 pub fn StreamHandler::StreamHandler(
   on_content_delta~ : async (String) -> Unit,
   on_reasoning_delta? : async (String) -> Unit = _ => (),
-  on_retry? : (Int, Int, String) -> Unit,
+  on_retry? : () -> Unit,
 ) -> StreamHandler {
   { on_content_delta, on_reasoning_delta, on_retry, }
 }
@@ -131,6 +133,14 @@ priv suberror RetryableApiError {
 }
 
 ///|
+/// Failures where the connection died mid-stream. These are the only errors an
+/// opted-in stream handler may retry after output has started; malformed SSE
+/// and delta-callback errors are plain `Failure` values and stay final.
+fn is_stream_interruption(error : Error) -> Bool {
+  error is (IdleTimeout(_, _) | StreamEnded | StreamTransport(_))
+}
+
+///|
 /// Ceiling on a single backoff sleep. The doubling sequence from
 /// `retry_backoff_ms` stops growing here — but this bounds each sleep, not
 /// their sum, which stays a geometric series: raising `retry_attempts` buys
@@ -147,9 +157,8 @@ let max_backoff_ms : Int = 60_000
 /// failures, and malformed-api_url parse errors propagate immediately;
 /// anything else is transport-shaped (connect refused, reset, DNS) and
 /// retries within budget. `bail` lets an attempt declare later retries
-/// pointless based on the error it raised. Streaming chat uses that to keep
-/// post-event replay disabled unless its handler explicitly opted in, and even
-/// then permits only transport, EOF, and idle-timeout failures.
+/// pointless for the error it raised; streaming chat uses it to refuse
+/// replaying a half-consumed completion (see `StreamHandler`).
 ///
 /// Errors propagate with their types intact. The chat boundary observes the
 /// final cause before adding request context for the caller.
@@ -217,52 +226,20 @@ pub async fn Client::chat(
     match stream {
       None => self.with_retries(() => self.chat_attempt(body), _ => false)
       Some(stream) => {
-        // The handler, not this client, owns already-rendered deltas. An absent
-        // retry callback preserves the conservative no-replay rule after the
-        // first event. An opted-in consumer gets a boundary before the next
-        // attempt and must clear that transient output there.
         let progress = RequestProgress()
-        let mut previous_streamed = false
-        let mut retry_reason = ""
         self.with_retries(
           () => {
-            let attempt = progress.attempts + 1
-            if attempt > 1 && previous_streamed {
-              match stream.on_retry {
-                Some(on_retry) =>
-                  on_retry(attempt, self.retry_attempts, retry_reason)
-                None => ()
-              }
+            // `progress` still describes the previous attempt here, so this is
+            // the boundary where an opted-in handler discards its output.
+            if progress.streamed() && stream.on_retry is Some(on_retry) {
+              on_retry()
             }
-            previous_streamed = false
             progress.begin_attempt()
             self.chat_stream_attempt(body, progress, stream)
           },
           error => {
-            previous_streamed = match progress.phase {
-              Sse(sse) => sse.event_count > 0 || sse.buffered_data
-              Decode(event_count~, ..) => event_count > 0
-              Connect | WriteRequest | ResponseHeaders | ResponseBody => false
-            }
-            retry_reason = match error {
-              IdleTimeout(context, timeout_ms) =>
-                "\{context} idle for \{timeout_ms}ms"
-              StreamEnded => "DeepSeek stream ended before [DONE]"
-              StreamTransport(detail) =>
-                "DeepSeek stream transport error: \{detail}"
-              HttpStatusError(code, body) =>
-                "DeepSeek API error \{code}: \{body}"
-              error => "\{error}"
-            }
-            // Malformed SSE and callback failures are plain Failure values and
-            // remain final. Only transport, EOF, and idle-timeout failures may
-            // cross a boundary after output has started.
-            let retryable_stream_error = match error {
-              IdleTimeout(_, _) | StreamEnded | StreamTransport(_) => true
-              _ => false
-            }
-            previous_streamed &&
-            (stream.on_retry is None || !retryable_stream_error)
+            progress.streamed() &&
+            !(stream.on_retry is Some(_) && is_stream_interruption(error))
           },
           progress~,
         ) catch {
