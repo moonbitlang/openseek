@@ -11,12 +11,6 @@ const CLI_SEQ : String = "cli/seq@0.1.0"
 const CLI_PRINTF : String = "cli/printf@0.1.0"
 
 ///|
-const CLI_SLEEP : String = "cli/sleep@0.1.0"
-
-///|
-const CLI_TRUE : String = "cli/true@0.1.0"
-
-///|
 /// Execute the job_output tool and unwrap its Respond output.
 async fn run_job_output(
   bg : @bgjobs.BgJobRuntime,
@@ -166,16 +160,16 @@ async test "job_output errors on an unknown job id" {
 }
 
 ///|
-async test "wait_ms blocks until the job finishes and returns its output" {
+async test "job_output reads the result after explicit completion waiting" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
     let id = bg.start(
       program="moonx",
-      args=[CLI_SH, "-c", "sleep 1; echo WAITED-OK"],
+      args=[CLI_PRINTF, "WAITED-OK"],
       command="waited",
     )
-    // No polling loop: a single call awaits the exit and returns the result.
-    let output = run_job_output(bg, { "job_id": id, "wait_ms": 30000 })
+    @async.with_timeout(30000, () => bg.wait_any([id]))
+    let output = run_job_output(bg, { "job_id": id })
     assert_false(output.is_error)
     assert_true(output.content.contains("WAITED-OK"))
     assert_true(output.content.contains("exit=0"))
@@ -183,37 +177,46 @@ async test "wait_ms blocks until the job finishes and returns its output" {
 }
 
 ///|
-async test "a wait_ms deadline on a still-running job is not an error" {
-  @async.with_task_group(group => {
-    let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
-    let id = bg.start(program="moonx", args=[CLI_SLEEP, "30"], command="slow")
-    let output = run_job_output(bg, { "job_id": id, "wait_ms": 200 })
-    // Deadline expiry just reports the live status; the model can call again.
-    assert_false(output.is_error)
-    assert_true(output.content.contains("running"))
-    let _ = bg.stop(id)
+#cfg(not(platform="windows"))
+async test "job_output returns before a gated job can complete" {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
+      let (input, release) = @process.write_to_process()
+      defer release.close()
+      let id = bg.start(
+        program="/bin/cat",
+        args=[],
+        command="gate",
+        stdin=input,
+      )
+      // Completion is impossible until after the read returns. No elapsed-time
+      // assertion or sleep-based race is needed to prove it does not wait.
+      let output = run_job_output(bg, { "job_id": id })
+      assert_false(output.is_error)
+      assert_true(output.content.contains("running"))
+      release.close()
+      bg.wait_any([id])
+    })
   })
 }
 
 ///|
-async test "a non-positive wait_ms is a tool error" {
+async test "removed wait_ms returns actionable tool error" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
-    let id = bg.start(program="moonx", args=[CLI_TRUE], command="noop")
-    let output = run_job_output(bg, { "job_id": id, "wait_ms": -5 })
-    assert_true(output.is_error)
-    assert_true(output.content.contains("wait_ms"))
-  })
-}
-
-///|
-async test "a non-numeric wait_ms is a tool error, not silently ignored" {
-  @async.with_task_group(group => {
-    let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
-    let id = bg.start(program="moonx", args=[CLI_TRUE], command="noop")
-    let output = run_job_output(bg, { "job_id": id, "wait_ms": "30000" })
-    assert_true(output.is_error)
-    assert_true(output.content.contains("wait_ms must be a number"))
+    for
+      value in [
+        Json::number(30000),
+        Json::number(-5),
+        Json::string("30000"),
+        Json::null(),
+      ] {
+      let output = run_job_output(bg, { "job_id": "bg-1", "wait_ms": value })
+      assert_true(output.is_error)
+      assert_true(output.content.contains("no longer accepts wait_ms"))
+      assert_true(output.content.contains("job_wait"))
+    }
   })
 }
 

@@ -15,21 +15,13 @@ pub fn definition(
       #|running. Output beyond the window is retained: pass offset (a character offset
       #|from the START) to read an earlier window instead — offsets 0, 12000, 24000, …
       #|page through all of total_chars. If you need the job's result before you can
-      #|continue and have no other work to do, pass wait_ms to block until it finishes
-      #|instead of checking repeatedly.
+      #|continue and have no other work to do, call job_wait with job_ids first.
+      #|This tool reads immediately without waiting for completion; it has no wait_ms.
     ),
     schema=JsonSchema({
       "type": "object",
       "properties": {
         "job_id": { "type": "string" },
-        "wait_ms": {
-          "type": "number",
-          "description": (
-            #|Wait up to this many milliseconds (capped at 120000) for the job to finish
-            #|before reading. Use when you need the result now and have nothing else to
-            #|do; never poll in a loop.
-          ),
-        },
         "offset": {
           "type": "number",
           "description": (
@@ -63,17 +55,6 @@ async fn execute(
       "error: no background job with id \{job_id}",
       is_error=true,
     )
-  }
-  // Await-before-read: with wait_ms the caller blocks (bounded) until the job
-  // exits — one efficient await instead of a model round trip per poll. A
-  // deadline expiry is not an error; the response simply reports the job still
-  // running. The cap keeps a single tool call from holding the turn for long —
-  // the model can always call again.
-  match input.wait_ms {
-    Some(wait) => {
-      let _ = bg_runtime.wait_exit(job_id, wait)
-    }
-    None => ()
   }
   // Recent output, bounded to a window so a poll cannot flood the conversation
   // with a large job's full log. For output over the window, show the *tail*

@@ -571,7 +571,9 @@ stderr warning while exit stays 0 — treat skipped blocks as a blind spot.
     workflow ever attached. Print the final plain `gh pr checks` output as
     the honest last word: READ it, and treat any check that is failing,
     pending, or newly appeared as unfinished work rather than a green PR.
-    Then keep working or finish the turn; a completion notice arrives.
+    While the monitor runs, keep working or call `job_wait` with its job ID
+    if you have no other work. The completion notice resumes that wait; an
+    already-finished turn is not restarted. Read the result with `job_output`.
     Never call a PR done while a check is pending or unreported.
     This bounded monitor discovers the current branch's PR, watches registered
     checks, then gives late workflows one settle interval to appear:

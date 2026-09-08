@@ -336,25 +336,16 @@ async test "a handed-off job cleans builds but keeps result files until teardown
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.content.contains("moved to the background"))
     guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
+    @async.with_timeout(120_000, () => bg_runtime.wait_any([job.id]))
     let read = run_async_tool(@job_output.definition(bg_runtime), {
       "job_id": job.id,
-      "wait_ms": 120_000,
     })
     guard read is Respond(result) else { fail("expected Respond") }
     assert_false(result.is_error)
     assert_eq(@fs.read_file(result_path).text(), "kept")
     let build_dir = "\{spill_dir}/snippet-0/build"
-    let mut build_reclaimed = !@fs.exists(build_dir)
-    // job_output may observe the terminal state just before its cleanup callback
-    // finishes, so wait for that callback rather than racing it.
-    for _ in 0..<400 {
-      if !@fs.exists(build_dir) {
-        build_reclaimed = true
-        break
-      }
-      @async.sleep(25)
-    }
-    assert_true(build_reclaimed)
+    // wait_any includes launcher cleanup and completion publication.
+    assert_false(@fs.exists(build_dir))
     assert_true(@fs.exists("\{spill_dir}/snippet-0/tmp"))
     @fs.rmdir(spill_dir, recursive=true) catch {
       _ => ()
@@ -385,9 +376,9 @@ async test "an escalated handed-off job does not invent a policy refusal" {
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.content.contains("moved to the background"))
     guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
+    @async.with_timeout(30_000, () => bg_runtime.wait_any([job.id]))
     let read = run_async_tool(@job_output.definition(bg_runtime), {
       "job_id": job.id,
-      "wait_ms": 30_000,
     })
     guard read is Respond(result) else { fail("expected Respond") }
     assert_false(result.is_error)
@@ -418,9 +409,9 @@ async test "a non-wasm handed-off job does not invent a policy refusal" {
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.content.contains("moved to the background"))
     guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
+    @async.with_timeout(30_000, () => bg_runtime.wait_any([job.id]))
     let read = run_async_tool(@job_output.definition(bg_runtime), {
       "job_id": job.id,
-      "wait_ms": 30_000,
     })
     guard read is Respond(result) else { fail("expected Respond") }
     assert_false(result.is_error)

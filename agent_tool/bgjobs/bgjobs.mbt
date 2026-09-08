@@ -490,9 +490,9 @@ pub async fn BgJobRuntime::read_output_tail(
 
 ///|
 /// Await the job reaching a terminal status, up to `timeout_ms`. Returns `true`
-/// once terminal, `false` on deadline or an unknown id. This is the await
-/// primitive behind `shell_output`'s `wait_ms`: a caller that needs the result
-/// *now* blocks here once instead of burning model round trips on polling.
+/// once terminal, `false` on deadline or an unknown id. Retained for bounded
+/// runtime callers; agent turns use `wait_any`, which also waits for completion
+/// publication, while `job_output` only reads available output.
 pub async fn BgJobRuntime::wait_exit(
   self : BgJobRuntime,
   id : String,

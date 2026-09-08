@@ -11,6 +11,7 @@ import {
   "bobzhang/openseek/agent_runtime",
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/async/process",
 } for "test"
 
 supported_targets = "+wasm+native"

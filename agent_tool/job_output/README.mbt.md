@@ -4,11 +4,13 @@
 `job_id` — the id `mbtx` returns when a run is still active after its
 five-second foreground grace period and moves to the background automatically.
 
-The primary consumption path for job results is the **pushed completion
-notice** (a job announces itself when it finishes); `job_output` is for
-checking progress on a still-running job, and for reading the output once the
-notice arrives. The tool description and system prompts steer the model away
-from calling it in a polling loop.
+Reads return the currently available output and status without waiting for the
+job to finish. If the result is needed and there is no other work, call
+`job_wait({"job_ids":["bg-3"]})` alone first, then read with `job_output`.
+Completion notices still use the runtime's existing publication path.
+
+`wait_ms` has been removed. Calls that still supply it receive an actionable
+error directing the caller to `job_wait`; no wait duration is guessed or polled.
 
 ## Result Shape
 
