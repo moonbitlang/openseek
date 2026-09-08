@@ -41,6 +41,11 @@ fn Action::test_emit() -> @cmd.Emit[Action] {
 }
 
 ///|
+fn[T] Menu::length(self : Menu[T]) -> Int {
+  self.items.length()
+}
+
+///|
 test "a running draft keeps Stop beside Steer" {
   let base = Input::fixture("steer while running")
   let input = {

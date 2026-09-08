@@ -4,15 +4,18 @@ import {
   "openseek_desktop/internal/fsx",
   "openseek_desktop/internal/gitx",
   "openseek_desktop/internal/pathx",
-  "openseek_desktop/internal/processx",
   "openseek_desktop/internal/protocol",
   "openseek_desktop/internal/session_store",
   "openseek_desktop/internal/workspaces",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/json",
-  "tonyfettes/platform",
 }
+
+import {
+  "openseek_desktop/internal/processx",
+  "tonyfettes/platform",
+} for "wbtest"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 

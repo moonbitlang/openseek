@@ -108,11 +108,6 @@ fn[T] Menu::draft_without_token(self : Menu[T]) -> String {
 }
 
 ///|
-fn[T] Menu::length(self : Menu[T]) -> Int {
-  self.items.length()
-}
-
-///|
 fn[T] Menu::get(self : Menu[T], index : Int) -> T? {
   self.items.get(index)
 }
