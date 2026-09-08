@@ -46,3 +46,5 @@ Step details. The prompt is keyboard-focusable. A retains original styling;
 B now includes experimental MoonBit disclosure markup, so it is labeled Revised
 preview rather than the PR. Verified the tool-step disclosure opens to reveal
 its number and timestamp. Reasoning-led steps remain outside this sample.
+
+Revision: B now folds each non-final reasoning/tool activity as a whole. Its summary shows the step, tool count, pending/error status when present, and a CSS-clipped verbatim reasoning or narration preview. Expanding reveals the original activity components; final answers stay outside. Browser-checked the tool fixture collapsed and expanded. No generated summary; still prototype-only.

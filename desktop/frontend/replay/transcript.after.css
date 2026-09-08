@@ -1527,9 +1527,16 @@
 .msg.user:focus-within + .turn-rule .turn-time,
 .turn-rule:hover .turn-time { opacity:1; }
 .msg.user:focus-visible { outline:1px solid var(--color-accent); outline-offset:3px; }
-.prototype-original-step { display:none; }
+.prototype-original-activity { display:none; }
 .prototype-step-details { font-size:var(--font-size-xs); color:var(--color-text-muted); margin:0; }
 .prototype-step-details summary { cursor:pointer; }
 .prototype-step-metadata { display:flex; gap:8px; padding:6px 0; }
 .turn-rule { position:relative; height:0; }
 .turn-rule .turn-time { position:absolute; right:0; top:0; }
+
+.prototype-step-details > summary { display:flex; align-items:baseline; min-width:0; gap:4px; }
+.prototype-step-details > summary::before { content:"▸"; flex:none; }
+.prototype-step-details[open] > summary::before { content:"▾"; }
+.prototype-step-label { flex:none; }
+.prototype-step-preview { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.prototype-step-body { display:flex; flex-direction:column; gap:12px; padding-top:12px; font-size:var(--font-size-sm); color:var(--color-text); }

@@ -92,11 +92,7 @@ fn assistant_view(
       ]),
     )
   } else if !header.is_empty() && !calls.is_empty() {
-    lead.push(@html.div(class="activity-heading prototype-original-step", header))
-    lead.push(@html.details(class="prototype-step-details", [
-      @html.summary("Step details"),
-      @html.div(class="prototype-step-metadata", header),
-    ]))
+    lead.push(@html.div(class="activity-heading", header))
   }
   let work = if calls.is_empty() {
     None
@@ -137,7 +133,44 @@ fn assistant_view(
       parts.push(@html.div(class="activity-row", lead))
     }
   }
-  @html.div(class="step", parts)
+  // Prototype comparison: fold the complete work response, never the final answer.
+  if !finished && (!calls.is_empty() || reasoning is Some(_)) {
+    let label = match step_label {
+      Some(label) => "Step " + label.replace(old="#", new="")
+      None => "Activity"
+    }
+    let summary : Array[@html.Html] = [
+      @html.span(class="prototype-step-label", label),
+    ]
+    if !calls.is_empty() {
+      let count = calls.length()
+      let noun = if count == 1 { "tool call" } else { "tool calls" }
+      summary.push(
+        @html.span(class="prototype-step-label", " · \{count} \{noun}"),
+      )
+    }
+    if calls.any(call => call.outcome is Done(is_error=true, ..)) {
+      summary.push(@html.span(class="prototype-step-label", " · Failed"))
+    } else if live || calls.any(call => call.outcome is Pending(..)) {
+      summary.push(@html.span(class="prototype-step-label", " · Running"))
+    }
+    let preview = match reasoning {
+      Some(_) => reasoning
+      None => prose
+    }
+    if preview is Some(text) {
+      summary.push(@html.span(class="prototype-step-preview", " · " + text))
+    }
+    @html.div(class="step", [
+      @html.div(class="prototype-original-activity", parts),
+      @html.details(class="prototype-step-details", [
+        @html.summary(summary),
+        @html.div(class="prototype-step-body", parts),
+      ]),
+    ])
+  } else {
+    @html.div(class="step", parts)
+  }
 }
 
 ///|
@@ -684,7 +717,12 @@ fn user_message_view(
       body.push(@html.div(class="msg-content", inline_code_nodes(content)))
   }
   // The overview rail and scroll watcher share this stable turn anchor.
-  @html.div(class="msg user", id?=anchor, attrs=@html.Attrs::build().tabindex(0), [@html.div(class="user-bubble", body)])
+  @html.div(
+    class="msg user",
+    id?=anchor,
+    attrs=@html.Attrs::build().tabindex(0),
+    [@html.div(class="user-bubble", body)],
+  )
 }
 
 ///|
