@@ -38,13 +38,12 @@ pub fn Input::not_equal(Self, Self) -> Bool
 
 type LiveReasoning
 pub fn LiveReasoning::LiveReasoning() -> Self
-pub fn LiveReasoning::complete_before_answer(Self, channel~ : @interop.ChannelId, websocket_epoch~ : Int, session~ : String, run_id~ : String?) -> String?
-pub fn LiveReasoning::connection_closed(Self, @interop.ChannelId, Int) -> Unit
-pub fn LiveReasoning::connection_opened(Self, @interop.ChannelId, Int) -> Unit
-pub fn LiveReasoning::delta(Self, channel~ : @interop.ChannelId, websocket_epoch~ : Int, session~ : String, run_id~ : String?, content~ : String) -> Unit
-pub fn LiveReasoning::finish(Self, channel~ : @interop.ChannelId, websocket_epoch~ : Int, session~ : String, run_id~ : String?) -> Unit
-pub fn LiveReasoning::finish_run(Self, channel~ : @interop.ChannelId, websocket_epoch~ : Int, run_id~ : String) -> Unit
-pub fn LiveReasoning::start_step(Self, channel~ : @interop.ChannelId, websocket_epoch~ : Int, session~ : String, run_id~ : String?) -> Unit
+pub fn LiveReasoning::clear_channel(Self, @interop.ChannelId) -> Unit
+pub fn LiveReasoning::complete_before_answer(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?) -> String?
+pub fn LiveReasoning::delta(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?, content~ : String) -> Unit
+pub fn LiveReasoning::finish(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?) -> Unit
+pub fn LiveReasoning::finish_run(Self, channel~ : @interop.ChannelId, run_id~ : String) -> Unit
+pub fn LiveReasoning::start_step(Self, channel~ : @interop.ChannelId, session~ : String, run_id~ : String?) -> Unit
 
 pub(all) struct ProjectChoice {
   root : @common.Uri

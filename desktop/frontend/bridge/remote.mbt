@@ -47,15 +47,15 @@ fn RemoteBridgeSub::install(
       guard self.active else { return }
       self.events.enqueue(
         scheduler,
-        Notification(
-          channel=self.channel,
-          websocket_epoch=self.websocket_epoch,
-          notification~,
-        ),
+        Notification(channel=self.channel, notification~),
       )
     },
     on_down=() => {
       guard self.active else { return }
+      // Retire before forwarding the close. Already queued notifications
+      // still hold this subscription and must not reach any event consumer,
+      // including the reasoning preview, while reconnection is pending.
+      self.active = false
       self.events.enqueue(
         scheduler,
         ChannelDown(channel=self.channel, websocket_epoch=self.websocket_epoch),

@@ -70,30 +70,10 @@ fn Input::live_reasoning_target(self : Input) -> LiveReasoningTarget? {
 }
 
 ///|
-/// Whether this component may still accept transient events from one concrete
-/// bridge connection. Keeping the last epoch after a close prevents callbacks
-/// already queued by that connection from recreating a cleared preview.
-priv enum LiveReasoningConnectionPhase {
-  Receiving
-  Closed
-} derive(Eq)
-
-///|
-/// The latest bridge connection observed for one device channel. Epochs are
-/// monotonic within a channel; a replacement connection therefore fences both
-/// late reasoning fragments and a late close callback from its predecessor.
-priv struct LiveReasoningConnection {
-  channel : @interop.ChannelId
-  websocket_epoch : Int
-  phase : LiveReasoningConnectionPhase
-} derive(Eq)
-
-///|
-/// Component-owned previews for every concurrently running conversation.
-/// Both vectors are persistent, so a background connection or run cannot
-/// mutate a state snapshot currently being rendered for the foreground.
+/// Previews for concurrently running conversations. Connection subscriptions
+/// filter retired callbacks before they reach this state; it only owns content
+/// and the currently displayed conversation.
 priv struct LiveReasoningState {
-  connections : @vector.Vector[LiveReasoningConnection]
   previews : @vector.Vector[LiveReasoningPreview]
   active : LiveReasoningTarget?
 } derive(Eq)
@@ -101,12 +81,11 @@ priv struct LiveReasoningState {
 ///|
 priv enum LiveReasoningMsg {
   Focused(LiveReasoningTarget?)
-  ConnectionOpened(@interop.ChannelId, websocket_epoch~ : Int)
-  Delta(LiveReasoningKey, websocket_epoch~ : Int, String)
-  Finished(LiveReasoningKey, websocket_epoch~ : Int)
-  StepStarted(LiveReasoningKey, websocket_epoch~ : Int)
-  RunFinished(@interop.ChannelId, websocket_epoch~ : Int, String)
-  ConnectionClosed(@interop.ChannelId, websocket_epoch~ : Int)
+  ClearChannel(@interop.ChannelId)
+  Delta(LiveReasoningKey, String)
+  Finished(LiveReasoningKey)
+  StepStarted(LiveReasoningKey)
+  RunFinished(@interop.ChannelId, String)
 }
 
 ///|
@@ -168,21 +147,6 @@ fn LiveReasoningState::sync_effect(
 }
 
 ///|
-fn LiveReasoningState::accepts(
-  self : LiveReasoningState,
-  channel : @interop.ChannelId,
-  websocket_epoch : Int,
-) -> Bool {
-  for connection in self.connections {
-    if connection.channel == channel {
-      return connection.websocket_epoch == websocket_epoch &&
-        connection.phase is Receiving
-    }
-  }
-  false
-}
-
-///|
 fn LiveReasoningState::update(
   self : LiveReasoningState,
   msg : LiveReasoningMsg,
@@ -194,59 +158,20 @@ fn LiveReasoningState::update(
       // may have been remounted while another application screen was visible.
       (next, next.sync_effect(target))
     }
-    ConnectionOpened(channel, websocket_epoch~) => {
-      for index in 0..<self.connections.length() {
-        let current = self.connections[index]
-        if current.channel == channel {
-          // A connection command can finish after its replacement was
-          // installed. Never move this component's fence backwards.
-          if websocket_epoch < current.websocket_epoch {
-            return (self, NoChange)
-          }
-          let next = {
-            ..self,
-            connections: self.connections.set(index, {
-              channel,
-              websocket_epoch,
-              phase: Receiving,
-            }),
-            // `agent.connected` can repeat without a WebSocket replacement
-            // when the engine pump restarts. Its transient fragments are no
-            // more replayable than fragments across a transport reconnect.
-            previews: self.previews.filter(preview => {
-              preview.key.channel != channel
-            }),
-          }
-          return (
-            next,
-            if self.active is Some(active) && active.key.channel == channel {
-              Hide(target=active.key.wire())
-            } else {
-              NoChange
-            },
-          )
-        }
-      }
-      let next = {
-        ..self,
-        connections: self.connections.push({
-          channel,
-          websocket_epoch,
-          phase: Receiving,
-        }),
-        previews: self.previews.filter(preview => preview.key.channel != channel),
-      }
+    ClearChannel(channel) =>
       (
-        next,
+        {
+          ..self,
+          previews: self.previews.filter(p => p.key.channel != channel),
+        },
         if self.active is Some(active) && active.key.channel == channel {
           Hide(target=active.key.wire())
         } else {
           NoChange
         },
       )
-    }
-    Delta(key, websocket_epoch~, content) => {
-      if !self.accepts(key.channel, websocket_epoch) || content.is_empty() {
+    Delta(key, content) => {
+      if content.is_empty() {
         return (self, NoChange)
       }
       for index in 0..<self.previews.length() {
@@ -289,10 +214,7 @@ fn LiveReasoningState::update(
         },
       )
     }
-    StepStarted(key, websocket_epoch~) => {
-      guard self.accepts(key.channel, websocket_epoch) else {
-        return (self, NoChange)
-      }
+    StepStarted(key) =>
       (
         {
           ..self,
@@ -304,11 +226,7 @@ fn LiveReasoningState::update(
           NoChange
         },
       )
-    }
-    Finished(key, websocket_epoch~) => {
-      guard self.accepts(key.channel, websocket_epoch) else {
-        return (self, NoChange)
-      }
+    Finished(key) => {
       for preview in self.previews {
         if preview.key == key && preview.complete {
           return (self, NoChange)
@@ -330,60 +248,27 @@ fn LiveReasoningState::update(
         },
       )
     }
-    RunFinished(channel, websocket_epoch~, run_id) =>
-      if self.accepts(channel, websocket_epoch) {
-        let next = {
-          ..self,
-          previews: self.previews.map(preview => {
-            if preview.key.channel == channel && preview.key.run_id == run_id {
-              { ..preview, chunks: @vector.new(), complete: true, }
-            } else {
-              preview
-            }
-          }),
-        }
-        (
-          next,
-          if self.active is Some(active) &&
-            active.key.channel == channel &&
-            active.key.run_id == run_id {
-            Hide(target=active.key.wire())
+    RunFinished(channel, run_id) => {
+      let next = {
+        ..self,
+        previews: self.previews.map(preview => {
+          if preview.key.channel == channel && preview.key.run_id == run_id {
+            { ..preview, chunks: @vector.new(), complete: true, }
           } else {
-            NoChange
-          },
-        )
-      } else {
-        (self, NoChange)
-      }
-    ConnectionClosed(channel, websocket_epoch~) => {
-      for index in 0..<self.connections.length() {
-        let current = self.connections[index]
-        if current.channel == channel &&
-          current.websocket_epoch == websocket_epoch {
-          if current.phase is Closed {
-            return (self, NoChange)
+            preview
           }
-          let next = {
-            ..self,
-            connections: self.connections.set(index, {
-              ..current,
-              phase: Closed,
-            }),
-            previews: self.previews.filter(preview => {
-              preview.key.channel != channel
-            }),
-          }
-          return (
-            next,
-            if self.active is Some(active) && active.key.channel == channel {
-              Hide(target=active.key.wire())
-            } else {
-              NoChange
-            },
-          )
-        }
+        }),
       }
-      (self, NoChange)
+      (
+        next,
+        if self.active is Some(active) &&
+          active.key.channel == channel &&
+          active.key.run_id == run_id {
+          Hide(target=active.key.wire())
+        } else {
+          NoChange
+        },
+      )
     }
   }
 }
@@ -423,14 +308,7 @@ struct LiveReasoning {
 
 ///|
 pub fn LiveReasoning::LiveReasoning() -> LiveReasoning {
-  {
-    state: {
-      connections: @vector.new(),
-      previews: @vector.new(),
-      active: None,
-    },
-    preview: LivePreview(),
-  }
+  { state: { previews: @vector.new(), active: None, }, preview: LivePreview(), }
 }
 
 ///|
@@ -487,15 +365,13 @@ fn LiveReasoning::focus_while(
 }
 
 ///|
-/// Start accepting transient events from this concrete bridge connection.
-/// Repeating the same epoch is also the engine-pump restart boundary, so its
-/// pre-restart preview is discarded before new fragments arrive.
-pub fn LiveReasoning::connection_opened(
+/// Discard transient text when its source is restarted or retired. The
+/// subscription guarantees that retired callbacks cannot repopulate it.
+pub fn LiveReasoning::clear_channel(
   self : LiveReasoning,
   channel : @interop.ChannelId,
-  websocket_epoch : Int,
 ) -> Unit {
-  self.apply(ConnectionOpened(channel, websocket_epoch~))
+  self.apply(ClearChannel(channel))
 }
 
 ///|
@@ -503,13 +379,12 @@ pub fn LiveReasoning::connection_opened(
 pub fn LiveReasoning::delta(
   self : LiveReasoning,
   channel~ : @interop.ChannelId,
-  websocket_epoch~ : Int,
   session~ : String,
   run_id~ : String?,
   content~ : String,
 ) -> Unit {
   guard run_id is Some(run_id) else { return }
-  self.apply(Delta({ channel, session, run_id, }, websocket_epoch~, content))
+  self.apply(Delta({ channel, session, run_id, }, content))
 }
 
 ///|
@@ -518,12 +393,11 @@ pub fn LiveReasoning::delta(
 pub fn LiveReasoning::finish(
   self : LiveReasoning,
   channel~ : @interop.ChannelId,
-  websocket_epoch~ : Int,
   session~ : String,
   run_id~ : String?,
 ) -> Unit {
   guard run_id is Some(run_id) else { return }
-  self.apply(Finished({ channel, session, run_id, }, websocket_epoch~))
+  self.apply(Finished({ channel, session, run_id, }))
 }
 
 ///|
@@ -531,21 +405,9 @@ pub fn LiveReasoning::finish(
 pub fn LiveReasoning::finish_run(
   self : LiveReasoning,
   channel~ : @interop.ChannelId,
-  websocket_epoch~ : Int,
   run_id~ : String,
 ) -> Unit {
-  self.apply(RunFinished(channel, websocket_epoch~, run_id))
-}
-
-///|
-/// Stop accepting events from this exact connection and discard its previews.
-/// A stale close is ignored after a newer epoch has taken ownership.
-pub fn LiveReasoning::connection_closed(
-  self : LiveReasoning,
-  channel : @interop.ChannelId,
-  websocket_epoch : Int,
-) -> Unit {
-  self.apply(ConnectionClosed(channel, websocket_epoch~))
+  self.apply(RunFinished(channel, run_id))
 }
 
 ///|
@@ -553,12 +415,11 @@ pub fn LiveReasoning::connection_closed(
 pub fn LiveReasoning::start_step(
   self : LiveReasoning,
   channel~ : @interop.ChannelId,
-  websocket_epoch~ : Int,
   session~ : String,
   run_id~ : String?,
 ) -> Unit {
   guard run_id is Some(run_id) else { return }
-  self.apply(StepStarted({ channel, session, run_id, }, websocket_epoch~))
+  self.apply(StepStarted({ channel, session, run_id, }))
 }
 
 ///|
@@ -568,15 +429,12 @@ pub fn LiveReasoning::start_step(
 pub fn LiveReasoning::complete_before_answer(
   self : LiveReasoning,
   channel~ : @interop.ChannelId,
-  websocket_epoch~ : Int,
   session~ : String,
   run_id~ : String?,
 ) -> String? {
-  guard run_id is Some(run_id) && self.state.accepts(channel, websocket_epoch) else {
-    return None
-  }
+  guard run_id is Some(run_id) else { return None }
   let key : LiveReasoningKey = { channel, session, run_id, }
   let content = self.state.preview_for(key).map(preview => preview.content())
-  self.apply(Finished(key, websocket_epoch~))
+  self.apply(Finished(key))
   content
 }

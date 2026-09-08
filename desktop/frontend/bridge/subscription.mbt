@@ -54,10 +54,7 @@ fn bridge_sub_loader(
       Some({
         unload: scheduler => {
           running.unload()
-          running.events.enqueue(
-            scheduler,
-            ConnectionRetired(channel=Local, websocket_epoch=0),
-          )
+          running.events.enqueue(scheduler, ConnectionRetired(channel=Local))
         },
         update_tagger: payload => {
           match payload {
@@ -75,7 +72,7 @@ fn bridge_sub_loader(
           running.unload()
           running.events.enqueue(
             scheduler,
-            ConnectionRetired(channel=running.channel, websocket_epoch~),
+            ConnectionRetired(channel=running.channel),
           )
         },
         update_tagger: payload => {

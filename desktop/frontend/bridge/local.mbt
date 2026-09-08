@@ -127,11 +127,7 @@ fn LocalBridgeSub::wire(
       }
       self.events.enqueue(
         scheduler,
-        Notification(
-          channel=@interop.ChannelId::Local,
-          websocket_epoch=0,
-          notification~,
-        ),
+        Notification(channel=@interop.ChannelId::Local, notification~),
       )
     }
     self.subscribe(extension_events, "openseek." + method_, handler)

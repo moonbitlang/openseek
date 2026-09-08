@@ -284,7 +284,7 @@ fn bridge_event(
   event : @bridge.Event,
 ) -> @cmd.Cmd? {
   match event {
-    @bridge.Event::Notification(channel~, websocket_epoch~, notification~) =>
+    @bridge.Event::Notification(channel~, notification~) =>
       match notification {
         TerminalOutput(payload) =>
           Some(
@@ -302,39 +302,23 @@ fn bridge_event(
             |> dispatch,
           )
         AgentConnected(_) => {
-          live_reasoning.connection_opened(channel, websocket_epoch)
+          live_reasoning.clear_channel(channel)
           notification_msg(channel, notification).map(msg => dispatch(msg))
         }
         AgentEvent(payload) =>
           match engine_msg(payload) {
             Some(Engine(run_id, ReasoningDelta(content), session=Some(session))) => {
-              live_reasoning.delta(
-                channel~,
-                websocket_epoch~,
-                session~,
-                run_id~,
-                content~,
-              )
+              live_reasoning.delta(channel~, session~, run_id~, content~)
               None
             }
             Some(
               Engine(run_id, ReasoningMessage(_), session=Some(session)) as msg
             ) => {
-              live_reasoning.finish(
-                channel~,
-                websocket_epoch~,
-                session~,
-                run_id~,
-              )
+              live_reasoning.finish(channel~, session~, run_id~)
               Some(dispatch(FromDevice(channel, msg)))
             }
             Some(Engine(run_id, AgentStep(_), session=Some(session)) as msg) => {
-              live_reasoning.start_step(
-                channel~,
-                websocket_epoch~,
-                session~,
-                run_id~,
-              )
+              live_reasoning.start_step(channel~, session~, run_id~)
               Some(dispatch(FromDevice(channel, msg)))
             }
             Some(
@@ -351,7 +335,6 @@ fn bridge_event(
               }
               if live_reasoning.complete_before_answer(
                   channel~,
-                  websocket_epoch~,
                   session~,
                   run_id~,
                 )
@@ -386,12 +369,7 @@ fn bridge_event(
                 session=Some(session)
               ) as msg
             ) => {
-              live_reasoning.finish(
-                channel~,
-                websocket_epoch~,
-                session~,
-                run_id~,
-              )
+              live_reasoning.finish(channel~, session~, run_id~)
               Some(dispatch(FromDevice(channel, msg)))
             }
             Some(msg) => Some(dispatch(FromDevice(channel, msg)))
@@ -400,7 +378,7 @@ fn bridge_event(
         AgentError(payload) =>
           match error_msg(payload) {
             Some(Error(run_id=Some(run_id), ..) as msg) => {
-              live_reasoning.finish_run(channel~, websocket_epoch~, run_id~)
+              live_reasoning.finish_run(channel~, run_id~)
               Some(dispatch(FromDevice(channel, msg)))
             }
             Some(msg) => Some(dispatch(FromDevice(channel, msg)))
@@ -409,7 +387,7 @@ fn bridge_event(
         AgentFinished(payload) =>
           match finished_msg(payload) {
             Some(Finished(run_id~, ..) as msg) => {
-              live_reasoning.finish_run(channel~, websocket_epoch~, run_id~)
+              live_reasoning.finish_run(channel~, run_id~)
               Some(dispatch(FromDevice(channel, msg)))
             }
             Some(msg) => Some(dispatch(FromDevice(channel, msg)))
@@ -420,11 +398,11 @@ fn bridge_event(
     @bridge.Event::Unavailable(channel~, message~) =>
       Some(dispatch(FromDevice(channel, BridgeUnavailable(message))))
     @bridge.Event::ChannelDown(channel~, websocket_epoch~) => {
-      live_reasoning.connection_closed(channel, websocket_epoch)
+      live_reasoning.clear_channel(channel)
       Some(dispatch(FromDevice(channel, ChannelDown(websocket_epoch~))))
     }
-    @bridge.Event::ConnectionRetired(channel~, websocket_epoch~) => {
-      live_reasoning.connection_closed(channel, websocket_epoch)
+    @bridge.Event::ConnectionRetired(channel~) => {
+      live_reasoning.clear_channel(channel)
       None
     }
     @bridge.Event::BrowserEvent(payload~) =>

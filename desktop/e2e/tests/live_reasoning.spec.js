@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 class ReasoningHarness extends DesktopBrowserHarness {
+  runs = [];
+
   start(session = 'session-1', run = 'run-1') {
     this.notify('agent.started', {
       run_id: run, session, session_root: '/workspace/.openseek',
@@ -15,6 +17,9 @@ class ReasoningHarness extends DesktopBrowserHarness {
   }
 
   replyFor(request) {
+    if (request.method === 'agent.runs') {
+      return { runs: this.runs, settled: [], approvals: [] };
+    }
     const result = super.replyFor(request);
     if (request.method === 'session.load') {
       return { ...result, session: { ...result.session, id: request.params.session } };
@@ -204,3 +209,88 @@ for (const commitFirst of [false, true]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+test('retired socket callbacks cannot recreate or clear the current reasoning preview', async ({ page }) => {
+  // Keep the actual callbacks installed by the product. Replaying them models
+  // events queued before retirement, including after a same-device reconnect.
+  const app = new ReasoningHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  // Wrap after navigation so Playwright's WebSocket routing is already set up.
+  await page.evaluate(() => {
+    const BrowserWebSocket = window.WebSocket;
+    window.reasoningSockets = [];
+    window.WebSocket = class extends BrowserWebSocket {
+      constructor(...args) {
+        super(...args);
+        window.reasoningSockets.push(this);
+      }
+    };
+  });
+  const loads = app.requests.filter(request => request.method === 'session.load').length;
+  app.socket.close();
+  await expect.poll(() => page.evaluate(() => window.reasoningSockets.length)).toBe(1);
+  await expect.poll(() => app.requests.filter(request => request.method === 'session.load').length)
+    .toBeGreaterThan(loads);
+  app.start();
+  // The run survives this connection gap. Returning an empty runs snapshot
+  // would tell the application that it finished, contradicting later deltas.
+  app.runs = [{
+    run_id: 'run-1', session: 'session-1', session_root: '/workspace/.openseek',
+    model: 'deepseek-v4-pro', max_steps: 1000,
+  }];
+  app.event({ event: 'reasoning_delta', content: 'old connection' });
+  const live = page.locator('#live-reasoning-host .activity-thinking-live');
+  await expect(live).toHaveText('old connection');
+
+  const loadsBeforeRetirement = app.requests.filter(request => request.method === 'session.load').length;
+  await page.evaluate(async () => {
+    const socket = window.reasoningSockets[0];
+    const message = socket.onmessage.bind(socket);
+    const close = socket.onclose.bind(socket);
+    window.retiredReasoningCallbacks = { message, close };
+    // Run close and a queued notification in the same task, before the retry
+    // timer can install a replacement. Closing the real socket then cleans up
+    // the test transport; its second close notification must be harmless.
+    close(new CloseEvent('close'));
+    socket.close();
+    message(new MessageEvent('message', { data: JSON.stringify({
+      jsonrpc: '2.0', method: 'agent.event', params: {
+        run_id: 'run-1', session: 'session-1',
+        event: { event: 'reasoning_delta', content: 'late after close' },
+      },
+    }) }));
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  await expect(live).toHaveCount(0);
+
+  await expect.poll(() => page.evaluate(() => window.reasoningSockets.length)).toBe(2);
+  // agent.connected is sent by the existing fixture on each fresh socket;
+  // wait for the resulting reload before starting the replacement stream.
+  await expect.poll(() => app.requests.filter(request => request.method === 'session.load').length)
+    .toBeGreaterThan(loadsBeforeRetirement);
+  app.start();
+  app.event({ event: 'reasoning_delta', content: 'current connection' });
+  await expect(live).toHaveText('current connection');
+  await page.evaluate(async () => {
+    const { message, close } = window.retiredReasoningCallbacks;
+    for (const event of [
+      { event: 'reasoning_delta', content: 'stale append' },
+      { event: 'reasoning_message', content: 'stale finish' },
+    ]) {
+      message(new MessageEvent('message', { data: JSON.stringify({
+        jsonrpc: '2.0', method: 'agent.event', params: {
+          run_id: 'run-1', session: 'session-1', event,
+        },
+      }) }));
+    }
+    message(new MessageEvent('message', { data: JSON.stringify({
+      jsonrpc: '2.0', method: 'agent.connected', params: { stage: 'serving' },
+    }) }));
+    close(new CloseEvent('close'));
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  await expect(live).toHaveText('current connection');
+  expect(app.pageErrors).toEqual([]);
+});
