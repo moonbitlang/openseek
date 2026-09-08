@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/agent_tool/job_output/internal/decode"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn decode(Json) -> JobOutputInput raise
+
+pub let max_wait_ms : Int
+
+// Errors
+
+// Types and methods
+pub struct JobOutputInput {
+  job_id : String
+  wait_ms : Int?
+  offset : Int?
+} derive(@debug.Debug)
+pub fn JobOutputInput::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

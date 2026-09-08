@@ -51,12 +51,13 @@ async fn execute(
   bg_runtime : @bgjobs.BgJobRuntime,
   arguments : Json,
 ) -> @agent_tool.ToolAction {
-  guard arguments is { "job_id": String(job_id), .. } else {
-    return @agent_tool.respond(
-      "error: job_output requires a string job_id",
-      is_error=true,
-    )
+  let input = @decode.decode(arguments) catch {
+    error => {
+      let message = @tool_error.failure_message("\{error}")
+      return @agent_tool.respond("error: \{message}", is_error=true)
+    }
   }
+  let job_id = input.job_id
   guard bg_runtime.snapshot(job_id) is Some(_) else {
     return @agent_tool.respond(
       "error: no background job with id \{job_id}",
@@ -68,20 +69,16 @@ async fn execute(
   // deadline expiry is not an error; the response simply reports the job still
   // running. The cap keeps a single tool call from holding the turn for long —
   // the model can always call again.
-  match wait_ms(arguments) {
-    Ok(Some(wait)) => {
+  match input.wait_ms {
+    Some(wait) => {
       let _ = bg_runtime.wait_exit(job_id, wait)
     }
-    Ok(None) => ()
-    Err(message) => return @agent_tool.respond(message, is_error=true)
+    None => ()
   }
   // Recent output, bounded to a window so a poll cannot flood the conversation
   // with a large job's full log. For output over the window, show the *tail*
   // (recent progress).
-  let page = match window_offset(arguments) {
-    Ok(page) => page
-    Err(message) => return @agent_tool.respond(message, is_error=true)
-  }
+  let page = input.offset
   let window = 12000
   // A page reads the retained log from the start — the spill file for a large
   // job — so a result bigger than one window (a workflow's several reports)
@@ -190,54 +187,6 @@ fn apply_output_rewrites(
     let (old, replacement) = rewrite
     output.replace_all(old~, new=replacement)
   })
-}
-
-///|
-/// Longest a single job_output call may block awaiting a job, so one tool
-/// call cannot hold the turn indefinitely; the model can always call again.
-let max_wait_ms : Int = 120_000
-
-///|
-/// Decode the optional `wait_ms` argument: a positive number, capped at
-/// `max_wait_ms`. Absent/null means no waiting.
-fn wait_ms(arguments : Json) -> Result[Int?, String] {
-  match arguments {
-    { "wait_ms": Number(value, ..), .. } => {
-      let wait = value.to_int()
-      if wait <= 0 {
-        Err("error: job_output wait_ms must be a positive number")
-      } else if wait > max_wait_ms {
-        Ok(Some(max_wait_ms))
-      } else {
-        Ok(Some(wait))
-      }
-    }
-    { "wait_ms": Null, .. } => Ok(None)
-    // Present but not a number (e.g. a stringified "30000"): reject rather than
-    // silently skip the wait — the local dispatcher does not enforce the JSON
-    // schema, so the decoder must.
-    { "wait_ms": _, .. } => Err("error: job_output wait_ms must be a number")
-    _ => Ok(None)
-  }
-}
-
-///|
-/// Decode the optional `offset` argument: a character offset from the start of
-/// the captured output, zero or more. Absent/null means the recent tail.
-fn window_offset(arguments : Json) -> Result[Int?, String] {
-  match arguments {
-    { "offset": Number(value, ..), .. } => {
-      let offset = value.to_int()
-      if offset < 0 {
-        Err("error: job_output offset must be zero or a positive number")
-      } else {
-        Ok(Some(offset))
-      }
-    }
-    { "offset": Null, .. } => Ok(None)
-    { "offset": _, .. } => Err("error: job_output offset must be a number")
-    _ => Ok(None)
-  }
 }
 
 ///|
