@@ -2,9 +2,9 @@
 /// The conversation whose transcript the root view places on screen. It keys
 /// the transcript component's lifetime (`Val::switch_by` in `boot`): a new
 /// slot builds a fresh component whose `init` places the scroller and clears
-/// overview state, and `None` disposes the current one. The view's own fork
-/// — the console gate, Chat onboarding, loading, and load failure — is
-/// mirrored here so the component exists exactly while its DOM does.
+/// overview state, and `None` disposes the current one. It derives from the
+/// same `console_gate` and `chat_column` the view places the column from, so
+/// the component exists exactly while its DOM does.
 priv struct TranscriptSlot {
   source : @transcript_component.Source
   channel : @interop.ChannelId
@@ -22,15 +22,61 @@ fn TranscriptSlot::key(self : TranscriptSlot) -> String {
 }
 
 ///|
-fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
-  if self.console is Some(console) &&
+/// A browser page is gated on both its relay session and its required
+/// query-selected device. Until both exist the view shows the gate instead of
+/// the console frame, so no transcript is on screen either.
+fn Model::console_gate(self : Model) -> ConsoleState? {
+  guard self.console is Some(console) &&
     (
       console.page_device is None ||
       !(console.auth is AuthSignedIn(..)) ||
       self.focused_device() is None
-    ) {
+    ) else {
     return None
   }
+  Some(console)
+}
+
+///|
+/// What the Chat screen's conversation column shows. A chat needs a
+/// conversation, and a conversation needs a project to work in, so with none
+/// on screen — the registry has not arrived, or no project is attached — the
+/// column is onboarding instead. The view places the column from this value
+/// and the transcript component's lifetime follows it, so the fork is decided
+/// once.
+priv enum ChatColumn {
+  LoadFailed(message~ : String)
+  Loading
+  Onboarding
+  Transcript(slot~ : TranscriptSlot, conversation~ : Conversation)
+}
+
+///|
+fn Model::chat_column(self : Model) -> ChatColumn {
+  if self.conversation_load_failure is Some(failure) &&
+    self.selected_conversation == Some(failure.target) {
+    return LoadFailed(message=failure.message)
+  }
+  if !self.selected_conversation_loaded() {
+    return Loading
+  }
+  match self.active_conversation() {
+    None => Onboarding
+    Some(conversation) =>
+      Transcript(
+        slot={
+          source: OpenSeek,
+          channel: self.focused,
+          session: Some(self.active_session),
+        },
+        conversation~,
+      )
+  }
+}
+
+///|
+fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
+  guard self.console_gate() is None else { return None }
   match self.screen {
     Codex =>
       Some({
@@ -38,21 +84,11 @@ fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
         channel: self.focused,
         session: self.codex.active_id(),
       })
-    Chat => {
-      if self.conversation_load_failure is Some(failure) &&
-        self.selected_conversation == Some(failure.target) {
-        return None
+    Chat =>
+      match self.chat_column() {
+        Transcript(slot~, ..) => Some(slot)
+        LoadFailed(..) | Loading | Onboarding => None
       }
-      guard self.selected_conversation_loaded() &&
-        self.active_conversation() is Some(_) else {
-        return None
-      }
-      Some({
-        source: OpenSeek,
-        channel: self.focused,
-        session: Some(self.active_session),
-      })
-    }
     Skills | Settings | WorkspaceSettings(..) => None
   }
 }

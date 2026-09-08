@@ -1675,15 +1675,10 @@ fn view(
 ) -> @html.Html {
   let (quick_open_html, context_menu_html) = quick_open_and_context_menu
   let (skills_html, workspace_settings_html) = skills_and_workspace_settings
-  // A browser page is gated on both its relay session and its required
-  // query-selected device. Until both exist, the console frame — sidebar,
-  // composer, overlays — stays unbuilt and inert Local cannot receive UI work.
-  if model.console is Some(console) &&
-    (
-      console.page_device is None ||
-      !(console.auth is AuthSignedIn(..)) ||
-      model.focused_device() is None
-    ) {
+  // Until the relay session and its device exist, the console frame —
+  // sidebar, composer, overlays — stays unbuilt and inert Local cannot
+  // receive UI work.
+  if model.console_gate() is Some(console) {
     return console_gate_view(dispatch, console)
   }
   let file_panel_visible = model.file_panel_visible()
@@ -1701,33 +1696,26 @@ fn view(
     model.is_desktop,
   )
   let content = match model.screen {
-    // The one fork that decides what the conversation column is. A chat needs
-    // a conversation, and a conversation needs a project to work in, so with
-    // none on screen — the registry has not arrived, or no project is
-    // attached — the column is onboarding instead. Everything below this
-    // point in the Chat branch has both.
+    // `Model::chat_column` is the one fork that decides what the conversation
+    // column is; the transcript component's lifetime follows the same value.
     Chat =>
-      if model.conversation_load_failure is Some(failure) &&
-        model.selected_conversation == Some(failure.target) {
-        [conversation_load_failed_view(dispatch, failure.message)]
-      } else if !model.selected_conversation_loaded() {
-        [conversation_loading_view()]
-      } else {
-        match model.active_conversation() {
-          None => [onboarding_view(dispatch, model)]
-          Some(conv) =>
-            [
-              topbar_view(
-                dispatch, toggle_terminal, toggle_right_panel, model, conv,
-              ),
-              transcript_html,
-              if conv.is_archived_read_only() {
-                conv.archived_read_only_view(dispatch)
-              } else {
-                composer_html
-              },
-            ]
-        }
+      match model.chat_column() {
+        LoadFailed(message~) =>
+          [conversation_load_failed_view(dispatch, message)]
+        Loading => [conversation_loading_view()]
+        Onboarding => [onboarding_view(dispatch, model)]
+        Transcript(conversation=conv, ..) =>
+          [
+            topbar_view(
+              dispatch, toggle_terminal, toggle_right_panel, model, conv,
+            ),
+            transcript_html,
+            if conv.is_archived_read_only() {
+              conv.archived_read_only_view(dispatch)
+            } else {
+              composer_html
+            },
+          ]
       }
     Codex =>
       model.codex.page(
