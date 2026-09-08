@@ -86,7 +86,7 @@ test('reasoning appends preserve the container and do not refresh historical con
     document.querySelector('.activity-thinking-live'))).toBe(true);
 
   app.event({ event: 'reasoning_message', content: '**Completed thought**' });
-  await expect(page.locator('#live-reasoning-host')).toBeEmpty();
+  await expect(page.locator('#live-reasoning-host .activity-thinking-live')).toBeEmpty();
   await expect(page.locator('#stream .activity-thinking strong', {
     hasText: 'Completed thought',
   })).toHaveCount(1);
@@ -94,14 +94,14 @@ test('reasoning appends preserve the container and do not refresh historical con
   // A later normal event provides an ordering barrier for the late fragment.
   app.event({ event: 'assistant_delta', content: 'Answer after thought' });
   await expect(page.locator('#stream')).toContainText('Answer after thought');
-  await expect(page.locator('#live-reasoning-host')).toBeEmpty();
+  await expect(page.locator('#live-reasoning-host .activity-thinking-live')).toBeEmpty();
 
   app.event({ event: 'agent_step', step: 2 });
   app.event({ event: 'reasoning_delta', content: 'Next step' });
   await expect(live).toHaveText('Next step');
   // The first assistant fragment may precede the complete reasoning event.
   app.event({ event: 'assistant_delta', content: 'An early answer' });
-  await expect(page.locator('#live-reasoning-host')).toBeEmpty();
+  await expect(page.locator('#live-reasoning-host .activity-thinking-live')).toBeEmpty();
   await expect(page.locator('#stream .activity-thinking')).toHaveText('Next step');
   await expect(page.locator('#stream')).toContainText('An early answer');
 
@@ -109,7 +109,7 @@ test('reasoning appends preserve the container and do not refresh historical con
   app.event({ event: 'reasoning_delta', content: 'Interrupted thought' });
   await expect(live).toHaveText('Interrupted thought');
   app.event({ event: 'agent_aborted', reason: 'User stopped the run' });
-  await expect(page.locator('#live-reasoning-host')).toBeEmpty();
+  await expect(page.locator('#live-reasoning-host .activity-thinking-live')).toBeEmpty();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -202,7 +202,7 @@ for (const commitFirst of [false, true]) {
       await expect(page.locator('.activity-thinking-live')).toHaveText('A provisional prefix');
       app.event({ event: 'reasoning_message', content: 'A complete durable thought' });
     }
-    await expect(page.locator('#live-reasoning-host')).toBeEmpty();
+    await expect(page.locator('#live-reasoning-host .activity-thinking-live')).toBeEmpty();
     await expect(page.locator('#stream .activity-thinking', {
       hasText: 'A complete durable thought',
     })).toHaveCount(1);
@@ -263,7 +263,7 @@ test('retired socket callbacks cannot recreate or clear the current reasoning pr
     }) }));
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
-  await expect(live).toHaveCount(0);
+  await expect(live).toBeEmpty();
 
   await expect.poll(() => page.evaluate(() => window.reasoningSockets.length)).toBe(2);
   // agent.connected is sent by the existing fixture on each fresh socket;

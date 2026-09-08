@@ -167,16 +167,12 @@ pub(all) struct Actions {
 }
 
 ///|
-/// The run whose reasoning may occupy the live preview host, keyed with the
-/// step label so a new step re-targets the preview with its own heading.
-fn Input::live_reasoning_target(self : Input) -> @live_reasoning.Target? {
+/// The run whose reasoning may occupy the live preview host.
+fn Input::live_reasoning_target(self : Input) -> @live_reasoning.Key? {
   guard self.source is OpenSeek && self.active_run_id is Some(run_id) else {
     return None
   }
-  Some({
-    key: { channel: self.focused, session: self.active_session, run_id, },
-    step_label: self.next_step_label(),
-  })
+  Some({ channel: self.focused, session: self.active_session, run_id, })
 }
 
 ///|
@@ -340,10 +336,10 @@ pub fn component(
     (_, block) => block.map(block => (block.key.wire(), block.render(actions))),
     by=block => block.branch_key(),
   )
-  // The run (and step) whose reasoning may occupy the preview host is a
-  // disposable branch keyed by that target: creating it focuses the preview
-  // after the next render and disposing it releases the host. The branch
-  // renders nothing; it lives in the view only so the graph keeps it alive.
+  // The run whose reasoning may occupy the preview host is a disposable
+  // branch keyed by that run: creating it focuses the preview after the next
+  // render and disposing it releases the host. The branch renders nothing;
+  // it lives in the view only so the graph keeps it alive.
   let live_focus = input
     .map(input => input.live_reasoning_target())
     .switch_by(

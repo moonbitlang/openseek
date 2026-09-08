@@ -23,23 +23,16 @@ test "live reasoning appends by owner and semantic finish deletes it" {
     session: "desktop-test",
     run_id: "r7",
   }
-  let target : Target = { key, step_label: Some("#1"), }
   let empty = LiveReasoningState::{ previews: @vector.new(), active: None, }
-  let (focused, focus_effect) = empty.update(Focused(Some(target)))
-  assert_eq(
-    focus_effect,
-    Sync(target=key.wire(), step_label=Some("#1"), content=None),
-  )
+  let (focused, focus_effect) = empty.update(Focused(Some(key)))
+  assert_eq(focus_effect, Sync(target=key.wire(), content=None))
   let (first, first_effect) = focused.update(Delta(key, "think"))
   assert_eq(first_effect, Append(target=key.wire(), content="think"))
   let (live, second_effect) = first.update(Delta(key, "ing"))
   assert_eq(second_effect, Append(target=key.wire(), content="ing"))
   assert_eq(live.content_for(key), Some("thinking"))
-  let (_, hydrate_effect) = live.update(Focused(Some(target)))
-  assert_eq(
-    hydrate_effect,
-    Sync(target=key.wire(), step_label=Some("#1"), content=Some("thinking")),
-  )
+  let (_, hydrate_effect) = live.update(Focused(Some(key)))
+  assert_eq(hydrate_effect, Sync(target=key.wire(), content=Some("thinking")))
 
   // The full reasoning event is a semantic boundary, not a durable commit.
   // Removing the preview here makes both commit-first and finish-first delivery
@@ -86,16 +79,10 @@ test "live reasoning keeps concurrent conversations and runs isolated" {
   assert_eq(state.content_for(local_r8), Some("local-current"))
   assert_eq(state.content_for(remote_r7), Some("remote"))
 
-  let (focused, focus_effect) = state.update(
-    Focused(Some({ key: local_r8, step_label: Some("#1"), })),
-  )
+  let (focused, focus_effect) = state.update(Focused(Some(local_r8)))
   assert_eq(
     focus_effect,
-    Sync(
-      target=local_r8.wire(),
-      step_label=Some("#1"),
-      content=Some("local-current"),
-    ),
+    Sync(target=local_r8.wire(), content=Some("local-current")),
   )
   let (with_background, background_effect) = focused.update(
     Delta(remote_r7, "-more"),

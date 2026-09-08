@@ -636,15 +636,12 @@ fn section_children(
     TranscriptSectionKey::stream(input).wire(),
     @html.div(id="stream", class="stream", stream),
   )
-  // Rabbita owns this container but no descendants. Streamed reasoning is
-  // written by LivePreview, outside both historical diffing and observation.
+  // The live reasoning card. Rabbita renders its shell; only the text inside
+  // is written by the preview, outside both historical diffing and the
+  // content observer, which watches `#stream` alone.
   children.set(
     "live-reasoning",
-    @html.div(
-      id="live-reasoning-host",
-      class="live-reasoning-host",
-      ([] : Array[@html.Html]),
-    ),
+    @live_reasoning.host_view(step_label?=input.next_step_label()),
   )
   // Empty Html from the focus branch (see `component`): present so the
   // branch is part of the rendered graph, never anything visible.

@@ -32,14 +32,15 @@
 }
 
 /* The live preview is a sibling of the observed historical stream, but
-   follows the same reading width. An empty container takes no extra space. */
+   follows the same reading width. Its shell is always rendered and hidden
+   until the preview writes text into it. */
 .live-reasoning-host {
   max-width: 820px;
-  margin: 0 auto;
+  margin: 20px auto 0;
 }
 
-.live-reasoning-host:not(:empty) {
-  margin-top: 20px;
+.live-reasoning-host:has(.activity-thinking-live:empty) {
+  display: none;
 }
 
 /* Floating "jump to latest" over the transcript's bottom edge, shown

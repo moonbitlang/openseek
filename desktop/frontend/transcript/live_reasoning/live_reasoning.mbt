@@ -34,19 +34,9 @@ fn LiveReasoningPreview::content(self : LiveReasoningPreview) -> String {
 }
 
 ///|
-/// The conversation currently allowed to use the one visible host.
-/// `step_label` is presentation data derived from durable transcript rows; it
-/// does not participate in routing provider fragments.
-pub(all) struct Target {
-  key : Key
-  step_label : String?
-} derive(Eq)
-
-///|
-/// The `switch_by` tag of a focus target: run identity plus the step label,
-/// so a new step re-targets the preview with its own heading.
-pub fn Target::tag(self : Target) -> String {
-  self.key.wire() + "\u{0}" + self.step_label.unwrap_or("")
+/// The `switch_by` tag of a focus target.
+pub fn Key::tag(self : Key) -> String {
+  self.wire()
 }
 
 ///|
@@ -57,12 +47,12 @@ pub fn Target::tag(self : Target) -> String {
 #warnings("-unused_value")
 priv struct LiveReasoningState {
   previews : @vector.Vector[LiveReasoningPreview]
-  active : Target?
+  active : Key?
 } derive(Eq)
 
 ///|
 priv enum LiveReasoningMsg {
-  Focused(Target?)
+  Focused(Key?)
   ClearChannel(@interop.ChannelId)
   Delta(Key, String)
   Finished(Key)
@@ -79,7 +69,7 @@ priv enum LiveReasoningEffect {
   NoChange
   // `content` is the stored preview to rehydrate; `None` means the target
   // has no open preview and the host is cleared.
-  Sync(target~ : String, step_label~ : String?, content~ : String?)
+  Sync(target~ : String, content~ : String?)
   Append(target~ : String, content~ : String)
   Hide(target~ : String)
   Reset
@@ -92,8 +82,7 @@ fn LiveReasoningEffect::apply(
 ) -> Unit {
   match self {
     NoChange => ()
-    Sync(target~, step_label~, content~) =>
-      preview.sync(target, step_label, content)
+    Sync(target~, content~) => preview.sync(target, content)
     Append(target~, content~) => preview.append(target, content)
     Hide(target~) => preview.hide(target)
     Reset => preview.reset()
@@ -116,15 +105,14 @@ fn LiveReasoningState::preview_for(
 ///|
 fn LiveReasoningState::sync_effect(
   self : LiveReasoningState,
-  target : Target?,
+  target : Key?,
 ) -> LiveReasoningEffect {
   match target {
     None => Reset
     Some(target) =>
       Sync(
-        target=target.key.wire(),
-        step_label=target.step_label,
-        content=self.preview_for(target.key).map(preview => preview.content()),
+        target=target.wire(),
+        content=self.preview_for(target).map(preview => preview.content()),
       )
   }
 }
@@ -136,7 +124,7 @@ fn LiveReasoningState::hide_when(
   matches : (Key) -> Bool,
 ) -> LiveReasoningEffect {
   match self.active {
-    Some(active) if matches(active.key) => Hide(target=active.key.wire())
+    Some(active) if matches(active) => Hide(target=active.wire())
     _ => NoChange
   }
 }
@@ -190,7 +178,7 @@ fn LiveReasoningState::update(
       }
       (
         { ..self, previews, },
-        if self.active is Some(active) && active.key == key {
+        if self.active is Some(active) && active == key {
           Append(target=key.wire(), content~)
         } else {
           NoChange
@@ -275,7 +263,7 @@ priv suberror LiveFocusSubscription {
 /// the conversation leaves the screen. It renders nothing.
 pub fn LiveReasoning::focus_while(
   self : LiveReasoning,
-  target : Target,
+  target : Key,
 ) -> @rabbita.Val[@html.Html] {
   let (state, _) = @rabbita.create_state_with_init(
     init=_ => {
@@ -401,6 +389,3 @@ pub fn LiveReasoning::observe(
 
 ///|
 pub extend Key with Eq::{equal, not_equal}
-
-///|
-pub extend Target with Eq::{equal, not_equal}
