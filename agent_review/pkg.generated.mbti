@@ -18,16 +18,14 @@ pub async fn run_review(String, @deepseek.Model, String, workspace_root? : Strin
 // Errors
 
 // Types and methods
-pub struct Finding {
-  severity : String
-  // private fields
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+type Finding derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub struct ReviewReport {
-  findings : Array[Finding]
   // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ReviewReport::digest(Self) -> String
+pub fn ReviewReport::finding_count(Self) -> Int
+pub fn ReviewReport::has_blockers(Self) -> Bool
 pub fn ReviewReport::parse(Json) -> Result[Self, String]
 pub fn ReviewReport::to_json(Self) -> Json
 pub fn ReviewReport::to_json_string(Self) -> String
