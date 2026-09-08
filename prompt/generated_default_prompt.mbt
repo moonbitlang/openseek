@@ -667,6 +667,13 @@ fn default_prompt() -> String {
     #|  `moonbitlang/core/argparse` for CLI parsing, or `moonbitlang/core/json` for
     #|  `@json.parse`.
     #|- Use `pub fn` for APIs called from another package. Plain `fn` is private.
+    #|- Types are abstract by default: a plain `struct X { ... }` (no `pub`) leaves
+    #|  only the type *name* visible to other packages — they can call its `pub`
+    #|  methods but cannot construct it or read its fields. Prefer that over
+    #|  `pub struct X { priv ... }` when every field is internal: the per-field
+    #|  `priv` markers are redundant and `pub` (readonly) exposes nothing when no
+    #|  field is readable. Reserve `pub` for types with readable fields, and
+    #|  `priv struct X` for a type whose name itself must not leave the package.
     #|- `_test.mbt` files are black-box tests. Use `_wbtest.mbt` only when tests must
     #|  inspect private helpers.
     #|- Top-level MoonBit items are separated by `///|`.
