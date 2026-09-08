@@ -23,6 +23,8 @@ import {
 // Values
 pub fn overlay_widget(String, @dom.Element) -> @browser.OverlayWidget
 
+pub fn render_diago_diagram_svg(String) -> String?
+
 pub fn render_mbti_diagram_svg(String) -> String?
 
 pub fn render_package_dep_diagram_svg(String) -> String?
@@ -157,6 +159,11 @@ pub fn MarkdownViewerOptions::with_theme(Self, String) -> Self
 
 type MarkdownViewerViewState derive(@debug.Debug)
 pub fn MarkdownViewerViewState::to_repr(Self) -> @debug.Repr
+
+type MermaidDiagram
+pub fn MermaidDiagram::MermaidDiagram(@dom.Element, String, dark_mode~ : Bool, on_size_changed~ : () -> Unit) -> Self
+pub fn MermaidDiagram::dispose(Self) -> Unit
+pub fn MermaidDiagram::set_dark_mode(Self, Bool) -> Unit
 
 type Viewer
 pub fn Viewer::add_overlay_widget(Self, @browser.OverlayWidget) -> Unit

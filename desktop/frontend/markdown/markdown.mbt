@@ -2,8 +2,8 @@
 // CommonMark (with the GFM-ish cmark extensions: tables, strikethrough, task
 // lists); this module parses it with moonbit-community/cmark and maps the
 // document tree directly onto Rabbita nodes. Untrusted model output therefore
-// never reaches `innerHTML`: raw HTML blocks and spans are rendered as visible
-// text instead of being injected into the DOM.
+// is never injected as HTML: raw HTML blocks and spans are rendered as visible
+// text. Diagram containers accept only escaped source or renderer-generated SVG.
 
 ///|
 /// Render a markdown string to a list of block-level Rabbita nodes.
@@ -121,6 +121,21 @@ fn code_block(block : @cmark.CodeBlock) -> @html.Html {
     None => ""
   }
   let source = lines_text(block.code)
+  if language == "mermaid" || language == "d2" || language == "diago" {
+    // Rabbita owns only this container and its source attribute. The transcript
+    // subscription owns its children, including the escaped loading fallback,
+    // so asynchronous SVG replacement cannot invalidate Rabbita child nodes.
+    return @html.div(
+      class=if language == "mermaid" { "chat-mermaid" } else { "chat-diago" },
+      attrs=@html.Attrs::build()
+        .data_set("transcript-diagram", language)
+        .data_set("transcript-diagram-source", source)
+        .inner_html(
+          "<pre><code class=\"language-\{language}\">\{@common.escape_html(source)}</code></pre>",
+        ),
+      ([] : Array[@html.Html]),
+    )
+  }
   if language == "uml" || language == "plantuml" {
     match @editor_viewer.render_uml_diagram_svg(source) {
       Some(svg) =>

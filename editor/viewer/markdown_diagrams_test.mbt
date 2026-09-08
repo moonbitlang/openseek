@@ -69,3 +69,12 @@ test "public Viewer package dependency renderer accepts moon tree JSON" {
   assert_true(svg.contains("--vscode-editor-foreground"))
   assert_true(render_package_dep_diagram_svg("{\"nodes\":[]}") is None)
 }
+
+///|
+test "public Viewer Diago renderer preserves invalid source fallback" {
+  guard render_diago_diagram_svg("a -> b") is Some(svg) else {
+    fail("expected Diago SVG")
+  }
+  assert_true(svg.contains("<svg"))
+  assert_true(render_diago_diagram_svg("a ->") is None)
+}

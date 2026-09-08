@@ -32,6 +32,11 @@ pub fn MermaidTheme::equal(Self, Self) -> Bool
 pub fn MermaidTheme::not_equal(Self, Self) -> Bool
 pub fn MermaidTheme::to_repr(Self) -> @debug.Repr
 
+type MermaidView
+pub fn MermaidView::MermaidView(@dom.Element, String, dark_mode~ : Bool, on_size_changed~ : () -> Unit) -> Self
+pub fn MermaidView::dispose(Self) -> Unit
+pub fn MermaidView::set_dark_mode(Self, Bool) -> Unit
+
 pub struct RenderedMarkdown {
   element : @dom.Element
   dispose : @common.Disposable

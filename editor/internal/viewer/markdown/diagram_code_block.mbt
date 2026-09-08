@@ -34,7 +34,9 @@ fn render_diagram_code_block(code_block : MarkdownCodeBlock) -> String? {
 }
 
 ///|
-fn render_diago_svg(source : String) -> String? {
+/// Compile a D2/Diago body for Markdown documents or standalone consumers.
+/// Failed compilation leaves the consumer responsible for its source fallback.
+pub fn render_diago_svg(source : String) -> String? {
   let svg = @diago.compile(
     source,
     options=@diago.CompileOptions::new().with_output_mode(Svg),

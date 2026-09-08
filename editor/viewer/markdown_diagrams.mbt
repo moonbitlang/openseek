@@ -1,4 +1,40 @@
 ///|
+/// Compile D2/Diago source with the same renderer used by Markdown documents.
+/// Invalid source returns `None` so the caller can preserve its code fallback.
+pub fn render_diago_diagram_svg(source : String) -> String? {
+  @markdown_core.render_diago_svg(source)
+}
+
+///|
+/// A single Mermaid diagram in a caller-owned, childless DOM container.
+/// Dispose before replacing its source or removing its container.
+struct MermaidDiagram {
+  view : @browser_markdown.MermaidView
+}
+
+///|
+pub fn MermaidDiagram::MermaidDiagram(
+  target : @rdom.Element,
+  source : String,
+  dark_mode~ : Bool,
+  on_size_changed~ : () -> Unit,
+) -> Self {
+  { view: MermaidView(target, source, dark_mode~, on_size_changed~), }
+}
+
+///|
+/// Invalidates pending renders before requesting the current theme.
+pub fn MermaidDiagram::set_dark_mode(self : Self, dark_mode : Bool) -> Unit {
+  self.view.set_dark_mode(dark_mode)
+}
+
+///|
+/// Releases listeners and prevents late results from writing to the container.
+pub fn MermaidDiagram::dispose(self : Self) -> Unit {
+  self.view.dispose()
+}
+
+///|
 /// Compile PlantUML-style diagram source to an SVG that follows the Viewer's
 /// host color variables. Invalid or unsupported source returns `None`.
 ///

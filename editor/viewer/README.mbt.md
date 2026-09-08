@@ -9,6 +9,22 @@ The js-only public façade for three readonly surfaces:
 `pkg.generated.mbti` is the authoritative API. This page records ownership and
 dependency rules that are intentionally not encoded in public signatures.
 
+## Diagram embedding
+
+Consumers with their own Markdown parser can use `render_diago_diagram_svg`
+for D2/Diago and `render_uml_diagram_svg` for UML/PlantUML. Both return `None`
+for invalid input so the consumer can retain the source as code.
+`MermaidDiagram` owns a single diagram inside a caller-owned, childless DOM
+container. It uses the same local Mermaid assets, strict rendering policy,
+escaped source fallback, and stale-result protection as `MarkdownViewer`.
+Call `set_dark_mode` when the application appearance changes, and `dispose`
+before replacing its source or removing its container. Its size callback lets
+the consumer refresh `DiagramViewports` and recompute surrounding layout.
+
+Desktop transcripts use these entries for exact lowercase `mermaid`, `d2`,
+`diago`, `uml`, and `plantuml` fences; ordinary prose and code remain under the
+transcript's existing Markdown renderer.
+
 ## Explicit presentation selection
 
 Presentation policy belongs to the host. `Viewer` never inspects a URI suffix

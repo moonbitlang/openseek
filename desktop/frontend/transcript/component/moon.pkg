@@ -12,6 +12,7 @@ import {
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
+  "moonbitlang/editor/viewer" @editor_viewer,
   "moonbitlang/editor/viewer/html" @syntax_html,
   "moonbitlang/editor/viewer/browser/diagram_viewport",
   "openseek_desktop/internal/commands",

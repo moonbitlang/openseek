@@ -67,6 +67,7 @@ pub(all) enum ScrollPosition {
 /// durable chronology and active-run ownership; this package owns only the
 /// transcript subtree and its scroll behavior.
 struct Input {
+  dark_mode : Bool
   source : Source
   focused : @interop.ChannelId
   active_session : String
@@ -103,6 +104,7 @@ struct Input {
 
 ///|
 pub fn Input::Input(
+  dark_mode? : Bool = false,
   source~ : Source,
   focused~ : @interop.ChannelId,
   active_session~ : String,
@@ -121,6 +123,7 @@ pub fn Input::Input(
   streaming_identity~ : String,
 ) -> Input {
   {
+    dark_mode,
     source,
     focused,
     active_session,
@@ -645,6 +648,7 @@ priv struct TranscriptObservers {
 priv struct TranscriptDomMount {
   mut element : @dom.Element?
   mut diagrams : @diagram_viewport.DiagramViewports?
+  mut rendered_diagrams : Array[TranscriptDiagram]
   images : TranscriptImageObserver
   on_size_changed : () -> Unit
 }
@@ -657,6 +661,7 @@ fn TranscriptDomMount::TranscriptDomMount(
   {
     element: None,
     diagrams: None,
+    rendered_diagrams: [],
     images: TranscriptImageObserver::install(on_image),
     on_size_changed,
   }
@@ -681,12 +686,17 @@ fn TranscriptDomMount::is_same_element(
 /// and requests a bounded host read once an image enters the viewport.
 fn TranscriptDomMount::replace(self : Self, next : @dom.Element?) -> Unit {
   self.images.disconnect()
+  for entry in self.rendered_diagrams {
+    entry.dispose()
+  }
+  self.rendered_diagrams = []
   if self.diagrams is Some(diagrams) {
     diagrams.dispose()
   }
   self.diagrams = None
   self.element = next
   if next is Some(element) {
+    self.refresh_diagrams(element)
     self.diagrams = Some(
       @diagram_viewport.DiagramViewports(element, self.on_size_changed),
     )
@@ -696,6 +706,9 @@ fn TranscriptDomMount::replace(self : Self, next : @dom.Element?) -> Unit {
 
 ///|
 fn TranscriptDomMount::refresh_content(self : Self) -> Unit {
+  if self.element is Some(element) {
+    self.refresh_diagrams(element)
+  }
   if self.diagrams is Some(diagrams) {
     diagrams.refresh()
   }
@@ -715,6 +728,9 @@ fn TranscriptDomMount::observe_content(
       child_list=true,
       character_data=true,
       subtree=true,
+      attribute_filter=[
+        "data-transcript-diagram", "data-transcript-diagram-source", "data-transcript-theme",
+      ],
     )
   }
 }

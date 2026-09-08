@@ -663,10 +663,12 @@
   font-size: inherit;
 }
 
-/* UML/PlantUML fences compile synchronously through the shared Viewer
-   renderer. Bind both generated SVGs and the shared diagram controls to the
-   chat palette so they follow explicit and system themes. */
-.msg-content.markdown .chat-markdown-diagram {
+/* Mermaid, D2/Diago and UML/PlantUML use the shared Viewer renderers. Bind
+   generated SVGs and diagram controls to the chat palette so they follow
+   explicit and system themes. */
+.msg-content.markdown .chat-markdown-diagram,
+.msg-content.markdown .chat-mermaid .moonbit-viewer-markdown-diagram,
+.msg-content.markdown .chat-diago .moonbit-viewer-markdown-diagram {
   --vscode-editor-foreground: var(--color-text-primary);
   --vscode-descriptionForeground: var(--color-text-secondary);
   --vscode-editorWidget-background: var(--color-bg-surface);

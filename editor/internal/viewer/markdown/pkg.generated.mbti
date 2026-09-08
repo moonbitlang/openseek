@@ -17,6 +17,8 @@ pub fn markdown_sections(MarkdownDocumentProjection) -> Array[MarkdownSection]
 
 pub fn markdown_table_of_contents(MarkdownDocumentProjection) -> Array[MarkdownTocEntry]
 
+pub fn render_diago_svg(String) -> String?
+
 pub fn render_markdown(String, language_id? : String, code_block_renderer? : (MarkdownCodeBlock, String?) -> String) -> MarkdownRenderFact
 
 pub fn render_mbti_diagram_svg(String) -> String?
