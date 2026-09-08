@@ -546,25 +546,14 @@ fn decode_directory_resolved_payload(
 ///|
 fn decode_diagnostics_payload(packet : Json) -> ServerPacketDecodeResult {
   match parse_uri_field(packet, "uri", "") {
-    ParsedProtocolUri(uri) => {
-      let diagnostics = []
-      match json_field(packet, "diagnostics") {
-        Some(Array(items)) =>
-          for item in items {
-            if parse_diagnostic(item) is Some(diagnostic) {
-              diagnostics.push(diagnostic)
-            }
-          }
-        _ => ()
-      }
+    ParsedProtocolUri(uri) =>
       DecodedServerPacket(
         Diagnostics({
           uri,
           revision: json_string_field(packet, "documentRevision").unwrap_or(""),
-          diagnostics,
+          diagnostics: json_array_field(packet, "diagnostics", parse_diagnostic),
         }),
       )
-    }
     ProtocolUriError(error) => ServerPacketDecodeError(error)
   }
 }
@@ -575,20 +564,15 @@ fn decode_hover_result_payload(
   id : String,
 ) -> ServerPacketDecodeResult {
   match parse_uri_field(packet, "uri", id) {
-    ParsedProtocolUri(uri) => {
-      let hover = match json_field(packet, "hover") {
-        Some(value) => parse_hover(value)
-        None => None
-      }
+    ParsedProtocolUri(uri) =>
       DecodedServerPacket(
         HoverResult({
           id,
           uri,
           revision: json_string_field(packet, "documentRevision").unwrap_or(""),
-          hover,
+          hover: json_field(packet, "hover").bind(parse_hover),
         }),
       )
-    }
     ProtocolUriError(error) => ServerPacketDecodeError(error)
   }
 }
@@ -599,26 +583,15 @@ fn decode_definition_result_payload(
   id : String,
 ) -> ServerPacketDecodeResult {
   match parse_uri_field(packet, "uri", id) {
-    ParsedProtocolUri(uri) => {
-      let locations = []
-      match json_field(packet, "locations") {
-        Some(Array(items)) =>
-          for item in items {
-            if parse_location(item) is Some(location) {
-              locations.push(location)
-            }
-          }
-        _ => ()
-      }
+    ParsedProtocolUri(uri) =>
       DecodedServerPacket(
         DefinitionResult({
           id,
           uri,
           revision: json_string_field(packet, "documentRevision").unwrap_or(""),
-          locations,
+          locations: json_array_field(packet, "locations", parse_location),
         }),
       )
-    }
     ProtocolUriError(error) => ServerPacketDecodeError(error)
   }
 }
@@ -629,26 +602,17 @@ fn decode_references_result_payload(
   id : String,
 ) -> ServerPacketDecodeResult {
   match parse_uri_field(packet, "uri", id) {
-    ParsedProtocolUri(uri) => {
-      let references = []
-      match json_field(packet, "references") {
-        Some(Array(items)) =>
-          for item in items {
-            if parse_reference_item(item) is Some(reference) {
-              references.push(reference)
-            }
-          }
-        _ => ()
-      }
+    ParsedProtocolUri(uri) =>
       DecodedServerPacket(
         ReferencesResult({
           id,
           uri,
           revision: json_string_field(packet, "documentRevision").unwrap_or(""),
-          references,
+          references: json_array_field(
+            packet, "references", parse_reference_item,
+          ),
         }),
       )
-    }
     ProtocolUriError(error) => ServerPacketDecodeError(error)
   }
 }
@@ -659,26 +623,15 @@ fn decode_document_symbols_result_payload(
   id : String,
 ) -> ServerPacketDecodeResult {
   match parse_uri_field(packet, "uri", id) {
-    ParsedProtocolUri(uri) => {
-      let symbols = []
-      match json_field(packet, "symbols") {
-        Some(Array(items)) =>
-          for item in items {
-            if parse_document_symbol(item) is Some(symbol) {
-              symbols.push(symbol)
-            }
-          }
-        _ => ()
-      }
+    ParsedProtocolUri(uri) =>
       DecodedServerPacket(
         DocumentSymbolsResult({
           id,
           uri,
           revision: json_string_field(packet, "documentRevision").unwrap_or(""),
-          symbols,
+          symbols: json_array_field(packet, "symbols", parse_document_symbol),
         }),
       )
-    }
     ProtocolUriError(error) => ServerPacketDecodeError(error)
   }
 }
@@ -907,15 +860,7 @@ fn parse_workspace_stat(value : Json) -> @workspace.WorkspaceStat? {
     return None
   }
   let children = match json_field(value, "children") {
-    Some(Array(items)) => {
-      let resolved = []
-      for item in items {
-        if parse_workspace_stat(item) is Some(stat) {
-          resolved.push(stat)
-        }
-      }
-      Some(resolved)
-    }
+    Some(Array(items)) => Some(items.filter_map(parse_workspace_stat))
     _ => None
   }
   Some({
@@ -1095,26 +1040,17 @@ fn parse_range(value : Json) -> @base_common.Range? {
 
 ///|
 fn parse_diagnostic(value : Json) -> @language.Diagnostic? {
-  match value {
-    Object(_) =>
-      match json_field(value, "range") {
-        Some(range_json) =>
-          match parse_range(range_json) {
-            Some(range) =>
-              Some({
-                range,
-                severity: diagnostic_severity(
-                  json_string_field(value, "severity").unwrap_or("Info"),
-                ),
-                message: json_string_field(value, "message").unwrap_or(""),
-                tags: parse_diagnostic_tags(value),
-              })
-            None => None
-          }
-        None => None
-      }
-    _ => None
-  }
+  guard value is Object(_) else { return None }
+  guard json_field(value, "range") is Some(range_json) else { return None }
+  guard parse_range(range_json) is Some(range) else { return None }
+  Some({
+    range,
+    severity: diagnostic_severity(
+      json_string_field(value, "severity").unwrap_or("Info"),
+    ),
+    message: json_string_field(value, "message").unwrap_or(""),
+    tags: parse_diagnostic_tags(value),
+  })
 }
 
 ///|
@@ -1141,26 +1077,15 @@ fn parse_diagnostic_tags(value : Json) -> Array[@language.DiagnosticTag]? {
 
 ///|
 fn parse_hover(value : Json) -> @language.Hover? {
-  match value {
-    Null => None
-    Object(_) =>
-      match (json_field(value, "range"), json_field(value, "contents")) {
-        (Some(range_json), Some(contents_json)) =>
-          match parse_range(range_json) {
-            Some(range) => {
-              let contents = parse_hover_contents(contents_json)
-              if contents.length() == 0 {
-                None
-              } else {
-                Some({ range, contents, })
-              }
-            }
-            None => None
-          }
-        _ => None
-      }
-    _ => None
+  guard value is Object(_) else { return None }
+  guard json_field(value, "range") is Some(range_json) else { return None }
+  guard json_field(value, "contents") is Some(contents_json) else {
+    return None
   }
+  guard parse_range(range_json) is Some(range) else { return None }
+  let contents = parse_hover_contents(contents_json)
+  guard contents.length() != 0 else { return None }
+  Some({ range, contents, })
 }
 
 ///|
@@ -1194,10 +1119,7 @@ fn parse_hover_content(value : Json) -> @language.HoverContent? {
         _ => None
       }
     Object(_) => {
-      let text = match json_string_field(value, "value") {
-        Some(text) => text
-        None => return None
-      }
+      guard json_string_field(value, "value") is Some(text) else { return None }
       if text == "" {
         return None
       }
@@ -1221,63 +1143,40 @@ fn parse_hover_plaintext(text : String) -> Array[@language.HoverContent] {
 
 ///|
 fn parse_location(value : Json) -> @language.Location? {
-  match value {
-    Null => None
-    Object(_) =>
-      match (json_string_field(value, "uri"), json_field(value, "range")) {
-        (Some(raw_uri), Some(range_json)) =>
-          match (try_parse_uri(raw_uri), parse_range(range_json)) {
-            (Some(uri), Some(range)) => Some({ uri, range, })
-            _ => None
-          }
-        _ => None
-      }
-    _ => None
-  }
+  guard value is Object(_) else { return None }
+  guard json_string_field(value, "uri") is Some(raw_uri) else { return None }
+  guard json_field(value, "range") is Some(range_json) else { return None }
+  guard try_parse_uri(raw_uri) is Some(uri) else { return None }
+  guard parse_range(range_json) is Some(range) else { return None }
+  Some({ uri, range, })
 }
 
 ///|
 fn parse_reference_item(value : Json) -> ReferenceItem? {
-  match value {
-    Object(_) =>
-      match (json_string_field(value, "uri"), json_field(value, "range")) {
-        (Some(raw_uri), Some(range_json)) =>
-          match (try_parse_uri(raw_uri), parse_range(range_json)) {
-            (Some(uri), Some(range)) =>
-              Some({
-                uri,
-                range,
-                line: json_int_field(value, "line").unwrap_or(0),
-                column: json_int_field(value, "column").unwrap_or(0),
-                line_text: json_string_field(value, "lineText").unwrap_or(""),
-              })
-            _ => None
-          }
-        _ => None
-      }
-    _ => None
-  }
+  guard value is Object(_) else { return None }
+  guard json_string_field(value, "uri") is Some(raw_uri) else { return None }
+  guard json_field(value, "range") is Some(range_json) else { return None }
+  guard try_parse_uri(raw_uri) is Some(uri) else { return None }
+  guard parse_range(range_json) is Some(range) else { return None }
+  Some({
+    uri,
+    range,
+    line: json_int_field(value, "line").unwrap_or(0),
+    column: json_int_field(value, "column").unwrap_or(0),
+    line_text: json_string_field(value, "lineText").unwrap_or(""),
+  })
 }
 
 ///|
 fn parse_document_symbol(value : Json) -> @language.DocumentSymbol? {
-  match value {
-    Object(_) =>
-      match json_field(value, "range") {
-        Some(range_json) =>
-          match parse_range(range_json) {
-            Some(range) =>
-              Some({
-                name: json_string_field(value, "name").unwrap_or(""),
-                kind: json_string_field(value, "kind").unwrap_or(""),
-                range,
-              })
-            None => None
-          }
-        None => None
-      }
-    _ => None
-  }
+  guard value is Object(_) else { return None }
+  guard json_field(value, "range") is Some(range_json) else { return None }
+  guard parse_range(range_json) is Some(range) else { return None }
+  Some({
+    name: json_string_field(value, "name").unwrap_or(""),
+    kind: json_string_field(value, "kind").unwrap_or(""),
+    range,
+  })
 }
 
 ///|
@@ -1318,6 +1217,20 @@ fn json_int_field(value : Json, key : String) -> Int? {
   match json_field(value, key) {
     Some(Number(number, repr=_)) => Some(number.to_int())
     _ => None
+  }
+}
+
+///|
+/// Every element of the JSON array at `key`, dropping the ones `parse`
+/// rejects. A missing or non-array field yields an empty array.
+fn[T] json_array_field(
+  value : Json,
+  key : String,
+  parse : (Json) -> T?,
+) -> Array[T] {
+  match json_field(value, key) {
+    Some(Array(items)) => items.filter_map(parse)
+    _ => []
   }
 }
 

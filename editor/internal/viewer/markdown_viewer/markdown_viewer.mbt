@@ -270,11 +270,9 @@ fn MarkdownViewerWidget::is_current_attachment(
   generation : Int,
 ) -> Bool {
   guard !self.disposed && self.generation == generation else { return false }
-  match self.current {
-    Some(current) =>
-      current.generation == generation && current.model.model.same(model)
-    None => false
-  }
+  self.current is Some(current) &&
+  current.generation == generation &&
+  current.model.model.same(model)
 }
 
 ///|
@@ -368,15 +366,40 @@ fn MarkdownViewerWidget::attach_model(
   }
   self.current = Some(attachment)
   attachment.initialize_folding()
-  match hover_bridge {
-    Some(bridge) => bridge.activate()
-    None => ()
+  if hover_bridge is Some(bridge) {
+    bridge.activate()
   }
-  match definition_bridge {
-    Some(bridge) => bridge.activate()
-    None => ()
+  if definition_bridge is Some(bridge) {
+    bridge.activate()
   }
   self.layout()
+}
+
+///|
+/// The bridge quiesce shared by `replace_source` and `apply_theme`:
+/// definition first on the way down, hover first on the way back up.
+fn MarkdownViewerWidgetAttachment::before_projection_replaced(
+  self : MarkdownViewerWidgetAttachment,
+) -> Unit {
+  if self.definition_bridge is Some(bridge) {
+    bridge.before_projection_replaced()
+  }
+  if self.hover_bridge is Some(bridge) {
+    bridge.before_projection_replaced()
+  }
+}
+
+///|
+/// The rebind half of `MarkdownViewerWidgetAttachment::before_projection_replaced`.
+fn MarkdownViewerWidgetAttachment::after_projection_replaced(
+  self : MarkdownViewerWidgetAttachment,
+) -> Unit {
+  if self.hover_bridge is Some(bridge) {
+    bridge.after_projection_replaced()
+  }
+  if self.definition_bridge is Some(bridge) {
+    bridge.after_projection_replaced()
+  }
 }
 
 ///|
@@ -386,24 +409,10 @@ fn MarkdownViewerWidgetAttachment::replace_source(
   source_model_version : Int,
 ) -> Unit {
   guard !self.disposed && self.view is Some(view) else { return }
-  match self.definition_bridge {
-    Some(bridge) => bridge.before_projection_replaced()
-    None => ()
-  }
-  match self.hover_bridge {
-    Some(bridge) => bridge.before_projection_replaced()
-    None => ()
-  }
+  self.before_projection_replaced()
   view.replace_source(source, source_model_version)
   self.reconcile_folding(source)
-  match self.hover_bridge {
-    Some(bridge) => bridge.after_projection_replaced()
-    None => ()
-  }
-  match self.definition_bridge {
-    Some(bridge) => bridge.after_projection_replaced()
-    None => ()
-  }
+  self.after_projection_replaced()
 }
 
 ///|
@@ -412,37 +421,21 @@ fn MarkdownViewerWidgetAttachment::apply_theme(
   theme : String,
 ) -> Unit {
   guard !self.disposed && self.view is Some(view) else { return }
-  match self.definition_bridge {
-    Some(bridge) => bridge.before_projection_replaced()
-    None => ()
-  }
-  match self.hover_bridge {
-    Some(bridge) => bridge.before_projection_replaced()
-    None => ()
-  }
+  self.before_projection_replaced()
   view.apply_theme(theme)
   self.reconcile_folding(self.fold.source)
-  match self.hover_bridge {
-    Some(bridge) => bridge.after_projection_replaced()
-    None => ()
-  }
-  match self.definition_bridge {
-    Some(bridge) => bridge.after_projection_replaced()
-    None => ()
-  }
+  self.after_projection_replaced()
 }
 
 ///|
 fn MarkdownViewerWidgetAttachment::layout_changed(
   self : MarkdownViewerWidgetAttachment,
 ) -> Unit {
-  match self.hover_bridge {
-    Some(bridge) => bridge.layout_changed()
-    None => ()
+  if self.hover_bridge is Some(bridge) {
+    bridge.layout_changed()
   }
-  match self.definition_bridge {
-    Some(bridge) => bridge.layout_changed()
-    None => ()
+  if self.definition_bridge is Some(bridge) {
+    bridge.layout_changed()
   }
 }
 
@@ -454,17 +447,14 @@ fn MarkdownViewerWidgetAttachment::dispose(
     return
   }
   self.disposed = true
-  match self.definition_bridge {
-    Some(bridge) => bridge.dispose()
-    None => ()
+  if self.definition_bridge is Some(bridge) {
+    bridge.dispose()
   }
-  match self.hover_bridge {
-    Some(bridge) => bridge.dispose()
-    None => ()
+  if self.hover_bridge is Some(bridge) {
+    bridge.dispose()
   }
-  match self.view {
-    Some(view) => view.dispose()
-    None => ()
+  if self.view is Some(view) {
+    view.dispose()
   }
   while self.listeners.length() > 0 {
     self.listeners.remove(self.listeners.length() - 1).dispose()
@@ -479,14 +469,10 @@ fn MarkdownViewerWidget::detach_model(
   self.generation += 1
   self.current = None
   self.focused = false
-  let root = match current.view {
-    Some(view) => Some(view.root())
-    None => None
-  }
+  let root = current.view.map(view => view.root())
   current.dispose()
-  match root {
-    Some(root) => @base_browser.remove_element(root)
-    None => ()
+  if root is Some(root) {
+    @base_browser.remove_element(root)
   }
   if !self.disposed {
     self.restore_placeholder()
@@ -497,9 +483,8 @@ fn MarkdownViewerWidget::detach_model(
 
 ///|
 fn MarkdownViewerWidget::hide_placeholder(self : MarkdownViewerWidget) -> Unit {
-  match self.placeholder {
-    Some(placeholder) => @base_browser.remove_element(placeholder.root)
-    None => ()
+  if self.placeholder is Some(placeholder) {
+    @base_browser.remove_element(placeholder.root)
   }
 }
 
@@ -507,12 +492,10 @@ fn MarkdownViewerWidget::hide_placeholder(self : MarkdownViewerWidget) -> Unit {
 fn MarkdownViewerWidget::restore_placeholder(
   self : MarkdownViewerWidget,
 ) -> Unit {
-  match (self.host, self.placeholder) {
-    (Some(host), Some(placeholder)) =>
-      if !@base_browser.element_contains(host, placeholder.root) {
-        host.append_child(placeholder.root.as_node())
-      }
-    _ => ()
+  if self.host is Some(host) &&
+    self.placeholder is Some(placeholder) &&
+    !@base_browser.element_contains(host, placeholder.root) {
+    host.append_child(placeholder.root.as_node())
   }
 }
 
@@ -532,18 +515,11 @@ pub fn MarkdownViewerWidget::set_model(
     (Some(current), Some(next)) if current.model.same(next) => return None
     _ => ()
   }
-  let old_model_url = match self.current {
-    Some(current) => Some(current.model.model.uri)
-    None => None
-  }
-  let new_model_url = match model {
-    Some(next) => Some(next.model.uri)
-    None => None
-  }
+  let old_model_url = self.current.map(current => current.model.model.uri)
+  let new_model_url = model.map(next => next.model.uri)
   let old = self.detach_model()
-  match model {
-    Some(next) => self.attach_model(next)
-    None => ()
+  if model is Some(next) {
+    self.attach_model(next)
   }
   self.did_change_model.fire({ old_model_url, new_model_url, })
   old
@@ -553,10 +529,7 @@ pub fn MarkdownViewerWidget::set_model(
 pub fn MarkdownViewerWidget::get_model(
   self : MarkdownViewerWidget,
 ) -> MarkdownViewerWidgetModel? {
-  match self.current {
-    Some(current) => Some(current.model)
-    None => None
-  }
+  self.current.map(current => current.model)
 }
 
 ///|
@@ -629,23 +602,16 @@ pub fn MarkdownViewerWidget::update_options(
   }
   let previous = self.options
   self.options = options
-  match self.placeholder {
-    Some(placeholder) => placeholder.update(options)
-    None => ()
+  if self.placeholder is Some(placeholder) {
+    placeholder.update(options)
   }
-  match self.current {
-    Some(current) => {
-      if previous.theme != options.theme {
-        current.apply_theme(options.theme)
-      }
-      if previous.show_unused != options.show_unused {
-        match current.view {
-          Some(view) => view.apply_marker_unused_visibility(options.show_unused)
-          None => ()
-        }
-      }
+  if self.current is Some(current) {
+    if previous.theme != options.theme {
+      current.apply_theme(options.theme)
     }
-    None => ()
+    if previous.show_unused != options.show_unused && current.view is Some(view) {
+      view.apply_marker_unused_visibility(options.show_unused)
+    }
   }
 }
 
@@ -676,9 +642,8 @@ pub fn MarkdownViewerWidget::get_container_dom_node(
 
 ///|
 pub fn MarkdownViewerWidget::focus(self : MarkdownViewerWidget) -> Unit {
-  match self.get_dom_node() {
-    Some(root) => @base_browser.focus_prevent_scroll(root)
-    None => ()
+  if self.get_dom_node() is Some(root) {
+    @base_browser.focus_prevent_scroll(root)
   }
 }
 
@@ -769,9 +734,8 @@ pub fn MarkdownViewerWidget::dispose(self : MarkdownViewerWidget) -> Unit {
     return
   }
   self.disposed = true
-  match self.resize_observer {
-    Some(observer) => observer.dispose()
-    None => ()
+  if self.resize_observer is Some(observer) {
+    observer.dispose()
   }
   self.resize_observer = None
   self.detach_model() |> ignore

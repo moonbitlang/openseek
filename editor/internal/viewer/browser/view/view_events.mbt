@@ -12,7 +12,7 @@ pub fn ViewConfigurationChangedEvent::from_changed_options(
 ) -> ViewConfigurationChangedEvent {
   let result : Array[ViewConfigurationOption] = []
   for option in changed_options {
-    if !view_configuration_options_contain(result, option) {
+    if !result.contains(option) {
       result.push(option)
     }
   }
@@ -24,20 +24,7 @@ fn ViewConfigurationChangedEvent::has_changed(
   self : ViewConfigurationChangedEvent,
   option : ViewConfigurationOption,
 ) -> Bool {
-  view_configuration_options_contain(self.changed_options, option)
-}
-
-///|
-fn view_configuration_options_contain(
-  options : Array[ViewConfigurationOption],
-  expected : ViewConfigurationOption,
-) -> Bool {
-  for option in options {
-    if option == expected {
-      return true
-    }
-  }
-  false
+  self.changed_options.contains(option)
 }
 
 ///|

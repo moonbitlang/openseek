@@ -269,6 +269,18 @@ fn transform_and_remove_overflowing(
 }
 
 ///|
+/// A copy of `token` cut short at `end_index`, keeping its CSS class, metadata
+/// and RTL flag.
+fn line_part_with_end_index(token : LinePart, end_index : Int) -> LinePart {
+  {
+    end_index,
+    class_name: token.class_name,
+    metadata: token.metadata,
+    contains_rtl: token.contains_rtl,
+  }
+}
+
+///|
 fn split_large_tokens(
   line_content : String,
   tokens : Array[LinePart],
@@ -281,9 +293,6 @@ fn split_large_tokens(
     for token in tokens {
       let token_end_index = token.end_index
       if last_token_end_index + long_token < token_end_index {
-        let token_type = token.class_name
-        let token_metadata = token.metadata
-        let token_contains_rtl = token.contains_rtl
         let mut last_space_offset = -1
         let mut curr_token_start = last_token_end_index
         for j in last_token_end_index..<token_end_index {
@@ -291,23 +300,13 @@ fn split_large_tokens(
             last_space_offset = j
           }
           if last_space_offset != -1 && j - curr_token_start >= long_token {
-            result.push({
-              end_index: last_space_offset + 1,
-              class_name: token_type,
-              metadata: token_metadata,
-              contains_rtl: token_contains_rtl,
-            })
+            result.push(line_part_with_end_index(token, last_space_offset + 1))
             curr_token_start = last_space_offset + 1
             last_space_offset = -1
           }
         }
         if curr_token_start != token_end_index {
-          result.push({
-            end_index: token_end_index,
-            class_name: token_type,
-            metadata: token_metadata,
-            contains_rtl: token_contains_rtl,
-          })
+          result.push(line_part_with_end_index(token, token_end_index))
         }
       } else {
         result.push(token)
@@ -319,25 +318,12 @@ fn split_large_tokens(
       let token_end_index = token.end_index
       let diff = token_end_index - last_token_end_index
       if diff > long_token {
-        let token_type = token.class_name
-        let token_metadata = token.metadata
-        let token_contains_rtl = token.contains_rtl
         let pieces_count = (diff + long_token - 1) / long_token
         for j in 1..<pieces_count {
           let piece_end_index = last_token_end_index + j * long_token
-          result.push({
-            end_index: piece_end_index,
-            class_name: token_type,
-            metadata: token_metadata,
-            contains_rtl: token_contains_rtl,
-          })
+          result.push(line_part_with_end_index(token, piece_end_index))
         }
-        result.push({
-          end_index: token_end_index,
-          class_name: token_type,
-          metadata: token_metadata,
-          contains_rtl: token_contains_rtl,
-        })
+        result.push(line_part_with_end_index(token, token_end_index))
       } else {
         result.push(token)
       }
@@ -421,12 +407,7 @@ fn extract_control_characters(
       if is_control_character(charcode) {
         if char_offset > last_end_index {
           last_end_index = char_offset
-          result.push({
-            end_index: char_offset,
-            class_name: token.class_name,
-            metadata: token.metadata,
-            contains_rtl: token.contains_rtl,
-          })
+          result.push(line_part_with_end_index(token, char_offset))
         }
         last_end_index = char_offset + 1
         result.push({
@@ -440,12 +421,7 @@ fn extract_control_characters(
     }
     if char_offset > last_end_index {
       last_end_index = token_end_index
-      result.push({
-        end_index: token_end_index,
-        class_name: token.class_name,
-        metadata: token.metadata,
-        contains_rtl: token.contains_rtl,
-      })
+      result.push(line_part_with_end_index(token, token_end_index))
     }
   }
   result
@@ -663,12 +639,7 @@ fn apply_inline_decorations(
       let decoration = decorations[decoration_index]
       if decoration.start_offset > last_result_end_index {
         last_result_end_index = decoration.start_offset
-        result.push({
-          end_index: last_result_end_index,
-          class_name: token_type,
-          metadata: token_metadata,
-          contains_rtl: token_contains_rtl,
-        })
+        result.push(line_part_with_end_index(token, last_result_end_index))
       }
       if decoration.end_offset + 1 <= token_end_index {
         last_result_end_index = decoration.end_offset + 1
@@ -692,12 +663,7 @@ fn apply_inline_decorations(
     }
     if token_end_index > last_result_end_index {
       last_result_end_index = token_end_index
-      result.push({
-        end_index: last_result_end_index,
-        class_name: token_type,
-        metadata: token_metadata,
-        contains_rtl: token_contains_rtl,
-      })
+      result.push(line_part_with_end_index(token, last_result_end_index))
     }
   }
   let last_token_end_index = tokens[tokens.length() - 1].end_index
@@ -974,21 +940,7 @@ fn write_css_px(html : StringBuilder, value : Double) -> Unit {
 
 ///|
 fn to_4_char_hex(n : Int) -> String {
-  let sb = StringBuilder()
-  append_code(sb, hex_digit((n >> 12) & 0xF))
-  append_code(sb, hex_digit((n >> 8) & 0xF))
-  append_code(sb, hex_digit((n >> 4) & 0xF))
-  append_code(sb, hex_digit(n & 0xF))
-  sb.to_string()
-}
-
-///|
-fn hex_digit(value : Int) -> Int {
-  if value < 10 {
-    0x30 + value
-  } else {
-    0x41 + value - 10
-  }
+  (n & 0xFFFF).to_string(radix=16).to_upper().pad_start(4, '0')
 }
 
 ///|

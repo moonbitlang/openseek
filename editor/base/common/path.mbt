@@ -602,14 +602,14 @@ fn Win32::relative_impl(from : String, to : String) -> String {
       return to_orig
     } else if i == length {
       if to_len > length {
-        return join_range(to_split[:], i, "\\")
+        return to_split[i:].join("\\")
       }
       if from_len > length {
         return "\{"..\\".repeat(from_len - 1 - i)}.."
       }
       return ""
     }
-    return "..\\".repeat(from_len - i) + join_range(to_split[:], i, "\\")
+    return "..\\".repeat(from_len - i) + to_split[i:].join("\\")
   }
 
   // Trim any leading backslashes
@@ -709,19 +709,6 @@ fn Win32::relative_impl(from : String, to : String) -> String {
     to_start += 1
   }
   js_slice(to_orig, to_start, end=to_end)
-}
-
-///|
-/// `toSplit.slice(i).join('\\')` helper for `Win32::relative`.
-fn join_range(parts : ArrayView[String], start : Int, sep : String) -> String {
-  let sb = StringBuilder()
-  for i in start..<parts.length() {
-    if i > start {
-      sb.write_string(sep)
-    }
-    sb.write_string(parts[i])
-  }
-  sb.to_string()
 }
 
 ///|
@@ -1086,7 +1073,7 @@ fn Posix::join_impl(paths : Array[String]) -> String {
   if path is [] {
     return "."
   }
-  Posix::normalize(join_range(path[:], 0, "/"))
+  Posix::normalize(path.join("/"))
 }
 
 ///|

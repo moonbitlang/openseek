@@ -53,14 +53,8 @@ fn Range::is_empty_range(range : Range) -> Bool {
 
 ///|
 /// Test if position is in this range. If the position is at the edges, returns true.
-fn Range::contains_position_impl(self : Range, position : Position) -> Bool {
-  Range::contains_position_in(self, position)
-}
-
-///|
-/// Test if position is in this range. If the position is at the edges, returns true.
 pub fn Range::contains_position(self : Range, position : Position) -> Bool {
-  self.contains_position_impl(position)
+  Range::contains_position_in(self, position)
 }
 
 ///|
@@ -136,91 +130,60 @@ fn Range::strict_contains_range_in(range : Range, other_range : Range) -> Bool {
 
 ///|
 /// A reunion of the two ranges (smallest start, largest end).
-fn Range::plus_range_impl(self : Range, other : Range) -> Range {
+pub fn Range::plus_range(self : Range, other : Range) -> Range {
   Range::plus_range_of(self, other)
 }
 
 ///|
-/// A reunion of the two ranges (smallest start, largest end).
-pub fn Range::plus_range(self : Range, other : Range) -> Range {
-  self.plus_range_impl(other)
-}
-
-///|
 fn Range::plus_range_of(a : Range, b : Range) -> Range {
-  let mut start_line_number = 0
-  let mut start_column = 0
-  let mut end_line_number = 0
-  let mut end_column = 0
-  if b.start_line_number < a.start_line_number {
-    start_line_number = b.start_line_number
-    start_column = b.start_column
+  let (start_line_number, start_column) = if b.start_line_number <
+    a.start_line_number {
+    (b.start_line_number, b.start_column)
   } else if b.start_line_number == a.start_line_number {
-    start_line_number = b.start_line_number
-    start_column = b.start_column.min(a.start_column)
+    (b.start_line_number, b.start_column.min(a.start_column))
   } else {
-    start_line_number = a.start_line_number
-    start_column = a.start_column
+    (a.start_line_number, a.start_column)
   }
-  if b.end_line_number > a.end_line_number {
-    end_line_number = b.end_line_number
-    end_column = b.end_column
+  let (end_line_number, end_column) = if b.end_line_number > a.end_line_number {
+    (b.end_line_number, b.end_column)
   } else if b.end_line_number == a.end_line_number {
-    end_line_number = b.end_line_number
-    end_column = b.end_column.max(a.end_column)
+    (b.end_line_number, b.end_column.max(a.end_column))
   } else {
-    end_line_number = a.end_line_number
-    end_column = a.end_column
+    (a.end_line_number, a.end_column)
   }
   Range(start_line_number, start_column, end_line_number, end_column)
 }
 
 ///|
 /// An intersection of the two ranges, or `None` if they do not intersect.
-fn Range::intersect_ranges_impl(self : Range, other : Range) -> Range? {
+pub fn Range::intersect_ranges(self : Range, other : Range) -> Range? {
   Range::intersect_ranges_of(self, other)
 }
 
 ///|
-/// An intersection of the two ranges, or `None` if they do not intersect.
-pub fn Range::intersect_ranges(self : Range, other : Range) -> Range? {
-  self.intersect_ranges_impl(other)
-}
-
-///|
 fn Range::intersect_ranges_of(a : Range, b : Range) -> Range? {
-  let mut result_start_line_number = a.start_line_number
-  let mut result_start_column = a.start_column
-  let mut result_end_line_number = a.end_line_number
-  let mut result_end_column = a.end_column
-  let other_start_line_number = b.start_line_number
-  let other_start_column = b.start_column
-  let other_end_line_number = b.end_line_number
-  let other_end_column = b.end_column
-  if result_start_line_number < other_start_line_number {
-    result_start_line_number = other_start_line_number
-    result_start_column = other_start_column
-  } else if result_start_line_number == other_start_line_number {
-    result_start_column = result_start_column.max(other_start_column)
+  let (start_line_number, start_column) = if a.start_line_number <
+    b.start_line_number {
+    (b.start_line_number, b.start_column)
+  } else if a.start_line_number == b.start_line_number {
+    (a.start_line_number, a.start_column.max(b.start_column))
+  } else {
+    (a.start_line_number, a.start_column)
   }
-  if result_end_line_number > other_end_line_number {
-    result_end_line_number = other_end_line_number
-    result_end_column = other_end_column
-  } else if result_end_line_number == other_end_line_number {
-    result_end_column = result_end_column.min(other_end_column)
+  let (end_line_number, end_column) = if a.end_line_number > b.end_line_number {
+    (b.end_line_number, b.end_column)
+  } else if a.end_line_number == b.end_line_number {
+    (a.end_line_number, a.end_column.min(b.end_column))
+  } else {
+    (a.end_line_number, a.end_column)
   }
-  if result_start_line_number > result_end_line_number {
+  if start_line_number > end_line_number {
     return None
   }
-  if result_start_line_number == result_end_line_number &&
-    result_start_column > result_end_column {
+  if start_line_number == end_line_number && start_column > end_column {
     return None
   }
-  Some(
-    Range(
-      result_start_line_number, result_start_column, result_end_line_number, result_end_column,
-    ),
-  )
+  Some(Range(start_line_number, start_column, end_line_number, end_column))
 }
 
 ///|

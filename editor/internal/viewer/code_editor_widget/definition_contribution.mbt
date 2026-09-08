@@ -239,10 +239,9 @@ fn CodeEditorWidget::symbol_navigation_anchor_is_current(
 }
 
 ///|
-/// Surface-owned preparation shared by Definition and References actions.
-/// Populated Peek sessions remain independently usable; only unresolved
-/// queries are superseded by the new navigation intent.
-fn CodeEditorWidget::prepare_symbol_navigation_intent(
+/// Closes a Peek session that is still resolving its definitions or
+/// references; a populated session stays open.
+fn CodeEditorWidget::close_loading_references_peek(
   self : CodeEditorWidget,
 ) -> Unit {
   match self.references_contribution() {
@@ -254,6 +253,16 @@ fn CodeEditorWidget::prepare_symbol_navigation_intent(
       }
     None => ()
   }
+}
+
+///|
+/// Surface-owned preparation shared by Definition and References actions.
+/// Populated Peek sessions remain independently usable; only unresolved
+/// queries are superseded by the new navigation intent.
+fn CodeEditorWidget::prepare_symbol_navigation_intent(
+  self : CodeEditorWidget,
+) -> Unit {
+  self.close_loading_references_peek()
   match self.definition_contribution() {
     Some(state) => state.reset_link_gesture()
     None => ()
@@ -324,15 +333,7 @@ fn CodeEditorWidget::on_definition_cursor_selection_changed(
   } else {
     state.reset_link_gesture()
   }
-  match self.references_contribution() {
-    Some(references) =>
-      match references.controller.phase() {
-        PeekLoadingDefinitions(_) | PeekLoadingReferences(_) =>
-          self.close_references_peek(restore_focus=false)
-        _ => ()
-      }
-    None => ()
-  }
+  self.close_loading_references_peek()
   self.clear_definition_message()
 }
 
@@ -473,15 +474,7 @@ fn CodeEditorWidget::commit_plain_definition_pointer_target(
 ) -> Unit {
   guard self.definition_contribution() is Some(state) else { return }
   state.navigation_action.cancel()
-  match self.references_contribution() {
-    Some(references) =>
-      match references.controller.phase() {
-        PeekLoadingDefinitions(_) | PeekLoadingReferences(_) =>
-          self.close_references_peek(restore_focus=false)
-        _ => ()
-      }
-    None => ()
-  }
+  self.close_loading_references_peek()
   state.last_pointer_target = match target {
     Some(target) if self.definition_link_target_is_current(target) =>
       Some(target)
@@ -800,35 +793,35 @@ fn CodeEditorWidget::show_definition_message(
       self.reveal_position_in_center_if_outside_viewport(position)
       widget.set_message(message)
       widget.show_at(position)
-      match self.current_code_view() {
-        Some(view) => {
-          view.content_widgets.set_widget_position(
-            widget.content_widget_handle(),
-          )
-          self.schedule_render()
-        }
-        None => ()
-      }
+      self.reposition_definition_message_widget(widget)
       state.message_hide = Some(
         @base_browser.schedule_timeout(
           () => {
             if !state.disposed {
               widget.hide()
-              match self.current_code_view() {
-                Some(view) => {
-                  view.content_widgets.set_widget_position(
-                    widget.content_widget_handle(),
-                  )
-                  self.schedule_render()
-                }
-                None => ()
-              }
+              self.reposition_definition_message_widget(widget)
               state.message_hide = None
             }
           },
           2500,
         ),
       )
+    }
+    None => ()
+  }
+}
+
+///|
+/// Re-publishes the definition message widget's position on the current view
+/// and schedules the repaint; a no-op without a view.
+fn CodeEditorWidget::reposition_definition_message_widget(
+  self : CodeEditorWidget,
+  widget : @definition_browser.DefinitionMessageWidget,
+) -> Unit {
+  match self.current_code_view() {
+    Some(view) => {
+      view.content_widgets.set_widget_position(widget.content_widget_handle())
+      self.schedule_render()
     }
     None => ()
   }
@@ -847,15 +840,7 @@ fn CodeEditorWidget::clear_definition_message(self : CodeEditorWidget) -> Unit {
       match state.message_widget {
         Some(widget) => {
           widget.hide()
-          match self.current_code_view() {
-            Some(view) => {
-              view.content_widgets.set_widget_position(
-                widget.content_widget_handle(),
-              )
-              self.schedule_render()
-            }
-            None => ()
-          }
+          self.reposition_definition_message_widget(widget)
         }
         None => ()
       }
@@ -893,10 +878,7 @@ fn CodeEditorWidget::dispose_definition_message(
 fn CodeEditorWidget::definition_message_for_test(
   self : CodeEditorWidget,
 ) -> String? {
-  match self.definition_contribution() {
-    Some(state) => state.last_message
-    None => None
-  }
+  self.definition_contribution().bind(state => state.last_message)
 }
 
 ///|

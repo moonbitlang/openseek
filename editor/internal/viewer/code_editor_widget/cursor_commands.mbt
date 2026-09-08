@@ -598,15 +598,11 @@ fn CodeEditorWidget::run_move_to_core_command(
   in_selection_mode : Bool,
 ) -> Bool {
   let id = if in_selection_mode { "_moveToSelect" } else { "_moveTo" }
-  let core_args : CursorCoreCommandArgs? = match args {
-    Some(args) => Some(MoveCommandArguments(args))
-    None => None
-  }
   editor_registry().run_core_editor_command(
     self,
     view_model,
     id,
-    args?=core_args,
+    args?=args.map(value => MoveCommandArguments(value)),
   )
 }
 
@@ -618,15 +614,11 @@ fn CodeEditorWidget::run_word_core_command(
   in_selection_mode : Bool,
 ) -> Bool {
   let id = if in_selection_mode { "_wordSelectDrag" } else { "_wordSelect" }
-  let core_args : CursorCoreCommandArgs? = match args {
-    Some(args) => Some(MoveCommandArguments(args))
-    None => None
-  }
   editor_registry().run_core_editor_command(
     self,
     view_model,
     id,
-    args?=core_args,
+    args?=args.map(value => MoveCommandArguments(value)),
   )
 }
 
@@ -638,15 +630,11 @@ fn CodeEditorWidget::run_line_core_command(
   in_selection_mode : Bool,
 ) -> Bool {
   let id = if in_selection_mode { "_lineSelectDrag" } else { "_lineSelect" }
-  let core_args : CursorCoreCommandArgs? = match args {
-    Some(args) => Some(MoveCommandArguments(args))
-    None => None
-  }
   editor_registry().run_core_editor_command(
     self,
     view_model,
     id,
-    args?=core_args,
+    args?=args.map(value => MoveCommandArguments(value)),
   )
 }
 
@@ -656,15 +644,11 @@ fn CodeEditorWidget::run_set_selection_core_command(
   args : CursorSetSelectionCommandArgs?,
 ) -> Bool {
   guard self.get_view_model() is Some(view_model) else { return false }
-  let core_args : CursorCoreCommandArgs? = match args {
-    Some(args) => Some(SetSelectionCommandArguments(args))
-    None => None
-  }
   editor_registry().run_core_editor_command(
     self,
     view_model,
     "setSelection",
-    args?=core_args,
+    args?=args.map(value => SetSelectionCommandArguments(value)),
   )
 }
 
@@ -777,113 +761,53 @@ fn register_cursor_navigation_commands(
       in_selection_mode=true,
     ).as_core_editor_command(),
   )
-  register_cursor_key_command(
+  register_cursor_move_key_pair(
     registry,
-    CursorMoveBasedCommand::CursorMoveBasedCommand(
-      "cursorLeft",
-      SimpleMoveArguments(Left, None, false, 1),
-    ).as_core_editor_command(),
+    "cursorLeft",
     "ArrowLeft",
-    shift=false,
+    Left,
+    None,
+    1,
   )
-  register_cursor_key_command(
+  register_cursor_move_key_pair(
     registry,
-    CursorMoveBasedCommand::CursorMoveBasedCommand(
-      "cursorLeftSelect",
-      SimpleMoveArguments(Left, None, true, 1),
-    ).as_core_editor_command(),
-    "ArrowLeft",
-    shift=true,
-  )
-  register_cursor_key_command(
-    registry,
-    CursorMoveBasedCommand::CursorMoveBasedCommand(
-      "cursorRight",
-      SimpleMoveArguments(Right, None, false, 1),
-    ).as_core_editor_command(),
+    "cursorRight",
     "ArrowRight",
-    shift=false,
+    Right,
+    None,
+    1,
   )
-  register_cursor_key_command(
+  register_cursor_move_key_pair(
     registry,
-    CursorMoveBasedCommand::CursorMoveBasedCommand(
-      "cursorRightSelect",
-      SimpleMoveArguments(Right, None, true, 1),
-    ).as_core_editor_command(),
-    "ArrowRight",
-    shift=true,
-  )
-  register_cursor_key_command(
-    registry,
-    CursorMoveBasedCommand::CursorMoveBasedCommand(
-      "cursorUp",
-      SimpleMoveArguments(Up, WrappedLine, false, 1),
-    ).as_core_editor_command(),
+    "cursorUp",
     "ArrowUp",
-    shift=false,
+    Up,
+    WrappedLine,
+    1,
   )
-  register_cursor_key_command(
+  register_cursor_move_key_pair(
     registry,
-    CursorMoveBasedCommand::CursorMoveBasedCommand(
-      "cursorUpSelect",
-      SimpleMoveArguments(Up, WrappedLine, true, 1),
-    ).as_core_editor_command(),
-    "ArrowUp",
-    shift=true,
-  )
-  register_cursor_key_command(
-    registry,
-    CursorMoveBasedCommand::CursorMoveBasedCommand(
-      "cursorPageUp",
-      SimpleMoveArguments(Up, WrappedLine, false, -1),
-    ).as_core_editor_command(),
+    "cursorPageUp",
     "PageUp",
-    shift=false,
+    Up,
+    WrappedLine,
+    -1,
   )
-  register_cursor_key_command(
+  register_cursor_move_key_pair(
     registry,
-    CursorMoveBasedCommand::CursorMoveBasedCommand(
-      "cursorPageUpSelect",
-      SimpleMoveArguments(Up, WrappedLine, true, -1),
-    ).as_core_editor_command(),
-    "PageUp",
-    shift=true,
-  )
-  register_cursor_key_command(
-    registry,
-    CursorMoveBasedCommand::CursorMoveBasedCommand(
-      "cursorDown",
-      SimpleMoveArguments(Down, WrappedLine, false, 1),
-    ).as_core_editor_command(),
+    "cursorDown",
     "ArrowDown",
-    shift=false,
+    Down,
+    WrappedLine,
+    1,
   )
-  register_cursor_key_command(
+  register_cursor_move_key_pair(
     registry,
-    CursorMoveBasedCommand::CursorMoveBasedCommand(
-      "cursorDownSelect",
-      SimpleMoveArguments(Down, WrappedLine, true, 1),
-    ).as_core_editor_command(),
-    "ArrowDown",
-    shift=true,
-  )
-  register_cursor_key_command(
-    registry,
-    CursorMoveBasedCommand::CursorMoveBasedCommand(
-      "cursorPageDown",
-      SimpleMoveArguments(Down, WrappedLine, false, -1),
-    ).as_core_editor_command(),
+    "cursorPageDown",
     "PageDown",
-    shift=false,
-  )
-  register_cursor_key_command(
-    registry,
-    CursorMoveBasedCommand::CursorMoveBasedCommand(
-      "cursorPageDownSelect",
-      SimpleMoveArguments(Down, WrappedLine, true, -1),
-    ).as_core_editor_command(),
-    "PageDown",
-    shift=true,
+    Down,
+    WrappedLine,
+    -1,
   )
   register_cursor_key_command(
     registry,
@@ -941,6 +865,37 @@ fn register_cursor_key_command(
       (key, false, false),
     ])
   }
+}
+
+///|
+/// Registers one cursor-key pair: the plain command on the bare key and its
+/// `…Select` twin on Shift, in that order.
+fn register_cursor_move_key_pair(
+  registry : EditorContributionRegistry,
+  id : String,
+  key : String,
+  direction : @view_model.SimpleMoveDirection,
+  unit : @view_model.CursorMoveUnit,
+  value : Int,
+) -> Unit {
+  register_cursor_key_command(
+    registry,
+    CursorMoveBasedCommand::CursorMoveBasedCommand(
+      id,
+      SimpleMoveArguments(direction, unit, false, value),
+    ).as_core_editor_command(),
+    key,
+    shift=false,
+  )
+  register_cursor_key_command(
+    registry,
+    CursorMoveBasedCommand::CursorMoveBasedCommand(
+      id + "Select",
+      SimpleMoveArguments(direction, unit, true, value),
+    ).as_core_editor_command(),
+    key,
+    shift=true,
+  )
 }
 
 ///|

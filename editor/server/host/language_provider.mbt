@@ -252,22 +252,7 @@ fn parse_moon_definition_range(raw : String) -> @base_common.Range? {
 
 ///|
 fn parse_positive_position(raw : StringView) -> @base_common.Position? {
-  guard raw.find(":") is Some(colon) else { return None }
-  let parsed = Some(
-    (
-      @string.parse_int(raw[0:colon], base=10),
-      @string.parse_int(raw[colon + 1:], base=10),
-    ),
-  ) catch {
-    _ => None
-  }
-  match parsed {
-    Some((line, column)) =>
-      if line >= 1 && column >= 1 {
-        Some(Position(line, column))
-      } else {
-        None
-      }
-    None => None
-  }
+  parse_check_position(raw).filter(position => {
+    position.line_number >= 1 && position.column >= 1
+  })
 }
