@@ -92,7 +92,11 @@ fn assistant_view(
       ]),
     )
   } else if !header.is_empty() && !calls.is_empty() {
-    lead.push(@html.div(class="activity-heading", header))
+    lead.push(@html.div(class="activity-heading prototype-original-step", header))
+    lead.push(@html.details(class="prototype-step-details", [
+      @html.summary("Step details"),
+      @html.div(class="prototype-step-metadata", header),
+    ]))
   }
   let work = if calls.is_empty() {
     None
@@ -680,7 +684,7 @@ fn user_message_view(
       body.push(@html.div(class="msg-content", inline_code_nodes(content)))
   }
   // The overview rail and scroll watcher share this stable turn anchor.
-  @html.div(class="msg user", id?=anchor, [@html.div(class="user-bubble", body)])
+  @html.div(class="msg user", id?=anchor, attrs=@html.Attrs::build().tabindex(0), [@html.div(class="user-bubble", body)])
 }
 
 ///|

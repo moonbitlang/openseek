@@ -1520,3 +1520,16 @@
   font-size: var(--font-size-sm);
   font-style: italic;
 }
+
+/* Review revision: transient send time, folded step metadata. */
+.turn-rule .turn-time { opacity:0; }
+.msg.user:hover + .turn-rule .turn-time,
+.msg.user:focus-within + .turn-rule .turn-time,
+.turn-rule:hover .turn-time { opacity:1; }
+.msg.user:focus-visible { outline:1px solid var(--color-accent); outline-offset:3px; }
+.prototype-original-step { display:none; }
+.prototype-step-details { font-size:var(--font-size-xs); color:var(--color-text-muted); margin:0; }
+.prototype-step-details summary { cursor:pointer; }
+.prototype-step-metadata { display:flex; gap:8px; padding:6px 0; }
+.turn-rule { position:relative; height:0; }
+.turn-rule .turn-time { position:absolute; right:0; top:0; }

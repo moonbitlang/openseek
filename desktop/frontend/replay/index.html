@@ -9,13 +9,13 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}summary{cursor:po
 #application{flex:1;min-height:0;width:100%;max-width:100%;align-self:center;border:0;background:white}
 #comparison{padding:8px 24px;background:#202632;color:white}#comparison button[aria-pressed=true]{background:#dce8ff;border-color:#658fdc}#comparison span{margin-left:10px}
 </style>
-<div id="comparison" aria-label="Visual comparison"><button data-compare="before">A · Before</button><button data-compare="after">B · PR #1351</button><span id="comparison-label"></span></div><div id="replay"></div><iframe id="application" title="Real Desktop application"></iframe>
+<div id="comparison" aria-label="Visual comparison"><button data-compare="before">A · Before</button><button data-compare="after">B · Revised preview</button><span id="comparison-label"></span></div><div id="replay"></div><iframe id="application" title="Real Desktop application"></iframe>
 <script>const url=new URL(location.href);url.searchParams.delete('variant');url.searchParams.set('provider','openseek');history.replaceState(null,'',url);const frameURL=new URL('./app.html',location.href);frameURL.search=url.search;frameURL.searchParams.set('reload',String(Date.now()));document.getElementById('application').src=frameURL.href;</script>
 <script>
 function compare(value){
  const url=new URL(location.href);url.searchParams.set('compare',value);history.replaceState(null,'',url);
  document.querySelectorAll('[data-compare]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.compare===value)));
- document.getElementById('comparison-label').textContent=value==='before'?'Original styling':'Proposed footer and boundary styling';
+ document.getElementById('comparison-label').textContent=value==='before'?'Original styling':'Revision: quiet timestamps and folded step details';
  document.getElementById('application').contentDocument?.querySelectorAll('[data-comparison]').forEach(link=>link.media=link.dataset.comparison===value?'all':'not all');
 }
 document.querySelectorAll('[data-compare]').forEach(button=>button.onclick=()=>compare(button.dataset.compare));

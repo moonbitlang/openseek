@@ -1526,3 +1526,5 @@
   font-size: var(--font-size-sm);
   font-style: italic;
 }
+
+.prototype-step-details { display:none; }

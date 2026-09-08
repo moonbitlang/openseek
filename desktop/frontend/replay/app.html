@@ -36,7 +36,7 @@ for (const match of css.matchAll(/@import url\("([^"]+)"\);/g)) {
 <script type="module">
 import './transport.js';
 const script = document.createElement('script');
-script.src = '../../target/replay.js';
+script.src = '../../target/replay.js?replay=' + Date.now();
 document.body.append(script);
 </script>
 </html>
