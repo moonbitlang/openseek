@@ -329,6 +329,12 @@
   background: color-mix(in srgb, var(--vscode-editor-foreground) 10%, transparent);
 }
 
+/* Leading item anchors separate blocks through whitespace. Interior Markdown
+ * rules keep their stroke; preserve the anchor's measured source geometry. */
+.moonbit-viewer-markdown-comment-body > hr:first-child {
+  background: transparent;
+}
+
 /* An item separator replaces one source line. Its content box is otherwise
  * 10px tall (4px + 1px + 5px), so retain the configured line geometry. */
 .moonbit-viewer-markdown-comment-body > hr:only-child {

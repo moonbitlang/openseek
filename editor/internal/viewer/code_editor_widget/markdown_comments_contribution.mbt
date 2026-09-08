@@ -334,7 +334,7 @@ fn render_markdown_comment_body(
 ///|
 /// Selects the first non-empty Markdown source line as the collapsed preview
 /// only for an item-delimited API document with meaningful content after it.
-/// The leading exact thematic break remains visible in both presentations;
+/// The leading exact thematic break is retained in both presentations;
 /// ordinary whole-line Markdown keeps its historical always-expanded surface.
 fn markdown_comment_folded_preview(
   markdown : String,

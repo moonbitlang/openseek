@@ -265,7 +265,7 @@ test('renders MoonBit documentation comments through the real workbench', async 
   );
 });
 
-test('renders undocumented MoonBit item anchors as horizontal separators', async ({
+test('renders undocumented MoonBit item anchors as quiet spacing', async ({
   page,
 }) => {
   await page.goto('/');
@@ -279,6 +279,8 @@ test('renders undocumented MoonBit item anchors as horizontal separators', async
   );
   await expect(first.locator('hr')).toBeVisible();
   await expect(second.locator('hr')).toBeVisible();
+  await expect(first.locator('hr')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(second.locator('hr')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(first).toHaveAttribute('data-documentation-foldable', 'false');
   await expect(second).toHaveAttribute('data-documentation-foldable', 'false');
   await expect(first.locator('.moonbit-viewer-markdown-comment-toggle')).toBeHidden();
