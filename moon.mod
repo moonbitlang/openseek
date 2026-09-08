@@ -10,6 +10,7 @@ import {
   "moonbit-community/rabbita@0.15.4",
   "moonbitlang/editor@0.4.5",
   "moonbitlang/workflow@0.7.0",
+  "moonbitlang/lexer@0.3.16",
 }
 
 readme = "README.mbt.md"
