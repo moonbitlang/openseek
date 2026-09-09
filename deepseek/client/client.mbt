@@ -34,7 +34,7 @@ fn encode_chat_request_for_endpoint(
   response_format? : @deepseek.ResponseFormat,
   messages : Array[@deepseek.ChatMessage],
 ) -> Json {
-  if api_url == OpenRouterChatCompletionsUrl && model is Deepseek(variant) {
+  if api_url is OpenRouterChatCompletionsUrl && model is Deepseek(variant) {
     @deepseek.openrouter_encode_chat_request(
       model=variant,
       tools~,
