@@ -1290,7 +1290,7 @@ async fn environment_prompt_section(workspace_root? : String = ".") -> String {
     $|Project layout (directories; hidden, build, and vendored dirs omitted):
     $|\{sb=>layout(sb)}
   match references_dir_from_environment() {
-    Some(dir) => "\{section}\n\n\{references_environment_block(dir)}"
+    Some(dir) => "\{section}\n\nOPENSEEK_REFERENCES: \{dir}"
     None => section
   }
 }
@@ -1303,20 +1303,6 @@ fn references_dir_from_environment() -> String? {
     Some(dir) if !dir.trim().is_empty() => Some(dir)
     _ => None
   }
-}
-
-///|
-/// Only the installation-dependent value belongs in the dynamic tail.
-fn references_environment_block(references_dir : String) -> String {
-  "OPENSEEK_REFERENCES: \{references_dir}"
-}
-
-///|
-test "references tail contains only the resource root value" {
-  assert_eq(
-    references_environment_block("/bundle/share"),
-    "OPENSEEK_REFERENCES: /bundle/share",
-  )
 }
 
 ///|
