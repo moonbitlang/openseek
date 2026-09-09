@@ -159,6 +159,24 @@ pub fn context_attrs(target : String) -> @html.Attrs {
       restore_focus_id: remembered_context_focus(event),
     })
   })
+  .on_keydown(event => {
+    guard event.key() == "ContextMenu" ||
+      (event.key() == "F10" && event.shift_key()) else {
+      return @cmd.none
+    }
+    guard event.current_target().to_option() is Some(target_element) &&
+      target_element.to_element() is Some(element) else {
+      return @cmd.none
+    }
+    event.prevent_default()
+    event.stop_propagation()
+    let rect = element.get_bounding_client_rect()
+    dispatch_open({
+      target,
+      anchor: Pointer(rect.get_left().to_int(), rect.get_bottom().to_int()),
+      restore_focus_id: focused_element_id(),
+    })
+  })
 }
 
 ///|
@@ -691,7 +709,13 @@ pub fn[Input : Eq] component(
           }
           guard resolve(input, next.target) is Some(definition) &&
             definition.enabled_indices() is [_, ..] else {
-            return (state, @cmd.none)
+            // Another component may own this target. Only one shared menu
+            // surface should remain open across the sidebar and dock.
+            let command = match state.menu {
+              Some(current) => set_trigger_open(current.target, false)
+              None => @cmd.none
+            }
+            return ({ menu: None, }, command)
           }
           let close_previous = match state.menu {
             Some(current) if current.target != next.target =>

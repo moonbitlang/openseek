@@ -133,10 +133,12 @@ test('Selecting a dock tab moves focus out of the composer', async ({ page }) =>
   await page.getByRole('button', { name: /^Browse / }).click();
   await page.locator('#task').click();
   await review.click();
-  await expect(page.locator('.content.panel-open > .editor')).toBeFocused();
+  // Tabs are now keyboard targets for their context menus. Selecting one
+  // keeps focus on that tab, inside the dock's Close shortcut scope.
+  await expect(review).toBeFocused();
   await page.locator('#task').click();
   await review.click();
-  await expect(page.locator('.content.panel-open > .editor')).toBeFocused();
+  await expect(review).toBeFocused();
   await closeFocused(page);
   await expect(review).toHaveCount(0);
   await expect(page.locator('.editor-tab')).toHaveCount(1);

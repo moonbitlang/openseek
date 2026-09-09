@@ -1908,6 +1908,11 @@ fn update(
       panel_cmd,
       terminal_cmd,
       browser_cmd,
+      if msg is Dock(TabClosed(_)) {
+        focus_dock_after_render()
+      } else {
+        @cmd.none
+      },
       sync_dock_visibility(
         model.dock.active != previous.dock.active ||
         model.dock.tabs != previous.dock.tabs ||
@@ -1937,11 +1942,12 @@ fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
 }
 
 ///|
-fn close_all_tabs(
+fn close_dock_tabs(
   dispatch : @cmd.Emit[Msg],
   model : Model,
+  selection : @dock.CloseSelection,
 ) -> (@cmd.Cmd, Model) {
-  let tabs = model.dock.tabs.copy()
+  let tabs = @dock.tabs_to_close(model.dock, selection)
   guard !tabs.is_empty() else { return (@cmd.none, model) }
   let active = model.dock.active
   let commands : Array[@cmd.Cmd] = []
@@ -1956,18 +1962,25 @@ fn close_all_tabs(
       next = updated
     }
   }
-  if active is Some(tab) {
+  if active is Some(tab) && tabs.contains(tab) {
     let (command, updated) = update_msg(dispatch, Dock(TabClosed(tab)), next)
     commands.push(command)
     next = updated
   }
+  // The menu disappears before its command runs. Keep subsequent keyboard
+  // actions in the dock rather than leaving focus on the document body.
+  commands.push(focus_dock_after_render())
   (
     @cmd.batch(commands),
     {
       ..next,
       right_panel_open: true,
       right_panel_menu_open: false,
-      right_panel_expanded: false,
+      right_panel_expanded: if selection is All {
+        false
+      } else {
+        next.right_panel_expanded
+      },
     },
   )
 }
@@ -4680,7 +4693,7 @@ fn update_msg(
     }
     CloseRightPanelMenu =>
       (@cmd.none, { ..model, right_panel_menu_open: false, })
-    CloseAllTabs => close_all_tabs(dispatch, model)
+    CloseDockTabs(selection) => close_dock_tabs(dispatch, model, selection)
     OpenGoalEditor => {
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
@@ -18844,7 +18857,7 @@ test "launcher rows open Browser and all Explorer destinations" {
 }
 
 ///|
-test "CloseAllTabs tears down mixed tabs and keeps the empty launcher open" {
+test "CloseDockTabs All tears down mixed tabs and keeps the empty launcher open" {
   let dispatch = test_dispatch()
   let (_, browser) = update(dispatch, BrowserTabRequested, {
     ..desktop_model(),
@@ -18859,13 +18872,44 @@ test "CloseAllTabs tears down mixed tabs and keeps the empty launcher open" {
   assert_true(
     mixed.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
   )
-  let (_, closed) = update(dispatch, CloseAllTabs, mixed)
+  let (_, closed) = update(dispatch, CloseDockTabs(All), mixed)
   assert_true(closed.dock.tabs.is_empty())
   assert_true(closed.dock.active is None)
   assert_true(@preview.page(closed.preview, 1) is None)
   assert_true(closed.right_panel_open)
   assert_false(closed.right_panel_menu_open)
   assert_false(closed.right_panel_expanded)
+}
+
+///|
+test "relative tab close preserves survivors and tears down only selected pages" {
+  let dispatch = test_dispatch()
+  let (_, first) = update(dispatch, BrowserTabRequested, desktop_model())
+  let (_, picker) = update(dispatch, ExplorerRequested(ExplorerFiles), first)
+  let (_, second) = update(dispatch, BrowserTabRequested, picker)
+  let mixed = { ..second, right_panel_expanded: true, }
+  let (_, left) = update(dispatch, CloseDockTabs(ToLeft(FilePicker)), mixed)
+  assert_true(
+    left.dock.tabs == [@dock.DockTab::FilePicker, @dock.DockTab::Browser(id=2)],
+  )
+  assert_true(left.dock.active == Some(@dock.DockTab::Browser(id=2)))
+  assert_true(@preview.page(left.preview, 1) is None)
+  assert_true(@preview.page(left.preview, 2) is Some(_))
+  assert_true(left.right_panel_expanded)
+  let (_, right) = update(dispatch, CloseDockTabs(ToRight(FilePicker)), mixed)
+  assert_true(
+    right.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
+  )
+  assert_true(right.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(@preview.page(right.preview, 1) is Some(_))
+  assert_true(@preview.page(right.preview, 2) is None)
+  let (_, others) = update(dispatch, CloseDockTabs(Others(FilePicker)), mixed)
+  assert_true(others.dock.tabs == [@dock.DockTab::FilePicker])
+  assert_true(others.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(@preview.page(others.preview, 1) is None)
+  assert_true(@preview.page(others.preview, 2) is None)
+  assert_true(others.right_panel_open)
+  assert_true(others.right_panel_expanded)
 }
 
 ///|

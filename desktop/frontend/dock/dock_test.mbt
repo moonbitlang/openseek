@@ -13,6 +13,39 @@ fn file_tab(path : String) -> @dock.DockTab {
 }
 
 ///|
+test "bulk close selects relative to the clicked tab across tab kinds" {
+  let state = @dock.State::empty()
+    |> @dock.open_file(@pathx.Relative("a.mbt"))
+    |> @dock.open_browser(7)
+    |> @dock.open_picker()
+    |> @dock.open_workflows()
+  let anchor = @dock.DockTab::Browser(id=7)
+  assert_true(@dock.tabs_to_close(state, ToLeft(anchor)) == [file_tab("a.mbt")])
+  assert_true(
+    @dock.tabs_to_close(state, ToRight(anchor)) ==
+    [@dock.DockTab::FilePicker, @dock.DockTab::Workflows],
+  )
+  assert_true(
+    @dock.tabs_to_close(state, Others(anchor)) ==
+    [file_tab("a.mbt"), @dock.DockTab::FilePicker, @dock.DockTab::Workflows],
+  )
+  assert_true(@dock.tabs_to_close(state, All) == state.tabs)
+  assert_true(@dock.tabs_to_close(state, ToLeft(file_tab("a.mbt"))).is_empty())
+  assert_true(@dock.tabs_to_close(state, ToRight(Workflows)).is_empty())
+  assert_true(
+    @dock.tabs_to_close(state, Others(file_tab("missing"))).is_empty(),
+  )
+  assert_true(
+    @dock.tabs_to_close(state, ToLeft(file_tab("missing"))).is_empty(),
+  )
+  assert_true(
+    @dock.tabs_to_close(state, ToRight(file_tab("missing"))).is_empty(),
+  )
+  let single = @dock.State::empty() |> @dock.open_picker()
+  assert_true(@dock.tabs_to_close(single, Others(FilePicker)).is_empty())
+}
+
+///|
 test "open_file appends in order and activates" {
   let state = @dock.State::empty()
     |> @dock.open_file(@pathx.Relative("a.mbt"))
