@@ -41,7 +41,7 @@ concurrency:
 
 jobs:
   desktop-package-windows:
-    name: desktop package (Windows NSIS)
+    name: desktop package (Windows app)
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -62,14 +62,6 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-
-      - name: Install NSIS
-        run: |
-          choco install nsis --version=3.12.0 --yes --no-progress
-          if ($LASTEXITCODE -ne 0) { throw "NSIS installation failed: $LASTEXITCODE" }
-          $nsisDir = "${env:ProgramFiles(x86)}\NSIS"
-          $nsisDir >> $env:GITHUB_PATH
-          & "$nsisDir\makensis.exe" /VERSION
 
       - name: Test release script
         run: node --test desktop/scripts/release.test.mjs
@@ -105,16 +97,17 @@ jobs:
           }
           moonx "moonbit-community/proton_cli@$($Matches[1])" cef setup
 
-      - name: Build Windows installer
+      - name: Build Windows app
         env:
           CL: /bigobj
-        run: moon run ./desktop/package/windows --target native -- --release --target installer
+        run: moon run ./desktop/package/windows --target native -- --release --target app
 
-      - name: Upload Windows installer
+      - name: Upload Windows app
         uses: actions/upload-artifact@v4
         with:
           name: SeekMoon-windows-x64
-          path: desktop/dist/seekmoon-setup.exe
+          path: desktop/dist/seekmoon/
+          include-hidden-files: true
           if-no-files-found: error
           compression-level: 0
           retention-days: 7

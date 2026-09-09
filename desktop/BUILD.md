@@ -57,8 +57,9 @@ moon run ./desktop/package/browser -- --release
 moon run ./desktop/package/dev
 ```
 
-Windows installer builds require NSIS (`makensis.exe` on `PATH`). Both Windows
-CI jobs install NSIS 3.12.0 through Chocolatey and set `CL=/bigobj` for MSVC.
+Windows installer builds require NSIS (`makensis.exe` on `PATH`). Only the
+release workflow installs NSIS 3.12.0 through Chocolatey; ordinary Windows CI
+builds and uploads the unpacked app. Both jobs set `CL=/bigobj` for MSVC.
 The release workflow retains the unpacked app for its version check and
 publishes `SeekMoon-windows-x64-setup.exe`; `--target zip` remains available
 for local portable builds.
