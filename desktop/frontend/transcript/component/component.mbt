@@ -299,11 +299,27 @@ pub fn component(
   )
   // Every stream child renders in its own branch, keyed by the block within
   // its stream. A streaming delta then recomputes only the live block's Html;
-  // each settled row keeps the Html it already has, so the cost of a delta no
-  // longer grows with the length of the transcript.
+  // each settled row keeps the Html it already has.
+  //
+  // Keeping the Html is not enough on its own: Rabbita's diff still walks a
+  // node's subtree whenever the node is reached, so a delta would still cost
+  // a comparison of every settled row's DOM. Each branch therefore wraps its
+  // Html in `memo_by`, keyed by how many times the branch has rendered. The
+  // branch renders only when its block changes (blocks compare by value), so
+  // an unchanged key means an unchanged subtree, and the diff skips it. Stream
+  // children are keyed, so a counter never meets another branch's counter.
   let blocks = input.map(stream_blocks)
   let rendered = blocks.assoc_by(
-    (_, block) => block.map(block => (block.key.wire(), block.render(actions))),
+    (_, block) => {
+      let renders = Ref(0)
+      block.map(block => {
+        renders.val += 1
+        let html = @html.memo_by(block, block => block.render(actions), by=_ => {
+          renders.val
+        })
+        (block.key.wire(), html)
+      })
+    },
     by=block => block.branch_key(),
   )
   state.view3(input, rendered, (state, input, rendered) => {
