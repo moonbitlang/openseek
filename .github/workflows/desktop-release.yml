@@ -352,6 +352,9 @@ jobs:
         run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
 
       - name: Build Windows ZIP
+        env:
+          # Generated desktop C can exceed MSVC's default object section limit.
+          CL: /bigobj
         # Keep the unpacked application for the version check below. Proton
         # removes it after packaging when only the ZIP format is requested.
         run: moon run ./desktop/package/windows --target native -- --release --target app --target zip
