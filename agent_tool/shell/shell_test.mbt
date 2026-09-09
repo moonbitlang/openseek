@@ -471,12 +471,14 @@ async test "shell leaves four-byte utf8 output at exact character limit on Unix"
 }
 
 ///|
-#cfg(false)
+#cfg(platform="windows")
 async test "shell stops oversized output while the command is still running on Windows" {
   let output = run_shell({
     "cmd": "[Console]::Out.Write('abcdef'); Start-Sleep -Seconds 2",
     "max_output_chars": 3,
-    "timeout_ms": 1000,
+    // Leave enough time for the sandbox-profile workspace scan under CI load;
+    // this test asserts that the output limit wins, not that the timeout fires.
+    "timeout_ms": 10000,
   })
   assert_true(output.is_error)
   assert_true(
