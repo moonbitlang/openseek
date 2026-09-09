@@ -767,10 +767,10 @@ test('tool-call tabs keep focus-driven scrolling inside the transcript', async (
   await app.openSession();
 
   const transcript = page.locator('#transcript');
-  await expect(transcript.locator('.tool-call-summary')).toContainText('Print <browser> fixture');
+  await expect(transcript.locator('.tool-toggle')).toContainText('Print <browser> fixture');
   const tabs = transcript.locator('.tool-call-tabs');
   const originalJson = tabs.getByText('Original JSON', { exact: true });
-  await transcript.locator('.tool-call-summary').click();
+  await transcript.locator('.tool-toggle').click();
   await transcript.evaluate(node => {
     node.scrollTop = node.scrollHeight;
   });
@@ -828,8 +828,9 @@ test('runtime notices keep the compact result-row presentation', async ({ page }
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a model step shows its thought, then its prose, then its tool rows', async ({ page }) => {
+test('work groups commentary with independent thinking and paired tool disclosures', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
+  const reasoning = '🔎 first thought with supporting evidence. '.repeat(200) + 'End of reasoning.';
   app.sessionEvents = [
     {
       sequence: 1,
@@ -844,7 +845,7 @@ test('a model step shows its thought, then its prose, then its tool rows', async
         kind: 'assistant',
         payload: {
           content: 'I will inspect the project.',
-          reasoning_content: 'first thought',
+          reasoning_content: reasoning,
           tool_calls: [{ id: 'c1', name: 'read', arguments: '{"path":"moon.mod"}' }],
         },
       },
@@ -867,14 +868,110 @@ test('a model step shows its thought, then its prose, then its tool rows', async
   await app.goto();
   await app.openSession();
 
-  // One durable response is one step, whose parts keep the model's order:
-  // the thought it had, the prose it said, then the calls that prose announced.
-  const step = page.locator('.step');
-  await expect(step).toHaveCount(1);
-  await expect(step.locator(':scope > *')).toHaveClass(['activity-row', 'msg', 'activity-row']);
-  await expect(step.locator('.activity-row').first().locator('.activity-text')).toHaveText('#1 · Thought');
-  await expect(step.locator('.msg .msg-content.markdown')).toContainText('I will inspect the project.');
-  await expect(step.locator('.activity-row').last().locator('.tool-call-text')).toHaveText('read moon.mod');
+  const work = page.locator('.work-group');
+  const summary = work.locator(':scope > summary');
+  await expect(summary).toHaveAccessibleName('Work · 1 step · 1 tool call');
+  await expect(summary).not.toContainText('first thought');
+  const thought = work.locator('.work-thinking-body');
+  const thinking = work.locator('.work-thinking > summary');
+  const prose = work.locator('.msg .msg-content.markdown');
+  const tool = work.locator('.tool-toggle');
+  await expect(thinking).toHaveAccessibleName('Thinking');
+  await expect(thought).not.toBeVisible();
+  await expect(prose).toHaveText('I will inspect the project.');
+  await expect(prose).toBeVisible();
+  await expect(tool).toHaveAccessibleName('Read · moon.mod — Result available');
+  await thinking.press('Enter');
+  await expect(thought).toHaveText(reasoning);
+  await expect(thinking).toHaveAccessibleName('Thinking');
+  await tool.click();
+  await expect(work.getByText('moon.mod', { exact: true })).toBeVisible();
+  await expect(work.getByText('module contents', { exact: true })).toBeVisible();
+  await expect(work.locator('details.tool-result')).toHaveCount(0);
+  await summary.press('Enter');
+  await expect(prose).not.toBeVisible();
+  await summary.press('Enter');
+  await expect(thought).toBeVisible();
+  await expect(work.getByText('module contents', { exact: true })).toBeVisible();
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('work commentary stays ordinary selectable text and file links keep work open', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture activity controls' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: {
+      content: 'I will inspect the project.\n\n[Source](src/main.mbt:12)',
+      tool_calls: [{ id: 'c1', name: 'read', arguments: '{"path":"src/main.mbt"}' }],
+    } } },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const activity = page.locator('.work-group');
+  const text = activity.getByText('I will inspect the project.', { exact: true });
+  await expect(text).toBeVisible();
+  await text.click();
+  await expect(activity).toHaveAttribute('open', '');
+
+  // Drag across ordinary prose: the resulting click must preserve the selection.
+  const box = await text.boundingBox();
+  await page.mouse.move(box.x + 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 100, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(activity).toHaveAttribute('open', '');
+  expect(await page.evaluate(() => document.getSelection().toString())).not.toBe('');
+  await page.evaluate(() => document.getSelection().removeAllRanges());
+
+  await activity.getByTitle('Open src/main.mbt:12').click();
+  await expect(activity).toHaveAttribute('open', '');
+  await expect.poll(() => app.requests.some(request =>
+    request.method === 'host.open_path' && request.params?.path === 'src/main.mbt:12'))
+    .toBe(true);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('reasoning-enabled answer text stays visible while streaming', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = [{
+    sequence: 1,
+    item: { kind: 'user', payload: { content: 'Show the browser fixture reasoning stream' } },
+  }];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  app.notify('agent.started', {
+    run_id: 'reasoning-run', session: 'session-1',
+    session_root: '/workspace/.openseek', model: 'deepseek-v4-pro', max_steps: 1000,
+  });
+  app.notify('agent.event', {
+    run_id: 'reasoning-run', session: 'session-1',
+    event: { event: 'reasoning_delta', content: 'Consider the evidence first.' },
+  });
+  const activity = page.locator('.work-group');
+  await expect(activity.locator(':scope > summary')).toHaveAccessibleName('Work · Thinking');
+  await activity.locator(':scope > summary').click();
+  await expect(activity).not.toHaveAttribute('open', '');
+  app.notify('agent.event', {
+    run_id: 'reasoning-run', session: 'session-1',
+    event: { event: 'assistant_delta', content: 'The answer is arriving' },
+  });
+  const answer = page.locator('.msg.streaming .msg-content');
+  await expect(answer).toHaveText('The answer is arriving');
+  await expect(answer).toBeVisible();
+  await expect(activity).not.toHaveAttribute('open', '');
+  app.notify('agent.event', {
+    run_id: 'reasoning-run', session: 'session-1',
+    event: { event: 'assistant_delta', content: ' in two chunks.' },
+  });
+  await expect(answer).toHaveText('The answer is arriving in two chunks.');
+  await expect(answer).toBeVisible();
+  await expect(page.locator('.msg.streaming .assistant-message-actions')).toHaveCount(0);
+  await activity.locator(':scope > summary').click();
+  await activity.locator('.work-thinking > summary').click();
+  await expect(activity.locator('.work-thinking-body')).toHaveText('Consider the evidence first.');
+  await expect(answer).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -2004,10 +2101,58 @@ test('pending job waits show descriptions from earlier tool rows', async ({ page
   await app.goto();
   await app.openSession();
   const wait = page.locator('details.tool-call').filter({ hasText: 'Waiting for' });
+  // The expanded Work group exposes pending targets while tool bodies stay folded.
+  const activity = page.locator('details.work-group').filter({ has: wait.first() });
+  await expect(activity).toHaveAttribute('open', '');
+  await expect(wait.first()).toBeVisible();
   await expect(wait.locator('.tool-call-text')).toHaveText(
     ['Waiting for bg-10: Watch CI on rebased PR 27, bg-11', 'Waiting for bg-11']);
   await expect(wait.first()).not.toHaveAttribute('open', '');
   await wait.first().locator('summary').click();
   await expect(wait.first()).toContainText('"job_ids"');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('paired tool results preserve disclosure and tab state when results arrive out of order', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture with two file reads' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: {
+      content: 'I will inspect both files.', reasoning_content: 'Compare the two files.',
+      tool_calls: ['a', 'b'].map(id => ({ id, name: 'read', arguments: JSON.stringify({ path: `${id}.mbt` }) })),
+    } } },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const work = page.locator('.work-group');
+  const tools = work.locator('details.tool-call');
+  await expect(tools).toHaveCount(2);
+  await tools.first().locator(':scope > summary').click();
+  const json = tools.first().getByText('Original JSON', { exact: true });
+  await json.click();
+  const commit = (sequence, kind, payload) => app.notify('session.event', {
+    session: 'session-1', session_root: '/workspace/.openseek', sequence,
+    event: { sequence, item: { kind, payload } },
+  });
+  commit(3, 'tool_result', { tool_call_id: 'b', tool_name: 'read', content: 'B output', is_error: false });
+  await expect(tools.nth(1).locator('.tool-status')).toHaveAccessibleName('Result available');
+  await expect(tools.nth(1)).not.toHaveAttribute('open', '');
+  await expect(tools.first().locator('.tool-card-original-json')).toBeVisible();
+  commit(4, 'tool_result', { tool_call_id: 'a', tool_name: 'read', content: 'A failed', is_error: true });
+  await expect(tools.first().locator('.tool-status')).toHaveAccessibleName('Tool failed');
+  await expect(work.locator(':scope > summary')).toContainText('Tool failed');
+  await expect(tools.first()).toHaveAttribute('open', '');
+  await expect(tools.first().locator('.tool-card-original-json')).toBeVisible();
+  await expect(tools.first().getByText('A failed', { exact: true })).toBeVisible();
+  await expect(tools.locator('.tool-call-text')).toHaveText(['Read · a.mbt', 'Read · b.mbt']);
+  await work.locator(':scope > summary').click();
+  commit(5, 'terminal', { kind: 'finished', message: 'One file could not be read.' });
+  await expect(work).not.toHaveAttribute('open', '');
+  const answer = page.getByText('One file could not be read.', { exact: true });
+  await expect(answer).toBeVisible();
+  await expect(work.getByText('One file could not be read.', { exact: true })).toHaveCount(0);
+  await work.locator(':scope > summary').click();
+  await expect(tools.first().locator('.tool-card-original-json')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });

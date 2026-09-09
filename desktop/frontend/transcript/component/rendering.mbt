@@ -422,6 +422,8 @@ fn Input::empty_content(self : Input) -> EmptyContent {
 
 ///|
 priv enum BlockContent {
+  /// Contiguous work; its native disclosure is keyed by the preceding boundary.
+  Work(Array[Block])
   /// Nothing to show: no durable items and nothing streaming.
   Empty(EmptyContent)
   /// One transcript item. `step_label` is the ordinal an OpenSeek provider
@@ -529,7 +531,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
       ),
     })
   }
-  @vector.from_array(blocks)
+  @vector.from_array(group_work_blocks(blocks))
 }
 
 ///|
@@ -544,15 +546,9 @@ fn Block::branch_key(self : Block) -> String {
 fn Block::render(self : Block, actions : Actions) -> @html.Html {
   let on_open = path => (actions.open)(path)
   match self.content {
+    Work(blocks) => work_view(blocks, actions)
     Empty(empty) => empty.render(actions)
-    Item(
-      item~,
-      anchor~,
-      step_label~,
-      assistant_name~,
-      subrun_parent~,
-      wait_labels~
-    ) =>
+    Item(item~, anchor~, assistant_name~, subrun_parent~, wait_labels~, ..) =>
       transcript_item_view(
         item,
         on_open,
@@ -560,19 +556,17 @@ fn Block::render(self : Block, actions : Actions) -> @html.Html {
         anchor?,
         on_jump=target => (actions.jump)(target),
         assistant_name~,
-        step_label?,
         subrun?=subrun_parent.map(parent => SubrunLink::{
           parent,
           open: session => (actions.open_session)(session),
         }),
       )
     TurnRule(ts~) => turn_rule_view(ts?)
-    Live(prose~, reasoning~, reasoning_complete~, step_label~, assistant_name~) =>
+    Live(prose~, reasoning~, reasoning_complete~, assistant_name~, ..) =>
       assistant_view(
         on_open,
         prose?,
         reasoning?,
-        step_label?,
         assistant_name~,
         live=true,
         reasoning_complete~,

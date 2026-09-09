@@ -49,7 +49,9 @@ test "transcript stream children use stable typed keys in display order" {
     streaming_identity="r7",
   )
   let keys = stream_keys(input)
-  assert_eq(keys, ["row\u{0}s41", "rule\u{0}s41", "row\u{0}s42", "live\u{0}r7"])
+  assert_eq(keys, [
+    "row\u{0}s41", "rule\u{0}s41", "work\u{0}rule\u{0}s41", "live\u{0}r7",
+  ])
   // The result filling the call, and the durable reasoning the same event
   // turns out to carry, change the response's node, never its identity: the
   // browser-owned disclosures inside it survive both.
@@ -81,7 +83,7 @@ test "transcript stream children use stable typed keys in display order" {
 }
 
 ///|
-test "the live response is one node, replaced by the durable one" {
+test "work identity survives live reasoning committing while prose stays outside" {
   let user : VisibleRow = {
     item: { kind: User("question"), ts: None, sequence: Some(1), },
     identity: "s1",
@@ -102,11 +104,11 @@ test "the live response is one node, replaced by the durable one" {
     streaming_identity="r7",
   )
   let live_keys = stream_keys(live_input)
-  assert_eq(live_keys, ["row\u{0}s1", "rule\u{0}s1", "live\u{0}r7"])
-  // The answer streaming after the thought joins the same node.
+  assert_eq(live_keys, ["row\u{0}s1", "rule\u{0}s1", "work\u{0}rule\u{0}s1"])
+  // Streaming prose remains a separate visible node beside folded reasoning.
   let answering = { ..live_input, streaming_response: Some("partial"), }
-  assert_eq(stream_keys(answering), live_keys)
-  // The durable commit is its own node; the preview is gone with the run.
+  assert_eq(stream_keys(answering), [..live_keys, "live\u{0}r7"])
+  // The durable step replaces the provisional evidence inside the same group.
   let settled = {
     ..live_input,
     items: [
@@ -128,7 +130,7 @@ test "the live response is one node, replaced by the durable one" {
     ],
     streaming_reasoning: None,
   }
-  assert_eq(stream_keys(settled), ["row\u{0}s1", "rule\u{0}s1", "row\u{0}s2"])
+  assert_eq(stream_keys(settled), live_keys)
 }
 
 ///|
@@ -237,4 +239,109 @@ test "tool output truncation keeps the head and tail around a skip marker" {
   assert_true(bounded.has_prefix("x".repeat(12_000)))
   assert_true(bounded.has_suffix("x".repeat(8_000)))
   assert_true(bounded.contains("10000 UTF-16 code units skipped"))
+}
+
+///|
+test "finished evidence folds separately from the answer for both providers" {
+  for source in [OpenSeek, Codex] {
+    let input = {
+      ..base_input(),
+      source,
+      items: VisibleRow::history([
+        { kind: User("question"), ts: None, sequence: Some(1), },
+        {
+          kind: Assistant(
+            reasoning=Some("evidence"),
+            prose=Some("final answer"),
+            calls=[],
+            replay=false,
+            finished=true,
+          ),
+          ts: None,
+          sequence: Some(2),
+        },
+      ]),
+    }
+    let blocks = stream_blocks(input).to_array()
+    assert_eq(blocks.length(), 4)
+    guard blocks[2].content is Work([evidence]) else { fail("missing work") }
+    assert_true(
+      evidence.content
+      is Item(
+        item={
+          kind: Assistant(
+            reasoning=Some("evidence"),
+            prose=None,
+            finished=false,
+            ..
+          ),
+          ..
+        },
+        ..
+      ),
+    )
+    assert_true(
+      blocks[3].content
+      is Item(
+        item={
+          kind: Assistant(
+            reasoning=None,
+            prose=Some("final answer"),
+            finished=true,
+            calls=[],
+            ..
+          ),
+          ..
+        },
+        ..
+      ),
+    )
+  }
+}
+
+///|
+test "work grouping preserves notices checkpoints failures and prompt boundaries" {
+  let activity : @transcript.ItemKind = Assistant(
+    reasoning=None,
+    prose=Some("activity"),
+    calls=[],
+    replay=false,
+    finished=false,
+  )
+  for
+    boundary in [
+      @transcript.ItemKind::User("next prompt"),
+      Summary("checkpoint"),
+      Notice(
+        label="notice",
+        brief=None,
+        is_error=false,
+        body=Some("background result"),
+      ),
+      Failure("failed"),
+      Answer("answer"),
+      Assistant(
+        reasoning=None,
+        prose=Some("replayed answer"),
+        calls=[],
+        replay=true,
+        finished=false,
+      ),
+    ] {
+    let input = {
+      ..base_input(),
+      items: VisibleRow::history([
+        { kind: activity, ts: None, sequence: Some(1), },
+        { kind: boundary, ts: None, sequence: Some(2), },
+        { kind: activity, ts: None, sequence: Some(3), },
+      ]),
+    }
+    let blocks = stream_blocks(input).to_array()
+    assert_true(blocks[0].content is Work([_]))
+    assert_true(
+      blocks[1].content is Item(item={ kind, .. }, ..) && kind == boundary,
+    )
+    assert_true(blocks.last().unwrap().content is Work([_]))
+    assert_true(blocks[0].key != blocks.last().unwrap().key)
+  }
 }

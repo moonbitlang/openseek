@@ -1,24 +1,5 @@
 ///|
-/// One provider response as the transcript shows it: its thought behind a
-/// fold, its prose as a bubble, and every tool call on display as its own
-/// one-line row (`tool_request_view`), expandable to that call's arguments and
-/// output — in the order the model produced them, so a step that ran ten
-/// tools reads as ten scannable rows after the narration that announced them.
-/// Only reasoning stays behind a fold: a step that opens with a thought
-/// carries the ordinal and commit instant on that fold's summary
-/// ("#2 14:32:10 · Thought"), and a numbered step that goes straight to
-/// tools puts the same columns on a plain heading line instead. The open
-/// state of every disclosure is the browser's (`<details>`), so a reader's
-/// toggle survives re-renders and the run growing while live.
-///
-/// The response still streaming renders through this same view (`live`), so
-/// nothing shown live restyles when its durable event lands: the thought
-/// stays plain text until it completes, and the prose bubble is marked
-/// streaming until the commit replaces it.
-///
-/// Failures need no badge up here: a failed call's own row is visible and
-/// carries its own literal `failed` marker. Its potentially large arguments
-/// and output stay folded by default, like every other call.
+/// Render commentary directly, with independent disclosures for reasoning and tools.
 fn assistant_view(
   on_open : (String) -> @cmd.Cmd,
   wait_labels? : Map[Int, String] = Map([]),
@@ -27,92 +8,41 @@ fn assistant_view(
   calls? : Array[@transcript.ToolCall] = [],
   sequence? : Int,
   ts? : Double,
-  step_label? : String,
   assistant_name? : String = "OpenSeek",
   finished? : Bool = false,
   live? : Bool = false,
   reasoning_complete? : Bool = true,
   subrun? : SubrunLink,
 ) -> @html.Html {
-  // The step ordinal is its own span so it can carry the accent and a fixed
-  // numeral column, then the instant in a second fixed column: the run reads
-  // as a table. The instant belongs beside the ordinal rather than out at the
-  // row's right edge — the reason to show it at all is the gap to the step
-  // above and below, and comparing a column is the eye's job only when
-  // nothing variable-width sits between its entries and their anchor.
-  let header : Array[@html.Html] = []
-  let stamp = step_stamp(ts?)
-  if step_label is Some(label) {
-    header.push(@html.span(class="activity-step", label))
-    // A real space, not a CSS margin, and only when the instant follows it: the
-    // gap has to exist in the text as well, or the accessible name and anything
-    // copied out of the row read "#1Committed 14:32:10".
-    if stamp is Some(_) {
-      header.push(@html.text(" "))
-    }
-  }
-  if stamp is Some(stamp) {
-    header.push(stamp)
-  }
-  // The header rides the thought fold's summary when the step opens with
-  // reasoning, keeping the common step's one-line "#2 · Thought" lead. A step
-  // that goes straight to tools gets a plain heading line instead: a call
-  // row's summary belongs to that call alone. Prose alone carries no heading.
-  let lead : Array[@html.Html] = []
-  if reasoning is Some(text) {
-    let thinking = live && !reasoning_complete
-    let label = if thinking { "Thinking…" } else { "Thought" }
-    let summary : Array[@html.Html] = []
-    if header.is_empty() {
-      // The separator introduces the label only when something precedes it:
-      // a Codex thought with no ordinal and no stamp is the label alone.
-      summary.push(@html.text(label))
-    } else {
-      summary.append(header)
-      summary.push(@html.text(" · \{label}"))
-    }
-    let body = if thinking {
-      // Do not parse an unfinished Markdown document on every provider token.
-      // Newlines are preserved by CSS while fragments are still arriving.
-      @html.div(
-        class="msg-content activity-thinking activity-thinking-live",
-        @html.text(text),
-      )
-    } else {
-      @html.div(
-        class="msg-content markdown activity-thinking",
-        @markdown.markdown_nodes(text, open_file=on_open),
-      )
-    }
-    lead.push(
-      @html.details(class="activity", open=live, [
-        @html.summary(class="activity-summary", [
-          @html.span(class="activity-text", summary),
+  let content : Map[String, @html.Html] = Map([])
+  if reasoning is Some(text) && !text.is_blank() {
+    content.set(
+      "thinking",
+      @html.details(class="work-thinking", [
+        @html.summary(class="work-toggle", [
+          @html.span(class="work-chevron", @icons.icon_chevron_down()),
+          @html.text(
+            if live && !reasoning_complete {
+              "Thinking · in progress"
+            } else {
+              "Thinking"
+            },
+          ),
         ]),
-        @html.div(class="activity-body", [body]),
+        @html.div(
+          class="work-thinking-body msg-content markdown",
+          if live && !reasoning_complete {
+            [@html.text(text)]
+          } else {
+            @markdown.markdown_nodes(text, open_file=on_open)
+          },
+        ),
       ]),
     )
-  } else if !header.is_empty() && !calls.is_empty() {
-    lead.push(@html.div(class="activity-heading", header))
   }
-  let work = if calls.is_empty() {
-    None
-  } else {
-    Some(
-      @html.div(
-        class="activity-work",
-        tool_run_views(calls, sequence?, subrun?, wait_labels~),
-      ),
-    )
-  }
-  // The prose bubble separates the thought from the work it announced; a
-  // response without prose keeps both under one quiet guide line.
-  let parts : Array[@html.Html] = []
   if prose is Some(text) {
-    if !lead.is_empty() {
-      parts.push(@html.div(class="activity-row", lead))
-    }
-    parts.push(
+    content.set(
+      "message",
       assistant_message_view(
         text,
         on_open,
@@ -123,18 +53,20 @@ fn assistant_view(
         streaming=live,
       ),
     )
-    if work is Some(work) {
-      parts.push(@html.div(class="activity-row", [work]))
-    }
-  } else {
-    if work is Some(work) {
-      lead.push(work)
-    }
-    if !lead.is_empty() {
-      parts.push(@html.div(class="activity-row", lead))
-    }
   }
-  @html.div(class="step", parts)
+  if !calls.is_empty() {
+    content.set(
+      "tools",
+      @html.div(
+        class="work-tools",
+        tool_run_views(calls, sequence?, subrun?, wait_labels~),
+      ),
+    )
+  }
+  if finished || (live && reasoning is None) {
+    return @html.div(class="step", content)
+  }
+  @html.div(class="work-step", content)
 }
 
 ///|
@@ -168,11 +100,9 @@ fn notice_view(
 }
 
 ///|
-/// Render one response's tool calls. Several calls of one provider response
-/// are a parallel burst: show every request first and every result after it,
-/// exactly as the viz HTML renderer's Assistant card followed by result cards
-/// makes a burst readable. A lone call — every Codex item, and a notice —
-/// keeps its request beside its own result instead of implying concurrency.
+/// Pair each invocation's inputs and output under one stable disclosure. The
+/// index disambiguates malformed histories with duplicate call ids; results
+/// update in place without changing the request order or browser-owned state.
 fn tool_run_views(
   calls : Array[@transcript.ToolCall],
   sequence? : Int,
@@ -180,57 +110,15 @@ fn tool_run_views(
   wait_labels? : Map[Int, String] = Map([]),
 ) -> Map[String, @html.Html] {
   let rows : Map[String, @html.Html] = Map([])
-  let burst = calls.length() > 1 && calls.all(call => call.arguments is Some(_))
-  if burst {
-    for index, call in calls {
-      rows[tool_run_row_key(call, index, "request")] = tool_request_view(
-        call,
-        sequence?,
-        wait_label?=wait_labels.get(index),
-      )
-    }
-    for index, call in calls {
-      if tool_result_row_is_visible(call) {
-        rows[tool_run_row_key(call, index, "result")] = tool_result_view(
-          call,
-          sequence?,
-          subrun?,
-        )
-      }
-    }
-  } else {
-    for index, call in calls {
-      if call.arguments is Some(_) {
-        rows[tool_run_row_key(call, index, "request")] = tool_request_view(
-          call,
-          sequence?,
-          wait_label?=wait_labels.get(index),
-        )
-      }
-      if tool_result_row_is_visible(call) {
-        rows[tool_run_row_key(call, index, "result")] = tool_result_view(
-          call,
-          sequence?,
-          subrun?,
-        )
-      }
-    }
+  for index, call in calls {
+    rows["call\u{0}\{call.call_id}\u{0}\{index}"] = tool_exchange_view(
+      call,
+      sequence?,
+      subrun?,
+      wait_label?=wait_labels.get(index),
+    )
   }
   rows
-}
-
-///|
-/// Stable VDOM identity for one side of a tool exchange. Results can arrive
-/// after later calls are already visible, so keyed children keep browser-owned
-/// disclosure and radio state attached to the same call instead of the same
-/// array position. The index disambiguates malformed logs with duplicate ids;
-/// call order itself is stable in the transcript projection.
-fn tool_run_row_key(
-  call : @transcript.ToolCall,
-  index : Int,
-  side : String,
-) -> String {
-  "\{side}\u{0}\{call.call_id}\u{0}\{index}"
 }
 
 ///|
@@ -262,171 +150,6 @@ fn subrun_chip(child : String, open : (String) -> @cmd.Cmd) -> @html.Html {
       "↳ subagent transcript",
     ),
   ])
-}
-
-///|
-/// A completed result always gets its own row, including an empty one. Codex
-/// command items can also stream output while still in progress; surface that
-/// stream immediately, with the row still labelled pending until the
-/// completed item arrives.
-fn tool_result_row_is_visible(call : @transcript.ToolCall) -> Bool {
-  match call.outcome {
-    Done(..) => true
-    Pending(output~) => output is Some(_)
-  }
-}
-
-///|
-/// One recorded tool request, always on display as its own row. Its brief is
-/// the result-derived caption the viz renderer also promotes onto the call;
-/// expanding reveals only what the model sent. Failed calls read red and carry
-/// a literal marker, while their separate result row owns the output.
-fn tool_request_view(
-  call : @transcript.ToolCall,
-  sequence? : Int,
-  wait_label? : String,
-) -> @html.Html {
-  guard call.arguments is Some(arguments) else { return @html.nothing }
-  let name = call.name
-  // A pending call has no result to be wrong about, and no brief yet.
-  let (is_error, brief) = match call.outcome {
-    Done(is_error~, brief~, ..) => (is_error, brief)
-    Pending(..) => (false, None)
-  }
-  let label = if brief is Some(brief) && !brief.is_blank() {
-    brief
-  } else if wait_label is Some(label) {
-    label
-  } else if pending_job_wait_label(call) is Some(label) {
-    label
-  } else {
-    name
-  }
-  let label = if name == "mbtx" &&
-    card_fields(arguments) is Some(fields) &&
-    fields.get("description") is Some(String(description)) &&
-    !description.is_blank() {
-    "\{label} · \{description}"
-  } else {
-    label
-  }
-  let error_class = (if is_error { " error" } else { "" }) +
-    failure_stage_class(name, brief, is_error, Some(arguments))
-  // The row's always-visible line: the brief, a literal marker when the
-  // result errored and the brief does not already carry the state in words
-  // (see `failure_marker`), and — for an applied `plan` call — the compact
-  // progress meter. `fold_progress` renders nothing for every other call.
-  let line : Array[@html.Html] = [
-    @html.span(class="tool-flow", "→"),
-    @html.span(class="tool-call-text", label),
-  ]
-  if failure_marker(
-      name,
-      brief,
-      is_error,
-      Some(arguments),
-      // The request row's label is the brief whenever one exists.
-      brief_shown=brief is Some(brief) && !brief.is_blank(),
-    )
-    is Some(marker) {
-    line.push(marker)
-  }
-  line.push(@plan.fold_progress(call))
-  let body : Array[@html.Html] = []
-  // A `plan` call shows the checklist it recorded rather than its JSON, in
-  // every state where that checklist is what the model asked for. A pending
-  // call qualifies: the card is a record of the call, and the missing Output
-  // section already marks it unfinished. A rejected one does not — the
-  // malformed arguments are what the reader needs, and dressing them up as a
-  // checklist would report a plan that never took effect.
-  if @plan.classify(call) is Some(Applied(steps) | Pending(steps)) {
-    body.push(@html.div(class="tool-call-section", [@plan.card(steps)]))
-  } else if tool_arguments_tabbed_view(
-      tool_call_tabs_key(call.call_id, sequence),
-      name,
-      Some(arguments),
-    )
-    is Some(tabs) {
-    body.push(@html.div(class="tool-call-section", [tabs]))
-  } else if custom_card(name, arguments) is Some((label, card)) {
-    // Some tools' arguments have a shape JSON hides, such as an `edit` split
-    // across two blobs whose difference is the whole point. Those get a card.
-    // A payload the card cannot read falls through to the generic rendering
-    // below, so nothing is ever shown as a change that is not one.
-    body.push(
-      @html.div(class="tool-call-section", [
-        @html.div(class="tool-call-section-label", label),
-        card,
-      ]),
-    )
-  } else {
-    let trimmed = arguments.trim()
-    if !trimmed.is_empty() && trimmed != "{}" {
-      body.push(
-        @html.div(class="tool-call-section", [
-          @html.div(class="tool-call-section-label", "Arguments"),
-          json_arguments_content(arguments).body,
-        ]),
-      )
-    }
-  }
-  if body.is_empty() {
-    @html.div(class="tool-call-label" + error_class, line)
-  } else {
-    @html.details(
-      class="tool-call" + error_class,
-      [
-        // The full label as the row's tooltip: a brief longer than the pane
-        // is ellipsized by the stylesheet, and the body holds the arguments
-        // but not the brief — hover (or opening the row, which the
-        // stylesheet un-clamps) is how the whole text stays reachable.
-        @html.summary(class="tool-call-summary", title=label, line),
-        ..body,
-      ],
-    )
-  }
-}
-
-///|
-/// One tool result, separate from the request that produced it as in the viz
-/// HTML renderer. A completed row remains visible even when empty; a pending
-/// Codex command gets a row only after it has streamed output, and its label
-/// deliberately says "output" rather than claiming completion.
-fn tool_result_view(
-  call : @transcript.ToolCall,
-  sequence? : Int,
-  subrun? : SubrunLink,
-) -> @html.Html {
-  let key = tool_call_tabs_key(call.call_id, sequence)
-  match call.outcome {
-    Pending(output~) =>
-      result_row_view(
-        call.name,
-        call.arguments,
-        pending=true,
-        is_error=false,
-        brief=None,
-        output,
-        key,
-        subrun?,
-      )
-    Done(content~, is_error~, brief~) =>
-      result_row_view(
-        call.name,
-        call.arguments,
-        pending=false,
-        is_error~,
-        brief~,
-        // An empty result still gets its row; it just has nothing to expand.
-        if content.is_blank() {
-          None
-        } else {
-          Some(content)
-        },
-        key,
-        subrun?,
-      )
-  }
 }
 
 ///|
@@ -470,6 +193,27 @@ fn result_row_view(
     is Some(marker) {
     line.push(marker)
   }
+  let body = tool_output_sections(name, arguments, brief, output, key, subrun?)
+  if body.is_empty() {
+    @html.div(class="tool-result-label" + error_class + pending_class, line)
+  } else {
+    @html.details(
+      class="tool-result" + error_class + pending_class,
+      [@html.summary(class="tool-result-summary", title=label, line), ..body],
+    )
+  }
+}
+
+///|
+/// Exact output and child-transcript links, reusable inside a notice or call.
+fn tool_output_sections(
+  name : String,
+  arguments : String?,
+  brief : String?,
+  output : String?,
+  key : String,
+  subrun? : SubrunLink,
+) -> Array[@html.Html] {
   let body : Array[@html.Html] = []
   // A sub-run result names the child session it spawned in its brief. The
   // result owns the child report and therefore owns the way into its transcript.
@@ -500,14 +244,7 @@ fn result_row_view(
       )
     }
   }
-  if body.is_empty() {
-    @html.div(class="tool-result-label" + error_class + pending_class, line)
-  } else {
-    @html.details(
-      class="tool-result" + error_class + pending_class,
-      [@html.summary(class="tool-result-summary", title=label, line), ..body],
-    )
-  }
+  body
 }
 
 ///|
@@ -697,7 +434,12 @@ fn user_message_view(
       body.push(@html.div(class="msg-content", inline_code_nodes(content)))
   }
   // The overview rail and scroll watcher share this stable turn anchor.
-  @html.div(class="msg user", id?=anchor, [@html.div(class="user-bubble", body)])
+  @html.div(
+    class="msg user",
+    id?=anchor,
+    attrs=@html.Attrs::build().tabindex(0),
+    [@html.div(class="user-bubble", body)],
+  )
 }
 
 ///|
@@ -816,9 +558,7 @@ fn turn_rule_view(ts? : Double) -> @html.Html {
 }
 
 ///|
-/// One transcript item as its own stream child. `step_label` is the ordinal an
-/// OpenSeek provider response carries ("#3"); every other source and kind
-/// has none.
+/// Render one normalized transcript item; the work grouping owns its placement.
 fn transcript_item_view(
   item : @transcript.TranscriptItem,
   on_open : (String) -> @cmd.Cmd,
@@ -826,7 +566,6 @@ fn transcript_item_view(
   anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
   assistant_name? : String = "OpenSeek",
-  step_label? : String,
   subrun? : SubrunLink,
 ) -> @html.Html {
   match item.kind {
@@ -840,7 +579,6 @@ fn transcript_item_view(
         wait_labels~,
         sequence?=item.sequence,
         ts?=item.ts,
-        step_label?,
         assistant_name~,
         finished~,
         subrun?,

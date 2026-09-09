@@ -71,8 +71,7 @@ fn tool_call_tabs_key(call_id : String, sequence : Int?) -> String {
 /// custom card supplies the first semantic view for tools such as `mbtx` and
 /// `edit`; other tools use the readable generic arguments view. Exact JSON is
 /// a separate tab only when the first view is a derived reading rather than
-/// the recording itself. The result deliberately does not join this tab set:
-/// like the viz HTML renderer, the transcript renders it as its own row.
+/// the recording itself. Output follows below in the same tool disclosure.
 ///
 /// `None` when there is only one useful view: the existing labeled fallback is
 /// clearer than a one-entry tab strip.

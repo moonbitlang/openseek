@@ -491,14 +491,32 @@
 
 /* Send time belongs beneath the prompt, without separating its answer. */
 .turn-rule {
-  display: flex;
-  justify-content: flex-end;
+  position: relative;
+  height: 0;
   margin-top: -8px;
   color: var(--color-text-faint);
   font-size: var(--font-size-xs);
 }
 .turn-rule:empty {
   display: none;
+}
+
+.turn-rule .turn-time {
+  position: absolute;
+  right: 0;
+  top: 0;
+  opacity: 0;
+}
+.msg.user:hover + .turn-rule .turn-time,
+.msg.user:focus-within + .turn-rule .turn-time,
+.turn-rule:hover .turn-time { opacity: 1; }
+.msg.user:focus-visible {
+  outline: 1px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+/* Touch users cannot hover to inspect a prompt's send time. */
+@media (hover: none) {
+  .turn-rule .turn-time { opacity: 1; }
 }
 
 .msg-body {
@@ -839,12 +857,7 @@
   gap: 20px;
 }
 
-/* One model step's work: a heading (or thought fold) carrying the ordinal
-   and commit instant, then every tool call on display as its own row. Flush
-   with the agent's prose, not indented: the work is the agent's, and an
-   indent under a user bubble would read as the user's. Only reasoning sits
-   behind a fold; a quiet guide line groups the call rows without turning
-   them into a card. */
+/* Runtime notices retain their position in the transcript. */
 .activity-row {
   min-width: 0;
   display: grid;
@@ -853,116 +866,16 @@
   animation: riseIn 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-.activity-summary,
-.tool-call-summary,
-.tool-result-summary {
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-}
-.activity-summary::-webkit-details-marker,
-.tool-call-summary::-webkit-details-marker,
-.tool-result-summary::-webkit-details-marker {
-  display: none;
-}
-
-/* The visible guide belongs to the body, while this empty part of the native
-   summary extends its hit area over the guide. A click therefore toggles only
-   the details element that owns that line, including when disclosures nest. */
-.activity {
-  position: relative;
-}
-.activity[open] > .activity-summary::before {
-  content: "";
-  position: absolute;
-  z-index: 1;
-  top: 1.5em;
-  bottom: 0;
-  left: -5px;
-  width: 12px;
-  cursor: pointer;
-}
-
-.activity-summary {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-}
-.activity-summary:hover {
-  color: var(--color-text-secondary);
-}
-.activity-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.activity-text::before {
-  content: "▸ ";
-}
-.activity[open] > .activity-summary .activity-text::before {
-  content: "▾ ";
-}
-
-/* The model-step ordinal stays in the transcript's neutral hierarchy so step
-   status does not compete with selection, primary actions, or failures. Tabular
-   numerals in a fixed right-aligned column hold every `·` on the same x as the
-   count crosses #9 → #10. */
-.activity-step {
-  display: inline-block;
-  min-width: 3ch;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-muted);
-  transition: color 0.15s ease;
-}
-
-/* Hover and disclosure raise contrast without introducing another blue state. */
-.activity-summary:hover .activity-step,
-.activity[open] > .activity-summary .activity-step {
-  color: var(--color-text-secondary);
-}
-.activity:has(> .activity-summary .activity-step) > .activity-body {
-  border-left-color: var(--color-border);
-}
-
-/* The step heading when the step went straight to tools: the same ordinal and
-   instant columns the thought fold's summary carries, on a plain line — there
-   is nothing to disclose, every call below is already on display. The hidden
-   marker reserves exactly the lead the summary's `▸ ` takes (same font, same
-   text), so `#N` and the instant line up in one column across both header
-   forms; the gap between them is the markup's real space, as in the summary. */
 .activity-heading {
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
-.activity-heading::before {
-  content: "▸ ";
-  visibility: hidden;
-}
 
-/* When the step committed, in the summary's second fixed column, right after
-   the ordinal — which a real space in the markup separates it from, not a
-   margin here, so the gap survives being copied or read aloud. No color of its
-   own: it inherits the summary's, so it is exactly as legible as the line it
-   belongs to and brightens with it on hover. Setting one would only have
-   restated the same token, or made the row's least important item its highest
-   contrast. Tabular numerals so the seconds digits do not shift against the
-   rows above and below — reading the gaps between steps is the whole point of
-   showing them. */
+/* Runtime notice commit time; tool activity deliberately omits this clock. */
 .activity-time {
   color: var(--color-text-faint);
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
-}
-
-.activity-body {
-  display: grid;
-  gap: 14px;
-  padding: 12px 0 4px 16px;
-  border-left: 2px solid var(--color-border);
 }
 
 /* compaction checkpoint between turns: a quiet labeled fold with the
@@ -1001,23 +914,7 @@
   color: var(--color-text-secondary);
 }
 
-/* Reasoning inside the work log — and the live stream before it commits
-   (`assistant_view`): full-width muted prose, never a labelled
-   "Thinking" row of its own. */
-.activity-thinking {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
-}
-.activity-thinking-live {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-/* A step's tool exchanges, always on display: one row per request and result,
-   with every request in a proven parallel burst preceding its result rows.
-   They hang behind
-   the same quiet guide line an expanded fold used to draw, so the step still
-   reads as one block under its heading or thought fold. */
+/* Runtime notices remain separate from the work disclosure. */
 .activity-work {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1026,17 +923,7 @@
   border-left: 2px solid var(--color-border);
 }
 
-.tool-exchange {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 4px;
-}
-
-/* One tool request/result row: the request expands to recorded arguments and
-   the result expands to output. Same muted line treatment as the summaries —
-   depth is carried by the guide line, not a size step. */
-.tool-call-label,
-.tool-call-summary,
+/* Standalone runtime-notice rows keep their compact disclosure. */
 .tool-result-label,
 .tool-result-summary {
   display: flex;
@@ -1050,18 +937,10 @@
   color: var(--color-text-faint);
   text-align: center;
 }
-.tool-call-summary:hover,
 .tool-result-summary:hover {
   color: var(--color-text-secondary);
 }
-/* One line per expandable call, whatever the brief's length: a long brief
-   (a Codex command string, a full shell invocation) truncates with an
-   ellipsis instead of wrapping or forcing the pane wider — the row list
-   stays scannable, and the full text is one click away inside the fold.
-   Only summaries get this: a bodyless `.tool-call-label` row (a goal
-   notice, a pending call) holds the sole copy of its text, so it wraps
-   rather than losing what an ellipsis would clip. */
-.tool-call-summary .tool-call-text,
+/* Keep a long notice caption compact until its disclosure is opened. */
 .tool-result-summary .tool-result-text {
   min-width: 0;
   overflow: hidden;
@@ -1073,7 +952,6 @@
    keeps a clipped brief reachable — including where there is no hover.
    `anywhere` breaks an unbroken token (a Codex command string), so the
    revealed text wraps instead of painting past the pane. */
-.tool-call[open] > .tool-call-summary .tool-call-text,
 .tool-result[open] > .tool-result-summary .tool-result-text {
   white-space: normal;
   overflow: visible;
@@ -1082,25 +960,20 @@
 /* A bodyless label wraps its whole text (see above — it is the sole copy),
    and the same `anywhere` break keeps an unbroken token, such as a long URL
    in a one-line goal, from pushing the transcript wide. */
-.tool-call-label .tool-call-text,
 .tool-result-label .tool-result-text {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-/* The trailing marker belongs to rows that own a fold; `.tool-call-label`
+/* The trailing marker belongs to rows that own a fold; `.tool-result-label`
    rows have nothing to disclose and stay bare. It is the summary's own last
    flex item rather than part of the text span, so a truncated brief cannot
    ellipsize it away. */
-.tool-call-summary::after,
 .tool-result-summary::after {
   content: "▸";
 }
-.tool-call[open] > .tool-call-summary::after,
 .tool-result[open] > .tool-result-summary::after {
   content: "▾";
 }
-.tool-call-label.error,
-.tool-call.error > .tool-call-summary,
 .tool-result-label.error,
 .tool-result.error > .tool-result-summary {
   color: var(--color-danger);
@@ -1117,8 +990,6 @@
    failed", "build timeout"), so the row appends no marker — appending one
    repeated the brief verbatim. Runtime failures keep the red row plus the
    "runtime error" marker, which does add a word the brief lacks. */
-.tool-call-label.error.stage-build,
-.tool-call.error.stage-build > .tool-call-summary,
 .tool-result-label.error.stage-build,
 .tool-result.error.stage-build > .tool-result-summary {
   color: var(--color-warning);
@@ -1185,9 +1056,8 @@
   background: var(--color-danger-soft);
 }
 
-/* Alternate views of one request or one result share a compact radio-backed
-   tab set. Requests and results never share a strip: the separate rows retain
-   the call/result chronology exposed by the viz HTML renderer. */
+/* Alternate views share a compact radio-backed tab set. Input and output
+   have independent tabs within the same invocation disclosure. */
 .tool-call-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -1521,4 +1391,223 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   font-style: italic;
+}
+
+.tool-result-summary { cursor: pointer; list-style: none; }
+.tool-result-summary::-webkit-details-marker { display: none; }
+
+/* Work disclosures: shared typography, compact spacing and a single reading
+   alignment. Direct commentary leads; reasoning and tool evidence recede. */
+.work-group, .work-thinking, .tool-call,
+.tool-input, .tool-output {
+  min-width: 0;
+}
+
+.work-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.work-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.work-toggle::marker {
+  content: "";
+}
+
+.work-toggle:hover {
+  color: var(--color-text-primary);
+}
+
+.work-toggle:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.work-chevron {
+  flex: none;
+  --icon-size: var(--icon-sm);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  display: inline-flex;
+  transform: rotate(-90deg);
+  color: var(--color-text-muted);
+}
+
+details[open] > .work-toggle > .work-chevron {
+  transform: none;
+}
+
+.work-summary {
+  color: var(--color-text-muted);
+}
+
+.work-body, .work-step, .work-tools, .tool-body {
+  display: grid;
+  grid-template-columns: minmax(0,1fr);
+  min-width: 0;
+}
+
+.work-body {
+  gap: 16px;
+  padding: 8px 0 0 20px;
+}
+
+.work-step {
+  gap: 8px;
+}
+
+.work-thinking-body {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+  padding: 8px 0 0 20px;
+}
+
+.work-thinking-body p:first-child {
+  margin-top: 0;
+}
+
+.work-thinking-body p:last-child {
+  margin-bottom: 0;
+}
+
+.work-tools {
+  gap: 4px;
+}
+
+.work-step > .msg {
+  margin: 0;
+}
+
+/* Direct commentary leads; disclosed reasoning and tool evidence are secondary. */
+.work-step > .msg .msg-content {
+  color: var(--color-text-primary);
+}
+
+.tool-call-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tool-status {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  --icon-size: var(--icon-lg);
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  color: var(--color-text-muted);
+}
+
+.tool-call.error .tool-status,
+.tool-call.error .tool-output,
+.tool-call.error .tool-call-output {
+  color: var(--color-danger);
+}
+
+.tool-body {
+  padding: 8px 0 0 20px;
+  gap: 16px;
+}
+
+/* These child margins previously stacked with the parent's grid gap. */
+.tool-body .tool-call-section {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.tool-body .tool-call-section-label,
+.tool-body .tool-call-tabs,
+.tool-body .tool-call-arguments-friendly,
+.tool-body pre {
+  margin: 0;
+}
+
+/* Input and output share one reading rail and type scale. Tabs still identify
+   alternate input views; their labels use the same treatment as Output. */
+.tool-body .tool-call-tabs {
+  gap: 0 16px;
+}
+
+.tool-body .tool-call-tab-label,
+.tool-body .tool-call-section-label {
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.tool-body .tool-call-section-label {
+  color: var(--color-text-secondary);
+}
+
+.tool-body .tool-call-tab-panel {
+  padding-top: 8px;
+}
+
+.tool-body .tool-call-arguments-friendly,
+.tool-body pre {
+  max-width: 100%;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+  line-height: var(--line-height-relaxed);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tool-body .tool-argument-field {
+  margin: 0;
+}
+
+.tool-body .tool-argument-key,
+.tool-body .tool-argument-value {
+  font-family: inherit;
+  font-weight: inherit;
+}
+
+.tool-body .tool-argument-key {
+  color: var(--color-text-secondary);
+}
+
+.tool-empty {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.tool-call[open] > .tool-toggle .tool-call-text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.tool-call.error.stage-build .tool-status {
+  color: var(--color-warning);
+}
+
+.tool-caption {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
 }
