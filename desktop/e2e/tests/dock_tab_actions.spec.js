@@ -93,12 +93,26 @@ for (const entry of ['menu', 'toolbar']) {
 test('tab and sidebar menus replace each other without changing selection', async ({ page }) => {
   const app = await openTabs(page, ['alpha', 'bravo']);
   const first = page.locator('.editor-tab').first();
+  const active = page.locator('.editor-tab.active');
+  const restingBackground = await first.evaluate(tab => getComputedStyle(tab).backgroundColor);
+  const selectedBackground = await active.evaluate(tab => getComputedStyle(tab).backgroundColor);
+  await first.hover();
+  const hoverBackground = await first.evaluate(tab => getComputedStyle(tab).backgroundColor);
   const workspace = page.locator('.workspace-row').first();
   await first.click({ button: 'right' });
   await expect(page.getByRole('menu', { name: 'Tab actions' })).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Close Others', exact: true }).hover();
+  await expect(first).toHaveAttribute('aria-expanded', 'true');
+  await expect(first).toHaveCSS('background-color', hoverBackground);
+  await expect(active).toHaveCSS('background-color', selectedBackground);
+  await page.keyboard.press('Escape');
+  await expect(first).toHaveAttribute('aria-expanded', 'false');
+  await expect(first).toHaveCSS('background-color', restingBackground);
+  await first.click({ button: 'right' });
   await workspace.click({ button: 'right', position: { x: 24, y: 16 } });
   await expect(page.getByRole('menu', { name: 'Workspace actions' })).toBeVisible();
   await expect(page.getByRole('menu', { name: 'Tab actions' })).toBeHidden();
+  await expect(first).toHaveCSS('background-color', restingBackground);
   await first.click({ button: 'right' });
   await expect(page.getByRole('menu', { name: 'Workspace actions' })).toBeHidden();
   await expect(page.getByRole('menu', { name: 'Tab actions' })).toBeVisible();
