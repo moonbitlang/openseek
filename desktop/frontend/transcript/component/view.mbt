@@ -31,6 +31,8 @@ fn assistant_view(
         ]),
         @html.div(
           class="work-thinking-body msg-content markdown",
+          // Keep growing reasoning as text; Markdown parsing and MoonBit
+          // tokenization start only once the reasoning is complete.
           if live && !reasoning_complete {
             [@html.text(text)]
           } else {

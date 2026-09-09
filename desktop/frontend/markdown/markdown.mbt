@@ -112,13 +112,15 @@ fn lines_text(lines : @cmark.Seq[@cmark.Node[String]]) -> String {
 ///|
 #warnings("-alert_xss_vulnerable")
 fn code_block(block : @cmark.CodeBlock) -> @html.Html {
+  // Unlabelled fences and indented code use MoonBit by default, including
+  // code inside completed reasoning. Explicit language labels still win.
   let language = match block.info_string {
     Some(info) =>
       match @cmark.CodeBlock::language_of_info_string(info.v) {
         Some((language, _)) => language
-        None => ""
+        None => "mbt"
       }
-    None => ""
+    None => "mbt"
   }
   let source = lines_text(block.code)
   // cmark also parses unfinished fences as code blocks. Only compile closed
