@@ -21,6 +21,6 @@ and validates the new snapshot before replacing `doc/moonbit/`. It preserves the
 upstream files except browser presentation assets and upstream ignore rules.
 The updater also regenerates the static system prompt's directory layout.
 Review and commit the documentation diff, `doc/moonbit.commit`, and generated prompt.
-After manually changing resource directories, run `just generate-prompt`.
+After manually changing resource directories, run `just prompt`.
 Packaging reads this checked-in tree without downloading documentation; its
 content hash invalidates the prepared resource cache when any file changes.

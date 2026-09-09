@@ -42,7 +42,7 @@ test-moon:
     moon test --target js
 
 # Refresh filesystem-derived prompt content even when only share/ changed.
-generate-prompt:
+prompt:
     moon run scripts/md_to_mbt_string -- prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
 
 check-prompt:

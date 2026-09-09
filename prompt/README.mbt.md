@@ -8,7 +8,7 @@ The `{{OPENSEEK_REFERENCES_LAYOUT}}` placeholder expands to a sorted,
 directory-only tree of the repository's `share/` during generation. The
 generated prompt contains the tree as static text; only the installation's
 absolute `OPENSEEK_REFERENCES` path is appended at runtime. No `tree` executable
-is required. `just generate-prompt` refreshes this filesystem-derived content;
+is required. `just prompt` refreshes this filesystem-derived content;
 the documentation updater invokes it automatically. `just check-prompt` checks
 freshness without writing and runs in CI before other build commands.
 Direct `moon` commands also run the dev-build rule when its Markdown input changes,

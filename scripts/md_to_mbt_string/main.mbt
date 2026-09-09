@@ -36,7 +36,7 @@ async fn main {
   }
   if parsed.flags is { "check": true, .. } {
     fail(
-      "Generated prompt is stale: \{output}. Run just generate-prompt and commit the result.",
+      "Generated prompt is stale: \{output}. Run just prompt and commit the result.",
     )
   }
   let tmp = "\{output}.tmp"
