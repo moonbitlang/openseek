@@ -49,12 +49,10 @@
   --vscode-editorGutter-foldingControlForeground: var(
     --vscode-icon-foreground
   );
-  /* editorCursor.foreground / editor.lineHighlightBorder registry defaults
-     (editorColorRegistry.ts:16,22); Dark Modern does not override them.
-     editor.lineHighlightBackground stays null like VS Code's defaults, so the
-     current line renders as the border box, not a fill. */
+  /* Neutral current-line wash stays distinct from selections and diff fills. */
   --vscode-editorCursor-foreground: #aeafad;
-  --vscode-editor-lineHighlightBorder: #282828;
+  --vscode-editor-lineHighlightBackground: #ffffff0d;
+  --vscode-editor-lineHighlightBorder: transparent;
   /* editorWhitespace.foreground registry default (editorColorRegistry.ts:28);
      the Modern themes do not override it. */
   --vscode-editorWhitespace-foreground: #e3e4e229;
@@ -206,10 +204,10 @@
   --vscode-editorGutter-foldingControlForeground: var(
     --vscode-icon-foreground
   );
-  /* See the Dark Modern block above (light defaults: black caret, #eeeeee
-     line-highlight border). */
+  /* Use a dark wash on the light code surface. */
   --vscode-editorCursor-foreground: #000000;
-  --vscode-editor-lineHighlightBorder: #eeeeee;
+  --vscode-editor-lineHighlightBackground: #0000000a;
+  --vscode-editor-lineHighlightBorder: transparent;
   /* See the Dark Modern block above (light registry default). */
   --vscode-editorWhitespace-foreground: #33333333;
   --vscode-editorLink-activeForeground: #0000ff;

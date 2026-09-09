@@ -82,9 +82,13 @@
   --vscode-editorGutter-foldingControlForeground: var(
     --vscode-icon-foreground
   );
-  /* editor.lineHighlightBackground stays unset like VS Code's defaults, so
-     the current line renders as the border box, not a fill. */
-  --vscode-editor-lineHighlightBorder: var(--color-border-subtle);
+  /* A neutral wash follows the app's light/dark palette automatically. */
+  --vscode-editor-lineHighlightBackground: color-mix(
+    in srgb,
+    var(--color-text-primary) 5%,
+    transparent
+  );
+  --vscode-editor-lineHighlightBorder: transparent;
   --vscode-editorWhitespace-foreground: color-mix(
     in srgb,
     var(--color-text-muted) 45%,

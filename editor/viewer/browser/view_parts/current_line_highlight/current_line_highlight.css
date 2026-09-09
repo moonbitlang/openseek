@@ -3,13 +3,10 @@
    plus the registerThemingParticipant rules (currentLineHighlight.ts:237-264),
    as static var() CSS (the viewer's theming design). Covers both the content
    overlay (this package) and the margin overlay (view_parts/margin), like the
-   Monaco source file. Deviations:
-   - editor.inactiveLineHighlightBackground defaults to
-     editor.lineHighlightBackground and both are null in the shipped themes,
-     so the unfocused background rule is omitted;
-   - Monaco emits the border rules only when no (opaque) background color is
-     defined (cLH:253-263) — statically true for the shipped themes, which
-     define only --vscode-editor-lineHighlightBorder. */
+   Monaco source file. Hosts supply a subtle fill and a transparent border;
+   border-only themes can still supply lineHighlightBorder. The inactive fill
+   falls back to the active fill, matching the default focus-independent
+   renderLineHighlight option. */
 
 .monaco-editor .view-overlays .current-line {
   display: block;
@@ -35,6 +32,14 @@
   .margin-view-overlays
   .current-line.current-line-margin.current-line-margin-both {
   border-right: 0;
+}
+
+.monaco-editor .view-overlays .current-line,
+.monaco-editor .margin-view-overlays .current-line-margin {
+  background-color: var(
+    --vscode-editor-inactiveLineHighlightBackground,
+    var(--vscode-editor-lineHighlightBackground, transparent)
+  );
 }
 
 .monaco-editor.focused .view-overlays .current-line {
