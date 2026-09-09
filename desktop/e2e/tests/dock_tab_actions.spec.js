@@ -67,6 +67,29 @@ test('tab menu disables empty ranges and supports keyboard dismissal and Close A
   expect(app.pageErrors).toEqual([]);
 });
 
+for (const entry of ['menu', 'toolbar']) {
+  test(`Close All from the ${entry} preserves the expanded launcher and the next tab`, async ({ page }) => {
+    const app = await openTabs(page, ['alpha', 'bravo']);
+    await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
+    if (entry === 'menu') {
+      await page.locator('.editor-tab').first().click({ button: 'right' });
+      await page.getByRole('menuitem', { name: 'Close All', exact: true }).click();
+    } else {
+      await page.getByRole('button', { name: 'Close all tabs', exact: true }).click();
+    }
+    await expect(page.locator('.editor-tab')).toHaveCount(0);
+    await expect(page.locator('.dock-launcher')).toBeVisible();
+    const restore = page.getByRole('button', { name: 'Restore panel', exact: true });
+    await expect(restore).toHaveAttribute('aria-pressed', 'true');
+    await app.openQuickOpen();
+    await page.locator('#quick-open-input').fill('alpha');
+    await page.getByRole('option', { name: /alpha\.mbt/ }).click();
+    await expect(page.locator('.editor-tab.active')).toContainText('alpha.mbt');
+    await expect(restore).toHaveAttribute('aria-pressed', 'true');
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 test('tab and sidebar menus replace each other without changing selection', async ({ page }) => {
   const app = await openTabs(page, ['alpha', 'bravo']);
   const first = page.locator('.editor-tab').first();
