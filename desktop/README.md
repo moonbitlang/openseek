@@ -143,8 +143,10 @@ to `api.deepseek.com` with your own key; the engine also falls back to the
 requests to `api.z.ai` with its own key (env fallback `GLM`) and offers the
 GLM 5.3 models on the composer's model chip. **OpenRouter** configures its
 canonical chat-completions endpoint through the existing custom backend; its
-setup form accepts the supported namespaced DeepSeek model id and maps reasoning
-fields to OpenRouter's wire format. **Custom URL**
+setup form only asks for an API key. Choose Flash or Pro in the composer, just
+as with DeepSeek official. The shared request encoder maps Flash to
+`deepseek/deepseek-v4-flash-0731` and translates the reasoning fields; Desktop
+keeps the same model preference for both endpoints. **Custom URL**
 accepts any other OpenAI-compatible chat-completions endpoint, with the key
 optional — whether one is needed is the endpoint's business. The provider
 choice, the custom URL, and the keys live in the host's settings store

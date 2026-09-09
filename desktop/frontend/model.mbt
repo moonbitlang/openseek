@@ -497,29 +497,6 @@ fn EngineModel::matches_provider(
 }
 
 ///|
-/// OpenRouter currently carries the DeepSeek models understood by the engine.
-/// Accept direct-API names as conveniences while showing canonical,
-/// namespaced OpenRouter ids in the setup field.
-fn parse_openrouter_model(value : String) -> EngineModel? {
-  match value.trim().to_owned() {
-    "deepseek-v4-pro" | "deepseek/deepseek-v4-pro" => Some(DsPro)
-    "deepseek-v4-flash" | "deepseek/deepseek-v4-flash" => Some(DsFlash)
-    _ => None
-  }
-}
-
-///|
-fn EngineModel::openrouter_wire(self : EngineModel) -> String? {
-  match self {
-    DsPro => Some("deepseek/deepseek-v4-pro")
-    DsFlash => Some("deepseek/deepseek-v4-flash")
-    Other(name) =>
-      parse_openrouter_model(name).bind(model => model.openrouter_wire())
-    Glm53 | Glm53Flash => None
-  }
-}
-
-///|
 /// The compaction lifecycle of one conversation, mirroring the host's
 /// `EnginePhase` design: one value instead of loose booleans, so a compact
 /// request that is in flight but not yet acknowledged still has a
@@ -1429,9 +1406,6 @@ priv struct Model {
   api_provider : ApiProvider
   custom_api_url : String
   followup_behavior : FollowupBehavior
-  // Editable only in the initial OpenRouter setup. A valid value also feeds
-  // `default_model`, which remains the conversation-level source of truth.
-  openrouter_model : String?
   // Host-settings writes still in flight. While any are, incoming
   // `settings.changed` broadcasts and `settings.get` replies may predate an
   // optimistic edit, so the newest revision is deferred until the last write
@@ -1795,7 +1769,6 @@ priv enum Msg {
   ProviderChanged(String)
   FollowupBehaviorChanged(String)
   CustomApiUrlChanged(String)
-  OpenRouterModelChanged(String)
   // The Settings choice of which window corner error toasts pop up in.
   NotificationCornerChanged(String)
   // The Settings choice of where the editor's file tree docks.
@@ -2612,7 +2585,6 @@ fn initial_model() -> Model {
     api_provider: Deepseek,
     custom_api_url: "",
     followup_behavior: FollowupSteer,
-    openrouter_model: Some("deepseek/deepseek-v4-flash"),
     settings_saves: 0,
     host_settings_revision: -1,
     deferred_host_settings: None,
@@ -2824,18 +2796,6 @@ fn Model::apply_host_settings(self : Model, settings : HostSettings) -> Model {
   } else {
     ApiProvider::parse(settings.provider)
   }
-  let openrouter_model = if provider is OpenRouter {
-    if self.api_provider is OpenRouter {
-      self.openrouter_model
-    } else {
-      match self.default_model.openrouter_wire() {
-        Some(model) => Some(model)
-        None => self.openrouter_model
-      }
-    }
-  } else {
-    self.openrouter_model
-  }
   let next = {
     ..self,
     host_settings_revision: settings.revision,
@@ -2846,7 +2806,6 @@ fn Model::apply_host_settings(self : Model, settings : HostSettings) -> Model {
     deepseek_key_saved: settings.has_deepseek_key,
     glm_key_saved: settings.has_glm_key,
     custom_key_saved: settings.has_custom_key,
-    openrouter_model,
   }
   next.align_fresh_conversation_with_provider()
 }
@@ -2956,16 +2915,14 @@ fn Model::settle_api_setup(self : Model) -> Model {
 
 ///|
 /// Whether the configured endpoint is usable as it stands: keyed providers
-/// need their own credential, OpenRouter also needs a supported DeepSeek model,
-/// and a custom endpoint needs a plausible URL. The credentials themselves
-/// live on the host; a start carries none.
+/// need their own credential, and a custom endpoint needs a plausible URL.
+/// OpenRouter uses the same model selector as the official DeepSeek endpoint.
+/// The credentials themselves live on the host; a start carries none.
 fn Model::api_ready(self : Model) -> Bool {
   match self.api_provider {
     Deepseek => self.deepseek_key_saved
     Glm => self.glm_key_saved
-    OpenRouter =>
-      self.custom_key_saved &&
-      self.openrouter_model.bind(parse_openrouter_model) is Some(_)
+    OpenRouter => self.custom_key_saved
     Custom => plausible_endpoint_url(self.custom_api_url)
   }
 }

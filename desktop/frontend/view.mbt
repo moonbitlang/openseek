@@ -954,8 +954,7 @@ fn byok_setup_guide(provider : ApiProvider) -> @html.Html {
     OpenRouter =>
       [
         step(1, "Open openrouter.ai and create an API key."),
-        step(2, "Enter a supported DeepSeek model id below."),
-        step(3, "Paste the OpenRouter API key and save."),
+        step(2, "Paste the OpenRouter API key and save."),
       ]
     Custom =>
       [
@@ -1060,27 +1059,6 @@ fn api_settings_rows(
       ),
     )
   }
-  if model.api_provider is OpenRouter {
-    rows.push(
-      @settings.row(
-        "Model",
-        [
-          @html.input(
-            input_type=@html.InputType::Text,
-            value=model.openrouter_model.unwrap_or(""),
-            placeholder="deepseek/deepseek-v4-flash",
-            on_input=dispatch.map(value => OpenRouterModelChanged(value)),
-            attrs=@html.Attrs::build()
-              .aria_label("OpenRouter model")
-              .data_set("focus-owner", "")
-              .disabled(!settings_loaded),
-          ),
-        ],
-        desc="Supported: deepseek/deepseek-v4-pro or deepseek/deepseek-v4-flash.",
-        stack=true,
-      ),
-    )
-  }
   // The key lives on the host and is never echoed back — the page only
   // knows one is saved; saving a new one overwrites it.
   {
@@ -1135,9 +1113,8 @@ fn api_settings_rows(
 fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let settings_loaded = model.host_settings_loaded()
   let ready = model.api_ready()
-  // Conversation models are normally picked on the composer's chip. The
-  // OpenRouter bootstrap id lives in the API group because setup must validate
-  // it before enabling Send.
+  // All providers use the composer's model selector; API setup only chooses
+  // the endpoint and credentials.
   let engine_rows : Array[@html.Html] = [
     @settings.row(
       "Max steps",
@@ -1344,7 +1321,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             match model.api_provider {
               Deepseek => "Enter a DeepSeek API key to start."
               Glm => "Enter a GLM API key to start."
-              OpenRouter => "Enter an OpenRouter API key and model to start."
+              OpenRouter => "Enter an OpenRouter API key to start."
               Custom => "Enter a chat-completions endpoint URL to start."
             }
           },

@@ -1752,7 +1752,7 @@ test('settings persist host API changes through settings.set', async ({ page }) 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('initial API setup accepts an OpenRouter key and DeepSeek model', async ({ page }) => {
+test('initial OpenRouter setup only needs an API key', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.hostSettings.has_deepseek_key = false;
   await app.install();
@@ -1761,9 +1761,7 @@ test('initial API setup accepts an OpenRouter key and DeepSeek model', async ({ 
   await expect(page.getByText('Set up your DeepSeek API key')).toBeVisible();
   await page.getByRole('button', { name: 'API endpoint' }).click();
   await page.getByRole('option', { name: 'OpenRouter' }).click();
-  const model = page.getByRole('textbox', { name: 'OpenRouter model' });
-  await expect(model).toHaveValue('deepseek/deepseek-v4-flash');
-  await model.fill('deepseek/deepseek-v4-pro');
+  await expect(page.getByLabel('OpenRouter model')).toHaveCount(0);
   await page.getByLabel('API key').fill('sk-openrouter-test');
   await page.getByRole('button', { name: 'Save API key' }).click();
 
@@ -1778,6 +1776,19 @@ test('initial API setup accepts an OpenRouter key and DeepSeek model', async ({ 
   await expect(page.getByText('Set up OpenRouter')).toBeHidden();
   expect(app.hostSettings.has_deepseek_key).toBe(false);
   expect(app.hostSettings.has_custom_key).toBe(true);
+
+  // OpenRouter uses the ordinary chat model selector and persisted preference.
+  await app.openSession();
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await page.getByRole('option', { name: 'DS Pro', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.model')))
+    .toBe('deepseek-v4-pro');
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await page.getByRole('option', { name: 'DS Flash', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.model')))
+    .toBe('deepseek-v4-flash');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByLabel('OpenRouter model')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 

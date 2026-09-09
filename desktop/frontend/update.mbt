@@ -2077,11 +2077,6 @@ fn update_msg(
         app_font_size,
         fps_overlay_enabled,
         default_model,
-        openrouter_model: if model.api_provider is OpenRouter {
-          default_model.openrouter_wire()
-        } else {
-          model.openrouter_model
-        },
         default_agent,
         conversation_models: parse_conversation_models(remembered),
         openseek_reasoning,
@@ -3133,15 +3128,6 @@ fn update_msg(
         } else {
           model.custom_api_url
         },
-        openrouter_model: if provider is OpenRouter {
-          Some(
-            model.default_model
-            .openrouter_wire()
-            .unwrap_or("deepseek/deepseek-v4-flash"),
-          )
-        } else {
-          model.openrouter_model
-        },
         setup_api_key: "",
         settings_saves: model.settings_saves + 1,
         select_menu: None,
@@ -3185,24 +3171,6 @@ fn update_msg(
           settings_saves: model.settings_saves + 1,
         },
       )
-    }
-    OpenRouterModelChanged(value) => {
-      guard model.host_settings_loaded() && model.api_provider is OpenRouter else {
-        return (@cmd.none, model)
-      }
-      let staged = {
-        ..model,
-        openrouter_model: if value.is_blank() {
-          None
-        } else {
-          Some(value)
-        },
-      }
-      guard parse_openrouter_model(value) is Some(engine_model) else {
-        return (@cmd.none, staged.settle_api_setup())
-      }
-      let next = { ..staged, default_model: engine_model, }.align_fresh_conversation_with_provider()
-      (save_default_model(engine_model), next.settle_api_setup())
     }
     NotificationCornerChanged(value) => {
       let corner = NotificationCorner::parse(value)
@@ -13057,58 +13025,19 @@ test "the official endpoint requires a key, a custom endpoint a URL" {
 }
 
 ///|
-test "OpenRouter requires a stored custom key and a supported DeepSeek model" {
+test "OpenRouter setup requires only its stored custom key" {
   let openrouter = {
     ..test_model(),
     api_provider: OpenRouter,
     deepseek_key_saved: true,
     custom_key_saved: false,
-    openrouter_model: Some("deepseek/deepseek-v4-flash"),
   }
   assert_false(openrouter.api_ready())
   assert_true({ ..openrouter, custom_key_saved: true, }.api_ready())
-  assert_false(
-    {
-      ..openrouter,
-      custom_key_saved: true,
-      openrouter_model: Some("openai/gpt-5"),
-    }.api_ready(),
+  // Model choice belongs to the chat, just as with the official endpoint.
+  assert_true(
+    { ..openrouter, custom_key_saved: true, default_model: DsPro, }.api_ready(),
   )
-  assert_false(
-    { ..openrouter, custom_key_saved: true, openrouter_model: None, }.api_ready(),
-  )
-}
-
-///|
-test "the OpenRouter setup model updates only after a valid model id" {
-  let dispatch = test_dispatch()
-  let model = {
-    ..test_model(),
-    api_provider: OpenRouter,
-    custom_key_saved: true,
-    openrouter_model: Some("deepseek/deepseek-v4-flash"),
-    api_setup_open: true,
-  }
-  let (_, invalid) = update(
-    dispatch,
-    OpenRouterModelChanged("openai/gpt-5"),
-    model,
-  )
-  assert_eq(invalid.openrouter_model, Some("openai/gpt-5"))
-  assert_true(invalid.default_model is DsFlash)
-  assert_true(invalid.api_setup_open)
-  let (_, valid) = update(
-    dispatch,
-    OpenRouterModelChanged("deepseek/deepseek-v4-pro"),
-    invalid,
-  )
-  assert_eq(valid.openrouter_model, Some("deepseek/deepseek-v4-pro"))
-  assert_true(valid.default_model is DsPro)
-  assert_true(valid.active().engine_model is DsPro)
-  assert_false(valid.api_setup_open)
-  let (_, blank) = update(dispatch, OpenRouterModelChanged("  "), valid)
-  assert_true(blank.openrouter_model is None)
-  assert_true(blank.api_setup_open)
 }
 
 ///|
