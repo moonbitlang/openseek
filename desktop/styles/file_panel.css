@@ -121,7 +121,8 @@ button.panel-toggle:not(:disabled):hover {
   cursor: pointer;
   white-space: nowrap;
 }
-.editor-tab:hover {
+.editor-tab:hover,
+.editor-tab[aria-expanded="true"]:not(.active) {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }

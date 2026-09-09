@@ -146,7 +146,10 @@ pub fn button_attrs(target : String) -> @html.Attrs {
 /// Build the context-menu entry point for a stable target.
 pub fn context_attrs(target : String) -> @html.Attrs {
   @html.Attrs::build()
+  .id(target + ":context-trigger")
   .data_set("action-menu-context", target)
+  .aria_haspopup("menu")
+  .aria_controls(menu_id(target))
   .on_mousedown(event => remember_context_focus(event))
   .on_contextmenu(event => {
     event.prevent_default()
@@ -234,6 +237,12 @@ fn set_trigger_open(target : String, open : Bool) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
       if @dom.document().get_element_by_id(trigger_id(target)).to_option()
+        is Some(trigger) {
+        trigger.set_attribute("aria-expanded", open.to_string())
+      }
+      if @dom.document()
+        .get_element_by_id(target + ":context-trigger")
+        .to_option()
         is Some(trigger) {
         trigger.set_attribute("aria-expanded", open.to_string())
       }

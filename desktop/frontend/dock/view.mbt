@@ -195,7 +195,8 @@ pub fn tabs_bar(
   toggle_expanded~ : @cmd.Cmd,
   toggle_panel~ : @cmd.Cmd,
 ) -> @html.Html {
-  let tabs : Array[@html.Html] = []
+  // Keep each menu trigger's DOM identity when neighbouring tabs close.
+  let tabs : Map[String, @html.Html] = Map([])
   for chip in chips {
     let mut classes = "editor-tab"
     if state.active == Some(chip.tab) {
@@ -206,38 +207,34 @@ pub fn tabs_bar(
     }
     let tab = chip.tab
     let target = tab_menu_target(state, tab)
-    tabs.push(
-      @html.div(
-        class=classes,
-        title=chip.title,
-        attrs=@action_menu.context_attrs(target)
-          .id(target)
-          .tabindex(0)
-          .aria_haspopup("menu")
-          .on_keydown(event => {
-            if event.target().to_element() is Some(element) &&
-              element.get_attribute("id") == Some(target) &&
-              (event.key() == "Enter" || event.key() == " ") {
-              event.prevent_default()
-              dispatch(TabActivated(tab))
-            } else {
-              @cmd.none
-            }
+    tabs[target] = @html.div(
+      class=classes,
+      title=chip.title,
+      attrs=@action_menu.context_attrs(target)
+        .tabindex(0)
+        .on_keydown(event => {
+          if event.target().to_element() is Some(element) &&
+            element.get_attribute("data-action-menu-context") == Some(target) &&
+            (event.key() == "Enter" || event.key() == " ") {
+            event.prevent_default()
+            dispatch(TabActivated(tab))
+          } else {
+            @cmd.none
+          }
+        }),
+      on_click=dispatch(TabActivated(tab)),
+      [
+        @html.span(class="tab-name", chip.label),
+        @html.button(
+          class="tab-close",
+          title="Close",
+          attrs=@html.Attrs::build().on_click(event => {
+            event.stop_propagation()
+            dispatch(TabClosed(tab))
           }),
-        on_click=dispatch(TabActivated(tab)),
-        [
-          @html.span(class="tab-name", chip.label),
-          @html.button(
-            class="tab-close",
-            title="Close",
-            attrs=@html.Attrs::build().on_click(event => {
-              event.stop_propagation()
-              dispatch(TabClosed(tab))
-            }),
-            "×",
-          ),
-        ],
-      ),
+          "×",
+        ),
+      ],
     )
   }
   // With an empty strip the body already is the launcher, so the `+` hides
