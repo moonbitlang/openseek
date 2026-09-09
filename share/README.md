@@ -19,6 +19,8 @@ moon run scripts/update-moonbit-docs.mbtx <40-character-commit>
 Run from the repository root with `curl` and `tar` installed. The command downloads
 and validates the new snapshot before replacing `doc/moonbit/`. It preserves the
 upstream files except browser presentation assets and upstream ignore rules.
-Review and commit the documentation diff together with `doc/moonbit.commit`.
+The updater also regenerates the static system prompt's directory layout.
+Review and commit the documentation diff, `doc/moonbit.commit`, and generated prompt.
+After manually changing resource directories, run `just generate-prompt`.
 Packaging reads this checked-in tree without downloading documentation; its
 content hash invalidates the prepared resource cache when any file changes.

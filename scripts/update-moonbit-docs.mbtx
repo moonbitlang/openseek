@@ -37,11 +37,15 @@ async fn main {
   if @fs.exists("\{staged}/.gitignore") {
     @fs.remove("\{staged}/.gitignore")
   }
-  @fs.mkdir("share/doc", recursive=true)
+  if !@fs.exists("share/doc") { @fs.mkdir("share/doc", recursive=true) }
   if @fs.exists("share/doc/moonbit") {
     @fs.rmdir("share/doc/moonbit", recursive=true)
   }
   @shell.Cmd("cp", ["-R", staged, "share/doc/moonbit"]).run()
   @fs.write_file("share/doc/moonbit.commit", "\{commit}\n")
+  @shell.Cmd("moon", [
+    "run", "scripts/md_to_mbt_string", "--",
+    "prompt/default_prompt.mbt.md", "prompt/generated_default_prompt.mbt",
+  ]).run()
   println("Updated share/doc/moonbit to \{commit}; review the diff before committing.")
 }

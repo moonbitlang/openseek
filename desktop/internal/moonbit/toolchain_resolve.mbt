@@ -69,7 +69,7 @@ pub async fn resolve_toolchain(
     // reference path is exactly as stable as `moon` itself: the per-user
     // runtime directory, never the bundle (an AppImage mounts afresh per
     // launch).
-    let resources = moonbit_references_dir(payload)
+    let resources = payload.join("share")
     let references = if @fsx.is_dir(resources) {
       resources.to_absolute()
     } else {

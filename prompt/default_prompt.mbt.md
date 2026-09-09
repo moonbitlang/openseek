@@ -37,8 +37,12 @@ documentation (the moonbit-docs markdown build) lives under its `doc/moonbit/`
 subdirectory. Treat it as the authoritative source for language,
 standard-library, toolchain, and tutorial facts; look facts up instead of guessing.
 
-The documentation contains `language/` (language guide, attributes, error codes),
-`toolchain/`, `tutorial/`, `example/`, and `index.md` (the site map).
+Directory layout relative to `OPENSEEK_REFERENCES`:
+
+```text
+{{OPENSEEK_REFERENCES_LAYOUT}}
+```
+
 Reading these references outside the workspace is expected. Read on demand,
 never wholesale: find the relevant page with a subtree listing or search
 under `OPENSEEK_REFERENCES/doc/moonbit/`, then open only that page with the

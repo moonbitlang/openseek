@@ -3,6 +3,9 @@ fn cli_command() -> @argparse.Command {
   Command(
     "md_to_mbt_string",
     about="Generate a MoonBit string source file from Markdown.",
+    flags=[
+      FlagArg("check", about="Fail if generated output is stale; do not write."),
+    ],
     positionals=[
       PositionArg(
         "input",
@@ -20,20 +23,64 @@ fn cli_command() -> @argparse.Command {
 
 ///|
 async fn main {
-  guard cli_command().parse().values
-    is { "input": [input, ..], "output": [output, ..], .. } else {
+  let parsed = cli_command().parse()
+  guard parsed.values is { "input": [input, ..], "output": [output, ..], .. } else {
     fail("missing parsed arguments")
   }
   let base = @path.Path(input).basename()
   let function_name = function_name_from_base(base)
-  let markdown = @fs.read_file(input).text()
+  let markdown = expand_resource_layout(@fs.read_file(input).text(), "share")
   let source = generated_source(base~, function_name~, markdown~)
   if output_matches(output, source) {
     return
   }
+  if parsed.flags is { "check": true, .. } {
+    fail(
+      "Generated prompt is stale: \{output}. Run just generate-prompt and commit the result.",
+    )
+  }
   let tmp = "\{output}.tmp"
   @fs.write_file(tmp, source, create_mode=CreateOrTruncate)
   @fs.rename(tmp, output, replace=true)
+}
+
+///|
+/// Expand before stripping Markdown comments or emitting the static string.
+async fn expand_resource_layout(markdown : String, root : String) -> String {
+  let marker = "{{OPENSEEK_REFERENCES_LAYOUT}}"
+  if !markdown.contains(marker) {
+    return markdown
+  }
+  let tree = StringBuilder()
+  tree.write_string(".")
+  async fn visit(directory : String, prefix : String) -> Unit {
+    let directories : Array[String] = []
+    for name in @fs.readdir(directory) {
+      if !name.has_prefix(".") &&
+        @fs.kind("\{directory}/\{name}", follow_symlink=false) is Directory {
+        directories.push(name)
+      }
+    }
+    // String's default ordering is length-first; directory trees use lexical order.
+    directories.sort_by((a, b) => {
+      let length = if a.length() < b.length() { a.length() } else { b.length() }
+      for i in 0..<length {
+        if a[i] != b[i] {
+          return a[i].compare(b[i])
+        }
+      }
+      a.length().compare(b.length())
+    })
+    for index, name in directories {
+      let last = index == directories.length() - 1
+      let branch = if last { "└── " } else { "├── " }
+      tree.write_string("\n\{prefix}\{branch}\{name}")
+      let next_prefix = prefix + (if last { "    " } else { "│   " })
+      visit("\{directory}/\{name}", next_prefix)
+    }
+  }
+  visit(root, "")
+  markdown.replace_all(old=marker, new=tree.to_string())
 }
 
 ///|
@@ -342,5 +389,43 @@ async test "output match detects unchanged generated file" {
     @fs.write_file(path, "same", create_mode=CreateOrTruncate)
     assert_true(output_matches(path, "same"))
     assert_false(output_matches(path, "different"))
+  })
+}
+
+///|
+async test "resource layout is sorted, directory-only, and refreshed on changes" {
+  with_tmpdir(root => {
+    @fs.mkdir("\{root}/workflow")
+    @fs.mkdir("\{root}/aardvark")
+    @fs.mkdir("\{root}/z")
+    @fs.mkdir("\{root}/doc/moonbit/language", recursive=true)
+    @fs.mkdir("\{root}/.hidden")
+    @fs.write_file("\{root}/doc/moonbit/index.md", "docs")
+    let template = "before\n{{OPENSEEK_REFERENCES_LAYOUT}}\nafter"
+    inspect(
+      expand_resource_layout(template, root),
+      content=(
+        #|before
+        #|.
+        #|├── aardvark
+        #|├── doc
+        #|│   └── moonbit
+        #|│       └── language
+        #|├── workflow
+        #|└── z
+        #|after
+      ),
+    )
+    @fs.mkdir("\{root}/doc/moonbit/tutorial")
+    assert_true(
+      expand_resource_layout(template, root).contains("└── tutorial"),
+    )
+    @fs.rmdir("\{root}/doc/moonbit/tutorial")
+    assert_false(expand_resource_layout(template, root).contains("tutorial"))
+    // Prompts without the placeholder do not depend on a resources directory.
+    assert_eq(
+      expand_resource_layout("unchanged", "\{root}/missing"),
+      "unchanged",
+    )
   })
 }

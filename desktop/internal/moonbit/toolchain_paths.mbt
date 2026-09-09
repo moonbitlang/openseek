@@ -5,11 +5,6 @@ const MoonbitBundleStampFile : String = ".openseek-moonbit-bundle-version"
 const MoonbitSeedVersionFile : String = ".openseek-moonbit-seed-version"
 
 ///|
-/// Resource root containing official docs and bundled workflows.
-/// The engine advertises this prepared payload directory as OPENSEEK_REFERENCES.
-const MoonbitReferencesRelDir : String = "share"
-
-///|
 /// A seed is detected by the version stamp packaging writes as its final
 /// step — after extracting the binary and core archives and verifying the
 /// staged compiler answers `moonc -v` with the expected version. The stamp's
@@ -95,12 +90,6 @@ async fn prepared_moonbit_payload_dir(
 ///|
 fn moonbit_bin_dir(moon_home : @pathx.Path) -> @pathx.Path {
   moon_home.join("bin")
-}
-
-///|
-/// Stable resource root copied from the bundled seed.
-fn moonbit_references_dir(moon_home : @pathx.Path) -> @pathx.Path {
-  moon_home.join(MoonbitReferencesRelDir)
 }
 
 ///|

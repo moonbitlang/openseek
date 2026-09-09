@@ -1408,7 +1408,7 @@ async fn add_moonbit_path_for_native_engine(
     {
       "event": "desktop_engine_moonbit_path",
       "bin_dir": toolchain.bin_dir.to_string(),
-      "references": toolchain.references.map(docs => docs.to_string()),
+      "references": toolchain.references.map(resources => resources.to_string()),
       "path_prefix": first_path_entry(path_env_value(env)),
     }
 }

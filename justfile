@@ -3,6 +3,7 @@ default:
 
 # Check the two production targets together and verify repository formatting.
 check:
+    just check-prompt
     moon check --target native --deny-warn
     moon check --target js --deny-warn
     moon fmt --check
@@ -39,6 +40,13 @@ test-turn-finish:
 test-moon:
     moon test --target native
     moon test --target js
+
+# Refresh filesystem-derived prompt content even when only share/ changed.
+generate-prompt:
+    moon run scripts/md_to_mbt_string -- prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
+
+check-prompt:
+    moon run scripts/md_to_mbt_string -- --check prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
 
 # Build the editor's web distribution and reference server in its scoped workspace.
 editor-build:
