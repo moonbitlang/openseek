@@ -221,7 +221,7 @@ async fn rollback_provision(geometry : Geometry, entry : SubtaskEntry) -> Unit {
 fn is_valid_name(name : String) -> Bool {
   name.length() <= 40 &&
   name is ['a'..='z' | '0'..='9', .. rest] &&
-  rest.iter().all(ch => ch is ('a'..='z' | '0'..='9' | '-'))
+  rest.all(ch => ch is ('a'..='z' | '0'..='9' | '-'))
 }
 
 ///|

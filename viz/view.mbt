@@ -2928,7 +2928,7 @@ fn subrun_child_id(
   guard tokens.get(1) is Some(token) else { return None }
   guard token.has_prefix("sr-") else { return None }
   let digits = token.view(start_offset=3)
-  guard !digits.is_empty() && digits.iter().all(c => c.is_ascii_digit()) else {
+  guard !digits.is_empty() && digits.all(c => c.is_ascii_digit()) else {
     return None
   }
   Some("\{parent}-\{token}")

@@ -569,7 +569,7 @@ fn State::with_turn_start_reply(self : State, value : Json) -> State {
     { ..self, draft: "", }
   }
   let next = match next.active_thread() {
-    Some(active) if active.turns.iter().any(turn => turn.is_running()) =>
+    Some(active) if active.turns.any(turn => turn.is_running()) =>
       { ..next, activity: next.activity.started(active.id), }
     _ => next
   }
@@ -1133,8 +1133,8 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
   assert_true(observed_second.pending_steers.is_empty())
   let items = observed_second.transcript_items()
   assert_eq(items.length(), 3)
-  assert_true(items.iter().all(item => item.kind is @transcript.User(_)))
-  assert_true(items.iter().all(item => item.text() == Some("same text")))
+  assert_true(items.all(item => item.kind is @transcript.User(_)))
+  assert_true(items.all(item => item.text() == Some("same text")))
 }
 
 ///|

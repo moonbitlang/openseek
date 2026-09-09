@@ -28,7 +28,7 @@ fn CodexThread::has_item_id(
 ) -> Bool {
   for turn in self.turns {
     if turn.id == turn_id {
-      return turn.items.iter().any(item => item.id == item_id)
+      return turn.items.any(item => item.id == item_id)
     }
   }
   false

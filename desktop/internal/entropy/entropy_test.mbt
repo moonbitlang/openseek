@@ -8,7 +8,7 @@ test "random_bytes returns OS entropy on native" {
 test "random_hex returns lowercase hex of the requested size" {
   guard @entropy.random_hex(16) is Some(hex) else { fail("no OS entropy") }
   assert_eq(hex.length(), 32)
-  assert_true(hex.iter().all(c => c is ('0'..='9' | 'a'..='f')))
+  assert_true(hex.all(c => c is ('0'..='9' | 'a'..='f')))
 }
 
 ///|

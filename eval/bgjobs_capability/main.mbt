@@ -57,19 +57,17 @@ async fn scenario_overlap(engine : Engine) -> Unit {
   })
   // The marker inside a plain `mbtx` result means the slow program ran
   // (and blocked) in the foreground.
-  let blocked_foreground = seen
-    .iter()
-    .any(event => {
-      event
-      is {
-        "event": String("tool_result"),
-        "tool_name": String("mbtx"),
-        "content": String(content),
-        ..
-      } &&
-      content.contains("INTEG-OK-31337") &&
-      !content.contains("moved to the background")
-    })
+  let blocked_foreground = seen.any(event => {
+    event
+    is {
+      "event": String("tool_result"),
+      "tool_name": String("mbtx"),
+      "content": String(content),
+      ..
+    } &&
+    content.contains("INTEG-OK-31337") &&
+    !content.contains("moved to the background")
+  })
   // Any tool activity strictly between the job start and the marker retrieval
   // shows the wait was actually used for work.
   let retrieved_at = seen.search_by(event => {
@@ -131,13 +129,10 @@ async fn scenario_fire_and_forget(engine : Engine) -> Unit {
     event is { "event": String("agent_finished"), .. }
   })
   let wall_s = (@env.now().reinterpret_as_int64() - started_ms) / 1000
-  let backgrounded = seen
-    .iter()
-    .any(event => {
-      event
-      is { "event": String("tool_result"), "content": String(content), .. } &&
-      content.contains("moved to the background")
-    })
+  let backgrounded = seen.any(event => {
+    event is { "event": String("tool_result"), "content": String(content), .. } &&
+    content.contains("moved to the background")
+  })
   report("S2 automatically handed off the slow run", backgrounded)
   report(
     "S2 finished well before the 45s job (did not block)",

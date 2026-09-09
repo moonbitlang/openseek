@@ -167,7 +167,7 @@ fn child_session_ordinal(id : String, parent : String) -> Int? {
   guard id.strip_prefix("\{parent}-sr-") is Some(digits) else { return None }
   guard !digits.is_empty() &&
     digits.length() <= 9 &&
-    digits.iter().all(c => c.is_ascii_digit()) else {
+    digits.all(c => c.is_ascii_digit()) else {
     return None
   }
   let value = for c in digits; value = 0 {

@@ -156,9 +156,9 @@ fn render(input : @steps.PlanInput) -> @agent_tool.ToolAction {
     .iter()
     .find_first(step => step.status is InProgress)
     .map(step => step.title)
-  let has_verification = input.steps
-    .iter()
-    .any(step => is_verification_title(step.title))
+  let has_verification = input.steps.any(step => {
+    is_verification_title(step.title)
+  })
   let mut content = match in_progress {
     Some(title) =>
       "Plan updated: \{completed}/\{total} done · in progress: \{title}."

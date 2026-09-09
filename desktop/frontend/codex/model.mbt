@@ -753,7 +753,7 @@ fn State::with_selected_effort(self : State, effort : String) -> State {
     return { ..self, selected_effort: effort, }
   }
   guard self.selected_model_option() is Some(model) &&
-    model.reasoning_efforts.iter().any(option => option.value == effort) else {
+    model.reasoning_efforts.any(option => option.value == effort) else {
     return self
   }
   { ..self, selected_effort: effort, }
@@ -770,11 +770,11 @@ fn CodexModelOption::reasoning_effort(
   preferred : String,
 ) -> String {
   let preferred = preferred.trim().to_owned()
-  if self.reasoning_efforts.iter().any(option => option.value == preferred) {
+  if self.reasoning_efforts.any(option => option.value == preferred) {
     return preferred
   }
   if self.default_reasoning_effort is Some(default_) &&
-    self.reasoning_efforts.iter().any(option => option.value == default_) {
+    self.reasoning_efforts.any(option => option.value == default_) {
     return default_
   }
   self.reasoning_efforts.get(0).map(option => option.value).unwrap_or("")
@@ -1315,7 +1315,7 @@ fn CodexThread::decode(value : Json) -> CodexThread? {
   }
   let runtime = match CodexThreadRuntime::decode(fields.get("status")) {
     Some(runtime) => Some(runtime)
-    None if turns.iter().any(turn => turn.is_running()) => Some(ThreadActive)
+    None if turns.any(turn => turn.is_running()) => Some(ThreadActive)
     None => None
   }
   Some({
@@ -1496,7 +1496,7 @@ fn State::with_models(self : State, value : Json) -> State {
     })
   }
   let selected_model = if self.selected_model.is_empty() ||
-    !models.iter().any(model => model.id == self.selected_model) {
+    !models.any(model => model.id == self.selected_model) {
     if !default_model.is_empty() {
       default_model
     } else {
@@ -1536,14 +1536,14 @@ fn State::with_threads(
     let next = {
       ..self,
       threads: self.threads.filter(live => {
-        !threads.iter().any(archived => archived.id == live.id)
+        !threads.any(archived => archived.id == live.id)
       }),
       archived_threads: threads,
       activity,
       notice: "",
     }
     if next.active_thread() is Some(active) &&
-      next.archived_threads.iter().any(thread => thread.id == active.id) {
+      next.archived_threads.any(thread => thread.id == active.id) {
       return next.without_thread(active.id)
     }
     return next
@@ -1553,8 +1553,8 @@ fn State::with_threads(
   // newer and authoritative, so do not let an older list snapshot erase the
   // active row from the navigation rail.
   let visible = if self.active_thread() is Some(active) &&
-    !threads.iter().any(thread => thread.id == active.id) &&
-    !self.archived_threads.iter().any(thread => thread.id == active.id) {
+    !threads.any(thread => thread.id == active.id) &&
+    !self.archived_threads.any(thread => thread.id == active.id) {
     // The list snapshot has no stamp for this thread; carry the one its
     // previous row held (the `thread/start` reply's), so the fresh thread
     // does not sink below stamped history until the next refresh.
@@ -1947,7 +1947,7 @@ fn State::with_login(self : State, value : Json) -> State {
 ///|
 fn State::is_running(self : State) -> Bool {
   guard self.active_thread() is Some(active) else { return false }
-  active.turns.iter().any(turn => turn.is_running())
+  active.turns.any(turn => turn.is_running())
 }
 
 ///|
@@ -2075,7 +2075,7 @@ fn CodexTurn::merged_onto(self : CodexTurn, existing : CodexTurn) -> CodexTurn {
     .unwrap_or(item)
   })
   for incoming in self.items {
-    if !existing.items.iter().any(item => item.id == incoming.id) {
+    if !existing.items.any(item => item.id == incoming.id) {
       items.push(incoming)
     }
   }
@@ -2274,9 +2274,7 @@ fn State::with_pending_request(
     return { ..self, request_generation: generation, }
   }
   let key = request_id.stringify()
-  if self.pending_requests
-    .iter()
-    .any(request => request.request_id.stringify() == key) {
+  if self.pending_requests.any(request => request.request_id.stringify() == key) {
     return { ..self, request_generation: generation, }
   }
   let pending_requests = self.pending_requests.copy()

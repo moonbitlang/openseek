@@ -335,7 +335,7 @@ fn parse_search_response(
         url != "" else {
         continue
       }
-      if sources.iter().any(source => source.url == url) {
+      if sources.any(source => source.url == url) {
         continue
       }
       if sources.length() >= max_results {

@@ -52,7 +52,7 @@ fn valid_slug(name : String) -> Bool {
   if name.is_empty() || name.length() > 64 {
     return false
   }
-  name.iter().all(ch => ch is ('a'..='z' | '0'..='9' | '-'))
+  name.all(ch => ch is ('a'..='z' | '0'..='9' | '-'))
 }
 
 ///|

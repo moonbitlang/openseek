@@ -485,7 +485,7 @@ pub fn queue_run(
         return { accepted: false, }
       }
       guard !text.is_blank() else { return { accepted: false, } }
-      guard !live.queued_runs.iter().any(queued => queued.id == id) else {
+      guard !live.queued_runs.any(queued => queued.id == id) else {
         return { accepted: false, }
       }
       live.queued_runs.push({ id, run_id: mint_run_id(), content: text, })

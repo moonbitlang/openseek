@@ -374,11 +374,11 @@ fn Model::sidebar_component_sections(
   self : Model,
   dev : DeviceState,
 ) -> Array[@section.Input] {
-  let listed = (id : String) => dev.sessions.iter().any(item => item.id == id)
+  let listed = (id : String) => dev.sessions.any(item => item.id == id)
   // An archived record has moved out of the live store, so the live list
   // normally cannot contain it; the filter covers the moment between the
   // archive reply and the list refetch that follows it.
-  let archived = (id : String) => dev.archived.iter().any(item => item.id == id)
+  let archived = (id : String) => dev.archived.any(item => item.id == id)
   let channel = dev.channel.uri_authority()
   let chat_selected = self.screen is Chat && dev.channel == self.focused
   // The activation identity handed to sections and projects: which

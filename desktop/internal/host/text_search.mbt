@@ -613,7 +613,7 @@ fn text_search_unicode_escapes_to_pcre2(pattern : String) -> String {
     let mut converted = false
     if after_slashes + 4 < chars.length() {
       let digits = chars[after_slashes + 1:after_slashes + 5]
-      if digits.iter().all(char => char.is_ascii_hexdigit()) {
+      if digits.all(char => char.is_ascii_hexdigit()) {
         output.write_string("x{")
         for digit in digits {
           output.write_char(digit)
@@ -628,7 +628,7 @@ fn text_search_unicode_escapes_to_pcre2(pattern : String) -> String {
       chars[after_slashes + 1] == '{' &&
       chars[after_slashes + 6] == '}' {
       let digits = chars[after_slashes + 2:after_slashes + 6]
-      if digits.iter().all(char => char.is_ascii_hexdigit()) {
+      if digits.all(char => char.is_ascii_hexdigit()) {
         output.write_string("x{")
         for digit in digits {
           output.write_char(digit)

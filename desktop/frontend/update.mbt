@@ -426,9 +426,7 @@ fn adopt_projects(
   })
   let loading_conversation = if model.loading_conversation is Some(owner) &&
     owner.channel == channel &&
-    !conversations
-    .iter()
-    .any(conv => {
+    !conversations.any(conv => {
       conv.device == owner.channel && conv.session_id == owner.session
     }) {
     None
@@ -2260,9 +2258,7 @@ fn update_msg(
               }
               guard conv.queued_inputs.search_by(item => item.id == id)
                 is Some(index) &&
-                !conv.pending_steers
-                .iter()
-                .any(input => input.submission_id == id) else {
+                !conv.pending_steers.any(input => input.submission_id == id) else {
                 return (@cmd.none, model)
               }
               let item = conv.queued_inputs[index]
@@ -2848,7 +2844,7 @@ fn update_msg(
         file_ctx(model).owner == owner else {
         return (@cmd.none, model)
       }
-      if model.notifications.iter().any(toast => toast.message == message) {
+      if model.notifications.any(toast => toast.message == message) {
         (@cmd.none, model)
       } else {
         model.notify_error(dispatch, message)
@@ -2876,7 +2872,7 @@ fn update_msg(
       let next = { ..model, file_panel: panel, }
       if panel.watch_error == Some(message) &&
         model.file_panel.watch_error != Some(message) &&
-        !model.notifications.iter().any(toast => toast.message == message) {
+        !model.notifications.any(toast => toast.message == message) {
         let (toast, next) = next.notify_error(dispatch, message)
         (@cmd.batch([cmd, toast]), next)
       } else {
@@ -4446,7 +4442,7 @@ fn update_msg(
       // the current archived index and use its placement rather than opening
       // a stale archived target or trusting an obsolete workspace hint.
       let key : ArchiveRecordKey = { session, workspace, }
-      guard dev.archived.iter().any(item => key.matches(item)) &&
+      guard dev.archived.any(item => key.matches(item)) &&
         !(dev.archive_override(key) is Some(ArchiveLive)) else {
         return (@cmd.none, model)
       }
@@ -6016,7 +6012,7 @@ fn update_device_msg(
       })
       for fact in dev.archive_overrides {
         if fact.disposition is ArchiveLive &&
-          !items.iter().any(item => fact.key.matches(item)) {
+          !items.any(item => fact.key.matches(item)) {
           for current in dev.sessions {
             if fact.key.matches(current) {
               items.push(current)
@@ -6074,7 +6070,7 @@ fn update_device_msg(
         }
         if conv.device == channel &&
           conv.is_archived_read_only() &&
-          items.iter().any(item => key.matches(item)) {
+          items.any(item => key.matches(item)) {
           let foreground = channel == next.focused &&
             next.active_session == conv.session_id
           next = next.with_archive_override(channel, key, ArchiveLive)
@@ -6113,7 +6109,7 @@ fn update_device_msg(
         if conv.device == channel &&
           conv.awaits_durable_proof() &&
           !(conv.sync is Reloading(..)) &&
-          items.iter().any(item => item.id == conv.session_id) {
+          items.any(item => item.id == conv.session_id) {
           let (updated, generation) = next.begin_transcript_reload(conv)
           next = updated
           if generation is Some(generation) {
@@ -6415,7 +6411,7 @@ fn update_device_msg(
         Some(confirm) if confirm.channel == channel &&
           next.find_conversation(channel, confirm.session) is Some(conv) &&
           conv.project() == workspace &&
-          !rows.iter().any(row => row.session == Some(confirm.session)) => None
+          !rows.any(row => row.session == Some(confirm.session)) => None
         other => other
       }
       let next = { ..next, conversations, archive_confirm, }
@@ -6472,7 +6468,7 @@ fn update_device_msg(
       })
       for fact in dev.archive_overrides {
         if fact.disposition is ArchiveStored &&
-          !items.iter().any(item => fact.key.matches(item)) {
+          !items.any(item => fact.key.matches(item)) {
           for current in dev.archived {
             if fact.key.matches(current) {
               items.push(current)
@@ -6494,7 +6490,7 @@ fn update_device_msg(
         }
       }
       let archived_now = (id : String, workspace : @common.Uri) => {
-        items.iter().any(item => item.id == id && item.workspace == workspace)
+        items.any(item => item.id == id && item.workspace == workspace)
       }
       // The selected row may still be loading while another conversation is
       // active. Its exact store-qualified identity, not `active_session`, owns
@@ -6683,7 +6679,7 @@ fn update_device_msg(
         let archived = dev.archived.filter(item => !key.matches(item))
         let sessions = dev.sessions.copy()
         if restored is Some(item) &&
-          !sessions.iter().any(current => key.matches(current)) {
+          !sessions.any(current => key.matches(current)) {
           sessions.push(item)
         }
         let next = model
@@ -6759,7 +6755,7 @@ fn update_device_msg(
         conv.is_archived_read_only()
       })
       let archived = dev.archived.copy()
-      if !archived.iter().any(item => key.matches(item)) {
+      if !archived.any(item => key.matches(item)) {
         let mut item : @transcript.SessionListItem = {
           id: key.session,
           title: None,
@@ -6866,7 +6862,7 @@ fn update_device_msg(
       let archived = match dev.archive_override(key) {
         Some(ArchiveStored | ArchiveDeleted) => true
         Some(ArchiveLive) => false
-        None => dev.archived.iter().any(item => key.matches(item))
+        None => dev.archived.any(item => key.matches(item))
       }
       if archived {
         return (@cmd.none, model)
@@ -6884,9 +6880,9 @@ fn update_device_msg(
       // The listing is store-qualified, so ask whether THIS record is listed:
       // a same-id row from another store is a different durable record and
       // must not suppress the reload that gives this one its sidebar row.
-      let listed = dev.sessions
-        .iter()
-        .any(item => item.id == session && item.workspace == commit_project)
+      let listed = dev.sessions.any(item => {
+        item.id == session && item.workspace == commit_project
+      })
       let refresh_sessions = sequence == 1 && !listed && first_commit_unseen
       // A short foreign run can commit and finish before either the session
       // list or run resync reaches this page. Materialize hidden client state
@@ -7175,7 +7171,7 @@ fn update_device_msg(
       // ordinary Started boundary. Retire its in-memory queue row here; the
       // corresponding User commit is the first durable representation of it.
       let existing = if submission_id is Some(id) &&
-        existing.queued_inputs.iter().any(item => item.id == id) {
+        existing.queued_inputs.any(item => item.id == id) {
         let (without_queue, _) = existing.remove_queued_input(id)
         {
           ..without_queue,
@@ -7341,9 +7337,7 @@ fn update_device_msg(
       let accepted_settlements : Array[RecoveredSettlement] = []
       let settled_sessions : Array[String] = []
       for settlement in settled {
-        if !accepted_settlements
-          .iter()
-          .any(item => item.run_id == settlement.run_id) &&
+        if !accepted_settlements.any(item => item.run_id == settlement.run_id) &&
           model.matched_settlement_frontier(channel, frontier, settlement)
           is Some(_) {
           accepted_settlements.push(settlement)
@@ -7359,9 +7353,9 @@ fn update_device_msg(
       let accepted_runs : Array[RecoveredRun] = []
       let admitted_run_sessions : Array[String] = []
       for run in runs {
-        let duplicates_settlement = accepted_settlements
-          .iter()
-          .any(item => item.session == run.session && item.run_id == run.run_id)
+        let duplicates_settlement = accepted_settlements.any(item => {
+          item.session == run.session && item.run_id == run.run_id
+        })
         if !duplicates_settlement &&
           !admitted_run_sessions.contains(run.session) &&
           model.matches_run_snapshot_frontier(channel, frontier, run.session) {
@@ -7513,7 +7507,7 @@ fn update_device_msg(
         guard captured.pending_approval_id is Some(captured_id) else {
           continue
         }
-        if approvals.iter().any(item => item.approval.id == captured_id) {
+        if approvals.any(item => item.approval.id == captured_id) {
           continue
         }
         guard seeded.find_conversation(channel, captured.session) is Some(conv) else {
@@ -12467,9 +12461,9 @@ test "a failed Stop becomes retryable instead of staying Stopping" {
   )
   assert_true(next.active().run is Open(run_id="r7", stage=AtStep(None)))
   assert_true(
-    next.notifications
-    .iter()
-    .any(item => item.message.contains("cancel transport failed")),
+    next.notifications.any(item => {
+      item.message.contains("cancel transport failed")
+    }),
   )
 }
 
@@ -15470,9 +15464,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
     fail("the recreated conversation disappeared after its snapshot")
   }
   assert_true(
-    recreated.messages
-    .iter()
-    .any(message => message.text() == Some("new incarnation")),
+    recreated.messages.any(message => message.text() == Some("new incarnation")),
   )
 }
 
@@ -15670,11 +15662,9 @@ test "archive broadcast invalidates the active send target before list replies" 
   assert_true(invalidated.active().worktree_mode)
   inspect(invalidated.active().task, content="")
   assert_true(invalidated.active().mentions.is_empty())
-  assert_true(
-    invalidated.dev().archived.iter().any(item => item.id == "desktop-test"),
-  )
+  assert_true(invalidated.dev().archived.any(item => item.id == "desktop-test"))
   assert_false(
-    invalidated.dev().sessions.iter().any(item => item.id == "desktop-test"),
+    invalidated.dev().sessions.any(item => item.id == "desktop-test"),
   )
   // Even before either sidebar refresh returns, the next submit belongs to
   // the replacement conversation; no live state can target the archived id.
@@ -15793,10 +15783,8 @@ test "an archive notification wins over a stale live-list reply" {
     sessions_loaded([item], request_generation=1),
     invalidated,
   )
-  assert_false(
-    stale.dev().sessions.iter().any(current => current.id == item.id),
-  )
-  assert_true(stale.dev().archived.iter().any(current => current.id == item.id))
+  assert_false(stale.dev().sessions.any(current => current.id == item.id))
+  assert_true(stale.dev().archived.any(current => current.id == item.id))
   inspect(stale.active_session, content="desktop-safe")
 }
 
@@ -15870,10 +15858,8 @@ test "an unarchive notification wins over a stale archived-list reply" {
     archived_loaded([item], request_generation=1),
     restored,
   )
-  assert_false(
-    stale.dev().archived.iter().any(current => current.id == item.id),
-  )
-  assert_true(stale.dev().sessions.iter().any(current => current.id == item.id))
+  assert_false(stale.dev().archived.any(current => current.id == item.id))
+  assert_true(stale.dev().sessions.any(current => current.id == item.id))
 }
 
 ///|
@@ -15990,9 +15976,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
     ),
     stale_archived,
   )
-  assert_true(
-    reconciled.dev().sessions.iter().any(current => current.id == item.id),
-  )
+  assert_true(reconciled.dev().sessions.any(current => current.id == item.id))
   inspect(reconciled.dev().archived.length(), content="0")
   let (_, stale) = update_dev(
     dispatch,

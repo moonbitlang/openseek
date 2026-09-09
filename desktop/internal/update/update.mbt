@@ -199,7 +199,7 @@ fn normalized_sha256(text : String) -> String? {
   }
   let hex = text.to_lower()
   guard hex.length() == 64 else { return None }
-  guard hex.iter().all(ch => ch is ('0'..='9' | 'a'..='f')) else { return None }
+  guard hex.all(ch => ch is ('0'..='9' | 'a'..='f')) else { return None }
   Some(hex)
 }
 

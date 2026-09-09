@@ -150,9 +150,9 @@ fn Draft::reconciled(self : Draft, source~ : Draft, incoming~ : Draft) -> Draft 
   } else {
     let mut merged = { ..self, task, }
     for mention in incoming.mentions {
-      let externally_added = source.mentions
-        .iter()
-        .all(existing => existing.ref_ != mention.ref_)
+      let externally_added = source.mentions.all(existing => {
+        existing.ref_ != mention.ref_
+      })
       if externally_added {
         merged = merged.with_mention(mention)
       }

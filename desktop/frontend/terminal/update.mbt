@@ -285,9 +285,7 @@ fn update(
           (@cmd.batch(cmds), state)
         }
         None =>
-          if state.tabs
-            .iter()
-            .any(tab => {
+          if state.tabs.any(tab => {
               tab.workspace.channel() == channel && tab.status is TabOpening
             }) {
             let owner = (channel, id)

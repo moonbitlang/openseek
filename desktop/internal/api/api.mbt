@@ -959,9 +959,7 @@ async fn ApiState::codex_worktree_project(
   // operation as well as first creation. Existing tasks can have turns and an
   // app-server cwd at the missing checkout; the registry's exact owner/project
   // pair is the authority needed to recreate that same placement.
-  if @worktree.list_codex_worktree_bindings()
-    .iter()
-    .any(binding => {
+  if @worktree.list_codex_worktree_bindings().any(binding => {
       binding.thread_id == thread_id && binding.workspace == requested
     }) {
     return requested

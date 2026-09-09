@@ -1062,7 +1062,7 @@ async test "workspace detach drains an orphaned pending follower before commit" 
     let drained_before_commit : Ref[Bool] = Ref(false)
     let detached = detach_workspace(manager, workspace.to_string(), fn(_) {
       drained_before_commit.val = follower.retired &&
-        emitted.iter().any(event => event is SessionCommit({ sequence: 1, .. }))
+        emitted.any(event => event is SessionCommit({ sequence: 1, .. }))
     })
     assert_true(drained_before_commit.val)
     assert_true(detached is Workspaces([]))

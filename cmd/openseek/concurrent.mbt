@@ -385,9 +385,9 @@ async fn print_fleet_summary(
   session_root_value : String,
 ) -> Unit {
   let total = outcomes.length()
-  let finished = outcomes
-    .iter()
-    .count_if(outcome => outcome is Some(result) && result.ok)
+  let finished = outcomes.count_if(outcome => {
+    outcome is Some(result) && result.ok
+  })
   // Each row writes its own leading newline, so a fleet with no rows leaves
   // the scaffold untouched.
   fn rows(out : StringBuilder) {

@@ -200,7 +200,7 @@ pub fn subrun_child_sessions(
     let digits = token.view(start_offset=3)
     guard !digits.is_empty() &&
       digits.length() <= 9 &&
-      digits.iter().all(c => c.is_ascii_digit()) else {
+      digits.all(c => c.is_ascii_digit()) else {
       continue
     }
     let child = "\{parent}-\{token}"
@@ -1114,9 +1114,7 @@ test "transcript mapping renders goal markers as cards and reduces the standing 
   assert_true(view.goal_markers[0] == (2, GoalSet("ship the feature")))
   assert_true(view.goal_markers[1] == (4, GoalBlocked("needs a decision")))
   // The goal-family notices that are not markers stay out of it.
-  assert_true(
-    view.goal_markers.iter().all(entry => entry.0 != 1 && entry.0 != 3),
-  )
+  assert_true(view.goal_markers.all(entry => entry.0 != 1 && entry.0 != 3))
 }
 
 ///|

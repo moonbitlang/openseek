@@ -995,7 +995,7 @@ fn session_url(id : String) -> String {
 /// server resolves as a legacy key but a standalone export's embedded data
 /// map does not.
 fn resolve_session_key(sessions : Array[SessionRow], value : String) -> String? {
-  if sessions.iter().any(row => row.key == value) {
+  if sessions.any(row => row.key == value) {
     return Some(value)
   }
   sessions.iter().find_first(row => row.id == value).map(row => row.key)

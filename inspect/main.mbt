@@ -123,7 +123,7 @@ async fn main {
       let scoped = rows.filter(row => {
         in_export_scope(row.id, config.export_session)
       })
-      guard scoped.iter().any(row => row.id == config.export_session) else {
+      guard scoped.any(row => row.id == config.export_session) else {
         fail(
           "openseek viz: no session '\{config.export_session}' in the scanned roots",
         )
@@ -1203,7 +1203,7 @@ fn in_export_scope(id : String, target : String) -> Bool {
     return true
   }
   guard id.strip_prefix("\{target}-sr-") is Some(digits) else { return false }
-  !digits.is_empty() && digits.iter().all(c => c.is_ascii_digit())
+  !digits.is_empty() && digits.all(c => c.is_ascii_digit())
 }
 
 ///|

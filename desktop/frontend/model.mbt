@@ -3221,7 +3221,7 @@ fn Model::can_reload_transcript(self : Model, conv : Conversation) -> Bool {
     return true
   }
   match self.device_state(conv.device) {
-    Some(dev) => dev.sessions.iter().any(item => item.id == conv.session_id)
+    Some(dev) => dev.sessions.any(item => item.id == conv.session_id)
     None => false
   }
 }
@@ -3365,9 +3365,9 @@ fn Model::conversation_is_new_chat(self : Model, conv : Conversation) -> Bool {
     return false
   }
   guard self.device_state(conv.device) is Some(dev) else { return true }
-  !dev.sessions
-  .iter()
-  .any(item => item.id == conv.session_id && item.workspace == conv.project())
+  !dev.sessions.any(item => {
+    item.id == conv.session_id && item.workspace == conv.project()
+  })
 }
 
 ///|
@@ -4152,7 +4152,7 @@ fn Conversation::has_seen_durable_sequence(
   }
   match self.sync {
     Reloading(buffered~, ..) | ReloadFailed(buffered~, ..) =>
-      buffered.iter().any(commit => commit.sequence == sequence)
+      buffered.any(commit => commit.sequence == sequence)
     Synced => false
   }
 }

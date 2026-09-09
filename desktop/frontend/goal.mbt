@@ -701,9 +701,7 @@ test "a kept goal draft is a conversation you can get back to" {
       listed=_ => false,
       archived=_ => false,
     )
-    assert_true(
-      rows.iter().any(row => row.1.id().conversation() == "desktop-fresh"),
-    )
+    assert_true(rows.any(row => row.1.id().conversation() == "desktop-fresh"))
   }
 }
 

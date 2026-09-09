@@ -116,14 +116,12 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   let queued_items : Array[@composer.QueuedInput] = []
   let interactive = conv.run is Open(stage~, ..) && !(stage is Cancelling)
   for item in conv.queued_inputs {
-    if steering.iter().any(input => input.submission_id == item.id) {
+    if steering.any(input => input.submission_id == item.id) {
       continue
     }
-    let queueing = conv.pending_steers
-      .iter()
-      .any(input => {
-        input.behavior is FollowupQueue && input.submission_id == item.id
-      })
+    let queueing = conv.pending_steers.any(input => {
+      input.behavior is FollowupQueue && input.submission_id == item.id
+    })
     queued_items.push({
       id: item.id,
       content: user_display_text(item.content),

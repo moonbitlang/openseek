@@ -220,7 +220,7 @@ pub async fn add(
   // dialog buffer once slipped through the is_dir check below — C-level
   // filesystem calls truncate at the first NUL while the MoonBit string
   // keeps the rest — and poisoned the registry, so refuse them outright.
-  guard !path.iter().any(ch => ch.is_control()) else {
+  guard !path.any(ch => ch.is_control()) else {
     raise WorkspaceError("workspace path contains control characters")
   }
   let dir = expanded_path(path)

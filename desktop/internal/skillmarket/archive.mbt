@@ -86,7 +86,7 @@ fn safe_archive_path(path : String) -> Bool {
     if segment.is_empty() || segment == "." || segment == ".." {
       return false
     }
-    if segment.iter().any(ch => ch is ('\\' | ':' | '\u{0}')) {
+    if segment.any(ch => ch is ('\\' | ':' | '\u{0}')) {
       return false
     }
   }

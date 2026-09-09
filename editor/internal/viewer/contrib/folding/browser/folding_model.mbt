@@ -571,7 +571,7 @@ pub fn set_collapse_state_at_level(
   let filter = region_filter_with_level((region, level) => {
     level == fold_level &&
     region.is_collapsed() != do_collapse &&
-    !blocked_line_numbers.iter().any(line => region.contains_line(line))
+    !blocked_line_numbers.any(line => region.contains_line(line))
   })
   let to_toggle = folding_model.get_regions_inside(None, filter~)
   folding_model.toggle_collapse_state(to_toggle)

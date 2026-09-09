@@ -487,7 +487,7 @@ fn Model::conversation_placement(
   match conv.workspace {
     Project(root~) => {
       guard self.device_state(conv.device) is Some(dev) &&
-        dev.worktrees.iter().any(group => group.project == root) else {
+        dev.worktrees.any(group => group.project == root) else {
         return None
       }
       Some(@interop.WorkspaceRoot(root~))
@@ -497,7 +497,7 @@ fn Model::conversation_placement(
       // exposing a live placement so no file or terminal request can combine
       // that name with the project's main checkout.
       guard self.device_state(conv.device) is Some(dev) else { return None }
-      guard dev.worktrees.iter().any(group => group.project == project) else {
+      guard dev.worktrees.any(group => group.project == project) else {
         return None
       }
       guard dev.worktree_row(project, conv.session_id) is Some(row) else {

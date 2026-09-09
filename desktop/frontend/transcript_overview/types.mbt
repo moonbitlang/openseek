@@ -101,7 +101,7 @@ pub fn entries(
       }
       match item.kind {
         Assistant(calls~, ..) =>
-          if calls.iter().any(call => call.outcome is Done(is_error=true, ..)) {
+          if calls.any(call => call.outcome is Done(is_error=true, ..)) {
             failed = true
           }
         Notice(is_error=true, ..) => failed = true

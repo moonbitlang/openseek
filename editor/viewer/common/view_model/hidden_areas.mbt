@@ -263,9 +263,7 @@ pub fn ViewModel::set_hidden_areas(
     let first_model_line_is_hidden = match
       stable_viewport.viewport_start_model_position {
       Some(position) =>
-        merged_ranges
-        .iter()
-        .any(range => {
+        merged_ranges.any(range => {
           range.start_line_number <= position.line_number &&
           position.line_number <= range.end_line_number
         })

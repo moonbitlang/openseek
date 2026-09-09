@@ -431,18 +431,18 @@ test "native window ops are absent from the relay method catalog" {
   let catalog = @api.endpoints(state, connection)
   let window_only = window_endpoints(BrowserViews())
   assert_true(
-    window_only
-    .iter()
-    .any(endpoint => endpoint.name() == @commands.app_toggle_maximized.name()),
+    window_only.any(endpoint => {
+      endpoint.name() == @commands.app_toggle_maximized.name()
+    }),
   )
   assert_true(
-    window_only
-    .iter()
-    .any(endpoint => endpoint.name() == @commands.app_set_titlebar_theme.name()),
+    window_only.any(endpoint => {
+      endpoint.name() == @commands.app_set_titlebar_theme.name()
+    }),
   )
   for endpoint in window_only {
     let name = endpoint.name()
-    assert_false(catalog.iter().any(shared => shared.name() == name))
+    assert_false(catalog.any(shared => shared.name() == name))
   }
 }
 

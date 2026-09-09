@@ -100,10 +100,10 @@ fn is_moonbit_source(path : StringView) -> Bool {
 fn numbered_line(line : String) -> (String, String)? {
   guard line.split_once("|") is Some((left, source)) else { return None }
   let number = left.trim()
-  if number.is_empty() || !number.iter().all(char => char.is_ascii_digit()) {
+  if number.is_empty() || !number.all(char => char.is_ascii_digit()) {
     return None
   }
-  if !left.iter().all(char => char == ' ' || char.is_ascii_digit()) {
+  if !left.all(char => char == ' ' || char.is_ascii_digit()) {
     return None
   }
   Some((number.to_owned(), source.to_owned()))

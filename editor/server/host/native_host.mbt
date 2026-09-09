@@ -643,9 +643,7 @@ fn mermaid_static_route(path : String) -> (String, String)? {
   guard path.has_prefix(prefix) && path.has_suffix(".mjs") else { return None }
   let name = path[prefix.length():]
   guard !name.is_empty() &&
-    name
-    .iter()
-    .all(char => {
+    name.all(char => {
       char.is_ascii_alphabetic() ||
       char.is_ascii_digit() ||
       char == '-' ||

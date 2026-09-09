@@ -34,7 +34,7 @@ pub fn split_child_session_id(id : String) -> (String, Int)? {
   let digits = id[start + marker.length():]
   guard !digits.is_empty() &&
     digits.length() <= 9 &&
-    digits.iter().all(c => c.is_ascii_digit()) else {
+    digits.all(c => c.is_ascii_digit()) else {
     return None
   }
   let ordinal = for c in digits; ordinal = 0 {

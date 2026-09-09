@@ -241,7 +241,7 @@ async fn read_worktrees_unlocked(
     guard fields.get("name") is Some(String(name)) && valid_worktree_name(name) else {
       continue
     }
-    if entries.iter().any(existing => existing.name == name) {
+    if entries.any(existing => existing.name == name) {
       continue
     }
     guard fields.get("branch") is Some(String(branch)) && !branch.is_empty() else {
@@ -687,7 +687,7 @@ async fn fresh_worktree_name(
 ) -> String {
   for n in 1..<=1000 {
     let name = "wt-\{n}"
-    if entries.iter().any(entry => entry.name == name) {
+    if entries.any(entry => entry.name == name) {
       continue
     }
     let occupied = @fsx.exists(worktree_dir(dir, name).to_path()) catch {
@@ -857,7 +857,7 @@ pub async fn create(
   // Refusals name the holder: the registry entry or the directory (a worker
   // slice can own `.worktrees/<name>` without any registry entry). The branch
   // is freshly salted, so nothing can hold it ahead of us.
-  if entries.iter().any(entry => entry.name == name) {
+  if entries.any(entry => entry.name == name) {
     raise WorktreeError("worktree \{name} already exists in this workspace")
   }
   let target = worktree_dir(dir, name)

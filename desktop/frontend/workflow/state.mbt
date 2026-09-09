@@ -96,7 +96,7 @@ fn ordinal_of(id : String) -> Int? {
   // a sub-run id.
   guard !digits.is_empty() &&
     digits.length() <= 9 &&
-    digits.iter().all(c => c.is_ascii_digit()) else {
+    digits.all(c => c.is_ascii_digit()) else {
     return None
   }
   let ordinal = for c in digits; ordinal = 0 {
