@@ -50,21 +50,26 @@ cancelled at that deadline.
   transcript and inherited by any background job. Presentation only; it does
   not affect compilation, execution, sandboxing, or background handoff.
 
-- `source` (string, mutually exclusive with `filename`): a full `.mbtx` program. It may open with an
+- `source` (string): a full `.mbtx` program. It may open with an
   inline `import { "pkg", "pkg", … }` block (comma-separated module paths),
   then the program including its own `main`. Use `async fn main` for
   filesystem/stdio work.
-- `filename` (string, mutually exclusive with `source`): a saved `.mbtx`
-  script name or path. A bare name (no `/` or `\`, and not `.` or `..`)
-  resolves under `OPENSEEK_REFERENCES/workflow/`. Use `./check.mbtx` for a
-  workspace file; other relative paths resolve from the workspace root and
+- `filename` (string): a `.mbtx` script name or path. Ordinary names, including
+  `check.mbtx`, resolve from the workspace root. `@builtin/check.mbtx` resolves
+  under `OPENSEEK_REFERENCES/workflow/`. Other namespaces are reserved for future
+  use and currently rejected. Paths cannot escape the namespace root, including
+  through symlinks. Use `./@builtin/check.mbtx` for a literal workspace path;
   absolute paths remain absolute. There is no fallback between locations.
-  Supply exactly one of these two fields. `cwd` does not change resolution. Each call
+  Supply at least one of these two fields. `cwd` does not change resolution. A filename-only call
   reads the current file once and compiles that snapshot through the same
   isolated execution path as inline source; diagnostics cite the filename.
-  For repeated calls, save a script with the file tools and reuse it with
-  `{"filename":"scripts/check.mbtx"}`, omitting `source` entirely. `filename`
-  reads an existing file; it does not save or name an inline `source` program.
+  With both source and filename, the tool saves the script inside the writable
+  workspace and runs the submitted snapshot. Missing parents are created;
+  identical existing content is reused, while different content is rejected
+  without overwriting or running. Use edit to change a saved file. Subsequent
+  calls can use `{"filename":"scripts/check.mbtx"}` without source. Saving is
+  unavailable in read-only mode and obeys worker write scopes. Namespaced
+  filenames cannot accompany source: bundled scripts are read-only.
   Use `source` alone for one-off snippets.
 - `target` (string, optional, default `wasm`): one of `wasm`, `wasm-gc`, `js`,
   or `llvm`. The default wasm backend is the policy-bound command/IO surface;

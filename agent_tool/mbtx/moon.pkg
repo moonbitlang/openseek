@@ -1,5 +1,6 @@
 import {
   "bobzhang/openseek/agent_tool",
+  "bobzhang/openseek/agent_tool/write_scope",
   "bobzhang/openseek/agent_subrun/host",
   "bobzhang/openseek/agent_tool/bgjobs",
   "bobzhang/openseek/agent_runtime",

@@ -1,8 +1,9 @@
 ///|
-/// Exactly one inline program or saved script path.
+/// Inline code, an existing script, or code to save before running.
 pub enum Program {
   Source(String)
   File(String)
+  Save(String, String)
 } derive(Debug)
 
 ///|
@@ -50,8 +51,8 @@ fn valid_target(target : String) -> Bool {
 }
 
 ///|
-/// Decode `mbtx` tool-call arguments. Exactly one of `source` and `filename`
-/// is required. `filename` names a saved script; `source` is a string
+/// Decode `mbtx` tool-call arguments. At least one of `source` and `filename`
+/// is required; both means save and run a workspace script. `source` is a string
 /// holding a full `.mbtx` program (an optional leading `import { … }` block,
 /// then the program including its own `main`). `target` is an optional backend
 /// name defaulting to `wasm`, which is the backend moonrun's policy sandbox
@@ -71,9 +72,22 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
   match arguments {
     Object(fields) => {
       let program = match (fields.get("source"), fields.get("filename")) {
+        (Some(String(source)), Some(String(filename))) => {
+          guard !filename.is_blank() else {
+            fail(
+              "arguments.filename to be a nonblank workspace path when saving source",
+            )
+          }
+          guard !filename.has_prefix("@") else {
+            fail(
+              "a workspace filename when source is supplied. Namespaced scripts are read-only: call {\"filename\":\"@builtin/check.mbtx\"} without source, or save your custom source as {\"source\":\"...\",\"filename\":\"check.mbtx\"}",
+            )
+          }
+          Save(source, filename)
+        }
         (Some(_), Some(_)) =>
           fail(
-            "exactly one of arguments.source and arguments.filename, not both. filename reads an existing script; it does not save or name source. For repeated runs, first save the program with the file tools, then call mbtx with {\"filename\":\"scripts/check.mbtx\"} and omit source. For a one-off run, omit filename and pass only source",
+            "source and filename to both be strings for save-and-run. Omit unused fields entirely instead of sending null",
           )
         (Some(String(source)), None) => Source(source)
         (None, Some(String(filename))) => {
@@ -86,7 +100,7 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         }
         (None, None) =>
           fail(
-            "exactly one of arguments.source and arguments.filename. Use {\"source\":\"fn main { println(42) }\"} for inline code, or {\"filename\":\"./check.mbtx\"} for an existing workspace script. Omit the unused field entirely; do not send null",
+            "source or filename. Use {\"source\":\"fn main { println(42) }\"} for inline code, {\"filename\":\"./check.mbtx\"} for an existing script, or both strings to save and run. Omit unused fields entirely; do not send null",
           )
         (Some(_), None) =>
           fail(
@@ -210,7 +224,7 @@ test "decode rejects malformed arguments" {
     { "filename": 3 },
     { "filename": null },
     { "source": null },
-    { "source": "x", "filename": "run.mbtx" },
+    { "source": "x", "filename": "@builtin/check.mbtx" },
     { "source": "x", "filename": null },
     { "source": null, "filename": "run.mbtx" },
     // An unknown warning value, a non-string cwd, an unknown target, a
@@ -234,26 +248,27 @@ test "decode rejects malformed arguments" {
 }
 
 ///|
-test "decode explains how to recover from source and filename together" {
+test "decode rejects saving to a namespace with retry guidance" {
   try
-    decode({ "source": "fn main {}", "filename": "scripts/check.mbtx" })
+    decode({ "source": "fn main {}", "filename": "@builtin/check.mbtx" })
   catch {
     error => {
       let message = error.to_string()
-      assert_true(message.contains("filename reads an existing script"))
-      assert_true(
-        message.contains("first save the program with the file tools"),
-      )
-      assert_true(message.contains("{\"filename\":\"scripts/check.mbtx\"}"))
-      assert_true(message.contains("omit filename and pass only source"))
+      assert_true(message.contains("Namespaced scripts are read-only"))
+      assert_true(message.contains("without source"))
+      assert_true(message.contains("@builtin/check.mbtx"))
     }
   } noraise {
-    _ => fail("expected mutually exclusive inputs to be rejected")
+    _ => fail("expected namespace write to be rejected")
   }
 }
 
 ///|
 test "decode accepts filename with unchanged execution options" {
+  assert_true(
+    decode({ "source": "fn main {}", "filename": "check.mbtx" }).program
+    is Save("fn main {}", "check.mbtx"),
+  )
   let input = decode({
     "filename": "scripts/check.mbtx",
     "cwd": "sub",

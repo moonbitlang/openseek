@@ -157,7 +157,12 @@ pub async fn run_child(
     tools=captured => {
       Tools([
         @read.definition(workspace_root=input.worker_root),
-        @mbtx.definition(workspace_root=input.worker_root, worker_sandbox~),
+        @mbtx.definition(
+          workspace_root=input.worker_root,
+          worker_sandbox~,
+          file_state~,
+          write_scope~,
+        ),
         @edit.definition(
           workspace_root=input.worker_root,
           file_state~,

@@ -33,7 +33,7 @@ test "a saved mbtx call displays a Filename variant" {
 }
 
 ///|
-test "mbtx tabs identify Source and Filename and leave ambiguous inputs as JSON" {
+test "mbtx tabs identify Source, Filename, and Save and run" {
   guard custom_card("mbtx", "{\"source\":\"fn main {}\"}")
     is Some((source_label, _)) else {
     fail("expected Source card")
@@ -46,8 +46,15 @@ test "mbtx tabs identify Source and Filename and leave ambiguous inputs as JSON"
   assert_eq(file_label, "Filename")
   assert_true(
     decode_mbtx_call("{\"source\":\"fn main {}\",\"filename\":\"check.mbtx\"}")
-    is None,
+    is Some({ program: Save("fn main {}", "check.mbtx"), .. }),
   )
+  guard custom_card(
+      "mbtx", "{\"source\":\"fn main {}\",\"filename\":\"check.mbtx\"}",
+    )
+    is Some((save_label, _)) else {
+    fail("expected Save & run card")
+  }
+  assert_eq(save_label, "Save & run")
 }
 
 ///|

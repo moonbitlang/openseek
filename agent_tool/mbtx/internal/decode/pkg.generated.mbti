@@ -24,6 +24,7 @@ pub struct MbtxInput {
 pub enum Program {
   Source(String)
   File(String)
+  Save(String, String)
 } derive(@debug.Debug)
 
 // Type aliases

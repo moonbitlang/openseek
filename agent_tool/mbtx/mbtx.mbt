@@ -112,6 +112,8 @@ fn duration_label(milliseconds : Int) -> String {
 pub fn definition(
   workspace_root~ : String,
   read_only? : Bool = false,
+  file_state? : @agent_tool.FileStateMap = FileStateMap(),
+  write_scope? : @write_scope.WriteScope,
   bg_runtime? : @bgjobs.BgJobRuntime,
   job_dir? : String,
   scratch_dir? : String,
@@ -141,10 +143,14 @@ pub fn definition(
       schema(escalation=approval is Some(_), hosting=subrun is Some(_)),
     ),
     execute=Async(arguments => {
-      execute(
+      let saved : Ref[String?] = Ref(None)
+      let action = execute(
         workspace_root,
         arguments,
         read_only~,
+        file_state~,
+        write_scope?,
+        saved~,
         bg_runtime?,
         job_dir?,
         scratch_dir?,
@@ -156,6 +162,17 @@ pub fn definition(
         approval?,
         subrun?,
       )
+      match (saved.val, action) {
+        (Some(filename), Respond(output)) => {
+          let retry : Json = { "filename": filename }
+          @agent_tool.respond(
+            "Script saved at \{filename}. For subsequent runs, call mbtx with \{retry.stringify()} and omit source.\n\n\{output.content}",
+            is_error=output.is_error,
+            brief?=output.brief,
+          )
+        }
+        _ => action
+      }
     }),
   )
 }
@@ -201,6 +218,9 @@ async fn execute(
   workspace_root : String,
   arguments : Json,
   read_only~ : Bool,
+  file_state~ : @agent_tool.FileStateMap,
+  write_scope? : @write_scope.WriteScope,
+  saved~ : Ref[String?],
   bg_runtime? : @bgjobs.BgJobRuntime,
   job_dir? : String,
   scratch_dir? : String,
@@ -226,6 +246,31 @@ async fn execute(
   // A saved script has the same isolation and execution path as inline code.
   let (source, source_name) = match input.program {
     Source(source) => (source, "source")
+    Save(source, filename) => {
+      if worker_sandbox is Some(_) && write_scope is None {
+        return @agent_tool.respond(
+          "error: mbtx cannot save without the worker write scope; use the write tool first",
+          is_error=true,
+        )
+      }
+      save_script(
+        workspace_root,
+        filename,
+        source,
+        read_only~,
+        file_state~,
+        write_scope?,
+      ) catch {
+        error if @async.is_being_cancelled() => raise error
+        error =>
+          return @agent_tool.respond(
+            "error: mbtx could not save \{filename}: \{@tool_error.failure_message("\{error}")}",
+            is_error=true,
+          )
+      }
+      saved.val = Some(filename)
+      (source, filename)
+    }
     File(filename) => {
       let path = resolve_filename(
         workspace_root,
@@ -238,13 +283,24 @@ async fn execute(
             is_error=true,
           )
       }
+      if is_bundled_filename(filename) &&
+        @env.get_env_var("OPENSEEK_REFERENCES") is Some(root) {
+        check_builtin_containment(path, root) catch {
+          error if @async.is_being_cancelled() => raise error
+          error =>
+            return @agent_tool.respond(
+              "error: mbtx \{@tool_error.failure_message("\{error}")}",
+              is_error=true,
+            )
+        }
+      }
       let source = @fs.read_file(path).text() catch {
         error if @async.is_being_cancelled() => raise error
         error => {
           let hint = if is_bundled_filename(filename) {
-            " Bundled workflows: check.mbtx, test.mbtx, check-test.mbtx, info-fmt.mbtx, check-json.mbtx. For a workspace file, use ./\{filename}."
+            " Bundled workflows: @builtin/check.mbtx, @builtin/test.mbtx, @builtin/check-test.mbtx, @builtin/info-fmt.mbtx, @builtin/check-json.mbtx. Ordinary filenames select workspace files."
           } else {
-            " filename must name an existing readable script. Save it with the file tools first, then retry with filename only; or run inline code with source only. Paths resolve from the workspace, independently of cwd."
+            " filename alone must name an existing readable script. To save a new workspace script, pass source and filename together; or run inline with source only. Paths resolve from the workspace, independently of cwd."
           }
           return @agent_tool.respond(
             "error: mbtx could not read filename \{filename}: \{error}\{hint}",
@@ -1375,7 +1431,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool) -> Json {
             "source",
             Json({
               "type": "string",
-              "description": "Inline program to execute once. Omit filename when using source. To reuse a program, save it with the file tools first, then call with filename only.",
+              "description": "Complete .mbtx program. Alone: run inline. With a workspace filename: save and run, then reuse filename-only calls. Cannot accompany a namespaced filename. Different existing content is never overwritten.",
             }),
           ),
           (
@@ -1383,7 +1439,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool) -> Json {
             {
               "type": "string",
               "minLength": 1,
-              "description": "Read and execute an existing .mbtx file; this does not save source. A bare name such as check.mbtx resolves under OPENSEEK_REFERENCES/workflow/. Use ./check.mbtx for a workspace file; other relative paths resolve from the workspace, and absolute paths stay absolute. Save new custom scripts with file tools first. Omit source. cwd controls execution only.",
+              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx resolves under OPENSEEK_REFERENCES/workflow/. Alone: read and run. With source: save and run inside the workspace, refusing to overwrite different content. Namespaced scripts are read-only; omit source for them. cwd controls execution only.",
             },
           ),
           (
@@ -1460,7 +1516,11 @@ fn schema(escalation~ : Bool, hosting~ : Bool) -> Json {
         ],
       ),
     ),
-    "oneOf": [{ "required": ["source"] }, { "required": ["filename"] }],
+    "anyOf": [{ "required": ["source"] }, { "required": ["filename"] }],
+    "not": {
+      "required": ["source", "filename"],
+      "properties": { "filename": { "pattern": "^@" } },
+    },
   }
 }
 
@@ -1528,26 +1588,26 @@ fn description(
     #|scripting surface: there is no shell tool, so commands, IO, and computation
     #|happen inside the submitted MoonBit program.
     #|
-    #|Choose exactly one input. For a one-off probe, pass `source` and omit
-    #|`filename`. When OPENSEEK_REFERENCES is available, bundled workflows
-    #|already exist and need no file creation: check.mbtx (moon check),
-    #|test.mbtx (moon test), check-test.mbtx (check then test), info-fmt.mbtx
-    #|(moon info then moon fmt), and check-json.mbtx (moon check --output-json).
-    #|For custom repeated validation or automation (for example, running
-    #|`moon check` and `moon test` after edits), follow these two steps:
-    #|1. Use the file tools to save the program as `scripts/check.mbtx`.
-    #|2. Execute it with `{"filename":"scripts/check.mbtx"}`. Omit `source`
-    #|   entirely. Use this same filename-only call for subsequent runs.
-    #|`filename` READS an existing file. It does not create a file, save `source`,
-    #|or assign a name to an inline program. Passing both inputs is an error.
-    #|If the program needs to change, edit the saved file and run it again.
-    #|A filename with no `/` or `\` and unequal to `.` or `..` selects
-    #|OPENSEEK_REFERENCES/workflow/ (for example, `{"filename":"check.mbtx"}`).
-    #|Use `./check.mbtx` for a workspace file. Other relative paths resolve
+    #|Pass source to run inline, filename to run an existing script, or both to
+    #|save and run a workspace script. For repeated automation, use
+    #|`{"source":"...","filename":"scripts/check.mbtx"}` once, then
+    #|`{"filename":"scripts/check.mbtx"}` for later runs. Missing parents are
+    #|created. Identical existing content is reused; different content is never
+    #|overwritten. Use the edit tool to change a saved script. Saving is limited
+    #|to the writable workspace and is unavailable in read-only mode.
+    #|When OPENSEEK_REFERENCES is available, these scripts are already bundled:
+    #|@builtin/check.mbtx (moon check), @builtin/test.mbtx (moon test),
+    #|@builtin/check-test.mbtx (check then test), @builtin/info-fmt.mbtx (info
+    #|then fmt), and @builtin/check-json.mbtx (moon check --output-json).
+    #|Call `{"filename":"@builtin/check.mbtx"}` without source. Namespaced
+    #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
+    #|not implemented. Paths within the namespace cannot escape its root.
+    #|Ordinary names such as check.mbtx select workspace files. Use
+    #|./@builtin/check.mbtx for a literal workspace path. Relative paths resolve
     #|from the workspace root; absolute paths stay absolute. No lookup fallback
     #|occurs. `cwd` controls execution only, not filename resolution.
-    #|Each call reads the current file once
-    #|and runs that snapshot with the same sandbox and isolated imports as source.
+    #|Existing scripts are read once; each run executes its selected snapshot
+    #|with the same sandbox and isolated imports as inline source.
     #|Diagnostics cite `source:LINE:COL` or the supplied filename and line/column.
     #|`target` defaults to wasm, the sandboxed backend.
     #|

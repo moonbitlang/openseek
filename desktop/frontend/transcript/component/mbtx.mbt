@@ -20,6 +20,7 @@
 priv enum MbtxProgram {
   Source(String)
   Filename(String)
+  Save(String, String)
 }
 
 ///|
@@ -46,6 +47,8 @@ fn decode_mbtx_call(arguments : String) -> MbtxCall? {
   let program = match (fields.get("source"), fields.get("filename")) {
     (Some(String(source)), None) if !source.is_blank() => Source(source)
     (None, Some(String(filename))) if !filename.is_blank() => Filename(filename)
+    (Some(String(source)), Some(String(filename))) if !source.is_blank() &&
+      !filename.is_blank() => Save(source, filename)
     _ => return None
   }
   let chips = scalar_chips(
@@ -74,6 +77,16 @@ fn decode_mbtx_call(arguments : String) -> MbtxCall? {
 fn mbtx_card(arguments : String) -> (String, @html.Html)? {
   guard decode_mbtx_call(arguments) is Some(call) else { return None }
   let (label, content) = match call.program {
+    Save(source, filename) =>
+      (
+        "Save & run",
+        @html.div([
+          @html.pre(class="tool-card-original-json", filename),
+          @html.pre(class="moonbit-source", [
+            @syntax_html.moonbit_numbered_source(source),
+          ]),
+        ]),
+      )
     Source(source) =>
       (
         "Source",

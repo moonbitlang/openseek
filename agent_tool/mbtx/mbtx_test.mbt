@@ -39,13 +39,98 @@ async test "runs a pure-core program and returns its output" {
 }
 
 ///|
+async test "save and run creates parents, suggests reuse, and preserves existing content" {
+  @vfs.with_tmpdir(ws => {
+    let state = @agent_tool.FileStateMap()
+    let tool = @mbtx.definition(workspace_root=ws, file_state=state)
+    let source = "fn main { println(42) }"
+    let args : Json = { "source": source, "filename": "scripts/check.mbtx" }
+    let out = dispatch(tool, args)
+    assert_false(out.is_error, msg=out.content)
+    assert_true(out.content.contains("42"))
+    assert_true(out.content.contains("{\"filename\":\"scripts/check.mbtx\"}"))
+    assert_true(out.content.contains("omit source"))
+    let path = "\{ws}/scripts/check.mbtx"
+    assert_eq(@fs.read_file(path).text(), source)
+    assert_true(
+      state.created_and_unchanged(path, @agent_tool.content_digest(source)),
+    )
+    assert_false(dispatch(tool, args).is_error)
+    assert_false(dispatch(tool, { "filename": "scripts/check.mbtx" }).is_error)
+    let out = dispatch(tool, {
+      "source": "fn main { println(99) }",
+      "filename": "scripts/check.mbtx",
+    })
+    assert_true(out.is_error)
+    assert_true(out.content.contains("different content"))
+    assert_eq(@fs.read_file(path).text(), source)
+    assert_false(
+      dispatch(tool, { "source": source, "filename": "check.mbtx" }).is_error,
+    )
+    assert_false(dispatch(tool, { "filename": "check.mbtx" }).is_error)
+  })
+}
+
+///|
+async test "saving rejects read-only, outside-workspace, namespace, and worker scope violations" {
+  @vfs.with_tmpdir(ws => {
+    @vfs.with_tmpdir(outside => {
+      let source = "fn main {}"
+      let read_only_tool = @mbtx.definition(workspace_root=ws, read_only=true)
+      assert_true(
+        dispatch(read_only_tool, { "source": source, "filename": "check.mbtx" }).is_error,
+      )
+      assert_false(@fs.exists("\{ws}/check.mbtx"))
+      let out = run_in(ws, {
+        "source": source,
+        "filename": "\{outside}/check.mbtx",
+      })
+      assert_true(out.is_error)
+      assert_false(@fs.exists("\{outside}/check.mbtx"))
+      assert_true(
+        run_in(ws, { "source": source, "filename": "@builtin/check.mbtx" }).is_error,
+      )
+      let scope = match
+        @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"]) {
+        Ok(scope) => scope
+        Err(reason) => fail(reason)
+      }
+      let worker = @mbtx.definition(workspace_root=ws, write_scope=scope)
+      assert_true(
+        dispatch(worker, { "source": source, "filename": "denied/check.mbtx" }).is_error,
+      )
+      assert_false(@fs.exists("\{ws}/denied"))
+      assert_false(
+        dispatch(worker, { "source": source, "filename": "allowed/check.mbtx" }).is_error,
+      )
+    })
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "saving refuses symlinks escaping the workspace" {
+  @vfs.with_tmpdir(ws => {
+    @vfs.with_tmpdir(outside => {
+      @fs.symlink(target=outside, "\{ws}/link")
+      let out = run_in(ws, {
+        "source": "fn main {}",
+        "filename": "link/check.mbtx",
+      })
+      assert_true(out.is_error)
+      assert_false(@fs.exists("\{outside}/check.mbtx"))
+    })
+  })
+}
+
+///|
 async test "bundled workflows use cwd and propagate check and test failures" {
   // Run this test with OPENSEEK_REFERENCES set to this checkout's share/ to
-  // exercise bare-name dispatch too. Ordinary suite runs use absolute paths.
+  // exercise @builtin/ dispatch too. Ordinary suite runs use absolute paths.
   let references = @fs.realpath("share")
   async fn workflow_filename(name : String) -> String {
     if @env.get_env_var("OPENSEEK_REFERENCES") == Some(references) {
-      name
+      "@builtin/\{name}"
     } else {
       @fs.realpath("share/workflow/\{name}")
     }
@@ -142,7 +227,10 @@ async test "filename reports read failures and refuses ambiguous calls" {
       arguments in [
         Json({ "filename": "missing.mbtx" }),
         Json({ "filename": ws }),
-        Json({ "source": "fn main { println(42) }", "filename": "missing.mbtx" }),
+        Json({
+          "source": "fn main { println(42) }",
+          "filename": "@builtin/check.mbtx",
+        }),
       ] {
       let out = run_in(ws, arguments)
       assert_true(out.is_error)
@@ -820,11 +908,19 @@ test "the description advertises the Proton CLI command surface" {
 
 ///|
 /// The schema is the model-facing argument contract, so pin its shape: the
-/// arguments the tool decodes are all present, with exactly one program input.
+/// arguments the tool decodes are all present, including save-and-run inputs.
 test "the schema advertises every decoded argument" {
   let JsonSchema(schema) = @mbtx.definition(workspace_root=".").schema
-  guard schema is { "properties": Object(properties), "oneOf": choices, .. } else {
-    fail("expected an object schema with properties and oneOf")
+  guard schema
+    is {
+      "properties": Object(properties),
+      "anyOf": choices,
+      "not": namespace_write,
+      ..
+    } else {
+    fail(
+      "expected an object schema with input choices and namespace write exclusion",
+    )
   }
   // Order-independent: `Map` iteration order is not the declaration order, and
   // MoonBit's String ordering is by length first, so a sorted expectation would
@@ -839,6 +935,14 @@ test "the schema advertises every decoded argument" {
     ([{ "required": ["source"] }, { "required": ["filename"] }] : Json),
   )
   assert_false(schema is { "required": _, .. })
+  assert_eq(
+    namespace_write,
+    (
+      {
+        "required": ["source", "filename"],
+        "properties": { "filename": { "pattern": "^@" } },
+      } : Json),
+  )
 }
 
 ///|

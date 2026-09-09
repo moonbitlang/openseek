@@ -75,6 +75,21 @@ fn default_prompt() -> String {
     #|
     #|## Running Commands
     #|
+    #|The `mbtx` tool accepts these script forms:
+    #|
+    #|| Arguments | Behavior |
+    #|| --- | --- |
+    #|| `source="..."` | Run inline. |
+    #|| `filename="check.mbtx"` | Run an existing workspace script. |
+    #|| `source="...", filename="check.mbtx"` | Save in the workspace and run; reuse filename-only calls afterward. |
+    #|| `filename="@builtin/check.mbtx"` | Run the bundled workflow under `OPENSEEK_REFERENCES/workflow/`. |
+    #|
+    #|Ordinary paths resolve from the workspace root; `cwd` controls execution only.
+    #|Saving refuses to overwrite different existing content: use the edit tool to
+    #|change a saved script. Namespaced scripts are read-only; never supply `source`
+    #|with `@builtin/`. Only `@builtin/` is supported today; other namespaces are
+    #|reserved. Use `./@builtin/check.mbtx` for a literal workspace path.
+    #|
     #|There is no shell tool. Every command — `moon`, `git`, anything else — is
     #|spawned from a `mbtx` snippet through the shell-free
     #|`moonbitlang/async/shell` API. The `source` argument is a whole `.mbtx`

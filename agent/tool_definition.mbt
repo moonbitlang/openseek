@@ -119,6 +119,7 @@ pub async fn[X] build_tools(
       // would have nowhere to leave a transcript.
       @mbtx.definition(
         workspace_root~,
+        file_state~,
         bg_runtime~,
         job_dir?=spill_dir,
         approval?=runtime.approval_channel(),
