@@ -1779,8 +1779,7 @@ fn update(
   // A registry refresh can retire the title control without changing the
   // active session. Do not leave its root menu flag hiding a native Browser
   // view after the control itself has disappeared.
-  let model = if model.select_menu is Some(open_menu) &&
-    open_menu == ProjectMenu &&
+  let model = if model.select_menu is Some(ProjectMenu) &&
     !model.can_choose_new_chat_project() {
     { ..model, select_menu: None, project_menu_query: "", }
   } else {
@@ -1789,9 +1788,7 @@ fn update(
   // The query has meaning only while its exact menu is open. Context changes,
   // covering overlays, and selections close menus in several handlers; keep
   // all of those paths from reviving an old filter on the next fresh draft.
-  let model = if (
-      model.select_menu is Some(open_menu) && open_menu == ProjectMenu
-    ) ||
+  let model = if model.select_menu is Some(ProjectMenu) ||
     model.project_menu_query.is_empty() {
     model
   } else {
@@ -2918,8 +2915,7 @@ fn update_msg(
     CloseSelectMenu =>
       (@cmd.none, { ..model, select_menu: None, project_menu_query: "", })
     ProjectMenuQueryChanged(query) =>
-      if model.select_menu is Some(menu) &&
-        menu == ProjectMenu &&
+      if model.select_menu is Some(ProjectMenu) &&
         model.screen is Chat &&
         model.composing_new_chat() {
         (@cmd.none, { ..model, project_menu_query: query, })
@@ -2927,8 +2923,7 @@ fn update_msg(
         (@cmd.none, model)
       }
     ProjectMenuProjectChosen(workspace) => {
-      let menu_open = model.select_menu is Some(open_menu) &&
-        open_menu == ProjectMenu
+      let menu_open = model.select_menu is Some(ProjectMenu)
       let closed = { ..model, select_menu: None, project_menu_query: "", }
       guard menu_open &&
         model.can_choose_new_chat_project() &&

@@ -30,8 +30,7 @@ fn TranscriptDomMount::refresh_diagrams(
   root : @dom.Element,
 ) -> Unit {
   let elements = root.query_selector_all("[data-transcript-diagram]")
-  let dark_mode = root.get_attribute("data-transcript-theme") is Some(theme) &&
-    theme == "dark"
+  let dark_mode = root.get_attribute("data-transcript-theme") is Some("dark")
   let retained : Array[TranscriptDiagram] = []
   // Dispose removed/reused targets first, invalidating their pending Mermaid
   // work before any new diagram is installed into the same container.

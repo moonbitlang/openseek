@@ -233,8 +233,7 @@ pub fn FoldingModel::update_post(
         is_collapsed,
         end_line_number <= last_hidden_line,
         is_manual,
-        new_regions.get_type(index) is Some(fold_type) &&
-        fold_type == OUTLINE_BODY_FOLDING_RANGE_TYPE,
+        new_regions.get_type(index) is Some(OUTLINE_BODY_FOLDING_RANGE_TYPE),
       ),
     })
     if is_collapsed && end_line_number > last_hidden_line {

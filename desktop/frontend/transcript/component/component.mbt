@@ -572,8 +572,7 @@ fn transcript_sub_loader(
       let target = @dom.document().as_event_target()
       let listener : @dom.Listener = event => {
         guard event.target().to_element() is Some(element) &&
-          element.get_property("id").to_option() is Some(element_id) &&
-          element_id == "transcript" else {
+          element.get_property("id").to_option() is Some("transcript") else {
           return
         }
         // Report only what differs from the Model. Its next message brings

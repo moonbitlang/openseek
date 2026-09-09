@@ -182,8 +182,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
             projects~,
             can_choose_project~,
             project_menu_open=can_choose_project &&
-              self.select_menu is Some(menu) &&
-              menu == ProjectMenu,
+              self.select_menu is Some(ProjectMenu),
             project_query=self.project_menu_query,
             root=self
               .conversation_placement(conversation)

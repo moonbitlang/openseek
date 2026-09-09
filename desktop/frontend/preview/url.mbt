@@ -98,8 +98,7 @@ fn octet_value(text : StringView) -> Int? {
 fn is_loopback_ipv4(host : String) -> Bool {
   match host.split(".").collect() {
     [first, second, third, fourth] =>
-      octet_value(first) is Some(octet) &&
-      octet == 127 &&
+      octet_value(first) is Some(127) &&
       octet_value(second) is Some(_) &&
       octet_value(third) is Some(_) &&
       octet_value(fourth) is Some(_)

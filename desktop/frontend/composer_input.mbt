@@ -260,7 +260,7 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
     // action still returns through the shared composer's typed route.
     model_control: self.codex_model_chip(),
     reasoning_control: self.codex.reasoning_effort_chip(
-      self.select_menu is Some(menu) && menu == CodexReasoningMenu,
+      self.select_menu is Some(CodexReasoningMenu),
     ),
     file_candidates: search.candidates,
     open_files: if workspace_ready {
