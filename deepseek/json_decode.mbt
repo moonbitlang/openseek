@@ -80,6 +80,42 @@ impl FromJson for ToolCall with fn from_json(json : Json, path : @json.JsonPath)
 }
 
 ///|
+fn decode_nullable_string(
+  fields : Map[String, Json],
+  key~ : String,
+  path~ : @json.JsonPath,
+) -> String? raise @json.JsonDecodeError {
+  if fields.get(key) is Some(value) {
+    if value is (String(value) | (Null with value = "")) {
+      Some(value)
+    } else {
+      raise json_decode_error(
+        path.add_key(key),
+        "ChatResponse::from_json: expected \{key} string",
+      )
+    }
+  } else {
+    None
+  }
+}
+
+///|
+fn decode_reasoning_content(
+  fields : Map[String, Json],
+  path~ : @json.JsonPath,
+) -> String raise @json.JsonDecodeError {
+  if decode_nullable_string(fields, key="reasoning_content", path~)
+    is Some(reasoning_content) {
+    return reasoning_content
+  } else if decode_nullable_string(fields, key="reasoning", path~)
+    is Some(reasoning_content) {
+    return reasoning_content
+  } else {
+    return ""
+  }
+}
+
+///|
 /// Decodes a DeepSeek chat completions JSON response envelope.
 ///
 /// Missing usage information is represented as zero token counts.
@@ -146,23 +182,10 @@ pub impl FromJson for ChatResponse with fn from_json(
         "ChatResponse::from_json: expected message content",
       )
   }
-  let reasoning_content = match message_fields {
-    { "reasoning_content": String(reasoning_content), .. } => reasoning_content
-    { "reasoning_content": Null, .. } => ""
-    { "reasoning_content": _, .. } =>
-      json_decode_error(
-        message_path.add_key("reasoning_content"),
-        "ChatResponse::from_json: expected reasoning_content string",
-      )
-    { "reasoning": String(reasoning), .. } => reasoning
-    { "reasoning": Null, .. } => ""
-    { "reasoning": _, .. } =>
-      json_decode_error(
-        message_path.add_key("reasoning"),
-        "ChatResponse::from_json: expected reasoning string",
-      )
-    _ => ""
-  }
+  let reasoning_content = decode_reasoning_content(
+    message_fields,
+    path=message_path,
+  )
   let usage = match usage_json {
     Some(usage) => FromJson::from_json(usage, path.add_key("usage"))
     None => Usage::empty()
