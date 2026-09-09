@@ -1,7 +1,8 @@
 # mbtx/internal/decode
 
 Argument decoding for the `mbtx` tool. `decode(Json) -> MbtxInput`
-reads the required `source` string (a `.mbtx` program) and the optional
+reads exactly one of `source` (a `.mbtx` program) and `filename` (a saved
+script path), represented by the `Program` enum, and the optional
 `target` backend (default `wasm`, validated against
 `wasm`/`wasm-gc`/`js`/`llvm`), `cwd`, `warning`, and `escalated` fields. It names
 the offending field on failure so the error fed back to the model says exactly

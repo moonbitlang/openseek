@@ -39,6 +39,141 @@ async test "runs a pure-core program and returns its output" {
 }
 
 ///|
+async test "bundled workflows use cwd and propagate check and test failures" {
+  // Run this test with OPENSEEK_REFERENCES set to this checkout's share/ to
+  // exercise bare-name dispatch too. Ordinary suite runs use absolute paths.
+  let references = @fs.realpath("share")
+  async fn workflow_filename(name : String) -> String {
+    if @env.get_env_var("OPENSEEK_REFERENCES") == Some(references) {
+      name
+    } else {
+      @fs.realpath("share/workflow/\{name}")
+    }
+  }
+  let check_path = workflow_filename("check.mbtx")
+  let test_path = workflow_filename("test.mbtx")
+  let combined_path = workflow_filename("check-test.mbtx")
+  let json_path = workflow_filename("check-json.mbtx")
+  let format_path = workflow_filename("info-fmt.mbtx")
+  @vfs.with_tmpdir(ws => {
+    let project = "\{ws}/nested"
+    @fs.mkdir(project)
+    @fs.write_file(
+      "\{project}/moon.mod",
+      "name = \"test/workflow\"\n",
+      create_mode=CreateOrTruncate,
+    )
+    @fs.write_file("\{project}/moon.pkg", "", create_mode=CreateOrTruncate)
+    @fs.write_file(
+      "\{project}/main_test.mbt",
+      "test { assert_eq(1, 1) }\n",
+      create_mode=CreateOrTruncate,
+    )
+    for
+      filename in [check_path, test_path, combined_path, json_path, format_path] {
+      let out = run_in(ws, { "filename": filename, "cwd": "nested" })
+      assert_false(out.is_error, msg=out.content)
+    }
+    @fs.write_file(
+      "\{project}/main_test.mbt",
+      "test { assert_eq(1, 2) }\n",
+      create_mode=CreateOrTruncate,
+    )
+    let out = run_in(ws, { "filename": test_path, "cwd": "nested" })
+    assert_true(out.is_error, msg=out.content)
+    assert_true(out.content.contains("moon test failed"), msg=out.content)
+    let out = run_in(ws, { "filename": combined_path, "cwd": "nested" })
+    assert_true(out.is_error, msg=out.content)
+    assert_true(out.content.contains("moon test failed"), msg=out.content)
+    @fs.write_file(
+      "\{project}/main.mbt",
+      "fn broken() -> Int { true }\n",
+      create_mode=CreateOrTruncate,
+    )
+    let out = run_in(ws, { "filename": check_path, "cwd": "nested" })
+    assert_true(out.is_error, msg=out.content)
+    assert_true(out.content.contains("moon check failed"), msg=out.content)
+    let out = run_in(ws, { "filename": combined_path, "cwd": "nested" })
+    assert_true(out.is_error, msg=out.content)
+    assert_true(out.content.contains("moon check failed"), msg=out.content)
+    assert_false(out.content.contains("moon test failed"), msg=out.content)
+    let out = run_in(ws, { "filename": json_path, "cwd": "nested" })
+    assert_true(out.is_error, msg=out.content)
+    assert_true(out.content.contains("main.mbt"), msg=out.content)
+  })
+}
+
+///|
+async test "filename resolves from workspace independently of cwd and is reread" {
+  @vfs.with_tmpdir(ws => {
+    @fs.mkdir("\{ws}/sub")
+    @fs.write_file(
+      "\{ws}/sub/marker",
+      "saved-script-ok",
+      create_mode=CreateOrTruncate,
+    )
+    let path = "\{ws}/saved script.mbtx"
+    @fs.write_file(
+      path,
+      (
+        #|import { "moonbitlang/async", "moonbitlang/async/fs" }
+        #|async fn main { println(@fs.read_file("marker").text()) }
+      ),
+      create_mode=CreateOrTruncate,
+    )
+    let out = run_in(ws, { "filename": "./saved script.mbtx", "cwd": "sub" })
+    assert_false(out.is_error, msg=out.content)
+    assert_true(out.content.contains("saved-script-ok"))
+    @fs.write_file(
+      path,
+      "fn main { println(43) }",
+      create_mode=CreateOrTruncate,
+    )
+    let out = run_in(ws, { "filename": path })
+    assert_false(out.is_error, msg=out.content)
+    assert_true(out.content.contains("43"))
+  })
+}
+
+///|
+async test "filename reports read failures and refuses ambiguous calls" {
+  @vfs.with_tmpdir(ws => {
+    for
+      arguments in [
+        Json({ "filename": "missing.mbtx" }),
+        Json({ "filename": ws }),
+        Json({ "source": "fn main { println(42) }", "filename": "missing.mbtx" }),
+      ] {
+      let out = run_in(ws, arguments)
+      assert_true(out.is_error)
+      assert_true(out.content.contains("filename"))
+    }
+  })
+}
+
+///|
+async test "saved scripts retain compiler filename and FFI checks" {
+  @vfs.with_tmpdir(ws => {
+    @fs.write_file(
+      "\{ws}/broken.mbtx",
+      "fn main { let _x : Int = \"nope\" }",
+      create_mode=CreateOrTruncate,
+    )
+    let out = run_in(ws, { "filename": "./broken.mbtx" })
+    assert_true(out.is_error)
+    assert_true(out.content.contains("broken.mbtx:1:"), msg=out.content)
+    @fs.write_file(
+      "\{ws}/ffi.mbtx",
+      "extern \"js\" fn escape() -> Unit = \"() => {}\"\nfn main { escape() }",
+      create_mode=CreateOrTruncate,
+    )
+    let out = run_in(ws, { "filename": "./ffi.mbtx", "target": "js" })
+    assert_true(out.is_error)
+    assert_true(out.content.contains("native FFI"))
+  })
+}
+
+///|
 async test "surfaces a compile error via moon's own diagnostics" {
   let out = run("fn main { let _x : Int = \"nope\" }")
   assert_true(out.is_error)
@@ -685,21 +820,53 @@ test "the description advertises the Proton CLI command surface" {
 
 ///|
 /// The schema is the model-facing argument contract, so pin its shape: the
-/// arguments the tool decodes are all present, and only `source` is required.
+/// arguments the tool decodes are all present, with exactly one program input.
 test "the schema advertises every decoded argument" {
   let JsonSchema(schema) = @mbtx.definition(workspace_root=".").schema
-  guard schema is { "properties": Object(properties), "required": required, .. } else {
-    fail("expected an object schema with properties and required")
+  guard schema is { "properties": Object(properties), "oneOf": choices, .. } else {
+    fail("expected an object schema with properties and oneOf")
   }
   // Order-independent: `Map` iteration order is not the declaration order, and
   // MoonBit's String ordering is by length first, so a sorted expectation would
   // encode neither what this test means nor what a reader expects.
   let names = properties.keys().collect()
-  assert_eq(names.length(), 5)
-  for name in ["source", "description", "target", "cwd", "warning"] {
+  assert_eq(names.length(), 6)
+  for name in ["source", "filename", "description", "target", "cwd", "warning"] {
     assert_true(names.contains(name))
   }
-  assert_eq(required, (["source"] : Json))
+  assert_eq(
+    choices,
+    ([{ "required": ["source"] }, { "required": ["filename"] }] : Json),
+  )
+  assert_false(schema is { "required": _, .. })
+}
+
+///|
+async test "filename approval executes the reviewed snapshot even if the file changes" {
+  @vfs.with_tmpdir(ws => {
+    let path = "\{ws}/approved.mbtx"
+    let original = "fn main { println(\"approved snapshot\") }"
+    @fs.write_file(path, original, create_mode=CreateOrTruncate)
+    let definition = @mbtx.definition(
+      workspace_root=ws,
+      approval=ApprovalChannel(ask => {
+        assert_eq(ask.body, Some(original))
+        @fs.write_file(
+          path,
+          "fn main { println(\"replacement program\") }",
+          create_mode=CreateOrTruncate,
+        )
+        AllowedOnce
+      }),
+    )
+    let out = dispatch(definition, {
+      "filename": "./approved.mbtx",
+      "escalated": true,
+    })
+    assert_false(out.is_error, msg=out.content)
+    assert_true(out.content.contains("approved snapshot"))
+    assert_false(out.content.contains("replacement program"))
+  })
 }
 
 ///|

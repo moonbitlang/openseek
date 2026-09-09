@@ -4,7 +4,8 @@
 // shows the recorded JSON: the program arrives as one long line with every
 // newline spelled `\n`, so the one field a reader came for is the one field
 // they cannot read. The card below lifts `source` out as verbatim program text
-// and states the call's remaining arguments as chips above it.
+// and states the call's remaining arguments as chips above it. Saved-script
+// calls display the filename as plain text in their own Filename view.
 //
 // Nothing is hidden by that: the payload as the model actually sent it stays a
 // click away in the neighboring Original JSON tab. So the card is free to show
@@ -16,10 +17,15 @@
 // tool `is_error` means the run failed, not that the arguments were refused.
 
 ///|
+priv enum MbtxProgram {
+  Source(String)
+  Filename(String)
+}
+
+///|
 /// A recorded `mbtx` call, decoded for display.
 priv struct MbtxCall {
-  /// The `.mbtx` program, exactly as the model sent it.
-  source : String
+  program : MbtxProgram
   /// The call's other scalar arguments, as `key: value` chip text.
   chips : Array[String]
 }
@@ -27,7 +33,7 @@ priv struct MbtxCall {
 ///|
 /// Decode recorded `mbtx` arguments, or `None` when they are not a call
 /// this card can show: past the shared payload bound, not JSON, not an object,
-/// or carrying no program to display.
+/// or carrying no unambiguous program to display.
 ///
 /// Deliberately more permissive than the tool's own decoder — it does not
 /// re-check the target name, or that `warning` is `on`/`off`. Whether the call
@@ -36,10 +42,11 @@ priv struct MbtxCall {
 /// An argument with an unexpected value therefore still shows, as its own
 /// chip, which is what a reader looking at a rejected call needs to see.
 fn decode_mbtx_call(arguments : String) -> MbtxCall? {
-  guard card_fields(arguments) is Some(fields) &&
-    fields.get("source") is Some(String(source)) &&
-    !source.is_blank() else {
-    return None
+  guard card_fields(arguments) is Some(fields) else { return None }
+  let program = match (fields.get("source"), fields.get("filename")) {
+    (Some(String(source)), None) if !source.is_blank() => Source(source)
+    (None, Some(String(filename))) if !filename.is_blank() => Filename(filename)
+    _ => return None
   }
   let chips = scalar_chips(
     fields,
@@ -47,9 +54,9 @@ fn decode_mbtx_call(arguments : String) -> MbtxCall? {
     // removed `run_in_background` last so transcripts recorded by older
     // versions remain readable; new calls never emit it.
     known=["target", "cwd", "escalated", "warning", "run_in_background"],
-    dramatized=["source"],
+    dramatized=["source", "filename"],
   )
-  Some({ source, chips, })
+  Some({ program, chips, })
 }
 
 ///|
@@ -64,16 +71,20 @@ fn decode_mbtx_call(arguments : String) -> MbtxCall? {
 /// after its skip marker. Cost stays bounded without it — `card_fields`
 /// refuses payloads past the shared card ceiling, and the numbered renderer
 /// clamps a degenerate line count itself, keeping true numbers on the tail.
-fn mbtx_card(arguments : String) -> @html.Html? {
+fn mbtx_card(arguments : String) -> (String, @html.Html)? {
   guard decode_mbtx_call(arguments) is Some(call) else { return None }
-  Some(
-    @html.div(class="mbtx-args", [
-      chip_row(call.chips),
-      @html.pre(class="moonbit-source", [
-        @syntax_html.moonbit_numbered_source(call.source),
-      ]),
-    ]),
-  )
+  let (label, content) = match call.program {
+    Source(source) =>
+      (
+        "Source",
+        @html.pre(class="moonbit-source", [
+          @syntax_html.moonbit_numbered_source(source),
+        ]),
+      )
+    Filename(filename) =>
+      ("Filename", @html.pre(class="tool-card-original-json", filename))
+  }
+  Some((label, @html.div(class="mbtx-args", [chip_row(call.chips), content])))
 }
 
 ///|

@@ -12,13 +12,18 @@ pub fn decode(Json) -> MbtxInput raise
 
 // Types and methods
 pub struct MbtxInput {
-  source : String
+  program : Program
   description : String?
   target : String
   cwd : String?
   warning : Bool
   escalated : Bool
   subrun : Bool
+} derive(@debug.Debug)
+
+pub enum Program {
+  Source(String)
+  File(String)
 } derive(@debug.Debug)
 
 // Type aliases

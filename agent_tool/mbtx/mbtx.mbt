@@ -222,6 +222,39 @@ async fn execute(
         is_error=true,
       )
   }
+  // Read once, before validation/approval, then compile this same snapshot.
+  // A saved script has the same isolation and execution path as inline code.
+  let (source, source_name) = match input.program {
+    Source(source) => (source, "source")
+    File(filename) => {
+      let path = resolve_filename(
+        workspace_root,
+        filename,
+        @env.get_env_var("OPENSEEK_REFERENCES"),
+      ) catch {
+        error =>
+          return @agent_tool.respond(
+            "error: mbtx \{@tool_error.failure_message("\{error}")}",
+            is_error=true,
+          )
+      }
+      let source = @fs.read_file(path).text() catch {
+        error if @async.is_being_cancelled() => raise error
+        error => {
+          let hint = if is_bundled_filename(filename) {
+            " Bundled workflows: check.mbtx, test.mbtx, check-test.mbtx, info-fmt.mbtx, check-json.mbtx. For a workspace file, use ./\{filename}."
+          } else {
+            " filename must name an existing readable script. Save it with the file tools first, then retry with filename only; or run inline code with source only. Paths resolve from the workspace, independently of cwd."
+          }
+          return @agent_tool.respond(
+            "error: mbtx could not read filename \{filename}: \{error}\{hint}",
+            is_error=true,
+          )
+        }
+      }
+      (source, filename)
+    }
+  }
   // Refuse FFI (`extern`), the one construct no mbtx target runs sandboxed.
   // The wasm family needs no scan — the compiler refuses `extern "c"` and
   // `extern "js"` on those backends outright — but the js target's host is
@@ -231,7 +264,7 @@ async fn execute(
   // literals (a snippet quoting a commit message was refused once), the quote
   // that follows it does not. A substring scan is NOT a real boundary; it is
   // what keeps the non-wasm targets' "compute-only" promise true.
-  if input.source.contains("extern \"") {
+  if source.contains("extern \"") {
     return @agent_tool.respond(
       "mbtx refuses this program: it uses native FFI (extern), which no mbtx target can run sandboxed — the wasm family refuses to compile it, and the js/llvm targets have no policy to contain it.",
       is_error=true,
@@ -307,12 +340,12 @@ async fn execute(
       Some(channel) =>
         // The program goes with the question. It is what the user is actually
         // deciding about, and `detail` — which is a constant — describes only
-        // the permission. Passed as the exact string this call was made with,
-        // so what is approved and what runs cannot differ.
+        // the permission. This is the resolved snapshot, so what is approved
+        // and what runs cannot differ even if the saved file changes.
         channel.ask({
           tool_name: "mbtx",
           detail: "run this snippet with no sandbox policy: no spawn allowlist, and writes anywhere",
-          body: Some(input.source),
+          body: Some(source),
         })
       // The argument was not advertised in this build's schema, so reaching
       // here means the model asked for a field it was never offered.
@@ -417,7 +450,7 @@ async fn execute(
   }
   @fs.write_file(
     "\{build_dir}/snippet.mbtx",
-    input.source,
+    source,
     create_mode=CreateOrTruncate,
   )
   let log = "\{build_dir}/output.log"
@@ -621,6 +654,7 @@ async fn execute(
         build_timeout_ms~,
         empty_stdin~,
         rewrite_bases=[real, build_dir],
+        source_name~,
         confine~,
       ) {
       NotBuilt(action) => return action
@@ -728,12 +762,12 @@ async fn execute(
         exec,
         description?=input.description,
         command=if staged {
-          "mbtx run (build ok): \{@agent_tool.brief_line(input.source, limit=64)}"
+          "mbtx run (build ok): \{@agent_tool.brief_line(source, limit=64)}"
         } else {
-          "mbtx: \{@agent_tool.brief_line(input.source, limit=64)}"
+          "mbtx: \{@agent_tool.brief_line(source, limit=64)}"
         },
         sandboxed_command?,
-        output_rewrites=temp_path_rewrites([real, build_dir]),
+        output_rewrites=temp_path_rewrites([real, build_dir], source_name~),
         moonrun_policy_active=policy_active,
         on_terminal=terminal_cleanup,
       )
@@ -769,7 +803,7 @@ async fn execute(
       policy_active~,
     )
     exec.discard()
-    let text = rewrite_temp_paths(raw, [real, build_dir])
+    let text = rewrite_temp_paths(raw, [real, build_dir], source_name~)
     let body = with_build_notes(
       build_notes,
       finished_body(text, exit_code, staged~),
@@ -820,9 +854,8 @@ async fn execute(
   )
   let action = match result {
     Some((exit_code, raw)) => {
-      // Rewrite the throwaway temp path to `source` so the model reads
-      // `source:LINE:COL` about its own input, not a random temp path.
-      let text = rewrite_temp_paths(raw, [real, build_dir])
+      // Rewrite the throwaway temp path to the inline label or saved filename.
+      let text = rewrite_temp_paths(raw, [real, build_dir], source_name~)
       // PREPEND the exit status so it survives the agent loop's outer 60k
       // result clamp (which cuts the tail); the output cap is below 60k so
       // both the status line and the body are retained.
@@ -842,7 +875,11 @@ async fn execute(
       // still on disk (cleanup runs below), so surface the captured prefix
       // instead of discarding it behind a generic timeout message. The status
       // line stays first so it survives the outer result clamp.
-      let partial = rewrite_temp_paths(read_capped(log), [real, build_dir])
+      let partial = rewrite_temp_paths(
+        read_capped(log),
+        [real, build_dir],
+        source_name~,
+      )
       let head = timeout_head(foreground_timeout_ms, staged~)
       let body = if partial.is_blank() {
         head
@@ -892,6 +929,7 @@ async fn build_snippet(
   build_timeout_ms~ : Int,
   empty_stdin~ : String,
   rewrite_bases~ : Array[String],
+  source_name~ : String,
   confine~ : async (String, Array[String]) -> @sandbox.SandboxedCommand?,
 ) -> BuildOutcome {
   let build_argv = [
@@ -938,7 +976,7 @@ async fn build_snippet(
       ),
     )
   }
-  let text = rewrite_temp_paths(raw, rewrite_bases)
+  let text = rewrite_temp_paths(raw, rewrite_bases, source_name~)
   if exit_code != 0 {
     // The exit code is moon's and it is kept: build-stage faults are not all
     // exit 1 (a dependency-resolution fault exits 255), and distinct codes
@@ -1156,31 +1194,38 @@ async fn refusal_guidance(
 }
 
 ///|
-/// Rewrite moon's throwaway temp paths back to `source` in its diagnostics, for
+/// Rewrite moon's throwaway temp paths to the input label in its diagnostics, for
 /// both `/` and `\` separators — moon reports the canonical native path (with
-/// backslashes on Windows), so `source:LINE:COL` shows on every host rather than
+/// backslashes on Windows), so the original label shows on every host rather than
 /// a random `_build` path leaking through.
-fn temp_path_rewrites(bases : Array[String]) -> Array[(String, String)] {
+fn temp_path_rewrites(
+  bases : Array[String],
+  source_name~ : String,
+) -> Array[(String, String)] {
   let rewrites : Array[(String, String)] = []
   for base in bases {
     for sep in ["/", "\\"] {
       // `.mbtx` first: replacing `snippet.mbt` before it would leave a stray
       // `x` (`sourcex`). Older moon versions copy the source to `snippet.mbt`
       // under the target directory, sometimes with another `_build` layer.
-      rewrites.push(("\{base}\{sep}snippet.mbtx", "source"))
+      rewrites.push(("\{base}\{sep}snippet.mbtx", source_name))
       rewrites.push(
-        ("\{base}\{sep}_build\{sep}_build\{sep}snippet.mbt", "source"),
+        ("\{base}\{sep}_build\{sep}_build\{sep}snippet.mbt", source_name),
       )
-      rewrites.push(("\{base}\{sep}_build\{sep}snippet.mbt", "source"))
-      rewrites.push(("\{base}\{sep}snippet.mbt", "source"))
+      rewrites.push(("\{base}\{sep}_build\{sep}snippet.mbt", source_name))
+      rewrites.push(("\{base}\{sep}snippet.mbt", source_name))
     }
   }
   rewrites
 }
 
 ///|
-fn rewrite_temp_paths(text : String, bases : Array[String]) -> String {
-  temp_path_rewrites(bases).fold(init=text, (out, rewrite) => {
+fn rewrite_temp_paths(
+  text : String,
+  bases : Array[String],
+  source_name~ : String,
+) -> String {
+  temp_path_rewrites(bases, source_name~).fold(init=text, (out, rewrite) => {
     let (old, replacement) = rewrite
     out.replace_all(old~, new=replacement)
   })
@@ -1326,7 +1371,21 @@ fn schema(escalation~ : Bool, hosting~ : Bool) -> Json {
     "properties": Json(
       Map(
         [
-          ("source", Json({ "type": "string" })),
+          (
+            "source",
+            Json({
+              "type": "string",
+              "description": "Inline program to execute once. Omit filename when using source. To reuse a program, save it with the file tools first, then call with filename only.",
+            }),
+          ),
+          (
+            "filename",
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Read and execute an existing .mbtx file; this does not save source. A bare name such as check.mbtx resolves under OPENSEEK_REFERENCES/workflow/. Use ./check.mbtx for a workspace file; other relative paths resolve from the workspace, and absolute paths stay absolute. Save new custom scripts with file tools first. Omit source. cwd controls execution only.",
+            },
+          ),
           (
             "description",
             {
@@ -1401,7 +1460,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool) -> Json {
         ],
       ),
     ),
-    "required": ["source"],
+    "oneOf": [{ "required": ["source"] }, { "required": ["filename"] }],
   }
 }
 
@@ -1469,8 +1528,28 @@ fn description(
     #|scripting surface: there is no shell tool, so commands, IO, and computation
     #|happen inside the submitted MoonBit program.
     #|
-    #|`source` is the whole program. Diagnostics are rewritten to `source:LINE:COL`
-    #|about your input; `target` defaults to wasm, the sandboxed backend.
+    #|Choose exactly one input. For a one-off probe, pass `source` and omit
+    #|`filename`. When OPENSEEK_REFERENCES is available, bundled workflows
+    #|already exist and need no file creation: check.mbtx (moon check),
+    #|test.mbtx (moon test), check-test.mbtx (check then test), info-fmt.mbtx
+    #|(moon info then moon fmt), and check-json.mbtx (moon check --output-json).
+    #|For custom repeated validation or automation (for example, running
+    #|`moon check` and `moon test` after edits), follow these two steps:
+    #|1. Use the file tools to save the program as `scripts/check.mbtx`.
+    #|2. Execute it with `{"filename":"scripts/check.mbtx"}`. Omit `source`
+    #|   entirely. Use this same filename-only call for subsequent runs.
+    #|`filename` READS an existing file. It does not create a file, save `source`,
+    #|or assign a name to an inline program. Passing both inputs is an error.
+    #|If the program needs to change, edit the saved file and run it again.
+    #|A filename with no `/` or `\` and unequal to `.` or `..` selects
+    #|OPENSEEK_REFERENCES/workflow/ (for example, `{"filename":"check.mbtx"}`).
+    #|Use `./check.mbtx` for a workspace file. Other relative paths resolve
+    #|from the workspace root; absolute paths stay absolute. No lookup fallback
+    #|occurs. `cwd` controls execution only, not filename resolution.
+    #|Each call reads the current file once
+    #|and runs that snapshot with the same sandbox and isolated imports as source.
+    #|Diagnostics cite `source:LINE:COL` or the supplied filename and line/column.
+    #|`target` defaults to wasm, the sandboxed backend.
     #|
     #|## Which programs a snippet may start
     #|

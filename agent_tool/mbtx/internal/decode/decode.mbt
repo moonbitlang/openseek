@@ -1,10 +1,14 @@
 ///|
-/// Decoded arguments of the `mbtx` tool: a self-contained MoonBit
-/// program (`.mbtx` single-file script) to compile and run, the backend
-/// `target` to run it on, and an optional `cwd` (the working directory the
-/// program runs in; `None` means the workspace root).
+/// Exactly one inline program or saved script path.
+pub enum Program {
+  Source(String)
+  File(String)
+} derive(Debug)
+
+///|
+/// Decoded program and execution options. `None` cwd means workspace root.
 pub struct MbtxInput {
-  source : String
+  program : Program
   /// Presentation metadata, inherited by a background job.
   description : String?
   target : String
@@ -30,6 +34,11 @@ pub struct MbtxInput {
 } derive(Debug)
 
 ///|
+#deprecated("the derived Debug impl is the API")
+#doc(hidden)
+pub extend Program with Debug::{to_repr}
+
+///|
 /// The moon backends `--target` accepts.
 fn valid_target(target : String) -> Bool {
   // `native` is deliberately absent: moonrun's policy — the only confinement
@@ -41,7 +50,8 @@ fn valid_target(target : String) -> Bool {
 }
 
 ///|
-/// Decode `mbtx` tool-call arguments. `source` is a required string
+/// Decode `mbtx` tool-call arguments. Exactly one of `source` and `filename`
+/// is required. `filename` names a saved script; `source` is a string
 /// holding a full `.mbtx` program (an optional leading `import { … }` block,
 /// then the program including its own `main`). `target` is an optional backend
 /// name defaulting to `wasm`, which is the backend moonrun's policy sandbox
@@ -59,7 +69,34 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
     )
   }
   match arguments {
-    { "source": String(source), .. } => {
+    Object(fields) => {
+      let program = match (fields.get("source"), fields.get("filename")) {
+        (Some(_), Some(_)) =>
+          fail(
+            "exactly one of arguments.source and arguments.filename, not both. filename reads an existing script; it does not save or name source. For repeated runs, first save the program with the file tools, then call mbtx with {\"filename\":\"scripts/check.mbtx\"} and omit source. For a one-off run, omit filename and pass only source",
+          )
+        (Some(String(source)), None) => Source(source)
+        (None, Some(String(filename))) => {
+          guard !filename.is_blank() else {
+            fail(
+              "arguments.filename to be a nonblank path to an existing script, for example {\"filename\":\"./check.mbtx\"}. Omit source entirely",
+            )
+          }
+          File(filename)
+        }
+        (None, None) =>
+          fail(
+            "exactly one of arguments.source and arguments.filename. Use {\"source\":\"fn main { println(42) }\"} for inline code, or {\"filename\":\"./check.mbtx\"} for an existing workspace script. Omit the unused field entirely; do not send null",
+          )
+        (Some(_), None) =>
+          fail(
+            "arguments.source to be a string containing a complete .mbtx program. To run a saved script, omit source entirely and use {\"filename\":\"./check.mbtx\"}; do not send source: null",
+          )
+        (None, Some(_)) =>
+          fail(
+            "arguments.filename to be a string naming an existing script, for example {\"filename\":\"./check.mbtx\"}. For inline code, omit filename entirely and pass source; do not send filename: null",
+          )
+      }
       let description = match arguments {
         { "description": String(text), .. } => Some(text)
         { "description": Null, .. } => None
@@ -101,9 +138,8 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         { "subrun": _, .. } => fail("arguments.subrun to be a boolean")
         _ => false
       }
-      { source, description, target, cwd, warning, escalated, subrun, }
+      { program, description, target, cwd, warning, escalated, subrun, }
     }
-    Object(_) => fail("arguments.source")
     _ => fail("object arguments")
   }
 }
@@ -111,7 +147,7 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
 ///|
 test "decode reads source with the default wasm target" {
   let input = decode({ "source": "fn main { println(1) }" })
-  assert_eq(input.source, "fn main { println(1) }")
+  assert_true(input.program is Source("fn main { println(1) }"))
   assert_eq(input.target, "wasm")
 }
 
@@ -168,6 +204,15 @@ test "decode defaults warning to off and reads on/off" {
 /// the model is supposed to read.
 test "decode rejects malformed arguments" {
   let malformed : Array[Json] = [
+    {},
+    { "filename": "" },
+    { "filename": "  " },
+    { "filename": 3 },
+    { "filename": null },
+    { "source": null },
+    { "source": "x", "filename": "run.mbtx" },
+    { "source": "x", "filename": null },
+    { "source": null, "filename": "run.mbtx" },
     // An unknown warning value, a non-string cwd, an unknown target, a
     // missing source, and arguments that are not an object at all.
     { "source": "x", "warning": "loud" },
@@ -185,6 +230,61 @@ test "decode rejects malformed arguments" {
       _ => true
     }
     assert_true(failed, msg="accepted \{arguments.stringify()}")
+  }
+}
+
+///|
+test "decode explains how to recover from source and filename together" {
+  try
+    decode({ "source": "fn main {}", "filename": "scripts/check.mbtx" })
+  catch {
+    error => {
+      let message = error.to_string()
+      assert_true(message.contains("filename reads an existing script"))
+      assert_true(
+        message.contains("first save the program with the file tools"),
+      )
+      assert_true(message.contains("{\"filename\":\"scripts/check.mbtx\"}"))
+      assert_true(message.contains("omit filename and pass only source"))
+    }
+  } noraise {
+    _ => fail("expected mutually exclusive inputs to be rejected")
+  }
+}
+
+///|
+test "decode accepts filename with unchanged execution options" {
+  let input = decode({
+    "filename": "scripts/check.mbtx",
+    "cwd": "sub",
+    "warning": "on",
+  })
+  assert_true(input.program is File("scripts/check.mbtx"))
+  assert_eq(input.cwd, Some("sub"))
+  assert_eq(input.target, "wasm")
+  assert_true(input.warning)
+}
+
+///|
+test "missing or invalid program fields give an actionable retry" {
+  for
+    arguments in [
+      ({} : Json),
+      Json({ "source": null }),
+      Json({ "source": 42 }),
+      Json({ "filename": null }),
+      Json({ "filename": 42 }),
+      Json({ "filename": " " }),
+    ] {
+    try decode(arguments) catch {
+      error => {
+        let message = error.to_string()
+        assert_true(message.contains("{\"filename\":\"./check.mbtx\"}"))
+        assert_true(message.contains("omit") || message.contains("Omit"))
+      }
+    } noraise {
+      _ => fail("malformed input must fail before execution")
+    }
   }
 }
 

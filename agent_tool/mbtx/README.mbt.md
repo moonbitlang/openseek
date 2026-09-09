@@ -10,7 +10,8 @@ sandboxed automation surface.
 ## How it works
 
 The `source` is a `.mbtx` **single-file script** — MoonBit's own one-file
-program format. The tool writes it into a throwaway directory and, for the
+program format. Alternatively, `filename` loads a saved script. The tool
+writes the program into a throwaway directory and, for the
 default wasm target, runs it in **two phases**. The BUILD runs first,
 synchronously: `moon run <file>.mbtx --build-only --target wasm --target-dir
 <temp>`, bounded by its own wall clock (10s by default) so a hung dependency
@@ -26,7 +27,7 @@ exec'd — with the workspace (or explicit `cwd`) as the program's working
 directory, so relative reads reach workspace files while build artifacts stay
 out of your `_build`. A failure there is labeled `at RUNTIME — … from the
 run, not the build`. Compiler diagnostics are rewritten to stable
-`source:LINE:COL` locations, and build output (warnings under
+`source:LINE:COL` locations (or the supplied filename), and build output (warnings under
 `warning: "on"`) is kept apart from program output by construction. The
 non-wasm targets keep the single-shot `moon run` and their reports claim no
 stage.
@@ -49,10 +50,22 @@ cancelled at that deadline.
   transcript and inherited by any background job. Presentation only; it does
   not affect compilation, execution, sandboxing, or background handoff.
 
-- `source` (string, required): a full `.mbtx` program. It may open with an
+- `source` (string, mutually exclusive with `filename`): a full `.mbtx` program. It may open with an
   inline `import { "pkg", "pkg", … }` block (comma-separated module paths),
   then the program including its own `main`. Use `async fn main` for
   filesystem/stdio work.
+- `filename` (string, mutually exclusive with `source`): a saved `.mbtx`
+  script name or path. A bare name (no `/` or `\`, and not `.` or `..`)
+  resolves under `OPENSEEK_REFERENCES/workflow/`. Use `./check.mbtx` for a
+  workspace file; other relative paths resolve from the workspace root and
+  absolute paths remain absolute. There is no fallback between locations.
+  Supply exactly one of these two fields. `cwd` does not change resolution. Each call
+  reads the current file once and compiles that snapshot through the same
+  isolated execution path as inline source; diagnostics cite the filename.
+  For repeated calls, save a script with the file tools and reuse it with
+  `{"filename":"scripts/check.mbtx"}`, omitting `source` entirely. `filename`
+  reads an existing file; it does not save or name an inline `source` program.
+  Use `source` alone for one-off snippets.
 - `target` (string, optional, default `wasm`): one of `wasm`, `wasm-gc`, `js`,
   or `llvm`. The default wasm backend is the policy-bound command/IO surface;
   the other targets are intended for pure compute, reject explicit native FFI,

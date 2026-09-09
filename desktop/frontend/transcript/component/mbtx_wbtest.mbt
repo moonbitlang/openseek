@@ -5,8 +5,9 @@ test "an mbtx call decodes to its program and its arguments" {
   guard decode_mbtx_call(arguments) is Some(call) else {
     fail("expected a readable mbtx call")
   }
+  guard call.program is Source(source) else { fail("expected inline source") }
   assert_eq(
-    call.source,
+    source,
     (
       #|fn main {
       #|  println("hi")
@@ -14,6 +15,39 @@ test "an mbtx call decodes to its program and its arguments" {
     ),
   )
   assert_eq(call.chips, ["target: js", "cwd: sub/dir"])
+}
+
+///|
+test "a saved mbtx call displays a Filename variant" {
+  guard decode_mbtx_call(
+      (
+        #|{"filename":"scripts/check.mbtx","cwd":"subdir"}
+      ),
+    )
+    is Some(call) else {
+    fail("expected a saved script call")
+  }
+  assert_true(call.program is Filename("scripts/check.mbtx"))
+  assert_eq(call.chips, ["cwd: subdir"])
+  assert_true(decode_mbtx_call("{\"filename\":\"  \"}") is None)
+}
+
+///|
+test "mbtx tabs identify Source and Filename and leave ambiguous inputs as JSON" {
+  guard custom_card("mbtx", "{\"source\":\"fn main {}\"}")
+    is Some((source_label, _)) else {
+    fail("expected Source card")
+  }
+  assert_eq(source_label, "Source")
+  guard custom_card("mbtx", "{\"filename\":\"scripts/check.mbtx\"}")
+    is Some((file_label, _)) else {
+    fail("expected Filename card")
+  }
+  assert_eq(file_label, "Filename")
+  assert_true(
+    decode_mbtx_call("{\"source\":\"fn main {}\",\"filename\":\"check.mbtx\"}")
+    is None,
+  )
 }
 
 ///|
