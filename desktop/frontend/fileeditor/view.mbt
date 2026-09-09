@@ -998,7 +998,8 @@ fn git_graph_placeholder(
   let paths : Array[@svg.Svg] = []
   for lane, column in columns {
     let x = graph_lane_x(lane)
-    let highlight_class = if highlight_index == Some(lane) {
+    let highlight_class = if highlight_index is Some(highlight) &&
+      highlight == lane {
       " git-graph-edge-highlight"
     } else {
       ""
@@ -1011,7 +1012,13 @@ fn git_graph_placeholder(
         class=path_class,
         d="M\{x} 0 V22",
         attrs=@svg.Attrs::build()
-          .stroke_width(if highlight_index == Some(lane) { "3" } else { "1" })
+          .stroke_width(
+            if highlight_index is Some(highlight) && highlight == lane {
+              "3"
+            } else {
+              "1"
+            },
+          )
           .stroke_linecap("round"),
       ),
     )
@@ -1224,11 +1231,12 @@ fn git_commit_row(
   index : Int,
   total : Int,
 ) -> @html.Html {
-  let expanded = state.git_graph_selected == Some(commit.id)
+  let expanded = state.git_graph_selected is Some(selected) &&
+    selected == commit.id
   let refs : Array[@html.Html] = []
   let mut head = false
   if state.git_graph is GitGraphReady(snapshot~, ..) {
-    head = snapshot.head == Some(commit.id)
+    head = snapshot.head is Some(selected) && selected == commit.id
     refs.push_iter(git_commit_refs(snapshot, commit.id).iter())
   }
   let mut row_class = "git-commit-row"
@@ -1365,7 +1373,8 @@ fn git_commit_files(
             status: file.status,
             kind: file.kind,
           }
-          let selected = ctx.active_history_diff == Some(diff)
+          let selected = ctx.active_history_diff is Some(active_diff) &&
+            active_diff == diff
           let contents : Array[@html.Html] = [
             git_graph_placeholder(columns, highlight_index),
             @html.span(class="git-history-file-path", file.path),
@@ -1664,7 +1673,9 @@ fn ChangedFile::is_selected(
   state : State,
   ctx : Ctx,
 ) -> Bool {
-  guard ctx.active_file == Some(self.path) else { return false }
+  guard ctx.active_file is Some(active) && active == self.path else {
+    return false
+  }
   match state.docs.get(self.path) {
     Some({ review: Some(review), .. }) => review.selected == self
     _ => true
@@ -1791,7 +1802,8 @@ pub fn breadcrumb_view(
           dispatch,
           "Workspace",
           @pathx.Relative::root(),
-          state.highlighted == Some(@pathx.Relative::root()),
+          state.highlighted is Some(highlight) &&
+          highlight == @pathx.Relative::root(),
         ),
       )
       let segments = path_segments(path)
@@ -1805,7 +1817,8 @@ pub fn breadcrumb_view(
               dispatch,
               segment,
               segments_prefix(segments, index + 1),
-              state.highlighted == Some(segments_prefix(segments, index + 1)),
+              state.highlighted is Some(highlight) &&
+              highlight == segments_prefix(segments, index + 1),
             ),
           )
         }
@@ -2509,7 +2522,9 @@ fn breadcrumb_picker_row(
   index : Int,
   total : Int,
 ) -> @html.Html {
-  let selected = !entry.is_dir && ctx.active_file == Some(entry.path)
+  let selected = !entry.is_dir &&
+    ctx.active_file is Some(active) &&
+    active == entry.path
   @html.button(
     type_="button",
     class=if selected {
@@ -2838,7 +2853,7 @@ fn tree_row(
     )
   } else {
     @html.div(
-      class=if ctx.active_file == Some(entry.path) {
+      class=if ctx.active_file is Some(active) && active == entry.path {
         "tree-row tree-file selected"
       } else {
         "tree-row tree-file"

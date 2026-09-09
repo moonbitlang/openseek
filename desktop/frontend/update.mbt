@@ -123,7 +123,9 @@ fn open_session_on(
           @cmd.none,
           {
             ..base,
-            loading_conversation: if base.loading_conversation == Some(owner) {
+            loading_conversation: if base.loading_conversation
+              is Some(loading_owner) &&
+              loading_owner == owner {
               Some(owner)
             } else {
               None
@@ -611,7 +613,9 @@ fn retry_session_snapshot(
     let next = model.replace_conversation(failed)
     let scroll = @cmd.none
     let owner : @interop.ConversationKey = { channel, session, }
-    if activate_on_success && model.loading_conversation == Some(owner) {
+    if activate_on_success &&
+      model.loading_conversation is Some(loading_owner) &&
+      loading_owner == owner {
       let blocking_failure = !next.selected_conversation_loaded()
       let (toast, next) = next.notify_error(
         dispatch,
@@ -683,7 +687,9 @@ fn apply_session_snapshot(
   let mut next = model.replace_conversation(conv)
   let commands : Array[@cmd.Cmd] = []
   let owner : @interop.ConversationKey = { channel, session, }
-  if activate_on_success && model.loading_conversation == Some(owner) {
+  if activate_on_success &&
+    model.loading_conversation is Some(loading_owner) &&
+    loading_owner == owner {
     next = {
       ..next.activate(channel, session, conv.project()),
       loading_conversation: None,
@@ -1651,7 +1657,7 @@ fn sync_browser_view(
       }
     Some(_) => {
       let geo = browser_geometry(model)
-      if pane.geo == Some(geo) {
+      if pane.geo is Some(measured) && measured == geo {
         (model, @cmd.none)
       } else {
         (
@@ -1773,7 +1779,8 @@ fn update(
   // A registry refresh can retire the title control without changing the
   // active session. Do not leave its root menu flag hiding a native Browser
   // view after the control itself has disappeared.
-  let model = if model.select_menu == Some(ProjectMenu) &&
+  let model = if model.select_menu is Some(open_menu) &&
+    open_menu == ProjectMenu &&
     !model.can_choose_new_chat_project() {
     { ..model, select_menu: None, project_menu_query: "", }
   } else {
@@ -1782,7 +1789,9 @@ fn update(
   // The query has meaning only while its exact menu is open. Context changes,
   // covering overlays, and selections close menus in several handlers; keep
   // all of those paths from reviving an old filter on the next fresh draft.
-  let model = if model.select_menu == Some(ProjectMenu) ||
+  let model = if (
+      model.select_menu is Some(open_menu) && open_menu == ProjectMenu
+    ) ||
     model.project_menu_query.is_empty() {
     model
   } else {
@@ -2285,7 +2294,8 @@ fn update_msg(
               guard conv.run is Open(run_id~, stage~) && !(stage is Cancelling) else {
                 return (@cmd.none, model)
               }
-              let editing = conv.queue_edit_id == Some(id)
+              let editing = conv.queue_edit_id is Some(queued_id) &&
+                queued_id == id
               (
                 queue_openseek(
                   dispatch,
@@ -2813,7 +2823,8 @@ fn update_msg(
     // a reference pick) opens a dock tab before the document loads. The
     // owner stamp rejects a reply that outlived a conversation switch.
     FileEditor(OpenNavigationLocation(owner~, path~, range~)) => {
-      guard model.file_panel.owner == Some(owner) &&
+      guard model.file_panel.owner is Some(panel_owner) &&
+        panel_owner == owner &&
         file_ctx(model).owner == owner else {
         return (@cmd.none, model)
       }
@@ -2840,7 +2851,8 @@ fn update_msg(
     // callback by its original conversation and coalesce identical live
     // toasts: one user gesture can cause Viewer to ask more than once.
     FileEditor(@fileeditor.LanguageRequestFailed(owner~, message~)) => {
-      guard model.file_panel.owner == Some(owner) &&
+      guard model.file_panel.owner is Some(panel_owner) &&
+        panel_owner == owner &&
         file_ctx(model).owner == owner else {
         return (@cmd.none, model)
       }
@@ -2870,7 +2882,8 @@ fn update_msg(
         file_ctx(model),
       )
       let next = { ..model, file_panel: panel, }
-      if panel.watch_error == Some(message) &&
+      if panel.watch_error is Some(err) &&
+        err == message &&
         model.file_panel.watch_error != Some(message) &&
         !model.notifications.any(toast => toast.message == message) {
         let (toast, next) = next.notify_error(dispatch, message)
@@ -2885,7 +2898,8 @@ fn update_msg(
       if menu is ProjectMenu && !model.can_choose_new_chat_project() {
         return (@cmd.none, model)
       }
-      let select_menu = if model.select_menu == Some(menu) {
+      let select_menu = if model.select_menu is Some(open_menu) &&
+        open_menu == menu {
         None
       } else {
         Some(menu)
@@ -2904,7 +2918,8 @@ fn update_msg(
     CloseSelectMenu =>
       (@cmd.none, { ..model, select_menu: None, project_menu_query: "", })
     ProjectMenuQueryChanged(query) =>
-      if model.select_menu == Some(ProjectMenu) &&
+      if model.select_menu is Some(menu) &&
+        menu == ProjectMenu &&
         model.screen is Chat &&
         model.composing_new_chat() {
         (@cmd.none, { ..model, project_menu_query: query, })
@@ -2912,7 +2927,8 @@ fn update_msg(
         (@cmd.none, model)
       }
     ProjectMenuProjectChosen(workspace) => {
-      let menu_open = model.select_menu == Some(ProjectMenu)
+      let menu_open = model.select_menu is Some(open_menu) &&
+        open_menu == ProjectMenu
       let closed = { ..model, select_menu: None, project_menu_query: "", }
       guard menu_open &&
         model.can_choose_new_chat_project() &&
@@ -4866,7 +4882,8 @@ fn update_msg(
             // kinds activate directly.
             let next_file = @dock.active_file(dock)
             let next_history = @dock.active_history_diff(dock)
-            let was_active = before.active == Some(tab)
+            let was_active = before.active is Some(active_tab) &&
+              active_tab == tab
             // Closing any file tab is newer than a pending transcript link:
             // even an inactive tab must stay closed when that link's delayed
             // host lookup returns. Other tab kinds compete only when closing
@@ -4938,7 +4955,8 @@ fn update_msg(
                 // does not enqueue a hide behind the close; the ordered bridge
                 // lane would then try to hide a view the host already removed.
                 // Clearing `geo` also makes a successor Browser tab re-measure.
-                let browser_pane = if model.browser_pane.shown == Some(id) {
+                let browser_pane = if model.browser_pane.shown is Some(shown_id) &&
+                  shown_id == id {
                   { shown: None, rect: None, geo: None, }
                 } else {
                   model.browser_pane
@@ -5267,7 +5285,8 @@ fn update_msg(
         let reuse = for tab in model.dock.tabs {
           if tab is Browser(id~) &&
             @preview.page(model.preview, id) is Some(page) &&
-            page.url == Some(url) {
+            page.url is Some(page_url) &&
+            page_url == url {
             break Some(id)
           }
         } nobreak {
@@ -5396,7 +5415,9 @@ fn Model::apply_codex_worktree_snapshot(
     return (@cmd.none, self)
   }
   for row in rows {
-    if row.codex_thread == Some(thread_id) && row.path is Some(path) {
+    if row.codex_thread is Some(thread) &&
+      thread == thread_id &&
+      row.path is Some(path) {
       let (command, codex) = @codex.update(
         dispatch.map(msg => Codex(channel~, msg)),
         @codex.Msg::worktree_changed(
@@ -5757,7 +5778,7 @@ fn update_device_msg(
     }
     HostSettingsLoaded(settings, connection_generation~) => {
       guard connection_generation is None ||
-        connection_generation == Some(dev.connection_generation) else {
+        (connection_generation is Some(gen) && gen == dev.connection_generation) else {
         return (@cmd.none, model)
       }
       // The settings mirror is the focused host's. A generation-carrying
@@ -5885,7 +5906,7 @@ fn update_device_msg(
           }
           let queued_inputs = conv.queued_inputs.copy()
           queued_inputs[index] = { id, content, }
-          if conv.queue_edit_id == Some(id) {
+          if conv.queue_edit_id is Some(queued_id) && queued_id == id {
             {
               ..conv,
               queued_inputs,
@@ -6411,7 +6432,9 @@ fn update_device_msg(
         Some(confirm) if confirm.channel == channel &&
           next.find_conversation(channel, confirm.session) is Some(conv) &&
           conv.project() == workspace &&
-          !rows.any(row => row.session == Some(confirm.session)) => None
+          !rows.any(row => {
+            row.session is Some(session) && session == confirm.session
+          }) => None
         other => other
       }
       let next = { ..next, conversations, archive_confirm, }
@@ -6713,7 +6736,9 @@ fn update_device_msg(
           if generation is Some(generation) {
             let foreground = channel == next.focused &&
               next.active_session == key.session &&
-              next.session_project(channel, key.session) == Some(key.workspace)
+              next.session_project(channel, key.session)
+              is Some(session_workspace) &&
+              session_workspace == key.workspace
             let next = if foreground {
               {
                 ..next,
@@ -7482,7 +7507,8 @@ fn update_device_msg(
         // dismissed. A question only exists inside a turn, so a conversation
         // with no open run has none to restore.
         guard conv.run is Open(run_id~, ..) &&
-          recovered.approval.run_id == Some(run_id) else {
+          recovered.approval.run_id is Some(approval_run_id) &&
+          approval_run_id == run_id else {
           continue
         }
         // Already on screen unchanged: leave it, answered flag and all. This

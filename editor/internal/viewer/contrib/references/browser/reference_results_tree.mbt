@@ -748,7 +748,9 @@ fn ReferenceResultsTree::update_row_states(self : ReferenceResultsTree) -> Unit 
       Some(row) => {
         row.set_attribute(
           "tabindex",
-          reference_results_tabindex(self.roving == Some(GroupRow(group_index))),
+          reference_results_tabindex(
+            self.roving is Some(GroupRow(row_index)) && row_index == group_index,
+          ),
         )
         row.set_attribute(
           "aria-expanded",
@@ -767,7 +769,8 @@ fn ReferenceResultsTree::update_row_states(self : ReferenceResultsTree) -> Unit 
         row.set_attribute(
           "tabindex",
           reference_results_tabindex(
-            self.roving == Some(ReferenceRow(reference.flat_index)) &&
+            self.roving is Some(ReferenceRow(row_index)) &&
+            row_index == reference.flat_index &&
             self.reference_is_visible(reference),
           ),
         )

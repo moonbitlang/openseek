@@ -108,7 +108,7 @@ fn DefinitionMessageWidget::after_render(
   preference : @view.ContentWidgetPositionPreference?,
 ) -> Unit {
   guard !self.disposed else { return }
-  let below = if preference == Some(Below) { " below" } else { "" }
+  let below = if preference is Some(Below) { " below" } else { "" }
   self.root.set_attribute(
     "class",
     "monaco-editor-overlaymessage moonbit-viewer-definition-message fadeIn\{below}",

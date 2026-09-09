@@ -40,7 +40,7 @@ pub fn update(msg : Msg, state : State) -> State {
     // `loading` is driven by its own event, so the new load still ends.
     LoadFailed(id~, url~, text~) =>
       patch(id, page => {
-        if page.url == Some(url) {
+        if page.url is Some(page_url) && page_url == url {
           { ..page, loading: false, failure: Some("\{url}: \{text}"), }
         } else {
           page

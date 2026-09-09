@@ -452,7 +452,7 @@ fn DeviceState::conversation_workspace(
   for group in self.worktrees {
     guard group.project == project else { continue }
     for row in group.rows {
-      if row.session == Some(session) {
+      if row.session is Some(row_session) && row_session == session {
         return Worktree(project~, name=row.name)
       }
     }

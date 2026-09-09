@@ -28,7 +28,7 @@ fn SelectMenu::setting_control(
     groups: [{ label: aria_label, options, }],
     selected,
     disabled,
-    open: model.select_menu == Some(self),
+    open: model.select_menu is Some(menu) && menu == self,
     toggle: dispatch(ToggleSelectMenu(self)),
     dismiss: dispatch(CloseSelectMenu),
     change,
@@ -431,7 +431,9 @@ fn Model::sidebar_component_sections(
       codex_activation = self.codex.project_activation(context, root)
     }
     let conversations = ordered_by_recency(stamped)
-    let openseek_activation = activation(dev.active_project == Some(path))
+    let openseek_activation = activation(
+      dev.active_project is Some(project) && project == path,
+    )
     projects.push(
       @section.Project({
         id: @project.Id(source="openseek.projects", channel~, root=path.path),

@@ -30,7 +30,7 @@ pub fn update(msg : Msg, state : State) -> State {
       match tab_index(state, tab) {
         Some(index) => {
           let tabs = state.tabs.filter(entry => entry != tab)
-          let active = if state.active == Some(tab) {
+          let active = if state.active is Some(active_tab) && active_tab == tab {
             // The right neighbor inherits the screen; at the strip's end,
             // the left one.
             match tabs.get(index) {
@@ -124,7 +124,7 @@ pub fn resolve_pick(state : State, path : @pathx.Relative) -> State {
 /// restored documents is the content subsystems' business, driven by their
 /// own sync against the fresh projection.
 pub fn sync(state : State, owner : @interop.ConversationKey) -> State {
-  if state.owner == Some(owner) {
+  if state.owner is Some(current) && current == owner {
     return state
   }
   let remembered = state.remembered.copy()

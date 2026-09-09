@@ -224,8 +224,10 @@ fn ReferencesController::session_is_open(
   key : @references.ReferencesSessionKey,
   mode : @references.ReferencesPeekMode,
 ) -> Bool {
-  self.session_key == Some(key) &&
-  self.mode == Some(mode) &&
+  self.session_key is Some(current_key) &&
+  current_key == key &&
+  self.mode is Some(current_mode) &&
+  current_mode == mode &&
   self.widget is Some(_) &&
   self.mount is Some(_) &&
   self.session_is_current(self.generation)
@@ -376,7 +378,7 @@ fn ReferencesController::install_locations(
   }
   self.group_preview_owners = owners
   if result_model.is_empty() {
-    if self.mode == Some(Definitions) {
+    if self.mode is Some(Definitions) {
       self.close(restore_focus=true)
       (self.host.show_message)(anchor, definition_no_result_message(anchor))
     } else {

@@ -96,7 +96,7 @@ fn Model::update(
       (
         {
           ..self,
-          menu: if self.menu == Some(menu) {
+          menu: if self.menu is Some(current) && current == menu {
             None
           } else {
             Some(menu)
@@ -143,7 +143,9 @@ fn setting_select(
     // and the shared select dismisses on blur, so a page change takes the
     // trigger out of the DOM and closes the menu on the way. This keeps the
     // view honest if that ever stops holding.
-    open: state.menu == Some(menu) && state.key == input.page,
+    open: state.menu is Some(current) &&
+    current == menu &&
+    state.key == input.page,
     toggle: emit(ToggleMenu(menu)),
     dismiss: emit(CloseMenu),
     change,

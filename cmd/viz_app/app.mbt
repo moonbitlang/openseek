@@ -1428,7 +1428,7 @@ fn sidebar_row(
   row : SessionRow,
   child? : Bool = false,
 ) -> @html.Html {
-  let selected = model.selected == Some(row.key)
+  let selected = model.selected is Some(current) && current == row.key
   let label = if row.first_prompt.is_blank() {
     row.id
   } else {

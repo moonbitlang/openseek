@@ -54,7 +54,8 @@ priv enum ChatColumn {
 ///|
 fn Model::chat_column(self : Model) -> ChatColumn {
   if self.conversation_load_failure is Some(failure) &&
-    self.selected_conversation == Some(failure.target) {
+    self.selected_conversation is Some(selected) &&
+    selected == failure.target {
     return LoadFailed(message=failure.message)
   }
   if !self.selected_conversation_loaded() {
@@ -181,7 +182,8 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
             projects~,
             can_choose_project~,
             project_menu_open=can_choose_project &&
-              self.select_menu == Some(ProjectMenu),
+              self.select_menu is Some(menu) &&
+              menu == ProjectMenu,
             project_query=self.project_menu_query,
             root=self
               .conversation_placement(conversation)

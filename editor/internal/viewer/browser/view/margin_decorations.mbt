@@ -85,7 +85,7 @@ fn dedup_whole_margin_decorations(
     } else {
       visible_end_line_number - visible_start_line_number
     }
-    if previous_class_name == Some(class_name) {
+    if previous_class_name is Some(prev_class) && prev_class == class_name {
       start_line_index = if previous_end_line_index + 1 > start_line_index {
         previous_end_line_index + 1
       } else {

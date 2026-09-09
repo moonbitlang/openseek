@@ -232,7 +232,7 @@ pub fn AssistantMessage::reasoning_content(self : AssistantMessage) -> String? {
 /// Whether this event only restores an already durable answer after a
 /// checkpoint. It remains model-visible but is not a new provider step.
 pub fn AssistantMessage::is_replay(self : AssistantMessage) -> Bool {
-  self.is_replay == Some(true)
+  self.is_replay is Some(true)
 }
 
 ///|

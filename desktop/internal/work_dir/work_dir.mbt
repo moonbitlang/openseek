@@ -59,7 +59,7 @@ async fn HostWorkspaceAuthorizations::resolve(
   let normalized = hint.normalize()
   self.lock.acquire()
   defer self.lock.release()
-  if self.paths.get(session) == Some(normalized.0) {
+  if self.paths.get(session) is Some(stored) && stored == normalized.0 {
     Some(normalized.to_path())
   } else {
     None

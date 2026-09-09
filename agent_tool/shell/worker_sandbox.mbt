@@ -85,10 +85,10 @@ async fn worker_cd_escapes(
       }
       _ => ()
     }
-    let in_pipeline = command.separator_before == Some("|") ||
+    let in_pipeline = command.separator_before is Some("|") ||
       (
         position + 1 < commands.length() &&
-        commands[position + 1].separator_before == Some("|")
+        commands[position + 1].separator_before is Some("|")
       )
     // The effective command name skips wrappers (`command`, `env`), so
     // `command cd ..` is still a cwd change.
@@ -138,7 +138,7 @@ async fn worker_cd_escapes(
             // profile remains the enforcement where one exists.
             if !in_pipeline {
               let next_is_and = position + 1 < commands.length() &&
-                commands[position + 1].separator_before == Some("&&")
+                commands[position + 1].separator_before is Some("&&")
               if next_is_and && interpretations > 0 && !viable.is_empty() {
                 for old in candidates {
                   if !suspended.contains(old) {

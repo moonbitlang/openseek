@@ -470,7 +470,7 @@ pub fn endpoints(
         (moved, workspace) => {
           publish_session_changed(state, "archived", moved, workspace)
         },
-        force=payload.force == Some(true),
+        force=payload.force is Some(true),
         on_worktree_changed=(workspace, worktrees) => {
           publish_worktree_changed(state, workspace, worktrees)
         },
@@ -629,7 +629,9 @@ pub fn endpoints(
         reply.worktrees
         .iter()
         .find_first(info => {
-          info.codex_thread == Some(thread_id) && info.name == reply.name
+          info.codex_thread is Some(thread) &&
+          thread == thread_id &&
+          info.name == reply.name
         })
         is Some(info) {
         @work_dir.authorize_host_workspace(thread_id, info.path)
@@ -641,7 +643,7 @@ pub fn endpoints(
         state.manager.worktree_host(),
         payload.workspace,
         payload.name,
-        payload.force == Some(true),
+        payload.force is Some(true),
         worktrees => {
           publish_worktree_changed(state, payload.workspace, worktrees)
         },
@@ -949,8 +951,10 @@ async fn ApiState::codex_worktree_project(
   })
   guard metadata is Object(reply_fields) &&
     reply_fields.get("thread") is Some(Object(thread)) &&
-    thread.get("id") == Some(Json(thread_id)) &&
-    thread.get("projectRoot") == Some(Json(requested)) else {
+    thread.get("id") is Some(reply_id) &&
+    reply_id == Json(thread_id) &&
+    thread.get("projectRoot") is Some(reply_root) &&
+    reply_root == Json(requested) else {
     raise @host.HostError(
       "Codex worktree requires an empty task at its main project root",
     )
@@ -964,7 +968,7 @@ async fn ApiState::codex_worktree_project(
     }) {
     return requested
   }
-  guard thread.get("cwd") == Some(Json(requested)) else {
+  guard thread.get("cwd") is Some(reply_cwd) && reply_cwd == Json(requested) else {
     raise @host.HostError(
       "Codex worktree requires an empty task at its main project root",
     )

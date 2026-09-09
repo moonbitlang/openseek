@@ -1240,7 +1240,7 @@ fn DiffEditorWidget::publish_content_height_if_changed(
   }
   let content_height = self.get_content_height()
   if content_height <= 0.0 ||
-    self.last_published_content_height == Some(content_height) {
+    (self.last_published_content_height is Some(last) && last == content_height) {
     return
   }
   self.last_published_content_height = Some(content_height)

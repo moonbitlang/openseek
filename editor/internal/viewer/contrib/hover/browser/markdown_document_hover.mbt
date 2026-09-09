@@ -713,8 +713,10 @@ fn MarkdownDocumentHoverBridge::on_pointer_move(
     self.invalidate_pointer_request()
     return
   }
-  if self.current_source_offset == Some(hit.source_offset) &&
-    self.current_block_index == Some(hit.line.block_index) {
+  if self.current_source_offset is Some(shown_offset) &&
+    shown_offset == hit.source_offset &&
+    self.current_block_index is Some(shown_block) &&
+    shown_block == hit.line.block_index {
     return
   }
   self.request_generation += 1

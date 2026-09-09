@@ -306,7 +306,10 @@ fn State::apply_cache_loaded(
   _generation : Int,
 ) -> (@cmd.Cmd, State) {
   let cache = self.cache
-  guard cache.owner == Some(owner) && cache.loading_key == Some(cache_key) else {
+  guard cache.owner is Some(cached_owner) &&
+    cached_owner == owner &&
+    cache.loading_key is Some(cached_key) &&
+    cached_key == cache_key else {
     return (@cmd.none, self)
   }
   let cmds : Array[@cmd.Cmd] = []
@@ -338,7 +341,10 @@ fn State::fail_cache_load(
   _generation : Int,
 ) -> (@cmd.Cmd, State) {
   let cache = self.cache
-  guard cache.owner == Some(owner) && cache.loading_key == Some(cache_key) else {
+  guard cache.owner is Some(cached_owner) &&
+    cached_owner == owner &&
+    cache.loading_key is Some(cached_key) &&
+    cached_key == cache_key else {
     return (@cmd.none, self)
   }
   let next = { ..self, cache: { ..cache, loading_key: None, }, }
@@ -366,7 +372,8 @@ fn State::apply_file_result(
   guard self.open is Some(open) &&
     open.owner == owner &&
     open.provider() is Files &&
-    self.cache.active_key == Some(cache_key) &&
+    self.cache.active_key is Some(active_key) &&
+    active_key == cache_key &&
     open.query() == query &&
     open.generation == generation else {
     return self
@@ -385,7 +392,8 @@ fn State::fail_file_request(
   guard self.open is Some(open) &&
     open.owner == owner &&
     open.provider() is Files &&
-    self.cache.active_key == Some(cache_key) &&
+    self.cache.active_key is Some(active_key) &&
+    active_key == cache_key &&
     open.query() == query &&
     open.generation == generation else {
     return self
@@ -555,7 +563,8 @@ fn State::ensure_cache(
   query_now : Bool,
 ) -> (@cmd.Cmd, State) {
   let previous = self.cache
-  let compatible = previous.owner == Some(open.owner) &&
+  let compatible = previous.owner is Some(cached_owner) &&
+    cached_owner == open.owner &&
     previous.root == input.root
   let cmds : Array[@cmd.Cmd] = []
   let mut cache = if compatible {

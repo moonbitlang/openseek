@@ -845,7 +845,8 @@ pub fn LinesLayout::get_lines_viewport_data(
 
     // Next line starts immediately after this one.
     current_line_relative_offset += line_height.to_double()
-    while current_whitespace_after_line_number == Some(line_number) {
+    while current_whitespace_after_line_number is Some(matched) &&
+          matched == line_number {
       // Push down next line with the height of the current whitespace.
       current_line_relative_offset += current_whitespace_height.to_double()
 

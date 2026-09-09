@@ -141,7 +141,7 @@ fn Doc::diff_pending_generation(self : Doc) -> Int? {
 ///|
 fn State::shows_delayed_diff_loading(self : State, doc : Doc) -> Bool {
   guard doc.diff_pending_generation() is Some(generation) else { return false }
-  self.diff_loading_generation == Some(generation)
+  self.diff_loading_generation is Some(loading) && loading == generation
 }
 
 ///|
@@ -434,7 +434,7 @@ pub fn open_document(
   } else {
     state
   }
-  let clear_review = if ctx.active_file == Some(path) {
+  let clear_review = if ctx.active_file is Some(active) && active == path {
     // Always clear the displayed resource, even when this path has no cached
     // `Doc`: a reviewed tab can be closed while another dock kind is active,
     // leaving its hidden Viewer model alive until the next file opens. Do not
@@ -834,7 +834,7 @@ fn reconcile_reviews_after_changes(
             ),
           )
         }
-        if ctx.active_file == Some(path) {
+        if ctx.active_file is Some(active) && active == path {
           cmds.push(
             show_tab(
               dispatch,
@@ -858,7 +858,7 @@ fn reconcile_reviews_after_changes(
           stale: false,
         }
         docs[path] = ordinary
-        if ctx.active_file == Some(path) {
+        if ctx.active_file is Some(active) && active == path {
           cmds.push(
             show_tab(
               dispatch,
@@ -958,7 +958,9 @@ fn reconcile_reviews_after_changes(
           )
         }
         if has_working_file {
-          if ctx.active_file == Some(path) && !(doc.state is TabLoading) {
+          if ctx.active_file is Some(active) &&
+            active == path &&
+            !(doc.state is TabLoading) {
             // Keep the previous working text visible while its replacement is
             // in flight, but clear the old gutter until both new sides settle.
             cmds.push(
@@ -983,7 +985,7 @@ fn reconcile_reviews_after_changes(
               root=ctx.root(),
             ),
           )
-        } else if ctx.active_file == Some(path) {
+        } else if ctx.active_file is Some(active) && active == path {
           // Clear the old gutter immediately while the new HEAD side loads;
           // deleted previews switch back to their precise loading notice.
           cmds.push(
@@ -1570,7 +1572,8 @@ fn changes_live(state : State, ctx : Ctx) -> Bool {
 /// the host that lost it.
 fn changes_poll_wanted(state : State, ctx : Ctx) -> Bool {
   ctx.checkout_ready() &&
-  state.owner == Some(ctx.owner) &&
+  state.owner is Some(state_owner) &&
+  state_owner == ctx.owner &&
   !ctx.owner.session.is_empty() &&
   changes_live(state, ctx) &&
   state.changes is ChangeListReady(repository=true, refreshing=false, ..)
@@ -1731,7 +1734,9 @@ fn refresh_changes(
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
-  guard state.owner == Some(ctx.owner) && !ctx.owner.session.is_empty() else {
+  guard state.owner is Some(state_owner) &&
+    state_owner == ctx.owner &&
+    !ctx.owner.session.is_empty() else {
     return (@cmd.none, state)
   }
   match state.changes {
@@ -1870,7 +1875,8 @@ pub fn sync(
   // may happen after that owner's initial transcript click. Every later owner
   // replacement is a real navigation boundary.
   let owner_replaced = state.owner is Some(_) && owner_changed
-  let same_owner = state.owner == Some(ctx.owner)
+  let same_owner = state.owner is Some(current_owner) &&
+    current_owner == ctx.owner
   // Missing/unresolved are availability changes, not automatically a new
   // checkout. A live managed worktree and its missing form share the same
   // project/name identity so reviews and dock documents can park and recover;
@@ -2401,7 +2407,8 @@ pub fn update(
       )
     }
     PackageGraphRequestLoaded(owner~, epoch~, path~, generation~, source~) =>
-      if state.owner == Some(owner) &&
+      if state.owner is Some(state_owner) &&
+        state_owner == owner &&
         state.request_epoch == epoch &&
         state.package_graphs.get(path) is Some(PackageGraphLoading(current)) &&
         current == generation {
@@ -2412,7 +2419,8 @@ pub fn update(
         (@cmd.none, state)
       }
     PackageGraphRequestFailed(owner~, epoch~, path~, generation~, message~) =>
-      if state.owner == Some(owner) &&
+      if state.owner is Some(state_owner) &&
+        state_owner == owner &&
         state.request_epoch == epoch &&
         state.package_graphs.get(path) is Some(PackageGraphLoading(current)) &&
         current == generation {
@@ -2423,10 +2431,13 @@ pub fn update(
         (@cmd.none, state)
       }
     DiffLoadingDue(owner~, path~, generation~) =>
-      if state.owner == Some(owner) &&
-        ctx.active_file == Some(path) &&
+      if state.owner is Some(state_owner) &&
+        state_owner == owner &&
+        ctx.active_file is Some(active) &&
+        active == path &&
         state.docs.get(path) is Some(doc) &&
-        doc.diff_pending_generation() == Some(generation) {
+        doc.diff_pending_generation() is Some(pending) &&
+        pending == generation {
         (@cmd.none, { ..state, diff_loading_generation: Some(generation), })
       } else {
         (@cmd.none, state)
@@ -2636,7 +2647,7 @@ pub fn update(
     ToggleGitGraphSection =>
       (@cmd.none, { ..state, git_graph_collapsed: !state.git_graph_collapsed, })
     RevealDirectory(path) =>
-      if state.highlighted == Some(path) {
+      if state.highlighted is Some(highlighted) && highlighted == path {
         (@cmd.none, { ..state, highlighted: None, })
       } else {
         let selected = { ..state, highlighted: Some(path), }
@@ -2660,7 +2671,7 @@ pub fn update(
         }
       }
     HighlightCleared(path) =>
-      if state.highlighted == Some(path) {
+      if state.highlighted is Some(highlighted) && highlighted == path {
         (@cmd.none, { ..state, highlighted: None, })
       } else {
         (@cmd.none, state)
@@ -2728,7 +2739,8 @@ pub fn update(
       } else {
         let children = state.children.copy()
         children[path] = entries
-        let breadcrumb_cmd = if state.highlighted == Some(path) {
+        let breadcrumb_cmd = if state.highlighted is Some(highlighted) &&
+          highlighted == path {
           focus_breadcrumb_entry_after_render(0)
         } else {
           @cmd.none
@@ -2885,9 +2897,11 @@ pub fn update(
       }
     GitCommitSelected(commit) => select_git_commit(dispatch, state, ctx, commit)
     GitCommitChangesLoaded(owner~, generation~, reply~) =>
-      if state.owner == Some(owner) &&
+      if state.owner is Some(state_owner) &&
+        state_owner == owner &&
         state.git_commit_files_generation == generation &&
-        state.git_graph_selected == Some(reply.commit) &&
+        state.git_graph_selected is Some(selected_commit) &&
+        selected_commit == reply.commit &&
         state.git_commit_files is GitCommitFilesLoading(commit=loading_commit) &&
         loading_commit == reply.commit {
         let commit = reply.commit
@@ -2904,9 +2918,11 @@ pub fn update(
         (@cmd.none, state)
       }
     GitCommitChangesFailed(owner~, generation~, commit~, message~) =>
-      if state.owner == Some(owner) &&
+      if state.owner is Some(state_owner) &&
+        state_owner == owner &&
         state.git_commit_files_generation == generation &&
-        state.git_graph_selected == Some(commit) {
+        state.git_graph_selected is Some(selected) &&
+        selected == commit {
         (
           @cmd.none,
           {
@@ -3140,14 +3156,16 @@ pub fn update(
     OpenNavigationLocation(..) => (@cmd.none, state)
     GitOriginalLoaded(owner~, path~, generation~, background~, original~) => {
       let background_review_requests = if background &&
-        state.background_review_requests.get(path) == Some(generation) {
+        state.background_review_requests.get(path) is Some(requested) &&
+        requested == generation {
         let requests = state.background_review_requests.copy()
         requests.remove(path)
         requests
       } else {
         state.background_review_requests
       }
-      guard state.owner == Some(owner) &&
+      guard state.owner is Some(state_owner) &&
+        state_owner == owner &&
         state.docs.get(path) is Some(doc) &&
         doc.review is Some(current_review) &&
         current_review.generation == generation &&
@@ -3169,7 +3187,8 @@ pub fn update(
       // A working-tree read may still be in flight. It will consume the
       // parked baseline when `FileLoaded` arrives; every settled document can
       // update immediately (including a deleted-file HEAD preview).
-      let cmd = if ctx.active_file == Some(path) &&
+      let cmd = if ctx.active_file is Some(active) &&
+        active == path &&
         working_side_ready_for_review(next_doc) {
         show_settled_review(
           dispatch,
@@ -3185,14 +3204,16 @@ pub fn update(
     }
     GitOriginalFailed(owner~, path~, generation~, background~, message~) => {
       let background_review_requests = if background &&
-        state.background_review_requests.get(path) == Some(generation) {
+        state.background_review_requests.get(path) is Some(requested) &&
+        requested == generation {
         let requests = state.background_review_requests.copy()
         requests.remove(path)
         requests
       } else {
         state.background_review_requests
       }
-      guard state.owner == Some(owner) &&
+      guard state.owner is Some(state_owner) &&
+        state_owner == owner &&
         state.docs.get(path) is Some(doc) &&
         doc.review is Some(current_review) &&
         current_review.generation == generation else {
@@ -3212,7 +3233,8 @@ pub fn update(
         review: Some({ ..current_review, baseline: ReviewFailed(message), }),
       }
       docs[path] = next_doc
-      let cmd = if ctx.active_file == Some(path) &&
+      let cmd = if ctx.active_file is Some(active) &&
+        active == path &&
         !(next_doc.state is TabLoading) {
         show_settled_review(
           dispatch,
@@ -3227,7 +3249,8 @@ pub fn update(
       (cmd, { ..state, docs, background_review_requests, })
     }
     HistoryBlobLoaded(owner~, key~, generation~, side~, blob~) => {
-      guard state.owner == Some(owner) &&
+      guard state.owner is Some(state_owner) &&
+        state_owner == owner &&
         state.history_docs.get(key) is Some(doc) &&
         doc.generation == generation else {
         return (@cmd.none, state)
@@ -3253,7 +3276,8 @@ pub fn update(
       (cmd, { ..state, history_docs, })
     }
     HistoryBlobFailed(owner~, key~, generation~, side~, message~) => {
-      guard state.owner == Some(owner) &&
+      guard state.owner is Some(state_owner) &&
+        state_owner == owner &&
         state.history_docs.get(key) is Some(doc) &&
         doc.generation == generation else {
         return (@cmd.none, state)
@@ -3336,7 +3360,7 @@ pub fn update(
         // show command's decision against what the Viewer actually displays.
         let reveal_range = if stale_file_link { None } else { range }
         let reveal_annotation = if stale_file_link { None } else { annotation }
-        let cmd = if ctx.active_file == Some(path) {
+        let cmd = if ctx.active_file is Some(active) && active == path {
           match file {
             // A real MoonBit file also gets a diagnostics request: the host
             // runs `moon check` over the file's module and returns its
@@ -3390,7 +3414,7 @@ pub fn update(
       }
     }
     RunSettled(owner~) =>
-      if state.owner == Some(owner) {
+      if state.owner is Some(state_owner) && state_owner == owner {
         // A completed agent run can write files outside the pruned watcher.
         // Git status alone cannot prove their content or path set is unchanged,
         // so review progress and a ready file index are conservatively
@@ -3463,7 +3487,8 @@ pub fn update(
     FsChanged(root~, generation~, changes~) =>
       if state.owner is Some(owner) &&
         owner.channel == ctx.owner.channel &&
-        ctx.root() == Some(root) &&
+        ctx.root() is Some(ctx_root) &&
+        ctx_root == root &&
         generation == ctx.watch_identity(state.watch_generation) {
         let reviewed_changes = match changes {
           Some(changes) =>
@@ -3499,7 +3524,10 @@ pub fn update(
                 (
                   directory.is_root() ||
                   state.expanded.contains(directory) ||
-                  state.highlighted == Some(directory)
+                  (
+                    state.highlighted is Some(highlighted) &&
+                    highlighted == directory
+                  )
                 ) &&
                 !state.loading.contains(directory) {
                 relist.push(directory)
@@ -3663,7 +3691,7 @@ pub fn update(
                   stale: false,
                 }
                 docs[stat.path] = deleted
-                if ctx.active_file == Some(stat.path) {
+                if ctx.active_file is Some(active) && active == stat.path {
                   cmds.push(
                     show_tab(
                       dispatch,
@@ -3715,7 +3743,7 @@ pub fn update(
                   stale: false,
                 }
                 docs[stat.path] = failed
-                if ctx.active_file == Some(stat.path) {
+                if ctx.active_file is Some(active) && active == stat.path {
                   cmds.push(
                     show_tab(
                       dispatch,
@@ -3753,7 +3781,7 @@ pub fn update(
             TabReadFailed(_) => true
           }
           if changed {
-            if ctx.active_file == Some(stat.path) {
+            if ctx.active_file is Some(active) && active == stat.path {
               // The document on screen reloads eagerly (scroll kept —
               // `FileLoaded` sees the previous content). The document keeps
               // its loaded state so that restore has its baseline.
@@ -3818,7 +3846,9 @@ pub fn update(
         (@cmd.batch(cmds), { ..state, docs, review_generation, })
       }
     DiagnosticsLoaded(owner~, epoch~, absolute~, diagnostics~) =>
-      if state.owner == Some(owner) && state.request_epoch == epoch {
+      if state.owner is Some(state_owner) &&
+        state_owner == owner &&
+        state.request_epoch == epoch {
         (apply_diagnostics(owner.channel, absolute, diagnostics), state)
       } else {
         (@cmd.none, state)
@@ -3862,7 +3892,9 @@ pub fn update(
             let docs = state.docs.copy()
             let failed = { ..doc, state: TabReadFailed(message), stale: false, }
             docs[path] = failed
-            let cmd = if !stale_file_link && ctx.active_file == Some(path) {
+            let cmd = if !stale_file_link &&
+              ctx.active_file is Some(active) &&
+              active == path {
               show_tab(
                 dispatch,
                 ctx,
@@ -3891,7 +3923,7 @@ pub fn update(
         let docs = state.docs.copy()
         let failed = { ..doc, state: TabReadFailed(message), stale: false, }
         docs[path] = failed
-        let cmd = if ctx.active_file == Some(path) {
+        let cmd = if ctx.active_file is Some(active) && active == path {
           show_tab(
             dispatch,
             ctx,
@@ -3919,7 +3951,8 @@ pub fn update(
     FileWatchFailed(channel~, root~, generation~, message~) =>
       if state.owner is Some(owner) &&
         owner.channel == channel &&
-        ctx.root() == Some(root) &&
+        ctx.root() is Some(ctx_root) &&
+        ctx_root == root &&
         generation == ctx.watch_identity(state.watch_generation) {
         // The Host reports request-time activation failures through the
         // `fs.watch` reply and reserves this event for a watcher that stopped

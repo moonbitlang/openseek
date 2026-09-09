@@ -18,7 +18,7 @@ pub fn rail(
   let ticks : Array[@html.Html] = []
   for entry in entries {
     let mut tick_class = "overview-tick"
-    if state.active == Some(entry.key) {
+    if state.active is Some(key) && key == entry.key {
       tick_class += " active"
     }
     if state.hover is Some(hover) && hover.key == entry.key {

@@ -52,7 +52,9 @@ pub fn channel(uri : @common.Uri) -> @interop.ChannelId? {
 /// Callers use this at the request boundary; checking the authority prevents
 /// an accidentally retained URI from being sent to another device.
 pub fn path_for(uri : @common.Uri, owner : @interop.ChannelId) -> String? {
-  guard channel(uri) == Some(owner) else { return None }
+  guard channel(uri) is Some(uri_owner) && uri_owner == owner else {
+    return None
+  }
   Some(uri.path)
 }
 
@@ -61,7 +63,7 @@ pub fn path_for(uri : @common.Uri, owner : @interop.ChannelId) -> String? {
 /// before they are encoded for a request, so a URI retained from another
 /// device can never be sent as this one's store.
 pub fn belongs_to(uri : @common.Uri, owner : @interop.ChannelId) -> Bool {
-  channel(uri) == Some(owner)
+  channel(uri) is Some(uri_owner) && uri_owner == owner
 }
 
 ///|

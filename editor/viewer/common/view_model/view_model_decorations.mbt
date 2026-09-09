@@ -113,7 +113,8 @@ pub fn ViewModelDecorations::get_decorations_viewport_data(
 ) -> ViewDecorationsCollection {
   let mut cache_is_valid = self.cached_model_decorations_resolver is Some(_)
   cache_is_valid = cache_is_valid &&
-    self.cached_model_decorations_resolver_view_range == Some(view_range)
+    self.cached_model_decorations_resolver_view_range is Some(cached_range) &&
+    cached_range == view_range
   if !cache_is_valid {
     self.cached_model_decorations_resolver = Some(
       self.compute_decorations(view_range),

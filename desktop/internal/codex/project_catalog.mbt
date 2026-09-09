@@ -88,7 +88,7 @@ pub fn ProjectCatalog::main_project(
   cwd : String,
 ) -> String? {
   let cwd = cwd.trim().to_owned()
-  if self.known_projects.get(cwd) == Some(true) {
+  if self.known_projects.get(cwd) is Some(true) {
     Some(cwd)
   } else {
     None

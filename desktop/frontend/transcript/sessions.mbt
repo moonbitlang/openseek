@@ -336,7 +336,7 @@ pub fn apply_session_item(
       }
     }
     @desktop_protocol.Assistant(payload) => {
-      let is_replay = payload.is_replay == Some(true)
+      let is_replay = payload.is_replay is Some(true)
       // Thinking-mode turns store the reasoning alongside the answer (the
       // store omits the field entirely otherwise). A checkpoint replay
       // already has its reasoning on the original durable provider response,

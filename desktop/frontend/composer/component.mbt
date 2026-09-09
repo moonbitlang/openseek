@@ -56,8 +56,10 @@ fn FileCompletion::matches(
       ..
     ) =>
       remote_owner == owner &&
-      root == Some(remote_root) &&
-      query == Some(remote_query) &&
+      root is Some(root_value) &&
+      root_value == remote_root &&
+      query is Some(query_value) &&
+      query_value == remote_query &&
       remote_epoch == epoch
     Local(..) => false
   }
@@ -500,7 +502,8 @@ fn Entry::settled_file_completion(
   remote_files : Array[@pathx.Relative]?,
 ) -> Entry? {
   guard owner == self.owner &&
-    self.root == Some(root) &&
+    self.root is Some(entry_root) &&
+    entry_root == root &&
     epoch == input.file_index.epoch() &&
     Trigger::parse(self.draft.task, inline_markers="$#@") is Some(trigger) &&
     trigger.marker() == "@" &&
@@ -742,7 +745,8 @@ fn Model::update(
       // against the reconciled entry, so a menu closed by a context switch in
       // the same pass also rejects the reply instead of reopening.
       guard owner == entry.owner &&
-        entry.root == Some(root) &&
+        entry.root is Some(entry_root) &&
+        entry_root == root &&
         Trigger::parse(entry.draft.task, inline_markers="$#") is Some(trigger) &&
         trigger.marker() == "#" &&
         trigger.query() == query &&

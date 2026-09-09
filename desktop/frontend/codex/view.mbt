@@ -175,7 +175,8 @@ pub fn State::project_conversations(
   guard context.project_registered(root) else { return [] }
   let project = CodexProject(root)
   [
-    for thread in self.threads if thread.project_key() == Some(project) => {
+    for thread in self.threads if thread.project_key() is Some(thread_project) &&
+    thread_project == project => {
       CodexProjectRow::{
         input: thread.sidebar_input(self, context, true),
         updated_at_ms: thread.updated_at_ms,

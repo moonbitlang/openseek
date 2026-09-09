@@ -27,7 +27,9 @@ pub fn SimpleCommand::command_index(self : SimpleCommand) -> Int? {
 pub fn contains_command(result : ParseResult, name : String) -> Bool {
   match result {
     Simple(commands) =>
-      commands.any(command => command.command_name() == Some(name))
+      commands.any(command => {
+        command.command_name() is Some(cmd_name) && cmd_name == name
+      })
     _ => false
   }
 }

@@ -222,7 +222,7 @@ fn settlement_matches(
   settlement.session == selector.session &&
   selector.run_id.map_or(true, run_id => settlement.run_id == run_id) &&
   selector.submission_id.map_or(true, submission_id => {
-    settlement.submission_id == Some(submission_id)
+    settlement.submission_id is Some(settled) && settled == submission_id
   })
 }
 

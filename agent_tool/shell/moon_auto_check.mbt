@@ -190,7 +190,7 @@ fn next_command_is_guarded_by_and(
   index : Int,
 ) -> Bool {
   index + 1 < commands.length() &&
-  commands[index + 1].separator_before == Some("&&")
+  commands[index + 1].separator_before is Some("&&")
 }
 
 ///|

@@ -129,7 +129,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
         @composer.Queueing
       } else {
         @composer.Queued(
-          editing=conv.queue_edit_id == Some(item.id),
+          editing=conv.queue_edit_id is Some(id) && id == item.id,
           interactive~,
         )
       },
@@ -260,7 +260,7 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
     // action still returns through the shared composer's typed route.
     model_control: self.codex_model_chip(),
     reasoning_control: self.codex.reasoning_effort_chip(
-      self.select_menu == Some(CodexReasoningMenu),
+      self.select_menu is Some(menu) && menu == CodexReasoningMenu,
     ),
     file_candidates: search.candidates,
     open_files: if workspace_ready {

@@ -204,7 +204,7 @@ async fn git_base_ref(dir : String, hint? : String) -> String? {
 /// names, rather than commits, keeps a feature branch made at the current
 /// default-branch tip eligible for its own pull request.
 async fn git_is_default_branch(dir : String, branch~ : String) -> Bool {
-  git_base_ref(dir) == Some("origin/\{branch}")
+  git_base_ref(dir) is Some(base) && base == "origin/\{branch}"
 }
 
 ///|
@@ -1330,7 +1330,8 @@ async fn validate_git_history_snapshot(
   }
   for tip in snapshot.tips {
     guard valid_commit_identity(tip) &&
-      git_revision_commit(dir, tip) == Some(tip) else {
+      git_revision_commit(dir, tip) is Some(resolved) &&
+      resolved == tip else {
       raise HostError("Git history snapshot contains an unavailable commit")
     }
   }
@@ -1338,14 +1339,16 @@ async fn validate_git_history_snapshot(
     guard ref_.name.length() <= 512 &&
       ["current", "upstream", "base", "head"].contains(ref_.kind) &&
       valid_commit_identity(ref_.revision) &&
-      git_revision_commit(dir, ref_.revision) == Some(ref_.revision) &&
+      git_revision_commit(dir, ref_.revision) is Some(resolved) &&
+      resolved == ref_.revision &&
       snapshot.tips.contains(ref_.revision) else {
       raise HostError("Git history snapshot contains an invalid ref")
     }
   }
   if snapshot.head is Some(head) {
     guard valid_commit_identity(head) &&
-      git_revision_commit(dir, head) == Some(head) else {
+      git_revision_commit(dir, head) is Some(resolved) &&
+      resolved == head else {
       raise HostError("Git history snapshot contains an unavailable HEAD")
     }
   }

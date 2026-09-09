@@ -235,7 +235,8 @@ fn CodeEditorWidget::symbol_navigation_anchor_is_current(
   anchor.surface_generation() == self.model_slot.generation &&
   anchor.model().same(model) &&
   anchor.model_is_current() &&
-  self.get_position() == Some(anchor.position())
+  self.get_position() is Some(position) &&
+  position == anchor.position()
 }
 
 ///|

@@ -199,7 +199,7 @@ pub fn tabs_bar(
   let tabs : Array[@html.Html] = []
   for chip in chips {
     let mut classes = "editor-tab"
-    if state.active == Some(chip.tab) {
+    if state.active is Some(active) && active == chip.tab {
       classes += " active"
     }
     if chip.missing {

@@ -191,7 +191,8 @@ fn refresh_git_graph(
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
-  guard state.owner == Some(ctx.owner) &&
+  guard state.owner is Some(state_owner) &&
+    state_owner == ctx.owner &&
     ctx.checkout_ready() &&
     !ctx.owner.session.is_empty() else {
     return (@cmd.none, state)
@@ -223,7 +224,8 @@ fn load_more_git_history(
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
-  guard state.owner == Some(ctx.owner) &&
+  guard state.owner is Some(state_owner) &&
+    state_owner == ctx.owner &&
     ctx.checkout_ready() &&
     state.git_graph
     is GitGraphReady(
@@ -269,7 +271,7 @@ fn select_git_commit(
   ctx : Ctx,
   commit : String,
 ) -> (@cmd.Cmd, State) {
-  if state.git_graph_selected == Some(commit) {
+  if state.git_graph_selected is Some(selected) && selected == commit {
     return (
       @cmd.none,
       {
@@ -308,7 +310,8 @@ fn retry_git_commit_changes(
   ctx : Ctx,
   commit : String,
 ) -> (@cmd.Cmd, State) {
-  guard state.git_graph_selected == Some(commit) &&
+  guard state.git_graph_selected is Some(selected_commit) &&
+    selected_commit == commit &&
     state.git_graph is GitGraphReady(repository=true, commits~, ..) &&
     commits.any(item => item.id == commit) else {
     return (@cmd.none, state)

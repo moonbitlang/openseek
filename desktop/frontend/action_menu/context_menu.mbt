@@ -157,7 +157,8 @@ fn element_context(element : @dom.Element) -> ContextTarget {
 fn discard_temporary_focus(element : @dom.Element?) -> Unit {
   if element is Some(element) &&
     element.get_attribute("id") is Some(id) &&
-    element.get_attribute(TemporaryFocusAttribute) == Some(id) {
+    element.get_attribute(TemporaryFocusAttribute) is Some(attr) &&
+    attr == id {
     element.remove_attribute(TemporaryFocusAttribute)
     element.remove_attribute("id")
   }

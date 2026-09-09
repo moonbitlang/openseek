@@ -243,7 +243,7 @@ fn AgentFeedbackEditorWidget::build_items(
     // lose the composer.
     match self.drafts.get(comment.id) {
       Some(draft) => {
-        let refocus = focused_reply == Some(comment.id)
+        let refocus = focused_reply is Some(reply) && reply == comment.id
         self.open_reply_composer(comment, item, draft, focus=refocus)
       }
       None => ()

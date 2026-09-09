@@ -24,7 +24,8 @@ fn NavigationContext::relative_path(
   self : NavigationContext,
   absolute : @common.Uri,
 ) -> @pathx.Relative? {
-  guard model_uri_channel(absolute) == Some(self.owner.channel) &&
+  guard model_uri_channel(absolute) is Some(channel) &&
+    channel == self.owner.channel &&
     @resource.relative_to(absolute, self.root) is Some(relative) &&
     !relative.is_root() else {
     return None
@@ -62,8 +63,8 @@ fn navigation_context_for_file(
   relative : @pathx.Relative,
 ) -> NavigationContext? {
   let root = match root_hint {
-    Some(root) if @resource.relative_to(absolute, root) == Some(relative) =>
-      Some(root)
+    Some(root) if @resource.relative_to(absolute, root) is Some(rel) &&
+      rel == relative => Some(root)
     _ => navigation_root_from_file(absolute, relative)
   }
   root.map(root => { owner, root, })
@@ -98,7 +99,8 @@ fn moon_ide_model_projection(
   guard viewer_state.navigation is Some(context) else { return None }
   match model_uri_path(model.uri) {
     Some(absolute) => {
-      guard viewer_state.absolute == Some(absolute) &&
+      guard viewer_state.absolute is Some(stored_absolute) &&
+        stored_absolute == absolute &&
         context.relative_path(absolute) is Some(path) else {
         return None
       }
@@ -106,7 +108,8 @@ fn moon_ide_model_projection(
     }
     None => {
       guard semantic_modified_model_projection(model) is Some(semantic) &&
-        context.relative_path(semantic.resource) == Some(semantic.path) else {
+        context.relative_path(semantic.resource) is Some(rel) &&
+        rel == semantic.path else {
         return None
       }
       Some({ context, path: semantic.path, line_offset: semantic.line_offset, })
@@ -318,7 +321,8 @@ async fn resolve_navigation_preview(
     return None
   }
   guard viewer_state.navigation is Some(context) else { return None }
-  guard model_uri_channel(resource) == Some(context.owner.channel) &&
+  guard model_uri_channel(resource) is Some(channel) &&
+    channel == context.owner.channel &&
     model_uri_path(resource) is Some(absolute) &&
     @resource.relative_to(absolute, context.root) is Some(relative) &&
     !relative.is_root() else {

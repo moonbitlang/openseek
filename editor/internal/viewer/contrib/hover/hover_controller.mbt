@@ -836,7 +836,8 @@ fn HoverController::set_current_result(
     Some(existing) =>
       if existing.parts == sorted &&
         self.current_complete == is_complete &&
-        self.current_anchor == Some(result_anchor) {
+        self.current_anchor is Some(current) &&
+        current == result_anchor {
         return self
       }
     None => ()

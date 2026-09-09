@@ -180,7 +180,9 @@ fn ViewLine::render_line(
     return false
   }
   self.is_maybe_invalid = false
-  if self.rendered_view_line.map(rendered => rendered.input) == Some(input) {
+  if self.rendered_view_line.map(rendered => rendered.input)
+    is Some(rendered_input) &&
+    rendered_input == input {
     return false
   }
   let output = @view_layout.render_view_line2(input)

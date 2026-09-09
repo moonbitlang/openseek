@@ -163,7 +163,7 @@ pub fn update(
         active.id == thread_id &&
         (
           state.requested_thread is None ||
-          state.requested_thread == Some(thread_id)
+          (state.requested_thread is Some(requested) && requested == thread_id)
         ) {
         // Clicking the selected sidebar row is navigation at the root shell,
         // not a request to reacquire history. Preserve its local composer and

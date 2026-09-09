@@ -102,8 +102,10 @@ fn normalize_reference_locations(
   let mut previous_uri : String? = None
   let mut previous_range : @base_common.Range? = None
   for entry in sorted_indexed_reference_locations(locations) {
-    let duplicate = previous_uri == Some(entry.uri_string) &&
-      previous_range == Some(entry.location.range)
+    let duplicate = previous_uri is Some(uri) &&
+      uri == entry.uri_string &&
+      previous_range is Some(loc_range) &&
+      loc_range == entry.location.range
     if !duplicate {
       result.push(entry.location)
       previous_uri = Some(entry.uri_string)

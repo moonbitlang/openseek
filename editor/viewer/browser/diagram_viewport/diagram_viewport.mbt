@@ -676,7 +676,9 @@ fn MarkdownDiagramViewport::install_listeners(
       return
     }
     let pointer_id = @base_browser.mouse_event_pointer_id(mouse)
-    if self.is_panning && self.pan_pointer_id == Some(pointer_id) {
+    if self.is_panning &&
+      self.pan_pointer_id is Some(captured) &&
+      captured == pointer_id {
       if mouse.get_buttons() == 0 {
         self.finish_pan(mouse)
         return
@@ -697,7 +699,9 @@ fn MarkdownDiagramViewport::install_listeners(
       self.apply_transform()
       return
     }
-    if self.is_resizing && self.resize_pointer_id == Some(pointer_id) {
+    if self.is_resizing &&
+      self.resize_pointer_id is Some(captured) &&
+      captured == pointer_id {
       if mouse.get_buttons() == 0 {
         self.finish_resize()
         return
@@ -713,12 +717,16 @@ fn MarkdownDiagramViewport::install_listeners(
   let finish_pointer_gesture = (event : @rdom.Event) => {
     guard event.to_mouse_event() is Some(mouse) else { return }
     let pointer_id = @base_browser.mouse_event_pointer_id(mouse)
-    if self.is_panning && self.pan_pointer_id == Some(pointer_id) {
+    if self.is_panning &&
+      self.pan_pointer_id is Some(captured) &&
+      captured == pointer_id {
       event.prevent_default()
       event.stop_propagation()
       self.finish_pan(mouse)
     }
-    if self.is_resizing && self.resize_pointer_id == Some(pointer_id) {
+    if self.is_resizing &&
+      self.resize_pointer_id is Some(captured) &&
+      captured == pointer_id {
       event.prevent_default()
       event.stop_propagation()
       self.finish_resize()

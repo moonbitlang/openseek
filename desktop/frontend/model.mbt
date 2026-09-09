@@ -1323,7 +1323,8 @@ fn ConversationSelection::matches_id(
   record_matches &&
   self.channel.uri_authority() == id.channel() &&
   self.session == id.conversation() &&
-  id.root() == Some(self.workspace.path)
+  id.root() is Some(root_path) &&
+  root_path == self.workspace.path
 }
 
 ///|
@@ -3814,7 +3815,7 @@ fn Conversation::remove_queued_input(
         {
           ..self,
           queued_inputs,
-          queue_edit_id: if self.queue_edit_id == Some(id) {
+          queue_edit_id: if self.queue_edit_id is Some(edit_id) && edit_id == id {
             None
           } else {
             self.queue_edit_id

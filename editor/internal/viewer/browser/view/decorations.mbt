@@ -150,7 +150,8 @@ fn render_normal_decorations(
         get_line_max_column(range.end_line_number - 1),
       )
     }
-    if prev_class_name == Some(class_name) &&
+    if prev_class_name is Some(prev_class) &&
+      prev_class == class_name &&
       prev_show_if_collapsed == show_if_collapsed &&
       @base_common.Range::are_intersecting_or_touching(
         prev_range.unwrap(),

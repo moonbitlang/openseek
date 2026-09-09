@@ -1077,8 +1077,10 @@ fn mount_generated_svg_viewport(
 /// with the source toggle still available in the breadcrumb.
 fn show_mbti_diagram(resource : @common.Uri, source : String) -> Unit {
   let resource_key = resource.to_string()
-  if viewer_state.mbti_resource == Some(resource_key) &&
-    viewer_state.mbti_source == Some(source) {
+  if viewer_state.mbti_resource is Some(resource_shown) &&
+    resource_shown == resource_key &&
+    viewer_state.mbti_source is Some(source_shown) &&
+    source_shown == source {
     return
   }
   guard @dom.document().get_element_by_id(MbtiDiagramHostId).to_option()
@@ -1146,7 +1148,7 @@ fn show_package_graph_in_viewer(state : PackageGraphState) -> @cmd.Cmd {
       is Some(host) else {
       return
     }
-    if viewer_state.package_graph == Some(state) {
+    if viewer_state.package_graph is Some(graph_shown) && graph_shown == state {
       return
     }
     viewer_state.package_graph = Some(state)

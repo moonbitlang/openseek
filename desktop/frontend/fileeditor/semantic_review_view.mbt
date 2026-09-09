@@ -1038,13 +1038,15 @@ fn schedule_semantic_review_reveal_scroll(
 ) -> Unit {
   @dom.window().request_animation_frame(_ => {
     guard semantic_review_navigation_generation.val == generation &&
-      semantic_review_active_key.val == Some(key) &&
+      semantic_review_active_key.val is Some(active_key) &&
+      active_key == key &&
       @base_browser.element_is_connected(editor_host) else {
       return
     }
     @dom.window().request_animation_frame(_ => {
       guard semantic_review_navigation_generation.val == generation &&
-        semantic_review_active_key.val == Some(key) &&
+        semantic_review_active_key.val is Some(active_key) &&
+        active_key == key &&
         @base_browser.element_is_connected(editor_host) &&
         @dom.document().get_element_by_id(SemanticReviewHostId).to_option()
         is Some(scroll_host) &&

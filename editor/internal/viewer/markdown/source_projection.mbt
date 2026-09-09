@@ -66,7 +66,7 @@ fn MarkdownCodeLine::displayed_boundary_at_source_offset(
   source_offset : Int,
 ) -> Int? {
   for displayed_boundary, mapped in self.displayed_boundary_to_source_offset {
-    if mapped == Some(source_offset) {
+    if mapped is Some(offset) && offset == source_offset {
       return Some(displayed_boundary)
     }
   }

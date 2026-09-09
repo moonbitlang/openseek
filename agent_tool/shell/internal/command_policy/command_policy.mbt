@@ -15,7 +15,7 @@ pub fn moonbit_command_policy_error_for_parse(
     } else {
       None
     }
-  } else if first_command_word(shell_words(cmd)) == Some("moon_cmd") {
+  } else if first_command_word(shell_words(cmd)) is Some("moon_cmd") {
     // Too-complex parse (globs, expansions, heredocs): keep only the narrow
     // leading-word `moon_cmd` typo fallback. `sed -i` is blocked solely on the
     // precise `Simple` path above — a rough text scan of an unparseable command

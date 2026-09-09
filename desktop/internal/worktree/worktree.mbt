@@ -139,8 +139,8 @@ fn WorktreeEntry::belongs_to(
   owner : WorktreeOwner,
 ) -> Bool {
   match owner {
-    OpenSeekSession(id) => self.session == Some(id)
-    CodexThread(id) => self.codex_thread == Some(id)
+    OpenSeekSession(id) => self.session is Some(matched) && matched == id
+    CodexThread(id) => self.codex_thread is Some(matched) && matched == id
   }
 }
 
@@ -149,7 +149,8 @@ fn WorktreeEntry::belongs_to(
 /// The two products store that id in distinct registry fields, but checkout
 /// resolution must recognize either field without merging their lifecycles.
 fn WorktreeEntry::serves_id(self : WorktreeEntry, id : String) -> Bool {
-  self.session == Some(id) || self.codex_thread == Some(id)
+  (self.session is Some(session) && session == id) ||
+  (self.codex_thread is Some(codex_thread) && codex_thread == id)
 }
 
 ///|

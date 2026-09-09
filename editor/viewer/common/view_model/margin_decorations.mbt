@@ -90,7 +90,7 @@ pub fn dedup_margin_decorations(
     let end_line_index = (decoration.end_line_number - visible_start_line_number).min(
       visible_end_line_number - visible_start_line_number,
     )
-    if prev_class_name == Some(class_name) {
+    if prev_class_name is Some(prev_class) && prev_class == class_name {
       // Here we avoid rendering the same className multiple times on the
       // same line.
       start_line_index = start_line_index.max(prev_end_line_index + 1)

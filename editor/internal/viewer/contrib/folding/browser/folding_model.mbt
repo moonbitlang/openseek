@@ -233,7 +233,8 @@ pub fn FoldingModel::update_post(
         is_collapsed,
         end_line_number <= last_hidden_line,
         is_manual,
-        new_regions.get_type(index) == Some(OUTLINE_BODY_FOLDING_RANGE_TYPE),
+        new_regions.get_type(index) is Some(fold_type) &&
+        fold_type == OUTLINE_BODY_FOLDING_RANGE_TYPE,
       ),
     })
     if is_collapsed && end_line_number > last_hidden_line {
@@ -345,7 +346,8 @@ fn FoldingModel::apply_memento(
       range.start_line_number + 1,
       range.end_line_number,
     )
-    if range.checksum is None || range.checksum == Some(checksum) {
+    if range.checksum is None ||
+      (range.checksum is Some(current) && current == checksum) {
       ranges_to_restore.push({
         start_line_number: range.start_line_number,
         end_line_number: range.end_line_number,

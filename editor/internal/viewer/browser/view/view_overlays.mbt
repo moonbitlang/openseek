@@ -150,7 +150,7 @@ fn ViewOverlayLine::render_line(
     )
   }
   let content = content.to_string()
-  if self.rendered_content == Some(content) {
+  if self.rendered_content is Some(rendered) && rendered == content {
     return false
   }
   self.rendered_content = Some(content)

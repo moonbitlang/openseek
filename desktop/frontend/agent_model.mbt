@@ -209,7 +209,7 @@ fn Model::openseek_model_chip(
     groups,
     selected: ModelChoice::OpenSeekModel(conv.engine_model).wire(),
     disabled: false,
-    open: self.select_menu == Some(OpenSeekModelMenu),
+    open: self.select_menu is Some(menu) && menu == OpenSeekModelMenu,
     title: "Model: \{conv.engine_model.label()}",
   }
 }
@@ -240,7 +240,7 @@ fn Model::openseek_reasoning_chip(
     options,
     selected: reasoning.wire(),
     disabled: false,
-    open: self.select_menu == Some(OpenSeekReasoningMenu),
+    open: self.select_menu is Some(menu) && menu == OpenSeekReasoningMenu,
     title: "Reasoning effort: \{reasoning.label_for_model(conv.engine_model)}",
   })
 }
@@ -264,7 +264,7 @@ fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
     groups,
     selected,
     disabled: false,
-    open: self.select_menu == Some(CodexModelMenu),
+    open: self.select_menu is Some(menu) && menu == CodexModelMenu,
     title: "Codex model",
   }
 }

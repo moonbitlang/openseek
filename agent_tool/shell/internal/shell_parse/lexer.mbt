@@ -129,11 +129,11 @@ fn lex(command : String) -> LexResult {
           '&' => {
             let attached = !word.empty
             word.flush_and_reset(tokens)
-            if peek_char(chars, index + 1) == Some('&') {
+            if peek_char(chars, index + 1) is Some('&') {
               tokens.push(Op("&&", attached))
               index += 2
-            } else if peek_char(chars, index + 1) == Some('>') {
-              if peek_char(chars, index + 2) == Some('>') {
+            } else if peek_char(chars, index + 1) is Some('>') {
+              if peek_char(chars, index + 2) is Some('>') {
                 tokens.push(Op("&>>", attached))
                 index += 3
               } else {
@@ -147,7 +147,7 @@ fn lex(command : String) -> LexResult {
           '|' => {
             let attached = !word.empty
             word.flush_and_reset(tokens)
-            if peek_char(chars, index + 1) == Some('|') {
+            if peek_char(chars, index + 1) is Some('|') {
               tokens.push(Op("||", attached))
               index += 2
             } else {
@@ -164,13 +164,13 @@ fn lex(command : String) -> LexResult {
           '>' => {
             let attached = !word.empty
             word.flush_and_reset(tokens)
-            if peek_char(chars, index + 1) == Some('&') {
+            if peek_char(chars, index + 1) is Some('&') {
               tokens.push(Op(">&", attached))
               index += 2
-            } else if peek_char(chars, index + 1) == Some('>') {
+            } else if peek_char(chars, index + 1) is Some('>') {
               tokens.push(Op(">>", attached))
               index += 2
-            } else if peek_char(chars, index + 1) == Some('|') {
+            } else if peek_char(chars, index + 1) is Some('|') {
               tokens.push(Op(">|", attached))
               index += 2
             } else {
@@ -181,12 +181,12 @@ fn lex(command : String) -> LexResult {
           '<' => {
             let attached = !word.empty
             word.flush_and_reset(tokens)
-            if peek_char(chars, index + 1) == Some('<') {
+            if peek_char(chars, index + 1) is Some('<') {
               return LexTooComplex("here documents are not supported")
-            } else if peek_char(chars, index + 1) == Some('&') {
+            } else if peek_char(chars, index + 1) is Some('&') {
               tokens.push(Op("<&", attached))
               index += 2
-            } else if peek_char(chars, index + 1) == Some('>') {
+            } else if peek_char(chars, index + 1) is Some('>') {
               tokens.push(Op("<>", attached))
               index += 2
             } else {

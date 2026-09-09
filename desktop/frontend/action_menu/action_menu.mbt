@@ -198,7 +198,8 @@ fn focus_element(id : String, after_render : Bool) -> @cmd.Cmd {
         "focus",
         ([] : FixedArray[@js.Value]),
       )
-      if element.get_attribute(TemporaryFocusAttribute) == Some(id) {
+      if element.get_attribute(TemporaryFocusAttribute) is Some(focus_id) &&
+        focus_id == id {
         element.remove_attribute(TemporaryFocusAttribute)
         element.remove_attribute("id")
       }
@@ -448,7 +449,8 @@ fn render_menu(
         @cmd.none
       })
       .on_keydown(event => {
-        guard focused_element_id() == Some(menu_id(open.target)) else {
+        guard focused_element_id() is Some(focused_id) &&
+          focused_id == menu_id(open.target) else {
           return @cmd.none
         }
         let destination = match event.key() {

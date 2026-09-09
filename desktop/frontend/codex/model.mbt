@@ -1007,7 +1007,9 @@ fn State::begin_foreground(self : State, kind : CodexReplyKind) -> State {
 
 ///|
 fn State::owns_foreground(self : State, kind : CodexReplyKind) -> Bool {
-  kind.foreground() is Some(foreground) && self.foreground == Some(foreground)
+  kind.foreground() is Some(foreground) &&
+  self.foreground is Some(current) &&
+  current == foreground
 }
 
 ///|
@@ -1152,7 +1154,8 @@ fn State::with_open_draft(
   guard self.active_draft() is Some(draft) &&
     draft.id == draft_id &&
     value is Object(fields) &&
-    @jsonx.json_text(fields, "draftId") == Some(draft_id) &&
+    @jsonx.json_text(fields, "draftId") is Some(reply_draft_id) &&
+    reply_draft_id == draft_id &&
     @jsonx.json_text(fields, "projectRoot") is Some(project_root) else {
     return { ..self, notice: "Malformed Codex draft workspace reply", }
   }
@@ -1295,7 +1298,8 @@ fn CodexWorktree::from_create_reply(
 ) -> CodexWorktree? {
   for info in reply.worktrees {
     if info.name == reply.name &&
-      info.codex_thread == Some(thread_id) &&
+      info.codex_thread is Some(codex_thread) &&
+      codex_thread == thread_id &&
       info.present &&
       !info.path.trim().is_empty() {
       return Some({ name: info.name, path: info.path, present: true, })
@@ -1828,7 +1832,8 @@ fn State::with_git_reply(
   guard self.active_thread() is Some(active) &&
     active.id == thread_id &&
     generation == self.git_request_generation &&
-    active.cwd == Some(requested_cwd) else {
+    active.cwd is Some(active_cwd) &&
+    active_cwd == requested_cwd else {
     return self
   }
   {
@@ -1880,7 +1885,8 @@ fn State::without_thread(self : State, thread_id : String) -> State {
     } else {
       self.selection
     },
-    requested_thread: if self.requested_thread == Some(thread_id) {
+    requested_thread: if self.requested_thread is Some(requested) &&
+      requested == thread_id {
       None
     } else {
       self.requested_thread

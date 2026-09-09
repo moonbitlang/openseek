@@ -730,7 +730,7 @@ fn plan_baselines(
       continue
     }
     if call.id != "" &&
-      id_counts.get(call.id) == Some(1) &&
+      id_counts.get(call.id) is Some(1) &&
       previous is Some(prev) {
       baselines.set(call.id, prev)
     }
