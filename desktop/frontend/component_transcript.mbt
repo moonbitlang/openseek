@@ -130,7 +130,6 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         .bind(value => value.project_root())
         .map(project => @resource.label(project))
       @transcript_component.Input(
-        dark_mode=self.theme.is_dark(self.system_dark),
         source=@transcript_component.Codex,
         focused=self.focused,
         active_session=self.codex.active_id().unwrap_or("none"),
@@ -153,7 +152,6 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       match self.active_conversation() {
         None =>
           @transcript_component.Input(
-            dark_mode=self.theme.is_dark(self.system_dark),
             source=@transcript_component.OpenSeek,
             focused=self.focused,
             active_session=self.active_session,
@@ -171,7 +169,6 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
           let (streaming_reasoning, reasoning_complete) = conversation.reasoning_for_render()
           let can_choose_project = self.can_choose_new_chat_project()
           @transcript_component.Input(
-            dark_mode=self.theme.is_dark(self.system_dark),
             source=@transcript_component.OpenSeek,
             focused=self.focused,
             active_session=self.active_session,
