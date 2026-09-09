@@ -75,6 +75,10 @@ priv struct ViewerHost {
   // batched behind a mount request whose after-render tick precedes the async
   // reply, so by the time a document arrives the viewer exists.
   mut viewer : @viewer.Viewer?
+  // The stable source host lives for the app's lifetime. Observe its box so
+  // CSS drawer animations keep the code viewport measured through the final
+  // frame, just as the Markdown and diff widgets observe their own hosts.
+  mut _viewer_resize_observer : @common.Disposable?
   // Kept separate from the source Viewer so a Diff/Source toggle preserves
   // the source model, selection, folding, and scroll state. DiffEditor owns
   // two code kernels directly rather than wrapping public Viewers.
@@ -152,6 +156,7 @@ priv struct ViewerHost {
 ///|
 let viewer_state : ViewerHost = {
   viewer: None,
+  _viewer_resize_observer: None,
   diff_editor: None,
   markdown_viewer: None,
   mbti_resource: None,
@@ -393,6 +398,10 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           ),
         )
         viewer_state.viewer = Some(viewer)
+        viewer_state._viewer_resize_observer = @base_browser.observe_element_resize(
+          host,
+          () => if editor_surface_host_visible(ViewerHostId) { viewer.layout() },
+        )
         viewer_state.point_range_highlight = Some(
           viewer.create_decorations_collection(),
         )
