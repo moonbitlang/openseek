@@ -30,7 +30,7 @@ pub fn basename(@pathx.Relative) -> String
 
 pub fn body_view(@cmd.Emit[Msg], State, Ctx, semantic_review? : @html.Html) -> @html.Html
 
-pub fn breadcrumb_view(@cmd.Emit[Msg], State, Ctx) -> @html.Html
+pub fn breadcrumb_view(@cmd.Emit[Msg], State, Ctx, reveal? : (String, @cmd.Cmd)?) -> @html.Html
 
 pub fn close_document(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, next~ : @pathx.Relative?, was_active~ : Bool) -> (@cmd.Cmd, State)
 
@@ -222,6 +222,13 @@ pub fn MbtiViewMode::not_equal(Self, Self) -> Bool
 pub struct ModelUri(String)
 pub fn ModelUri::of(@common.Uri) -> Self
 
+pub(all) enum MoonModViewMode {
+  MoonModDependencies
+  MoonModSource
+} derive(Eq)
+pub fn MoonModViewMode::equal(Self, Self) -> Bool
+pub fn MoonModViewMode::not_equal(Self, Self) -> Bool
+
 pub(all) enum Msg {
   RevealDirectory(@pathx.Relative)
   HighlightCleared(@pathx.Relative)
@@ -265,6 +272,9 @@ pub(all) enum Msg {
   RevealSemanticReviewSectionChange(String, Bool)
   ToggleReviewProgress
   MbtiViewModeSelected(MbtiViewMode)
+  MoonModViewModeSelected(MoonModViewMode)
+  PackageGraphRequestLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, generation~ : Int, source~ : String)
+  PackageGraphRequestFailed(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, generation~ : Int, message~ : String)
   GitOriginalLoaded(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, original~ : @protocol.GitOriginalFileReply)
   GitOriginalFailed(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, message~ : String)
   HistoryBlobLoaded(owner~ : @interop.ConversationKey, key~ : String, generation~ : Int, side~ : HistoryDiffSide, blob~ : @protocol.GitOriginalFileReply)
@@ -283,6 +293,14 @@ pub(all) enum Msg {
   ApplyAllFeedback
   DiffCommentAdded(file~ : @pathx.Relative, original_line_number~ : Int?, modified_line_number~ : Int?, quote~ : String, comment~ : String, resource~ : ModelUri?, feedback_id~ : String?)
 }
+
+pub(all) enum PackageGraphState {
+  PackageGraphLoading(Int)
+  PackageGraphReady(Int, String)
+  PackageGraphFailed(Int, String)
+} derive(Eq)
+pub fn PackageGraphState::equal(Self, Self) -> Bool
+pub fn PackageGraphState::not_equal(Self, Self) -> Bool
 
 pub(all) enum ReconciledPlacement {
   PlacementUnknown
@@ -402,6 +420,9 @@ pub(all) struct State {
   children : Map[@pathx.Relative, Array[FileEntry]]
   docs : Map[@pathx.Relative, Doc]
   mbti_view_modes : Map[@pathx.Relative, MbtiViewMode]
+  moon_mod_view_modes : Map[@pathx.Relative, MoonModViewMode]
+  package_graphs : Map[@pathx.Relative, PackageGraphState]
+  package_graph_generation : Int
   highlighted : @pathx.Relative?
   index : FileIndex
   error : String?

@@ -8,6 +8,7 @@ import {
   "openseek_desktop/frontend/dock",
   "openseek_desktop/frontend/fileeditor",
   "openseek_desktop/frontend/preview",
+  "openseek_desktop/frontend/workflow",
 }
 
 // Values
@@ -23,20 +24,24 @@ pub(all) struct Actions {
   search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
+  workflows : @cmd.Cmd
+  open_child : (String) -> @cmd.Cmd
   browser_input : @cmd.Emit[String]
   browser_submit : @cmd.Cmd
   browser_back : @cmd.Cmd
   browser_forward : @cmd.Cmd
   browser_reload : @cmd.Cmd
   browser_open_external : @cmd.Cmd
+  reveal_file : (String) -> @cmd.Cmd
   toggle_panel : @cmd.Cmd
   toggle_menu : @cmd.Cmd
   toggle_expanded : @cmd.Cmd
+  close_all_tabs : @cmd.Cmd
   close_menu : @cmd.Cmd
 }
 
 type Input derive(Eq)
-pub fn Input::Input(dock~ : @dock.State, file_panel~ : @fileeditor.State, preview~ : @preview.State, file_ctx~ : @fileeditor.Ctx, is_desktop~ : Bool, menu_open~ : Bool, expanded~ : Bool) -> Self
+pub fn Input::Input(dock~ : @dock.State, file_panel~ : @fileeditor.State, preview~ : @preview.State, file_ctx~ : @fileeditor.Ctx, is_desktop~ : Bool, menu_open~ : Bool, expanded~ : Bool, reveal_label~ : String?, workflows~ : Array[@workflow.Run]) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 

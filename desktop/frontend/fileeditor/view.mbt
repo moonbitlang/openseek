@@ -1738,6 +1738,7 @@ pub fn breadcrumb_view(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
+  reveal? : (String, @cmd.Cmd)? = None,
 ) -> @html.Html {
   if ctx.active_history_diff is Some(diff) {
     return @html.div(
@@ -1828,6 +1829,18 @@ pub fn breadcrumb_view(
   }
   if moon_mod_view_available(state, ctx) {
     path_row.push(moon_mod_view_toolbar(dispatch, state, ctx))
+  }
+  if reveal is Some((label, command)) {
+    path_row.push(
+      @html.button(
+        type_="button",
+        class="file-reveal-button",
+        title=label,
+        on_click=command,
+        attrs=@html.Attrs::build().aria_label(label),
+        [icon(@icons.icon_link_external), @html.text(label)],
+      ),
+    )
   }
   path_row.push(
     @html.button(
@@ -2814,7 +2827,10 @@ fn tree_row(
       class="tree-row tree-dir",
       style=[indent_style],
       on_click=dispatch(DirToggle(entry.path)),
-      attrs=@html.Attrs::build().data_set("path", entry.path.0),
+      attrs=@html.Attrs::build()
+        .data_set("path", entry.path.0)
+        .data_set("context-file", entry.path.0)
+        .tabindex(0),
       [
         @html.span(class="tree-chevron", chevron),
         @html.span(class="tree-name", entry.name),
@@ -2829,7 +2845,10 @@ fn tree_row(
       },
       style=[indent_style],
       on_click=dispatch(FileSelected(path=entry.path, name=entry.name)),
-      attrs=@html.Attrs::build().data_set("path", entry.path.0),
+      attrs=@html.Attrs::build()
+        .data_set("path", entry.path.0)
+        .data_set("context-file", entry.path.0)
+        .tabindex(0),
       [@html.span(class="tree-name", entry.name)],
     )
   }

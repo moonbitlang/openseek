@@ -9,6 +9,7 @@ struct Input {
   is_desktop : Bool
   menu_open : Bool
   expanded : Bool
+  reveal_label : String?
   // The workflows the active conversation's snippets announced, for the
   // Workflows tab. Live-only state projected from the root's conversation.
   workflows : Array[@workflow.Run]
@@ -23,6 +24,7 @@ pub fn Input::Input(
   is_desktop~ : Bool,
   menu_open~ : Bool,
   expanded~ : Bool,
+  reveal_label~ : String?,
   workflows~ : Array[@workflow.Run],
 ) -> Input {
   {
@@ -33,6 +35,7 @@ pub fn Input::Input(
     is_desktop,
     menu_open,
     expanded,
+    reveal_label,
     workflows,
   }
 }
@@ -57,6 +60,7 @@ pub(all) struct Actions {
   browser_forward : @cmd.Cmd
   browser_reload : @cmd.Cmd
   browser_open_external : @cmd.Cmd
+  reveal_file : (String) -> @cmd.Cmd
   toggle_panel : @cmd.Cmd
   toggle_menu : @cmd.Cmd
   toggle_expanded : @cmd.Cmd

@@ -28,6 +28,26 @@ button.panel-toggle:not(:disabled):hover {
   color: var(--color-accent-strong);
 }
 
+.file-reveal-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.file-reveal-button:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+}
+
 /* The editor part: a tab strip of open files over the viewer, with the
    file tree as a toggleable pane on the viewer's right. */
 .editor {
