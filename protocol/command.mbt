@@ -137,15 +137,17 @@ pub fn Command::to_json(self : Command) -> Json {
 /// claims.
 pub fn Command::parse(line : Json) -> Result[Command, String] {
   match line {
+    {
+      "command": "prompt",
+      "text": String(text),
+      "submission_id": String(id),
+      ..
+    } => Ok(Prompt(text~, submission_id=Some(id)))
+    { "command": "prompt", "text": String(_), "submission_id": _, .. } =>
+      Err("expected a string \"submission_id\" field")
+    // An untagged prompt: see the absence rule above.
     { "command": "prompt", "text": String(text), .. } =>
-      match line {
-        { "submission_id": String(id), .. } =>
-          Ok(Prompt(text~, submission_id=Some(id)))
-        { "submission_id": _, .. } =>
-          Err("expected a string \"submission_id\" field")
-        // An untagged prompt: see the absence rule above.
-        _ => Ok(Prompt(text~, submission_id=None))
-      }
+      Ok(Prompt(text~, submission_id=None))
     { "command": "steer", .. } => parse_steer(line)
     { "command": "prompt", .. } => Err("expected a string \"text\" field")
     { "command": "compact", .. } => Ok(Compact)
@@ -156,8 +158,18 @@ pub fn Command::parse(line : Json) -> Result[Command, String] {
     // can hold, `to_json` can write, and `parse` then rejects — a round-trip
     // the type advertises and would not have. `serve` rejects it, in the same
     // words, where the policy lives.
+    // The armed line is its own static arm: absent and non-true `auto` both
+    // mean false (its default since goal shipped — see the absence rule above),
+    // so the two shapes are described rather than tested for twice.
+    {
+      "command": "goal",
+      "action": "set",
+      "text": String(text),
+      "auto": True,
+      ..
+    } => Ok(GoalSet(text~, auto=true))
     { "command": "goal", "action": "set", "text": String(text), .. } =>
-      Ok(GoalSet(text~, auto=line is { "auto": True, .. }))
+      Ok(GoalSet(text~, auto=false))
     { "command": "goal", "action": "clear", .. } => Ok(GoalClear)
     { "command": "goal", .. } =>
       Err(
@@ -181,19 +193,21 @@ pub fn Command::parse(line : Json) -> Result[Command, String] {
 
 ///|
 fn parse_steer(line : Json) -> Result[Command, String] {
-  // `text` is required whatever the kind says, so it is checked once here
-  // rather than restated in three arms, where the precedence between "no text"
-  // and "bad kind" was emergent from their order.
-  guard line is { "text": String(text), .. } else {
-    return Err("expected a string \"text\" field")
-  }
+  // `text` is required whatever the kind says, so each arm spells the full
+  // shape it accepts: the two kinds are static arms, a present kind that is
+  // not one of them is its own refusal, and a steer with no kind at all is a
+  // prompt steer (see the rule above) — spelled out, not a fallback tail.
   match line {
-    { "kind": String("prompt"), .. } => Ok(Steer(kind=Prompt, text~))
-    { "kind": String("command"), .. } => Ok(Steer(kind=Command, text~))
-    { "kind": String(other), .. } => Err("unknown steer kind: \{other}")
-    { "kind": _, .. } => Err("expected a string \"kind\" field")
-    // A steer with no kind at all is a prompt steer: see the rule above.
-    _ => Ok(Steer(kind=Prompt, text~))
+    { "kind": "prompt", "text": String(text), .. } =>
+      Ok(Steer(kind=Prompt, text~))
+    { "kind": "command", "text": String(text), .. } =>
+      Ok(Steer(kind=Command, text~))
+    { "kind": String(other), "text": String(_), .. } =>
+      Err("unknown steer kind: \{other}")
+    { "kind": _, "text": String(_), .. } =>
+      Err("expected a string \"kind\" field")
+    { "text": String(text), .. } => Ok(Steer(kind=Prompt, text~))
+    _ => Err("expected a string \"text\" field")
   }
 }
 
