@@ -48,6 +48,10 @@ prompt:
 check-prompt:
     moon run scripts/md_to_mbt_string -- --check prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
 
+# Import a pinned upstream markdown build and regenerate the prompt layout.
+update-docs commit:
+    moon run scripts/update-moonbit-docs.mbtx {{quote(commit)}}
+
 # Build the editor's web distribution and reference server in its scoped workspace.
 editor-build:
     just --justfile editor/justfile build

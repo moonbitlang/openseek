@@ -13,7 +13,7 @@ Keep edits upstream; refresh this snapshot periodically or when updating the
 bundled toolchain, using a full commit from the upstream markdown-build branch:
 
 ```sh
-moon run scripts/update-moonbit-docs.mbtx <40-character-commit>
+just update-docs <40-character-commit>
 ```
 
 Run from the repository root with `curl` and `tar` installed. The command downloads
