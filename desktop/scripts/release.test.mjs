@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import { createServer } from "node:http";
 import { syncBuiltinESMExports } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { Release } from "./release.mjs";
 
@@ -15,46 +18,55 @@ async function server(t, respond) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-test("release verification recovers from a transient HTTP failure", async t => {
+test("release verification reads a successful JSON response", async t => {
   let requests = 0;
   const url = await server(t, (_request, response) => {
     requests++;
-    response.writeHead(requests === 1 ? 503 : 200, { "content-type": "application/json" });
+    response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ version: "0.1.9" }));
   });
   const release = new Release();
   t.mock.method(release, "apiOrigin", () => url);
-  assert.deepEqual(await release.fetchJson("/latest.json", { auth: false, retries: 3 }), { version: "0.1.9" });
-  assert.equal(requests, 2);
-});
-
-test("transient retries are bounded and preserve the final error response", async t => {
-  let requests = 0;
-  const url = await server(t, (_request, response) => {
-    requests++;
-    response.writeHead(429, { "retry-after": "0" });
-    response.end("rate limited");
-  });
-  const release = new Release();
-  t.mock.method(release, "apiOrigin", () => url);
-  await assert.rejects(release.fetchJson("/latest.json", { auth: false, retries: 2 }), /HTTP 429\nrate limited/);
-  assert.equal(requests, 3);
-});
-
-test("permanent HTTP errors are not retried", async t => {
-  let requests = 0;
-  const url = await server(t, (_request, response) => {
-    requests++;
-    response.writeHead(401);
-    response.end("unauthorized");
-  });
-  const response = await new Release().request(url, { retries: 3 });
-  assert.equal(response.status, 401);
-  assert.equal(await response.text(), "unauthorized");
+  assert.deepEqual(await release.fetchJson("/latest.json", { auth: false }), { version: "0.1.9" });
   assert.equal(requests, 1);
 });
 
-test("mutating requests keep retries disabled by default", async t => {
+for (const status of [401, 429, 503]) {
+  test(`HTTP ${status} fails immediately without retrying`, async t => {
+    let requests = 0;
+    const url = await server(t, (_request, response) => {
+      requests++;
+      response.writeHead(status, { "retry-after": "0" });
+      response.end("request failed");
+    });
+    const release = new Release();
+    t.mock.method(release, "apiOrigin", () => url);
+    await assert.rejects(release.fetchJson("/latest.json", { auth: false }), new RegExp(`HTTP ${status}\\nrequest failed`));
+    assert.equal(requests, 1);
+  });
+}
+
+test("network failures propagate without retrying", async t => {
+  const error = new TypeError("connection reset");
+  const request = t.mock.method(globalThis, "fetch", async () => { throw error; });
+  const release = new Release();
+  t.mock.method(release, "apiOrigin", () => "http://localhost");
+  await assert.rejects(release.fetchJson("/latest.json", { auth: false }), actual => actual === error);
+  assert.equal(request.mock.callCount(), 1);
+});
+
+test("response-body failures propagate without retrying", async t => {
+  const error = new TypeError("response stream interrupted");
+  const request = t.mock.method(globalThis, "fetch", async () => new Response(new ReadableStream({
+    start(controller) { controller.error(error); },
+  }), { status: 200 }));
+  const release = new Release();
+  t.mock.method(release, "apiOrigin", () => "http://localhost");
+  await assert.rejects(release.fetchJson("/latest.json", { auth: false }), actual => actual === error);
+  assert.equal(request.mock.callCount(), 1);
+});
+
+test("mutating requests fail without retrying", async t => {
   let requests = 0;
   const url = await server(t, (request, response) => {
     assert.equal(request.method, "POST");
@@ -62,10 +74,55 @@ test("mutating requests keep retries disabled by default", async t => {
     response.writeHead(503);
     response.end("unavailable");
   });
-  const response = await new Release().request(url, { method: "POST", body: "{}" });
-  assert.equal(response.status, 503);
-  await response.body.cancel();
+  const release = new Release();
+  t.mock.method(release, "apiOrigin", () => url);
+  await assert.rejects(release.fetchJson("/publish", { auth: false, method: "POST", body: "{}" }), /HTTP 503/);
   assert.equal(requests, 1);
+});
+
+test("verify distinguishes missing Location, non-redirects, and wrong destinations", async t => {
+  const release = new Release();
+  release.dist = await fs.mkdtemp(join(tmpdir(), "openseek-release-"));
+  t.after(() => fs.rm(release.dist, { recursive: true, force: true }));
+  t.mock.method(release, "moduleVersion", async () => "0.1.9");
+  const files = {
+    "macos-arm64": "SeekMoon.app.zip",
+    "macos-arm64-dmg": "SeekMoon.dmg",
+    browser: "SeekMoon.browser.tar.gz",
+    "windows-x64": "SeekMoon-windows-x64.zip",
+  };
+  const bytes = Buffer.from("release artifact fixture");
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  for (const file of Object.values(files)) await fs.writeFile(join(release.dist, file), bytes);
+  const manifest = { version: "0.1.9", platforms: {} };
+  let status = 302;
+  let headers = {};
+  const url = await server(t, (request, response) => {
+    if (request.method === "HEAD") {
+      response.writeHead(200, { "content-length": String(bytes.length), "x-oss-meta-sha256": sha256, "x-oss-hash-crc64ecma": "1" });
+      response.end();
+    } else if (request.url === "/desktop/releases/latest.json") {
+      response.end(JSON.stringify(manifest));
+    } else if (request.url === "/browser/releases/current.json") {
+      response.end(JSON.stringify({ version: "0.1.9" }));
+    } else if (request.url === "/console/") {
+      response.writeHead(status, headers);
+      response.end();
+    } else {
+      response.writeHead(404);
+      response.end();
+    }
+  });
+  for (const [platform, file] of Object.entries(files)) {
+    manifest.platforms[platform] = { url: `${url}/v0.1.9/${file}`, sha256 };
+  }
+  t.mock.method(release, "apiOrigin", () => url);
+  await assert.rejects(release.verify("v0.1.9"), /redirect is missing Location: HTTP 302/);
+  status = 200;
+  await assert.rejects(release.verify("v0.1.9"), /did not redirect: HTTP 200/);
+  status = 302;
+  headers = { location: "/console/releases/v0.1.8/index.html" };
+  await assert.rejects(release.verify("v0.1.9"), /did not select \/console\/releases\/v0\.1\.9\/index\.html/);
 });
 
 test("artifact checks preserve non-missing filesystem errors", async t => {

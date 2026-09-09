@@ -23,7 +23,6 @@ import { createReadStream } from "node:fs";
 import { appendFile, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Everything one release ships, in upload order. `file` is both the name in
@@ -107,31 +106,11 @@ export class Release {
     return hash.digest("hex");
   }
 
-  // Retry transient failures with backoff, as the previous curl --retry did.
-  // The final response (including permanent HTTP errors) is the caller's to judge.
-  async request(url, { method = "GET", body, headers = {}, redirect = "follow", retries = 0 } = {}) {
-    for (let attempt = 0; ; attempt++) {
-      let delay = Math.min(1000 * 2 ** attempt, 30000);
-      try {
-        const response = await fetch(url, { method, body, headers, redirect });
-        if (attempt >= retries || ![408, 429, 500, 502, 503, 504].includes(response.status)) return response;
-        const retryAfter = response.headers.get("retry-after");
-        if (retryAfter !== null) {
-          const milliseconds = /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now();
-          if (Number.isFinite(milliseconds)) delay = Math.max(delay, milliseconds);
-        }
-        await response.body?.cancel();
-      } catch (error) {
-        if (attempt >= retries) throw error;
-      }
-      await sleep(delay);
-    }
-  }
-
   // An API route, with the deploy token unless the route is public.
+  // Fail on the first request error; operators can rerun the release job.
   async fetch(path, { auth = true, headers = {}, ...options } = {}) {
     const authorization = auth ? { authorization: `Bearer ${this.env("OPENSEEK_DEPLOY_TOKEN")}` } : {};
-    return this.request(`${this.apiOrigin()}${path}`, { ...options, headers: { ...headers, ...authorization } });
+    return fetch(`${this.apiOrigin()}${path}`, { ...options, headers: { ...headers, ...authorization } });
   }
 
   async fetchJson(path, options) {
@@ -299,7 +278,7 @@ export class Release {
     this.verifyManifest(response.published, version, platforms);
     // Read the canonical file back from the API. This verifies that publish
     // wrote the same manifest it returned; no manifest is copied to OSS.
-    const latest = await this.fetchJson("/desktop/releases/latest.json", { retries: 3 });
+    const latest = await this.fetchJson("/desktop/releases/latest.json");
     this.verifyManifest(latest, version, platforms);
     console.log(JSON.stringify(latest, null, 2));
   }
@@ -325,7 +304,7 @@ export class Release {
   // compared with the archives in dist/ (the OSS bytes once `upload` ran).
   async verify(version) {
     await this.checkoutVersion(version);
-    const manifest = await this.fetchJson("/desktop/releases/latest.json", { auth: false, retries: 3 });
+    const manifest = await this.fetchJson("/desktop/releases/latest.json", { auth: false });
     const platforms = {};
     for (const artifact of Artifacts) {
       const local = await this.localArtifact(artifact);
@@ -338,7 +317,7 @@ export class Release {
     for (const artifact of Artifacts) {
       const { url } = manifest.platforms[artifact.platform];
       const local = platforms[artifact.platform];
-      const response = await this.request(url, { method: "HEAD", headers: { "accept-encoding": "identity" }, retries: 3 });
+      const response = await fetch(url, { method: "HEAD", headers: { "accept-encoding": "identity" } });
       if (!response.ok) throw new Error(`HEAD ${url} failed: HTTP ${response.status}`);
       const served = {
         size: response.headers.get("content-length"),
@@ -354,17 +333,21 @@ export class Release {
     // The API must have selected this version's Browser bundle for `/console/`
     // and serve the files that the archive in dist/ contains.
     const bare = version.replace(/^v/, "");
-    const current = await this.fetchJson("/browser/releases/current.json", { auth: false, retries: 3 });
+    const current = await this.fetchJson("/browser/releases/current.json", { auth: false });
     if (current?.version !== bare) throw new Error(`browser current.json version ${current?.version} is not ${bare}`);
     const consolePath = `/console/releases/${version}/index.html`;
-    const redirect = await this.fetch("/console/", { auth: false, redirect: "manual", retries: 3 });
+    const redirect = await this.fetch("/console/", { auth: false, redirect: "manual" });
     await redirect.body?.cancel();
-    const location = redirect.headers.get("location") ?? "";
-    if (redirect.status < 300 || redirect.status >= 400 || new URL(location, this.apiOrigin()).pathname !== consolePath) {
+    if (redirect.status < 300 || redirect.status >= 400) {
+      throw new Error(`/console/ did not redirect: HTTP ${redirect.status}`);
+    }
+    const location = redirect.headers.get("location");
+    if (location === null) throw new Error(`/console/ redirect is missing Location: HTTP ${redirect.status}`);
+    if (new URL(location, this.apiOrigin()).pathname !== consolePath) {
       throw new Error(`/console/ did not select ${consolePath}: HTTP ${redirect.status} ${location}`);
     }
     for (const file of ["index.html", "browser.js"]) {
-      const response = await this.fetch(`/console/releases/${version}/${file}`, { auth: false, retries: 3 });
+      const response = await this.fetch(`/console/releases/${version}/${file}`, { auth: false });
       if (!response.ok) throw new Error(`GET /console/releases/${version}/${file} failed: HTTP ${response.status}`);
       const served = createHash("sha256").update(Buffer.from(await response.arrayBuffer())).digest("hex");
       if (served !== await this.digest(join(this.dist, "browser", file))) {

@@ -267,6 +267,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SeekMoon-macos-arm64-v${{ needs.release-needed.outputs.version }}-build
+          overwrite: true
           path: |
             desktop/dist/SeekMoon.app.zip
             desktop/dist/SeekMoon.dmg
@@ -377,6 +378,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SeekMoon-windows-x64-v${{ needs.release-needed.outputs.version }}-build
+          overwrite: true
           path: desktop/dist/SeekMoon-windows-x64.zip
           if-no-files-found: error
           compression-level: 0
@@ -460,6 +462,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SeekMoon-macos-arm64-v${{ needs.release-needed.outputs.version }}
+          overwrite: true
           path: |
             desktop/dist/SeekMoon.app.zip
             desktop/dist/SeekMoon.dmg
@@ -472,6 +475,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SeekMoon-windows-x64-v${{ needs.release-needed.outputs.version }}
+          overwrite: true
           path: desktop/dist/SeekMoon-windows-x64.zip
           if-no-files-found: error
           compression-level: 0
