@@ -7,6 +7,7 @@ fn panel_view(
   input : Input,
   actions : Actions,
   semantic_review? : @html.Html = @html.nothing,
+  tab_menu? : @html.Html = @html.nothing,
 ) -> @html.Html {
   let chips : Array[@dock.TabChip] = input.dock.tabs.map(tab => {
     match tab {
@@ -131,8 +132,7 @@ fn panel_view(
         expanded=input.expanded,
         toggle_menu=actions.toggle_menu,
         close_menu=actions.close_menu,
-        close_all_tabs=actions.close_all_tabs,
-        close_all_tabs_disabled=input.dock.tabs.is_empty(),
+        close_tabs=actions.close_tabs,
         toggle_expanded=actions.toggle_expanded,
       ),
       @fileeditor.breadcrumb_view(
@@ -173,6 +173,7 @@ fn panel_view(
         actions.github_events,
         actions.open_link,
       ),
+      tab_menu,
     ],
   )
 }

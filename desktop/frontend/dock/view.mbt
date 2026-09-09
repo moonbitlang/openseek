@@ -180,8 +180,7 @@ pub fn tabs_bar(
   expanded~ : Bool,
   toggle_menu~ : @cmd.Cmd,
   close_menu~ : @cmd.Cmd,
-  close_all_tabs~ : @cmd.Cmd,
-  close_all_tabs_disabled~ : Bool,
+  close_tabs~ : @cmd.Emit[CloseSelection],
   toggle_expanded~ : @cmd.Cmd,
 ) -> @html.Html {
   let menu : LauncherMenu = { toggle: toggle_menu, dismiss: close_menu, }
@@ -195,10 +194,25 @@ pub fn tabs_bar(
       classes += " deleted"
     }
     let tab = chip.tab
+    let target = tab_menu_target(state, tab)
     tabs.push(
       @html.div(
         class=classes,
         title=chip.title,
+        attrs=@action_menu.context_attrs(target)
+          .id(target)
+          .tabindex(0)
+          .aria_haspopup("menu")
+          .on_keydown(event => {
+            if event.target().to_element() is Some(element) &&
+              element.get_attribute("id") == Some(target) &&
+              (event.key() == "Enter" || event.key() == " ") {
+              event.prevent_default()
+              dispatch(TabActivated(tab))
+            } else {
+              @cmd.none
+            }
+          }),
         on_click=dispatch(TabActivated(tab)),
         [
           @html.span(class="tab-name", chip.label),
@@ -227,8 +241,8 @@ pub fn tabs_bar(
       title=ui(locale, CloseAllTabs),
       attrs=@html.Attrs::build()
         .aria_label(ui(locale, CloseAllTabs))
-        .disabled(close_all_tabs_disabled)
-        .on_click(_ => close_all_tabs),
+        .disabled(state.tabs.is_empty())
+        .on_click(_ => close_tabs(All)),
       @icons.icon(@icons.icon_close_all),
     ),
     @html.button(
