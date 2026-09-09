@@ -9,6 +9,7 @@ async fn stream_test_server(
     return None
   }
   group.spawn_bg(no_wait=true) <| () => {
+    defer server.close()
     server.run_forever(
       (request, body, conn) => {
         assert_eq(request.path, "/chat/completions")
@@ -134,6 +135,7 @@ async test "streaming chat retries an idle stall before any event" {
     }
     let hits : Ref[Int] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
+      defer server.close()
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
@@ -189,6 +191,7 @@ async test "streaming chat fails an idle stall after a delta without retrying" {
     }
     let hits : Ref[Int] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
+      defer server.close()
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
@@ -246,6 +249,7 @@ async test "streaming chat does not retry an idle stall after an unterminated da
     }
     let hits : Ref[Int] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
+      defer server.close()
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
