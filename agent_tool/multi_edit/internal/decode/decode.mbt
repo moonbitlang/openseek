@@ -63,7 +63,9 @@ pub fn decode_args(arguments : Json) -> MultiEditArgs raise {
         _ => fail("arguments.revert_when_errors_above to be an integer")
       }
       let revert_on_parse_errors = match fields {
-        { "revert_on_parse_errors"? : Some(true) | Some(Null) | None, .. } => true
+        { "revert_on_parse_errors"? : Some(true) | Some(Null) | None, .. } =>
+
+          true
         { "revert_on_parse_errors": false, .. } => false
         _ => fail("arguments.revert_on_parse_errors to be a boolean")
       }
