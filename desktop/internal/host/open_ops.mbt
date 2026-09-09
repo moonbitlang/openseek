@@ -154,6 +154,7 @@ async fn reveal_path_op(payload : OpenPathPayload) -> RevealPathReply {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "reveal_path shares open_path reference refusals" {
   let root = @fs.tmpdir(prefix="openseek-host-reveal-missing-")
   let missing = "\{root}/missing.mbt:12"

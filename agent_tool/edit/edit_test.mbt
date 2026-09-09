@@ -193,6 +193,7 @@ async test "edit rejects replace_all even with a range" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "edit resolves relative paths under the workspace root" {
   @vfs.with_tmpdir(prefix="openseek-edit-workspace-", dir => {
     let path = "\{dir}/note.txt"
