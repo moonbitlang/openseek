@@ -23,7 +23,8 @@ import { createReadStream } from "node:fs";
 import { appendFile, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Everything one release ships, in upload order. `file` is both the name in
 // dist/ and the immutable download name under the version directory; `label`
@@ -53,7 +54,7 @@ const Usage = `usage:
   node scripts/release.mjs rollback vX.Y.Z
   node scripts/release.mjs status`;
 
-class Release {
+export class Release {
   constructor() {
     this.desktop = fileURLToPath(new URL("../", import.meta.url));
     this.dist = join(this.desktop, "dist");
@@ -106,14 +107,24 @@ class Release {
     return hash.digest("hex");
   }
 
-  // Network failures are retried; an HTTP error status is the caller's to judge.
+  // Retry transient failures with backoff, as the previous curl --retry did.
+  // The final response (including permanent HTTP errors) is the caller's to judge.
   async request(url, { method = "GET", body, headers = {}, redirect = "follow", retries = 0 } = {}) {
     for (let attempt = 0; ; attempt++) {
+      let delay = Math.min(1000 * 2 ** attempt, 30000);
       try {
-        return await fetch(url, { method, body, headers, redirect });
+        const response = await fetch(url, { method, body, headers, redirect });
+        if (attempt >= retries || ![408, 429, 500, 502, 503, 504].includes(response.status)) return response;
+        const retryAfter = response.headers.get("retry-after");
+        if (retryAfter !== null) {
+          const milliseconds = /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now();
+          if (Number.isFinite(milliseconds)) delay = Math.max(delay, milliseconds);
+        }
+        await response.body?.cancel();
       } catch (error) {
         if (attempt >= retries) throw error;
       }
+      await sleep(delay);
     }
   }
 
@@ -161,8 +172,9 @@ class Release {
 
   async localArtifact(artifact) {
     const path = join(this.dist, artifact.file);
-    const size = await stat(path).then(info => info.size, () => {
-      throw new Error(`artifact not found: ${path}`);
+    const size = await stat(path).then(info => info.size, error => {
+      if (error.code === "ENOENT") throw new Error(`artifact not found: ${path}`, { cause: error });
+      throw error;
     });
     return { path, size, sha256: await this.digest(path) };
   }
@@ -401,9 +413,11 @@ class Release {
   }
 }
 
-try {
-  await new Release().run(process.argv[2], process.argv[3]);
-} catch (error) {
-  console.error(`error: ${error.message}`);
-  process.exitCode = 1;
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    await new Release().run(process.argv[2], process.argv[3]);
+  } catch (error) {
+    console.error(`error: ${error.message}`);
+    process.exitCode = 1;
+  }
 }

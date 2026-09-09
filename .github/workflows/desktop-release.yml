@@ -351,7 +351,9 @@ jobs:
         run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
 
       - name: Build Windows ZIP
-        run: moon run ./desktop/package/windows --target native -- --release --target zip
+        # Keep the unpacked application for the version check below. Proton
+        # removes it after packaging when only the ZIP format is requested.
+        run: moon run ./desktop/package/windows --target native -- --release --target app --target zip
 
       # Proton names the portable ZIP after the executable. The release keeps
       # the platform in the filename, matching the other download names.

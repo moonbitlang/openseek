@@ -61,6 +61,9 @@ jobs:
         with:
           arch: x64
 
+      - name: Test release script
+        run: node --test desktop/scripts/release.test.mjs
+
       - name: Set up MoonBit
         run: |
           Invoke-RestMethod https://cli.moonbitlang.com/install/powershell.ps1 | Invoke-Expression
