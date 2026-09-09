@@ -118,12 +118,10 @@ async fn apply_stream_delta(
 ) -> Unit {
   // Compatible providers may put both fields in one SSE object. Reasoning
   // logically precedes the answer, so preserve that order for live clients.
-  let reasoning = match delta {
-    { "reasoning_content": String(reasoning), .. } => Some(reasoning)
-    { "reasoning": String(reasoning), .. } => Some(reasoning)
-    _ => None
-  }
-  if reasoning is Some(reasoning) && reasoning != "" {
+  if delta
+    is ({ "reasoning_content": String(reasoning), .. }
+    | { "reasoning": String(reasoning), .. }) &&
+    !reasoning.is_empty() {
     acc.reasoning_content <+ "\{reasoning}"
     on_reasoning_delta(reasoning)
   }
