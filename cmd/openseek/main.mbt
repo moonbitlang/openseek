@@ -1264,13 +1264,9 @@ async fn skills_prompt_section_for_cwd(
 /// the recorded directory is where the session was started — resume it from
 /// the same project root.
 ///
-/// When the process environment names a MoonBit reference-docs directory
-/// (`OPENSEEK_REFERENCES`), the section additionally points the model at the
-/// bundled moonbit-docs pages and tells it how to consult them. The tail
-/// position keeps that optional, install-dependent text out of the
-/// cache-shared prefix. The variable is set by the desktop host only after it
-/// resolved an existing `references` directory next to the engine, so no
-/// existence check is needed here.
+/// OPENSEEK_REFERENCES adds the resolved share/ resource directory value.
+/// Documentation layout and usage instructions live in the static default
+/// prompt, keeping the installation-dependent path in this tail.
 async fn environment_prompt_section(workspace_root? : String = ".") -> String {
   let target = if workspace_root == "" { "." } else { workspace_root }
   let cwd = @fs.realpath(target) catch { _ => target }
@@ -1300,7 +1296,7 @@ async fn environment_prompt_section(workspace_root? : String = ".") -> String {
 }
 
 ///|
-/// The bundled MoonBit reference-docs directory, when the process environment
+/// The bundled share/ resource directory, when the process environment
 /// sets `OPENSEEK_REFERENCES` to a non-empty value.
 fn references_dir_from_environment() -> String? {
   match @env.get_env_var("OPENSEEK_REFERENCES") {
@@ -1310,17 +1306,16 @@ fn references_dir_from_environment() -> String? {
 }
 
 ///|
-/// The environment-section tail naming `references_dir` — the bundled
-/// moonbit-docs markdown build — and how to consult it. The pages live
-/// outside the workspace, so the block must say both that reading them is
-/// expected and how: find the relevant page by listing or searching a
-/// subtree, then read only that file in bounded reads, never the whole tree.
+/// Only the installation-dependent value belongs in the dynamic tail.
 fn references_environment_block(references_dir : String) -> String {
-  (
-    $|MoonBit reference docs: \{references_dir}
-    $|This installation bundles the official MoonBit documentation (the moonbit-docs markdown build) at the path above. It sits outside the workspace and is read-only; treat it as the authoritative source for language, standard-library, toolchain, and tutorial facts — look facts up there instead of guessing or inventing them.
-    $|Top-level layout: language/ (language guide, attributes, error codes), toolchain/, tutorial/, example/, and index.md (the site map).
-    $|Read on demand, never wholesale: find the page you need with a subtree listing or search (@shell.glob or rg over "\{references_dir}"), then open only that page with the read tool, keeping each read bounded.
+  "OPENSEEK_REFERENCES: \{references_dir}"
+}
+
+///|
+test "references tail contains only the resource root value" {
+  assert_eq(
+    references_environment_block("/bundle/share"),
+    "OPENSEEK_REFERENCES: /bundle/share",
   )
 }
 

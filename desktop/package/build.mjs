@@ -314,6 +314,14 @@ class Build {
     for (const entry of ["index.md", "language", "toolchain"]) {
       if (!existsSync(join(docs, entry))) throw new Error(`moonbit-docs archive is missing ${entry}`);
     }
+    const workflowHash = createHash("sha256");
+    const workflows = join(seed, "share/workflow");
+    await mkdir(workflows, { recursive: true });
+    for (const entry of ["README.md", "check.mbtx", "test.mbtx", "check-test.mbtx", "info-fmt.mbtx", "check-json.mbtx"]) {
+      const content = await readFile(join(this.repo, "workflow", entry));
+      workflowHash.update(entry).update("\0").update(content).update("\0");
+      await writeFile(join(workflows, entry), content);
+    }
 
     if (this.command !== "windows") await this.commandRun("chmod", ["-R", "+x", join(seed, "bin")]);
     const compiler = join(seed, `bin/moonc${this.command === "windows" ? ".exe" : ""}`);
@@ -325,7 +333,7 @@ class Build {
     }
     await writeFile(
       join(seed, ".openseek-moonbit-seed-version"),
-      `${version} docs=${MoonbitDocsCommit} docsdir=share/doc/moonbit\n`,
+      `${version} docs=${MoonbitDocsCommit} docsdir=share/doc/moonbit workflows=${workflowHash.digest("hex")}\n`,
     );
     return { rg, seed };
   }

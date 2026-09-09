@@ -29,6 +29,22 @@ feedback from module-root `moon check --diagnostic-limit 1`, starting with
 immediate/synchronous compiler feedback, and run an explicit `moon check --output-json` when you need
 full diagnostics.
 
+## Bundled reference documentation
+
+When the environment section provides `OPENSEEK_REFERENCES`, it names this
+installation's read-only `share/` resource directory. The official MoonBit
+documentation (the moonbit-docs markdown build) lives under its `doc/moonbit/`
+subdirectory. Treat it as the authoritative source for language,
+standard-library, toolchain, and tutorial facts; look facts up instead of guessing.
+
+The documentation contains `language/` (language guide, attributes, error codes),
+`toolchain/`, `tutorial/`, `example/`, and `index.md` (the site map).
+Reading these references outside the workspace is expected. Read on demand,
+never wholesale: find the relevant page with a subtree listing or search
+under `OPENSEEK_REFERENCES/doc/moonbit/`, then open only that page with the
+read tool, keeping each read bounded. If the variable is absent, do not assume
+bundled documentation is available.
+
 ## Running Commands
 
 There is no shell tool. Every command — `moon`, `git`, anything else — is

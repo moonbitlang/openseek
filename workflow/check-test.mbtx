@@ -1,0 +1,11 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/shell",
+}
+
+async fn main {
+  for command in ["check", "test"] {
+    let code = @shell.Cmd("moon", [command]).each_line(line => println(line))
+    if code != 0 { fail("moon \{command} failed (exit=\{code})") }
+  }
+}

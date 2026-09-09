@@ -5,12 +5,9 @@ const MoonbitBundleStampFile : String = ".openseek-moonbit-bundle-version"
 const MoonbitSeedVersionFile : String = ".openseek-moonbit-seed-version"
 
 ///|
-/// The seed-relative reference-docs path (FHS `share/doc/moonbit` under the
-/// toolchain prefix). Packaging stages the pinned moonbit-docs markdown build
-/// here (`MoonbitDocsRelDir` in `desktop/package/build.mjs`), the payload copy
-/// carries it verbatim, and the engine advertises the tree to the model as
-/// `OPENSEEK_REFERENCES`.
-const MoonbitDocsRelDir : String = "share/doc/moonbit"
+/// Resource root containing official docs and bundled workflows.
+/// The engine advertises this prepared payload directory as OPENSEEK_REFERENCES.
+const MoonbitReferencesRelDir : String = "share"
 
 ///|
 /// A seed is detected by the version stamp packaging writes as its final
@@ -101,11 +98,9 @@ fn moonbit_bin_dir(moon_home : @pathx.Path) -> @pathx.Path {
 }
 
 ///|
-/// The moonbit-docs markdown build packaging stages inside the seed at
-/// `share/doc/moonbit`, so the prepared payload carries the docs describing
-/// exactly its toolchain.
-fn moonbit_docs_dir(moon_home : @pathx.Path) -> @pathx.Path {
-  moon_home.join(MoonbitDocsRelDir)
+/// Stable resource root copied from the bundled seed.
+fn moonbit_references_dir(moon_home : @pathx.Path) -> @pathx.Path {
+  moon_home.join(MoonbitReferencesRelDir)
 }
 
 ///|

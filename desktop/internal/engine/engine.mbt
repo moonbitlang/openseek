@@ -1393,12 +1393,12 @@ async fn add_moonbit_path_for_native_engine(
   // naming the cause now.
   let toolchain = @moonbit.resolve_toolchain(config.engine, runtime_dir?)
   toolchain.apply_to_env(env)
-  // The prepared payload also carries the seed's `share/doc/moonbit/` (the
-  // moonbit-docs markdown build), which the engine advertises to the model as
-  // its MoonBit reference. Durable session prompts embed the path, and the
+  // The prepared payload carries share/doc/moonbit/ and share/workflow/.
+  // Advertise their common share/ root as OPENSEEK_REFERENCES.
+  // Durable session prompts embed the path, and the
   // payload lives in the per-user runtime directory, so it survives bundle
-  // moves and AppImage relaunches. A toolchain without docs — an external
-  // one, or a seed staged without them — advertises none, and the ambient
+  // moves and AppImage relaunches. A toolchain without bundled resources — an
+  // external one, or a seed staged without share/ — advertises none, and the ambient
   // value is scrubbed so the child never names docs the host did not resolve.
   match toolchain.references {
     Some(docs) => env["OPENSEEK_REFERENCES"] = docs.to_string()
@@ -2904,10 +2904,12 @@ async test "native engine env has one authoritative bundled moon path" {
   // copy — the durable prompt embeds this path, and it must never name a
   // bundle location that unmounts when the app exits.
   write_fake_file(moon_home.join("share/doc/moonbit/language/index.md"))
+  write_fake_file(moon_home.join("share/workflow/check.mbtx"))
+  write_fake_file(moon_home.join("share/workflow/test.mbtx"))
   let env_with_references = engine_process_env(config, Some(runtime))
   assert_eq(
     env_with_references["OPENSEEK_REFERENCES"],
-    moon_home.join("share/doc/moonbit").to_string(),
+    moon_home.join("share").to_string(),
   )
   // A GLM run's key travels in GLM, and the resolved variable — not a
   // hardcoded DEEPSEEK — is what the process env honors.
