@@ -134,7 +134,11 @@ fn path_pattern_matches(pattern : String, path : String) -> Bool {
   if pattern == "*" {
     return true
   }
-  let path = if path.has_prefix("/") { path[1:].to_owned() } else { path }
+  let path = if path.strip_prefix("/") is Some(rest) {
+    rest.to_owned()
+  } else {
+    path
+  }
   match pattern.split_once("*") {
     Some((prefix, suffix)) => path.has_prefix(prefix) && path.has_suffix(suffix)
     None => path == pattern

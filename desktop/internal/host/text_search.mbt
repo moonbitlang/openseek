@@ -743,8 +743,8 @@ fn normalize_text_search_path(path : String) -> String {
   } else {
     path
   }
-  if path.has_prefix("./") {
-    path[2:].to_owned()
+  if path.strip_prefix("./") is Some(rest) {
+    rest.to_owned()
   } else {
     path
   }

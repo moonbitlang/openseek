@@ -312,12 +312,14 @@ fn render_semantic_tokenized_code_lines(
 ) -> String {
   let prefix = "<div class=\"monaco-tokenized-source\">"
   let suffix = "</div>"
-  guard tokenized.has_prefix(prefix) &&
-    tokenized.has_suffix(suffix) &&
-    tokenized.length() >= prefix.length() + suffix.length() else {
-    return tokenized
+  let inner = match tokenized.strip_prefix(prefix) {
+    Some(body) =>
+      match body.strip_suffix(suffix) {
+        Some(inner_view) => inner_view.to_owned()
+        None => return tokenized
+      }
+    None => return tokenized
   }
-  let inner = tokenized[prefix.length():tokenized.length() - suffix.length()].to_owned()
   let rendered_lines = split_tokenized_code_lines(inner)
   // `MarkdownCodeBlock::code` ends in one source newline. The shared
   // tokenizer must therefore produce exactly the projected lines plus one

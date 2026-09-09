@@ -211,7 +211,11 @@ fn Open::current(self : Open) -> Item? {
 ///|
 /// Rewrite only the provider prefix, preserving the visible query suffix.
 fn value_for_provider(value : String, provider : Provider) -> String {
-  let suffix = if value.has_prefix("#") { value[1:].to_owned() } else { value }
+  let suffix = if value.strip_prefix("#") is Some(rest) {
+    rest.to_owned()
+  } else {
+    value
+  }
   provider.prefix() + suffix
 }
 

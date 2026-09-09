@@ -287,10 +287,10 @@ fn parse_moon_check_diagnostics_impl(
         }
       ) => {
         let normalized = normalize_host_path(path)
-        if !normalized.has_prefix(prefix) {
-          continue
+        let relative = match normalized.strip_prefix(prefix) {
+          Some(rest) => rest.to_owned()
+          None => continue
         }
-        let relative = normalized[prefix.length():].to_owned()
         match (parse_moon_loc(loc), @server.remote_document_uri(relative)) {
           (Some(range), Some(uri)) => {
             let diagnostic : @language.Diagnostic = {

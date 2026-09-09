@@ -443,8 +443,8 @@ async fn read_sse_stream(
       }
       continue
     }
-    if line.has_prefix("data:") {
-      let payload = line[5:].trim(chars=" ").to_owned()
+    if line.strip_prefix("data:") is Some(content) {
+      let payload = content.trim(chars=" ").to_owned()
       if has_data {
         data.write_string("\n")
       }

@@ -219,8 +219,8 @@ fn definition_uri_under_root(
   let root = normalize_host_path(root)
   let path = normalize_host_path(raw_path)
   let root_prefix = if root == "/" { "/" } else { "\{root}/" }
-  let relative = if path.has_prefix(root_prefix) {
-    path[root_prefix.length():].to_owned()
+  let relative = if path.strip_prefix(root_prefix) is Some(rest) {
+    rest.to_owned()
   } else if path.has_prefix("/") {
     return None
   } else {

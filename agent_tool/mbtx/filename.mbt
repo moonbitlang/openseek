@@ -10,12 +10,12 @@ fn resolve_filename(
   references : String?,
 ) -> String raise {
   if filename.has_prefix("@") {
-    guard is_bundled_filename(filename) else {
+    guard filename.strip_prefix("@builtin/") is Some(name_view) else {
       fail(
         "unknown script namespace in \{filename}. Only @builtin/ is supported. Use ./\{filename} for a literal workspace path",
       )
     }
-    let name = filename[9:].to_owned()
+    let name = name_view.to_owned()
     guard !name.is_empty() &&
       !name.contains("\\") &&
       name

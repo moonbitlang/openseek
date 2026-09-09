@@ -951,9 +951,14 @@ async fn prepare_workspace_root(
 ///|
 fn trim_trailing_path_separators(path : String) -> String {
   let mut result = path
-  while !is_path_root(result) &&
-        (result.has_suffix("/") || result.has_suffix("\\")) {
-    result = result[:result.length() - 1].to_owned()
+  while !is_path_root(result) {
+    if result.strip_suffix("/") is Some(rest) {
+      result = rest.to_owned()
+    } else if result.strip_suffix("\\") is Some(rest) {
+      result = rest.to_owned()
+    } else {
+      break
+    }
   }
   result
 }

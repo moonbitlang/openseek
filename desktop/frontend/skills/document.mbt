@@ -16,8 +16,8 @@ fn parse_skill_document(source : String) -> SkillDocument {
     return { metadata: [], body: source, }
   }
   let first = first.trim()
-  let first = if first.has_prefix("\u{feff}") {
-    first[1:].trim()
+  let first = if first.strip_prefix("\u{feff}") is Some(rest) {
+    rest.trim()
   } else {
     first
   }

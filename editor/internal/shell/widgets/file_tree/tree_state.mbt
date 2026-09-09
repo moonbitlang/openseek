@@ -191,10 +191,10 @@ fn TreeNode::ancestor_uris(
 ) -> Array[@base_common.Uri]? {
   let root_raw = self.uri.to_string()
   let target_raw = target.to_string()
-  if !target_raw.has_prefix("\{root_raw}/") {
+  guard target_raw.strip_prefix("\{root_raw}/") is Some(relative_view) else {
     return None
   }
-  let relative = target_raw[root_raw.length() + 1:].to_owned()
+  let relative = relative_view.to_owned()
   let ancestors : Array[@base_common.Uri] = []
   let mut prefix = root_raw
   let segments = []

@@ -178,7 +178,7 @@ pub fn resolve_remote_document_uri(
 ) -> RemotePathResult {
   let raw = uri.to_string()
   let prefix = "readonly-remote://workspace/"
-  if !raw.has_prefix(prefix) {
+  guard raw.strip_prefix(prefix) is Some(relative) else {
     return RemotePathError(
       ProtocolError(
         ProtocolInvalidUri,
@@ -188,9 +188,7 @@ pub fn resolve_remote_document_uri(
     )
   }
   match
-    @workspace.SourcePath::normalize_root_relative_path(
-      raw[prefix.length():].to_owned(),
-    ) {
+    @workspace.SourcePath::normalize_root_relative_path(relative.to_owned()) {
     ParsedSourcePath(path) => ParsedRemotePath(path)
     SourcePathError(error) =>
       RemotePathError(
@@ -682,10 +680,9 @@ fn RemoteServer::missing_cached_document_error(
 ///|
 fn normalize_workspace_root(root : String) -> String {
   let normalized = root.replace_all(old="\\", new="/")
-  if normalized.has_suffix("/") && normalized.length() > 1 {
-    normalized[0:normalized.length() - 1].to_owned()
-  } else {
-    normalized
+  match normalized.strip_suffix("/") {
+    Some(rest) if normalized.length() > 1 => rest.to_owned()
+    _ => normalized
   }
 }
 

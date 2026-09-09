@@ -224,10 +224,9 @@ fn workspace_file_path(root : String, path : @workspace.SourcePath) -> String {
 ///|
 fn normalize_host_path(path : String) -> String {
   let normalized = path.replace_all(old="\\", new="/")
-  if normalized.has_suffix("/") && normalized.length() > 1 {
-    normalized[0:normalized.length() - 1].to_owned()
-  } else {
-    normalized
+  match normalized.strip_suffix("/") {
+    Some(rest) if normalized.length() > 1 => rest.to_owned()
+    _ => normalized
   }
 }
 
@@ -640,8 +639,11 @@ fn mermaid_static_route(path : String) -> (String, String)? {
     return Some(("mermaid/LICENSE", "text/plain; charset=utf-8"))
   }
   let prefix = "/mermaid/chunks/mermaid.esm.min/"
-  guard path.has_prefix(prefix) && path.has_suffix(".mjs") else { return None }
-  let name = path[prefix.length():]
+  let name = match path.strip_prefix(prefix) {
+    Some(rest) => rest
+    None => return None
+  }
+  guard name.has_suffix(".mjs") else { return None }
   guard !name.is_empty() &&
     name.all(char => {
       char.is_ascii_alphabetic() ||
