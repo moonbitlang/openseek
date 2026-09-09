@@ -310,6 +310,14 @@ jobs:
         with:
           arch: x64
 
+      - name: Install NSIS
+        run: |
+          choco install nsis --version=3.12.0 --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "NSIS installation failed: $LASTEXITCODE" }
+          $nsisDir = "${env:ProgramFiles(x86)}\NSIS"
+          $nsisDir >> $env:GITHUB_PATH
+          & "$nsisDir\makensis.exe" /VERSION
+
       # Stable, matching CI, for the same reason as the macOS job below.
       - name: Set up MoonBit
         run: |
@@ -351,15 +359,15 @@ jobs:
         shell: bash
         run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
 
-      - name: Build Windows ZIP
+      - name: Build Windows installer
         env:
           # Generated desktop C can exceed MSVC's default object section limit.
           CL: /bigobj
         # Keep the unpacked application for the version check below. Proton
-        # removes it after packaging when only the ZIP format is requested.
-        run: moon run ./desktop/package/windows --target native -- --release --target app --target zip
+        # removes it after packaging when only the installer is requested.
+        run: moon run ./desktop/package/windows --target native -- --release --target app --target installer
 
-      # Proton names the portable ZIP after the executable. The release keeps
+      # Proton names the installer after the executable. The release keeps
       # the platform in the filename, matching the other download names.
       - name: Verify packaged application version
         shell: bash
@@ -373,16 +381,16 @@ jobs:
               throw new Error(`packaged ${manifest.version} (bundle ${manifest.bundle_version}), expected ${version}`);
             }
           '
-          mv desktop/dist/seekmoon.zip desktop/dist/SeekMoon-windows-x64.zip
+          mv desktop/dist/seekmoon-setup.exe desktop/dist/SeekMoon-windows-x64-setup.exe
 
       # Only a hand-off to the publish job. The downloadable release artifact
       # is uploaded there, after OSS has settled which bytes are canonical.
-      - name: Hand Windows ZIP to the publish job
+      - name: Hand Windows installer to the publish job
         uses: actions/upload-artifact@v4
         with:
           name: SeekMoon-windows-x64-v${{ needs.release-needed.outputs.version }}-build
           overwrite: true
-          path: desktop/dist/SeekMoon-windows-x64.zip
+          path: desktop/dist/SeekMoon-windows-x64-setup.exe
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
@@ -438,7 +446,7 @@ jobs:
           name: SeekMoon-macos-arm64-v${{ needs.release-needed.outputs.version }}-build
           path: desktop/dist
 
-      - name: Collect Windows ZIP
+      - name: Collect Windows installer
         uses: actions/download-artifact@v4
         with:
           name: SeekMoon-windows-x64-v${{ needs.release-needed.outputs.version }}-build
@@ -479,7 +487,7 @@ jobs:
         with:
           name: SeekMoon-windows-x64-v${{ needs.release-needed.outputs.version }}
           overwrite: true
-          path: desktop/dist/SeekMoon-windows-x64.zip
+          path: desktop/dist/SeekMoon-windows-x64-setup.exe
           if-no-files-found: error
           compression-level: 0
           retention-days: 14

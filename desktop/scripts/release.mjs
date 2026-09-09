@@ -33,10 +33,10 @@ const Artifacts = [
   { platform: "macos-arm64-dmg", label: "Installer DMG", file: "SeekMoon.dmg", contentType: "application/x-apple-diskimage" },
   // Also uploaded to the API: `/console/` serves it from the API origin.
   { platform: "browser", label: "Browser bundle", file: "SeekMoon.browser.tar.gz", contentType: "application/gzip" },
-  // Renamed from Proton's `seekmoon.zip` by the release workflow. Versions
-  // released before Windows shipped have none, which a rollback tolerates.
-  { platform: "windows-x64", label: "Windows ZIP", file: "SeekMoon-windows-x64.zip", contentType: "application/zip",
-    optionalOnRollback: true },
+  // Renamed from Proton's `seekmoon-setup.exe` by the release workflow.
+  // Rollbacks preserve older ZIP downloads or releases without Windows.
+  { platform: "windows-x64", label: "Windows installer", file: "SeekMoon-windows-x64-setup.exe", contentType: "application/octet-stream",
+    optionalOnRollback: true, rollbackFiles: ["SeekMoon-windows-x64.zip"] },
 ];
 const Browser = Artifacts.find(artifact => artifact.platform === "browser");
 
@@ -236,7 +236,7 @@ export class Release {
     }
 
     // `/console/` remains on the API origin, so only the much smaller Browser
-    // archive is uploaded twice. The ZIPs and the DMG exist only in OSS.
+    // archive is uploaded twice. Desktop packages exist only in OSS.
     const recorded = await this.fetchJson(`/desktop/releases/${version}/${Browser.file}?platform=browser`, {
       method: "PUT", body: await readFile(join(this.dist, Browser.file)),
     });
@@ -262,10 +262,15 @@ export class Release {
     if (fromCheckout) await this.checkoutVersion(version);
     else if (!/^v[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(version)) throw new Error(`invalid rollback version: ${version}`);
     const platforms = {};
-    for (const artifact of Artifacts) {
-      if (!fromCheckout && artifact.optionalOnRollback && this.headObject(version, artifact).missing) {
-        console.log(`${artifact.platform} was never uploaded for ${version}; republishing without it`);
-        continue;
+    for (let artifact of Artifacts) {
+      if (!fromCheckout && artifact.optionalOnRollback) {
+        const file = [artifact.file, ...(artifact.rollbackFiles ?? [])].find(file =>
+          !this.headObject(version, { ...artifact, file }).missing);
+        if (file === undefined) {
+          console.log(`${artifact.platform} was never uploaded for ${version}; republishing without it`);
+          continue;
+        }
+        artifact = { ...artifact, file };
       }
       const local = fromCheckout ? await this.localArtifact(artifact) : undefined;
       const served = await this.verifyServed(version, artifact, local);
