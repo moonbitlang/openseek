@@ -56,7 +56,3 @@ extern "js" fn anchor_href(anchor : @dom.Element) -> String =
 ///|
 extern "js" fn anchor_protocol(anchor : @dom.Element) -> String =
   #| anchor => anchor.protocol
-
-///|
-extern "js" fn decode_uri_component(text : String) -> String =
-  #| text => decodeURIComponent(text)

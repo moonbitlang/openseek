@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/internal/uri",
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/js",
   "moonbitlang/core/deque",

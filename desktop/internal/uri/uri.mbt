@@ -12,6 +12,44 @@ pub fn encode_component(text : StringView) -> String {
 }
 
 ///|
+/// Decode one URI component, retaining the entire input if any escape or
+/// escaped UTF-8 sequence is malformed. This matches `decodeURIComponent`
+/// with a keep-original catch. A plus stays a plus, and escapes decode once.
+///
+/// ```mbt check
+/// test {
+///   assert_eq(@uri.decode_component("a%20b%2520"), "a b%20")
+///   assert_eq(@uri.decode_component("a%20b%zz"), "a%20b%zz")
+/// }
+/// ```
+pub fn decode_component(text : StringView) -> String {
+  let out = StringBuilder()
+  let mut rest = text
+  while !rest.is_empty() {
+    if rest is ['%', ..] {
+      let bytes = @buffer.Buffer()
+      while rest is ['%', ..] {
+        guard rest is ['%', high, low, .. tail] &&
+          hex_value(high) is Some(high) &&
+          hex_value(low) is Some(low) else {
+          return text.to_owned()
+        }
+        bytes.write_byte(((high << 4) | low).to_byte())
+        rest = tail
+      }
+      let decoded = @utf8.decode(bytes.contents(), ignore_bom=false) catch {
+        _ => return text.to_owned()
+      }
+      out.write_string(decoded)
+    } else if rest is [ch, .. tail] {
+      out.write_char(ch)
+      rest = tail
+    }
+  }
+  out.to_string()
+}
+
+///|
 /// Decode percent-escapes into UTF-8 bytes and everything else as-is. A
 /// malformed escape (`%` without two hex digits) stays literal rather than
 /// failing, and invalid UTF-8 decodes lossily — URIs sent by other programs

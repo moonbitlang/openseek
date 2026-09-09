@@ -4,6 +4,8 @@ package "openseek_desktop/internal/uri"
 // Values
 pub fn decode(StringView) -> String
 
+pub fn decode_component(StringView) -> String
+
 pub fn encode_component(StringView) -> String
 
 // Errors

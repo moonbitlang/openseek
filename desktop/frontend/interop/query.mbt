@@ -4,9 +4,6 @@
 // Retired `/d/<device>/` routes redirect into this query shape.
 
 ///|
-extern "js" fn js_decode_uri_component(value : String) -> String = "(v) => { try { return decodeURIComponent(v) } catch { return v } }"
-
-///|
 /// The named parameter in the page's own query string, decoded; `None`
 /// when absent or empty.
 pub fn page_query_param(name : String) -> String? {
@@ -24,7 +21,7 @@ pub fn page_query_param(name : String) -> String? {
   for pair in query.split("&") {
     guard pair.find("=") is Some(index) else { continue }
     if pair[:index].to_owned() == name {
-      let value = js_decode_uri_component(pair[index + 1:].to_owned())
+      let value = @uri.decode_component(pair[index + 1:])
       return if value.is_empty() { None } else { Some(value) }
     }
   }
