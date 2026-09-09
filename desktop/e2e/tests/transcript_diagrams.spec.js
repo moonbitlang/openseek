@@ -45,7 +45,7 @@ test('transcript renders editor diagram fences and retains them across updates a
   // System appearance is a real application input, exercising the full theme
   // projection and a fresh SVG/controller after the async renderer completes.
   await page.emulateMedia({ colorScheme: 'dark' });
-  await expect(transcript).toHaveAttribute('data-transcript-theme', 'dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect.poll(() => originalSvg.evaluate(svg => svg.isConnected)).toBe(false);
   await expect(mermaid.locator('svg')).toContainText('Beta');
   await expect.poll(() => originalD2.evaluate(svg => svg.isConnected)).toBe(true);

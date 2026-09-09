@@ -1000,15 +1000,7 @@ fn transcript_view(
     attrs=@html.Attrs::build()
       .id("transcript")
       .class("transcript")
-      .data_set("transcript-session", input.active_session)
-      .data_set(
-        "transcript-theme",
-        if input.dark_mode {
-          "dark"
-        } else {
-          "light"
-        },
-      ),
+      .data_set("transcript-session", input.active_session),
     children,
   )
 }

@@ -49,7 +49,8 @@ fn Theme::apply(
   is_desktop : Bool,
   dispatch : @cmd.Emit[Msg],
 ) -> @cmd.Cmd {
-  let value = if self.is_dark(system_dark) { "dark" } else { "light" }
+  let dark = self.is_dark(system_dark)
+  let value = if dark { "dark" } else { "light" }
   @cmd.batch([
     @cmd.custom_cmd(_ => {
       if @dom.document().get_document_element() is Some(root) {
@@ -57,11 +58,12 @@ fn Theme::apply(
       }
     }),
     if is_desktop {
-      app_set_titlebar_theme(dispatch, value == "dark")
+      app_set_titlebar_theme(dispatch, dark)
     } else {
       @cmd.none
     },
     @fileeditor.apply_theme(value),
+    @transcript_component.apply_theme(dark),
   ])
 }
 

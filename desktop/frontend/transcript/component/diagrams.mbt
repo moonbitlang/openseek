@@ -13,7 +13,6 @@ priv struct TranscriptDiagram {
   source : String
   language : String
   renderer : TranscriptDiagramRenderer
-  mut dark_mode : Bool
 }
 
 ///|
@@ -25,12 +24,66 @@ fn TranscriptDiagram::dispose(self : Self) -> Unit {
 }
 
 ///|
+/// Diago SVGs follow the chat palette through CSS variables; only Mermaid
+/// bakes its theme into the render and must be asked for a fresh one.
+fn TranscriptDiagram::set_dark_mode(self : Self, dark_mode : Bool) -> Unit {
+  match self.renderer {
+    Diago => ()
+    Mermaid(diagram) => diagram.set_dark_mode(dark_mode)
+  }
+}
+
+///|
+/// The effective application theme as the imperative diagram renderers need
+/// it. The root pushes it through `apply_theme`, the same way the file editor
+/// receives its theme, so the value never round-trips through the DOM. Live
+/// mounts register here for as long as they borrow a transcript element; a
+/// mount created after a change starts from the current value.
+priv struct TranscriptTheme {
+  mut dark_mode : Bool
+  mounts : Array[TranscriptDomMount]
+}
+
+///|
+let transcript_theme : TranscriptTheme = { dark_mode: false, mounts: [], }
+
+///|
+/// Re-theme every diagram rendered inside a mounted transcript. Batch it with
+/// the other theme commands whenever the effective theme changes.
+pub fn apply_theme(dark_mode : Bool) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    transcript_theme.dark_mode = dark_mode
+    for mount in transcript_theme.mounts {
+      mount.set_dark_mode(dark_mode)
+    }
+  })
+}
+
+///|
+fn TranscriptDomMount::register_theme(self : Self) -> Unit {
+  transcript_theme.mounts.push(self)
+}
+
+///|
+fn TranscriptDomMount::unregister_theme(self : Self) -> Unit {
+  transcript_theme.mounts.retain(mount => !physical_equal(mount, self))
+}
+
+///|
+fn TranscriptDomMount::set_dark_mode(self : Self, dark_mode : Bool) -> Unit {
+  guard self.dark_mode != dark_mode else { return }
+  self.dark_mode = dark_mode
+  for entry in self.rendered_diagrams {
+    entry.set_dark_mode(dark_mode)
+  }
+}
+
+///|
 fn TranscriptDomMount::refresh_diagrams(
   self : Self,
   root : @dom.Element,
 ) -> Unit {
   let elements = root.query_selector_all("[data-transcript-diagram]")
-  let dark_mode = root.get_attribute("data-transcript-theme") == Some("dark")
   let retained : Array[TranscriptDiagram] = []
   // Dispose removed/reused targets first, invalidating their pending Mermaid
   // work before any new diagram is installed into the same container.
@@ -61,22 +114,14 @@ fn TranscriptDomMount::refresh_diagrams(
     } nobreak {
       None
     }
-    if existing is Some(entry) {
-      if entry.dark_mode != dark_mode {
-        entry.dark_mode = dark_mode
-        match entry.renderer {
-          Diago => ()
-          Mermaid(diagram) => diagram.set_dark_mode(dark_mode)
-        }
-      }
-    } else {
+    if existing is None {
       let renderer = match language {
         "mermaid" =>
           TranscriptDiagramRenderer::Mermaid(
             @editor_viewer.MermaidDiagram(
               element,
               source,
-              dark_mode~,
+              dark_mode=self.dark_mode,
               on_size_changed=self.on_size_changed,
             ),
           )
@@ -92,7 +137,7 @@ fn TranscriptDomMount::refresh_diagrams(
         }
         _ => continue
       }
-      retained.push({ element, source, language, dark_mode, renderer, })
+      retained.push({ element, source, language, renderer, })
     }
   }
   self.rendered_diagrams = retained

@@ -67,7 +67,6 @@ pub(all) enum ScrollPosition {
 /// durable chronology and active-run ownership; this package owns only the
 /// transcript subtree and its scroll behavior.
 struct Input {
-  dark_mode : Bool
   source : Source
   focused : @interop.ChannelId
   active_session : String
@@ -104,7 +103,6 @@ struct Input {
 
 ///|
 pub fn Input::Input(
-  dark_mode? : Bool = false,
   source~ : Source,
   focused~ : @interop.ChannelId,
   active_session~ : String,
@@ -123,7 +121,6 @@ pub fn Input::Input(
   streaming_identity~ : String,
 ) -> Input {
   {
-    dark_mode,
     source,
     focused,
     active_session,
@@ -637,8 +634,9 @@ fn transcript_sub_loader(
 /// observer only finds the scroller element once Rabbita has inserted it (the
 /// subscription starts before the first paint); content growth and geometry
 /// are then observed directly on that element, so unrelated page mutations
-/// cannot feed back into component updates. Conversation identity is never
-/// read back from the DOM: it is fixed for the component's lifetime.
+/// cannot feed back into component updates. Neither conversation identity nor
+/// the theme is read back from the DOM: the former is fixed for the
+/// component's lifetime and the latter arrives through `apply_theme`.
 priv struct TranscriptObservers {
   document : @dom.MutationObserver
   content : @dom.MutationObserver
@@ -654,6 +652,7 @@ priv struct TranscriptDomMount {
   mut element : @dom.Element?
   mut diagrams : @diagram_viewport.DiagramViewports?
   mut rendered_diagrams : Array[TranscriptDiagram]
+  mut dark_mode : Bool
   images : TranscriptImageObserver
   on_size_changed : () -> Unit
 }
@@ -663,13 +662,16 @@ fn TranscriptDomMount::TranscriptDomMount(
   on_size_changed : () -> Unit,
   on_image : (String) -> Unit,
 ) -> Self {
-  {
+  let mount = {
     element: None,
     diagrams: None,
     rendered_diagrams: [],
+    dark_mode: transcript_theme.dark_mode,
     images: TranscriptImageObserver::install(on_image),
     on_size_changed,
   }
+  mount.register_theme()
+  mount
 }
 
 ///|
@@ -734,7 +736,7 @@ fn TranscriptDomMount::observe_content(
       character_data=true,
       subtree=true,
       attribute_filter=[
-        "data-transcript-diagram", "data-transcript-diagram-source", "data-transcript-theme",
+        "data-transcript-diagram", "data-transcript-diagram-source",
       ],
     )
   }
@@ -752,6 +754,7 @@ fn TranscriptDomMount::observe_resize(
 
 ///|
 fn TranscriptDomMount::dispose(self : Self) -> Unit {
+  self.unregister_theme()
   self.replace(None)
 }
 
