@@ -52,6 +52,15 @@ override it with, for example, `just PYTHON="py -3" test-turn-finish`.
 When passing editor paths containing spaces, quote the whole assignment:
 `just --justfile editor/justfile "ROOT=C:/Users/me/My Project" dev`.
 
+The cram documentation tests (`just test-cram`, included in `just test`) use
+Bash. On Windows, `just test` selects Git for Windows' Bash at
+`%ProgramFiles%/Git/bin/bash.exe`, avoiding the WSL launcher on `PATH`.
+For a custom Git installation, set
+`just "CRAM_SHELL=D:/Git/bin/bash.exe" test`.
+
+Windows installer packaging (`just desktop-package`) also needs NSIS with
+`makensis.exe` on `PATH` (usually under `C:/Program Files (x86)/NSIS`).
+
 The editor browser suites additionally need Node.js 18 or newer, the locked npm
 dependencies, and a Playwright-managed Chromium installation:
 
