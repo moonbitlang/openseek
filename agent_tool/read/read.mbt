@@ -6,7 +6,8 @@
 ///
 /// ## Arguments
 /// - `path` (string): filesystem path to read. Required. Directories are not
-///   supported; use `ls` or `tree` first, then read specific files.
+///   supported; list them with `mbtx` (`@fs.readdir`/`@shell.glob`), then read
+///   specific files.
 /// - `start_line` (number, optional): 1-based first line to return. Defaults
 ///   to 1. Single-file calls only.
 /// - `max_lines` (number, optional): maximum number of lines to return.
@@ -41,10 +42,10 @@ pub fn definition(
     description=(
       #|Read arguments.path as text. For several known independent files, batch separate
       #|read tool calls in one assistant response when possible. Do not use read for
-      #|directories: inspect them with `ls` or `tree`, then read specific files. Supports
-      #|optional start_line, max_lines, and max_output_chars for focused single-file
-      #|reads. Output is right-aligned `<line-number> |<content>` numbered lines followed
-      #|by a `<system>` status footer.
+      #|directories: list them with `mbtx` (`@fs.readdir`/`@shell.glob`), then read
+      #|specific files. Supports optional start_line, max_lines, and max_output_chars for
+      #|focused single-file reads. Output is right-aligned `<line-number> |<content>`
+      #|numbered lines followed by a `<system>` status footer.
     ),
     schema=JsonSchema({
       "type": "object",
@@ -52,7 +53,7 @@ pub fn definition(
       "properties": {
         "path": {
           "type": "string",
-          "description": "Text file path to read. Directories are not supported; use `ls` or `tree` first, then read specific files.",
+          "description": "Text file path to read. Directories are not supported; list them with `mbtx` (`@fs.readdir`/`@shell.glob`), then read specific files.",
         },
         "start_line": { "type": "number" },
         "max_lines": { "type": "number" },
@@ -91,7 +92,7 @@ async fn read_file(
   }
   if is_directory {
     return @agent_tool.respond(
-      "error reading \{path}: path is a directory; use the shell tool with `ls` or `tree` to inspect directories, then read specific files.",
+      "error reading \{path}: path is a directory; list it with `mbtx` (`@fs.readdir`/`@shell.glob`), then read the specific file.",
       is_error=true,
       brief~,
     )
@@ -489,7 +490,8 @@ async test "read reports directories with an actionable hint" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(output.content.contains("path is a directory"))
-    assert_true(output.content.contains("`ls` or `tree`"))
+    assert_true(output.content.contains("`mbtx`"))
+    assert_true(output.content.contains("@fs.readdir"))
   })
 }
 

@@ -10,8 +10,7 @@ single-file `read` tool calls in one assistant response. The tool accepts one
 file per call so ranges, errors, and output budgets stay tied to a specific
 file.
 
-Do not use `read` for directories. Inspect directories with `ls` or `tree`, then
-read specific files.
+Do not use `read` for directories. List them with `mbtx` (`@fs.readdir`/`@shell.glob`), then read specific files.
 
 ## Design Rationale
 
@@ -101,7 +100,7 @@ test "read tool advertises the expected schema" {
     content=(
       #|{
       #|  name: "read",
-      #|  description: "Read arguments.path as text. For several known independent files, batch separate\nread tool calls in one assistant response when possible. Do not use read for\ndirectories: inspect them with `ls` or `tree`, then read specific files. Supports\noptional start_line, max_lines, and max_output_chars for focused single-file\nreads. Output is right-aligned `<line-number> |<content>` numbered lines followed\nby a `<system>` status footer.",
+      #|  description: "Read arguments.path as text. For several known independent files, batch separate\nread tool calls in one assistant response when possible. Do not use read for\ndirectories: list them with `mbtx` (`@fs.readdir`/`@shell.glob`), then read\nspecific files. Supports optional start_line, max_lines, and max_output_chars for\nfocused single-file reads. Output is right-aligned `<line-number> |<content>`\nnumbered lines followed by a `<system>` status footer.",
       #|  schema: JsonSchema(
       #|    Object(
       #|      {
@@ -112,7 +111,7 @@ test "read tool advertises the expected schema" {
       #|            "path": Object(
       #|              {
       #|                "type": String("string"),
-      #|                "description": String("Text file path to read. Directories are not supported; use `ls` or `tree` first, then read specific files."),
+      #|                "description": String("Text file path to read. Directories are not supported; list them with `mbtx` (`@fs.readdir`/`@shell.glob`), then read specific files."),
       #|              },
       #|            ),
       #|            "start_line": Object({ "type": String("number") }),
