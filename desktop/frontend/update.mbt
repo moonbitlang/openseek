@@ -1976,11 +1976,9 @@ fn close_dock_tabs(
       ..next,
       right_panel_open: true,
       right_panel_menu_open: false,
-      right_panel_expanded: if selection is All {
-        false
-      } else {
-        next.right_panel_expanded
-      },
+      // Closing the final tab resets the panel in the ordinary close path.
+      // Bulk close keeps the launcher open, so retain the user's chosen size.
+      right_panel_expanded: model.right_panel_expanded,
     },
   )
 }
@@ -18857,7 +18855,7 @@ test "launcher rows open Browser and all Explorer destinations" {
 }
 
 ///|
-test "CloseDockTabs All tears down mixed tabs and keeps the empty launcher open" {
+test "CloseDockTabs All keeps the empty launcher at the chosen panel size" {
   let dispatch = test_dispatch()
   let (_, browser) = update(dispatch, BrowserTabRequested, {
     ..desktop_model(),
@@ -18878,7 +18876,13 @@ test "CloseDockTabs All tears down mixed tabs and keeps the empty launcher open"
   assert_true(@preview.page(closed.preview, 1) is None)
   assert_true(closed.right_panel_open)
   assert_false(closed.right_panel_menu_open)
-  assert_false(closed.right_panel_expanded)
+  assert_true(closed.right_panel_expanded)
+  let (_, normal) = update(dispatch, CloseDockTabs(All), {
+    ..mixed,
+    right_panel_expanded: false,
+  })
+  assert_true(normal.right_panel_open)
+  assert_false(normal.right_panel_expanded)
 }
 
 ///|
