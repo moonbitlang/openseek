@@ -1852,6 +1852,17 @@ fn description(
       #|A snippet may start at most 32 children. Without the flag no child sessions are
       #|reserved and the engine is not on the spawn allowlist: a workflow written
       #|without it runs with no handoff and its subagents are refused.
+      #|
+      #|For an independent worktree review, use `wf.agent_call`, NOT `wf.agent`
+      #|(which sends a scout's `query` field). Pass your actual audit criteria explicitly:
+      #|`wf.agent_call(kind="review", input={"goal": "Check the CSV parser's CRLF and escaped-quote handling"}, label="CSV review", max_steps=100)`.
+      #|The reviewer reads the current worktree and returns a full structured report
+      #|with `findings`, `summary`, and `stats`; print the report with `.stringify()`
+      #|and address its findings. A missing report raises an error, not a clean verdict.
+      #|No standing goal or baseline is filled in automatically. Optionally include
+      #|`sha` and `dirty` in input only when you know the baseline commit and whether
+      #|the worktree was already dirty when it was recorded. Hosted children default
+      #|to a 10-minute deadline; `--review-deadline` controls only the automatic gate.
     )
   } else {
     ""

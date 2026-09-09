@@ -298,31 +298,14 @@ async fn run_task_turn(
     )
     let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
     let scope = @agent_runtime.AgentTaskScope(group)
-    // One-shot = one turn, so a fresh per-turn subrun budget needs no reset.
-    let subrun_budget = @agent_subrun.SubrunBudget()
     let exe = self_executable()
-    // Mirror the latest appended session so the review tool audits against
-    // the LIVE standing goal, not the turn-start snapshot.
-    let latest_session : Ref[@agent_session.Session] = { val: session, }
-    let review_context = () => {
-      let goal = latest_session.val.current_goal()
-      (
-        goal.map(goal => goal.text()),
-        latest_session.val.current_goal_baseline(),
-      )
-    }
     let extra_tools = build_extra_tools(
       matches,
       scope,
-      self_exe=exe,
       model~,
       api_key~,
       workspace_root~,
-      budget=subrun_budget,
-      review_context~,
-      review_deadline_ms~,
       api_url?,
-      child_session?,
     )
     // A snippet's workflow delegates to children named from the SAME ordinal
     // counter `run_subrun` uses, so a snippet's child and a `review` child
@@ -353,11 +336,7 @@ async fn run_task_turn(
         model~,
         session~,
         task~,
-        append_item=(current, item) => {
-          let next = append_item(current, item)
-          latest_session.val = next
-          next
-        },
+        append_item~,
         max_steps?,
         thinking~,
         api_url?,
@@ -881,12 +860,12 @@ fn retry_overrides(matches : @argparse.Matches) -> (Int?, Int?) raise {
 ///
 /// `--retry-attempts 2` and `OPENSEEK_RETRY_ATTEMPTS=2` must mean the same
 /// thing to a subagent, and before this a child got only the second: nothing
-/// injects these on the child command line, and four separate spawn sites
-/// would each have to — the review gate, the model-callable review tool, and
+/// injects these on the child command line, and separate spawn sites
+/// would each have to — the review gate and
 /// the workflow scout and worker runners, the last two reachable only through
 /// the `SubrunInjection` handoff an `mbtx` snippet receives. Children do
 /// inherit the environment (`@process.spawn(inherit_env=true)`), so writing
-/// the flag back closes all four at once. It is also the shape `--api-key`
+/// the flag back covers them all at once. It is also the shape `--api-key`
 /// already has: argv carries what a child cannot otherwise know, and the
 /// environment carries the rest.
 ///
