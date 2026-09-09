@@ -275,8 +275,7 @@ pub async fn Client::chat(
     thinking=self.thinking,
     stream=is_streaming,
     response_format?,
-    messages,
-  )
+  ) <| messages
   try {
     match stream {
       None => self.with_retries(() => self.chat_attempt(body), _ => false)
