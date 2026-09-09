@@ -59,7 +59,7 @@ pub fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply
 
 pub async fn unarchive_session(EngineManager, String, (String, String) -> Unit) -> @protocol.SessionsReply
 
-pub async fn update_settings(EngineManager, SettingsPatch, followup_behavior? : String, legacy_migration? : Bool, on_committed? : (@protocol.SettingsStatusPayload) -> Unit) -> @protocol.SettingsStatusPayload
+pub async fn update_settings(EngineManager, SettingsPatch, followup_behavior? : String, on_committed? : (@protocol.SettingsStatusPayload) -> Unit) -> @protocol.SettingsStatusPayload
 
 // Errors
 pub(all) suberror EngineError {

@@ -207,7 +207,6 @@ pub(all) struct ArchivedSessionPayload {
 
 ///|
 pub(all) struct SettingsSetPayload {
-  legacy_migration : Bool?
   provider : String?
   custom_api_url : String?
   deepseek_api_key : String?
@@ -220,7 +219,6 @@ pub(all) struct SettingsSetPayload {
 pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "settings patch payload")
   {
-    legacy_migration: object.optional_bool("legacy_migration"),
     provider: object.optional_string("provider"),
     custom_api_url: object.optional_string("custom_api_url"),
     deepseek_api_key: object.optional_string("deepseek_api_key"),
@@ -233,9 +231,6 @@ pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for SettingsSetPayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  if self.legacy_migration is Some(value) {
-    fields["legacy_migration"] = value.to_json()
-  }
   if self.provider is Some(value) {
     fields["provider"] = value.to_json()
   }

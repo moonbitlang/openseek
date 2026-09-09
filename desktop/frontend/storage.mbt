@@ -5,18 +5,11 @@
 // The engine endpoint settings (provider, URLs, API keys) are NOT here: they
 // live on the host (`settings.get`/`set`), because relay pages
 // for different devices share one browser origin — a secret in
-// localStorage would leak across hosts. The legacy readers below exist
-// only for the one-time migration (desktop) and purge (browser).
+// localStorage would leak across hosts.
 
 ///|
 fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    // The update channel stopped being its own setting (it derives from the
-    // server selection now), and each workspace's launch-mode default lives
-    // in its own `.openseek/settings.json`; drop both obsolete keys
-    // wherever they linger.
-    remove_setting(UpdateChannelStorageKey)
-    remove_setting(WorkspaceDefaultModeStorageKey)
     scheduler.add(
       dispatch(
         SettingsLoaded(
@@ -161,46 +154,6 @@ fn AppFontSize::save(self : AppFontSize) -> @cmd.Cmd {
 }
 
 ///|
-/// Read the legacy client-stored engine settings, dispatched only when any
-/// value is actually stored — a page that never held them (or already
-/// migrated) dispatches nothing.
-fn read_legacy_engine_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
-  @cmd.custom_cmd(scheduler => {
-    let provider = load_setting(LegacyApiProviderStorageKey)
-    let custom_url = load_setting(LegacyCustomApiUrlStorageKey)
-    let api_key = load_setting(LegacyApiKeyStorageKey)
-    let custom_api_key = load_setting(LegacyCustomApiKeyStorageKey)
-    if [provider, custom_url, api_key, custom_api_key]
-      .iter()
-      .any(value => !value.is_blank()) {
-      scheduler.add(
-        dispatch(
-          LegacySettingsRead(provider~, custom_url~, api_key~, custom_api_key~),
-        ),
-      )
-    }
-  })
-}
-
-///|
-/// Delete the legacy client-stored engine settings — after the desktop
-/// migrated them up, or on any browser page (where the stored key is the
-/// cross-device leak this design removes).
-fn clear_legacy_engine_settings() -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => {
-    for
-      key in [
-        LegacyApiProviderStorageKey,
-        LegacyCustomApiUrlStorageKey,
-        LegacyApiKeyStorageKey,
-        LegacyCustomApiKeyStorageKey,
-      ] {
-      remove_setting(key)
-    }
-  })
-}
-
-///|
 fn load_setting(storage_key : String) -> String {
   @js.Error_::wrap(
     fn() {
@@ -226,23 +179,6 @@ fn save_setting(storage_key : String, value : String) -> Unit {
       storage.apply_with_string("setItem", [
         @js.Value::cast_from(storage_key),
         @js.Value::cast_from(value),
-      ])
-    },
-    map_ok=_ => (),
-  ) catch {
-    _ => ()
-  }
-}
-
-///|
-fn remove_setting(storage_key : String) -> Unit {
-  @js.Error_::wrap(
-    fn() {
-      guard @interop.js_prop(@js.globalThis, "localStorage") is Some(storage) else {
-        return @js.Value::cast_from(())
-      }
-      storage.apply_with_string("removeItem", [
-        @js.Value::cast_from(storage_key),
       ])
     },
     map_ok=_ => (),

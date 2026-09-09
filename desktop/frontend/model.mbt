@@ -207,22 +207,6 @@ const TranscriptRefreshFailedNotice : String = "Transcript refresh failed repeat
 const SteerDroppedNotice : String = "Input was not delivered (the task ended as you sent it) — it is back in the composer."
 
 ///|
-/// Legacy localStorage keys from when the page stored the engine endpoint
-/// settings itself. Those now live on the host (`settings.get`/`set`); the
-/// keys remain only so the desktop window can migrate stored values up once
-/// and every page can purge the leftover secrets.
-const LegacyApiKeyStorageKey : String = "openseek.deepseek_api_key"
-
-///|
-const LegacyCustomApiKeyStorageKey : String = "openseek.custom_api_key"
-
-///|
-const LegacyApiProviderStorageKey : String = "openseek.api_provider"
-
-///|
-const LegacyCustomApiUrlStorageKey : String = "openseek.custom_api_url"
-
-///|
 const NotificationCornerStorageKey : String = "openseek.notification_corner"
 
 ///|
@@ -293,17 +277,6 @@ const ConversationModelsStorageKey : String = "openseek.conversation_models"
 /// the least recently chosen conversation forgets and opens on the default,
 /// exactly like one the user never chose a tier for.
 const ConversationModelsLimit : Int = 200
-
-///|
-/// Obsolete: each workspace's launch-mode default lives in its own
-/// `.openseek/settings.json` now. The key is kept only so startup can
-/// delete whatever old builds stored.
-const WorkspaceDefaultModeStorageKey : String = "openseek.workspace_default_mode"
-
-///|
-/// Obsolete: the update channel is gone — there is one release stream. The
-/// key is kept only so startup can delete whatever old builds stored.
-const UpdateChannelStorageKey : String = "openseek.update_channel"
 
 ///|
 /// The app's appearance choice. System preference is tracked separately on
@@ -1436,9 +1409,6 @@ priv struct Model {
   // bridge generation has not accepted an authoritative status yet.
   host_settings_revision : Int
   deferred_host_settings : HostSettings?
-  // A legacy localStorage migration's push is in flight; its success is
-  // what deletes the migrated secrets from localStorage.
-  legacy_cleanup_pending : Bool
   // Whether the API-setup modal is up. Every settled settings snapshot
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
@@ -1738,16 +1708,6 @@ priv enum Msg {
     codex_effort~ : String,
     openseek_effort~ : String,
     glm_effort~ : String
-  )
-  // The legacy localStorage engine settings, read at bridge time. The
-  // desktop window migrates them up to the host once; a browser page only
-  // purges them (a stale secret in shared storage is the leak this design
-  // removes).
-  LegacySettingsRead(
-    provider~ : String,
-    custom_url~ : String,
-    api_key~ : String,
-    custom_api_key~ : String
   )
   // Deliberate actions emitted by the component-local input composer. Raw
   // keystrokes never enter this root message loop.
@@ -2145,17 +2105,9 @@ priv enum DeviceMsg {
   // is in flight — see `Model::settings_saves`.
   HostSettingsLoaded(HostSettings, connection_generation~ : Int?)
   // A `settings.set` this client sent came back with the post-write state.
-  HostSettingsApplied(
-    HostSettings,
-    connection_generation~ : Int,
-    cleans_legacy~ : Bool
-  )
+  HostSettingsApplied(HostSettings, connection_generation~ : Int)
   // A `settings.set` this client sent failed; the message pops as a toast.
-  HostSettingsSaveFailed(
-    String,
-    connection_generation~ : Int,
-    cleans_legacy~ : Bool
-  )
+  HostSettingsSaveFailed(String, connection_generation~ : Int)
   // A `skills.installed` reply is channel-scoped just like the invalidation
   // that prompted it. Only the currently focused host may replace the
   // page's library mirror.
@@ -2629,7 +2581,6 @@ fn initial_model() -> Model {
     settings_saves: 0,
     host_settings_revision: -1,
     deferred_host_settings: None,
-    legacy_cleanup_pending: false,
     is_desktop,
     window_focused: !is_desktop || @interop.page_has_focus(),
     app_version: "development",
@@ -2822,7 +2773,6 @@ fn Model::clear_host_settings(self : Model) -> Model {
     settings_saves: 0,
     host_settings_revision: -1,
     deferred_host_settings: None,
-    legacy_cleanup_pending: false,
   }
 }
 
@@ -2901,7 +2851,7 @@ fn Model::defer_host_settings(self : Model, settings : HostSettings) -> Model {
 /// the form. A lower revision is discarded; equal is deliberately accepted
 /// so a failed optimistic edit can be restored by an authoritative `get`.
 /// The settled mirror then decides the setup modal like any other snapshot —
-/// a deferred first snapshot (the legacy migration races it here) must be
+/// a deferred first snapshot (an optimistic write races it here) must be
 /// able to open the modal, not just retire it.
 fn Model::flush_host_settings(self : Model) -> Model {
   let next = match self.deferred_host_settings {

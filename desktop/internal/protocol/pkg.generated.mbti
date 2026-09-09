@@ -2146,7 +2146,6 @@ pub fn SessionsReply::to_json(Self) -> Json
 pub fn SessionsReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SettingsSetPayload {
-  legacy_migration : Bool?
   provider : String?
   custom_api_url : String?
   deepseek_api_key : String?

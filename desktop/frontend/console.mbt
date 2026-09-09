@@ -522,7 +522,6 @@ test "a revoked page device is retired without connecting a survivor" {
       has_custom_key: false,
       followup_behavior: "steer",
     }),
-    legacy_cleanup_pending: true,
     installed_skills: [
       {
         id: "old-host",
@@ -552,7 +551,6 @@ test "a revoked page device is retired without connecting a survivor" {
   inspect(refreshed.settings_saves, content="0")
   inspect(refreshed.host_settings_revision, content="-1")
   assert_true(refreshed.deferred_host_settings is None)
-  assert_false(refreshed.legacy_cleanup_pending)
   inspect(
     refreshed.conversations
     .iter()

@@ -1977,11 +1977,6 @@ fn update_msg(
             @cmd.batch([
               fetch_console_me(dispatch),
               load_saved_settings(dispatch),
-              // Browser localStorage is relay-origin state, not device
-              // state. Purge old client-held engine credentials even while
-              // signed out or when no device is online to reach
-              // `BridgeReady`.
-              clear_legacy_engine_settings(),
               watch_color_scheme(dispatch),
               request_sidebar_resize_mount(),
               measure_scrollbar_lane(),
@@ -2098,42 +2093,6 @@ fn update_msg(
     // edit broadcast. Revisions order concurrent clients and RPC replies;
     // while this page has optimistic writes, keep only the newest status and
     // apply it once the last write settles.
-    LegacySettingsRead(provider~, custom_url~, api_key~, custom_api_key~) =>
-      // Only the desktop window migrates: it is the one client whose stored
-      // values are unambiguously this host's. A browser page's copy may
-      // belong to a different device behind the same origin — pushing it is
-      // exactly the leak the host-side store removes — so it is purged.
-      if model.is_desktop {
-        let patch = legacy_settings_patch(
-          provider~,
-          custom_url~,
-          api_key~,
-          custom_api_key~,
-        )
-        // Mirror the pushed values optimistically so the Settings page and
-        // the ready gate reflect the migration immediately.
-        let next = {
-          ..model,
-          api_provider: ApiProvider::parse(provider),
-          custom_api_url: custom_url.trim().to_owned(),
-          deepseek_key_saved: model.deepseek_key_saved || !api_key.is_blank(),
-          custom_key_saved: model.custom_key_saved || !custom_api_key.is_blank(),
-          settings_saves: model.settings_saves + 1,
-          legacy_cleanup_pending: true,
-        }
-        (
-          push_host_settings(
-            dispatch,
-            model.focused,
-            patch,
-            model.focused_connection_generation(),
-            cleans_legacy=true,
-          ),
-          next,
-        )
-      } else {
-        (clear_legacy_engine_settings(), model)
-      }
     CodexComposerAction(action) =>
       match action {
         @composer.ModelMenuToggled(identity~) => {
@@ -5622,9 +5581,6 @@ fn update_device_msg(
         commands.push(
           fetch_host_settings(dispatch, channel, connection_generation),
         )
-        // Legacy client-stored engine settings: the desktop migrates them
-        // up to the host, a browser purges them (see `LegacySettingsRead`).
-        commands.push(read_legacy_engine_settings(dispatch))
         commands.push(fetch_installed_skills(dispatch, channel))
         // Codex conversations are always visible in the global sidebar, so
         // populate that focused-host catalog on bridge readiness rather than
@@ -5812,7 +5768,7 @@ fn update_device_msg(
         (@cmd.none, model.apply_host_settings(settings).settle_api_setup())
       }
     }
-    HostSettingsApplied(settings, connection_generation~, cleans_legacy~) => {
+    HostSettingsApplied(settings, connection_generation~) => {
       guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
       }
@@ -5828,20 +5784,8 @@ fn update_device_msg(
           0
         },
       }.defer_host_settings(settings)
-      // The migration's secrets leave localStorage only once the host
-      // confirmed it holds them.
-      let cleanup = if cleans_legacy && next.legacy_cleanup_pending {
-        clear_legacy_engine_settings()
-      } else {
-        @cmd.none
-      }
-      let next = if cleans_legacy {
-        { ..next, legacy_cleanup_pending: false, }
-      } else {
-        next
-      }
       (
-        cleanup,
+        @cmd.none,
         if next.settings_saves > 0 {
           next
         } else {
@@ -5849,7 +5793,7 @@ fn update_device_msg(
         },
       )
     }
-    HostSettingsSaveFailed(message, connection_generation~, cleans_legacy~) => {
+    HostSettingsSaveFailed(message, connection_generation~) => {
       guard connection_generation == dev.connection_generation else {
         return (@cmd.none, model)
       }
@@ -5860,13 +5804,6 @@ fn update_device_msg(
           model.settings_saves - 1
         } else {
           0
-        },
-        // The push never landed; the legacy values stay in localStorage for
-        // the next launch's retry.
-        legacy_cleanup_pending: if cleans_legacy {
-          false
-        } else {
-          model.legacy_cleanup_pending
         },
       }
       let next = if next.settings_saves == 0 {
@@ -14053,7 +13990,6 @@ test "host settings are deferred while this client's writes are in flight" {
     HostSettingsApplied(
       host_settings(provider="deepseek", revision=2, has_deepseek_key=true),
       connection_generation=0,
-      cleans_legacy=false,
     ),
     model,
   )
@@ -14068,7 +14004,6 @@ test "host settings are deferred while this client's writes are in flight" {
     HostSettingsApplied(
       host_settings(provider="deepseek", revision=1),
       connection_generation=0,
-      cleans_legacy=false,
     ),
     stacked,
   )
@@ -14100,102 +14035,12 @@ test "a newer peer broadcast beats a delayed local settings reply" {
     HostSettingsApplied(
       host_settings(provider="openseek", revision=6),
       connection_generation=0,
-      cleans_legacy=false,
     ),
     broadcast,
   )
   assert_true(settled.api_provider is Deepseek)
   inspect(settled.host_settings_revision, content="7")
   inspect(settled.settings_saves, content="0")
-}
-
-///|
-test "legacy client settings migrate up only from the desktop window" {
-  let dispatch = test_dispatch()
-  let legacy = LegacySettingsRead(
-    provider="deepseek",
-    custom_url="",
-    api_key="sk-legacy",
-    custom_api_key="",
-  )
-  let (_, desktop) = update(dispatch, legacy, {
-    ..test_model(),
-    is_desktop: true,
-  })
-  assert_true(desktop.api_provider is Deepseek)
-  assert_true(desktop.deepseek_key_saved)
-  inspect(desktop.settings_saves, content="1")
-  assert_true(desktop.legacy_cleanup_pending)
-  // A browser page only purges — its copy may belong to another device.
-  // The keyless mirror is explicit: the fixture's saved key belongs to the
-  // desktop window's migration above, not to this page.
-  let (_, browser) = update(dispatch, legacy, {
-    ..test_model(),
-    is_desktop: false,
-    deepseek_key_saved: false,
-  })
-  assert_false(browser.deepseek_key_saved)
-  inspect(browser.settings_saves, content="0")
-  assert_false(browser.legacy_cleanup_pending)
-}
-
-///|
-test "only the migration settings response owns legacy cleanup" {
-  let dispatch = test_dispatch()
-  let pending = {
-    ..test_model(),
-    settings_saves: 2,
-    legacy_cleanup_pending: true,
-  }
-  // An unrelated save may finish first; it must not consume the migration's
-  // right to clear localStorage when that exact write is acknowledged.
-  let (_, unrelated) = update_dev(
-    dispatch,
-    HostSettingsApplied(
-      host_settings(provider="custom", revision=1),
-      connection_generation=0,
-      cleans_legacy=false,
-    ),
-    pending,
-  )
-  inspect(unrelated.settings_saves, content="1")
-  assert_true(unrelated.legacy_cleanup_pending)
-  let (_, migrated) = update_dev(
-    dispatch,
-    HostSettingsApplied(
-      host_settings(provider="deepseek", revision=2, has_deepseek_key=true),
-      connection_generation=0,
-      cleans_legacy=true,
-    ),
-    unrelated,
-  )
-  inspect(migrated.settings_saves, content="0")
-  assert_false(migrated.legacy_cleanup_pending)
-  assert_true(migrated.api_provider is Deepseek)
-  assert_true(migrated.deepseek_key_saved)
-}
-
-///|
-test "a failed migration keeps legacy storage for a later launch" {
-  let dispatch = test_dispatch()
-  let pending = {
-    ..test_model(),
-    settings_saves: 1,
-    legacy_cleanup_pending: true,
-  }
-  let (_, failed) = update_dev(
-    dispatch,
-    HostSettingsSaveFailed(
-      "host write failed",
-      connection_generation=0,
-      cleans_legacy=true,
-    ),
-    pending,
-  )
-  inspect(failed.settings_saves, content="0")
-  // False means this launch must not clear localStorage; LegacySettingsRead
-  // on the next launch will discover and retry the still-present values.
-  assert_false(failed.legacy_cleanup_pending)
 }
 
 ///|
@@ -14219,7 +14064,6 @@ test "background settings replies cannot alter the focused host mirror" {
       HostSettingsApplied(
         host_settings(provider="deepseek", revision=7),
         connection_generation=0,
-        cleans_legacy=false,
       ),
     ),
     focused,
@@ -14230,11 +14074,7 @@ test "background settings replies cannot alter the focused host mirror" {
     dispatch,
     FromDevice(
       Local,
-      HostSettingsSaveFailed(
-        "old host failed",
-        connection_generation=0,
-        cleans_legacy=false,
-      ),
+      HostSettingsSaveFailed("old host failed", connection_generation=0),
     ),
     applied,
   )
