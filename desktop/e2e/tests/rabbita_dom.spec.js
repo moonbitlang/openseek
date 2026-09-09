@@ -901,6 +901,7 @@ test('transcript Markdown keeps links safe and loads local raster bytes through 
             '[External docs](https://example.test/docs)',
             '[Source](src/main.mbt:12)',
             '[Local URI](file:///Users/me/My%20Project/main.mbt#L7)',
+            '[Bundled guide](/Users/me/Library/Application%20Support/SeekMoon/gmachine-3.md)',
             '[Unsafe](javascript:alert(1))',
             '![Fixture image](diagram.png)',
           ].join('\n\n'),
@@ -1004,6 +1005,13 @@ test('transcript Markdown keeps links safe and loads local raster bytes through 
   await expect.poll(() => app.requests.find(request =>
     request.method === 'host.open_path' &&
     request.params?.path === '/Users/me/My Project/main.mbt#L7'))
+    .toBeTruthy();
+  const guidePath = '/Users/me/Library/Application Support/SeekMoon/gmachine-3.md';
+  const guide = markdown.getByRole('button', { name: 'Bundled guide', exact: true });
+  await expect(guide).toHaveAttribute('data-context-file', guidePath);
+  await guide.click();
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'host.open_path' && request.params?.path === guidePath))
     .toBeTruthy();
   expect(app.pageErrors).toEqual([]);
 });

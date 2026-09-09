@@ -3,6 +3,49 @@
 // on the pure text helpers.
 
 ///|
+test "markdown file actions decode URI destinations exactly once" {
+  let paths : Array[String] = []
+  let open = path => {
+    paths.push(path)
+    @cmd.none
+  }
+  let root = "/Users/me/Library/Application"
+  ignore(
+    markdown_nodes(
+      "[guide](\{root}%20Support/SeekMoon/gmachine-3.md)",
+      open_file=open,
+    ),
+  )
+  ignore(
+    markdown_nodes(
+      "[guide][doc]\n\n[doc]: ./docs/%E4%B8%AD%E6%96%87%20guide.md#L12",
+      open_file=open,
+    ),
+  )
+  ignore(
+    markdown_nodes(
+      "[percent](./docs/100%25.md) [literal](./docs/a%2520b.md:12:3) [plus](./docs/a+b.md) [malformed](./docs/100%zz.md)",
+      open_file=open,
+    ),
+  )
+  ignore(
+    markdown_nodes(
+      "[file](file:///tmp/Application%20Support/guide.md) `./docs/a%20b.md:12`",
+      open_file=open,
+    ),
+  )
+  assert_eq(paths, [
+    "\{root} Support/SeekMoon/gmachine-3.md",
+    "./docs/中文 guide.md#L12",
+    "./docs/100%.md",
+    "./docs/a%20b.md:12:3",
+    "./docs/a+b.md",
+    "./docs/100%zz.md",
+    "/tmp/Application Support/guide.md",
+  ])
+}
+
+///|
 test "markdown renders block structure" {
   inspect(markdown_nodes("").length(), content="0")
   inspect(markdown_nodes("just a paragraph").length(), content="1")

@@ -569,11 +569,18 @@ fn MarkdownRender::file_destination(
     return Some(path)
   }
   if !@cmark.InlineLink::is_unsafe(destination) && is_local_path(destination) {
-    Some(destination)
+    Some(decode_local_link_path(destination))
   } else {
     None
   }
 }
+
+///|
+/// Markdown destinations are URI references. Decode exactly once at this
+/// boundary; prose/code paths and host filesystem paths remain literal.
+/// Malformed escapes retain their original spelling, as in URI parsing.
+extern "js" fn decode_local_link_path(destination : String) -> String =
+  #| value => { try { return decodeURIComponent(value) } catch { return value } }
 
 ///|
 /// A local raster image destination. Explicit `file://` URIs use the same
