@@ -72,9 +72,8 @@
   display: block;
 }
 
-.moonbit-viewer-markdown-comment-preview {
-  color: var(--vscode-descriptionForeground, var(--vscode-editor-foreground));
-}
+/* Folding changes content and geometry, not prose contrast. Inherit the same
+ * foreground as full and single-line documentation on the shared surface. */
 
 .moonbit-viewer-markdown-comment-preview > :not(hr) {
   overflow: hidden;

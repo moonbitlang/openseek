@@ -265,6 +265,52 @@ test('renders MoonBit documentation comments through the real workbench', async 
   );
 });
 
+test('keeps documentation colors consistent across folding states', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await openWorkspaceFile(page, 'src/documentation.mbt');
+  const comments = page.locator('.moonbit-viewer-markdown-comment');
+  await expect(comments).toHaveCount(3);
+  const multiline = comments.nth(0);
+  const single = comments.nth(1);
+  const separator = comments.nth(2);
+  const preview = multiline.locator('.moonbit-viewer-markdown-comment-preview > p');
+  const full = multiline.locator('.moonbit-viewer-markdown-comment-full > p').first();
+  const singleText = single.locator('.moonbit-viewer-markdown-comment-full > p');
+  await expect(preview).toBeVisible();
+  await expect(singleText).toBeVisible();
+  for (const theme of ['dark', 'light']) {
+    if (theme === 'light') {
+      await page.getByRole('button', { name: 'Toggle color theme' }).click();
+    }
+    await expect(page.locator('.editor-shell')).toHaveAttribute('data-theme', theme);
+    const background = await single.evaluate(
+      (node) => getComputedStyle(node).backgroundColor,
+    );
+    const foreground = await singleText.evaluate(
+      (node) => getComputedStyle(node).color,
+    );
+    const screenshot = testInfo.outputPath(`documentation-${theme}.png`);
+    await page.screenshot({ path: screenshot });
+    await testInfo.attach(`documentation-${theme}`, {
+      path: screenshot,
+      contentType: 'image/png',
+    });
+    await expect(multiline).toHaveCSS('background-color', background);
+    await expect(preview).toHaveCSS('color', foreground);
+    await multiline.getByRole('button', { name: 'Expand API documentation' }).click();
+    await expect(full).toBeVisible();
+    await expect(full).toHaveCSS('color', foreground);
+    await expect(multiline).toHaveCSS('background-color', background);
+    await multiline.getByRole('button', { name: 'Collapse API documentation' }).click();
+    await expect(preview).toHaveCSS('color', foreground);
+    await expect(multiline).toHaveCSS('background-color', background);
+    const editorBackground = await page.locator('.overflow-guard').evaluate(
+      (node) => getComputedStyle(node).backgroundColor,
+    );
+    await expect(separator).toHaveCSS('background-color', editorBackground);
+  }
+});
+
 test('renders undocumented MoonBit item anchors as quiet spacing', async ({
   page,
 }) => {
