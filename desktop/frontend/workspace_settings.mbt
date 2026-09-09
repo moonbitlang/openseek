@@ -9,7 +9,7 @@
 ///|
 /// Used only before an authoritative row exists or while an optimistic edit
 /// preserves a neighboring field. The host remains the persisted source.
-const DefaultWorkspaceSubmoduleCheckoutTimeoutSeconds : Int = 10
+const DefaultWorkspaceSubmoduleCheckoutTimeoutSeconds : Int = 30
 
 ///|
 /// One project's settings mirror, keyed like `ProjectWorktrees` and fenced
