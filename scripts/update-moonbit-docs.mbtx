@@ -6,13 +6,33 @@ import {
 }
 
 async fn main {
-  guard @env.args() is [_, commit] && commit.length() == 40 &&
-    commit.iter().all(c => c is ('0'..='9' | 'a'..='f')) else {
-    fail("Usage (from repository root): moon run scripts/update-moonbit-docs.mbtx <40-character markdown-build commit>")
-  }
   guard @fs.exists("desktop/package/build.mjs") && @fs.exists("share/workflow") else {
     fail("Run this command from the OpenSeek repository root")
   }
+  let requested = match @env.args() {
+    [_] => "latest"
+    [_, revision] => revision
+    _ => fail("Usage: just update-docs [latest|40-character markdown-build commit]")
+  }
+  let commit = if requested == "latest" {
+    let result = @shell.Cmd("git", [
+      "ls-remote", "--exit-code", "--heads",
+      "https://github.com/moonbitlang/moonbit-docs.git", "refs/heads/markdown-build",
+    ]).output()
+    result.check()
+    let fields = result.stdout().trim().split("\t").map(s => s.to_owned()).collect()
+    guard fields is [sha, "refs/heads/markdown-build"] else {
+      fail("Could not resolve the upstream markdown-build commit")
+    }
+    sha
+  } else {
+    requested
+  }
+  guard commit.length() == 40 &&
+    commit.iter().all(c => c is ('0'..='9' | 'a'..='f')) else {
+    fail("Expected latest or a full 40-character markdown-build commit")
+  }
+  println("Using moonbit-docs markdown build \{commit}")
   let temp = @fs.tmpdir(prefix="openseek-docs-")
   defer @fs.rmdir(temp, recursive=true)
   let archive = "\{temp}/docs.tar.gz"

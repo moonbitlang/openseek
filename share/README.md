@@ -10,13 +10,17 @@ This directory is checked in and copied into the packaged toolchain's `share/`.
 The documentation comes from https://github.com/moonbitlang/moonbit-docs.
 Its original README records the source commit that produced the markdown build.
 Keep edits upstream; refresh this snapshot periodically or when updating the
-bundled toolchain, using a full commit from the upstream markdown-build branch:
+bundled toolchain:
 
 ```sh
+just update-docs
+# Or select a specific upstream markdown-build commit:
 just update-docs <40-character-commit>
 ```
 
-Run from the repository root with `curl` and `tar` installed. The command downloads
+The default resolves the latest `markdown-build` branch to a full commit SHA
+before downloading; `doc/moonbit.commit` always records the exact snapshot.
+Run from the repository root with `git`, `curl`, and `tar` installed. The command downloads
 and validates the new snapshot before replacing `doc/moonbit/`. It preserves the
 upstream files except browser presentation assets and upstream ignore rules.
 The updater also regenerates the static system prompt's directory layout.
