@@ -39,7 +39,7 @@ pub fn[T] capture_tool(
   captured : Ref[T?],
   finished_note? : (T) -> String = _value => "submitted",
 ) -> @agent_tool.AgentToolDefinition {
-  @agent_tool.AgentToolDefinition(
+  AgentToolDefinition(
     name~,
     description~,
     schema~,

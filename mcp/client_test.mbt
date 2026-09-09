@@ -126,7 +126,7 @@ fn[X] fake_client(
   let rpc = @jsonrpc.Client(transport)
   spawn_client(group, rpc)
   spawn_server(group, transport, reply)
-  @mcp.McpClient(rpc)
+  McpClient(rpc)
 }
 
 ///|

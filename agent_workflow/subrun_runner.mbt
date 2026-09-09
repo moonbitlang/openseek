@@ -35,7 +35,7 @@ pub fn subrun_runner(
   extra_env? : Map[String, String],
   map_launch? : (@spawn.LaunchSpec, @workflow.AgentCall) -> @spawn.LaunchSpec,
 ) -> @workflow.Runner {
-  @workflow.Runner(call => {
+  Runner(call => {
     let canonical : @spawn.LaunchSpec = {
       command: exe,
       args: subrun_args(call, model, api_url),

@@ -254,7 +254,7 @@ async test "session_catalog serves a direct store named like the root marker" {
 async test "session_catalog serves a non-marker direct store without duplicates" {
   @vfs.with_tmpdir(prefix="openseek-viz-non-marker-store-", root => {
     let store = @store.SessionStore("\{root}/store")
-    store.create(@agent_session.Session(SessionId("only"), system_prompt=""))
+    store.create(Session(SessionId("only"), system_prompt=""))
     let catalog = session_catalog("\{root}/store", [], ".openseek")
     let rows = catalog.rows()
     guard rows is [row] else { fail("expected one direct-store row") }
@@ -267,9 +267,7 @@ async test "session_catalog serves a non-marker direct store without duplicates"
 async test "session listing uses jsonl files and ignores junk entries" {
   @vfs.with_tmpdir(prefix="openseek-viz-flat-jsonl-", root => {
     let source_store = @store.SessionStore("\{root}/source/.openseek")
-    source_store.create(
-      @agent_session.Session(SessionId("flat-a"), system_prompt=""),
-    )
+    source_store.create(Session(SessionId("flat-a"), system_prompt=""))
     source_store.create(
       @agent_session.Session(SessionId("flat-b"), system_prompt="").append(
         User(UserMessage("copied prompt")),
@@ -317,9 +315,7 @@ async test "session listing uses jsonl files and ignores junk entries" {
 async test "session_catalog serves a direct directory of copied jsonl files" {
   @vfs.with_tmpdir(prefix="openseek-viz-jsonl-dir-", root => {
     let source_store = @store.SessionStore("\{root}/source/.openseek")
-    source_store.create(
-      @agent_session.Session(SessionId("copied"), system_prompt=""),
-    )
+    source_store.create(Session(SessionId("copied"), system_prompt=""))
     let copied_dir = "\{root}/copied"
     @fs.mkdir(copied_dir, recursive=true)
     @fs.write_file(
@@ -343,9 +339,7 @@ async test "session_catalog serves a direct directory of copied jsonl files" {
 async test "session_catalog serves marker-named copied jsonl directories" {
   @vfs.with_tmpdir(prefix="openseek-viz-marker-jsonl-", root => {
     let source_store = @store.SessionStore("\{root}/source/.openseek")
-    source_store.create(
-      @agent_session.Session(SessionId("marker-copy"), system_prompt=""),
-    )
+    source_store.create(Session(SessionId("marker-copy"), system_prompt=""))
     let copied_dir = "\{root}/.openseek"
     @fs.mkdir(copied_dir, recursive=true)
     @fs.write_file(
@@ -365,12 +359,8 @@ async test "session catalog lookup supports stable and legacy keys" {
   @vfs.with_tmpdir(prefix="openseek-viz-lookup-", root => {
     let app_store = @store.SessionStore("\{root}/app/.openseek")
     let lib_store = @store.SessionStore("\{root}/lib/.openseek")
-    app_store.create(
-      @agent_session.Session(SessionId("legacy"), system_prompt=""),
-    )
-    lib_store.create(
-      @agent_session.Session(SessionId("demo"), system_prompt=""),
-    )
+    app_store.create(Session(SessionId("legacy"), system_prompt=""))
+    lib_store.create(Session(SessionId("demo"), system_prompt=""))
     let catalog : SessionCatalog = {
       roots: [
         marker_root(root, "app/.openseek"),
@@ -390,9 +380,7 @@ async test "session catalog lookup supports stable and legacy keys" {
     }
     inspect(row.root, content="\{root}/lib/.openseek")
     inspect(row.id, content="demo")
-    app_store.create(
-      @agent_session.Session(SessionId("newer"), system_prompt=""),
-    )
+    app_store.create(Session(SessionId("newer"), system_prompt=""))
     guard catalog.lookup(demo_key) is Some(row) else {
       fail("expected stable key lookup after file addition")
     }
@@ -414,12 +402,8 @@ async test "session_list_reply includes root metadata and stable keys" {
   @vfs.with_tmpdir(prefix="openseek-viz-list-", root => {
     let app_store = @store.SessionStore("\{root}/app/.openseek")
     let lib_store = @store.SessionStore("\{root}/lib/.openseek")
-    app_store.create(
-      @agent_session.Session(SessionId("same"), system_prompt="a"),
-    )
-    lib_store.create(
-      @agent_session.Session(SessionId("same"), system_prompt="b"),
-    )
+    app_store.create(Session(SessionId("same"), system_prompt="a"))
+    lib_store.create(Session(SessionId("same"), system_prompt="b"))
     let catalog : SessionCatalog = {
       roots: [
         marker_root(root, "app/.openseek"),

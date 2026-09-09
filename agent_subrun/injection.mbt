@@ -22,7 +22,7 @@ pub fn ChildSession::injection(
   api_url? : String,
 ) -> @host.SubrunInjection {
   let first_free = self.first_free
-  @host.SubrunInjection(
+  SubrunInjection(
     exe~,
     session_root=self.root,
     parent=self.parent,

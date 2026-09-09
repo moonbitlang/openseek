@@ -42,7 +42,7 @@ pub async fn run(
     session_id="pattern-repair",
     system_prompt=pattern_repair_system_prompt(),
     task=pattern_repair_task(pattern, instruction),
-    tools=captured => @agent_tool.Tools([submit_pattern_repair_tool(captured)]),
+    tools=captured => Tools([submit_pattern_repair_tool(captured)]),
     max_steps~,
     api_key~,
     model~,

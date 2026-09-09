@@ -120,7 +120,7 @@ async fn run_answer_kind(
     system_prompt="You are a test subagent.",
     task="Answer via the submit tool.",
     tools=captured => {
-      @agent_tool.Tools([
+      Tools([
         @agent_kind.capture_tool(
           name="submit",
           description="Submit the final answer.",
@@ -265,7 +265,7 @@ async test "a store-backed append_item persists the child transcript" {
       system_prompt="You are a test subagent.",
       task="Answer via the submit tool.",
       tools=captured => {
-        @agent_tool.Tools([
+        Tools([
           @agent_kind.capture_tool(
             name="submit",
             description="Submit the final answer.",
@@ -287,7 +287,7 @@ async test "a store-backed append_item persists the child transcript" {
       append_item=(session, item) => store.append(session, item),
     )
     assert_true(value is Some("persisted"))
-    let loaded = store.load(@agent_session.SessionId("parent-sr-1"))
+    let loaded = store.load(SessionId("parent-sr-1"))
     assert_eq(loaded.system_prompt(), "You are a test subagent.")
     // The durable transcript holds the whole turn, not just a header.
     assert_true(loaded.events().length() >= 3)

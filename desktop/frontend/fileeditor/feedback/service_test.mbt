@@ -10,11 +10,7 @@ test "Desktop feedback backing connects host controls to the Viewer handle" {
   handle.on_did_change_feedback(_event => changes.val += 1) |> ignore
   service.set_feedback_enabled(resource, true)
   assert_true(handle.is_feedback_enabled(resource))
-  let item = handle.add_feedback(
-    resource,
-    @common.Range(2, 1, 2, 5),
-    "rename this",
-  )
+  let item = handle.add_feedback(resource, Range(2, 1, 2, 5), "rename this")
   assert_eq(added.val, Some(item.id))
   assert_eq(handle.get_feedback(resource).length(), 1)
   assert_true(changes.val >= 2)
@@ -34,9 +30,9 @@ test "Desktop feedback backing implements every stateful handle mutation" {
   let handle = service.agent_feedback_handle()
   let item = handle.add_feedback(
     resource,
-    @common.Range(4, 2, 4, 8),
+    Range(4, 2, 4, 8),
     "draft",
-    state=@agent_feedback_api.Created,
+    state=Created,
   )
   handle.accept_feedback(resource, item.id)
   handle.update_feedback(resource, item.id, "reworded")
@@ -45,7 +41,7 @@ test "Desktop feedback backing implements every stateful handle mutation" {
   let stored = handle.get_feedback(resource).get(0)
   assert_eq(stored.map(item => item.text), Some("reworded"))
   assert_eq(stored.map(item => item.replies), Some(["done"]))
-  assert_eq(stored.map(item => item.state), Some(@agent_feedback_api.Submitted))
+  assert_eq(stored.map(item => item.state), Some(Submitted))
   assert_eq(submitted_ids.val, [item.id])
   let navigation_id = "agentFeedback:" + item.id
   handle.set_navigation_anchor(resource, Some(navigation_id))

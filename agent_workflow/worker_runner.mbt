@@ -40,7 +40,7 @@ pub fn openseek_runner(
     map_launch?,
   )
   let worker_slots : @async.Semaphore = Semaphore(max_workers)
-  @workflow.Runner(
+  Runner(
     call => {
       if call.kind == "worker" {
         worker_slots.acquire()

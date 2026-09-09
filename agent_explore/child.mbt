@@ -38,7 +38,7 @@ pub async fn run_child(
     system_prompt=explore_system_prompt(),
     task=explore_task(query, hints, scratch_dir),
     tools=captured => {
-      @agent_tool.Tools([
+      Tools([
         @read.definition(workspace_root~),
         @mbtx.definition(workspace_root~, read_only=true, scratch_dir?),
         submit_answer_tool(captured),

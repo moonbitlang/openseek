@@ -44,7 +44,7 @@ pub async fn run_review(
     system_prompt=review_system_prompt(),
     task=review_task(base, scratch_dir),
     tools=captured => {
-      @agent_tool.Tools([
+      Tools([
         @read.definition(workspace_root~),
         @mbtx.definition(workspace_root~, read_only=true, scratch_dir?),
         submit_review_tool(captured),

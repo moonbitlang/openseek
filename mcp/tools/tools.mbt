@@ -157,7 +157,7 @@ pub async fn[X] build_grouped(
       seen[name] = ()
       total += 1
       mine.push(
-        @agent_tool.AgentToolDefinition(
+        AgentToolDefinition(
           name~,
           description=tool.description,
           schema=tool.schema,
@@ -190,7 +190,7 @@ async fn[X] connect_server(
       // A stdio server runs in the agent's workspace, not openseek's invocation
       // directory, so cwd-sensitive servers and relative args target the same
       // tree the built-in tools do.
-      @config.Stdio(command~, args~, env~, ..) =>
+      Stdio(command~, args~, env~, ..) =>
         @stdio.connect(
           scope.group(),
           command~,
@@ -200,7 +200,7 @@ async fn[X] connect_server(
           client_name~,
           client_version~,
         ).client()
-      @config.Http(url~, headers~, ..) =>
+      Http(url~, headers~, ..) =>
         @streamhttp.connect(
           scope.group(),
           url~,
@@ -268,11 +268,11 @@ fn bridge_tool(
   } else {
     { "type": "object" }
   }
-  @agent_tool.AgentToolDefinition(
+  AgentToolDefinition(
     name=tool_name(server, tool.name),
     description~,
-    schema=@agent_tool.JsonSchema(schema),
-    execute=@agent_tool.Async(args => call_tool(client, tool.name, args)),
+    schema=JsonSchema(schema),
+    execute=Async(args => call_tool(client, tool.name, args)),
   )
 }
 

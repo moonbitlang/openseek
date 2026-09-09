@@ -118,7 +118,7 @@ async test "tools_for_client bridges tools with namespaced names and schemas" {
     assert_eq(tools.length(), 1)
     assert_eq(tools[0].name, "mcp__srv__echo")
     assert_eq(tools[0].description, "Echoes")
-    let @agent_tool.JsonSchema(schema) = tools[0].schema
+    let JsonSchema(schema) = tools[0].schema
     assert_true(schema is { "type": "object", .. })
     // The control flag is a built-in-only privilege: the ceiling salvage
     // executes control-registered calls sight-unseen, so a server-supplied
@@ -135,10 +135,10 @@ async test "a bridged tool proxies tools/call and returns the result" {
     wire(group, transport, rpc)
     let client = @mcp.McpClient(rpc)
     let tools = @tools.tools_for_client("srv", client)
-    guard tools[0].execute is @agent_tool.Async(exec) else {
+    guard tools[0].execute is Async(exec) else {
       fail("expected an async executor")
     }
-    guard exec({ "text": "hi" }) is @agent_tool.Respond(output) else {
+    guard exec({ "text": "hi" }) is Respond(output) else {
       fail("expected a respond action")
     }
     assert_false(output.is_error)
@@ -323,10 +323,10 @@ async test "build bridges and dispatches tools from an http server" {
     assert_eq(tools[0].name, "mcp__remote__ping")
     // Full production path (build -> build_grouped re-wrap): still no control.
     assert_false(tools[0].is_control())
-    guard tools[0].execute is @agent_tool.Async(exec) else {
+    guard tools[0].execute is Async(exec) else {
       fail("expected an async executor")
     }
-    guard exec(Json::empty_object()) is @agent_tool.Respond(output) else {
+    guard exec(Json::empty_object()) is Respond(output) else {
       fail("expected a respond action")
     }
     assert_false(output.is_error)

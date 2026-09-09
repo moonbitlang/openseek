@@ -36,9 +36,9 @@ struct DesktopFeedbackService {
 ///|
 pub fn DesktopFeedbackService::DesktopFeedbackService() -> DesktopFeedbackService {
   {
-    did_change_feedback: @common.Emitter(),
-    did_change_navigation: @common.Emitter(),
-    did_add_feedback: @common.Emitter(),
+    did_change_feedback: Emitter(),
+    did_change_navigation: Emitter(),
+    did_add_feedback: Emitter(),
     did_submit_feedback: Emitter(),
     items_by_resource: Map([]),
     navigation_anchor_by_resource: Map([]),
@@ -52,7 +52,7 @@ pub fn DesktopFeedbackService::DesktopFeedbackService() -> DesktopFeedbackServic
 pub fn DesktopFeedbackService::agent_feedback_handle(
   self : DesktopFeedbackService,
 ) -> @agent_feedback_api.AgentFeedbackHandle {
-  @agent_feedback_api.AgentFeedbackHandle(
+  AgentFeedbackHandle(
     on_did_change_feedback=listener => self.did_change_feedback.event(listener),
     on_did_change_navigation=listener => {
       self.did_change_navigation.event(listener)
@@ -197,8 +197,8 @@ pub fn DesktopFeedbackService::add_feedback(
   resource : @common.Uri,
   range : @common.Range,
   text : String,
-  kind? : @agent_feedback_api.AgentFeedbackKind = @agent_feedback_api.UserReview,
-  state? : @agent_feedback_api.AgentFeedbackState = @agent_feedback_api.Accepted,
+  kind? : @agent_feedback_api.AgentFeedbackKind = UserReview,
+  state? : @agent_feedback_api.AgentFeedbackState = Accepted,
 ) -> @agent_feedback_api.AgentFeedback {
   let feedback : @agent_feedback_api.AgentFeedback = {
     id: "viewer-feedback-" + self.next_feedback_handle.to_string(),
@@ -214,7 +214,7 @@ pub fn DesktopFeedbackService::add_feedback(
   let has_existing_for_file = !items.is_empty()
   items.push(feedback)
   self.handle_items_changed(resource)
-  if state == @agent_feedback_api.Accepted {
+  if state == Accepted {
     self.did_add_feedback.fire({
       feedback,
       has_existing_feedback_for_file: has_existing_for_file,
@@ -233,10 +233,10 @@ fn DesktopFeedbackService::accept_feedback(
   guard self.feedback_by_id(resource, feedback_id) is Some(existing) else {
     return
   }
-  guard existing.state == @agent_feedback_api.Created else { return }
+  guard existing.state == Created else { return }
   let updated : @agent_feedback_api.AgentFeedback = {
     ..existing,
-    state: @agent_feedback_api.Accepted,
+    state: Accepted,
   }
   self.replace_item(resource, updated)
 }

@@ -121,7 +121,7 @@ async test "a child that dies without a report fails typed WITH its cost" {
     #|printf '{"event":"usage","usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90}}\n'
   let wf = @workflow.Workflow(runner=scripted_subrun(script))
   guard @workflow.attempt(() => wf.agent(prompt="q", kind="explore"))
-    is Err(@workflow.AgentFailed(failure=NoReport, ..)) else {
+    is Err(AgentFailed(failure=NoReport, ..)) else {
     fail("expected a typed NoReport failure")
   }
   // The doomed child's spend still lands in the budget — the lossless
@@ -140,7 +140,7 @@ async test "an observed step exhaustion maps to MaxSteps" {
     #|printf '{"event":"max_steps_exhausted"}\n'
   let wf = @workflow.Workflow(runner=scripted_subrun(script))
   guard @workflow.attempt(() => wf.agent(prompt="q", kind="explore"))
-    is Err(@workflow.AgentFailed(failure=MaxSteps, ..)) else {
+    is Err(AgentFailed(failure=MaxSteps, ..)) else {
     fail("expected a typed MaxSteps failure")
   }
 }
@@ -155,10 +155,10 @@ async test "a spawn failure maps to Failed with a zero-cost attempt" {
     journal=@workflow.Journal::in_memory(),
   )
   match @workflow.attempt(() => wf.agent(prompt="q", kind="explore")) {
-    Err(@workflow.AgentFailed(failure=Failed(_), ..)) => ()
+    Err(AgentFailed(failure=Failed(_), ..)) => ()
     // Some sandboxes surface spawn refusal as an immediate empty exit:
     // accept NoReport there, but never a success or a crash.
-    Err(@workflow.AgentFailed(failure=NoReport, ..)) => ()
+    Err(AgentFailed(failure=NoReport, ..)) => ()
     _ => fail("expected the missing binary to fail typed")
   }
   assert_eq(wf.tokens_spent(), 0)

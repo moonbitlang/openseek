@@ -33,7 +33,7 @@ fn worker_workflow(
   script : String,
   journal? : @workflow.Journal,
 ) -> @workflow.Workflow raise {
-  @workflow.Workflow(
+  Workflow(
     runner=@agent_workflow.openseek_runner(
       exe="unused",
       workspace_root=repo,
@@ -108,7 +108,7 @@ async test "an out-of-bounds edit is not mergeable and can be discarded" {
       task="edit outside the slice",
       allowed_paths=["src/"],
     )
-    is Err(@workflow.AgentFailed(failure=Failed(reason), ..)) else {
+    is Err(AgentFailed(failure=Failed(reason), ..)) else {
     fail("expected the out-of-bounds slice to fail typed")
   }
   assert_true(reason.contains("not mergeable"))
@@ -136,7 +136,7 @@ async test "overlapping slices are refused before any child spawns" {
   guard @agent_workflow.try_worker(wf, name="second", task="also edit src", allowed_paths=[
       "src/",
     ])
-    is Err(@workflow.AgentFailed(failure=Failed(reason), ..)) else {
+    is Err(AgentFailed(failure=Failed(reason), ..)) else {
     fail("expected the overlapping slice to be refused")
   }
   assert_true(reason.contains("provision"))
@@ -252,7 +252,7 @@ async test "a dead child cannot become a clean-tree success" {
   guard @agent_workflow.try_worker(wf, name="doomed", task="edit src", allowed_paths=[
       "src/",
     ])
-    is Err(@workflow.AgentFailed(..)) else {
+    is Err(AgentFailed(..)) else {
     fail("a spawn failure must never look like a completed slice")
   }
 }
@@ -269,12 +269,12 @@ async test "blank tasks and empty allowed_paths are refused pre-provision" {
   guard @agent_workflow.try_worker(wf, name="blank", task="  ", allowed_paths=[
       "src/",
     ])
-    is Err(@workflow.AgentFailed(failure=Failed(task_reason), ..)) else {
+    is Err(AgentFailed(failure=Failed(task_reason), ..)) else {
     fail("expected the blank task to be refused")
   }
   assert_true(task_reason.contains("task"))
   guard @agent_workflow.try_worker(wf, name="pathless", task="edit", allowed_paths=[])
-    is Err(@workflow.AgentFailed(failure=Failed(path_reason), ..)) else {
+    is Err(AgentFailed(failure=Failed(path_reason), ..)) else {
     fail("expected the empty allowed_paths to be refused")
   }
   assert_true(path_reason.contains("allowed_paths"))
@@ -354,7 +354,7 @@ async test "an invalid report shape fails the slice at the trust boundary" {
   guard @agent_workflow.try_worker(wf, name="garbled", task="edit src", allowed_paths=[
       "src/",
     ])
-    is Err(@workflow.AgentFailed(failure=Failed(reason), ..)) else {
+    is Err(AgentFailed(failure=Failed(reason), ..)) else {
     fail("expected the garbled report to fail the slice")
   }
   assert_true(reason.contains("salvaged commit"))
@@ -375,7 +375,7 @@ async test "a clean no-op the child disclaims is a failure" {
   guard @agent_workflow.try_worker(wf, name="gave-up", task="edit src", allowed_paths=[
       "src/",
     ])
-    is Err(@workflow.AgentFailed(failure=Failed(reason), ..)) else {
+    is Err(AgentFailed(failure=Failed(reason), ..)) else {
     fail("expected the disclaimed no-op to be a failure")
   }
   assert_true(reason.contains("reported failure"))
@@ -400,7 +400,7 @@ async test "a typed terminal with salvage names the salvaged commit" {
   guard @agent_workflow.try_worker(wf, name="truncated", task="edit src", allowed_paths=[
       "src/",
     ])
-    is Err(@workflow.AgentFailed(failure=Failed(reason), ..)) else {
+    is Err(AgentFailed(failure=Failed(reason), ..)) else {
     fail("expected the truncated slice to fail with salvage visibility")
   }
   assert_true(reason.contains("salvaged commit"))

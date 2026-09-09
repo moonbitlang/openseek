@@ -33,10 +33,7 @@ pub async fn[T] execute_kind(
 ) -> T? {
   let captured : Ref[T?] = { val: None, }
   let tools = tools(captured)
-  let session = @agent_session.Session(
-    @agent_session.SessionId(session_id),
-    system_prompt~,
-  )
+  let session = @agent_session.Session(SessionId(session_id), system_prompt~)
   // Default: the transcript lives and dies with this process. A caller
   // wires a store-backed append (the `subrun` child mode when the parent
   // is durable) to make the child's transcript a first-class session.
@@ -46,8 +43,8 @@ pub async fn[T] execute_kind(
   }
   let _ : @agent_session.Session = @async.with_task_group() <| group => {
     @agent.run_turn_in_scope(
-      runtime=@agent_runtime.AgentRuntime(workspace_root~),
-      scope=@agent_runtime.AgentTaskScope(group),
+      runtime=AgentRuntime(workspace_root~),
+      scope=AgentTaskScope(group),
       api_key~,
       model~,
       session~,

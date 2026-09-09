@@ -4,7 +4,7 @@
 /// engine's counter; starting it above zero stands in for a resumed session
 /// whose floor an earlier process already pushed up.
 fn injection(issued : Ref[Int], model? : String) -> @host.SubrunInjection {
-  @host.SubrunInjection(
+  SubrunInjection(
     exe="/opt/openseek",
     session_root="/store",
     parent="run7",

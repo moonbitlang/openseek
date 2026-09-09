@@ -405,7 +405,7 @@ async fn build_export_html(
   let sessions : Array[@viz_export.Session] = []
   for row in rows {
     sessions.push(
-      @viz_export.Session(
+      Session(
         key=row.key,
         id=row.id,
         root=row.root,
