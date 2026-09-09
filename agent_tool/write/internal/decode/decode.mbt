@@ -20,8 +20,8 @@ pub fn decode(arguments : Json) -> WriteInput raise {
   match arguments {
     { "path": String(path), "content": String(content), .. } => {
       let revert_on_parse_errors = match arguments {
-        { "revert_on_parse_errors": True, .. } => true
-        { "revert_on_parse_errors": False, .. } => false
+        { "revert_on_parse_errors": true, .. } => true
+        { "revert_on_parse_errors": false, .. } => false
         { "revert_on_parse_errors": Null, .. } => true
         { "revert_on_parse_errors": _, .. } =>
           fail("arguments.revert_on_parse_errors to be a boolean")

@@ -82,22 +82,22 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         _ => None
       }
       let warning = match arguments {
-        { "warning": String("on"), .. } => true
-        { "warning": String("off"), .. } => false
+        { "warning": "on", .. } => true
+        { "warning": "off", .. } => false
         { "warning": Null, .. } => false
         { "warning": _, .. } =>
           fail("arguments.warning to be \"on\" or \"off\"")
         _ => false
       }
       let escalated = match arguments {
-        { "escalated": True, .. } => true
-        { "escalated": False, .. } | { "escalated": Null, .. } => false
+        { "escalated": true, .. } => true
+        { "escalated": false, .. } | { "escalated": Null, .. } => false
         { "escalated": _, .. } => fail("arguments.escalated to be a boolean")
         _ => false
       }
       let subrun = match arguments {
-        { "subrun": True, .. } => true
-        { "subrun": False, .. } | { "subrun": Null, .. } => false
+        { "subrun": true, .. } => true
+        { "subrun": false, .. } | { "subrun": Null, .. } => false
         { "subrun": _, .. } => fail("arguments.subrun to be a boolean")
         _ => false
       }

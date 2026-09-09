@@ -749,7 +749,7 @@ async fn ApiState::codex_thread_history(
     reply_fields.get("thread") is Some(Object(thread_fields)) else {
     raise @host.PayloadError("malformed Codex thread metadata reply")
   }
-  let paginated = thread_fields.get("historyMode") is Some(String("paginated"))
+  let paginated = thread_fields.get("historyMode") is Some("paginated")
   if !paginated {
     let value = try
       self.codex_request("codex.thread.read", {

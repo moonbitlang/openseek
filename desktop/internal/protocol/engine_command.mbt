@@ -69,53 +69,41 @@ pub fn approval(id : String, allow~ : Bool) -> @wire.Command {
 ///|
 test "the host's commands are the protocol's" {
   assert_true(
-    prompt("hello").to_json()
-    is { "command": String("prompt"), "text": String("hello"), .. },
+    prompt("hello").to_json() is { "command": "prompt", "text": "hello", .. },
   )
   assert_true(
     prompt("hello", submission_id="page-1-submission-2").to_json()
     is {
-      "command": String("prompt"),
-      "text": String("hello"),
-      "submission_id": String("page-1-submission-2"),
+      "command": "prompt",
+      "text": "hello",
+      "submission_id": "page-1-submission-2",
       ..
     },
   )
   assert_true(
     steer("go left").to_json()
-    is {
-      "command": String("steer"),
-      "kind": String("prompt"),
-      "text": String("go left"),
-      ..
-    },
+    is { "command": "steer", "kind": "prompt", "text": "go left", .. },
   )
-  assert_true(compact().to_json() is { "command": String("compact"), .. })
-  assert_true(cancel().to_json() is { "command": String("cancel"), .. })
+  assert_true(compact().to_json() is { "command": "compact", .. })
+  assert_true(cancel().to_json() is { "command": "cancel", .. })
   // A manual set omits `auto` on the wire entirely; arming spells it out.
   guard goal_set("ship the feature", auto=false).to_json()
-    is {
-      "command": String("goal"),
-      "action": String("set"),
-      "text": String("ship the feature"),
-      ..
-    } &&
+    is { "command": "goal", "action": "set", "text": "ship the feature", .. } &&
     !(goal_set("ship the feature", auto=false).to_json() is { "auto": _, .. }) else {
     fail("goal_set did not encode a manual set")
   }
   assert_true(
     goal_set("grind it out", auto=true).to_json()
     is {
-      "command": String("goal"),
-      "action": String("set"),
-      "text": String("grind it out"),
-      "auto": True,
+      "command": "goal",
+      "action": "set",
+      "text": "grind it out",
+      "auto": true,
       ..
     },
   )
   assert_true(
-    goal_clear().to_json()
-    is { "command": String("goal"), "action": String("clear"), .. },
+    goal_clear().to_json() is { "command": "goal", "action": "clear", .. },
   )
 }
 
@@ -124,7 +112,7 @@ test "engine commands encode one json line" {
   let line = prompt("quote \" newline\n").to_jsonl()
   assert_true(line.has_suffix("\n"))
   guard @json.parse(line.trim())
-    is { "command": String("prompt"), "text": String("quote \" newline\n"), .. } else {
+    is { "command": "prompt", "text": "quote \" newline\n", .. } else {
     fail("prompt command did not round-trip through json")
   }
 }

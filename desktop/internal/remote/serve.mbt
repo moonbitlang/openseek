@@ -335,7 +335,7 @@ fn classify(text : String) -> Inbound {
   let message = @json.parse(text) catch { _ => return Unparsable }
   guard message is Object(fields) else { return Invalid }
   // Reject protocol lookalikes before any catalog method can run.
-  guard fields.get("jsonrpc") is Some(String("2.0")) else { return Invalid }
+  guard fields.get("jsonrpc") is Some("2.0") else { return Invalid }
   guard fields.get("method") is Some(String(method_)) else { return Invalid }
   let id = fields.get("id")
   // JSON-RPC request ids may only be strings, numbers, or null. They remain

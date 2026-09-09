@@ -165,7 +165,7 @@ pub fn Command::parse(line : Json) -> Result[Command, String] {
       "command": "goal",
       "action": "set",
       "text": String(text),
-      "auto": True,
+      "auto": true,
       ..
     } => Ok(GoalSet(text~, auto=true))
     { "command": "goal", "action": "set", "text": String(text), .. } =>
@@ -179,9 +179,9 @@ pub fn Command::parse(line : Json) -> Result[Command, String] {
     // with no `id` answers no particular question, and one with no `allow` is
     // a decision that did not decide — silently reading either as absent would
     // settle a permission prompt on a guess.
-    { "command": "approval", "id": String(id), "allow": True, .. } =>
+    { "command": "approval", "id": String(id), "allow": true, .. } =>
       Ok(ApprovalDecision(id~, allow=true))
-    { "command": "approval", "id": String(id), "allow": False, .. } =>
+    { "command": "approval", "id": String(id), "allow": false, .. } =>
       Ok(ApprovalDecision(id~, allow=false))
     { "command": "approval", "id": String(_), .. } =>
       Err("expected a boolean \"allow\" field")

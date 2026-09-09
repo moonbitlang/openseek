@@ -118,9 +118,9 @@ fn decode_step(index : Int, item : Json) -> PlanStep raise {
   }
   let title = normalize_title(index, raw_title)
   let status = match fields {
-    { "status": String("pending"), .. } => PlanStatus::Pending
-    { "status": String("in_progress"), .. } => InProgress
-    { "status": String("completed"), .. } => Completed
+    { "status": "pending", .. } => PlanStatus::Pending
+    { "status": "in_progress", .. } => InProgress
+    { "status": "completed", .. } => Completed
     { "status": String(_), .. } =>
       fail(
         "arguments.steps[\{index}].status to be one of pending|in_progress|completed",
