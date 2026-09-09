@@ -395,3 +395,54 @@ and letting its subagents vanish. And whether or not the flag is set,
 `WORKFLOW_HOST` is always DECIDED by the policy — the handoff, or nothing — so
 a child engine's snippet can never inherit its grandparent's handoff and mint
 child ids from a block that is not its own.
+
+### Independent review
+
+The model delegates an independent worktree audit through the same hosted
+workflow as scouts. Set `subrun: true` on the `mbtx` tool call and supply this
+program as `source`:
+
+```mbt nocheck
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/workflow",
+  "moonbitlang/workflow/hosted",
+}
+
+///|
+async fn main {
+  guard @hosted.context() is Some(ctx) else {
+    println("Hosted delegation is unavailable in this session")
+    return
+  }
+  let report = ctx.run(wf => {
+    wf.agent_call(
+      kind="review",
+      input={
+        "goal": "Check the CSV parser's CRLF and escaped-quote handling.",
+      },
+      label="CSV review",
+      max_steps=100,
+    )
+  })
+  println(report.stringify())
+}
+```
+
+Use `agent_call`, not `agent`: review requires `input.goal`, whereas `agent`
+builds the scout input `{query, hints?}`. Criteria are explicit; this path
+does not automatically read the standing goal or its baseline. If known,
+include `sha` and `dirty` alongside `goal` to describe the baseline commit
+and whether the worktree was dirty when it was recorded.
+
+The child runs `agent_review.run_goal_audit` and validates its submission
+before returning the full report JSON. The workflow does not reduce it to a
+digest or mark blocker findings as a tool error: the caller reads the findings.
+Failure to obtain a report raises instead of returning a clean verdict.
+Hosted child limits apply (32 launches per snippet, 10-minute default child
+deadline, and the explicit step ceiling); there is no shared per-turn review
+budget. `--review-deadline` applies only to the automatic goal-met gate.
+Without a durable session, hosted delegation is unavailable. The standalone
+`openseek review --base REF` remains available and calls the review engine
+directly, without hosted workflow.

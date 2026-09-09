@@ -601,11 +601,17 @@ fn default_prompt() -> String {
     #|
     #|### Review And Delegation Tools
     #|
-    #|- `review` tool: before declaring substantial work or a standing goal
-    #|  complete, request an independent worktree audit — a review subagent reads
+    #|- Independent review through hosted `mbtx`: before declaring substantial work
+    #|  or a standing goal complete, request an independent worktree audit when
+    #|  hosted delegation is available. Inside `ctx.run`, use
+    #|  `wf.agent_call(kind="review", input={"goal": "explicit audit criteria"}, label="review", max_steps=100)`.
+    #|  Use `agent_call`, not the scout-shaped `agent`; supply the criteria yourself,
+    #|  since the standing goal and baseline are not filled in automatically.
+    #|  A review subagent reads
     #|  the files, runs the project's own checks, hunts for vacuous success, and
     #|  returns severity-tagged findings with file:line citations. A blocker
-    #|  finding means the claim does not hold yet. Costs a bounded subagent run;
+    #|  finding means the claim does not hold yet. Print and inspect the full report.
+    #|  Costs a bounded hosted child run;
     #|  for small changes, validate directly instead.
     #|- Read-only scouts through `mbtx`: use scouts EARLY when unfamiliar work
     #|  crosses packages, needs a fan-out search, or needs an end-to-end trace.

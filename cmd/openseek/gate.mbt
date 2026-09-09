@@ -54,12 +54,9 @@ fn review_subrun_input(
 /// only external cancellation re-raises (through run_subrun's own
 /// contract).
 ///
-/// The gate does NOT draw from the shared `SubrunBudget`: that allowance
-/// meters MODEL-initiated delegation, while the gate is engine-initiated
-/// and fires at most once per met claim. Sharing let a turn's model-initiated
-/// subrun calls starve the audit into an underpowered run that died at its step
-/// ceiling unreported (ccomp-run10) — the one subrun that must not be
-/// shortchanged is the one auditing the claim everything else rests on.
+/// The gate has its own step allowance and fires at most once per met claim,
+/// independently of model-initiated hosted workflows. The audit must retain
+/// enough steps to inspect the claim even after the model delegated other work.
 fn build_goal_met_gate(
   self_exe~ : String,
   model~ : @deepseek.Model,
@@ -109,14 +106,14 @@ fn review_gate_flag() -> @argparse.FlagArg {
 
 ///|
 /// The `--review-deadline` option (milliseconds), shared by `run` and `serve`
-/// like `--review-gate`: the wall clock one review audit (the model-callable
-/// review tool or the `--review-gate` audit) may take before it is treated as
+/// like `--review-gate`: the wall clock one automatic goal-met audit
+/// may take before it is treated as
 /// stuck. Absent, the audit falls back to `GateDeadlineMs`.
 fn review_deadline_option() -> @argparse.OptionArg {
   OptionArg(
     "review-deadline",
     long="review-deadline",
-    about="Wall-clock deadline in milliseconds for one review audit (the review tool or --review-gate); default 900000 (15 minutes).",
+    about="Wall-clock deadline in milliseconds for one --review-gate audit; default 900000 (15 minutes).",
   )
 }
 

@@ -3,6 +3,10 @@ import {
 }
 
 import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "bobzhang/openseek/agent_review",
+  "moonbitlang/workflow",
   "moonbitlang/workflow/hosted",
   "moonbitlang/core/json",
 } for "test"

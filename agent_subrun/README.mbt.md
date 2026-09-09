@@ -24,10 +24,9 @@ Layers:
   extracts. What the child RUNS to produce that report is not here: the
   bounded turn itself (`execute_kind`, `capture_tool`) lives in
   `agent_kind`, which never spawns and never knows it is in a child.
-- `SubrunBudget`: the per-turn CALL allowance shared by model-initiated
-  subrun tools — a runaway backstop, reserved before launch; every granted
-  child runs at its kind's full step ceiling (engine-initiated subruns
-  like the goal-met gate bypass it).
+- `SubrunBudget`: a reusable per-turn CALL allowance for direct consumers.
+  The CLI's model-initiated delegation uses hosted workflows and their
+  reserved child blocks instead; the automatic goal-met gate has its own allowance.
 Known limits: a hard-killed child can orphan its own tool subprocesses (the
 upstream group-kill gap) — the stdin-EOF grace path is the mitigation;
 Windows support is deferred with background jobs.

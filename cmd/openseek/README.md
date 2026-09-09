@@ -52,9 +52,15 @@ with `OPENSEEK_SYSTEM_PROMPT_FILE` and
 `OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE`. `--session` explicitly creates or
 resumes that session under `--session-root` (default `.openseek`). Relative
 session roots are resolved under `--dir`.
-`--review-deadline` bounds one review audit (the model-callable `review` tool or
-the `--review-gate` audit) to that many milliseconds; the default is 900000
-(15 minutes).
+`--review-deadline` bounds one automatic `--review-gate` audit to that many
+milliseconds; the default is 900000 (15 minutes). Model-initiated reviews use
+hosted `mbtx` workflows with explicit audit criteria, the hosted child limit
+(32 per snippet), and a per-call `max_steps`. Their default child deadline is
+600000 (10 minutes), independent of this flag. See the
+[hosted review example](../../agent_tool/mbtx/README.mbt.md#independent-review).
+Hosted delegation requires a durable session; `--no-session` cannot delegate.
+The standalone `openseek review --base REF` command still runs the review
+engine directly, without a workflow.
 
 Every run records a durable session: without `--session`, a generated
 `cli-YYYYMMDD-HHMMSS-mmm` id is used and announced by a `session_started` event
