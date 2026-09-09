@@ -1,3 +1,5 @@
+set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
+
 default:
     just --list
 
@@ -19,4 +21,4 @@ dev:
 # Build the Desktop browser application and run Playwright.
 test-browser:
     moon run package/browser --target native
-    npm --prefix e2e test
+    {{ if os() == "windows" { "npm.cmd" } else { "npm" } }} --prefix e2e test

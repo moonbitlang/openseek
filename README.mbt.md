@@ -33,9 +33,9 @@ The root [`moon.work`](moon.work) develops OpenSeek, the desktop app, and the
 smaller `editor/moon.work` as a scoped entry point for editor-only builds and
 browser tests; root Moon commands are the integration gate across both projects.
 
-A fresh checkout needs the MoonBit toolchain and `just`; `just check` also
-requires `jq` to inspect structured compiler diagnostics. The root integration
-gates are:
+A fresh checkout needs the MoonBit toolchain and `just`. Recipes use Windows
+PowerShell on Windows and the default POSIX shell on macOS/Linux. The root
+integration gates are:
 
 ```sh
 just check              # native + JS workspace checks and formatting
@@ -45,6 +45,12 @@ just editor-build       # editor web distribution and server
 just editor-test        # editor-only tests on every supported target
 just editor-test-browser
 ```
+
+The CLI lifecycle test (`just test-turn-finish`, also included in `just test`)
+needs Python 3. It uses `python` on Windows and `python3` on macOS/Linux;
+override it with, for example, `just PYTHON="py -3" test-turn-finish`.
+When passing editor paths containing spaces, quote the whole assignment:
+`just --justfile editor/justfile "ROOT=C:/Users/me/My Project" dev`.
 
 The editor browser suites additionally need Node.js 18 or newer, the locked npm
 dependencies, and a Playwright-managed Chromium installation:

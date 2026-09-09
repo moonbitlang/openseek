@@ -1,3 +1,5 @@
+set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
+
 default: dev
 
 list:
@@ -63,12 +65,12 @@ TARGET := "wasm"
 
 serve:
     moon run --target {{ TARGET }} server/host/main -- \
-      --root "$(cd '{{ ROOT }}' && pwd)" \
+      --root '{{ absolute_path(ROOT) }}' \
       --host "{{ if HOST == '' { '127.0.0.1' } else { HOST } }}" \
       --port {{ PORT }} \
-      --asset-dir "$(cd '{{ ASSET_DIR }}' && pwd)" \
+      --asset-dir '{{ absolute_path(ASSET_DIR) }}' \
       --moon-command "{{ MOON_COMMAND }}" \
-      --browse-root "{{ BROWSE_ROOT }}"
+      {{ if BROWSE_ROOT == '' { '' } else { '--browse-root "' + BROWSE_ROOT + '"' } }}
 
 dev: build
     just ROOT='{{ ROOT }}' PORT='{{ PORT }}' ASSET_DIR='{{ ASSET_DIR }}' \
@@ -79,7 +81,7 @@ dev: build
 test-browser: test-browser-smoke
 
 test-browser-smoke: build build-browser-tests
-    ./node_modules/.bin/playwright test tests/browser/smoke tests/browser/component
+    node node_modules/@playwright/test/cli.js test tests/browser/smoke tests/browser/component
 
 test-browser-component: build build-browser-tests
-    ./node_modules/.bin/playwright test tests/browser/component
+    node node_modules/@playwright/test/cli.js test tests/browser/component

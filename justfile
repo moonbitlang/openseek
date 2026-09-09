@@ -1,3 +1,8 @@
+# Use Windows PowerShell without requiring Git Bash or WSL.
+set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
+
+PYTHON := if os() == "windows" { "python" } else { "python3" }
+
 default:
     just --list
 
@@ -34,7 +39,7 @@ test: test-moon
 # Real CLI lifecycle regression with an offline scripted model (Python 3).
 test-turn-finish:
     moon build cmd/openseek --target native
-    python3 tests/integration/turn_finish.py _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
+    {{ PYTHON }} tests/integration/turn_finish.py _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
 
 test-moon:
     moon test --target native
