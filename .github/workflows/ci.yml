@@ -336,10 +336,26 @@ jobs:
             ~/.proton/helpers
           key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
 
+      # `cef setup` prints the assembled runtime root. Native test executables
+      # import libcef.dll at process startup, so its bin directory must be on
+      # PATH even when a test never initializes CEF.
       - name: Assemble Proton CEF runtime
-        run: >-
-          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
-          cef setup
+        run: |
+          $setupOutput = @(
+            moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}" cef setup
+          )
+          if ($LASTEXITCODE -ne 0) { throw "cef setup failed" }
+          $setupOutput | Write-Output
+          $runtimeRoot = $setupOutput |
+            Where-Object { $_ -and $_.Trim() } |
+            Select-Object -Last 1
+          if (-not $runtimeRoot) { throw "cef setup did not print a runtime root" }
+          $runtimeRoot = $runtimeRoot.Trim()
+          $runtimeBin = Join-Path $runtimeRoot "bin"
+          if (-not (Test-Path -LiteralPath (Join-Path $runtimeBin "libcef.dll"))) {
+            throw "libcef.dll not found under Proton runtime: $runtimeBin"
+          }
+          $runtimeBin | Out-File -FilePath $env:GITHUB_PATH -Append
 
       # The sole Windows writer: main pushes populate the Windows cache key,
       # while PR jobs remain restore-only.
