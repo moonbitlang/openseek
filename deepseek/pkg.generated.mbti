@@ -9,6 +9,8 @@ import {
 // Values
 pub fn encode_chat_request(tools? : Array[ToolDefinition], thinking? : ThinkingMode, stream? : Bool, response_format? : ResponseFormat, model? : Model, Array[ChatMessage]) -> Json
 
+pub fn openrouter_encode_chat_request(model~ : DsVariant, thinking~ : ThinkingMode, tools? : Array[ToolDefinition], stream? : Bool, response_format? : ResponseFormat, Array[ChatMessage]) -> Json
+
 // Errors
 
 // Types and methods

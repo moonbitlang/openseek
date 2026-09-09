@@ -84,6 +84,11 @@ thinking effort to OpenRouter's portable `reasoning` object. Both
 `reasoning_content` and OpenRouter's `reasoning` response field are normalized
 into `ChatResponse::reasoning_content`.
 
+| DeepSeek model      | OpenRouter ids                    |
+|---------------------|-----------------------------------|
+| `deepseek-v4-flash` | `deepseek/deepseek-v4-flash-0731` |
+| `deepseek-v4-pro`   | `deepseek/deepseek-v4-pro`        |
+
 Use `tools=[...]` when the model may request native function calls.
 Use `response_format=JsonObject` only when the assistant content itself must be
 a JSON object.

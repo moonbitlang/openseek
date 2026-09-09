@@ -1,45 +1,33 @@
 ///|
-test "OpenRouter adapts DeepSeek model and reasoning fields" {
-  let body = @deepseek.encode_chat_request(model=Deepseek(V4Pro), thinking=High) <| [
-    ChatMessage(User, content="hello"),
-  ]
-  json_inspect(
-    adapt_chat_request_for_endpoint(
-      "https://openrouter.ai/api/v1/chat/completions",
-      Deepseek(V4Pro),
-      High,
-      body,
-    ),
-    content={
-      "model": "deepseek/deepseek-v4-pro",
-      "messages": [{ "role": "user", "content": "hello" }],
-      "stream": false,
-      "reasoning": { "effort": "high" },
-    },
-  )
-}
-
-///|
-test "non-OpenRouter custom endpoints keep DeepSeek wire format" {
-  let body = @deepseek.encode_chat_request(
-    model=Deepseek(V4Flash),
-    thinking=Max,
-  ) <| [
-    ChatMessage(User, content="hello"),
-  ]
-  json_inspect(
-    adapt_chat_request_for_endpoint(
-      "https://proxy.example/v1/chat/completions",
-      Deepseek(V4Flash),
-      Max,
-      body,
-    ),
-    content={
-      "model": "deepseek-v4-flash",
-      "messages": [{ "role": "user", "content": "hello" }],
-      "stream": false,
-      "thinking": { "type": "enabled" },
-      "reasoning_effort": "max",
-    },
-  )
+test "OpenRouter encodes DeepSeek models and reasoning fields" {
+  for
+    (model, model_id) in [
+      (@deepseek.Deepseek(V4Pro), "deepseek/deepseek-v4-pro"),
+      (Deepseek(V4Flash), "deepseek/deepseek-v4-flash-0731"),
+    ] {
+    for
+      (thinking, effort) in [
+        (@deepseek.No, "none"),
+        (High, "high"),
+        (Max, "max"),
+      ] {
+      let expected : Json = {
+        "model": model_id,
+        "messages": [{ "role": "user", "content": "hello" }],
+        "stream": false,
+        "reasoning": { "effort": effort },
+      }
+      assert_eq(
+        encode_chat_request_for_endpoint(
+          api_url="https://openrouter.ai/api/v1/chat/completions",
+          model~,
+          thinking~,
+          tools=[],
+          stream=false,
+          [ChatMessage(User, content="hello")],
+        ),
+        expected,
+      )
+    }
+  }
 }
