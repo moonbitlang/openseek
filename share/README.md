@@ -1,0 +1,24 @@
+# Bundled resources
+
+This directory is checked in and copied into the packaged toolchain's `share/`.
+`OPENSEEK_REFERENCES` points to that installed copy.
+
+- `doc/moonbit/`: official MoonBit documentation from the upstream markdown build.
+- `doc/moonbit.commit`: the exact upstream build commit used for the snapshot.
+- `workflow/`: OpenSeek-maintained scripts, packaged for future agent integration.
+
+The documentation comes from https://github.com/moonbitlang/moonbit-docs.
+Its original README records the source commit that produced the markdown build.
+Keep edits upstream; refresh this snapshot periodically or when updating the
+bundled toolchain, using a full commit from the upstream markdown-build branch:
+
+```sh
+moon run scripts/update-moonbit-docs.mbtx <40-character-commit>
+```
+
+Run from the repository root with `curl` and `tar` installed. The command downloads
+and validates the new snapshot before replacing `doc/moonbit/`. It preserves the
+upstream files except browser presentation assets and upstream ignore rules.
+Review and commit the documentation diff together with `doc/moonbit.commit`.
+Packaging reads this checked-in tree without downloading documentation; its
+content hash invalidates the prepared resource cache when any file changes.

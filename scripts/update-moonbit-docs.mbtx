@@ -1,0 +1,47 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+}
+
+async fn main {
+  guard @env.args() is [_, commit] && commit.length() == 40 &&
+    commit.iter().all(c => c is ('0'..='9' | 'a'..='f')) else {
+    fail("Usage (from repository root): moon run scripts/update-moonbit-docs.mbtx <40-character markdown-build commit>")
+  }
+  guard @fs.exists("desktop/package/build.mjs") && @fs.exists("share/workflow") else {
+    fail("Run this command from the OpenSeek repository root")
+  }
+  let temp = @fs.tmpdir(prefix="openseek-docs-")
+  defer @fs.rmdir(temp, recursive=true)
+  let archive = "\{temp}/docs.tar.gz"
+  let staged = "\{temp}/moonbit"
+  @shell.Cmd("curl", [
+    "--fail", "--location", "--retry", "3", "--output", archive,
+    "https://codeload.github.com/moonbitlang/moonbit-docs/tar.gz/\{commit}",
+  ]).run()
+  @fs.mkdir(staged)
+  @shell.Cmd("tar", [
+    "-xzf", archive, "-C", staged, "--strip-components=1",
+  ]).run()
+  for entry in ["README.md", "index.md", "language", "toolchain", "tutorial", "example"] {
+    guard @fs.exists("\{staged}/\{entry}") else {
+      fail("The commit is not a complete markdown build: missing \{entry}")
+    }
+  }
+  // Browser presentation assets and upstream ignore rules are not reference pages.
+  if @fs.exists("\{staged}/_sphinx_design_static") {
+    @fs.rmdir("\{staged}/_sphinx_design_static", recursive=true)
+  }
+  if @fs.exists("\{staged}/.gitignore") {
+    @fs.remove("\{staged}/.gitignore")
+  }
+  @fs.mkdir("share/doc", recursive=true)
+  if @fs.exists("share/doc/moonbit") {
+    @fs.rmdir("share/doc/moonbit", recursive=true)
+  }
+  @shell.Cmd("cp", ["-R", staged, "share/doc/moonbit"]).run()
+  @fs.write_file("share/doc/moonbit.commit", "\{commit}\n")
+  println("Updated share/doc/moonbit to \{commit}; review the diff before committing.")
+}

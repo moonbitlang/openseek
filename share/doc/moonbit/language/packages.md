@@ -1,0 +1,359 @@
+# Managing Projects with Packages
+
+When developing projects at large scale, the project usually needs to be divided into smaller modular unit that depends on each other.
+More often, it involves using other people's work: most noticeably is the [core](https://github.com/moonbitlang/core), the standard library of MoonBit.
+
+## Packages and modules
+
+In MoonBit, the most important unit for code organization is a package, which consists of a number of source code files and a single package configuration file (`moon.pkg`, or the legacy `moon.pkg.json` format).
+A package is a library by default. A package containing a `main` function is
+declared executable with [`pkgtype(kind: "executable")`](https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html#package-type).
+
+A project, corresponding to a module, consists of multiple packages and a
+single `moon.mod` configuration file. Older projects may still use the legacy
+`moon.mod.json` format.
+
+A module is identified by the [`name`](https://docs.moonbitlang.com/en/latest/toolchain/moon/module.html#name) field, which usually consists of two parts, separated by `/`: `user-name/project-name`.
+A package is identified by the relative path to the source root defined by the [`source`](https://docs.moonbitlang.com/en/latest/toolchain/moon/module.html#source-directory) field. The full identifier would be `user-name/project-name/path-to-pkg`.
+
+When using things from another package, the dependency between modules should
+first be declared in `moon.mod` with an
+[`import`](https://docs.moonbitlang.com/en/latest/toolchain/moon/module.html#dependency-management) declaration.
+The dependency between packages should then be declared in the package file (`moon.pkg`, or legacy `moon.pkg.json`) by the [`import`](https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html#import) field.
+Most core packages follow the same rule: if you use `@json`, `@test`, or other
+ordinary core aliases, add the corresponding `moonbitlang/core/...` package to
+`import` to avoid `core_package_not_imported` warnings.
+
+<a id="default-alias"></a>
+
+The **default alias** of a package is the last part of the identifier split by `/`.
+One can use `@pkg_alias` to access the imported entities, where `pkg_alias` is either the full identifier or the default alias.
+A custom alias may also be defined with the [`import`](https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html#import) field.
+
+In `moon.pkg`, a custom alias is written as:
+
+```text
+import {
+  "moonbit-community/language/packages/pkgA",
+  "moonbit-community/language/packages/pkgC" @c,
+  "moonbitlang/core/builtin",
+}
+```
+
+```moonbit
+///|
+pub fn add1(x : Int) -> Int {
+  @moonbitlang/core/builtin.Add::add(0, @c.incr(@pkgA.incr(x)))
+}
+```
+
+### Prelude and builtin names
+
+If `@pkg.` is omitted, MoonBit resolves an unqualified name in the current
+package and the prelude. A local definition with the same name therefore
+shadows the prelude definition.
+
+```moonbit
+fn println(msg : String) -> String {
+  "log: \{msg}"
+}
+
+///|
+fn shadowed_println() -> String {
+  println("hello")
+}
+
+///|
+fn builtin_answer() -> Int {
+  let answer : Int = 42
+  answer
+}
+```
+
+`prelude` is a special package: it is available by default, and names exposed
+through it participate in normal unqualified name resolution without an
+explicit `import`.
+
+Compiler builtins are a separate category. Types such as `Int` are built into
+the language itself, not imported from any package, so there is no
+`@builtin.Int`. The same distinction applies to other compiler-known names such
+as `String`, `Bool`, and `Unit`.
+
+### Internal Packages
+
+You can define internal packages that are only available for certain packages.
+
+Code in `a/b/c/internal/x/y/z` are only available to packages `a/b/c` and `a/b/c/**`.
+
+### Using
+
+You can use `using` syntax to import symbols defined in another package.
+
+```moonbit
+///|
+pub using @pkgA {incr, trait Trait, type Type}
+```
+
+By having `pub` modifier, it is considered as reexportation.
+
+<a id="access-control"></a>
+
+## Access Control
+
+MoonBit features a comprehensive access control system that governs which parts of your code are accessible from other packages.
+This system helps maintain encapsulation, information hiding, and clear API boundaries.
+The visibility modifiers apply to functions, variables, types, and traits, allowing fine-grained control over how your code can be used by others.
+
+### Functions
+
+By default, all function definitions and variable bindings are *invisible* to other packages.
+You can use the `pub` modifier before toplevel `let`/`fn` to make them public.
+
+### Aliases
+
+By default, [function alias](https://docs.moonbitlang.com/en/latest/language/fundamentals.html#function-alias) and
+[method alias](https://docs.moonbitlang.com/en/latest/language/methods.html#alias-methods-as-functions) follow the
+visibility of the original definition, while
+[type alias](https://docs.moonbitlang.com/en/latest/language/fundamentals.html#type-alias), [using]() are *invisible* to other
+packages.
+
+You can add the `pub` modifier before the definition or fill in the `visibility`
+field within the annotation.
+
+### Types
+
+There are four different kinds of visibility for types in MoonBit:
+
+- Private type: declared with `priv`, completely invisible to the outside world
+- Abstract type: which is the default visibility for types.
+
+  Only the name of an abstract type is visible outside, the internal representation of the
+  type is hidden. Making abstract type by default is a design choice to encourage
+  encapsulation and information hiding.
+- Readonly types, declared with `pub`.
+
+  The internal representation of readonly types are visible outside,
+  but users can only read the values of these types from outside, construction and mutation are not allowed.
+- Fully public types, declared with `pub(all)`.
+
+  The outside world can freely construct, read values of these types and modify them if possible.
+
+In addition to the visibility of the type itself, the fields of a public `struct` can be annotated with `priv`,
+which will hide the field from the outside world completely.
+Note that `struct`s with private fields cannot be constructed directly outside,
+but you can update the public fields using the functional struct update syntax.
+
+Readonly types is a very useful feature, inspired by [private types](https://ocaml.org/manual/5.3/privatetypes.html) in OCaml.
+In short, values of `pub` types can be destructed by pattern matching and the dot syntax, but
+cannot be constructed or mutated in other packages.
+
+#### NOTE
+There is no restriction within the same package where `pub` types are defined.
+
+<!-- MANUAL CHECK -->
+```moonbit
+// Package A
+pub struct RO {
+  field: Int
+}
+test {
+  let r = { field: 4 }       // OK
+  let r = { ..r, field: 8 }  // OK
+}
+
+// Package B
+fn println(r : RO) -> Unit {
+  println("{ field: ")
+  println(r.field)  // OK
+  println(" }")
+}
+test {
+  let r : RO = { field: 4 }  // ERROR: Cannot create values of the public read-only type RO!
+  let r = { ..r, field: 8 }  // ERROR: Cannot mutate a public read-only field!
+}
+```
+
+Access control in MoonBit adheres to the principle that a `pub` type, function, or variable cannot be defined in terms of a private type. This is because the private type may not be accessible everywhere that the `pub` entity is used. MoonBit incorporates sanity checks to prevent the occurrence of use cases that violate this principle.
+
+<!-- MANUAL CHECK -->
+```moonbit
+pub(all) type T1
+pub(all) type T2
+priv type T3
+
+pub(all) struct S {
+  x: T1  // OK
+  y: T2  // OK
+  z: T3  // ERROR: public field has private type `T3`!
+}
+
+// ERROR: public function has private parameter type `T3`!
+pub fn f1(_x: T3) -> T1 { ... }
+// ERROR: public function has private return type `T3`!
+pub fn f2(_x: T1) -> T3 { ... }
+// OK
+pub fn f3(_x: T1) -> T1 { ... }
+
+pub let a: T3 = { ... } // ERROR: public variable has private type `T3`!
+```
+
+### Traits
+
+There are four visibility for traits, just like `struct` and `enum`: private, abstract, readonly and fully public.
+
+- Private traits are declared with `priv trait`, and they are completely invisible from outside.
+- Abstract trait is the default visibility. Only the name of the trait is visible from outside, and the methods in the trait are not exposed.
+- Readonly traits are declared with `pub trait`, their methods can be invoked from outside, but only the current package can add new implementation for readonly traits.
+- Fully public traits are declared with `pub(open) trait`, they are open to new implementations outside current package, and their methods can be freely used.
+
+Abstract and readonly traits are sealed, because only the package defining the trait can implement them.
+Implementing a sealed (abstract or readonly) trait outside its package result in compiler error.
+
+#### Trait Implementations
+
+Implementations have independent visibility, just like functions. The type will not be considered having fulfillled the trait outside current package unless the implementation is `pub`.
+
+To make the trait system coherent (i.e. there is a globally unique implementation for every `Type: Trait` pair),
+and prevent third-party packages from modifying behavior of existing programs by accident,
+MoonBit employs the following restrictions on who can define methods/implement traits for types:
+
+- *only the package that defines a type can define methods for it*. So one cannot define new methods or override old methods for builtin and foreign types.
+  - there is an exception to this rule: [local methods](https://docs.moonbitlang.com/en/latest/language/methods.html#local-method). Local methods are always private though, so they do not break coherence properties of MoonBit's type system
+- *only the package of the type or the package of the trait can define an implementation*.
+  For example, only `@pkg1` and `@pkg2` are allowed to write `impl @pkg1.Trait for @pkg2.Type`.
+
+The second rule above allows one to add new functionality to a foreign type by defining a new trait and implementing it.
+This makes MoonBit's trait & method system flexible while enjoying good coherence property.
+
+#### WARNING
+Currently, an empty trait is implemented automatically.
+
+Here's an example of abstract trait:
+
+<!-- MANUAL CHECK -->
+```moonbit
+trait Number {
+ op_add(Self, Self) -> Self
+ op_sub(Self, Self) -> Self
+}
+
+fn[N : Number] add(x : N, y: N) -> N {
+  Number::op_add(x, y)
+}
+
+fn[N : Number] sub(x : N, y: N) -> N {
+  Number::op_sub(x, y)
+}
+
+impl Number for Int with op_add(x, y) { x + y }
+impl Number for Int with op_sub(x, y) { x - y }
+
+impl Number for Double with op_add(x, y) { x + y }
+impl Number for Double with op_sub(x, y) { x - y }
+```
+
+From outside this package, users can only see the following:
+
+```moonbit
+trait Number
+
+fn[N : Number] op_add(x : N, y : N) -> N
+fn[N : Number] op_sub(x : N, y : N) -> N
+
+impl Number for Int
+impl Number for Double
+```
+
+The author of `Number` can make use of the fact that only `Int` and `Double` can ever implement `Number`,
+because new implementations are not allowed outside.
+
+## Virtual Packages
+
+#### WARNING
+Virtual package is an experimental feature. There may be bugs and undefined behaviors.
+
+You can define virtual packages, which serves as an interface. They can be replaced by specific implementations at build time. Currently virtual packages can only contain plain functions.
+
+Virtual packages can be useful when swapping different implementations while keeping the code untouched.
+
+### Defining a virtual package
+
+You need to declare it to be a virtual package and define its interface in a MoonBit interface file.
+
+Within `moon.pkg`, you will need to add field [`virtual`](https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html#declarations) :
+
+```text
+options(
+  "virtual": { "has-default": true },
+)
+```
+
+The `has-default` indicates whether the virtual package has a default implementation.
+
+Within the package, you will need to add an interface file `pkg.mbti`:
+
+```moonbit
+package "moonbit-community/language/packages/virtual"
+
+fn log(String) -> Unit
+```
+
+The first line of the interface file need to be `package "full-package-name"`. Then comes the declarations.
+The `pub` keyword for [access control]() and the function parameter names should be omitted.
+
+### Implementing a virtual package
+
+A virtual package can have a default implementation. By defining [`virtual.has-default`](https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html#declarations) as `true`, you can implement the code as usual within the same package.
+
+```moonbit
+///|
+pub fn log(s : String) -> Unit {
+  println(s)
+}
+```
+
+A virtual package can also be implemented by a third party. By defining [`implements`](https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html#implementations) as the target package's full name, the compiler can warn you about the missing implementations or the mismatched implementations.
+
+```text
+options(
+  implement: "moonbit-community/language/packages/virtual",
+)
+```
+
+```moonbit
+///|
+pub fn log(string : String) -> Unit {
+  ignore(string)
+}
+```
+
+### Using a virtual package
+
+To use a virtual package, it's the same as other packages: define [`import`](https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html#import) field in the package where you want to use it.
+
+### Overriding a virtual package
+
+If a virtual package has a default implementation and that is your choice, there's no extra configurations.
+
+Otherwise, you may define the [`overrides`](https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html#overriding-implementations) field by providing an array of implementations that you would like to use.
+
+```text
+import {
+  "moonbit-community/language/packages/virtual",
+}
+
+pkgtype(kind: "executable")
+
+options(
+  overrides: [ "moonbit-community/language/packages/implement" ],
+)
+```
+
+You should reference the virtual package when using the entities.
+
+```moonbit
+///|
+fn main {
+  @virtual.log("Hello")
+}
+```

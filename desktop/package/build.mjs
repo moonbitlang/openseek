@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { execFileSync, spawnSync } from "node:child_process";
+import { stageResources } from "./resources.mjs";
 
 const Hosts = {
   darwin: {
@@ -77,11 +78,6 @@ const WebArchives = {
     path: "mermaid",
   },
 };
-
-// Keep the packaged reference docs tied to the toolchain seed. The host uses
-// this exact tree as OPENSEEK_REFERENCES after copying the seed into place.
-const MoonbitDocsCommit = "750cc5a41679256441a3efa75487420028cff2e1";
-const MoonbitDocsRelDir = join("share", "doc", "moonbit");
 
 class Build {
   constructor(command, argv) {
@@ -302,26 +298,7 @@ class Build {
     await this.commandRun("tar", ["-xf", core, "-C", join(seed, "lib")]);
     await rm(join(seed, "lib/core/_build"), { recursive: true, force: true });
 
-    const docsArchive = join(cache, `moonbit-docs-${MoonbitDocsCommit}.tar.gz`);
-    await this.download(
-      `https://codeload.github.com/moonbitlang/moonbit-docs/tar.gz/${MoonbitDocsCommit}`,
-      docsArchive,
-    );
-    const docs = join(seed, MoonbitDocsRelDir);
-    await mkdir(docs, { recursive: true });
-    await this.commandRun("tar", ["-xzf", docsArchive, "-C", docs, "--strip-components=1"]);
-    await rm(join(docs, "_sphinx_design_static"), { recursive: true, force: true });
-    for (const entry of ["index.md", "language", "toolchain"]) {
-      if (!existsSync(join(docs, entry))) throw new Error(`moonbit-docs archive is missing ${entry}`);
-    }
-    const workflowHash = createHash("sha256");
-    const workflows = join(seed, "share/workflow");
-    await mkdir(workflows, { recursive: true });
-    for (const entry of ["README.md", "check.mbtx", "test.mbtx", "check-test.mbtx", "info-fmt.mbtx", "check-json.mbtx"]) {
-      const content = await readFile(join(this.repo, "workflow", entry));
-      workflowHash.update(entry).update("\0").update(content).update("\0");
-      await writeFile(join(workflows, entry), content);
-    }
+    const resourceHash = await stageResources(join(this.repo, "share"), join(seed, "share"));
 
     if (this.command !== "windows") await this.commandRun("chmod", ["-R", "+x", join(seed, "bin")]);
     const compiler = join(seed, `bin/moonc${this.command === "windows" ? ".exe" : ""}`);
@@ -333,7 +310,7 @@ class Build {
     }
     await writeFile(
       join(seed, ".openseek-moonbit-seed-version"),
-      `${version} docs=${MoonbitDocsCommit} docsdir=share/doc/moonbit workflows=${workflowHash.digest("hex")}\n`,
+      `${version} resources=${resourceHash}\n`,
     );
     return { rg, seed };
   }

@@ -4,6 +4,7 @@ default:
 # Parse the shared build program and type-check every compatibility entry.
 build-scripts-check:
     node --check package/build.mjs
+    node --test package/resources.test.mjs
     node --check scripts/release.mjs
     node --test scripts/release.test.mjs
     moon check package/internal/cli package/macos package/windows package/linux package/browser package/dev --target native
