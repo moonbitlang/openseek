@@ -939,6 +939,16 @@ fn message(name : String, line : Int) -> String {
   It is deterministic, so it is fine when you only need stable output; when you
   need dictionary order (sorted JSON keys, for instance), sort with an explicit
   comparator instead of the default.
+- `Array::sort` and `Array::sort_by` sort **in place and return `Unit`**, so a
+  chain on the result is a type error — `xs.sort()[0]` fails with "Unit has no
+  method op_get", and so does `for x in xs.sort() { ... }`. Sort first, then
+  read the array (`xs.sort(); xs[0]`), or use the cascade operator `..`, which
+  runs the call and yields the array itself: `let sorted = xs..sort()`. For
+  sorted directory listings pass `sort=true` instead of chaining:
+  `@fs.readdir(dir, sort=true)`.
+- `Array::rev` and `String::rev` **return a new value** and leave the original
+  untouched: `let ys = xs.rev()`. To reverse in place use `Array::rev_in_place`
+  (returns `Unit`, like `sort`). There is no `Array::reverse` method.
 - `s[start:end]`, `s[:end]`, and `s[start:]` create zero-copy `StringView`s.
   Pass views directly to string APIs and parsers; use `.to_owned()` only when a
   callee stores or requires an owned `String`.
