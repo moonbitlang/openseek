@@ -5,8 +5,11 @@ pub fn definition() -> @agent_tool.AgentToolDefinition {
     name="job_wait",
     description=(
       #|Wait for any selected background job to finish, or until user input arrives.
-      #|Use when you need those results and have no other work to do. No timeout or
-      #|polling is needed. Call this tool alone in its batch. Returns job states;
+      #|This pauses the turn. First do useful work on the user's request that is
+      #|independent of these jobs, in parallel while they run. Use this tool only
+      #|when further progress depends on their results and no useful independent
+      #|work remains. No timeout or polling is needed. Call this tool alone in its
+      #|batch. Returns job states;
       #|read logs afterward with job_output. Use finish if your work is already done.
       #|Runtime watchdogs still apply; a job may be stopped at its output or time cap.
     ),

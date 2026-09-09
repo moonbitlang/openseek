@@ -13,7 +13,7 @@ fn AgentLoop::background_finish_notice(self : AgentLoop) -> String? {
     })
     .join("\n")
   Some(
-    "Background jobs still need a decision:\n\{labels}\nIf your work is complete, call finish. If you need their results and have no other work, call job_wait with job_ids. Otherwise keep working, or stop unneeded jobs with job_stop.",
+    "Background jobs still need a decision:\n\{labels}\nFirst consider useful work on the user's request that can proceed independently of these jobs, such as reviewing changes, investigating another issue, or preparing the next step. Keep doing that work in parallel while the jobs run. Call job_wait with job_ids only when further progress depends on their results and no useful independent work remains; it pauses this turn until a selected job finishes or user input arrives. If your work is complete, call finish. Stop unneeded jobs with job_stop.",
   )
 }
 

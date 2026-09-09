@@ -1741,9 +1741,12 @@ fn description(
     $|succeeded, so the job's output and exit code are the program's own. A completion
     $|notice arrives when it finishes, so never wait with sleep loops or repeated
     $|polling: keep working and act on the notice. Read recent output with job_output
-    $|and cancel it with job_stop. If you need results and have no other work, call
-    $|job_wait with job_ids, alone in its tool batch; it resumes on completion or
-    $|user input, without a timeout. Explicitly finish when your work is complete.
+    $|and cancel it with job_stop. First do useful work on the user's request that
+    $|is independent of the job, in parallel while it runs. Only when further
+    $|progress depends on its results and no useful independent work remains,
+    $|call job_wait with job_ids, alone in its tool batch. It pauses the turn until
+    $|completion or user input, without a timeout. Explicitly finish when your
+    $|work is complete.
     $|\{delegation}
   )
 }

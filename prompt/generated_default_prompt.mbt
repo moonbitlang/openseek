@@ -499,9 +499,13 @@ fn default_prompt() -> String {
     #|    background flag and no duration guess to make. A notice is pushed when the
     #|    job finishes. Never wait with a sleep loop or repeated polling; keep working
     #|    and act on the notice. `job_output` reads recent output; `job_stop` cancels
-    #|    the job. If you need the result now and have nothing else to do, call
-    #|    `job_wait` with `job_ids`, alone in its tool batch. It waits for any selected
-    #|    job to finish or for user input, without a timeout. Then read results with
+    #|    the job. Before waiting, look for useful work on the user's request that can
+    #|    proceed independently, such as reviewing changes, investigating another
+    #|    issue, or preparing the next step, and do it in parallel while the job runs.
+    #|    Only when further progress depends on the result and no useful independent
+    #|    work remains, call `job_wait` with `job_ids`, alone in its tool batch. It
+    #|    pauses the turn until any selected job finishes or user input arrives,
+    #|    without a timeout. Then read results with
     #|    `job_output`. If your work is complete despite running jobs, explicitly call
     #|    `finish`; a plain-text answer with running jobs asks you to choose. Background
     #|    jobs are reaped after thirty minutes of wall clock.
