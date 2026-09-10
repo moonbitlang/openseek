@@ -26,3 +26,73 @@ Missing bundled names do not fall back to workspace files. Other `@namespace/`
 prefixes are reserved and currently rejected. To customize a script, save the
 modified source with an ordinary workspace filename; never send source with
 `@builtin/`.
+
+## Read-only agent workflows
+
+- `change-review.mbtx` examines staged, unstaged, and untracked source changes
+  from correctness, compatibility, and regression-test perspectives. Its scope
+  is the working tree against HEAD, not committed branch history.
+- `repo-map.mbtx` surveys architecture and data flow, validation commands, and
+  extension points for a new contributor.
+
+Run these with the hosted child-agent handoff:
+
+```json
+{"filename":"@builtin/change-review.mbtx","subrun":true}
+```
+
+```json
+{"filename":"@builtin/repo-map.mbtx","subrun":true,"cwd":"/path/to/repository"}
+```
+
+Both use `moonbitlang/workflow`'s `fan_out` and `attempt` with read-only
+`explore` children. Change review runs three scouts, allowing 16 steps each.
+Repo-map runs two scouts, allowing 12 steps each, and displays the root
+`justfile` recipes directly in MoonBit without asking a model to summarize
+commands. Recipes are marked as not executed; a missing `justfile` is reported
+explicitly. Long recipe files are visibly truncated.
+
+For MoonBit, scouts start with the selected package’s `moon.pkg` and
+`pkg.generated.mbti`, then use its dependencies and public API to choose
+implementation and test reads. Interfaces are navigation aids: they can be
+stale and omit private behavior, so behavioral claims still require source.
+
+Repo-map asks for at most six targeted reads before submission. That read limit
+is guidance to the scout; the 12-step ceiling is enforced by the engine.
+The host supplies the runner, journal, event stream, credentials, and reserved
+child IDs through `moonbitlang/workflow/hosted`. Missing handoff or insufficient
+child capacity (three for change review, two for repo-map) fails before any
+scout starts. These workflows use model tokens.
+
+Change review prints JSON reports; repo-map prints readable Markdown answers,
+supporting references, unverified areas, and usage counts. Repo-map shares one
+bounded inventory of root entries and nested package source filenames, plus numbered
+excerpts from root instructions, README, and MoonBit/build manifests across
+the scouts. Discovery visits at most 160 directories through depth three,
+skips hidden/generated/vendor directories and directory symlinks, and caps
+the package listing at 16,000 characters. Omitted areas are marked explicitly.
+It asks for one verified execution trace and one concrete extension
+example, with answers under 350 words and at most eight citations, and rejects
+a missing or empty answer. Every citation must contain a repository-relative
+file and positive integer line number. The script resolves the path (including
+symlinks), checks containment and readability, and verifies the line exists.
+Missing/malformed references are marked `UNVERIFIED` and make the run fail;
+`CHECKED` means only that the location exists, not that the claim is true.
+The scout must submit through
+`submit_answer`; ordinary final text does not satisfy the child contract.
+
+Output contains one report per named perspective plus usage counts.
+Successful reports remain visible if another perspective fails, and any failed
+perspective makes the script exit unsuccessfully. Findings are agent-produced
+leads with cited evidence, not a substitute for running project checks. The
+calling agent can compare and consolidate the reports without another scout.
+Run against a stable working tree so the scouts inspect the same state.
+
+To customize, copy a script into the workspace and edit its questions or step
+limit. Keep `ctx.run` so OpenSeek can account for and display its children.
+The pinned imports make these scripts independent of the inspected project's
+library dependencies. Compile them with `moon run --build-only --target wasm
+share/workflow/repo-map.mbtx`; execute them through OpenSeek with `subrun=true`.
+
+Maintainers: `just test-workflows` exercises both scripts with an offline child
+contract fixture, including partial failure and missing/insufficient handoff.

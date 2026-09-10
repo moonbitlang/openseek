@@ -34,7 +34,7 @@ inspect *args:
     moon run inspect -- {{ args }}
 
 # Run workspace MoonBit tests plus the offline OpenSeek CLI documentation tests.
-test: test-moon test-cram test-turn-finish
+test: test-moon test-cram test-turn-finish test-workflows
 
 # Run the offline CLI documentation tests (Git Bash on Windows).
 test-cram:
@@ -91,3 +91,7 @@ desktop-dev:
 # Run the session viewer's Rabbita views in Chromium.
 viz-test-browser:
     just --justfile cmd/viz_app/justfile test-browser
+
+# Exercise bundled agent workflows against an offline child contract.
+test-workflows:
+    python3 tests/integration/workflows.py

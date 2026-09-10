@@ -287,7 +287,7 @@ async fn execute(
         error if @async.is_being_cancelled() => raise error
         error => {
           let hint = if is_bundled_filename(filename) {
-            " Bundled workflows: @builtin/check.mbtx, @builtin/test.mbtx, @builtin/check-test.mbtx, @builtin/info-fmt.mbtx, @builtin/check-json.mbtx. Ordinary filenames select workspace files."
+            " Bundled workflows: @builtin/check.mbtx, @builtin/test.mbtx, @builtin/check-test.mbtx, @builtin/info-fmt.mbtx, @builtin/check-json.mbtx. Read-only agent workflows (subrun=true): @builtin/change-review.mbtx, @builtin/repo-map.mbtx. Ordinary filenames select workspace files."
           } else {
             " filename alone must name an existing readable script. To save a new workspace script, pass source and filename together; or run inline with source only. Paths resolve from the workspace, independently of cwd."
           }
@@ -1602,6 +1602,9 @@ fn description(
     #|@builtin/check.mbtx (moon check), @builtin/test.mbtx (moon test),
     #|@builtin/check-test.mbtx (check then test), @builtin/info-fmt.mbtx (info
     #|then fmt), and @builtin/check-json.mbtx (moon check --output-json).
+    #|For read-only agent workflows, use subrun=true with
+    #|@builtin/change-review.mbtx (working-tree review from three perspectives)
+    #|or @builtin/repo-map.mbtx (architecture, validation, extension points).
     #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
     #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
     #|not implemented. Paths within the namespace cannot escape its root.

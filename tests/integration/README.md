@@ -21,3 +21,13 @@ multi-job selection, and notification ordering separately.
 A second real `serve` scenario clears the goal through stdin while `job_wait`
 observes a gated job. The next model request must report `user_input` before the
 job is released, proving that the command dispatcher wakes the active turn.
+
+# Bundled workflows
+
+`just test-workflows` compiles the bundled agent scripts for Wasm and runs them
+with a local Python child-contract fixture. It checks success, partial failure,
+missing handoff, insufficient capacity, empty answers, and bounded shared
+repository context, nested-package discovery, and citation validation (including
+escaping symlinks and invalid line numbers), without calling a model service.
+It is also included in `just test`. Builds live in a temporary directory so the
+bundled resource tree stays clean.
