@@ -60,6 +60,16 @@ trial, in AB/BA/AB order. Both arms get the same task and explicit requirements
 for a MoonBit implementation, clean nonzero CLI errors, and no delegation.
 Each workspace begins with only a committed `.gitignore`; global skills and MCP
 are disabled, while each binary retains its own default prompt and tools.
+The runner terminates each command's and agent's process group on every exit,
+including success, so abandoned descendants cannot consume CPU in later trials.
+This cleanup was added after the recorded September cohort exposed the leak;
+the historical report preserves that limitation and links its original runner.
+
+Verify descendant cleanup without a model call:
+
+```bash
+python3 -B -m unittest discover -s eval/prompt_task -p 'toml_read_ab_cleanup_test.py'
+```
 
 Before model calls, `--prepare-only` verifies Git isolation and cross-checks 29
 valid documents and 26 invalid documents against Python's `tomllib`. A reference
