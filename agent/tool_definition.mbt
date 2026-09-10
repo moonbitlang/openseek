@@ -216,16 +216,10 @@ async test "the registry has no shell tool family" {
     guard schema is { "properties": Object(properties), .. } else {
       fail("expected an object schema")
     }
-    let names = properties.keys().collect()
-    assert_eq(names.length(), 7)
-    for
-      name in [
-        "source", "filename", "args", "description", "target", "cwd", "warning",
-      ] {
-      assert_true(names.contains(name))
-    }
-    assert_false(mbtx.description.contains("run_in_background"))
-    assert_true(mbtx.description.contains("AUTOMATICALLY"))
+    // New script options must not break this regression test. The mbtx
+    // package owns the complete schema contract; here only the removed
+    // background-mode field is relevant to the registry's shell-free API.
+    assert_false(properties.contains("run_in_background"))
   }
 }
 
