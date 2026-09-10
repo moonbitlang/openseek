@@ -221,7 +221,9 @@ pub fn parse_goal_baseline(content : String) -> GoalBaseline? {
     (re" dirty=false$", before=sha, after=_) => (sha, false)
     _ => return None
   }
-  if sha.is_empty() {
+  // The FIRST ` dirty=` is the field separator, so a prefix that still holds
+  // one means the line repeated the field — mangled, not a sha containing it.
+  if sha.is_empty() || sha.contains(" dirty=") {
     return None
   }
   Some({ sha: sha.to_owned(), dirty, })

@@ -122,6 +122,14 @@ test "goal baseline round-trips through its notice" {
     @agent_session.parse_goal_baseline("[goal baseline] sha=x dirty=true junk")
     is None,
   )
+  // A repeated field is mangled too: the FIRST ` dirty=` is the separator,
+  // so the value that follows it is never `true`/`false` on its own.
+  assert_true(
+    @agent_session.parse_goal_baseline(
+      "[goal baseline] sha=x dirty=true dirty=false",
+    )
+    is None,
+  )
 }
 
 ///|
