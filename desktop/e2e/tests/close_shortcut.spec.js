@@ -221,3 +221,25 @@ test('Close respects dialogs and closes successive dock tabs without closing the
     .toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
 });
+
+for (const destination of ['Browser', 'Workflows']) {
+  test(`closing a file keeps its promoted ${destination} visible on narrow layouts`, async ({ page }) => {
+    const app = await installDesktop(page);
+    await page.setViewportSize({ width: 390, height: 850 });
+    await app.openReview();
+    await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.getByTitle('New tab', { exact: true }).click();
+    await page.getByRole('button', { name: destination === 'Browser' ? /^Browse/ : /^Workflows / }).click();
+    const tabs = page.locator('.editor-tab');
+    const file = tabs.filter({ hasText: 'main.mbt' });
+    await file.click();
+    await expect(file).toHaveClass(/active/);
+    await file.locator('.tab-close').click();
+    await expect(tabs).toHaveCount(1);
+    await expect(tabs).toHaveClass(/active/);
+    await expect(page.locator(destination === 'Browser' ? '.browser-chrome' : '.workflow-panel')).toBeVisible();
+    await expect(page.getByRole('tablist', { name: 'Explorer views' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Show workspace navigator' })).toBeVisible();
+    expect(app.pageErrors).toEqual([]);
+  });
+}

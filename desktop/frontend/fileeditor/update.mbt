@@ -1141,11 +1141,10 @@ pub fn activate(
 
 ///|
 /// Drop `path`'s document after its dock tab closed. `next`, when the closed
-/// tab owned the screen, is the file the dock promoted (`None` when the
-/// strip emptied — the viewer falls back to the placeholder, and the tree is
-/// forced open so the panel is never a dead pane). The closed document's
-/// parked scroll is forgotten after the neighbor's show re-parks the
-/// outgoing document.
+/// tab owned the screen, is the file the dock promoted. `None` can also mean
+/// a non-file successor, so only the root dock handler decides navigator
+/// visibility. Forget the closed document's scroll after the neighbor's show
+/// re-parks the outgoing document.
 pub fn close_document(
   dispatch : @cmd.Emit[Msg],
   state : State,
@@ -1167,15 +1166,6 @@ pub fn close_document(
   // promoting its neighbor must not address the missing checkout. Recovery's
   // sync pass restores whichever surviving tab the dock made active.
   if !ctx.placement_ready() {
-    let state = {
-      ..state,
-      docs,
-      tree_open: if was_active && next is None {
-        true
-      } else {
-        state.tree_open
-      },
-    }
     let cmd = if was_active && next is None {
       @cmd.batch([
         clear_document(),
@@ -1185,7 +1175,7 @@ pub fn close_document(
     } else {
       forget_view_state(path)
     }
-    return (cmd, state)
+    return (cmd, { ..state, docs, })
   }
   guard was_active else { return (forget_view_state(path), { ..state, docs, }) }
   match next {
@@ -1207,9 +1197,8 @@ pub fn close_document(
       } else {
         (forget_view_state(path), { ..state, docs, })
       }
-    // The last tab: fall back to the placeholder and force the tree open so
-    // the panel is never a dead pane. Losing the active tab also hides the
-    // breadcrumb row, so the viewer must remeasure.
+    // No file inherits the viewer. Clear its old content and remeasure after
+    // the breadcrumb hides, without changing the promoted dock destination.
     None =>
       (
         @cmd.batch([
@@ -1217,7 +1206,7 @@ pub fn close_document(
           forget_view_state(path),
           request_viewer_remeasure(),
         ]),
-        { ..state, docs, tree_open: true, },
+        { ..state, docs, },
       )
   }
 }
@@ -5175,7 +5164,7 @@ test "activate without a document entry is a no-op" {
 }
 
 ///|
-test "close_document drops the entry and forces the tree open on the last one" {
+test "close_document drops the entry without changing navigator visibility" {
   let emit = test_emit()
   let docs : Map[@pathx.Relative, Doc] = Map([])
   docs[Relative("a.mbt")] = loaded_doc("a.mbt")
@@ -5194,18 +5183,20 @@ test "close_document drops the entry and forces the tree open on the last one" {
   assert_false(one.docs.contains(Relative("a.mbt")))
   assert_true(one.docs.contains(Relative("b.mbt")))
   assert_false(one.tree_open)
-  // Closing the last document: the viewer falls back to the placeholder and
-  // the tree is forced open so the panel is never a dead pane.
-  let (_, last) = close_document(
-    emit,
-    one,
-    test_ctx(),
-    Relative("b.mbt"),
-    next=None,
-    was_active=true,
-  )
-  assert_true(last.docs.is_empty())
-  assert_true(last.tree_open)
+  // No next file does not imply an empty dock: Browser or Workflows may be
+  // active. This remains true while checkout access is unavailable.
+  for placement in [test_ctx().placement, None] {
+    let (_, last) = close_document(
+      emit,
+      one,
+      { ..test_ctx(), placement, },
+      Relative("b.mbt"),
+      next=None,
+      was_active=true,
+    )
+    assert_true(last.docs.is_empty())
+    assert_false(last.tree_open)
+  }
 }
 
 ///|

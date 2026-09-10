@@ -4803,7 +4803,8 @@ fn update_msg(
       // Only a real non-empty -> empty strip transition closes the panel.
       // An already-empty panel is the launcher surface, so a stale close must
       // leave it open. Reset the other visibility bits just like the explicit
-      // panel toggle does, keeping the root-owned panel state consistent.
+      // panel toggle does. Only an empty dock prepares the navigator for the
+      // next opening; having no next file can still mean Browser or Workflows.
       let model = if !before.tabs.is_empty() && dock.tabs.is_empty() {
         {
           ..model,
@@ -4811,6 +4812,7 @@ fn update_msg(
           right_panel_open: false,
           right_panel_menu_open: false,
           right_panel_expanded: false,
+          file_panel: { ..model.file_panel, tree_open: true, },
         }
       } else {
         { ..model, dock, }
@@ -18953,6 +18955,71 @@ test "launcher rows open Browser and all Explorer destinations" {
   let (_, model) = update(dispatch, ExplorerRequested(ExplorerSearch), model)
   assert_true(model.file_panel.explorer_mode is ExplorerSearch)
   assert_true(model.file_panel.tree_open)
+}
+
+///|
+test "closing a file preserves the promoted non-file tab and navigator preference" {
+  let dispatch = test_dispatch()
+  let path = @pathx.Relative("src/main.mbt")
+  for
+    request in [
+      ExternalLinkClicked("https://example.test/"),
+      WorkflowsRequested,
+    ] {
+    for narrow in [false, true] {
+      let (_, destination) = update(dispatch, request, {
+        ..desktop_model(),
+        narrow,
+        sidebar_open: false,
+        right_panel_open: true,
+      })
+      let successor = destination.dock.active
+      let (_, opened) = update(
+        dispatch,
+        FileEditor(FileSelected(path~, name="main.mbt")),
+        destination,
+      )
+      for tree_open in [false, true] {
+        let (_, closed) = update(dispatch, Dock(TabClosed(@dock.File(path~))), {
+          ..opened,
+          file_panel: { ..opened.file_panel, tree_open, },
+        })
+        assert_true(closed.dock.active == successor)
+        assert_eq(closed.dock.tabs.length(), 1)
+        assert_true(closed.right_panel_open)
+        assert_eq(closed.file_panel.tree_open, tree_open)
+        assert_false(closed.file_panel.docs.contains(path))
+        if successor is Some(@dock.Browser(id~)) && !(narrow && tree_open) {
+          assert_eq(desired_browser_view(closed), Some(id))
+        }
+      }
+    }
+  }
+}
+
+///|
+test "closing the last dock tab prepares the navigator for reopening" {
+  let dispatch = test_dispatch()
+  for
+    request in [
+      BrowserTabRequested,
+      WorkflowsRequested,
+      FileEditor(FileSelected(path=Relative("src/main.mbt"), name="main.mbt")),
+    ] {
+    let (_, opened) = update(dispatch, request, {
+      ..desktop_model(),
+      narrow: true,
+      right_panel_open: true,
+    })
+    guard opened.dock.active is Some(tab) else { fail("expected an open tab") }
+    let (_, closed) = update(dispatch, Dock(TabClosed(tab)), opened)
+    assert_true(closed.dock.active is None)
+    assert_false(closed.right_panel_open)
+    assert_true(closed.file_panel.tree_open)
+    let (_, reopened) = update(dispatch, ToggleRightPanel, closed)
+    assert_true(reopened.right_panel_open)
+    assert_true(reopened.file_panel.tree_open)
+  }
 }
 
 ///|
