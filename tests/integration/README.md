@@ -34,3 +34,10 @@ bundled resource tree stays clean.
 
 The native CI job also runs `python3 tests/integration/workflows.py` directly,
 since its target matrix does not invoke the root `just test` recipe.
+
+`ci_watch.py` compiles the bundled CI monitor as Wasm and substitutes a scoped
+`gh` executable with controlled JSON snapshots. It verifies stable completion,
+PR-head replacement, failure/cancellation states, registration gaps, errors,
+timeouts, and diagnostic argument lists without network or model credentials.
+Run it directly with `python3 tests/integration/ci_watch.py`; the root workflow
+test recipe and native CI job include it.

@@ -96,3 +96,51 @@ share/workflow/repo-map.mbtx`; execute them through OpenSeek with `subrun=true`.
 
 Maintainers: `just test-workflows` exercises both scripts with an offline child
 contract fixture, including partial failure and missing/insufficient handoff.
+
+## GitHub CI monitor
+
+`ci-watch.mbtx` uses authenticated `gh` to monitor the current-branch PR, or an
+explicit PR number/URL. It is deterministic, read-only, and uses no subagents
+or model tokens. CLI parsing and generated help use `moonbitlang/core/argparse`.
+It never reruns jobs, changes branches, or merges a PR.
+
+```json
+{"filename":"@builtin/ci-watch.mbtx","args":["1427","--repo","moonbitlang/openseek","--once"]}
+```
+
+Omit `--once` to watch for up to 300 seconds, polling every 15 seconds. Override
+with `--timeout-seconds` (1–3600) and `--interval-seconds` (1–60). Without an
+explicit PR, `cwd` must select the repository containing the current branch.
+`--repo` accepts `OWNER/REPO` or `HOST/OWNER/REPO`. Use `--help` for usage. The
+host's own execution deadline can end the script sooner; with an OpenSeek job
+runtime, long runs use its normal automatic background handoff. No `subrun`
+flag or scheduled automation is needed.
+
+The first snapshot pins the PR URL and head commit. A changed head stops the
+monitor as superseded, rather than mixing checks from different revisions.
+Both Actions check runs and external commit statuses are included. Changed
+snapshots print check names, workflows, raw states, and links as JSON rows;
+missing links/workflows are `null`. Failed Actions checks also include
+`failure_logs_argv`, an argument list for `gh run view --log-failed`. Logs are
+not downloaded automatically; the caller can use that command or the check
+URL, and a still-running workflow may not yet have downloadable failed logs.
+
+A watch succeeds after two matching completed snapshots with at least one
+successful check, no failed or pending checks, and any remaining checks
+skipped/neutral. `--once` evaluates one snapshot. A failed/cancelled/action-required
+check exits nonzero immediately, even if other checks remain pending. No checks,
+only skipped/neutral checks, unknown states, API/authentication errors, and
+expired deadlines never count as success. Pending `--once` snapshots exit
+nonzero too; their output says `CI INCOMPLETE` rather than `CI FAILED`.
+
+This reports **observed checks**, not branch-protection compliance or merge
+readiness. It cannot know about workflows that have not registered, path-filtered
+workflows that never run, or required checks missing from the returned snapshot.
+Two stable polls reduce registration races but do not prove that all expected
+checks exist. Each gh request has a 30-second timeout and a 1 MiB output bound.
+
+`tests/integration/ci_watch.py` exercises the actual Wasm script using a local
+`gh` fixture, including pending-to-success, delayed registration, late failure,
+head replacement, external statuses, unknown states, and timeouts. It runs in
+`just test-workflows` and the native CI job. The mbtx package also checks bundled
+argument forwarding without requiring GitHub credentials.

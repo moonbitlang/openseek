@@ -95,3 +95,4 @@ viz-test-browser:
 # Exercise bundled agent workflows against an offline child contract.
 test-workflows:
     python3 tests/integration/workflows.py
+    python3 tests/integration/ci_watch.py

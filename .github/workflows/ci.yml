@@ -78,7 +78,9 @@ jobs:
 
       - name: Bundled workflows (offline child contract)
         if: matrix.target == 'native'
-        run: python3 tests/integration/workflows.py
+        run: |
+          python3 tests/integration/workflows.py
+          python3 tests/integration/ci_watch.py
 
       - name: Check formatting
         # Run the repository's one canonical formatter once on stable/native.

@@ -2041,3 +2041,27 @@ async test "a hosted run is announced before it runs and closed on every exit" {
     })
   })
 }
+
+///|
+async test "CI monitor bundled entry forwards arguments before querying GitHub" {
+  let references = @fs.realpath("share")
+  let filename = if @env.get_env_var("OPENSEEK_REFERENCES") == Some(references) {
+    "@builtin/ci-watch.mbtx"
+  } else {
+    @fs.realpath("share/workflow/ci-watch.mbtx")
+  }
+  @vfs.with_tmpdir(ws => {
+    let out = run_in(ws, { "filename": filename, "args": ["--help"] })
+    assert_false(out.is_error, msg=out.content)
+    assert_true(
+      out.content.contains("Requires authenticated gh"),
+      msg=out.content,
+    )
+    let out = run_in(ws, {
+      "filename": filename,
+      "args": ["--timeout-seconds", "0"],
+    })
+    assert_true(out.is_error, msg=out.content)
+    assert_true(out.content.contains("Expected seconds"), msg=out.content)
+  })
+}

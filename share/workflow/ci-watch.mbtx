@@ -1,0 +1,286 @@
+///|
+import {
+  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.21.2/shell",
+  "moonbitlang/core/argparse",
+  "moonbitlang/core/json",
+}
+
+///|
+fn seconds(value : String, maximum : Int) -> Int raise {
+  guard !value.is_empty() && value.length() <= 4 else {
+    fail("Expected seconds between 1 and \{maximum}")
+  }
+  let mut result = 0
+  for c in value {
+    guard c >= '0' && c <= '9' else { fail("Expected integer seconds") }
+    result = result * 10 + c.to_int() - 48
+  }
+  guard result > 0 && result <= maximum else {
+    fail("Expected seconds between 1 and \{maximum}")
+  }
+  result
+}
+
+///|
+fn optional_text(value : String?) -> Json {
+  match value {
+    Some(text) => text.to_json()
+    None => null
+  }
+}
+
+///|
+fn log_command(link : String?) -> Json {
+  if link is Some(url) {
+    match url.split("/").map(part => part.to_owned()).collect() {
+      ["https:", "", host, owner, repo, "actions", "runs", run, ..] if !run.is_empty() &&
+        run.iter().all(c => c >= '0' && c <= '9') =>
+        return [
+          "gh",
+          "run",
+          "view",
+          run,
+          "--repo",
+          host + "/" + owner + "/" + repo,
+          "--log-failed",
+        ]
+      _ => ()
+    }
+  }
+  null
+}
+
+///|
+async fn main {
+  let command = @argparse.Command(
+    "ci-watch.mbtx",
+    about="Monitor observed GitHub PR checks, not merge readiness. Requires authenticated gh. Read-only; no reruns or merges.",
+    flags=[
+      @argparse.FlagArg(
+        "once",
+        about="Report one snapshot; pending/incomplete exits nonzero.",
+      ),
+    ],
+    options=[
+      @argparse.OptionArg("repo", about="GitHub repository: [HOST/]OWNER/REPO."),
+      @argparse.OptionArg(
+        "timeout-seconds",
+        default_values=["300"],
+        about="Overall deadline in seconds (1–3600).",
+      ),
+      @argparse.OptionArg(
+        "interval-seconds",
+        default_values=["15"],
+        about="Poll interval in seconds (1–60).",
+      ),
+    ],
+    positionals=[
+      @argparse.PositionArg(
+        "pr",
+        num_args=@argparse.ValueRange(lower=0, upper=1),
+        about="PR number or URL; defaults to current-branch PR.",
+      ),
+    ],
+  )
+  let parsed = command.parse()
+  let mut selector = match parsed.values {
+    { "pr": [value], .. } => Some(value)
+    _ => None
+  }
+  let repo = match parsed.values {
+    { "repo": [value], .. } => Some(value)
+    _ => None
+  }
+  let once = parsed.flags is { "once": true, .. }
+  guard parsed.values
+    is {
+      "timeout-seconds": [timeout_text],
+      "interval-seconds": [interval_text],
+      ..
+    } else {
+    fail("Missing parsed timing options")
+  }
+  let timeout = seconds(timeout_text, 3600)
+  let interval = seconds(interval_text, 60)
+  println("# CI monitor (observed checks; not a merge-readiness verdict)")
+  // Bound both a stuck CLI call and the entire polling loop.
+  @async.with_timeout(timeout * 1000, () => {
+    let mut head : String? = None
+    let mut previous : String? = None
+    let mut previous_green = false
+    while true {
+      let command = ["pr", "view"]
+      if selector is Some(value) {
+        command.push(value)
+      }
+      if repo is Some(value) {
+        command.append(["--repo", value])
+      }
+      command.append(["--json", "number,url,headRefOid,statusCheckRollup"])
+      let output = @shell.Cmd("gh", command).output(
+        timeout_ms=30000,
+        max_output_bytes=1048576,
+      )
+      guard output.exit_code() == 0 else {
+        fail(
+          "CI query failed (gh exit \{output.exit_code()}): \{output.stderr()}",
+        )
+      }
+      let snapshot = @json.parse(output.stdout())
+      guard snapshot
+        is {
+          "url": String(url),
+          "headRefOid": String(sha),
+          "statusCheckRollup": Array(checks),
+          ..
+        } &&
+        !url.is_empty() &&
+        !sha.is_empty() else {
+        fail("Invalid CI snapshot: expected PR URL, head SHA, and check array")
+      }
+      match head {
+        None => {
+          head = Some(sha)
+          selector = Some(url)
+          println("PR: \{url}\nHead: \{sha}")
+        }
+        Some(expected) if expected != sha =>
+          fail(
+            "SUPERSEDED: head changed from \{expected} to \{sha}; rerun for the new commit",
+          )
+        _ => ()
+      }
+      let rows : Array[String] = []
+      let mut passed = 0
+      let mut skipped = 0
+      let mut pending = 0
+      let mut failed = 0
+      for check in checks {
+        let (name, state, link, workflow) = match check {
+          {
+            "__typename": String("CheckRun"),
+            "name": String(name),
+            "status": String(status),
+            ..
+          } => {
+            let state = if status == "COMPLETED" {
+              match check {
+                { "conclusion": String(value), .. } if !value.is_empty() =>
+                  value
+                _ => "UNKNOWN"
+              }
+            } else {
+              status
+            }
+            let link = match check {
+              { "detailsUrl": String(value), .. } if !value.is_empty() =>
+                Some(value)
+              _ => None
+            }
+            let workflow = match check {
+              { "workflowName": String(value), .. } if !value.is_empty() =>
+                Some(value)
+              _ => None
+            }
+            (name, state, link, workflow)
+          }
+          {
+            "__typename": String("StatusContext"),
+            "context": String(name),
+            "state": String(state),
+            ..
+          } => {
+            let link = match check {
+              { "targetUrl": String(value), .. } if !value.is_empty() =>
+                Some(value)
+              _ => None
+            }
+            (name, state, link, None)
+          }
+          _ => fail("Unrecognized CI check shape: \{check.stringify()}")
+        }
+        let category = match state {
+          "SUCCESS" => {
+            passed += 1
+            "PASS"
+          }
+          "NEUTRAL" | "SKIPPED" => {
+            skipped += 1
+            "SKIP"
+          }
+          "FAILURE"
+          | "ERROR"
+          | "TIMED_OUT"
+          | "CANCELLED"
+          | "ACTION_REQUIRED"
+          | "STARTUP_FAILURE"
+          | "STALE" => {
+            failed += 1
+            "FAIL"
+          }
+          _ => {
+            pending += 1
+            "PENDING/UNKNOWN"
+          }
+        }
+        // JSON quoting prevents names/descriptions from forging output lines.
+        let row : Json = {
+          "result": category,
+          "name": name,
+          "state": state,
+          "workflow": optional_text(workflow),
+          "url": optional_text(link),
+          "failure_logs_argv": if category == "FAIL" {
+            log_command(link)
+          } else {
+            null
+          },
+        }
+        rows.push(row.stringify())
+      }
+      rows.sort()
+      let fingerprint = rows.join("\n")
+      let green = passed > 0 && pending == 0 && failed == 0
+      let stable = previous is Some(old) && old == fingerprint
+      if !stable {
+        println(
+          "pass=\{passed} skip=\{skipped} pending=\{pending} fail=\{failed}",
+        )
+        for row in rows {
+          println(row)
+        }
+        if checks.is_empty() {
+          println("NO CHECKS: waiting for registration; this is not success")
+        }
+        if passed == 0 && skipped > 0 && pending == 0 && failed == 0 {
+          println("ONLY SKIPPED/NEUTRAL: no successful checks observed")
+        }
+      }
+      if failed > 0 {
+        fail(
+          "CI FAILED: inspect the failed check URLs above for logs/annotations; no jobs were rerun",
+        )
+      }
+      if green && (once || (stable && previous_green)) {
+        println(
+          "CI PASSED: all observed checks passed or were skipped/neutral, with at least one success. Required-check policy and absent workflows were not verified.",
+        )
+        return
+      }
+      if once {
+        fail("CI INCOMPLETE: checks pending, unknown, absent, or only skipped")
+      }
+      if green && !stable {
+        println("Waiting for a second matching completed snapshot…")
+      }
+      previous = Some(fingerprint)
+      previous_green = green
+      @async.sleep(interval * 1000)
+    }
+  }) catch {
+    error if @async.is_being_cancelled() => raise error
+    error =>
+      fail("CI monitor stopped without a verified successful result: \{error}")
+  }
+}
