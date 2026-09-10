@@ -9,7 +9,7 @@ snapshots across head changes.
 ## Offline verification
 
 The actual Wasm script compiled with warnings denied and passed 25 snapshot /
-watch scenarios plus four invalid-argument cases in `ci_watch.py`. These cover
+watch scenarios plus four invalid-argument cases in the MoonBit `tests/integration/workflows` fixture package. These cover
 successful checks, external statuses, mixed skips, no checks, only neutral or
 skipped checks, unknown/missing conclusions, malformed snapshots, delayed
 registration, pending-to-success, late failure, head replacement, terminal
@@ -56,3 +56,13 @@ with fixtures, not by waiting for an entire live CI cycle. The monitor only
 reports returned checks: it cannot prove required-check coverage, account for
 workflows not yet registered, or establish merge readiness. Log retrieval is
 suggested, not automatic, and no jobs were rerun.
+
+The original Python harnesses were replaced by one native MoonBit runner. It
+also supplies both child-process fixtures; the same 17 hosted scenarios, 25 CI
+scenarios, and four invalid-argument cases passed after the migration. CI and
+`just test-workflows` invoke it directly without Python.
+
+The migrated runner also passed with PATH restricted to `moon`, `moonrun`,
+`moonc`, and `moonfmt`, confirming that its subprocess fixtures need neither
+Python nor a shell runtime. Native/JS builds and the fixture package check with
+warnings denied passed.

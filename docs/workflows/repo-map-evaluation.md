@@ -185,7 +185,7 @@ not erase the earlier connection failure or prove stable cost/reliability.
 
 Verification also found that CI calls Moon directly and would skip the new
 `just test-workflows` recipe. The native CI job now invokes the same offline
-Python suite explicitly, before the full workspace check. All 17 scenarios
+fixture suite explicitly, before the full workspace check. All 17 scenarios
 passed again locally. This verifies the script/child contract; the live run
 still does not exercise the outer mbtx UI/approval path.
 
@@ -205,3 +205,8 @@ tuple-pattern loop syntax errors in existing tests (including
 `deepseek/client/openrouter_wbtest.mbt` after rebasing,
 `desktop/internal/uri/uri_test.mbt` and
 `editor/viewer/diff_provider/moondiff/*test.mbt`). No such files were changed.
+
+The offline workflow fixtures now live in the native MoonBit package
+`tests/integration/workflows`; both the driver and its child processes are
+MoonBit. The historical output samples above retain the commands printed at
+the time of those live runs.

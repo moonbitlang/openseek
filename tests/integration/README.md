@@ -24,20 +24,25 @@ job is released, proving that the command dispatcher wakes the active turn.
 
 # Bundled workflows
 
-`just test-workflows` compiles the bundled agent scripts for Wasm and runs them
-with a local Python child-contract fixture. It checks success, partial failure,
-missing handoff, insufficient capacity, empty answers, and bounded shared
-repository context, nested-package discovery, and citation validation (including
-escaping symlinks and invalid line numbers), without calling a model service.
-It is also included in `just test`. Builds live in a temporary directory so the
-bundled resource tree stays clean.
+`just test-workflows` runs the native MoonBit fixture package at
+`tests/integration/workflows`. It compiles the actual bundled scripts as Wasm
+and exercises them with local child processes. The runner itself doubles as the
+hosted-child fixture and the fake `gh` executable; no Python, shell scripts,
+network access, or model credentials are needed. Builds and fixture files live
+in a temporary directory, keeping the bundled resource tree clean.
 
-The native CI job also runs `python3 tests/integration/workflows.py` directly,
-since its target matrix does not invoke the root `just test` recipe.
+The hosted tests cover success, partial failure, missing handoff, insufficient
+capacity, empty answers, bounded context, nested-package discovery, and citation
+validation (including escaping symlinks and invalid line numbers). The CI tests
+cover stable completion, PR-head replacement, failure/cancellation states,
+registration gaps, errors, timeouts, and diagnostic argument lists.
 
-`ci_watch.py` compiles the bundled CI monitor as Wasm and substitutes a scoped
-`gh` executable with controlled JSON snapshots. It verifies stable completion,
-PR-head replacement, failure/cancellation states, registration gaps, errors,
-timeouts, and diagnostic argument lists without network or model credentials.
-Run it directly with `python3 tests/integration/ci_watch.py`; the root workflow
-test recipe and native CI job include it.
+Run the same suite directly with:
+
+```sh
+moon run tests/integration/workflows --target native
+```
+
+The native CI job runs that command too, since its target matrix does not invoke
+`just test`. These subprocess/symlink fixtures run on Linux and macOS. The
+pre-existing background lifecycle suite above is separate.

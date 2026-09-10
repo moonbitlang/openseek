@@ -139,8 +139,10 @@ workflows that never run, or required checks missing from the returned snapshot.
 Two stable polls reduce registration races but do not prove that all expected
 checks exist. Each gh request has a 30-second timeout and a 1 MiB output bound.
 
-`tests/integration/ci_watch.py` exercises the actual Wasm script using a local
-`gh` fixture, including pending-to-success, delayed registration, late failure,
+`tests/integration/workflows` exercises the actual Wasm script using a local
+native MoonBit `gh` fixture, including pending-to-success, delayed registration, late failure,
 head replacement, external statuses, unknown states, and timeouts. It runs in
 `just test-workflows` and the native CI job. The mbtx package also checks bundled
 argument forwarding without requiring GitHub credentials.
+
+All bundled-workflow fixtures run in MoonBit; they require no Python runtime.

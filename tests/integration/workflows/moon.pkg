@@ -1,0 +1,14 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/io",
+  "moonbitlang/async/stdio",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "bobzhang/openseek/testkit/filesystem" @vfs,
+}
+
+supported_targets = "+native"
+
+pkgtype(kind: "executable")
