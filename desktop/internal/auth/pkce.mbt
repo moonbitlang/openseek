@@ -64,8 +64,8 @@ priv enum Callback {
 /// Parse one request target against the expected redirect: path `/cb`,
 /// matching `state`, and either `code` or `error`.
 fn parse_callback(target : String, oauth_state~ : String) -> Callback {
-  let (path, query) = match target.find("?") {
-    Some(index) => (target[:index].to_owned(), target[index + 1:])
+  let (path, query) = match target.split_once("?") {
+    Some((path, query)) => (path.to_owned(), query)
     None => (target, "".view())
   }
   guard path == "/cb" else { return Stray }
@@ -73,8 +73,8 @@ fn parse_callback(target : String, oauth_state~ : String) -> Callback {
   let mut error_ : String? = None
   let mut state : String? = None
   for pair in query.split("&") {
-    let (key, value) = match pair.find("=") {
-      Some(index) => (pair[:index].to_owned(), @uri.decode(pair[index + 1:]))
+    let (key, value) = match pair.split_once("=") {
+      Some((key, value)) => (key.to_owned(), @uri.decode(value))
       None => (pair.to_owned(), "")
     }
     match key {

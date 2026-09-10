@@ -382,10 +382,10 @@ fn markdown_semantic_line_is_phrase_divider(
 /// not accepted as the synthetic trailing line.
 fn tokenized_line_segment_is_empty(segment : String) -> Bool {
   guard segment.has_prefix("<span class=\"") &&
-    segment.find("\">") is Some(content_start) else {
+    segment.split_once("\">") is Some((_, content)) else {
     return false
   }
-  segment[content_start + 2:] == "</span>"
+  content == "</span>"
 }
 
 ///|

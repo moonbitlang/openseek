@@ -5,10 +5,11 @@
 fn gitlink_paths(metadata : String) -> Array[String] {
   let paths : Array[String] = []
   for record in metadata.split("\u{0}") {
-    guard record.has_prefix("160000 ") && record.find("\t") is Some(tab) else {
+    guard record.has_prefix("160000 ") &&
+      record.split_once("\t") is Some((_, path)) else {
       continue
     }
-    let path = record.view(start_offset=tab + 1).to_owned()
+    let path = path.to_owned()
     // A conflicted index can carry several stages for one gitlink.
     if !paths.contains(path) {
       paths.push(path)

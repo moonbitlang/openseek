@@ -323,13 +323,9 @@ fn check_level_severity(level : String) -> @language.DiagnosticSeverity {
 /// Parses a `moon check` location: `line:col-line:col`, or a bare `line:col`
 /// which degrades to an empty range at that position.
 fn parse_moon_loc(loc : String) -> @base_common.Range? {
-  match loc.find("-") {
-    Some(dash) =>
-      match
-        (
-          parse_check_position(loc[0:dash]),
-          parse_check_position(loc[dash + 1:]),
-        ) {
+  match loc.split_once("-") {
+    Some((start_text, end_text)) =>
+      match (parse_check_position(start_text), parse_check_position(end_text)) {
         (Some(start), Some(end)) =>
           Some(@base_common.Range::from_positions(start, end))
         _ => None
@@ -345,12 +341,12 @@ fn parse_moon_loc(loc : String) -> @base_common.Range? {
 
 ///|
 fn parse_check_position(view : StringView) -> @base_common.Position? {
-  match view.find(":") {
-    Some(colon) => {
+  match view.split_once(":") {
+    Some((line_text, column_text)) => {
       let parsed = Some(
         (
-          @string.parse_int(view[0:colon], base=10),
-          @string.parse_int(view[colon + 1:], base=10),
+          @string.parse_int(line_text, base=10),
+          @string.parse_int(column_text, base=10),
         ),
       ) catch {
         _ => None

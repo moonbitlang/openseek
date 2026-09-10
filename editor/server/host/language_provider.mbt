@@ -234,12 +234,8 @@ fn definition_uri_under_root(
 
 ///|
 fn parse_moon_definition_range(raw : String) -> @base_common.Range? {
-  guard raw.find("-") is Some(dash) else { return None }
-  match
-    (
-      parse_positive_position(raw[0:dash]),
-      parse_positive_position(raw[dash + 1:]),
-    ) {
+  guard raw.split_once("-") is Some((start, end_)) else { return None }
+  match (parse_positive_position(start), parse_positive_position(end_)) {
     (Some(start), Some(end)) =>
       if start.is_before_or_equal(end) {
         Some(@base_common.Range::from_positions(start, end))
@@ -252,11 +248,13 @@ fn parse_moon_definition_range(raw : String) -> @base_common.Range? {
 
 ///|
 fn parse_positive_position(raw : StringView) -> @base_common.Position? {
-  guard raw.find(":") is Some(colon) else { return None }
+  guard raw.split_once(":") is Some((line_text, column_text)) else {
+    return None
+  }
   let parsed = Some(
     (
-      @string.parse_int(raw[0:colon], base=10),
-      @string.parse_int(raw[colon + 1:], base=10),
+      @string.parse_int(line_text, base=10),
+      @string.parse_int(column_text, base=10),
     ),
   ) catch {
     _ => None

@@ -439,12 +439,11 @@ fn parse_numstat(output : String) -> GitDiffStat {
   let mut files = 0
   for line in output.split("\n") {
     let line = line.trim_end(chars="\r")
-    guard line.find("\t") is Some(first) else { continue }
-    let rest = line.view(start_offset=first + 1)
-    guard rest.find("\t") is Some(second) else { continue }
+    guard line.split_once("\t") is Some((added_text, rest)) else { continue }
+    guard rest.split_once("\t") is Some((removed_text, _)) else { continue }
     files += 1
-    added += @string.parse_int(line.view(end_offset=first)) catch { _ => 0 }
-    removed += @string.parse_int(rest.view(end_offset=second)) catch { _ => 0 }
+    added += @string.parse_int(added_text) catch { _ => 0 }
+    removed += @string.parse_int(removed_text) catch { _ => 0 }
   }
   { added, removed, files, base: None, partial: false, }
 }
@@ -729,10 +728,11 @@ fn parse_git_mode_paths(
   let paths : Set[String] = Set([])
   let prefix = mode + " "
   for record in output.split("\u{0}") {
-    guard record.has_prefix(prefix) && record.find("\t") is Some(tab) else {
+    guard record.has_prefix(prefix) &&
+      record.split_once("\t") is Some((_, path)) else {
       continue
     }
-    let path = record.view(start_offset=tab + 1).to_owned()
+    let path = path.to_owned()
     if git_path_relative_to_workspace(path, workspace_prefix) is Some(relative) {
       paths.add(relative)
     }

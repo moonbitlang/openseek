@@ -206,8 +206,8 @@ fn markdown_heading_text_from_source(
   let start = range.start.max(0).min(source.length())
   let end = range.end_exclusive.max(start).min(source.length())
   let raw = source[start:end].to_owned()
-  let first_line = match raw.find("\n") {
-    Some(index) => raw[0:index].to_owned()
+  let first_line = match raw.split_once("\n") {
+    Some((first, _)) => first.to_owned()
     None => raw
   }
   let trimmed = for trimmed = first_line.trim(chars=" \t\r").to_owned(); trimmed.has_prefix(

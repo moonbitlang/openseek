@@ -19,9 +19,9 @@ pub fn page_query_param(name : String) -> String? {
     None => search.view()
   }
   for pair in query.split("&") {
-    guard pair.find("=") is Some(index) else { continue }
-    if pair[:index].to_owned() == name {
-      let value = @uri.decode_component(pair[index + 1:])
+    guard pair.split_once("=") is Some((key, encoded)) else { continue }
+    if key.to_owned() == name {
+      let value = @uri.decode_component(encoded)
       return if value.is_empty() { None } else { Some(value) }
     }
   }

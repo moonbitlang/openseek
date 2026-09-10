@@ -224,8 +224,8 @@ fn parse_version(text : String) -> (Int, Int, Int)? {
   }
   // `1.2.3-beta.1+build` compares by its numeric triple.
   for stop in ["-", "+"] {
-    if view.find(stop) is Some(index) {
-      view = view[:index]
+    if view.split_once(stop) is Some((before, _)) {
+      view = before
     }
   }
   let parts = [..view.split(".")]

@@ -282,13 +282,9 @@ impl @jsonrpc.Transport for HttpTransport with fn close(self) {
 /// client-initiated termination — is swallowed.
 async fn delete_session(url : String, headers : @http.Headers) -> Unit {
   // Split the MCP URL into origin (scheme + host[:port]) and path.
-  guard url.find("://") is Some(scheme_end) else { return }
-  let host_start = scheme_end + 3
-  let (origin, path) = match url[host_start:].find("/") {
-    Some(slash) => {
-      let cut = host_start + slash
-      (url[:cut].to_owned(), url[cut:].to_owned())
-    }
+  guard url.split_once("://") is Some((scheme, rest)) else { return }
+  let (origin, path) = match rest.split_once("/") {
+    Some((host, path)) => ("\{scheme}://\{host}", "/\{path}")
     None => (url, "/")
   }
   let client = @http.Client(origin) catch {

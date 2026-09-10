@@ -29,10 +29,10 @@ fn parse_skill_document(source : String) -> SkillDocument {
   for line in rest[0:index] {
     let line = line.trim()
     guard !line.is_empty() && !line.has_prefix("#") else { continue }
-    guard line.find(":") is Some(colon) else { continue }
-    let key = line[0:colon].trim().to_owned()
+    guard line.split_once(":") is Some((key_text, value)) else { continue }
+    let key = key_text.trim().to_owned()
     guard !key.is_empty() else { continue }
-    metadata.push((key, line[colon + 1:].trim().to_owned()))
+    metadata.push((key, value.trim().to_owned()))
   }
   { metadata, body: rest[index + 1:].join("\n"), }
 }

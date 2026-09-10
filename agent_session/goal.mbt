@@ -213,17 +213,18 @@ pub fn parse_goal_baseline(content : String) -> GoalBaseline? {
   guard content.strip_prefix("\{GoalBaselinePrefix} sha=") is Some(rest) else {
     return None
   }
-  guard rest.find(" dirty=") is Some(cut) else { return None }
-  let sha = rest[:cut].to_owned()
-  let dirty = match rest[cut + 7:].to_owned() {
-    "true" => true
-    "false" => false
+  // Either value literal ends the line, and the sha is the unmatched prefix:
+  // the `$` keeps the value the LAST field, so a line with trailing junk
+  // degrades to a plain notice instead of a half-parsed baseline.
+  let (sha, dirty) = lexmatch rest {
+    (re" dirty=true$", before=sha, after=_) => (sha, true)
+    (re" dirty=false$", before=sha, after=_) => (sha, false)
     _ => return None
   }
   if sha.is_empty() {
     return None
   }
-  Some({ sha, dirty, })
+  Some({ sha: sha.to_owned(), dirty, })
 }
 
 ///|

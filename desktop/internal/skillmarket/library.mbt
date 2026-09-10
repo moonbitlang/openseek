@@ -109,9 +109,9 @@ fn parse_frontmatter(text : String, fallback_name : String) -> (String, String) 
     if line.trim() == "---" {
       break
     }
-    if line.find(":") is Some(index) {
-      let key = line[0:index].to_owned().trim().to_owned()
-      let value = line[index + 1:].to_owned().trim().to_owned()
+    if line.split_once(":") is Some((key_text, value_text)) {
+      let key = key_text.to_owned().trim().to_owned()
+      let value = value_text.to_owned().trim().to_owned()
       match key {
         "name" => if !value.is_empty() { name = value }
         "description" => description = value

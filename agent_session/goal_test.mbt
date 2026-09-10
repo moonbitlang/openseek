@@ -117,6 +117,11 @@ test "goal baseline round-trips through its notice" {
     @agent_session.parse_goal_baseline("[goal baseline] sha=x dirty=maybe")
     is None,
   )
+  // The `dirty` value must end the line: trailing text is not a baseline.
+  assert_true(
+    @agent_session.parse_goal_baseline("[goal baseline] sha=x dirty=true junk")
+    is None,
+  )
 }
 
 ///|

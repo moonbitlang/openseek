@@ -122,15 +122,16 @@ fn redirect_target(
   if location.has_prefix("http://") || location.has_prefix("https://") {
     return location
   }
-  if location.has_prefix("/") && current.find("://") is Some(scheme_end) {
-    let host_start = scheme_end + 3
-    let origin_end = match current[host_start:].to_owned().find("/") {
-      Some(offset) => host_start + offset
-      None => current.length()
-    }
-    return "\{current[0:origin_end].to_owned()}\{location}"
+  guard location.has_prefix("/") &&
+    current.split_once("://") is Some((scheme, rest)) else {
+    raise SkillMarketError("the skill registry sent an unsupported redirect")
   }
-  raise SkillMarketError("the skill registry sent an unsupported redirect")
+  // Host-relative: keep `current`'s origin and take `location` as the path.
+  let origin = match rest.split_once("/") {
+    Some((host, _)) => "\{scheme}://\{host}"
+    None => current
+  }
+  "\{origin}\{location}"
 }
 
 ///|
