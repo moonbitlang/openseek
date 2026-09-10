@@ -2811,16 +2811,15 @@ fn text_block(content : String) -> @html.Html {
 }
 
 ///|
-/// A read result whose tool-owned brief names a MoonBit file keeps its gutter
+/// A read workflow result with MoonBit file headings keeps its gutter
 /// and footer plain while the source uses the shared editor tokenizer.
 fn tool_result_content(
   result : @agent_session.ToolResult?,
   content : String,
 ) -> @html.Html {
   if result is Some(result) &&
-    result.tool_name() == "read" &&
-    result.brief() is Some(brief) &&
-    @read_html.moonbit_output_for_brief(brief, content) is Some(rendered) {
+    result.tool_name() == "mbtx" &&
+    @read_html.read_workflow_output(content) is Some(rendered) {
     @html.div([
       @html.pre(class="content tool-call-args-rendered", [rendered]),
       @html.pre(class="content tool-call-args-original", content),

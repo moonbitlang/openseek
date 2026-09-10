@@ -89,7 +89,6 @@ pub async fn run_goal_audit(
     task=audit_task(goal, baseline, scratch_dir),
     tools=captured => {
       Tools([
-        @read.definition(workspace_root~),
         @mbtx.definition(workspace_root~, read_only=true, scratch_dir?),
         submit_review_tool(captured),
       ])

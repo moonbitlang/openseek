@@ -1,0 +1,251 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+  "moonbitlang/x/sys",
+}
+
+///|
+/// Leave room below mbtx's 48,000-byte transport limit for run diagnostics.
+const OutputBytes : Int = 40_000
+
+///|
+suberror ReadError {
+  ReadError(String)
+}
+
+///|
+struct Request {
+  path : String
+  start : Int
+  end : Int?
+}
+
+///|
+fn positive_int(text : StringView) -> Int raise ReadError {
+  let mut value = 0
+  guard !text.is_empty() else {
+    raise ReadError("expected a positive line number or budget")
+  }
+  for char in text {
+    let digit = char.to_int() - '0'.to_int()
+    guard digit >= 0 && digit <= 9 && value <= (2_147_483_647 - digit) / 10 else {
+      raise ReadError("expected a positive integer no larger than 2147483647")
+    }
+    value = value * 10 + digit
+  }
+  guard value > 0 else {
+    raise ReadError("line numbers and budgets must be positive")
+  }
+  value
+}
+
+///|
+fn numeric_suffix(text : StringView) -> Bool {
+  let digits = text.strip_prefix("-").unwrap_or(text)
+  !digits.is_empty() && digits.all(char => char.is_ascii_digit())
+}
+
+///|
+/// Parse from the right, leaving drive letters and other path colons intact.
+/// --literal selects filenames that themselves end in a numeric colon suffix.
+fn request(selector : String, literal : Bool) -> Request raise ReadError {
+  guard !selector.is_empty() else {
+    raise ReadError("file path must not be empty")
+  }
+  if !literal &&
+    selector.rev_split_once(":") is Some((head, last)) &&
+    numeric_suffix(last) {
+    let number = positive_int(last)
+    if head.rev_split_once(":") is Some((path, first)) && numeric_suffix(first) {
+      let start = positive_int(first)
+      guard !path.is_empty() && number >= start else {
+        raise ReadError(
+          "expected path:start:end with end >= start (inclusive, 1-based)",
+        )
+      }
+      return { path: path.to_owned(), start, end: Some(number), }
+    }
+    guard !head.is_empty() else {
+      raise ReadError("file path must not be empty")
+    }
+    return { path: head.to_owned(), start: number, end: None, }
+  }
+  { path: selector, start: 1, end: None, }
+}
+
+///|
+/// Bound both UTF-16 units (the read body budget) and UTF-8 transport bytes,
+/// always ending at a Unicode scalar boundary.
+fn prefix(text : StringView, units : Int, bytes : Int) -> String {
+  let out = StringBuilder()
+  let mut remaining_units = units
+  let mut remaining_bytes = bytes
+  for char in text {
+    let code = char.to_int()
+    let char_units = if code > 0xffff { 2 } else { 1 }
+    let char_bytes = if code < 0x80 {
+      1
+    } else if code < 0x800 {
+      2
+    } else if code < 0x10000 {
+      3
+    } else {
+      4
+    }
+    if char_units > remaining_units || char_bytes > remaining_bytes {
+      break
+    }
+    out.write_char(char)
+    remaining_units -= char_units
+    remaining_bytes -= char_bytes
+  }
+  out.to_string()
+}
+
+///|
+fn render(
+  content : String,
+  input : Request,
+  units : Int,
+  bytes : Int,
+) -> String {
+  if content.is_empty() {
+    return "<system>start_line=\{input.start} shown_lines=0 total_lines=0 truncated=false note=empty file</system>\n"
+  }
+  let lines = content.split("\n").collect()
+  let total = lines.length()
+  let start = (input.start - 1).min(total)
+  let end = input.end.unwrap_or(total).min(total)
+  let width = (if start < end { end } else { input.start }).to_string().length()
+  let body = StringBuilder()
+  let mut remaining_units = units
+  // A fixed reserve covers the longest possible status footer (Int bounds).
+  let mut remaining_bytes = bytes - 256
+  let mut shown = 0
+  let mut truncated = false
+  for index in start..<end {
+    let gutter = "\{(index + 1).to_string().pad_start(width, ' ')} |"
+    let separator = if shown == 0 { "" } else { "\n" }
+    let overhead = gutter.length() + separator.length()
+    if remaining_units < overhead || remaining_bytes < overhead {
+      truncated = true
+      break
+    }
+    let line = lines[index]
+    let text = prefix(
+      line,
+      remaining_units - overhead,
+      remaining_bytes - overhead,
+    )
+    body <+ "\{separator}\{gutter}\{text}"
+    shown += 1
+    remaining_units -= overhead + text.length()
+    remaining_bytes -= overhead + @utf8.encode(text).length()
+    if text.length() < line.length() {
+      truncated = true
+      break
+    }
+  }
+  if !body.is_empty() {
+    body <+ "\n"
+  }
+  body <+
+    "<system>start_line=\{input.start} shown_lines=\{shown} total_lines=\{total} truncated=\{truncated}</system>\n"
+  body.to_string()
+}
+
+///|
+async fn read(input : Request, units : Int, bytes : Int) -> (String, Bool) {
+  try {
+    if @fs.kind(input.path, follow_symlink=true) is Directory {
+      raise ReadError(
+        "path is a directory; list it with mbtx (@fs.readdir/@shell.glob), then read specific files",
+      )
+    }
+    (render(@fs.read_file(input.path).text(), input, units, bytes), false)
+  } catch {
+    error if @async.is_being_cancelled() => raise error
+    error => {
+      let message = match error {
+        ReadError(message) => message
+        _ => error.to_string()
+      }
+      // Errors may contain arbitrary paths; escape newlines so file framing
+      // stays unambiguous, and bound them just like successful bodies.
+      // JSON escaping can expand each source byte to six ASCII bytes.
+      let message = prefix(message, (bytes - 128) / 6, (bytes - 128) / 6)
+      ("error reading file: \{message.to_json().stringify()}\n", true)
+    }
+  }
+}
+
+///|
+async fn main {
+  let args = @env.args()[1:]
+  let requests : Array[Request] = []
+  let mut units = 12_000
+  let mut options = true
+  let mut index = 0
+  try {
+    while index < args.length() {
+      let arg = args[index]
+      if options && arg == "--help" {
+        println(
+          "Usage: mbtx(filename=\"@builtin/read.mbtx\", args=[\"path\", \"path:start\", \"path:start:end\"])\nRanges are inclusive and 1-based. --max-output-chars N sets each file's UTF-16 body budget (default 12000, maximum 50000). The batch is bounded to 40000 UTF-8 bytes; use smaller batches/ranges when truncated. --literal PATH reads a path without interpreting colon suffixes. -- ends option parsing. Relative paths use cwd (default workspace).",
+        )
+        return
+      } else if options && arg == "--" {
+        options = false
+      } else if options && (arg == "--max-output-chars" || arg == "--literal") {
+        index += 1
+        guard args.get(index) is Some(value) else {
+          raise ReadError("\{arg} requires a value")
+        }
+        if arg == "--literal" {
+          requests.push(request(value, true))
+        } else {
+          units = positive_int(value).min(50_000)
+        }
+      } else {
+        guard !options || !arg.has_prefix("--") else {
+          raise ReadError(
+            "unknown option; use --help or -- before a filename starting with --",
+          )
+        }
+        requests.push(request(arg, false))
+      }
+      index += 1
+    }
+    guard !requests.is_empty() else {
+      raise ReadError("expected at least one file selector; use --help")
+    }
+  } catch {
+    ReadError(message) => {
+      println("error: read \{message}")
+      @sys.exit(1)
+      return
+    }
+  }
+  let mut remaining = OutputBytes - 256
+  let mut failed = false
+  for index, input in requests {
+    let header = "=== \{input.path.to_json().stringify()} ===\n"
+    let header_bytes = @utf8.encode(header).length()
+    if remaining < header_bytes + 512 {
+      println(
+        "<system>truncated=true skipped_files=\{requests.length() - index} note=batch output budget exhausted; request remaining files separately</system>",
+      )
+      break
+    }
+    let (body, error) = read(input, units, remaining - header_bytes)
+    failed = failed || error
+    println("\{header}\{body.trim_end(chars="\n")}")
+    remaining -= header_bytes + @utf8.encode(body).length()
+  }
+  if failed {
+    @sys.exit(1)
+  }
+}

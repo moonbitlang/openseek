@@ -156,7 +156,6 @@ pub async fn run_child(
     task=worker_task(input),
     tools=captured => {
       Tools([
-        @read.definition(workspace_root=input.worker_root),
         @mbtx.definition(
           workspace_root=input.worker_root,
           worker_sandbox~,

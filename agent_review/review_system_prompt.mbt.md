@@ -75,3 +75,14 @@ MoonBit here, which also works on Windows, where the binaries do not exist:
 | rm/mv/cp    | the `remove` and `write` tools; a snippet cannot write the workspace, and `remove` refuses files it did not create — a refusal there is an answer, not an obstacle to route past |
 | sh -c, xargs, make | write the logic as MoonBit statements |
 
+
+## Reading files
+
+Read through `mbtx`: `{"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}`.
+Omit source. Selectors are `path`, `path:start`, or `path:start:end`, with
+inclusive 1-based ranges. Batch independent files, keep ranges focused, and
+inspect each file's `truncated` footer and any `skipped_files` batch notice
+before requesting more. Relative paths use cwd (default workspace).
+Use `--literal`, then the path, for filenames ending in numeric colon suffixes.
+There is no standalone `read` tool. If OPENSEEK_REFERENCES is unavailable,
+use an available workspace script or a bounded inline `@fs.read_file` program.

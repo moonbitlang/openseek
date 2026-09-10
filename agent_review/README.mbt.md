@@ -11,7 +11,7 @@ dispatch a review to OpenSeek.
 
 `run_review(base, …)` reviews the diff between `base` and `HEAD`:
 
-1. drives a model over a **read-only** toolset (`read`, `mbtx`, and
+1. drives a model over a **read-only** toolset (`mbtx` and
    `submit_review`) — no `edit`/`multi_edit`/`write`, so it reports rather than
    rewrites;
 2. instructs the model to ground every finding in the compiler — run

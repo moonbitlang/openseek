@@ -111,7 +111,7 @@ calls `@agent.run`, but that decision lives outside the `agent` package.
   runtime;
 - `job_output` / `job_stop`: read or stop a background job;
 - `job_wait`: wait for selected jobs or user input in the same turn;
-- `read`: read a text file;
+- `mbtx` with `@builtin/read.mbtx`: read text files with per-file line ranges;
 - `edit`: replace exact text in a file;
 - `multi_edit`: apply several explicit line-anchored replacements to one file;
 - `write`: overwrite a file;
@@ -143,7 +143,6 @@ async test "standard tools are registered in dispatch order" {
       ],
       content=(
         #|[
-        #|  "read",
         #|  "edit",
         #|  "multi_edit",
         #|  "write",

@@ -33,6 +33,18 @@ test "a saved mbtx call displays a Filename variant" {
 }
 
 ///|
+test "named read workflows preserve all file selectors for display" {
+  guard decode_mbtx_call(
+      "{\"filename\":\"@builtin/read.mbtx\",\"args\":[\"x.mbt:120:200\",\"path with spaces\"]}",
+    )
+    is Some(call) else {
+    fail("expected named workflow")
+  }
+  assert_eq(call.args, Some(["x.mbt:120:200", "path with spaces"]))
+  assert_true(call.chips.is_empty())
+}
+
+///|
 test "mbtx tabs identify Source, Filename, and Save and run" {
   guard custom_card("mbtx", "{\"source\":\"fn main {}\"}")
     is Some((source_label, _)) else {

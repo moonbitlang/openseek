@@ -321,8 +321,8 @@ export class DesktopBrowserHarness {
             tool_calls: [
               {
                 id: 'read-1',
-                name: 'read',
-                arguments: JSON.stringify({ path: 'src/main.mbt' }),
+                name: 'mbtx',
+                arguments: JSON.stringify({ filename: '@builtin/read.mbtx', args: ['src/main.mbt:9:11'] }),
               },
             ],
           },
@@ -334,15 +334,16 @@ export class DesktopBrowserHarness {
           kind: 'tool_result',
           payload: {
             tool_call_id: 'read-1',
-            tool_name: 'read',
+            tool_name: 'mbtx',
             content: [
+              '=== "src/main.mbt" ===',
               ' 9 |fn main {',
               '10 |  println("hi")',
               '11 |}',
               '<system>start_line=9 shown_lines=3 total_lines=20 truncated=false</system>',
             ].join('\n'),
             is_error: false,
-            brief: 'read main.mbt (truncated)',
+            brief: 'mbtx (exit=0)',
           },
         },
       },

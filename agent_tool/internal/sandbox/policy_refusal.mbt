@@ -26,7 +26,12 @@ const PolicyRefusedSpawn : String = "@process.spawn(): Permission denied"
 /// happens to grant: widening or narrowing the policy cannot make a refusal
 /// stop being recognized.
 pub fn output_reports_policy_refusal(output : String) -> Bool {
-  output.contains(PolicyBlockedAccess) || output.contains(PolicyRefusedSpawn)
+  output
+  .split("\n")
+  .any(line => {
+    !is_file_content_line(line) &&
+    (line.contains(PolicyBlockedAccess) || line.contains(PolicyRefusedSpawn))
+  })
 }
 
 ///|

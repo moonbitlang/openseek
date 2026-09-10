@@ -14,7 +14,7 @@ error directing the caller to `job_wait`; no wait duration is guessed or polled.
 
 ## Result Shape
 
-Output first, one `<system>` footer line last (the `read` tool convention):
+Output first, one `<system>` footer line last (the read workflow convention):
 
 ```text
 <recent output…>

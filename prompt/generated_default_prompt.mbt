@@ -65,13 +65,23 @@ fn default_prompt() -> String {
     #|│       └── tutorial
     #|│           └── for-go-programmers
     #|└── workflow
+    #|    └── _build
+    #|        └── wasm
+    #|            └── debug
+    #|                └── build
+    #|                    └── single
     #|```
     #|
-    #|Reading these references outside the workspace is expected. Read on demand,
-    #|never wholesale: find the relevant page with a subtree listing or search
-    #|under `OPENSEEK_REFERENCES/doc/moonbit/`, then open only that page with the
-    #|read tool, keeping each read bounded. If the variable is absent, do not assume
-    #|bundled documentation is available.
+    #|Read references outside the workspace on demand: locate the relevant page under
+    #|`OPENSEEK_REFERENCES/doc/moonbit/`, then read a focused excerpt as described below.
+    #|
+    #|## Reading files
+    #|
+    #|Read known files together immediately with `mbtx` and `@builtin/read.mbtx`;
+    #|`path:start:end` selects inclusive, 1-based lines. Its tool description gives
+    #|the arguments. Use the returned text and file-status footers directly to do the
+    #|task, including empty/missing-file checks. List directories only to discover
+    #|unknown paths. Reread only when needed content is missing, truncated, or changed.
     #|
     #|## Running Commands
     #|
@@ -505,7 +515,8 @@ fn default_prompt() -> String {
     #|  ignore it for trivial work — never answer it with assistant text or call
     #|  `plan` only to silence it.
     #|- Use the right tool for the job:
-    #|  - `read`, `edit`, `multi_edit`, `write`, and `remove` for files. Use `edit` for
+    #|  - Read files with `mbtx` and `@builtin/read.mbtx` as described above.
+    #|    Use `edit`, `multi_edit`, `write`, and `remove` to change files. Use `edit` for
     #|    a single span; use `multi_edit` to apply several line-anchored fixes to one
     #|    file in one call. To fix several files at once, issue one `multi_edit` per
     #|    file in the same step rather than editing files one turn at a time. Do not

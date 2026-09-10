@@ -17,7 +17,7 @@ description: How to cut a release of this project.
 
 The engine discovers skills at startup and appends a `## Skills` section to
 the system prompt listing each skill's name, description, and path, with the
-instruction to `read` the file before doing matching work. The body stays
+instruction to read the file through `mbtx` and `@builtin/read.mbtx` before doing matching work. The body stays
 out of the prompt until the model decides it is relevant, so a large skill
 library costs a few listing lines per request, not its full text. Missing
 frontmatter falls back to the file stem and an empty description; a missing

@@ -111,20 +111,14 @@ fn tool_arguments_tabbed_view(
 }
 
 ///|
-/// Result views for a tool call. A decoded MoonBit `read` gets a readable,
+/// Result views for a tool call. A numbered MoonBit read workflow result gets
 /// highlighted Output plus the exact numbered protocol in Original output;
 /// every other result is already its own faithful display.
-fn tool_output_tabs(
-  name : String,
-  arguments : String?,
-  output : String,
-) -> Array[ToolCallTab] {
+fn tool_output_tabs(name : String, output : String) -> Array[ToolCallTab] {
   if output.is_blank() {
     return []
   }
-  if name == "read" &&
-    arguments is Some(arguments) &&
-    @read_html.moonbit_output(arguments, output) is Some(rendered) {
+  if name == "mbtx" && @read_html.read_workflow_output(output) is Some(rendered) {
     return [
       {
         label: "Output",

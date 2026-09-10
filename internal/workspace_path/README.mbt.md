@@ -1,7 +1,7 @@
 # internal/workspace_path
 
 Lexical path helpers shared by every agent tool that has to interpret a path
-the model wrote. `read`, `write`, `edit`, `multi_edit`, `remove`, `shell`,
+the model wrote. `write`, `edit`, `multi_edit`, `remove`, `shell`,
 `mbtx`, `moon_check`, `source_write_policy`, `sandbox`, and the
 `cmd/openseek` entry point all resolve and compare paths through this package,
 so they agree on what "inside the workspace" means.

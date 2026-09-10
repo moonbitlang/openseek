@@ -310,7 +310,7 @@ async fn execute(
         error if @async.is_being_cancelled() => raise error
         error => {
           let hint = if is_bundled_filename(filename) {
-            " Bundled workflows: @builtin/check.mbtx, @builtin/test.mbtx, @builtin/check-test.mbtx, @builtin/info-fmt.mbtx, @builtin/check-json.mbtx, @builtin/ci-watch.mbtx (GitHub CI status). Read-only agent workflows (subrun=true): @builtin/change-review.mbtx, @builtin/repo-map.mbtx. Ordinary filenames select workspace files."
+            " Bundled workflows: @builtin/read.mbtx, @builtin/check.mbtx, @builtin/test.mbtx, @builtin/check-test.mbtx, @builtin/info-fmt.mbtx, @builtin/check-json.mbtx, @builtin/ci-watch.mbtx (GitHub CI status). Read-only agent workflows (subrun=true): @builtin/change-review.mbtx, @builtin/repo-map.mbtx. Ordinary filenames select workspace files."
           } else {
             " filename alone must name an existing readable script. To save a new workspace script, pass source and filename together; or run inline with source only. Paths resolve from the workspace, independently of cwd."
           }
@@ -1697,6 +1697,13 @@ fn description(
     #|`@env.args()[1:]` to skip the executable name.
     #|Arguments are passed verbatim, without shell expansion or splitting.
     #|When OPENSEEK_REFERENCES is available, these scripts are already bundled:
+    #|Read text files with {"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}.
+    #|Selectors: path, path:start, path:start:end (inclusive, 1-based); batch in args.
+    #|Use ["--literal","name:123"] for numeric-colon filenames, and "--" before
+    #|option-like filenames. Headings, numbered lines and footers report each file,
+    #|including empty files; errors fail the call but remaining files still return.
+    #|Follow truncated/skipped_files with focused reads. args=["--help"] gives budgets.
+    #|Without OPENSEEK_REFERENCES, use a bounded inline @fs.read_file program.
     #|@builtin/check.mbtx (moon check), @builtin/test.mbtx (moon test),
     #|@builtin/check-test.mbtx (check then test), @builtin/info-fmt.mbtx (info
     #|then fmt), and @builtin/check-json.mbtx (moon check --output-json).

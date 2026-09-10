@@ -4,9 +4,9 @@ This package defines OpenSeek's local tool boundary: parsed tool calls, tool
 definitions, executor wrappers, registries, typed output, and explicit
 agent-loop control actions.
 
-Concrete built-in tools live in subpackages:
+Read files through `mbtx` using `filename="@builtin/read.mbtx"` and
+`args=["path:start:end", "other/path"]`. Concrete built-in tools live in subpackages:
 
-- `agent_tool/read`
 - `agent_tool/edit`
 - `agent_tool/multi_edit`
 - `agent_tool/write`
