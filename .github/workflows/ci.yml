@@ -372,23 +372,18 @@ jobs:
 
       # Keep compilation outside the timed execution step: on a cold Windows
       # runner, linking the native test executables takes most of ten minutes.
-      # CI does not debug these executables. `_LINK_` is appended to every
-      # MSVC linker invocation, so these overrides avoid generating the large
-      # per-test PDB/ILK files without changing Moon's test configuration.
+      # CI does not debug these executables, so omit native debug information;
+      # on MSVC this avoids producing gigabytes of PDB/ILK data.
       - name: Build full native test suite
         timeout-minutes: 10
-        env:
-          _LINK_: /DEBUG:NONE /INCREMENTAL:NO
-        run: moon test --target native --build-only
+        run: moon test --target native --strip --build-only
 
       # Verbose mode prints each test executable before it starts. Keep a
       # bounded execution timeout so a stuck test cannot occupy the runner
       # indefinitely.
       - name: Test full native suite
         timeout-minutes: 10
-        env:
-          _LINK_: /DEBUG:NONE /INCREMENTAL:NO
-        run: moon test --target native -v
+        run: moon test --target native --strip -v
 
       # The cram suite is POSIX shell (`sh` heredocs, `sed`, `mktemp`); the
       # Linux job owns it. A Windows port would need PowerShell-flavored
