@@ -6,6 +6,10 @@ through `PATH`/`PATHEXT`; explicit executable paths spawn directly. As in MCP
 stdio, shutdown cancels the IO tasks, which close their own pipes, and cancels
 the child process. Startup failures retain their
 underlying pipe, process, or handshake error in the status and Desktop log.
+The host converts app-server's native cwd and project roots to Desktop resource
+paths before sending them to the frontend, and resolves incoming resource paths
+back to native paths before starting a thread or turn. This matches worktree
+replies and broadcasts and keeps platform handling out of the frontend.
 Codex and OpenSeek conversation lists share the global left sidebar; selecting either source swaps
 the main transcript and composer without creating a second nested application
 shell. Codex remains the owner of its account and thread data, separate from

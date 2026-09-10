@@ -147,6 +147,7 @@ pub(all) struct CodexStatusReply {
 ///|
 pub(all) struct CodexDraftOpenReply {
   draft_id : String
+  // Desktop resource URI paths, encoded by the host from native Codex paths.
   cwd : String
   project_root : String
 } derive(Debug, Eq)

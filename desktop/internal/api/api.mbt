@@ -166,17 +166,24 @@ fn CodexWorktreeCatalog::CodexWorktreeCatalog(
 fn CodexWorktreeCatalog::annotate_thread(
   self : CodexWorktreeCatalog,
   value : Json,
-) -> Json {
+) -> Json raise {
   guard value is Object(thread) && thread.get("id") is Some(String(thread_id)) else {
     return value
+  }
+  let annotated = thread.copy()
+  // App-server paths are native; Desktop paths are resource URI components.
+  // Registry worktree annotations below already use the Desktop convention.
+  for key in ["cwd", "projectRoot"] {
+    if thread.get(key) is Some(String(path)) {
+      annotated[key] = Json(codex_resource_path(path))
+    }
   }
   guard self.bindings
     .iter()
     .find_first(binding => binding.thread_id == thread_id)
     is Some(binding) else {
-    return value
+    return Json(annotated)
   }
-  let annotated = thread.copy()
   // The registry retains the owning project even after its checkout is gone;
   // Git cannot recover that relationship from a deleted cwd.
   annotated["projectRoot"] = Json(binding.workspace)
@@ -188,7 +195,7 @@ fn CodexWorktreeCatalog::annotate_thread(
 fn CodexWorktreeCatalog::annotate(
   self : CodexWorktreeCatalog,
   reply : Json,
-) -> Json {
+) -> Json raise {
   guard reply is Object(fields) else { return reply }
   let annotated = fields.copy()
   if fields.get("data") is Some(Array(threads)) {
@@ -234,8 +241,14 @@ fn CodexWorkspaceBinding::decode_reply(value : Json) -> CodexWorkspaceBinding? {
 /// Terminal request caused by that render can resolve the cwd immediately.
 async fn CodexWorkspaceBinding::authorize(self : CodexWorkspaceBinding) -> Unit {
   match self.workspace {
-    Some(workspace) if !workspace.trim().is_empty() =>
-      @work_dir.authorize_host_workspace(self.session, workspace)
+    Some(workspace) => {
+      guard @pathx.Absolute::from_uri_path(workspace) is Some(path) else {
+        raise @host.HostError(
+          "invalid Codex workspace resource path: " + workspace,
+        )
+      }
+      @work_dir.authorize_host_workspace(self.session, path.to_string())
+    }
     _ => @work_dir.revoke_host_workspace(self.session)
   }
 }
@@ -634,7 +647,10 @@ pub fn endpoints(
           info.name == reply.name
         })
         is Some(info) {
-        @work_dir.authorize_host_workspace(thread_id, info.path)
+        CodexWorkspaceBinding::{
+          session: thread_id,
+          workspace: Some(info.path),
+        }.authorize()
       }
       WorktreeCreatedReply(reply)
     }),
@@ -859,6 +875,7 @@ async fn ApiState::open_codex_draft(
     raise @host.PayloadError("invalid Codex draft project")
   }
   @work_dir.authorize_host_workspace(draft_id, project_root)
+  let project_root = codex_resource_path(project_root)
   { draft_id, cwd: project_root, project_root, }
 }
 
@@ -871,22 +888,26 @@ async fn ApiState::codex_thread_start(
   self : ApiState,
   request : @protocol.CodexThreadStartPayload,
 ) -> @protocol.CodexThreadReply {
-  match (request.cwd, request.draft_id) {
+  let cwd = match (request.cwd, request.draft_id) {
     (Some(cwd), Some(draft_id)) => {
       guard @protocol.CodexDraftClosePayload::{ draft_id, }.validated_id()
         is Some(validated) &&
         @work_dir.resolve_host_workspace_authorization(validated, cwd)
-        is Some(_) else {
+        is Some(authorized) else {
         raise @host.HostError("Codex draft workspace is not authorized")
       }
+      Some(authorized.to_string())
     }
-    (None, Some(draft_id)) =>
+    (None, Some(draft_id)) => {
       if @protocol.CodexDraftClosePayload::{ draft_id, }.validated_id() is None {
         raise @host.PayloadError("invalid Codex draft id")
       }
-    (None, None) => ()
+      None
+    }
+    (None, None) => None
     _ => raise @host.PayloadError("Codex thread cwd requires its draft id")
   }
+  let request = { ..request, cwd, }
   if self.codex_draft_threads.cached(request) is Some(reply) {
     return reply
   }
@@ -916,12 +937,16 @@ async fn ApiState::codex_turn_start(
   self : ApiState,
   request : @protocol.CodexTurnStartPayload,
 ) -> @protocol.CodexTurnReply {
-  if request.cwd is Some(cwd) {
+  let cwd = if request.cwd is Some(cwd) {
     guard @work_dir.resolve_host_workspace_authorization(request.thread_id, cwd)
-      is Some(_) else {
+      is Some(authorized) else {
       raise @host.HostError("Codex turn workspace is not authorized")
     }
+    Some(authorized.to_string())
+  } else {
+    None
   }
+  let request = { ..request, cwd, }
   @json.from_json(
     self.codex_request("codex.turn.start", request.app_server_params()),
   )
@@ -945,8 +970,8 @@ async fn ApiState::codex_worktree_project(
     reply_fields.get("thread") is Some(Object(thread)) &&
     thread.get("id") is Some(reply_id) &&
     reply_id == Json(thread_id) &&
-    thread.get("projectRoot") is Some(reply_root) &&
-    reply_root == Json(requested) else {
+    thread.get("projectRoot") is Some(String(reply_root)) &&
+    codex_same_workspace(reply_root, requested) else {
     raise @host.HostError(
       "Codex worktree requires an empty task at its main project root",
     )
@@ -956,11 +981,13 @@ async fn ApiState::codex_worktree_project(
   // app-server cwd at the missing checkout; the registry's exact owner/project
   // pair is the authority needed to recreate that same placement.
   if @worktree.list_codex_worktree_bindings().any(binding => {
-      binding.thread_id == thread_id && binding.workspace == requested
+      binding.thread_id == thread_id &&
+      codex_same_workspace(binding.workspace, requested)
     }) {
     return requested
   }
-  guard thread.get("cwd") is Some(reply_cwd) && reply_cwd == Json(requested) else {
+  guard thread.get("cwd") is Some(String(reply_cwd)) &&
+    codex_same_workspace(reply_cwd, requested) else {
     raise @host.HostError(
       "Codex worktree requires an empty task at its main project root",
     )

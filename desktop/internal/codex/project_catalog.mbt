@@ -81,18 +81,24 @@ async fn ProjectCatalog::resolve(
 
 ///|
 /// Confirm that an add action names a project previously learned from an
-/// app-server thread reply. Existence alone is not authority: a remote page
+/// app-server thread reply. `cwd` is the frontend resource path; cached
+/// projects retain their native spelling. Existence alone is not authority: a remote page
 /// must not turn an arbitrary directory spelling into a Desktop grant.
 pub fn ProjectCatalog::main_project(
   self : ProjectCatalog,
   cwd : String,
 ) -> String? {
-  let cwd = cwd.trim().to_owned()
-  if self.known_projects.get(cwd) is Some(true) {
-    Some(cwd)
-  } else {
-    None
+  guard @pathx.Absolute::from_uri_path(cwd.trim().to_owned()) is Some(requested) else {
+    return None
   }
+  for project, _ in self.known_projects {
+    if @pathx.Path(project).to_absolute() is Some(root) &&
+      requested.relative_to(root~) is Some(relative) &&
+      relative.is_root() {
+      return Some(project)
+    }
+  }
+  None
 }
 
 ///|
@@ -168,16 +174,22 @@ async test "Codex project catalog rechecks a missing cwd on later refreshes" {
 ///|
 async test "Codex draft projects accept only the main checkout" {
   let catalog = ProjectCatalog()
-  catalog.roots["/workspace/project"] = "/workspace/project"
-  catalog.roots["/worktrees/a/project"] = "/workspace/project"
+  let project = if @platform.win32 || @platform.win64 {
+    "C:\\workspace\\project"
+  } else {
+    "/workspace/project"
+  }
+  let resource = if @platform.win32 || @platform.win64 {
+    "/c:/workspace/project"
+  } else {
+    "/workspace/project"
+  }
+  catalog.roots[project] = project
   // A cached filesystem lookup alone is not enough to grant a browser path.
-  assert_true(catalog.main_project("/workspace/project") is None)
-  catalog.known_projects["/workspace/project"] = true
-  assert_eq(
-    catalog.main_project("/workspace/project"),
-    Some("/workspace/project"),
-  )
-  assert_true(catalog.main_project("/worktrees/a/project") is None)
+  assert_true(catalog.main_project(resource) is None)
+  catalog.known_projects[project] = true
+  assert_eq(catalog.main_project(resource), Some(project))
+  assert_true(catalog.main_project(resource + "/child") is None)
 }
 
 ///|

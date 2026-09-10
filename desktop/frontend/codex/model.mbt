@@ -1049,18 +1049,6 @@ pub fn State::active_id(self : State) -> String? {
 }
 
 ///|
-/// Codex reports native paths for the owning host. Convert Windows drive
-/// spellings explicitly, without consulting the browser machine's OS.
-fn cwd_resource(channel : @interop.ChannelId, cwd : String) -> @common.Uri? {
-  let path = match cwd {
-    ['a'..='z' | 'A'..='Z', ':', '/' | '\\', ..] =>
-      "/" + cwd.replace_all(old="\\", new="/")
-    _ => cwd
-  }
-  @resource.of_path(channel, path)
-}
-
-///|
 /// The selected task's complete host-authorized placement. Stored tasks get
 /// their cwd from app-server and their managed-worktree annotation from the
 /// native host; local drafts get their project from `codex.draft.open`.
@@ -1074,7 +1062,7 @@ pub fn State::active_placement(
     CodexNoTask => None
     CodexDraftTask(draft) =>
       draft.project_root
-      .bind(root => cwd_resource(channel, root))
+      .bind(root => @resource.of_path(channel, root))
       .map(root => @interop.WorkspaceRoot(root~))
     CodexStoredTask(thread) => thread.placement(channel)
   }
@@ -1131,7 +1119,7 @@ pub fn State::worktree_launch_workspace(
 ) -> @common.Uri? {
   guard self.active_draft() is Some(draft) &&
     draft.project_root is Some(root) &&
-    cwd_resource(channel, root) is Some(workspace) else {
+    @resource.of_path(channel, root) is Some(workspace) else {
     return None
   }
   Some(workspace)
@@ -1184,20 +1172,20 @@ fn State::with_open_draft(
 }
 
 ///|
-test "Codex draft adopts the host cwd after resolving a Windows resource path" {
+test "Codex draft adopts the host-confirmed resource path" {
   let draft = State().select_draft("desktop-windows", "/c:/work/project")
   let opened = draft.with_open_draft("desktop-windows", {
     "draftId": "desktop-windows",
-    "cwd": "C:\\work\\project",
-    "projectRoot": "C:\\work\\project",
+    "cwd": "/C:/work/canonical-project",
+    "projectRoot": "/C:/work/canonical-project",
   })
   guard opened.active_draft() is Some(draft) else { fail("expected a draft") }
-  assert_eq(draft.cwd, "C:\\work\\project")
-  assert_eq(draft.project_root, Some("C:\\work\\project"))
+  assert_eq(draft.cwd, "/C:/work/canonical-project")
+  assert_eq(draft.project_root, Some("/C:/work/canonical-project"))
   let channel = @interop.ChannelId::Local
   assert_eq(
     opened.worktree_launch_workspace(channel),
-    @resource.of_path(channel, "/c:/work/project"),
+    @resource.of_path(channel, "/c:/work/canonical-project"),
   )
 }
 
@@ -1381,7 +1369,7 @@ fn CodexThread::placement(
   match self.worktree {
     Some(worktree) => {
       guard self.project_root is Some(project_path) &&
-        cwd_resource(channel, project_path) is Some(project) else {
+        @resource.of_path(channel, project_path) is Some(project) else {
         return None
       }
       if !worktree.present {
@@ -1389,7 +1377,7 @@ fn CodexThread::placement(
       }
       guard self.cwd is Some(cwd) &&
         !cwd.trim().is_empty() &&
-        cwd_resource(channel, cwd) is Some(root) else {
+        @resource.of_path(channel, cwd) is Some(root) else {
         return None
       }
       Some(@interop.Worktree(project~, name=worktree.name, root~))
@@ -1397,7 +1385,9 @@ fn CodexThread::placement(
     None =>
       match self.cwd {
         Some(cwd) if !cwd.trim().is_empty() =>
-          cwd_resource(channel, cwd).map(root => @interop.WorkspaceRoot(root~))
+          @resource.of_path(channel, cwd).map(root => {
+            @interop.WorkspaceRoot(root~)
+          })
         // app-server tasks created without cwd still own a host-lazy scratch
         // terminal. The host does not disclose its path, so keep `root=None`:
         // Terminal can use the task id while Files and language services stay

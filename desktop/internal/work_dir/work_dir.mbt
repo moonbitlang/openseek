@@ -95,13 +95,12 @@ pub async fn revoke_host_workspace(session : String) -> Unit {
 /// native subsystem. Unlike `resolve_in_workspace`, this does not let a safe
 /// session id select any registered OpenSeek project; draft and turn mutation
 /// endpoints use it to verify the cwd they previously authorized themselves.
-/// `workspace` is the host-native cwd returned by that subsystem, not a
-/// frontend resource URI path.
+/// `workspace` is a frontend resource URI path, decoded on its owning host.
 pub async fn resolve_host_workspace_authorization(
   session : String,
   workspace : String,
 ) -> @pathx.Absolute? {
-  guard @pathx.Path(workspace).to_absolute() is Some(requested) &&
+  guard @pathx.Absolute::from_uri_path(workspace) is Some(requested) &&
     host_workspace_authorizations.resolve(session, requested)
     is Some(authorized) else {
     return None
@@ -345,7 +344,6 @@ async test "host-authorized workspaces are exact and session-scoped" {
   let session = "codex-authorized-workspace-test"
   revoke_host_workspace(session)
   authorize_host_workspace(session, root)
-  let exact = resolve_host_workspace_authorization(session, root)
   guard @pathx.Path(root).to_absolute().bind(path => path.to_uri_path())
     is Some(resource) else {
     fail("expected a resource path")
@@ -355,6 +353,7 @@ async test "host-authorized workspaces are exact and session-scoped" {
       "/" + drive.to_ascii_lowercase().to_string() + ":/" + rest.to_owned()
     _ => resource
   }
+  let exact = resolve_host_workspace_authorization(session, resource)
   let authorized = resolve_in_workspace(
     session,
     "src/main.mbt",
@@ -368,7 +367,7 @@ async test "host-authorized workspaces are exact and session-scoped" {
   let escape = resolve_in_workspace(session, "../outside", workspace=resource)
   revoke_host_workspace(session)
   let revoked = resolve_in_workspace(session, "", workspace=resource)
-  let exact_revoked = resolve_host_workspace_authorization(session, root)
+  let exact_revoked = resolve_host_workspace_authorization(session, resource)
   @fs.rmdir(root, recursive=true) catch {
     _ => ()
   }
