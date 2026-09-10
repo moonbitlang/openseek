@@ -626,12 +626,12 @@ button.row-twisty:hover {
 /* The host-backed project picker: a compact native-dialog treatment around
    the location bar, directory browser, and inline folder creation. */
 .picker-backdrop {
+  /* Use a tint alone to separate the picker from the page on every platform. */
   background: color-mix(
     in srgb,
     var(--color-text-primary) 20%,
     transparent
   );
-  backdrop-filter: blur(7px) saturate(0.9);
 }
 .modal.picker-modal {
   display: flex;
