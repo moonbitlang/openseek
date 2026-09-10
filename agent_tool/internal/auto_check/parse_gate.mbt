@@ -12,9 +12,7 @@
 /// matching moon's own extraction; and the textual `moon.mod` / `moon.pkg`
 /// config files. `moon.work` and the legacy `*.json` config files are not
 /// `syncheck` inputs, so they are not gated.
-const MooncSyncheckCommand : String = "moonc syncheck -error-format json"
-
-///|
+///
 /// How many lex/parse errors a reject report surfaces. Each entry carries a
 /// source excerpt, and parse errors cascade — a handful shows the shape of the
 /// breakage without dumping pages.
@@ -154,8 +152,9 @@ pub async fn content_parse_errors(
       create_mode=CreateOrTruncate,
     )
     let result = @async.with_timeout_opt(MooncParseTimeoutMs, () => {
-      @shell.collect_shell_output(
-        "\{MooncSyncheckCommand} \{scratch_name}",
+      collect_process_output(
+        "moonc",
+        ["syncheck", "-error-format", "json", scratch_name],
         cwd=dir,
         max_output_chars=MooncParseMaxOutputChars,
       )

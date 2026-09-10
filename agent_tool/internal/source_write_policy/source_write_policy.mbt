@@ -1,21 +1,4 @@
 ///|
-/// Return whether `target` is lexically inside `lab`, including the lab itself.
-///
-/// Both paths are normalized before comparison. An empty lab and the
-/// filesystem root `/` are rejected so this predicate cannot accidentally
-/// authorize every path. No filesystem or symlink resolution is performed.
-pub fn path_is_under_lab(target : String, lab : String) -> Bool {
-  let lab = @workspace_path.strip_trailing_slash(
-    @path.Path(lab).normalize().to_string(),
-  )
-  guard !lab.is_empty() && lab != "/" else { return false }
-  let target = @workspace_path.strip_trailing_slash(
-    @path.Path(target).normalize().to_string(),
-  )
-  target == lab || target.has_prefix("\{lab}/")
-}
-
-///|
 /// Return whether `target` is a protected MoonBit source path inside the
 /// workspace.
 ///

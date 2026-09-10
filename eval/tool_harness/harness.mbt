@@ -20,7 +20,7 @@ async fn run_harness_with_runtime(
     run_write_case(2, tools),
     run_edit_case(3, tools),
     run_multi_edit_case(4, tools),
-    run_shell_case(5, tools),
+    run_mbtx_case(5, tools),
     run_plan_case(6, tools),
     run_finish_case(7, tools),
   ]
@@ -32,17 +32,14 @@ fn tool_definitions(
   runtime : @agent_runtime.AgentRuntime,
   scope : @agent_runtime.AgentTaskScope[@report.Report],
 ) -> @agent_tool.Tools raise {
-  // No harness tool needs the runtime or task scope now that the moon_check
-  // watcher is gone; the parameters stay so the registry shape still mirrors
-  // the agent's build_tools.
-  ignore(runtime)
+  // The harness runs each snippet in the foreground; it needs no job scope.
   ignore(scope)
   Tools([
     @read.definition(),
     @write.definition(),
     @edit.definition(),
     @multi_edit.definition(),
-    @shell.definition(),
+    @mbtx.definition(workspace_root=runtime.workspace_root()),
     @plan.definition(),
     @finish.definition(),
   ])
@@ -201,24 +198,23 @@ async fn run_multi_edit_case(
 }
 
 ///|
-async fn run_shell_case(
+async fn run_mbtx_case(
   index : Int,
   tools : @agent_tool.Tools,
 ) -> @report.ReportRow {
-  let action = dispatch(tools, "shell", {
-    "cmd": "printf tool-harness-shell",
-    "max_output_chars": 2000,
+  let action = dispatch(tools, "mbtx", {
+    "source": "fn main { println(\"tool-harness-mbtx\") }",
   })
   let reason = expect_respond(
     action,
-    contains=["exit=0", "tool-harness-shell"],
+    contains=["tool-harness-mbtx"],
     error=false,
   )
   row(
     index~,
-    name="shell",
+    name="mbtx",
     mode="process",
-    action="run harmless command",
+    action="compile and run a MoonBit snippet",
     reason~,
   )
 }

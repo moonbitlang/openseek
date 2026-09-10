@@ -28,7 +28,7 @@ flowchart LR
   subgraph engine ["openseek engine (cmd/openseek)"]
     SERVE["serve / run / review / sessions / mcp"]
     AGENT["agent — turn loop"]
-    TOOLS["agent_tool — registry:<br/>shell·shell_output·shell_stop<br/>read·edit·multi_edit·write<br/>remove·plan·goal·finish"]
+    TOOLS["agent_tool — registry:<br/>mbtx·job_output·job_stop·job_wait<br/>read·edit·multi_edit·write<br/>remove·plan·goal·finish"]
     MCP["mcp — client + tool bridge<br/>(mcp__server__tool)"]
     PROMPT["prompt + agent_skill —<br/>system prompt & skills"]
     SESSION["agent_session (+ store) —<br/>durable event log"]

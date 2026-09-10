@@ -32,14 +32,14 @@ fn ExecStatus::is_terminal(self : ExecStatus) -> Bool {
 }
 
 ///|
-/// One shell command execution: a process spawned on the session group, its
+/// One command execution: a process spawned on the session group, its
 /// merged stdout+stderr owned by a single `ShellOutputSink`, and a status flag.
-/// This is the shared object behind both foreground `shell` and background jobs —
+/// This is the shared object behind foreground `mbtx` runs and background jobs —
 /// "foreground vs background" is only whether a tool call is currently awaiting
 /// it, so detaching is a status flip (`background()`), not a re-route.
 ///
-/// Cancellation reaches only the directly spawned process (like the foreground
-/// `shell` tool and `moon_check`): the process library exposes no process-group
+/// Cancellation reaches only the directly spawned process:
+/// the process library exposes no process-group
 /// kill, so a command that daemonizes its own children can leave descendants
 /// running after the execution is terminal.
 struct ShellExecution {
@@ -257,20 +257,6 @@ pub fn ShellExecution::request_stop(self : ShellExecution) -> Unit {
 pub async fn ShellExecution::wait(self : ShellExecution) -> Unit {
   for ;; {
     if self.status.is_terminal() {
-      return
-    }
-    @async.sleep(5)
-  }
-}
-
-///|
-/// Await terminal *or* the first invalid (binary / non-UTF-8) output, whichever
-/// comes first — so a foreground command that emits binary bytes and then keeps
-/// running fails immediately, matching the strict per-call path, instead of
-/// blocking until exit.
-pub async fn ShellExecution::wait_or_invalid(self : ShellExecution) -> Unit {
-  for ;; {
-    if self.status.is_terminal() || self.sink.had_invalid_utf8() {
       return
     }
     @async.sleep(5)

@@ -112,7 +112,7 @@ git submodule update --init editor/vscode     # opt-in performance suite
 | `bobzhang/openseek/internal/{cli,workspace_path}` | Shared CLI accessors and workspace-path resolution for the command mains. | — |
 | `bobzhang/openseek/testkit/filesystem` | JSON-backed virtual filesystem for tests and eval fixtures. | `testkit/filesystem/README.mbt.md` |
 | `bobzhang/openseek/eval/report` | Shared Markdown/JSON report primitive for deterministic and model evals. | `eval/report/README.mbt.md` |
-| `bobzhang/openseek/eval/tool_harness` | Deterministic host-side harness that dispatches every built-in tool. | `eval/tool_harness/README.mbt.md` |
+| `bobzhang/openseek/eval/tool_harness` | Deterministic host-side harness for file, command, and control tools. | `eval/tool_harness/README.mbt.md` |
 | `bobzhang/openseek/eval/file_edit/cases` | Deterministic file-editing eval case definitions. | `eval/file_edit/README.md` |
 | `bobzhang/openseek/eval/file_edit/harness` | Reusable file-editing eval runner, oracle, and reporter. | `eval/file_edit/README.md` |
 | `bobzhang/openseek/eval/file_edit/cmd/main` | Native-only CLI wrapper for the file-editing eval harness. | `eval/file_edit/README.md` |
@@ -285,8 +285,8 @@ The file-editing eval harness is available under `eval/file_edit`. It runs the
 real agent against isolated fixtures and checks exact final file state, making
 it suitable for cheap Flash baselines such as 8 successful edits out of 10.
 
-The deterministic tool harness under `eval/tool_harness` exercises each built-in
-tool through `agent_tool.execute_tool_call` with temporary fixtures. It is meant
+The deterministic tool harness under `eval/tool_harness` exercises file, command, and
+control tools through `agent_tool.execute_tool_call` with temporary fixtures. It is meant
 for ordinary `moon test` coverage of tool wiring and observable side effects,
 not for model quality scoring.
 

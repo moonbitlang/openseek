@@ -2,8 +2,6 @@
 package "bobzhang/openseek/agent_tool/internal/moon_check"
 
 // Values
-pub const Command : String = "moon check --diagnostic-limit 1"
-
 pub const MaxOutputChars : Int = 12000
 
 pub const TimeoutMs : Int = 30000

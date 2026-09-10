@@ -41,13 +41,3 @@ test "protected workspace source policy" {
     ),
   )
 }
-
-///|
-test "scratch lab containment policy" {
-  assert_true(@source_write_policy.path_is_under_lab("/tmp/lab", "/tmp/lab"))
-  assert_true(
-    @source_write_policy.path_is_under_lab("/tmp/lab/pkg/main.mbt", "/tmp/lab"),
-  )
-  assert_false(@source_write_policy.path_is_under_lab("/tmp/lab2", "/tmp/lab"))
-  assert_false(@source_write_policy.path_is_under_lab("/tmp/lab", "/"))
-}

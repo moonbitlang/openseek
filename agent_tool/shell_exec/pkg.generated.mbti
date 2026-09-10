@@ -45,7 +45,6 @@ pub fn ShellExecution::started_at_ms(Self) -> Int64
 pub fn ShellExecution::status(Self) -> ExecStatus
 pub async fn ShellExecution::stop(Self) -> Bool
 pub async fn ShellExecution::wait(Self) -> Unit
-pub async fn ShellExecution::wait_or_invalid(Self) -> Unit
 
 // Type aliases
 

@@ -762,13 +762,9 @@ async fn execute(
     )
     // A cancelled turn must not leak the child: stop it before unwinding.
     errdefer exec.request_stop()
-    // `wait`, not `wait_or_invalid`. That one returns early on the first non-UTF-8
-    // byte, for a caller that fails fast on binary output — and this is not one:
-    // reporting with the child still running would leave it going while
-    // `defer cleanup()` removes its build directory underneath it, and the exit
-    // code below would be invented. The exit is what this waits for either way,
-    // so asking for the early wake only put the rest of the wait outside the
-    // deadline. Expiry needs nothing special: it detaches like any other long run.
+    // Wait for exit even after binary output: reporting early would let
+    // cleanup remove a still-running snippet's build directory. Keep the whole
+    // wait inside the foreground deadline so expiry can detach the run.
     let finished = @async.with_timeout_opt(auto_background_after_ms, () => {
       exec.wait()
     })

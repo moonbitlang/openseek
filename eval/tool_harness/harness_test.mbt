@@ -1,5 +1,5 @@
 ///|
-async test "deterministic harness exercises every tool" {
+async test "deterministic harness exercises file, command, and control tools" {
   let report = @tool_harness.run_harness()
   assert_eq(report.rows.length(), 7)
   assert_eq(report.successes(), 7)
@@ -11,6 +11,8 @@ async test "deterministic harness exercises every tool" {
   assert_false(markdown.contains("`moon_check`"))
   assert_false(markdown.contains("`moon_cmd`"))
   assert_true(markdown.contains("| 4 | `multi_edit` | pass"))
+  assert_true(markdown.contains("| 5 | `mbtx` | pass"))
+  assert_false(markdown.contains("`shell`"))
   assert_true(markdown.contains("| 6 | `plan` | pass"))
   assert_true(markdown.contains("| 7 | `finish` | pass"))
 }

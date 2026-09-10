@@ -1,8 +1,4 @@
 ///|
-/// The bounded follow-up command shared by edit and shell auto-checks.
-pub const Command : String = "moon check --diagnostic-limit 1"
-
-///|
 /// Maximum time a follow-up `moon check` may run.
 pub const TimeoutMs : Int = 30000
 

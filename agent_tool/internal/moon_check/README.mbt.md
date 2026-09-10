@@ -1,13 +1,11 @@
 # agent_tool/internal/moon_check
 
-The shared vocabulary for running a follow-up `moon check`: the command, its
+The shared vocabulary for running a follow-up `moon check`: its
 bounds, how its result is rendered, and where it should run from.
 
-Two callers need to agree on all four. `agent_tool/internal/auto_check` runs a
-check after `write`, `edit`, `multi_edit`, and `remove` change a MoonBit file;
-`agent_tool/shell` recognizes the same check when the model runs it itself. If
-the two disagreed on the command or the output shape, the same failure would
-reach the model looking like two different failures.
+`agent_tool/internal/auto_check` runs `moon check --diagnostic-limit 1` directly
+after editing tools change a MoonBit file. It uses these bounds and formatting
+helpers to present the compiler's feedback consistently.
 
 This package holds no policy about *when* to check — only what the check is.
 
@@ -15,8 +13,7 @@ This package holds no policy about *when* to check — only what the check is.
 
 ```mbt check
 ///|
-test "the command and its bounds are constants, not caller choices" {
-  inspect(@moon_check.Command, content="moon check --diagnostic-limit 1")
+test "the check bounds are constants, not caller choices" {
   inspect(@moon_check.TimeoutMs, content="30000")
   inspect(@moon_check.MaxOutputChars, content="12000")
 }

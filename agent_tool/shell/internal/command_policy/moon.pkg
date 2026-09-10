@@ -1,5 +1,0 @@
-import {
-  "bobzhang/openseek/agent_tool/shell/internal/shell_parse",
-}
-
-warnings = "+unnecessary_annotation"

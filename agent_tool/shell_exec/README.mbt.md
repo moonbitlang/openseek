@@ -1,12 +1,12 @@
 # Shell Execution Model
 
 `bobzhang/openseek/agent_tool/shell_exec` is the shared execution model behind
-every shell command the agent runs: one process, one output owner, one status
-flag. It is the foundation the `shell`, `shell_output`, and `shell_stop` tools
-(and the `bgjobs` registry) are built on.
+the agent's `mbtx` runs and background jobs: one process, one output owner, one
+status flag. `mbtx` starts a program directly; `job_output`, `job_stop`, and
+`job_wait` observe it through the `bgjobs` registry.
 
 The package deliberately contains no tool definitions and no policy about what
-commands may run — it only answers "what is a running shell command, who owns
+commands may run — it only answers "what is a running process, who owns
 its output, and how does it end".
 
 ## The One Idea
@@ -88,7 +88,7 @@ so a command that daemonizes children can leave descendants running.
 
 ```mermaid
 flowchart TD
-  shell["agent_tool/shell\nforeground + detach-on-timeout"] --> exec
+  mbtx["agent_tool/mbtx\nforeground + automatic background handoff"] --> bgjobs
   bgjobs["agent_tool/bgjobs\nsession job registry"] --> exec
   exec["shell_exec.ShellExecution\n(process + status)"] --> sink["shell_exec.ShellOutputSink\n(memory head + spill file)"]
 ```

@@ -18,8 +18,9 @@ pub async fn append_summary(path : String, content : String) -> String {
 async fn auto_check_summary(path : String) -> String? {
   guard moon_check_cwd(path) is Some(cwd) else { return None }
   let result = @async.with_timeout_opt(@moon_check.TimeoutMs, () => {
-    @shell.collect_shell_output(
-      @moon_check.Command,
+    collect_process_output(
+      "moon",
+      ["check", "--diagnostic-limit", "1"],
       cwd~,
       max_output_chars=@moon_check.MaxOutputChars,
     )
@@ -44,9 +45,7 @@ async fn auto_check_summary(path : String) -> String? {
 /// `moon check --output-json` emits one JSON diagnostic object per line, so the
 /// guardrail can count `level == "error"` exactly instead of parsing the
 /// warning-heavy human summary.
-const MoonCheckJsonCommand : String = "moon check --output-json"
-
-///|
+///
 /// A larger capture budget than the human summary: a project with hundreds of
 /// warnings emits a JSON line each, and undercounting would weaken the
 /// guardrail. If output still overflows this, `CheckErrors::truncated` is set
@@ -79,8 +78,9 @@ pub(all) struct CheckErrors {
 pub async fn count_errors(path : String) -> CheckErrors? {
   guard moon_check_cwd(path) is Some(cwd) else { return None }
   let result = @async.with_timeout_opt(@moon_check.TimeoutMs, () => {
-    @shell.collect_shell_output(
-      MoonCheckJsonCommand,
+    collect_process_output(
+      "moon",
+      ["check", "--output-json"],
       cwd~,
       max_output_chars=MoonCheckJsonMaxOutputChars,
     )

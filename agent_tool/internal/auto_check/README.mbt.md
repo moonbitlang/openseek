@@ -11,6 +11,11 @@ MoonBit source:
 3. **What should the model be told?** — `append_summary` and
    `format_parse_gate_errors`.
 
+Compiler processes (`moon` and `moonc`) run directly with literal argument
+arrays. The private collector bounds merged stdout/stderr by Unicode character
+count, closes stdin immediately, and cancels the child on output overflow or
+when the caller's timeout expires.
+
 ## Everything here fails open
 
 Each entry point returns `None` (or the content unchanged) when it cannot do its

@@ -1,8 +1,7 @@
 ///|
 /// Default retained-output budget for a background job's inline preview, in
-/// characters. Matches the `shell` tool's foreground default so a command reads
-/// the same whether it runs in the foreground or the background. Full output
-/// beyond this spills to the job's file (see `ShellOutputSink`).
+/// characters. Full output beyond this spills to the job's file (see
+/// `ShellOutputSink`).
 let default_max_output_chars : Int = 12000
 
 ///|
@@ -223,13 +222,11 @@ fn BgJobRuntime::next_id(self : BgJobRuntime) -> String {
 }
 
 ///|
-/// Spawn a foreground execution that may be *detached* (adopted) on timeout: it
-/// uses the background retention config — file-backed (spill), a large hard cap,
-/// no output-limit kill — so that if it is detached and keeps producing output,
-/// `shell_output` still sees it. The foreground output-limit (over
-/// `max_output_chars`) is enforced by the caller at display time, not by killing;
-/// the caller's `timeout_ms` bounds the wait. Reuses the background spawn with a
-/// distinct `fg-<n>.out` spill file.
+/// Spawn a foreground execution that can be adopted as a background job.
+/// Full output spills to a distinct `fg-<n>.out` file. The foreground watchdog
+/// kills output past `max_output_chars`; detaching clears that watchdog while
+/// retaining the hard output cap. `job_output` can read the retained output
+/// after adoption, and the caller bounds the foreground wait.
 pub async fn BgJobRuntime::spawn_foreground_retained(
   self : BgJobRuntime,
   program : String,

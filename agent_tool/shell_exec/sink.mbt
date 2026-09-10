@@ -1,8 +1,7 @@
 ///|
 /// Default inline cap: output at or below this many characters is shown inline;
 /// larger output spills to a file and is rendered as a pointer plus a head
-/// preview. Matches the `shell` tool's foreground default so a command reads the
-/// same whether it runs in the foreground or the background.
+/// preview. Callers can override this budget for their foreground output.
 let default_inline_cap : Int = 12000
 
 ///|
@@ -23,7 +22,7 @@ pub let default_hard_cap : Int = 20_000_000
 ///
 /// With no `spill_path` the sink is memory-only: it keeps the head and drops the
 /// rest (bounded, never touches disk) — used by contexts that never need full
-/// large output (tests, the scope-less `collect_shell_output`).
+/// large output, such as tests and runtimes without a spill directory.
 priv struct ShellOutputSink {
   // The first `inline_cap` characters, for inline rendering without a file read.
   head : StringBuilder

@@ -6,7 +6,7 @@ import {
   "bobzhang/openseek/agent_tool/multi_edit",
   "bobzhang/openseek/agent_tool/plan",
   "bobzhang/openseek/agent_tool/read",
-  "bobzhang/openseek/agent_tool/shell",
+  "bobzhang/openseek/agent_tool/mbtx",
   "bobzhang/openseek/agent_tool/write",
   "bobzhang/openseek/deepseek",
   "bobzhang/openseek/eval/report",
@@ -19,3 +19,9 @@ import {
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+native"
+
+options(
+  // Each harness run builds an mbtx snippet; serialize the test and doc cases
+  // so they do not compete with one another for the compiler's build budget.
+  "max-concurrent-tests": 1,
+)

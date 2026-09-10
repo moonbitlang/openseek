@@ -1,16 +1,11 @@
 # agent_tool/internal/source_write_policy
 
-Workspace policy shared by the macOS sandbox profile builder and the `shell`
-tool's static command preflight. This package decides which MoonBit source paths
+Workspace policy used by the macOS sandbox profile builder. This package decides which MoonBit source paths
 are protected; it does not execute commands or emit SBPL.
 
-Two callers, one answer. `agent_tool/internal/sandbox` turns these predicates
-into SBPL deny rules enforced by `sandbox-exec` at runtime; `agent_tool/shell`
-asks the same questions before spawning anything, so a command is refused the
-same way on a platform where the sandbox is unavailable. The two must agree,
-which is why the rules live here rather than in either caller — and why the
-examples below are tests rather than prose: a drift in behavior fails the build
-instead of quietly letting the enforcement paths diverge.
+`agent_tool/internal/sandbox` turns these predicates into SBPL deny rules
+enforced by `sandbox-exec` for read-only runs. The examples below are tests so
+changes to the protected paths are checked by the build.
 
 Every function is a pure string operation. Nothing here opens, stats, or
 resolves symlinks.
@@ -216,61 +211,6 @@ test "`..` is resolved before containment is judged" {
     @source_write_policy.is_protected_workspace_source_path(
       "/work", "/work/../etc/passwd.mbt",
     ),
-    content="false",
-  )
-}
-```
-
-## `path_is_under_lab` — the scratch-lab exception
-
-The authorization predicate for an opt-in writable subtree. It normalizes both
-paths, includes the lab itself, and refuses to authorize everything.
-
-```mbt check
-///|
-test "the lab and everything under it, and nothing else" {
-  inspect(
-    @source_write_policy.path_is_under_lab("/work/lab/scratch.mbt", "/work/lab"),
-    content="true",
-  )
-  // The lab directory itself is included.
-  inspect(
-    @source_write_policy.path_is_under_lab("/work/lab", "/work/lab"),
-    content="true",
-  )
-  // A sibling sharing a name prefix is not under the lab.
-  inspect(
-    @source_write_policy.path_is_under_lab("/work/lab2/x.mbt", "/work/lab"),
-    content="false",
-  )
-  // Traversal is normalized away before the comparison, in both directions.
-  inspect(
-    @source_write_policy.path_is_under_lab(
-      "/work/lab/../lab/x.mbt", "/work/lab",
-    ),
-    content="true",
-  )
-  inspect(
-    @source_write_policy.path_is_under_lab(
-      "/work/lab/../secret.mbt", "/work/lab",
-    ),
-    content="false",
-  )
-}
-```
-
-A lab of `/` or of the empty string is rejected outright, so a caller that
-forgets to configure one cannot accidentally authorize the whole filesystem:
-
-```mbt check
-///|
-test "a degenerate lab authorizes nothing" {
-  inspect(
-    @source_write_policy.path_is_under_lab("/work/src/main.mbt", "/"),
-    content="false",
-  )
-  inspect(
-    @source_write_policy.path_is_under_lab("/work/src/main.mbt", ""),
     content="false",
   )
 }

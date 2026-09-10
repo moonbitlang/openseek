@@ -1,7 +1,7 @@
 # agent_tool/internal/sandbox
 
-The source-write sandbox as one prepared-command capability. `shell`,
-`mbtx`, `bgjobs`, and `shell_output` share one macOS `sandbox-exec`
+The source-write sandbox as one prepared-command capability.
+`mbtx`, `bgjobs`, and `job_output` share one macOS `sandbox-exec`
 integration: describe command intent with the `Shell` or `Exec` variants of
 `Command`,
 prepare an opaque `SandboxedCommand`, run its program and arguments, then ask
@@ -120,6 +120,4 @@ boundary:
 - reads and non-source writes remain allowed;
 - callers may run unsandboxed when preparation returns `None`;
 - filesystem aliasing and directory operations can exceed purely path-based
-  policy assumptions;
-- `shell` supplements the runtime profile with static command preflight,
-  while arbitrary code run by `mbtx` cannot receive the same analysis.
+  policy assumptions.

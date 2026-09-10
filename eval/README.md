@@ -6,8 +6,8 @@ This directory describes proposed harnesses for evaluating OpenSeek with
 The checked-in eval support packages are:
 
 - `eval/report`: shared Markdown/JSON report rows, metrics, and file writer.
-- `eval/tool_harness`: deterministic host-side harness that dispatches every
-  built-in tool through `agent_tool.execute_tool_call`.
+- `eval/tool_harness`: deterministic host-side harness that dispatches file, command,
+  and control tools through `agent_tool.execute_tool_call`.
 - `eval/file_edit`: nondeterministic model-facing file-edit harness that runs
   the real agent against isolated fixtures.
 - `eval/prompt_task`: nondeterministic model-facing prompt-task harness that
