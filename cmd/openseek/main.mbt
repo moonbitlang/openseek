@@ -1459,6 +1459,22 @@ test "cli defaults model and max steps" {
 }
 
 ///|
+/// V4.1 Flash's canonical wire name is `deepseek-flash`; the retired
+/// `deepseek-v4-flash` name still parses to its own legacy tier.
+test "cli accepts the v4.1 flash wire name" {
+  let parsed = run_matches(argv=["write", "MoonBit"], env={
+    "DEEPSEEK": "test-key",
+    "OPENSEEK_MODEL": "deepseek-flash",
+  })
+  let (model, thinking, api_url) = agent_settings(parsed)
+  assert_true(model is Deepseek(V41Flash))
+  assert_eq(model.to_string(), "deepseek-flash")
+  assert_eq(model.api_key(parsed.values), Some("test-key"))
+  assert_true(thinking is High)
+  assert_true(api_url is None)
+}
+
+///|
 test "cli retry flags override the environment and reject non-positives" {
   let parsed = run_matches(
     argv=["--retry-attempts", "2", "--retry-backoff-ms", "7", "write"],

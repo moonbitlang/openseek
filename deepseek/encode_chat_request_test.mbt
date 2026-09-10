@@ -265,6 +265,23 @@ test "glm flash enables preserved thinking at max effort" {
 }
 
 ///|
+test "v4.1 flash encodes its canonical wire name and thinking fields" {
+  let body = @deepseek.encode_chat_request(
+    model=Deepseek(V41Flash),
+    thinking=Max,
+  ) <| [
+    ChatMessage(User, content="solve"),
+  ]
+  json_inspect(body, content={
+    "model": "deepseek-flash",
+    "messages": [{ "role": "user", "content": "solve" }],
+    "stream": false,
+    "thinking": { "type": "enabled" },
+    "reasoning_effort": "max",
+  })
+}
+
+///|
 test "deepseek tool-enabled reasoning and tool result round-trip" {
   let tool = @deepseek.ToolDefinition("shell", "Run a shell command.", {
     "type": "object",

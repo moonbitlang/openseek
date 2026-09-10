@@ -11,6 +11,7 @@ pub fn openrouter_encode_chat_request(
   let model = match model {
     V4Flash => "deepseek/deepseek-v4-flash-0731"
     V4Pro => "deepseek/deepseek-v4-pro"
+    V41Flash => "deepseek/deepseek-v4.1-flash"
   }
   let effort = match thinking {
     No => "none"

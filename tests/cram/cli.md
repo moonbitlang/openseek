@@ -35,7 +35,7 @@ Commands:
 Options:
   -h, --help                             Show help information.
   --api-key <api-key>                    API key for the selected chat provider. [default: ]
-  --model <model>                        Chat model: deepseek-v4-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-v4-flash]
+  --model <model>                        Chat model: deepseek-flash, deepseek-v4-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-v4-flash]
   --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
   --retry-attempts <retry-attempts>      Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
   --retry-backoff-ms <retry-backoff-ms>  Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
@@ -135,7 +135,7 @@ Arguments:
 Options:
   -h, --help                                                   Show help information.
   --api-key <api-key>                                          API key for the selected chat provider. [default: ]
-  --model <model>                                              Chat model: deepseek-v4-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-v4-flash]
+  --model <model>                                              Chat model: deepseek-flash, deepseek-v4-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-v4-flash]
   --api-url <api-url>                                          OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
   --retry-attempts <retry-attempts>                            Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
   --retry-backoff-ms <retry-backoff-ms>                        Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
@@ -197,6 +197,27 @@ $ sh <<'EOF'
 > EOF
 exit-non-zero
 error: an API key is required for deepseek-v4-flash: pass --api-key
+stdout-empty
+```
+
+## V4.1 Flash Is Selected By Its Canonical Wire Name
+
+`deepseek-flash` is V4.1 Flash's canonical name (the retired
+`deepseek-v4-flash` name still parses, served by the same model). It reaches
+the key check like any other tier, and the report names the model that was
+actually selected.
+
+```mooncram
+$ sh <<'EOF'
+> stdout=$(mktemp)
+> stderr=$(mktemp)
+> if env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run --model deepseek-flash "summarize this project" > "$stdout" 2> "$stderr"; then echo exit-zero; else echo exit-non-zero; fi
+> cat "$stderr"
+> if test -s "$stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
+> rm -f "$stdout" "$stderr"
+> EOF
+exit-non-zero
+error: an API key is required for deepseek-flash: pass --api-key
 stdout-empty
 ```
 

@@ -8,6 +8,7 @@
 priv enum EngineModel {
   DsPro
   DsFlash
+  DsFlash41
   Glm53
   Glm53Flash
   Other(String)
@@ -18,6 +19,7 @@ fn EngineModel::wire(self : EngineModel) -> String {
   match self {
     DsPro => "deepseek-v4-pro"
     DsFlash => "deepseek-v4-flash"
+    DsFlash41 => "deepseek-flash"
     Glm53 => "glm-5.3"
     Glm53Flash => "glm-5.3-flash"
     Other(name) => name
@@ -32,6 +34,7 @@ fn EngineModel::parse(value : StringView) -> EngineModel? {
   match value.trim() {
     "deepseek-v4-pro" => Some(DsPro)
     "deepseek-v4-flash" => Some(DsFlash)
+    "deepseek-flash" => Some(DsFlash41)
     "glm-5.3" => Some(Glm53)
     "glm-5.3-flash" => Some(Glm53Flash)
     "" => None
@@ -46,6 +49,7 @@ fn EngineModel::label(self : EngineModel) -> String {
   match self {
     DsPro => "DS Pro"
     DsFlash => "DS Flash"
+    DsFlash41 => "DS Flash 4.1"
     Glm53 => "GLM 5.3"
     Glm53Flash => "GLM 5.3 Flash"
     Other(name) => name
@@ -56,12 +60,13 @@ fn EngineModel::label(self : EngineModel) -> String {
 /// Whether this Desktop model is one whose request format accepts the
 /// `no`/`high`/`max` reasoning setting: the DeepSeek models, and the GLM
 /// models (the engine maps `no` to GLM's lowest supported effort, because
-/// GLM 5.3 always reasons). Unknown models include providers such as Kimi,
-/// where sending this setting would claim a capability the model does not
-/// expose.
+/// GLM 5.3 always reasons). V4.1 Flash is the DeepSeek model behind the
+/// `deepseek-flash` wire name, so it reasons like the rest of the family.
+/// Unknown models include providers such as Kimi, where sending this setting
+/// would claim a capability the model does not expose.
 fn EngineModel::supports_reasoning(self : EngineModel) -> Bool {
   match self {
-    DsPro | DsFlash | Glm53 | Glm53Flash => true
+    DsPro | DsFlash | DsFlash41 | Glm53 | Glm53Flash => true
     Other(_) => false
   }
 }
@@ -174,6 +179,14 @@ test "engine models round-trip their wire names" {
     EngineModel::parse("deepseek-v4-flash").unwrap().label(),
     content="DS Flash",
   )
+  inspect(
+    EngineModel::parse("deepseek-flash").unwrap().label(),
+    content="DS Flash 4.1",
+  )
+  inspect(
+    EngineModel::parse("deepseek-flash").unwrap().wire(),
+    content="deepseek-flash",
+  )
   inspect(EngineModel::parse("glm-5.3").unwrap().label(), content="GLM 5.3")
   inspect(
     EngineModel::parse("glm-5.3-flash").unwrap().wire(),
@@ -181,6 +194,7 @@ test "engine models round-trip their wire names" {
   )
   assert_true(EngineModel::parse("glm-5.3") is Some(Glm53))
   assert_true(EngineModel::Glm53Flash.supports_reasoning())
+  assert_true(EngineModel::DsFlash41.supports_reasoning())
   inspect(
     EngineModel::parse(" custom-model ").unwrap().wire(),
     content="custom-model",
@@ -491,7 +505,8 @@ fn EngineModel::matches_provider(
 ) -> Bool {
   match (provider, self) {
     (Custom, _) | (_, Other(_)) => true
-    (Deepseek | OpenRouter, DsPro | DsFlash) | (Glm, Glm53 | Glm53Flash) => true
+    (Deepseek | OpenRouter, DsPro | DsFlash | DsFlash41)
+    | (Glm, Glm53 | Glm53Flash) => true
     _ => false
   }
 }
@@ -2841,7 +2856,7 @@ fn Model::reasoning_for(
 ) -> OpenSeekReasoning {
   match engine_model {
     Glm53 | Glm53Flash => self.glm_reasoning
-    DsPro | DsFlash | Other(_) => self.openseek_reasoning
+    DsPro | DsFlash | DsFlash41 | Other(_) => self.openseek_reasoning
   }
 }
 

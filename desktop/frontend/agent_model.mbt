@@ -132,10 +132,10 @@ fn openseek_model_group(
   selected : EngineModel,
 ) -> @composer.ModelGroup {
   let listed : Array[EngineModel] = match provider {
-    Deepseek => [DsPro, DsFlash]
+    Deepseek => [DsPro, DsFlash, DsFlash41]
     Glm => [Glm53, Glm53Flash]
-    OpenRouter => [DsPro, DsFlash]
-    Custom => [DsPro, DsFlash, Glm53, Glm53Flash]
+    OpenRouter => [DsPro, DsFlash, DsFlash41]
+    Custom => [DsPro, DsFlash, DsFlash41, Glm53, Glm53Flash]
   }
   let options = listed.map(model => @composer.ModelOption::{
     value: ModelChoice::OpenSeekModel(model).wire(),
@@ -153,14 +153,16 @@ fn openseek_model_group(
 ///|
 test "the model group follows the configured provider" {
   let deepseek = openseek_model_group(Deepseek, DsPro)
-  assert_eq(deepseek.options.map(option => option.label), ["DS Pro", "DS Flash"])
+  assert_eq(deepseek.options.map(option => option.label), [
+    "DS Pro", "DS Flash", "DS Flash 4.1",
+  ])
   let glm = openseek_model_group(Glm, Glm53)
   assert_eq(glm.options.map(option => option.value), [
     "openseek:glm-5.3", "openseek:glm-5.3-flash",
   ])
   let openrouter = openseek_model_group(OpenRouter, DsFlash)
   assert_eq(openrouter.options.map(option => option.label), [
-    "DS Pro", "DS Flash",
+    "DS Pro", "DS Flash", "DS Flash 4.1",
   ])
   // A conversation carried across a provider switch keeps its model visible,
   // same as an unknown wire name always did.
@@ -170,7 +172,7 @@ test "the model group follows the configured provider" {
   ])
   let custom = openseek_model_group(Custom, Other("proxy-model"))
   assert_eq(custom.options.map(option => option.label), [
-    "DS Pro", "DS Flash", "GLM 5.3", "GLM 5.3 Flash", "proxy-model",
+    "DS Pro", "DS Flash", "DS Flash 4.1", "GLM 5.3", "GLM 5.3 Flash", "proxy-model",
   ])
 }
 

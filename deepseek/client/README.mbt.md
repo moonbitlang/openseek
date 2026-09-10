@@ -88,6 +88,7 @@ into `ChatResponse::reasoning_content`.
 |---------------------|-----------------------------------|
 | `deepseek-v4-flash` | `deepseek/deepseek-v4-flash-0731` |
 | `deepseek-v4-pro`   | `deepseek/deepseek-v4-pro`        |
+| `deepseek-flash`    | `deepseek/deepseek-v4.1-flash`    |
 
 Use `tools=[...]` when the model may request native function calls.
 Use `response_format=JsonObject` only when the assistant content itself must be

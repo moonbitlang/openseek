@@ -34,9 +34,10 @@ moon run cmd/openseek -- run [--api-key sk-...] [--model deepseek-v4-flash] [--a
 Runs require `--api-key` or the provider-specific environment variable:
 `DEEPSEEK` for DeepSeek models, `KIMI` for Kimi models, and `GLM` for Z.AI GLM
 models. `--model` can also be supplied with `OPENSEEK_MODEL`; it accepts
-`deepseek-v4-flash`, `deepseek-v4-pro`, `kimi-k2.7-code`,
-`kimi-k2.7-code-highspeed`, `glm-5.3`, and `glm-5.3-flash`, and defaults to
-`deepseek-v4-flash`. `--max-steps` can also be supplied with
+`deepseek-flash` (V4.1 Flash), `deepseek-v4-flash`, `deepseek-v4-pro`,
+`kimi-k2.7-code`, `kimi-k2.7-code-highspeed`, `glm-5.3`, and
+`glm-5.3-flash`, and defaults to `deepseek-v4-flash`. `--max-steps` can also
+be supplied with
 `OPENSEEK_MAX_STEPS`; when omitted, turns are bounded by the model's context
 window instead of a step count. `--api-url` can also be supplied
 with `OPENSEEK_API_URL`; when omitted, OpenSeek uses the official endpoint for

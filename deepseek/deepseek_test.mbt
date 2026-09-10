@@ -18,6 +18,7 @@ test "chat message constructor keeps labeled fields" {
 ///|
 test "model parsing" {
   assert_true(@deepseek.Model::parse("deepseek-v4-flash") is Deepseek(V4Flash))
+  assert_true(@deepseek.Model::parse("deepseek-flash") is Deepseek(V41Flash))
   assert_true(
     @deepseek.Model::parse("kimi-k2.7-code-highspeed") is Kimi(K27CodeHighSpeed),
   )
@@ -26,6 +27,10 @@ test "model parsing" {
   assert_eq(
     @deepseek.Model::parse("deepseek-v4-flash").to_string(),
     "deepseek-v4-flash",
+  )
+  assert_eq(
+    @deepseek.Model::parse("deepseek-flash").to_string(),
+    "deepseek-flash",
   )
   assert_eq(
     @deepseek.Model::parse("deepseek-v4-pro").to_string(),
@@ -50,6 +55,7 @@ test "model parsing" {
 test "context windows per model" {
   assert_eq((Deepseek(V4Flash) : @deepseek.Model).context_window(), 1_000_000)
   assert_eq((Deepseek(V4Pro) : @deepseek.Model).context_window(), 1_000_000)
+  assert_eq((Deepseek(V41Flash) : @deepseek.Model).context_window(), 1_000_000)
   assert_eq((Kimi(K27Code) : @deepseek.Model).context_window(), 262_144)
   assert_eq(
     (Kimi(K27CodeHighSpeed) : @deepseek.Model).context_window(),

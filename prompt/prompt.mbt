@@ -21,4 +21,5 @@ pub fn system_prompt_for_model(_model : @deepseek.Model) -> String {
 test "system_prompt_for_model returns the default prompt for every model" {
   assert_eq(system_prompt_for_model(Deepseek(V4Flash)), default_prompt())
   assert_eq(system_prompt_for_model(Deepseek(V4Pro)), default_prompt())
+  assert_eq(system_prompt_for_model(Deepseek(V41Flash)), default_prompt())
 }

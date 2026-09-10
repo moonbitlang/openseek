@@ -11,8 +11,8 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
 ## API Shape
 
 - `Model`: provider-tagged chat models, e.g. `Deepseek(V4Pro)`,
-  `Kimi(K27Code)`, and `Glm(G53)`, with `Show` for wire strings and `Debug` for
-  inspection.
+  `Deepseek(V41Flash)` (the canonical `deepseek-flash` wire name), `Kimi(K27Code)`,
+  and `Glm(G53)`, with `Show` for wire strings and `Debug` for inspection.
 - `Model::api_key(matches)`: resolves the key a command main should send for
   this model — an explicit `--api-key` first, then the provider-specific
   option (`--deepseek-api-key` / `--kimi-api-key` / `--glm-api-key`, which the
@@ -81,6 +81,7 @@ classDiagram
     <<enumeration>>
     V4Flash
     V4Pro
+    V41Flash
   }
 
   class KimiVariant {
