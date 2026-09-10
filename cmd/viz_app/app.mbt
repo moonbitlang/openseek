@@ -1017,11 +1017,9 @@ fn subrun_child_refs(
     id=parent_row.id,
     system_prompt="",
   )
+  let child_ids = @viz.subrun_child_ids(session, parent_row.id)
   [
-    for child_id in @viz.subrun_child_ids(session, parent_row.id) if resolve_session_key(
-      model.sessions,
-      child_id,
-    )
+    for child_id in child_ids if resolve_session_key(model.sessions, child_id)
     is Some(key) => (child_id, key)
   ]
 }
