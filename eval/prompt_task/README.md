@@ -42,7 +42,91 @@ the historical results and their Git-isolation correction. The
 the original and shortened builtin prompts using independently committed Git
 fixtures. Both reports separately state the more lenient content-correctness metric.
 
-The default task is `eval/prompt_tasks/toml_parser_cli.md`. The runner replaces
+For a longer, real implementation comparison, `toml_read_ab.py` runs that
+TOML subset library-and-CLI task from a fresh project three times per arm. Pass
+frozen binaries and their matching resources, as above:
+
+```bash
+python3 eval/prompt_task/toml_read_ab.py \
+  --baseline /absolute/path/to/main/openseek.exe \
+  --baseline-share /absolute/path/to/main/share \
+  --candidate /absolute/path/to/pr/openseek.exe \
+  --candidate-share /absolute/path/to/pr/share \
+  --out .moonagent/eval_runs/toml_read_ab
+```
+
+Defaults are `deepseek-v4-flash`, high thinking, 160 steps and 1800 seconds per
+trial, in AB/BA/AB order. Both arms get the same task and explicit requirements
+for a MoonBit implementation, clean nonzero CLI errors, and no delegation.
+Each workspace begins with only a committed `.gitignore`; global skills and MCP
+are disabled, while each binary retains its own default prompt and tools.
+
+Before model calls, `--prepare-only` verifies Git isolation and cross-checks 29
+valid documents and 26 invalid documents against Python's `tomllib`. A reference
+adapter must pass all 114 CLI checks and an empty parser must fail them. After
+each run, a separate copy of the submission is checked, tested and built, then
+its actual native CLI is tested in file and stdin modes against exact expected
+JSON values, clean errors, usage handling and deterministic output. The agent
+receives none of this feedback. The original workspace must remain unchanged.
+A submission without a root `moon.mod` is rejected before running Moon, so
+validation never walks into an ancestor project. Modern manifests and actual
+black-box tests are also required. This tests the
+documented subset, not complete TOML 1.0 compliance; library API design and the
+ban on reusing another parser also need source inspection in the final report.
+
+The primary metric is cumulative input tokens, including cached input. The
+reporter adds the parent's usage events and each unique `subrun_finished`
+summary, so built-in reviews count toward total input, output and steps. Raw
+runner `usage` and `results.json` remain parent-only; use the exported report's
+`total_model_usage` and `summary` for the end-to-end comparison. Child summaries
+do not expose cache hits or misses, so complete cache totals are unavailable
+when children run. Missing child completion summaries also leave total usage
+unavailable rather than assuming zero. This measures reported tokens, not billing.
+
+Tool calls, independent acceptance results and latency are reported separately.
+The original strict `passed` verdict also requires no delegation. The reporter
+preserves it while separately recording artifact acceptance and normal delivery;
+an unsolicited review is a protocol deviation even if the parser passes.
+All fixed trials, including failures, remain in the report.
+`--limit` can pause after a fixed number of trials; rerunning resumes completed
+results, but an interrupted trial is retained for inspection. The plan hashes
+the task, evaluator dependencies, binaries and resources to reject mixed runs.
+
+`--api-url` can supply a common evaluation endpoint. OpenSeek disables
+`web_search` for custom endpoints, so record that toolset change for both arms.
+For the September run, local DNS returned unreachable DeepSeek addresses. The
+optional `deepseek_eval_relay.py` binds only to loopback, connects to a separately
+resolved address, verifies TLS for `api.deepseek.com`, and forwards request bodies
+unchanged, including native chunked uploads and streamed responses. It logs only
+request hashes, byte counts, status and timing. It does not log credentials or
+payloads. Keep any interrupted attempt separate rather than replacing its trials.
+
+After all trials finish, reconcile and export their results without rerunning
+model calls or changing scores:
+
+```bash
+python3 eval/prompt_task/toml_read_ab_report.py \
+  .moonagent/eval_runs/toml_read_ab \
+  eval/prompt_reports/toml_read_ab.json
+```
+
+The September source review also motivated a separate, **post-hoc** library
+probe. `toml_read_ab_library_probe.py <run-directory>` refuses to run until all
+planned model trials have ended. It makes fresh copies and checks the numeric
+payload of both `7` and `-7`, which can disagree with a correct-looking JSON
+serialization. It adapts only the public `parse(String)` / `parse(StringView)` /
+`parse_string(String)` entry point, locating its unique generated package
+interface; inspect unsupported or ambiguous APIs before adapting them. It saves
+`library-probe.json` without changing the frozen CLI
+scores or original source. Probe output is supplementary evidence, not a
+replacement success metric, and an existing probe directory is not overwritten.
+
+See the [completed TOML comparison](../prompt_reports/toml_read_ab_20260910.md)
+for all six real runs, full parent-and-review token accounting, the supplementary
+API probes, and the delegation/process-isolation limitations of that observation.
+
+The MoonBit suite runner below also defaults to
+`eval/prompt_tasks/toml_parser_cli.md`. That runner replaces
 `{{WORKSPACE}}` in the task template with each trial workspace path and starts
 the agent with `openseek --dir <trial-workspace>` and an explicit per-trial
 session id. Each session log stays under the trial workspace's `.openseek`
