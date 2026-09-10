@@ -813,10 +813,9 @@ async fn ApiState::codex_file_search(
   self : ApiState,
   payload : @protocol.CodexFileSearchPayload,
 ) -> @protocol.CodexFileSearchReply {
-  guard @work_dir.resolve_in_workspace(
+  guard @work_dir.resolve_host_workspace_authorization(
       payload.thread_id,
-      "",
-      workspace=payload.cwd,
+      payload.cwd,
     )
     is Some(root) else {
     raise @host.HostError("Codex workspace is not authorized")
@@ -842,12 +841,9 @@ async fn ApiState::open_codex_draft(
       payload.cwd.trim().to_owned(),
     )
     is Some(requested) {
-    let normalized = requested.normalize()
-    if @workspaces.registered().contains(normalized) {
-      Some(normalized.to_string())
-    } else {
-      None
-    }
+    // Resource URIs lowercase Windows drive letters; the registry owns the
+    // canonical filesystem spelling, including drive case and symlinks.
+    @workspaces.registered_dir(requested).map(root => root.to_string())
   } else {
     None
   }
@@ -880,9 +876,7 @@ async fn ApiState::codex_thread_start(
       guard @protocol.CodexDraftClosePayload::{ draft_id, }.validated_id()
         is Some(validated) &&
         @work_dir.resolve_host_workspace_authorization(validated, cwd)
-        is Some(authorized) &&
-        @pathx.Absolute::from_uri_path(cwd) is Some(requested) &&
-        authorized.normalize() == requested.normalize() else {
+        is Some(_) else {
         raise @host.HostError("Codex draft workspace is not authorized")
       }
     }
@@ -924,9 +918,7 @@ async fn ApiState::codex_turn_start(
 ) -> @protocol.CodexTurnReply {
   if request.cwd is Some(cwd) {
     guard @work_dir.resolve_host_workspace_authorization(request.thread_id, cwd)
-      is Some(authorized) &&
-      @pathx.Absolute::from_uri_path(cwd) is Some(requested) &&
-      authorized.normalize() == requested.normalize() else {
+      is Some(_) else {
       raise @host.HostError("Codex turn workspace is not authorized")
     }
   }
@@ -1005,10 +997,9 @@ async fn ApiState::codex_skills_list(
   self : ApiState,
   payload : @protocol.CodexSkillsListPayload,
 ) -> @protocol.CodexDataReply {
-  guard @work_dir.resolve_in_workspace(
+  guard @work_dir.resolve_host_workspace_authorization(
       payload.thread_id,
-      "",
-      workspace=payload.cwd,
+      payload.cwd,
     )
     is Some(root) else {
     raise @host.HostError("Codex workspace is not authorized")

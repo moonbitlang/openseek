@@ -387,10 +387,6 @@ async fn[G] Actor::run_connection(
       self.signal()
     },
   )
-  guard connection is Some(connection) else {
-    self.report_unavailable("Codex app-server is unavailable", pending, emit)
-    return
-  }
   self.state = Ready
   emit("codex.status_changed", self.status())
   if pending is Some(input) {

@@ -11,7 +11,7 @@ import {
 // Values
 pub fn command() -> String
 
-pub async fn[X] connect(@async.TaskGroup[X], command~ : String, notification_handler~ : (String, Json) -> Unit, request_handler~ : (@jsonrpc.PeerRequest) -> Bool raise, on_closed~ : () -> Unit, version~ : String, home~ : @pathx.Path?, handshake_timeout_ms? : Int) -> Connection?
+pub async fn[X] connect(@async.TaskGroup[X], command~ : String, notification_handler~ : (String, Json) -> Unit, request_handler~ : (@jsonrpc.PeerRequest) -> Bool raise, on_closed~ : () -> Unit, version~ : String, home~ : @pathx.Path?, handshake_timeout_ms? : Int) -> Connection
 
 pub fn home_dir(@pathx.Path) -> @pathx.Path
 

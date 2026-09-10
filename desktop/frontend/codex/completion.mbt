@@ -587,6 +587,7 @@ test "Codex draft skills wait for the host-confirmed project root" {
   assert_true(pending.active_context() is None)
   let confirmed = pending.with_open_draft("draft-1", {
     "draftId": "draft-1",
+    "cwd": "/canonical/project",
     "projectRoot": "/canonical/project",
   })
   guard confirmed.active_context() is Some(context) else {

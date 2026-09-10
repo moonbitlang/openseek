@@ -1,7 +1,12 @@
 # Codex app-server in OpenSeek Desktop
 
-OpenSeek Desktop starts one `codex app-server` child process. Codex and OpenSeek
-conversation lists share the global left sidebar; selecting either source swaps
+OpenSeek Desktop starts one `codex app-server` child process. On Windows the
+default command runs through `cmd.exe /d /c` so npm's `codex.cmd` shim resolves
+through `PATH`/`PATHEXT`; explicit executable paths spawn directly. As in MCP
+stdio, shutdown cancels the IO tasks, which close their own pipes, and cancels
+the child process. Startup failures retain their
+underlying pipe, process, or handshake error in the status and Desktop log.
+Codex and OpenSeek conversation lists share the global left sidebar; selecting either source swaps
 the main transcript and composer without creating a second nested application
 shell. Codex remains the owner of its account and thread data, separate from
 OpenSeek's existing engine and conversation store.
