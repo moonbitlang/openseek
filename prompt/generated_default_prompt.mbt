@@ -115,6 +115,35 @@ fn default_prompt() -> String {
     #|Reuse it with `{"filename":"scripts/check.mbtx","args":["--output-json"]}`,
     #|or `{"filename":"scripts/check.mbtx"}` for `moon check` with no extra arguments.
     #|
+    #|For scripts with their own options, prefer `argparse` and declare those options
+    #|explicitly. Call `@argparse.parse(...)` without `argv`: it reads the process
+    #|arguments and handles the executable prefix, so no `@env.args()` slicing is
+    #|needed. For example, save this source as `scripts/greet.mbtx`:
+    #|
+    #|```mbtx
+    #|import { "moonbitlang/core/argparse" }
+    #|
+    #|fn main raise {
+    #|  let matches = @argparse.parse(
+    #|    Command(
+    #|      "greet",
+    #|      options=[
+    #|        OptionArg("name", long="name", default_values=["world"], about="Who to greet."),
+    #|      ],
+    #|    ),
+    #|  )
+    #|  guard matches.values.get("name") is Some([name]) else {
+    #|    fail("expected one value for --name")
+    #|  }
+    #|  println("Hello, \{name}!")
+    #|}
+    #|```
+    #|
+    #|Call `{"filename":"scripts/greet.mbtx","args":["--name","Ada Lovelace"]}`
+    #|to print `Hello, Ada Lovelace!`. Omitting `args` prints `Hello, world!`.
+    #|The `args` field supplies script inputs; `argparse` handles option parsing,
+    #|defaults, and validation without receiving an explicit argument array.
+    #|
     #|There is no shell tool. Every command — `moon`, `git`, anything else — is
     #|spawned from a `mbtx` snippet through the shell-free
     #|`moonbitlang/async/shell` API. The `source` argument is a whole `.mbtx`

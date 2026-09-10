@@ -76,6 +76,33 @@ async test "default prompt reusable check script forwards arguments" {
 }
 
 ///|
+async test "default prompt argparse example reads process arguments implicitly" {
+  let prompt = @fs.read_file("prompt/default_prompt.mbt.md").text()
+  let example = prompt
+    .split("save this source as `scripts/greet.mbtx`")
+    .collect()
+  assert_eq(example.length(), 2)
+  let source = example[1].split("```mbtx\n").collect()[1].split("```").collect()[0]
+  @vfs.with_tmpdir(ws => {
+    let saved = run_in(ws, {
+      "source": source,
+      "filename": "scripts/greet.mbtx",
+      "args": ["--name", "Ada Lovelace"],
+    })
+    assert_false(saved.is_error, msg=saved.content)
+    assert_true(saved.content.contains("Hello, Ada Lovelace!\n"))
+    let defaults = run_in(ws, { "filename": "scripts/greet.mbtx" })
+    assert_false(defaults.is_error, msg=defaults.content)
+    assert_eq(defaults.content, "Hello, world!\n")
+    let invalid = run_in(ws, {
+      "filename": "scripts/greet.mbtx",
+      "args": ["--unknown"],
+    })
+    assert_true(invalid.is_error)
+  })
+}
+
+///|
 async test "script arguments reach inline and reused scripts verbatim on both runners" {
   @vfs.with_tmpdir(ws => {
     let values : Array[String] = [
