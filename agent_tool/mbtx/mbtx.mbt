@@ -1528,11 +1528,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool) -> Json {
         ],
       ),
     ),
-    "anyOf": [{ "required": ["source"] }, { "required": ["filename"] }],
-    "not": {
-      "required": ["source", "filename"],
-      "properties": { "filename": { "pattern": "^@" } },
-    },
+    "required": ["description"],
   }
 }
 
@@ -1600,15 +1596,23 @@ fn description(
     #|scripting surface: there is no shell tool, so commands, IO, and computation
     #|happen inside the submitted MoonBit program.
     #|
-    #|Pass source to run inline, filename to run an existing script, or both to
-    #|save and run a workspace script. For repeated automation, use
-    #|`{"source":"...","filename":"scripts/check.mbtx"}` once, then
-    #|`{"filename":"scripts/check.mbtx"}` for later runs. Missing parents are
+    #|Every call requires a short description and at least one of source or
+    #|filename. There are three valid ways to supply the program:
+    #|- source + filename: save the source to that workspace filename and run it.
+    #|  Use both together when creating a script you want to inspect or run again.
+    #|- source without filename: run a one-off inline program without saving it.
+    #|- filename without source: run a script that already exists.
+    #|Omit unused fields entirely; do not send null.
+    #|
+    #|For example, create and run a reusable script with
+    #|`{"description":"Save and run a greeting","source":"fn main { println(42) }","filename":"scripts/greet.mbtx"}`.
+    #|Run it again with `{"description":"Run the saved greeting","filename":"scripts/greet.mbtx"}`.
+    #|A filename-only call cannot create a script. Missing parent directories are
     #|created. Identical existing content is reused; different content is never
     #|overwritten. Use the edit tool to change a saved script. Saving is limited
     #|to the writable workspace and is unavailable in read-only mode.
     #|Pass `args` (an array of strings, default `[]`) to parameterize any script:
-    #|`{"filename":"scripts/check.mbtx","args":["--deny-warn"]}`.
+    #|`{"description":"Run saved checks","filename":"scripts/check.mbtx","args":["--deny-warn"]}`.
     #|The script runs on wasm. Import "moonbitlang/core/env" and read
     #|`@env.args()[1:]` to skip the executable name.
     #|Arguments are passed verbatim, without shell expansion or splitting.
@@ -1616,7 +1620,7 @@ fn description(
     #|@builtin/check.mbtx (moon check), @builtin/test.mbtx (moon test),
     #|@builtin/check-test.mbtx (check then test), @builtin/info-fmt.mbtx (info
     #|then fmt), and @builtin/check-json.mbtx (moon check --output-json).
-    #|Call `{"filename":"@builtin/check.mbtx"}` without source. Namespaced
+    #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
     #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
     #|not implemented. Paths within the namespace cannot escape its root.
     #|Ordinary names such as check.mbtx select workspace files. Use

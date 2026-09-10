@@ -1009,16 +1009,8 @@ test "the description advertises the Proton CLI command surface" {
 /// arguments the tool decodes are all present, including save-and-run inputs.
 test "the schema advertises every decoded argument" {
   let JsonSchema(schema) = @mbtx.definition(workspace_root=".").schema
-  guard schema
-    is {
-      "properties": Object(properties),
-      "anyOf": choices,
-      "not": namespace_write,
-      ..
-    } else {
-    fail(
-      "expected an object schema with input choices and namespace write exclusion",
-    )
+  guard schema is { "properties": Object(properties), .. } else {
+    fail("expected an object schema")
   }
   // Order-independent: `Map` iteration order is not the declaration order, and
   // MoonBit's String ordering is by length first, so a sorted expectation would
@@ -1037,19 +1029,8 @@ test "the schema advertises every decoded argument" {
       { "type": "array", "items": { "type": "string", .. }, "default": [], .. }
     ),
   )
-  assert_eq(
-    choices,
-    ([{ "required": ["source"] }, { "required": ["filename"] }] : Json),
-  )
-  assert_false(schema is { "required": _, .. })
-  assert_eq(
-    namespace_write,
-    (
-      {
-        "required": ["source", "filename"],
-        "properties": { "filename": { "pattern": "^@" } },
-      } : Json),
-  )
+  assert_false(schema is { "anyOf": _, .. })
+  assert_true(schema is { "required": ["description"], .. })
 }
 
 ///|
