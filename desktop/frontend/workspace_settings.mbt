@@ -7,11 +7,6 @@
 // override that never writes here.
 
 ///|
-/// Used only before an authoritative row exists or while an optimistic edit
-/// preserves a neighboring field. The host remains the persisted source.
-const DefaultWorkspaceSubmoduleCheckoutTimeoutSeconds : Int = 30
-
-///|
 /// One project's settings mirror, keyed like `ProjectWorktrees` and fenced
 /// by the same per-project generation rule: a reply carrying an older token
 /// is stale for that project alone.
@@ -157,7 +152,7 @@ fn DeviceState::with_workspace_settings(
       self
       .workspace_settings_row(project)
       .map(row => row.submodule_checkout_timeout_seconds)
-      .unwrap_or(DefaultWorkspaceSubmoduleCheckoutTimeoutSeconds)
+      .unwrap_or(@protocol.DefaultSubmoduleCheckoutTimeoutSeconds)
     },
   )
   let rows = self.workspace_settings.filter(row => row.project != project)
@@ -492,7 +487,8 @@ test "the workspace submodule select preserves its launch mode" {
   }
   assert_true(row.worktree_mode)
   assert_false(row.checkout_submodules)
-  // Unknown select values are ignored and cannot mutate either field.
+  assert_eq(row.submodule_checkout_timeout_seconds, 10)
+  // Unknown select values are ignored and cannot mutate the settings.
   let (_, unknown) = update(
     dispatch,
     WorkspaceSubmodulesChosen(Local, workspace, "unknown"),
@@ -555,6 +551,10 @@ test "a failed save pops a toast and re-reads under a fresh token" {
     attached,
   )
   let minted = chosen.dev().workspace_settings_request_generation
+  guard chosen.dev().workspace_settings_row(workspace) is Some(row) else {
+    fail("expected the optimistic workspace settings row")
+  }
+  assert_eq(row.submodule_checkout_timeout_seconds, 30)
   let (_, failed) = update_dev(
     dispatch,
     WorkspaceSettingsSaveFailed(workspace~, message="disk full"),
