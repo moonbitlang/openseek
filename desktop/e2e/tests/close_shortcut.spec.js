@@ -153,7 +153,7 @@ test('Selecting a dock tab moves focus out of the composer', async ({ page }) =>
   const app = await installDesktop(page);
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await page.getByRole('button', { name: /^Review / }).click();
-  await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+  await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
   const review = page.locator('.editor-tab', { hasText: 'main.mbt' });
   await page.getByTitle('New tab', { exact: true }).click();
   await page.getByRole('menu', { name: 'New tab', exact: true })
@@ -370,3 +370,25 @@ test('titlebar geometry ignores stale replies and preserves the last valid area 
   await expect(root).not.toHaveClass(/native-titlebar-overlay/);
   expect(app.pageErrors).toEqual([]);
 });
+
+for (const destination of ['Browser', 'Workflows']) {
+  test(`closing a file keeps its promoted ${destination} visible on narrow layouts`, async ({ page }) => {
+    const app = await installDesktop(page);
+    await page.setViewportSize({ width: 390, height: 850 });
+    await app.openReview();
+    await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.getByTitle('New tab', { exact: true }).click();
+    await page.getByRole('menuitem', { name: destination === 'Browser' ? 'Browse' : 'Workflows', exact: true }).click();
+    const tabs = page.locator('.editor-tab');
+    const file = tabs.filter({ hasText: 'main.mbt' });
+    await file.click();
+    await expect(file).toHaveClass(/active/);
+    await file.locator('.tab-close').click();
+    await expect(tabs).toHaveCount(1);
+    await expect(tabs).toHaveClass(/active/);
+    await expect(page.locator(destination === 'Browser' ? '.browser-chrome' : '.workflow-panel')).toBeVisible();
+    await expect(page.getByRole('tablist', { name: 'Explorer views' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Show workspace navigator' })).toBeVisible();
+    expect(app.pageErrors).toEqual([]);
+  });
+}
