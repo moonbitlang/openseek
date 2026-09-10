@@ -2051,7 +2051,11 @@ async test "CI monitor bundled entry forwards arguments before querying GitHub" 
     @fs.realpath("share/workflow/ci-watch.mbtx")
   }
   @vfs.with_tmpdir(ws => {
-    let out = run_in(ws, { "filename": filename, "args": ["--help"] })
+    let out = run_in(ws, {
+      "description": "Show CI monitor help",
+      "filename": filename,
+      "args": ["--help"],
+    })
     assert_false(out.is_error, msg=out.content)
     assert_true(
       out.content.contains("Requires authenticated gh"),
@@ -2060,6 +2064,7 @@ async test "CI monitor bundled entry forwards arguments before querying GitHub" 
     let out = run_in(ws, {
       "filename": filename,
       "args": ["--timeout-seconds", "0"],
+      "description": "Reject invalid CI monitor timing",
     })
     assert_true(out.is_error, msg=out.content)
     assert_true(out.content.contains("Expected seconds"), msg=out.content)

@@ -7,7 +7,7 @@ import {
 }
 
 ///|
-/// Run with mbtx(filename="@builtin/repo-map.mbtx", subrun=true).
+/// Run with mbtx(description="Map repository architecture", filename="@builtin/repo-map.mbtx", subrun=true).
 /// Two read-only scouts plus exact validation recipes; no retries or automatic edits.
 async fn main {
   guard @hosted.context() is Some(ctx) else {

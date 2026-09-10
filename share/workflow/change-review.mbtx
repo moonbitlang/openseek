@@ -6,7 +6,7 @@ import {
 }
 
 ///|
-/// Run with mbtx(filename="@builtin/change-review.mbtx", subrun=true).
+/// Run with mbtx(description="Review working-tree changes", filename="@builtin/change-review.mbtx", subrun=true).
 /// Three read-only scouts; no retries or automatic edits.
 async fn main {
   guard @hosted.context() is Some(ctx) else {

@@ -11,7 +11,7 @@ this resource root's absolute path.
 - `info-fmt.mbtx` runs info then fmt, modifying generated interfaces and formatting.
 - `check-json.mbtx` relays `moon check --output-json` diagnostics without filtering.
 
-Call `mbtx(filename="@builtin/check.mbtx")` (or another bundled name) and omit `source`. No file
+Call `mbtx(description="Check the workspace", filename="@builtin/check.mbtx")` (or another bundled name) and omit `source`. No file
 creation is needed. `cwd` selects the module to check or test, defaulting to
 the workspace. The commands use project/toolchain target defaults, stream
 output, and fail when the underlying command fails. Follow repository-specific
@@ -38,11 +38,11 @@ modified source with an ordinary workspace filename; never send source with
 Run these with the hosted child-agent handoff:
 
 ```json
-{"filename":"@builtin/change-review.mbtx","subrun":true}
+{"description":"Review working-tree changes","filename":"@builtin/change-review.mbtx","subrun":true}
 ```
 
 ```json
-{"filename":"@builtin/repo-map.mbtx","subrun":true,"cwd":"/path/to/repository"}
+{"description":"Map repository architecture","filename":"@builtin/repo-map.mbtx","subrun":true,"cwd":"/path/to/repository"}
 ```
 
 Both use `moonbitlang/workflow`'s `fan_out` and `attempt` with read-only
@@ -105,7 +105,7 @@ or model tokens. CLI parsing and generated help use `moonbitlang/core/argparse`.
 It never reruns jobs, changes branches, or merges a PR.
 
 ```json
-{"filename":"@builtin/ci-watch.mbtx","args":["1427","--repo","moonbitlang/openseek","--once"]}
+{"description":"Check PR CI status","filename":"@builtin/ci-watch.mbtx","args":["1427","--repo","moonbitlang/openseek","--once"]}
 ```
 
 Omit `--once` to watch for up to 300 seconds, polling every 15 seconds. Override
