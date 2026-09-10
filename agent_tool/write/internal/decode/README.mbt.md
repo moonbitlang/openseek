@@ -77,7 +77,7 @@ test "absent, null, and explicit true all mean the gate is on" {
 ## Empty content is a valid write
 
 Truncating a file to nothing is a legitimate request, so `content: ""` decodes
-rather than raising. Contrast `path` in `agent_tool/read/internal/decode`, where
+rather than raising. Contrast a file selector in the read workflow, where
 an empty string *is* rejected — there it names a file to open, and no file is
 named by the empty string.
 

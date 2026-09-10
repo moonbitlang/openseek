@@ -5,6 +5,43 @@ isolated workspaces, per-trial raw logs, durable `openseek_session-<id>.jsonl` s
 and bounded parallelism. Reporting is a separate analyzer pass, so reports can
 be regenerated without rerunning model/API trials.
 
+For the standalone `read` versus builtin `@builtin/read.mbtx` comparison, use
+`read_workflow_ab.py`. It runs three paired task types (batch extraction, focused
+ranges and filesystem edge cases, and a three-file MoonBit repair), three times
+per arm by default, sequentially with alternating AB/BA order. Each fixture has
+its own committed Git repository and isolated Git configuration: `git status`
+and `git diff` cannot walk into the enclosing project. The preflight checks
+this boundary before model calls:
+
+```bash
+python3 eval/prompt_task/read_workflow_ab.py \
+  --baseline /absolute/path/to/old/openseek.exe \
+  --baseline-share /absolute/path/to/old/share \
+  --candidate /absolute/path/to/new/openseek.exe \
+  --candidate-share /absolute/path/to/new/share \
+  --out .moonagent/eval_runs/read_workflow_ab
+```
+
+Credentials are inherited from the provider's normal environment variables and
+are never written into the command or manifest. The default is
+`deepseek-v4-flash`, high thinking, 24 steps, and a 240-second limit per trial.
+`--prepare-only` checks the repair fixture and independent oracle without a model
+call. `--limit 2` runs the first pair; rerunning the same command without the limit
+resumes the rest. Completed trials are never rerun; an interrupted trial without
+a result requires inspection. The configuration, binaries, resources and evaluator
+are hashed to prevent silently mixing variants during a resumed experiment.
+
+The output retains source fixtures, prompts, expected answers, raw events, durable
+sessions, decoded calls, individual results and `results.json`. Read-task scoring
+requires an exact JSON object (an optional surrounding Markdown fence is accepted;
+additional prose fails). Repair scoring uses an independent oracle with pristine
+manifests and tests. Both also check protected files and normal completion. See
+[the September 2026 pilot](../prompt_reports/read_workflow_ab_20260910.md) for
+the historical results and their Git-isolation correction. The
+[token follow-up](../prompt_reports/read_workflow_tokens_20260910.md) compares
+the original and shortened builtin prompts using independently committed Git
+fixtures. Both reports separately state the more lenient content-correctness metric.
+
 The default task is `eval/prompt_tasks/toml_parser_cli.md`. The runner replaces
 `{{WORKSPACE}}` in the task template with each trial workspace path and starts
 the agent with `openseek --dir <trial-workspace>` and an explicit per-trial

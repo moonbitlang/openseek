@@ -11,7 +11,7 @@ be invoked correctly through the same typed boundary the agent loop uses.
 
 ## Coverage
 
-- `read`: ranged text read from a virtual filesystem fixture.
+- `mbtx`: run the bundled read workflow against a ranged filesystem fixture.
 - `write`: creates a file and compares disk state with `testkit/filesystem`.
 - `edit`: exact replacement plus final disk-state comparison.
 - `multi_edit`: a batch of line-anchored replacements with a disk-state check.

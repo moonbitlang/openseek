@@ -2,7 +2,7 @@
 
 `remove` deletes a file the agent created earlier this session, gated on that
 provenance and carrying a required rationale for the audit trail. It is the
-delete verb of the tool-mediated file API: `read`, `write`, and
+delete verb of the tool-mediated file API: `write` and
 `edit`/`multi_edit` already exist, but there was no in-workflow way to delete a
 file — the shell sandbox blocks `rm` on source paths, and routing other
 deletions through `shell` bypasses provenance entirely.

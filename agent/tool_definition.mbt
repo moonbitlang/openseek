@@ -25,7 +25,7 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
 ///|
 /// Build the agent's standard tool registry bound to `runtime` and `scope`.
 ///
-/// The returned registry contains the built-in local tools: `read`, `edit`,
+/// The returned registry contains the built-in local tools: `edit`,
 /// `multi_edit`, `write`, `remove`, `plan`, `goal`, `mbtx`, `job_output`,
 /// `job_stop`, and `finish`. Commands are `mbtx`'s job — it compiles and
 /// runs a MoonBit program that spawns processes through the shell-free
@@ -100,7 +100,6 @@ pub async fn[X] build_tools(
   })
   Tools(
     [
-      @read.definition(workspace_root~),
       @edit.definition(workspace_root~, file_state~),
       @multi_edit.definition(workspace_root~, file_state~),
       @write.definition(workspace_root~, file_state~),
@@ -179,12 +178,12 @@ async test "agent registers the expected tool names" {
   @async.with_task_group() <| group => {
     let tools = build_tools(AgentRuntime(), AgentTaskScope(group))
     let function_tools = tools.function_tools()
-    assert_eq(function_tools.length(), 12)
+    assert_eq(function_tools.length(), 11)
     let names = [ for t in function_tools => t.name ]
     assert_true(names.contains("job_output"))
     assert_true(names.contains("job_stop"))
     assert_true(names.contains("job_wait"))
-    assert_true(names.contains("read"))
+    assert_false(names.contains("read"))
     assert_true(names.contains("edit"))
     assert_true(names.contains("multi_edit"))
     assert_true(names.contains("write"))

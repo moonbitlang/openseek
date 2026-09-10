@@ -45,7 +45,7 @@ async test "discovery reads flat files and SKILL.md directories, sorted" {
       content=(
         $|## Skills
         $|
-        $|Reusable skills are available. When a task matches one, read its file with the read tool BEFORE doing the work, then follow it. Listed skill files are pre-approved reads even when they sit outside the working directory.
+        $|Reusable skills are available. When a task matches one, read its file through mbtx (filename="@builtin/read.mbtx", args=[the file path]) BEFORE doing the work, then follow it. Listed skill files are pre-approved reads even when they sit outside the working directory.
         $|- bare — (no description) (file: \{dir}/bare.md)
         $|- alpha — Alpha steps. (file: \{dir}/alpha/SKILL.md)
         $|- node.js — (no description) (file: \{dir}/node.js/SKILL.md)
@@ -141,7 +141,7 @@ async test "the prompt section lists usage, names, and paths" {
       content=(
         $|## Skills
         $|
-        $|Reusable skills are available. When a task matches one, read its file with the read tool BEFORE doing the work, then follow it. Listed skill files are pre-approved reads even when they sit outside the working directory.
+        $|Reusable skills are available. When a task matches one, read its file through mbtx (filename="@builtin/read.mbtx", args=[the file path]) BEFORE doing the work, then follow it. Listed skill files are pre-approved reads even when they sit outside the working directory.
         $|- release — Cut a release of this project. (file: \{dir}/release.md)
       ),
     )

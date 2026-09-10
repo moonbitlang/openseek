@@ -1,6 +1,54 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+test('read workflow shows selectors and highlights each MoonBit file in a mixed batch', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const output = [
+    '=== "src/main.mbt" ===',
+    '120 |let answer = 42',
+    '<system>start_line=120 shown_lines=1 total_lines=200 truncated=false</system>',
+    '=== "README.md" ===',
+    '1 |# Documentation <literal>',
+    '<system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>',
+    '=== "lib.mbti" ===',
+    '1 |pub fn answer() -> Int',
+    '<system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>',
+    '',
+  ].join('\n');
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture file reads' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: {
+      content: '', tool_calls: [{ id: 'read-workflow', name: 'mbtx', arguments: JSON.stringify({
+        filename: '@builtin/read.mbtx', args: ['src/main.mbt:120:120', 'README.md', 'lib.mbti'],
+      }) }],
+    } } },
+    { sequence: 3, item: { kind: 'tool_result', payload: {
+      tool_call_id: 'read-workflow', tool_name: 'mbtx', content: output,
+      is_error: false, brief: 'mbtx (exit=0)',
+    } } },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const call = page.locator('#transcript details.tool-call');
+  await expect(call.locator('.tool-call-text')).toContainText('@builtin/read.mbtx');
+  await call.locator('.tool-call-summary').click();
+  await call.getByText('Filename', { exact: true }).click();
+  await expect(call.locator('.mbtx-args')).toContainText('src/main.mbt:120:120');
+  await expect(call.locator('.mbtx-args')).toContainText('README.md');
+  const result = page.locator('#transcript details.tool-result');
+  await result.locator('.tool-result-summary').click();
+  await result.getByText('Output', { exact: true }).click();
+  const rendered = result.locator('pre.tool-call-output');
+  await expect(rendered.locator('.read-moonbit-output')).toHaveCount(2);
+  await expect(rendered.locator('.read-moonbit-gutter')).toHaveText(['120', '1']);
+  await expect(rendered.locator('span[class^="mtk"]').first()).toBeVisible();
+  await expect(rendered).toContainText('# Documentation <literal>');
+  await result.getByText('Original output', { exact: true }).click();
+  await expect(result.locator('pre.tool-card-original-json:visible')).toHaveText(output);
+  expect(app.pageErrors).toEqual([]);
+});
+
 for (const language of ['', 'mbt']) {
   test(`reasoning highlights ${language || 'unlabelled'} code only after completion`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);

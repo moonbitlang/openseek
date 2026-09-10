@@ -21,7 +21,7 @@
 /// - `Respond(ToolOutput("ok: wrote <n> line(s) (<m> chars) to <path>"))` when a
 ///   new file is created; the message gains ` (overwrote existing file)` when the
 ///   path already existed, so the model can tell it clobbered prior content. The
-///   line count matches what `read` reports for the same file (empty content is
+///   line count matches what the read workflow reports for the same file (empty content is
 ///   0 lines; a trailing newline counts a final empty segment).
 /// - `Respond(ToolOutput("rejected: the content for <path> ...", is_error=true))`
 ///   when the parse gate refused non-parsing content.

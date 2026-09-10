@@ -27,6 +27,7 @@ priv enum MbtxProgram {
 /// A recorded `mbtx` call, decoded for display.
 priv struct MbtxCall {
   program : MbtxProgram
+  args : Array[String]?
   /// The call's other scalar arguments, as `key: value` chip text.
   chips : Array[String]
 }
@@ -57,9 +58,21 @@ fn decode_mbtx_call(arguments : String) -> MbtxCall? {
     // removed `run_in_background` last so transcripts recorded by older
     // versions remain readable; new calls never emit it.
     known=["target", "cwd", "escalated", "warning", "run_in_background"],
-    dramatized=["source", "filename"],
+    dramatized=["source", "filename", "args"],
   )
-  Some({ program, chips, })
+  let args = match fields.get("args") {
+    Some(Array(values)) if values.all(value => value is String(_)) =>
+      Some(
+        values.filter_map(value => {
+          match value {
+            String(text) => Some(text)
+            _ => None
+          }
+        }),
+      )
+    _ => None
+  }
+  Some({ program, args, chips, })
 }
 
 ///|
@@ -97,7 +110,17 @@ fn mbtx_card(arguments : String) -> (String, @html.Html)? {
     Filename(filename) =>
       ("Filename", @html.pre(class="tool-card-original-json", filename))
   }
-  Some((label, @html.div(class="mbtx-args", [chip_row(call.chips), content])))
+  let args = match call.args {
+    Some(args) =>
+      @html.pre(
+        class="tool-card-original-json",
+        args.to_json().stringify(indent=2),
+      )
+    None => @html.nothing
+  }
+  Some(
+    (label, @html.div(class="mbtx-args", [chip_row(call.chips), content, args])),
+  )
 }
 
 ///|

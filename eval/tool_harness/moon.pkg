@@ -1,11 +1,11 @@
 import {
+  "bobzhang/openseek/agent_tool/mbtx",
   "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/agent_tool/edit",
   "bobzhang/openseek/agent_tool/finish",
   "bobzhang/openseek/agent_tool/multi_edit",
   "bobzhang/openseek/agent_tool/plan",
-  "bobzhang/openseek/agent_tool/read",
   "bobzhang/openseek/agent_tool/mbtx",
   "bobzhang/openseek/agent_tool/write",
   "bobzhang/openseek/deepseek",

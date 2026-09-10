@@ -35,7 +35,7 @@ fn tool_definitions(
   // The harness runs each snippet in the foreground; it needs no job scope.
   ignore(scope)
   Tools([
-    @read.definition(),
+    @mbtx.definition(workspace_root="."),
     @write.definition(),
     @edit.definition(),
     @multi_edit.definition(),
@@ -58,14 +58,19 @@ async fn run_read_case(
       #|
     ),
   }).write_to(root)
-  let action = dispatch(tools, "read", {
-    "path": "\{root}/src/read.txt",
-    "start_line": 1,
-    "max_lines": 1,
+  let action = dispatch(tools, "mbtx", {
+    "filename": @fs.realpath("share/workflow/read.mbtx"),
+    "args": ["\{root}/src/read.txt:1:1"],
   })
   let reason = expect_respond(action, contains=["hello read"], error=false)
   @fs.rmdir(root, recursive=true)
-  row(index~, name="read", mode="filesystem", action="range read", reason~)
+  row(
+    index~,
+    name="mbtx",
+    mode="filesystem",
+    action="read workflow range",
+    reason~,
+  )
 }
 
 ///|

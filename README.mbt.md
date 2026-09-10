@@ -167,7 +167,7 @@ supports eleven local tools: `mbtx` — both the scripting surface and the
 command runner, spawning processes through the shell-free
 `moonbitlang/async/shell` API, with
 `job_output` and `job_stop` watching anything it detaches as a background job —
-plus `read`, `edit`, `multi_edit`, `write`, `remove`, `plan`, `goal`, and
+plus `edit`, `multi_edit`, `write`, `remove`, `plan`, `goal`, and
 `finish`. There is no shell tool, so no command ever goes through a shell.
 
 ```bash

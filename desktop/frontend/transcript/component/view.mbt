@@ -302,11 +302,17 @@ fn tool_request_view(
   } else {
     name
   }
-  let label = if name == "mbtx" &&
-    card_fields(arguments) is Some(fields) &&
-    fields.get("description") is Some(String(description)) &&
-    !description.is_blank() {
-    "\{label} · \{description}"
+  let label = if name == "mbtx" && card_fields(arguments) is Some(fields) {
+    match fields.get("description") {
+      Some(String(description)) if !description.is_blank() =>
+        "\{label} · \{description}"
+      _ =>
+        match fields.get("filename") {
+          Some(String(filename)) if !filename.is_blank() =>
+            "\{label} · \{filename.clamped_view(end=MAX_CHIP_CHARS)}"
+          _ => label
+        }
+    }
   } else {
     label
   }
@@ -478,7 +484,7 @@ fn result_row_view(
     }
   }
   if output is Some(text) {
-    let output = tool_output_tabs(name, arguments, text)
+    let output = tool_output_tabs(name, text)
     if output is [tab] {
       body.push(
         @html.div(class="tool-call-section", [

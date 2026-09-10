@@ -72,7 +72,7 @@ The action is always `Respond(ToolOutput(...))` — the agent loop forwards
 has one of these shapes:
 
 - `"ok: wrote <n> line(s) (<m> chars) to <path>"` when a new file is created —
-  `n` is the line count (matching what `read` reports for the same file: empty
+  `n` is the line count (matching what the read workflow reports for the same file: empty
   content is 0 lines, a trailing newline counts a final empty segment) and `m`
   the character count of the written content. When the path already existed the
   line ends with ` (overwrote existing file)` so the model can tell it clobbered

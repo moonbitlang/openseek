@@ -76,6 +76,15 @@ foreground/background argument to choose. A standalone definition without a
 job runtime stays in the foreground for up to 300 seconds of run time and is
 cancelled at that deadline.
 
+## Reading files
+
+Use `{"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}`
+for bounded, numbered file reads. Selectors are `path`, `path:start`, or
+`path:start:end` with inclusive, 1-based ranges. The workflow reports each
+file separately, continues after file errors, and truncates within a 40000-byte
+batch budget without failing the run. See `share/workflow/README.md` or run it
+with `args=["--help"]`. No standalone `read` tool is registered.
+
 ## Arguments
 
 - `description` (string, optional): a short human-readable label shown in the

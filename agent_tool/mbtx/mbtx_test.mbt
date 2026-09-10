@@ -661,7 +661,7 @@ async test "a snippet writes only its own temp dir, never the workspace" {
 
 ///|
 /// Reads are NOT bounded the way writes are, and that asymmetry is deliberate:
-/// the `read` tool takes any absolute path with no scope, so a read root list
+/// the read workflow accepts any absolute path with no scope, so a read root list
 /// buys no confidentiality — it only turns a wrong guess at where the toolchain
 /// lives into a refusal that reads like a broken environment, which live runs
 /// spent steps on. Pinned against a file the workspace cannot reach so it can

@@ -12,7 +12,7 @@ let default_review_max_steps : Int = 120
 
 ///|
 /// Run a code review of the changes between `base` and HEAD and return the
-/// structured report. The toolset is `read`, `mbtx`, and
+/// structured report. The toolset is `mbtx` and
 /// `submit_review` — no edit/multi_edit/write — so the review reports rather
 /// than edits. Read-only is best-effort: `mbtx` runs under the "may not
 /// write source" profile on macOS, but `moon check`/`moon test` may still
@@ -45,7 +45,6 @@ pub async fn run_review(
     task=review_task(base, scratch_dir),
     tools=captured => {
       Tools([
-        @read.definition(workspace_root~),
         @mbtx.definition(workspace_root~, read_only=true, scratch_dir?),
         submit_review_tool(captured),
       ])

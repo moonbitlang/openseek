@@ -5,6 +5,7 @@ alongside the official documentation in `share/doc/moonbit/`.
 `OPENSEEK_REFERENCES` points to `share/`; the engine's environment prompt gives
 this resource root's absolute path.
 
+- `read.mbtx` reads text files with numbered lines and per-file ranges (see below).
 - `check.mbtx` runs `moon check`.
 - `test.mbtx` runs `moon test` without updating snapshots.
 - `check-test.mbtx` runs check then test, stopping on the first failure.
@@ -18,7 +19,7 @@ output, and fail when the underlying command fails. Follow repository-specific
 validation commands when they differ from these defaults.
 
 Scripts use the ordinary mbtx sandbox and approval path. Read them with the
-file tools to inspect their behavior; save a customized copy in the workspace
+read workflow to inspect their behavior; save a customized copy in the workspace
 when needed. The bundled copies are installation resources and should not be
 edited. `@builtin/` resolves under `OPENSEEK_REFERENCES/workflow/` and refuses
 escaping paths. Ordinary names such as `check.mbtx` resolve from the workspace.
@@ -26,6 +27,36 @@ Missing bundled names do not fall back to workspace files. Other `@namespace/`
 prefixes are reserved and currently rejected. To customize a script, save the
 modified source with an ordinary workspace filename; never send source with
 `@builtin/`.
+
+## Reading files
+
+```json
+{"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod","README.md:50"]}
+```
+
+Selectors are `path`, `path:start`, and `path:start:end`. Lines start at 1;
+both ends are included. A range beyond EOF returns an empty range footer.
+Each file has a JSON-quoted filename heading, numbered content, and the same
+`start_line`, `shown_lines`, `total_lines`, and `truncated` footer as the former
+read tool. Empty files explicitly report `total_lines=0 note=empty file`.
+Trailing newlines still count as a final blank line. Directory, missing-file,
+and invalid UTF-8 errors remain distinct; a failed file does not prevent later
+files from being read. Any file/argument error gives a nonzero exit; a
+successfully truncated read exits zero.
+
+The default body budget is 12000 UTF-16 units per file (including gutters).
+`--max-output-chars N` adjusts it for all files, capped at 50000. A separate
+40000-byte UTF-8 budget covers the whole batch including headings and footers,
+so Unicode and multiple files cannot trip mbtx's 48000-byte stop limit.
+`truncated=true` marks incomplete bodies; `skipped_files=N` marks files not
+attempted when the batch budget runs out. Request smaller ranges/batches to
+continue. The workflow uses the normal compiled mbtx execution path.
+
+Use `--literal PATH` for literal filenames ending in `:number` (including any
+such path with a range-like suffix), and `--` before paths starting with `--`.
+Range parsing proceeds from the right, preserving Windows drive letters and
+other colons. Paths with spaces are single args without shell quoting.
+`args=["--help"]` prints usage. Relative file paths use cwd (default workspace).
 
 ## Read-only agent workflows
 

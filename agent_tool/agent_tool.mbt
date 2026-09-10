@@ -8,7 +8,7 @@
 /// name and parsed `Json` arguments. The original id stays on the native call
 /// used by the conversation loop when it appends the tool result message.
 pub struct AgentToolCall {
-  /// Local tool name selected by DeepSeek, such as `shell`, `read`, `write`, or
+  /// Local tool name selected by DeepSeek, such as `mbtx`, `write`, or
   /// `finish`.
   name : String
   /// Parsed JSON arguments for the selected local tool. Dispatchers validate the

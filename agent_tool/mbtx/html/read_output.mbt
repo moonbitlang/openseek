@@ -1,40 +1,65 @@
-// HTML rendering for the `read` tool's stable numbered-output protocol.
-//
-// The tool result is not the file verbatim: every source line has a
-// right-aligned `<number> |` prefix and the result ends with a `<system>` status
-// footer. Tokenizing that whole envelope would color the protocol as MoonBit
-// and let the footer perturb the lexer. This decoder keeps only the number as
-// plain gutter text while passing the source through the editor's shared,
-// stateful MoonBit tokenizer.
+///|
+/// Render the read workflow's file sections, preserving surrounding runner
+/// diagnostics and non-MoonBit sections verbatim. Numbered source alone goes
+/// through the editor tokenizer. File names come from JSON-quoted headings,
+/// so a batch needs no tool-specific argument decoding or result metadata.
+pub fn read_workflow_output(content : String) -> @rhtml.Html? {
+  guard content.length() <= 48_000 else { return None }
+  let lines = content.split("\n").map(line => line.to_owned()).collect()
+  let children : Array[@rhtml.Html] = []
+  let mut highlighted = false
+  let mut index = 0
+  while index < lines.length() {
+    let line = lines[index]
+    if file_heading(line) is Some(path) {
+      let mut end = index + 1
+      while end < lines.length() && numbered_line(lines[end]) is Some(_) {
+        end += 1
+      }
+      if end < lines.length() &&
+        moonbit_output_for_path(path, lines[index + 1:end + 1].join("\n"))
+        is Some(rendered) {
+        children.push(@rhtml.span("\{line}\n"))
+        children.push(rendered)
+        if end + 1 < lines.length() {
+          children.push(@rhtml.span("\n"))
+        }
+        index = end + 1
+        highlighted = true
+        continue
+      }
+    }
+    children.push(@rhtml.span(line))
+    if index + 1 < lines.length() {
+      children.push(@rhtml.span("\n"))
+    }
+    index += 1
+  }
+  if highlighted {
+    Some(@rhtml.span(children))
+  } else {
+    None
+  }
+}
 
 ///|
-/// Maximum recorded argument payload worth parsing to discover a read path.
-/// A normal read call is a tiny object; the bound keeps a malformed historical
-/// transcript from making every collapsed render parse an unbounded string.
-const MAX_READ_ARGUMENT_CHARS = 16_000
-
-///|
-/// Render a successful numbered `read` result for a MoonBit source path.
-///
-/// Returns `None` for another file type, malformed arguments, errors, legacy
-/// unnumbered output, and empty/range-past-EOF reads. Callers should preserve
-/// their existing plain-text rendering in those cases.
-pub fn moonbit_output(arguments : String, content : String) -> @rhtml.Html? {
-  if arguments.length() > MAX_READ_ARGUMENT_CHARS {
+fn file_heading(line : String) -> String? {
+  guard line.strip_prefix("=== ") is Some(rest) &&
+    rest.strip_suffix(" ===") is Some(path) else {
     return None
   }
-  let json = @json.parse(arguments) catch { _ => return None }
-  let input = @decode.decode(json) catch { _ => return None }
-  moonbit_output_for_path(input.path, content)
+  let json = @json.parse(path) catch { _ => return None }
+  match json {
+    String(path) => Some(path)
+    _ => None
+  }
 }
 
 ///|
 /// Render a numbered result when `path` has a MoonBit source extension.
 fn moonbit_output_for_path(path : StringView, content : String) -> @rhtml.Html? {
-  // The read body is capped by its canonical decoder. Leave room for the
-  // short status footer; older unbounded records use the host's plain fallback.
-  guard is_moonbit_source(path) &&
-    content.length() <= @decode.hard_max_output_chars + 512 else {
+  // Keep rendering bounded even for malformed recorded output.
+  guard is_moonbit_source(path) && content.length() <= 40_000 else {
     return None
   }
   let lines = content.split("\n").map(line => line.to_owned()).collect()
@@ -67,18 +92,6 @@ fn moonbit_output_for_path(path : StringView, content : String) -> @rhtml.Html? 
   ]
   children.push(@rhtml.span(class="read-moonbit-status", status))
   Some(@rhtml.span(class="read-moonbit-output moonbit-source", children))
-}
-
-///|
-/// Render from the read tool's stable `read <basename> (truncated)` brief.
-/// Viz result cards use this because calls and results are separate events.
-pub fn moonbit_output_for_brief(
-  brief : String,
-  content : String,
-) -> @rhtml.Html? {
-  guard brief.strip_prefix("read ") is Some(path_view) else { return None }
-  let path = path_view.strip_suffix(" (truncated)").unwrap_or(path_view)
-  moonbit_output_for_path(path, content)
 }
 
 ///|

@@ -120,7 +120,7 @@ Note the ordering consequence: a payload with *both* fields wrong reports
 `arguments.path`, never `arguments.reason`. The model fixes one field per
 retry.
 
-Unlike `read`, an empty-string `path` is not rejected here — the pattern only
+Unlike the read workflow, an empty-string `path` is not rejected here — the pattern only
 requires a string. A path that is empty, absent from disk, or outside the
 workspace is the parent package's problem, because answering those questions
 needs the filesystem.

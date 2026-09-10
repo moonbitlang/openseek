@@ -16,7 +16,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-def run_case(executable, serve=False):
+def run_case(executable, serve=False, read_workflow=False):
     with tempfile.TemporaryDirectory(prefix="openseek-turn-finish-") as directory:
         release = Path(directory) / "release"
         source = '''import { "moonbitlang/async", "moonbitlang/async/fs" }
@@ -27,6 +27,9 @@ async fn main {
         requests = []
         errors = []
         process = None
+        if read_workflow:
+            (Path(directory) / "sample.mbt").write_text("first\nselected\nlast\n")
+            (Path(directory) / "note.txt").write_text("whole file")
 
         class Provider(BaseHTTPRequestHandler):
             def log_message(self, *_args):
@@ -51,7 +54,28 @@ async fn main {
                     requests.append(body)
                     step = len(requests)
                     messages = json.dumps(body["messages"])
-                    if step == 1:
+                    if read_workflow:
+                        names = [tool["function"]["name"] for tool in body["tools"]
+                                 if tool.get("type") == "function"]
+                        assert "mbtx" in names and "read" not in names, names
+                        assert "@builtin/read.mbtx" in messages, messages
+                        assert "path:start:end" in messages, messages
+                        if step == 1:
+                            name, args = "mbtx", {
+                                "filename": "@builtin/read.mbtx",
+                                "args": ["sample.mbt:2:3", "note.txt"],
+                            }
+                        elif step == 2:
+                            outputs = [message["content"] for message in body["messages"]
+                                       if message.get("role") == "tool"]
+                            assert len(outputs) == 1, outputs
+                            assert '=== "sample.mbt" ===\n2 |selected\n3 |last\n' in outputs[0], outputs
+                            assert "start_line=2 shown_lines=2 total_lines=4 truncated=false" in outputs[0], outputs
+                            assert '=== "note.txt" ===\n1 |whole file\n' in outputs[0], outputs
+                            name, args = "finish", {"answer": "checked the read workflow"}
+                        else:
+                            raise AssertionError(f"unexpected read workflow request {step}")
+                    elif step == 1:
                         name, args = "mbtx", {"source": source}
                     elif step == 2:
                         assert "moved to the background" in messages, messages
@@ -101,6 +125,8 @@ async fn main {
         thread.start()
         try:
             env = {**os.environ, "DEEPSEEK": "test", "OPENSEEK_RETRY_ATTEMPTS": "1"}
+            if read_workflow:
+                env["OPENSEEK_REFERENCES"] = str(Path(__file__).resolve().parents[2] / "share")
             command = [
                 executable, "serve" if serve else "run", "--no-session", "--dir", directory,
                 "--api-key", "test", "--model", "deepseek-v4-flash",
@@ -131,16 +157,23 @@ async fn main {
                             process.kill()
                             process.wait()
             else:
-                run = subprocess.run(command + ["Run a background job and process its result."],
+                prompt = ("Read sample.mbt lines 2 through 3 and all of note.txt, then report the result."
+                          if read_workflow else "Run a background job and process its result.")
+                run = subprocess.run(command + [prompt],
                                      env=env, capture_output=True, text=True, timeout=120)
             assert not errors, errors
             assert run.returncode == 0, (run.stdout, run.stderr)
-            assert len(requests) == (4 if serve else 5), (requests, run.stdout, run.stderr)
+            assert len(requests) == (2 if read_workflow else 4 if serve else 5), (requests, run.stdout, run.stderr)
             events = [json.loads(line) for line in run.stdout.splitlines() if line.startswith("{")]
             finishes = [event for event in events if event.get("event") == "agent_finished"]
             assert len(finishes) == 1, finishes
-            assert finishes[0]["answer"] == "checked the background result", finishes
-            print("PASS: serve goal clear wakes job_wait while the job is still running" if serve else
+            assert finishes[0]["answer"] == ("checked the read workflow" if read_workflow else "checked the background result"), finishes
+            if read_workflow:
+                results = [event for event in events if event.get("event") == "tool_result"
+                           and event.get("tool_name") == "mbtx"]
+                assert len(results) == 1 and not results[0]["is_error"], results
+            print("PASS: real CLI advertises the read workflow, omits read, and returns ranged batch output" if read_workflow else
+                  "PASS: serve goal clear wakes job_wait while the job is still running" if serve else
                   "PASS: real CLI preserves background work through wait, notice, read, and finish")
         finally:
             server.shutdown()
@@ -152,3 +185,4 @@ if __name__ == "__main__":
     executable = str(Path(sys.argv[1]).resolve())
     run_case(executable)
     run_case(executable, serve=True)
+    run_case(executable, read_workflow=True)

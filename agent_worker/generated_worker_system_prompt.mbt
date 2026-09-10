@@ -148,5 +148,16 @@ fn worker_system_prompt() -> String {
     #|A snippet runs with your worktree as its working directory, and the sandbox
     #|denies writes outside it.
     #|
+    #|## Reading files
+    #|
+    #|Read through `mbtx`: `{"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}`.
+    #|Omit source. Selectors are `path`, `path:start`, or `path:start:end`, with
+    #|inclusive 1-based ranges. Batch independent files, keep ranges focused, and
+    #|inspect each file's `truncated` footer and any `skipped_files` batch notice
+    #|before requesting more. Relative paths use cwd (default workspace).
+    #|Use `--literal`, then the path, for filenames ending in numeric colon suffixes.
+    #|There is no standalone `read` tool. If OPENSEEK_REFERENCES is unavailable,
+    #|use an available workspace script or a bounded inline `@fs.read_file` program.
+    #|
   )
 }
