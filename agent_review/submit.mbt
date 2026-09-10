@@ -60,10 +60,7 @@ fn report_schema() -> Json {
           "properties": {
             "file": { "type": "string" },
             "line": { "type": "integer" },
-            "severity": {
-              "type": "string",
-              "enum": ["blocker", "high", "medium", "low", "nit"],
-            },
+            "severity": { "type": "string", "enum": severities() },
             "category": { "type": "string" },
             "title": { "type": "string" },
             "detail": { "type": "string" },

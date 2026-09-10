@@ -56,13 +56,28 @@ pub fn ReviewReport::to_json_string(self : ReviewReport) -> String {
 /// verdict is that the reviewed claim does NOT hold. Callers use this for
 /// exit codes and error flags without reaching into the findings shape.
 pub fn ReviewReport::has_blockers(self : ReviewReport) -> Bool {
-  self.findings.any(f => f.severity == "blocker")
+  !self.findings_with_severity("blocker").is_empty()
 }
 
 ///|
 /// Number of findings carried by the report, for summaries and briefs.
 pub fn ReviewReport::finding_count(self : ReviewReport) -> Int {
   self.findings.length()
+}
+
+///|
+/// The findings at `severity`, in report order. The one place a severity
+/// string selects a subset of the report: the blocker gate here and the
+/// digest's tally in `audit.mbt` both read it, so the comparison against a
+/// severity literal is written once instead of respelled at every caller.
+/// `severity` is drawn from `severities()`; an unknown one selects nothing.
+fn ReviewReport::findings_with_severity(
+  self : ReviewReport,
+  severity : String,
+) -> Array[Finding] {
+  [
+    for finding in self.findings if finding.severity == severity => finding
+  ]
 }
 
 ///|
@@ -210,6 +225,58 @@ test "parse reports an error on malformed json" {
   guard ReviewReport::parse(Json::null()) is Err(_) else {
     fail("expected parse error")
   }
+}
+
+///|
+/// A minimal valid finding at `severity`, for the severity-selection tests.
+fn finding_at(severity : String) -> Finding {
+  {
+    file: "a.mbt",
+    line: Some(1),
+    severity,
+    category: "correctness",
+    title: "finding at \{severity}",
+    detail: "detail",
+    suggestion: None,
+  }
+}
+
+///|
+test "has_blockers tracks the blocker severity alone" {
+  assert_false(sample_report().has_blockers())
+  for severity in severities() {
+    let report = { ..sample_report(), findings: [finding_at(severity)], }
+    assert_eq(report.has_blockers(), severity == "blocker")
+  }
+}
+
+///|
+test "the submit schema offers exactly the severities validation accepts" {
+  // The schema is the model-facing contract, so its enum must be the very
+  // vocabulary `validate` enforces — not a second copy that can drift.
+  let enum_values = match report_schema() {
+    {
+      "properties": {
+        "findings": {
+          "items": {
+            "properties": { "severity": { "enum": Array(values), .. }, .. },
+            ..
+          },
+          ..
+        },
+        ..
+      },
+      ..
+    } =>
+      values.map(value => {
+        match value {
+          String(severity) => severity
+          _ => ""
+        }
+      })
+    _ => []
+  }
+  assert_eq(enum_values, severities())
 }
 
 ///|
