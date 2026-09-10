@@ -449,7 +449,7 @@ fn result_row_view(
     (None, _, _) => name
     (_, _, true) => "Tool output · \{name}"
     _ if is_error => "Tool error · \{name}"
-    _ => "Tool result · \{name}"
+    _ => name
   }
   let error_class = (if is_error { " error" } else { "" }) +
     failure_stage_class(name, brief, is_error)
