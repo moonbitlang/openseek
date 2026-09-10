@@ -1070,6 +1070,40 @@
   color: var(--color-text-faint);
   text-align: center;
 }
+/* Reserve the trailing state column even for a long or wrapped caption.
+   The disclosure arrow remains a separate control beside it. */
+.tool-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+}
+.tool-status.failed {
+  color: var(--color-danger);
+}
+.tool-status-spinner {
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: tool-status-spin 0.8s linear infinite;
+}
+@keyframes tool-status-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-status-spinner {
+    animation: none;
+  }
+}
 .tool-call-summary:hover,
 .tool-result-summary:hover {
   color: var(--color-text-secondary);

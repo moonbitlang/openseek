@@ -332,6 +332,7 @@ fn tool_request_view(
     line.push(marker)
   }
   line.push(@plan.fold_progress(call))
+  line.push(ToolStatus(call.outcome).view())
   let body : Array[@html.Html] = []
   // A `plan` call shows the checklist it recorded rather than its JSON, in
   // every state where that checklist is what the model asked for. A pending
@@ -398,6 +399,13 @@ fn tool_result_view(
   subrun? : SubrunLink,
 ) -> @html.Html {
   let key = tool_call_tabs_key(call.call_id, sequence)
+  // Calls without recorded arguments have no request row. Put their status
+  // on the result instead, so every call has exactly one visible status.
+  let status = if call.arguments is None {
+    Some(ToolStatus(call.outcome))
+  } else {
+    None
+  }
   match call.outcome {
     Pending(output~) =>
       result_row_view(
@@ -409,6 +417,7 @@ fn tool_result_view(
         output,
         key,
         subrun?,
+        status?,
       )
     Done(content~, is_error~, brief~) =>
       result_row_view(
@@ -425,6 +434,7 @@ fn tool_result_view(
         },
         key,
         subrun?,
+        status?,
       )
   }
 }
@@ -442,6 +452,7 @@ fn result_row_view(
   output : String?,
   key : String,
   subrun? : SubrunLink,
+  status? : ToolStatus,
 ) -> @html.Html {
   let label = match (arguments, brief, pending) {
     (None, Some(brief), _) if !brief.is_blank() => brief
@@ -469,6 +480,9 @@ fn result_row_view(
     )
     is Some(marker) {
     line.push(marker)
+  }
+  if status is Some(status) {
+    line.push(status.view())
   }
   let body : Array[@html.Html] = []
   // A sub-run result names the child session it spawned in its brief. The
