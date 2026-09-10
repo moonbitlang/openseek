@@ -265,7 +265,7 @@ test('renders MoonBit documentation comments through the real workbench', async 
   );
 });
 
-test('keeps documentation colors consistent across folding states', async ({ page }, testInfo) => {
+test('blends documentation into the editor across themes and folding states', async ({ page }, testInfo) => {
   await page.goto('/');
   await openWorkspaceFile(page, 'src/documentation.mbt');
   const comments = page.locator('.moonbit-viewer-markdown-comment');
@@ -283,7 +283,7 @@ test('keeps documentation colors consistent across folding states', async ({ pag
       await page.getByRole('button', { name: 'Toggle color theme' }).click();
     }
     await expect(page.locator('.editor-shell')).toHaveAttribute('data-theme', theme);
-    const background = await single.evaluate(
+    const background = await page.locator('.overflow-guard').evaluate(
       (node) => getComputedStyle(node).backgroundColor,
     );
     const foreground = await singleText.evaluate(
@@ -295,6 +295,7 @@ test('keeps documentation colors consistent across folding states', async ({ pag
       path: screenshot,
       contentType: 'image/png',
     });
+    await expect(single).toHaveCSS('background-color', background);
     await expect(multiline).toHaveCSS('background-color', background);
     await expect(preview).toHaveCSS('color', foreground);
     await multiline.getByRole('button', { name: 'Expand API documentation' }).click();
@@ -304,10 +305,7 @@ test('keeps documentation colors consistent across folding states', async ({ pag
     await multiline.getByRole('button', { name: 'Collapse API documentation' }).click();
     await expect(preview).toHaveCSS('color', foreground);
     await expect(multiline).toHaveCSS('background-color', background);
-    const editorBackground = await page.locator('.overflow-guard').evaluate(
-      (node) => getComputedStyle(node).backgroundColor,
-    );
-    await expect(separator).toHaveCSS('background-color', editorBackground);
+    await expect(separator).toHaveCSS('background-color', background);
   }
 });
 

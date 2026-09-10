@@ -10,22 +10,10 @@
    * Markdown input above it, but below editor cursors (4) and widgets (50+). */
   z-index: 2;
   color: var(--vscode-editor-foreground);
-  background: color-mix(
-    in srgb,
-    var(--vscode-editor-foreground) 3%,
-    var(--vscode-editor-background)
-  );
+  background: var(--vscode-editor-background);
   font-family: var(--ui-font-family, var(--editor-font-family));
   font-size: calc(var(--editor-font-size) * 0.92);
   line-height: 1.5;
-}
-
-/* Bare item separators are spacing, not documentation panels. Keep source
- * inspection on the tinted surface even for a separator-only source block. */
-.moonbit-viewer-markdown-comment[data-source-visible="false"]:has(
-  .moonbit-viewer-markdown-comment-full > hr:only-child
-) {
-  background: var(--vscode-editor-background);
 }
 
 /* Vertical and trailing padding belong to the measured inner target, so
