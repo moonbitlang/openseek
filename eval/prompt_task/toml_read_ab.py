@@ -54,6 +54,15 @@ def json_equal(a, b):
     return type(a) is type(b) and a == b
 
 
+def stop_process_group(pgid):
+    # Every caller created this group with start_new_session=True. A successful
+    # parent can still leave a child running; terminate those before the next trial.
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
 def command_run(command, cwd, env, *, stdin=None, timeout=120):
     started = time.monotonic()
     proc = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.PIPE,
@@ -64,8 +73,11 @@ def command_run(command, cwd, env, *, stdin=None, timeout=120):
         stdout, stderr = proc.communicate(stdin, timeout=timeout)
     except subprocess.TimeoutExpired:
         timed_out = True
-        os.killpg(proc.pid, signal.SIGKILL)
+        stop_process_group(proc.pid)
         stdout, stderr = proc.communicate()
+    finally:
+        stop_process_group(proc.pid)
+        proc.wait()
     return {'command': [str(v) for v in command], 'returncode': proc.returncode,
             'timed_out': timed_out, 'elapsed_s': round(time.monotonic() - started, 3),
             'stdout': stdout, 'stderr': stderr}
@@ -288,7 +300,9 @@ def run_trial(args, trial, prompt):
             process.wait(timeout=args.timeout)
         except subprocess.TimeoutExpired:
             timed_out = True
-            os.killpg(process.pid, signal.SIGKILL)
+            stop_process_group(process.pid)
+        finally:
+            stop_process_group(process.pid)
             process.wait()
     elapsed = time.monotonic() - start
     measured = metrics(root)

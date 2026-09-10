@@ -39,6 +39,8 @@
 
 环境记录：B2 的 review 在原定 15 分钟上限处超时，父运行随后正常完成。卡住的解析器与探测进程被取消调用留下；有两个忙循环未及时清理，跨越了 A2 和 A3 的部分运行。后续根据已结束试次的 PID/进程组归属清理，操作保存在 `cleanup-events.jsonl`。没有向模型发送验收反馈、改动产物或丢弃失败。六个父运行均未触及 30 分钟总上限，但 CPU 竞争仍可能影响工具完成时间和模型接下来的路径，不能认为它对 token 一定无影响。本文不报告延时收益。
 
+运行结束后，评测运行器补上了正常退出和异常退出时的整组进程清理，覆盖模型运行及离线命令。回归测试先复现“父进程成功退出、子进程仍运行”，修复后成功退出和超时两种场景都通过。该修复没有重算本文数据，也不能消除已经发生的干扰。本轮实际使用的 runner 可在 [测量归档提交](https://github.com/moonbitlang/openseek/blob/e7f6363aac23911efeac867e3c8af8354310f8b1/eval/prompt_task/toml_read_ab.py) 查看；当前 runner 的新运行会执行清理。
+
 每个版本从只有已提交 `.gitignore` 的独立 Git 仓库开始，真实实现 MoonBit TOML 子集库、原生 CLI 和黑盒测试。任务使用仓库现有 `toml_parser_cli.md`，追加 signed decimal、干净错误输出、不复用解析器、不提交代码和不委派的共同约束。三组顺序固定为 AB、BA、AB，串行执行；全部结果保留，不根据验收结果重试或修改提示词。
 
 A 为主干 `2b6ffc8b199c0e6ae84a6b2c26d145bebc6685e5`，B 为 PR #1446 的产品提交 `cdf76f63d53409c5b9d1df1b494e873bc5b16809`。两边同一工具链构建 native debug 二进制，分别冻结匹配的 share 资源。请求模型为 `deepseek-v4-flash`，high thinking，父运行 160 步、1800 秒上限，API 设置为 `--retry-attempts 2`。review 继承模型，thinking 默认同为 high。MCP 和全局 skills 禁用；两边保留各自默认系统提示及读取工具。此对照衡量整个 PR 的读取路径变化，没有单独分离 schema、提示词和 workflow 的因果贡献。
@@ -66,3 +68,5 @@ B binary SHA-256：`f4660d9e02bf273a8246ad2af1d7936ef55ef046ab18b6fb515ef465a79a
 - [运行与复现说明](../prompt_task/README.md)；[PR #1446](https://github.com/moonbitlang/openseek/pull/1446)。
 
 核对完成：CLI 参考对照 114/114、空解析器 5/114；六份产物及 Git 根/提交数、配对初始文件、冻结二进制/资源/evaluator 哈希、730 次请求与完整模型步骤、原始 usage 和导出统计一致；事后数值检查在独立副本中运行。所有生成源码保持不变。
+
+后续运行器修复验证：两项真实子进程回归测试通过；清理修改后 CLI 参考对照仍为 114/114、空解析器仍为 5/114，Git 隔离预检通过；`moon info && moon fmt` 通过，无生成接口变化。归档提交中的四个原始 evaluator 文件与运行计划哈希逐一相符。
