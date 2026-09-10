@@ -134,6 +134,53 @@ test('Navigator launchers receive focus without creating tabs', async ({ page })
   expect(app.pageErrors).toEqual([]);
 });
 
+for (const width of [1440, 390]) {
+  for (const destination of ['File', 'Browser', 'Workflows']) {
+    test(`closing the focused navigator preserves ${destination} at ${width}px`, async ({ page }) => {
+      const app = await installDesktop(page);
+      await page.setViewportSize({ width, height: 900 });
+      await app.openReview();
+      await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+      if (destination !== 'File') {
+        await page.getByTitle('New tab', { exact: true }).click();
+        await page.getByRole('button', { name: destination === 'Browser' ? /^Browse / : /^Workflows / }).click();
+      }
+      const tabs = page.locator('.editor-tab');
+      const initialTabs = await tabs.allTextContents();
+      const active = page.locator('.editor-tab.active');
+      const initialActive = await active.textContent();
+      const navigator = page.getByRole('tablist', { name: 'Explorer views' });
+      for (const inventory of ['Files', 'Changes', 'Search']) {
+        if (!(await navigator.isVisible())) {
+          await page.getByRole('button', { name: 'Show workspace navigator' }).click();
+        }
+        const tab = navigator.getByRole('tab', { name: new RegExp(`^${inventory}`) });
+        await tab.click();
+        // Exercise both the navigator header and controls inside its body.
+        if (inventory === 'Changes') {
+          await page.getByRole('button', { name: /View diff: src\/lib\.mbt/ }).focus();
+        } else if (inventory === 'Search') {
+          await page.locator('#workspace-search-input').fill('answer');
+        } else {
+          await tab.focus();
+        }
+        await closeFocused(page);
+        await expect(tabs).toHaveText(initialTabs);
+        await expect(active).toHaveText(initialActive);
+        await expect(navigator).toBeHidden();
+        await expect(page.locator('.content.panel-open > .editor')).toBeFocused();
+        await expect(page.locator(destination === 'File'
+          ? '#diff-editor-host' : destination === 'Browser' ? '.browser-chrome' : '.workflow-panel')).toBeVisible();
+      }
+      // Once focus returns to the resource, the next Close owns that tab.
+      await closeFocused(page);
+      await expect(tabs).toHaveCount(initialTabs.length - 1);
+      expect(app.requests.filter(request => request.method === 'app.close_window')).toEqual([]);
+      expect(app.pageErrors).toEqual([]);
+    });
+  }
+}
+
 test('Selecting a dock tab moves focus out of the composer', async ({ page }) => {
   const app = await installDesktop(page);
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();

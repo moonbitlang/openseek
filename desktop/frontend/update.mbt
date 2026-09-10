@@ -5190,6 +5190,26 @@ fn update_msg(
         model,
       )
     }
+    CloseWorkspaceNavigator => {
+      guard model.is_desktop &&
+        model.right_panel_open &&
+        model.file_panel.tree_open else {
+        return (@cmd.none, model)
+      }
+      if model.dock.tabs.is_empty() {
+        return update_msg(dispatch, ToggleRightPanel, model)
+      }
+      // Focus belongs to the navigator, selection to the resource. Dismiss
+      // only the former and restore focus to the retained resource region.
+      // This is local layout state, even while its checkout is unavailable.
+      (
+        @cmd.batch([
+          @fileeditor.request_viewer_remeasure(),
+          focus_dock_after_render(),
+        ]),
+        { ..model, file_panel: { ..model.file_panel, tree_open: false, }, },
+      )
+    }
     CloseActiveDockTab => {
       guard model.is_desktop else { return (@cmd.none, model) }
       match model.dock.active {
@@ -19020,6 +19040,33 @@ test "closing the last dock tab prepares the navigator for reopening" {
     assert_true(reopened.right_panel_open)
     assert_true(reopened.file_panel.tree_open)
   }
+}
+
+///|
+test "closing a narrow navigator restores the retained native browser" {
+  let dispatch = test_dispatch()
+  let (_, browser) = update(
+    dispatch,
+    ExternalLinkClicked("https://example.test/"),
+    { ..desktop_model(), narrow: true, sidebar_open: false, },
+  )
+  let (_, navigator) = update(
+    dispatch,
+    ExplorerRequested(ExplorerSearch),
+    browser,
+  )
+  assert_true(desired_browser_view(navigator) is None)
+  let (_, closed) = update(dispatch, CloseWorkspaceNavigator, navigator)
+  assert_false(closed.file_panel.tree_open)
+  assert_true(closed.right_panel_open)
+  assert_true(closed.dock.tabs == browser.dock.tabs)
+  assert_true(closed.dock.active == browser.dock.active)
+  assert_eq(desired_browser_view(closed), @dock.active_browser(browser.dock))
+  // A queued duplicate dismissal must not reopen the navigator or close a tab.
+  let (_, repeated) = update(dispatch, CloseWorkspaceNavigator, closed)
+  assert_false(repeated.file_panel.tree_open)
+  assert_true(repeated.right_panel_open)
+  assert_true(repeated.dock.tabs == browser.dock.tabs)
 }
 
 ///|

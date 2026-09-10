@@ -2067,6 +2067,7 @@ priv enum Msg {
   // Embedded Browser views can receive their own explicit action later.
   AppDeveloperToolsRequested
   AppCloseWindowRequested
+  CloseWorkspaceNavigator
   CloseActiveDockTab
   // The browser pane's on-screen rectangle, reported after a render by the
   // measurer or the pane's ResizeObserver; drives view bounds/visibility.
