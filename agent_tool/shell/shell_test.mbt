@@ -514,7 +514,9 @@ async test "shell does not cut multi-byte utf8 output mid-character on Windows" 
   let output = run_shell({
     "cmd": "[Console]::Out.Write('中中中'); Start-Sleep -Seconds 2",
     "max_output_chars": 2,
-    "timeout_ms": 1000,
+    // Leave enough time for the sandbox-profile workspace scan under CI load;
+    // this test asserts that the output limit wins, not that the timeout fires.
+    "timeout_ms": 10000,
   })
   assert_true(output.is_error)
   assert_true(
@@ -604,7 +606,9 @@ async test "shell output limit wins over an unbounded producer on Windows" {
   let output = run_shell({
     "cmd": "while ($true) { [Console]::Out.Write('yyyyyyyyyy') }",
     "max_output_chars": 5,
-    "timeout_ms": 1000,
+    // Leave enough time for the sandbox-profile workspace scan under CI load;
+    // this test asserts that the output limit wins, not that the timeout fires.
+    "timeout_ms": 10000,
   })
   assert_true(output.is_error)
   assert_true(
