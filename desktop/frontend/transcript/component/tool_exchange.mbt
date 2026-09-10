@@ -33,9 +33,6 @@ fn tool_exchange_view(
         Some(content),
       )
   }
-  let compact_mbtx = name == "mbtx" &&
-    !is_error &&
-    (brief is None || brief is Some("mbtx (exit=0)"))
   let label = if wait_label is Some(label) {
     label
   } else if pending_job_wait_label(call) is Some(label) {
@@ -46,7 +43,7 @@ fn tool_exchange_view(
     fields.get("path") is Some(String(path)) {
     "Read · " + path
   } else {
-    let label = if compact_mbtx {
+    let label = if name == "mbtx" {
       "🐇"
     } else {
       match brief {
@@ -135,9 +132,6 @@ fn tool_exchange_view(
     key,
     subrun?,
   )
-  if compact_mbtx && brief is Some(text) {
-    output_sections.insert(0, @html.div(class="tool-caption", text))
-  }
   if output_sections.is_empty() {
     output_sections.push(
       @html.div(class="tool-call-section", [
@@ -167,7 +161,7 @@ fn tool_exchange_view(
         class="work-toggle tool-toggle",
         attrs=@html.Attrs::build()
           .aria_label(
-            (if compact_mbtx { "mbtx · " } else { "" }) +
+            (if name == "mbtx" { "mbtx · " } else { "" }) +
             caption +
             " — " +
             status,
@@ -183,7 +177,9 @@ fn tool_exchange_view(
               brief,
               is_error,
               call.arguments,
-              brief_shown=brief is Some(text) && caption.contains(text),
+              brief_shown=name != "mbtx" &&
+                brief is Some(text) &&
+                caption.contains(text),
             ) {
             Some(marker) => marker
             None => @html.nothing

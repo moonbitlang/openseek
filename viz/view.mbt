@@ -1041,9 +1041,11 @@ fn tool_call_view(
 ) -> @html.Html {
   let name_row : Array[@html.Html] = [
     @html.text("→ "),
-    @html.strong(call.name),
+    @html.strong(if call.name == "mbtx" { "🐇" } else { call.name }),
   ]
-  if briefs.get(call.id) is Some(brief) && !brief.is_blank() {
+  if call.name != "mbtx" &&
+    briefs.get(call.id) is Some(brief) &&
+    !brief.is_blank() {
     name_row.push(@html.span(class="tool-call-brief") <| " · \{brief}")
   }
   if call.name == "mbtx" {
@@ -1076,13 +1078,7 @@ fn tool_call_view(
     (false, true) => "tool-call tool-call-escalated"
     (true, true) => "tool-call tool-call-failed tool-call-escalated"
   }
-  // A failed mbtx call names its STAGE — a build error is fixed in the
-  // source, a runtime error in the program's behavior. A build-failed row
-  // says it through its own brief, which already reads "build failed" /
-  // "build timeout": appending a word there repeated the brief verbatim
-  // ("· mbtx (build failed, exit=1) build error"), so the stage rides the
-  // class alone and the stylesheet turns the brief amber. The runtime word
-  // stays — "exit=1" never names the stage.
+  // The compact mbtx title leaves failure details to the stage marker.
   let build_failed = tool_call_is_build_failed(call, briefs, failed, tags)
   let run_failed = !build_failed &&
     tool_call_is_run_failed(call, briefs, failed, tags)
@@ -1093,10 +1089,16 @@ fn tool_call_view(
   } else {
     cls
   }
-  if run_failed {
+  if call.name == "mbtx" && build_failed {
+    name_row.push(
+      @html.span(class="tool-stage tool-stage-build", " build error"),
+    )
+  } else if run_failed {
     name_row.push(
       @html.span(class="tool-stage tool-stage-run") <| " runtime error",
     )
+  } else if call.name == "mbtx" {
+    name_row.push(failed_flag(failed.contains(call.id)))
   }
   let original = pretty_json(call.arguments)
   if is_blank_args(original) {
@@ -1113,6 +1115,11 @@ fn tool_call_view(
   let open_by_default = plan_steps.map(_ => true)
   @html.details(open?=open_by_default, id?=anchor, class=cls) <| [
     @html.summary(class="tool-call-name") <| name_row,
+    if call.name == "mbtx" && briefs.get(call.id) is Some(brief) {
+      @html.div(class="tool-call-brief", brief)
+    } else {
+      @html.nothing
+    },
     rendered,
     @html.pre(class="tool-call-args tool-call-args-original") <| original,
   ]
@@ -1342,10 +1349,15 @@ fn tool_card(
   } else {
     kind
   }
-  let label = if is_error {
-    "Tool error · \{result.tool_name()}"
+  let display_name = if result.tool_name() == "mbtx" {
+    "🐇"
   } else {
-    "Tool result · \{result.tool_name()}"
+    result.tool_name()
+  }
+  let label = if is_error {
+    "Tool error · \{display_name}"
+  } else {
+    "Tool result · \{display_name}"
   }
   let flag = result_flag(result)
   // Pair this result back to the call that produced it (same `call N` tag).
@@ -2630,7 +2642,7 @@ fn model_tool_card(
 ) -> @html.Html {
   let is_error = shown is Some(r) && r.is_error()
   let name = match shown {
-    Some(r) => r.tool_name()
+    Some(r) => if r.tool_name() == "mbtx" { "🐇" } else { r.tool_name() }
     None => ""
   }
   let is_escalated = match message.role {

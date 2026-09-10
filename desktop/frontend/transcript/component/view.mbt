@@ -168,12 +168,16 @@ fn result_row_view(
   key : String,
   subrun? : SubrunLink,
 ) -> @html.Html {
-  let label = match (arguments, brief, pending) {
-    (None, Some(brief), _) if !brief.is_blank() => brief
-    (None, _, _) => name
-    (_, _, true) => "Tool output · \{name}"
-    _ if is_error => "Tool error · \{name}"
-    _ => "Tool result · \{name}"
+  let label = if name == "mbtx" {
+    "🐇"
+  } else {
+    match (arguments, brief, pending) {
+      (None, Some(brief), _) if !brief.is_blank() => brief
+      (None, _, _) => name
+      (_, _, true) => "Tool output · \{name}"
+      _ if is_error => "Tool error · \{name}"
+      _ => "Tool result · \{name}"
+    }
   }
   let error_class = (if is_error { " error" } else { "" }) +
     failure_stage_class(name, brief, is_error, arguments)
@@ -188,9 +192,12 @@ fn result_row_view(
       is_error,
       arguments,
       // The result row shows the brief as its label only for the
-      // argument-less shape (the first `label` arm above); the common
-      // "Tool error · mbtx" label carries no brief, so the stage word stays.
-      brief_shown=arguments is None && brief is Some(brief) && !brief.is_blank(),
+      // argument-less shape. The mbtx emoji carries no brief, so its
+      // failure marker always names the stage.
+      brief_shown=name != "mbtx" &&
+        arguments is None &&
+        brief is Some(brief) &&
+        !brief.is_blank(),
     )
     is Some(marker) {
     line.push(marker)
@@ -217,6 +224,9 @@ fn tool_output_sections(
   subrun? : SubrunLink,
 ) -> Array[@html.Html] {
   let body : Array[@html.Html] = []
+  if name == "mbtx" && brief is Some(text) {
+    body.push(@html.div(class="tool-caption", text))
+  }
   // A sub-run result names the child session it spawned in its brief. The
   // result owns the child report and therefore owns the way into its transcript.
   if subrun is Some(link) && brief is Some(brief) {
