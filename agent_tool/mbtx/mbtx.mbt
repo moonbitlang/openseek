@@ -996,8 +996,6 @@ async fn build_snippet(
     "-q",
     "\{build_dir}/snippet.mbtx",
     "--build-only",
-    "--target",
-    "wasm",
     "--target-dir",
     "\{build_dir}/_build",
     ..if !warning {

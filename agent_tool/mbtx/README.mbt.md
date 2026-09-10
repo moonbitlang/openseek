@@ -13,7 +13,7 @@ The `source` is a `.mbtx` **single-file script** — MoonBit's own one-file
 program format. Alternatively, `filename` loads a saved script. The tool
 writes the program into a throwaway directory and, for the
 default wasm target, runs it in **two phases**. The BUILD runs first,
-synchronously: `moon run <file>.mbtx --build-only --target wasm --target-dir
+synchronously: `moon run <file>.mbtx --build-only --target-dir
 <temp>`, bounded by its own wall clock (10s by default) so a hung dependency
 download cannot hold the turn. A nonzero exit here is reported immediately as
 `BUILD failed (exit N)` — a build failure **by construction**, since the run
