@@ -1119,6 +1119,20 @@ fn tool_call_view(
 }
 
 ///|
+/// The one-line `description` an `mbtx` call carries in its arguments, when it
+/// has one worth showing; `None` for every other tool and for a blank or
+/// unparseable description.
+fn mbtx_description(call : @deepseek.ToolCall) -> String? {
+  guard call.name == "mbtx" else { return None }
+  let arguments = Some(@json.parse(call.arguments)) catch { _ => None }
+  guard arguments is Some({ "description": String(description), .. }) &&
+    !description.is_blank() else {
+    return None
+  }
+  Some(description)
+}
+
+///|
 /// The human-friendly rendering of a tool call's arguments: one row per field,
 /// with the value shown verbatim rather than as a quoted-and-escaped JSON string,
 /// so a `write_file` body or a `bash` command reads as plain text. Falls back to
@@ -3053,17 +3067,3 @@ pub extend ViewMode with Debug::{to_repr}
 
 ///|
 pub extend ViewMode with Eq::{equal, not_equal}
-
-///|
-/// The one-line `description` an `mbtx` call carries in its arguments, when it
-/// has one worth showing; `None` for every other tool and for a blank or
-/// unparseable description.
-fn mbtx_description(call : @deepseek.ToolCall) -> String? {
-  guard call.name == "mbtx" else { return None }
-  let arguments = Some(@json.parse(call.arguments)) catch { _ => None }
-  guard arguments is Some({ "description": String(description), .. }) &&
-    !description.is_blank() else {
-    return None
-  }
-  Some(description)
-}
