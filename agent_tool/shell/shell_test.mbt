@@ -549,7 +549,9 @@ async test "shell does not split four-byte utf8 characters on Windows" {
   let output = run_shell({
     "cmd": "[Console]::Out.Write('😀😀'); Start-Sleep -Seconds 2",
     "max_output_chars": 1,
-    "timeout_ms": 1000,
+    // Leave enough time for the sandbox-profile workspace scan under CI load;
+    // this test asserts that the output limit wins, not that the timeout fires.
+    "timeout_ms": 10000,
   })
   assert_true(output.is_error)
   assert_true(

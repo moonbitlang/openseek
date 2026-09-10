@@ -40,23 +40,23 @@ fn resolve_filename(
 test "only the builtin namespace selects bundled workflows" {
   assert_eq(
     resolve_filename("/project", "@builtin/check.mbtx", Some("/share")),
-    "/share/workflow/check.mbtx",
+    @workspace_path.resolve("/share", "workflow/check.mbtx"),
   )
   assert_eq(
     resolve_filename("/project", "check.mbtx", Some("/share")),
-    "/project/check.mbtx",
+    @workspace_path.resolve("/project", "check.mbtx"),
   )
   assert_eq(
     resolve_filename("/project", "./check.mbtx", Some("/share")),
-    "/project/check.mbtx",
+    @workspace_path.resolve("/project", "./check.mbtx"),
   )
   assert_eq(
     resolve_filename("/project", "scripts/check.mbtx", None),
-    "/project/scripts/check.mbtx",
+    @workspace_path.resolve("/project", "scripts/check.mbtx"),
   )
   assert_eq(
     resolve_filename("/project", "/other/check.mbtx", Some("/share")),
-    "/other/check.mbtx",
+    @workspace_path.resolve("/project", "/other/check.mbtx"),
   )
   assert_false(is_bundled_filename("."))
   assert_false(is_bundled_filename(".."))
@@ -82,6 +82,6 @@ test "only the builtin namespace selects bundled workflows" {
   }
   assert_eq(
     resolve_filename("/project", "./@builtin/check.mbtx", None),
-    "/project/@builtin/check.mbtx",
+    @workspace_path.resolve("/project", "./@builtin/check.mbtx"),
   )
 }

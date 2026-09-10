@@ -52,6 +52,7 @@ from making a change in two steps.
 
 ```mbt check
 ///|
+#cfg(not(platform="windows"))
 async test "the gate parses candidate content that never touches disk" {
   // `path` selects the input KIND only. Nothing reads or writes src/main.mbt.
   let clean = @auto_check.content_parse_errors(

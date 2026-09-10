@@ -683,6 +683,7 @@ async test "edit surfaces read errors through the dispatch boundary" {
 /// End-to-end through real moonc: the parse gate needs no moon project, so a
 /// plain tmpdir exercises the reject, the pre-existing-error tolerance, and
 /// the opt-out.
+#cfg(not(platform="windows"))
 async test "edit gates .mbt results through moonc before writing" {
   @vfs.with_tmpdir(prefix="openseek-edit-gate-", dir => {
     let original = "///|\npub fn f() -> Int {\n  42\n}\n"

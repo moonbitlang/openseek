@@ -148,7 +148,7 @@ async test "save and run creates parents, suggests reuse, and preserves existing
     assert_true(out.content.contains("42"))
     assert_true(out.content.contains("{\"filename\":\"scripts/check.mbtx\"}"))
     assert_true(out.content.contains("omit source"))
-    let path = "\{ws}/scripts/check.mbtx"
+    let path = @workspace_path.resolve(ws, "scripts/check.mbtx")
     assert_eq(@fs.read_file(path).text(), source)
     assert_true(
       state.created_and_unchanged(path, @agent_tool.content_digest(source)),
