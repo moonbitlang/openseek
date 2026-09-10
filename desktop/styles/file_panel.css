@@ -69,11 +69,7 @@ button.panel-toggle:not(:disabled):hover {
   transition-delay: var(--drawer-duration);
 }
 
-/* The editor's top bar, the same height as the topbar so the header
-   divider runs continuously across the window: the open-file tabs on
-   the left, with space reserved for the shell's fixed panel toggle
-   on the right. Always rendered — the editor's child order is
-   structural (see panel_view). */
+/* Shared resource tabs belong to the viewer column below the region header. */
 .editor-tabsbar {
   transition: padding-inline-start var(--drawer-duration) var(--drawer-easing);
   display: flex;
@@ -395,36 +391,13 @@ html:is(
   pointer-events: none !important;
 }
 
-/* ---------- dock: browser tabs, launcher, file picker ---------- */
+/* ---------- dock: browser tabs and launcher ---------- */
 /* The active tab's kind is a class on .editor (mode-file / mode-browser /
-   mode-picker / mode-launcher); every body part below the strip is always
+   mode-history / mode-launcher); every body part below the strip is always
    rendered and CSS shows exactly one, so no imperative host is re-keyed. */
 .editor.mode-browser .viewer-breadcrumb,
-.editor.mode-browser .editor-body,
-.editor.mode-launcher .viewer-breadcrumb,
-.editor.mode-launcher .editor-body {
+.editor.mode-launcher .viewer-breadcrumb {
   display: none;
-}
-/* The picker reuses the file chrome (tree + viewer area); the overlay
-   covers whatever document the viewer last showed. */
-.editor.mode-picker .viewer-stack::after {
-  content: "Select a file to open";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: var(--color-bg-surface);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
-}
-.editor.mode-picker.mode-review .viewer-stack::after {
-  content: "Select a changed file to review";
-}
-.editor.mode-picker.mode-search-picker .viewer-stack::after {
-  content: "Select a search result to open";
 }
 /* Keep the launcher attached to + as the panel and tab strip resize. */
 .editor-tabsbar {
@@ -1167,12 +1140,21 @@ html:is(
   background: var(--color-bg-subtle);
 }
 
+.explorer-header {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 6px;
+  border-bottom: 1px solid var(--color-separator);
+}
+.explorer-header > .navigator-toggle { flex: 0 0 auto; }
 .explorer-tabs {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 2px;
-  padding: 7px 4px 4px;
-  border-bottom: 1px solid var(--color-separator);
+  align-items: center;
 }
 
 .explorer-tab {
@@ -1185,7 +1167,7 @@ html:is(
   gap: 4px;
   padding: 4px 6px;
   border: 0;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   background: transparent;
   font: inherit;
@@ -2814,7 +2796,6 @@ button.git-history-file.selected {
   display: none;
 }
 .editor.mode-workflows .viewer-breadcrumb,
-.editor.mode-workflows .editor-body,
 .editor.mode-workflows .browser-chrome {
   display: none;
 }
@@ -3533,3 +3514,91 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-delete-confirm .danger { color: #cf222e; }
 .github-review-file-count { display: inline-flex; align-items: center; gap: 3px; color: var(--color-text-muted); font-size: 11px; padding-left: 4px; }
 .github-review-file-count svg { width: 13px; height: 13px; }
+
+/* One region header owns both resource tabs and workspace navigation.
+   Stable hosts occupy explicit grid cells; switching tab kinds never remounts
+   the viewer or native browser. The bottom setting keeps the same ownership. */
+.workspace-panel-header {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--topbar-height);
+  padding-inline: 12px var(--panel-toggle-reserved-width);
+  border-bottom: 1px solid var(--color-separator);
+}
+.workspace-panel-title {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+.changes-review-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 10px 6px;
+}
+.review-command-row.hidden { display: none; }
+.editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--topbar-height) 40px auto minmax(0, 1fr)
+    calc(40px + (clamp(96px, var(--tree-height, 32%), calc(100% - 200px)) - 40px)
+      * var(--tree-open-progress));
+  transition: --tree-open-progress var(--drawer-duration) var(--drawer-easing), visibility 0s linear;
+}
+.editor:not(.tree-open) { --tree-open-progress: 0; }
+.editor .workspace-panel-header { grid-column: 1 / -1; grid-row: 1; }
+.editor .editor-tabsbar { box-sizing: border-box; height: 40px; grid-column: 1; grid-row: 2; }
+.editor .viewer-breadcrumb { grid-column: 1; grid-row: 3; }
+.editor .editor-body { display: contents; }
+.editor .viewer-stack { grid-column: 1; grid-row: 4; }
+.editor .file-tree-pane { grid-column: 1; grid-row: 5; }
+.editor .explorer-header { box-sizing: border-box; min-height: 40px; padding: 4px 10px; }
+.editor:not(.tree-open) .file-tree-pane {
+  visibility: inherit;
+  pointer-events: inherit;
+  transition-delay: 0s;
+}
+.editor:not(.tree-open) .file-tree-pane > :not(.explorer-header),
+.editor:not(.tree-open) .explorer-tabs { display: none; }
+.editor:not(.tree-open) .explorer-header { justify-content: flex-end; padding-inline: 1px 10px; }
+.content:not(.panel-open) > .editor .file-tree-pane {
+  visibility: hidden;
+  pointer-events: none;
+  transition-delay: var(--drawer-duration);
+}
+.editor :is(.browser-chrome, .workflow-panel, .jobs-panel, .github-panel, .dock-launcher) {
+  grid-column: 1;
+  grid-row: 3 / 5;
+  min-width: 0;
+}
+.editor:is(.mode-browser, .mode-launcher, .mode-workflows, .mode-jobs, .mode-github) .viewer-stack { display: none; }
+@media (min-width: 761px) {
+  .editor.tree-right {
+    grid-template-columns: minmax(0, 1fr) calc(40px + (
+      clamp(180px, var(--tree-width, 260px), calc(100% - 240px)) - 40px
+    ) * var(--tree-open-progress));
+    grid-template-rows: var(--topbar-height) 40px auto minmax(0, 1fr);
+  }
+  .editor.tree-right .file-tree-pane { grid-column: 2; grid-row: 2 / 5; }
+}
+
+/* Keep the persistent file view choice distinct from comparison settings. */
+.review-diff-options {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.review-diff-options.hidden { display: none; }
+.review-option-label {
+  padding-inline: 5px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+.editor-tabsbar { gap: 6px; padding-inline: 10px; }

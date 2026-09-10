@@ -2927,7 +2927,14 @@ fn update_inner(
         search_highlights,
       )
       match mode {
-        ExplorerFiles => (search_highlight_cmd, selected)
+        ExplorerFiles =>
+          (
+            @cmd.batch([
+              search_highlight_cmd,
+              focus_explorer_tab_after_render(ExplorerFilesTabId),
+            ]),
+            selected,
+          )
         ExplorerSearch =>
           (
             @cmd.batch([
@@ -2958,7 +2965,12 @@ fn update_inner(
             (@cmd.none, selected)
           }
           (
-            @cmd.batch([search_highlight_cmd, changes_cmd, history_cmd]),
+            @cmd.batch([
+              search_highlight_cmd,
+              changes_cmd,
+              history_cmd,
+              focus_explorer_tab_after_render(ExplorerChangesTabId),
+            ]),
             selected,
           )
         }

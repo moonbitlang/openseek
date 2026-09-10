@@ -103,13 +103,16 @@ fn start_tree_resize(event : @dom.Event) -> Unit {
 /// Track the cursor. The panel is docked to the editor body's bottom or
 /// right edge, so its size is the gap from the cursor to that edge.
 fn on_tree_resize_move(event : @dom.Event) -> Unit {
-  guard tree_resizing.val &&
-    event.to_mouse_event() is Some(mouse) &&
-    @dom.document().query_selector(".editor-body").to_option() is Some(body) else {
+  guard tree_resizing.val && event.to_mouse_event() is Some(mouse) else {
+    return
+  }
+  // Both navigator layouts use the editor grid; editor-body has no box.
+  let right = tree_docked_right()
+  guard @dom.document().query_selector(".editor").to_option() is Some(body) else {
     return
   }
   let rect = body.get_bounding_client_rect()
-  if tree_docked_right() {
+  if right {
     set_tree_width(
       drag_size(
         rect.get_right() - mouse.get_client_x(),

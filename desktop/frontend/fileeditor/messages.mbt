@@ -60,8 +60,6 @@ priv enum UiMessage {
   TreeLabel
   ShowFile
   FileView
-  FileLabel
-  ReviewMode
   ComparisonAlgorithm
   AvailableDiff
   AvailableTokenTree
@@ -431,12 +429,12 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ReviewedPrefix) => "已审阅："
     (TraditionalChinese, ReviewedPrefix) => "已審閱："
     (Japanese, ReviewedPrefix) => "レビュー済み："
-    (English, HideFileTree) => "Hide file tree"
+    (English, HideFileTree) => "Hide workspace navigator"
     (Spanish, HideFileTree) => "Ocultar árbol de archivos"
     (SimplifiedChinese, HideFileTree) => "隐藏文件树"
     (TraditionalChinese, HideFileTree) => "隱藏檔案樹"
     (Japanese, HideFileTree) => "ファイルツリーを非表示"
-    (English, ShowFileTree) => "Show file tree"
+    (English, ShowFileTree) => "Show workspace navigator"
     (Spanish, ShowFileTree) => "Mostrar árbol de archivos"
     (SimplifiedChinese, ShowFileTree) => "显示文件树"
     (TraditionalChinese, ShowFileTree) => "顯示檔案樹"
@@ -491,16 +489,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, FileView) => "文件视图"
     (TraditionalChinese, FileView) => "檔案檢視"
     (Japanese, FileView) => "ファイルビュー"
-    (English, FileLabel) => "File"
-    (Spanish, FileLabel) => "Archivo"
-    (SimplifiedChinese, FileLabel) => "文件"
-    (TraditionalChinese, FileLabel) => "檔案"
-    (Japanese, FileLabel) => "ファイル"
-    (English, ReviewMode) => "Review mode"
-    (Spanish, ReviewMode) => "Modo de revisión"
-    (SimplifiedChinese, ReviewMode) => "审阅模式"
-    (TraditionalChinese, ReviewMode) => "審閱模式"
-    (Japanese, ReviewMode) => "レビューモード"
     (English, ComparisonAlgorithm) => "Comparison algorithm"
     (Spanish, ComparisonAlgorithm) => "Algoritmo de comparación"
     (SimplifiedChinese, ComparisonAlgorithm) => "比较算法"
