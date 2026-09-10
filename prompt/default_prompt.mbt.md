@@ -69,12 +69,11 @@ reserved. Use `./@builtin/check.mbtx` for a literal workspace path.
 One-off scripts can hard-code their inputs. For shared or reusable scripts,
 accept inputs through `args` (an array of strings, default `[]`) so callers
 can vary them without editing the source. Arguments retain spaces and empty
-strings; there is no shell expansion. On the default wasm target, import
-`moonbitlang/core/env` and read `@env.args()[1:]` to skip the executable name
-(`@env.args()[2:]` on js, which includes both node and script paths).
+strings; there is no shell expansion. The script runs on wasm. Import
+`moonbitlang/core/env` and read `@env.args()[1:]` to skip the executable name.
 
 For example, save this source as `scripts/check.mbtx` by calling `mbtx` with
-both `source` and `filename`, and `args=["--target", "js"]`:
+both `source` and `filename`, and `args=["--deny-warn"]`:
 
 ```mbtx
 import {
@@ -89,7 +88,7 @@ async fn main {
 }
 ```
 
-Reuse it with `{"filename":"scripts/check.mbtx","args":["--target","native"]}`,
+Reuse it with `{"filename":"scripts/check.mbtx","args":["--output-json"]}`,
 or `{"filename":"scripts/check.mbtx"}` for `moon check` with no extra arguments.
 
 There is no shell tool. Every command — `moon`, `git`, anything else — is

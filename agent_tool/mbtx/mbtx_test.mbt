@@ -55,13 +55,13 @@ async test "default prompt reusable check script forwards arguments" {
     @fs.write_file("\{ws}/moon.pkg", "", create_mode=CreateOrTruncate)
     @fs.write_file(
       "\{ws}/main.mbt",
-      "fn answer() -> Int { 42 }",
+      "pub fn answer() -> Int { 42 }",
       create_mode=CreateOrTruncate,
     )
     let saved = run_in(ws, {
       "source": source,
       "filename": "scripts/check.mbtx",
-      "args": ["--target", "js"],
+      "args": ["--deny-warn"],
     })
     assert_false(saved.is_error, msg=saved.content)
     let reused = run_in(ws, { "filename": "scripts/check.mbtx" })
