@@ -21,6 +21,72 @@ fn reviewed_doc(
 }
 
 ///|
+test "positioned Content failures settle retained reviews and fence both generations" {
+  let emit = test_emit()
+  let path = @pathx.Relative("src/main.mbt")
+  let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
+  let docs = owned_state().docs.copy()
+  docs[path] = reviewed_doc(path, test_modified_change(path))
+  let (_, pending) = open_document(
+    emit,
+    {
+      ..owned_state(),
+      docs,
+      review_generation: 1,
+      file_link_generation: 3,
+      explorer_mode: ExplorerSearch,
+    },
+    ctx,
+    path,
+    name="main.mbt",
+    range=Some(@common.Range(2, 1, 2, 4)),
+    had_active=true,
+  )
+  guard pending.docs.get(path) is Some({ review: Some(review), .. }) else {
+    fail("positioned open lost the comparison")
+  }
+  assert_true(review.view_mode is ReviewSource)
+  // Neither an old review read nor a superseded navigation may publish an
+  // error over the retained document. Current failures belong to that tab.
+  for
+    (file_generation, working_generation, accepted) in [
+      (pending.file_link_generation, review.working_generation - 1, false),
+      (pending.file_link_generation - 1, review.working_generation, false),
+      (pending.file_link_generation, review.working_generation, true),
+    ] {
+    let (_, result) = update(
+      emit,
+      FileFailed(
+        owner=ctx.owner,
+        epoch=ctx.request_epoch,
+        path~,
+        file_link_generation=Some(file_generation),
+        review_generation=Some(working_generation),
+        message="permission denied",
+      ),
+      pending,
+      ctx,
+    )
+    if accepted {
+      assert_true(
+        result.docs.get(path)
+        is Some(
+          {
+            state: TabReadFailed("permission denied"),
+            review: Some(retained),
+            ..
+          }
+        ) &&
+        retained == review,
+      )
+      assert_true(result.error is None)
+    } else {
+      assert_true(result == pending)
+    }
+  }
+}
+
+///|
 test "new reviews default to the full diff" {
   let path = @pathx.Relative("src/main.mbt")
   let change = test_modified_change(path)

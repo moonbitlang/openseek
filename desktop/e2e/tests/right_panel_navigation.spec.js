@@ -1,6 +1,63 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+test('transcript directory link reopens Files beside the current Workflows tab', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.directoryEntries['/workspace'] = [{ name: 'src', is_dir: true }];
+  app.directoryEntries['/workspace/src'] = [{ name: 'main.mbt', is_dir: false }];
+  app.sessionEvents[1].item.payload.content = '[Source directory](./src/)';
+  const replyFor = app.replyFor.bind(app);
+  app.replyFor = request => request.method === 'host.open_path'
+    ? { opened: false, directory_target: { path: 'src' } }
+    : replyFor(request);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  await page.getByRole('button', { name: /^Workflows / }).click();
+  await page.getByRole('button', { name: 'Hide workspace navigator' }).click();
+  await page.getByRole('button', { name: 'Collapse right panel' }).click();
+  await page.getByRole('button', { name: 'Source directory', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.file-tree-pane').getByText('main.mbt', { exact: true })).toBeVisible();
+  await expect(page.locator('.workflow-panel')).toBeVisible();
+  await expect(page.locator('.editor-tab')).toHaveCount(1);
+  await expect(page.locator('.editor-tab')).toHaveClass(/active/);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('failed Search refresh replaces retained review content with a visible notice and retries', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.textSearchMatches = [{
+    path: 'src/main.mbt', line_number: 2,
+    preview: '  println("working tree")', preview_start_column: 1,
+    ranges: [{ start_column: 12, end_column: 19 }],
+  }];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+  await expect(page.locator('#diff-editor-host')).toContainText('working tree');
+  await page.getByRole('tab', { name: 'Search', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Search', exact: true }).fill('working');
+  app.rpcErrors.set('fs.read_file', 'permission denied');
+  const result = page.getByTitle('Open src/main.mbt:2', { exact: true });
+  await result.click();
+  await expect(page.getByText('Working unavailable · baseline', { exact: true })).toBeVisible();
+  await expect(page.locator('#viewer-host')).not.toContainText('working tree');
+  await expect(page.locator('.editor-tab')).toHaveCount(1);
+
+  app.rpcErrors.delete('fs.read_file');
+  await result.click();
+  await expect(page.getByText('Working unavailable · baseline', { exact: true })).toBeHidden();
+  await expect(page.locator('#viewer-host')).toContainText('working tree');
+  await expect(page.getByRole('button', { name: 'Content view' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Diff view' }).click();
+  await expect(page.locator('#diff-editor-host')).toBeVisible();
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('workspace navigation preserves tabs and each file owns its Content/Diff view', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.textSearchMatches = [{

@@ -307,7 +307,7 @@ test('Review links hunk and file progress and reports the active hunk', async ({
   // Semantic review is a MultiDiff surface. Its counter is global across the
   // section-local editors, while file completion still projects into each
   // section's current hunk.
-  const reviewToolbar = page.getByRole('toolbar', { name: 'Review mode' });
+  const reviewToolbar = page.getByRole('toolbar', { name: 'Comparison algorithm' });
   await reviewToolbar.getByRole('button', { name: 'Token diff' }).click();
   await expect(reviewToolbar.getByRole('button', { name: 'Token diff' }))
     .toHaveAttribute('aria-pressed', 'true');
@@ -2208,7 +2208,7 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     await app.openSession();
     await app.openReview();
     await page.locator('#review-changes-body').getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
-    const toolbar = page.getByRole('toolbar', { name: 'Review mode' });
+    const toolbar = page.getByRole('toolbar', { name: 'Comparison algorithm' });
     await toolbar.getByRole('button', { name: `${mode} diff` }).click();
     const position = page.locator('.review-hunk-position');
     await expect(position).toHaveText('1 of 2');
@@ -2247,7 +2247,7 @@ for (const mode of ['Token', 'Tree']) {
     await app.openSession();
     await app.openReview();
     await page.locator('#review-changes-body').getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
-    await page.getByRole('toolbar', { name: 'Review mode' }).getByRole('button', { name: `${mode} diff` }).click();
+    await page.getByRole('toolbar', { name: 'Comparison algorithm' }).getByRole('button', { name: `${mode} diff` }).click();
     const sections = page.locator('.semantic-diff-entry');
     const headers = sections.locator('.semantic-entry-header-content');
     await expect(sections).toHaveCount(2);

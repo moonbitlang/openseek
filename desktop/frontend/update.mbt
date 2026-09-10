@@ -820,21 +820,33 @@ fn open_explorer(
 
 ///|
 /// Reveal a transcript-linked directory in the editor's Files tree. Keep an
-/// active tab visible beside the tree. `RevealDirectory` expands the ancestors;
-/// transcript navigation additionally expands the target itself, without
-/// toggling an already-open row closed.
+/// active tab visible beside the tree. Unlike a breadcrumb click, this must
+/// reveal Files even when the navigator was collapsed or another inventory
+/// was selected. Expand the target without toggling an open row closed.
 fn reveal_local_directory(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   path : @pathx.Relative,
 ) -> (@cmd.Cmd, Model) {
-  let model = { ..model, right_panel_open: true, right_panel_menu_open: false, }
-  let (cmd, panel) = @fileeditor.update(
+  let model = {
+    ..model,
+    right_panel_open: true,
+    right_panel_menu_open: false,
+    file_panel: { ..model.file_panel, tree_open: true, },
+  }
+  let (inventory_cmd, panel) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),
-    @fileeditor.RevealDirectory(path),
+    @fileeditor.ExplorerModeSelected(ExplorerFiles),
     model.file_panel,
     file_ctx(model),
   )
+  let (cmd, panel) = @fileeditor.update(
+    dispatch.map(msg => FileEditor(msg)),
+    @fileeditor.RevealDirectory(path),
+    panel,
+    file_ctx(model),
+  )
+  let cmd = @cmd.batch([inventory_cmd, cmd])
   let model = { ..model, file_panel: panel, }
   if path.is_root() || panel.expanded.contains(path) {
     return (cmd, model)
@@ -16627,6 +16639,54 @@ test "resolved transcript files and directories stay in the right panel" {
   // Repeating the same link is a reveal, not the row's collapse toggle.
   let (_, repeated) = update(dispatch, directory_msg, directory)
   assert_true(repeated.file_panel.expanded.contains(Relative("src")))
+}
+
+///|
+test "transcript directories reopen Files without replacing dock destinations" {
+  let dispatch = test_dispatch()
+  for active in [None, Some(@dock.Browser(id=1)), Some(@dock.Workflows)] {
+    for mode in [@fileeditor.ExplorerFiles, ExplorerChanges, ExplorerSearch] {
+      for path in ["src", ""] {
+        let model = test_model()
+        let model = {
+          ..model,
+          right_panel_open: false,
+          dock: {
+            ..model.dock,
+            active,
+            tabs: match active {
+              Some(tab) => [tab]
+              None => []
+            },
+          },
+          file_panel: {
+            ..model.file_panel,
+            tree_open: false,
+            explorer_mode: mode,
+          },
+        }
+        let (_, pending) = update(dispatch, OpenFile(path), model)
+        let (_, revealed) = update(
+          dispatch,
+          OpenDirectoryAt(
+            owner={ channel: Local, session: "desktop-test", },
+            generation=pending.file_panel.file_link_generation,
+            path~,
+          ),
+          pending,
+        )
+        assert_true(revealed.right_panel_open)
+        assert_true(revealed.file_panel.tree_open)
+        assert_true(revealed.file_panel.explorer_mode is ExplorerFiles)
+        assert_true(revealed.dock == pending.dock)
+        assert_true(revealed.file_panel.highlighted == Some(Relative(path)))
+        assert_true(
+          path.is_empty() ||
+          revealed.file_panel.expanded.contains(Relative(path)),
+        )
+      }
+    }
+  }
 }
 
 ///|

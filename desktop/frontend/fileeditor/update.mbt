@@ -4019,7 +4019,7 @@ pub fn update(
       }
       if state.owner != Some(owner) || state.request_epoch != epoch {
         (@cmd.none, state)
-      } else if file_link_generation is Some(_) {
+      } else if file_link_generation is Some(_) && review_generation is None {
         // A stale positioned failure may finish only the loading document. A
         // current failure is authoritative even if an older success filled
         // the cache first, so it replaces that snapshot with a retryable tab.
@@ -4053,12 +4053,13 @@ pub fn update(
           _ => (@cmd.none, { ..state, error: Some(message), })
         }
       } else if review_generation is Some(generation) {
-        // Review reads are generation-fenced just like successful replies.
-        // Preserve a current working-side failure without guessing that every
-        // host error means deletion; a superseded read remains invisible.
+        // Positioned Content reads retain review state and carry both tokens.
+        // Apply the same fences as FileLoaded before recording a tab failure;
+        // Search does not display generic inventory errors.
         guard state.docs.get(path) is Some(doc) &&
           doc.review is Some({ working_generation: current, .. }) &&
-          current == generation else {
+          current == generation &&
+          (!stale_file_link || doc.state is TabLoading) else {
           return (@cmd.none, state)
         }
         let docs = state.docs.copy()
