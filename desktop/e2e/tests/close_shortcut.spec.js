@@ -85,7 +85,7 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
   await toggle.click();
   await expect(toggle).toHaveAccessibleName('Show sidebar');
   await expect.poll(async () => (await toggle.boundingBox()).x).toBe(88);
-  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
+  await page.getByRole('button', { name: 'Collapse right panel', exact: true }).click();
   await toggle.click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
@@ -112,14 +112,14 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Launcher tabs receive focus and Close never closes the window', async ({ page }) => {
+test('Navigator launchers receive focus without creating tabs', async ({ page }) => {
   const app = await installDesktop(page);
   app.gitChanges = [];
   const tabs = page.locator('.editor-tab');
   for (const name of ['Review', 'Files', 'Search']) {
     await page.getByRole('button', { name: 'Show panel', exact: true }).click();
     await page.getByRole('button', { name: new RegExp(`^${name} `) }).click();
-    await expect(tabs).toHaveCount(1);
+    await expect(tabs).toHaveCount(0);
     if (name === 'Review') {
       await expect(page.getByText('No changed files.', { exact: true })).toBeVisible();
     }
@@ -138,7 +138,8 @@ test('Selecting a dock tab moves focus out of the composer', async ({ page }) =>
   const app = await installDesktop(page);
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await page.getByRole('button', { name: /^Review / }).click();
-  const review = page.locator('.editor-tab', { hasText: 'Review Changes' });
+  await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+  const review = page.locator('.editor-tab', { hasText: 'main.mbt' });
   await page.getByTitle('New tab', { exact: true }).click();
   await page.getByRole('button', { name: /^Browse / }).click();
   await page.locator('#task').click();

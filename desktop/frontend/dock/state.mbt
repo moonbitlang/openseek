@@ -31,9 +31,6 @@ pub(all) enum DockTab {
   // id keys the `preview` package's page state and the host's view. Page
   // ids are global, so a parked strip's tabs keep naming their pages.
   Browser(id~ : Int)
-  // The transient open-a-file tab (at most one): the file view's tree with
-  // a pick-a-file placeholder. Picking a file replaces it in place.
-  FilePicker
   // The subagent viewer this enum's comment anticipated: every workflow the
   // conversation's snippets announced, one row per subagent, each a click
   // from that child's own transcript. At most one lives in the strip.

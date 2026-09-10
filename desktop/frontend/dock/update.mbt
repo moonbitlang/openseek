@@ -84,37 +84,10 @@ pub fn open_browser(state : State, id : Int) -> State {
 }
 
 ///|
-/// Open the transient file-picker tab, re-activating the existing one — at
-/// most one lives in the strip.
-pub fn open_picker(state : State) -> State {
-  open_tab(state, FilePicker)
-}
-
-///|
 /// Open the workflows tab, re-activating the existing one — at most one
 /// lives in the strip.
 pub fn open_workflows(state : State) -> State {
   open_tab(state, Workflows)
-}
-
-///|
-/// A file was picked while the picker tab is in the strip: the picker is
-/// replaced in place by that file's tab — unless the file is already open,
-/// in which case its existing tab activates and the picker closes. Without
-/// a picker this is a plain `open_file`.
-pub fn resolve_pick(state : State, path : @pathx.Relative) -> State {
-  guard tab_index(state, FilePicker) is Some(picker_index) else {
-    return open_file(state, path)
-  }
-  let file = DockTab::File(path~)
-  if tab_index(state, file) is Some(_) {
-    let tabs = state.tabs.filter(entry => !(entry is FilePicker))
-    { ..state, tabs, active: Some(file), }
-  } else {
-    let tabs = state.tabs.copy()
-    tabs[picker_index] = file
-    { ..state, tabs, active: Some(file), }
-  }
 }
 
 ///|

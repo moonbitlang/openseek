@@ -178,8 +178,7 @@ pub fn launcher_pane(actions : LauncherActions) -> @html.Html {
 }
 
 ///|
-/// The panel's top bar: the open tabs, the `+` launcher popup, and the
-/// whole-panel toggle riding the right edge. Always rendered so the panel's
+/// The viewer's tab strip and `+` launcher popup. Always rendered so the panel's
 /// child order stays structural. Clicking a tab activates it; the `×`
 /// closes it without activating (the close click must not bubble into the
 /// tab's own handler).
@@ -189,12 +188,9 @@ pub fn tabs_bar(
   chips : Array[TabChip],
   actions : LauncherActions,
   menu_open~ : Bool,
-  expanded~ : Bool,
   toggle_menu~ : @cmd.Cmd,
   close_all_tabs~ : @cmd.Cmd,
   close_all_tabs_disabled~ : Bool,
-  toggle_expanded~ : @cmd.Cmd,
-  toggle_panel~ : @cmd.Cmd,
 ) -> @html.Html {
   let tabs : Array[@html.Html] = []
   for chip in chips {
@@ -250,6 +246,25 @@ pub fn tabs_bar(
       on_click=toggle_menu,
       @icons.icon(@icons.icon_add),
     ),
+  ]
+  if menu_open {
+    // No backdrop element: the frontend package installs a click-away
+    // dismissal that does not consume the click that closes it.
+    children.push(@html.div(class="dock-menu", launcher_rows(actions)))
+  }
+  @html.div(class="editor-tabsbar", children)
+}
+
+///|
+/// The region header sits above both the shared viewer and workspace navigator;
+/// these controls affect the whole region, independently of its selected tab.
+pub fn panel_header(
+  expanded~ : Bool,
+  toggle_expanded~ : @cmd.Cmd,
+  toggle_panel~ : @cmd.Cmd,
+) -> @html.Html {
+  @html.div(class="workspace-panel-header", [
+    @html.span(class="workspace-panel-title", "Workspace"),
     @html.button(
       class="panel-toggle panel-expand",
       title=if expanded { "Restore panel" } else { "Expand panel" },
@@ -260,16 +275,11 @@ pub fn tabs_bar(
       @icons.icon(if expanded { icon_restore_panel } else { icon_expand_panel }),
     ),
     @html.button(
-      class="panel-toggle",
-      title="Hide panel",
+      class="panel-toggle panel-collapse",
+      title="Collapse right panel",
+      attrs=@html.Attrs::build().aria_label("Collapse right panel"),
       on_click=toggle_panel,
       @icons.icon(@icons.icon_layout_sidebar_right),
     ),
-  ]
-  if menu_open {
-    // No backdrop element: the frontend package installs a click-away
-    // dismissal that does not consume the click that closes it.
-    children.push(@html.div(class="dock-menu", launcher_rows(actions)))
-  }
-  @html.div(class="editor-tabsbar", children)
+  ])
 }

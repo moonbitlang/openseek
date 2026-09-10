@@ -25,7 +25,6 @@ test "new reviews default to the full diff" {
   let path = @pathx.Relative("src/main.mbt")
   let change = test_modified_change(path)
   let state = owned_state()
-  assert_true(state.review_view_mode is ReviewDiff)
   assert_true(state.review_diff_layout is ReviewSideBySide)
   assert_false(state.review_diff_navigation_available)
   let (_, opened) = open_changed_document(
@@ -157,7 +156,7 @@ test "full diff layout toggles independently and source mode preserves it" {
 }
 
 ///|
-test "full diff remains selected when opening another changed file" {
+test "Content and Diff selections belong to their own file tabs" {
   let first_path = @pathx.Relative("src/first.mbt")
   let second_path = @pathx.Relative("src/second.mbt")
   let first_change = test_modified_change(first_path)
@@ -176,10 +175,9 @@ test "full diff remains selected when opening another changed file" {
   let (_, full_diff) = update(
     test_emit(),
     ToggleReviewDiff,
-    { ..owned_state(), docs, review_view_mode: ReviewSource, },
+    { ..owned_state(), docs, },
     first_ctx,
   )
-  assert_true(full_diff.review_view_mode is ReviewDiff)
   assert_true(
     full_diff.docs.get(first_path)
     is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. }),
@@ -215,11 +213,12 @@ test "full diff remains selected when opening another changed file" {
     { ..switched, docs: loaded_docs, },
     second_ctx,
   )
-  assert_true(source_again.review_view_mode is ReviewSource)
-  for path in [first_path, second_path] {
-    assert_true(
-      source_again.docs.get(path)
-      is Some({ review: Some({ view_mode: ReviewSource, .. }), .. }),
-    )
-  }
+  assert_true(
+    source_again.docs.get(first_path)
+    is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. }),
+  )
+  assert_true(
+    source_again.docs.get(second_path)
+    is Some({ review: Some({ view_mode: ReviewSource, .. }), .. }),
+  )
 }

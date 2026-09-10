@@ -338,8 +338,7 @@ fn State::current_review_generation(
     files.contains(change) &&
     self.docs.get(change.path) is Some({ review: Some(review), .. }) &&
     review.selected == change &&
-    review.view_mode is ReviewDiff &&
-    self.review_view_mode is ReviewDiff else {
+    review.view_mode is ReviewDiff else {
     return None
   }
   Some(review.diff_loading_generation())
