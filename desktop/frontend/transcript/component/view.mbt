@@ -279,8 +279,8 @@ fn tool_result_row_is_visible(call : @transcript.ToolCall) -> Bool {
 ///|
 /// One recorded tool request, always on display as its own row. Its brief is
 /// the result-derived caption the viz renderer also promotes onto the call;
-/// expanding reveals only what the model sent. Failed calls read red and carry
-/// a literal marker, while their separate result row owns the output.
+/// expanding reveals only what the model sent. Failed calls carry a status
+/// icon, while their separate result row owns the output and failure stage.
 fn tool_request_view(
   call : @transcript.ToolCall,
   sequence? : Int,
@@ -294,7 +294,13 @@ fn tool_request_view(
     Pending(..) => (false, None)
   }
   let label = if brief is Some(brief) && !brief.is_blank() {
-    brief
+    // The trailing status icon already conveys mbtx's outcome. Keep other
+    // briefs, including background handoffs with their job id.
+    if name == "mbtx" && brief.has_prefix("mbtx (") {
+      name
+    } else {
+      brief
+    }
   } else if wait_label is Some(label) {
     label
   } else if pending_job_wait_label(call) is Some(label) {
@@ -312,24 +318,15 @@ fn tool_request_view(
   }
   let error_class = (if is_error { " error" } else { "" }) +
     failure_stage_class(name, brief, is_error, Some(arguments))
-  // The row's always-visible line: the brief, a literal marker when the
-  // result errored and the brief does not already carry the state in words
-  // (see `failure_marker`), and — for an applied `plan` call — the compact
-  // progress meter. `fold_progress` renders nothing for every other call.
+  // mbtx uses the trailing icon for status and its result row for the failure
+  // stage. Other tools keep their failure marker; applied plans also show
+  // their compact progress meter.
   let line : Array[@html.Html] = [
     @html.span(class="tool-flow", "→"),
     @html.span(class="tool-call-text", label),
   ]
-  if failure_marker(
-      name,
-      brief,
-      is_error,
-      Some(arguments),
-      // The request row's label is the brief whenever one exists.
-      brief_shown=brief is Some(brief) && !brief.is_blank(),
-    )
-    is Some(marker) {
-    line.push(marker)
+  if is_error && name != "mbtx" {
+    line.push(@html.span(class="tool-call-failed", "failed"))
   }
   line.push(@plan.fold_progress(call))
   line.push(ToolStatus(call.outcome).view())
@@ -468,17 +465,7 @@ fn result_row_view(
     @html.span(class="tool-flow", "←"),
     @html.span(class="tool-result-text", label),
   ]
-  if failure_marker(
-      name,
-      brief,
-      is_error,
-      arguments,
-      // The result row shows the brief as its label only for the
-      // argument-less shape (the first `label` arm above); the common
-      // "Tool error · mbtx" label carries no brief, so the stage word stays.
-      brief_shown=arguments is None && brief is Some(brief) && !brief.is_blank(),
-    )
-    is Some(marker) {
+  if failure_marker(name, brief, is_error, arguments) is Some(marker) {
     line.push(marker)
   }
   if status is Some(status) {

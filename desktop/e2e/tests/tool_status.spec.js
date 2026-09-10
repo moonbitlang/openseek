@@ -78,10 +78,12 @@ for (const isError of [false, true]) {
       event: { sequence: 3, item: { kind: 'tool_result', payload: {
         tool_call_id: 'status-call', tool_name: 'mbtx',
         content: isError ? 'Command failed' : 'status', is_error: isError,
-        brief: isError ? 'Check failed' : 'Check succeeded',
+        brief: isError ? 'mbtx (build failed, exit=1)' : 'mbtx (exit=0)',
       } } },
     });
     const status = summary.getByRole('img', { name: isError ? 'Tool failed' : 'Tool succeeded' });
+    await expect(summary.locator('.tool-call-text')).toHaveText('mbtx · Check tool status');
+    await expect(summary.locator('.tool-call-failed')).toHaveCount(0);
     await expect(status).toBeVisible();
     await expect(status.locator('svg')).toHaveCount(1);
     await expect(summary.locator('.tool-status-spinner')).toHaveCount(0);
@@ -90,6 +92,9 @@ for (const isError of [false, true]) {
     // Output has its own fold, but must not duplicate the request's state icon.
     await expect(page.locator('.tool-result')).toHaveCount(1);
     await expect(page.locator('.tool-result .tool-status')).toHaveCount(0);
+    if (isError) {
+      await expect(page.locator('.tool-result .tool-stage-build')).toHaveText('build error');
+    }
     await expect(page.locator('.tool-call-label .tool-status-spinner')).toBeVisible();
     expect(app.pageErrors).toEqual([]);
   });

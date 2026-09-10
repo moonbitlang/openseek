@@ -155,33 +155,21 @@ fn mbtx_failure_stage(
 }
 
 ///|
-/// The literal word beside a failed row's label — only where it ADDS one.
-/// `brief_shown` says whether this row's label IS the brief: there a
-/// build-stage marker would repeat the label verbatim ("mbtx (build failed,
-/// exit=1) build error"), so the row says its state through the brief itself,
-/// restyled amber by `failure_stage_class`. A result row labeled
-/// "Tool error · mbtx" shows no brief, so it keeps the "build error" word —
-/// in a parallel burst the result rows sit apart from their requests, and
-/// amber alone must not carry the stage there. A runtime marker always
-/// stays: "exit=1" never names the stage. Every other failed row keeps the
-/// generic word.
+/// Result rows name the failure stage, since parallel calls can separate them
+/// from their requests. Without recorded arguments, the result's label is its
+/// brief, which already names build failures. mbtx request rows use their
+/// status icon instead.
 fn failure_marker(
   name : String,
   brief : String?,
   is_error : Bool,
   arguments : String?,
-  brief_shown~ : Bool,
 ) -> @html.Html? {
   guard is_error else { return None }
   match mbtx_failure_stage(name, brief, is_error, arguments) {
+    Some(BuildError) if arguments is None => None
     Some(BuildError) =>
-      if brief_shown {
-        None
-      } else {
-        Some(
-          @html.span(class="tool-call-failed tool-stage-build", "build error"),
-        )
-      }
+      Some(@html.span(class="tool-call-failed tool-stage-build", "build error"))
     Some(RuntimeError) =>
       Some(@html.span(class="tool-call-failed tool-stage-run", "runtime error"))
     None => Some(@html.span(class="tool-call-failed", "failed"))
@@ -190,8 +178,7 @@ fn failure_marker(
 
 ///|
 /// The stage modifier for a failed row's container class: build failures read
-/// amber (the fix lives in the source, and their brief carries the literal
-/// stage words), runtime failures keep the error red.
+/// amber (the fix lives in the source), runtime failures keep the error red.
 fn failure_stage_class(
   name : String,
   brief : String?,
