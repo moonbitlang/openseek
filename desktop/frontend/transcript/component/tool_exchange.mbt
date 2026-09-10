@@ -33,6 +33,9 @@ fn tool_exchange_view(
         Some(content),
       )
   }
+  let compact_mbtx = name == "mbtx" &&
+    !is_error &&
+    (brief is None || brief is Some("mbtx (exit=0)"))
   let label = if wait_label is Some(label) {
     label
   } else if pending_job_wait_label(call) is Some(label) {
@@ -43,9 +46,13 @@ fn tool_exchange_view(
     fields.get("path") is Some(String(path)) {
     "Read · " + path
   } else {
-    let label = match brief {
-      Some(text) if !text.is_blank() => text
-      _ => name
+    let label = if compact_mbtx {
+      "🐇"
+    } else {
+      match brief {
+        Some(text) if !text.is_blank() => text
+        _ => name
+      }
     }
     if name == "mbtx" &&
       call.arguments is Some(arguments) &&
@@ -128,6 +135,9 @@ fn tool_exchange_view(
     key,
     subrun?,
   )
+  if compact_mbtx && brief is Some(text) {
+    output_sections.insert(0, @html.div(class="tool-caption", text))
+  }
   if output_sections.is_empty() {
     output_sections.push(
       @html.div(class="tool-call-section", [
@@ -155,7 +165,14 @@ fn tool_exchange_view(
     [
       @html.summary(
         class="work-toggle tool-toggle",
-        attrs=@html.Attrs::build().aria_label(caption + " — " + status),
+        attrs=@html.Attrs::build()
+          .aria_label(
+            (if compact_mbtx { "mbtx · " } else { "" }) +
+            caption +
+            " — " +
+            status,
+          )
+          .title(name),
         [
           @html.span(class="work-chevron", @icons.icon_chevron_down()),
           @html.span(class="tool-call-text", caption),
