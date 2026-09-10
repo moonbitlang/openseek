@@ -94,4 +94,4 @@ viz-test-browser:
 
 # Exercise bundled agent workflows against an offline child contract.
 test-workflows:
-    moon run tests/integration/workflows --target native
+    moon run tests/integration/workflows

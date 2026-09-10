@@ -40,7 +40,7 @@ registration gaps, errors, timeouts, and diagnostic argument lists.
 Run the same suite directly with:
 
 ```sh
-moon run tests/integration/workflows --target native
+moon run tests/integration/workflows
 ```
 
 The native CI job runs that command too, since its target matrix does not invoke

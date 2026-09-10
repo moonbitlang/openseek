@@ -149,7 +149,7 @@ jobs:
       # Proton, so run it only after GTK/X11 and the CEF runtime are ready.
       - name: Bundled workflows (offline child contract)
         if: matrix.target == 'native'
-        run: moon run tests/integration/workflows --target native
+        run: moon run tests/integration/workflows
 
       - name: Test native target
         # No Xvfb: nothing here initializes CEF or opens a window. That was
