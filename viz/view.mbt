@@ -1043,7 +1043,9 @@ fn tool_call_view(
     @html.text("→ "),
     @html.strong(call.name),
   ]
-  if briefs.get(call.id) is Some(brief) && !brief.is_blank() {
+  if call_brief_display(briefs.get(call.id), failed.contains(call.id))
+    is Some(brief) &&
+    !brief.is_blank() {
     name_row.push(@html.span(class="tool-call-brief") <| " · \{brief}")
   }
   if call.name == "mbtx" {
@@ -1275,13 +1277,14 @@ fn scalar_text(value : Json) -> String {
 /// view (it shows every event); the model view instead uses
 /// `model_tool_call_briefs` so it never captions a compacted/healed call. Only
 /// results that carry a brief appear; older logs and briefless tools produce no
-/// entry (the call renders as a plain name).
+/// entry. Keep these raw for classification; the call renderer adds status.
 fn tool_call_briefs(session : @agent_session.Session) -> Map[String, String] {
   let briefs : Map[String, String] = Map([])
   for event in session.events() {
     if event.item() is Tool(result) {
-      if call_brief_display(result.brief(), result.is_error()) is Some(display) {
-        briefs.set(result.tool_call_id(), display)
+      match result.brief() {
+        Some(brief) => briefs.set(result.tool_call_id(), brief)
+        None => briefs.remove(result.tool_call_id())
       }
     }
   }
@@ -2131,9 +2134,11 @@ fn model_tool_call_briefs(
   let briefs : Map[String, String] = Map([])
   for message in messages {
     guard message.role is Tool(id) else { continue }
-    if model_shown_result(message, tool_results) is Some(result) &&
-      call_brief_display(result.brief(), result.is_error()) is Some(display) {
-      briefs.set(id, display)
+    if model_shown_result(message, tool_results) is Some(result) {
+      match result.brief() {
+        Some(brief) => briefs.set(id, brief)
+        None => briefs.remove(id)
+      }
     }
   }
   briefs

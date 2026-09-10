@@ -39,30 +39,39 @@ test('session filters and argument modes change what the reader can see', async 
   expect(viewer.pageErrors).toEqual([]);
 });
 
-test('build-error filter separates build diagnostics from other failures', async ({ page }) => {
-  const viewer = new VizBrowserHarness(page);
-  await viewer.install();
-  await viewer.goto();
-  await viewer.openSession();
-  await page.getByRole('button', { name: 'Raw log' }).click();
+for (const mode of ['Raw log', 'Model view']) {
+  test(`build-error filter separates build diagnostics from other failures in ${mode}`, async ({ page }) => {
+    const viewer = new VizBrowserHarness(page);
+    await viewer.install();
+    await viewer.goto();
+    await viewer.openSession();
+    await page.getByRole('button', { name: mode, exact: true }).click();
 
-  const buildFailure = page.locator('details.card').filter({ hasText: 'type mismatch' });
-  const buildCall = page.locator('summary.tool-call-name').filter({ hasText: 'Check <compiler> diagnostics' });
-  await expect(buildCall).toBeVisible();
-  await expect(buildCall).toContainText('mbtx build');
-  const runtimeFailure = page.locator('details.card').filter({ hasText: 'runtime trap' });
-  const shellFailure = page.locator('details.card').filter({ hasText: 'fixture failure' });
-  await page.getByRole('button', { name: 'Build errors only', exact: true }).click();
-  await expect(buildFailure).toBeVisible();
-  await expect(runtimeFailure).toBeHidden();
-  await expect(shellFailure).toBeHidden();
+    const buildFailure = page.locator('details.card').filter({ hasText: 'type mismatch' });
+    const buildCall = page.locator('summary.tool-call-name').filter({ hasText: 'Check <compiler> diagnostics' });
+    const runtimeCall = page.locator('summary.tool-call-name').filter({ hasText: 'mbtx run' });
+    await expect(buildCall).toBeVisible();
+    await expect(buildCall).toContainText('mbtx build 🚩');
+    await expect(page.locator('.tool-call-build-failed')).toContainText('Check <compiler> diagnostics');
+    await expect(page.locator('.tool-call-run-failed')).toContainText('runtime error');
+    const runtimeFailure = page.locator('details.card').filter({ hasText: 'runtime trap' });
+    const shellFailure = page.locator('details.card').filter({ hasText: 'fixture failure' });
+    await page.getByRole('button', { name: 'Build errors only', exact: true }).click();
+    await expect(buildFailure).toBeVisible();
+    await expect(buildCall).toBeVisible();
+    await expect(runtimeCall).toBeHidden();
+    await expect(runtimeFailure).toBeHidden();
+    await expect(shellFailure).toBeHidden();
 
-  await page.getByRole('button', { name: 'Errors only', exact: true }).click();
-  await expect(buildFailure).toBeVisible();
-  await expect(runtimeFailure).toBeVisible();
-  await expect(shellFailure).toBeVisible();
-  expect(viewer.pageErrors).toEqual([]);
-});
+    await page.getByRole('button', { name: 'Errors only', exact: true }).click();
+    await expect(buildFailure).toBeVisible();
+    await expect(buildCall).toBeVisible();
+    await expect(runtimeCall).toBeVisible();
+    await expect(runtimeFailure).toBeVisible();
+    await expect(shellFailure).toBeVisible();
+    expect(viewer.pageErrors).toEqual([]);
+  });
+}
 
 test('a dropped session file replaces the served selection without another fetch', async ({ page }) => {
   const viewer = new VizBrowserHarness(page);
