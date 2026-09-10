@@ -1017,13 +1017,13 @@ fn subrun_child_refs(
     id=parent_row.id,
     system_prompt="",
   )
-  let refs : Array[(String, String)] = []
-  for child_id in @viz.subrun_child_ids(session, parent_row.id) {
-    if resolve_session_key(model.sessions, child_id) is Some(key) {
-      refs.push((child_id, key))
-    }
-  }
-  refs
+  [
+    for child_id in @viz.subrun_child_ids(session, parent_row.id) if resolve_session_key(
+      model.sessions,
+      child_id,
+    )
+    is Some(key) => (child_id, key)
+  ]
 }
 
 ///|
@@ -1209,18 +1209,17 @@ fn sidebar_list(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
   if model.sessions.is_empty() {
     return @html.div(class="sidebar-empty") <| "no sessions found"
   }
-  let sections : Array[@html.Html] = []
-  for group in sidebar_groups(model.sessions) {
-    let rows = sidebar_nested_rows(
-      emit,
-      model,
-      model.sessions.filter(row => {
-        session_group(row.root_label, row.is_marker) == group
-      }),
-    )
-    let collapsed = root_collapsed(model, group)
-    let display = group_display(group)
-    sections.push(
+  let sections : Array[@html.Html] = [
+    for group in sidebar_groups(model.sessions) => {
+      let rows = sidebar_nested_rows(
+        emit,
+        model,
+        model.sessions.filter(row => {
+          session_group(row.root_label, row.is_marker) == group
+        }),
+      )
+      let collapsed = root_collapsed(model, group)
+      let display = group_display(group)
       @html.div(class=class_with("session-root", "collapsed", collapsed)) <| [
         @html.button(
           class="session-root-toggle",
@@ -1244,9 +1243,9 @@ fn sidebar_list(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
         } else {
           @html.ul(class="session-root-sessions") <| rows
         },
-      ],
-    )
-  }
+      ]
+    }
+  ]
   @html.div(class="session-list") <| sections
 }
 
