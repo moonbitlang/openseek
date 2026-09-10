@@ -8,6 +8,8 @@ import {
 }
 
 // Values
+pub const DefaultSubmoduleCheckoutTimeoutSeconds : Int = 30
+
 pub fn approval(String, allow~ : Bool) -> @openseek_protocol.Command
 
 pub fn cancel() -> @openseek_protocol.Command
