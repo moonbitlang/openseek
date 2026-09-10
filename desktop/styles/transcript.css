@@ -1070,8 +1070,8 @@
   color: var(--color-text-faint);
   text-align: center;
 }
-/* Reserve the trailing state column even for a long or wrapped caption.
-   The disclosure arrow remains a separate control beside it. */
+/* Keep status at the far right, after the summary's ::after disclosure arrow.
+   The arrow stays beside the caption while the auto margin separates status. */
 .tool-status {
   display: inline-flex;
   align-items: center;
@@ -1081,6 +1081,7 @@
   width: 16px;
   height: 16px;
   margin-left: auto;
+  order: 1;
 }
 .tool-status.failed {
   color: var(--color-danger);
@@ -1141,10 +1142,9 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
-/* The trailing marker belongs to rows that own a fold; `.tool-call-label`
-   rows have nothing to disclose and stay bare. It is the summary's own last
-   flex item rather than part of the text span, so a truncated brief cannot
-   ellipsize it away. */
+/* The marker belongs to rows that own a fold; `.tool-call-label` rows have
+   nothing to disclose and stay bare. Its separate flex item follows the
+   caption but precedes status, and cannot be ellipsized with a long brief. */
 .tool-call-summary::after,
 .tool-result-summary::after {
   content: "▸";
