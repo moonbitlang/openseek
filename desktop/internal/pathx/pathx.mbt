@@ -85,7 +85,8 @@ pub fn Absolute::to_path(self : Absolute) -> Path {
 ///|
 /// Encode this host-native absolute path as the slash-rooted path component
 /// carried by frontend resource URIs. POSIX paths already have that form;
-/// Windows drive paths gain the URI root slash (`C:\\work` -> `/C:/work`).
+/// Windows drive paths gain the URI root slash and a lowercase drive letter
+/// (`C:\\Work` -> `/c:/Work`), matching frontend URI serialization.
 ///
 /// UNC and Windows root-relative paths return `None`: a frontend resource URI
 /// uses its authority for the owning device, so it has no second authority in
@@ -101,10 +102,11 @@ pub fn Absolute::to_uri_path(self : Absolute) -> String? {
   let normalized = @path.Path(self.0).normalize().to_string()
   if @path.sep == '\\' {
     let normalized = normalized.replace_all(old="\\", new="/")
-    guard normalized is [drive, ':', '/', ..] && drive.is_ascii_path_drive() else {
+    guard normalized is [drive, ':', '/', .. rest] &&
+      drive.is_ascii_path_drive() else {
       return None
     }
-    Some("/" + normalized)
+    Some("/\{drive.to_ascii_lowercase()}:/\{rest}")
   } else {
     Some(normalized)
   }

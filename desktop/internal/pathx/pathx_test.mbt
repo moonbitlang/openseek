@@ -242,7 +242,15 @@ test "resource URI conversion rejects double-rooted POSIX paths" {
 #cfg(platform="windows")
 test "Windows drive paths round-trip through URI paths" {
   let absolute = absolute_fixture("C:\\work\\a b\\#file.mbt")
-  assert_eq(absolute.to_uri_path(), Some("/C:/work/a b/#file.mbt"))
+  assert_eq(absolute.to_uri_path(), Some("/c:/work/a b/#file.mbt"))
+  assert_eq(
+    absolute_fixture("c:\\work\\a b\\#file.mbt").to_uri_path(),
+    absolute.to_uri_path(),
+  )
+  assert_eq(
+    absolute_fixture("C:\\Users\\mbt\\Workspace\\tty").to_uri_path(),
+    Some("/c:/Users/mbt/Workspace/tty"),
+  )
   assert_true(
     @pathx.Absolute::from_uri_path("/C:/work/a b/#file.mbt") is Some(decoded) &&
     decoded.normalize() == absolute.normalize(),

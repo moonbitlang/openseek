@@ -25,12 +25,12 @@ async test "Codex thread resources roundtrip through host workspace grants" {
     "/work/project"
   }
   let resource = if @platform.win32 || @platform.win64 {
-    "/C:/work/project"
+    "/c:/work/project"
   } else {
     "/work/project"
   }
   let frontend = if @platform.win32 || @platform.win64 {
-    "/c:/work/project"
+    "/C:/work/project"
   } else {
     resource
   }
@@ -67,5 +67,10 @@ async test "Codex thread resources roundtrip through host workspace grants" {
     is Some(authorized) else {
     fail("expected the frontend resource to resolve to the native cwd")
   }
-  assert_eq(authorized.to_path().normalize(), @pathx.Path(native).normalize())
+  guard @pathx.Path(native).to_absolute() is Some(root) else {
+    fail("expected a native absolute path")
+  }
+  assert_true(
+    authorized.relative_to(root~) is Some(relative) && relative.is_root(),
+  )
 }

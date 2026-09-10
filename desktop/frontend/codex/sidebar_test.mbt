@@ -1,4 +1,37 @@
 ///|
+test "Windows Codex resource paths match registered sidebar projects" {
+  let channel = @interop.ChannelId::Local
+  // The host's to_uri_path canonicalizes the drive before publishing either
+  // draft/thread metadata or registered projects. URI parsing preserves it.
+  let root = "/c:/Users/mbt/Workspace/tty"
+  guard @resource.of_path(channel, root) is Some(project) else {
+    fail("expected a Windows project resource")
+  }
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "windows-thread",
+      "cwd": root + "/.worktrees/wt-1",
+      "projectRoot": root,
+      "preview": "New chat",
+      "turns": [],
+    },
+  })
+  let context : @codex.SidebarContext = {
+    channel,
+    selected: true,
+    registered_projects: [project.path],
+  }
+  let rows = state.project_conversations(context, project.path)
+  assert_eq(rows.length(), 1)
+  assert_true(rows[0].input.nested)
+  assert_eq(
+    state.project_activation(context, project.path),
+    Some("windows-thread"),
+  )
+  assert_eq(state.loose_entries(context).length(), 0)
+}
+
+///|
 test "Codex threads nest under their registered project row" {
   let state = @codex.State::from_thread_snapshot({
     "thread": {
