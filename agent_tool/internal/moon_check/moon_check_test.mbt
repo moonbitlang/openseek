@@ -47,6 +47,7 @@ test "format output keeps successful and truncated metadata" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "nearest project dir prefers the closest module or workspace" {
   @vfs.with_tmpdir(prefix="openseek-moon-check-root-", dir => {
     let module_dir = "\{dir}/packages/demo"

@@ -67,6 +67,7 @@ pub async fn prepared_home(runtime_dir : @pathx.Path) -> @pathx.Path? {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "codex home is a codex subdirectory of the runtime dir" {
   let home = home_dir(Path("/tmp/openseek-state"))
   assert_eq(home.to_string(), "/tmp/openseek-state/codex")

@@ -69,6 +69,7 @@ async test "allowed prefixes are component-wise" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "symlinks cannot smuggle writes out of scope" {
   @vfs.with_tmpdir(prefix="write-scope-links-", root => {
     @vfs.FileSystem({

@@ -14,6 +14,7 @@ async fn flaky_server(
   }
   let hits : Ref[Int] = { val: 0, }
   group.spawn_bg(no_wait=true) <| () => {
+    defer server.close()
     server.run_forever(
       (_request, body, conn) => {
         let _ = body.read_all()
@@ -164,6 +165,7 @@ async test "streaming chat retries a pre-delta stream drop" {
     }
     let hits : Ref[Int] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
+      defer server.close()
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
@@ -206,6 +208,7 @@ async test "streaming chat never retries after the first delta" {
     }
     let hits : Ref[Int] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
+      defer server.close()
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
@@ -250,6 +253,7 @@ async test "streaming chat retries after a delta when the consumer opts in" {
     }
     let hits : Ref[Int] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
+      defer server.close()
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()
@@ -312,6 +316,7 @@ async test "streaming chat never retries after a tool-call-only delta" {
     }
     let hits : Ref[Int] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
+      defer server.close()
       server.run_forever(
         (_request, body, conn) => {
           let _ = body.read_all()

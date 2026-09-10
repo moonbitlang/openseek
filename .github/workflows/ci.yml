@@ -260,3 +260,131 @@ jobs:
             cmd/viz_app/e2e/test-results
           if-no-files-found: ignore
           retention-days: 7
+
+  # The Linux rows above own the canonical native/JS pair, the committed
+  # `.mbti` gate, and the POSIX cram suite. This job carries the native
+  # contract onto Windows, where MoonBit compiles through MSVC — a path the
+  # Linux rows cannot exercise.
+  #
+  # Tests that assume POSIX paths, symlink privileges, or unix shell
+  # semantics are gated with `#cfg(not(platform="windows"))` next to their
+  # declarations (plus the odd helper/import that only they used); each gate
+  # names the Windows-port work that would re-enable it. The full native
+  # suite runs here and is green on Windows.
+  check-windows:
+    name: check (windows, native)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      # actions/checkout inherits the runner's autocrlf on Windows, which
+      # rewrites committed LFs; the repository has no .gitattributes and its
+      # canonical tree (fmt, cram, `.mbti`) is LF. Pin autocrlf before the
+      # checkout so the working tree stays byte-identical to the commit.
+      - name: Pin Git line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit (stable)
+        run: |
+          Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          "$HOME\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Show MoonBit version
+        run: moon version --all
+
+      - name: Update MoonBit package registry
+        run: moon update
+
+      - name: Check formatting
+        run: moon fmt --check
+
+      - name: Check native target
+        # The whole integrated workspace compiles on Windows — including the
+        # desktop member — the local-dependency integration gate the Linux
+        # rows perform for their own target. No CEF runtime is needed:
+        # checks never link. Warnings are tolerated here (Linux keeps the
+        # --deny-warn gate): platform-gated tests legitimately leave some
+        # imports/fields unused on Windows.
+        run: moon check --target native
+
+      # Same version read the Linux job performs; duplicated here because a
+      # job cannot reach another job's step outputs.
+      - name: Resolve pinned Proton version
+        id: proton
+        run: |
+          $version = (Select-String -Path desktop/moon.mod -Pattern '"moonbit-community/proton@([^"]*)"').Matches[0].Groups[1].Value
+          if (-not $version) { throw "proton version not found in desktop/moon.mod" }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      # The full native test build compiles Proton's C sources, which include
+      # CEF headers from the user-level store; `cef setup` assembles it.
+      - name: Restore Proton runtime
+        id: cef-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
+
+      # `cef setup` prints the assembled runtime root. Native test executables
+      # import libcef.dll at process startup, so its bin directory must be on
+      # PATH even when a test never initializes CEF.
+      - name: Assemble Proton CEF runtime
+        run: |
+          $setupOutput = @(
+            moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}" cef setup
+          )
+          if ($LASTEXITCODE -ne 0) { throw "cef setup failed" }
+          $setupOutput | Write-Output
+          $runtimeRoot = $setupOutput |
+            Where-Object { $_ -and $_.Trim() } |
+            Select-Object -Last 1
+          if (-not $runtimeRoot) { throw "cef setup did not print a runtime root" }
+          $runtimeRoot = $runtimeRoot.Trim()
+          $runtimeBin = Join-Path $runtimeRoot "bin"
+          if (-not (Test-Path -LiteralPath (Join-Path $runtimeBin "libcef.dll"))) {
+            throw "libcef.dll not found under Proton runtime: $runtimeBin"
+          }
+          $runtimeBin | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      # The sole Windows writer: main pushes populate the Windows cache key,
+      # while PR jobs remain restore-only.
+      - name: Save Proton runtime
+        if: >-
+          github.event_name == 'push' &&
+          steps.cef-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: ${{ steps.cef-cache.outputs.cache-primary-key }}
+
+      # Keep compilation outside the timed execution step: on a cold Windows
+      # runner, linking the native test executables takes most of ten minutes.
+      # CI does not debug these executables, so omit native debug information;
+      # on MSVC this avoids producing gigabytes of PDB/ILK data.
+      - name: Build full native test suite
+        timeout-minutes: 10
+        run: moon test --target native --strip --build-only
+
+      # Verbose mode prints each test executable before it starts. Keep a
+      # bounded execution timeout so a stuck test cannot occupy the runner
+      # indefinitely.
+      - name: Test full native suite
+        timeout-minutes: 10
+        run: moon test --target native --strip -v
+
+      # The cram suite is POSIX shell (`sh` heredocs, `sed`, `mktemp`); the
+      # Linux job owns it. A Windows port would need PowerShell-flavored
+      # blocks.

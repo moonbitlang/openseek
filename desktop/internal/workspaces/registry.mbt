@@ -374,6 +374,7 @@ pub async fn exclude_from_git(dir : @pathx.Absolute, entry : String) -> Unit {
 // live app.
 
 ///|
+#cfg(not(platform="windows"))
 test "a workspace's session store is the engine's in-project default" {
   assert_eq(
     store_root(@pathx.Path("/home/u/proj").resolve()).to_string(),
@@ -382,6 +383,7 @@ test "a workspace's session store is the engine's in-project default" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "workspace paths expand ~ against the home directory" {
   guard @home.dir() is Some(home) else {
     // No home in this environment; nothing to expand against.

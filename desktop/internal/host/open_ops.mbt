@@ -154,6 +154,7 @@ async fn reveal_path_op(payload : OpenPathPayload) -> RevealPathReply {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "reveal_path shares open_path reference refusals" {
   let root = @fs.tmpdir(prefix="openseek-host-reveal-missing-")
   let missing = "\{root}/missing.mbt:12"
@@ -188,6 +189,7 @@ fn refusal(message : String) -> OpenPathReply {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "open_path only requires a working directory for relative or editor paths" {
   let root = @fs.tmpdir(prefix="openseek-host-open-without-cwd-")
   let missing_path = "\{root}/missing.bin"
@@ -222,6 +224,7 @@ async test "open_path only requires a working directory for relative or editor p
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "open_path returns workspace editor positions without a system open" {
   // A kernel-created directory keeps concurrent package tests from racing to
   // create the shared `_build` parent.

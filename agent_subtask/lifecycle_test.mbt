@@ -44,6 +44,7 @@ async fn must_provision(
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "provision, worker edit, capture, integrate — the happy path" {
   @vfs.with_tmpdir(prefix="openseek-subtask-happy-", dir => {
     let repo = seed_repo(dir)
@@ -177,6 +178,7 @@ async test "an empty worker tree resolves to no_changes and releases the slice" 
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "a conflicting merge hands off, continues after resolution" {
   @vfs.with_tmpdir(prefix="openseek-subtask-conflict-", dir => {
     let repo = seed_repo(dir)
@@ -242,6 +244,7 @@ async test "a conflicting merge hands off, continues after resolution" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "integrate refuses a dirty tracked origin; abort restores state" {
   @vfs.with_tmpdir(prefix="openseek-subtask-dirty-", dir => {
     let repo = seed_repo(dir)
@@ -301,6 +304,7 @@ async test "integrate refuses a dirty tracked origin; abort restores state" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "linked worktree provisions and integrates into itself" {
   @vfs.with_tmpdir(prefix="openseek-subtask-precond-", dir => {
     let repo = seed_repo(dir)
@@ -405,6 +409,7 @@ async test "disjoint slices coexist as active reservations" {
 /// capture after further edits stacks a child commit on the same branch; a
 /// second capture with nothing new leaves the prior commit standing instead
 /// of tripping the no-changes cleanup (which would delete validated work).
+#cfg(not(platform="windows"))
 async test "capture is re-entrant: resumed work stacks on the same branch" {
   @vfs.with_tmpdir(prefix="openseek-subtask-resume-", dir => {
     let repo = seed_repo(dir)
@@ -465,6 +470,7 @@ async test "capture is re-entrant: resumed work stacks on the same branch" {
 ///|
 /// resume_running refuses what it must: unknown names, and states without a
 /// kept worktree (a Running slice may still have a live child).
+#cfg(not(platform="windows"))
 async test "resume_running refuses unknown names and running slices" {
   @vfs.with_tmpdir(prefix="openseek-subtask-resume-refuse-", dir => {
     let repo = seed_repo(dir)
@@ -492,6 +498,7 @@ async test "resume_running refuses unknown names and running slices" {
 /// The repair half of continue: a defective re-capture preserves the prior
 /// commit_oid, resume admits the Captured state, and once the intrusion is
 /// reverted the idle re-capture returns to Committed on the SAME commit.
+#cfg(not(platform="windows"))
 async test "captured defects repair through resume and re-capture" {
   @vfs.with_tmpdir(prefix="openseek-subtask-repair-", dir => {
     let repo = seed_repo(dir)
@@ -544,6 +551,7 @@ async test "captured defects repair through resume and re-capture" {
 /// The integration-safety gates: a Conflicted slice and a gone worktree
 /// both refuse resume — continue must never race a half-done merge or
 /// relaunch into a deleted tree.
+#cfg(not(platform="windows"))
 async test "resume_running refuses conflicted slices and gone worktrees" {
   @vfs.with_tmpdir(prefix="openseek-subtask-resume-gates-", dir => {
     let repo = seed_repo(dir)
@@ -595,6 +603,7 @@ async test "resume_running refuses conflicted slices and gone worktrees" {
 /// the repo mutex, so an entry object captured BEFORE a concurrent
 /// continue flipped the slice to Running cannot merge or discard under the
 /// live child.
+#cfg(not(platform="windows"))
 async test "integrate refuses a stale snapshot of a resumed slice" {
   @vfs.with_tmpdir(prefix="openseek-subtask-stale-", dir => {
     let repo = seed_repo(dir)

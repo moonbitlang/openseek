@@ -275,6 +275,7 @@ fn contained_path(
 // the registry and on what is on disk, and is covered by the live app.
 
 ///|
+#cfg(not(platform="windows"))
 test "absolute paths open as themselves" {
   guard @pathx.Path("/home/u/repo").to_absolute() is Some(cwd) else {
     fail("expected an absolute working-directory fixture")
@@ -285,6 +286,7 @@ test "absolute paths open as themselves" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 test "relative paths are taken against the working directory" {
   guard @pathx.Path("/home/u/repo").to_absolute() is Some(cwd) else {
     fail("expected an absolute working-directory fixture")
@@ -332,6 +334,7 @@ test "contained_path keeps in-tree relatives and rejects escapes" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "host-authorized workspaces are exact and session-scoped" {
   let root = @fs.tmpdir(prefix="openseek-authorized-workspace-")
   let session = "codex-authorized-workspace-test"
@@ -367,6 +370,7 @@ async test "host-authorized workspaces are exact and session-scoped" {
 /// so a link *inside* the workspace pointing *outside* it passes that check;
 /// `real_contains` follows the link and rejects it. A real in-tree file passes,
 /// and a path that does not exist has no link to follow so it is trusted.
+#cfg(not(platform="windows"))
 async test "real_contains rejects a symlink escaping the boundary" {
   let root = @fs.tmpdir(prefix="openseek-boundary-")
   let outside = @fs.tmpdir(prefix="openseek-outside-")

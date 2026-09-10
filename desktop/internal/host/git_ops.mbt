@@ -1918,6 +1918,7 @@ async fn git_test_commit(dir : String, message : String) -> Unit {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "Git history pages stay pinned and commit changes use first parent" {
   let dir = @fs.tmpdir(prefix="openseek-git-history-")
   let _ = {
@@ -2176,6 +2177,7 @@ async test "ordinary checkout reviews retain committed branch changes" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "Git snapshots pair status with HEAD and supplied revisions stay pinned" {
   let dir = @fs.tmpdir(prefix="openseek-git-review-")
   defer git_test_cleanup(dir)

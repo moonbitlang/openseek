@@ -1,4 +1,5 @@
 ///|
+#cfg(not(platform="windows"))
 async test "deterministic harness exercises every tool" {
   let report = @tool_harness.run_harness()
   assert_eq(report.rows.length(), 7)

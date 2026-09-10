@@ -148,7 +148,7 @@ async test "save and run creates parents, suggests reuse, and preserves existing
     assert_true(out.content.contains("42"))
     assert_true(out.content.contains("{\"filename\":\"scripts/check.mbtx\"}"))
     assert_true(out.content.contains("omit source"))
-    let path = "\{ws}/scripts/check.mbtx"
+    let path = @workspace_path.resolve(ws, "scripts/check.mbtx")
     assert_eq(@fs.read_file(path).text(), source)
     assert_true(
       state.created_and_unchanged(path, @agent_tool.content_digest(source)),
@@ -532,6 +532,7 @@ async fn sandbox_enforcement_available() -> Bool {
 /// it will look. Under a policy moonrun takes that base path from the POLICY's
 /// `TMPDIR`, so the run points it at its own build directory: the call has to
 /// succeed without the host's temp directory ever being granted.
+#cfg(not(platform="windows"))
 async test "a snippet's temp directory lands somewhere it may write" {
   let out = run(
     (
@@ -600,6 +601,7 @@ async test "a refused spawn gets guidance that fits a refused spawn" {
 ///
 /// Ungated: this is the policy's own `fs.write` rule, which moonrun applies on
 /// every platform, so there is no host where it may be skipped.
+#cfg(not(platform="windows"))
 async test "a snippet writes only its own temp dir, never the workspace" {
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
@@ -664,6 +666,7 @@ async test "a snippet writes only its own temp dir, never the workspace" {
 /// lives into a refusal that reads like a broken environment, which live runs
 /// spent steps on. Pinned against a file the workspace cannot reach so it can
 /// only pass if the policy really is open.
+#cfg(not(platform="windows"))
 async test "a snippet may read outside the workspace, though it may not write" {
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
@@ -910,6 +913,7 @@ async test "a scratch lab is writable while workspace source stays denied" {
 /// on every platform rather than only where `sandbox-exec` does. The kernel
 /// profile still governs what those CHILD processes may touch; that is pinned
 /// in `internal/sandbox/worker_profile_test.mbt`.
+#cfg(not(platform="windows"))
 async test "a worker's snippet writes neither its own tree nor a sibling's" {
   @vfs.with_tmpdir(prefix="mbtx-worker-repo-", repo => {
     let common_git = "\{repo}/.git"
@@ -1079,6 +1083,7 @@ async test "the removed background field has grammatical migration guidance" {
 // breaks on every rewrite and catches no real gap.
 
 ///|
+#cfg(not(platform="windows"))
 async test "an uncaught sandbox denial is explained, not left as a bare EPERM" {
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
@@ -1133,6 +1138,7 @@ async test "warnings are suppressed by default and shown with warning=on" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "a denial past the display cap is still detected and explained" {
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {

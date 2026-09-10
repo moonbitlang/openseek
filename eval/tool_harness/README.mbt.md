@@ -23,6 +23,7 @@ be invoked correctly through the same typed boundary the agent loop uses.
 
 ```moonbit check
 ///|
+#cfg(not(platform="windows"))
 async test "run deterministic tool harness" {
   let report = @tool_harness.run_harness()
   assert_true(report.all_passed())

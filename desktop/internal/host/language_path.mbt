@@ -123,6 +123,7 @@ async fn resolve_rejected(
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "language paths accept frontend resource roots and reject escapes" {
   let root = @fs.tmpdir(prefix="openseek-language-root-")
   let outside = @fs.tmpdir(prefix="openseek-language-outside-")

@@ -52,9 +52,9 @@ async test "stream never retries a non-retryable HTTP error" {
 async test "idle stream delivers partial output once without retrying" {
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
-    defer server.close()
     let mut hits = 0
     group.spawn_bg(no_wait=true) <| () => {
+      defer server.close()
       server.run_forever((_request, body, conn) => {
         ignore(body.read_all())
         hits += 1
@@ -93,9 +93,9 @@ async test "idle stream delivers partial output once without retrying" {
 async test "a thrown body read after a buffered data line cannot replay the request" {
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
-    defer server.close()
     let mut hits = 0
     group.spawn_bg(no_wait=true) <| () => {
+      defer server.close()
       server.run_forever(
         (_request, body, conn) => {
           ignore(body.read_all())
@@ -136,8 +136,8 @@ async test "a thrown body read after a buffered data line cannot replay the requ
 async test "cancellation is not wrapped as a request failure" {
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
-    defer server.close()
     group.spawn_bg(no_wait=true) <| () => {
+      defer server.close()
       server.run_forever((_request, body, _conn) => {
         ignore(body.read_all())
         @async.sleep(3000)
@@ -160,9 +160,9 @@ async test "cancellation is not wrapped as a request failure" {
 async test "idle flush preserves malformed response payload without retrying" {
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
-    defer server.close()
     let mut hits = 0
     group.spawn_bg(no_wait=true) <| () => {
+      defer server.close()
       server.run_forever((_request, body, conn) => {
         ignore(body.read_all())
         hits += 1
