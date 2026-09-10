@@ -76,10 +76,6 @@ jobs:
         if: matrix.moonbit-channel == 'stable' && matrix.target == 'native'
         run: moon run scripts/md_to_mbt_string -- --check prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
 
-      - name: Bundled workflows (offline child contract)
-        if: matrix.target == 'native'
-        run: moon run tests/integration/workflows --target native
-
       - name: Check formatting
         # Run the repository's one canonical formatter once on stable/native.
         # A second toolchain channel could require a different committed form.
@@ -148,6 +144,12 @@ jobs:
             ~/.proton/store
             ~/.proton/helpers
           key: ${{ steps.cef-cache.outputs.cache-primary-key }}
+
+      # Building the native fixture invokes workspace prebuilds, including
+      # Proton, so run it only after GTK/X11 and the CEF runtime are ready.
+      - name: Bundled workflows (offline child contract)
+        if: matrix.target == 'native'
+        run: moon run tests/integration/workflows --target native
 
       - name: Test native target
         # No Xvfb: nothing here initializes CEF or opens a window. That was

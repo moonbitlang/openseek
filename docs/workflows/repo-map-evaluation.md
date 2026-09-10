@@ -185,7 +185,9 @@ not erase the earlier connection failure or prove stable cost/reliability.
 
 Verification also found that CI calls Moon directly and would skip the new
 `just test-workflows` recipe. The native CI job now invokes the same offline
-fixture suite explicitly, before the full workspace check. All 17 scenarios
+fixture suite explicitly. After migrating it to a native MoonBit runner,
+the step must follow GTK/X11 and CEF setup because its build invokes workspace
+prebuilds, including Proton. All 17 scenarios
 passed again locally. This verifies the script/child contract; the live run
 still does not exercise the outer mbtx UI/approval path.
 
