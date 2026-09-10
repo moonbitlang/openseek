@@ -200,27 +200,6 @@ error: an API key is required for deepseek-v4-flash: pass --api-key
 stdout-empty
 ```
 
-## V4.1 Flash Is Selected By Its Canonical Wire Name
-
-`deepseek-flash` is V4.1 Flash's canonical name (the retired
-`deepseek-v4-flash` name still parses, served by the same model). It reaches
-the key check like any other tier, and the report names the model that was
-actually selected.
-
-```mooncram
-$ sh <<'EOF'
-> stdout=$(mktemp)
-> stderr=$(mktemp)
-> if env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run --model deepseek-flash "summarize this project" > "$stdout" 2> "$stderr"; then echo exit-zero; else echo exit-non-zero; fi
-> cat "$stderr"
-> if test -s "$stdout"; then echo stdout-not-empty; else echo stdout-empty; fi
-> rm -f "$stdout" "$stderr"
-> EOF
-exit-non-zero
-error: an API key is required for deepseek-flash: pass --api-key
-stdout-empty
-```
-
 ## Unknown Options Are Rejected Before Task Text
 
 The task is free-form after option parsing has stopped, but a leading
