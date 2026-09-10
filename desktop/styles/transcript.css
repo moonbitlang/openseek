@@ -500,21 +500,17 @@
   white-space: nowrap;
 }
 
-/* Closes the user's turn: a hairline running to the right edge, where a
-   trailing label (the send time) can sit under the bubble it belongs
-   to. Empty of children it is simply the full-width rule. */
+/* Keep the send time beneath its prompt without separating the prompt from
+   its answer. The final assistant footer draws the turn's closing rule. */
 .turn-rule {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: flex-end;
   color: var(--color-text-faint);
   font-size: var(--font-size-xs);
 }
-.turn-rule::before {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--color-border);
+.turn-rule:empty {
+  display: none;
 }
 
 .msg-body {
@@ -522,8 +518,8 @@
   min-width: 0;
 }
 
-/* A completed assistant answer closes with a left-aligned metadata row: the
-   raw-Markdown action first, followed by the durable event's completion time.
+/* A completed assistant answer closes with the raw-Markdown action on the
+   left and the durable event's completion time on the right.
    The icon stays visible instead of relying on hover so touch and keyboard
    users can discover it. */
 .assistant-message-actions {
@@ -532,6 +528,14 @@
   justify-content: flex-start;
   gap: 8px;
   margin-top: 4px;
+}
+/* Only final answers have this footer; intermediate and streaming messages
+   do not close the turn. */
+.assistant-message-actions::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--color-border-subtle);
 }
 .assistant-message-copy {
   --icon-size: var(--icon-md);
@@ -547,6 +551,7 @@
   cursor: pointer;
 }
 .assistant-message-time {
+  order: 1;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
