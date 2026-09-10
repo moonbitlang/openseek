@@ -217,9 +217,11 @@ async test "the registry has no shell tool family" {
       fail("expected an object schema")
     }
     let names = properties.keys().collect()
-    assert_eq(names.length(), 6)
+    assert_eq(names.length(), 7)
     for
-      name in ["source", "filename", "description", "target", "cwd", "warning"] {
+      name in [
+        "source", "filename", "args", "description", "target", "cwd", "warning",
+      ] {
       assert_true(names.contains(name))
     }
     assert_false(mbtx.description.contains("run_in_background"))
