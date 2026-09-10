@@ -31,3 +31,6 @@ repository context, nested-package discovery, and citation validation (including
 escaping symlinks and invalid line numbers), without calling a model service.
 It is also included in `just test`. Builds live in a temporary directory so the
 bundled resource tree stays clean.
+
+The native CI job also runs `python3 tests/integration/workflows.py` directly,
+since its target matrix does not invoke the root `just test` recipe.

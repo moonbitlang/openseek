@@ -76,6 +76,10 @@ jobs:
         if: matrix.moonbit-channel == 'stable' && matrix.target == 'native'
         run: moon run scripts/md_to_mbt_string -- --check prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
 
+      - name: Bundled workflows (offline child contract)
+        if: matrix.target == 'native'
+        run: python3 tests/integration/workflows.py
+
       - name: Check formatting
         # Run the repository's one canonical formatter once on stable/native.
         # A second toolchain channel could require a different committed form.

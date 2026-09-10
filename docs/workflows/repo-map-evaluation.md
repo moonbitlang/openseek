@@ -3,7 +3,7 @@
 The revised workflow can produce useful first-pass onboarding on OpenSeek,
 with exact validation recipes and source-backed examples. Completion and
 semantic accuracy remain variable; it deliberately leaves much of a large
-repository uninspected. [Latest live output (partial failure)](repo-map-sample.md).
+repository uninspected. [Latest live output](repo-map-sample.md).
 The earlier root-package-only output is retained [here](repo-map-sample-initial.md).
 
 ## Method
@@ -157,12 +157,37 @@ reported that omission. Its phrase that the root manifest "declares no
 package" is also imprecise: `moon.pkg` defines a package boundary even without
 an executable declaration. These are unedited model outputs, not authoritative
 documentation. The new guidance is retained as a navigation aid, not a proven
-reliability improvement. No further live retries were made.
+reliability improvement. No further live retries were made in that iteration.
 
 All September 10 live comparisons above inspected commit `3aea46ca1` plus the
 workflow changes, before rebasing onto the newly fetched origin/main. The
 samples are historical evidence; line references may move after that rebase.
 `change-review.mbtx` was exercised offline, not evaluated with real review scouts.
+
+## Verification on the rebased PR
+
+A fresh run on PR commit `6b9968968` used the rebuilt native binary and the
+unchanged bundled script. Both scouts submitted (3 steps each) in 24.5 seconds,
+using 114,414 accounted tokens. All 16 citation locations passed. Transcripts
+confirm that each scout read its selected `moon.pkg` and `pkg.generated.mbti`
+before implementation. The latest sample is this successful, unedited output.
+
+Manual source review confirmed the executable declaration, session-startup
+MCP config read/decode/build path, open `AgentEvent` contract, and the embedded
+emit/drain and event-flood tests. The extension report now uses the directly
+relevant event tests and does not claim production consumers need no changes.
+One wording problem remains: it labels the traced resolver as `openseek mcp` /
+session startup, but `run_mcp_command` has a separate fail-fast path; the
+resolver's log-and-return-empty behavior applies to session startup. The
+proposed bgjobs implementation location is hypothetical and was not read.
+Location validation does not establish those claims. This successful run does
+not erase the earlier connection failure or prove stable cost/reliability.
+
+Verification also found that CI calls Moon directly and would skip the new
+`just test-workflows` recipe. The native CI job now invokes the same offline
+Python suite explicitly, before the full workspace check. All 17 scenarios
+passed again locally. This verifies the script/child contract; the live run
+still does not exercise the outer mbtx UI/approval path.
 
 ## Validation
 
