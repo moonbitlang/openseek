@@ -80,22 +80,24 @@ fn render_raw(
   if turns.is_empty() {
     return empty_state("This session has no events yet.")
   }
-  let blocks : Array[@html.Html] = [prompt_rail(session, subrun)]
-  for index, turn in turns {
-    blocks.push(
-      turn_block(
-        index + 1,
-        turn,
-        briefs,
-        failed,
-        escalated,
-        tags,
-        plans,
-        step_labels,
-        subrun,
-      ),
-    )
-  }
+  let blocks : Array[@html.Html] = [
+    prompt_rail(session, subrun),
+    ..[
+      for index, turn in turns => {
+        turn_block(
+          index + 1,
+          turn,
+          briefs,
+          failed,
+          escalated,
+          tags,
+          plans,
+          step_labels,
+          subrun,
+        )
+      }
+    ],
+  ]
   @html.div(class="log raw-log") <| blocks
 }
 
@@ -213,21 +215,23 @@ fn turn_block(
   }
   // Surface failed tools in the turn header so a turn carrying errors is
   // scannable even while its cards are folded or the turn itself is collapsed.
-  let summary : Array[@html.Html] = [@html.text(label)]
   // Same reason for steering: a mid-turn interjection can redirect the whole
   // turn, and it is the one thing in the turn the user wrote themselves.
   let steers = if subrun.delegated { 0 } else { count_turn_steers(turn) }
-  if steers > 0 {
-    summary.push(
-      @html.span(class="turn-steer-badge") <| " · ✋ \{steers} steer\{plural(steers)}",
-    )
-  }
   let errors = count_turn_tool_errors(turn)
-  if errors > 0 {
-    summary.push(
-      @html.span(class="turn-error-badge") <| " · 🚩 \{errors} error\{plural(errors)}",
-    )
-  }
+  let summary : Array[@html.Html] = [
+    @html.text(label),
+    ..if steers > 0 {
+      [
+        @html.span(class="turn-steer-badge") <| " · ✋ \{steers} steer\{plural(steers)}",
+      ]
+    },
+    ..if errors > 0 {
+      [
+        @html.span(class="turn-error-badge") <| " · 🚩 \{errors} error\{plural(errors)}",
+      ]
+    },
+  ]
   @html.details(open=true, class="turn") <| [
     @html.summary(class="turn-summary") <| summary,
     @html.div(class="turn-body") <| cards,
@@ -546,23 +550,19 @@ fn runtime_card(seq : Int, time : String, content : String) -> @html.Html {
 /// A plan-cadence reminder card: prose kept verbatim, the re-surfaced
 /// checklist (when present) as a progress meter plus status-classed rows.
 fn plan_reminder_card(seq : Int, time : String, content : String) -> @html.Html {
-  let body : Array[@html.Html] = []
-  match split_plan_checklist(content) {
-    Some((prose, steps)) => {
-      body.push(text_block(prose))
-      body.push(
+  let body : Array[@html.Html] = match split_plan_checklist(content) {
+    Some((prose, steps)) =>
+      [
+        text_block(prose),
         plan_progress_view(
           steps.count_if(step => reminder_step_status(step) is Some("completed")),
           steps.length(),
         ),
-      )
-      body.push(
         @html.ul(class="plan-steps") <| [
           for step in steps => plan_step_item(step)
         ],
-      )
-    }
-    None => body.push(text_block(content))
+      ]
+    None => [text_block(content)]
   }
   card("runtime plan-reminder", "Plan reminder", seq, time~, body)
 }
@@ -793,23 +793,27 @@ fn plan_args_view(
   }
   let diff_base = if plan_evolves(steps, baseline) { baseline } else { None }
   let rows : Array[@html.Html] = [
-    for index, step in steps => plan_call_step(index + 1, step, diff_base)
+    ..[
+      for index, step in steps => plan_call_step(index + 1, step, diff_base)
+    ],
+    ..[
+      for dropped in dropped_steps(steps, diff_base) => {
+        dropped_step_row(dropped)
+      }
+    ],
   ]
-  for dropped in dropped_steps(steps, diff_base) {
-    rows.push(dropped_step_row(dropped))
-  }
   let body : Array[@html.Html] = [
     plan_progress_view(
       steps.count_if(step => step.status is Completed),
       steps.length(),
     ),
+    ..if diff_base is None && baseline is Some(prev) && !prev.is_empty() {
+      [
+        @html.div(class="plan-rewrite-note") <| "rewritten — replaces the previous plan",
+      ]
+    },
+    @html.ul(class="plan-steps") <| rows,
   ]
-  if diff_base is None && baseline is Some(prev) && !prev.is_empty() {
-    body.push(
-      @html.div(class="plan-rewrite-note") <| "rewritten — replaces the previous plan",
-    )
-  }
-  body.push(@html.ul(class="plan-steps") <| rows)
   @html.div(class="tool-call-args-rendered plan-args") <| body
 }
 
@@ -883,12 +887,14 @@ fn plan_step_row(
   title~ : String,
   chip~ : @html.Html,
 ) -> @html.Html {
-  let cells : Array[@html.Html] = [status_cell(status)]
-  if !number.is_empty() {
-    cells.push(@html.span(class="step-num") <| number)
-  }
-  cells.push(@html.span(class="step-title") <| title)
-  cells.push(chip)
+  let cells : Array[@html.Html] = [
+    status_cell(status),
+    ..if !number.is_empty() {
+      [@html.span(class="step-num") <| number]
+    },
+    @html.span(class="step-title") <| title,
+    chip,
+  ]
   @html.li(class="plan-step \{status}") <| cells
 }
 
@@ -992,25 +998,27 @@ fn assistant_card(
   plans : Map[String, Array[@steps.PlanStep]],
   step_label~ : String,
 ) -> @html.Html {
-  let body : Array[@html.Html] = []
-  if message.reasoning_content() is Some(reasoning) && !reasoning.is_blank() {
-    body.push(
-      @html.details(class="reasoning") <| [
-        @html.summary("reasoning"),
-        text_block(reasoning),
-      ],
-    )
-  }
-  if !message.content().is_blank() {
-    body.push(text_block(message.content()))
-  }
   let calls = message.tool_calls()
-  if !calls.is_empty() {
-    let call_views : Array[@html.Html] = [
-      for call in calls => tool_call_view(call, briefs, failed, tags, plans)
-    ]
-    body.push(@html.div(class="tool-calls") <| call_views)
-  }
+  let body : Array[@html.Html] = [
+    ..if message.reasoning_content() is Some(reasoning) && !reasoning.is_blank() {
+      [
+        @html.details(class="reasoning") <| [
+          @html.summary("reasoning"),
+          text_block(reasoning),
+        ],
+      ]
+    },
+    ..if !message.content().is_blank() {
+      [text_block(message.content())]
+    },
+    ..if !calls.is_empty() {
+      [
+        @html.div(class="tool-calls") <| [
+          for call in calls => tool_call_view(call, briefs, failed, tags, plans)
+        ],
+      ]
+    },
+  ]
   card("assistant", "Assistant", seq, time~, body, step_label~)
 }
 
@@ -1040,38 +1048,10 @@ fn tool_call_view(
   tags : Map[String, Int],
   plans : Map[String, Array[@steps.PlanStep]],
 ) -> @html.Html {
-  let name_row : Array[@html.Html] = [
-    @html.text("→ "),
-    @html.strong(call.name),
-  ]
-  if call_brief_display(briefs.get(call.id), failed.contains(call.id))
-    is Some(brief) &&
-    !brief.is_blank() {
-    name_row.push(@html.span(class="tool-call-brief") <| " · \{brief}")
-  }
-  if call.name == "mbtx" {
-    let arguments = Some(@json.parse(call.arguments)) catch { _ => None }
-    if arguments is Some({ "description": String(description), .. }) &&
-      !description.is_blank() {
-      name_row.push(@html.span(class="tool-call-brief", " · \{description}"))
-    }
-  }
   let plan_steps = plan_call_steps(call)
-  if plan_steps is Some(steps) {
-    name_row.push(plan_ribbon(steps))
-  }
   // When this call forms an unambiguous pair with a result, tag it `call N` and
   // link forward to that result's card; the same number labels the result.
   let pair = tags.get(call.id)
-  if pair is Some(n) {
-    name_row.push(
-      pair_link(
-        n,
-        href="#\{tool_result_anchor(n)}",
-        title="Jump to this call's result (call \{n})",
-      ),
-    )
-  }
   let anchor = pair.map(n => tool_call_anchor(n))
   let cls = match (failed.contains(call.id), tool_call_is_escalated(call)) {
     (false, false) => "tool-call"
@@ -1091,11 +1071,33 @@ fn tool_call_view(
   } else {
     cls
   }
-  if run_failed {
-    name_row.push(
-      @html.span(class="tool-stage tool-stage-run") <| " runtime error",
-    )
-  }
+  let name_row : Array[@html.Html] = [
+    @html.text("→ "),
+    @html.strong(call.name),
+    ..if call_brief_display(briefs.get(call.id), failed.contains(call.id))
+      is Some(brief) &&
+      !brief.is_blank() {
+      [@html.span(class="tool-call-brief") <| " · \{brief}"]
+    },
+    ..if mbtx_description(call) is Some(description) {
+      [@html.span(class="tool-call-brief", " · \{description}")]
+    },
+    ..if plan_steps is Some(steps) {
+      [plan_ribbon(steps)]
+    },
+    ..if pair is Some(n) {
+      [
+        pair_link(
+          n,
+          href="#\{tool_result_anchor(n)}",
+          title="Jump to this call's result (call \{n})",
+        ),
+      ]
+    },
+    ..if run_failed {
+      [@html.span(class="tool-stage tool-stage-run") <| " runtime error"]
+    },
+  ]
   let original = pretty_json(call.arguments)
   if is_blank_args(original) {
     return @html.div(id?=anchor, class=cls) <| [
@@ -1357,18 +1359,21 @@ fn tool_card(
     Some(n) => tool_result_anchor(n)
     None => seq_anchor(seq)
   }
-  let summary = card_head(label, seq, time~, flag~, link~)
-  let body : Array[@html.Html] = [
-    tool_result_content(Some(result), result.content()),
-  ]
   // A subrun result gets a chip to its child session and — when the caller
   // loaded that child — the transcript itself, nested inside this card.
-  if subrun_child_id(result, subrun.parent) is Some(child_id) {
-    summary.push(subrun_chip(child_id))
-    if subrun.children.get(child_id) is Some(child) {
-      body.push(subrun_transcript(child))
-    }
-  }
+  let child_id = subrun_child_id(result, subrun.parent)
+  let summary : Array[@html.Html] = [
+    ..card_head(label, seq, time~, flag~, link~),
+    ..if child_id is Some(id) {
+      [subrun_chip(id)]
+    },
+  ]
+  let body : Array[@html.Html] = [
+    tool_result_content(Some(result), result.content()),
+    ..if child_id is Some(id) && subrun.children.get(id) is Some(child) {
+      [subrun_transcript(child)]
+    },
+  ]
   @html.details(id=anchor, class="card \{kind}") <| [
     @html.summary(class="card-label") <| summary,
     @html.div(class="card-body") <| body,
@@ -1448,10 +1453,10 @@ fn terminal_card(
   }
   let body : Array[@html.Html] = [
     @html.span(class="badge badge-\{kind}") <| kind,
+    ..if !message.is_blank() {
+      [text_block(message)]
+    },
   ]
-  if !message.is_blank() {
-    body.push(text_block(message))
-  }
   card("terminal", "Turn ended", seq, time~, body, step_label~)
 }
 
@@ -1589,23 +1594,23 @@ fn prompt_rail(
           one_line(mark.text),
           220,
         ),
+        ..if !mark.time.is_empty() {
+          [@html.div(class="rail-preview-time") <| mark.time]
+        },
+        ..if mark.errors > 0 {
+          [
+            @html.div(class="rail-preview-errors") <| "had error\{plural(mark.errors)}",
+          ]
+        },
+        ..if !mark.reply.is_blank() {
+          [
+            @html.blockquote(class="rail-preview-reply") <| truncate(
+              one_line(mark.reply),
+              180,
+            ),
+          ]
+        },
       ]
-      if !mark.time.is_empty() {
-        preview.push(@html.div(class="rail-preview-time") <| mark.time)
-      }
-      if mark.errors > 0 {
-        preview.push(
-          @html.div(class="rail-preview-errors") <| "had error\{plural(mark.errors)}",
-        )
-      }
-      if !mark.reply.is_blank() {
-        preview.push(
-          @html.blockquote(class="rail-preview-reply") <| truncate(
-            one_line(mark.reply),
-            180,
-          ),
-        )
-      }
       @html.a(class="rail-mark", href="#\{seq_anchor(mark.seq)}", [
         @html.span(class="rail-tick") <| "",
         @html.div(class="rail-preview") <| preview,
@@ -2655,13 +2660,15 @@ fn model_tool_card(
     Some(r) => result_flag(r)
     None => failed_flag(is_error)
   }
-  let summary = model_card_head(label, time~, flag~, link~)
   // Chip only, no nested transcript: the model view shows what the model
   // was fed, and the child's transcript never was.
-  if shown is Some(result) &&
-    subrun_child_id(result, subrun.parent) is Some(child_id) {
-    summary.push(subrun_chip(child_id))
-  }
+  let summary : Array[@html.Html] = [
+    ..model_card_head(label, time~, flag~, link~),
+    ..if shown is Some(result) &&
+      subrun_child_id(result, subrun.parent) is Some(child_id) {
+      [subrun_chip(child_id)]
+    },
+  ]
   @html.details(id?=anchor, class="card \{kind}") <| [
     @html.summary(class="card-label") <| summary,
     @html.div(class="card-body") <| [
@@ -2683,26 +2690,28 @@ fn model_card(
   step_label~ : String,
   anchor~ : String?,
 ) -> @html.Html {
-  let body : Array[@html.Html] = []
-  if message.reasoning_content is Some(reasoning) && !reasoning.is_blank() {
-    body.push(
-      @html.details(class="reasoning") <| [
-        @html.summary("reasoning"),
-        text_block(reasoning),
-      ],
-    )
-  }
-  if !message.content.is_blank() {
-    body.push(text_block(message.content))
-  }
-  if !message.tool_calls.is_empty() {
-    let call_views : Array[@html.Html] = [
-      for call in message.tool_calls => {
-        tool_call_view(call, briefs, failed, tags, plans)
-      }
-    ]
-    body.push(@html.div(class="tool-calls") <| call_views)
-  }
+  let body : Array[@html.Html] = [
+    ..if message.reasoning_content is Some(reasoning) && !reasoning.is_blank() {
+      [
+        @html.details(class="reasoning") <| [
+          @html.summary("reasoning"),
+          text_block(reasoning),
+        ],
+      ]
+    },
+    ..if !message.content.is_blank() {
+      [text_block(message.content)]
+    },
+    ..if !message.tool_calls.is_empty() {
+      [
+        @html.div(class="tool-calls") <| [
+          for call in message.tool_calls => {
+            tool_call_view(call, briefs, failed, tags, plans)
+          }
+        ],
+      ]
+    },
+  ]
   @html.section(id?=anchor, class="card \{kind}") <| [
     @html.div(class="card-label") <| model_card_head(label, time~, step_label~),
     @html.div(class="card-body") <| body,
@@ -2719,14 +2728,17 @@ fn model_card_head(
   link? : @html.Html = @html.nothing,
   step_label? : String = "",
 ) -> Array[@html.Html] {
-  let head : Array[@html.Html] = [flag, @html.text(label), link]
-  if !step_label.is_empty() {
-    head.push(@html.span(class="card-step") <| step_label)
-  }
-  if !time.is_empty() {
-    head.push(@html.span(class="card-ts") <| time)
-  }
-  head
+  [
+    flag,
+    @html.text(label),
+    link,
+    ..if !step_label.is_empty() {
+      [@html.span(class="card-step") <| step_label]
+    },
+    ..if !time.is_empty() {
+      [@html.span(class="card-ts") <| time]
+    },
+  ]
 }
 
 ///|
@@ -3041,3 +3053,17 @@ pub extend ViewMode with Debug::{to_repr}
 
 ///|
 pub extend ViewMode with Eq::{equal, not_equal}
+
+///|
+/// The one-line `description` an `mbtx` call carries in its arguments, when it
+/// has one worth showing; `None` for every other tool and for a blank or
+/// unparseable description.
+fn mbtx_description(call : @deepseek.ToolCall) -> String? {
+  guard call.name == "mbtx" else { return None }
+  let arguments = Some(@json.parse(call.arguments)) catch { _ => None }
+  guard arguments is Some({ "description": String(description), .. }) &&
+    !description.is_blank() else {
+    return None
+  }
+  Some(description)
+}
