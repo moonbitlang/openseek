@@ -1857,7 +1857,7 @@ fn escalated_bar(
 
 ///|
 /// Build-error counterpart of `escalated_bar`: a count of mbtx BUILD-stage
-/// failures (the staged engine's `mbtx (build …)` briefs), a filter toggle,
+/// failures (the staged engine's `mbtx build` brief), a filter toggle,
 /// and viewport-relative prev/next jumps — the way to find compile errors in
 /// a long log without reading it. Unlike its siblings it shows whenever the
 /// session has ANY mbtx activity (`present`), not only at nonzero count:

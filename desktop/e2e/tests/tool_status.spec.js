@@ -78,11 +78,11 @@ for (const isError of [false, true]) {
       event: { sequence: 3, item: { kind: 'tool_result', payload: {
         tool_call_id: 'status-call', tool_name: 'mbtx',
         content: isError ? 'Command failed' : 'status', is_error: isError,
-        brief: isError ? 'mbtx (build failed, exit=1)' : 'mbtx (exit=0)',
+        ...(isError ? { brief: 'mbtx build' } : {}),
       } } },
     });
     const status = summary.getByRole('img', { name: isError ? 'Tool failed' : 'Tool succeeded' });
-    await expect(summary.locator('.tool-call-text')).toHaveText('mbtx · Check tool status');
+    await expect(summary.locator('.tool-call-text')).toHaveText(`${isError ? 'mbtx build' : 'mbtx'} · Check tool status`);
     await expect(summary.locator('.tool-call-failed')).toHaveCount(0);
     await expect(status).toBeVisible();
     await expect(status.locator('svg')).toHaveCount(1);

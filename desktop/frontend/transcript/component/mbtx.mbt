@@ -101,38 +101,12 @@ fn mbtx_card(arguments : String) -> (String, @html.Html)? {
 }
 
 ///|
-/// The failure stage a finished `mbtx` call reports, read from its brief —
-/// the display-only caption the engine persists for renderers. The staged
-/// wasm engine writes `mbtx (build failed, exit=N)` / `mbtx (build timeout)`
-/// / `mbtx (build fault)` for build-phase failures and `mbtx (exit=N)` for a
-/// program that built and then failed.
-///
-/// One accepted imprecision, by explicit owner decision (no backwards
-/// compatibility for old transcripts): a WASM failure recorded before the
-/// staged engine carries the same `mbtx (exit=N)` brief whichever stage
-/// failed, and reads here as a runtime error. Disambiguating it would need a
-/// new engine brief shape or a recording-version gate — complexity spent
-/// entirely on sessions that predate the label. The build shapes carry no
-/// such ambiguity: only the staged engine ever wrote them.
+/// The engine names the phase in failed staged runs; status and exit codes
+/// belong to the outcome and output, respectively. Single-shot targets do
+/// not claim a phase.
 priv enum MbtxFailureStage {
   BuildError
   RuntimeError
-}
-
-///|
-/// Whether the recorded call took the staged wasm path — the only path whose
-/// `mbtx (exit=N)` brief is a RUN-stage claim. A single-shot target's one
-/// exit code covers both stages (the engine's own tests pin that its report
-/// claims neither), so those rows must keep the generic word. The target is
-/// read from the call's own arguments; absent means the wasm default, and an
-/// unreadable payload conservatively claims nothing.
-fn mbtx_staged_target(arguments : String?) -> Bool {
-  guard arguments is Some(arguments) else { return false }
-  guard card_fields(arguments) is Some(fields) else { return false }
-  match fields.get("target") {
-    None | Some(String("wasm")) | Some(Null) => true
-    _ => false
-  }
 }
 
 ///|
@@ -140,17 +114,12 @@ fn mbtx_failure_stage(
   name : String,
   brief : String?,
   is_error : Bool,
-  arguments : String?,
 ) -> MbtxFailureStage? {
-  guard is_error && name == "mbtx" && brief is Some(brief) else { return None }
-  // The build shapes are unambiguous by construction: only the staged engine
-  // writes them. The exit shape is a run-stage claim only where staging ran.
-  if brief.has_prefix("mbtx (build") {
-    Some(BuildError)
-  } else if brief.has_prefix("mbtx (exit=") && mbtx_staged_target(arguments) {
-    Some(RuntimeError)
-  } else {
-    None
+  guard is_error && name == "mbtx" else { return None }
+  match brief {
+    Some("mbtx build") => Some(BuildError)
+    Some("mbtx run") => Some(RuntimeError)
+    _ => None
   }
 }
 
@@ -166,7 +135,7 @@ fn failure_marker(
   arguments : String?,
 ) -> @html.Html? {
   guard is_error else { return None }
-  match mbtx_failure_stage(name, brief, is_error, arguments) {
+  match mbtx_failure_stage(name, brief, is_error) {
     Some(BuildError) if arguments is None => None
     Some(BuildError) =>
       Some(@html.span(class="tool-call-failed tool-stage-build", "build error"))
@@ -183,9 +152,8 @@ fn failure_stage_class(
   name : String,
   brief : String?,
   is_error : Bool,
-  arguments : String?,
 ) -> String {
-  match mbtx_failure_stage(name, brief, is_error, arguments) {
+  match mbtx_failure_stage(name, brief, is_error) {
     Some(BuildError) => " stage-build"
     Some(RuntimeError) | None => ""
   }

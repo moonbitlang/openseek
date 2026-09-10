@@ -203,17 +203,6 @@ fn escalation_refused(outcome : @agent_runtime.ApprovalOutcome) -> String {
 }
 
 ///|
-/// The outcome word for the display-only brief.
-fn escalation_brief(outcome : @agent_runtime.ApprovalOutcome) -> String {
-  match outcome {
-    AllowedOnce => "allowed"
-    Rejected => "refused"
-    Cancelled => "withdrawn"
-    Unavailable => "unavailable"
-  }
-}
-
-///|
 async fn execute(
   workspace_root : String,
   arguments : Json,
@@ -367,14 +356,12 @@ async fn execute(
     return @agent_tool.respond(
       "mbtx: `subrun` applies to the wasm target, which is the one the sandbox policy binds — the handoff, the engine's spawn rule and the run's write root all live in that policy; `\{input.target}` runs none. Drop `target` to use wasm, or drop `subrun`.",
       is_error=true,
-      brief="mbtx (subrun needs wasm)",
     )
   }
   if input.subrun && input.escalated {
     return @agent_tool.respond(
       "mbtx: `subrun` and `escalated` exclude each other — escalation runs the snippet with NO sandbox policy, and the delegation handoff is delivered through that policy. Use `subrun` alone to delegate; the allowed programs already include the engine.",
       is_error=true,
-      brief="mbtx (subrun with escalated)",
     )
   }
   if input.escalated && input.target != "wasm" {
@@ -408,11 +395,7 @@ async fn execute(
       None => Unavailable
     }
     guard outcome is AllowedOnce else {
-      return @agent_tool.respond(
-        escalation_refused(outcome),
-        is_error=true,
-        brief="mbtx (escalation \{escalation_brief(outcome)})",
-      )
+      return @agent_tool.respond(escalation_refused(outcome), is_error=true)
     }
     true
   } else {
@@ -554,7 +537,6 @@ async fn execute(
         return @agent_tool.respond(
           "mbtx: `subrun` was requested, but this conversation has no durable session, so a workflow's children would have nowhere to leave a transcript. Retry without `subrun` and do the work in this snippet directly.",
           is_error=true,
-          brief="mbtx (subrun unavailable)",
         )
     }
   } else {
@@ -878,12 +860,13 @@ async fn execute(
       body
     }
     let body = with_denial_guidance(body, sandbox_denied)
+    let is_error = exit_code != 0 ||
+      sandbox_denied is Some(_) ||
+      output_limit_reached
     return @agent_tool.respond(
       body,
-      is_error=exit_code != 0 ||
-        sandbox_denied is Some(_) ||
-        output_limit_reached,
-      brief="mbtx (exit=\{exit_code})",
+      is_error~,
+      brief?=if staged && is_error { Some("mbtx run") } else { None },
     )
   }
   let result = @async.with_timeout_opt(foreground_timeout_ms, () => {
@@ -923,10 +906,11 @@ async fn execute(
         finished_body(text, exit_code, staged~),
       )
       let body = with_denial_guidance(body, sandbox_denied)
+      let is_error = exit_code != 0 || sandbox_denied is Some(_)
       @agent_tool.respond(
         body,
-        is_error=exit_code != 0 || sandbox_denied is Some(_),
-        brief="mbtx (exit=\{exit_code})",
+        is_error~,
+        brief?=if staged && is_error { Some("mbtx run") } else { None },
       )
     }
     None => {
@@ -951,7 +935,7 @@ async fn execute(
       @agent_tool.respond(
         with_build_notes(build_notes, body),
         is_error=true,
-        brief="mbtx (timeout)",
+        brief?=if staged { Some("mbtx run") } else { None },
       )
     }
   }
@@ -1031,7 +1015,7 @@ async fn build_snippet(
       @agent_tool.respond(
         "mbtx: the BUILD did not finish within \{duration_label(build_timeout_ms)} and was cancelled — the program never ran. Compilation or a dependency download stalled; retrying is faster than it looks (downloaded modules are cached).",
         is_error=true,
-        brief="mbtx (build timeout)",
+        brief="mbtx build",
       ),
     )
   }
@@ -1049,7 +1033,7 @@ async fn build_snippet(
           "[mbtx: BUILD failed (exit \{exit_code}) — the program never ran; the output below is the build's]\n\{text}"
         },
         is_error=true,
-        brief="mbtx (build failed, exit=\{exit_code})",
+        brief="mbtx build",
       ),
     )
   }
@@ -1069,7 +1053,7 @@ async fn build_snippet(
         @agent_tool.respond(
           "mbtx: the build succeeded but its artifact could not be verified (\{error}) — a filesystem fault, not a problem in `source`.",
           is_error=true,
-          brief="mbtx (build fault)",
+          brief="mbtx build",
         ),
       )
   }
@@ -1078,7 +1062,7 @@ async fn build_snippet(
       @agent_tool.respond(
         "mbtx: the build reported success but its artifact is missing (\{artifact}) — a toolchain fault, not a problem in `source`; retry, and report it if it persists.",
         is_error=true,
-        brief="mbtx (build fault)",
+        brief="mbtx build",
       ),
     )
   }

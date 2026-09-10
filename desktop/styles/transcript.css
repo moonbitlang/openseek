@@ -1166,11 +1166,8 @@
   color: var(--color-danger);
   font-size: var(--font-size-xs);
 }
-/* An mbtx build failure reads amber, not the error red: the fix lives in the
-   source, and its BRIEF already carries the literal stage words ("build
-   failed", "build timeout"), so the row appends no marker — appending one
-   repeated the brief verbatim. Runtime failures keep the red row plus the
-   "runtime error" marker, which does add a word the brief lacks. */
+/* Build failures read amber; runtime failures keep the error color.
+   The brief names the phase, while the status icon conveys the outcome. */
 .tool-call-label.error.stage-build,
 .tool-call.error.stage-build > .tool-call-summary,
 .tool-result-label.error.stage-build,

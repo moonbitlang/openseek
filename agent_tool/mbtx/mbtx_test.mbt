@@ -371,7 +371,7 @@ async test "surfaces a compile error via moon's own diagnostics" {
   // probing artifacts or parsing diagnostics.
   assert_true(out.content.contains("BUILD failed"))
   assert_true(out.content.contains("never ran"))
-  assert_true(out.brief is Some("mbtx (build failed, exit=1)"))
+  assert_true(out.brief is Some("mbtx build"))
 }
 
 ///|
@@ -388,6 +388,7 @@ async test "a runtime trap is labeled as the run, whatever the output says" {
   assert_true(out.content.contains("at RUNTIME"))
   assert_true(out.content.contains("from the run, not the build"))
   assert_false(out.content.contains("BUILD failed"))
+  assert_true(out.brief is Some("mbtx run"))
 }
 
 ///|
@@ -396,6 +397,7 @@ async test "diagnostic-shaped output with a clean exit stays unlabeled" {
   assert_false(out.is_error)
   assert_false(out.content.contains("BUILD failed"))
   assert_false(out.content.contains("at RUNTIME"))
+  assert_true(out.brief is None)
 }
 
 ///|
@@ -410,7 +412,7 @@ async test "a build that outlives its bound is reported as the build's" {
     assert_true(output.is_error)
     assert_true(output.content.contains("BUILD did not finish"))
     assert_true(output.content.contains("never ran"))
-    assert_true(output.brief is Some("mbtx (build timeout)"))
+    assert_true(output.brief is Some("mbtx build"))
   })
 }
 

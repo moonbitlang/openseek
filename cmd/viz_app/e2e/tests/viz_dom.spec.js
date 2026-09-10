@@ -49,7 +49,7 @@ test('build-error filter separates build diagnostics from other failures', async
   const buildFailure = page.locator('details.card').filter({ hasText: 'type mismatch' });
   const buildCall = page.locator('summary.tool-call-name').filter({ hasText: 'Check <compiler> diagnostics' });
   await expect(buildCall).toBeVisible();
-  await expect(buildCall).toContainText('mbtx (build failed, exit=1)');
+  await expect(buildCall).toContainText('mbtx build');
   const runtimeFailure = page.locator('details.card').filter({ hasText: 'runtime trap' });
   const shellFailure = page.locator('details.card').filter({ hasText: 'fixture failure' });
   await page.getByRole('button', { name: 'Build errors only', exact: true }).click();

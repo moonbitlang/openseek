@@ -123,7 +123,7 @@ test "mbtx activity and build-error counts follow durable events" {
           tool_name="mbtx",
           content="diag",
           is_error=true,
-          brief="mbtx (build failed, exit=1)",
+          brief="mbtx build",
         ),
       ),
     )
@@ -150,7 +150,7 @@ test "mbtx activity and build-error counts follow durable events" {
         tool_name="mbtx",
         content="diag",
         is_error=true,
-        brief="mbtx (build failed, exit=1)",
+        brief="mbtx build",
       ),
     ),
   )

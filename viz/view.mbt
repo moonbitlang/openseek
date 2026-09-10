@@ -1076,13 +1076,8 @@ fn tool_call_view(
     (false, true) => "tool-call tool-call-escalated"
     (true, true) => "tool-call tool-call-failed tool-call-escalated"
   }
-  // A failed mbtx call names its STAGE — a build error is fixed in the
-  // source, a runtime error in the program's behavior. A build-failed row
-  // says it through its own brief, which already reads "build failed" /
-  // "build timeout": appending a word there repeated the brief verbatim
-  // ("· mbtx (build failed, exit=1) build error"), so the stage rides the
-  // class alone and the stylesheet turns the brief amber. The runtime word
-  // stays — "exit=1" never names the stage.
+  // The engine's brief names the failed phase. Build failures read amber;
+  // runtime failures retain their explicit error marker.
   let build_failed = tool_call_is_build_failed(call, briefs, failed, tags)
   let run_failed = !build_failed &&
     tool_call_is_run_failed(call, briefs, failed, tags)
@@ -1390,9 +1385,7 @@ fn failed_flag(is_error : Bool) -> @html.Html {
 ///|
 /// The collapsed-card flag for a durable result: an mbtx build failure names
 /// its stage (the fix lives in the source, not the program), every other
-/// failure keeps the generic word. The run stage is deliberately not named
-/// here — the result alone cannot see the call's target, and the call card
-/// beside it already says it.
+/// failure keeps the generic word. The call card already names run failures.
 fn result_flag(result : @agent_session.ToolResult) -> @html.Html {
   if result_is_build_failed(result) {
     @html.span(class="tool-flag tool-stage-build") <| "🚩 build error"
@@ -2185,10 +2178,7 @@ fn tool_call_is_escalated(call : @deepseek.ToolCall) -> Bool {
 }
 
 ///|
-/// Whether a failed `mbtx` call's brief reports a BUILD-stage failure — the
-/// staged engine's `mbtx (build …)` shapes (`build failed`, `build timeout`,
-/// `build fault`), which only it ever writes, so the tag carries no
-/// pre-staging or single-shot ambiguity.
+/// Whether an unambiguous call/result pair reports the staged build phase.
 fn tool_call_is_build_failed(
   call : @deepseek.ToolCall,
   briefs : Map[String, String],
@@ -2207,32 +2197,22 @@ fn tool_call_is_build_failed(
   // name on either side is what would let them diverge.
   tags.contains(call.id) &&
   failed.contains(call.id) &&
-  briefs.get(call.id) is Some(brief) &&
-  brief.has_prefix("mbtx (build")
+  briefs.get(call.id) is Some("mbtx build")
 }
 
 ///|
-/// Whether a failed `mbtx` call reads as a RUN-stage failure: an exit brief
-/// on the staged wasm path (target absent or `"wasm"` in the call's own
-/// arguments). A single-shot target's one exit code covers both stages and
-/// claims neither. A wasm failure recorded before the staged engine shares
-/// the brief shape and reads as runtime — an accepted imprecision, by
-/// explicit owner decision (no backwards compatibility for old transcripts).
+/// The producer names the run phase only when staging proved the build
+/// succeeded. No target inference or diagnostic parsing is needed here.
 fn tool_call_is_run_failed(
   call : @deepseek.ToolCall,
   briefs : Map[String, String],
   failed : Map[String, Unit],
   tags : Map[String, Int],
 ) -> Bool {
-  guard tags.contains(call.id) &&
-    call.name == "mbtx" &&
-    failed.contains(call.id) &&
-    briefs.get(call.id) is Some(brief) &&
-    brief.has_prefix("mbtx (exit=") else {
-    return false
-  }
-  let json = @json.parse(call.arguments) catch { _ => return false }
-  json is { "target"? : None | Some(String("wasm") | Null), .. }
+  tags.contains(call.id) &&
+  call.name == "mbtx" &&
+  failed.contains(call.id) &&
+  briefs.get(call.id) is Some("mbtx run")
 }
 
 ///|
@@ -2242,11 +2222,8 @@ fn tool_call_is_run_failed(
 fn result_is_build_failed(result : @agent_session.ToolResult) -> Bool {
   // Brief-only, matching `tool_call_is_build_failed`: one identity for both
   // sides of a pair keeps the tags and the toolbar count consistent even on
-  // logs whose call name and result tool_name disagree. The `mbtx (build`
-  // shape is written only by the staged engine.
-  result.is_error() &&
-  result.brief() is Some(brief) &&
-  brief.has_prefix("mbtx (build")
+  // logs whose call name and result tool_name disagree.
+  result.is_error() && result.brief() is Some("mbtx build")
 }
 
 ///|

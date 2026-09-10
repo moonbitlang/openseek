@@ -294,13 +294,7 @@ fn tool_request_view(
     Pending(..) => (false, None)
   }
   let label = if brief is Some(brief) && !brief.is_blank() {
-    // The trailing status icon already conveys mbtx's outcome. Keep other
-    // briefs, including background handoffs with their job id.
-    if name == "mbtx" && brief.has_prefix("mbtx (") {
-      name
-    } else {
-      brief
-    }
+    brief
   } else if wait_label is Some(label) {
     label
   } else if pending_job_wait_label(call) is Some(label) {
@@ -317,10 +311,9 @@ fn tool_request_view(
     label
   }
   let error_class = (if is_error { " error" } else { "" }) +
-    failure_stage_class(name, brief, is_error, Some(arguments))
-  // mbtx uses the trailing icon for status and its result row for the failure
-  // stage. Other tools keep their failure marker; applied plans also show
-  // their compact progress meter.
+    failure_stage_class(name, brief, is_error)
+  // mbtx uses the trailing icon for status. Other tools keep their failure
+  // marker; applied plans also show their compact progress meter.
   let line : Array[@html.Html] = [
     @html.span(class="tool-flow", "→"),
     @html.span(class="tool-call-text", label),
@@ -459,7 +452,7 @@ fn result_row_view(
     _ => "Tool result · \{name}"
   }
   let error_class = (if is_error { " error" } else { "" }) +
-    failure_stage_class(name, brief, is_error, arguments)
+    failure_stage_class(name, brief, is_error)
   let pending_class = if pending { " pending" } else { "" }
   let line : Array[@html.Html] = [
     @html.span(class="tool-flow", "←"),
