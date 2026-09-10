@@ -284,6 +284,7 @@ pub fn component(
           images: ImageCache::empty(),
         },
         @cmd.batch([
+          render_rows_once_after_mount(),
           match input.scroll {
             Pinned => scroll_after_render()
             Unpinned(top~) => restore_scroll_after_render(top)
@@ -395,6 +396,37 @@ fn scroll_after_render() -> @cmd.Cmd {
     kind=@cmd.after_render,
   )
 }
+
+///|
+/// Render every row in the transcript's first frame, then let rows outside
+/// the viewport be skipped again (`content-visibility: auto`, see
+/// `transcript.css`). A skipped row keeps the height it was last rendered
+/// at, so after this frame no row stands in at a guessed height: scroll
+/// offsets saved earlier map to the same content, and scrolling through
+/// history never shifts as rows first render.
+fn render_rows_once_after_mount() -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => {
+      guard @dom.document().get_element_by_id("stream").to_option()
+        is Some(stream) &&
+        stream.to_html_element() is Some(stream) else {
+        return
+      }
+      let style = stream.get_style()
+      style.set(STREAM_ROWS_VISIBILITY, "visible")
+      @dom.window().request_animation_frame(_ => {
+        style.remove_property(STREAM_ROWS_VISIBILITY) |> ignore
+      })
+      |> ignore
+    },
+    kind=@cmd.after_render,
+  )
+}
+
+///|
+/// The custom property `transcript.css` reads for the rows' content
+/// visibility; `visible` on `#stream` renders every row.
+const STREAM_ROWS_VISIBILITY = "--stream-rows-visibility"
 
 ///|
 /// Put a returning conversation back where its reader left it. Lazily loaded

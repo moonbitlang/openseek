@@ -31,6 +31,20 @@
   margin: 0 auto;
 }
 
+/* Rows outside the viewport skip style, layout and paint. A long transcript
+   otherwise re-lays out every row whenever the column width changes (the
+   editor panel animating open, a window resize), and every render walks
+   them for style. A skipped row keeps the height it had when last rendered
+   (`auto`); the component renders every row once when the transcript
+   mounts (see render_rows_once_after_mount), so the 120px guess never
+   stands in and scroll offsets stay exact. The turn rule is a zero-height
+   row whose time stamp hangs outside it, and the empty state is one row
+   that is always on screen: neither wants the containment. */
+.stream > :not(.turn-rule):not(.empty) {
+  content-visibility: var(--stream-rows-visibility, auto);
+  contain-intrinsic-size: auto 120px;
+}
+
 /* Floating "jump to latest" over the transcript's bottom edge, shown
    only while auto-follow is unpinned. Sticky inside the scroller; zero
    height so it never adds scroll length, the transform lifts the button
