@@ -728,6 +728,7 @@ async fn execute(
           },
           artifact,
           "--",
+          ..input.args,
         ]
         Some(("moonrun", run_argv, notes))
       }
@@ -749,6 +750,8 @@ async fn execute(
         ..if !input.warning {
           ["--warn-list", WarnOffList]
         },
+        "--",
+        ..input.args,
       ],
       "",
     ),
@@ -1443,6 +1446,15 @@ fn schema(escalation~ : Bool, hosting~ : Bool) -> Json {
             },
           ),
           (
+            "args",
+            {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": [],
+              "description": "Script arguments, defaulting to []. Passed verbatim after the runner's -- separator. Import moonbitlang/core/env and read @env.args()[1:] on wasm, or @env.args()[2:] on js. Works with source, filename, or both.",
+            },
+          ),
+          (
             "description",
             {
               "type": "string",
@@ -1595,6 +1607,11 @@ fn description(
     #|created. Identical existing content is reused; different content is never
     #|overwritten. Use the edit tool to change a saved script. Saving is limited
     #|to the writable workspace and is unavailable in read-only mode.
+    #|Pass `args` (an array of strings, default `[]`) to parameterize any script:
+    #|`{"filename":"scripts/check.mbtx","args":["--target","js"]}`.
+    #|Import "moonbitlang/core/env" and read `@env.args()[1:]` on the default
+    #|wasm target (`@env.args()[2:]` on js, which includes node and script paths).
+    #|Arguments are passed verbatim, without shell expansion or splitting.
     #|When OPENSEEK_REFERENCES is available, these scripts are already bundled:
     #|@builtin/check.mbtx (moon check), @builtin/test.mbtx (moon test),
     #|@builtin/check-test.mbtx (check then test), @builtin/info-fmt.mbtx (info

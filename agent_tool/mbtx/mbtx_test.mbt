@@ -39,6 +39,77 @@ async test "runs a pure-core program and returns its output" {
 }
 
 ///|
+async test "default prompt reusable check script forwards arguments" {
+  let prompt = @fs.read_file("prompt/default_prompt.mbt.md").text()
+  let example = prompt
+    .split("For example, save this source as `scripts/check.mbtx`")
+    .collect()
+  assert_eq(example.length(), 2)
+  let source = example[1].split("```mbtx\n").collect()[1].split("```").collect()[0]
+  @vfs.with_tmpdir(ws => {
+    @fs.write_file(
+      "\{ws}/moon.mod",
+      "name = \"test/args\"",
+      create_mode=CreateOrTruncate,
+    )
+    @fs.write_file("\{ws}/moon.pkg", "", create_mode=CreateOrTruncate)
+    @fs.write_file(
+      "\{ws}/main.mbt",
+      "fn answer() -> Int { 42 }",
+      create_mode=CreateOrTruncate,
+    )
+    let saved = run_in(ws, {
+      "source": source,
+      "filename": "scripts/check.mbtx",
+      "args": ["--target", "js"],
+    })
+    assert_false(saved.is_error, msg=saved.content)
+    let reused = run_in(ws, { "filename": "scripts/check.mbtx" })
+    assert_false(reused.is_error, msg=reused.content)
+    let invalid = run_in(ws, {
+      "filename": "scripts/check.mbtx",
+      "args": ["--not-a-moon-option"],
+    })
+    assert_true(invalid.is_error)
+    assert_true(invalid.content.contains("--not-a-moon-option"))
+  })
+}
+
+///|
+async test "script arguments reach inline and reused scripts verbatim on both runners" {
+  @vfs.with_tmpdir(ws => {
+    let values : Array[String] = [
+      "--policy", "two words", "", "你好", "$(echo nope)", "--",
+    ]
+    for target in ["wasm", "js"] {
+      let skip = if target == "js" { 2 } else { 1 }
+      let source =
+        $|import { "moonbitlang/core/env" }
+        $|fn main { println(@env.args()[\{skip}:].to_array().to_json().stringify()) }
+      let filename = "args-\{target}.mbtx"
+      let inline = run_in(ws, { "source": source, "target": target })
+      assert_false(inline.is_error, msg=inline.content)
+      assert_eq(inline.content, "[]\n")
+      let saved = run_in(ws, {
+        "source": source,
+        "filename": filename,
+        "target": target,
+        "args": values,
+      })
+      assert_false(saved.is_error, msg=saved.content)
+      assert_true(saved.content.contains(values.to_json().stringify()))
+      let reused = run_in(ws, {
+        "filename": filename,
+        "target": target,
+        "args": ["different input"],
+      })
+      assert_false(reused.is_error, msg=reused.content)
+      assert_eq(reused.content, "[\"different input\"]\n")
+    }
+  })
+}
+
+///|
 async test "save and run creates parents, suggests reuse, and preserves existing content" {
   @vfs.with_tmpdir(ws => {
     let state = @agent_tool.FileStateMap()
@@ -926,10 +997,19 @@ test "the schema advertises every decoded argument" {
   // MoonBit's String ordering is by length first, so a sorted expectation would
   // encode neither what this test means nor what a reader expects.
   let names = properties.keys().collect()
-  assert_eq(names.length(), 6)
-  for name in ["source", "filename", "description", "target", "cwd", "warning"] {
+  assert_eq(names.length(), 7)
+  for
+    name in [
+      "source", "filename", "args", "description", "target", "cwd", "warning",
+    ] {
     assert_true(names.contains(name))
   }
+  assert_true(
+    properties.get("args")
+    is Some(
+      { "type": "array", "items": { "type": "string", .. }, "default": [], .. }
+    ),
+  )
   assert_eq(
     choices,
     ([{ "required": ["source"] }, { "required": ["filename"] }] : Json),

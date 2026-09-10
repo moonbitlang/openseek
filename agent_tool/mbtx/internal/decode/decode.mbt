@@ -10,6 +10,8 @@ pub enum Program {
 /// Decoded program and execution options. `None` cwd means workspace root.
 pub struct MbtxInput {
   program : Program
+  /// Script arguments, excluding the executable name. Defaults to empty.
+  args : Array[String]
   /// Presentation metadata, inherited by a background job.
   description : String?
   target : String
@@ -111,6 +113,17 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
             "arguments.filename to be a string naming an existing script, for example {\"filename\":\"./check.mbtx\"}. For inline code, omit filename entirely and pass source; do not send filename: null",
           )
       }
+      let args : Array[String] = match fields.get("args") {
+        None => []
+        Some(Array(values)) =>
+          values.map(value => {
+            guard value is String(text) else {
+              fail("arguments.args to be an array of strings")
+            }
+            text
+          })
+        Some(_) => fail("arguments.args to be an array of strings")
+      }
       let description = match arguments {
         { "description": String(text), .. } => Some(text)
         { "description": Null, .. } => None
@@ -152,7 +165,7 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         { "subrun": _, .. } => fail("arguments.subrun to be a boolean")
         _ => false
       }
-      { program, description, target, cwd, warning, escalated, subrun, }
+      { program, args, description, target, cwd, warning, escalated, subrun, }
     }
     _ => fail("object arguments")
   }

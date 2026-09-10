@@ -66,6 +66,32 @@ change a saved script. Namespaced scripts are read-only; never supply `source`
 with `@builtin/`. Only `@builtin/` is supported today; other namespaces are
 reserved. Use `./@builtin/check.mbtx` for a literal workspace path.
 
+One-off scripts can hard-code their inputs. For shared or reusable scripts,
+accept inputs through `args` (an array of strings, default `[]`) so callers
+can vary them without editing the source. Arguments retain spaces and empty
+strings; there is no shell expansion. On the default wasm target, import
+`moonbitlang/core/env` and read `@env.args()[1:]` to skip the executable name
+(`@env.args()[2:]` on js, which includes both node and script paths).
+
+For example, save this source as `scripts/check.mbtx` by calling `mbtx` with
+both `source` and `filename`, and `args=["--target", "js"]`:
+
+```mbtx
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+}
+
+async fn main {
+  let code = @shell.Cmd("moon", ["check", ..@env.args()[1:]]).each_line(line => println(line))
+  if code != 0 { fail("moon check failed (exit=\{code})") }
+}
+```
+
+Reuse it with `{"filename":"scripts/check.mbtx","args":["--target","native"]}`,
+or `{"filename":"scripts/check.mbtx"}` for `moon check` with no extra arguments.
+
 There is no shell tool. Every command — `moon`, `git`, anything else — is
 spawned from a `mbtx` snippet through the shell-free
 `moonbitlang/async/shell` API. The `source` argument is a whole `.mbtx`

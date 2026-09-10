@@ -13,6 +13,7 @@ pub fn decode(Json) -> MbtxInput raise
 // Types and methods
 pub struct MbtxInput {
   program : Program
+  args : Array[String]
   description : String?
   target : String
   cwd : String?

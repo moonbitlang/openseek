@@ -71,6 +71,13 @@ cancelled at that deadline.
   unavailable in read-only mode and obeys worker write scopes. Namespaced
   filenames cannot accompany source: bundled scripts are read-only.
   Use `source` alone for one-off snippets.
+- `args` (array of strings, optional, default `[]`): script arguments passed
+  verbatim, without shell expansion or splitting. Works with inline, saved,
+  and save-and-run scripts. Import `moonbitlang/core/env` and read
+  `@env.args()[1:]` on wasm (excluding the executable name), or
+  `@env.args()[2:]` on js (excluding node and script paths). For reuse, call
+  `{"filename":"scripts/check.mbtx","args":["--target","js"]}` and vary
+  `args` on subsequent runs. Explicit `null` and non-string elements are rejected.
 - `target` (string, optional, default `wasm`): one of `wasm`, `wasm-gc`, `js`,
   or `llvm`. The default wasm backend is the policy-bound command/IO surface;
   the other targets are intended for pure compute, reject explicit native FFI,
