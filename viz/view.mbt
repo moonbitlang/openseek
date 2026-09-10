@@ -33,28 +33,29 @@ pub fn render_session(
 /// and a truncated final record. Returns `@html.nothing` for a clean log so the
 /// caller can stack it unconditionally.
 pub fn render_notices(parsed : @session_log.ParsedLog) -> @html.Html {
-  let notices : Array[@html.Html] = []
-  if parsed.partial_tail {
-    notices.push(
-      @html.div(class="notice notice-warn") <| [
-        @html.text(
-          "⚠ trailing partial line ignored (process likely exited mid-append)",
-        ),
-      ],
-    )
-  }
-  for error in parsed.errors {
-    notices.push(
-      @html.div(class="notice notice-error") <| [
-        @html.div(class="notice-head") <| [
+  let notices : Array[@html.Html] = [
+    ..if parsed.partial_tail {
+      [
+        @html.div(class="notice notice-warn") <| [
           @html.text(
-            "⚠ line \{error.line_number} could not be decoded: \{error.message}",
+            "⚠ trailing partial line ignored (process likely exited mid-append)",
           ),
         ],
-        @html.pre(class="notice-body") <| error.content,
-      ],
-    )
-  }
+      ]
+    },
+    ..[
+      for error in parsed.errors => {
+        @html.div(class="notice notice-error") <| [
+          @html.div(class="notice-head") <| [
+            @html.text(
+              "⚠ line \{error.line_number} could not be decoded: \{error.message}",
+            ),
+          ],
+          @html.pre(class="notice-body") <| error.content,
+        ]
+      }
+    ],
+  ]
   if notices.is_empty() {
     @html.nothing
   } else {
