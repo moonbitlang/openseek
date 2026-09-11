@@ -69,9 +69,12 @@ fn duration_label(milliseconds : Int) -> String {
 /// `main`. It runs via `moon run` with your workspace as the working directory
 /// by default — so relative `@fs` paths (e.g. `@fs.read_file("data.json")`)
 /// resolve to workspace files, and any output the program writes lands in the
-/// workspace. Pass `cwd` to run somewhere else. Build artifacts stay in a
-/// throwaway temp directory (via `--target-dir`), so they never touch your
-/// `_build` and the working tree is left clean.
+/// workspace. Pass `cwd` to run somewhere else. Build artifacts never touch
+/// your `_build`: they go to a per-session cache directory (via
+/// `--target-dir`) when the session has one, so the packages a script imports
+/// are compiled once per session rather than once per call (see
+/// `build_cache_root`), and to a throwaway temp directory otherwise. Either
+/// way the working tree is left clean.
 ///
 /// Dependency resolution is still isolated: a local-package import resolves to
 /// the published registry snapshot, not your uncommitted edits (so this is for
@@ -129,6 +132,11 @@ pub fn definition(
   // this call, so its snippet, build artifacts, and output log cannot be
   // removed here — the caller's scratch dir is what eventually reclaims them.
   let next_background = Ref(0)
+  // Deliberately NOT `concurrent_safe`: wasm builds for one session share
+  // build directories (see `build_cache_root`), and a call copies its program
+  // out of the shared directory only after its own build returns. Two calls
+  // in flight could interleave a rebuild of the same directory between one
+  // call's build and its copy. Sequential execution is what rules that out.
   AgentToolDefinition(
     name="mbtx",
     description=description(
@@ -233,8 +241,8 @@ async fn execute(
   }
   // Read once, before validation/approval, then compile this same snapshot.
   // A saved script has the same isolation and execution path as inline code.
-  let (source, source_name) = match input.program {
-    Source(source) => (source, "source")
+  let (source, source_name, script_path) = match input.program {
+    Source(source) => (source, "source", None)
     Save(source, filename) => {
       if worker_sandbox is Some(_) && write_scope is None {
         return @agent_tool.respond(
@@ -258,7 +266,14 @@ async fn execute(
           )
       }
       saved.val = Some(filename)
-      (source, filename)
+      // The same resolution `save_script` used; a script that could be saved
+      // resolves, so a failure here only costs the cache its dedicated dir.
+      let path = try resolve_filename(workspace_root, filename, None) catch {
+        _ => None
+      } noraise {
+        path => Some(path)
+      }
+      (source, filename, path)
     }
     File(filename) => {
       let path = resolve_filename(
@@ -297,7 +312,7 @@ async fn execute(
           )
         }
       }
-      (source, filename)
+      (source, filename, Some(path))
     }
   }
   // Refuse FFI (`extern`), the one construct no mbtx target runs sandboxed.
@@ -333,10 +348,12 @@ async fn execute(
       )
     }
   }
-  // The snippet and all build artifacts live in a throwaway temp dir (passed as
-  // `--target-dir`), while the program itself runs with `run_cwd` as its working
-  // directory — so relative `@fs` paths reach workspace files yet nothing lands
-  // in the working tree. The temp dir is managed by hand (not `@vfs.with_tmpdir`)
+  // The snippet's run-time files live in a throwaway temp dir, and its build
+  // in the session cache when there is one (see `build_cache_root`) — that,
+  // not the workspace, is what moon gets as `--target-dir` — while the program
+  // itself runs with `run_cwd` as its working directory, so relative `@fs`
+  // paths reach workspace files yet nothing lands in the working tree. The
+  // temp dir is managed by hand (not `@vfs.with_tmpdir`)
   // so its cleanup can be shielded from cancellation — that helper re-raises on
   // cancel WITHOUT removing the dir, which would leak the snippet, artifacts, and
   // a possibly-large output log when a turn is cancelled mid-run. The timeout
@@ -487,11 +504,46 @@ async fn execute(
         is_error=true,
       )
   }
-  @fs.write_file(
-    "\{build_dir}/snippet.mbtx",
-    source,
-    create_mode=CreateOrTruncate,
-  )
+  // Where the program is staged and built. With a session cache the wasm
+  // build lands in a directory keyed by the program (see `cache_key`) that
+  // outlives this call, so its compiled dependencies are there for the next
+  // one; the staged source is rewritten only when it changed, because moon
+  // rebuilds on modification time. Without a cache — no owner, or a non-wasm
+  // target, which keeps the single-shot `moon run` — the program builds in
+  // this call's own directory as before. A cache directory that cannot be
+  // created costs this call the cache, not the run.
+  let stage_dir = match build_cache_root(job_dir?, scratch_dir?) {
+    Some(root) if input.target == "wasm" => {
+      let keyed = "\{root}/\{cache_key(script_path)}"
+      try {
+        if !@fs.exists(keyed) {
+          @fs.mkdir(keyed, recursive=true)
+        }
+        keyed
+      } catch {
+        error if @async.is_being_cancelled() => raise error
+        _ => build_dir
+      }
+    }
+    _ => build_dir
+  }
+  let cached = stage_dir != build_dir
+  // A build that was stopped mid-way left this marker (see `build_snippet`):
+  // its output is not to be trusted, and it may still have been receiving
+  // writes from an orphaned compiler when the marker was set, so it is
+  // discarded HERE, at the next use, rather than at the moment of the stop.
+  let abort_marker = "\{stage_dir}/aborted"
+  if cached && @fs.exists(abort_marker) {
+    @async.protect_from_cancel(() => {
+      @fs.rmdir("\{stage_dir}/_build", recursive=true) catch {
+        _ => ()
+      }
+      @fs.remove(abort_marker) catch {
+        _ => ()
+      }
+    })
+  }
+  stage_source("\{stage_dir}/snippet.mbtx", source) |> ignore
   let log = "\{build_dir}/output.log"
   // Pre-create the merged output file so both redirects open it; both append
   // so stdout and stderr interleave in write order.
@@ -506,6 +558,7 @@ async fn execute(
   // moon's diagnostics point at the copied source under the build dir; the
   // canonical path anchors the diagnostic path rewrite below.
   let real = @fs.realpath(build_dir) catch { _ => build_dir }
+  let stage_real = @fs.realpath(stage_dir) catch { _ => stage_dir }
   // The wasm backend is where moonrun's policy applies, so the policy file is
   // written for every run and passed alongside. `--wasm-policy` is silently
   // IGNORED on other backends, which is why `target` is not the model's choice
@@ -687,16 +740,42 @@ async fn execute(
     match
       build_snippet(
         build_dir~,
+        stage_dir~,
+        abort_marker=if cached { Some(abort_marker) } else { None },
         run_cwd~,
         warning=input.warning,
         build_timeout_ms~,
         empty_stdin~,
-        rewrite_bases=[real, build_dir],
+        rewrite_bases=[real, build_dir, stage_real, stage_dir],
         source_name~,
         confine~,
       ) {
       NotBuilt(action) => return action
-      Built(artifact~, notes~) => {
+      Built(artifact=built, notes~) => {
+        // A cached artifact is a shared file: the next build of the same key
+        // rewrites it in place. This call runs a private copy, so neither a
+        // later call nor a detached job's cleanup can touch the file a
+        // running program was started from. moonrun reads the whole program
+        // at startup, so the copy also decouples job lifetime from the cache.
+        let artifact = if cached {
+          let copy = "\{build_dir}/snippet.wasm"
+          @fs.write_file(
+            copy,
+            @fs.read_file(built),
+            create_mode=CreateOrTruncate,
+          ) catch {
+            error if @async.is_being_cancelled() => raise error
+            error =>
+              return @agent_tool.respond(
+                "mbtx: the build succeeded but its artifact could not be copied out of the session cache (\{error}) — a filesystem fault, not a problem in `source`.",
+                is_error=true,
+                brief="mbtx build",
+              )
+          }
+          copy
+        } else {
+          built
+        }
         // An approved escalation is exactly this: the policy file is still
         // written, and simply not passed. Widening the document instead was
         // not available — its `fs.write` roots are canonicalized existing
@@ -963,6 +1042,8 @@ priv enum BuildOutcome {
 /// without the report line.
 async fn build_snippet(
   build_dir~ : String,
+  stage_dir~ : String,
+  abort_marker~ : String?,
   run_cwd~ : String?,
   warning~ : Bool,
   build_timeout_ms~ : Int,
@@ -974,14 +1055,29 @@ async fn build_snippet(
   let build_argv = [
     "run",
     "-q",
-    "\{build_dir}/snippet.mbtx",
+    "\{stage_dir}/snippet.mbtx",
     "--build-only",
     "--target-dir",
-    "\{build_dir}/_build",
+    "\{stage_dir}/_build",
     ..if !warning {
       ["--warn-list", WarnOffList]
     },
   ]
+  // A build stopped mid-way — by its bound or by cancellation — can leave a
+  // half-written artifact behind. In a throwaway directory that is nobody's
+  // problem; in the session cache it would be the next call's. Stopping
+  // `moon` does not stop the compiler processes it spawned, so deleting the
+  // output now could race their last writes: the directory is marked instead,
+  // and the next call for this key discards it before building.
+  async fn mark_aborted() -> Unit {
+    if abort_marker is Some(marker) {
+      @async.protect_from_cancel(() => {
+        @fs.write_file(marker, "", create_mode=CreateOrTruncate) catch {
+          _ => ()
+        }
+      })
+    }
+  }
   let (prog, argv) = match confine("moon", build_argv) {
     Some(command) => (command.program(), command.args())
     None => ("moon", build_argv)
@@ -991,6 +1087,7 @@ async fn build_snippet(
   // policy-refusal scan never reads build chatter.
   let build_log = "\{build_dir}/build.log"
   @fs.write_file(build_log, "", create_mode=CreateOrTruncate)
+  errdefer mark_aborted()
   let result = @async.with_timeout_opt(build_timeout_ms, () => {
     let exit_code = @process.run(
       prog,
@@ -1005,6 +1102,7 @@ async fn build_snippet(
     (exit_code, read_capped(build_log))
   })
   guard result is Some((exit_code, raw)) else {
+    mark_aborted()
     return NotBuilt(
       @agent_tool.respond(
         "mbtx: the BUILD did not finish within \{duration_label(build_timeout_ms)} and was cancelled — the program never ran. Compilation or a dependency download stalled; retrying is faster than it looks (downloaded modules are cached).",
@@ -1034,7 +1132,7 @@ async fn build_snippet(
   // Older moon versions without an artifact report write directly under the
   // configured target directory; newer versions report their per-file path.
   let artifact = parse_artifacts_path(raw).unwrap_or(
-    "\{build_dir}/_build/wasm/debug/build/single/single.wasm",
+    "\{stage_dir}/_build/wasm/debug/build/single/single.wasm",
   )
   let artifact_present = @fs.exists(artifact) catch {
     error if @async.is_being_cancelled() => raise error

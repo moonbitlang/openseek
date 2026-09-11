@@ -11,10 +11,10 @@ sandboxed automation surface.
 
 The `source` is a `.mbtx` **single-file script** — MoonBit's own one-file
 program format. Alternatively, `filename` loads a saved script. The tool
-writes the program into a throwaway directory and, for the
+stages the program outside the working tree and, for the
 default wasm target, runs it in **two phases**. The BUILD runs first,
 synchronously: `moon run <file>.mbtx --build-only --target-dir
-<temp>`, bounded by its own wall clock (10s by default) so a hung dependency
+<dir>`, bounded by its own wall clock (10s by default) so a hung dependency
 download cannot hold the turn. A nonzero exit here is reported immediately as
 `BUILD failed (exit N)` — a build failure **by construction**, since the run
 phase never starts; no exit-code or output archaeology is needed to tell the
@@ -31,6 +31,35 @@ run, not the build`. Compiler diagnostics are rewritten to stable
 `warning: "on"`) is kept apart from program output by construction. The
 non-wasm targets keep the single-shot `moon run` and their reports claim no
 stage.
+
+## Build cache
+
+The cost of a call is the build, and the cost of the build is compiling the
+packages the script imports: measured on the bundled read workflow, a cold
+build is ~570ms, a rebuild in a directory that already holds those packages
+is ~270ms when the script body changed and ~25ms when it did not, and running
+the program is ~20ms. So when the session has a place that outlives the call
+(its job directory, or a read-only role's scratch lab) wasm builds go to a
+per-session cache under it instead of a fresh temp dir, and the compiled
+packages are there for the next call. The cache is reclaimed with the session.
+
+The directory, not the file name, is the key: moon writes every single-file
+build's program to one fixed path under its target directory, so two scripts
+sharing a directory would overwrite each other's program. A **named script**
+(`filename`, saved or bundled) gets a directory of its own, keyed by its
+resolved path — its content rarely changes, and an unchanged staged file is a
+no-op rebuild. **Inline snippets** share one directory: they differ every
+call, and what they gain is the warm dependency compilation. The staged file
+is rewritten only when its content changed, because moon rebuilds on
+modification time. After a successful build the call copies the program into
+its own per-call directory and runs the copy, so a later rebuild of the shared
+directory, or a detached job's cleanup, never touches the file a running
+program was started from. A build stopped by its bound marks its directory,
+and the next call for that key discards the marked output before building.
+
+Nothing in the tool's result changes; the cache only changes how long a
+call takes. A definition with neither a job directory nor a lab keeps the
+per-call cold build.
 
 With the agent's background runtime, every call's RUN waits inline for up to
 five seconds — build time deliberately does not count against that allowance.
