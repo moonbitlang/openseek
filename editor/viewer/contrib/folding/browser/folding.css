@@ -42,6 +42,7 @@
 }
 
 .inline-folded-body:after {
+  margin-left: 1ch;
   content: "\2026  }";
 }
 
