@@ -135,6 +135,9 @@ pub fn definition(
   // this call, so its snippet, build artifacts, and output log cannot be
   // removed here — the caller's scratch dir is what eventually reclaims them.
   let next_background = Ref(0)
+  // Per cache key, the generation a stopped build retired (see
+  // `open_generation`). Session memory, deliberately: see there.
+  let generations : Map[String, Int] = Map([])
   // Deliberately NOT `concurrent_safe`: wasm builds for one session share
   // build directories (see `build_cache_root`), and a call copies its program
   // out of the shared directory only after its own build returns. Two calls
@@ -170,6 +173,7 @@ pub fn definition(
         foreground_timeout_ms~,
         build_timeout_ms~,
         next_background~,
+        generations~,
         approval?,
         subrun?,
       )
@@ -232,6 +236,7 @@ async fn execute(
   foreground_timeout_ms~ : Int,
   build_timeout_ms~ : Int,
   next_background~ : Ref[Int],
+  generations~ : Map[String, Int],
   approval? : @agent_runtime.ApprovalChannel,
   subrun? : @host.SubrunInjection,
 ) -> @agent_tool.ToolAction {
@@ -522,13 +527,17 @@ async fn execute(
   }
   let stage_dir = match key_dir {
     Some(keyed) =>
-      open_generation(keyed) catch {
+      open_generation(keyed, generations.get(keyed).unwrap_or(0)) catch {
         error if @async.is_being_cancelled() => raise error
         _ => build_dir
       }
     None => build_dir
   }
   let cached = stage_dir != build_dir
+  // What a stopped build does to its key: the next call builds elsewhere.
+  let retire = key_dir.map(keyed => {
+    () => generations[keyed] = generations.get(keyed).unwrap_or(0) + 1
+  })
   // With warnings requested the program is recompiled even when unchanged:
   // moon's no-op rebuild reports the artifact and nothing else, so a cache
   // hit would silently drop the diagnostics the caller asked to see. Warning
@@ -739,7 +748,7 @@ async fn execute(
       build_snippet(
         build_dir~,
         stage_dir~,
-        retire=if cached { key_dir } else { None },
+        retire=if cached { retire } else { None },
         run_cwd~,
         warning=input.warning,
         build_timeout_ms~,
@@ -1041,7 +1050,7 @@ priv enum BuildOutcome {
 async fn build_snippet(
   build_dir~ : String,
   stage_dir~ : String,
-  retire~ : String?,
+  retire~ : (() -> Unit)?,
   run_cwd~ : String?,
   warning~ : Bool,
   build_timeout_ms~ : Int,
@@ -1068,9 +1077,9 @@ async fn build_snippet(
   // deleting nor rebuilding in that directory is safe at any later moment
   // this call can name: the generation is retired instead, and the next call
   // for this key builds in a fresh one (see `open_generation`).
-  async fn mark_aborted() -> Unit {
-    if retire is Some(key_dir) {
-      retire_generation(key_dir)
+  fn mark_aborted() -> Unit {
+    if retire is Some(retire) {
+      retire()
     }
   }
   let (prog, argv) = match confine("moon", build_argv) {

@@ -140,35 +140,55 @@ async test "cache: build errors are reported against the source, not the cache" 
 }
 
 ///|
-/// A build stopped by its bound must not leave its half-written output for the
+/// A build stopped mid-way must not leave its half-written output for the
 /// next call to trust. Stopping `moon` does not stop the compilers it spawned,
-/// so the stop retires the key's generation; the next call builds in a fresh
-/// directory and sweeps the retired one.
-async test "cache: a build stopped by its bound retires its generation" {
+/// so the stop retires the key's generation in the definition's memory; the
+/// next call through that definition builds in a fresh directory and sweeps
+/// the retired one. Cancellation is the stop used here because a definition's
+/// build bound is fixed for its lifetime, and the retirement must be observed
+/// through the SAME definition; the bound's path shares the retirement.
+async test "cache: a build stopped mid-way retires its generation" {
   @vfs.with_tmpdir(prefix="mbtx-cache-abort-", ws => {
     let spill = "\{ws}/spill"
     @fs.mkdir(spill)
-    let bounded = @mbtx.definition(
-      workspace_root=ws,
-      job_dir=spill,
-      build_timeout_ms=1,
-    )
-    let stopped = dispatch(bounded, { "source": "fn main { println(1) }" })
-    assert_true(stopped.is_error)
-    assert_true(stopped.content.contains("BUILD did not finish"))
-    assert_eq(
-      @fs.read_file("\{spill}/mbtx-cache/snippet/generation").text(),
-      "1",
-    )
     let definition = @mbtx.definition(workspace_root=ws, job_dir=spill)
+    // The stop must land while the BUILD is running for there to be anything
+    // to retire: a cold build of a script importing `moonbitlang/async` takes
+    // several hundred milliseconds, and what precedes it a few, so a bound in
+    // between lands inside the build.
+    let slow =
+      #|import { "moonbitlang/async" }
+      #|
+      #|async fn main {
+      #|  println(1)
+      #|}
+    let stopped = @async.with_timeout_opt(200, () => {
+      dispatch(definition, { "source": slow })
+    })
+    assert_true(stopped is None)
     let ok = dispatch(definition, { "source": "fn main { println(1) }" })
     assert_false(ok.is_error, msg=ok.content)
     assert_true(ok.content.contains("1"))
     assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/gen-1/_build"))
     assert_false(@fs.exists("\{spill}/mbtx-cache/snippet/gen-0"))
-    // Once discarded, the cache serves the next call as usual.
+    // Once retired, the cache serves the next call as usual, in place.
     let again = dispatch(definition, { "source": "fn main { println(2) }" })
     assert_true(again.content.contains("2"), msg=again.content)
+    assert_eq(
+      @fs.readdir("\{spill}/mbtx-cache/snippet").filter(name => {
+        name.has_prefix("gen-")
+      }),
+      ["gen-1"],
+    )
+    // A bounded build is stopped the same way and reports it as the build's.
+    let bounded = @mbtx.definition(
+      workspace_root=ws,
+      job_dir=spill,
+      build_timeout_ms=1,
+    )
+    let timed_out = dispatch(bounded, { "source": "fn main { println(3) }" })
+    assert_true(timed_out.is_error)
+    assert_true(timed_out.content.contains("BUILD did not finish"))
   })
 }
 

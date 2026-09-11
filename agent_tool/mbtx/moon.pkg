@@ -14,7 +14,7 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
-  "moonbitlang/core/string",
+  "moonbitlang/async/os_error",
   "bobzhang/openseek_protocol",
   "bobzhang/openseek_protocol/emit",
 }

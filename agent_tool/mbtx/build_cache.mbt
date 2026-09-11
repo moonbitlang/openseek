@@ -65,14 +65,17 @@ fn cache_key(script_path : String?) -> String {
 ///|
 /// The directory a cached build actually runs in: `<key dir>/gen-N`, where N
 /// is the key's current generation. A generation is retired (N+1) when a
-/// build in it was stopped mid-way — see `retire_generation` — so the next
-/// call builds in a fresh directory rather than in one an orphaned compiler
-/// may still be writing to. Older generations are swept here, best-effort:
-/// by the time a later call arrives the orphan is long gone, and a sweep
-/// that still loses the race only leaves garbage the session reclaims.
-async fn open_generation(key_dir : String) -> String {
-  let n = current_generation(key_dir)
-  let name = "gen-\{n}"
+/// build in it was stopped mid-way, so the next call builds in a fresh
+/// directory rather than in one an orphaned compiler may still be writing
+/// to. The generation lives in the definition's memory, not on disk: the
+/// cache is the session's and so is the definition, and a retirement that
+/// cannot fail is the whole point — a metadata file that failed to write, or
+/// read back malformed, would have the next call reuse the directory it was
+/// meant to fence off. Older generations are swept here, best-effort: by the
+/// time a later call arrives the orphan is long gone, and a sweep that still
+/// loses the race only leaves garbage the session reclaims.
+async fn open_generation(key_dir : String, generation : Int) -> String {
+  let name = "gen-\{generation}"
   let dir = "\{key_dir}/\{name}"
   if !@fs.exists(dir) {
     @fs.mkdir(dir, recursive=true)
@@ -86,41 +89,6 @@ async fn open_generation(key_dir : String) -> String {
     }
   }
   dir
-}
-
-///|
-/// Retire the key's current generation so no later call reuses its build
-/// directory. Called when a build was stopped by its bound or by cancellation:
-/// `moon` is gone by then, but the compiler processes it spawned are not
-/// necessarily, and deleting or rebuilding under them could hand the next
-/// call their stale or half-written output.
-async fn retire_generation(key_dir : String) -> Unit {
-  @async.protect_from_cancel(() => {
-    let next = current_generation(key_dir) + 1
-    @fs.write_file(
-      "\{key_dir}/generation",
-      next.to_string(),
-      create_mode=CreateOrTruncate,
-    ) catch {
-      _ => ()
-    }
-  })
-}
-
-///|
-fn generation_file(key_dir : String) -> String {
-  "\{key_dir}/generation"
-}
-
-///|
-async fn current_generation(key_dir : String) -> Int {
-  let text = @fs.read_file(generation_file(key_dir)).text() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return 0
-  }
-  @string.parse_int(text.trim()) catch {
-    _ => 0
-  }
 }
 
 ///|
@@ -142,8 +110,13 @@ fn fnv1a64(text : String) -> UInt64 {
 /// relink the program on every call — the ~270ms case — where leaving it
 /// alone is the ~25ms no-op. Returns whether the file was written.
 async fn stage_source(path : String, source : String) -> Bool {
+  // Only a genuinely absent file means "nothing staged yet"; a read that
+  // fails for any other reason is carried, not read as a stale file to
+  // overwrite. Non-UTF-8 content cannot equal `source`, so it is rewritten.
   let current : String? = try @fs.read_file(path).text() catch {
     error if @async.is_being_cancelled() => raise error
+    @os_error.OSError(_) as error if error.is_ENOENT() => None
+    @os_error.OSError(_) as error => raise error
     _ => None
   } noraise {
     text => Some(text)
