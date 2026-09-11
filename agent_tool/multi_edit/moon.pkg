@@ -3,6 +3,7 @@ import {
   "bobzhang/openseek/agent_tool/internal/auto_check",
   "bobzhang/openseek/agent_tool/internal/error" @tool_error,
   "bobzhang/openseek/agent_tool/internal/line_offset",
+  "bobzhang/openseek/agent_tool/internal/matching",
   "bobzhang/openseek/agent_tool/write_scope",
   "bobzhang/openseek/agent_tool/internal/manifest_error",
   "bobzhang/openseek/agent_tool/multi_edit/internal/decode",

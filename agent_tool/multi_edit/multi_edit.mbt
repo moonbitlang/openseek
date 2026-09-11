@@ -27,7 +27,9 @@ pub fn definition(
       #|optional end_line}: `file` is the path to change; `start_line` (1-based) anchors
       #|the search and `end_line` bounds it, so old_string can be the small exact span
       #|instead of a large context block; each edit replaces the first matching span in
-      #|its range. Make old_string uniquely identify the flagged code — include the
+      #|its range. Matching normalizes CRLF (`\r\n`) to LF and curly/smart quotes to
+      #|straight quotes, so old_string with LF matches `\r\n` in the file and straight
+      #|quotes match curly quotes. Make old_string uniquely identify the flagged code — include the
       #|receiver, e.g. `args.length()` — so a rename cannot stray onto a same-named call
       #|elsewhere on the line. List all edits for a given file contiguously. To INSERT
       #|instead of replace, set old_string to the empty string: new_string is inserted at
@@ -892,8 +894,16 @@ fn validate_edit(
       message: "old_string and new_string are identical",
     })
   }
-  let region = select_edit_region(content, item.start_line, item.end_line)
-  guard region.body.find(item.old_string) is Some(offset) else {
+  let (norm_content, offset_map) = @matching.normalize_content_for_matching(
+    content,
+  )
+  let (norm_old, _) = @matching.normalize_content_for_matching(item.old_string)
+  let region = select_edit_region(norm_content, item.start_line, item.end_line)
+  let match_offset = match region.body.find(norm_old) {
+    Some(offset) => Some(offset)
+    None => @matching.find_quote_normalized_match(region.body, norm_old)
+  }
+  guard match_offset is Some(offset) else {
     return Invalid({
       file,
       index: Some(index),
@@ -901,11 +911,17 @@ fn validate_edit(
       message: "old_string not found",
     })
   }
-  let start = region.start_offset + offset
+  let norm_global = region.start_offset + offset
+  let orig_start = offset_map[norm_global]
+  let orig_end = if norm_global + norm_old.length() < offset_map.length() {
+    offset_map[norm_global + norm_old.length()]
+  } else {
+    content.length()
+  }
   Valid({
     index,
-    start,
-    end: start + item.old_string.length(),
+    start: orig_start,
+    end: orig_end,
     new_string: item.new_string,
     range,
   })
