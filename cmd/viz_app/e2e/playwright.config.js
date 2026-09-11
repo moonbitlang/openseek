@@ -30,7 +30,7 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
   },
   webServer: {
-    // The shell lives at the repository root because viz_server serves it
+    // The shell lives at the repository root because the inspect server serves it
     // directly. The test still builds and owns the cmd/viz_app bundle here.
     command: `python3 -m http.server ${serverPort} --bind 127.0.0.1 --directory ../../..`,
     url: `${baseURL}/web/index.html`,

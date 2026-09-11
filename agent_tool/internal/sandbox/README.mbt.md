@@ -100,9 +100,8 @@ from the source-tree scan invalidate the cache when the tree changes. The
 `writable_subtree` variant is composed per command preparation and never cached.
 `sandbox_wbtest.mbt` pins the emitted SBPL byte for byte.
 
-The profile builder classifies names through `@source_write_policy`; callers
-performing static command preflight (the `shell` tool) use those packages
-directly, so the static and kernel layers agree on what counts as source.
+The profile builder classifies names through `@source_write_policy`, so what
+the kernel profile protects is exactly what that policy calls source.
 
 ## Availability and limitations
 

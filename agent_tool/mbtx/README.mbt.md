@@ -124,8 +124,7 @@ with `args=["--help"]`. No standalone `read` tool is registered.
   and run without that policy. `native` is deliberately unavailable because
   moonrun cannot apply the policy to it.
 - `cwd` (string, optional, default workspace root): the working directory the
-  program runs in. A relative `cwd` resolves against the workspace root, like
-  the `shell` tool.
+  program runs in. A relative `cwd` resolves against the workspace root.
 - `escalated` (boolean, optional, default `false`): ask the user to run this
   one snippet with **no sandbox policy**. Offered only when the tool was built
   with an `ask_approval` channel — see *Escalation* below. Absent from the
@@ -144,7 +143,7 @@ third-party import resolves to its **latest** registry version, which can differ
 from your workspace's pinned versions — so verify dependency-API probes against
 the workspace, not mbtx. Use it for self-contained scripts; to exercise
 your working-tree code, add a `*_test.mbt` to that package and run `moon test`
-via shell.
+from a snippet (`@shell.Cmd("moon", ["test", ...])`).
 
 ## Sandbox policy and source-file protection
 

@@ -25,7 +25,7 @@ test "protected names: sources, interfaces, and every manifest" {
   // `.mbt.md` counts — a documented package's README is executable source.
   inspect(
     @source_write_policy.is_protected_source_path(
-      "agent_tool/read/README.mbt.md",
+      "agent_tool/mbtx/README.mbt.md",
     ),
     content="true",
   )

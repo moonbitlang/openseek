@@ -109,7 +109,7 @@ git submodule update --init editor/vscode     # opt-in performance suite
 | `bobzhang/inspect` (in `inspect/`, own module) | HTTP server (native or wasm) that serves the visualizer over recorded sessions. | `inspect/README.md` |
 | `bobzhang/openseek-viz-app` (in `cmd/viz_app/`, own module) | JS entry point compiled into the visualizer bundle. | `viz/README.md` |
 | `moonbitlang/editor` (in `editor/`, own module) | Reusable readonly editor plus its reference browser shell and server. | `editor/README.md` |
-| `bobzhang/openseek/internal/{cli,workspace_path}` | Shared CLI accessors and workspace-path resolution for the command mains. | — |
+| `bobzhang/openseek/internal/workspace_path` | Workspace-path resolution shared by the agent tools and the command mains. | `internal/workspace_path/README.mbt.md` |
 | `bobzhang/openseek/testkit/filesystem` | JSON-backed virtual filesystem for tests and eval fixtures. | `testkit/filesystem/README.mbt.md` |
 | `bobzhang/openseek/eval/report` | Shared Markdown/JSON report primitive for deterministic and model evals. | `eval/report/README.mbt.md` |
 | `bobzhang/openseek/eval/tool_harness` | Deterministic host-side harness for file, command, and control tools. | `eval/tool_harness/README.mbt.md` |
@@ -278,8 +278,7 @@ and exposes each on `PATH` as `<name>.exe` (e.g. `openseek.exe`).
 For the evaluation-backed roadmap, see
 [`agent-improvement-guide.md`](agent-improvement-guide.md). It explains why the
 next highest-ROI work is semantic CLI validation, native CLI/error-handling
-guidance, MoonBit command routing, shaped IDE output, and manifest/debug/edit
-guardrails.
+guidance, shaped IDE output, and manifest/debug/edit guardrails.
 
 The file-editing eval harness is available under `eval/file_edit`. It runs the
 real agent against isolated fixtures and checks exact final file state, making

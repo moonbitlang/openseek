@@ -1,6 +1,6 @@
 # OpenSeek Agent Improvement Guide
 
-This guide turns the evaluation notes in `todo.md` into a practical direction
+This guide turns the May–June 2026 evaluation runs into a practical direction
 for improving OpenSeek. The short version is simple: DeepSeek V4 Pro is already
 capable enough to build substantial MoonBit libraries when it gets tight,
 well-shaped feedback. The highest return now is not another broad prompt. It is
@@ -164,47 +164,12 @@ reasoning budget on the domain logic instead of guessing MoonBit runtime APIs.
 
 ## Priority 3: Route MoonBit Commands Through Structured Policy
 
-### Motivation
-
-A structured command policy can still be bypassed by raw shell. In one eval, a
-guarded command path rejected an unreviewed `moon test --update`; the agent then
-used shell to run the same command. Other runs lost time to shell quoting for
-expressions with `|`, spaces, brackets, and parentheses.
-
-### Good Example
-
-Instead of allowing this:
-
-```text
-shell: moon test --update
-```
-
-the shell tool should either reject it or route it through the same command
-policy:
-
-```text
-structured command:
-  command = test
-  update_snapshots = true
-  test_update_kind = intentional_snapshot_refresh
-  test_update_reason = "README output changed after fixing JSON escaping"
-```
-
-For query-heavy tools such as jqmini or JSONPath, structured argv matters:
-
-```text
-command argv:
-  ["moon", "run", "--target", "native", "cmd/jqmini", "--", ".items[] | .name", "fixtures/users.json"]
-```
-
-The agent should not have to rely on shell quoting to preserve the query.
-
-### Why It Matters
-
-Command policy is only real if every path respects it. If a guarded command path
-is safe but `shell` can bypass it, the agent will eventually take the loose path
-under pressure. Routing also improves eval quality because command failures become
-tool-feedback failures, not quoting accidents.
+*Resolved.* The shell tool and its command policy are gone: every command now
+runs as an `mbtx` snippet that spawns processes through the shell-free
+`moonbitlang/async/shell` API, so there is no raw-shell path that can bypass a
+guarded command and no shell quoting to get wrong. The eval finding that
+motivated this priority — a guarded path rejected `moon test --update` and the
+agent re-ran it through shell — cannot recur.
 
 ## Priority 4: Shape Semantic Docs And Source Output
 
@@ -315,7 +280,8 @@ can make the wrong state impossible to overlook. The strongest improvements so
 far were tool-level:
 
 - output caps prevented JSON Schema context blowups
-- bounded `read` made repair loops more focused
+- bounded reads (today the `@builtin/read.mbtx` workflow) made repair loops
+  more focused
 
 The next investments should follow that same pattern.
 
@@ -328,8 +294,8 @@ The next investments should follow that same pattern.
 2. Add a CLI/error cookbook and inject it into the agent prompt.
    This gives the model a reliable native CLI pattern while the semantic
    validator proves the result.
-3. Enforce MoonBit command routing through a structured command policy.
-   Close shell bypasses and reduce quoting failures for query-heavy tasks.
+3. (Done.) MoonBit command routing — commands now run as `mbtx` snippets with
+   no shell path beside them.
 4. Shape semantic-doc responses and broad source reads.
    Keep API discovery useful but bounded.
 5. Add manifest/debug/edit guardrails.

@@ -64,7 +64,7 @@ test "the module manifest and its legacy JSON form are separate questions" {
 test "package manifests, and the JSON form this package does not classify" {
   inspect(@manifest_path.is_moon_pkg_path("moon.pkg"), content="true")
   inspect(
-    @manifest_path.is_moon_pkg_path("agent_tool/read/moon.pkg"),
+    @manifest_path.is_moon_pkg_path("agent_tool/mbtx/moon.pkg"),
     content="true",
   )
   // There is deliberately no `is_moon_pkg_json_path`. Only `moon.mod.json` has
@@ -83,7 +83,7 @@ extension rather than by a fixed filename. Any basename may precede it.
 ///|
 test "generated interfaces are matched by extension, not by filename" {
   inspect(
-    @manifest_path.is_generated_mbti_path("agent_tool/read/pkg.generated.mbti"),
+    @manifest_path.is_generated_mbti_path("agent_tool/mbtx/pkg.generated.mbti"),
     content="true",
   )
   // Any stem works — the extension is what is being recognized.

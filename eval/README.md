@@ -34,7 +34,7 @@ policy, and visible tests identical.
 
 | Runner | Purpose | Invocation Shape |
 | --- | --- | --- |
-| `openseek-deepseek-v4-pro` | Main subject under test. Measures our agent loop, DeepSeek V4 Pro reasoning, MoonBit prompt, and local tools together. | `moon run cmd/main -- --model deepseek-v4-pro "$(cat TASK.md)"` |
+| `openseek-deepseek-v4-pro` | Main subject under test. Measures our agent loop, DeepSeek V4 Pro reasoning, MoonBit prompt, and local tools together. | `moon run cmd/openseek -- run --model deepseek-v4-pro "$(cat TASK.md)"` |
 | `codex-strong` | Strong reference agent. Measures whether failures are task difficulty or OpenSeek-specific. | Codex runner with a current strong coding model. |
 | `codex-weak` | Lower-cost/weak baseline. Measures whether DeepSeek clears a practical quality bar. | Same Codex runner with a deliberately cheaper model. |
 | `deepseek-v4-pro-compat` | Optional control. Measures DeepSeek through an existing SWE-AGI-compatible runner if available. | SWE-AGI-style runner using DeepSeek credentials. |
@@ -137,8 +137,8 @@ For each run, monitor the log in addition to final tests:
 - `moon run -e` and stdin probe use when syntax/API uncertainty appears
 - any `moon run -c` mention, which should trend to zero
 - compiler/test repair loops and whether the same root cause repeats
-- avoidable tool-call failures: bad schema fields, stale edits, shell bypasses,
-  and malformed MoonBit command arguments
+- avoidable tool-call failures: bad schema fields, stale edits, and mbtx
+  snippets that fail to build
 - validation coverage before finish: `moon check`, targeted `moon test`,
   `moon info`, `moon fmt`, and task-specific CLI probes
 - CLI contract quality: file mode, stdin mode, exit codes, valid JSON/JSON

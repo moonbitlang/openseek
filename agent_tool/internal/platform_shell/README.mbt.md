@@ -1,10 +1,10 @@
 # agent_tool/internal/platform_shell
 
 The platform shell pair: `program` (`sh`, or `powershell.exe` on Windows) and
-`args(cmd)`, which makes that shell interpret `cmd` as command text. The
-`shell` tool uses the pair for plain launches, and `internal/sandbox` builds
-its `sandbox-exec` command line around the same pair — so a command means the
-same thing whether or not a sandbox wraps it.
+`args(cmd)`, which makes that shell interpret `cmd` as command text.
+`internal/sandbox` builds its `sandbox-exec` command line around the pair for
+its `Shell` capability, so command text means the same thing whether or not a
+sandbox wraps it.
 
 The values are platform-`#cfg`'d, so assertions here stay portable by
 checking shape rather than spelling:
