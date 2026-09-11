@@ -940,11 +940,19 @@ fn comparability(
   let mut unmapped_edits = 0
   if graph is Some(graph) {
     for target in edited {
-      // Every spelling can name a package: a symlink's own directory AND its
-      // target's — an edited `a/alias.mbt -> z/z.mbt` changes package `z`
-      // too, so `z`'s dependents must count as depending on the edit.
+      // Every spelling that moon would compile can name a package: a
+      // symlink's own directory AND its target's — an edited
+      // `a/alias.mbt -> z/z.mbt` changes package `z` too, so `z`'s dependents
+      // must count as depending on the edit. A target moon does not compile
+      // (`a/alias.mbt -> z/source.txt`) changes nothing in `z`. A target with
+      // no compilable spelling at all (a README next to the sources) is
+      // simply not part of the attribution.
+      let compiled = target.spellings.filter(moon_compiles)
+      if compiled.is_empty() {
+        continue
+      }
       let mut mapped = false
-      for spelling in target.spellings {
+      for spelling in compiled {
         guard graph.package_of(spelling) is Some(pkg) else { continue }
         mapped = true
         if !edited_pkgs.contains(pkg) {
@@ -1025,6 +1033,17 @@ fn comparability(
     graph_available: graph is Some(_),
     truncated: after.truncated || before.map(b => b.truncated).unwrap_or(false),
   }
+}
+
+///|
+/// Whether moon compiles a file under this name: MoonBit source, a doc file
+/// with checked fences, or a manifest that shapes a package or module.
+fn moon_compiles(path : String) -> Bool {
+  if path.has_suffix(".mbt") || path.has_suffix(".mbt.md") {
+    return true
+  }
+  let name = path.rev_after("/").unwrap_or(path)
+  name == "moon.pkg" || name == "moon.mod" || name == "moon.work"
 }
 
 ///|
@@ -1740,6 +1759,27 @@ test "comparability attributes through an edited symlink's target package" {
   )
   assert_eq(evidence.new_breaking, ["w/w.mbt:2:1-2:2: caller broke"])
   assert_eq(evidence.verdict(), Breakage)
+  // A target moon does not compile changes nothing in its package: the same
+  // link resolving to `z/source.txt` leaves `w` independent of the edit.
+  let data_link : EditedTarget = {
+    spellings: ["/r/x/alias.mbt", "/r/z/source.txt"],
+    canonical: "/r/x/alias.mbt",
+  }
+  let surfaced = comparability(
+    Some(before),
+    check_result([site("w/w.mbt", "2:1-2:2", "surfaced")]),
+    [data_link],
+    cwd=Some("/r"),
+    graph=Some(sample_graph()),
+  )
+  assert_eq(surfaced.new_breaking, [])
+  assert_eq(surfaced.verdict(), CertifiedReach)
+  // A non-source file in the batch (a README) neither maps nor counts as
+  // unmapped.
+  let with_readme = classify(Some(before), check_result([]), [
+    "/r/x/x.mbt", "/r/x/README.md",
+  ])
+  assert_eq(with_readme.unmapped_edits, 0)
 }
 
 ///|
