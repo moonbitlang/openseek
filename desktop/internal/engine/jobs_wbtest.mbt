@@ -156,10 +156,34 @@ async test "history decodes only its requested page and preserves runtime job or
   assert_eq(selected.job, terminal)
   assert_false(selected.controllable)
   // One malformed runtime entry produces one actionable diagnostic.
-  @fs.write_file("\{root}/stray-file", "not a runtime directory")
-  let broken = job_history_page(root, Map([]), 0, [])
+  // Use an otherwise empty root so pagination cannot hide a second error.
+  let broken_root = @fs.tmpdir(prefix="job-broken-runtime-")
+  defer @fs.rmdir(broken_root, recursive=true)
+  @fs.write_file("\{broken_root}/stray-file", "not a runtime directory")
+  let broken = job_history_page(broken_root, Map([]), 0, [])
   assert_eq(broken.errors.length(), 1)
   assert_true(broken.errors[0].contains("stray-file"))
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "owner lock inspection failures preserve durable and live jobs" {
+  let root = @fs.tmpdir(prefix="job-owner-inspection-")
+  defer @fs.rmdir(root, recursive=true)
+  @fs.mkdir("\{root}/gen-1")
+  let record = job_record_fixture()
+  @fs.write_file("\{root}/gen-1/bg-1.json", record.to_json().stringify())
+  // A symlink loop produces a non-ENOENT stat failure even when run as root.
+  @fs.symlink(target="owner.lock", "\{root}/gen-1/owner.lock")
+  let durable = job_history_page(root, Map([]), 0, [])
+  assert_eq(durable.jobs.length(), 1)
+  assert_true(durable.jobs[0].job.state is Running)
+  assert_true(durable.jobs[0].error is Some(_))
+  assert_eq(durable.errors.length(), 1)
+  let live = job_history_page(root, Map([("gen-1/bg-1", record)]), 0, [])
+  assert_eq(live.jobs.length(), 1)
+  assert_true(live.jobs[0].controllable)
+  assert_eq(live.errors.length(), 1)
 }
 
 ///|

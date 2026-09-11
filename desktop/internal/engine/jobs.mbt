@@ -220,22 +220,28 @@ async fn job_history_page(
     if !@wire.valid_job_component(name) {
       continue
     }
-    let kind = @fs.kind("\{directory}/\{name}") catch {
+    let kind = Some(@fs.kind("\{directory}/\{name}")) catch {
       error => {
         errors.push("Cannot inspect runtime \{name}: \{error}")
-        continue
+        None
       }
     }
-    guard kind is Directory else {
-      errors.push("Cannot inspect runtime \{name}: not a directory")
-      continue
-    }
-    let stamp = Some(@fs.mtime("\{directory}/\{name}/owner.lock")) catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() => None
-      error => {
-        errors.push("Cannot inspect runtime \{name}: \{error}")
+    // Reject only entries known to be invalid. An inspection error must not
+    // discard readable metadata or the authoritative live-engine overlay.
+    let stamp = match kind {
+      Some(Directory) =>
+        Some(@fs.mtime("\{directory}/\{name}/owner.lock")) catch {
+          @os_error.OSError(_) as error if error.is_ENOENT() => None
+          error => {
+            errors.push("Cannot inspect runtime \{name}: \{error}")
+            None
+          }
+        }
+      Some(_) => {
+        errors.push("Cannot inspect runtime \{name}: not a directory")
         continue
       }
+      None => None
     }
     generations.push((name, stamp))
   }
