@@ -63,7 +63,8 @@ pub fn BgJobRuntime::generation(self : BgJobRuntime) -> String {
 }
 
 ///|
-/// Typed live snapshots; history is read from the session's metadata files.
+/// Current-runtime snapshots only. The Desktop host reads durable history
+/// separately from the session metadata files.
 pub fn BgJobRuntime::records(self : BgJobRuntime) -> Array[@protocol.JobRecord] {
   [
     for _, job in self.jobs => job.record(self)
@@ -83,13 +84,16 @@ async fn BgJobRuntime::publish(
     job.revision += 1
   }
   job.persistence_error = None
+  // One immutable revision is shared by persistence and the lifecycle event.
+  // Execution status/output may advance while filesystem writes are awaiting.
+  let record = job.record(self)
   if self.persistent_logs && self.spill_dir is Some(dir) {
     let path = "\{dir}/\{id}.json"
     let temporary = "\{path}.tmp"
     try {
       @fs.write_file(
         temporary,
-        job.record(self).to_json().stringify(),
+        record.to_json().stringify(),
         create_mode=CreateOrTruncate,
         sync=Data,
         permission=0o600,
@@ -100,7 +104,7 @@ async fn BgJobRuntime::publish(
     }
   }
   if self.on_job_event is Some(publish) {
-    publish(kind, job.record(self))
+    publish(kind, { ..record, persistence_error: job.persistence_error, })
   }
 }
 

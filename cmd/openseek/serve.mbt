@@ -139,6 +139,7 @@ priv enum ServeStep {
 
 ///|
 /// Decode one JSONL command line from the controller.
+/// `jobs_snapshot` and `job_stop` are correlated controls handled outside turns.
 ///
 /// `prompt` starts a turn, `steer` supplies typed step-boundary input, `compact`
 /// summarizes the current conversation once no work is active, and `cancel`
@@ -198,6 +199,19 @@ fn decode_serve_command(json : Json) -> Result[ServeCommand, String] {
 
 ///|
 test "serve commands decode and reject with actionable errors" {
+  assert_true(
+    decode_serve_command({ "command": "jobs_snapshot", "request_id": "list-1" })
+    is Ok(JobsSnapshot(request_id="list-1")),
+  )
+  assert_true(
+    decode_serve_command({
+      "command": "job_stop",
+      "request_id": "stop-1",
+      "generation": "runtime-1",
+      "job_id": "bg-1",
+    })
+    is Ok(JobStop(request_id="stop-1", generation="runtime-1", job_id="bg-1")),
+  )
   assert_true(
     decode_serve_command({ "command": "prompt", "text": "hi" })
     is Ok(Prompt("hi", submission_id=None)),
