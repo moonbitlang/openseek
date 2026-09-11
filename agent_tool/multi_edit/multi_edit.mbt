@@ -87,12 +87,17 @@ pub fn definition(
             #|against the pre-batch error count, so pre-existing errors and all warnings
             #|are ignored), the entire batch is rolled back to its pre-batch contents and
             #|the call returns an error listing the first few new errors — so an
-            #|over-matching replace cannot leave a broken tree to untangle. Default 5; the
-            #|host caps the effective value (you can make it stricter, e.g. 0 to revert on
-            #|any new error, but cannot disable it). A batch that keeps or reduces the
-            #|error count is never reverted.
+            #|over-matching replace cannot leave a broken tree to untangle. Default 10;
+            #|the host clamps the effective value to 0..200 (0 reverts on any new error).
+            #|A batch that keeps or reduces the error count is never reverted. Caveat:
+            #|moon check stops at the first failing package, so in a tree that already
+            #|has errors a batch that FIXES them lets the build reach further and report
+            #|errors that were always there — the count rises without breakage. The
+            #|revert report states the evidence (are the pre-batch errors gone? is any
+            #|new error inside a file this batch edited?) and, when it points at that
+            #|artifact, the exact value to re-issue the unchanged batch with.
           ),
-          "examples": [5],
+          "examples": [10],
         },
         "revert_on_parse_errors": {
           "type": "boolean",
@@ -539,13 +544,15 @@ fn batch_reject_report(
 /// The host default number of newly introduced errors a batch may cause before
 /// it is auto-reverted. Conservative: a handful of new errors is a likely
 /// over-match, not a transient cross-file gap.
-const DefaultRevertThreshold : Int = 5
+const DefaultRevertThreshold : Int = 10
 
 ///|
 /// The largest threshold the model may request. The model can make the guard
-/// stricter (down to 0 — revert on any new error) but never raise it past this
-/// cap, so an overconfident call cannot silently disable the safety net.
-const HostMaxRevertThreshold : Int = 10
+/// stricter (down to 0 — revert on any new error) and, when a revert report
+/// shows the count delta to be a measurement artifact (see `Comparability`),
+/// raise it to the reported delta so the same batch is admitted — but never
+/// past this cap, so an overconfident call cannot silently disable the net.
+const HostMaxRevertThreshold : Int = 200
 
 ///|
 /// Resolve the model's requested threshold against the host policy: absent →
@@ -594,9 +601,26 @@ async fn revert_guarded_response(
   let before_count = before.map(b => b.error_count).unwrap_or(0)
   let introduced = after.error_count - before_count
   if introduced > threshold {
-    // Real breakage. Stay reverted (the originals are already back on disk).
+    // Over the line by count. Stay reverted (the originals are already back on
+    // disk) — but the count alone cannot tell breakage from the build merely
+    // reaching further, so the report carries the identity/location evidence
+    // and, when it points at the latter, the value that admits this batch.
+    let evidence = comparability(
+      before,
+      after,
+      [
+        for write in writes => write.path
+      ],
+    )
     @agent_tool.respond(
-      revert_report(writes, after, introduced~, threshold~, restore_failures~),
+      revert_report(
+        writes,
+        after,
+        introduced~,
+        threshold~,
+        restore_failures~,
+        evidence~,
+      ),
       is_error=true,
       brief="multi_edit reverted (\{introduced} new error(s))",
     )
@@ -698,37 +722,167 @@ fn keep_response(
     None =>
       "\{summary}\nmoon check: applied with \{errors} error(s) kept (≤ revert_when_errors_above=\{threshold}), \{after.warning_count} warning(s)"
   }
-  if after.first_errors.is_empty() {
+  let first_errors = after.first_errors()
+  if first_errors.is_empty() {
     header
   } else {
-    "\{header}\n\{after.first_errors.join("\n")}"
+    "\{header}\n\{first_errors.join("\n")}"
   }
 }
 
 ///|
+/// Evidence on whether the pre- and post-batch error counts are comparable.
+/// `moon check` stops at the first failing package level, so a batch that
+/// fixes the errors the pre-batch run stopped at lets the build reach further
+/// and report errors that were always there; the count then rises without
+/// breakage. A count delta cannot tell that from an over-match, but the error
+/// identities and locations can: an over-match leaves new errors inside the
+/// files the batch wrote, while the build reaching further leaves the old
+/// errors gone and the new ones elsewhere.
+priv struct Comparability {
+  // The pre-batch run's error count; `None` when that run could not be made
+  // (then every post-batch error was counted as introduced).
+  before_count : Int?
+  // Pre-batch errors (by `path:loc: message` identity) still reported after.
+  remaining : Int
+  // Post-batch errors absent from the pre-batch run that sit in a file this
+  // batch wrote — the signature of an over-match.
+  new_in_edited : Array[String]
+  // Either run overflowed the capture budget, so the identity sets above are
+  // incomplete and no conclusion is drawn from them.
+  truncated : Bool
+} derive(Debug, Eq)
+
+///|
+fn comparability(
+  before : @auto_check.CheckErrors?,
+  after : @auto_check.CheckErrors,
+  edited : Array[String],
+) -> Comparability {
+  let seen : Set[String] = Set([])
+  if before is Some(before) {
+    for site in before.errors {
+      seen.add(site.line())
+    }
+  }
+  let mut remaining = 0
+  let new_in_edited : Array[String] = []
+  for site in after.errors {
+    let line = site.line()
+    if seen.contains(line) {
+      remaining += 1
+    } else if in_edited_file(site.path, edited) {
+      new_in_edited.push(line)
+    }
+  }
+  {
+    before_count: before.map(b => b.error_count),
+    remaining,
+    new_in_edited,
+    truncated: after.truncated || before.map(b => b.truncated).unwrap_or(false),
+  }
+}
+
+///|
+/// The delta looks like the build reaching further, not breakage: the tree
+/// already had errors, every one of them is gone, and no new error sits in a
+/// file this batch edited. A clean pre-batch tree never qualifies — it compiled
+/// everything, so its post-batch errors are all attributable to the batch.
+fn Comparability::looks_like_reach(self : Comparability) -> Bool {
+  self.before_count is Some(count) &&
+  count > 0 &&
+  self.remaining == 0 &&
+  self.new_in_edited.is_empty() &&
+  !self.truncated
+}
+
+///|
+/// Whether a diagnostic's path (as moon reported it: usually relative to the
+/// checked module, sometimes absolute) names one of the batch's resolved,
+/// absolute write targets.
+fn in_edited_file(diagnostic_path : String, edited : Array[String]) -> Bool {
+  edited.any(path => {
+    path == diagnostic_path ||
+    path.has_suffix("/\{diagnostic_path}") ||
+    path.has_suffix("\\\{diagnostic_path}")
+  })
+}
+
+///|
+/// How many over-match sites the revert report lists by name.
+const NewInEditedDisplayLimit : Int = 5
+
+///|
 /// The reverted-batch report: what was applied, how many new errors triggered
-/// the rollback, the first few of them, and how to retry.
+/// the rollback, the first few of them, the comparability evidence, and how to
+/// retry — narrower old_strings when the evidence points at an over-match, the
+/// exact `revert_when_errors_above` that admits the unchanged batch when it
+/// points at the build reaching further.
 fn revert_report(
   writes : Array[PreparedWrite],
   after : @auto_check.CheckErrors,
   introduced~ : Int,
   threshold~ : Int,
   restore_failures~ : Array[String],
+  evidence~ : Comparability,
 ) -> String {
   let total = total_edit_count(writes)
   let head = "reverted: applied \{total} edit(s) across \{writes.length()} file(s), but moon check then reported \{error_count_label(after)} error(s) (\{introduced} newly introduced > revert_when_errors_above=\{threshold}); all \{writes.length()} file(s) were rolled back to their pre-batch contents."
-  let errors = if after.first_errors.is_empty() {
+  let first_errors = after.first_errors()
+  let errors = if first_errors.is_empty() {
     ""
   } else {
-    "\nfirst \{after.first_errors.length()} error(s):\n\{after.first_errors.join("\n")}"
+    "\nfirst \{first_errors.length()} error(s):\n\{first_errors.join("\n")}"
   }
   let restore_note = if restore_failures.is_empty() {
     ""
   } else {
     "\nWARNING: could not restore \{restore_failures.length()} file(s): \{restore_failures.join(", ")} — inspect them manually."
   }
-  let tail = "\nre-issue with more precise old_strings (include the receiver) and/or smaller batches so a replacement cannot stray onto unintended sites."
-  "\{head}\{errors}\{restore_note}\{tail}"
+  "\{head}\{errors}\{restore_note}\n\{comparability_advice(evidence, introduced~)}"
+}
+
+///|
+fn comparability_advice(evidence : Comparability, introduced~ : Int) -> String {
+  if evidence.looks_like_reach() {
+    let before = evidence.before_count.unwrap_or(0)
+    let action = if introduced > HostMaxRevertThreshold {
+      "The delta exceeds the host cap of revert_when_errors_above=\{HostMaxRevertThreshold}, so this batch cannot be admitted in one call: split it by package and let each part's check reach further."
+    } else {
+      "If you are confident this batch is a fix (e.g. every post-batch error is the same class you are fixing, in files you have not touched yet), re-issue it UNCHANGED with revert_when_errors_above=\{introduced}; it will then be kept and the remaining errors reported."
+    }
+    return "comparability: all \{before} pre-batch error(s) are gone and none of the post-batch errors are in the files this batch edited. moon check stops at the first failing package, so fixing the errors it stopped at lets the build reach further and report errors that were already there — this delta is then a measurement artifact, not breakage. \{action}"
+  }
+  let baseline = match evidence.before_count {
+    None =>
+      "the pre-batch check could not run, so every post-batch error was counted as introduced"
+    Some(0) =>
+      "the tree checked clean before this batch, so every post-batch error is attributable to it"
+    Some(count) => "\{evidence.remaining} of \{count} pre-batch error(s) remain"
+  }
+  let truncated = if evidence.truncated {
+    " (check output was truncated, so this comparison is partial)"
+  } else {
+    ""
+  }
+  let over_match = match evidence.new_in_edited {
+    [] => ""
+    sites => {
+      let limit = if sites.length() < NewInEditedDisplayLimit {
+        sites.length()
+      } else {
+        NewInEditedDisplayLimit
+      }
+      let shown = sites[:limit]
+      let more = if sites.length() > shown.length() {
+        "\n… \{sites.length() - shown.length()} more"
+      } else {
+        ""
+      }
+      "; \{sites.length()} new error(s) sit in files this batch edited (over-match evidence):\n\{shown.join("\n")}\{more}"
+    }
+  }
+  "comparability: \{baseline}\{truncated}\{over_match}\nre-issue with more precise old_strings (include the receiver) and/or smaller batches so a replacement cannot stray onto unintended sites."
 }
 
 ///|
@@ -1028,6 +1182,26 @@ fn sample_write(path : String, edits : Int) -> PreparedWrite {
 }
 
 ///|
+fn site(path : String, loc : String, message : String) -> @auto_check.ErrorSite {
+  { path, loc, message, }
+}
+
+///|
+fn check_result(
+  errors : Array[@auto_check.ErrorSite],
+  truncated? : Bool = false,
+) -> @auto_check.CheckErrors {
+  { error_count: errors.length(), warning_count: 0, errors, truncated, }
+}
+
+///|
+/// Evidence of an over-match: no comparability conclusion, so the report gives
+/// the narrow-your-old_strings advice.
+fn over_match_evidence() -> Comparability {
+  { before_count: Some(0), remaining: 0, new_in_edited: [], truncated: false, }
+}
+
+///|
 test "effective_revert_threshold defaults and clamps to the host policy" {
   // Absent → host default.
   assert_eq(effective_revert_threshold(None), DefaultRevertThreshold)
@@ -1049,7 +1223,7 @@ test "keep_response is clean at zero errors and honest below threshold" {
   let clean : @auto_check.CheckErrors = {
     error_count: 0,
     warning_count: 12,
-    first_errors: [],
+    errors: [],
     truncated: false,
   }
   assert_eq(
@@ -1059,7 +1233,7 @@ test "keep_response is clean at zero errors and honest below threshold" {
   let kept : @auto_check.CheckErrors = {
     error_count: 2,
     warning_count: 12,
-    first_errors: ["a.mbt:1:1-1:2: boom", "a.mbt:4:1-4:2: bang"],
+    errors: [site("a.mbt", "1:1-1:2", "boom"), site("a.mbt", "4:1-4:2", "bang")],
     truncated: false,
   }
   assert_eq(
@@ -1077,7 +1251,7 @@ test "keep_response on the false-alarm path makes the introduced split explicit"
   let after : @auto_check.CheckErrors = {
     error_count: 8,
     warning_count: 0,
-    first_errors: ["a.mbt:1:1-1:2: boom"],
+    errors: [site("a.mbt", "1:1-1:2", "boom")],
     truncated: false,
   }
   assert_eq(
@@ -1091,7 +1265,7 @@ test "revert_report names the introduced count and the first errors" {
   let after : @auto_check.CheckErrors = {
     error_count: 9,
     warning_count: 3,
-    first_errors: ["a.mbt:1:1-1:2: boom", "b.mbt:2:1-2:2: bang"],
+    errors: [site("a.mbt", "1:1-1:2", "boom"), site("b.mbt", "2:1-2:2", "bang")],
     truncated: false,
   }
   let report = revert_report(
@@ -1100,6 +1274,7 @@ test "revert_report names the introduced count and the first errors" {
     introduced=9,
     threshold=5,
     restore_failures=[],
+    evidence=over_match_evidence(),
   )
   assert_eq(
     report,
@@ -1108,6 +1283,7 @@ test "revert_report names the introduced count and the first errors" {
       #|first 2 error(s):
       #|a.mbt:1:1-1:2: boom
       #|b.mbt:2:1-2:2: bang
+      #|comparability: the tree checked clean before this batch, so every post-batch error is attributable to it
       #|re-issue with more precise old_strings (include the receiver) and/or smaller batches so a replacement cannot stray onto unintended sites.
     ),
   )
@@ -1118,7 +1294,7 @@ test "revert_report marks a truncated count and a failed restore" {
   let after : @auto_check.CheckErrors = {
     error_count: 400,
     warning_count: 0,
-    first_errors: ["a.mbt:1:1-1:2: boom"],
+    errors: [site("a.mbt", "1:1-1:2", "boom")],
     truncated: true,
   }
   let report = revert_report(
@@ -1127,9 +1303,138 @@ test "revert_report marks a truncated count and a failed restore" {
     introduced=400,
     threshold=5,
     restore_failures=["a.mbt"],
+    evidence=over_match_evidence(),
   )
   assert_true(report.contains("reported ≥400 error(s)"))
   assert_true(report.contains("WARNING: could not restore 1 file(s): a.mbt"))
+}
+
+///|
+/// The issue-#1452 shape: the pre-batch run stopped at 10 errors in the edited
+/// files; the batch fixed all 10, the build reached further, and 87 errors in
+/// files the batch never touched surfaced. By count that is "77 introduced";
+/// by identity and location it is the build reaching further.
+test "comparability recognises the build reaching further after a fix" {
+  let edited = [
+    "/ws/cmd/openseek/main.mbt", "/ws/desktop/internal/engine/ops.mbt",
+  ]
+  let before = check_result(
+    [
+      for index in 0..<10 => {
+        site("cmd/openseek/main.mbt", "\{index + 1}:1-1:2", "wanted String")
+      }
+    ],
+  )
+  let after = check_result(
+    [
+      for index in 0..<87 => {
+        site(
+          "desktop/internal/host/git_ops.mbt",
+          "\{index + 1}:1-1:2",
+          "wanted String",
+        )
+      }
+    ],
+  )
+  let evidence = comparability(Some(before), after, edited)
+  assert_eq(evidence, {
+    before_count: Some(10),
+    remaining: 0,
+    new_in_edited: [],
+    truncated: false,
+  })
+  assert_true(evidence.looks_like_reach())
+  let advice = comparability_advice(evidence, introduced=77)
+  assert_true(advice.contains("all 10 pre-batch error(s) are gone"))
+  assert_true(
+    advice.contains("re-issue it UNCHANGED with revert_when_errors_above=77"),
+  )
+  assert_false(advice.contains("more precise old_strings"))
+  // Past the host cap the override cannot reach; say so instead of naming an
+  // unreachable value.
+  let capped = comparability_advice(
+    evidence,
+    introduced=HostMaxRevertThreshold + 1,
+  )
+  assert_true(
+    capped.contains(
+      "exceeds the host cap of revert_when_errors_above=\{HostMaxRevertThreshold}",
+    ),
+  )
+  assert_false(capped.contains("re-issue it UNCHANGED"))
+}
+
+///|
+test "comparability treats new errors inside edited files as an over-match" {
+  let edited = ["/ws/cmd/openseek/main.mbt"]
+  let before = check_result([site("cmd/openseek/main.mbt", "1:1-1:2", "old")])
+  let after = check_result([
+    site("cmd/openseek/main.mbt", "1:1-1:2", "old"),
+    site("cmd/openseek/main.mbt", "7:1-7:2", "stray"),
+    site("cmd/openseek/main.mbt", "9:1-9:2", "stray"),
+    site("lib/other.mbt", "2:1-2:2", "downstream"),
+  ])
+  let evidence = comparability(Some(before), after, edited)
+  assert_eq(evidence, {
+    before_count: Some(1),
+    remaining: 1,
+    new_in_edited: [
+      "cmd/openseek/main.mbt:7:1-7:2: stray", "cmd/openseek/main.mbt:9:1-9:2: stray",
+    ],
+    truncated: false,
+  })
+  assert_false(evidence.looks_like_reach())
+  let advice = comparability_advice(evidence, introduced=3)
+  assert_true(advice.contains("1 of 1 pre-batch error(s) remain"))
+  assert_true(advice.contains("2 new error(s) sit in files this batch edited"))
+  assert_true(advice.contains("cmd/openseek/main.mbt:9:1-9:2: stray"))
+  assert_true(advice.contains("more precise old_strings"))
+}
+
+///|
+test "comparability never calls a clean, missing, or truncated baseline a reach" {
+  let edited = ["/ws/a.mbt"]
+  let elsewhere = check_result([site("b.mbt", "1:1-1:2", "downstream")])
+  // Clean tree: it compiled everything, so the new errors are the batch's.
+  let clean = comparability(Some(check_result([])), elsewhere, edited)
+  assert_false(clean.looks_like_reach())
+  assert_true(
+    comparability_advice(clean, introduced=1).contains(
+      "checked clean before this batch",
+    ),
+  )
+  // No baseline run at all.
+  let missing = comparability(None, elsewhere, edited)
+  assert_eq(missing.before_count, None)
+  assert_false(missing.looks_like_reach())
+  assert_true(
+    comparability_advice(missing, introduced=1).contains(
+      "pre-batch check could not run",
+    ),
+  )
+  // Same shape as a reach, but the identity sets are partial.
+  let old = check_result([site("a.mbt", "1:1-1:2", "old")], truncated=true)
+  let truncated = comparability(Some(old), elsewhere, edited)
+  assert_true(truncated.truncated)
+  assert_false(truncated.looks_like_reach())
+  assert_true(
+    comparability_advice(truncated, introduced=1).contains(
+      "comparison is partial",
+    ),
+  )
+}
+
+///|
+test "in_edited_file matches moon's relative paths against resolved targets" {
+  let edited = ["/ws/cmd/openseek/main.mbt", "C:\\ws\\lib\\win.mbt"]
+  assert_true(in_edited_file("cmd/openseek/main.mbt", edited))
+  assert_true(in_edited_file("/ws/cmd/openseek/main.mbt", edited))
+  assert_true(in_edited_file("win.mbt", edited))
+  // A same-named file in another directory is not the edited one.
+  assert_false(in_edited_file("other/main.mbt", edited))
+  assert_false(
+    in_edited_file("openseek/main.mbt", ["/ws/cmd/xopenseek/main.mbt"]),
+  )
 }
 
 ///|

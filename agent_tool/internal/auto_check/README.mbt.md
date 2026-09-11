@@ -269,18 +269,23 @@ async test "a real check tallies errors separately from warnings" {
     guard tally is Some(errors) else { fail("check did not run") }
     inspect(errors.error_count >= 1, content="true")
     inspect(errors.truncated, content="false")
-    // `first_errors` renders as `path:loc: message`, the same shape the human
-    // `moon check` output uses, so a reverted batch points straight at the site.
-    inspect(errors.first_errors.length() >= 1, content="true")
+    // Every error site is kept (path, loc, message) so two runs can be
+    // compared by identity and location; `first_errors()` renders the first
+    // few as `path:loc: message`, the same shape the human `moon check` output
+    // uses, so a reverted batch points straight at the site.
+    inspect(errors.errors.length() >= 1, content="true")
+    inspect(errors.errors[0].path.has_suffix("main.mbt"), content="true")
+    inspect(errors.first_errors().length() >= 1, content="true")
   })
 }
 ```
 
-`first_errors` holds at most ten entries while `error_count` stays exact, so a
+`errors` holds every error site while `first_errors()` shows at most ten, so a
 revert report can show the shape of an over-match without dumping a broken
-build. When the capture budget overflows, `truncated` is set and both counts
-become lower bounds — which only ever makes a caller's guard fire more readily,
-never less.
+build, and a caller can still tell "the old errors are gone and the new ones are
+elsewhere" from "new errors appeared where I edited". When the capture budget
+overflows, `truncated` is set and the counts and sites become lower bounds —
+which only ever makes a caller's guard fire more readily, never less.
 
 ## `append_summary` — the human-facing tail
 
