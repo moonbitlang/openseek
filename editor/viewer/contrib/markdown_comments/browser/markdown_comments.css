@@ -193,8 +193,8 @@
 }
 
 /* The margin ViewZone node spans the entire gutter for the zone's height.
- * The chevron shares the trailing 16px folding column with code-folding
- * controls, regardless of the feedback reservation. */
+ * The chevron shares the code-folding column, leaving 8px before content
+ * regardless of the feedback reservation. */
 .moonbit-viewer-markdown-comment-margin {
   pointer-events: none;
 }
@@ -202,7 +202,7 @@
 .moonbit-viewer-markdown-comment-margin-toggle.codicon {
   position: absolute;
   top: 4px;
-  right: 0;
+  right: 8px;
   /* The later `.margin-view-overlays` sibling otherwise paints above the
    * zones container and intercepts the click. */
   z-index: 1;

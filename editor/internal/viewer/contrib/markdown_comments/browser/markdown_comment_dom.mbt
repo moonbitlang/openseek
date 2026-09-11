@@ -259,7 +259,7 @@ pub fn MarkdownCommentDom::pin_to_content_viewport(
 
 ///|
 /// Bounds the gutter chevron by the available line-decorations lane. CSS caps
-/// its width at 16px and aligns it to the right, sharing the code-folding
+/// its width at 16px and leaves 8px before content, sharing the code-folding
 /// column without expanding into the feedback reservation.
 pub fn MarkdownCommentDom::set_margin_fold_lane_width(
   self : MarkdownCommentDom,

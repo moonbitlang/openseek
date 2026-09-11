@@ -18,9 +18,9 @@
   align-items: center;
   justify-content: center;
   font-size: 140%;
-  /* Folding owns the trailing 16px, independently of other gutter controls. */
+  /* Keep the 16px folding target close to feedback, with 8px before code. */
   left: auto !important;
-  right: 0;
+  right: 8px;
   width: 16px !important;
 }
 

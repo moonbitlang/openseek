@@ -97,7 +97,7 @@ async function expectDecorationsLane(pane, expectedWidth) {
       toggle: toggleRect.width,
       toggleRightInset: marginRect.right - toggleRect.right,
     };
-  })).toEqual({ lane: expectedWidth, toggle: 16, toggleRightInset: 0 });
+  })).toEqual({ lane: expectedWidth, toggle: 16, toggleRightInset: 8 });
 }
 
 test('keeps normal editor gutter room for comment and feedback controls', async ({ page }) => {
