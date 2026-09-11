@@ -54,8 +54,11 @@ is rewritten only when its content changed, because moon rebuilds on
 modification time. After a successful build the call copies the program into
 its own per-call directory and runs the copy, so a later rebuild of the shared
 directory, or a detached job's cleanup, never touches the file a running
-program was started from. A build stopped by its bound marks its directory,
-and the next call for that key discards the marked output before building.
+program was started from. A build stopped by its bound retires the key's
+generation: the next call builds in a fresh `gen-N` directory and sweeps the
+old one, because stopping `moon` does not stop the compilers it spawned. With
+`warning: "on"` the script is recompiled even when unchanged, since a no-op
+rebuild reports the artifact and nothing else.
 
 Nothing in the tool's result changes; the cache only changes how long a
 call takes. A definition with neither a job directory nor a lab keeps the

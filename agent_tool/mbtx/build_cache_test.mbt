@@ -32,9 +32,9 @@ async test "cache: consecutive inline snippets each run their own program" {
     assert_true(again.content.contains("I AM ALICE"))
     // One shared directory holds the snippet's build; the per-call dirs are
     // reclaimed as before, so nothing but the cache survives the calls.
-    assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/_build"))
+    assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/gen-0/_build"))
     assert_eq(
-      @fs.read_file("\{spill}/mbtx-cache/snippet/snippet.mbtx").text(),
+      @fs.read_file("\{spill}/mbtx-cache/snippet/gen-0/snippet.mbtx").text(),
       "fn main { println(\"I AM ALICE\") }",
     )
     assert_eq(@fs.readdir(spill), ["mbtx-cache"])
@@ -67,7 +67,7 @@ async test "cache: a named script builds in one keyed dir and follows edits" {
       name.has_prefix("named-hello.mbtx-")
     })
     assert_eq(keyed.length(), 1)
-    let stage = "\{spill}/mbtx-cache/\{keyed[0]}"
+    let stage = "\{spill}/mbtx-cache/\{keyed[0]}/gen-0"
     assert_eq(@fs.read_file("\{stage}/snippet.mbtx").text(), v1)
     assert_true(@fs.exists("\{stage}/_build"))
     // Edit the script: the same directory is rebuilt, not a new one.
@@ -142,9 +142,9 @@ async test "cache: build errors are reported against the source, not the cache" 
 ///|
 /// A build stopped by its bound must not leave its half-written output for the
 /// next call to trust. Stopping `moon` does not stop the compilers it spawned,
-/// so the stop only marks the directory; the next call on the same cache
-/// discards the marked output and builds cleanly.
-async test "cache: a build stopped by its bound is discarded at the next use" {
+/// so the stop retires the key's generation; the next call builds in a fresh
+/// directory and sweeps the retired one.
+async test "cache: a build stopped by its bound retires its generation" {
   @vfs.with_tmpdir(prefix="mbtx-cache-abort-", ws => {
     let spill = "\{ws}/spill"
     @fs.mkdir(spill)
@@ -156,16 +156,39 @@ async test "cache: a build stopped by its bound is discarded at the next use" {
     let stopped = dispatch(bounded, { "source": "fn main { println(1) }" })
     assert_true(stopped.is_error)
     assert_true(stopped.content.contains("BUILD did not finish"))
-    assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/aborted"))
+    assert_eq(
+      @fs.read_file("\{spill}/mbtx-cache/snippet/generation").text(),
+      "1",
+    )
     let definition = @mbtx.definition(workspace_root=ws, job_dir=spill)
     let ok = dispatch(definition, { "source": "fn main { println(1) }" })
     assert_false(ok.is_error, msg=ok.content)
     assert_true(ok.content.contains("1"))
-    assert_false(@fs.exists("\{spill}/mbtx-cache/snippet/aborted"))
-    assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/_build"))
+    assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/gen-1/_build"))
+    assert_false(@fs.exists("\{spill}/mbtx-cache/snippet/gen-0"))
     // Once discarded, the cache serves the next call as usual.
     let again = dispatch(definition, { "source": "fn main { println(2) }" })
     assert_true(again.content.contains("2"), msg=again.content)
+  })
+}
+
+///|
+/// A cache hit is a no-op rebuild that reports nothing but the artifact, so a
+/// caller asking for warnings must get a real recompile, or the second call
+/// would silently lose diagnostics the first one showed.
+async test "cache: requested warnings survive an unchanged script" {
+  @vfs.with_tmpdir(prefix="mbtx-cache-warn-", ws => {
+    let spill = "\{ws}/spill"
+    @fs.mkdir(spill)
+    let definition = @mbtx.definition(workspace_root=ws, job_dir=spill)
+    let source = "fn main { let unused = 1; println(\"ran\") }"
+    let first = dispatch(definition, { "source": source, "warning": "on" })
+    assert_false(first.is_error, msg=first.content)
+    assert_true(first.content.contains("nused"), msg=first.content)
+    let second = dispatch(definition, { "source": source, "warning": "on" })
+    assert_false(second.is_error, msg=second.content)
+    assert_true(second.content.contains("nused"), msg=second.content)
+    assert_true(second.content.contains("ran"))
   })
 }
 
@@ -216,7 +239,7 @@ async test "cache: a detached job's cleanup keeps the cache and its own run" {
         msg="the job's terminal must reclaim its build dir",
       )
       // ...and the cache is still there for the next call.
-      assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/_build"))
+      assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/gen-0/_build"))
       let after = dispatch(definition, {
         "source": "fn main { println(\"after\") }",
       })
