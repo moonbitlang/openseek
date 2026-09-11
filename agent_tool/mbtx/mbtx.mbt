@@ -515,38 +515,33 @@ async fn execute(
   // target, which keeps the single-shot `moon run` — the program builds in
   // this call's own directory as before. A cache directory that cannot be
   // created costs this call the cache, not the run.
-  let stage_dir = match build_cache_root(job_dir?, scratch_dir?) {
-    Some(root) if input.target == "wasm" => {
-      let keyed = "\{root}/\{cache_key(script_path)}"
-      try {
-        if !@fs.exists(keyed) {
-          @fs.mkdir(keyed, recursive=true)
-        }
-        keyed
-      } catch {
+  let key_dir = match build_cache_root(job_dir?, scratch_dir?) {
+    Some(root) if input.target == "wasm" =>
+      Some("\{root}/\{cache_key(script_path)}")
+    _ => None
+  }
+  let stage_dir = match key_dir {
+    Some(keyed) =>
+      open_generation(keyed) catch {
         error if @async.is_being_cancelled() => raise error
         _ => build_dir
       }
-    }
-    _ => build_dir
+    None => build_dir
   }
   let cached = stage_dir != build_dir
-  // A build that was stopped mid-way left this marker (see `build_snippet`):
-  // its output is not to be trusted, and it may still have been receiving
-  // writes from an orphaned compiler when the marker was set, so it is
-  // discarded HERE, at the next use, rather than at the moment of the stop.
-  let abort_marker = "\{stage_dir}/aborted"
-  if cached && @fs.exists(abort_marker) {
-    @async.protect_from_cancel(() => {
-      @fs.rmdir("\{stage_dir}/_build", recursive=true) catch {
-        _ => ()
-      }
-      @fs.remove(abort_marker) catch {
-        _ => ()
-      }
-    })
+  // With warnings requested the program is recompiled even when unchanged:
+  // moon's no-op rebuild reports the artifact and nothing else, so a cache
+  // hit would silently drop the diagnostics the caller asked to see. Warning
+  // runs are probes, and the recompile is the ~270ms case, not the cold one.
+  if input.warning {
+    @fs.write_file(
+      "\{stage_dir}/snippet.mbtx",
+      source,
+      create_mode=CreateOrTruncate,
+    )
+  } else {
+    stage_source("\{stage_dir}/snippet.mbtx", source) |> ignore
   }
-  stage_source("\{stage_dir}/snippet.mbtx", source) |> ignore
   let log = "\{build_dir}/output.log"
   // Pre-create the merged output file so both redirects open it; both append
   // so stdout and stderr interleave in write order.
@@ -744,7 +739,7 @@ async fn execute(
       build_snippet(
         build_dir~,
         stage_dir~,
-        abort_marker=if cached { Some(abort_marker) } else { None },
+        retire=if cached { key_dir } else { None },
         run_cwd~,
         warning=input.warning,
         build_timeout_ms~,
@@ -1046,7 +1041,7 @@ priv enum BuildOutcome {
 async fn build_snippet(
   build_dir~ : String,
   stage_dir~ : String,
-  abort_marker~ : String?,
+  retire~ : String?,
   run_cwd~ : String?,
   warning~ : Bool,
   build_timeout_ms~ : Int,
@@ -1069,16 +1064,13 @@ async fn build_snippet(
   // A build stopped mid-way — by its bound or by cancellation — can leave a
   // half-written artifact behind. In a throwaway directory that is nobody's
   // problem; in the session cache it would be the next call's. Stopping
-  // `moon` does not stop the compiler processes it spawned, so deleting the
-  // output now could race their last writes: the directory is marked instead,
-  // and the next call for this key discards it before building.
+  // `moon` does not stop the compiler processes it spawned, so neither
+  // deleting nor rebuilding in that directory is safe at any later moment
+  // this call can name: the generation is retired instead, and the next call
+  // for this key builds in a fresh one (see `open_generation`).
   async fn mark_aborted() -> Unit {
-    if abort_marker is Some(marker) {
-      @async.protect_from_cancel(() => {
-        @fs.write_file(marker, "", create_mode=CreateOrTruncate) catch {
-          _ => ()
-        }
-      })
+    if retire is Some(key_dir) {
+      retire_generation(key_dir)
     }
   }
   let (prog, argv) = match confine("moon", build_argv) {
