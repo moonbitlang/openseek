@@ -34,9 +34,6 @@ pub(all) struct ApprovalAsk {
   detail : String
   body : String?
 } derive(Eq, @debug.Debug)
-pub fn ApprovalAsk::equal(Self, Self) -> Bool
-pub fn ApprovalAsk::not_equal(Self, Self) -> Bool
-pub fn ApprovalAsk::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ApprovalChannel(async (ApprovalAsk) -> ApprovalOutcome)
 pub async fn ApprovalChannel::ask(Self, ApprovalAsk) -> ApprovalOutcome
@@ -47,9 +44,6 @@ pub(all) enum ApprovalOutcome {
   Cancelled
   Unavailable
 } derive(Eq, @debug.Debug)
-pub fn ApprovalOutcome::equal(Self, Self) -> Bool
-pub fn ApprovalOutcome::not_equal(Self, Self) -> Bool
-pub fn ApprovalOutcome::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SteerInput {
   Prompt(String)
