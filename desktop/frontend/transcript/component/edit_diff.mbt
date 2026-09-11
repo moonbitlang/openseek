@@ -11,18 +11,15 @@
 // The diff is *derived*, not recorded: it is these two strings compared, not
 // what the tool wrote to the file. Whether the edit applied at all is the
 // paired result — a rejected call still renders, because the change it asked
-// for is what a reader is trying to see. Detailed mode keeps the recorded
-// payload in its Original JSON tab. Minimal mode shares this diff but shows
-// only file/line anchors, with no raw payload.
+// for is what a reader is trying to see. Only the file and line anchors
+// accompany the diff; every other argument stays in the recorded payload,
+// which detailed mode keeps a click away in its Original JSON tab.
 
 ///|
-/// One decoded edit: where it lands, every scalar argument beside it, and the
-/// diff it describes. `anchors` are the file and line chips a reader needs to
-/// place the change; `chips` repeats them ahead of the remaining scalars for
-/// the detailed card.
+/// One decoded edit: the file and line chips that place it, and the diff it
+/// describes.
 priv struct EditDiff {
   anchors : Array[String]
-  chips : Array[String]
   diff : String
 } derive(Eq)
 
@@ -35,14 +32,13 @@ const MAX_RENDERED_EDITS = 50
 
 ///|
 /// The decoded change an `edit` or `multi_edit` call asked for, shared by both
-/// transcript modes: the batch-level chips, one anchored diff per readable
-/// entry, and how many entries are not shown. `None` for any other tool and
-/// for a payload with no readable edit — a batch whose entries are only partly
-/// readable renders the ones that are, since dropping the whole card would
-/// hide the edits that did decode. Holding derived text rather than raw
-/// arguments keeps the minimal projection structurally comparable.
+/// transcript modes: one anchored diff per readable entry, and how many
+/// entries are not shown. `None` for any other tool and for a payload with no
+/// readable edit — a batch whose entries are only partly readable renders the
+/// ones that are, since dropping the whole card would hide the edits that did
+/// decode. Holding derived text rather than raw arguments keeps the minimal
+/// projection structurally comparable.
 priv struct EditChanges {
-  chips : Array[String]
   edits : Array[EditDiff]
   omitted : Int
 } derive(Eq)
@@ -58,7 +54,7 @@ fn EditChanges::from_arguments(
     guard EditDiff::from_fields(fields, path_key="path") is Some(edit) else {
       return None
     }
-    return Some({ chips: [], edits: [edit], omitted: 0, })
+    return Some({ edits: [edit], omitted: 0, })
   }
   guard fields.get("edits") is Some(Array(entries)) else { return None }
   let edits : Array[EditDiff] = []
@@ -72,31 +68,21 @@ fn EditChanges::from_arguments(
     }
   }
   guard !edits.is_empty() else { return None }
-  Some({
-    chips: scalar_chips(
-      fields,
-      known=["edits_file", "revert_when_errors_above", "revert_on_parse_errors"],
-      dramatized=["edits"],
-    ),
-    edits,
-    // `entries` counts what the model sent, including entries this card could
-    // not read, which is what the reader is being told about.
-    omitted: entries.length() - edits.length(),
-  })
+  // `entries` counts what the model sent, including entries this card could
+  // not read, which is what the reader is being told about.
+  Some({ edits, omitted: entries.length() - edits.length(), })
 }
 
 ///|
-/// The detailed card shows every scalar argument and points at its Original
-/// JSON tab for what is omitted. The minimal card shows only anchors, never a
-/// whole payload through metadata chips, and has no original to point to.
-fn EditChanges::render(self : EditChanges, minimal~ : Bool) -> @html.Html {
-  let body : Array[@html.Html] = [
-    chip_row(if minimal { [] } else { self.chips }),
-  ]
+/// A batch longer than the card renders says so, rather than reading as the
+/// whole batch. The wording names only what is missing: minimal mode has no
+/// Original JSON tab to point at.
+fn EditChanges::render(self : EditChanges) -> @html.Html {
+  let body : Array[@html.Html] = []
   for edit in self.edits {
     body.push(
       @html.div(class="edit-entry", [
-        chip_row(if minimal { edit.anchors } else { edit.chips }),
+        chip_row(edit.anchors),
         diff_block(edit.diff),
       ]),
     )
@@ -105,11 +91,7 @@ fn EditChanges::render(self : EditChanges, minimal~ : Bool) -> @html.Html {
     body.push(
       @html.div(
         class="edit-omitted",
-        if minimal {
-          "⋯ \{self.omitted} edits not shown · enable transcript details to inspect the original ⋯"
-        } else {
-          "⋯ \{self.omitted} more edits, in the original ⋯"
-        },
+        "⋯ \{self.omitted} more edits not shown ⋯",
       ),
     )
   }
@@ -131,21 +113,14 @@ fn EditDiff::from_fields(
     old != new else {
     return None
   }
+  // The order the tools' schemas list them in: what file, then where in it.
   let anchors : Array[String] = []
   for key in [path_key, "start_line", "end_line"] {
     if fields.get(key) is Some(value) && chip_text(key, value) is Some(text) {
       anchors.push(text)
     }
   }
-  let chips = scalar_chips(
-    fields,
-    // The order the tools' schemas list them in: what file, then where in it.
-    known=[
-      path_key, "start_line", "end_line", "replace_all_preview", "revert_on_parse_errors",
-    ],
-    dramatized=["old_string", "new_string"],
-  )
-  Some({ anchors, chips, diff: @edit_diff.generate(old, new), })
+  Some({ anchors, diff: @edit_diff.generate(old, new), })
 }
 
 ///|

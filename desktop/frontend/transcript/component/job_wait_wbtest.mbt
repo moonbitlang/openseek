@@ -6,7 +6,10 @@ test "pending job wait labels expose targets and clear on result" {
     arguments: Some("{\"job_ids\":[\"bg-1\",\"bg-2\",\"bg-1\"]}"),
     outcome: Pending(output=None),
   }
-  assert_eq(pending_job_wait_label(call), Some("Waiting for bg-1, bg-2"))
+  assert_eq(
+    pending_job_wait_label(call),
+    Some("Wait for any of these jobs to complete: bg-1, bg-2"),
+  )
   assert_eq(
     pending_job_wait_label({
       ..call,
@@ -50,9 +53,14 @@ test "waiting labels reuse recorded job descriptions and keep unknown IDs" {
   let descriptions : Map[String, String] = Map([])
   assert_eq(
     job_wait_labels(item, descriptions).get(1),
-    Some("Waiting for bg-10: Watch CI on rebased PR 27, bg-11"),
+    Some(
+      "Wait for any of these jobs to complete: \"Watch CI on rebased PR 27\", bg-11",
+    ),
   )
-  assert_eq(pending_job_wait_label(wait), Some("Waiting for bg-10, bg-11"))
+  assert_eq(
+    pending_job_wait_label(wait),
+    Some("Wait for any of these jobs to complete: bg-10, bg-11"),
+  )
   let output : @transcript.ToolCall = {
     call_id: "output",
     name: "job_output",
@@ -67,7 +75,7 @@ test "waiting labels reuse recorded job descriptions and keep unknown IDs" {
   assert_eq(
     pending_job_wait_label(wait, descriptions~),
     Some(
-      "Waiting for bg-10: Watch CI on rebased PR 27, bg-11: Run tests: native",
+      "Wait for any of these jobs to complete: \"Watch CI on rebased PR 27\", \"Run tests: native\"",
     ),
   )
   // A matching-looking log is not metadata; malformed and failed calls do
@@ -126,6 +134,6 @@ test "waiting labels distinguish duplicate call IDs by position" {
     "bg-1": "First job",
     "bg-2": "Second job",
   })
-  assert_eq(labels.get(0), Some("Waiting for bg-1: First job"))
-  assert_eq(labels.get(1), Some("Waiting for bg-2: Second job"))
+  assert_eq(labels.get(0), Some("Wait for job \"First job\" to complete"))
+  assert_eq(labels.get(1), Some("Wait for job \"Second job\" to complete"))
 }

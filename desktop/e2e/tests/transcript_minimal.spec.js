@@ -456,7 +456,7 @@ test('minimal edits handle unreadable payloads and bound multi-edit previews', a
     await expect(calls.nth(i).locator('.tool-diff')).toHaveCount(0);
   }
   await expect(calls.last().locator('.tool-diff')).toHaveCount(50);
-  await expect(calls.last().locator('.edit-omitted')).toContainText('2 edits not shown');
+  await expect(calls.last().locator('.edit-omitted')).toContainText('2 more edits not shown');
 });
 
 test('minimal job waits name their targets while pending and disappear after success', async ({ page }) => {
