@@ -191,12 +191,12 @@ pub fn tabs_bar(
   menu_open~ : Bool,
   expanded~ : Bool,
   toggle_menu~ : @cmd.Cmd,
-  close_all_tabs~ : @cmd.Cmd,
-  close_all_tabs_disabled~ : Bool,
+  close_tabs~ : @cmd.Emit[CloseSelection],
   toggle_expanded~ : @cmd.Cmd,
   toggle_panel~ : @cmd.Cmd,
 ) -> @html.Html {
-  let tabs : Array[@html.Html] = []
+  // Keep each menu trigger's DOM identity when neighbouring tabs close.
+  let tabs : Map[String, @html.Html] = Map([])
   for chip in chips {
     let mut classes = "editor-tab"
     if state.active is Some(active) && active == chip.tab {
@@ -206,24 +206,35 @@ pub fn tabs_bar(
       classes += " deleted"
     }
     let tab = chip.tab
-    tabs.push(
-      @html.div(
-        class=classes,
-        title=chip.title,
-        on_click=dispatch(TabActivated(tab)),
-        [
-          @html.span(class="tab-name", chip.label),
-          @html.button(
-            class="tab-close",
-            title="Close",
-            attrs=@html.Attrs::build().on_click(event => {
-              event.stop_propagation()
-              dispatch(TabClosed(tab))
-            }),
-            "×",
-          ),
-        ],
-      ),
+    let target = tab_menu_target(state, tab)
+    tabs[target] = @html.div(
+      class=classes,
+      title=chip.title,
+      attrs=@action_menu.context_attrs(target)
+        .tabindex(0)
+        .on_keydown(event => {
+          if event.target().to_element() is Some(element) &&
+            element.get_attribute("data-action-menu-context") == Some(target) &&
+            (event.key() == "Enter" || event.key() == " ") {
+            event.prevent_default()
+            dispatch(TabActivated(tab))
+          } else {
+            @cmd.none
+          }
+        }),
+      on_click=dispatch(TabActivated(tab)),
+      [
+        @html.span(class="tab-name", chip.label),
+        @html.button(
+          class="tab-close",
+          title="Close",
+          attrs=@html.Attrs::build().on_click(event => {
+            event.stop_propagation()
+            dispatch(TabClosed(tab))
+          }),
+          "×",
+        ),
+      ],
     )
   }
   // With an empty strip the body already is the launcher, so the `+` hides
@@ -236,8 +247,8 @@ pub fn tabs_bar(
       title="Close all tabs",
       attrs=@html.Attrs::build()
         .aria_label("Close all tabs")
-        .disabled(close_all_tabs_disabled)
-        .on_click(_ => close_all_tabs),
+        .disabled(state.tabs.is_empty())
+        .on_click(_ => close_tabs(All)),
       @icons.icon(@icons.icon_close_all),
     ),
     @html.button(

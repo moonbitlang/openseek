@@ -2039,9 +2039,8 @@ priv enum Msg {
   ToggleRightPanelMenu
   ToggleRightPanelExpanded
   CloseRightPanelMenu
-  // Close every dock tab through its ordinary teardown path, then keep the
-  // empty panel open on the New Tab launcher.
-  CloseAllTabs
+  // Close a selection through ordinary teardown; All keeps the launcher open.
+  CloseDockTabs(@dock.CloseSelection)
   // The composer's goal-editing mode over the active conversation: open
   // (prefilled with the mirrored standing goal), edit its draft, send a
   // set/clear to the engine, or dismiss. Each acts on the conversation on

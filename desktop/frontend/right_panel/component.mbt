@@ -64,14 +64,13 @@ pub(all) struct Actions {
   toggle_panel : @cmd.Cmd
   toggle_menu : @cmd.Cmd
   toggle_expanded : @cmd.Cmd
-  close_all_tabs : @cmd.Cmd
+  close_tabs : @cmd.Emit[@dock.CloseSelection]
   close_menu : @cmd.Cmd
 }
 
 ///|
-/// Render the root-owned panel input directly. The panel has no local state or
-/// document listeners: app shortcuts, menu dismissal, and URL requests belong
-/// to the root application because their messages all change root state.
+/// Panel data stays root-owned; the shared action menu owns only its ephemeral
+/// opening and focus state, resolving tab commands from the latest input.
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
@@ -79,8 +78,11 @@ pub fn component(
   let semantic_review = input.map(input => {
     @fileeditor.semantic_review_view(actions.file_editor, input.file_panel)
   })
-  input.view2(semantic_review, (input, semantic_review) => {
-    panel_view(input, actions, semantic_review~)
+  let tab_menu = @action_menu.component(input, (input, target) => {
+    @dock.tab_menu(input.dock, target, actions.dock, actions.close_tabs)
+  })
+  input.map3(semantic_review, tab_menu, (input, semantic_review, tab_menu) => {
+    panel_view(input, actions, semantic_review~, tab_menu~)
   })
 }
 

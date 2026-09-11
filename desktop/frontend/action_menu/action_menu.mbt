@@ -146,7 +146,10 @@ pub fn button_attrs(target : String) -> @html.Attrs {
 /// Build the context-menu entry point for a stable target.
 pub fn context_attrs(target : String) -> @html.Attrs {
   @html.Attrs::build()
+  .id(target + ":context-trigger")
   .data_set("action-menu-context", target)
+  .aria_haspopup("menu")
+  .aria_controls(menu_id(target))
   .on_mousedown(event => remember_context_focus(event))
   .on_contextmenu(event => {
     event.prevent_default()
@@ -157,6 +160,24 @@ pub fn context_attrs(target : String) -> @html.Attrs {
         event.get_client_y().to_int(),
       ),
       restore_focus_id: remembered_context_focus(event),
+    })
+  })
+  .on_keydown(event => {
+    guard event.key() == "ContextMenu" ||
+      (event.key() == "F10" && event.shift_key()) else {
+      return @cmd.none
+    }
+    guard event.current_target().to_option() is Some(target_element) &&
+      target_element.to_element() is Some(element) else {
+      return @cmd.none
+    }
+    event.prevent_default()
+    event.stop_propagation()
+    let rect = element.get_bounding_client_rect()
+    dispatch_open({
+      target,
+      anchor: Pointer(rect.get_left().to_int(), rect.get_bottom().to_int()),
+      restore_focus_id: focused_element_id(),
     })
   })
 }
@@ -217,6 +238,12 @@ fn set_trigger_open(target : String, open : Bool) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
       if @dom.document().get_element_by_id(trigger_id(target)).to_option()
+        is Some(trigger) {
+        trigger.set_attribute("aria-expanded", open.to_string())
+      }
+      if @dom.document()
+        .get_element_by_id(target + ":context-trigger")
+        .to_option()
         is Some(trigger) {
         trigger.set_attribute("aria-expanded", open.to_string())
       }
@@ -693,7 +720,13 @@ pub fn[Input : Eq] component(
           }
           guard resolve(input, next.target) is Some(definition) &&
             definition.enabled_indices() is [_, ..] else {
-            return (state, @cmd.none)
+            // Another component may own this target. Only one shared menu
+            // surface should remain open across the sidebar and dock.
+            let command = match state.menu {
+              Some(current) => set_trigger_open(current.target, false)
+              None => @cmd.none
+            }
+            return ({ menu: None, }, command)
           }
           let close_previous = match state.menu {
             Some(current) if current.target != next.target =>
