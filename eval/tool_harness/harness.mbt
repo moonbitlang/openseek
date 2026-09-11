@@ -35,7 +35,6 @@ fn tool_definitions(
   // The harness runs each snippet in the foreground; it needs no job scope.
   ignore(scope)
   Tools([
-    @mbtx.definition(workspace_root="."),
     @write.definition(),
     @edit.definition(),
     @multi_edit.definition(),
