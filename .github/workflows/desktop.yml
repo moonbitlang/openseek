@@ -102,6 +102,11 @@ jobs:
           CL: /bigobj
         run: moon run ./desktop/package/windows --target native -- --release --target app
 
+      - name: Test Windows background job paths and retained reads
+        env:
+          CL: /bigobj
+        run: moon test desktop/internal/engine/jobs_wbtest.mbt --target native
+
       - name: Upload Windows app
         uses: actions/upload-artifact@v4
         with:
