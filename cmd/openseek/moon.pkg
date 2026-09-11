@@ -27,7 +27,6 @@ import {
   "moonbitlang/async/aqueue",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
-  "moonbitlang/async/io",
   "moonbitlang/async/os_error",
   "moonbitlang/async/stdio",
   "moonbitlang/core/argparse",

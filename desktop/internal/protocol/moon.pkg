@@ -1,7 +1,10 @@
 import {
   "bobzhang/openseek_protocol" @wire,
-  "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
+
+import {
+  "moonbitlang/core/debug",
+} for "test"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

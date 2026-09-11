@@ -1,9 +1,5 @@
 import {
   "moonbitlang/core/json",
-}
-
-import {
-  "moonbitlang/core/json",
 } for "test"
 
 warnings = "+unnecessary_annotation"

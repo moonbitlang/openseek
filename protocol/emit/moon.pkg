@@ -2,7 +2,6 @@ import {
   "bobzhang/openseek_protocol" @protocol,
   "moonbitlang/async",
   "moonbitlang/async/stdio",
-  "moonbitlang/core/json",
 }
 
 import {

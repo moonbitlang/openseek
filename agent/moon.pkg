@@ -24,7 +24,6 @@ import {
   "bobzhang/openseek_protocol/emit",
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/core/json",
 }
 
 import {
