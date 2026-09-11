@@ -922,6 +922,7 @@ async fn execute(
       sandboxed_command,
       denial_scan_source,
       raw,
+      exit_code=exec.exit_code(),
       escalation=approval is Some(_),
       policy_active~,
     )
@@ -965,14 +966,18 @@ async fn execute(
     (exit_code, read_capped(log))
   })
   // A refusal is this tool's confinement firing, not an environment fault:
-  // explain it (the raw OS error is otherwise a dead end) and treat the run as
-  // failed even if the snippet swallowed the error and exited 0 — a swallowed
-  // denial still means the access it needed did not happen. It runs for the
-  // timeout arm too: a snippet can print a caught denial and then hang.
+  // explain it (the raw OS error is otherwise a dead end). Only a run that did
+  // not exit 0 is classified — see `refusal_guidance` — which includes the
+  // timeout arm: a snippet can print a caught denial and then hang, and a
+  // killed program has no exit of its own.
   let sandbox_denied = refusal_guidance(
     sandboxed_command,
     Some(log),
     "",
+    exit_code=match result {
+      Some((exit_code, _)) => Some(exit_code)
+      None => None
+    },
     escalation=approval is Some(_),
     policy_active~,
   )
@@ -1299,9 +1304,21 @@ async fn refusal_guidance(
   sandboxed_command : @sandbox.SandboxedCommand?,
   log_path : String?,
   head : String,
+  exit_code~ : Int?,
   escalation~ : Bool,
   policy_active~ : Bool,
 ) -> String? {
+  // A program that exited 0 is not classified, whatever it printed. The scan
+  // is a substring match on output, and output is DATA: a program that prints
+  // a file, a diff or a test log containing the refusal wording is not being
+  // refused — and reading such a file is exactly what the read workflow does.
+  // A refusal the program caught and then exited 0 from is the program's own
+  // report; its text is still in the output for the model to read. What is
+  // classified is a run that did not exit 0: a nonzero exit, or no exit
+  // because the engine stopped it (`None`).
+  if exit_code is Some(0) {
+    return None
+  }
   async fn shows(reports : (String) -> Bool) -> Bool {
     match log_path {
       Some(path) =>

@@ -442,6 +442,14 @@ pub async fn BgJobRuntime::terminal_denial_feedback(
     job.denial_scanned = true
     return None
   }
+  // A job that exited 0 is not classified, whatever it printed: its output is
+  // data, and a refusal it survived is its own report (the foreground path
+  // applies the same rule, see mbtx's `refusal_guidance`). A stopped job has
+  // no exit of its own and is still scanned.
+  if job.exec.exit_code() is Some(0) {
+    job.denial_scanned = true
+    return None
+  }
   let output = job.exec.read_all()
   let feedback = if job.moonrun_policy_active &&
     @sandbox.output_reports_policy_refusal(output) {

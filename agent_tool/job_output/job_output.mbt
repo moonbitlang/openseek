@@ -93,8 +93,10 @@ async fn execute(
     Stopped => ("stopped", true)
   }
   // Preserve the foreground path's error semantics for a job read later: binary
-  // (non-UTF-8) output and a refused access are tool errors even when the
-  // command exited 0.
+  // (non-UTF-8) output is a tool error even when the command exited 0, and a
+  // refused access is one when the command did NOT exit 0 — a job that exited
+  // 0 is not classified, whatever it printed (see the runtime's
+  // `terminal_denial_feedback`).
   //
   // Running jobs classify only the bounded recent tail. Once terminal, the
   // runtime scans the retained log and caches the result, so a refusal that

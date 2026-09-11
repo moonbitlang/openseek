@@ -270,7 +270,7 @@ async test "a terminal job finds a policy refusal before the displayed tail" {
       args=[
         CLI_SH,
         "-c",
-        "printf 'Sandbox policy blocked file write: example\\n'; seq 1 10000",
+        "printf 'Sandbox policy blocked file write: example\\n'; seq 1 10000; exit 3",
       ],
       command="policy then output",
       moonrun_policy_active=true,
@@ -280,6 +280,21 @@ async test "a terminal job finds a policy refusal before the displayed tail" {
     assert_true(output.is_error)
     assert_false(output.content.contains("Sandbox policy blocked"))
     assert_true(output.content.contains("mbtx sandbox:"))
+    // The same output from a job that exited 0 is data, not a refusal.
+    let quiet = bg.start(
+      program="moonx",
+      args=[
+        CLI_SH,
+        "-c",
+        "printf 'Sandbox policy blocked file write: example\\n'; seq 1 10000",
+      ],
+      command="policy wording then exit 0",
+      moonrun_policy_active=true,
+    )
+    poll_bg_terminal(bg, quiet)
+    let fine = run_job_output(bg, { "job_id": quiet })
+    assert_false(fine.is_error, msg=fine.content)
+    assert_false(fine.content.contains("mbtx sandbox:"))
     @fs.rmdir(dir, recursive=true) catch {
       _ => ()
     }
