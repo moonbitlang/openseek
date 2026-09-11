@@ -63,6 +63,7 @@ priv struct ServeEngine {
   // gone, so a start joins its close barrier instead of racing it.
   mut condemned : Bool
   steer_runs : SteerRunTracker
+  job_requests : Map[String, @async.Queue[@wire.Event]]
   queued_runs : Array[QueuedRun]
 }
 
@@ -247,6 +248,10 @@ fn ends_with_turn(command : @wire.Command) -> Bool {
 /// stay the writer's to flush; `discard_commands` is the variant that also
 /// refuses them.
 fn ServeEngine::condemn(self : ServeEngine) -> Unit {
+  for _, reply in self.job_requests {
+    reply.close()
+  }
+  self.job_requests.clear()
   self.condemned = true
   self.commands.close()
 }
@@ -1588,6 +1593,7 @@ async fn[G] start_serve_engine(
     condemned: false,
     steer_runs: SteerRunTracker(),
     queued_runs: [],
+    job_requests: Map([]),
   }
   startup_engine = Some(engine)
   // Spawned before the handle is reachable from any request, so stdin has an
@@ -1764,6 +1770,14 @@ async fn ServeEngine::consume(
         // wakeup (its poll only backstops this).
         manager.kick_follower(engine.session_key)
         let wire_event = @wire.parse(json)
+        match wire_event {
+          Some(JobsSnapshot(request_id~, ..) as event)
+          | Some(JobStopResult(request_id~, ..) as event) =>
+            if self.job_requests.get(request_id) is Some(reply) {
+              ignore(reply.try_put(event) catch { _ => false })
+            }
+          _ => ()
+        }
         // The brackets are the only thing that knows a sub-run's lifetime;
         // the probe in between reads the child's own record, which is the
         // only place its progress is visible to this process.
@@ -2264,6 +2278,7 @@ fn test_serve_engine(
     condemned,
     steer_runs: SteerRunTracker(),
     queued_runs: [],
+    job_requests: Map([]),
   }
 }
 

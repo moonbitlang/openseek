@@ -31,6 +31,8 @@ pub async fn export_session_html(EngineManager, @protocol.SessionExportPayload, 
 
 pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalReply
 
+pub async fn list_jobs(EngineManager, @protocol.JobsListPayload) -> @protocol.JobsListReply
+
 pub async fn list_sessions(EngineManager) -> @protocol.SessionsReply
 
 pub async fn list_workspaces() -> @protocol.WorkspacesReply
@@ -47,6 +49,8 @@ pub async fn pattern_repair_environment(EngineManager) -> Map[String, String] ra
 
 pub fn queue_run(EngineManager, @protocol.QueuePayload) -> @protocol.QueueReply raise EngineError
 
+pub async fn read_job(EngineManager, @protocol.JobReadPayload) -> @protocol.JobReadReply
+
 pub async fn remote_server_base(EngineManager) -> String?
 
 pub async fn rename_session(EngineManager, @protocol.SessionRenamePayload) -> Unit
@@ -56,6 +60,8 @@ pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 pub async fn start_run(EventSink, EngineManager, @protocol.StartPayload) -> @protocol.StartReply
 
 pub fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply
+
+pub async fn stop_job(EngineManager, @protocol.JobTarget) -> @protocol.JobStopReply
 
 pub async fn unarchive_session(EngineManager, String, (String, String) -> Unit) -> @protocol.SessionsReply
 

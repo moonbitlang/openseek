@@ -751,3 +751,18 @@ pub let browser_close : Command[
   @protocol.BrowserIdPayload,
   @protocol.EmptyReply,
 ] = Command("browser.close")
+
+///|
+pub let jobs_list : Command[@protocol.JobsListPayload, @protocol.JobsListReply] = Command(
+  "jobs.list",
+)
+
+///|
+pub let jobs_read : Command[@protocol.JobReadPayload, @protocol.JobReadReply] = Command(
+  "jobs.read",
+)
+
+///|
+pub let jobs_stop : Command[@protocol.JobTarget, @protocol.JobStopReply] = Command(
+  "jobs.stop",
+)
