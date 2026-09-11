@@ -12,6 +12,7 @@ struct Input {
   reveal_label : String?
   // The workflows the active conversation's snippets announced, for the
   // Workflows tab. Live-only state projected from the root's conversation.
+  jobs : @jobs.State
   workflows : Array[@workflow.Run]
 } derive(Eq)
 
@@ -25,6 +26,7 @@ pub fn Input::Input(
   menu_open~ : Bool,
   expanded~ : Bool,
   reveal_label~ : String?,
+  jobs~ : @jobs.State,
   workflows~ : Array[@workflow.Run],
 ) -> Input {
   {
@@ -37,6 +39,7 @@ pub fn Input::Input(
     expanded,
     reveal_label,
     workflows,
+    jobs,
   }
 }
 
@@ -50,6 +53,8 @@ pub(all) struct Actions {
   search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
+  jobs : @cmd.Cmd
+  job_events : @cmd.Emit[@jobs.Msg]
   workflows : @cmd.Cmd
   // Open one subagent's transcript: the child's session id, as its row
   // carries it.

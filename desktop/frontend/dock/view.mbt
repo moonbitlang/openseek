@@ -117,6 +117,7 @@ pub(all) struct LauncherActions {
   files : @cmd.Cmd
   review : @cmd.Cmd
   workflows : @cmd.Cmd
+  jobs : @cmd.Cmd
 }
 
 ///|
@@ -161,6 +162,16 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
       @html.span(
         class="dock-launcher-hint",
         "Subagents this conversation delegated to",
+      ),
+    ]),
+  )
+  rows.push(
+    @html.button(class="dock-launcher-row", on_click=actions.jobs, [
+      @icons.icon(icon_review),
+      @html.span(class="dock-launcher-name", "Jobs"),
+      @html.span(
+        class="dock-launcher-hint",
+        "Follow background commands and their logs",
       ),
     ]),
   )
