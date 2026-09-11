@@ -14,7 +14,7 @@ program format. Alternatively, `filename` loads a saved script. The tool
 stages the program outside the working tree and, for the
 default wasm target, runs it in **two phases**. The BUILD runs first,
 synchronously: `moon run <file>.mbtx --build-only --target-dir
-<dir>`, bounded by its own wall clock (10s by default) so a hung dependency
+<dir>`, bounded by its own wall clock (20s by default) so a hung dependency
 download cannot hold the turn. A nonzero exit here is reported immediately as
 `BUILD failed (exit N)` — a build failure **by construction**, since the run
 phase never starts; no exit-code or output archaeology is needed to tell the

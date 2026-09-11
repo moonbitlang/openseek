@@ -28,8 +28,11 @@ const BuildNotesCapChars : Int = 8_000
 /// dependency download must not hold the turn. Generous by an order of
 /// magnitude: a trivial wasm build measures ~100ms and one pulling several
 /// registry modules well under a second on a warm cache, and a timed-out
-/// build's retry is faster still (moon caches downloaded modules).
-const BuildTimeoutMs : Int = 10_000
+/// build's retry is faster still (moon caches downloaded modules). With the
+/// session cache only the FIRST build of a program in a session is cold, and
+/// parallel subruns each starting with the same bundled script are where cold
+/// builds contend for the machine, so the bound leaves room for that.
+const BuildTimeoutMs : Int = 20_000
 
 ///|
 /// Output is streamed to a file on disk, not buffered in memory, so a snippet
