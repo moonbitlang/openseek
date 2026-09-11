@@ -253,7 +253,11 @@ test "suite report renders markdown and html from shared report frontend" {
   let markdown = suite.markdown()
   assert_true(markdown.contains("Prompt Task Suite Eval"))
   assert_true(markdown.contains("alpha"))
-  assert_true(markdown.contains("Avg Steps"))
+  assert_true(
+    markdown.contains(
+      "| # | Case | Result | Model | Problem | Successes | Avg Steps | Avg Tool Errors | Finished | Validation | Reason | Warnings |",
+    ),
+  )
   let html = suite.html()
   assert_true(html.contains("<html"))
   assert_true(html.contains("trial-card"))

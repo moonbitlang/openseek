@@ -9,7 +9,9 @@
 /// it merely undoes the agent's own work. A pre-existing file (one the agent did
 /// not create this session) is refused. It handles any file type: source and
 /// non-source files go through the same gate — a deletion here is
-/// provenance-checked where an `rm` inside an `mbtx` snippet is not. Deleting a
+/// provenance-checked where a `git rm` spawned from an `mbtx` snippet is not (a
+/// snippet's own writes stay in its temp dir, so a spawned child is the only
+/// unprovenanced deletion route). Deleting a
 /// `.mbt`/`.mbt.md` file runs `moon
 /// check`, so a break it causes shows up in the result as after `write`/`edit`.
 /// Each removal carries a required `reason`, recorded in the (durable) result so
@@ -49,8 +51,8 @@ pub fn definition(
       #|file-state record). Only a file the agent itself created this session can be
       #|removed — a pre-existing file is refused, since deleting it could lose work the
       #|agent never made; change existing source with edit/multi_edit. Handles any file
-      #|type: it is the provenance-gated deletion path (an rm inside an mbtx snippet
-      #|checks no provenance), for source and non-source files alike. Deleting a
+      #|type: it is the provenance-gated deletion path (a git rm spawned from an mbtx
+      #|snippet checks no provenance), for source and non-source files alike. Deleting a
       #|.mbt/.mbt.md file runs moon check so any break it causes is reported. Requires a
       #|`reason` — a short, non-empty explanation of why the file is deleted — recorded
       #|with the result for auditing this destructive action; a blank reason is rejected.
@@ -256,7 +258,7 @@ async test "remove keeps deleting a created file it later edited" {
 async test "remove deletes a non-source file the agent created" {
   @vfs.with_tmpdir(dir => {
     // The gate is provenance, not file type: a created .txt is deletable too
-    // (and this path is gated, unlike an `rm` inside an mbtx snippet).
+    // (and this path is gated, unlike a `git rm` spawned from an mbtx snippet).
     @vfs.FileSystem({ "notes.txt": "scratch" }).write_to(dir)
     let path = "\{dir}/notes.txt"
     let state = @agent_tool.FileStateMap()

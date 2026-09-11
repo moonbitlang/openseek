@@ -475,6 +475,16 @@ pub fn BgJobRuntime::snapshot(
 }
 
 ///|
+/// Snapshot every job, oldest first. The turn loop reads it to surface still-
+/// pending jobs at a step boundary; the `agent` package's job tests observe
+/// runtime state through it.
+pub fn BgJobRuntime::list(self : BgJobRuntime) -> Array[BgJobSnapshot] {
+  [
+    for _, job in self.jobs => job.to_snapshot()
+  ]
+}
+
+///|
 /// The full output of one job (reads the spill file for a large job), or `None`
 /// for an unknown id.
 pub async fn BgJobRuntime::read_output(
