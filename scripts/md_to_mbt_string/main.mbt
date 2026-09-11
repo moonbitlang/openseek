@@ -397,13 +397,14 @@ async test "output match detects unchanged generated file" {
 }
 
 ///|
-async test "resource layout is sorted, directory-only, and refreshed on changes" {
+async test "resource layout is sorted, directory-only, skips build output, and refreshed on changes" {
   with_tmpdir(root => {
     @fs.mkdir("\{root}/workflow")
     @fs.mkdir("\{root}/aardvark")
     @fs.mkdir("\{root}/z")
     @fs.mkdir("\{root}/doc/moonbit/language", recursive=true)
     @fs.mkdir("\{root}/.hidden")
+    @fs.mkdir("\{root}/workflow/_build/wasm", recursive=true)
     @fs.write_file("\{root}/doc/moonbit/index.md", "docs")
     let template = "before\n{{OPENSEEK_REFERENCES_LAYOUT}}\nafter"
     inspect(
