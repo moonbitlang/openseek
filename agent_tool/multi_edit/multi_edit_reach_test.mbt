@@ -60,5 +60,33 @@ async test "multi_edit tells a fix that lets the build reach further from breaka
       ),
     )
     assert_true(@fs.read_file("\{dir}/a/a.mbt").text().contains("  1\n"))
+    // Negative control: a batch that breaks the edited file ITSELF (twenty-five
+    // errors inside a/a.mbt) must be called an over-match, never a reach —
+    // even though it also makes the one pre-batch error disappear. The tmpdir
+    // lives under /tmp, which moon diagnoses under /private/tmp on macOS, so
+    // this also proves the edited paths are compared canonically.
+    let broken_lines : Array[String] = [
+      for index in 1..<=25 => "  let y\{index} : Int = \"s\""
+    ]
+    let broken_sum = [ for index in 1..<=25 => "y\{index}" ].join(" + ")
+    let breaking = run_multi_edit({
+      "edits": [
+        {
+          "file": "\{dir}/a/a.mbt",
+          "old_string": "  1",
+          "new_string": "\{broken_lines.join("\n")}\n  \{broken_sum}",
+          "start_line": 3,
+        },
+      ],
+    })
+    assert_true(breaking.is_error)
+    assert_true(
+      breaking.content.contains(
+        "25 new error(s) sit in files this batch edited (over-match evidence)",
+      ),
+    )
+    assert_true(breaking.content.contains("more precise old_strings"))
+    assert_false(breaking.content.contains("re-issue it UNCHANGED"))
+    assert_true(@fs.read_file("\{dir}/a/a.mbt").text().contains("  1\n"))
   })
 }

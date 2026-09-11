@@ -274,7 +274,10 @@ async test "a real check tallies errors separately from warnings" {
     // few as `path:loc: message`, the same shape the human `moon check` output
     // uses, so a reverted batch points straight at the site.
     inspect(errors.errors.length() >= 1, content="true")
-    inspect(errors.errors[0].path.has_suffix("main.mbt"), content="true")
+    inspect(
+      errors.errors[0].path is Some(path) && path.has_suffix("main.mbt"),
+      content="true",
+    )
     inspect(errors.first_errors().length() >= 1, content="true")
   })
 }
