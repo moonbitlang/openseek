@@ -58,10 +58,9 @@ decoder exercises the same byte-level / defensive axis with pure-text fixtures.
 ## Metrics
 
 The analyzer records, per trial: overall success, agent `steps`, `tool_errors`,
-`shell_uses`/`shell_failures`, `finished`, per-probe validation pass/fail,
-`parse_errors`, and a set of MoonBit-idiom counters. The suite report surfaces,
-per `(model, problem)`: Successes, Avg Steps, Avg Tool Errors, Avg Shell
-Failures, Finished, and Validation.
+`finished`, per-probe validation pass/fail, `parse_errors`, and a set of
+MoonBit-idiom counters. The suite report surfaces, per `(model, problem)`:
+Successes, Avg Steps, Avg Tool Errors, Finished, and Validation.
 
 ## Running it
 

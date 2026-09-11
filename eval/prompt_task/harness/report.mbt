@@ -148,8 +148,7 @@ fn EvalReport::as_report(self : EvalReport) -> @report.Report {
       Metric(name="output", value=self.out_dir),
     ],
     metric_columns=[
-      "Steps", "Tool Results", "Tool Errors", "Shell Failures", "Finished", "Validation",
-      "Exit Code",
+      "Steps", "Tool Results", "Tool Errors", "Finished", "Validation", "Exit Code",
     ],
     rows=[
       for result in self.results => {
@@ -175,8 +174,7 @@ fn EvalResult::as_report(
       Metric(name="events", value=empty_dash(self.events_path)),
     ],
     metric_columns=[
-      "Steps", "Tool Results", "Tool Errors", "Shell Failures", "Finished", "Validation",
-      "Exit Code",
+      "Steps", "Tool Results", "Tool Errors", "Finished", "Validation", "Exit Code",
     ],
     rows=[eval_result_row(self, out_dir~, include_eval_link=false)],
   )

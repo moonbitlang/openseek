@@ -4,7 +4,9 @@
 provenance and carrying a required rationale for the audit trail. It is the
 delete verb of the tool-mediated file API: `write` and
 `edit`/`multi_edit` already exist, but there was no in-workflow way to delete a
-file — and an `rm` inside an `mbtx` snippet checks no provenance at all.
+file — and a `git rm` spawned from an `mbtx` snippet checks no provenance at
+all (a snippet's own writes stay in its temp dir, so a spawned child is the
+only unprovenanced deletion route).
 
 `remove` deletes a path **only** when the session's
 [`FileStateMap`](../file_state.mbt) records it as `Created` — one the agent
@@ -15,8 +17,8 @@ refused.
 ## Design Rationale
 
 The gate is provenance, not file type. `remove` handles any file the agent
-created, source or not, and it is the *provenance-checked* path where an `rm`
-inside an `mbtx` snippet is not. Deleting a
+created, source or not, and it is the *provenance-checked* path where a
+`git rm` spawned from an `mbtx` snippet is not. Deleting a
 `.mbt`/`.mbt.md` file runs module `moon check` and appends the feedback, so a
 break the deletion causes surfaces in the result exactly as it does after
 `write`/`edit`.

@@ -727,8 +727,8 @@ fn SuiteReport::as_report(self : SuiteReport) -> @report.Report {
       Metric(name="output", value=self.out_dir),
     ],
     metric_columns=[
-      "Model", "Problem", "Successes", "Avg Steps", "Avg Tool Errors", "Avg Shell Failures",
-      "Finished", "Validation",
+      "Model", "Problem", "Successes", "Avg Steps", "Avg Tool Errors", "Finished",
+      "Validation",
     ],
     rows=[
       for index, report in self.reports => {

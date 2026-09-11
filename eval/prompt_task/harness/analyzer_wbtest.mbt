@@ -102,6 +102,14 @@ test "eval session produces standalone result" {
   assert_eq(result.steps, 2)
   assert_false(result.validation.ran)
   assert_true(result.markdown().contains("Prompt Task Eval Result"))
+  // Every column named in the header must be one a row actually produces.
+  assert_true(
+    result
+    .markdown()
+    .contains(
+      "| # | Case | Result | Steps | Tool Results | Tool Errors | Finished | Validation | Exit Code | Reason | Warnings |",
+    ),
+  )
   assert_true(result.html().contains("<html"))
 }
 
@@ -333,6 +341,11 @@ test "markdown report includes prompt label and parser metrics" {
     ],
   }
   let text = report.markdown()
+  assert_true(
+    text.contains(
+      "| # | Case | Result | Steps | Tool Results | Tool Errors | Finished | Validation | Exit Code | Reason | Warnings |",
+    ),
+  )
   assert_true(text.contains("flash"))
   assert_true(text.contains("Parse Errors"))
   assert_true(text.contains("## Trial Details"))
