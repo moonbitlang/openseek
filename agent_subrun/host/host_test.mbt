@@ -84,3 +84,34 @@ test "what this host writes is what the library reads" {
   // No `--max-steps`: per-call ceilings ride the request envelope.
   assert_false(args.contains("--max-steps"))
 }
+
+///|
+test "the standing goal rides the guest environment beside the handoff" {
+  // Read at reservation time, so the closure sees whatever goal stands when
+  // the snippet actually runs; absent, nothing but the handoff is set.
+  let goal : Ref[@host.AuditCriteria?] = Ref(None)
+  let injection = @host.SubrunInjection(
+    exe="/opt/openseek",
+    session_root="/store",
+    parent="run7",
+    workspace_root="/ws",
+    reserve_ordinals=_ => 1,
+    criteria=() => goal.val,
+  )
+  assert_eq(injection.reserve().env().length(), 1)
+  goal.val = Some({ goal: "ship the parser", sha: None, dirty: true, })
+  let env = injection.reserve().env()
+  assert_eq(env.get("OPENSEEK_GOAL"), Some("ship the parser"))
+  // A dirty flag without a commit describes nothing: neither is set.
+  assert_eq(env.get("OPENSEEK_GOAL_SHA"), None)
+  assert_eq(env.get("OPENSEEK_GOAL_DIRTY"), None)
+  goal.val = Some({
+    goal: "ship the parser",
+    sha: Some("abc123"),
+    dirty: false,
+  })
+  let env = injection.reserve().env()
+  assert_eq(env.get("OPENSEEK_GOAL_SHA"), Some("abc123"))
+  assert_eq(env.get("OPENSEEK_GOAL_DIRTY"), Some("false"))
+  assert_true(env.get("WORKFLOW_HOST") is Some(_))
+}

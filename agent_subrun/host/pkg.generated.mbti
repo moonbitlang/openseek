@@ -7,8 +7,14 @@ pub let block_size : Int
 // Errors
 
 // Types and methods
+pub(all) struct AuditCriteria {
+  goal : String
+  sha : String?
+  dirty : Bool
+}
+
 type SubrunInjection
-pub fn SubrunInjection::SubrunInjection(exe~ : String, session_root~ : String, parent~ : String, workspace_root~ : String, reserve_ordinals~ : (Int) -> Int, model? : String, api_url? : String) -> Self
+pub fn SubrunInjection::SubrunInjection(exe~ : String, session_root~ : String, parent~ : String, workspace_root~ : String, reserve_ordinals~ : (Int) -> Int, model? : String, api_url? : String, criteria? : () -> AuditCriteria?) -> Self
 pub fn SubrunInjection::exe(Self) -> String
 pub fn SubrunInjection::reserve(Self) -> SubrunReservation
 

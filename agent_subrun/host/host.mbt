@@ -29,6 +29,23 @@
 pub let block_size : Int = 32
 
 ///|
+/// What a review child audits against when the model gives no criteria: the
+/// standing goal's text and, when the goal recorded one, its baseline commit
+/// and whether the worktree was already dirty at it.
+///
+/// The host reads it at reservation time, so a snippet sees the LIVE goal
+/// rather than a turn-start snapshot, and hands it over as guest environment
+/// (`OPENSEEK_GOAL`, `OPENSEEK_GOAL_SHA`, `OPENSEEK_GOAL_DIRTY`) beside the
+/// workflow handoff. The audited party does not get to restate its own
+/// criteria: a paraphrased goal is where quiet narrowing hides, and the
+/// baseline is something the model does not reliably know at all.
+pub(all) struct AuditCriteria {
+  goal : String
+  sha : String?
+  dirty : Bool
+}
+
+///|
 /// What to spawn, where transcripts belong, and the counter that keeps two
 /// snippets from minting the same child id.
 ///
@@ -46,6 +63,8 @@ struct SubrunInjection {
   api_url : String?
   /// Reserve N consecutive child ordinals and return the first.
   reserve_ordinals : (Int) -> Int
+  /// The standing goal at reservation time, if one stands.
+  criteria : () -> AuditCriteria?
 }
 
 ///|
@@ -71,6 +90,7 @@ pub fn SubrunInjection::SubrunInjection(
   reserve_ordinals~ : (Int) -> Int,
   model? : String,
   api_url? : String,
+  criteria? : () -> AuditCriteria? = () => None,
 ) -> SubrunInjection {
   {
     exe,
@@ -80,6 +100,7 @@ pub fn SubrunInjection::SubrunInjection(
     model,
     api_url,
     reserve_ordinals,
+    criteria,
   }
 }
 
@@ -139,7 +160,9 @@ pub fn SubrunReservation::events_path(self : SubrunReservation) -> String {
 }
 
 ///|
-/// The guest environment to set: `WORKFLOW_HOST` and nothing else.
+/// The guest environment to set: `WORKFLOW_HOST`, plus the standing goal
+/// (`OPENSEEK_GOAL`, with `OPENSEEK_GOAL_SHA`/`OPENSEEK_GOAL_DIRTY` when it
+/// recorded a baseline) while one stands — and nothing else.
 pub fn SubrunReservation::env(self : SubrunReservation) -> Map[String, String] {
   self.env
 }
@@ -200,12 +223,13 @@ pub fn SubrunInjection::reserve(self : SubrunInjection) -> SubrunReservation {
     "events": events_path,
     "cwd": self.workspace_root,
   }
-  {
-    base,
-    limit: block_size,
-    dir,
-    journal_path,
-    events_path,
-    env: { "WORKFLOW_HOST": handoff.stringify() },
+  let env = { "WORKFLOW_HOST": handoff.stringify() }
+  if (self.criteria)() is Some(criteria) {
+    env["OPENSEEK_GOAL"] = criteria.goal
+    if criteria.sha is Some(sha) {
+      env["OPENSEEK_GOAL_SHA"] = sha
+      env["OPENSEEK_GOAL_DIRTY"] = if criteria.dirty { "true" } else { "false" }
+    }
   }
+  { base, limit: block_size, dir, journal_path, events_path, env, }
 }

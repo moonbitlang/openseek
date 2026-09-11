@@ -13,13 +13,15 @@
 ///
 /// `exe` must be absolute (the sandbox admits it by exact path);
 /// `workspace_root` is where a child RUNS, since an `explore` child reads code
-/// by paths relative to its cwd.
+/// by paths relative to its cwd. `criteria` is read when a snippet is
+/// reserved, so a review it delegates audits the LIVE standing goal.
 pub fn ChildSession::injection(
   self : ChildSession,
   exe~ : String,
   workspace_root~ : String,
   model? : String,
   api_url? : String,
+  criteria? : () -> @host.AuditCriteria?,
 ) -> @host.SubrunInjection {
   let first_free = self.first_free
   SubrunInjection(
@@ -29,6 +31,7 @@ pub fn ChildSession::injection(
     workspace_root~,
     model?,
     api_url?,
+    criteria?,
     reserve_ordinals=count => reserve_subrun_ordinals(count, first_free~),
   )
 }

@@ -60,8 +60,8 @@ other colons. Paths with spaces are single args without shell quoting.
 
 ## Agent workflows
 
-- `review.mbtx` audits the current worktree against the criteria given in
-  `args` (see below).
+- `review.mbtx` audits the current worktree against the standing goal the
+  engine supplies and/or the criteria given in `args` (see below).
 - `change-review.mbtx` examines staged, unstaged, and untracked source changes
   from correctness, compatibility, and regression-test perspectives. Its scope
   is the working tree against HEAD, not committed branch history.
@@ -82,13 +82,16 @@ Run these with the hosted child-agent handoff:
 {"description":"Map repository architecture","filename":"@builtin/repo-map.mbtx","subrun":true,"cwd":"/path/to/repository"}
 ```
 
-`review.mbtx` launches one `review` child (100-step ceiling) with the
-arguments joined as its criteria, prints the full report JSON, then a
-`findings=N blockers=M` line; blocker findings never turn into a failing
-exit, the caller reads them. `--sha COMMIT` (with `--dirty` when the worktree
-was already dirty at that commit) names the baseline the criteria were
-recorded at; `--help` prints usage. Nothing is audited implicitly: the script
-does not read a standing goal.
+`review.mbtx` launches one `review` child (100-step ceiling). With no
+arguments it audits the standing goal and the baseline it recorded, which the
+engine places in the snippet's environment (`OPENSEEK_GOAL`,
+`OPENSEEK_GOAL_SHA`, `OPENSEEK_GOAL_DIRTY`) when one stands; arguments, joined
+with spaces, narrow that goal as an audit focus, or are the whole criteria
+when no goal stands. It prints the full report JSON, then a
+`findings=N blockers=M` line, and exits unsuccessfully when any finding is a
+blocker so the caller cannot read past it. `--sha COMMIT` (with `--dirty`
+when the worktree was already dirty at that commit) overrides the engine's
+baseline; `--help` prints usage.
 
 The other two use `moonbitlang/workflow`'s `fan_out` and `attempt` with
 read-only `explore` children. Change review runs three scouts, allowing 16 steps each.

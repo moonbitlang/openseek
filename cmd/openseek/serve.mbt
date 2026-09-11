@@ -646,7 +646,15 @@ async fn run_serve(
     // counter `run_subrun` uses, or a snippet's child and a `review` child
     // collide on one transcript file.
     let mbtx_subrun = child_session.map(spec => {
-      spec.injection(exe~, workspace_root~, model="\{model}", api_url?)
+      spec.injection(
+        exe~,
+        workspace_root~,
+        model="\{model}",
+        api_url?,
+        // Read at reservation time from the loop-updated session, never a
+        // snapshot: a review requested mid-turn audits the LIVE goal.
+        criteria=() => audit_criteria(session),
+      )
     })
     let extra_tools = build_extra_tools(
       matches,

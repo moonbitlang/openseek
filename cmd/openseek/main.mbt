@@ -299,6 +299,9 @@ async fn run_task_turn(
     let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
     let scope = @agent_runtime.AgentTaskScope(group)
     let exe = self_executable()
+    // Mirror the latest appended session so a review a snippet delegates
+    // audits against the LIVE standing goal, not the turn-start snapshot.
+    let latest_session : Ref[@agent_session.Session] = { val: session, }
     let extra_tools = build_extra_tools(
       matches,
       scope,
@@ -311,7 +314,9 @@ async fn run_task_turn(
     // counter `run_subrun` uses, so a snippet's child and a `review` child
     // cannot collide on one transcript file.
     let mbtx_subrun = child_session.map(spec => {
-      spec.injection(exe~, workspace_root~, model="\{model}", api_url?)
+      spec.injection(exe~, workspace_root~, model="\{model}", api_url?, criteria=() => {
+        audit_criteria(latest_session.val)
+      })
     })
     let tools = @agent.build_tools(runtime, scope, extra_tools~, mbtx_subrun?)
     let on_goal_met = if review_gate_enabled(matches) {
@@ -336,7 +341,11 @@ async fn run_task_turn(
         model~,
         session~,
         task~,
-        append_item~,
+        append_item=(current, item) => {
+          let next = append_item(current, item)
+          latest_session.val = next
+          next
+        },
         max_steps?,
         thinking~,
         api_url?,
