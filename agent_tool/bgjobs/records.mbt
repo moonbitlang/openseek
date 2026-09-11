@@ -63,8 +63,9 @@ pub fn BgJobRuntime::generation(self : BgJobRuntime) -> String {
 }
 
 ///|
-/// Current-runtime snapshots only. The Desktop host reads durable history
-/// separately from the session metadata files.
+/// Current-runtime snapshots whose first publication has been attempted.
+/// Unlike list()/snapshot(), this excludes jobs still being registered. The
+/// Desktop host reads durable history separately from session metadata files.
 pub fn BgJobRuntime::records(self : BgJobRuntime) -> Array[@protocol.JobRecord] {
   [
     for _, job in self.jobs if job.announced => job.record(self)
@@ -99,6 +100,7 @@ async fn BgJobRuntime::publish(
         permission=0o600,
       )
       @fs.rename(temporary, path, replace=true)
+      sync_job_directories(dir)
     } catch {
       error => job.persistence_error = Some("failed to persist job: \{error}")
     }
@@ -106,6 +108,20 @@ async fn BgJobRuntime::publish(
   job.announced = true
   if self.on_job_event is Some(publish) {
     publish(kind, { ..record, persistence_error: job.persistence_error, })
+  }
+}
+
+///|
+/// Make the metadata rename and new generation/jobs directory entries durable
+/// where directory sync is supported, matching the session store's best-effort
+/// policy. This does not add per-chunk fsync to the output stream.
+async fn sync_job_directories(dir : String) -> Unit {
+  for path in [dir, "\{dir}/..", "\{dir}/../.."] {
+    let directory = @fs.open(path, mode=ReadOnly) catch { _ => continue }
+    defer directory.close()
+    directory.sync() catch {
+      _ => ()
+    }
   }
 }
 

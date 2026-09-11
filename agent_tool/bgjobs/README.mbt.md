@@ -51,10 +51,11 @@ memory-only jobs (bounded preview, rest dropped).
 ## Push-completion
 
 The per-job watcher awaits the execution and calls `on_job_exit` exactly once
-when the job ends *on its own* — a natural exit, the output watchdog, or the
-wall-clock reaper. A
-requested stop (`job_stop`, session teardown) fires nothing: it is already
-user-visible. The `agent` package wires `on_job_exit` to queue a
+for a natural exit, the output watchdog, the wall-clock reaper, or an output
+capture failure. A normal requested stop (`job_stop`, session teardown) fires
+nothing: it is already user-visible. Capture failures still produce a notice
+when they race a requested stop, so losing output is never hidden by that stop.
+The `agent` package wires `on_job_exit` to queue a
 `SteerInput::Notice` (lossless) and poke the serve loop, which is what makes
 job completion *push* into the conversation instead of requiring the model to
 poll — see the `mbtx` tool description and the system prompts, which teach

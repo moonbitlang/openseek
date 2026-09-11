@@ -155,6 +155,11 @@ async test "history decodes only its requested page and preserves runtime job or
   )
   assert_eq(selected.job, terminal)
   assert_false(selected.controllable)
+  // One malformed runtime entry produces one actionable diagnostic.
+  @fs.write_file("\{root}/stray-file", "not a runtime directory")
+  let broken = job_history_page(root, Map([]), 0, [])
+  assert_eq(broken.errors.length(), 1)
+  assert_true(broken.errors[0].contains("stray-file"))
 }
 
 ///|

@@ -224,7 +224,7 @@ async fn job_history_page(
       @os_error.OSError(_) as error if error.is_ENOENT() => None
       error => {
         errors.push("Cannot inspect runtime \{name}: \{error}")
-        None
+        continue
       }
     }
     generations.push((name, stamp))

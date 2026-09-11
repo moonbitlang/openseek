@@ -77,8 +77,9 @@ struct BgJobRuntime {
   // spinning grandchild can be orphaned — true process-group kill is
   // upstream work in moonbitlang/async. Tests shrink it to fire cheaply.
   hard_timeout_ms : Int
-  // Called once, with the terminal snapshot, when a job exits on its own (not on
-  // `stop`/teardown) — e.g. to push a completion notice into the agent loop.
+  // Called once for natural exits, watchdog kills, or capture failures. Normal
+  // stop/teardown is already user-visible; a capture failure is still reported
+  // even if it races a requested stop.
   on_job_exit : ((BgJobSnapshot) -> Unit)?
   jobs : Map[String, BgJob]
   generation : String

@@ -24,6 +24,8 @@ fn status_class(state : @wire.JobState) -> String {
 }
 
 ///|
+/// The host normalizes output paths: POSIX double-leading slashes collapse to
+/// one, so a normalized // prefix here denotes a Windows UNC path.
 fn tail_command(path : String) -> String {
   if (path.length() >= 2 && path[1] == ':') ||
     path.has_prefix("\\\\") ||

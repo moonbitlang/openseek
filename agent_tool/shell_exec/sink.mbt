@@ -26,6 +26,8 @@ pub let default_hard_cap : Int = 20_000_000
 priv struct ShellOutputSink {
   // The first `inline_cap` characters, for inline rendering without a file read.
   lock : @async.Mutex
+  // The path exists even if seeding fails; retain it for inspecting partial
+  // output. This does not assert that any bytes have committed successfully.
   mut file_created : Bool
   mut failure : String?
   mut last_output_at_ms : Int64?
@@ -46,7 +48,8 @@ priv struct ShellOutputSink {
   // Full-output spill file, opened lazily once output exceeds `inline_cap` and a
   // spill path is configured. None → memory-only (small output, or no path).
   mut file : @fs.File?
-  // Bytes written to the file so far (== full output byte length once spilled).
+  // Bytes covered by successful writes. A failed write may leave additional
+  // partial bytes on disk; failure stays explicit and this cursor does not move.
   mut file_bytes : Int64
   // Where to spill; None → never spill (memory-only, head kept, rest dropped).
   spill_path : String?
