@@ -38,38 +38,46 @@ fn MinimalCall::from_tool(
     Pending(..) => (true, false, None)
     Done(is_error~, brief~, ..) => (false, is_error, brief)
   }
-  // An mbtx brief usually reports only an exit code. Keep its human-written
-  // description visible after completion, just as while the script is running.
-  // Other settled tools retain their brief without parsing large arguments.
-  let description = if call.name != "mbtx" &&
-    brief is Some(text) &&
-    !text.is_blank() {
-    None
-  } else if call.arguments is Some(arguments) {
-    let value = Some(@json.parse(arguments)) catch { _ => None }
-    if value is Some({ "description": String(text), .. }) && !text.is_blank() {
-      Some(text)
-    } else {
-      None
-    }
+  // Codex briefs a shell call with its command line, which is an argument,
+  // not a description; the tool name stands in for it here.
+  let brief = if call.name != "shell" && brief is Some(text) && !text.is_blank() {
+    Some(text)
   } else {
     None
   }
+  // An mbtx brief usually reports only an exit code, so its human-written
+  // description stays visible after completion, just as while the script is
+  // running. Other tools keep their brief without parsing large arguments.
   let caption = if wait_label is Some(text) {
     text
-  } else if description is Some(text) {
+  } else if call.name == "mbtx" && argument_description(call) is Some(text) {
     text
-  } else if brief is Some(text) && !text.is_blank() {
+  } else if brief is Some(text) {
+    text
+  } else if call.name != "mbtx" && argument_description(call) is Some(text) {
     text
   } else {
     call.name
   }
   let changes = if call.arguments is Some(arguments) {
-    EditChanges::from_arguments(call.name, arguments, minimal=true)
+    EditChanges::from_arguments(call.name, arguments)
   } else {
     None
   }
   { category, caption, pending, failed, changes, }
+}
+
+///|
+/// The `description` argument a tool call was given, when its payload is a
+/// readable object carrying one.
+fn argument_description(call : @transcript.ToolCall) -> String? {
+  guard call.arguments is Some(arguments) else { return None }
+  let value = Some(@json.parse(arguments)) catch { _ => None }
+  if value is Some({ "description": String(text), .. }) && !text.is_blank() {
+    Some(text)
+  } else {
+    None
+  }
 }
 
 ///|
@@ -453,7 +461,7 @@ fn MinimalContent::render(
                   @html.div(
                     class="minimal-edit-changes",
                     attrs=@html.Attrs::build().aria_label("Requested changes"),
-                    changes.render(original_available=false),
+                    changes.render(minimal=true),
                   )
                 } else {
                   @html.nothing
