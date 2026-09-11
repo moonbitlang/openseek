@@ -199,30 +199,6 @@ async test "agent registers the expected tool names" {
 }
 
 ///|
-/// Commands go through `mbtx`, so the registry must not carry a shell
-/// tool family — nor the background-job tools that only ever served it.
-async test "the registry has no shell tool family" {
-  @async.with_task_group() <| group => {
-    let tools = build_tools(AgentRuntime(), AgentTaskScope(group))
-    let names = [ for t in tools.function_tools() => t.name ]
-    assert_false(names.contains("shell"))
-    assert_false(names.contains("shell_output"))
-    assert_false(names.contains("shell_stop"))
-    guard tools.find("mbtx") is Some(mbtx) else { fail("mbtx tool missing") }
-    // Background handoff is automatic, so the schema carries no duration-mode
-    // choice for the model to make.
-    let JsonSchema(schema) = mbtx.schema
-    guard schema is { "properties": Object(properties), .. } else {
-      fail("expected an object schema")
-    }
-    // New script options must not break this regression test. The mbtx
-    // package owns the complete schema contract; here only the removed
-    // background-mode field is relevant to the registry's shell-free API.
-    assert_false(properties.contains("run_in_background"))
-  }
-}
-
-///|
 /// A compile error reached inside the foreground grace reports inline, with
 /// the throwaway path rewritten to `source:LINE:COL`.
 async test "a compile error reached inside the grace reports inline" {

@@ -95,8 +95,6 @@ priv struct EvalResult {
   steps : Int
   tool_results : Int
   tool_errors : Int
-  shell_uses : Int
-  shell_failures : Int
   runtime_notices : Int
   finished : Bool
   finish_message : String
@@ -321,9 +319,6 @@ fn eval_session_with_context(
     reasons.push(context.validation.reason)
   }
   let warnings = context.extra_warnings.copy()
-  if base.warnings != "" {
-    warnings.push(base.warnings)
-  }
   let success = reasons.length() == 0
   let text = @session_analyzer.transcript_text(session)
   {
@@ -343,8 +338,6 @@ fn eval_session_with_context(
     steps: base.steps,
     tool_results: base.tool_results,
     tool_errors: base.tool_errors,
-    shell_uses: base.shell_uses,
-    shell_failures: base.shell_failures,
     runtime_notices: base.runtime_notices,
     finished: base.finished,
     finish_message: base.finish_message,

@@ -26,7 +26,6 @@ pub async fn BgJobRuntime::start(Self, program~ : String, args~ : Array[String],
 pub async fn BgJobRuntime::stop(Self, String) -> Bool
 pub async fn BgJobRuntime::terminal_denial_feedback(Self, String) -> String?
 pub async fn BgJobRuntime::wait_any(Self, Array[String]) -> Unit
-pub async fn BgJobRuntime::wait_exit(Self, String, Int) -> Bool
 
 pub struct BgJobSnapshot {
   id : String

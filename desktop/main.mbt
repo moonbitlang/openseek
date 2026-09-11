@@ -26,7 +26,7 @@ async fn main {
     }
   // A Finder/Dock launch inherits only launchd's minimal environment; graft
   // the user's login-shell environment (PATH, custom variables) onto this
-  // process before anything downstream — engine, LSP, shell tool — spawns.
+  // process before anything downstream — engine, LSP, mbtx snippets — spawns.
   @shellenv.apply_login_shell_env(executable)
   // The user's login shell supplies the base environment, then installed
   // tools take precedence. Both the OpenSeek engine and Codex app-server are

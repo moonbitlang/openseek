@@ -43,7 +43,7 @@ pub fn definition(
       #|existing source (an empty old_string inserts new code). New syntax-checkable
       #|content (.mbt, .mbt.md, moon.mod, moon.pkg) that fails to lex/parse is rejected
       #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors. Do
-      #|not use write to route shell-generated rewrites back into source files. Do not
+      #|not use write to copy a snippet-generated rewrite of a file back over source. Do not
       #|create Markdown or README files unless the user explicitly asks for them.
     ),
     schema=JsonSchema({
@@ -144,8 +144,8 @@ async fn write_file(
     error if @async.is_being_cancelled() => raise error
     _ => path
   }
-  // Guard the last unguarded source-write path: `write` is not sandboxed (it
-  // is an in-process file write, unlike `shell`), so overwriting an existing
+  // Guard the last unguarded source-write path: `write` is an in-process file
+  // write with no sandbox in front of it, so overwriting an existing
   // `.mbt`/`.mbt.md` file here would bypass the line-anchored edit discipline
   // and risk silently dropping content. Existing source must change through
   // `edit`/`multi_edit` (which also insert). Creating a NEW source file, or

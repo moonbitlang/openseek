@@ -29,11 +29,3 @@ pub fn FileSystem::from_json(json : Json) -> FileSystem raise {
   filesystem.validate()
   filesystem
 }
-
-///|
-/// The underlying JSON object, e.g. for embedding the fixture in a larger
-/// eval-case document.
-pub fn FileSystem::to_json(self : FileSystem) -> Json {
-  let FileSystem(json) = self
-  json
-}

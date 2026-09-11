@@ -28,10 +28,6 @@ struct SandboxedCommand {
   /// sandbox did not cause. Derived from the same profile encoded in `args`, so
   /// denial reporting cannot use metadata from another run.
   denial_subjects : Array[String]
-  /// True only for the ordinary source-readonly profile with no writable
-  /// subtree. A trusted source writer can escape this profile by running as a
-  /// standalone shell command; worker and scratch-lab profiles cannot.
-  plain_source_readonly : Bool
   /// What to tell the model when this command's output reports a denial. Held
   /// per command rather than picked by the caller, because the profiles deny
   /// different things: the source-readonly one denies source writes, the worker
@@ -101,7 +97,6 @@ pub async fn SandboxedCommand::create_if_available(
     // Copied: the profile cache hands out its own array, and this command must
     // keep classifying with the subjects of the profile it actually runs under.
     denial_subjects: data.denial_subjects.copy(),
-    plain_source_readonly: subtree is None,
     denial_feedback: source_write_denial_feedback,
   })
 }
@@ -136,13 +131,4 @@ pub fn SandboxedCommand::output_reports_denial(
 /// one that actually refused.
 pub fn SandboxedCommand::denial_feedback(self : SandboxedCommand) -> String {
   self.denial_feedback
-}
-
-///|
-/// Whether this command uses the ordinary source-readonly profile, where a
-/// normally trusted source writer may succeed when retried by itself.
-pub fn SandboxedCommand::allows_standalone_trusted_writer(
-  self : SandboxedCommand,
-) -> Bool {
-  self.plain_source_readonly
 }

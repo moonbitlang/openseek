@@ -20,7 +20,7 @@ test "markdown renders summary metrics and dynamic columns" {
       ),
       ReportRow(
         index=2,
-        name="shell",
+        name="mbtx",
         success=false,
         reason="exit 1",
         warnings="contains | pipe\nand newline",
@@ -36,7 +36,7 @@ test "markdown renders summary metrics and dynamic columns" {
   )
   assert_true(text.contains("## Trial Details"))
   assert_true(text.contains("### Trial 1: `read`"))
-  assert_true(text.contains("### Trial 2: `shell`"))
+  assert_true(text.contains("### Trial 2: `mbtx`"))
   assert_true(text.contains("- Log:\n\n  ```text\n  logs/read.log\n  ```"))
   assert_true(text.contains("contains \\| pipe and newline"))
   assert_eq(report.successes(), 1)

@@ -8,12 +8,9 @@ pub struct EvalResult {
   session_id : String
   success : Bool
   reason : String
-  warnings : String
   steps : Int
   tool_results : Int
   tool_errors : Int
-  shell_uses : Int
-  shell_failures : Int
   runtime_notices : Int
   finished : Bool
   finish_message : String
@@ -27,8 +24,6 @@ priv struct SessionMetrics {
   steps : Int
   tool_results : Int
   tool_errors : Int
-  shell_uses : Int
-  shell_failures : Int
   runtime_notices : Int
   /// The last terminal event the session reached, already scored, or `None`
   /// when it never reached one.
@@ -70,22 +65,14 @@ pub fn analyze_session(session : @agent_session.Session) -> EvalResult {
     Some({ status, message, .. }) => "agent terminal \{status}: \{message}"
     None => "finish marker missing"
   }
-  let warnings = if metrics.shell_uses > 0 {
-    "shell output observed \{metrics.shell_uses} time(s)"
-  } else {
-    ""
-  }
   let finished = metrics.terminal is Some({ success: true, .. })
   {
     session_id: session.id().value(),
     success: finished,
     reason,
-    warnings,
     steps: metrics.steps,
     tool_results: metrics.tool_results,
     tool_errors: metrics.tool_errors,
-    shell_uses: metrics.shell_uses,
-    shell_failures: metrics.shell_failures,
     runtime_notices: metrics.runtime_notices,
     finished,
     finish_message: metrics.finish_message,
@@ -127,23 +114,12 @@ fn summarize_session(session : @agent_session.Session) -> SessionMetrics {
   let mut terminal : TerminalOutcome? = None
   let mut tool_results = 0
   let mut tool_errors = 0
-  let mut shell_uses = 0
-  let mut shell_failures = 0
   let mut runtime_notices = 0
   for event in session.events() {
     match event.item() {
       Assistant(_) | Summary(_) | User(_) => ()
       Tool(result) => {
         tool_results += 1
-        if result.tool_name() == "shell" {
-          shell_uses += 1
-          // Use the recorded `is_error` flag rather than re-parsing the shell
-          // output: the tool already decided success/failure, so this stays
-          // correct regardless of the output format.
-          if result.is_error() {
-            shell_failures += 1
-          }
-        }
         if result.is_error() {
           tool_errors += 1
         }
@@ -163,8 +139,6 @@ fn summarize_session(session : @agent_session.Session) -> SessionMetrics {
     steps,
     tool_results,
     tool_errors,
-    shell_uses,
-    shell_failures,
     runtime_notices,
     terminal,
   }

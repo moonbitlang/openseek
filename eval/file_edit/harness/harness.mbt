@@ -17,7 +17,6 @@ priv struct TrialResult {
   exit_code : Int
   steps : Int
   tool_errors : Int
-  shell_uses : Int
   moon_cmd_uses : Int
   moon_run_e_mentions : Int
   moon_run_c_mentions : Int
@@ -51,7 +50,6 @@ struct EvalReport {
 priv struct AgentLogSummary {
   steps : Int
   tool_errors : Int
-  shell_uses : Int
 }
 
 ///|
@@ -176,7 +174,6 @@ async fn evaluate_trial(
   let state_reason = check_expected_state(workspace, case)
   let validation_reason = run_validation(workspace, case.validation)
   let log_summary = summarize_agent_log(log_text)
-  let shell_uses = log_summary.shell_uses
   let marker = "file-edit-eval:\{case.id}"
   let marker_ok = log_text.contains(marker)
   let validation_passed = validation_reason == ""
@@ -191,9 +188,6 @@ async fn evaluate_trial(
     reasons.push(validation_reason)
   }
   let warnings : Array[String] = []
-  if shell_uses > 0 {
-    warnings.push("shell tool used \{shell_uses} time(s)")
-  }
   if !marker_ok {
     warnings.push("finish marker missing")
   }
@@ -213,7 +207,6 @@ async fn evaluate_trial(
     exit_code,
     steps: log_summary.steps,
     tool_errors: log_summary.tool_errors,
-    shell_uses,
     moon_cmd_uses: @metrics.count_lines_containing_all(log_text, [
       "command=moon ",
     ]),
@@ -248,7 +241,6 @@ fn summarize_agent_log(log_text : String) -> AgentLogSummary {
   let mut has_json_events = false
   let mut steps = 0
   let mut tool_errors = 0
-  let mut shell_uses = 0
   for line in log_text.split("\n") {
     let json = @json.parse(line.trim()) catch { _ => continue }
     match json {
@@ -256,16 +248,8 @@ fn summarize_agent_log(log_text : String) -> AgentLogSummary {
         has_json_events = true
         steps += 1
       }
-      {
-        "event": String("tool_result"),
-        "tool_name": String(tool_name),
-        "is_error": is_error,
-        ..
-      } => {
+      { "event": String("tool_result"), "is_error": is_error, .. } => {
         has_json_events = true
-        if tool_name == "shell" {
-          shell_uses += 1
-        }
         if is_error is True {
           tool_errors += 1
         }
@@ -275,19 +259,11 @@ fn summarize_agent_log(log_text : String) -> AgentLogSummary {
     }
   }
   if has_json_events {
-    { steps, tool_errors, shell_uses, }
+    { steps, tool_errors, }
   } else {
-    let leading_shell_use = if log_text.has_prefix("tool: exit=") {
-      1
-    } else {
-      0
-    }
-    let shell_uses = @metrics.count_occurrences(log_text, "\ntool: exit=") +
-      leading_shell_use
     {
       steps: @metrics.count_occurrences(log_text, "--- step "),
       tool_errors: @metrics.count_occurrences(log_text, "tool error:"),
-      shell_uses,
     }
   }
 }
@@ -392,7 +368,6 @@ async test "dry run exact replacement oracle with jsonl agent log" {
         $|not json
         $|{"event":"agent_step","step":1}
         $|{"event":"tool_result","tool_name":"edit","is_error":false,"content":"ok: replaced 1 occurrence"}
-        $|{"event":"tool_result","tool_name":"shell","is_error":false,"content":"exit=0"}
         $|{"event":"agent_finished","answer":"file-edit-eval:\{case.id}"}
       ),
       create_mode=CreateOrTruncate,
@@ -409,10 +384,9 @@ async test "dry run exact replacement oracle with jsonl agent log" {
     assert_true(result.success)
     assert_eq(result.steps, 1)
     assert_eq(result.tool_errors, 0)
-    assert_eq(result.shell_uses, 1)
     assert_eq(result.edit_successes, 1)
     assert_true(result.marker_present)
-    assert_eq(result.warnings, "shell tool used 1 time(s)")
+    assert_eq(result.warnings, "")
   })
 }
 
@@ -512,7 +486,6 @@ test "markdown report summarizes threshold" {
         exit_code: 0,
         steps: 3,
         tool_errors: 0,
-        shell_uses: 0,
         moon_cmd_uses: 1,
         moon_run_e_mentions: 1,
         moon_run_c_mentions: 0,

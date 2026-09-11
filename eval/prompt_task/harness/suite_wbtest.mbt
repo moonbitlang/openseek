@@ -189,12 +189,6 @@ fn eval_result_for_suite_test(index : Int, success : Bool) -> EvalResult {
     } else {
       1
     },
-    shell_uses: index,
-    shell_failures: if success {
-      0
-    } else {
-      1
-    },
     runtime_notices: 0,
     finished: success,
     finish_message: if success {

@@ -119,30 +119,30 @@ final_answer=DONE
 
 The point of the agent is that it *acts*. When a task needs work, the model
 calls one of the local tools and a `tool_result` record joins the stream. Here
-the task forces the `shell` tool; we match the `tool_result` event together with
-its `tool_name`, and use a regex on its `content` to confirm the command really
+the task forces the `mbtx` tool; we match the `tool_result` event together with
+its `tool_name`, and use a regex on its `content` to confirm the snippet really
 ran and its output flowed back.
 
 ```mooncram
-$ openseek.exe run --model deepseek-v4-flash --max-steps 6 "Use the shell tool to run exactly: echo openseek-cram. Then call finish with the word done." 2>/dev/null \
+$ openseek.exe run --model deepseek-v4-flash --max-steps 6 "Use the mbtx tool to run a snippet that prints exactly: openseek-cram. Then call finish with the word done." 2>/dev/null \
 >   | moon run --target native -e 'import {
 >   "moonbitlang/jsonl@0.2.0",
 >   "moonbitlang/async",
 > }
 > 
 > async fn main {
->   let mut used_shell = false
->   let mut shell_output_seen = false
+>   let mut used_mbtx = false
+>   let mut mbtx_output_seen = false
 >   for value in @jsonl.read_stdin() {
->     if value is { "event": String("tool_result"), "tool_name": String("shell"), "content": String(out), .. } {
->       used_shell = true
->       if out =~ re"openseek-cram" { shell_output_seen = true }
+>     if value is { "event": String("tool_result"), "tool_name": String("mbtx"), "content": String(out), .. } {
+>       used_mbtx = true
+>       if out =~ re"openseek-cram" { mbtx_output_seen = true }
 >     }
 >   }
->   println("used_shell=\{used_shell}")
->   println("shell_output_seen=\{shell_output_seen}")
+>   println("used_mbtx=\{used_mbtx}")
+>   println("mbtx_output_seen=\{mbtx_output_seen}")
 > }' 2>/dev/null \
 >   | grep '='
-used_shell=true
-shell_output_seen=true
+used_mbtx=true
+mbtx_output_seen=true
 ```

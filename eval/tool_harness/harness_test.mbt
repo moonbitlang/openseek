@@ -6,13 +6,8 @@ async test "deterministic harness exercises file, command, and control tools" {
   assert_true(report.all_passed())
   let markdown = report.markdown()
   assert_true(markdown.contains("# Tool Harness"))
-  assert_false(markdown.contains("`check_daemon`"))
-  assert_false(markdown.contains("`moon_ide`"))
-  assert_false(markdown.contains("`moon_check`"))
-  assert_false(markdown.contains("`moon_cmd`"))
   assert_true(markdown.contains("| 4 | `multi_edit` | pass"))
   assert_true(markdown.contains("| 5 | `mbtx` | pass"))
-  assert_false(markdown.contains("`shell`"))
   assert_true(markdown.contains("| 6 | `plan` | pass"))
   assert_true(markdown.contains("| 7 | `finish` | pass"))
 }

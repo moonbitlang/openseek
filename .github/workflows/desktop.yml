@@ -12,7 +12,7 @@ on:
       # and root-module tool output views.
       - "protocol/**"
       - "agent_tool/edit_diff/**"
-      - "agent_tool/read/**"
+      - "agent_tool/mbtx/html/**"
       - "jsonrpc/**"
       - "viz_export/**"
       - "moon.mod"
@@ -25,7 +25,7 @@ on:
       - "editor/**"
       - "protocol/**"
       - "agent_tool/edit_diff/**"
-      - "agent_tool/read/**"
+      - "agent_tool/mbtx/html/**"
       - "jsonrpc/**"
       - "viz_export/**"
       - "moon.mod"

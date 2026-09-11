@@ -4,8 +4,4 @@ import {
   "moonbitlang/core/json",
 }
 
-import {
-  "bobzhang/openseek/deepseek",
-} for "test"
-
 warnings = "+unnecessary_annotation"
