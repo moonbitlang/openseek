@@ -266,10 +266,16 @@ fn status_of(terminal : SubrunTerminal) -> String {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SubrunResult with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SubrunTerminal with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SubrunTerminal with Eq::{equal, not_equal}
