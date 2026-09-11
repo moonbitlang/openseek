@@ -30,7 +30,7 @@ async fn jobs_directory(scope : @protocol.JobsScope) -> String {
   guard @fs.kind(session) is Directory else {
     raise EngineError("session directory is unavailable")
   }
-  "\{session}/jobs"
+  jobs_store_path(root, scope.session)
 }
 
 ///|
@@ -155,7 +155,7 @@ pub async fn list_jobs(
     // Verify workspace placement as well as the session id before requesting
     // live data; duplicate session ids in different stores must stay isolated.
     if engine.session_root is Some(root) &&
-      directory == "\{root}/sessions/\{scope.session}/jobs" {
+      directory == jobs_store_path(root, scope.session) {
       guard @uuid.mint() is Some(request_id) else {
         raise EngineError("could not allocate a job request id")
       }
@@ -320,7 +320,7 @@ async fn read_job_page(
   }
   let length = (size - start).min(limit.to_int64()).to_int()
   let bytes = file.read_exactly_at(length, position=start)
-  let (skip, end) = job_utf8_window(bytes, offset is None)
+  let (skip, end) = job_utf8_window(bytes, offset is None && start > 0L)
   let next = start + end.to_int64()
   {
     text: @utf8.decode(bytes[skip:end]),
@@ -343,7 +343,7 @@ pub async fn stop_job(
   let directory = jobs_directory(target.scope)
   guard manager.jobs_engine(target.scope) is Some(engine) &&
     engine.session_root is Some(root) &&
-    directory == "\{root}/sessions/\{target.scope.session}/jobs" else {
+    directory == jobs_store_path(root, target.scope.session) else {
     raise EngineError("job controls require its current live engine")
   }
   guard @uuid.mint() is Some(request_id) else {
@@ -359,4 +359,16 @@ pub async fn stop_job(
       job_id == target.job_id => { outcome, }
     _ => raise EngineError("unexpected job stop reply")
   }
+}
+
+///|
+/// Normalize both sides of ownership comparisons. Native joins use backslashes
+/// on Windows while stored engine roots use slash-normalized Absolute paths.
+fn jobs_store_path(root : @pathx.Absolute, session : String) -> String {
+  root
+  .join("sessions")
+  .join(Relative(session))
+  .join("jobs")
+  .normalize()
+  .to_string()
 }

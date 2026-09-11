@@ -107,3 +107,44 @@ async test "job history distinguishes dead owner from disconnected client and ma
     _ => fail("corrupt metadata must not disappear silently")
   }
 }
+
+///|
+#cfg(platform="windows")
+test "job ownership paths normalize Windows joins and engine roots equally" {
+  let native = @pathx.Path("C:\\workspace\\.openseek").resolve()
+  assert_eq(
+    jobs_store_path(native, "s-1"),
+    "C:/workspace/.openseek/sessions/s-1/jobs",
+  )
+  assert_eq(
+    jobs_store_path(native, "s-1"),
+    jobs_store_path(native.normalize(), "s-1"),
+  )
+}
+
+///|
+#cfg(not(platform="windows"))
+test "job ownership paths normalize POSIX roots and joins equally" {
+  let root = @pathx.Path("/workspace/./.openseek").resolve()
+  assert_eq(
+    jobs_store_path(root, "s-1"),
+    "/workspace/.openseek/sessions/s-1/jobs",
+  )
+  assert_eq(
+    jobs_store_path(root, "s-1"),
+    jobs_store_path(root.normalize(), "s-1"),
+  )
+}
+
+///|
+async test "a tail at byte zero rejects corrupt leading UTF8 instead of hiding it" {
+  let root = @fs.tmpdir(prefix="job-invalid-tail-")
+  defer @fs.rmdir(root, recursive=true)
+  let path = "\{root}/output"
+  @fs.write_file(path, b"\x80a")
+  try read_job_page(path, None, 65536) catch {
+    _ => ()
+  } noraise {
+    _ => fail("invalid leading UTF8 must remain visible as a read error")
+  }
+}
