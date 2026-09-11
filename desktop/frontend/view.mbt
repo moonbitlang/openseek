@@ -1363,10 +1363,38 @@ fn session_tooltip(model : Model, conv : Conversation) -> String {
 }
 
 ///|
-/// Top bar: conversation identity on the left (session id and workspace in
-/// the tooltip), live run state on the right — these are per-conversation
-/// runtime facts, not settings, so they live here rather than in the
-/// settings popup.
+/// The shared display preference is available directly beside the conversation.
+fn Model::minimal_transcript_toggle(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+) -> @html.Html {
+  // Both conversation titlebars share the same application-wide preference.
+  // Info means details: its active/pressed state is the inverse of minimal mode.
+  @html.button(
+    // A Codex titlebar gains its workspace after loading. Positional reuse can
+    // move a disabled terminal button here; explicitly clear that DOM property.
+    disabled=false,
+    class=if !self.minimal_transcript {
+      "panel-toggle active"
+    } else {
+      "panel-toggle"
+    },
+    type_="button",
+    title=if self.minimal_transcript {
+      "Show transcript details"
+    } else {
+      "Hide transcript details"
+    },
+    attrs=@html.Attrs::build()
+      .aria_label("Transcript details")
+      .aria_pressed((!self.minimal_transcript).to_string()),
+    on_click=dispatch(MinimalTranscriptChanged(!self.minimal_transcript)),
+    icon(@icons.icon_info),
+  )
+}
+
+///|
+/// Conversation identity on the left; live state and display controls on the right.
 fn topbar_view(
   dispatch : @cmd.Emit[Msg],
   toggle_terminal : @cmd.Cmd,
@@ -1395,6 +1423,7 @@ fn topbar_view(
   if conv.turn.usage_tokens > 0 {
     items.push(@html.span(class="pill", token_label(conv.turn.usage_tokens)))
   }
+  items.push(model.minimal_transcript_toggle(dispatch))
   // Export is a native-window operation and the visualizer consumes durable
   // OpenSeek JSONL. Remote-device conversations and fresh drafts therefore do
   // not offer a button that their host cannot fulfill.
@@ -1737,6 +1766,7 @@ fn view(
         @codex.PageActions::{
           toggle_terminal,
           toggle_files: toggle_right_panel,
+          transcript_toggle: model.minimal_transcript_toggle(dispatch),
           workspace_label: workspace => @resource.label(workspace),
           transcript: transcript_html,
           composer: codex_composer_html,

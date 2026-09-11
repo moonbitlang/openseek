@@ -132,6 +132,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         .map(project => @resource.label(project))
       @transcript_component.Input(
         dark_mode=self.theme.is_dark(self.system_dark),
+        minimal=self.minimal_transcript,
         source=@transcript_component.Codex,
         focused=self.focused,
         active_session=self.codex.active_id().unwrap_or("none"),
@@ -144,7 +145,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         project_query="",
         root=placement.bind(value => value.checkout_root()),
         items=@transcript_component.VisibleRow::history(
-          self.codex.transcript_items(),
+          self.codex.transcript_items(minimal=self.minimal_transcript),
         ),
         streaming_response=None,
         streaming_identity="idle",
@@ -155,6 +156,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         None =>
           @transcript_component.Input(
             dark_mode=self.theme.is_dark(self.system_dark),
+            minimal=self.minimal_transcript,
             source=@transcript_component.OpenSeek,
             focused=self.focused,
             active_session=self.active_session,
@@ -173,6 +175,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
           let can_choose_project = self.can_choose_new_chat_project()
           @transcript_component.Input(
             dark_mode=self.theme.is_dark(self.system_dark),
+            minimal=self.minimal_transcript,
             source=@transcript_component.OpenSeek,
             focused=self.focused,
             active_session=self.active_session,

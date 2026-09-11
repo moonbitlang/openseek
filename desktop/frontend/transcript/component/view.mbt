@@ -870,6 +870,7 @@ fn transcript_item_view(
         sequence?=item.sequence,
       )
     Summary(text) => summary_card_view(text, on_open)
+    TurnEnd => @html.nothing
   }
 }
 

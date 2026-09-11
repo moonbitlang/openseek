@@ -1573,3 +1573,102 @@
   font-size: var(--font-size-sm);
   font-style: italic;
 }
+
+/* Minimal mode: neutral activity descriptions, with native disclosures for
+   keyboard access and browser-owned expansion state. Tool bodies contain only
+   captions; parameters and output never enter this subtree. */
+.minimal-tools,
+.minimal-process,
+.minimal-context-summary {
+  margin: 14px 0;
+  min-width: 0;
+}
+/* The stream already separates its rows with a grid gap. Keep the extra
+   margins only for disclosures nested inside an expanded process. */
+.stream > .minimal-tools,
+.stream > .minimal-process,
+.stream > .minimal-context-summary {
+  margin-block: 0;
+}
+/* An expanded process ends at its last item; the stream supplies the gap
+   before the final answer, just as it does for a collapsed process. */
+.minimal-process-body > :last-child {
+  margin-bottom: 0;
+}
+/* Activity captions keep the same typography when a disclosure opens. */
+.minimal-activity-summary,
+.minimal-call,
+.minimal-note {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+}
+.minimal-activity-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  list-style: none;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.minimal-activity-summary:hover {
+  color: var(--color-text-primary);
+}
+.minimal-activity-summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+.minimal-call-list,
+.minimal-process-body {
+  margin-top: 10px;
+  /* Center the 1px guide under the 14px chevron; captions align with the
+     summary text after the chevron's 6px gap. */
+  margin-left: 6.5px;
+  padding-left: 12.5px;
+  border-left: 1px solid var(--color-border);
+}
+/* Balance the space above the first brief and below the last one. Combined
+   with each call's 5px padding, both ends have 10px of space. */
+.minimal-call-list {
+  margin-top: 0;
+  padding-block: 5px;
+}
+.minimal-call,
+.minimal-note {
+  padding: 5px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.minimal-call-status {
+  margin-left: 8px;
+  font-size: var(--font-size-sm);
+}
+.minimal-call.failed,
+.minimal-note.transcript-error-message {
+  color: var(--color-danger);
+}
+
+.minimal-activity-summary::-webkit-details-marker {
+  display: none;
+}
+.minimal-activity-summary::marker {
+  content: "";
+}
+.minimal-chevron {
+  display: inline-flex;
+  align-self: center;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  transform: rotate(-90deg);
+}
+.minimal-chevron svg {
+  width: 14px;
+  height: 14px;
+}
+.minimal-tools[open] > .minimal-activity-summary > .minimal-chevron,
+.minimal-process[open] > .minimal-activity-summary > .minimal-chevron,
+.minimal-context-summary[open] > .minimal-activity-summary > .minimal-chevron {
+  transform: rotate(0deg);
+}

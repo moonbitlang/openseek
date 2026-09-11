@@ -398,6 +398,7 @@ fn CodexGitStatus::presentation(
 pub(all) struct PageActions {
   toggle_terminal : @cmd.Cmd
   toggle_files : @cmd.Cmd
+  transcript_toggle : @html.Html
   workspace_label : (@common.Uri) -> String
   // The root shell supplies the one transcript view shared with OpenSeek.
   // Codex owns the normalized items, but no parallel message/activity DOM.
@@ -468,6 +469,7 @@ pub fn State::page(
   // These are OpenSeek's existing host panels, re-rooted by `file_ctx` and
   // `terminal_ctx` to the selected app-server thread. They stay in this one
   // topbar instead of creating a nested Codex application frame.
+  topbar.push(actions.transcript_toggle)
   topbar.push(
     @html.button(
       class=if terminal_open { "panel-toggle active" } else { "panel-toggle" },
