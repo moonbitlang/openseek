@@ -67,7 +67,7 @@ pub fn BgJobRuntime::generation(self : BgJobRuntime) -> String {
 /// separately from the session metadata files.
 pub fn BgJobRuntime::records(self : BgJobRuntime) -> Array[@protocol.JobRecord] {
   [
-    for _, job in self.jobs => job.record(self)
+    for _, job in self.jobs if job.announced => job.record(self)
   ]
 }
 
@@ -103,6 +103,7 @@ async fn BgJobRuntime::publish(
       error => job.persistence_error = Some("failed to persist job: \{error}")
     }
   }
+  job.announced = true
   if self.on_job_event is Some(publish) {
     publish(kind, { ..record, persistence_error: job.persistence_error, })
   }

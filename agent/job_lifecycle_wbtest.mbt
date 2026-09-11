@@ -84,3 +84,30 @@ async test "session cleanup persists a terminal record after cancellation" {
   assert_true(saved.state is Stopped("session_ended"))
   assert_eq(saved.revision, 2)
 }
+
+///|
+#cfg(not(platform="windows"))
+async test "metadata write failure remains visible and does not strand stop settlement" {
+  let root = @fs.tmpdir(prefix="openseek-job-metadata-fail-")
+  defer @fs.rmdir(root, recursive=true)
+  let events : Array[@protocol.JobRecord] = []
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let jobs = @bgjobs.BgJobRuntime(
+        AgentTaskScope(group),
+        spill_dir=root,
+        persistent_logs=true,
+        on_job_event=(_, record) => events.push(record),
+      )
+      let id = jobs.start(program="/bin/sleep", args=["30"], command="sleep")
+      @fs.mkdir("\{root}/\{id}.json.tmp")
+      assert_true(jobs.stop(id))
+      assert_true(
+        events.last() is Some(record) &&
+        record.state.is_terminal() &&
+        record.persistence_error is Some(_),
+      )
+      assert_true(jobs.pending().is_empty())
+    })
+  })
+}

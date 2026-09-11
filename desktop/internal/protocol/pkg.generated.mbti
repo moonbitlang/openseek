@@ -1320,6 +1320,7 @@ pub impl @json.FromJson for JobView
 pub(all) struct JobsListPayload {
   scope : JobsScope
   offset : Int
+  selected : JobTarget?
 } derive(Eq, @debug.Debug)
 pub fn JobsListPayload::equal(Self, Self) -> Bool
 pub fn JobsListPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1333,6 +1334,7 @@ pub(all) struct JobsListReply {
   jobs : Array[JobView]
   next_offset : Int?
   errors : Array[String]
+  selected : JobView?
 } derive(Eq, @debug.Debug)
 pub fn JobsListReply::equal(Self, Self) -> Bool
 pub fn JobsListReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

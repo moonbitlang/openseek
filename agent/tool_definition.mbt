@@ -68,7 +68,12 @@ pub async fn[X] build_tools(
   let file_state = @agent_tool.FileStateMap()
   // Scratch files follow the scope. Adopted job logs use separate storage so
   // removing compiler/snippet scratch space cannot remove a user's log.
-  let scratch = @fs.tmpdir(prefix="openseek-jobs-")
+  let scratch = @fs.tmpdir(prefix="openseek-jobs-") catch {
+    error =>
+      fail(
+        "cannot create background-job scratch directory; check temporary-directory space and permissions: \{error}",
+      )
+  }
   scope
   .group()
   .add_defer(() => {
@@ -87,9 +92,7 @@ pub async fn[X] build_tools(
       guard parts.last() is Some(generation) else {
         fail("missing runtime directory name")
       }
-      let dir = "\{root}/\{generation}"
-      @fs.mkdir(dir, permission=0o700)
-      @fs.realpath(dir)
+      "\{root}/\{generation}"
     }
     None => scratch
   }
@@ -97,10 +100,42 @@ pub async fn[X] build_tools(
   // loop's lossless steer queue (surfaced to the model at the next step, or
   // persisted while idle) and poke the controller so an idle engine wakes to
   // drain it instead of leaving it until the next prompt.
+  let mut owner : @fs.File? = None
+  let prepare_output_dir : (async () -> String)? = match job_log_dir {
+    None => None
+    Some(root) =>
+      Some(() => {
+        @fs.mkdir(root, recursive=true, permission=0o700) catch {
+          @os_error.OSError(_) as error if error.is_EEXIST() => {
+            guard @fs.kind(root) is Directory else { raise error }
+          }
+          error => raise error
+        }
+        // Exclusive creation: a collision never reuses another engine's logs.
+        @fs.mkdir(spill_dir, permission=0o700)
+        errdefer @async.protect_from_cancel(() => {
+          @fs.rmdir(spill_dir, recursive=true) catch {
+            _ => ()
+          }
+        })
+        let canonical = @fs.realpath(spill_dir)
+        let file = @fs.open(
+          "\{canonical}/owner.lock",
+          mode=ReadWrite,
+          create_mode=CreateNew,
+          permission=0o600,
+        )
+        errdefer file.close()
+        file.lock(Exclusive)
+        owner = Some(file)
+        canonical
+      })
+  }
   let bg_runtime = @bgjobs.BgJobRuntime(
     scope,
     spill_dir~,
     persistent_logs=job_log_dir is Some(_),
+    prepare_output_dir?,
     on_job_event=(kind, job) => @emit.emit(JobChanged(kind~, job~)),
     on_job_exit=snapshot => {
       runtime.queue_steer(Notice(background_notice_text(snapshot)))
@@ -109,19 +144,7 @@ pub async fn[X] build_tools(
       }
     },
   )
-  let owner = if job_log_dir is Some(_) {
-    let file = @fs.open(
-      "\{spill_dir}/owner.lock",
-      mode=ReadWrite,
-      create_mode=CreateNew,
-      permission=0o600,
-    )
-    errdefer file.close()
-    file.lock(Exclusive)
-    Some(file)
-  } else {
-    None
-  }
+
   scope
   .group()
   .add_defer(() => {

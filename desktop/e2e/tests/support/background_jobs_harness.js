@@ -65,7 +65,9 @@ export class BackgroundJobsHarness extends DesktopBrowserHarness {
         view.job.output_bytes = bytes.length;
         view.job.output_chars = [...bytes.toString()].length;
       }
-      return { jobs, next_offset: null, errors: [] };
+      const selected = p.selected ? jobs.find(v => v.job.generation === p.selected.generation && v.job.id === p.selected.job_id) : null;
+      return { jobs: jobs.slice(p.offset, p.offset + 100), selected,
+        next_offset: p.offset + 100 < jobs.length ? p.offset + 100 : null, errors: [] };
     }
     if (request.method === 'jobs.read') {
       const view = this.jobs.find(v => v.job.generation === p.target.generation && v.job.id === p.target.job_id);

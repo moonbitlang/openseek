@@ -150,7 +150,6 @@ pub async fn list_jobs(
   let directory = jobs_directory(scope)
   let errors : Array[String] = []
   let records : Map[String, @wire.JobRecord] = Map([])
-  let live_ids : Map[String, Bool] = Map([])
   if manager.jobs_engine(scope) is Some(engine) {
     // Verify workspace placement as well as the session id before requesting
     // live data; duplicate session ids in different stores must stay isolated.
@@ -166,76 +165,171 @@ pub async fn list_jobs(
           for job in jobs {
             let key = "\{job.generation}/\{job.id}"
             records[key] = job
-            live_ids[key] = true
           }
         _ => errors.push("Unexpected job snapshot reply")
       }
     }
   }
-  let generations = @fs.readdir(directory) catch {
+  let page = job_history_page(directory, records, payload.offset, errors)
+  let selected = match payload.selected {
+    None => None
+    Some(target) => {
+      guard target.scope == scope else {
+        raise EngineError("selected job scope mismatch")
+      }
+      try
+        selected_job_view(directory, records, target.generation, target.job_id)
+      catch {
+        error => {
+          errors.push("Cannot refresh selected job: \{error}")
+          None
+        }
+      } noraise {
+        view => Some(view)
+      }
+    }
+  }
+  { ..page, selected, }
+}
+
+///|
+/// Enumerate lightweight names, then decode only the requested page. Runtime
+/// creation stamps and monotonic bg-N ids keep completed records in stable
+/// order; output writes and terminal metadata updates cannot reshuffle pages.
+async fn job_history_page(
+  directory : String,
+  live : Map[String, @wire.JobRecord],
+  offset : Int,
+  errors : Array[String],
+) -> @protocol.JobsListReply {
+  guard offset >= 0 else { raise EngineError("invalid history offset") }
+  let names = @fs.readdir(directory) catch {
     @os_error.OSError(_) as error if error.is_ENOENT() => []
     error => {
       errors.push("Cannot list job history: \{error}")
       []
     }
   }
-  for generation in generations {
-    if !@wire.valid_job_component(generation) {
+  for _, record in live {
+    if !names.contains(record.generation) {
+      names.push(record.generation)
+    }
+  }
+  let generations : Array[(String, (Int64, Int)?)] = []
+  for name in names {
+    if !@wire.valid_job_component(name) {
       continue
     }
-    let names = @fs.readdir("\{directory}/\{generation}") catch {
+    let stamp = Some(@fs.mtime("\{directory}/\{name}/owner.lock")) catch {
+      @os_error.OSError(_) as error if error.is_ENOENT() => None
       error => {
-        errors.push("Cannot read generation \{generation}: \{error}")
-        continue
+        errors.push("Cannot inspect runtime \{name}: \{error}")
+        None
       }
     }
-    for name in names {
-      if !name.has_suffix(".json") {
+    generations.push((name, stamp))
+  }
+  generations.sort_by((a, b) => {
+    match (a.1, b.1) {
+      (Some(x), Some(y)) => {
+        let seconds = y.0.compare(x.0)
+        if seconds != 0 {
+          seconds
+        } else {
+          let nanos = y.1.compare(x.1)
+          if nanos != 0 {
+            nanos
+          } else {
+            b.0.compare(a.0)
+          }
+        }
+      }
+      (Some(_), None) => -1
+      (None, Some(_)) => 1
+      (None, None) => b.0.compare(a.0)
+    }
+  })
+  let candidates : Array[(String, String)] = []
+  let mut skipped = 0
+  scan~: for (generation, _) in generations {
+    let files = @fs.readdir("\{directory}/\{generation}") catch {
+      error => {
+        errors.push("Cannot read generation \{generation}: \{error}")
+        []
+      }
+    }
+    let ids = files.filter_map(name => {
+      if name.has_suffix(".json") {
+        Some(name[:name.length() - 5].to_owned())
+      } else {
+        None
+      }
+    })
+    for _, record in live {
+      if record.generation == generation && !ids.contains(record.id) {
+        ids.push(record.id)
+      }
+    }
+    ids.sort_by((a, b) => {
+      let length = b.length().compare(a.length())
+      if length != 0 {
+        length
+      } else {
+        b.compare(a)
+      }
+    })
+    for id in ids {
+      if skipped < offset {
+        skipped += 1
         continue
       }
-      let id = name[:name.length() - 5].to_owned()
-      let key = "\{generation}/\{id}"
-      if records.contains(key) {
-        continue
-      }
-      try read_job_record(directory, generation, id) catch {
-        error => errors.push("Cannot read job \{key}: \{error}")
-      } noraise {
-        record => records[key] = record
+      candidates.push((generation, id))
+      if candidates.length() > 100 {
+        break scan~
       }
     }
   }
-  let sorted = records.values().to_array()
-  sorted.sort_by((a, b) => {
-    let order = b.backgrounded_at_ms.compare(a.backgrounded_at_ms)
-    if order != 0 {
-      order
-    } else {
-      "\{a.generation}/\{a.id}".compare("\{b.generation}/\{b.id}")
-    }
-  })
-  let start = payload.offset.min(sorted.length())
-  let end = (start + 100).min(sorted.length())
   let jobs : Array[@protocol.JobView] = []
-  for index in start..<end {
-    let record = sorted[index]
-    jobs.push(
-      job_view(
-        directory,
-        record,
-        live_ids.contains("\{record.generation}/\{record.id}"),
-      ),
-    )
+  for index in 0..<candidates.length().min(100) {
+    let (generation, id) = candidates[index]
+    let key = "\{generation}/\{id}"
+    let record = match live.get(key) {
+      Some(record) => record
+      None =>
+        read_job_record(directory, generation, id) catch {
+          error => {
+            errors.push("Cannot read job \{key}: \{error}")
+            continue
+          }
+        }
+    }
+    jobs.push(job_view(directory, record, live.contains(key)))
   }
   {
     jobs,
     errors,
-    next_offset: if end < sorted.length() {
-      Some(end)
+    selected: None,
+    next_offset: if candidates.length() > 100 {
+      Some(offset + 100)
     } else {
       None
     },
   }
+}
+
+///|
+async fn selected_job_view(
+  directory : String,
+  live : Map[String, @wire.JobRecord],
+  generation : String,
+  id : String,
+) -> @protocol.JobView {
+  let key = "\{generation}/\{id}"
+  let record = match live.get(key) {
+    Some(record) => record
+    None => read_job_record(directory, generation, id)
+  }
+  job_view(directory, record, live.contains(key))
 }
 
 ///|
@@ -248,6 +342,9 @@ fn job_utf8_window(bytes : Bytes, tail : Bool) -> (Int, Int) raise {
       start += 1
     }
   }
+  guard start == bytes.length() || (bytes[start].to_int() & 0xc0) != 0x80 else {
+    raise EngineError("log cursor is not on a UTF-8 boundary")
+  }
   let mut end = bytes.length()
   if end > start {
     let mut lead = end - 1
@@ -255,6 +352,9 @@ fn job_utf8_window(bytes : Bytes, tail : Bool) -> (Int, Int) raise {
       lead -= 1
     }
     let byte = bytes[lead].to_int()
+    guard byte < 0x80 || (byte >= 0xc2 && byte <= 0xf4) else {
+      raise EngineError("invalid UTF-8 in job output")
+    }
     let width = if byte < 0x80 {
       1
     } else if byte < 0xe0 {
@@ -286,7 +386,35 @@ pub async fn read_job(
     directory,
     payload.target.generation,
     payload.target.job_id,
-  )
+  ) catch {
+    metadata_error => {
+      // A failed first metadata write must not make a retained live log
+      // unreadable. Only the exact owning engine may supply this fallback.
+      guard manager.jobs_engine(scope) is Some(engine) &&
+        engine.session_root is Some(root) &&
+        directory == "\{root}/sessions/\{scope.session}/jobs" else {
+        raise metadata_error
+      }
+      guard @uuid.mint() is Some(request_id) else {
+        raise EngineError("could not allocate a job request id")
+      }
+      match engine.job_request(request_id, JobsSnapshot(request_id~)) {
+        JobsSnapshot(jobs~, ..) => {
+          guard jobs
+            .iter()
+            .find_first(job => {
+              job.generation == payload.target.generation &&
+              job.id == payload.target.job_id
+            })
+            is Some(job) else {
+            raise metadata_error
+          }
+          job
+        }
+        _ => raise EngineError("unexpected job snapshot reply")
+      }
+    }
+  }
   guard job.output_file is Some(name) else {
     raise EngineError("this job has no output file")
   }

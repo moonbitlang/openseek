@@ -66,7 +66,10 @@ struct BgJobRuntime {
   spawn_watcher : (async () -> Unit) -> Unit
   // Directory for per-job spill files (full output beyond the inline preview).
   // None → memory-only jobs (no full-output file).
-  spill_dir : String?
+  mut spill_dir : String?
+  prepare_output_dir : (async () -> String)?
+  prepare_lock : @async.Mutex
+  mut output_prepared : Bool
   persistent_logs : Bool
   // Wall-clock lifetime cap for any registered job, measured from process
   // start (an adopted job keeps its original deadline). Bounded lifetime,
@@ -96,6 +99,7 @@ struct BgJobRuntime {
 priv struct BgJob {
   id : String
   mut revision : Int
+  mut announced : Bool
   backgrounded_at_ms : Int64
   mut requested_stop : Bool
   mut persistence_error : String?
@@ -169,6 +173,7 @@ pub fn[X] BgJobRuntime::BgJobRuntime(
   scope : @agent_runtime.AgentTaskScope[X],
   spill_dir? : String,
   persistent_logs? : Bool = false,
+  prepare_output_dir? : async () -> String,
   hard_output_cap? : Int = @shell_exec.default_hard_cap,
   hard_timeout_ms? : Int = default_hard_timeout_ms,
   on_job_exit? : (BgJobSnapshot) -> Unit,
@@ -219,6 +224,9 @@ pub fn[X] BgJobRuntime::BgJobRuntime(
       group.spawn_bg(task, no_wait=true, allow_failure=true)
     },
     spill_dir,
+    prepare_output_dir,
+    prepare_lock: Mutex(),
+    output_prepared: prepare_output_dir is None,
     persistent_logs,
     hard_timeout_ms,
     on_job_exit,
@@ -256,6 +264,7 @@ pub async fn BgJobRuntime::spawn_foreground_retained(
   max_output_chars : Int,
   stdin? : &@process.ProcessInput,
 ) -> @shell_exec.ShellExecution {
+  self.prepare_output()
   let spill_path = self.spill_dir.map(dir => {
     let index = self.fg_index
     self.fg_index += 1
@@ -286,6 +295,7 @@ pub async fn BgJobRuntime::start(
 ) -> String {
   // Reserve one id and use it for both the spill file and the registry entry, so
   // the job id and its `<id>.out` file never diverge.
+  self.prepare_output()
   let id = self.next_id()
   let spill_path = self.spill_dir.map(dir => "\{dir}/\{id}.out")
   let exec = (self.spawn_exec)(
@@ -324,8 +334,9 @@ pub async fn BgJobRuntime::adopt(
   moonrun_policy_active? : Bool = false,
   on_terminal? : async () -> Unit,
 ) -> String {
-  let id = self.next_id()
   errdefer exec.request_stop()
+  self.prepare_output()
+  let id = self.next_id()
   exec.materialize_output()
   let _ = exec.background()
   self.register(
@@ -359,6 +370,7 @@ async fn BgJobRuntime::register(
   self.jobs[id] = {
     id,
     revision: 1,
+    announced: false,
     backgrounded_at_ms: @env.now().reinterpret_as_int64(),
     requested_stop: false,
     persistence_error: None,
@@ -863,3 +875,25 @@ async test "a requested stop is not blamed on the reaper" {
 
 ///|
 pub extend BgJobStatus with Eq::{equal, not_equal}
+
+///|
+/// Reserve durable storage lazily at the first execution, after the turn's
+/// first durable append. A failed serve setup therefore leaves no fake session.
+async fn BgJobRuntime::prepare_output(self : BgJobRuntime) -> Unit {
+  if self.output_prepared {
+    return
+  }
+  self.prepare_lock.acquire()
+  defer self.prepare_lock.release()
+  if self.output_prepared {
+    return
+  }
+  if self.prepare_output_dir is Some(prepare) {
+    let directory = prepare()
+    guard artifact_basename(directory) == self.generation else {
+      fail("job artifact preparation changed runtime identity")
+    }
+    self.spill_dir = Some(directory)
+  }
+  self.output_prepared = true
+}

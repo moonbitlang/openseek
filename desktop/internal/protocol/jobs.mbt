@@ -70,6 +70,7 @@ pub extend JobsScope with FromJson::{from_json}
 pub(all) struct JobsListPayload {
   scope : JobsScope
   offset : Int
+  selected : JobTarget?
 } derive(Eq, Debug)
 
 ///|
@@ -86,7 +87,16 @@ pub impl FromJson for JobsListPayload with fn from_json(json, path) {
     }
     n.to_int()
   }
-  { scope, offset, }
+  let selected : JobTarget? = match obj.optional_json("selected") {
+    None => None
+    Some(value) => Some(@json.from_json(value, path=path.add_key("selected")))
+  }
+  guard selected is None || (selected is Some(target) && target.scope == scope) else {
+    raise JsonDecodeError(
+      (path, "selected job must belong to the listed scope"),
+    )
+  }
+  { scope, offset, selected, }
 }
 
 ///|
@@ -94,6 +104,9 @@ pub impl ToJson for JobsListPayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   fields["scope"] = self.scope.to_json()
   fields["offset"] = self.offset.to_json()
+  if self.selected is Some(value) {
+    fields["selected"] = value.to_json()
+  }
   fields.to_json()
 }
 
@@ -275,6 +288,7 @@ pub(all) struct JobsListReply {
   jobs : Array[JobView]
   next_offset : Int?
   errors : Array[String]
+  selected : JobView?
 } derive(Eq, Debug)
 
 ///|
@@ -301,7 +315,11 @@ pub impl FromJson for JobsListReply with fn from_json(json, path) {
     obj.required_json("errors"),
     path=path.add_key("errors"),
   )
-  { jobs, next_offset, errors, }
+  let selected : JobView? = match obj.optional_json("selected") {
+    None => None
+    Some(value) => Some(@json.from_json(value, path=path.add_key("selected")))
+  }
+  { jobs, next_offset, errors, selected, }
 }
 
 ///|
@@ -312,6 +330,9 @@ pub impl ToJson for JobsListReply with fn to_json(self) {
     fields["next_offset"] = value.to_json()
   }
   fields["errors"] = self.errors.to_json()
+  if self.selected is Some(value) {
+    fields["selected"] = value.to_json()
+  }
   fields.to_json()
 }
 

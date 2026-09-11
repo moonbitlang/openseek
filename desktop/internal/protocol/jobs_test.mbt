@@ -28,3 +28,15 @@ test "jobs API codecs retain identity and reject ambiguous cursors" {
     }
   }
 }
+
+///|
+test "selected history target must belong to the list scope" {
+  let raw =
+    #|{"scope":{"session":"one","archived":false},"offset":0,"selected":{"scope":{"session":"two","archived":false},"generation":"gen","job_id":"bg-1"}}
+  try @json.from_json(@json.parse(raw)) catch {
+    _ => ()
+  } noraise {
+    (_ : @protocol.JobsListPayload) =>
+      fail("cross-session selection must be rejected")
+  }
+}

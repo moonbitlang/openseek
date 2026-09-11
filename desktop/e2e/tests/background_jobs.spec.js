@@ -107,3 +107,23 @@ test('switching conversations cannot display a late log from the previous sessio
   expect(app.requests.some(r => r.method === 'jobs.list' && r.params.scope.session === 'session-2')).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
+
+
+test('selected job beyond the first history page keeps receiving terminal state', async ({ page }) => {
+  app = new BackgroundJobsHarness(page);
+  for (let i = 2; i <= 101; i++) {
+    const view = app.view('runtime-new', `bg-${i}`, app.oldPath, { kind: 'exited', code: 0 });
+    view.job.description = `Completed build ${i}`;
+    app.jobs.splice(1, 0, view);
+  }
+  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
+  await page.getByRole('button', { name: 'Load older jobs', exact: true }).click();
+  await page.getByRole('button', { name: /Earlier failing test run/ }).click();
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  const selected = app.jobs.find(v => v.job.generation === 'runtime-old');
+  selected.job.state = { kind: 'stopped', reason: 'user' };
+  selected.job.revision++;
+  await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
+  expect(app.requests.some(r => r.method === 'jobs.list' && r.params.offset === 0 && r.params.selected?.generation === 'runtime-old')).toBe(true);
+  expect(app.pageErrors).toEqual([]);
+});

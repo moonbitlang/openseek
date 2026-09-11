@@ -121,7 +121,13 @@ async fn execute(
       None
     }
   } else {
-    bg_runtime.terminal_denial_feedback(job_id)
+    bg_runtime.terminal_denial_feedback(job_id) catch {
+      error =>
+        return @agent_tool.respond(
+          "failed to read job \{job_id} output for terminal diagnostics: \{error}",
+          is_error=true,
+        )
+    }
   }
   let is_error = exit_error ||
     snapshot.output_error is Some(_) ||

@@ -95,6 +95,7 @@ fn request_list(
       @interop.bridge_request(owner.channel, @commands.jobs_list, {
         scope: owner.scope,
         offset,
+        selected: state.selected.map(key => target(owner, key)),
       })
     },
   )
@@ -149,6 +150,11 @@ pub fn reconcile(
       epoch: state.epoch + 1,
       listing: false,
       reading: false,
+      read_error: if active {
+        None
+      } else {
+        state.read_error
+      },
       stopping: false,
     }
     return request_list(emit, state, 0)
@@ -192,25 +198,38 @@ pub fn update(
         Err(error) =>
           (@cmd.none, { ..state, listing: false, error: Some(error), })
         Ok(reply) => {
-          let jobs = if offset == 0 {
-            reply.jobs.copy()
+          let jobs = if offset == 0 && reply.next_offset is None {
+            []
           } else {
             state.jobs.copy()
           }
-          let older = if offset == 0 { state.jobs } else { reply.jobs }
-          for view in older {
-            if !jobs.any(existing => {
-                existing.job.generation == view.job.generation &&
-                existing.job.id == view.job.id
-              }) {
-              jobs.push(view)
+          for view in reply.jobs {
+            upsert_job(jobs, view)
+          }
+          if reply.selected is Some(view) {
+            upsert_job(jobs, view)
+          }
+          // Put the refreshed first page first while retaining loaded history.
+          if offset == 0 {
+            let ordered = reply.jobs.copy()
+            for view in jobs {
+              if !ordered.any(existing => {
+                  existing.job.generation == view.job.generation &&
+                  existing.job.id == view.job.id
+                }) {
+                ordered.push(view)
+              }
             }
+            jobs.clear()
+            jobs.append(ordered)
           }
           let selected = match state.selected {
             Some(_) => state.selected
             None => jobs.get(0).map(view => (view.job.generation, view.job.id))
           }
-          let next_offset = if offset == 0 && state.jobs.length() > 100 {
+          let next_offset = if offset == 0 &&
+            reply.next_offset is Some(_) &&
+            state.jobs.length() > 100 {
             state.next_offset
           } else {
             reply.next_offset
@@ -261,7 +280,13 @@ pub fn update(
           // <= 262144 characters keeps even four-byte UTF-8 below 1 MiB.
           let trimmed = combined.length() > 262144
           let text = if trimmed {
-            combined[combined.length() - 262144:].to_owned()
+            let start = combined.length() - 262144
+            let start = if combined.code_units()[start].is_trailing_surrogate() {
+              start + 1
+            } else {
+              start
+            }
+            combined[start:].to_owned()
           } else {
             combined
           }
@@ -377,3 +402,18 @@ pub extend Owner with Eq::{equal, not_equal}
 
 ///|
 pub extend State with Eq::{equal, not_equal}
+
+///|
+fn upsert_job(
+  jobs : Array[@protocol.JobView],
+  view : @protocol.JobView,
+) -> Unit {
+  for index in 0..<jobs.length() {
+    if jobs[index].job.generation == view.job.generation &&
+      jobs[index].job.id == view.job.id {
+      jobs[index] = view
+      return
+    }
+  }
+  jobs.push(view)
+}

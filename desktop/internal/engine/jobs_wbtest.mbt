@@ -109,6 +109,67 @@ async test "job history distinguishes dead owner from disconnected client and ma
 }
 
 ///|
+async test "history decodes only its requested page and preserves runtime job order" {
+  let root = @fs.tmpdir(prefix="job-history-pages-")
+  defer @fs.rmdir(root, recursive=true)
+  @fs.mkdir("\{root}/gen-1")
+  @fs.write_file("\{root}/gen-1/owner.lock", "")
+  for index in 1..<=101 {
+    let record = {
+      ..job_record_fixture(),
+      id: "bg-\{index}",
+      state: Exited(0),
+    }
+    @fs.write_file(
+      "\{root}/gen-1/bg-\{index}.json",
+      if index == 1 {
+        "corrupt old metadata"
+      } else {
+        record.to_json().stringify()
+      },
+    )
+  }
+  let first = job_history_page(root, Map([]), 0, [])
+  assert_eq(first.jobs.length(), 100)
+  assert_eq(first.jobs[0].job.id, "bg-101")
+  assert_eq(first.jobs[99].job.id, "bg-2")
+  assert_eq(first.next_offset, Some(100))
+  assert_true(first.errors.is_empty())
+  let second = job_history_page(root, Map([]), 100, [])
+  assert_true(second.jobs.is_empty())
+  assert_true(second.next_offset is None)
+  assert_eq(second.errors.length(), 1)
+  assert_true(second.errors[0].contains("bg-1"))
+  // Selection is refreshed independently of the visible history page, and a
+  // live snapshot remains usable even if its metadata write failed.
+  let terminal = {
+    ..job_record_fixture(),
+    state: Stopped("user"),
+    revision: 3,
+  }
+  let selected = selected_job_view(
+    root,
+    Map([("gen-1/bg-1", terminal)]),
+    "gen-1",
+    "bg-1",
+  )
+  assert_eq(selected.job, terminal)
+  assert_false(selected.controllable)
+}
+
+///|
+test "log cursors reject UTF8 continuation boundaries and invalid trailing leads" {
+  for bytes in [b"\x80", b"a\xc0", b"a\xff"] {
+    try job_utf8_window(bytes, false) catch {
+      _ => ()
+    } noraise {
+      _ => fail("invalid bytes must not produce a nonadvancing cursor")
+    }
+  }
+  assert_eq(job_utf8_window(b"a\xf0\x9f", false), (0, 1))
+}
+
+///|
 #cfg(platform="windows")
 test "job ownership paths normalize Windows joins and engine roots equally" {
   let native = @pathx.Path("C:\\workspace\\.openseek").resolve()

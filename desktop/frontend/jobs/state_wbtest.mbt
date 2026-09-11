@@ -74,3 +74,91 @@ test "tail command safely quotes host filesystem paths" {
     "Get-Content -LiteralPath 'C:\\a''b\\log.out' -Tail 100 -Wait",
   )
 }
+
+///|
+test "bounded output does not split a surrogate pair at its leading edge" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let state = { ..State::empty(), text: "🙂", epoch: 1, read_serial: 2, }
+  let page : @protocol.JobReadReply = {
+    text: "x".repeat(262143),
+    start_offset: 4L,
+    next_offset: 262147L,
+    size: 262147L,
+    more: false,
+    output_path: "/log",
+  }
+  let (_, next) = update(emit, Read(1, 2, Ok(page)), state)
+  assert_eq(next.text, "x".repeat(262143))
+}
+
+///|
+fn fixture_job(id : String, state : @wire.JobState) -> @protocol.JobView {
+  {
+    job: {
+      generation: "runtime",
+      id,
+      state,
+      revision: 2,
+      command: "worker",
+      description: None,
+      cwd: None,
+      started_at_ms: 1L,
+      backgrounded_at_ms: 2L,
+      finished_at_ms: None,
+      last_output_at_ms: None,
+      output_file: Some("job.out"),
+      output_persistent: true,
+      output_bytes: 0L,
+      output_chars: 0,
+      output_truncated: false,
+      invalid_utf8: false,
+      output_error: None,
+      persistence_error: None,
+      cleanup_error: None,
+    },
+    output_path: Some("/job.out"),
+    controllable: !state.is_terminal(),
+    error: None,
+  }
+}
+
+///|
+test "first-page polling refreshes a selected historical row while paused" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let old = fixture_job("old", Running)
+  let current = fixture_job("new", Running)
+  let state = {
+    ..State::empty(),
+    jobs: [current, old],
+    selected: Some(("runtime", "old")),
+    follow: false,
+  }
+  let reply : @protocol.JobsListReply = {
+    jobs: [current],
+    selected: Some(fixture_job("old", Stopped("user"))),
+    next_offset: Some(100),
+    errors: [],
+  }
+  let (_, next) = update(emit, Listed(0, 0, Ok(reply)), state)
+  assert_true(
+    selected_job(next) is Some(view) &&
+    view.job.state is Stopped("user") &&
+    !view.controllable,
+  )
+  assert_false(next.follow)
+  let (_, page) = update(
+    emit,
+    Listed(
+      0,
+      100,
+      Ok({
+        ..reply,
+        jobs: [fixture_job("old", Exited(7))],
+        selected: None,
+        next_offset: None,
+      }),
+    ),
+    next,
+  )
+  assert_true(selected_job(page) is Some(view) && view.job.state is Exited(7))
+}

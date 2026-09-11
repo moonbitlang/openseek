@@ -16,7 +16,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-def run_case(executable, serve=False, read_workflow=False):
+def run_case(executable, serve=False, read_workflow=False, job_controls=False):
     with tempfile.TemporaryDirectory(prefix="openseek-turn-finish-") as directory:
         release = Path(directory) / "release"
         source = '''import { "moonbitlang/async", "moonbitlang/async/fs" }
@@ -24,6 +24,12 @@ async fn main {
   while !@fs.exists("release") { @async.sleep(10) }
   println("BACKGROUND-RESULT")
 }'''
+        if job_controls:
+            source = source.replace('  while ', '  println("PERSISTED-PREFIX 你好🙂")\n  while ', 1)
+        session_id = "job-control-session"
+        store_root = Path(directory) / "store"
+        retained_path = None
+        active_snapshot_seen = threading.Event()
         requests = []
         errors = []
         process = None
@@ -78,6 +84,8 @@ async fn main {
                     elif step == 1:
                         name, args = "mbtx", {"source": source}
                     elif step == 2:
+                        if job_controls:
+                            assert active_snapshot_seen.wait(15), "controller snapshot blocked behind the active model request"
                         assert "moved to the background" in messages, messages
                         self.respond({"content": "Waiting for the test result."})
                         return
@@ -133,6 +141,9 @@ async fn main {
                 "--api-url", f"http://127.0.0.1:{server.server_port}/chat/completions",
                 "--max-steps", "8", "--mcp-config", "",
             ]
+            if job_controls:
+                command.remove("--no-session")
+                command.extend(["--session", session_id, "--session-root", str(store_root)])
             if serve:
                 with tempfile.TemporaryFile(mode="w+") as stderr:
                     process = subprocess.Popen(command, env=env, stdin=subprocess.PIPE,
@@ -145,9 +156,46 @@ async fn main {
                         lines = []
                         for line in process.stdout:
                             lines.append(line)
-                            if line.startswith("{") and json.loads(line).get("event") == "agent_finished":
-                                process.stdin.close()
-                                process.stdin = None
+                            if not line.startswith("{"):
+                                continue
+                            event = json.loads(line)
+                            def send(value):
+                                process.stdin.write(json.dumps(value) + "\n")
+                                process.stdin.flush()
+                            if job_controls and event.get("event") == "job_changed" and event["kind"] == "started":
+                                job = event["job"]
+                                retained_path = store_root / "sessions" / session_id / "jobs" / job["generation"] / job["output_file"]
+                                assert retained_path.exists(), "announced before materializing output"
+                                assert "PERSISTED-PREFIX 你好🙂" in retained_path.read_text()
+                                send({"command": "jobs_snapshot", "request_id": "active-snapshot"})
+                            if event.get("event") == "agent_finished":
+                                if job_controls:
+                                    send({"command": "jobs_snapshot", "request_id": "idle-snapshot"})
+                                else:
+                                    process.stdin.close()
+                                    process.stdin = None
+                            elif job_controls and event.get("event") == "jobs_snapshot":
+                                job = event["jobs"][0]
+                                if event["request_id"] == "active-snapshot":
+                                    assert job["state"]["kind"] == "running", job
+                                    send({"command": "job_stop", "request_id": "active-stale", "generation": "stale-runtime", "job_id": job["id"]})
+                                elif event["request_id"] == "idle-snapshot":
+                                    assert job["state"]["kind"] == "running", job
+                                    send({"command": "job_stop", "request_id": "stale-stop", "generation": "stale-runtime", "job_id": job["id"]})
+                                elif event["request_id"] == "final-snapshot":
+                                    assert job["state"] == {"kind": "stopped", "reason": "user"}, job
+                                    process.stdin.close()
+                                    process.stdin = None
+                            elif job_controls and event.get("event") == "job_stop_result":
+                                if event["request_id"] == "active-stale":
+                                    assert event["outcome"] == "wrong_runtime", event
+                                    active_snapshot_seen.set()
+                                elif event["request_id"] == "stale-stop":
+                                    assert event["outcome"] == "wrong_runtime", event
+                                    send({"command": "job_stop", "request_id": "valid-stop", "generation": retained_path.parent.name, "job_id": "bg-1"})
+                                elif event["request_id"] == "valid-stop":
+                                    assert event["outcome"] == "stopped", event
+                                    send({"command": "jobs_snapshot", "request_id": "final-snapshot"})
                         process.wait(timeout=10)
                         stderr.seek(0)
                         run = subprocess.CompletedProcess(command, process.returncode, "".join(lines), stderr.read())
@@ -168,6 +216,22 @@ async fn main {
             finishes = [event for event in events if event.get("event") == "agent_finished"]
             assert len(finishes) == 1, finishes
             assert finishes[0]["answer"] == ("checked the read workflow" if read_workflow else "checked the background result"), finishes
+            if job_controls:
+                assert retained_path is not None
+                assert retained_path.read_text() == "PERSISTED-PREFIX 你好🙂\n"
+                changes = [event for event in events if event.get("event") == "job_changed"]
+                assert [event["kind"] for event in changes] == ["started", "updated", "finished"], changes
+                saved = json.loads((retained_path.parent / "bg-1.json").read_text())
+                assert saved["state"] == {"kind": "stopped", "reason": "user"}, saved
+                restarted = subprocess.run(command, input=json.dumps({"command": "jobs_snapshot", "request_id": "restart"}) + "\n",
+                                           env=env, capture_output=True, text=True, timeout=30)
+                assert restarted.returncode == 0, (restarted.stdout, restarted.stderr)
+                snapshots = [json.loads(line) for line in restarted.stdout.splitlines() if line.startswith("{") and json.loads(line).get("event") == "jobs_snapshot"]
+                assert snapshots and snapshots[0]["jobs"] == [], snapshots
+                assert retained_path.read_text() == "PERSISTED-PREFIX 你好🙂\n"
+                assert json.loads((retained_path.parent / "bg-1.json").read_text()) == saved
+                assert len(list(retained_path.parent.parent.iterdir())) == 1, "idle restart created unnecessary artifact directories"
+                print("PASS: durable serve jobs materialize before announcement, reject stale controls, stop while idle, and survive restart")
             if read_workflow:
                 results = [event for event in events if event.get("event") == "tool_result"
                            and event.get("tool_name") == "mbtx"]
@@ -185,4 +249,5 @@ if __name__ == "__main__":
     executable = str(Path(sys.argv[1]).resolve())
     run_case(executable)
     run_case(executable, serve=True)
+    run_case(executable, serve=True, job_controls=True)
     run_case(executable, read_workflow=True)

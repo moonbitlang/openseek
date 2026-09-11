@@ -903,7 +903,8 @@ async fn execute(
         Some(path) => "\{handoff}\nOutput file: \{path}"
         None => "\{handoff}\nOutput retention: memory only."
       }
-      let handoff = if runtime.snapshot(id) is Some(snapshot) &&
+      let handoff = if exec.spill_path() is Some(_) &&
+        runtime.snapshot(id) is Some(snapshot) &&
         !snapshot.output_persistent {
         "\{handoff}\nThis output file is temporary and lasts until engine shutdown."
       } else {
