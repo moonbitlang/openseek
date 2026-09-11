@@ -860,6 +860,10 @@ fn Comparability::verdict(self : Comparability) -> Verdict {
 priv struct EditedTarget {
   spellings : Array[String]
   canonical : String
+  // The spellings whose package the edit can change: those moon compiles
+  // (source and manifests) and those a pre-build rule in their package's
+  // manifest names as an input. A README next to the sources is neither.
+  attributable : Array[String]
 }
 
 ///|
@@ -880,15 +884,42 @@ async fn edited_targets(writes : Array[PreparedWrite]) -> Array[EditedTarget] {
     }
     let resolved = @fs.realpath(write.path) catch {
       error if @async.is_being_cancelled() => raise error
-      _ => {
-        targets.push({ spellings, canonical, })
-        continue
+      _ => ""
+    }
+    if resolved != "" {
+      spellings.push(resolved)
+    }
+    let attributable : Array[String] = []
+    for spelling in spellings {
+      if moon_compiles(spelling) || is_build_input(spelling) {
+        attributable.push(spelling)
       }
     }
-    spellings.push(resolved)
-    targets.push({ spellings, canonical, })
+    targets.push({ spellings, canonical, attributable, })
   }
   targets
+}
+
+///|
+/// Whether a file moon does not compile can still change compiled code: a
+/// `dev_build`/pre-build rule in its package's manifest names it as an input
+/// (`moon check` runs those rules). Detected by the file's name appearing in
+/// the manifest text — an over-match here only makes attribution more
+/// conservative, never less.
+async fn is_build_input(path : String) -> Bool {
+  guard path.rev_split_once("/") is Some((dir, name)) && dir != "" else {
+    return false
+  }
+  for manifest in ["moon.pkg", "moon.pkg.json"] {
+    let text = @fs.read_file("\{dir}/\{manifest}").text() catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => continue
+    }
+    if text.contains(name) {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -947,7 +978,7 @@ fn comparability(
       // (`a/alias.mbt -> z/source.txt`) changes nothing in `z`. A target with
       // no compilable spelling at all (a README next to the sources) is
       // simply not part of the attribution.
-      let compiled = target.spellings.filter(moon_compiles)
+      let compiled = target.attributable
       if compiled.is_empty() {
         continue
       }
@@ -1043,7 +1074,11 @@ fn moon_compiles(path : String) -> Bool {
     return true
   }
   let name = path.rev_after("/").unwrap_or(path)
-  name == "moon.pkg" || name == "moon.mod" || name == "moon.work"
+  name == "moon.pkg" ||
+  name == "moon.pkg.json" ||
+  name == "moon.mod" ||
+  name == "moon.mod.json" ||
+  name == "moon.work"
 }
 
 ///|
@@ -1462,7 +1497,15 @@ fn check_result(
 
 ///|
 fn target(path : String) -> EditedTarget {
-  { spellings: [path], canonical: path, }
+  {
+    spellings: [path],
+    canonical: path,
+    attributable: if moon_compiles(path) {
+      [path]
+    } else {
+      []
+    },
+  }
 }
 
 ///|
@@ -1749,6 +1792,7 @@ test "comparability attributes through an edited symlink's target package" {
   let link : EditedTarget = {
     spellings: ["/r/x/alias.mbt", "/r/z/z.mbt"],
     canonical: "/r/x/alias.mbt",
+    attributable: ["/r/x/alias.mbt", "/r/z/z.mbt"],
   }
   let evidence = comparability(
     Some(before),
@@ -1764,6 +1808,7 @@ test "comparability attributes through an edited symlink's target package" {
   let data_link : EditedTarget = {
     spellings: ["/r/x/alias.mbt", "/r/z/source.txt"],
     canonical: "/r/x/alias.mbt",
+    attributable: ["/r/x/alias.mbt"],
   }
   let surfaced = comparability(
     Some(before),
@@ -1774,6 +1819,20 @@ test "comparability attributes through an edited symlink's target package" {
   )
   assert_eq(surfaced.new_breaking, [])
   assert_eq(surfaced.verdict(), CertifiedReach)
+  // …unless that target feeds a pre-build rule in `z` (then `edited_targets`
+  // lists it as attributable), in which case `z` is edited after all.
+  let build_input_link : EditedTarget = {
+    ..data_link,
+    attributable: ["/r/x/alias.mbt", "/r/z/source.txt"],
+  }
+  let generated = comparability(
+    Some(before),
+    check_result([site("w/w.mbt", "2:1-2:2", "caller broke")]),
+    [build_input_link],
+    cwd=Some("/r"),
+    graph=Some(sample_graph()),
+  )
+  assert_eq(generated.verdict(), Breakage)
   // A non-source file in the batch (a README) neither maps nor counts as
   // unmapped.
   let with_readme = classify(Some(before), check_result([]), [
@@ -1928,6 +1987,19 @@ test "comparability compares by error code so a reworded message is not new" {
   )
   assert_eq(evidence.remaining, 1)
   assert_eq(evidence.new_in_edited, [])
+}
+
+///|
+test "moon_compiles recognises sources and every manifest flavour" {
+  assert_true(moon_compiles("/r/x/x.mbt"))
+  assert_true(moon_compiles("/r/x/README.mbt.md"))
+  assert_true(moon_compiles("/r/x/moon.pkg"))
+  assert_true(moon_compiles("/r/x/moon.pkg.json"))
+  assert_true(moon_compiles("/r/moon.mod"))
+  assert_true(moon_compiles("/r/moon.mod.json"))
+  assert_true(moon_compiles("/r/moon.work"))
+  assert_false(moon_compiles("/r/x/README.md"))
+  assert_false(moon_compiles("/r/x/source.txt"))
 }
 
 ///|
